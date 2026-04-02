@@ -547,7 +547,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         keeper = _owner;
         emergencyAdmin = _owner;
         performanceFeeRecipient = _owner;
-        performanceFee = 1000; // 10% default
+        performanceFee = 0; // 0% default
         profitMaxUnlockTime = 7 days;
         rescueDelay = uint64(7 days);
 

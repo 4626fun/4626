@@ -86,7 +86,7 @@ The system audit remains the authoritative protocol narrative. Below: **status v
 | Link-start tokens **single-use / claim-bound** | Token replay across users | `createTelegramLinkStartToken` / `consumeTelegramActionToken` usage in [_webhook.runtime.ts](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/_webhook.runtime.ts) (e.g. vault deploy flows). | Audit any new callback paths for consume-on-success semantics. |
 | Group-scoped Telegram actions **owner-scoped** | Non-owner mutates shared bot state | Enforced in callback/update handlers under [frontend/api/_handlers/telegram/webhook/](https://github.com/wenakita/4626/tree/main/frontend/api/_handlers/telegram/webhook/) (review diffs when adding group features). | Requires per-feature verification; not exhaustively proven in this pass. |
 
-**Telegram canonical order** (email OTP, Privy sync, link persistence): see [docs/operations/telegram-canonical-link-preservation.md](../operations/telegram-canonical-link-preservation.md) and [frontend/docs/account-auth-invariants.md](/frontend/docs/account-auth-invariants).
+**Telegram canonical order** (email OTP, Privy sync, link persistence): see [Telegram Canonical Link Preservation](../operations/telegram-canonical-link-preservation.md) and [Account Auth Invariants](https://github.com/wenakita/4626/blob/main/frontend/docs/account-auth-invariants.md).
 
 ---
 

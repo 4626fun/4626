@@ -5,6 +5,7 @@ declare const process: { env: Record<string, string | undefined> }
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
 let referralsSchemaEnsured = false
+let referralsSchemaEnsurePromise: Promise<void> | null = null
 
 export function normalizeReferralCode(input: string): string {
   const raw = String(input || '')
@@ -66,63 +67,51 @@ export function hashForAttribution(value: string): string | null {
 
 export async function ensureReferralsSchema(db: Db): Promise<void> {
   if (referralsSchemaEnsured) return
-  try {
-    // Waitlist signup referral metadata.
+  if (referralsSchemaEnsurePromise) return referralsSchemaEnsurePromise
+  referralsSchemaEnsurePromise = (async () => {
     try {
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS referral_code TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS referred_by_code TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS referred_by_signup_id BIGINT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS referral_claimed_at TIMESTAMPTZ NULL;`
-    } catch {
-      // ignore (older Postgres or restricted perms)
+      const preflight = await db.sql`
+        SELECT
+          to_regclass('public.referral_clicks') IS NOT NULL AS has_referral_clicks,
+          to_regclass('public.referral_conversions') IS NOT NULL AS has_referral_conversions,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'profiles'
+              AND column_name = 'referral_code'
+          ) AS has_profiles_referral_code,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'profiles'
+              AND column_name = 'referred_by_signup_id'
+          ) AS has_profiles_referred_by_signup_id;
+      `
+      const status = preflight.rows?.[0] ?? {}
+      if (
+        Boolean(status.has_referral_clicks) &&
+        Boolean(status.has_referral_conversions) &&
+        Boolean(status.has_profiles_referral_code) &&
+        Boolean(status.has_profiles_referred_by_signup_id)
+      ) {
+        referralsSchemaEnsured = true
+        return
+      }
+      const missing: string[] = []
+      if (!Boolean(status.has_referral_clicks)) missing.push('public.referral_clicks')
+      if (!Boolean(status.has_referral_conversions)) missing.push('public.referral_conversions')
+      if (!Boolean(status.has_profiles_referral_code)) missing.push('public.profiles.referral_code')
+      if (!Boolean(status.has_profiles_referred_by_signup_id)) missing.push('public.profiles.referred_by_signup_id')
+      throw new Error(`referrals_schema_migration_required:${missing.join(',')}`)
+
+    } catch (err) {
+      referralsSchemaEnsured = false
+      throw err
+    } finally {
+      referralsSchemaEnsurePromise = null
     }
-
-    // Enforce uniqueness of referral codes (ignore NULLs).
-    await db.sql`
-      CREATE UNIQUE INDEX IF NOT EXISTS profiles_referral_code_unique
-        ON profiles (referral_code)
-        WHERE referral_code IS NOT NULL;
-    `
-    await db.sql`CREATE INDEX IF NOT EXISTS profiles_referred_by_signup_id_idx ON profiles (referred_by_signup_id);`
-
-    // Click events (best-effort; used for analytics and basic anti-abuse).
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS referral_clicks (
-        id BIGSERIAL PRIMARY KEY,
-        referral_code TEXT NOT NULL,
-        referrer_signup_id BIGINT NOT NULL,
-        ip_hash TEXT NULL,
-        ua_hash TEXT NULL,
-        session_id TEXT NULL,
-        landing_url TEXT NULL,
-        is_bot_suspected BOOLEAN NOT NULL DEFAULT FALSE,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-
-    // Conversions (one per invitee signup).
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS referral_conversions (
-        id BIGSERIAL PRIMARY KEY,
-        referral_code TEXT NOT NULL,
-        referrer_signup_id BIGINT NOT NULL,
-        invitee_signup_id BIGINT NOT NULL UNIQUE,
-        ip_hash TEXT NULL,
-        ua_hash TEXT NULL,
-        session_id TEXT NULL,
-        attribution TEXT NOT NULL DEFAULT 'last_click',
-        is_valid BOOLEAN NOT NULL DEFAULT TRUE,
-        invalid_reason TEXT NULL,
-        status TEXT NULL,
-        qualified_at TIMESTAMPTZ NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-    await db.sql`CREATE INDEX IF NOT EXISTS referral_conversions_referrer_created_idx ON referral_conversions (referrer_signup_id, created_at DESC);`
-
-    referralsSchemaEnsured = true
-  } catch (err) {
-    referralsSchemaEnsured = false
-    throw err
-  }
+  })()
+  return referralsSchemaEnsurePromise
 }

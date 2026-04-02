@@ -1,6 +1,7 @@
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
 let canonicalWalletsSchemaEnsured = false
+let canonicalWalletsSchemaEnsurePromise: Promise<void> | null = null
 
 async function assertNoDuplicatePrivyUserIds(db: Db): Promise<void> {
   const dupes = await db.sql`
@@ -18,133 +19,88 @@ async function assertNoDuplicatePrivyUserIds(db: Db): Promise<void> {
 
 export async function ensureCanonicalWalletsSchema(db: Db): Promise<void> {
   if (canonicalWalletsSchemaEnsured) return
-  try {
-    await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS primary_smart_wallet TEXT NULL;`
-    await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS primary_embedded_eoa TEXT NULL;`
-    await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS display_name TEXT NULL;`
-    await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS bio TEXT NULL;`
-    await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS website TEXT NULL;`
-    await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT NULL;`
-    await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS banner_url TEXT NULL;`
-    await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS profile_fields JSONB NULL;`
-    await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS canonical_solana_wallet TEXT NULL;`
-    await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS operational_solana_wallet TEXT NULL;`
-
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS wallets (
-        address TEXT PRIMARY KEY,
-        chain TEXT NOT NULL DEFAULT 'evm',
-        wallet_type TEXT NOT NULL,
-        provider TEXT NOT NULL DEFAULT 'unknown',
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS profile_wallets (
-        profile_id BIGINT NOT NULL REFERENCES profiles(id) ON DELETE CASCADE,
-        address TEXT NOT NULL REFERENCES wallets(address) ON DELETE CASCADE,
-        is_primary BOOLEAN NOT NULL DEFAULT false,
-        is_canonical_smart_wallet BOOLEAN NOT NULL DEFAULT false,
-        is_embedded_eoa BOOLEAN NOT NULL DEFAULT false,
-        is_canonical_solana_wallet BOOLEAN NOT NULL DEFAULT false,
-        is_operational_solana_wallet BOOLEAN NOT NULL DEFAULT false,
-        verified_at TIMESTAMPTZ,
-        metadata JSONB,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        PRIMARY KEY (profile_id, address)
-      );
-    `
-    await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS is_canonical_solana_wallet BOOLEAN NOT NULL DEFAULT false;`
-    await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS is_operational_solana_wallet BOOLEAN NOT NULL DEFAULT false;`
-
-    await db.sql`
-      CREATE UNIQUE INDEX IF NOT EXISTS profile_wallets_one_canonical
-      ON profile_wallets (profile_id)
-      WHERE is_canonical_smart_wallet = true;
-    `
-    await db.sql`
-      CREATE UNIQUE INDEX IF NOT EXISTS profile_wallets_one_embedded_eoa
-      ON profile_wallets (profile_id)
-      WHERE is_embedded_eoa = true;
-    `
-    await db.sql`
-      CREATE UNIQUE INDEX IF NOT EXISTS profile_wallets_one_canonical_solana
-      ON profile_wallets (profile_id)
-      WHERE is_canonical_solana_wallet = true;
-    `
-    await db.sql`
-      CREATE UNIQUE INDEX IF NOT EXISTS profile_wallets_one_operational_solana
-      ON profile_wallets (profile_id)
-      WHERE is_operational_solana_wallet = true;
-    `
-    await db.sql`
-      CREATE UNIQUE INDEX IF NOT EXISTS profile_wallets_one_primary
-      ON profile_wallets (profile_id)
-      WHERE is_primary = true;
-    `
-
-    await db.sql`CREATE INDEX IF NOT EXISTS profile_wallets_address_idx ON profile_wallets (address);`
-    await db.sql`CREATE INDEX IF NOT EXISTS profile_wallets_profile_id_idx ON profile_wallets (profile_id);`
-    await db.sql`CREATE INDEX IF NOT EXISTS profile_wallets_address_lc_idx ON profile_wallets ((LOWER(address)));`
-    await db.sql`CREATE INDEX IF NOT EXISTS wallets_address_lc_idx ON wallets ((LOWER(address)));`
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS profiles_primary_wallet_lc_idx
-      ON profiles ((LOWER(primary_wallet)))
-      WHERE primary_wallet IS NOT NULL;
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS profiles_embedded_wallet_lc_idx
-      ON profiles ((LOWER(embedded_wallet)))
-      WHERE embedded_wallet IS NOT NULL;
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS profiles_primary_embedded_eoa_lc_idx
-      ON profiles ((LOWER(primary_embedded_eoa)))
-      WHERE primary_embedded_eoa IS NOT NULL;
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS profiles_primary_smart_wallet_lc_idx
-      ON profiles ((LOWER(primary_smart_wallet)))
-      WHERE primary_smart_wallet IS NOT NULL;
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS profiles_csw_address_lc_idx
-      ON profiles ((LOWER(csw_address)))
-      WHERE csw_address IS NOT NULL;
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS profiles_base_sub_account_lc_idx
-      ON profiles ((LOWER(base_sub_account)))
-      WHERE base_sub_account IS NOT NULL;
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS profiles_primary_smart_wallet_idx
-      ON profiles (primary_smart_wallet)
-      WHERE primary_smart_wallet IS NOT NULL;
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS profiles_canonical_solana_wallet_idx
-      ON profiles (canonical_solana_wallet)
-      WHERE canonical_solana_wallet IS NOT NULL;
-    `
-    await db.sql`
-      CREATE INDEX IF NOT EXISTS profiles_operational_solana_wallet_idx
-      ON profiles (operational_solana_wallet)
-      WHERE operational_solana_wallet IS NOT NULL;
-    `
-
-    await assertNoDuplicatePrivyUserIds(db)
-    await db.sql`
-      CREATE UNIQUE INDEX IF NOT EXISTS profiles_privy_user_id_unique
-      ON profiles (privy_user_id)
-      WHERE privy_user_id IS NOT NULL;
-    `
-
-    canonicalWalletsSchemaEnsured = true
-  } catch {
-    canonicalWalletsSchemaEnsured = false
-    throw new Error('canonical_wallets_schema_ensure_failed')
-  }
+  if (canonicalWalletsSchemaEnsurePromise) return canonicalWalletsSchemaEnsurePromise
+  canonicalWalletsSchemaEnsurePromise = (async () => {
+    try {
+      const preflight = await db.sql`
+        SELECT
+          to_regclass('public.wallets') IS NOT NULL AS has_wallets,
+          to_regclass('public.profile_wallets') IS NOT NULL AS has_profile_wallets,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'profiles'
+              AND column_name = 'primary_smart_wallet'
+          ) AS has_primary_smart_wallet,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'profiles'
+              AND column_name = 'primary_embedded_eoa'
+          ) AS has_primary_embedded_eoa,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'profiles'
+              AND column_name = 'canonical_solana_wallet'
+          ) AS has_canonical_solana_wallet,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'profile_wallets'
+              AND column_name = 'is_canonical_solana_wallet'
+          ) AS has_profile_wallets_canonical_solana,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'profile_wallets'
+              AND column_name = 'is_operational_solana_wallet'
+          ) AS has_profile_wallets_operational_solana;
+      `
+      const status = preflight.rows?.[0] ?? {}
+      if (
+        Boolean(status.has_wallets) &&
+        Boolean(status.has_profile_wallets) &&
+        Boolean(status.has_primary_smart_wallet) &&
+        Boolean(status.has_primary_embedded_eoa) &&
+        Boolean(status.has_canonical_solana_wallet) &&
+        Boolean(status.has_profile_wallets_canonical_solana) &&
+        Boolean(status.has_profile_wallets_operational_solana)
+      ) {
+        await assertNoDuplicatePrivyUserIds(db)
+        canonicalWalletsSchemaEnsured = true
+        return
+      }
+      const missing: string[] = []
+      if (!Boolean(status.has_wallets)) missing.push('public.wallets')
+      if (!Boolean(status.has_profile_wallets)) missing.push('public.profile_wallets')
+      if (!Boolean(status.has_primary_smart_wallet)) missing.push('public.profiles.primary_smart_wallet')
+      if (!Boolean(status.has_primary_embedded_eoa)) missing.push('public.profiles.primary_embedded_eoa')
+      if (!Boolean(status.has_canonical_solana_wallet)) missing.push('public.profiles.canonical_solana_wallet')
+      if (!Boolean(status.has_profile_wallets_canonical_solana)) {
+        missing.push('public.profile_wallets.is_canonical_solana_wallet')
+      }
+      if (!Boolean(status.has_profile_wallets_operational_solana)) {
+        missing.push('public.profile_wallets.is_operational_solana_wallet')
+      }
+      throw new Error(`canonical_wallets_schema_migration_required:${missing.join(',')}`)
+    } catch (error) {
+      canonicalWalletsSchemaEnsured = false
+      if (
+        error instanceof Error &&
+        error.message.startsWith('canonical_wallets_schema_migration_required:')
+      ) {
+        throw error
+      }
+      throw new Error('canonical_wallets_schema_ensure_failed')
+    } finally {
+      canonicalWalletsSchemaEnsurePromise = null
+    }
+  })()
+  return canonicalWalletsSchemaEnsurePromise
 }

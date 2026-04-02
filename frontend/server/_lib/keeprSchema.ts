@@ -1,386 +1,286 @@
 import { getDb, isDbConfigured } from './postgres.js'
 
 let keeprSchemaEnsured = false
+let keeprSchemaEnsurePromise: Promise<void> | null = null
 
 export async function ensureKeeprSchema(): Promise<void> {
   if (!isDbConfigured()) return
   const db = await getDb()
   if (!db) return
   if (keeprSchemaEnsured) return
-  try {
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS keepr_vaults (
-        vault_address TEXT PRIMARY KEY,
-        chain_id INTEGER NOT NULL,
-        group_id TEXT NOT NULL,
-        lens_group_address TEXT,
-        creator_coin_address TEXT NOT NULL,
-        canonical_owner_address TEXT NOT NULL,
-        share_token_address TEXT,
-        gating_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-        join_locked BOOLEAN NOT NULL DEFAULT FALSE,
-        gating_mode TEXT NOT NULL DEFAULT 'shares',
-        min_shares TEXT,
-        fail_closed BOOLEAN NOT NULL DEFAULT TRUE,
-        config_version INTEGER NOT NULL DEFAULT 1,
-        config_hash TEXT NOT NULL,
-        config_json JSONB NOT NULL,
-        last_sync_at TIMESTAMPTZ,
-        graduated_at TIMESTAMPTZ,
-        settled_at TIMESTAMPTZ,
-        settlement_stage TEXT,
-        settlement_stage_updated_at TIMESTAMPTZ,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-
-    await db.sql`CREATE INDEX IF NOT EXISTS keepr_vaults_group_id_idx ON keepr_vaults (group_id);`
-
-    // Back-compat: if table exists from a previous deployment, add new columns safely.
+  if (keeprSchemaEnsurePromise) return keeprSchemaEnsurePromise
+  keeprSchemaEnsurePromise = (async () => {
     try {
-      await db.sql`ALTER TABLE keepr_vaults ADD COLUMN IF NOT EXISTS last_sync_at TIMESTAMPTZ;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE keepr_vaults ADD COLUMN IF NOT EXISTS lens_group_address TEXT;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE keepr_vaults ADD COLUMN IF NOT EXISTS graduated_at TIMESTAMPTZ;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE keepr_vaults ADD COLUMN IF NOT EXISTS settled_at TIMESTAMPTZ;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE keepr_vaults ADD COLUMN IF NOT EXISTS settlement_stage TEXT;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE keepr_vaults ADD COLUMN IF NOT EXISTS settlement_stage_updated_at TIMESTAMPTZ;`
-    } catch {
-      // ignore
-    }
-
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS keepr_vault_automation (
-        vault_address TEXT PRIMARY KEY,
-        profile_id BIGINT NOT NULL,
-        canonical_csw_address TEXT NOT NULL,
-        embedded_eoa_address TEXT,
-        privy_wallet_id TEXT,
-        authorization_source TEXT NOT NULL,
-        automation_enabled BOOLEAN NOT NULL DEFAULT TRUE,
-        automation_scope TEXT NOT NULL,
-        last_owner_check_at TIMESTAMPTZ,
-        revoked_at TIMESTAMPTZ,
-        metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-
-    // Back-compat: add columns before creating indexes that depend on them.
-    try {
-      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS profile_id BIGINT;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS canonical_csw_address TEXT;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS embedded_eoa_address TEXT;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS privy_wallet_id TEXT;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS authorization_source TEXT;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS automation_enabled BOOLEAN NOT NULL DEFAULT TRUE;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS automation_scope TEXT;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS last_owner_check_at TIMESTAMPTZ;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS metadata JSONB NOT NULL DEFAULT '{}'::jsonb;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE keepr_vault_automation ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`
-        CREATE INDEX IF NOT EXISTS keepr_vault_automation_profile_idx
-        ON keepr_vault_automation (profile_id, created_at DESC);
+      const preflight = await db.sql`
+        SELECT
+          to_regclass('public.keepr_vaults') IS NOT NULL AS has_keepr_vaults,
+          to_regclass('public.keepr_vault_automation') IS NOT NULL AS has_keepr_vault_automation,
+          to_regclass('public.keepr_nonces') IS NOT NULL AS has_keepr_nonces,
+          to_regclass('public.keepr_actions') IS NOT NULL AS has_keepr_actions,
+          to_regclass('public.keepr_logs') IS NOT NULL AS has_keepr_logs,
+          to_regclass('public.keepr_join_requests') IS NOT NULL AS has_keepr_join_requests,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_vaults'
+              AND column_name = 'chain_id'
+          ) AS has_vaults_chain_id,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_vaults'
+              AND column_name = 'group_id'
+          ) AS has_vaults_group_id,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_vaults'
+              AND column_name = 'creator_coin_address'
+          ) AS has_vaults_creator_coin_address,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_vaults'
+              AND column_name = 'canonical_owner_address'
+          ) AS has_vaults_canonical_owner_address,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_vaults'
+              AND column_name = 'share_token_address'
+          ) AS has_vaults_share_token_address,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_vaults'
+              AND column_name = 'config_json'
+          ) AS has_vaults_config_json,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_vaults'
+              AND column_name = 'settled_at'
+          ) AS has_vaults_settled_at,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_vaults'
+              AND column_name = 'settlement_stage'
+          ) AS has_vaults_settlement_stage,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_vault_automation'
+              AND column_name = 'profile_id'
+          ) AS has_automation_profile_id,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_vault_automation'
+              AND column_name = 'canonical_csw_address'
+          ) AS has_automation_canonical_csw_address,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_vault_automation'
+              AND column_name = 'embedded_eoa_address'
+          ) AS has_automation_embedded_eoa_address,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_vault_automation'
+              AND column_name = 'privy_wallet_id'
+          ) AS has_automation_privy_wallet_id,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_vault_automation'
+              AND column_name = 'authorization_source'
+          ) AS has_automation_authorization_source,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_vault_automation'
+              AND column_name = 'automation_enabled'
+          ) AS has_automation_enabled,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_vault_automation'
+              AND column_name = 'automation_scope'
+          ) AS has_automation_scope,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_vault_automation'
+              AND column_name = 'last_owner_check_at'
+          ) AS has_automation_last_owner_check_at,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_vault_automation'
+              AND column_name = 'revoked_at'
+          ) AS has_automation_revoked_at,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_vault_automation'
+              AND column_name = 'metadata'
+          ) AS has_automation_metadata,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_actions'
+              AND column_name = 'action_type'
+          ) AS has_action_type,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_actions'
+              AND column_name = 'dedupe_key'
+          ) AS has_dedupe_key,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_actions'
+              AND column_name = 'attempt_count'
+          ) AS has_attempt_count,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_actions'
+              AND column_name = 'next_attempt_at'
+          ) AS has_next_attempt_at,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'keepr_join_requests'
+              AND column_name = 'action_id'
+          ) AS has_join_action_id;
       `
-    } catch {
-      // ignore
+      const status = preflight.rows?.[0] ?? {}
+      if (
+        Boolean(status.has_keepr_vaults) &&
+        Boolean(status.has_keepr_vault_automation) &&
+        Boolean(status.has_keepr_nonces) &&
+        Boolean(status.has_keepr_actions) &&
+        Boolean(status.has_keepr_logs) &&
+        Boolean(status.has_keepr_join_requests) &&
+        Boolean(status.has_vaults_chain_id) &&
+        Boolean(status.has_vaults_group_id) &&
+        Boolean(status.has_vaults_creator_coin_address) &&
+        Boolean(status.has_vaults_canonical_owner_address) &&
+        Boolean(status.has_vaults_share_token_address) &&
+        Boolean(status.has_vaults_config_json) &&
+        Boolean(status.has_vaults_settled_at) &&
+        Boolean(status.has_vaults_settlement_stage) &&
+        Boolean(status.has_automation_profile_id) &&
+        Boolean(status.has_automation_canonical_csw_address) &&
+        Boolean(status.has_automation_embedded_eoa_address) &&
+        Boolean(status.has_automation_privy_wallet_id) &&
+        Boolean(status.has_automation_authorization_source) &&
+        Boolean(status.has_automation_enabled) &&
+        Boolean(status.has_automation_scope) &&
+        Boolean(status.has_automation_last_owner_check_at) &&
+        Boolean(status.has_automation_revoked_at) &&
+        Boolean(status.has_automation_metadata) &&
+        Boolean(status.has_action_type) &&
+        Boolean(status.has_dedupe_key) &&
+        Boolean(status.has_attempt_count) &&
+        Boolean(status.has_next_attempt_at) &&
+        Boolean(status.has_join_action_id)
+      ) {
+        keeprSchemaEnsured = true
+        return
+      }
+      const missing: string[] = []
+      if (!Boolean(status.has_keepr_vaults)) missing.push('public.keepr_vaults')
+      if (!Boolean(status.has_keepr_vault_automation)) missing.push('public.keepr_vault_automation')
+      if (!Boolean(status.has_keepr_nonces)) missing.push('public.keepr_nonces')
+      if (!Boolean(status.has_keepr_actions)) missing.push('public.keepr_actions')
+      if (!Boolean(status.has_keepr_logs)) missing.push('public.keepr_logs')
+      if (!Boolean(status.has_keepr_join_requests)) missing.push('public.keepr_join_requests')
+      if (!Boolean(status.has_vaults_chain_id)) missing.push('public.keepr_vaults.chain_id')
+      if (!Boolean(status.has_vaults_group_id)) missing.push('public.keepr_vaults.group_id')
+      if (!Boolean(status.has_vaults_creator_coin_address)) {
+        missing.push('public.keepr_vaults.creator_coin_address')
+      }
+      if (!Boolean(status.has_vaults_canonical_owner_address)) {
+        missing.push('public.keepr_vaults.canonical_owner_address')
+      }
+      if (!Boolean(status.has_vaults_share_token_address)) {
+        missing.push('public.keepr_vaults.share_token_address')
+      }
+      if (!Boolean(status.has_vaults_config_json)) missing.push('public.keepr_vaults.config_json')
+      if (!Boolean(status.has_vaults_settled_at)) missing.push('public.keepr_vaults.settled_at')
+      if (!Boolean(status.has_vaults_settlement_stage)) {
+        missing.push('public.keepr_vaults.settlement_stage')
+      }
+      if (!Boolean(status.has_automation_profile_id)) {
+        missing.push('public.keepr_vault_automation.profile_id')
+      }
+      if (!Boolean(status.has_automation_canonical_csw_address)) {
+        missing.push('public.keepr_vault_automation.canonical_csw_address')
+      }
+      if (!Boolean(status.has_automation_embedded_eoa_address)) {
+        missing.push('public.keepr_vault_automation.embedded_eoa_address')
+      }
+      if (!Boolean(status.has_automation_privy_wallet_id)) {
+        missing.push('public.keepr_vault_automation.privy_wallet_id')
+      }
+      if (!Boolean(status.has_automation_authorization_source)) {
+        missing.push('public.keepr_vault_automation.authorization_source')
+      }
+      if (!Boolean(status.has_automation_enabled)) {
+        missing.push('public.keepr_vault_automation.automation_enabled')
+      }
+      if (!Boolean(status.has_automation_scope)) {
+        missing.push('public.keepr_vault_automation.automation_scope')
+      }
+      if (!Boolean(status.has_automation_last_owner_check_at)) {
+        missing.push('public.keepr_vault_automation.last_owner_check_at')
+      }
+      if (!Boolean(status.has_automation_revoked_at)) {
+        missing.push('public.keepr_vault_automation.revoked_at')
+      }
+      if (!Boolean(status.has_automation_metadata)) {
+        missing.push('public.keepr_vault_automation.metadata')
+      }
+      if (!Boolean(status.has_action_type)) missing.push('public.keepr_actions.action_type')
+      if (!Boolean(status.has_dedupe_key)) missing.push('public.keepr_actions.dedupe_key')
+      if (!Boolean(status.has_attempt_count)) missing.push('public.keepr_actions.attempt_count')
+      if (!Boolean(status.has_next_attempt_at)) missing.push('public.keepr_actions.next_attempt_at')
+      if (!Boolean(status.has_join_action_id)) missing.push('public.keepr_join_requests.action_id')
+      throw new Error(`keepr_schema_migration_required:${missing.join(',')}`)
+    } catch (err) {
+      keeprSchemaEnsured = false
+      throw err
+    } finally {
+      keeprSchemaEnsurePromise = null
     }
-    try {
-      await db.sql`
-        CREATE INDEX IF NOT EXISTS keepr_vault_automation_enabled_idx
-        ON keepr_vault_automation (automation_enabled, updated_at DESC);
-      `
-    } catch {
-      // ignore
-    }
-
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS keepr_nonces (
-        nonce TEXT PRIMARY KEY,
-        purpose TEXT NOT NULL,
-        wallet_address TEXT NOT NULL,
-        vault_address TEXT NOT NULL,
-        issued_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        expires_at TIMESTAMPTZ NOT NULL,
-        used_at TIMESTAMPTZ
-      );
-    `
-    await db.sql`CREATE INDEX IF NOT EXISTS keepr_nonces_wallet_idx ON keepr_nonces (wallet_address);`
-    await db.sql`CREATE INDEX IF NOT EXISTS keepr_nonces_expires_idx ON keepr_nonces (expires_at);`
-
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS keepr_actions (
-        id BIGSERIAL PRIMARY KEY,
-        vault_address TEXT NOT NULL,
-        group_id TEXT NOT NULL,
-        action_type TEXT,
-        action JSONB NOT NULL,
-        dedupe_key TEXT,
-        status TEXT NOT NULL DEFAULT 'pending',
-        attempt_count INTEGER NOT NULL DEFAULT 0,
-        next_attempt_at TIMESTAMPTZ,
-        last_error TEXT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        executed_at TIMESTAMPTZ
-      );
-    `
-
-    // Back-compat: add columns to existing deployments safely.
-    //
-    // IMPORTANT:
-    // Some deployments may already have `keepr_actions` without newer columns. Creating an index that references
-    // a missing column will error *before* we have a chance to ALTER TABLE. So we add columns first, then indexes.
-    try {
-      await db.sql`ALTER TABLE keepr_actions ADD COLUMN IF NOT EXISTS action_type TEXT;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE keepr_actions ADD COLUMN IF NOT EXISTS dedupe_key TEXT;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE keepr_actions ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE keepr_actions ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ;`
-    } catch {
-      // ignore
-    }
-
-    // Indexes (best-effort; don't fail startup if they can't be created yet).
-    try {
-      await db.sql`CREATE INDEX IF NOT EXISTS keepr_actions_status_idx ON keepr_actions (status, created_at DESC);`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`CREATE INDEX IF NOT EXISTS keepr_actions_dedupe_idx ON keepr_actions (dedupe_key, created_at DESC);`
-    } catch {
-      // ignore
-    }
-
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS keepr_logs (
-        id BIGSERIAL PRIMARY KEY,
-        vault_address TEXT NOT NULL,
-        actor_wallet TEXT,
-        event_type TEXT NOT NULL,
-        details JSONB NOT NULL DEFAULT '{}'::jsonb,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-
-    // Users who attempted to join but were ineligible can be "watched".
-    // Keepr will periodically re-check eligibility and auto-add when eligible.
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS keepr_join_requests (
-        id BIGSERIAL PRIMARY KEY,
-        vault_address TEXT NOT NULL,
-        group_id TEXT NOT NULL,
-        wallet_address TEXT NOT NULL,
-        status TEXT NOT NULL DEFAULT 'watching', -- watching | queued | added | failed | cancelled
-        last_reason TEXT,
-        last_checked_at TIMESTAMPTZ,
-        next_check_at TIMESTAMPTZ,
-        action_id BIGINT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-    await db.sql`CREATE INDEX IF NOT EXISTS keepr_join_requests_vault_wallet_idx ON keepr_join_requests (vault_address, wallet_address);`
-
-    // Back-compat: add columns safely.
-    try {
-      await db.sql`ALTER TABLE keepr_join_requests ADD COLUMN IF NOT EXISTS last_checked_at TIMESTAMPTZ;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE keepr_join_requests ADD COLUMN IF NOT EXISTS next_check_at TIMESTAMPTZ;`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`ALTER TABLE keepr_join_requests ADD COLUMN IF NOT EXISTS action_id BIGINT;`
-    } catch {
-      // ignore
-    }
-
-    // One-time migration from compatibility takopi_* tables (if they exist).
-    await db.sql`
-      DO $$
-      BEGIN
-        IF to_regclass('public.takopi_vaults') IS NOT NULL THEN
-          INSERT INTO keepr_vaults (
-            vault_address,
-            chain_id,
-            group_id,
-            creator_coin_address,
-            canonical_owner_address,
-            share_token_address,
-            gating_enabled,
-            join_locked,
-            gating_mode,
-            min_shares,
-            fail_closed,
-            config_version,
-            config_hash,
-            config_json,
-            last_sync_at,
-            created_at,
-            updated_at
-          )
-          SELECT
-            vault_address,
-            chain_id,
-            group_id,
-            creator_coin_address,
-            canonical_owner_address,
-            share_token_address,
-            gating_enabled,
-            join_locked,
-            gating_mode,
-            min_shares,
-            fail_closed,
-            config_version,
-            config_hash,
-            config_json,
-            last_sync_at,
-            created_at,
-            updated_at
-          FROM takopi_vaults
-          ON CONFLICT (vault_address) DO NOTHING;
-        END IF;
-      END $$;
-    `
-
-    await db.sql`
-      DO $$
-      BEGIN
-        IF to_regclass('public.takopi_nonces') IS NOT NULL THEN
-          INSERT INTO keepr_nonces (nonce, purpose, wallet_address, vault_address, issued_at, expires_at, used_at)
-          SELECT nonce, purpose, wallet_address, vault_address, issued_at, expires_at, used_at
-          FROM takopi_nonces
-          ON CONFLICT (nonce) DO NOTHING;
-        END IF;
-      END $$;
-    `
-
-    await db.sql`
-      DO $$
-      BEGIN
-        IF to_regclass('public.takopi_actions') IS NOT NULL THEN
-          INSERT INTO keepr_actions (id, vault_address, group_id, action, status, last_error, created_at, updated_at, executed_at)
-          SELECT id, vault_address, group_id, action, status, last_error, created_at, updated_at, executed_at
-          FROM takopi_actions
-          ON CONFLICT (id) DO NOTHING;
-        END IF;
-      END $$;
-    `
-
-    await db.sql`
-      DO $$
-      BEGIN
-        IF to_regclass('public.takopi_audit_log') IS NOT NULL THEN
-          INSERT INTO keepr_logs (id, vault_address, actor_wallet, event_type, details, created_at)
-          SELECT id, vault_address, actor_wallet, event_type, details, created_at
-          FROM takopi_audit_log
-          ON CONFLICT (id) DO NOTHING;
-        END IF;
-      END $$;
-    `
-
-    // Ensure sequences are moved past the migrated ids (if any).
-    try {
-      await db.sql`SELECT setval(pg_get_serial_sequence('keepr_actions', 'id'), COALESCE((SELECT MAX(id) FROM keepr_actions), 1), true);`
-    } catch {
-      // ignore
-    }
-    try {
-      await db.sql`SELECT setval(pg_get_serial_sequence('keepr_logs', 'id'), COALESCE((SELECT MAX(id) FROM keepr_logs), 1), true);`
-    } catch {
-      // ignore
-    }
-
-    keeprSchemaEnsured = true
-  } catch (err) {
-    keeprSchemaEnsured = false
-    throw err
-  }
+  })()
+  return keeprSchemaEnsurePromise
 }

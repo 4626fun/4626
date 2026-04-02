@@ -11,6 +11,9 @@ sidebar_position: 5
 
 - [Payout Router + CreatorCoin Control Hardening (March 2026)](./payout-router-ownership-hardening-2026-03.md)
 - [Security Scan Overview](./scan-overview.md)
+- Canonical disclosure policy: [SECURITY.md](https://github.com/wenakita/4626/blob/main/SECURITY.md)
+
+For operational rollout posture (including deferred feature surfaces), see [Roadmap](/roadmap).
 
 ## Anti-Inflation Attack
 

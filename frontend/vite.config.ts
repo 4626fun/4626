@@ -13,6 +13,7 @@ import { zoraCliRoutePaths } from './api/_handlers/zora/cli/_routes'
 
 const buildTelegramLinkStandalone = process.env.TELEGRAM_LINK_STANDALONE_BUILD === '1'
 const nodeRequire = createRequire(import.meta.url)
+const dotenvLoadedKeys = new Set<string>()
 
 function loadDotEnvFile(filePath: string) {
   if (!fs.existsSync(filePath)) return
@@ -29,7 +30,19 @@ function loadDotEnvFile(filePath: string) {
     if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
       value = value.slice(1, -1)
     }
-    if (process.env[key] === undefined) process.env[key] = value
+    const existing = process.env[key]
+    if (existing === undefined) {
+      process.env[key] = value
+      dotenvLoadedKeys.add(key)
+      continue
+    }
+
+    // Preserve shell-provided env precedence. Only allow a later dotenv file
+    // to fill a blank if that blank came from an earlier dotenv load.
+    if (dotenvLoadedKeys.has(key) && existing.trim().length === 0 && value.trim().length > 0) {
+      process.env[key] = value
+      dotenvLoadedKeys.add(key)
+    }
   }
 }
 

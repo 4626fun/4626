@@ -47,6 +47,7 @@ const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
 const DEFAULT_BASE_RPCS = ['https://mainnet.base.org', 'https://base.llamarpc.com'] as const
 
 let delegationColumnsEnsured = false
+let delegationColumnsEnsurePromise: Promise<void> | null = null
 
 function normalizeAddress(value: unknown): string | null {
   const raw = typeof value === 'string' ? value.trim() : ''
@@ -248,33 +249,99 @@ async function ensureCanonicalWalletRow(params: {
 
 async function ensureDelegationColumns(db: Db): Promise<void> {
   if (delegationColumnsEnsured) return
-  try {
-    await db.sql`
-      DO $$
-      BEGIN
-        IF EXISTS (
-          SELECT 1
-          FROM information_schema.columns
-          WHERE table_schema = 'public'
-            AND table_name = 'profile_wallets'
-            AND column_name = 'canonical_zora_csw_address'
-        ) THEN
-          ALTER TABLE public.profile_wallets
-            RENAME COLUMN canonical_zora_csw_address TO canonical_csw_address;
-        END IF;
-      END $$;
-    `
-    await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS chain_id INT NOT NULL DEFAULT 8453;`
-    await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS canonical_csw_address TEXT NULL;`
-    await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS canonical_source TEXT NOT NULL DEFAULT 'wallet_sync';`
-    await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS privy_embedded_eoa_address TEXT NULL;`
-    await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS privy_is_owner BOOLEAN NOT NULL DEFAULT false;`
-    await db.sql`ALTER TABLE profile_wallets ADD COLUMN IF NOT EXISTS last_checked_at TIMESTAMPTZ NULL;`
-    delegationColumnsEnsured = true
-  } catch {
-    delegationColumnsEnsured = false
-    throw new Error('canonical_csw_delegation_columns_ensure_failed')
-  }
+  if (delegationColumnsEnsurePromise) return delegationColumnsEnsurePromise
+  delegationColumnsEnsurePromise = (async () => {
+    try {
+      const preflight = await db.sql`
+        SELECT
+          to_regclass('public.profile_wallets') IS NOT NULL AS has_profile_wallets,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'profile_wallets'
+              AND column_name = 'chain_id'
+          ) AS has_chain_id,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'profile_wallets'
+              AND column_name = 'canonical_csw_address'
+          ) AS has_canonical_csw_address,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'profile_wallets'
+              AND column_name = 'canonical_source'
+          ) AS has_canonical_source,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'profile_wallets'
+              AND column_name = 'privy_embedded_eoa_address'
+          ) AS has_privy_embedded_eoa_address,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'profile_wallets'
+              AND column_name = 'privy_is_owner'
+          ) AS has_privy_is_owner,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'profile_wallets'
+              AND column_name = 'last_checked_at'
+          ) AS has_last_checked_at;
+      `
+      const status = preflight.rows?.[0] ?? {}
+      if (
+        Boolean(status.has_profile_wallets) &&
+        Boolean(status.has_chain_id) &&
+        Boolean(status.has_canonical_csw_address) &&
+        Boolean(status.has_canonical_source) &&
+        Boolean(status.has_privy_embedded_eoa_address) &&
+        Boolean(status.has_privy_is_owner) &&
+        Boolean(status.has_last_checked_at)
+      ) {
+        delegationColumnsEnsured = true
+        return
+      }
+      const missing: string[] = []
+      if (!Boolean(status.has_profile_wallets)) missing.push('public.profile_wallets')
+      if (!Boolean(status.has_chain_id)) missing.push('public.profile_wallets.chain_id')
+      if (!Boolean(status.has_canonical_csw_address)) {
+        missing.push('public.profile_wallets.canonical_csw_address')
+      }
+      if (!Boolean(status.has_canonical_source)) missing.push('public.profile_wallets.canonical_source')
+      if (!Boolean(status.has_privy_embedded_eoa_address)) {
+        missing.push('public.profile_wallets.privy_embedded_eoa_address')
+      }
+      if (!Boolean(status.has_privy_is_owner)) {
+        missing.push('public.profile_wallets.privy_is_owner')
+      }
+      if (!Boolean(status.has_last_checked_at)) {
+        missing.push('public.profile_wallets.last_checked_at')
+      }
+      throw new Error(`canonical_csw_delegation_columns_migration_required:${missing.join(',')}`)
+    } catch (error) {
+      delegationColumnsEnsured = false
+      if (
+        error instanceof Error &&
+        error.message.startsWith('canonical_csw_delegation_columns_migration_required:')
+      ) {
+        throw error
+      }
+      throw new Error('canonical_csw_delegation_columns_ensure_failed')
+    } finally {
+      delegationColumnsEnsurePromise = null
+    }
+  })()
+  return delegationColumnsEnsurePromise
 }
 
 export async function getPrivyUserIdFromRequest(req: VercelRequest): Promise<string> {

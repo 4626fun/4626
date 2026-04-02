@@ -97,3 +97,13 @@ export function getStickyLeftMap(columns: ExploreTableColumn[]): Record<ExploreT
   return out as Record<ExploreTableColumnId, number>
 }
 
+export function getHorizontalScrollStops(columns: ExploreTableColumn[]): number[] {
+  const nonStickyWidths = columns.filter((column) => !column.sticky).map((column) => column.widthPx)
+  const stops: number[] = [0]
+  let acc = 0
+  for (const width of nonStickyWidths) {
+    acc += width
+    stops.push(acc)
+  }
+  return stops
+}

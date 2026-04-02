@@ -2133,14 +2133,24 @@ function writeStaticTextResponse(params: {
 }): void {
   const method = String(params.req.method ?? 'GET').toUpperCase()
   const sendBody = method !== 'HEAD'
+<<<<<<< HEAD
   const contentLength = Buffer.byteLength(params.body)
+=======
+  const payload = sendBody ? params.body : ''
+>>>>>>> 3d2ffc35 (Enhance documentation and scripts for link verification and migration)
   params.res.writeHead(params.statusCode, {
     'Content-Type': params.contentType,
     'Cache-Control': params.cacheControl ?? 'public, max-age=900',
     'X-Robots-Tag': 'noindex, nofollow, noarchive',
+<<<<<<< HEAD
     'Content-Length': String(contentLength),
   })
   params.res.end(sendBody ? params.body : undefined)
+=======
+    'Content-Length': String(Buffer.byteLength(payload)),
+  })
+  params.res.end(payload)
+>>>>>>> 3d2ffc35 (Enhance documentation and scripts for link verification and migration)
 }
 
 function startHealthServer() {

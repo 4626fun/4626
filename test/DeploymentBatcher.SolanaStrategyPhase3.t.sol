@@ -171,6 +171,7 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
     bytes32 internal constant AJNA_VAULT_CODE_ID = bytes32(uint256(4));
     bytes32 internal constant AJNA_ADAPTER_CODE_ID = bytes32(uint256(5));
     bytes32 internal constant SOLANA_STRATEGY_CODE_ID = bytes32(uint256(6));
+    uint24 internal constant CHARM_MANAGER_FEE_PIPS = 160_000; // 16% in Charm's 1e6 precision
 
     DeploymentBatcher internal batcher;
     MockCreate2DeployerForPhase3 internal create2Deployer;
@@ -311,6 +312,31 @@ contract DeploymentBatcherSolanaStrategyPhase3Test is Test {
         assertEq(ajnaAuth.minBucketIndex(), 4_156, "ajna min bucket mismatch");
         assertTrue(ajnaAuth.keepers(ajnaKeeper), "ajna keeper should be configured");
         assertEq(ajnaAuth.admin(), protocolTreasury, "ajna auth admin should transfer to treasury");
+    }
+
+    function test_deployPhase3Strategies_callsCharmFactoryWithExpectedManagerFeePips() public {
+        DeploymentBatcher.Phase3Params memory params = _phase3Params();
+        address v3Pool = uniswapFactory.pool();
+        ICharmFactory.VaultParams memory expectedVaultParams = ICharmFactory.VaultParams({
+            pool: v3Pool,
+            manager: protocolTreasury,
+            managerFee: CHARM_MANAGER_FEE_PIPS,
+            rebalanceDelegate: address(0),
+            maxTotalSupply: type(uint256).max,
+            baseThreshold: 3000,
+            limitThreshold: 6000,
+            fullRangeWeight: 0,
+            period: 1800,
+            minTickMove: int24(0),
+            maxTwapDeviation: 500,
+            twapDuration: 300,
+            name: params.charmVaultName,
+            symbol: params.charmVaultSymbol
+        });
+
+        vm.expectCall(CHARM_FACTORY, abi.encodeWithSelector(CREATE_VAULT_SELECTOR, expectedVaultParams));
+
+        batcher.deployPhase3Strategies(params, _strategyCodeIds());
     }
 
     function test_deployPhase3Strategies_revertsWhenAjnaCodeIdsMissing() public {

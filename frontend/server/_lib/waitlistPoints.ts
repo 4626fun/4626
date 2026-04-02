@@ -1,6 +1,7 @@
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
 let waitlistPointsSchemaEnsured = false
+let waitlistPointsSchemaEnsurePromise: Promise<void> | null = null
 
 export const WAITLIST_POINTS = {
   // Core actions
@@ -83,50 +84,65 @@ export function isWaitlistPointSource(value: string): value is WaitlistPointSour
 
 export async function ensureWaitlistPointsSchema(db: Db): Promise<void> {
   if (waitlistPointsSchemaEnsured) return
-  try {
-    // Profile completion (used to qualify referrals).
+  if (waitlistPointsSchemaEnsurePromise) return waitlistPointsSchemaEnsurePromise
+  waitlistPointsSchemaEnsurePromise = (async () => {
     try {
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS profile_completed_at TIMESTAMPTZ NULL;`
-    } catch {
-      // ignore (older Postgres or restricted perms)
+      const preflight = await db.sql`
+        SELECT
+          to_regclass('public.points') IS NOT NULL AS has_points,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'profiles'
+              AND column_name = 'profile_completed_at'
+          ) AS has_profile_completed_at,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'referral_conversions'
+              AND column_name = 'status'
+          ) AS has_referral_status,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'referral_conversions'
+              AND column_name = 'qualified_at'
+          ) AS has_referral_qualified_at;
+      `
+      const status = preflight.rows?.[0] ?? {}
+      if (
+        Boolean(status.has_points) &&
+        Boolean(status.has_profile_completed_at) &&
+        Boolean(status.has_referral_status) &&
+        Boolean(status.has_referral_qualified_at)
+      ) {
+        waitlistPointsSchemaEnsured = true
+        return
+      }
+      const missing: string[] = []
+      if (!Boolean(status.has_points)) missing.push('public.points')
+      if (!Boolean(status.has_profile_completed_at)) missing.push('public.profiles.profile_completed_at')
+      if (!Boolean(status.has_referral_status)) missing.push('public.referral_conversions.status')
+      if (!Boolean(status.has_referral_qualified_at)) missing.push('public.referral_conversions.qualified_at')
+      throw new Error(`waitlist_points_schema_migration_required:${missing.join(',')}`)
+
+    } catch (error) {
+      waitlistPointsSchemaEnsured = false
+      if (
+        error instanceof Error &&
+        error.message.startsWith('waitlist_points_schema_migration_required:')
+      ) {
+        throw error
+      }
+      throw new Error('waitlist_points_schema_ensure_failed')
+    } finally {
+      waitlistPointsSchemaEnsurePromise = null
     }
-
-    // Referral conversion qualification state (backwards-compatible: NULL status treated as compatibility-qualified by queries).
-    try {
-      await db.sql`ALTER TABLE referral_conversions ADD COLUMN IF NOT EXISTS status TEXT NULL;`
-      await db.sql`ALTER TABLE referral_conversions ADD COLUMN IF NOT EXISTS qualified_at TIMESTAMPTZ NULL;`
-    } catch {
-      // ignore
-    }
-
-    // Append-only points ledger (idempotent via unique key).
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS points (
-        id BIGSERIAL PRIMARY KEY,
-        signup_id BIGINT NOT NULL,
-        source TEXT NOT NULL,
-        source_id TEXT NULL,
-        amount INT NOT NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-    await db.sql`
-      CREATE UNIQUE INDEX IF NOT EXISTS points_unique_source
-        ON points (signup_id, source, source_id)
-        WHERE source_id IS NOT NULL;
-    `
-    await db.sql`
-      CREATE UNIQUE INDEX IF NOT EXISTS points_csw_link_single_shot
-        ON points (signup_id)
-        WHERE source = 'csw_link' AND source_id IS NULL;
-    `
-    await db.sql`CREATE INDEX IF NOT EXISTS points_signup_idx ON points (signup_id, created_at DESC);`
-
-    waitlistPointsSchemaEnsured = true
-  } catch {
-    waitlistPointsSchemaEnsured = false
-    throw new Error('waitlist_points_schema_ensure_failed')
-  }
+  })()
+  return waitlistPointsSchemaEnsurePromise
 }
 
 export async function awardWaitlistPoints(params: {

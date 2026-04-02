@@ -9,6 +9,7 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {IUniswapV3Factory} from "../../../interfaces/uniswap/IUniswapV3Factory.sol";
 import {IUniswapV3Pool} from "../../../interfaces/uniswap/IUniswapV3Pool.sol";
 import {TickMathCompat} from "../../../libraries/TickMathCompat.sol";
+import {IAjnaPool} from "../../../interfaces/IAjnaPool.sol";
 import "../../../interfaces/IStrategy.sol";
 import {ICreatorOracle} from "../../../interfaces/ICreatorOracle.sol";
 import {IStrategyValuation} from "../../../interfaces/IStrategyValuation.sol";
@@ -60,6 +61,12 @@ interface ISwapRouter {
 contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard, Ownable {
     using SafeERC20 for IERC20;
 
+    struct AjnaDebtState {
+        bool readable;
+        uint256 debtCreator;
+        uint256 collateralUsdc;
+    }
+
     // =================================
     // STATE VARIABLES
     // =================================
@@ -90,6 +97,21 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
     IUniswapV3Factory public uniFactory;
     bool public autoFeeTier = false;
 
+    /// @notice Optional Ajna ERC20 pool used as CREATOR borrow backstop against USDC collateral.
+    IAjnaPool public ajnaPool;
+    bool public ajnaBorrowEnabled;
+    uint256 public ajnaMaxDebt = type(uint256).max;
+    uint256 public ajnaMaxBorrowPerWithdraw = type(uint256).max;
+    uint256 public ajnaMinCollateralRatioBps = 12_500; // 125% minimum collateral ratio target
+    uint256 public ajnaBorrowLimitIndex; // 0 => auto-resolve from oracle TWAP bucket
+    uint256 public ajnaRepayLimitIndex; // 0 => auto-resolve from oracle TWAP bucket
+
+    uint256 internal constant AJNA_WAD = 1e18;
+    uint256 internal constant USDC_TO_AJNA_WAD = 1e12;
+    uint256 internal constant AJNA_MIN_BUCKET_INDEX = 1;
+    uint256 internal constant AJNA_MAX_BUCKET_INDEX = 7_388;
+    uint256 internal constant AJNA_APPROX_BUCKET_STEP_BPS = 50; // Ajna ~0.5% price steps
+
     /// @notice Configurable parameters
     uint256 public maxSwapPercent = 5; // Max 5% CREATOR → USDC (99/1 ratio)
     uint256 public swapSlippageBps = 300; // 3% max swap slippage
@@ -118,6 +140,17 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
     event ParametersUpdated(uint256 maxSwapPercent, uint256 swapSlippageBps);
     event TwapDurationUpdated(uint32 oldDuration, uint32 newDuration);
     event CreatorOracleUpdated(address indexed oldOracle, address indexed newOracle);
+    event AjnaPoolUpdated(address indexed oldPool, address indexed newPool);
+    event AjnaBorrowConfigUpdated(
+        bool enabled,
+        uint256 maxDebt,
+        uint256 maxBorrowPerWithdraw,
+        uint256 minCollateralRatioBps,
+        uint256 borrowLimitIndex,
+        uint256 repayLimitIndex
+    );
+    event AjnaBorrowed(uint256 requestedCreator, uint256 borrowedCreator, uint256 pledgedUsdc);
+    event AjnaRepaid(uint256 repaidCreator, uint256 collateralPulledUsdc);
 
     // =================================
     // ERRORS
@@ -130,6 +163,11 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
     error InvalidTwapDuration(uint32 duration);
     error TwapUnavailable();
     error RequiredSwapFailed();
+    error InvalidCollateralRatioBps(uint256 ratioBps);
+    error InvalidAjnaLimitIndex(uint256 limitIndex);
+    error InvalidAjnaPool(address expectedQuote, address actualQuote, address expectedCollateral, address actualCollateral);
+    error AjnaPositionOpen(uint256 debtCreator, uint256 collateralUsdc);
+    error WithdrawLiquidityUnavailable(uint256 requested, uint256 available);
 
     // =================================
     // MODIFIERS
@@ -213,6 +251,69 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
         autoFeeTier = _autoFeeTier;
     }
 
+    function setAjnaPool(address _ajnaPool) external onlyOwner {
+        address oldPool = address(ajnaPool);
+        if (oldPool != address(0)) {
+            AjnaDebtState memory state = _readAjnaDebtState();
+            if (!state.readable || state.debtCreator != 0 || state.collateralUsdc != 0) {
+                revert AjnaPositionOpen(state.debtCreator, state.collateralUsdc);
+            }
+        }
+
+        if (oldPool != address(0)) {
+            CREATOR.forceApprove(oldPool, 0);
+            USDC.forceApprove(oldPool, 0);
+        }
+
+        if (_ajnaPool == address(0)) {
+            ajnaPool = IAjnaPool(address(0));
+            emit AjnaPoolUpdated(oldPool, address(0));
+            return;
+        }
+
+        IAjnaPool pool = IAjnaPool(_ajnaPool);
+        address quote = pool.quoteTokenAddress();
+        address collateral = pool.collateralAddress();
+        if (quote != address(CREATOR) || collateral != address(USDC)) {
+            revert InvalidAjnaPool(address(CREATOR), quote, address(USDC), collateral);
+        }
+
+        ajnaPool = pool;
+        CREATOR.forceApprove(_ajnaPool, type(uint256).max);
+        USDC.forceApprove(_ajnaPool, type(uint256).max);
+        emit AjnaPoolUpdated(oldPool, _ajnaPool);
+    }
+
+    function setAjnaBorrowConfig(
+        bool _enabled,
+        uint256 _maxDebt,
+        uint256 _maxBorrowPerWithdraw,
+        uint256 _minCollateralRatioBps,
+        uint256 _borrowLimitIndex,
+        uint256 _repayLimitIndex
+    ) external onlyOwner {
+        if (_minCollateralRatioBps < 10_000) {
+            revert InvalidCollateralRatioBps(_minCollateralRatioBps);
+        }
+        if (_borrowLimitIndex > AJNA_MAX_BUCKET_INDEX) {
+            revert InvalidAjnaLimitIndex(_borrowLimitIndex);
+        }
+        if (_repayLimitIndex > AJNA_MAX_BUCKET_INDEX) {
+            revert InvalidAjnaLimitIndex(_repayLimitIndex);
+        }
+
+        ajnaBorrowEnabled = _enabled;
+        ajnaMaxDebt = _maxDebt;
+        ajnaMaxBorrowPerWithdraw = _maxBorrowPerWithdraw;
+        ajnaMinCollateralRatioBps = _minCollateralRatioBps;
+        ajnaBorrowLimitIndex = _borrowLimitIndex;
+        ajnaRepayLimitIndex = _repayLimitIndex;
+
+        emit AjnaBorrowConfigUpdated(
+            _enabled, _maxDebt, _maxBorrowPerWithdraw, _minCollateralRatioBps, _borrowLimitIndex, _repayLimitIndex
+        );
+    }
+
     /// @notice Find best fee tier for a token pair (checks liquidity)
     /// @dev Checks 0.01%, 0.05%, 0.3%, 1% fee tiers
     function _findBestFeeTier(address tokenIn, address tokenOut) internal view returns (uint24 bestFee) {
@@ -264,6 +365,10 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
             CREATOR.forceApprove(address(charmVault), type(uint256).max);
             USDC.forceApprove(address(charmVault), type(uint256).max);
         }
+        if (address(ajnaPool) != address(0)) {
+            CREATOR.forceApprove(address(ajnaPool), type(uint256).max);
+            USDC.forceApprove(address(ajnaPool), type(uint256).max);
+        }
     }
 
     // =================================
@@ -280,116 +385,194 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
 
     /**
      * @notice Strategy valuation health check for ERC-4626 deposit/mint gating.
-     * @dev MUST NOT revert. If the strategy has any USDC exposure, this requires a
-     *      configured and fresh `creatorOracle` price. If there is no USDC exposure,
-     *      returns true even if the oracle is unset.
+     * @dev MUST NOT revert. Any USDC exposure (idle/charm/Ajna collateral) requires a
+     *      fresh CreatorOracle price. Ajna debt state must be readable and above the
+     *      configured collateral ratio threshold when debt is outstanding.
      */
     function isValuationReady() external view override returns (bool) {
-        uint256 idleUsdc = USDC.balanceOf(address(this));
-        uint256 usdcExposure = idleUsdc;
+        (, uint256 charmUsdc, bool charmReadable) = _getCharmExposure();
+        if (!charmReadable) return false;
 
-        // Include USDC exposure inside Charm vault position when present.
-        if (address(charmVault) != address(0)) {
-            uint256 ourShares;
-            uint256 totalShares;
+        AjnaDebtState memory ajnaState = _readAjnaDebtState();
+        if (!ajnaState.readable) return false;
+        if (ajnaState.debtCreator > ajnaMaxDebt) return false;
 
-            try charmVault.balanceOf(address(this)) returns (uint256 s) {
-                ourShares = s;
-            } catch {
-                return false;
-            }
+        uint256 usdcExposure = USDC.balanceOf(address(this)) + charmUsdc + ajnaState.collateralUsdc;
+        bool needsOracle = usdcExposure > 0 || ajnaState.debtCreator > 0;
+        if (!needsOracle) return true;
 
-            try charmVault.totalSupply() returns (uint256 ts) {
-                totalShares = ts;
-            } catch {
-                return false;
-            }
+        (uint256 priceUsd, bool priceReady) = _getFreshCreatorPrice();
+        if (!priceReady) return false;
 
-            if (totalShares != 0 && ourShares != 0) {
-                uint256 total0;
-                uint256 total1;
-                try charmVault.getTotalAmounts() returns (uint256 a0, uint256 a1) {
-                    total0 = a0;
-                    total1 = a1;
-                } catch {
-                    return false;
-                }
-
-                bool creatorIsToken0;
-                try charmVault.token0() returns (address t0) {
-                    creatorIsToken0 = (t0 == address(CREATOR));
-                } catch {
-                    return false;
-                }
-
-                uint256 ourUsdc =
-                    creatorIsToken0 ? (total1 * ourShares) / totalShares : (total0 * ourShares) / totalShares;
-
-                usdcExposure += ourUsdc;
-            }
+        if (ajnaState.debtCreator > 0) {
+            uint256 collateralValueCreator = _usdcToCreatorValueWithPrice(ajnaState.collateralUsdc, priceUsd);
+            uint256 collateralRatioBps = _computeCollateralRatioBps(collateralValueCreator, ajnaState.debtCreator);
+            if (collateralRatioBps < ajnaMinCollateralRatioBps) return false;
         }
 
-        if (usdcExposure == 0) return true;
+        return true;
+    }
 
-        ICreatorOracle oracle = creatorOracle;
-        if (address(oracle) == address(0)) return false;
+    function getAjnaPosition()
+        external
+        view
+        returns (
+            bool configured,
+            bool readable,
+            uint256 debtCreator,
+            uint256 collateralUsdc,
+            uint256 collateralRatioBps
+        )
+    {
+        configured = address(ajnaPool) != address(0);
+        AjnaDebtState memory state = _readAjnaDebtState();
+        readable = state.readable;
+        debtCreator = state.debtCreator;
+        collateralUsdc = state.collateralUsdc;
 
-        try oracle.isPriceFresh() returns (bool fresh) {
-            return fresh;
-        } catch {
-            return false;
+        if (!state.readable || state.debtCreator == 0) {
+            collateralRatioBps = state.debtCreator == 0 ? type(uint256).max : 0;
+            return (configured, readable, debtCreator, collateralUsdc, collateralRatioBps);
         }
+
+        (uint256 priceUsd, bool priceReady) = _getFreshCreatorPrice();
+        if (!priceReady) return (configured, readable, debtCreator, collateralUsdc, 0);
+
+        uint256 collateralValueCreator = _usdcToCreatorValueWithPrice(state.collateralUsdc, priceUsd);
+        collateralRatioBps = _computeCollateralRatioBps(collateralValueCreator, state.debtCreator);
     }
 
     function getTotalAssets() public view override returns (uint256) {
         uint256 idleCreator = CREATOR.balanceOf(address(this));
         uint256 idleUsdc = USDC.balanceOf(address(this));
-        uint256 ourCreator = 0;
-        uint256 ourUsdc = 0;
 
-        if (address(charmVault) != address(0)) {
-            uint256 ourShares = charmVault.balanceOf(address(this));
-            uint256 totalShares = charmVault.totalSupply();
-
-            if (totalShares != 0 && ourShares != 0) {
-                (uint256 total0, uint256 total1) = charmVault.getTotalAmounts();
-
-                // Determine which token is CREATOR
-                bool creatorIsToken0 = address(charmVault.token0()) == address(CREATOR);
-
-                ourCreator = creatorIsToken0 ? (total0 * ourShares) / totalShares : (total1 * ourShares) / totalShares;
-
-                ourUsdc = creatorIsToken0 ? (total1 * ourShares) / totalShares : (total0 * ourShares) / totalShares;
-            }
+        (uint256 charmCreator, uint256 charmUsdc, bool charmReadable) = _getCharmExposure();
+        if (!charmReadable) {
+            charmCreator = 0;
+            charmUsdc = 0;
         }
 
-        uint256 usdcInCreator = _usdcToCreatorValue(ourUsdc + idleUsdc);
-        return ourCreator + idleCreator + usdcInCreator;
+        AjnaDebtState memory ajnaState = _readAjnaDebtState();
+        if (!ajnaState.readable) {
+            // Debt state is unknown: fail closed to avoid overstating equity.
+            return 0;
+        }
+
+        uint256 grossCreator = idleCreator + charmCreator;
+        uint256 usdcInCreator = _usdcToCreatorValue(idleUsdc + charmUsdc + ajnaState.collateralUsdc);
+        uint256 grossCreatorValue = grossCreator + usdcInCreator;
+
+        if (ajnaState.debtCreator >= grossCreatorValue) return 0;
+        return grossCreatorValue - ajnaState.debtCreator;
+    }
+
+    function _getCharmExposure() internal view returns (uint256 creatorAmount, uint256 usdcAmount, bool readable) {
+        if (address(charmVault) == address(0)) return (0, 0, true);
+
+        uint256 ourShares;
+        uint256 totalShares;
+
+        try charmVault.balanceOf(address(this)) returns (uint256 s) {
+            ourShares = s;
+        } catch {
+            return (0, 0, false);
+        }
+
+        try charmVault.totalSupply() returns (uint256 ts) {
+            totalShares = ts;
+        } catch {
+            return (0, 0, false);
+        }
+
+        if (ourShares == 0 || totalShares == 0) return (0, 0, true);
+
+        uint256 total0;
+        uint256 total1;
+        try charmVault.getTotalAmounts() returns (uint256 a0, uint256 a1) {
+            total0 = a0;
+            total1 = a1;
+        } catch {
+            return (0, 0, false);
+        }
+
+        bool creatorIsToken0;
+        try charmVault.token0() returns (address t0) {
+            creatorIsToken0 = (t0 == address(CREATOR));
+        } catch {
+            return (0, 0, false);
+        }
+
+        creatorAmount = creatorIsToken0 ? (total0 * ourShares) / totalShares : (total1 * ourShares) / totalShares;
+        usdcAmount = creatorIsToken0 ? (total1 * ourShares) / totalShares : (total0 * ourShares) / totalShares;
+        readable = true;
+    }
+
+    function _readAjnaDebtState() internal view returns (AjnaDebtState memory state) {
+        IAjnaPool pool = ajnaPool;
+        if (address(pool) == address(0)) {
+            state.readable = true;
+            return state;
+        }
+
+        uint256 t0Debt;
+        uint256 collateralWad;
+        try pool.borrowerInfo(address(this)) returns (uint256 t0Debt_, uint256 collateral_, uint256) {
+            t0Debt = t0Debt_;
+            collateralWad = collateral_;
+        } catch {
+            return state;
+        }
+
+        uint256 inflator;
+        try pool.inflatorInfo() returns (uint256 inflator_, uint256) {
+            inflator = inflator_;
+        } catch {
+            return state;
+        }
+        if (inflator == 0) return state;
+
+        state.readable = true;
+        state.debtCreator = t0Debt == 0 ? 0 : Math.mulDiv(t0Debt, inflator, AJNA_WAD, Math.Rounding.Ceil);
+        state.collateralUsdc = collateralWad / USDC_TO_AJNA_WAD;
+    }
+
+    function _getFreshCreatorPrice() internal view returns (uint256 priceUsd, bool fresh) {
+        ICreatorOracle oracle = creatorOracle;
+        if (address(oracle) == address(0)) return (0, false);
+
+        try oracle.isPriceFresh() returns (bool ok) {
+            fresh = ok;
+        } catch {
+            return (0, false);
+        }
+        if (!fresh) return (0, false);
+
+        try oracle.getCreatorPrice() returns (int256 priceUsdSigned, uint256) {
+            if (priceUsdSigned <= 0) return (0, false);
+            return (uint256(priceUsdSigned), true);
+        } catch {
+            return (0, false);
+        }
     }
 
     function _usdcToCreatorValue(uint256 usdcAmount) internal view returns (uint256 creatorAmount) {
         if (usdcAmount == 0) return 0;
 
-        ICreatorOracle oracle = creatorOracle;
-        if (address(oracle) == address(0)) return 0;
-
-        // Strict: require freshness; if stale/unavailable, return conservative valuation.
-        bool fresh;
-        try oracle.isPriceFresh() returns (bool ok) {
-            fresh = ok;
-        } catch {
-            return 0;
-        }
+        (uint256 priceUsd, bool fresh) = _getFreshCreatorPrice();
         if (!fresh) return 0;
+        return _usdcToCreatorValueWithPrice(usdcAmount, priceUsd);
+    }
 
-        try oracle.getCreatorPrice() returns (int256 priceUsd, uint256) {
-            if (priceUsd <= 0) return 0;
-            // USDC (1e6) -> USD (1e18): * 1e12, then USD (1e18) -> CREATOR (1e18): *1e18/priceUsd
-            // => usdcAmount * 1e30 / priceUsd
-            creatorAmount = Math.mulDiv(usdcAmount, 1e30, uint256(priceUsd));
-        } catch {
-            return 0;
-        }
+    function _usdcToCreatorValueWithPrice(uint256 usdcAmount, uint256 creatorPriceUsd) internal pure returns (uint256) {
+        if (usdcAmount == 0 || creatorPriceUsd == 0) return 0;
+        // USDC (1e6) -> USD (1e18): *1e12, then USD (1e18) -> CREATOR (1e18): *1e18/price
+        // => usdcAmount * 1e30 / creatorPriceUsd
+        return Math.mulDiv(usdcAmount, 1e30, creatorPriceUsd);
+    }
+
+    function _computeCollateralRatioBps(uint256 collateralValueCreator, uint256 debtCreator) internal pure returns (uint256) {
+        if (debtCreator == 0) return type(uint256).max;
+        return Math.mulDiv(collateralValueCreator, 10_000, debtCreator);
     }
 
     /**
@@ -474,6 +657,14 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
 
         uint256 totalCreator = CREATOR.balanceOf(address(this));
         uint256 totalUsdc = USDC.balanceOf(address(this));
+
+        // Deposit-side policy: repay Ajna CREATOR debt first, then allocate remaining
+        // CREATOR/USDC to Charm. Any collateral released by repay increases USDC leg.
+        (uint256 repaidCreator,) = _repayAjnaDebtWithCreator(totalCreator);
+        if (repaidCreator > 0) {
+            totalCreator = CREATOR.balanceOf(address(this));
+            totalUsdc = USDC.balanceOf(address(this));
+        }
 
         if (totalCreator == 0 && totalUsdc == 0) return 0;
 
@@ -764,17 +955,28 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
             }
         }
 
-        // Convert any USDC back to CREATOR before returning.
-        uint256 totalUsdc = USDC.balanceOf(address(this));
-        if (totalUsdc > 0) {
-            _swapUsdcToCreatorSafe(totalUsdc);
+        uint256 availableCreator = CREATOR.balanceOf(address(this));
+        if (availableCreator < amount) {
+            uint256 creatorNeeded = amount - availableCreator;
+
+            // Ajna-first: borrow CREATOR against available USDC collateral.
+            _tryAjnaBorrow(creatorNeeded);
+            availableCreator = CREATOR.balanceOf(address(this));
+
+            // Swap fallback for any residual deficit.
+            if (availableCreator < amount) {
+                uint256 totalUsdc = USDC.balanceOf(address(this));
+                if (totalUsdc > 0) {
+                    _swapUsdcToCreatorSafe(totalUsdc);
+                    availableCreator = CREATOR.balanceOf(address(this));
+                }
+            }
         }
 
-        uint256 availableCreator = CREATOR.balanceOf(address(this));
-        withdrawn = availableCreator > amount ? amount : availableCreator;
-        if (withdrawn > 0) {
-            CREATOR.safeTransfer(vault, withdrawn);
-        }
+        if (availableCreator < amount) revert WithdrawLiquidityUnavailable(amount, availableCreator);
+
+        CREATOR.safeTransfer(vault, amount);
+        withdrawn = amount;
 
         emit StrategyWithdraw(msg.sender, amount, withdrawn);
     }
@@ -824,6 +1026,157 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
             if (required) revert RequiredSwapFailed();
             amountOut = 0;
         }
+    }
+
+    function _tryAjnaBorrow(uint256 creatorNeeded) internal returns (uint256 borrowed) {
+        if (!ajnaBorrowEnabled || creatorNeeded == 0) return 0;
+
+        IAjnaPool pool = ajnaPool;
+        if (address(pool) == address(0)) return 0;
+
+        AjnaDebtState memory state = _readAjnaDebtState();
+        if (!state.readable || state.debtCreator >= ajnaMaxDebt) return 0;
+
+        uint256 usdcAvailable = USDC.balanceOf(address(this));
+
+        (uint256 priceUsd, bool priceReady) = _getFreshCreatorPrice();
+        if (!priceReady) return 0;
+
+        uint256 debtCapacity = ajnaMaxDebt - state.debtCreator;
+        uint256 existingCollateralCreator = _usdcToCreatorValueWithPrice(state.collateralUsdc, priceUsd);
+        uint256 totalCollateralCreator = existingCollateralCreator + _usdcToCreatorValueWithPrice(usdcAvailable, priceUsd);
+        uint256 maxTotalDebtFromCollateral = Math.mulDiv(totalCollateralCreator, 10_000, ajnaMinCollateralRatioBps);
+        if (maxTotalDebtFromCollateral <= state.debtCreator) return 0;
+        uint256 maxBorrowByCollateral = maxTotalDebtFromCollateral - state.debtCreator;
+
+        uint256 borrowTarget = creatorNeeded;
+        if (borrowTarget > ajnaMaxBorrowPerWithdraw) borrowTarget = ajnaMaxBorrowPerWithdraw;
+        if (borrowTarget > debtCapacity) borrowTarget = debtCapacity;
+        if (borrowTarget > maxBorrowByCollateral) borrowTarget = maxBorrowByCollateral;
+        if (borrowTarget == 0) return 0;
+
+        uint256 newDebt = state.debtCreator + borrowTarget;
+        uint256 requiredTotalCollateralCreator = Math.mulDiv(newDebt, ajnaMinCollateralRatioBps, 10_000, Math.Rounding.Ceil);
+        uint256 additionalCollateralCreatorNeeded =
+            requiredTotalCollateralCreator > existingCollateralCreator ? requiredTotalCollateralCreator - existingCollateralCreator : 0;
+        uint256 collateralToPledgeUsdc =
+            additionalCollateralCreatorNeeded == 0 ? 0 : _creatorToUsdcAmountWithPrice(additionalCollateralCreatorNeeded, priceUsd);
+        if (collateralToPledgeUsdc > usdcAvailable) {
+            collateralToPledgeUsdc = usdcAvailable;
+        }
+
+        uint256 actualTotalCollateralCreator =
+            existingCollateralCreator + _usdcToCreatorValueWithPrice(collateralToPledgeUsdc, priceUsd);
+        uint256 maxDebtFromActualCollateral = Math.mulDiv(actualTotalCollateralCreator, 10_000, ajnaMinCollateralRatioBps);
+        if (maxDebtFromActualCollateral <= state.debtCreator) return 0;
+        uint256 maxBorrowFromActualCollateral = maxDebtFromActualCollateral - state.debtCreator;
+        if (borrowTarget > maxBorrowFromActualCollateral) {
+            borrowTarget = maxBorrowFromActualCollateral;
+            if (borrowTarget == 0) return 0;
+        }
+
+        uint256 creatorBefore = CREATOR.balanceOf(address(this));
+        uint256 usdcBefore = USDC.balanceOf(address(this));
+        uint256 borrowLimitIndex = _resolveAjnaLimitIndex(true);
+
+        try pool.drawDebt(address(this), borrowTarget, borrowLimitIndex, _usdcToAjnaWad(collateralToPledgeUsdc)) {
+            uint256 creatorAfter = CREATOR.balanceOf(address(this));
+            if (creatorAfter > creatorBefore) {
+                borrowed = creatorAfter - creatorBefore;
+                uint256 usdcAfter = USDC.balanceOf(address(this));
+                uint256 pledgedUsdc = usdcBefore > usdcAfter ? usdcBefore - usdcAfter : 0;
+                emit AjnaBorrowed(borrowTarget, borrowed, pledgedUsdc);
+            }
+        } catch {
+            return 0;
+        }
+    }
+
+    function _repayAjnaDebtWithCreator(uint256 availableCreator)
+        internal
+        returns (uint256 repaid, uint256 collateralPulledUsdc)
+    {
+        if (availableCreator == 0) return (0, 0);
+
+        IAjnaPool pool = ajnaPool;
+        if (address(pool) == address(0)) return (0, 0);
+
+        AjnaDebtState memory state = _readAjnaDebtState();
+        if (!state.readable || state.debtCreator == 0) return (0, 0);
+
+        uint256 repayTarget = availableCreator > state.debtCreator ? state.debtCreator : availableCreator;
+        if (repayTarget == 0) return (0, 0);
+
+        uint256 collateralToPullWad;
+        if (state.collateralUsdc > 0 && state.debtCreator > 0) {
+            uint256 proportionalCollateralUsdc = Math.mulDiv(state.collateralUsdc, repayTarget, state.debtCreator);
+            collateralToPullWad = _usdcToAjnaWad(proportionalCollateralUsdc);
+        }
+
+        uint256 usdcBefore = USDC.balanceOf(address(this));
+        uint256 repayLimitIndex = _resolveAjnaLimitIndex(false);
+        try pool.repayDebt(address(this), repayTarget, collateralToPullWad, address(this), repayLimitIndex) returns (
+            uint256 amountRepaid
+        ) {
+            repaid = amountRepaid;
+            uint256 usdcAfter = USDC.balanceOf(address(this));
+            collateralPulledUsdc = usdcAfter > usdcBefore ? usdcAfter - usdcBefore : 0;
+            if (repaid > 0 || collateralPulledUsdc > 0) {
+                emit AjnaRepaid(repaid, collateralPulledUsdc);
+            }
+        } catch {
+            return (0, 0);
+        }
+    }
+
+    function _usdcToAjnaWad(uint256 usdcAmount) internal pure returns (uint256) {
+        return usdcAmount * USDC_TO_AJNA_WAD;
+    }
+
+    /**
+     * @notice Resolve Ajna draw/repay limit index.
+     * @dev Configured non-zero index is used as-is (clamped); 0 enables oracle-driven auto mode:
+     *      base bucket from CreatorOracle V3 TWAP helper + conservative collateral-ratio buffer.
+     */
+    function _resolveAjnaLimitIndex(bool forBorrow) internal view returns (uint256 limitIndex) {
+        uint256 configured = forBorrow ? ajnaBorrowLimitIndex : ajnaRepayLimitIndex;
+        if (configured != 0) return _clampAjnaBucketIndex(configured);
+
+        uint256 oracleBucket = _oracleSuggestedAjnaBucket();
+        if (oracleBucket == 0) return AJNA_MAX_BUCKET_INDEX;
+
+        uint256 extraCollateralBps =
+            ajnaMinCollateralRatioBps > 10_000 ? ajnaMinCollateralRatioBps - 10_000 : 0;
+        uint256 safetySteps = Math.ceilDiv(extraCollateralBps, AJNA_APPROX_BUCKET_STEP_BPS);
+        return _clampAjnaBucketIndex(oracleBucket + safetySteps);
+    }
+
+    function _oracleSuggestedAjnaBucket() internal view returns (uint256 bucketIndex) {
+        ICreatorOracle oracle = creatorOracle;
+        if (address(oracle) == address(0)) return 0;
+
+        try oracle.getAjnaBucketFromV3TWAP(twapDuration) returns (uint256 suggested) {
+            bucketIndex = _clampAjnaBucketIndex(suggested);
+        } catch {
+            bucketIndex = 0;
+        }
+    }
+
+    function _clampAjnaBucketIndex(uint256 index) internal pure returns (uint256) {
+        if (index < AJNA_MIN_BUCKET_INDEX) return AJNA_MIN_BUCKET_INDEX;
+        if (index > AJNA_MAX_BUCKET_INDEX) return AJNA_MAX_BUCKET_INDEX;
+        return index;
+    }
+
+    function _creatorToUsdcAmountWithPrice(uint256 creatorAmount, uint256 creatorPriceUsd)
+        internal
+        pure
+        returns (uint256)
+    {
+        if (creatorAmount == 0 || creatorPriceUsd == 0) return 0;
+        // Inverse of _usdcToCreatorValueWithPrice:
+        // creator = usdc * 1e30 / price  => usdc = creator * price / 1e30
+        return Math.mulDiv(creatorAmount, creatorPriceUsd, 1e30, Math.Rounding.Ceil);
     }
 
     // =================================

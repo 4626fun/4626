@@ -12,98 +12,91 @@ export async function ensureWaitlistSchema(db: Db): Promise<void> {
   if (waitlistSchemaEnsurePromise) return waitlistSchemaEnsurePromise
   waitlistSchemaEnsurePromise = (async () => {
     try {
-      // Create a minimal, durable waitlist schema. Safe to run repeatedly.
-      await db.sql`
-      CREATE TABLE IF NOT EXISTS profiles (
-        id BIGSERIAL PRIMARY KEY,
-        email TEXT UNIQUE,
-        primary_wallet TEXT NULL,
-        solana_wallet TEXT NULL,
-        privy_user_id TEXT NULL,
-        embedded_wallet TEXT NULL,
-        embedded_wallet_chain TEXT NULL,
-        embedded_wallet_client_type TEXT NULL,
-        base_sub_account TEXT NULL,
-        persona TEXT NULL,
-        has_creator_coin BOOLEAN NULL,
-        contact_preference TEXT NULL,
-        border_tier INT NOT NULL DEFAULT 0,
-        x_follow_verified_at TIMESTAMPTZ NULL,
-        app_access_status TEXT NOT NULL DEFAULT 'pending',
-        app_access_decision_note TEXT NULL,
-        app_access_decided_at TIMESTAMPTZ NULL,
-        app_access_decided_by TEXT NULL,
-        verifications JSONB NULL,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-
-    // Backfill/migrate older tables that were created without newer columns.
-    // `IF NOT EXISTS` is supported on modern Postgres versions; if it throws, we ignore.
-    try {
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS persona TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS has_creator_coin BOOLEAN NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS privy_user_id TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS embedded_wallet TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS embedded_wallet_chain TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS embedded_wallet_client_type TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS base_sub_account TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS primary_wallet TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS solana_wallet TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS contact_preference TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS app_access_status TEXT NOT NULL DEFAULT 'pending';`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS app_access_decision_note TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS app_access_decided_at TIMESTAMPTZ NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS app_access_decided_by TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS verifications JSONB NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS csw_address TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS primary_smart_wallet TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS primary_embedded_eoa TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS border_tier INT NOT NULL DEFAULT 0;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS x_follow_verified_at TIMESTAMPTZ NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS display_name TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS bio TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS website TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS avatar_url TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS banner_url TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS profile_fields JSONB NULL;`
-
-      // Pre-provisioning columns (quickstart data prepared at waitlist signup)
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprovisioned_at TIMESTAMPTZ NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprov_server_wallet_id TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprov_server_wallet_address TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprov_coin_address TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprov_coin_symbol TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS preprov_zora_handle TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS erc8004_agent_id BIGINT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS erc8128_agent_id TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS lens_handle TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS lens_account_address TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS lens_owner_address TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ADD COLUMN IF NOT EXISTS lens_grove_uri TEXT NULL;`
-      await db.sql`ALTER TABLE profiles ALTER COLUMN email DROP NOT NULL;`
-    } catch {
-      // ignore (older Postgres or restricted perms)
-    }
-
-      await db.sql`CREATE INDEX IF NOT EXISTS profiles_created_at_idx ON profiles (created_at DESC);`
-      await db.sql`CREATE INDEX IF NOT EXISTS profiles_csw_idx ON profiles (csw_address) WHERE csw_address IS NOT NULL;`
-
-      // Referral schema depends on profiles existing.
-      await ensureReferralsSchema(db)
-
-      // Points + profile completion schema.
-      await ensureWaitlistPointsSchema(db)
-
-      // Canonical wallet graph + provenance fields.
-      await ensureCanonicalWalletsSchema(db)
-
-      waitlistSchemaEnsured = true
-    } catch {
+      const preflight = await db.sql`
+        SELECT
+          to_regclass('public.profiles') IS NOT NULL AS has_profiles,
+          to_regclass('public.referral_clicks') IS NOT NULL AS has_referral_clicks,
+          to_regclass('public.referral_conversions') IS NOT NULL AS has_referral_conversions,
+          to_regclass('public.points') IS NOT NULL AS has_points,
+          to_regclass('public.wallets') IS NOT NULL AS has_wallets,
+          to_regclass('public.profile_wallets') IS NOT NULL AS has_profile_wallets,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'profiles'
+              AND column_name = 'app_access_status'
+          ) AS has_app_access_status,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'profiles'
+              AND column_name = 'verifications'
+          ) AS has_verifications,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'profiles'
+              AND column_name = 'profile_completed_at'
+          ) AS has_profile_completed_at,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'profiles'
+              AND column_name = 'primary_smart_wallet'
+          ) AS has_primary_smart_wallet,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'profiles'
+              AND column_name = 'primary_embedded_eoa'
+          ) AS has_primary_embedded_eoa;
+      `
+      const status = preflight.rows?.[0] ?? {}
+      if (
+        Boolean(status.has_profiles) &&
+        Boolean(status.has_referral_clicks) &&
+        Boolean(status.has_referral_conversions) &&
+        Boolean(status.has_points) &&
+        Boolean(status.has_wallets) &&
+        Boolean(status.has_profile_wallets) &&
+        Boolean(status.has_app_access_status) &&
+        Boolean(status.has_verifications) &&
+        Boolean(status.has_profile_completed_at) &&
+        Boolean(status.has_primary_smart_wallet) &&
+        Boolean(status.has_primary_embedded_eoa)
+      ) {
+        await ensureReferralsSchema(db)
+        await ensureWaitlistPointsSchema(db)
+        await ensureCanonicalWalletsSchema(db)
+        waitlistSchemaEnsured = true
+        return
+      }
+      const missing: string[] = []
+      if (!Boolean(status.has_profiles)) missing.push('public.profiles')
+      if (!Boolean(status.has_referral_clicks)) missing.push('public.referral_clicks')
+      if (!Boolean(status.has_referral_conversions)) missing.push('public.referral_conversions')
+      if (!Boolean(status.has_points)) missing.push('public.points')
+      if (!Boolean(status.has_wallets)) missing.push('public.wallets')
+      if (!Boolean(status.has_profile_wallets)) missing.push('public.profile_wallets')
+      if (!Boolean(status.has_app_access_status)) missing.push('public.profiles.app_access_status')
+      if (!Boolean(status.has_verifications)) missing.push('public.profiles.verifications')
+      if (!Boolean(status.has_profile_completed_at)) missing.push('public.profiles.profile_completed_at')
+      if (!Boolean(status.has_primary_smart_wallet)) missing.push('public.profiles.primary_smart_wallet')
+      if (!Boolean(status.has_primary_embedded_eoa)) missing.push('public.profiles.primary_embedded_eoa')
+      throw new Error(`waitlist_schema_migration_required:${missing.join(',')}`)
+    } catch (error) {
       waitlistSchemaEnsured = false
+      if (
+        error instanceof Error &&
+        /_schema_migration_required:/.test(error.message)
+      ) {
+        throw error
+      }
       throw new Error('waitlist_schema_ensure_failed')
     } finally {
       waitlistSchemaEnsurePromise = null

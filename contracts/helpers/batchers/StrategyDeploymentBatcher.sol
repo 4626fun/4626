@@ -63,6 +63,8 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
     address public immutable ajnaStrategyFactory;
     address public immutable protocolOwner;
     bytes4 private constant ADD_STRATEGY_SELECTOR = bytes4(keccak256("addStrategy(address,uint256)"));
+    // Charm managerFee uses 1e6 precision (100% = 1_000_000).
+    uint24 private constant CHARM_MANAGER_FEE_PIPS = 160_000; // 16%
     int24 private constant CHARM_MAX_TWAP_DEVIATION = 500;
     uint32 private constant CHARM_TWAP_DURATION = 300;
 
@@ -161,7 +163,7 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
             ICharmFactory.VaultParams({
                 pool: result.v3Pool,
                 manager: owner, // manager (can call rebalance)
-                managerFee: 0,
+                managerFee: CHARM_MANAGER_FEE_PIPS,
                 rebalanceDelegate: address(0),
                 maxTotalSupply: type(uint256).max, // maxTotalSupply (unlimited)
                 baseThreshold: 3000, // baseThreshold (ticks)

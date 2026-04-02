@@ -25,8 +25,10 @@ interface IStrategy {
     function asset() external view returns (address);
 
     /**
-     * @notice Get strategy's total value in underlying tokens
-     * @return Total amount of underlying tokens managed by strategy
+     * @notice Get strategy net equity in underlying tokens.
+     * @dev Implementations with borrow liabilities MUST return net assets
+     *      (gross assets minus liabilities), never gross exposure.
+     * @return Net amount of underlying tokens attributable to vault shareholders
      */
     function getTotalAssets() external view returns (uint256);
 

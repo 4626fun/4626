@@ -6,6 +6,7 @@ import { useInfiniteQuery } from '@tanstack/react-query'
 
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
 import { ExploreMetricsDashboard } from '@/components/explore/ExploreMetricsDashboard'
+import { ExploreLoadMoreButton, ExploreLoadingMoreRows, ExploreTableMessage } from '@/components/explore/ExploreUiPrimitives'
 import { useWindowInfiniteScrollLoadMore } from '@/hooks/useWindowInfiniteScrollLoadMore'
 import { fetchZoraExplore } from '@/lib/zora/client'
 import type { ZoraCoin } from '@/lib/zora/types'
@@ -396,20 +397,19 @@ export function ExploreTransactions() {
               Array.from({ length: 10 }).map((_, i) => <ActivityRowSkeleton key={i} />)
             ) : isError ? (
               // Error state
-              <div className="px-6 py-12 text-center">
-                <p className="text-zinc-400 mb-4">Failed to load activity</p>
-                <p className="text-xs text-zinc-600">{(error as Error)?.message || 'Unknown error'}</p>
-              </div>
+              <ExploreTableMessage title="Failed to load activity" detail={(error as Error)?.message || 'Unknown error'} />
             ) : filteredActivity.length === 0 ? (
               // Empty state
-              <div className="px-6 py-16 text-center">
-                <div className="w-12 h-12 rounded-full bg-zinc-800 flex items-center justify-center mx-auto mb-4">
-                  <ArrowUpRight className="w-6 h-6 text-zinc-600" />
-                </div>
-                <p className="text-zinc-400 text-sm mb-2">
-                  {searchQuery ? 'No activity found matching your search' : 'No recent activity'}
-                </p>
-              </div>
+              <ExploreTableMessage
+                title={searchQuery ? 'No activity found matching your search' : 'No recent activity'}
+                icon={
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-zinc-800">
+                    <ArrowUpRight className="h-6 w-6 text-zinc-600" />
+                  </div>
+                }
+                className="px-6 py-16 text-center"
+                titleClassName="text-zinc-400 text-sm"
+              />
             ) : (
               // Activity rows
               filteredActivity.map((coin, index) => (
@@ -418,27 +418,19 @@ export function ExploreTransactions() {
             )}
 
             {/* Loading more indicator */}
-            {isFetchingNextPage && (
-              <>
-                <ActivityRowSkeleton />
-                <ActivityRowSkeleton />
-                <ActivityRowSkeleton />
-              </>
-            )}
+            <ExploreLoadingMoreRows
+              isFetchingNextPage={isFetchingNextPage}
+              renderSkeletonRow={() => <ActivityRowSkeleton />}
+            />
           </div>
 
-          {/* Load more button (fallback for scroll) */}
-          {hasNextPage && !isFetchingNextPage && (
-            <div className="px-6 py-4 border-t border-white/8 flex justify-center">
-              <button
-                type="button"
-                onClick={() => fetchNextPage()}
-                className="px-6 py-2 rounded-full text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-              >
-                Load more
-              </button>
-            </div>
-          )}
+          <ExploreLoadMoreButton
+            hasNextPage={Boolean(hasNextPage)}
+            isFetchingNextPage={isFetchingNextPage}
+            onLoadMore={() => {
+              void fetchNextPage()
+            }}
+          />
         </motion.div>
 
         {/* Info footer */}

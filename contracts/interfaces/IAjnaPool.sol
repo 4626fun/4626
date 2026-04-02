@@ -21,6 +21,35 @@ interface IAjnaPool {
         returns (uint256 bucketLP, uint256 addedAmount);
 
     /**
+     * @notice Borrow quote token and/or pledge collateral.
+     * @dev Amounts use Ajna WAD precision (1e18), even for non-18-decimal tokens.
+     * @param borrowerAddress Borrower account to mutate
+     * @param amountToBorrow Quote token amount to borrow (WAD)
+     * @param limitIndex Lower bound on tolerated LUP move
+     * @param collateralToPledge Collateral amount to pledge (WAD)
+     */
+    function drawDebt(address borrowerAddress, uint256 amountToBorrow, uint256 limitIndex, uint256 collateralToPledge)
+        external;
+
+    /**
+     * @notice Repay quote token debt and optionally pull collateral.
+     * @dev Amounts use Ajna WAD precision (1e18), even for non-18-decimal tokens.
+     * @param borrowerAddress Borrower account to mutate
+     * @param maxQuoteTokenAmountToRepay Maximum quote token to repay (WAD)
+     * @param collateralAmountToPull Maximum collateral to pull (WAD)
+     * @param recipient Recipient of pulled collateral
+     * @param limitIndex Lower bound on tolerated LUP move while pulling collateral
+     * @return amountRepaid Actual quote token repaid (WAD)
+     */
+    function repayDebt(
+        address borrowerAddress,
+        uint256 maxQuoteTokenAmountToRepay,
+        uint256 collateralAmountToPull,
+        address recipient,
+        uint256 limitIndex
+    ) external returns (uint256 amountRepaid);
+
+    /**
      * @notice Remove quote tokens from a lending bucket
      * @param amount Amount of LP tokens to burn
      * @param index Bucket index
@@ -67,6 +96,23 @@ interface IAjnaPool {
         external
         view
         returns (uint256 lpBalance, uint256 collateral, uint256 bankruptcyTime, uint256 deposit, uint256 scale);
+
+    /**
+     * @notice Get borrower debt and collateral state.
+     * @dev Values are Ajna WAD precision.
+     * @param borrower Borrower address
+     * @return t0Debt Borrower t0 debt (WAD)
+     * @return collateral Borrower pledged collateral (WAD)
+     * @return npTpRatio Borrower neutral/threshold ratio (WAD)
+     */
+    function borrowerInfo(address borrower) external view returns (uint256 t0Debt, uint256 collateral, uint256 npTpRatio);
+
+    /**
+     * @notice Get pool inflator state used to transform t0Debt into current debt.
+     * @return inflator Pool inflator (WAD)
+     * @return lastUpdate Timestamp of inflator update
+     */
+    function inflatorInfo() external view returns (uint256 inflator, uint256 lastUpdate);
 
     /**
      * @notice Get the pool's quote token address
@@ -141,9 +187,3 @@ interface IAjnaPoolFactory {
      */
     function deployedPoolsList(uint256 index) external view returns (address pool);
 }
-
-/**
- * @title IAjnaPool
- * @notice Interface for Ajna lending pools
- * @dev Simplified interface for ERC20 pools (quote token lending)
- */

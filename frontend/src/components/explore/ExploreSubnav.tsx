@@ -1,5 +1,5 @@
 import { Search } from 'lucide-react'
-import { Link, useLocation, useSearchParams } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { useUniswapServiceStatus } from '@/lib/uniswap/hooks'
 
 type Tab = {
@@ -16,9 +16,6 @@ type ExploreSortOption = {
   label: string
   value: string
 }
-
-type ExploreParamKey = 'time' | 'sort'
-type ExploreSearchParamSetter = (nextInit: URLSearchParams, navigateOpts?: { replace?: boolean }) => void
 
 const TABS: Tab[] = [
   { label: 'Creators', to: '/explore/creators' },
@@ -49,26 +46,17 @@ function isActive(pathname: string, to: string): boolean {
 }
 
 export function applyExploreParamChange({
-  key,
   value,
+  currentValue,
   onChange,
-  searchParams,
-  setSearchParams,
 }: {
-  key: ExploreParamKey
   value: string
+  currentValue: string
   onChange?: (value: string) => void
-  searchParams: URLSearchParams
-  setSearchParams: ExploreSearchParamSetter
 }) {
-  if (onChange) {
-    onChange(value)
-    return
-  }
-  if (searchParams.get(key) === value) return
-  const newParams = new URLSearchParams(searchParams)
-  newParams.set(key, value)
-  setSearchParams(newParams, { replace: true })
+  if (!onChange) return
+  if (currentValue === value) return
+  onChange(value)
 }
 
 export function ExploreSubnav({
@@ -98,29 +86,24 @@ export function ExploreSubnav({
   disableUniswapTimeGating?: boolean
 }) {
   const location = useLocation()
-  const [searchParams, setSearchParams] = useSearchParams()
-  
+
   // Check if Uniswap historical data service is available
   const { data: uniswapStatus } = useUniswapServiceStatus()
   const uniswapAvailable = uniswapStatus?.available === true
 
   const handleTimeFilterClick = (value: string) => {
     applyExploreParamChange({
-      key: 'time',
       value,
+      currentValue: currentTimeFilter,
       onChange: onTimeFilterChange,
-      searchParams,
-      setSearchParams,
     })
   }
 
   const handleSortClick = (value: string) => {
     applyExploreParamChange({
-      key: 'sort',
       value,
+      currentValue: currentSort,
       onChange: onSortChange,
-      searchParams,
-      setSearchParams,
     })
   }
 

@@ -2,9 +2,13 @@ import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { useInfiniteQuery } from '@tanstack/react-query'
 
+import { ExploreHorizontalScrollArrows } from '@/components/explore/ExploreHorizontalScrollArrows'
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
 import { ExploreMetricsDashboard } from '@/components/explore/ExploreMetricsDashboard'
 import { PoolRow, PoolTableHeader, PoolRowSkeleton } from '@/components/explore/PoolRow'
+import { ExploreLoadMoreButton, ExploreLoadingMoreRows, ExploreTableMessage } from '@/components/explore/ExploreUiPrimitives'
+import { useExploreHorizontalTableSync } from '@/components/explore/useExploreHorizontalTableSync'
+import { getExploreColumns, getHorizontalScrollStops } from '@/components/explore/tableColumns'
 import { fetchZoraExplore } from '@/lib/zora/client'
 import { useMigratedCoins } from '@/hooks/useMigratedCoins'
 import { useWindowInfiniteScrollLoadMore } from '@/hooks/useWindowInfiniteScrollLoadMore'
@@ -90,6 +94,17 @@ export function ExploreContent() {
     onLoadMore: fetchNextPage,
   })
 
+  const { hasHorizontalOverflow, canScrollLeft, canScrollRight, handleHeaderScroll, handleBodyScroll, handleArrowClick } =
+    useExploreHorizontalTableSync({
+      headerId: 'explore-content-header',
+      bodyId: 'explore-content-body',
+    })
+
+  const columnScrollStops = useMemo(() => {
+    const columns = getExploreColumns({ variant: 'content', timeframe: currentTimeFilter })
+    return getHorizontalScrollStops(columns)
+  }, [currentTimeFilter])
+
   return (
     <div className="relative min-h-screen pt-1 sm:pt-2">
       <div className="max-w-[1400px] mx-auto px-3 sm:px-6 pt-2 sm:pt-4 pb-4 sm:pb-8">
@@ -142,15 +157,7 @@ export function ExploreContent() {
               className="overflow-x-auto scrollbar-hide" 
               id="explore-content-header"
               data-scrolled="0"
-              onScroll={(e) => {
-                const body = document.getElementById('explore-content-body')
-                const scrolled = e.currentTarget.scrollLeft > 0
-                e.currentTarget.dataset.scrolled = scrolled ? '1' : '0'
-                if (body) {
-                  body.scrollLeft = e.currentTarget.scrollLeft
-                  body.dataset.scrolled = scrolled ? '1' : '0'
-                }
-              }}
+              onScroll={handleHeaderScroll}
             >
               <div className="min-w-max">
                 <PoolTableHeader timeframe={currentTimeFilter} currentSort={currentSort} onSortChange={handleSortChange} />
@@ -158,20 +165,22 @@ export function ExploreContent() {
             </div>
           </div>
 
+          <ExploreHorizontalScrollArrows
+            hasOverflow={hasHorizontalOverflow}
+            canScrollLeft={canScrollLeft}
+            canScrollRight={canScrollRight}
+            onScrollLeft={() => handleArrowClick('left', columnScrollStops)}
+            onScrollRight={() => handleArrowClick('right', columnScrollStops)}
+            leftAriaLabel="Scroll content table left"
+            rightAriaLabel="Scroll content table right"
+          />
+
           {/* Table body with synced horizontal scroll */}
           <div 
             className="overflow-x-auto scrollbar-hide" 
             id="explore-content-body"
             data-scrolled="0"
-            onScroll={(e) => {
-              const header = document.getElementById('explore-content-header')
-              const scrolled = e.currentTarget.scrollLeft > 0
-              if (header) {
-                header.scrollLeft = e.currentTarget.scrollLeft
-                header.dataset.scrolled = scrolled ? '1' : '0'
-              }
-              e.currentTarget.dataset.scrolled = scrolled ? '1' : '0'
-            }}
+            onScroll={handleBodyScroll}
           >
             <div className="min-w-max divide-y divide-white/6">
               {isLoading ? (
@@ -179,17 +188,10 @@ export function ExploreContent() {
                 Array.from({ length: 10 }).map((_, i) => <PoolRowSkeleton key={i} />)
               ) : isError ? (
                 // Error state
-                <div className="px-6 py-12 text-center">
-                  <p className="text-zinc-400 mb-4">Failed to load content</p>
-                  <p className="text-xs text-zinc-600">{(error as Error)?.message || 'Unknown error'}</p>
-                </div>
+                <ExploreTableMessage title="Failed to load content" detail={(error as Error)?.message || 'Unknown error'} />
               ) : filteredCoins.length === 0 ? (
                 // Empty state
-                <div className="px-6 py-12 text-center">
-                  <p className="text-zinc-400">
-                    {searchQuery ? 'No content found matching your search' : 'No content available'}
-                  </p>
-                </div>
+                <ExploreTableMessage title={searchQuery ? 'No content found matching your search' : 'No content available'} />
               ) : (
                 // Pool rows
                 filteredCoins.map((coin, index) => {
@@ -210,26 +212,19 @@ export function ExploreContent() {
               )}
 
               {/* Loading more indicator */}
-              {isFetchingNextPage && (
-                <>
-                  <PoolRowSkeleton />
-                  <PoolRowSkeleton />
-                  <PoolRowSkeleton />
-                </>
-              )}
+              <ExploreLoadingMoreRows
+                isFetchingNextPage={isFetchingNextPage}
+                renderSkeletonRow={() => <PoolRowSkeleton />}
+              />
 
-              {/* Load more button (fallback for scroll) */}
-              {hasNextPage && !isFetchingNextPage && (
-                <div className="px-6 py-4 border-t border-zinc-800 flex justify-center">
-                  <button
-                    type="button"
-                    onClick={() => fetchNextPage()}
-                    className="px-6 py-2 rounded-full text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-                  >
-                    Load more
-                  </button>
-                </div>
-              )}
+              <ExploreLoadMoreButton
+                hasNextPage={Boolean(hasNextPage)}
+                isFetchingNextPage={isFetchingNextPage}
+                onLoadMore={() => {
+                  void fetchNextPage()
+                }}
+                containerClassName="px-6 py-4 border-t border-zinc-800 flex justify-center"
+              />
             </div>
           </div>
         </motion.div>

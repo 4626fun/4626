@@ -276,57 +276,45 @@ export async function ensureAccountsIdentitySchema(db: Db): Promise<void> {
   if (accountsIdentitySchemaEnsurePromise) return accountsIdentitySchemaEnsurePromise
   accountsIdentitySchemaEnsurePromise = (async () => {
     try {
-      await db.sql`CREATE EXTENSION IF NOT EXISTS pgcrypto;`
-      await db.sql`
-      CREATE TABLE IF NOT EXISTS accounts (
-        privy_user_id TEXT PRIMARY KEY,
-        email TEXT NULL,
-        email_verified BOOLEAN NOT NULL DEFAULT false,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS account_linked_methods (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        privy_user_id TEXT NOT NULL REFERENCES accounts(privy_user_id) ON DELETE CASCADE,
-        type TEXT NOT NULL,
-        value TEXT NOT NULL,
-        verified BOOLEAN NOT NULL DEFAULT false,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        UNIQUE (privy_user_id, type, value)
-      );
-    `
-    await db.sql`CREATE INDEX IF NOT EXISTS account_linked_methods_type_value_idx ON account_linked_methods (type, value);`
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS account_zora_signals (
-        privy_user_id TEXT PRIMARY KEY REFERENCES accounts(privy_user_id) ON DELETE CASCADE,
-        zora_linked BOOLEAN NOT NULL DEFAULT false,
-        zora_handle TEXT NULL,
-        canonical_csw_address TEXT NULL,
-        creator_coin_address TEXT NULL,
-        last_resolved_at TIMESTAMPTZ NULL,
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
-    `
-    await db.sql`
-      DO $$
-      BEGIN
-        IF EXISTS (
-          SELECT 1
-          FROM information_schema.columns
-          WHERE table_schema = 'public'
-            AND table_name = 'account_zora_signals'
-            AND column_name = 'canonical_zora_csw_address'
-        ) THEN
-          ALTER TABLE public.account_zora_signals
-            RENAME COLUMN canonical_zora_csw_address TO canonical_csw_address;
-        END IF;
-      END $$;
-    `
-      accountsIdentitySchemaEnsured = true
-    } catch {
+      const preflight = await db.sql`
+        SELECT
+          to_regclass('public.accounts') IS NOT NULL AS has_accounts,
+          to_regclass('public.account_linked_methods') IS NOT NULL AS has_account_linked_methods,
+          to_regclass('public.account_zora_signals') IS NOT NULL AS has_account_zora_signals,
+          EXISTS (
+            SELECT 1
+            FROM information_schema.columns
+            WHERE table_schema = 'public'
+              AND table_name = 'account_zora_signals'
+              AND column_name = 'canonical_csw_address'
+          ) AS has_canonical_csw_address;
+      `
+      const status = preflight.rows?.[0] ?? {}
+      if (
+        Boolean(status.has_accounts) &&
+        Boolean(status.has_account_linked_methods) &&
+        Boolean(status.has_account_zora_signals) &&
+        Boolean(status.has_canonical_csw_address)
+      ) {
+        accountsIdentitySchemaEnsured = true
+        return
+      }
+      const missing: string[] = []
+      if (!Boolean(status.has_accounts)) missing.push('public.accounts')
+      if (!Boolean(status.has_account_linked_methods)) missing.push('public.account_linked_methods')
+      if (!Boolean(status.has_account_zora_signals)) missing.push('public.account_zora_signals')
+      if (!Boolean(status.has_canonical_csw_address)) {
+        missing.push('public.account_zora_signals.canonical_csw_address')
+      }
+      throw new Error(`accounts_identity_schema_migration_required:${missing.join(',')}`)
+    } catch (error) {
       accountsIdentitySchemaEnsured = false
+      if (
+        error instanceof Error &&
+        error.message.startsWith('accounts_identity_schema_migration_required:')
+      ) {
+        throw error
+      }
       throw new Error('accounts_identity_schema_ensure_failed')
     } finally {
       accountsIdentitySchemaEnsurePromise = null

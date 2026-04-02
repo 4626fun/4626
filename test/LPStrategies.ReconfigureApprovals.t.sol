@@ -156,6 +156,34 @@ contract LPStrategiesReconfigureApprovalsTest is Test {
         strat.reconfigureApprovals(positionManagerAlt, address(permit2Alt));
     }
 
+    function test_FullRange_ReconfigureApprovals_RevertsWhenPoolNotConfigured() external {
+        FullRangeStrategy strat =
+            new FullRangeStrategy(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+
+        vm.expectRevert(FullRangeStrategy.PoolNotConfigured.selector);
+        strat.reconfigureApprovals(positionManagerAlt, address(permit2Alt));
+    }
+
+    function test_FullRange_ReconfigureApprovals_RevertsOnZeroPositionManager() external {
+        FullRangeStrategy strat =
+            new FullRangeStrategy(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+
+        strat.configurePool(poolManager, positionManager, address(permit2), _poolKey());
+
+        vm.expectRevert(FullRangeStrategy.ZeroAddress.selector);
+        strat.reconfigureApprovals(address(0), address(permit2Alt));
+    }
+
+    function test_FullRange_ReconfigureApprovals_RevertsOnZeroPermit2() external {
+        FullRangeStrategy strat =
+            new FullRangeStrategy(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+
+        strat.configurePool(poolManager, positionManager, address(permit2), _poolKey());
+
+        vm.expectRevert(FullRangeStrategy.ZeroAddress.selector);
+        strat.reconfigureApprovals(positionManagerAlt, address(0));
+    }
+
     function test_Concentrated_ConfigurePool_IsOneTimeOnly() external {
         ConcentratedStrategy strat =
             new ConcentratedStrategy(address(creator), address(paired), address(this), address(this), address(hookRegistry));
@@ -191,6 +219,34 @@ contract LPStrategiesReconfigureApprovalsTest is Test {
         vm.prank(address(0xA11CE));
         vm.expectRevert();
         strat.reconfigureApprovals(positionManagerAlt, address(permit2Alt));
+    }
+
+    function test_Concentrated_ReconfigureApprovals_RevertsWhenPoolNotConfigured() external {
+        ConcentratedStrategy strat =
+            new ConcentratedStrategy(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+
+        vm.expectRevert(ConcentratedStrategy.PoolNotConfigured.selector);
+        strat.reconfigureApprovals(positionManagerAlt, address(permit2Alt));
+    }
+
+    function test_Concentrated_ReconfigureApprovals_RevertsOnZeroPositionManager() external {
+        ConcentratedStrategy strat =
+            new ConcentratedStrategy(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+
+        strat.configurePool(poolManager, positionManager, address(permit2), _poolKey());
+
+        vm.expectRevert(ConcentratedStrategy.ZeroAddress.selector);
+        strat.reconfigureApprovals(address(0), address(permit2Alt));
+    }
+
+    function test_Concentrated_ReconfigureApprovals_RevertsOnZeroPermit2() external {
+        ConcentratedStrategy strat =
+            new ConcentratedStrategy(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+
+        strat.configurePool(poolManager, positionManager, address(permit2), _poolKey());
+
+        vm.expectRevert(ConcentratedStrategy.ZeroAddress.selector);
+        strat.reconfigureApprovals(positionManagerAlt, address(0));
     }
 
     function test_LimitOrder_ConfigurePool_IsOneTimeOnly() external {
@@ -230,6 +286,34 @@ contract LPStrategiesReconfigureApprovalsTest is Test {
         strat.reconfigureApprovals(positionManagerAlt, address(permit2Alt));
     }
 
+    function test_LimitOrder_ReconfigureApprovals_RevertsWhenPoolNotConfigured() external {
+        LimitOrderStrategy strat =
+            new LimitOrderStrategy(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+
+        vm.expectRevert(LimitOrderStrategy.PoolNotConfigured.selector);
+        strat.reconfigureApprovals(positionManagerAlt, address(permit2Alt));
+    }
+
+    function test_LimitOrder_ReconfigureApprovals_RevertsOnZeroPositionManager() external {
+        LimitOrderStrategy strat =
+            new LimitOrderStrategy(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+
+        strat.configurePool(poolManager, positionManager, address(permit2), _poolKey());
+
+        vm.expectRevert(LimitOrderStrategy.ZeroAddress.selector);
+        strat.reconfigureApprovals(address(0), address(permit2Alt));
+    }
+
+    function test_LimitOrder_ReconfigureApprovals_RevertsOnZeroPermit2() external {
+        LimitOrderStrategy strat =
+            new LimitOrderStrategy(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+
+        strat.configurePool(poolManager, positionManager, address(permit2), _poolKey());
+
+        vm.expectRevert(LimitOrderStrategy.ZeroAddress.selector);
+        strat.reconfigureApprovals(positionManagerAlt, address(0));
+    }
+
     function test_CreatorLPManager_ConfigurePool_IsOneTimeOnly() external {
         CreatorLPManager strat =
             new CreatorLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
@@ -265,6 +349,34 @@ contract LPStrategiesReconfigureApprovalsTest is Test {
         vm.prank(address(0xA11CE));
         vm.expectRevert();
         strat.reconfigureApprovals(positionManagerAlt, address(permit2Alt));
+    }
+
+    function test_CreatorLPManager_ReconfigureApprovals_RevertsWhenPoolNotConfigured() external {
+        CreatorLPManager strat =
+            new CreatorLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+
+        vm.expectRevert(CreatorLPManager.PoolNotConfigured.selector);
+        strat.reconfigureApprovals(positionManagerAlt, address(permit2Alt));
+    }
+
+    function test_CreatorLPManager_ReconfigureApprovals_RevertsOnZeroPositionManager() external {
+        CreatorLPManager strat =
+            new CreatorLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+
+        strat.configurePool(poolManager, positionManager, address(permit2), _poolKey());
+
+        vm.expectRevert(CreatorLPManager.ZeroAddress.selector);
+        strat.reconfigureApprovals(address(0), address(permit2Alt));
+    }
+
+    function test_CreatorLPManager_ReconfigureApprovals_RevertsOnZeroPermit2() external {
+        CreatorLPManager strat =
+            new CreatorLPManager(address(creator), address(paired), address(this), address(this), address(hookRegistry));
+
+        strat.configurePool(poolManager, positionManager, address(permit2), _poolKey());
+
+        vm.expectRevert(CreatorLPManager.ZeroAddress.selector);
+        strat.reconfigureApprovals(positionManagerAlt, address(0));
     }
 
     function test_FullRange_RevertsWhenHookNotApproved() external {

@@ -4,15 +4,9 @@ import { renderToStaticMarkup } from 'react-dom/server'
 
 import { ExploreSubnav, applyExploreParamChange } from './ExploreSubnav'
 
-const { searchParamsState, setSearchParamsMock } = vi.hoisted(() => ({
-  searchParamsState: { value: new URLSearchParams() },
-  setSearchParamsMock: vi.fn(),
-}))
-
 vi.mock('react-router-dom', () => ({
   Link: ({ to, children, ...props }: any) => React.createElement('a', { href: to, ...props }, children),
   useLocation: () => ({ pathname: '/explore/creators' }),
-  useSearchParams: () => [searchParamsState.value, setSearchParamsMock],
 }))
 
 vi.mock('@/lib/uniswap/hooks', () => ({
@@ -22,7 +16,6 @@ vi.mock('@/lib/uniswap/hooks', () => ({
 describe('ExploreSubnav', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    searchParamsState.value = new URLSearchParams()
   })
 
   it('renders a Trends tab that links to /explore/trends', () => {
@@ -34,44 +27,30 @@ describe('ExploreSubnav', () => {
 
   it('uses callback as single source for sort updates when provided', () => {
     const onSortChange = vi.fn()
-    const currentParams = new URLSearchParams('sort=volume')
     applyExploreParamChange({
-      key: 'sort',
       value: 'marketCap',
+      currentValue: 'volume',
       onChange: onSortChange,
-      searchParams: currentParams,
-      setSearchParams: setSearchParamsMock,
     })
 
     expect(onSortChange).toHaveBeenCalledWith('marketCap')
-    expect(setSearchParamsMock).not.toHaveBeenCalled()
   })
 
-  it('falls back to internal URL write when no sort callback is provided', () => {
-    const currentParams = new URLSearchParams('time=1d')
+  it('skips change callback when next value matches current value', () => {
+    const onSortChange = vi.fn()
     applyExploreParamChange({
-      key: 'sort',
       value: 'marketCap',
-      searchParams: currentParams,
-      setSearchParams: setSearchParamsMock,
+      currentValue: 'marketCap',
+      onChange: onSortChange,
     })
 
-    expect(setSearchParamsMock).toHaveBeenCalledTimes(1)
-    const [params, options] = setSearchParamsMock.mock.calls[0] as [URLSearchParams, { replace: boolean }]
-    expect(params.get('sort')).toBe('marketCap')
-    expect(params.get('time')).toBe('1d')
-    expect(options).toEqual({ replace: true })
+    expect(onSortChange).not.toHaveBeenCalled()
   })
 
-  it('skips fallback URL write when next sort matches current value', () => {
-    const currentParams = new URLSearchParams('sort=marketCap&time=1d')
+  it('no-ops when no callback is provided', () => {
     applyExploreParamChange({
-      key: 'sort',
       value: 'marketCap',
-      searchParams: currentParams,
-      setSearchParams: setSearchParamsMock,
+      currentValue: 'volume',
     })
-
-    expect(setSearchParamsMock).not.toHaveBeenCalled()
   })
 })

@@ -40,6 +40,12 @@ contract MockAdapterAjnaPool is IAjnaPool {
         return (amount, amount);
     }
 
+    function drawDebt(address, uint256, uint256, uint256) external {}
+
+    function repayDebt(address, uint256, uint256, address, uint256) external pure returns (uint256 amountRepaid) {
+        return 0;
+    }
+
     function removeQuoteToken(uint256 amount, uint256 index)
         external
         returns (uint256 removedAmount, uint256 redeemedLP)
@@ -83,6 +89,14 @@ contract MockAdapterAjnaPool is IAjnaPool {
         returns (uint256 lpBalance, uint256 collateral, uint256 bankruptcyTime, uint256 deposit, uint256 scale)
     {
         return (bucketLpTotal[index], 0, 0, bucketDeposits[index], 1e18);
+    }
+
+    function borrowerInfo(address) external pure returns (uint256 t0Debt, uint256 collateral, uint256 npTpRatio) {
+        return (0, 0, 0);
+    }
+
+    function inflatorInfo() external view returns (uint256 inflator, uint256 lastUpdate) {
+        return (1e18, block.timestamp);
     }
 
     function quoteTokenAddress() external view returns (address) {

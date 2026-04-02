@@ -459,13 +459,13 @@ describe('/api/(cre/)?vaults/active automation exposure', () => {
   })
 })
 
-describe('ensureKeeprSchema back-compat ordering', () => {
+describe('ensureKeeprSchema migration-first guardrails', () => {
   afterEach(() => {
     vi.doUnmock('../../server/_lib/postgres.js')
     vi.doUnmock('../../server/_lib/keeprSchema.js')
   })
 
-  it('adds keepr_vault_automation columns before creating indexes that depend on them', async () => {
+  it('fails fast with actionable missing-schema details instead of runtime DDL', async () => {
     vi.resetModules()
     vi.doUnmock('../../server/_lib/keeprSchema.js')
 
@@ -483,36 +483,12 @@ describe('ensureKeeprSchema back-compat ordering', () => {
     }))
 
     const { ensureKeeprSchema } = await import('../../server/_lib/keeprSchema.js')
-    await ensureKeeprSchema()
+    await expect(ensureKeeprSchema()).rejects.toThrow(/keepr_schema_migration_required:/)
 
-    const profileIdAlterIndex = sqlCalls.findIndex((sql) =>
-      sql.includes('alter table keepr_vault_automation add column if not exists profile_id bigint'),
-    )
-    const createdAtAlterIndex = sqlCalls.findIndex((sql) =>
-      sql.includes('alter table keepr_vault_automation add column if not exists created_at timestamptz not null default now()'),
-    )
-    const automationEnabledAlterIndex = sqlCalls.findIndex((sql) =>
-      sql.includes('alter table keepr_vault_automation add column if not exists automation_enabled boolean not null default true'),
-    )
-    const updatedAtAlterIndex = sqlCalls.findIndex((sql) =>
-      sql.includes('alter table keepr_vault_automation add column if not exists updated_at timestamptz not null default now()'),
-    )
-    const profileIndexCreation = sqlCalls.findIndex((sql) =>
-      sql.includes('create index if not exists keepr_vault_automation_profile_idx on keepr_vault_automation (profile_id, created_at desc)'),
-    )
-    const enabledIndexCreation = sqlCalls.findIndex((sql) =>
-      sql.includes('create index if not exists keepr_vault_automation_enabled_idx on keepr_vault_automation (automation_enabled, updated_at desc)'),
-    )
-
-    expect(profileIdAlterIndex).toBeGreaterThan(-1)
-    expect(createdAtAlterIndex).toBeGreaterThan(-1)
-    expect(automationEnabledAlterIndex).toBeGreaterThan(-1)
-    expect(updatedAtAlterIndex).toBeGreaterThan(-1)
-    expect(profileIndexCreation).toBeGreaterThan(-1)
-    expect(enabledIndexCreation).toBeGreaterThan(-1)
-    expect(profileIdAlterIndex).toBeLessThan(profileIndexCreation)
-    expect(createdAtAlterIndex).toBeLessThan(profileIndexCreation)
-    expect(automationEnabledAlterIndex).toBeLessThan(enabledIndexCreation)
-    expect(updatedAtAlterIndex).toBeLessThan(enabledIndexCreation)
+    const sqlText = sqlCalls.join('\n')
+    expect(sqlText).not.toContain('create table if not exists keepr_vault_automation')
+    expect(sqlText).not.toContain('alter table keepr_vault_automation add column if not exists')
+    expect(sqlText).not.toContain('create index if not exists keepr_vault_automation_profile_idx')
+    expect(sqlText).not.toContain('create index if not exists keepr_vault_automation_enabled_idx')
   })
 })

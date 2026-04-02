@@ -3,6 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
+  requireKeeprApiKey,
   setCors,
   setNoStore,
   getDb,
@@ -105,16 +106,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  // Auth: shared secret
-  const secret = process.env.KEEPR_API_KEY
-  if (!secret) {
-    return res.status(500).json({ success: false, error: 'Server misconfigured' } satisfies ApiEnvelope<never>)
-  }
-
-  const authHeader = req.headers.authorization
-  if (!authHeader || authHeader !== `Bearer ${secret}`) {
-    return res.status(401).json({ success: false, error: 'Unauthorized' } satisfies ApiEnvelope<never>)
-  }
+  if (!requireKeeprApiKey(req, res, { missingSecretError: 'Server misconfigured' })) return
 
   try {
     const body = (typeof req.body === 'object' && req.body !== null ? req.body : {}) as Partial<UpdateBody>

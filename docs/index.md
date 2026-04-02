@@ -18,6 +18,12 @@ Start here:
 - **[Four Compressions](/compressions)** (recommended first read)
 - **[Three Primitives](/primitives)** (how the system fits together)
 
+## Choose a Reading Path
+
+- Product and narrative first: [Four Compressions](/compressions)
+- Integration and implementation first: [Three Primitives](/primitives)
+- Legacy map and redirects: [Overview](/overview)
+
 ## What is 4626?
 
 In one click, creators deploy institutional-grade **ERC-4626 vault** infrastructure (Yearn V3 architecture) with:
@@ -45,6 +51,7 @@ In one click, creators deploy institutional-grade **ERC-4626 vault** infrastruct
 - [Architecture](/architecture) - System architecture deep dive
 - [Tokenomics](/tokenomics) - Fee structure and lottery mechanics
 - [Security](/security) - Threat surfaces and mitigations
+- [Roadmap](/roadmap) - Staged and deferred feature rollout posture
 - [Contracts](/contracts) - What's deployed onchain
 - [API Reference](/api) - Auto-generated contract and frontend documentation
 - [Lens Integration](/integrations/lens) - Lens + Grove Phase 1 guidance for this repo

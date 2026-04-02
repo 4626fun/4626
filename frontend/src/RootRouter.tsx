@@ -73,22 +73,8 @@ export function RootRouter() {
         <Route
           element={<Layout interactive={false} chatEnabled={false} />}
         >
-          <Route
-            path="/"
-            element={
-              <Suspense fallback={<AppLoadingState />}>
-                <Home />
-              </Suspense>
-            }
-          />
-          <Route
-            path="/r/:referralCode"
-            element={
-              <Suspense fallback={<AppLoadingState />}>
-                <WaitlistInviteEntry />
-              </Suspense>
-            }
-          />
+          <Route path="/" element={<Home />} />
+          <Route path="/r/:referralCode" element={<WaitlistInviteEntry />} />
         </Route>
         <Route
           path="/telegram/link"

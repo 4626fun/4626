@@ -9,7 +9,7 @@ sidebar_position: 10
 
 This document defines the canonical wallet-execution model used by the app so we stop treating `connected address === user` as a global truth.
 
-The canonical 4626 account identity is the user's verified email. This document is only about signer, CSW, and active-account behavior after auth. See [frontend/docs/account-auth-invariants.md](frontend/docs/account-auth-invariants.md).
+The canonical 4626 account identity is the user's verified email. This document is only about signer, CSW, and active-account behavior after auth. See [Account Auth Invariants](https://github.com/wenakita/4626/blob/main/frontend/docs/account-auth-invariants.md).
 
 It aligns frontend and backend behavior for:
 

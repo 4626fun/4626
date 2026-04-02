@@ -12,4 +12,8 @@ sidebar_position: 1
 - [Four Compressions](/compressions)
 - [Three Primitives](/primitives)
 
+## When To Use This Section
+
+Use `overview/*` only when following older links/bookmarks. New readers should start in `compressions/*` and `primitives/*`.
+
 Legacy `overview/*` URLs are kept working via redirects.

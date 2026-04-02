@@ -2,6 +2,7 @@
   "version": "1.7.1",
   "scripts": {
     "check:no-todo-markers": "bash scripts/check-no-todo-markers.sh",
+    "docs:check-links": "node apps/docs-site/scripts/check-doc-links.mjs",
     "security:local": "bash scripts/security-audit-local.sh",
     "docs:refresh": "node apps/docs-site/scripts/docs-refresh.mjs",
     "docs:check": "node apps/docs-site/scripts/docs-refresh.mjs --check",

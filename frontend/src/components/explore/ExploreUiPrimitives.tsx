@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { Fragment, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, Copy } from 'lucide-react'
 
 type ExploreCopyButtonProps = {
@@ -87,6 +87,121 @@ export function ExploreStatRow({
         <span className={valueClassName}>{value}</span>
       </div>
       {note ? <div className={noteClassName}>{note}</div> : null}
+    </div>
+  )
+}
+
+type ExploreTableMessageProps = {
+  title: string
+  detail?: string
+  icon?: ReactNode
+  className?: string
+  titleClassName?: string
+  detailClassName?: string
+}
+
+export function ExploreTableMessage({
+  title,
+  detail,
+  icon,
+  className = 'px-6 py-12 text-center',
+  titleClassName = 'text-zinc-400',
+  detailClassName = 'mt-2 text-xs text-zinc-600',
+}: ExploreTableMessageProps) {
+  return (
+    <div className={className}>
+      {icon ? (
+        <div className="mb-4">
+          {icon}
+        </div>
+      ) : null}
+      <p className={titleClassName}>{title}</p>
+      {detail ? <p className={detailClassName}>{detail}</p> : null}
+    </div>
+  )
+}
+
+type ExploreTableRowMessageProps = {
+  colSpan: number
+  title: string
+  detail?: string
+  cellClassName?: string
+  titleClassName?: string
+  detailClassName?: string
+}
+
+export function ExploreTableRowMessage({
+  colSpan,
+  title,
+  detail,
+  cellClassName = 'px-6 py-12 text-center',
+  titleClassName = 'text-zinc-400',
+  detailClassName = 'mt-2 text-xs text-zinc-600',
+}: ExploreTableRowMessageProps) {
+  return (
+    <tr>
+      <td colSpan={colSpan} className={cellClassName}>
+        <p className={titleClassName}>{title}</p>
+        {detail ? <p className={detailClassName}>{detail}</p> : null}
+      </td>
+    </tr>
+  )
+}
+
+type ExploreLoadingMoreRowsProps = {
+  isFetchingNextPage: boolean
+  renderSkeletonRow: (rowKey: string) => ReactNode
+  count?: number
+  keyPrefix?: string
+}
+
+export function ExploreLoadingMoreRows({
+  isFetchingNextPage,
+  renderSkeletonRow,
+  count = 3,
+  keyPrefix = 'next-skeleton',
+}: ExploreLoadingMoreRowsProps) {
+  if (!isFetchingNextPage) return null
+  return (
+    <>
+      {Array.from({ length: count }).map((_, i) => (
+        <Fragment key={`${keyPrefix}-${i}`}>
+          {renderSkeletonRow(`${keyPrefix}-${i}`)}
+        </Fragment>
+      ))}
+    </>
+  )
+}
+
+type ExploreLoadMoreButtonProps = {
+  hasNextPage: boolean
+  isFetchingNextPage: boolean
+  onLoadMore: () => void
+  disabled?: boolean
+  label?: string
+  containerClassName?: string
+  buttonClassName?: string
+}
+
+export function ExploreLoadMoreButton({
+  hasNextPage,
+  isFetchingNextPage,
+  onLoadMore,
+  disabled = false,
+  label = 'Load more',
+  containerClassName = 'px-6 py-4 border-t border-white/8 flex justify-center',
+  buttonClassName = 'px-6 py-2 rounded-full text-sm font-medium text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors',
+}: ExploreLoadMoreButtonProps) {
+  if (!hasNextPage || isFetchingNextPage || disabled) return null
+  return (
+    <div className={containerClassName}>
+      <button
+        type="button"
+        onClick={onLoadMore}
+        className={buttonClassName}
+      >
+        {label}
+      </button>
     </div>
   )
 }

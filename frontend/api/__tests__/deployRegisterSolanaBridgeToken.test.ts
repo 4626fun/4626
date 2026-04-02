@@ -1016,6 +1016,224 @@ describe('deploy registerSolanaBridgeToken handler', () => {
     }
   })
 
+  it('forwards exact base metadata casing to remote provisioner without symbol fallback field', async () => {
+    const restoreEnv = applyEnv({
+      SOLANA_ADAPTER_OWNER_PRIVATE_KEY:
+        '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      SOLANA_DEFAULT_MINT_BYTES32: undefined,
+      SOLANA_DEFAULT_MINT_DECIMALS: '9',
+      SOLANA_DYNAMIC_ROUTE_ENABLED: '1',
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL: 'https://provisioner.4626.fun/provision',
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET: 'test-secret',
+      SOLANA_BRIDGE_CLI_DIR: undefined,
+    })
+    const originalFetch = globalThis.fetch
+    try {
+      const mockPublicClient = {
+        readContract: vi.fn(async (args: any) => {
+          switch (args.functionName) {
+            case 'solanaBridgeAdapter':
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'isRegistered':
+              return false
+            case 'owner':
+              return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
+            case 'solanaMintToToken':
+              return '0x0000000000000000000000000000000000000000'
+            case 'scalars':
+              return 1n
+            case 'name':
+              return 'akita'
+            case 'symbol':
+              return 'akita'
+            default:
+              throw new Error(`Unexpected read ${String(args.functionName)}`)
+          }
+        }),
+        getBytecode: vi.fn(async () => '0x1234'),
+        waitForTransactionReceipt: vi.fn(async () => ({ status: 'success' })),
+      }
+      const writeContractMock = vi.fn(async (_args: any) => '0x5fcb2a505cad6c7c8bb750b95db3a846df8f181f85759750f84d91b736283557')
+      createPublicClientMock.mockReturnValue(mockPublicClient as any)
+      createWalletClientMock.mockReturnValue({ writeContract: writeContractMock } as any)
+      privateKeyToAccountMock.mockReturnValue({
+        address: '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD',
+      })
+
+      const fetchMock = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            mintBytes32:
+              '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            runner: 'remote-provisioner',
+          }),
+      })) as any
+      ;(globalThis as any).fetch = fetchMock
+
+      const req = createInternalReq({
+        method: 'POST',
+        body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+      })
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const fetchInit = (fetchMock.mock.calls as any[])[0]?.[1] as { body?: string } | undefined
+      const sentBody = JSON.parse(String(fetchInit?.body ?? '{}')) as Record<string, unknown>
+      expect(sentBody.tokenName).toBe('akita')
+      expect(sentBody.tokenSymbol).toBe('akita')
+      expect('tokenSymbolFallback' in sentBody).toBe(false)
+      expect(writeContractMock).toHaveBeenCalledTimes(1)
+    } finally {
+      ;(globalThis as any).fetch = originalFetch
+      restoreEnv()
+    }
+  })
+
+  it('fails closed on remote symbol rejection without transformed symbol retry', async () => {
+    const restoreEnv = applyEnv({
+      SOLANA_ADAPTER_OWNER_PRIVATE_KEY:
+        '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      SOLANA_DEFAULT_MINT_BYTES32: undefined,
+      SOLANA_DEFAULT_MINT_DECIMALS: '9',
+      SOLANA_DYNAMIC_ROUTE_ENABLED: '1',
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL: 'https://provisioner.4626.fun/provision',
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET: 'test-secret',
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_ATTEMPTS: '1',
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_DELAY_MS: '0',
+      SOLANA_BRIDGE_CLI_DIR: undefined,
+    })
+    const originalFetch = globalThis.fetch
+    try {
+      const mockPublicClient = {
+        readContract: vi.fn(async (args: any) => {
+          switch (args.functionName) {
+            case 'solanaBridgeAdapter':
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'isRegistered':
+              return false
+            case 'owner':
+              return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
+            case 'name':
+              return 'akita'
+            case 'symbol':
+              return 'akita'
+            default:
+              throw new Error(`Unexpected read ${String(args.functionName)}`)
+          }
+        }),
+        getBytecode: vi.fn(async () => '0x1234'),
+      }
+      createPublicClientMock.mockReturnValue(mockPublicClient as any)
+      privateKeyToAccountMock.mockReturnValue({
+        address: '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD',
+      })
+
+      const fetchMock = vi.fn(async () => ({
+        ok: false,
+        status: 400,
+        text: async () => JSON.stringify({ error: 'Error Code: ConstraintSeeds' }),
+      })) as any
+      ;(globalThis as any).fetch = fetchMock
+
+      const req = createInternalReq({
+        method: 'POST',
+        body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+      })
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(409)
+      expect(String(res.body?.error ?? '')).toContain('Dynamic route provisioning error')
+      expect(String(res.body?.error ?? '')).toContain('ConstraintSeeds')
+      expect(fetchMock).toHaveBeenCalledTimes(1)
+      const fetchInit = (fetchMock.mock.calls as any[])[0]?.[1] as { body?: string } | undefined
+      const sentBody = JSON.parse(String(fetchInit?.body ?? '{}')) as Record<string, unknown>
+      expect(sentBody.tokenSymbol).toBe('akita')
+      expect('tokenSymbolFallback' in sentBody).toBe(false)
+      expect(createWalletClientMock).not.toHaveBeenCalled()
+    } finally {
+      ;(globalThis as any).fetch = originalFetch
+      restoreEnv()
+    }
+  })
+
+  it('fails closed before remote call when Base symbol exceeds UTF-8 byte limit', async () => {
+    const restoreEnv = applyEnv({
+      SOLANA_ADAPTER_OWNER_PRIVATE_KEY:
+        '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      SOLANA_DEFAULT_MINT_BYTES32: undefined,
+      SOLANA_DEFAULT_MINT_DECIMALS: '9',
+      SOLANA_DYNAMIC_ROUTE_ENABLED: '1',
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_URL: 'https://provisioner.4626.fun/provision',
+      SOLANA_DYNAMIC_ROUTE_PROVISIONER_SECRET: 'test-secret',
+      SOLANA_BRIDGE_CLI_DIR: undefined,
+    })
+    const originalFetch = globalThis.fetch
+    try {
+      const mockPublicClient = {
+        readContract: vi.fn(async (args: any) => {
+          switch (args.functionName) {
+            case 'solanaBridgeAdapter':
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'isRegistered':
+              return false
+            case 'owner':
+              return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
+            // 7 x "é" => 7 chars but 14 UTF-8 bytes, which exceeds symbol byte limit (12).
+            case 'name':
+              return 'akita'
+            case 'symbol':
+              return 'ééééééé'
+            default:
+              throw new Error(`Unexpected read ${String(args.functionName)}`)
+          }
+        }),
+        getBytecode: vi.fn(async () => '0x1234'),
+      }
+      createPublicClientMock.mockReturnValue(mockPublicClient as any)
+      privateKeyToAccountMock.mockReturnValue({
+        address: '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD',
+      })
+
+      const fetchMock = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            mintBytes32:
+              '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+            runner: 'remote-provisioner',
+          }),
+      })) as any
+      ;(globalThis as any).fetch = fetchMock
+
+      const req = createInternalReq({
+        method: 'POST',
+        body: { bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba' },
+      })
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(409)
+      expect(String(res.body?.error ?? '')).toContain('strict Solana parity requirements')
+      expect(fetchMock).toHaveBeenCalledTimes(0)
+      expect(createWalletClientMock).not.toHaveBeenCalled()
+    } finally {
+      ;(globalThis as any).fetch = originalFetch
+      restoreEnv()
+    }
+  })
+
   it('forwards explicit tokenMetadataUri to remote dynamic provisioner', async () => {
     const restoreEnv = applyEnv({
       SOLANA_ADAPTER_OWNER_PRIVATE_KEY:

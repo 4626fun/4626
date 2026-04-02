@@ -31,6 +31,21 @@ function createMockDb(options: {
     sql: vi.fn(async (strings: TemplateStringsArray, ...values: any[]) => {
       const text = normalizeSql(strings)
 
+      if (text.includes("to_regclass('public.profile_wallets') is not null as has_profile_wallets")) {
+        return {
+          rows: [
+            {
+              has_profile_wallets: true,
+              has_chain_id: true,
+              has_canonical_csw_address: true,
+              has_canonical_source: true,
+              has_privy_embedded_eoa_address: true,
+              has_privy_is_owner: true,
+              has_last_checked_at: true,
+            },
+          ],
+        }
+      }
       if (text.startsWith('do $$')) return { rows: [] }
       if (text.startsWith('alter table profile_wallets')) return { rows: [] }
       if (text.includes('select id from profiles where privy_user_id =')) return { rows: [{ id: 11 }] }

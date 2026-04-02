@@ -76,6 +76,10 @@ jobs:
             frontend/pnpm-lock.yaml
             apps/docs-site/pnpm-lock.yaml
 
+      - name: Verify authored docs links
+        if: steps.detect.outputs.docs_sensitive == 'true'
+        run: node apps/docs-site/scripts/check-doc-links.mjs
+
       - name: Install root dependencies
         if: steps.detect.outputs.docs_sensitive == 'true'
         run: pnpm install --frozen-lockfile

@@ -1,6 +1,6 @@
 # Canonical CSW Sync (Historical Zora-Anchored) Implementation Plan
 
-> Historical note (2026-03-20): this implementation plan predates the current email-first account model. The verified email is now the canonical 4626 identity. References below to canonical wallet selection are about the canonical execution wallet only. See [frontend/docs/account-auth-invariants.md](../frontend/docs/account-auth-invariants.md).
+> Historical note (2026-03-20): this implementation plan predates the current email-first account model. The verified email is now the canonical 4626 identity. References below to canonical wallet selection are about the canonical execution wallet only. See [Account Auth Invariants](https://github.com/wenakita/4626/blob/main/frontend/docs/account-auth-invariants.md).
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 

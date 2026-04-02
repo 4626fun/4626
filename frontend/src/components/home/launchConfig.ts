@@ -38,6 +38,7 @@ export const STRATEGY_CARDS = [
     percent: '30%',
     numericPercent: 30,
     amount: '15,000,000',
+    apy: '8–12%',
     route: '/deploy/charm',
     description: 'Managed Uniswap V3 CREATOR/USDC LP',
     icon: '/protocols/charm.png' as string | null,
@@ -49,6 +50,7 @@ export const STRATEGY_CARDS = [
     percent: '30%',
     numericPercent: 30,
     amount: '15,000,000',
+    apy: '5–9%',
     route: '/deploy/ajna',
     description: 'Permissionless lending exposure',
     icon: '/protocols/ajna.svg' as string | null,
@@ -60,8 +62,9 @@ export const STRATEGY_CARDS = [
     percent: '30%',
     numericPercent: 30,
     amount: '15,000,000',
+    apy: '10–18%',
     route: '/deploy/solana',
-    description: 'Reserved for Solana route deployment',
+    description: 'Cross-chain bridge route deployment',
     icon: '/protocols/solana.svg' as string | null,
     iconAlt: 'Solana',
     iconClassName: 'h-3.5 w-auto opacity-90',
@@ -71,12 +74,15 @@ export const STRATEGY_CARDS = [
     percent: '10%',
     numericPercent: 10,
     amount: '5,000,000',
+    apy: '—',
     route: '/deploy/idle',
-    description: 'Kept in-vault for withdrawals and execution flexibility',
+    description: 'Kept liquid for withdrawals and execution flexibility',
     icon: null as string | null,
     iconAlt: 'Idle Reserve',
     iconClassName: '',
   },
 ] as const
+
+export const BLENDED_APY = '~8–12%'
 
 export const SHARE_SPLIT_LABEL = SHARE_DISTRIBUTION_ROWS.map((row) => row.percent.replace('%', '')).join(' / ')

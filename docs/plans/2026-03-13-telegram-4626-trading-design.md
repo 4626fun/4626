@@ -4,7 +4,7 @@ Date: 2026-03-13
 Status: Approved  
 Owner: 4626 Product + Agent Platform
 
-> Historical note (2026-03-20): this design predates the current Telegram model. Telegram now uses the Mini App only for secure account linking and wallet-finalization steps; ongoing actions run through the bot. The canonical 4626 identity is the verified email, while the canonical CSW remains the execution wallet. See [frontend/docs/account-auth-invariants.md](../frontend/docs/account-auth-invariants.md).
+> Historical note (2026-03-20): this design predates the current Telegram model. Telegram now uses the Mini App only for secure account linking and wallet-finalization steps; ongoing actions run through the bot. The canonical 4626 identity is the verified email, while the canonical CSW remains the execution wallet. See [Account Auth Invariants](https://github.com/wenakita/4626/blob/main/frontend/docs/account-auth-invariants.md).
 
 ## Implementation Snapshot (2026-03-13)
 

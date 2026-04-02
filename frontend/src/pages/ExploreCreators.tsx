@@ -2,11 +2,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import { PageMeta, META } from '@/components/seo/PageMeta'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
 
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
+import { ExploreHorizontalScrollArrows } from '@/components/explore/ExploreHorizontalScrollArrows'
 import { TokenRow, TokenTableHeader, TokenRowSkeleton } from '@/components/explore/TokenRow'
-import { getExploreColumns } from '@/components/explore/tableColumns'
+import { ExploreLoadMoreButton, ExploreLoadingMoreRows, ExploreTableMessage } from '@/components/explore/ExploreUiPrimitives'
+import { useExploreHorizontalTableSync } from '@/components/explore/useExploreHorizontalTableSync'
+import { getExploreColumns, getHorizontalScrollStops } from '@/components/explore/tableColumns'
 import { fetchZoraCoin, fetchZoraExplore, fetchZoraProfile, fetchZoraProfileCoins } from '@/lib/zora/client'
 import { apiFetch } from '@/lib/apiBase'
 import { API_ENDPOINTS } from '@/lib/apiEndpoints'
@@ -218,9 +220,6 @@ function inferFeeRate(coin: ZoraCoin, migratedCoins: Set<string> | null): number
 
 export function ExploreCreators() {
   const [expandedFees, setExpandedFees] = useState<string | null>(null)
-  const [hasHorizontalOverflow, setHasHorizontalOverflow] = useState(false)
-  const [canScrollLeft, setCanScrollLeft] = useState(false)
-  const [canScrollRight, setCanScrollRight] = useState(false)
   const [collapseIdentity, setCollapseIdentity] = useState(false)
 
   const { currentTimeFilter, currentSort, searchQuery, handleSearchChange, handleTimeFilterChange, handleSortChange } =
@@ -498,76 +497,21 @@ export function ExploreCreators() {
     return () => window.clearTimeout(timer)
   }, [fetchNextPage, shouldAutoFetchForSearch])
 
-  const updateHorizontalControls = useCallback((el: HTMLElement | null) => {
-    if (!el) return
-    const overflow = el.scrollWidth > el.clientWidth + 1
-    const maxLeft = Math.max(0, el.scrollWidth - el.clientWidth)
-    const atLeftEdge = el.scrollLeft <= 1
-    const atRightEdge = el.scrollLeft >= maxLeft - 1
-    const shouldCollapse = overflow && !atLeftEdge && window.innerWidth <= 1024
-    setHasHorizontalOverflow(overflow)
-    setCanScrollLeft(overflow && !atLeftEdge)
-    setCanScrollRight(overflow && !atRightEdge)
-    setCollapseIdentity(shouldCollapse)
+  const onHorizontalControlsChange = useCallback(({ overflow, atLeftEdge }: { overflow: boolean; atLeftEdge: boolean }) => {
+    setCollapseIdentity(overflow && !atLeftEdge && window.innerWidth <= 1024)
   }, [])
 
-  useEffect(() => {
-    const body = document.getElementById('explore-creators-body')
-    if (!body) return
-
-    const updateHint = () => updateHorizontalControls(body)
-
-    updateHint()
-    window.addEventListener('resize', updateHint)
-    let observer: ResizeObserver | null = null
-    if (typeof ResizeObserver !== 'undefined') {
-      observer = new ResizeObserver(updateHint)
-      observer.observe(body)
-    }
-
-    return () => {
-      window.removeEventListener('resize', updateHint)
-      observer?.disconnect()
-    }
-  }, [filteredCoins.length, currentTimeFilter, updateHorizontalControls])
+  const { hasHorizontalOverflow, canScrollLeft, canScrollRight, handleHeaderScroll, handleBodyScroll, handleArrowClick } =
+    useExploreHorizontalTableSync({
+      headerId: 'explore-creators-header',
+      bodyId: 'explore-creators-body',
+      onControlsChange: onHorizontalControlsChange,
+    })
 
   const columnScrollStops = useMemo(() => {
     const columns = getExploreColumns({ variant: 'creators', timeframe: currentTimeFilter, collapseIdentity })
-    const nonStickyWidths = columns.filter((c) => !c.sticky).map((c) => c.widthPx)
-    const stops: number[] = [0]
-    let acc = 0
-    for (const width of nonStickyWidths) {
-      acc += width
-      stops.push(acc)
-    }
-    return stops
+    return getHorizontalScrollStops(columns)
   }, [currentTimeFilter, collapseIdentity])
-
-  const handleHorizontalArrowClick = (direction: 'left' | 'right') => {
-    const body = document.getElementById('explore-creators-body')
-    if (!body) return
-    const maxLeft = Math.max(0, body.scrollWidth - body.clientWidth)
-    const currentLeft = body.scrollLeft
-
-    if (direction === 'right') {
-      const nextStop = columnScrollStops.find((stop) => stop > currentLeft + 1) ?? maxLeft
-      body.scrollTo({ left: Math.min(maxLeft, nextStop), behavior: 'smooth' })
-      return
-    }
-
-    let prevStop = 0
-    for (let i = columnScrollStops.length - 1; i >= 0; i--) {
-      const stop = columnScrollStops[i]
-      if (stop < currentLeft - 1) {
-        prevStop = stop
-        break
-      }
-    }
-    body.scrollTo({ left: Math.max(0, prevStop), behavior: 'smooth' })
-  }
-
-  const arrowButtonClass =
-    'inline-flex h-8 w-8 items-center justify-center rounded-full border border-blue-300/30 bg-blue-500/15 backdrop-blur-md text-blue-100 shadow-[0_10px_24px_-16px_rgba(37,99,235,0.9)] transition-all duration-200 hover:-translate-y-[1px] hover:border-blue-200/60 hover:bg-blue-500/25 hover:text-white hover:shadow-[0_14px_26px_-14px_rgba(59,130,246,0.95)] active:translate-y-0 active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-300/40'
 
   return (
     <div className="relative min-h-screen pt-1 sm:pt-2">
@@ -667,16 +611,7 @@ export function ExploreCreators() {
               className="overflow-x-auto scrollbar-hide" 
               id="explore-creators-header"
               data-scrolled="0"
-              onScroll={(e) => {
-                const body = document.getElementById('explore-creators-body')
-                const scrolled = e.currentTarget.scrollLeft > 0
-                updateHorizontalControls(e.currentTarget)
-                e.currentTarget.dataset.scrolled = scrolled ? '1' : '0'
-                if (body) {
-                  body.scrollLeft = e.currentTarget.scrollLeft
-                  body.dataset.scrolled = scrolled ? '1' : '0'
-                }
-              }}
+              onScroll={handleHeaderScroll}
             >
               <div className="min-w-max">
                 <TokenTableHeader
@@ -689,47 +624,22 @@ export function ExploreCreators() {
             </div>
           </div>
 
-          {hasHorizontalOverflow && canScrollLeft ? (
-            <div className="absolute left-2 top-10 z-60">
-              <button
-                type="button"
-                onClick={() => handleHorizontalArrowClick('left')}
-                aria-label="Scroll creators table left"
-                className={arrowButtonClass}
-              >
-                <ChevronLeft size={14} strokeWidth={2.4} aria-hidden="true" />
-              </button>
-            </div>
-          ) : null}
-
-          {hasHorizontalOverflow && canScrollRight ? (
-            <div className="absolute right-2 top-10 z-60">
-              <button
-                type="button"
-                onClick={() => handleHorizontalArrowClick('right')}
-                aria-label="Scroll creators table right"
-                className={arrowButtonClass}
-              >
-                <ChevronRight size={14} strokeWidth={2.4} aria-hidden="true" />
-              </button>
-            </div>
-          ) : null}
+          <ExploreHorizontalScrollArrows
+            hasOverflow={hasHorizontalOverflow}
+            canScrollLeft={canScrollLeft}
+            canScrollRight={canScrollRight}
+            onScrollLeft={() => handleArrowClick('left', columnScrollStops)}
+            onScrollRight={() => handleArrowClick('right', columnScrollStops)}
+            leftAriaLabel="Scroll creators table left"
+            rightAriaLabel="Scroll creators table right"
+          />
 
           {/* Table body with synced horizontal scroll */}
           <div 
             className="overflow-x-auto scrollbar-hide" 
             id="explore-creators-body"
             data-scrolled="0"
-            onScroll={(e) => {
-              const header = document.getElementById('explore-creators-header')
-              const scrolled = e.currentTarget.scrollLeft > 0
-              updateHorizontalControls(e.currentTarget)
-              if (header) {
-                header.scrollLeft = e.currentTarget.scrollLeft
-                header.dataset.scrolled = scrolled ? '1' : '0'
-              }
-              e.currentTarget.dataset.scrolled = scrolled ? '1' : '0'
-            }}
+            onScroll={handleBodyScroll}
           >
             <div className="min-w-max divide-y divide-white/6">
               {isLoading ? (
@@ -737,34 +647,19 @@ export function ExploreCreators() {
                 Array.from({ length: 10 }).map((_, i) => <TokenRowSkeleton key={i} collapseIdentity={collapseIdentity} />)
               ) : isError ? (
                 // Error state
-                <div className="px-6 py-12 text-center">
-                  <p className="text-zinc-400 mb-4">Failed to load creators</p>
-                  <p className="text-xs text-zinc-600">{(error as Error)?.message || 'Unknown error'}</p>
-                </div>
+                <ExploreTableMessage title="Failed to load creators" detail={(error as Error)?.message || 'Unknown error'} />
               ) : showSyncingEmptyState ? (
-                <div className="px-6 py-12 text-center">
-                  <p className="text-zinc-400">Creator list is still syncing</p>
-                  <p className="mt-2 text-xs text-zinc-600">
-                    Global stats are available, but the ranked creator rows have not finished loading yet.
-                  </p>
-                </div>
+                <ExploreTableMessage
+                  title="Creator list is still syncing"
+                  detail="Global stats are available, but the ranked creator rows have not finished loading yet."
+                />
               ) : trimmedSearchQuery.length > 0 && filteredCoins.length === 0 && isSearchingDirectMatches ? (
-                <div className="px-6 py-12 text-center">
-                  <p className="text-zinc-400">Searching creators...</p>
-                  <p className="mt-2 text-xs text-zinc-600">Checking direct handle/profile matches.</p>
-                </div>
+                <ExploreTableMessage title="Searching creators..." detail="Checking direct handle/profile matches." />
               ) : trimmedSearchQuery.length > 0 && filteredCoins.length === 0 && isFetchingNextPage ? (
-                <div className="px-6 py-12 text-center">
-                  <p className="text-zinc-400">Searching more creators...</p>
-                  <p className="mt-2 text-xs text-zinc-600">Scanning additional pages for matches.</p>
-                </div>
+                <ExploreTableMessage title="Searching more creators..." detail="Scanning additional pages for matches." />
               ) : filteredCoins.length === 0 ? (
                 // Empty state
-                <div className="px-6 py-12 text-center">
-                  <p className="text-zinc-400">
-                    {trimmedSearchQuery ? 'No creators found matching your search' : 'No creators available'}
-                  </p>
-                </div>
+                <ExploreTableMessage title={trimmedSearchQuery ? 'No creators found matching your search' : 'No creators available'} />
               ) : (
                 // Token rows
                 filteredCoins.map((coin, index) => {
@@ -787,26 +682,19 @@ export function ExploreCreators() {
               )}
 
               {/* Loading more indicator */}
-              {isFetchingNextPage && (
-                <>
-                  <TokenRowSkeleton collapseIdentity={collapseIdentity} />
-                  <TokenRowSkeleton collapseIdentity={collapseIdentity} />
-                  <TokenRowSkeleton collapseIdentity={collapseIdentity} />
-                </>
-              )}
+              <ExploreLoadingMoreRows
+                isFetchingNextPage={isFetchingNextPage}
+                renderSkeletonRow={() => <TokenRowSkeleton collapseIdentity={collapseIdentity} />}
+              />
 
-              {/* Load more button (fallback for scroll) */}
-              {hasNextPage && !isFetchingNextPage && (
-                <div className="px-6 py-4 border-t border-white/8 flex justify-center">
-                  <button
-                    type="button"
-                    onClick={() => fetchNextPage()}
-                    className="px-6 py-2 rounded-full text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/8 transition-colors"
-                  >
-                    Load more
-                  </button>
-                </div>
-              )}
+              <ExploreLoadMoreButton
+                hasNextPage={Boolean(hasNextPage)}
+                isFetchingNextPage={isFetchingNextPage}
+                onLoadMore={() => {
+                  void fetchNextPage()
+                }}
+                buttonClassName="px-6 py-2 rounded-full text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/8 transition-colors"
+              />
             </div>
           </div>
         </motion.div>

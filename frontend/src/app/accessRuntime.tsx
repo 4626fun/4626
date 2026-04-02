@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
 
 import { useQuery } from '@tanstack/react-query'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
@@ -6,6 +6,7 @@ import { useAccount } from 'wagmi'
 
 import { AppLoadingState } from '@/components/AppLoadingState'
 import { useCreatorAllowlist } from '@/hooks'
+import { useTelegramMiniAppEntryStatus } from '@/hooks/useTelegramMiniAppEntryStatus'
 import { useAdminStatusFromSession } from '@/hooks/useAdminStatus'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
@@ -15,10 +16,8 @@ import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
 import {
   AccessContext,
   computeAcceptedFromAllowlist,
-  getInitialTelegramMiniAppEntryResolution,
   resolveAccess,
   resolveAllowlistMode,
-  resolveTelegramMiniAppEntryBootstrap,
   type AccessState,
   type CreatorAllowlistMode,
   type RouteId,
@@ -145,44 +144,14 @@ export function RequireAdmin(props: { children?: React.ReactNode }) {
 export function RequireTelegramMiniAppEntry(props: { children?: React.ReactNode }) {
   const access = useAccessContext()
   const location = useLocation()
-  const hasImmediateEntryContext = getInitialTelegramMiniAppEntryResolution(location.search) === 'ready'
-  const [entryBootstrapState, setEntryBootstrapState] = useState(() => ({
-    search: location.search,
-    resolved: hasImmediateEntryContext,
-    ready: hasImmediateEntryContext,
-  }))
+  const entryStatus = useTelegramMiniAppEntryStatus(location.search)
 
-  useEffect(() => {
-    if (hasImmediateEntryContext) {
-      return
-    }
-
-    let cancelled = false
-    const search = location.search
-    void resolveTelegramMiniAppEntryBootstrap({ search }).then((ready) => {
-      if (cancelled) return
-      setEntryBootstrapState({
-        search,
-        resolved: true,
-        ready,
-      })
-    })
-
-    return () => {
-      cancelled = true
-    }
-  }, [hasImmediateEntryContext, location.search])
-
-  if (hasImmediateEntryContext) {
+  if (entryStatus === 'ready') {
     return props.children ? <>{props.children}</> : <Outlet />
   }
 
-  if (entryBootstrapState.search !== location.search || !entryBootstrapState.resolved) {
+  if (entryStatus === 'checking') {
     return <AppLoadingState />
-  }
-
-  if (entryBootstrapState.ready) {
-    return props.children ? <>{props.children}</> : <Outlet />
   }
 
   const acceptedDecision = resolveAccess('accepted', access)

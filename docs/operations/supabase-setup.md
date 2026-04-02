@@ -23,10 +23,17 @@ SUPABASE_SERVICE_KEY=eyJ...
 
 ## Database Schema
 
-Run migrations to set up tables:
+Run linked migrations to set up/update tables:
 
 ```bash
-pnpm supabase db push
+# from repo root
+pnpm -C frontend db:migrate
+```
+
+The `db:migrate` script is the single migration entrypoint and runs:
+
+```bash
+pnpm -C .. dlx supabase@latest migration up --linked
 ```
 
 ## Security

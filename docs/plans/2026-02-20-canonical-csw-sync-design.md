@@ -1,6 +1,6 @@
 # Canonical CSW Sync (Historical Zora-Anchored) Design
 
-> Historical note (2026-03-20): this design predates the email-first account-model reset. The current canonical account identity is the user's verified email. References below to a "canonical account" should now be read as "canonical execution wallet (CSW)." See [frontend/docs/account-auth-invariants.md](../frontend/docs/account-auth-invariants.md).
+> Historical note (2026-03-20): this design predates the email-first account-model reset. The current canonical account identity is the user's verified email. References below to a "canonical account" should now be read as "canonical execution wallet (CSW)." See [Account Auth Invariants](https://github.com/wenakita/4626/blob/main/frontend/docs/account-auth-invariants.md).
 
 ## Problem
 

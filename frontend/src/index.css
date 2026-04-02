@@ -375,32 +375,130 @@
     @apply absolute inset-0 pointer-events-none opacity-30;
   }
 
-  .guard-loading-bar {
-    position: relative;
-    overflow: hidden;
-    background: rgb(var(--vault-card-raised) / 0.72);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
+  .app-loading-root {
+    animation: app-loading-fade-in 340ms cubic-bezier(0.22, 1, 0.36, 1) both;
   }
 
-  .guard-loading-bar::after {
+  .app-loading-root::after {
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(
-      105deg,
-      transparent 0%,
-      rgba(255, 255, 255, 0.06) 35%,
-      rgba(0, 82, 255, 0.36) 50%,
-      rgba(255, 255, 255, 0.06) 65%,
-      transparent 100%
-    );
-    background-size: 210% 100%;
-    animation: guard-shimmer 2.2s linear infinite;
+    pointer-events: none;
+    background: radial-gradient(120% 86% at 50% 4%, rgba(255, 255, 255, 0.045), transparent 58%);
   }
 
-  .guard-loading-core {
-    animation: guard-core-breathe 1.9s ease-in-out infinite;
-    box-shadow: 0 0 16px rgba(0, 82, 255, 0.5);
+  .app-loading-glow {
+    position: absolute;
+    border-radius: 9999px;
+    filter: blur(100px);
+    opacity: 0.58;
+    pointer-events: none;
+    animation: app-loading-glow-breathe 4.8s ease-in-out infinite;
+  }
+
+  .app-loading-glow-primary {
+    left: 50%;
+    top: -9rem;
+    height: 26rem;
+    width: 26rem;
+    transform: translateX(-50%);
+    background: radial-gradient(circle, rgba(0, 82, 255, 0.4) 0%, rgba(0, 82, 255, 0.12) 46%, transparent 80%);
+  }
+
+  .app-loading-glow-secondary {
+    right: -9rem;
+    bottom: -10rem;
+    height: 22rem;
+    width: 22rem;
+    background: radial-gradient(circle, rgba(56, 189, 248, 0.2) 0%, rgba(56, 189, 248, 0.08) 50%, transparent 82%);
+    animation-delay: -2.2s;
+  }
+
+  .app-loading-grid-mask {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    opacity: 0.24;
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+    background-size: 30px 30px;
+    mask-image: radial-gradient(circle at center, black 16%, transparent 72%);
+  }
+
+  .app-loading-panel {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.4rem;
+    border-radius: 1.5rem;
+    border: 1px solid rgb(255 255 255 / 0.09);
+    background:
+      linear-gradient(165deg, rgb(12 14 18 / 0.88), rgb(9 11 14 / 0.72));
+    box-shadow:
+      0 22px 56px -26px rgba(0, 0, 0, 0.82),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    padding: 2.1rem 1.5rem 1.65rem;
+    animation: app-loading-panel-pulse 2.8s ease-in-out infinite;
+  }
+
+  .app-loading-orb {
+    position: relative;
+    height: 3.8rem;
+    width: 3.8rem;
+  }
+
+  .app-loading-orb-ring {
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+  }
+
+  .app-loading-orb-ring-outer {
+    border-top-color: rgba(0, 82, 255, 0.75);
+    border-right-color: rgba(0, 82, 255, 0.28);
+    border-bottom-color: rgba(255, 255, 255, 0.08);
+    border-left-color: rgba(255, 255, 255, 0.08);
+    animation: app-loading-spin 2.1s linear infinite;
+  }
+
+  .app-loading-orb-ring-inner {
+    inset: 0.42rem;
+    border-color: rgba(148, 163, 184, 0.42);
+    border-bottom-color: transparent;
+    animation: app-loading-spin 2.6s linear infinite reverse;
+  }
+
+  .app-loading-orb-core {
+    position: absolute;
+    inset: 1.26rem;
+    border-radius: 9999px;
+    background: rgba(0, 82, 255, 0.9);
+    box-shadow:
+      0 0 18px rgba(0, 82, 255, 0.5),
+      0 0 40px rgba(0, 82, 255, 0.25);
+    animation: app-loading-core-breathe 1.9s ease-in-out infinite;
+  }
+
+  .app-loading-progress {
+    position: relative;
+    width: 100%;
+    max-width: 15rem;
+    height: 0.2rem;
+    overflow: hidden;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .app-loading-progress-bar {
+    position: absolute;
+    inset: 0;
+    width: 42%;
+    border-radius: 9999px;
+    background: linear-gradient(90deg, rgba(0, 82, 255, 0.25), rgba(0, 82, 255, 0.95), rgba(0, 82, 255, 0.25));
+    animation: app-loading-progress-sweep 1.7s cubic-bezier(0.22, 1, 0.36, 1) infinite;
   }
 }
 
@@ -438,24 +536,63 @@
   }
 }
 
-@keyframes guard-shimmer {
+@keyframes app-loading-fade-in {
   0% {
-    background-position: 180% 0;
+    opacity: 0;
+    transform: translateY(10px);
   }
   100% {
-    background-position: -180% 0;
+    opacity: 1;
+    transform: translateY(0);
   }
 }
 
-@keyframes guard-core-breathe {
+@keyframes app-loading-glow-breathe {
   0%,
   100% {
-    opacity: 0.52;
-    transform: scale(0.88);
+    opacity: 0.4;
+    transform: translateY(0) scale(0.95);
+  }
+  50% {
+    opacity: 0.82;
+    transform: translateY(-8px) scale(1.04);
+  }
+}
+
+@keyframes app-loading-panel-pulse {
+  0%,
+  100% {
+    opacity: 0.88;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@keyframes app-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes app-loading-core-breathe {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: scale(0.84);
   }
   50% {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@keyframes app-loading-progress-sweep {
+  0% {
+    transform: translateX(-130%);
+  }
+  100% {
+    transform: translateX(340%);
   }
 }
 

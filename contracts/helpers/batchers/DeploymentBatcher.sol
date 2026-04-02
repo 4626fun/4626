@@ -34,6 +34,8 @@ interface IUniV4ConfigurableStrategy {
 
 contract DeploymentBatcherPhase3Helper {
     uint24 internal constant V3_FEE_TIER = 3000;
+    // Charm managerFee uses 1e6 precision (100% = 1_000_000).
+    uint24 internal constant CHARM_MANAGER_FEE_PIPS = 160_000; // 16%
     int24 internal constant CHARM_MAX_TWAP_DEVIATION = 500;
     uint32 internal constant CHARM_TWAP_DURATION = 300;
 
@@ -94,7 +96,7 @@ contract DeploymentBatcherPhase3Helper {
                 ICharmFactory.VaultParams({
                 pool: v3Pool,
                 manager: protocolTreasury,
-                managerFee: 0,
+                managerFee: CHARM_MANAGER_FEE_PIPS,
                 rebalanceDelegate: address(0),
                 maxTotalSupply: type(uint256).max,
                 baseThreshold: 3000,

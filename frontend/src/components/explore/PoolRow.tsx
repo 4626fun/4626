@@ -3,7 +3,15 @@ import { Link } from 'react-router-dom'
 import { ChevronDown } from 'lucide-react'
 import type { ZoraCoin } from '@/lib/zora/types'
 import { getZoraExploreVolumeColumnRaw, getZoraExploreVolumeForFees } from '@/lib/zora/exploreVolume'
-import { EXPLORE_TABLE_GROUPS, getExploreColumns, getGridTemplateColumns, getStickyLeftMap } from './tableColumns'
+import { getExploreColumns, getGridTemplateColumns, getStickyLeftMap } from './tableColumns'
+import {
+  buildGroupSpans,
+  formatCompactNumber,
+  formatFeeAmount,
+  formatMarketCapDeltaPercent,
+  getCoinFeeStatus,
+  shortAddress,
+} from './rowFormatting'
 import { useIdentity } from '@/hooks/useIdentity'
 
 type PoolRowProps = {
@@ -20,143 +28,6 @@ type PoolTableHeaderProps = {
   timeframe?: string
   currentSort?: string
   onSortChange?: (sort: string) => void
-}
-
-// V4 cutoff: June 6, 2025 (Zora V4 mainnet launch)
-const V4_CUTOFF_DATE = new Date('2025-06-06T00:00:00Z')
-
-// Zora V4 Fee Structure (1% total fee) - coins created after June 2025 OR migrated.
-// Note: this is Zora-specific and separate from CreatorVault gauge split economics.
-const FEE_RATES_V4 = {
-  total: 0.01,        // 1% total trading fee
-  creator: 0.50,      // 50% of fees -> Zora creator CreatorCoin payoutRecipient
-  platform: 0.20,     // 20% of fees → Platform Referral
-  lpRewards: 0.20,    // 20% of fees → Locked LP (not distributed)
-  protocol: 0.05,     // 5% of fees → Zora Protocol
-  tradeRef: 0.04,     // 4% of fees → Trade Referral
-  doppler: 0.01,      // 1% of fees → Doppler (LP hook)
-}
-
-// Legacy Fee Structure (3% total fee) - coins created before June 2025 that haven't migrated.
-const FEE_RATES_LEGACY = {
-  total: 0.03,        // 3% total trading fee
-  creator: 0.50,      // 50% of fees -> Zora creator CreatorCoin payoutRecipient
-  platform: 0.25,     // 25% of fees → Platform Referral
-  lpRewards: 0.00,    // No LP rewards in legacy
-  protocol: 0.25,     // 25% of fees → Zora Protocol
-  tradeRef: 0.00,     // No trade referral in legacy
-  doppler: 0.00,      // No Doppler in legacy
-}
-
-type FeeStatus = {
-  isV4: boolean
-  isMigrated: boolean
-  feeRates: typeof FEE_RATES_V4
-}
-
-/**
- * Determine fee status for a coin
- * Priority: 1) Check if migrated, 2) Check creation date
- */
-function getCoinFeeStatus(
-  address: string | undefined,
-  createdAt: string | undefined,
-  migratedCoins?: Set<string>
-): FeeStatus {
-  // Check if coin has migrated to V4
-  if (address && migratedCoins?.has(address.toLowerCase())) {
-    return { isV4: true, isMigrated: true, feeRates: FEE_RATES_V4 }
-  }
-  
-  // Fall back to creation date check
-  const isV4ByDate = !createdAt || new Date(createdAt) >= V4_CUTOFF_DATE
-  return {
-    isV4: isV4ByDate,
-    isMigrated: false,
-    feeRates: isV4ByDate ? FEE_RATES_V4 : FEE_RATES_LEGACY
-  }
-}
-
-function formatCompactNumber(value: string | number | undefined): string {
-  if (!value) return '-'
-  const num = typeof value === 'string' ? parseFloat(value) : value
-  if (isNaN(num) || num === 0) return '-'
-  if (num >= 1_000_000_000) return `$${(num / 1_000_000_000).toFixed(2)}B`
-  if (num >= 1_000_000) return `$${(num / 1_000_000).toFixed(2)}M`
-  if (num >= 1_000) return `$${(num / 1_000).toFixed(2)}K`
-  if (num >= 1) return `$${num.toFixed(2)}`
-  if (num >= 0.01) return `$${num.toFixed(2)}`
-  return `$${num.toFixed(4)}`
-}
-
-function formatFeeAmount(volume: string | undefined, totalFeeRate: number, splitRate: number): string {
-  if (!volume) return '-'
-  const vol = parseFloat(volume)
-  if (isNaN(vol) || vol === 0) return '-'
-  const fee = vol * totalFeeRate * splitRate
-  return formatCompactNumber(fee)
-}
-
-function shortAddress(addr: string | undefined): string {
-  if (!addr) return '-'
-  if (addr.length <= 10) return addr
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
-}
-
-function formatDeltaPercentValue(value: number): { text: string; positive: boolean } {
-  if (!Number.isFinite(value)) return { text: '-', positive: true }
-  const positive = value >= 0
-  const abs = Math.abs(value)
-
-  let formatted: string
-  if (abs >= 1000) {
-    formatted = `${Math.round(abs)}%`
-  } else if (abs >= 10) {
-    formatted = `${abs.toFixed(1)}%`
-  } else if (abs >= 0.01) {
-    formatted = `${abs.toFixed(2)}%`
-  } else if (abs > 0) {
-    formatted = '<0.01%'
-  } else {
-    formatted = '0%'
-  }
-
-  return { text: `${positive ? '+' : '-'}${formatted}`, positive }
-}
-
-function formatMarketCapDeltaPercent(deltaRaw: string | undefined, marketCapRaw: string | undefined): { text: string; positive: boolean } {
-  if (!deltaRaw) return { text: '-', positive: true }
-  const delta = parseFloat(deltaRaw)
-  if (!Number.isFinite(delta)) return { text: '-', positive: true }
-
-  let percent = delta
-  const abs = Math.abs(delta)
-  if (abs > 200) {
-    const marketCap = marketCapRaw ? parseFloat(marketCapRaw) : NaN
-    if (Number.isFinite(marketCap) && marketCap !== 0) {
-      const prev = marketCap - delta
-      if (prev !== 0) percent = (delta / prev) * 100
-    }
-  }
-
-  return formatDeltaPercentValue(percent)
-}
-
-function buildGroupSpans(columns: ReturnType<typeof getExploreColumns>) {
-  const out: Array<{ id: string; label: string; start: number; end: number }> = []
-  for (const g of EXPLORE_TABLE_GROUPS) {
-    const firstIdx = columns.findIndex((c) => c.group === g.id)
-    if (firstIdx === -1) continue
-    const lastIdx = (() => {
-      let i = firstIdx
-      for (; i < columns.length; i++) {
-        if (columns[i].group !== g.id) break
-      }
-      return i - 1
-    })()
-    out.push({ id: g.id, label: g.label, start: firstIdx, end: lastIdx })
-  }
-  return out
 }
 
 export function PoolRow({

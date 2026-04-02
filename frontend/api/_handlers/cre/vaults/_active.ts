@@ -9,6 +9,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
+  requireKeeprApiKey,
   setCors,
   setNoStore,
   getDb,
@@ -62,16 +63,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  // Auth check
-  const secret = process.env.KEEPR_API_KEY
-  if (!secret) {
-    return res.status(500).json({ success: false, error: 'KEEPR_API_KEY not configured' } satisfies ApiEnvelope<never>)
-  }
-
-  const auth = req.headers.authorization
-  if (!auth?.startsWith('Bearer ') || auth.slice(7) !== secret) {
-    return res.status(401).json({ success: false, error: 'Unauthorized' } satisfies ApiEnvelope<never>)
-  }
+  if (!requireKeeprApiKey(req, res)) return
 
   if (!isDbConfigured()) {
     return res.status(500).json({ success: false, error: 'Database not configured' } satisfies ApiEnvelope<never>)

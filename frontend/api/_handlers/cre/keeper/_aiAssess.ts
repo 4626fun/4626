@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../../packages/server-core/src/index.js'
+import { type ApiEnvelope, handleOptions, requireKeeprApiKey, setCors, setNoStore } from '../../../../packages/server-core/src/index.js'
 import { getElizaLlmService } from '../../../../server/agent/eliza/llm.js'
 
 type AlertSeverity = 'info' | 'warning' | 'critical'
@@ -132,14 +132,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const secret = process.env.KEEPR_API_KEY
-  if (!secret) {
-    return res.status(500).json({ success: false, error: 'KEEPR_API_KEY not configured' } satisfies ApiEnvelope<never>)
-  }
-  const auth = req.headers.authorization
-  if (!auth?.startsWith('Bearer ') || auth.slice(7) !== secret) {
-    return res.status(401).json({ success: false, error: 'Unauthorized' } satisfies ApiEnvelope<never>)
-  }
+  if (!requireKeeprApiKey(req, res)) return
 
   const body = (req.body ?? {}) as RequestBody
   const vaultAddress = typeof body.vaultAddress === 'string' ? body.vaultAddress.trim() : ''

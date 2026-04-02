@@ -45,6 +45,7 @@ vi.mock('@/components/explore/TokenRow', () => ({
 
 vi.mock('@/components/explore/tableColumns', () => ({
   getExploreColumns: () => [],
+  getHorizontalScrollStops: () => [0],
 }))
 
 vi.mock('@/hooks/useMigratedCoins', () => ({

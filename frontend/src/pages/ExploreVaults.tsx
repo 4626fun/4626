@@ -8,6 +8,7 @@ import { apiFetch } from '@/lib/apiBase'
 import { API_ENDPOINTS } from '@/lib/apiEndpoints'
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
 import { ExploreMetricsDashboard } from '@/components/explore/ExploreMetricsDashboard'
+import { ExploreLoadMoreButton, ExploreLoadingMoreRows, ExploreTableRowMessage } from '@/components/explore/ExploreUiPrimitives'
 import { useWindowInfiniteScrollLoadMore } from '@/hooks/useWindowInfiniteScrollLoadMore'
 import {
   formatDateLabel,
@@ -228,18 +229,16 @@ export function ExploreVaults() {
                 {isLoading ? (
                   Array.from({ length: 10 }).map((_, i) => <VaultRowSkeleton key={`skeleton-${i}`} rowKey={`skeleton-${i}`} />)
                 ) : isError ? (
-                  <tr>
-                    <td colSpan={9} className="px-6 py-12 text-center">
-                      <p className="text-zinc-400 mb-3">Failed to load vaults</p>
-                      <p className="text-xs text-zinc-600">{(error as Error)?.message || 'Unknown error'}</p>
-                    </td>
-                  </tr>
+                  <ExploreTableRowMessage
+                    colSpan={9}
+                    title="Failed to load vaults"
+                    detail={(error as Error)?.message || 'Unknown error'}
+                  />
                 ) : vaults.length === 0 ? (
-                  <tr>
-                    <td colSpan={9} className="px-6 py-12 text-center text-zinc-400">
-                      {normalizedSearchQuery ? 'No vaults found for that search' : 'No vaults available yet'}
-                    </td>
-                  </tr>
+                  <ExploreTableRowMessage
+                    colSpan={9}
+                    title={normalizedSearchQuery ? 'No vaults found for that search' : 'No vaults available yet'}
+                  />
                 ) : (
                   vaults.map((item, index) => {
                     const status = getVaultStatus(item)
@@ -293,28 +292,24 @@ export function ExploreVaults() {
                   })
                 )}
 
-                {isFetchingNextPage && (
-                  <>
-                    <VaultRowSkeleton rowKey="skeleton-next-1" />
-                    <VaultRowSkeleton rowKey="skeleton-next-2" />
-                    <VaultRowSkeleton rowKey="skeleton-next-3" />
-                  </>
-                )}
+                <ExploreLoadingMoreRows
+                  isFetchingNextPage={isFetchingNextPage}
+                  renderSkeletonRow={(rowKey) => <VaultRowSkeleton rowKey={rowKey} />}
+                />
               </tbody>
             </table>
           </div>
 
-          {hasNextPage && !isFetchingNextPage && !isLoading && !isError ? (
-            <div className="px-6 py-4 border-t border-white/8 flex justify-center">
-              <button
-                type="button"
-                onClick={() => fetchNextPage()}
-                className="px-6 py-2 rounded-full text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/7 transition-colors"
-              >
-                Load more vaults
-              </button>
-            </div>
-          ) : null}
+          <ExploreLoadMoreButton
+            hasNextPage={Boolean(hasNextPage)}
+            isFetchingNextPage={isFetchingNextPage}
+            disabled={isLoading || isError}
+            onLoadMore={() => {
+              void fetchNextPage()
+            }}
+            label="Load more vaults"
+            buttonClassName="px-6 py-2 rounded-full text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/7 transition-colors"
+          />
         </motion.div>
 
         {!isLoading && vaults.length > 0 ? (

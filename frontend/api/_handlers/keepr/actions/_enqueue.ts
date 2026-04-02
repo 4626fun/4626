@@ -4,6 +4,7 @@ import {
   type ApiEnvelope,
   handleOptions,
   readJsonBody,
+  requireKeeprApiKey,
   setCors,
   setNoStore,
   getDb,
@@ -73,13 +74,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const secret = process.env.KEEPR_API_KEY
-  if (!secret) {
-    return res.status(500).json({ success: false, error: 'Server misconfigured' } satisfies ApiEnvelope<never>)
-  }
-  if ((req.headers.authorization ?? '') !== `Bearer ${secret}`) {
-    return res.status(401).json({ success: false, error: 'Unauthorized' } satisfies ApiEnvelope<never>)
-  }
+  if (!requireKeeprApiKey(req, res, { missingSecretError: 'Server misconfigured' })) return
 
   const body = (await readJsonBody<EnqueueBody>(req)) ?? {}
   const vaultAddressRaw = typeof body.vaultAddress === 'string' ? body.vaultAddress.trim().toLowerCase() : ''

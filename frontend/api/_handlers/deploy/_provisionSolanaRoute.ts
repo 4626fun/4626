@@ -18,6 +18,13 @@ import {
 
 
 import { evaluateCanonicalBridgeTokenPolicy } from '../../../server/_lib/solanaBridgePolicy.js'
+import {
+  WRAP_TOKEN_NAME_MAX_LENGTH,
+  WRAP_TOKEN_SYMBOL_MAX_LENGTH,
+  normalizeExactWrapTokenName,
+  normalizeExactWrapTokenSymbol,
+  readBridgeTokenMetadata,
+} from '../../../server/_lib/solanaBridgeTokenMetadata.js'
 
 type ProvisionRouteRequest = {
   bridgeToken?: string
@@ -60,129 +67,6 @@ const BASE_SOLANA_BRIDGE_ABI = [
     outputs: [{ type: 'uint256' }],
   },
 ] as const
-
-const ERC20_METADATA_ABI = [
-  {
-    type: 'function',
-    name: 'name',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'string' }],
-  },
-  {
-    type: 'function',
-    name: 'symbol',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'string' }],
-  },
-] as const
-
-async function readBridgeTokenMetadata(params: {
-  publicClient: any
-  bridgeToken: Address
-}): Promise<{ name: string; symbol: string } | null> {
-  try {
-    const [nameRaw, symbolRaw] = await Promise.all([
-      params.publicClient.readContract({
-        address: params.bridgeToken,
-        abi: ERC20_METADATA_ABI,
-        functionName: 'name',
-      }),
-      params.publicClient.readContract({
-        address: params.bridgeToken,
-        abi: ERC20_METADATA_ABI,
-        functionName: 'symbol',
-      }),
-    ])
-    const name = typeof nameRaw === 'string' ? nameRaw.trim() : ''
-    const symbol = typeof symbolRaw === 'string' ? symbolRaw.trim() : ''
-    if (!name || !symbol) return null
-    return { name, symbol }
-  } catch {
-    return null
-  }
-}
-
-const WRAP_TOKEN_NAME_MAX_LENGTH = 32
-const WRAP_TOKEN_SYMBOL_MAX_LENGTH = 12
-type WrapTokenSymbolMode = 'auto' | 'unicode' | 'ascii'
-
-function sanitizeWrapTokenName(raw: string, bridgeToken: Address): string {
-  const fallback = `CreatorShare-${bridgeToken.slice(2, 8)}`
-  const ascii = String(raw ?? '')
-    .normalize('NFKD')
-    .replace(/[^\x20-\x7E]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-  const resolved = ascii || fallback
-  return resolved.slice(0, WRAP_TOKEN_NAME_MAX_LENGTH)
-}
-
-function readWrapTokenSymbolMode(): WrapTokenSymbolMode {
-  const raw = String(process.env.SOLANA_BRIDGE_WRAP_SYMBOL_MODE ?? 'auto')
-    .trim()
-    .toLowerCase()
-  if (raw === 'unicode' || raw === 'ascii' || raw === 'auto') return raw
-  return 'auto'
-}
-
-function sanitizeWrapTokenSymbolUnicode(raw: string, bridgeToken: Address): string {
-  const fallback = `■${bridgeToken.slice(2, 6).toUpperCase()}`
-  const normalized = String(raw ?? '')
-    .normalize('NFKC')
-    .toUpperCase()
-    .replace(/\s+/g, '')
-  const cleaned = normalized.replace(/[^A-Z0-9■]/g, '')
-  const resolved = cleaned || fallback
-  return resolved.slice(0, WRAP_TOKEN_SYMBOL_MAX_LENGTH)
-}
-
-function sanitizeWrapTokenSymbolAscii(raw: string, bridgeToken: Address): string {
-  const fallbackPrefixRaw = process.env.SOLANA_BRIDGE_WRAP_SYMBOL_PREFIX
-  const fallbackPrefix = (fallbackPrefixRaw === undefined ? 'CS' : String(fallbackPrefixRaw))
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '')
-  const fallback = `${fallbackPrefix}${bridgeToken.slice(2, 6).toUpperCase()}`
-  const cleaned = String(raw ?? '')
-    .normalize('NFKD')
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '')
-  const resolved = cleaned || fallback
-  return resolved.slice(0, WRAP_TOKEN_SYMBOL_MAX_LENGTH)
-}
-
-function buildWrapTokenSymbolCandidates(raw: string, bridgeToken: Address): string[] {
-  const mode = readWrapTokenSymbolMode()
-  const unicode = sanitizeWrapTokenSymbolUnicode(raw, bridgeToken)
-  const ascii = sanitizeWrapTokenSymbolAscii(raw, bridgeToken)
-  const out: string[] = []
-  const pushUnique = (value: string): void => {
-    if (!value || out.includes(value)) return
-    out.push(value)
-  }
-  if (mode === 'unicode') pushUnique(unicode)
-  else if (mode === 'ascii') pushUnique(ascii)
-  else {
-    pushUnique(unicode)
-    pushUnique(ascii)
-  }
-  return out
-}
-
-function isLikelyUnicodeSymbolUnsupportedError(message: string): boolean {
-  const lower = message.toLowerCase()
-  return (
-    lower.includes('utf-8') ||
-    lower.includes('utf8') ||
-    lower.includes('unicode') ||
-    lower.includes('invalid symbol') ||
-    lower.includes('symbol is invalid') ||
-    lower.includes('invalid metadata') ||
-    lower.includes('invalid character')
-  )
-}
 
 function readProvisionerSecret(): string {
   return String(
@@ -408,8 +292,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       error: 'Bridge token metadata unavailable. Name/symbol are required for Solana route provisioning.',
     } satisfies ApiEnvelope<never>)
   }
-  const tokenName = sanitizeWrapTokenName(bridgeTokenMetadata.name, bridgeToken)
-  const tokenSymbolCandidates = buildWrapTokenSymbolCandidates(bridgeTokenMetadata.symbol, bridgeToken)
+  const tokenName = normalizeExactWrapTokenName(bridgeTokenMetadata.name)
+  const tokenSymbol = normalizeExactWrapTokenSymbol(bridgeTokenMetadata.symbol)
+  if (!tokenName || !tokenSymbol) {
+    return res.status(409).json({
+      success: false,
+      error:
+        `Bridge token metadata is incompatible with strict Solana parity requirements (name<=${WRAP_TOKEN_NAME_MAX_LENGTH}, ` +
+        `symbol<=${WRAP_TOKEN_SYMBOL_MAX_LENGTH}, exact casing preserved).`,
+    } satisfies ApiEnvelope<never>)
+  }
 
   try {
     const buildWrapArgs = (tokenSymbol: string): string[] => {
@@ -438,42 +330,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     let combined = ''
     let runner = ''
-    let tokenSymbolUsed = tokenSymbolCandidates[0] ?? ''
-    let wrapError: unknown = null
-    for (let i = 0; i < tokenSymbolCandidates.length; i += 1) {
-      const candidate = tokenSymbolCandidates[i]
-      logger.info('[deploy/provisionSolanaRoute] Starting wrap-token provisioning', {
-        bridgeToken,
-        deployEnv,
-        tokenName,
-        tokenSymbol: candidate,
-        tokenSymbolCandidate: `${i + 1}/${tokenSymbolCandidates.length}`,
-        payerKp,
-        cliDir,
-      })
-      try {
-        const result = await runWrapToken(cliDir, cliBin, buildWrapArgs(candidate))
-        combined = result.output
-        runner = result.runner
-        tokenSymbolUsed = candidate
-        wrapError = null
-        break
-      } catch (error) {
-        wrapError = error
-        const message = error instanceof Error ? error.message : String(error)
-        const hasFallback = i < tokenSymbolCandidates.length - 1
-        const shouldFallback = hasFallback && isLikelyUnicodeSymbolUnsupportedError(message)
-        logger.warn('[deploy/provisionSolanaRoute] Symbol candidate failed', {
-          bridgeToken,
-          tokenSymbol: candidate,
-          tokenSymbolCandidate: `${i + 1}/${tokenSymbolCandidates.length}`,
-          fallback: shouldFallback,
-          error: message,
-        })
-        if (!shouldFallback) throw error
-      }
-    }
-    if (wrapError) throw wrapError
+    logger.info('[deploy/provisionSolanaRoute] Starting wrap-token provisioning', {
+      bridgeToken,
+      deployEnv,
+      tokenName,
+      tokenSymbol,
+      payerKp,
+      cliDir,
+    })
+    const result = await runWrapToken(cliDir, cliBin, buildWrapArgs(tokenSymbol))
+    combined = result.output
+    runner = result.runner
 
     const mintPubkey = parseMintPubkeyFromWrapOutput(combined)
     if (!mintPubkey) {
@@ -513,7 +380,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         mintPubkey,
         mintBytes32,
         runner,
-        tokenSymbol: tokenSymbolUsed,
+        tokenSymbol,
         routeScalar: scalar.toString(),
       },
     } satisfies ApiEnvelope<ProvisionRouteResponse>)

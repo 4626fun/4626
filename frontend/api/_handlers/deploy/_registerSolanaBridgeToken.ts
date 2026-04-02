@@ -45,6 +45,16 @@ import {
   readSolanaBridgeLivenessPolicy,
 } from '../../../server/_lib/solanaBridgePolicy.js'
 import { resolveShareTokenMetadataUrls } from '../../../server/_lib/shareTokenMetadata.js'
+import {
+  ERC20_METADATA_ABI,
+  WRAP_TOKEN_NAME_MAX_LENGTH,
+  WRAP_TOKEN_SYMBOL_MAX_LENGTH,
+  isLikelyUnsupportedMetadataUriFlagError,
+  normalizeExactWrapTokenName,
+  normalizeExactWrapTokenSymbol,
+  normalizeWrapTokenMetadataUri,
+  readBridgeTokenMetadata,
+} from '../../../server/_lib/solanaBridgeTokenMetadata.js'
 
 type RegisterSolanaBridgeTokenRequest = {
   bridgeToken?: string
@@ -164,30 +174,6 @@ const BASE_SOLANA_BRIDGE_ABI = [
       { name: 'remoteToken', type: 'bytes32' },
     ],
     outputs: [{ type: 'uint256' }],
-  },
-] as const
-
-const ERC20_METADATA_ABI = [
-  {
-    type: 'function',
-    name: 'name',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'string' }],
-  },
-  {
-    type: 'function',
-    name: 'symbol',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'string' }],
-  },
-  {
-    type: 'function',
-    name: 'decimals',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint8' }],
   },
 ] as const
 
@@ -451,56 +437,6 @@ function readMeteoraProvisionerSecret(): string {
   ])
 }
 
-async function readBridgeTokenMetadata(params: {
-  publicClient: any
-  bridgeToken: Address
-}): Promise<{ name: string; symbol: string } | null> {
-  try {
-    const [nameRaw, symbolRaw] = await Promise.all([
-      params.publicClient.readContract({
-        address: params.bridgeToken,
-        abi: ERC20_METADATA_ABI,
-        functionName: 'name',
-      }),
-      params.publicClient.readContract({
-        address: params.bridgeToken,
-        abi: ERC20_METADATA_ABI,
-        functionName: 'symbol',
-      }),
-    ])
-    const name = typeof nameRaw === 'string' ? nameRaw.trim() : ''
-    const symbol = typeof symbolRaw === 'string' ? symbolRaw.trim() : ''
-    if (!name || !symbol) return null
-    return { name, symbol }
-  } catch {
-    return null
-  }
-}
-
-const WRAP_TOKEN_NAME_MAX_LENGTH = 32
-const WRAP_TOKEN_SYMBOL_MAX_LENGTH = 12
-const WRAP_TOKEN_METADATA_URI_MAX_LENGTH = 512
-type WrapTokenSymbolMode = 'auto' | 'unicode' | 'ascii'
-
-function sanitizeWrapTokenName(raw: string, bridgeToken: Address): string {
-  const fallback = `CreatorShare-${bridgeToken.slice(2, 8)}`
-  const ascii = String(raw ?? '')
-    .normalize('NFKD')
-    .replace(/[^\x20-\x7E]/g, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-  const resolved = ascii || fallback
-  return resolved.slice(0, WRAP_TOKEN_NAME_MAX_LENGTH)
-}
-
-function readWrapTokenSymbolMode(): WrapTokenSymbolMode {
-  const raw = String(process.env.SOLANA_BRIDGE_WRAP_SYMBOL_MODE ?? 'auto')
-    .trim()
-    .toLowerCase()
-  if (raw === 'unicode' || raw === 'ascii' || raw === 'auto') return raw
-  return 'auto'
-}
-
 function readWrapTokenMetadataUriEnabled(): boolean {
   const raw = String(process.env.SOLANA_BRIDGE_WRAP_METADATA_URI_ENABLED ?? '')
     .trim()
@@ -509,124 +445,19 @@ function readWrapTokenMetadataUriEnabled(): boolean {
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
 }
 
-function normalizeWrapTokenMetadataUri(raw: unknown): string | null {
-  if (typeof raw !== 'string') return null
-  const value = raw.trim()
-  if (!value) return null
-  if (value.length > WRAP_TOKEN_METADATA_URI_MAX_LENGTH) return null
-  try {
-    const parsed = new URL(value)
-    const protocol = parsed.protocol.toLowerCase()
-    if (protocol !== 'http:' && protocol !== 'https:' && protocol !== 'ipfs:' && protocol !== 'ar:') {
-      return null
-    }
-    return parsed.toString()
-  } catch {
-    return null
-  }
-}
-
-function sanitizeWrapTokenSymbolUnicode(raw: string, bridgeToken: Address): string {
-  const fallback = `■${bridgeToken.slice(2, 6).toUpperCase()}`
-  const normalized = String(raw ?? '')
-    .normalize('NFKC')
-    .toUpperCase()
-    .replace(/\s+/g, '')
-  const cleaned = normalized.replace(/[^A-Z0-9■]/g, '')
-  const resolved = cleaned || fallback
-  return resolved.slice(0, WRAP_TOKEN_SYMBOL_MAX_LENGTH)
-}
-
-function sanitizeWrapTokenSymbolAscii(raw: string, bridgeToken: Address): string {
-  const fallbackPrefixRaw = process.env.SOLANA_BRIDGE_WRAP_SYMBOL_PREFIX
-  const fallbackPrefix = (fallbackPrefixRaw === undefined ? 'CS' : String(fallbackPrefixRaw))
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '')
-  const fallback = `${fallbackPrefix}${bridgeToken.slice(2, 6).toUpperCase()}`
-  const cleaned = String(raw ?? '')
-    .normalize('NFKD')
-    .toUpperCase()
-    .replace(/[^A-Z0-9]/g, '')
-  const resolved = cleaned || fallback
-  return resolved.slice(0, WRAP_TOKEN_SYMBOL_MAX_LENGTH)
-}
-
-function buildWrapTokenSymbolCandidates(raw: string, bridgeToken: Address): string[] {
-  const mode = readWrapTokenSymbolMode()
-  const unicode = sanitizeWrapTokenSymbolUnicode(raw, bridgeToken)
-  const ascii = sanitizeWrapTokenSymbolAscii(raw, bridgeToken)
-  const out: string[] = []
-  const pushUnique = (value: string): void => {
-    if (!value || out.includes(value)) return
-    out.push(value)
-  }
-  if (mode === 'unicode') pushUnique(unicode)
-  else if (mode === 'ascii') pushUnique(ascii)
-  else {
-    pushUnique(unicode)
-    pushUnique(ascii)
-  }
-  return out
-}
-
-function isLikelyUnicodeSymbolUnsupportedError(message: string): boolean {
-  const lower = message.toLowerCase()
-  return (
-    lower.includes('utf-8') ||
-    lower.includes('utf8') ||
-    lower.includes('unicode') ||
-    lower.includes('invalid symbol') ||
-    lower.includes('symbol is invalid') ||
-    lower.includes('invalid metadata') ||
-    lower.includes('invalid character') ||
-    // ConstraintSeeds (#2006) fires when the Solana bridge program derives the
-    // mint PDA from ASCII-only bytes of the symbol but the client passed the
-    // PDA computed from the raw Unicode symbol (e.g. "■AKITA" vs "AKITA").
-    lower.includes('constraintseeds') ||
-    lower.includes('seeds constraint was violated') ||
-    lower.includes('a seeds constraint') ||
-    lower.includes('error code: constraintseeds') ||
-    lower.includes('error number: 2006')
-  )
-}
-
-function isLikelyUnsupportedMetadataUriFlagError(message: string): boolean {
-  const lower = message.toLowerCase()
-  const mentionsMetadataUri =
-    lower.includes('--metadata-uri') ||
-    lower.includes('metadata-uri') ||
-    lower.includes('--metadatauri') ||
-    lower.includes('metadatauri')
-  if (!mentionsMetadataUri) return false
-  return (
-    lower.includes('unknown option') ||
-    lower.includes('unknown argument') ||
-    lower.includes('unexpected argument') ||
-    lower.includes('unrecognized option') ||
-    lower.includes('wasn\'t expected') ||
-    lower.includes('unexpected value')
-  )
-}
-
-function buildWrapTokenMetadata(metadata: { name: string; symbol: string }, bridgeToken: Address): {
-  tokenName: string
-  tokenSymbolCandidates: string[]
+function buildWrapTokenMetadata(metadata: { name: string; symbol: string }): {
+  tokenName: string | null
+  tokenSymbol: string | null
   tokenNameSource: string
   tokenSymbolSource: string
 } {
-  const originalName = String(metadata.name ?? '').trim()
-  const originalSymbol = String(metadata.symbol ?? '').trim()
-  const tokenName = sanitizeWrapTokenName(originalName, bridgeToken)
-  const tokenSymbolCandidates = buildWrapTokenSymbolCandidates(originalSymbol, bridgeToken)
-  const primarySymbol = tokenSymbolCandidates[0] ?? ''
-  const tokenNameSource = tokenName === originalName ? 'base_bridge_token' : 'base_bridge_token_sanitized'
-  const tokenSymbolSource = primarySymbol === originalSymbol
-    ? 'base_bridge_token'
-    : primarySymbol.includes('■')
-      ? 'base_bridge_token_unicode_sanitized'
-      : 'base_bridge_token_ascii_sanitized'
-  return { tokenName, tokenSymbolCandidates, tokenNameSource, tokenSymbolSource }
+  const originalName = String(metadata.name ?? '')
+  const originalSymbol = String(metadata.symbol ?? '')
+  const tokenName = normalizeExactWrapTokenName(originalName)
+  const tokenSymbol = normalizeExactWrapTokenSymbol(originalSymbol)
+  const tokenNameSource = 'base_bridge_token_exact'
+  const tokenSymbolSource = 'base_bridge_token_exact'
+  return { tokenName, tokenSymbol, tokenNameSource, tokenSymbolSource }
 }
 
 function describeFetchFailure(error: unknown): string {
@@ -868,20 +699,24 @@ async function tryProvisionDynamicRoute(params: {
       'Bridge token metadata unavailable for Solana wrap. Name/symbol are required before provisioning.',
     )
   }
-  // Prefer canonical Unicode symbol, with deterministic ASCII fallback when needed.
-  const { tokenName, tokenSymbolCandidates, tokenNameSource, tokenSymbolSource } = buildWrapTokenMetadata(
+  const { tokenName, tokenSymbol, tokenNameSource, tokenSymbolSource } = buildWrapTokenMetadata(
     bridgeTokenMetadata,
-    bridgeToken,
   )
-  const primaryTokenSymbol = tokenSymbolCandidates[0] ?? ''
-  const fallbackTokenSymbol = tokenSymbolCandidates[1] ?? null
+  if (!tokenName || !tokenSymbol) {
+    throw new Error(
+      `Bridge token metadata is incompatible with strict Solana parity requirements (name<=${WRAP_TOKEN_NAME_MAX_LENGTH}, ` +
+        `symbol<=${WRAP_TOKEN_SYMBOL_MAX_LENGTH}, exact casing preserved).`,
+    )
+  }
   const payForRelay = String(process.env.SOLANA_BRIDGE_PAY_FOR_RELAY ?? '1').trim() !== '0'
   const provisionerUrls = readDynamicProvisionerUrls()
   const provisionerHealthUrls = readDynamicProvisionerHealthUrls(provisionerUrls)
 
-  const provisionViaRemote = async (
-    tokenSymbol: string = primaryTokenSymbol,
-  ): Promise<{ mintBytes32: Hex; runner: string; mintCompatibilityHints: MintCompatibilityHints | null }> => {
+  const provisionViaRemote = async (): Promise<{
+    mintBytes32: Hex
+    runner: string
+    mintCompatibilityHints: MintCompatibilityHints | null
+  }> => {
     const retryAttempts = readProvisionerRetryAttempts()
     const retryDelayMs = readProvisionerRetryDelayMs()
     const requestTimeoutMs = readProvisionerRequestTimeoutMs()
@@ -911,7 +746,6 @@ async function tryProvisionDynamicRoute(params: {
           payerKp,
           tokenName,
           tokenSymbol,
-          tokenSymbolFallback: fallbackTokenSymbol,
           tokenNameSource,
           tokenSymbolSource,
           tokenMetadataUri,
@@ -932,7 +766,6 @@ async function tryProvisionDynamicRoute(params: {
                 solanaDecimals: params.solanaDecimals,
                 tokenName,
                 tokenSymbol,
-                tokenSymbolFallback: fallbackTokenSymbol,
                 tokenMetadataUri,
                 scalerExponent,
                 payerKp,
@@ -1025,30 +858,6 @@ async function tryProvisionDynamicRoute(params: {
     )
   }
 
-  // Wraps provisionViaRemote with a single ASCII-symbol retry when the primary
-  // (unicode) symbol causes a ConstraintSeeds / metadata-rejection error.
-  const provisionViaRemoteWithFallback = async (): Promise<{
-    mintBytes32: Hex
-    runner: string
-    mintCompatibilityHints: MintCompatibilityHints | null
-  }> => {
-    try {
-      return await provisionViaRemote(primaryTokenSymbol)
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error)
-      if (fallbackTokenSymbol && isLikelyUnicodeSymbolUnsupportedError(message)) {
-        logger.warn('[deploy/registerSolanaBridgeToken] Remote provisioner unicode symbol attempt failed; retrying with ASCII fallback', {
-          bridgeToken,
-          primaryTokenSymbol,
-          fallbackTokenSymbol,
-          error: message,
-        })
-        return provisionViaRemote(fallbackTokenSymbol)
-      }
-      throw error
-    }
-  }
-
   // Initialize to a sentinel so TS definite-assignment is satisfied; we validate
   // that provisioning replaced it before using it.
   let mintBytes32: Hex = ZERO_BYTES32
@@ -1085,76 +894,53 @@ async function tryProvisionDynamicRoute(params: {
     }
 
     try {
-      let localError: unknown = null
-      for (let i = 0; i < tokenSymbolCandidates.length; i += 1) {
-        const tokenSymbol = tokenSymbolCandidates[i]
-        logger.info('[deploy/registerSolanaBridgeToken] Dynamic Solana route provisioning start (local CLI)', {
-          bridgeToken,
-          cliDir,
-          deployEnv,
-          payerKp,
-          tokenName,
-          tokenSymbol,
-          tokenSymbolCandidate: `${i + 1}/${tokenSymbolCandidates.length}`,
-          tokenNameSource,
-          tokenSymbolSource,
-          tokenMetadataUri: includeMetadataUriByDefault ? tokenMetadataUri : null,
-          payForRelay,
-        })
+      logger.info('[deploy/registerSolanaBridgeToken] Dynamic Solana route provisioning start (local CLI)', {
+        bridgeToken,
+        cliDir,
+        deployEnv,
+        payerKp,
+        tokenName,
+        tokenSymbol,
+        tokenNameSource,
+        tokenSymbolSource,
+        tokenMetadataUri: includeMetadataUriByDefault ? tokenMetadataUri : null,
+        payForRelay,
+      })
+      const metadataAttempts = includeMetadataUriByDefault ? [true, false] : [false]
+      let combined: string | null = null
+      let runner: string | null = null
+      for (let metadataIdx = 0; metadataIdx < metadataAttempts.length; metadataIdx += 1) {
+        const includeMetadataUri = metadataAttempts[metadataIdx]
         try {
-          const metadataAttempts = includeMetadataUriByDefault ? [true, false] : [false]
-          let combined: string | null = null
-          let runner: string | null = null
-          for (let metadataIdx = 0; metadataIdx < metadataAttempts.length; metadataIdx += 1) {
-            const includeMetadataUri = metadataAttempts[metadataIdx]
-            try {
-              const result = await runWrapToken(cliDir, cliBin, buildWrapArgs(tokenSymbol, includeMetadataUri))
-              combined = result.output
-              runner = result.runner
-              break
-            } catch (error) {
-              const message = error instanceof Error ? error.message : String(error)
-              const canRetryWithoutMetadata =
-                includeMetadataUriByDefault &&
-                includeMetadataUri &&
-                isLikelyUnsupportedMetadataUriFlagError(message)
-              if (!canRetryWithoutMetadata) throw error
-              logger.warn('[deploy/registerSolanaBridgeToken] Local CLI metadata-uri flag unsupported; retrying without metadata-uri', {
-                bridgeToken,
-                tokenSymbol,
-                metadataUriFlag: '--metadata-uri',
-                error: message,
-              })
-            }
-          }
-          if (!combined || !runner) {
-            throw new Error('Dynamic route provisioning did not return wrap-token output.')
-          }
-          provisionRunner = runner
-          const mintPubkey = parseMintPubkeyFromWrapOutput(combined)
-          if (!mintPubkey) {
-            throw new Error(`Dynamic route created unknown mint (could not parse output). Output: ${combined.slice(-1200)}`)
-          }
-          mintedPubkey = mintPubkey
-          mintBytes32 = solanaPubkeyToBytes32Hex(mintPubkey)
-          localError = null
+          const result = await runWrapToken(cliDir, cliBin, buildWrapArgs(tokenSymbol, includeMetadataUri))
+          combined = result.output
+          runner = result.runner
           break
         } catch (error) {
-          localError = error
           const message = error instanceof Error ? error.message : String(error)
-          const hasFallback = i < tokenSymbolCandidates.length - 1
-          const shouldFallback = hasFallback && isLikelyUnicodeSymbolUnsupportedError(message)
-          logger.warn('[deploy/registerSolanaBridgeToken] Local CLI symbol candidate failed', {
+          const canRetryWithoutMetadata =
+            includeMetadataUriByDefault &&
+            includeMetadataUri &&
+            isLikelyUnsupportedMetadataUriFlagError(message)
+          if (!canRetryWithoutMetadata) throw error
+          logger.warn('[deploy/registerSolanaBridgeToken] Local CLI metadata-uri flag unsupported; retrying without metadata-uri', {
             bridgeToken,
             tokenSymbol,
-            tokenSymbolCandidate: `${i + 1}/${tokenSymbolCandidates.length}`,
-            fallback: shouldFallback,
+            metadataUriFlag: '--metadata-uri',
             error: message,
           })
-          if (!shouldFallback) throw error
         }
       }
-      if (localError) throw localError
+      if (!combined || !runner) {
+        throw new Error('Dynamic route provisioning did not return wrap-token output.')
+      }
+      provisionRunner = runner
+      const mintPubkey = parseMintPubkeyFromWrapOutput(combined)
+      if (!mintPubkey) {
+        throw new Error(`Dynamic route created unknown mint (could not parse output). Output: ${combined.slice(-1200)}`)
+      }
+      mintedPubkey = mintPubkey
+      mintBytes32 = solanaPubkeyToBytes32Hex(mintPubkey)
     } catch (error) {
       const localError = error instanceof Error ? error.message : String(error)
       const canFallbackToRemote =
@@ -1167,13 +953,13 @@ async function tryProvisionDynamicRoute(params: {
         localError,
         provisionerUrls,
       })
-      const remote = await provisionViaRemoteWithFallback()
+      const remote = await provisionViaRemote()
       mintBytes32 = remote.mintBytes32
       provisionRunner = remote.runner
       mintCompatibilityHints = remote.mintCompatibilityHints
     }
   } else if (provisionerUrls.length > 0) {
-    const remote = await provisionViaRemoteWithFallback()
+    const remote = await provisionViaRemote()
     mintBytes32 = remote.mintBytes32
     provisionRunner = remote.runner
     mintCompatibilityHints = remote.mintCompatibilityHints
@@ -1383,10 +1169,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       error: 'Invalid bridgeToken address.',
     } satisfies ApiEnvelope<never>)
   }
-  // When a Creator Coin is provided, wrap and register IT on Solana instead of
-  // a receipt-token path. The Creator Coin has a clean ASCII symbol (e.g.
-  // "AKITA" vs "■AKITA"), avoids ConstraintSeeds issues, and is the primary
-  // tradeable brand token that Solana users actually want to hold.
+  // When a Creator Coin is provided, wrap and register it on Solana instead of
+  // a receipt-token path. Dynamic mint metadata now preserves the exact Base
+  // name/symbol bytes (including lowercase) and fails closed on incompatibility.
   const resolvedBridgeToken: Address = bridgeToken
   const canonicalBridgeTokenPolicy = evaluateCanonicalBridgeTokenPolicy({
     bridgeToken: resolvedBridgeToken,
