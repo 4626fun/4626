@@ -173,6 +173,62 @@ function parseChainId(raw: string): bigint {
   return BigInt(Math.trunc(value))
 }
 
+function toErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message
+  return String(error)
+}
+
+function isTransientRpcError(message: string): boolean {
+  const lc = message.toLowerCase()
+  return (
+    lc.includes('timeout') ||
+    lc.includes('timed out') ||
+    lc.includes('rate limit') ||
+    lc.includes('too many requests') ||
+    lc.includes('429') ||
+    lc.includes('temporarily unavailable') ||
+    lc.includes('service unavailable') ||
+    lc.includes('network error') ||
+    lc.includes('failed to fetch') ||
+    lc.includes('gateway timeout') ||
+    lc.includes('econnreset') ||
+    lc.includes('etimedout') ||
+    lc.includes('eai_again')
+  )
+}
+
+function isLegacyExternalLaneProbeError(message: string): boolean {
+  const lc = message.toLowerCase()
+  return (
+    (lc.includes('approvedexternalswaptargets') && lc.includes('revert')) ||
+    (lc.includes('approvedexternalswaptargets') && lc.includes('returned no data')) ||
+    lc.includes('function selector was not recognized') ||
+    lc.includes('function does not exist')
+  )
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+async function readContractWithRetry<T>(context: string, operation: () => Promise<T>): Promise<T> {
+  let lastError: unknown = null
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      return await operation()
+    } catch (error) {
+      lastError = error
+      const message = toErrorMessage(error)
+      if (attempt === 0 && isTransientRpcError(message)) {
+        await sleep(350)
+        continue
+      }
+      throw new Error(`${context}: ${message}`)
+    }
+  }
+  throw new Error(`${context}: ${toErrorMessage(lastError)}`)
+}
+
 async function buildPlan(params: {
   rpcUrl: string
   routers: Address[]
@@ -220,14 +276,23 @@ async function buildPlan(params: {
     let externalLaneSupported = true
     if (params.targets.length > 0) {
       try {
-        await client.readContract({
-          address: router,
-          abi: PAYOUT_ROUTER_APPROVAL_ABI,
-          functionName: 'approvedExternalSwapTargets',
-          args: [params.targets[0]!],
-        })
-      } catch {
-        externalLaneSupported = false
+        await readContractWithRetry(
+          `Failed probing router ${router} for external swap support`,
+          () =>
+            client.readContract({
+              address: router,
+              abi: PAYOUT_ROUTER_APPROVAL_ABI,
+              functionName: 'approvedExternalSwapTargets',
+              args: [params.targets[0]!],
+            }),
+        )
+      } catch (error) {
+        const message = toErrorMessage(error)
+        if (isLegacyExternalLaneProbeError(message)) {
+          externalLaneSupported = false
+        } else {
+          throw error
+        }
       }
     }
     if (!externalLaneSupported) {
@@ -239,12 +304,16 @@ async function buildPlan(params: {
 
     const missingTargets: Address[] = []
     for (const target of params.targets) {
-      const approved = await client.readContract({
-        address: router,
-        abi: PAYOUT_ROUTER_APPROVAL_ABI,
-        functionName: 'approvedExternalSwapTargets',
-        args: [target],
-      })
+      const approved = await readContractWithRetry(
+        `Failed reading target approval for router ${router} target ${target}`,
+        () =>
+          client.readContract({
+            address: router,
+            abi: PAYOUT_ROUTER_APPROVAL_ABI,
+            functionName: 'approvedExternalSwapTargets',
+            args: [target],
+          }),
+      )
       if (approved !== true) {
         missingTargets.push(target)
         txs.push({
@@ -262,12 +331,16 @@ async function buildPlan(params: {
 
     const missingSpenders: Address[] = []
     for (const spender of params.spenders) {
-      const approved = await client.readContract({
-        address: router,
-        abi: PAYOUT_ROUTER_APPROVAL_ABI,
-        functionName: 'approvedExternalSwapSpenders',
-        args: [spender],
-      })
+      const approved = await readContractWithRetry(
+        `Failed reading spender approval for router ${router} spender ${spender}`,
+        () =>
+          client.readContract({
+            address: router,
+            abi: PAYOUT_ROUTER_APPROVAL_ABI,
+            functionName: 'approvedExternalSwapSpenders',
+            args: [spender],
+          }),
+      )
       if (approved !== true) {
         missingSpenders.push(spender)
         txs.push({

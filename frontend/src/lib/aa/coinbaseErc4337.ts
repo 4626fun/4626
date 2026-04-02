@@ -787,7 +787,6 @@ function isTransientUserOpSubmissionError(error: unknown): boolean {
     lc.includes('too many requests') ||
     lc.includes('over rate limit') ||
     lc.includes('rate limit') ||
-    lc.includes('resource not available') ||
     lc.includes('temporarily unavailable') ||
     lc.includes('no backend is currently healthy') ||
     lc.includes('gateway timeout') ||

@@ -179,7 +179,7 @@ function parseAddressListEnv(key: string): Array<`0x${string}`> {
   const raw = String(process.env[key] ?? '').trim();
   if (!raw) return [];
   const out: Array<`0x${string}`> = [];
-  for (const token of raw.split(',').map((s) => s.trim())) {
+  for (const token of raw.split(/[\s,]+/g).map((s) => s.trim()).filter(Boolean)) {
     const normalized = normalizeAddressMaybe(token);
     if (normalized) out.push(normalized);
   }

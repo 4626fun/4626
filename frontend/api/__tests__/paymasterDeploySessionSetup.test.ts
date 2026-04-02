@@ -947,3 +947,280 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     expect(errMsg).toMatch(/swap_router_non_canonical_encoding/i)
   })
 })
+
+describe('paymaster payout-router external approvals', () => {
+  let restoreEnv: () => void
+
+  const creatorToken = getAddress('0x4444444444444444444444444444444444444444')
+  const vault = getAddress('0x5555555555555555555555555555555555555555')
+  const wrapper = getAddress('0x6666666666666666666666666666666666666666')
+  const shareOFT = getAddress('0x7777777777777777777777777777777777777777')
+  const gaugeController = getAddress('0x8888888888888888888888888888888888888888')
+  const ccaStrategy = getAddress('0x9999999999999999999999999999999999999999')
+  const oracle = getAddress('0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+
+  const creatorVaultBatcher = getAddress('0xB87CBb646dD14F520078F11196f79BF815F18c84')
+  const vaultActivationBatcher = getAddress('0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB')
+  const permit2 = getAddress('0x000000000022D473030F116dDEE9F6B43aC78BA3')
+  const create2Deployer = getAddress('0x74183076C7D33346880A5bf0e263B761FB4d38BA')
+  const bytecodeStore = getAddress('0x6A578022609cdb65C614FF28912C49FC1EC97071')
+  const currentUniversalRouter = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43')
+  const unknownSpender = getAddress('0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb')
+
+  const BATCHER_FINALIZE_PHASE2_ABI = [
+    {
+      type: 'function',
+      name: 'finalizePhase2',
+      stateMutability: 'nonpayable',
+      inputs: [
+        {
+          name: 'params',
+          type: 'tuple',
+          components: [
+            { name: 'creatorToken', type: 'address' },
+            { name: 'owner', type: 'address' },
+            { name: 'vault', type: 'address' },
+            { name: 'wrapper', type: 'address' },
+            { name: 'shareOFT', type: 'address' },
+            { name: 'gaugeController', type: 'address' },
+            { name: 'ccaStrategy', type: 'address' },
+            { name: 'oracle', type: 'address' },
+            { name: 'version', type: 'string' },
+            { name: 'depositAmount', type: 'uint256' },
+            { name: 'requiredRaise', type: 'uint128' },
+            { name: 'floorPriceQ96', type: 'uint256' },
+            { name: 'auctionSteps', type: 'bytes' },
+            { name: 'meteoraAlphaVault', type: 'bytes32' },
+            {
+              name: 'solanaIxs',
+              type: 'tuple[]',
+              components: [
+                { name: 'programId', type: 'bytes32' },
+                { name: 'serializedAccounts', type: 'bytes[]' },
+                { name: 'data', type: 'bytes' },
+              ],
+            },
+          ],
+        },
+      ],
+      outputs: [],
+    },
+  ] as const
+
+  const COINBASE_SMART_WALLET_ABI = [
+    {
+      type: 'function',
+      name: 'executeBatch',
+      stateMutability: 'nonpayable',
+      inputs: [
+        {
+          name: 'calls',
+          type: 'tuple[]',
+          components: [
+            { name: 'target', type: 'address' },
+            { name: 'value', type: 'uint256' },
+            { name: 'data', type: 'bytes' },
+          ],
+        },
+      ],
+      outputs: [],
+    },
+  ] as const
+
+  const PAYOUT_ROUTER_ADMIN_ABI = [
+    {
+      type: 'function',
+      name: 'setExternalSwapTargetApproval',
+      stateMutability: 'nonpayable',
+      inputs: [
+        { name: 'target', type: 'address' },
+        { name: 'approved', type: 'bool' },
+      ],
+      outputs: [],
+    },
+    {
+      type: 'function',
+      name: 'setExternalSwapSpenderApproval',
+      stateMutability: 'nonpayable',
+      inputs: [
+        { name: 'spender', type: 'address' },
+        { name: 'approved', type: 'bool' },
+      ],
+      outputs: [],
+    },
+  ] as const
+
+  function buildFinalizePhase2Call(): { target: `0x${string}`; value: bigint; data: `0x${string}` } {
+    const finalizeData = encodeFunctionData({
+      abi: BATCHER_FINALIZE_PHASE2_ABI,
+      functionName: 'finalizePhase2',
+      args: [
+        {
+          creatorToken,
+          owner: sender,
+          vault,
+          wrapper,
+          shareOFT,
+          gaugeController,
+          ccaStrategy,
+          oracle,
+          version: 'v1',
+          depositAmount: 5_000_000n * 10n ** 18n,
+          requiredRaise: 100_000_000_000_000_000n,
+          floorPriceQ96: 1_000_000n,
+          auctionSteps: '0x',
+          meteoraAlphaVault: (`0x${'0'.repeat(64)}`) as `0x${string}`,
+          solanaIxs: [],
+        },
+      ],
+    })
+    return { target: creatorVaultBatcher, value: 0n, data: finalizeData }
+  }
+
+  function buildRouterAdminCall(params: {
+    payoutRouterTarget: `0x${string}`
+    functionName: 'setExternalSwapTargetApproval' | 'setExternalSwapSpenderApproval'
+    subject: `0x${string}`
+  }): { target: `0x${string}`; value: bigint; data: `0x${string}` } {
+    const adminData = encodeFunctionData({
+      abi: PAYOUT_ROUTER_ADMIN_ABI,
+      functionName: params.functionName,
+      args: [params.subject, true],
+    })
+    return { target: params.payoutRouterTarget, value: 0n, data: adminData }
+  }
+
+  function buildRequest(calls: Array<{ target: `0x${string}`; value: bigint; data: `0x${string}` }>, debug = false) {
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'executeBatch',
+      args: [calls],
+    })
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [{ sender, callData, initCode: '0x' }, ENTRYPOINT_V06, 8453],
+    }
+    return createMockReq({
+      method: 'POST',
+      body,
+      headers: {
+        'content-type': 'application/json',
+        ...(debug ? { 'x-cv-paymaster-debug': '1' } : {}),
+      },
+    })
+  }
+
+  function extractExpectedPayoutRouter(message: string): `0x${string}` {
+    const match = /expectedPayoutRouter=(0x[a-fA-F0-9]{40})/.exec(message)
+    if (!match) throw new Error(`Missing expectedPayoutRouter in debug payload: ${message}`)
+    return getAddress(match[1] as `0x${string}`)
+  }
+
+  async function discoverExpectedPayoutRouterAddress(): Promise<`0x${string}`> {
+    const provisionalRouterCall = buildRouterAdminCall({
+      payoutRouterTarget: creatorToken,
+      functionName: 'setExternalSwapTargetApproval',
+      subject: currentUniversalRouter,
+    })
+    const req = buildRequest([buildFinalizePhase2Call(), provisionalRouterCall], true)
+    const res = createMockRes()
+    await paymasterHandler(req as any, res as any)
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).toMatch(/expectedPayoutRouter=/i)
+    return extractExpectedPayoutRouter(errMsg)
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    restoreEnv = applyEnv({
+      CDP_PAYMASTER_URL: 'https://paymaster.example.com',
+      AUTH_SESSION_SECRET: 'test-secret-at-least-16-chars',
+      PROTOCOL_TREASURY: sender,
+    })
+
+    readRequestPrincipalMock.mockReturnValue(sessionAddress)
+    getApiContractsMock.mockReturnValue({
+      creatorVaultBatcher,
+      vaultActivationBatcher,
+      permit2,
+      universalCreate2DeployerFromStore: create2Deployer,
+      universalBytecodeStore: bytecodeStore,
+      protocolTreasury: sender,
+      zora: '0x1111111111166b7fe7bd91427724b487980afc69',
+      weth: '0x4200000000000000000000000000000000000006',
+    })
+    isDbConfiguredMock.mockReturnValue(false)
+    isSupabaseAdminConfiguredMock.mockReturnValue(false)
+    readJsonBodyMock.mockImplementation((req: { body?: unknown }) => Promise.resolve(req.body ?? null))
+
+    mockGetBytecode.mockResolvedValue('0x1234')
+    mockGetLogs.mockResolvedValue([{ args: { vault, wrapper, shareOFT } }])
+    mockReadContract.mockImplementation((opts: { address?: string; functionName?: string }) => {
+      const functionName = opts.functionName
+      const address = opts.address ? getAddress(opts.address as `0x${string}`) : null
+      if (functionName === 'isOwnerAddress') return Promise.resolve(true)
+      if (functionName === 'store') return Promise.resolve(bytecodeStore)
+      if (functionName === 'entryPoint') return Promise.resolve(ENTRYPOINT_V06)
+      if (functionName === 'implementation') return Promise.resolve(CSW_IMPLEMENTATION)
+      if (functionName === 'get') return Promise.resolve('0x60006000')
+      if (functionName === 'asset') return Promise.resolve(creatorToken)
+      if (functionName === 'name') return Promise.resolve('Creator OVault')
+      if (functionName === 'symbol') return Promise.resolve('ovCRT')
+      if (address === wrapper && functionName === 'creatorCoin') return Promise.resolve(creatorToken)
+      if (address === wrapper && functionName === 'vault') return Promise.resolve(vault)
+      if (address === wrapper && functionName === 'shareOFT') return Promise.resolve(shareOFT)
+      if (address === wrapper && functionName === 'owner') return Promise.resolve(creatorVaultBatcher)
+      if (address === shareOFT && functionName === 'vault') return Promise.resolve(vault)
+      if (address === shareOFT && functionName === 'owner') return Promise.resolve(creatorVaultBatcher)
+      return Promise.resolve(null)
+    })
+
+    globalThis.fetch = vi.fn().mockResolvedValue({
+      status: 200,
+      text: () => Promise.resolve(JSON.stringify({ jsonrpc: '2.0', id: 1, result: {} })),
+    }) as typeof fetch
+  })
+
+  afterEach(() => {
+    restoreEnv()
+    globalThis.fetch = originalFetch
+  })
+
+  it('allows setExternalSwapTargetApproval for configured target on expected payout router', async () => {
+    const expectedPayoutRouter = await discoverExpectedPayoutRouterAddress()
+    const routerCall = buildRouterAdminCall({
+      payoutRouterTarget: expectedPayoutRouter,
+      functionName: 'setExternalSwapTargetApproval',
+      subject: currentUniversalRouter,
+    })
+    const req = buildRequest([buildFinalizePhase2Call(), routerCall])
+    const res = createMockRes()
+    await paymasterHandler(req as any, res as any)
+
+    expect(res.statusCode).toBe(200)
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).not.toMatch(/request denied/i)
+    expect(errMsg).not.toMatch(/payout_router_external_target_not_allowed/i)
+  })
+
+  it('rejects setExternalSwapSpenderApproval for unconfigured spender on expected payout router', async () => {
+    const expectedPayoutRouter = await discoverExpectedPayoutRouterAddress()
+    const routerCall = buildRouterAdminCall({
+      payoutRouterTarget: expectedPayoutRouter,
+      functionName: 'setExternalSwapSpenderApproval',
+      subject: unknownSpender,
+    })
+    const req = buildRequest([buildFinalizePhase2Call(), routerCall])
+    const res = createMockRes()
+    await paymasterHandler(req as any, res as any)
+
+    expect(res.statusCode).toBe(200)
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).toMatch(/payout_router_external_spender_not_allowed/i)
+  })
+})
