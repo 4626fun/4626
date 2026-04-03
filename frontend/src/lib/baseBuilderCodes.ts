@@ -53,6 +53,13 @@ function isProdRuntime(env: EnvLike): boolean {
   return false
 }
 
+function isExplicitDebugEnabled(value: unknown): boolean {
+  if (typeof value === 'boolean') return value
+  if (typeof value !== 'string') return false
+  const normalized = value.trim().toLowerCase()
+  return normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on'
+}
+
 function warnMissingConfigOnce(): void {
   if (missingEnvWarned) return
   missingEnvWarned = true
@@ -174,6 +181,7 @@ export function warnGlobalWagmiDataSuffixBehavior(
   if (!dataSuffix || allChainsWarningEmitted) return
   const env = asEnvRecord(envInput)
   if (!isDevRuntime(env)) return
+  if (!isExplicitDebugEnabled(env.VITE_DEBUG_BASE_BUILDER_CODES)) return
   allChainsWarningEmitted = true
   console.warn(
     '[BuilderCodes] wagmi config `dataSuffix` is global and may append on non-Base chains. ' +

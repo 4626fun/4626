@@ -82,7 +82,7 @@ describe('POST /api/waitlist/bootstrap', () => {
     )
   })
 
-  it('returns deterministic recovery-required error on email collision', async () => {
+  it('returns deterministic recovery-required payload on email collision without a transport error status', async () => {
     const error = Object.assign(new Error('collision'), {
       code: 'IDENTITY_RECOVERY_REQUIRED',
       reason: 'EMAIL_BOUND_TO_DIFFERENT_PRIVY_USER',
@@ -97,7 +97,7 @@ describe('POST /api/waitlist/bootstrap', () => {
 
     await handler(req, res)
 
-    expect(res.statusCode).toBe(409)
+    expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(false)
     expect(res.body?.code).toBe('RECOVERY_REQUIRED_EMAIL_BOUND')
     expect(res.body?.recoveryRequired).toBe(true)

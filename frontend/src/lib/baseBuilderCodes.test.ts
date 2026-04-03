@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import type { Hex } from 'viem'
 
 import {
@@ -8,6 +8,7 @@ import {
   payloadEndsWithDataSuffix,
   resolveBuilderCodes,
   resolveDataSuffix,
+  warnGlobalWagmiDataSuffixBehavior,
 } from './baseBuilderCodes'
 
 describe('baseBuilderCodes', () => {
@@ -61,6 +62,23 @@ describe('baseBuilderCodes', () => {
     expect(payloadEndsWithDataSuffix(onBaseMainnet as Hex, suffix)).toBe(true)
     expect(payloadEndsWithDataSuffix(onBaseSepolia as Hex, suffix)).toBe(true)
     expect(onNonBase).toBe(payload)
+  })
+
+  it('stays quiet about global wagmi suffix behavior unless explicitly debugging it', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const suffix = resolveDataSuffix({
+      VITE_BASE_BUILDER_CODES: 'bc_alpha',
+      DEV: true,
+      PROD: false,
+    }) as Hex
+
+    warnGlobalWagmiDataSuffixBehavior(suffix, {
+      DEV: true,
+      PROD: false,
+    })
+
+    expect(warnSpy).not.toHaveBeenCalled()
+    warnSpy.mockRestore()
   })
 
   it('validates marker tails in payloads', () => {

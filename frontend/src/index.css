@@ -3,6 +3,7 @@
 
 @layer base {
   html {
+    position: relative;
     scrollbar-gutter: stable;
   }
 
@@ -16,6 +17,7 @@
   body {
     @apply bg-vault-bg text-vault-text antialiased font-sans;
     font-weight: 300;
+    position: relative;
     min-height: 100vh;
     background-image:
       radial-gradient(58% 42% at 15% -8%, rgba(0, 82, 255, 0.18), transparent 72%),

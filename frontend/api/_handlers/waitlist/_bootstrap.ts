@@ -408,7 +408,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<WaitlistBootstrapResponse>)
   } catch (error: any) {
     if (isIdentityRecoveryRequiredError(error)) {
-      return res.status(409).json({
+      return res.status(200).json({
         success: false,
         error: 'Recovery required: this email is already linked to another account. Use account recovery to continue.',
         code: 'RECOVERY_REQUIRED_EMAIL_BOUND',

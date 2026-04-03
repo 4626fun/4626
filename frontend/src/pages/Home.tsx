@@ -1,4 +1,4 @@
-import { Suspense, lazy, useState } from 'react'
+import { Suspense, lazy, useCallback, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
@@ -20,7 +20,7 @@ import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 import { Web3Providers } from '@/web3/Web3Providers'
 
 const LazyWaitlistFlow = lazy(async () => {
-  const mod = await import('@/components/waitlist/ThinWaitlistFlow')
+  const mod = await import('@/components/waitlist/WaitlistFlow')
   return { default: mod.WaitlistFlow }
 })
 
@@ -39,14 +39,22 @@ export function Home() {
   })
   const [waitlistInlineOpen, setWaitlistInlineOpen] = useState(initialWaitlistState.open)
   const [waitlistAutoStart] = useState(initialWaitlistState.autoStart)
+  const [waitlistProvidersArmed, setWaitlistProvidersArmed] = useState(initialWaitlistState.open)
   const heroCtaClass =
     'btn-primary inline-flex items-center justify-center min-h-[52px] px-6 py-3.5 text-[15px]'
 
-  const openWaitlistDirectAuth = () => {
+  const armWaitlistProviders = useCallback(() => {
+    if (!waitlistProvidersArmed) {
+      setWaitlistProvidersArmed(true)
+    }
+  }, [waitlistProvidersArmed])
+
+  const openWaitlistDirectAuth = useCallback(() => {
+    armWaitlistProviders()
     clearStoredWaitlistAuthState()
     clearStoredWaitlistReferralCode()
     setWaitlistInlineOpen(true)
-  }
+  }, [armWaitlistProviders])
 
   if (hostMode === 'app') {
     return <Navigate to="/swap" replace />
@@ -111,47 +119,52 @@ export function Home() {
           </motion.p>
 
           {showJoinWaitlistCta ? (
-            // PrivyClientProvider + Web3Providers are hoisted above the
-            // waitlistInlineOpen gate so the Privy SDK warms up during the
-            // initial hero render. Without this, Privy only starts
-            // initializing after the first CTA click, meaning the two form
-            // buttons arrive before `ready=true` and `login()` is silently
-            // a no-op.
-            <PrivyClientProvider showWalletLoginFirst={false}>
-              <Web3Providers>
-                <motion.div
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.8, delay: 1.12 }}
-                  className="pt-2 sm:pt-6"
-                >
-                  {waitlistInlineOpen ? (
-                    <div className="mx-auto w-full max-w-3xl text-left">
-                      <Suspense
-                        fallback={
-                          <div className="rounded-[28px] border border-white/10 bg-black/45 px-4 py-6 text-sm text-zinc-300 shadow-[0_30px_120px_-48px_rgba(0,0,0,0.95)] backdrop-blur-md sm:px-6">
-                            Loading waitlist…
-                          </div>
-                        }
-                      >
-                        <div className="rounded-[28px] bg-black/45 p-4 shadow-[0_30px_120px_-48px_rgba(0,0,0,0.95)] backdrop-blur-md sm:p-6 lg:p-8">
-                          <LazyWaitlistFlow
-                            variant="embedded"
-                            sectionId="home-waitlist"
-                            autoStartAuth={waitlistAutoStart}
-                          />
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.8, delay: 1.12 }}
+              className="pt-2 sm:pt-6"
+            >
+              <div className="contents">
+                {!waitlistInlineOpen ? (
+                  <button
+                    type="button"
+                    onClick={openWaitlistDirectAuth}
+                    className={heroCtaClass}
+                  >
+                    Join waitlist
+                    <ArrowRight className="h-4 w-4" />
+                  </button>
+                ) : null}
+              </div>
+              <div className="contents">
+                {waitlistProvidersArmed ? (
+                  <PrivyClientProvider showWalletLoginFirst={false}>
+                    <Web3Providers>
+                      {waitlistInlineOpen ? (
+                        <div className="mx-auto w-full max-w-3xl text-left">
+                          <Suspense
+                            fallback={
+                              <div className="rounded-[28px] border border-white/10 bg-black/45 px-4 py-6 text-sm text-zinc-300 shadow-[0_30px_120px_-48px_rgba(0,0,0,0.95)] backdrop-blur-md sm:px-6">
+                                Loading waitlist…
+                              </div>
+                            }
+                          >
+                            <div className="rounded-[28px] bg-black/45 p-4 shadow-[0_30px_120px_-48px_rgba(0,0,0,0.95)] backdrop-blur-md sm:p-6 lg:p-8">
+                              <LazyWaitlistFlow
+                                variant="embedded"
+                                sectionId="home-waitlist"
+                                autoStartAuth={waitlistAutoStart}
+                              />
+                            </div>
+                          </Suspense>
                         </div>
-                      </Suspense>
-                    </div>
-                  ) : (
-                    <button type="button" onClick={openWaitlistDirectAuth} className={heroCtaClass}>
-                      Join waitlist
-                      <ArrowRight className="h-4 w-4" />
-                    </button>
-                  )}
-                </motion.div>
-              </Web3Providers>
-            </PrivyClientProvider>
+                      ) : null}
+                    </Web3Providers>
+                  </PrivyClientProvider>
+                ) : null}
+              </div>
+            </motion.div>
           ) : null}
 
           {showExploreCreatorsCta ? (

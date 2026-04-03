@@ -4,9 +4,11 @@
  *
  * Why:
  * - We keep editable source assets as SVGs in `frontend/public/`.
- * - Some runtime surfaces still require PNG derivatives with fixed dimensions.
+ * - Browser tabs, install surfaces, and mobile shells still require PNG derivatives with fixed dimensions.
  * - Those derivatives are now committed to `public/` so Vercel does not need a
  *   post-build image pipeline on every deploy.
+ * - UI-derived hero and screenshot assets are intentionally generated elsewhere
+ *   (`capture-app-screenshots.mjs`) so this script stays logo/icon-only.
  *
  * This script refreshes the committed PNGs in-place.
  *
@@ -60,17 +62,49 @@ async function main() {
   }
 
   const BLACK = '#000000'
+  const DARK_BG = '#020617'
 
-  async function renderPng({ inputPath, outPath, width, height, background = BLACK }) {
+  async function renderPng({ inputPath, outPath, width, height, background = BLACK, fit = 'cover' }) {
     const ext = path.extname(inputPath).toLowerCase()
     const density = ext === '.svg' ? 512 : undefined
 
     const img = sharp(inputPath, density ? { density } : undefined)
-      .resize(width, height, { fit: 'cover' })
+      .resize(width, height, { fit, background })
       .flatten({ background })
       .png({ compressionLevel: 9 })
 
     await img.toFile(outPath)
+  }
+
+  async function renderMaskablePng({
+    inputPath,
+    outPath,
+    size,
+    background = DARK_BG,
+    paddingRatio = 0.16,
+  }) {
+    const ext = path.extname(inputPath).toLowerCase()
+    const density = ext === '.svg' ? 512 : undefined
+    const innerSize = Math.max(1, Math.round(size * (1 - paddingRatio * 2)))
+    const inset = Math.max(0, Math.round((size - innerSize) / 2))
+
+    const iconBuffer = await sharp(inputPath, density ? { density } : undefined)
+      .resize(innerSize, innerSize, { fit: 'contain', background })
+      .flatten({ background })
+      .png({ compressionLevel: 9 })
+      .toBuffer()
+
+    await sharp({
+      create: {
+        width: size,
+        height: size,
+        channels: 4,
+        background,
+      },
+    })
+      .composite([{ input: iconBuffer, left: inset, top: inset }])
+      .png({ compressionLevel: 9 })
+      .toFile(outPath)
   }
 
   const renderedPngCache = new Map()
@@ -81,12 +115,6 @@ async function main() {
       width: 1024,
       height: 1024,
       sources: ['app-icon.svg', 'brand/logo.svg', 'favicon.svg'],
-    },
-    {
-      outName: 'app-hero.png',
-      width: 1200,
-      height: 630,
-      sources: ['app-hero.svg'],
     },
     {
       outName: 'favicon-16x16.png',
@@ -104,7 +132,49 @@ async function main() {
       outName: 'apple-touch-icon.png',
       width: 180,
       height: 180,
-      sources: ['brand/logo.svg', 'favicon.svg', 'brand/favicon.svg'],
+      sources: ['app-icon.svg', 'brand/logo.svg', 'favicon.svg', 'brand/favicon.svg'],
+    },
+    {
+      outName: 'miniapp-icon.png',
+      width: 1024,
+      height: 1024,
+      sources: ['app-icon.svg', 'brand/logo.svg', 'favicon.svg'],
+    },
+    {
+      outName: 'icon-512.png',
+      width: 512,
+      height: 512,
+      sources: ['app-icon.svg', 'brand/logo.svg', 'favicon.svg'],
+    },
+    {
+      outName: 'pwa-512.png',
+      width: 512,
+      height: 512,
+      sources: ['app-icon.svg', 'brand/logo.svg', 'favicon.svg'],
+    },
+    {
+      outName: 'icon-192.png',
+      width: 192,
+      height: 192,
+      sources: ['app-icon.svg', 'brand/logo.svg', 'favicon.svg'],
+    },
+    {
+      outName: 'miniapp-splash.png',
+      width: 1200,
+      height: 1200,
+      sources: ['app-splash.svg'],
+    },
+  ]
+  const maskableTasks = [
+    {
+      outName: 'pwa-512-maskable.png',
+      size: 512,
+      sources: ['app-icon.svg', 'brand/logo.svg', 'favicon.svg'],
+    },
+    {
+      outName: 'icon-192-maskable.png',
+      size: 192,
+      sources: ['app-icon.svg', 'brand/logo.svg', 'favicon.svg'],
     },
   ]
 
@@ -134,6 +204,21 @@ async function main() {
     renderedPngCache.set(cacheKey, outPath)
     // eslint-disable-next-line no-console
     console.log(`[brand-icons] ${t.outName} (${t.width}x${t.height}) ← ${path.relative(root, inputPath)}`)
+  }
+
+  for (const t of maskableTasks) {
+    const candidates = t.sources.map((s) => path.resolve(publicDir, s))
+    const inputPath = await pickFirstExisting(candidates)
+    if (!inputPath) {
+      // eslint-disable-next-line no-console
+      console.warn(`[brand-icons] missing source for ${t.outName} (looked for: ${t.sources.join(', ')})`)
+      continue
+    }
+
+    const outPath = path.resolve(outDir, t.outName)
+    await renderMaskablePng({ inputPath, outPath, size: t.size })
+    // eslint-disable-next-line no-console
+    console.log(`[brand-icons] ${t.outName} (${t.size}x${t.size}) ← ${path.relative(root, inputPath)} (maskable)`)
   }
 
 }

@@ -15,7 +15,7 @@ jobs:
     name: Gitleaks (incremental)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           fetch-depth: 0
 
@@ -54,11 +54,11 @@ jobs:
     name: pnpm audit (report-only)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
-      - uses: pnpm/action-setup@v4
+      - uses: pnpm/action-setup@v5
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '20'
 
@@ -104,7 +104,7 @@ jobs:
     name: Semgrep (frontend API surfaces)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Pull Semgrep image
         run: docker pull semgrep/semgrep:latest
@@ -137,7 +137,7 @@ jobs:
     env:
       FOUNDRY_PROFILE: ci
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           submodules: recursive
 

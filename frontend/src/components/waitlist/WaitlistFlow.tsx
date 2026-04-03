@@ -95,8 +95,6 @@ type HandoffCreateResponse = {
   expiresAt: string
 }
 
-type DashboardPointsType = 'invite' | 'total' | 'agent'
-
 type WaitlistPositionResponse = {
   email: string | null
   signupId: number
@@ -141,7 +139,7 @@ type DashboardLeaderboardRow = {
 type DashboardLeaderboardResponse = {
   page: number
   limit: number
-  pointsType: DashboardPointsType
+  pointsType: string
   totalCount: number
   totalPages: number
   hasMore: boolean
@@ -150,10 +148,11 @@ type DashboardLeaderboardResponse = {
 }
 
 const HANDOFF_QUERY_KEY = 'cv_handoff'
-const GET_ACCESS_TOKEN_TIMEOUT_MS = 20_000
-const CANONICALIZATION_TIMEOUT_MS = 20_000
-const WAITLIST_BOOTSTRAP_TIMEOUT_MS = 20_000
-const EMBEDDED_WALLET_TIMEOUT_MS = 20_000
+const FLOW_TIMEOUT_MS = 20_000
+
+function privyJsonHeaders(token: string): Record<string, string> {
+  return { 'Content-Type': 'application/json', 'X-Privy-Token': token }
+}
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -220,13 +219,8 @@ function formatLeaderboardPointsTooltip(row: DashboardLeaderboardRow): string {
   return `Total ${formatWholeNumber(row.pointsTotal)} • Invite ${formatWholeNumber(row.pointsInvite)} • Agent ${formatWholeNumber(row.pointsAgent)}`
 }
 
-function getRecoveryRequiredMessage(): string {
-  return 'This email already has a 4626 account. Use Recover account sign-in to continue.'
-}
-
-function getSessionMismatchMessage(): string {
-  return 'Signed in as a different account. Click Continue with email to try again.'
-}
+const RECOVERY_REQUIRED_MESSAGE = 'This email already has a 4626 account. Use Recover account sign-in to continue.'
+const SESSION_MISMATCH_MESSAGE = 'Signed in as a different account. Click Continue with email to try again.'
 
 function getAccessStatusMeta(status: string | null | undefined): {
   label: string
@@ -432,6 +426,15 @@ function WaitlistAuthStep(props: {
   const privyReady = privyClientStatus === 'ready'
   const buttonsDisabled = busy || !privyReady
 
+  const signingInIndicator = (
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
+      <div className="inline-flex items-center gap-2">
+        <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
+        Opening secure email sign-in…
+      </div>
+    </div>
+  )
+
   return (
     <motion.div
       key="step-auth"
@@ -440,20 +443,8 @@ function WaitlistAuthStep(props: {
       transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
       className="space-y-5"
     >
-      {hideAuthShell ? (
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
-          <div className="inline-flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
-            Opening secure email sign-in…
-          </div>
-        </div>
-      ) : useCompactModalAuthStart ? (
-        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
-          <div className="inline-flex items-center gap-2">
-            <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
-            Opening secure email sign-in…
-          </div>
-        </div>
+      {hideAuthShell || useCompactModalAuthStart ? (
+        signingInIndicator
       ) : (
         <>
           <div className="space-y-1">
@@ -463,12 +454,7 @@ function WaitlistAuthStep(props: {
 
           {shouldAutoStartAuth ? (
             <div className="space-y-3">
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
-                <div className="inline-flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
-                  Opening secure email sign-in…
-                </div>
-              </div>
+              {signingInIndicator}
               <button
                 type="button"
                 disabled={buttonsDisabled}
@@ -538,6 +524,16 @@ function WaitlistAuthStep(props: {
         </div>
       ) : null}
     </motion.div>
+  )
+}
+
+function MiniStat({ label, value, description }: { label: string; value: ReactNode; description?: string }) {
+  return (
+    <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+      <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">{label}</div>
+      <div className="mt-2 text-lg font-semibold text-white">{value}</div>
+      {description ? <div className="mt-1 text-xs text-zinc-500">{description}</div> : null}
+    </div>
   )
 }
 
@@ -698,22 +694,10 @@ function WaitlistWalletStep(props: {
           </div>
 
           <div className="grid gap-3 sm:grid-cols-2">
-            <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Signup</div>
-              <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(waitlistPosition?.points.signup ?? 0)}</div>
-            </div>
-            <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Invites</div>
-              <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(waitlistPosition?.points.invite ?? 0)}</div>
-            </div>
-            <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Social</div>
-              <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(waitlistPosition?.points.social ?? 0)}</div>
-            </div>
-            <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-              <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Wallet / CSW</div>
-              <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(waitlistPosition?.points.csw ?? 0)}</div>
-            </div>
+            <MiniStat label="Signup" value={formatWholeNumber(waitlistPosition?.points.signup ?? 0)} />
+            <MiniStat label="Invites" value={formatWholeNumber(waitlistPosition?.points.invite ?? 0)} />
+            <MiniStat label="Social" value={formatWholeNumber(waitlistPosition?.points.social ?? 0)} />
+            <MiniStat label="Wallet / CSW" value={formatWholeNumber(waitlistPosition?.points.csw ?? 0)} />
           </div>
 
           <div className="rounded-xl border border-brand-primary/20 bg-brand-primary/8 p-4">
@@ -755,16 +739,8 @@ function WaitlistWalletStep(props: {
                 </div>
 
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Qualified</div>
-                    <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(qualifiedReferrals)}</div>
-                    <div className="mt-1 text-xs text-zinc-500">Friends fully linked and counted.</div>
-                  </div>
-                  <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Pending</div>
-                    <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(pendingReferrals)}</div>
-                    <div className="mt-1 text-xs text-zinc-500">People who still need to finish setup.</div>
-                  </div>
+                  <MiniStat label="Qualified" value={formatWholeNumber(qualifiedReferrals)} description="Friends fully linked and counted." />
+                  <MiniStat label="Pending" value={formatWholeNumber(pendingReferrals)} description="People who still need to finish setup." />
                 </div>
 
                 <div className="flex flex-col gap-3 sm:flex-row">
@@ -1138,6 +1114,7 @@ export function WaitlistFlow(props: {
   const { switchChainAsync } = useSwitchChain()
 
   const privyAuthed = privy.authenticated
+  const shouldDestroyPrivySession = privyAuthed && privyClientStatus === 'ready'
   const { getAccessToken } = privy
   const { ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
 
@@ -1165,7 +1142,6 @@ export function WaitlistFlow(props: {
   const [account, setAccount] = useState<AccountsSummary | null>(null)
   const [dashboardBusy, setDashboardBusy] = useState(false)
   const [dashboardError, setDashboardError] = useState<string | null>(null)
-  const dashboardPointsType: DashboardPointsType = 'total'
   const [waitlistPosition, setWaitlistPosition] = useState<WaitlistPositionResponse | null>(null)
   const [leaderboard, setLeaderboard] = useState<DashboardLeaderboardResponse | null>(null)
   const [copiedReferralLink, setCopiedReferralLink] = useState(false)
@@ -1194,9 +1170,10 @@ export function WaitlistFlow(props: {
 
   useEffect(() => {
     privyLogoutRef.current = async () => {
+      if (!shouldDestroyPrivySession) return
       await privy.logout().catch(() => null)
     }
-  }, [privy])
+  }, [privy, shouldDestroyPrivySession])
 
   useEffect(() => {
     if (!activeReferralCode) return
@@ -1221,7 +1198,7 @@ export function WaitlistFlow(props: {
   const runBootstrap = useCallback(async (): Promise<AccountsSummary | null> => {
     const token = await withTimeout(
       getAccessToken(),
-      GET_ACCESS_TOKEN_TIMEOUT_MS,
+      FLOW_TIMEOUT_MS,
       'Sign-in token',
     ).catch(() => null)
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -1231,13 +1208,13 @@ export function WaitlistFlow(props: {
         runCanonicalizationPipeline({
           privyToken: token,
         }),
-        CANONICALIZATION_TIMEOUT_MS,
+        FLOW_TIMEOUT_MS,
         'Account sync',
       )
       if (!canonicalization.onboardingBootstrapped && canonicalization.flags.needsEmbeddedWallet) {
         const provisionedWallet = await withTimeout(
           ensureEmbeddedWallet(),
-          EMBEDDED_WALLET_TIMEOUT_MS,
+          FLOW_TIMEOUT_MS,
           'Embedded wallet provisioning',
         )
         setEmbeddedEoaAddress(provisionedWallet.address)
@@ -1245,7 +1222,7 @@ export function WaitlistFlow(props: {
           runCanonicalizationPipeline({
             privyToken: token,
           }),
-          CANONICALIZATION_TIMEOUT_MS,
+          FLOW_TIMEOUT_MS,
           'Account sync',
         )
       }
@@ -1266,7 +1243,7 @@ export function WaitlistFlow(props: {
         headers,
         body: JSON.stringify(activeReferralCode ? { referralCode: activeReferralCode } : {}),
       }),
-      WAITLIST_BOOTSTRAP_TIMEOUT_MS,
+      FLOW_TIMEOUT_MS,
       'Waitlist bootstrap',
     )
     const payload = (await response.json().catch(() => null)) as ApiEnvelope<WaitlistBootstrapResponse> | null
@@ -1339,7 +1316,7 @@ export function WaitlistFlow(props: {
             withCredentials: true,
             headers: { Accept: 'application/json' },
           }),
-          apiFetch(`/api/waitlist/leaderboard?pointsType=${encodeURIComponent(dashboardPointsType)}&page=1&limit=6`, {
+          apiFetch(`/api/waitlist/leaderboard?pointsType=total&page=1&limit=6`, {
             method: 'GET',
             withCredentials: true,
             headers: { Accept: 'application/json' },
@@ -1387,7 +1364,7 @@ export function WaitlistFlow(props: {
         }
       }
     },
-    [account?.email, dashboardPointsType, getAccessToken, privyAuthed],
+    [account?.email, getAccessToken, privyAuthed],
   )
 
   const onContinueAuth = useCallback(async () => {
@@ -1418,12 +1395,12 @@ export function WaitlistFlow(props: {
       if (isRecoveryRequired) {
         authAutoAttemptedRef.current = true
         resetResolvedAccountState()
-        await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
+          await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
         setRecoveryRequired(true)
       }
       setError(
         isRecoveryRequired
-          ? getRecoveryRequiredMessage()
+          ? RECOVERY_REQUIRED_MESSAGE
           : !privyAuthed && isPrivyLoginBootstrapError(authError) && redirectToCanonicalWaitlist()
             ? 'Redirecting back to the waitlist sign-in flow…'
             : typeof authError?.message === 'string'
@@ -1445,6 +1422,7 @@ export function WaitlistFlow(props: {
     runBootstrap,
     setError,
     setRecoveryRequired,
+    shouldDestroyPrivySession,
   ])
 
   const onContinueWithBase = useCallback(async () => {
@@ -1469,7 +1447,7 @@ export function WaitlistFlow(props: {
   const resolveZora = useCallback(async (token: string): Promise<ZoraResolveResponse | null> => {
     const response = await apiFetch('/api/zora/resolve', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'X-Privy-Token': token },
+      headers: privyJsonHeaders(token),
       body: JSON.stringify({}),
     })
     const payload = (await response.json().catch(() => null)) as ApiEnvelope<ZoraResolveResponse> | null
@@ -1491,7 +1469,7 @@ export function WaitlistFlow(props: {
       })
       const token = await withTimeout(
         getAccessToken(),
-        GET_ACCESS_TOKEN_TIMEOUT_MS,
+        FLOW_TIMEOUT_MS,
         'Sign-in token',
       ).catch(() => null)
       if (!token) throw new Error('Missing auth token after linking your Zora wallet.')
@@ -1534,10 +1512,7 @@ export function WaitlistFlow(props: {
         walletClient,
         chainId,
         switchChainAsync,
-        authHeaders: async () => ({
-          'Content-Type': 'application/json',
-          'X-Privy-Token': token,
-        }),
+        authHeaders: async () => privyJsonHeaders(token),
       })
     },
     [chainId, getAccessToken, switchChainAsync, walletClient],
@@ -1552,30 +1527,29 @@ export function WaitlistFlow(props: {
       const token = await getAccessToken()
       if (!token) throw new Error('Missing Privy auth token. Sign in and retry.')
 
-      let preflightRes = await apiFetch('/api/onboarding/bootstrap', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Privy-Token': token,
-        },
-        body: JSON.stringify({}),
-      })
+      const fetchOnboardingBootstrap = () =>
+        apiFetch('/api/onboarding/bootstrap', {
+          method: 'POST',
+          headers: privyJsonHeaders(token),
+          body: JSON.stringify({}),
+        })
+
+      const markSigningAlreadyEnabled = async () => {
+        setOwnerDelegationVerified(true)
+        setNotice('4626 signing is already enabled on your canonical CSW.')
+        await runBootstrap()
+      }
+
+      let preflightRes = await fetchOnboardingBootstrap()
       let preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<OnboardingBootstrapResponse> | null
       if ((!preflightRes.ok || !preflightPayload?.success) && (preflightPayload as any)?.needsEmbeddedWallet === true) {
         const provisionedWallet = await withTimeout(
           ensureEmbeddedWallet(),
-          EMBEDDED_WALLET_TIMEOUT_MS,
+          FLOW_TIMEOUT_MS,
           'Embedded wallet provisioning',
         )
         setEmbeddedEoaAddress(provisionedWallet.address)
-        preflightRes = await apiFetch('/api/onboarding/bootstrap', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Privy-Token': token,
-          },
-          body: JSON.stringify({}),
-        })
+        preflightRes = await fetchOnboardingBootstrap()
         preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<OnboardingBootstrapResponse> | null
       }
       if (!preflightRes.ok || !preflightPayload?.success) {
@@ -1583,18 +1557,13 @@ export function WaitlistFlow(props: {
       }
       setEmbeddedEoaAddress(preflightPayload.data?.privyEmbeddedEoaAddress ?? null)
       if (preflightPayload.data?.privyIsOwner) {
-        setOwnerDelegationVerified(true)
-        setNotice('4626 signing is already enabled on your canonical CSW.')
-        await runBootstrap()
+        await markSigningAlreadyEnabled()
         return
       }
 
       const prepareRes = await apiFetch('/api/wallet/prepare-add-privy-owner', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Privy-Token': token,
-        },
+        headers: privyJsonHeaders(token),
         body: JSON.stringify({}),
       })
       const preparePayload = (await prepareRes.json().catch(() => null)) as ApiEnvelope<PrepareOwnerResponse> | null
@@ -1602,9 +1571,7 @@ export function WaitlistFlow(props: {
         throw buildOwnerDelegationError(preparePayload, 'Failed to prepare owner install.')
       }
       if (preparePayload.data.alreadyOwner) {
-        setOwnerDelegationVerified(true)
-        setNotice('4626 signing is already enabled on your canonical CSW.')
-        await runBootstrap()
+        await markSigningAlreadyEnabled()
         return
       }
 
@@ -1638,7 +1605,7 @@ export function WaitlistFlow(props: {
         setError('Sign-in service is still loading. Please wait a moment and try again.')
         return
       }
-      await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
+      await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
       await login(buildWaitlistRecoveryLoginOptions() as any)
     } catch (recoverError: any) {
       if (isPrivyLoginBootstrapError(recoverError) && redirectToCanonicalWaitlist()) {
@@ -1650,7 +1617,17 @@ export function WaitlistFlow(props: {
     } finally {
       endAuthAttempt()
     }
-  }, [beginAuthAttempt, endAuthAttempt, login, privyClientStatus, redirectToCanonicalWaitlist, resetResolvedAccountState, setError, setRecoveryRequired])
+  }, [
+    beginAuthAttempt,
+    endAuthAttempt,
+    login,
+    privyClientStatus,
+    redirectToCanonicalWaitlist,
+    resetResolvedAccountState,
+    setError,
+    setRecoveryRequired,
+    shouldDestroyPrivySession,
+  ])
 
   const onEnterApp = useCallback(async () => {
     if (enterAppBusy) return
@@ -1744,15 +1721,15 @@ export function WaitlistFlow(props: {
         }
         if (isSessionMismatch || isRecoveryRequired) {
           resetResolvedAccountState()
-          await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
+          await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
         }
         if (!cancelled) {
           if (isRecoveryRequired) setRecoveryRequired(true)
           setError(
             isSessionMismatch
-              ? getSessionMismatchMessage()
+              ? SESSION_MISMATCH_MESSAGE
               : isRecoveryRequired
-                ? getRecoveryRequiredMessage()
+                ? RECOVERY_REQUIRED_MESSAGE
                 : message,
           )
         }
@@ -1763,7 +1740,17 @@ export function WaitlistFlow(props: {
     return () => {
       cancelled = true
     }
-  }, [authAttemptInFlightRef, privyAuthed, resetResolvedAccountState, runBootstrap, setBusy, setError, setRecoveryRequired, step])
+  }, [
+    authAttemptInFlightRef,
+    privyAuthed,
+    resetResolvedAccountState,
+    runBootstrap,
+    setBusy,
+    setError,
+    setRecoveryRequired,
+    shouldDestroyPrivySession,
+    step,
+  ])
 
   useEffect(() => {
     if (step !== 'auth') {
@@ -1781,17 +1768,13 @@ export function WaitlistFlow(props: {
       void runBootstrap()
       void loadDashboard({ silent: true })
     }
-    const onFocus = () => refresh()
-    const onVisibilityChange = () => refresh()
-    const interval = window.setInterval(() => {
-      refresh()
-    }, 30_000)
-    window.addEventListener('focus', onFocus)
-    document.addEventListener('visibilitychange', onVisibilityChange)
+    const interval = window.setInterval(refresh, 30_000)
+    window.addEventListener('focus', refresh)
+    document.addEventListener('visibilitychange', refresh)
     return () => {
       window.clearInterval(interval)
-      window.removeEventListener('focus', onFocus)
-      document.removeEventListener('visibilitychange', onVisibilityChange)
+      window.removeEventListener('focus', refresh)
+      document.removeEventListener('visibilitychange', refresh)
     }
   }, [loadDashboard, privyAuthed, runBootstrap, step])
 
@@ -1872,22 +1855,16 @@ export function WaitlistFlow(props: {
     void onEnterApp()
   }, [onEnterApp, shouldAutoHandoff])
 
+  function stepStatus(active: WaitlistStep, complete?: WaitlistStep | WaitlistStep[]): 'pending' | 'active' | 'complete' {
+    if (step === active) return 'active'
+    const completes = complete ? (Array.isArray(complete) ? complete : [complete]) : []
+    return completes.includes(step) ? 'complete' : 'pending'
+  }
+
   const indicatorSteps = [
-    {
-      label: 'Sign in',
-      status: (step === 'auth' ? 'active' : step === 'wallet' || step === 'done' ? 'complete' : 'pending') as
-        | 'pending'
-        | 'active'
-        | 'complete',
-    },
-    {
-      label: 'Waitlist',
-      status: (step === 'wallet' ? 'active' : step === 'done' ? 'complete' : 'pending') as 'pending' | 'active' | 'complete',
-    },
-    {
-      label: 'App',
-      status: (step === 'done' ? 'active' : 'pending') as 'pending' | 'active' | 'complete',
-    },
+    { label: 'Sign in', status: stepStatus('auth', ['wallet', 'done']) },
+    { label: 'Waitlist', status: stepStatus('wallet', 'done') },
+    { label: 'App', status: stepStatus('done') },
   ]
 
   return (

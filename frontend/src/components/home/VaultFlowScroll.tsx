@@ -227,13 +227,12 @@ type VaultSceneProps = {
   zorbFillScale: MotionValue<number>
   zorbFillOp: MotionValue<number>
   shareZorbOp: MotionValue<number>
-  shareZorbSlide: MotionValue<number>
 }
 const VaultScene = memo(function VaultScene({
   uid, vaultTransform, vaultOpacity, vaultLidOp, vaultWallOp,
   vaultPostProgress, vaultTopProgress, vaultGlow, landingFlash,
   zoraGreenFlash, coinEntryGlow, zorbFillScale, zorbFillOp,
-  shareZorbOp, shareZorbSlide,
+  shareZorbOp,
 }: VaultSceneProps) {
   return (
     <motion.div className="absolute left-1/2 top-[44vh] z-20" style={{ transform: vaultTransform, opacity: vaultOpacity }}>
@@ -312,65 +311,46 @@ const VaultScene = memo(function VaultScene({
           aria-hidden="true"
         />
         <ZorbViewer size={96} />
-
-        {/* akita label — appears when deposit completes so the two tokens are clearly differentiated */}
-        <motion.div
-          className="pointer-events-none absolute left-0 right-0 flex justify-center"
-          style={{ top: 'calc(100% + 8px)', opacity: shareZorbOp }}
-          aria-hidden="true"
-        >
-          <span className="font-mono text-[8px] font-semibold uppercase tracking-[0.20em]" style={{ color: 'rgba(249,115,22,0.72)' }}>
-            akita · deposited
-          </span>
-        </motion.div>
-
-        {/* ── ■AKITA share token twin ──────────────────────────────────────────
-            Mobile (default): badge at bottom-right of the vault box, smaller.
-            Desktop (sm:): full element to the right of the vault, slides in.   */}
-
-        {/* Mobile badge — overlaid at bottom-right of vault box */}
-        <motion.div
-          className="pointer-events-none absolute sm:hidden"
-          style={{ right: -52, bottom: 10, opacity: shareZorbOp }}
-          aria-hidden="true"
-        >
-          <div className="relative">
-            <div className="pointer-events-none absolute rounded-full" style={{ inset: -6, boxShadow: '0 0 14px 5px rgba(0,82,255,0.60), 0 0 32px 12px rgba(0,82,255,0.25)' }} />
-            <div className="pointer-events-none absolute inset-0 rounded-full" style={{ background: 'radial-gradient(circle at 40% 35%, rgba(120,180,255,0.22) 0%, rgba(0,82,255,0.12) 55%, transparent 72%)' }} />
-            <ZorbViewer size={36} />
-            <div className="mt-1 flex items-center justify-center">
-              <span className="font-mono text-[7px] font-semibold" style={{ color: 'rgba(100,160,255,0.80)' }}>■AKITA</span>
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Desktop twin — slides in from right */}
-        <motion.div
-          className="pointer-events-none absolute hidden sm:block"
-          style={{
-            left: 'calc(100% + 20px)',
-            top: 'calc(50% - 75px)',
-            opacity: shareZorbOp,
-            x: shareZorbSlide,
-          }}
-          aria-hidden="true"
-        >
-          {/* Connector line */}
-          <div
-            className="pointer-events-none absolute top-[75px] h-px"
-            style={{ right: 'calc(100% + 1px)', width: 20, background: 'linear-gradient(90deg, transparent, rgba(100,160,255,0.40))' }}
-          />
-          <div className="relative">
-            <div className="pointer-events-none absolute rounded-full" style={{ inset: -8, boxShadow: '0 0 18px 7px rgba(0,82,255,0.62), 0 0 45px 16px rgba(0,82,255,0.26), 0 0 0 1px rgba(0,82,255,0.10)' }} />
-            <div className="pointer-events-none absolute inset-0 rounded-full" style={{ background: 'radial-gradient(circle at 40% 35%, rgba(140,200,255,0.20) 0%, rgba(0,82,255,0.10) 55%, transparent 72%)' }} />
-            <ZorbViewer size={56} />
-            <div className="mt-2 flex flex-col items-center gap-0.5">
-              <span className="font-mono text-[8px] font-semibold" style={{ color: 'rgba(100,160,255,0.85)' }}>■AKITA</span>
-              <span className="font-mono text-[7px]" style={{ color: 'rgba(100,160,255,0.50)' }}>minted</span>
-            </div>
-          </div>
-        </motion.div>
       </div>
+
+      {/* ── ■AKITA glass-floor reflection ──────────────────────────────────────
+          Same-size Zorb (size=96), vertically flipped and blue-shifted via CSS
+          hue-rotate filter. A gradient mask fades the reflection downward.
+          The mirror plane line marks the vault's "transparent glass floor".    */}
+      <motion.div
+        className="pointer-events-none"
+        style={{ opacity: shareZorbOp }}
+        aria-hidden="true"
+      >
+        {/* Mirror plane — glowing glass-floor seam */}
+        <div
+          style={{
+            marginTop: 64,
+            height: 1,
+            background: 'linear-gradient(90deg, transparent 0%, rgba(100,160,255,0.16) 10%, rgba(180,220,255,0.78) 36%, rgba(215,238,255,0.96) 50%, rgba(180,220,255,0.78) 64%, rgba(100,160,255,0.16) 90%, transparent 100%)',
+            boxShadow: '0 0 7px 2px rgba(0,82,255,0.22)',
+          }}
+        />
+        {/* ■AKITA identity label — sits between the plane and the reflection */}
+        <div className="mb-1 mt-2 flex items-center justify-center gap-1.5">
+          <span className="font-mono text-[8px] font-semibold" style={{ color: 'rgba(100,160,255,0.65)' }}>■AKITA</span>
+          <span className="h-px w-3 flex-shrink-0" style={{ background: 'rgba(100,160,255,0.28)' }} />
+          <span className="font-mono text-[7px]" style={{ color: 'rgba(100,160,255,0.38)' }}>minted</span>
+        </div>
+        {/* Fade-mask wrapper — top-to-bottom gradient so the reflection is
+            brightest near the mirror plane and dissolves downward.             */}
+        <div
+          style={{
+            WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.50) 0%, rgba(0,0,0,0.50) 28%, transparent 80%)',
+            maskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.50) 0%, rgba(0,0,0,0.50) 28%, transparent 80%)',
+          }}
+        >
+          {/* Vertical flip + blue-shift the Zorb hue toward electric blue-cyan */}
+          <div style={{ transform: 'scaleY(-1)', filter: 'hue-rotate(192deg) saturate(1.55) brightness(0.65)' }}>
+            <ZorbViewer size={96} />
+          </div>
+        </div>
+      </motion.div>
     </motion.div>
   )
 })
@@ -878,10 +858,8 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
   const vaultTopProgress  = useTransform(scroll, [0.30, 0.34], [0, 1])
   const vaultWallOp       = useTransform(scroll, [0.20, 0.24, 0.73, 0.77], [0, 1, 1, 0])
 
-  // Share Zorb twin — materialises when deposit fill completes, tracks the vault through dive fade.
-  // Slides in 22px from the right on reveal; fade matches vaultOpacity at the dive.
-  const shareZorbOp    = useTransform(scroll, [0.50, 0.54, 0.73, 0.77], [0, 1, 1, 0])
-  const shareZorbSlide = useTransform(scroll, [0.50, 0.54], [22, 0])
+  // Share Zorb reflection — materialises when deposit fill completes, fades with the dive.
+  const shareZorbOp = useTransform(scroll, [0.50, 0.54, 0.73, 0.77], [0, 1, 1, 0])
 
   // Coin entry glow — fires when deposit fill completes, sustains through all distributions,
   // fades as the dive begins
@@ -1416,7 +1394,6 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
               zorbFillScale={zorbFillScale}
               zorbFillOp={zorbFillOp}
               shareZorbOp={shareZorbOp}
-              shareZorbSlide={shareZorbSlide}
             />
 
             {/* Distribution fan chart */}

@@ -40,14 +40,16 @@ vi.mock('@/lib/host', () => ({
 }))
 
 vi.mock('@/web3/Web3Providers', () => ({
-  Web3Providers: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+  Web3Providers: ({ children }: { children: React.ReactNode }) =>
+    React.createElement('div', { 'data-testid': 'web3-providers' }, children),
 }))
 
 vi.mock('@/lib/privy/client', () => ({
-  PrivyClientProvider: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
+  PrivyClientProvider: ({ children }: { children: React.ReactNode }) =>
+    React.createElement('div', { 'data-testid': 'privy-provider' }, children),
 }))
 
-vi.mock('@/components/waitlist/ThinWaitlistFlow', () => ({
+vi.mock('@/components/waitlist/WaitlistFlow', () => ({
   WaitlistFlow: ({
     sectionId,
     variant,
@@ -136,6 +138,33 @@ describe('Home', () => {
     render(React.createElement(MemoryRouter, null, React.createElement(Home)))
 
     expect(screen.queryByTestId('waitlist-flow')).toBeNull()
+  })
+
+  it('keeps waitlist providers quiet before the waitlist flow is explicitly opened', async () => {
+    const user = userEvent.setup()
+    render(React.createElement(MemoryRouter, null, React.createElement(Home)))
+
+    expect(screen.queryByTestId('privy-provider')).toBeNull()
+    expect(screen.queryByTestId('web3-providers')).toBeNull()
+
+    await user.tab()
+
+    expect(screen.getByRole('button', { name: /join waitlist/i })).toBeTruthy()
+    expect(screen.queryByTestId('privy-provider')).toBeNull()
+    expect(screen.queryByTestId('web3-providers')).toBeNull()
+    expect(screen.queryByTestId('waitlist-flow')).toBeNull()
+  })
+
+  it('mounts waitlist providers immediately when stored auth intent is present', async () => {
+    window.sessionStorage.clear()
+    window.sessionStorage.setItem('cv:waitlist:auth_armed', '1')
+    window.sessionStorage.setItem('cv:waitlist:auth_auto_start', '1')
+
+    render(React.createElement(MemoryRouter, { initialEntries: ['/'] }, React.createElement(Home)))
+
+    expect(screen.getByTestId('privy-provider')).toBeTruthy()
+    expect(screen.getByTestId('web3-providers')).toBeTruthy()
+    expect(await screen.findByTestId('waitlist-flow')).toBeTruthy()
   })
 
   it('shows the current launch mechanics and token flow', () => {

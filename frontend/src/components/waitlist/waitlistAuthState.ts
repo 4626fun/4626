@@ -75,10 +75,12 @@ export function shouldStopWaitlistAutoAuthRetry(params: {
 export async function runWaitlistPrivyLogout(params: {
   logout: (() => Promise<void>) | null | undefined
   timeoutMs?: number
+  shouldLogout?: boolean
 }): Promise<void> {
   clearStoredWaitlistSessionToken()
   const clearServerSessionPromise = clearServerWaitlistSession()
   const logout = params.logout
+  const shouldLogout = params.shouldLogout !== false
 
   const timeoutCandidate = params.timeoutMs
   const timeoutMs =
@@ -99,7 +101,7 @@ export async function runWaitlistPrivyLogout(params: {
   }
 
   const tasks: Promise<void>[] = [settleWithinTimeout(clearServerSessionPromise)]
-  if (typeof logout === 'function') {
+  if (shouldLogout && typeof logout === 'function') {
     tasks.push(
       settleWithinTimeout(
         Promise.resolve()

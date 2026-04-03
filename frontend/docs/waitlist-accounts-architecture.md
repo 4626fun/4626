@@ -2,7 +2,7 @@
 
 This is the canonical product model for identity onboarding:
 
-- Marketing waitlist entry lives in `frontend/src/components/waitlist/ThinWaitlistFlow.tsx`.
+- Marketing waitlist entry lives in `frontend/src/components/waitlist/WaitlistFlow.tsx`.
 - Waitlist and account creation are explicitly **email-first**.
 - Verified email is the canonical 4626 identity and recovery key.
 - No account is fully created until email OTP verification completes.
@@ -47,7 +47,7 @@ Implementation posture:
 Legacy note:
 
 - The older heavy waitlist flow and its private step/hook files were removed after the thin waitlist convergence pass.
-- New product work should build on `frontend/src/components/waitlist/ThinWaitlistFlow.tsx`, `frontend/src/pages/Waitlist.tsx`, and `frontend/src/pages/accounts/AccountsPage.tsx`.
+- New product work should build on `frontend/src/components/waitlist/WaitlistFlow.tsx`, `frontend/src/pages/Waitlist.tsx`, and `frontend/src/pages/accounts/AccountsPage.tsx`.
 - If an older auth path conflicts with `frontend/docs/account-auth-invariants.md`, remove or migrate it rather than preserving it.
 
 ## Telegram Flow Routing Boundary

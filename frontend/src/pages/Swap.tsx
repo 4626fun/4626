@@ -50,6 +50,7 @@ import { ensureProviderOnBase } from '@/lib/wallet/safeSwitchToBase'
 import { resolveCreatorTradeTokenAddress } from '@/lib/onchain/vaultResolve'
 import { useAccountContext } from '@/wallet/accountContext'
 import { PageMeta } from '@/components/seo/PageMeta'
+import { useScreenshotReady } from '@/lib/screenshotMode'
 
 const CORE_TOKENS: TokenOption[] = [
   // Represent ETH as native for Uniswap Trading API + wagmi balances.
@@ -1309,6 +1310,9 @@ export function Swap() {
   })
 
   const anyBusy = busy !== null || lpBusy !== null
+  const screenshotReady = !tokenInIdentity.isLoading && !tokenOutIdentity.isLoading && tokenInSymbol.length > 0 && tokenOutSymbol.length > 0
+
+  useScreenshotReady(screenshotReady)
 
   const positions: LpPosition[] = useMemo(() => {
     const data = lpPositionsQuery.data
@@ -1424,7 +1428,7 @@ export function Swap() {
       />
 
       {activePanel === 'swap' && needsPrivyCanonicalAuth ? (
-        <div className="mx-auto mt-4 max-w-4xl">
+        <div data-screenshot-hide="true" className="mx-auto mt-4 max-w-4xl">
           <Alert
             variant="warning"
             title="Privy sign-in required for canonical swaps"
@@ -1443,7 +1447,7 @@ export function Swap() {
       ) : null}
 
       {activePanel === 'swap' && showPrivyClientDisabledHint ? (
-        <div className="mx-auto mt-4 max-w-4xl">
+        <div data-screenshot-hide="true" className="mx-auto mt-4 max-w-4xl">
           <Alert variant="warning" title="Privy is not configured for canonical swaps">
             Canonical mode requires Privy authentication and an embedded owner wallet. Enable Privy for this environment,
             then reload.
@@ -1456,7 +1460,7 @@ export function Swap() {
       ) : null}
 
       {activePanel === 'swap' && showPrivyLoadingHint ? (
-        <div className="mx-auto mt-4 max-w-4xl">
+        <div data-screenshot-hide="true" className="mx-auto mt-4 max-w-4xl">
           <Alert variant="warning" title="Initializing Privy for canonical signing">
             Waiting for the Privy client/session to finish loading before canonical signer checks can complete.
           </Alert>
@@ -1464,7 +1468,7 @@ export function Swap() {
       ) : null}
 
       {showCanonicalSessionGuardHint && !canonicalSessionRefreshBusy ? (
-        <div className="mx-auto mt-4 max-w-4xl">
+        <div data-screenshot-hide="true" className="mx-auto mt-4 max-w-4xl">
           <Alert variant="warning" title={canonicalSessionGuardTitle}>
             {canonicalSubmitSession.message}
           </Alert>
@@ -1472,7 +1476,7 @@ export function Swap() {
       ) : null}
 
       {activePanel === 'swap' && diagnosticsEnabled ? (
-        <div className="mx-auto mt-4 max-w-4xl vault-surface-muted rounded-xl p-3">
+        <div data-screenshot-hide="true" className="mx-auto mt-4 max-w-4xl vault-surface-muted rounded-xl p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-xs font-semibold uppercase tracking-wider text-zinc-400">Internal 7702 Diagnostics</div>
@@ -1498,7 +1502,10 @@ export function Swap() {
       ) : null}
 
       {activePanel === 'swap' && txDebug.enabled ? (
-        <div className="mx-auto mt-4 max-w-4xl rounded-xl border border-cyan-400/28 bg-linear-to-b from-cyan-900/35 to-cyan-950/22 p-3 backdrop-blur-sm">
+        <div
+          data-screenshot-hide="true"
+          className="mx-auto mt-4 max-w-4xl rounded-xl border border-cyan-400/28 bg-linear-to-b from-cyan-900/35 to-cyan-950/22 p-3 backdrop-blur-sm"
+        >
           <div className="flex items-center justify-between gap-3">
             <div>
               <div className="text-xs font-semibold uppercase tracking-wider text-cyan-200">Swap Tx Router Debug</div>
@@ -1563,7 +1570,10 @@ export function Swap() {
       ) : null}
 
       {chainMismatch ? (
-        <div className="mx-auto mb-4 flex max-w-4xl items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-linear-to-b from-amber-500/16 to-amber-500/8 px-3 py-2.5 backdrop-blur-sm">
+        <div
+          data-screenshot-hide="true"
+          className="mx-auto mb-4 flex max-w-4xl items-center justify-between gap-3 rounded-xl border border-amber-500/25 bg-linear-to-b from-amber-500/16 to-amber-500/8 px-3 py-2.5 backdrop-blur-sm"
+        >
           <div className="text-xs text-amber-200">
             Your wallet is on {walletChainId ? getChainMeta(walletChainId)?.name ?? `chain ${walletChainId}` : 'a different network'}. Switch to {chainMeta?.name ?? 'the selected network'} to trade.
           </div>

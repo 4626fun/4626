@@ -64,6 +64,23 @@ function stabilizeWindowEthereumSlot() {
   }
 }
 
+function stabilizeScrollMeasurementRoots() {
+  if (typeof document === 'undefined') return
+  try {
+    const html = document.documentElement
+    if (html && getComputedStyle(html).position === 'static') {
+      html.style.position = 'relative'
+    }
+
+    const body = document.body
+    if (body && getComputedStyle(body).position === 'static') {
+      body.style.position = 'relative'
+    }
+  } catch {
+    // ignore: best-effort setup for Motion's initial scroll measurements
+  }
+}
+
 const EXTENSION_ETHEREUM_ERROR_PATTERNS: RegExp[] = [
   /Cannot redefine property:\s*ethereum/i,
   /Cannot set property ethereum of #<Window> which has only a getter/i,
@@ -149,6 +166,7 @@ function tryRecoverFromViteOptimizeDepError(message: string, source: string): bo
 if (typeof window !== 'undefined') {
   try {
     stabilizeWindowEthereumSlot()
+    stabilizeScrollMeasurementRoots()
 
     if (!(window as any).__cvWalletNoisePatched) {
       const originalLog = console.log.bind(console)

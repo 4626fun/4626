@@ -84,6 +84,20 @@ describe('runWaitlistPrivyLogout', () => {
     expect(rejectingLogout).toHaveBeenCalledTimes(1)
   })
 
+  it('skips calling Privy logout when the caller marks the SDK session unavailable', async () => {
+    const logout = vi.fn(async () => undefined)
+
+    await expect(
+      runWaitlistPrivyLogout({
+        logout,
+        timeoutMs: 20,
+        shouldLogout: false,
+      } as any),
+    ).resolves.toBeUndefined()
+
+    expect(logout).not.toHaveBeenCalled()
+  })
+
   it('times out if logout never resolves', async () => {
     vi.useFakeTimers()
     const neverResolvingLogout = vi.fn(() => new Promise<void>(() => {}))

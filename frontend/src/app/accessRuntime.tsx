@@ -13,6 +13,7 @@ import { apiFetch } from '@/lib/apiBase'
 import { API_ENDPOINTS } from '@/lib/apiEndpoints'
 import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
+import { isScreenshotMode } from '@/lib/screenshotMode'
 import {
   AccessContext,
   computeAcceptedFromAllowlist,
@@ -39,6 +40,7 @@ function isValidEvmAddress(value: string): boolean {
 
 function useResolvedAccessState(): AccessState {
   const location = useLocation()
+  const screenshotMode = isScreenshotMode(location.search)
   const { address: connectedAddressRaw, isConnected } = useAccount()
   const siwe = useSiweAuth()
   const shouldLoadAdminStatus = location.pathname.startsWith('/admin')
@@ -62,6 +64,7 @@ function useResolvedAccessState(): AccessState {
 
   const allowlistModeQuery = useQuery({
     queryKey: ['creatorAllowlist', 'mode'],
+    enabled: !screenshotMode,
     queryFn: async (): Promise<CreatorAllowlistStatus> => {
       const res = await apiFetch(API_ENDPOINTS.creator.allowlist, { method: 'GET' })
       const json = (await res.json().catch(() => null)) as ApiEnvelope<CreatorAllowlistStatus> | null
@@ -94,6 +97,21 @@ function useResolvedAccessState(): AccessState {
     allowlistModeLoading ||
     allowlistAddressLoading ||
     (hasSession && adminStatus.isLoading)
+
+  if (screenshotMode) {
+    return {
+      loading: false,
+      walletConnected: false,
+      sessionValid: true,
+      accepted: true,
+      creator: true,
+      admin: false,
+      allowlistEnforced: false,
+      effectiveAddress: null,
+      marketingUrl: getMarketingBaseUrl(),
+      hostMode: getHostMode(),
+    }
+  }
 
   return {
     loading,

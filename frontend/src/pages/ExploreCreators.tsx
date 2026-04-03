@@ -17,6 +17,7 @@ import { useMigratedCoins } from '@/hooks/useMigratedCoins'
 import { useWindowInfiniteScrollLoadMore } from '@/hooks/useWindowInfiniteScrollLoadMore'
 import type { ZoraCoin, ZoraExploreListType } from '@/lib/zora/types'
 import { getZoraExploreVolumeNote } from '@/lib/zora/exploreVolume'
+import { useScreenshotMode, useScreenshotReady } from '@/lib/screenshotMode'
 import {
   flattenExplorePagedNodes,
   matchesCoinSearchQuery,
@@ -48,6 +49,57 @@ const CREATOR_SEARCH_MATCH_OPTIONS = {
   includeQueryVariants: true,
   includeHandleBasenameVariant: true,
 } as const
+const SCREENSHOT_DEMO_METRICS = {
+  creatorsTotal: 12840,
+  creatorsNew24h: 184,
+  creatorCoinsMarketCapUsd: 14200000,
+  creatorCoinsVolume24hUsd: 845000,
+  creatorCoinsFees24hUsd: 25350,
+} as const
+const SCREENSHOT_DEMO_COINS: ZoraCoin[] = [
+  {
+    address: '0x1111111111111111111111111111111111111111',
+    symbol: 'AKITA',
+    name: 'Akita',
+    chainId: 8453,
+    uniqueHolders: 1824,
+    marketCap: '4200000',
+    marketCapDelta24h: '11.4',
+    volume24h: '245000',
+    totalVolume: '1280000',
+    createdAt: '2025-07-01T12:00:00Z',
+    creatorAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    payoutRecipientAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+  },
+  {
+    address: '0x2222222222222222222222222222222222222222',
+    symbol: 'BUILD',
+    name: 'Base Builder',
+    chainId: 8453,
+    uniqueHolders: 1450,
+    marketCap: '3100000',
+    marketCapDelta24h: '6.1',
+    volume24h: '193000',
+    totalVolume: '940000',
+    createdAt: '2025-08-14T12:00:00Z',
+    creatorAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
+    payoutRecipientAddress: '0xdddddddddddddddddddddddddddddddddddddddd',
+  },
+  {
+    address: '0x3333333333333333333333333333333333333333',
+    symbol: 'VAULT',
+    name: 'Vault Pilot',
+    chainId: 8453,
+    uniqueHolders: 978,
+    marketCap: '2200000',
+    marketCapDelta24h: '3.8',
+    volume24h: '118000',
+    totalVolume: '670000',
+    createdAt: '2025-09-05T12:00:00Z',
+    creatorAddress: '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+    payoutRecipientAddress: '0xffffffffffffffffffffffffffffffffffffffff',
+  },
+]
 
 type ExploreMetrics = {
   scope: 'creators'
@@ -221,6 +273,7 @@ function inferFeeRate(coin: ZoraCoin, migratedCoins: Set<string> | null): number
 export function ExploreCreators() {
   const [expandedFees, setExpandedFees] = useState<string | null>(null)
   const [collapseIdentity, setCollapseIdentity] = useState(false)
+  const screenshotMode = useScreenshotMode()
 
   const { currentTimeFilter, currentSort, searchQuery, handleSearchChange, handleTimeFilterChange, handleSortChange } =
     useExploreSubnavParams({
@@ -440,6 +493,14 @@ export function ExploreCreators() {
     ? coalesceMetricValue(localMetricsFallback.creatorCoinsFees24hUsd, metricsTotals?.creatorCoinsFees24hUsd)
     : coalesceMetricValue(metricsTotals?.creatorCoinsFees24hUsd, localMetricsFallback.creatorCoinsFees24hUsd)
   const creatorsTotalCount = creatorsTotalDisplay ?? 0
+  const useScreenshotFallback = screenshotMode.enabled && !trimmedSearchQuery && filteredCoins.length === 0
+  const displayCoins = useScreenshotFallback ? SCREENSHOT_DEMO_COINS : filteredCoins
+  const hasScreenshotFallbackRows = useScreenshotFallback && displayCoins.length > 0
+  const creatorsTotalUi = useScreenshotFallback ? SCREENSHOT_DEMO_METRICS.creatorsTotal : creatorsTotalDisplay
+  const creatorsNew24hUi = useScreenshotFallback ? SCREENSHOT_DEMO_METRICS.creatorsNew24h : creatorsNew24hDisplay
+  const marketCapUi = useScreenshotFallback ? SCREENSHOT_DEMO_METRICS.creatorCoinsMarketCapUsd : marketCapDisplay
+  const volume24hUi = useScreenshotFallback ? SCREENSHOT_DEMO_METRICS.creatorCoinsVolume24hUsd : volume24hDisplay
+  const fees24hUi = useScreenshotFallback ? SCREENSHOT_DEMO_METRICS.creatorCoinsFees24hUsd : fees24hDisplay
   const canonicalUpdatedAt = syncMeta?.lastFullSyncAt ?? null
   const updatedTimeDisplay = canonicalUpdatedAt
     ? new Date(canonicalUpdatedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
@@ -469,19 +530,22 @@ export function ExploreCreators() {
     (directSearchQuery.isLoading || directSearchQuery.isFetching)
   const showSyncingEmptyState =
     !trimmedSearchQuery &&
-    filteredCoins.length === 0 &&
+    displayCoins.length === 0 &&
     !isLoading &&
     !isError &&
     (creatorsTotalCount > 0 || syncStatus === 'running' || syncStatus === 'error')
   const shouldAutoFetchForSearch =
     trimmedSearchQuery.length > 0 &&
-    filteredCoins.length === 0 &&
+    displayCoins.length === 0 &&
     !isLoading &&
     !isError &&
     !isSearchingDirectMatches &&
     hasNextPage === true &&
     !isFetchingNextPage &&
     (data?.pages?.length ?? 0) < SEARCH_AUTO_FETCH_MAX_PAGES
+  const screenshotReady = displayCoins.length > 0 && (!isLoading || hasScreenshotFallbackRows)
+
+  useScreenshotReady(screenshotReady)
 
   useWindowInfiniteScrollLoadMore({
     hasNextPage: Boolean(hasNextPage),
@@ -525,11 +589,11 @@ export function ExploreCreators() {
             <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
               <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">{creatorsLabel}</div>
               <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-                {creatorsTotalDisplay?.toLocaleString() ?? '—'}
+                {creatorsTotalUi?.toLocaleString() ?? '—'}
               </div>
               <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
-                {creatorsNew24hDisplay != null
-                  ? `+${creatorsNew24hDisplay.toLocaleString()} today`
+                {creatorsNew24hUi != null
+                  ? `+${creatorsNew24hUi.toLocaleString()} today`
                   : 'Tracking newly created creators'}
               </div>
             </div>
@@ -537,7 +601,7 @@ export function ExploreCreators() {
             <div className="vault-surface-elevated vault-hover-lift rounded-xl sm:rounded-2xl border-blue-300/30 bg-blue-950/16 px-3 sm:px-4 py-2.5 sm:py-3">
               <div className="text-[10px] sm:text-[11px] font-medium text-zinc-400">{marketLabel}</div>
               <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-                {formatCompactUsd(marketCapDisplay)}
+                {formatCompactUsd(marketCapUi)}
               </div>
               <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">Live market-cap snapshot</div>
             </div>
@@ -545,7 +609,7 @@ export function ExploreCreators() {
             <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
               <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Vol</div>
               <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-                {formatCompactUsd(volume24hDisplay)}
+                {formatCompactUsd(volume24hUi)}
               </div>
               <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
                 24H trade volume across creator coins
@@ -555,7 +619,7 @@ export function ExploreCreators() {
             <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
               <div className="text-[10px] sm:text-[11px] font-medium text-zinc-500">1D Fees</div>
               <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
-                {formatCompactUsd(fees24hDisplay)}
+                {formatCompactUsd(fees24hUi)}
               </div>
               <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
                 24H fees from creator-coin trading
@@ -595,23 +659,23 @@ export function ExploreCreators() {
             }
             body={
               <>
-                {isLoading ? (
+                {isLoading && !hasScreenshotFallbackRows ? (
                   Array.from({ length: 10 }).map((_, i) => <TokenRowSkeleton key={i} collapseIdentity={collapseIdentity} />)
-                ) : isError ? (
+                ) : isError && !hasScreenshotFallbackRows ? (
                   <ExploreTableMessage title="Failed to load creators" detail={(error as Error)?.message || 'Unknown error'} />
                 ) : showSyncingEmptyState ? (
                   <ExploreTableMessage
                     title="Creator list is still syncing"
                     detail="Global stats are available, but the ranked creator rows have not finished loading yet."
                   />
-                ) : trimmedSearchQuery.length > 0 && filteredCoins.length === 0 && isSearchingDirectMatches ? (
+                ) : trimmedSearchQuery.length > 0 && displayCoins.length === 0 && isSearchingDirectMatches ? (
                   <ExploreTableMessage title="Searching creators..." detail="Checking direct handle/profile matches." />
-                ) : trimmedSearchQuery.length > 0 && filteredCoins.length === 0 && isFetchingNextPage ? (
+                ) : trimmedSearchQuery.length > 0 && displayCoins.length === 0 && isFetchingNextPage ? (
                   <ExploreTableMessage title="Searching more creators..." detail="Scanning additional pages for matches." />
-                ) : filteredCoins.length === 0 ? (
+                ) : displayCoins.length === 0 ? (
                   <ExploreTableMessage title={trimmedSearchQuery ? 'No creators found matching your search' : 'No creators available'} />
                 ) : (
-                  filteredCoins.map((coin, index) => {
+                  displayCoins.map((coin, index) => {
                     const rowId = coin.address ? String(coin.address).toLowerCase() : `row-${index}`
                     const isExpanded = expandedFees === rowId
                     return (
@@ -655,7 +719,7 @@ export function ExploreCreators() {
           />
         </>
       }
-      footer={!isLoading && filteredCoins.length > 0 ? `Showing ${filteredCoins.length} creators` : null}
+      footer={!isLoading && displayCoins.length > 0 ? `Showing ${displayCoins.length} creators` : null}
     />
   )
 }
