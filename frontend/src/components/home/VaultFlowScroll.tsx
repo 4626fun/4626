@@ -829,10 +829,14 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
     },
   )
   const depositFillWidth = useTransform(depositFillPct, v => `${(Math.min(v, 1) * 100).toFixed(1)}%`)
-  // Zorb fill overlay — orange liquid rises inside the sphere as akita pours in
-  const zorbFillClip = useTransform(depositFillPct, v =>
+  // Zorb fill overlay — orange liquid rises inside the sphere as akita pours in.
+  // Both suppressed for reduced-motion users (skip clip-path repaint on every frame).
+  const _zorbFillClipBase = useTransform(depositFillPct, v =>
     `inset(${((1 - Math.min(v, 1)) * 100).toFixed(1)}% 0 0 0 round 50%)`)
-  const zorbFillOp = useTransform(scroll, [0.34, 0.38, 0.48, 0.54], [0, 0.70, 0.70, 0])
+  const zorbFillClip = useTransform(_zorbFillClipBase, v =>
+    prefersReducedMotion ? 'inset(0% 0 0 0 round 50%)' : v)
+  const _zorbFillOpBase = useTransform(scroll, [0.34, 0.38, 0.48, 0.54], [0, 0.70, 0.70, 0])
+  const zorbFillOp = useTransform(_zorbFillOpBase, v => prefersReducedMotion ? 0 : v)
   // "Vault initiated" confirmation badge — flashes after fill completes
   const vaultInitOp = useTransform(scroll, [0.50, 0.53, 0.55, 0.60], [0, 1, 1, 0])
 
@@ -1117,7 +1121,7 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
                     transition: 'transform 0.5s cubic-bezier(0.22,1,0.36,1)',
                     background: 'rgba(7,7,19,0.90)',
                     border: '1px solid rgba(255,255,255,0.08)',
-                    backdropFilter: 'blur(20px)',
+                    backdropFilter: prefersReducedMotion ? 'none' : 'blur(20px)',
                     boxShadow: '0 8px 32px -8px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.04)',
                   }}
                   onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.transform = 'rotateY(0deg)')}

@@ -23,6 +23,8 @@ Use `.cursor/rules/product-builder-workflow.mdc` as the generic feature-shaping 
 
 Path-scoped or topic-scoped rules in `.cursor/rules/*.mdc` are authoritative inside their scope and override the generic builder workflow when they conflict. In particular:
 
+- `.cursor/rules/product-builder-workflow.mdc` owns the generic feature-shaping workflow when no stricter domain rule applies.
+- `.cursor/rules/4626 secur-agent guardrails for repo-native implementation.mdc` adds generic secure-automation process guidance without overriding product-specific invariants.
 - `.cursor/rules/ERC-4337-Wallet-Invariants.mdc` owns canonical wallet/account selection.
 - `.cursor/rules/csw-agent-lifecycle.mdc` owns CSW delegation, XMTP identity, ERC-8004 identity, and deploy-session wallet mechanics.
 - `.cursor/rules/waitlist-onboarding-simplicity.mdc` owns waitlist/signup simplification inside its scoped auth and waitlist files.
@@ -103,6 +105,7 @@ Canonical wallet/account selection is defined in `.cursor/rules/ERC-4337-Wallet-
   - if the email is new, create the 4626 account through Privy
   - if the email already exists, attach Telegram to that existing account
 - **Base and Zora are login/linking paths, not separate account systems.** They must still resolve into the same verified-email-based 4626 account model.
+- **The Base referral flow is an acquisition path into the same canonical-wallet policy, not a second canonical-wallet model.** If a user is routed through Base app to finish CSW setup, they still return to the single canonical wallet/account rules defined in `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
 - **`linked` / `waitlist-joined` is not the same as wallet-ready.** Verified email plus successful channel binding or waitlist join can complete without immediate CSW owner confirmation.
 - **`execution-ready` / wallet-ready requires canonical-wallet completion.** The account must have a Privy embedded EOA, and if the user already has a canonical Coinbase Smart Wallet, that embedded EOA must be installed as an owner on the CSW and confirmed onchain.
 - **Features that require canonical wallet execution must stay gated until the account is `execution-ready`.**
