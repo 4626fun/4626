@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
 import { useInfiniteQuery } from '@tanstack/react-query'
 
-import { ExploreHorizontalScrollArrows } from '@/components/explore/ExploreHorizontalScrollArrows'
+import { ExplorePageShell } from '@/components/explore/ExplorePageShell'
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
 import { ExploreMetricsDashboard } from '@/components/explore/ExploreMetricsDashboard'
+import { ExploreTableSurface } from '@/components/explore/ExploreTableSurface'
 import { PoolRow, PoolTableHeader, PoolRowSkeleton } from '@/components/explore/PoolRow'
 import { ExploreLoadMoreButton, ExploreLoadingMoreRows, ExploreTableMessage } from '@/components/explore/ExploreUiPrimitives'
 import { useExploreHorizontalTableSync } from '@/components/explore/useExploreHorizontalTableSync'
@@ -106,67 +106,72 @@ export function ExploreContent() {
   }, [currentTimeFilter])
 
   return (
-    <div className="relative min-h-screen pt-1 sm:pt-2">
-      <div className="max-w-[1400px] mx-auto px-3 sm:px-6 pt-2 sm:pt-4 pb-4 sm:pb-8">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="mb-4 sm:mb-6"
-        >
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-medium text-white mb-1 sm:mb-2">
-            Top Content on Base
-          </h1>
-          <p className="text-zinc-400 text-[13px] sm:text-sm">
-            Content Coins ranked by volume, market cap, and more.
-          </p>
+    <ExplorePageShell
+      title="Top Content on Base"
+      subtitle="Content Coins ranked by volume, market cap, and more."
+      headerContent={<ExploreMetricsDashboard className="mt-4 sm:mt-6" />}
+      subnav={
+        <ExploreSubnav
+          searchPlaceholder="Search content"
+          searchValue={searchQuery}
+          onSearch={handleSearchChange}
+          onTimeFilterChange={handleTimeFilterChange}
+          onSortChange={handleSortChange}
+          currentTimeFilter={currentTimeFilter}
+          currentSort={currentSort}
+          volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}
+        />
+      }
+      table={
+        <>
+          <ExploreTableSurface
+            headerId="explore-content-header"
+            bodyId="explore-content-body"
+            onHeaderScroll={handleHeaderScroll}
+            onBodyScroll={handleBodyScroll}
+            header={<PoolTableHeader timeframe={currentTimeFilter} currentSort={currentSort} onSortChange={handleSortChange} />}
+            body={
+              <>
+                {isLoading ? (
+                  Array.from({ length: 10 }).map((_, i) => <PoolRowSkeleton key={i} />)
+                ) : isError ? (
+                  <ExploreTableMessage title="Failed to load content" detail={(error as Error)?.message || 'Unknown error'} />
+                ) : filteredCoins.length === 0 ? (
+                  <ExploreTableMessage title={searchQuery ? 'No content found matching your search' : 'No content available'} />
+                ) : (
+                  filteredCoins.map((coin, index) => {
+                    const rowId = coin.address ? String(coin.address).toLowerCase() : `row-${index}`
+                    const isExpanded = expandedFees === rowId
+                    return (
+                      <PoolRow
+                        key={coin.address || index}
+                        rank={index + 1}
+                        coin={coin}
+                        timeframe={currentTimeFilter}
+                        migratedCoins={migratedCoins ?? undefined}
+                        isExpanded={isExpanded}
+                        onToggleFees={() => setExpandedFees((prev) => (prev === rowId ? null : rowId))}
+                      />
+                    )
+                  })
+                )}
 
-          <ExploreMetricsDashboard className="mt-4 sm:mt-6" />
-        </motion.div>
+                <ExploreLoadingMoreRows
+                  isFetchingNextPage={isFetchingNextPage}
+                  renderSkeletonRow={() => <PoolRowSkeleton />}
+                />
 
-        {/* Navigation & Filters */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-          className="mb-6"
-        >
-          <ExploreSubnav
-            searchPlaceholder="Search content"
-            searchValue={searchQuery}
-            onSearch={handleSearchChange}
-            onTimeFilterChange={handleTimeFilterChange}
-            onSortChange={handleSortChange}
-            currentTimeFilter={currentTimeFilter}
-            currentSort={currentSort}
-            volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}
-          />
-        </motion.div>
-
-        {/* Pool Table */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.2 }}
-          className="vault-surface relative overflow-hidden"
-        >
-          {/* Sticky header - outside horizontal scroll to preserve sticky behavior */}
-          <div className="sticky top-0 z-50 border-b border-white/8 bg-vault-bg shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
-            <div 
-              className="overflow-x-auto scrollbar-hide" 
-              id="explore-content-header"
-              data-scrolled="0"
-              onScroll={handleHeaderScroll}
-            >
-              <div className="min-w-max">
-                <PoolTableHeader timeframe={currentTimeFilter} currentSort={currentSort} onSortChange={handleSortChange} />
-              </div>
-            </div>
-          </div>
-
-          <ExploreHorizontalScrollArrows
-            hasOverflow={hasHorizontalOverflow}
+                <ExploreLoadMoreButton
+                  hasNextPage={Boolean(hasNextPage)}
+                  isFetchingNextPage={isFetchingNextPage}
+                  onLoadMore={() => {
+                    void fetchNextPage()
+                  }}
+                  containerClassName="px-6 py-4 border-t border-zinc-800 flex justify-center"
+                />
+              </>
+            }
+            hasHorizontalOverflow={hasHorizontalOverflow}
             canScrollLeft={canScrollLeft}
             canScrollRight={canScrollRight}
             onScrollLeft={() => handleArrowClick('left', columnScrollStops)}
@@ -174,73 +179,9 @@ export function ExploreContent() {
             leftAriaLabel="Scroll content table left"
             rightAriaLabel="Scroll content table right"
           />
-
-          {/* Table body with synced horizontal scroll */}
-          <div 
-            className="overflow-x-auto scrollbar-hide" 
-            id="explore-content-body"
-            data-scrolled="0"
-            onScroll={handleBodyScroll}
-          >
-            <div className="min-w-max divide-y divide-white/6">
-              {isLoading ? (
-                // Loading skeletons
-                Array.from({ length: 10 }).map((_, i) => <PoolRowSkeleton key={i} />)
-              ) : isError ? (
-                // Error state
-                <ExploreTableMessage title="Failed to load content" detail={(error as Error)?.message || 'Unknown error'} />
-              ) : filteredCoins.length === 0 ? (
-                // Empty state
-                <ExploreTableMessage title={searchQuery ? 'No content found matching your search' : 'No content available'} />
-              ) : (
-                // Pool rows
-                filteredCoins.map((coin, index) => {
-                  const rowId = coin.address ? String(coin.address).toLowerCase() : `row-${index}`
-                  const isExpanded = expandedFees === rowId
-                  return (
-                    <PoolRow
-                      key={coin.address || index}
-                      rank={index + 1}
-                      coin={coin}
-                      timeframe={currentTimeFilter}
-                      migratedCoins={migratedCoins ?? undefined}
-                      isExpanded={isExpanded}
-                      onToggleFees={() => setExpandedFees((prev) => (prev === rowId ? null : rowId))}
-                    />
-                  )
-                })
-              )}
-
-              {/* Loading more indicator */}
-              <ExploreLoadingMoreRows
-                isFetchingNextPage={isFetchingNextPage}
-                renderSkeletonRow={() => <PoolRowSkeleton />}
-              />
-
-              <ExploreLoadMoreButton
-                hasNextPage={Boolean(hasNextPage)}
-                isFetchingNextPage={isFetchingNextPage}
-                onLoadMore={() => {
-                  void fetchNextPage()
-                }}
-                containerClassName="px-6 py-4 border-t border-zinc-800 flex justify-center"
-              />
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Stats footer */}
-        {!isLoading && filteredCoins.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.4, delay: 0.3 }}
-            className="mt-4 text-center text-xs text-zinc-600"
-          >
-            Showing {filteredCoins.length} content coins
-          </motion.div>
-        )}
-      </div>
-    </div>
+        </>
+      }
+      footer={!isLoading && filteredCoins.length > 0 ? `Showing ${filteredCoins.length} content coins` : null}
+    />
   )
 }

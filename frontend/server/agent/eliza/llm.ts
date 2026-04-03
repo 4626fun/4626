@@ -1,5 +1,6 @@
 import { AgentError } from './_errors.js'
 import { DailyBudgetGuard, parsePositiveNumber } from './_rateLimit.js'
+import { redactTextForRemoteAi } from '../../_lib/agentControl/redaction.js'
 import { logger } from '../../_lib/logger.js'
 import { emitTelemetryEvent } from '../../_lib/telemetry.js'
 import { readServerEnvVar } from '../../_lib/serverEnv.js'
@@ -405,8 +406,20 @@ class ElizaLlmService {
       return { text: null, provider: null, attempts: [] }
     }
 
-    const trimmedUserMessage = params.userMessage.slice(0, this.maxInputChars)
-    const systemBlock = `${params.systemPrompt}\n\n${params.vaultContext}`.trim()
+    const safeUserMessage = redactTextForRemoteAi(params.userMessage, {
+      maxStringLength: this.maxInputChars * 2,
+      maskAddresses: true,
+    })
+    const safeSystemPrompt = redactTextForRemoteAi(params.systemPrompt, {
+      maxStringLength: this.maxInputChars * 2,
+      maskAddresses: true,
+    })
+    const safeVaultContext = redactTextForRemoteAi(params.vaultContext, {
+      maxStringLength: this.maxInputChars * 2,
+      maskAddresses: true,
+    })
+    const trimmedUserMessage = safeUserMessage.slice(0, this.maxInputChars)
+    const systemBlock = `${safeSystemPrompt}\n\n${safeVaultContext}`.trim()
     const messages = [
       { role: 'system', content: systemBlock },
       { role: 'user', content: trimmedUserMessage },

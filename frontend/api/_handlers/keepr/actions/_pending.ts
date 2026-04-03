@@ -4,12 +4,19 @@ import {
   type ApiEnvelope,
   handleOptions,
   requireKeeprApiKey,
+  requireOptionalHeaderEnvAuth,
   setCors,
   setNoStore,
   getDb,
 } from '../../../../packages/server-core/src/index.js'
 
 import { ensureKeeprSchema } from '../../../../server/_lib/keeprSchema.js'
+import {
+  KEEPR_TRUST_ZONE_KEY_HEADER,
+  getKeeprTrustZoneEnvKey,
+  parseKeeprTrustZone,
+  resolveKeeprTrustZone,
+} from '../../../../server/_lib/agentControl/trustZones.js'
 
 
 declare const process: { env: Record<string, string | undefined> }
@@ -19,6 +26,7 @@ type PendingAction = {
   vaultAddress: string
   groupId: string
   actionType: string | null
+  trustZone: string
   action: unknown
   dedupeKey: string | null
   status: string
@@ -53,6 +61,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!requireKeeprApiKey(req, res, { missingSecretError: 'Server misconfigured' })) return
 
   try {
+    const requestedZone = parseKeeprTrustZone(req.query.zone)
+    if (
+      requestedZone &&
+      !requireOptionalHeaderEnvAuth(req, res, {
+        envKey: getKeeprTrustZoneEnvKey(requestedZone),
+        headerName: KEEPR_TRUST_ZONE_KEY_HEADER,
+        unauthorizedError: `Unauthorized trust zone: ${requestedZone}`,
+      })
+    ) {
+      return
+    }
+
     const db = await getDb()
     if (!db) {
       return res.status(500).json({ success: false, error: 'Database not configured' } satisfies ApiEnvelope<never>)
@@ -73,18 +93,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       LIMIT ${limit};
     `
 
-    const actions: PendingAction[] = (result.rows ?? []).map((row: any) => ({
+    const actions: PendingAction[] = (result.rows ?? [])
+      .map((row: any) => ({
       id: Number(row.id),
       vaultAddress: String(row.vault_address),
       groupId: String(row.group_id),
       actionType: row.action_type ? String(row.action_type) : null,
+      trustZone: resolveKeeprTrustZone(row.action_type ? String(row.action_type) : null),
       action: row.action,
       dedupeKey: row.dedupe_key ? String(row.dedupe_key) : null,
       status: String(row.status),
       attemptCount: Number(row.attempt_count ?? 0),
       lastError: row.last_error ? String(row.last_error) : null,
       createdAt: row.created_at ? new Date(row.created_at).toISOString() : '',
-    }))
+      }))
+      .filter((row) => (requestedZone ? row.trustZone === requestedZone : true))
 
     return res.status(200).json({
       success: true,

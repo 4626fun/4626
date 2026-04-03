@@ -1,6 +1,11 @@
 ---
 description: Canonical frontend SEO, indexing, metadata, and performance policy
-alwaysApply: true
+globs:
+  - frontend/src/**
+  - frontend/index.html
+  - frontend/public/robots.txt
+  - frontend/public/sitemap*
+alwaysApply: false
 ---
 
 # Frontend SEO Core Policy (4626.fun)
@@ -52,8 +57,7 @@ Performance is an SEO feature:
 - Explicitly call out any change likely to regress performance.
 
 Internal linking:
-- Apply link structure using `frontend-seo-internal-linking.mdc`.
-- Never recommend links to parameterized or `noindex` variants when a canonical entity/hub route exists.
+- Apply link structure and link-safety rules using `frontend-seo-internal-linking.mdc`.
 
 Content guardrails:
 - Do not add AI fluff, keyword stuffing, doorway pages, or thin list pages.

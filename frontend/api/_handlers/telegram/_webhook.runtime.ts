@@ -20,6 +20,9 @@ import { ensureAccountsIdentitySchema, fetchCreatorCoinSummary } from '../../../
 import { getKeeprVaultByGroupId, getKeeprVaultByVaultAddress } from '../../../server/_lib/keeprRegistry.js'
 import { ensureKeeprSchema } from '../../../server/_lib/keeprSchema.js'
 import { extractCreatorCoinAddressFromProfile, fetchZoraProfile } from '../../../server/_lib/zoraProfile.js'
+import { appendControlAuditEvent } from '../../../server/_lib/agentControl/audit.js'
+import { evaluatePolicy } from '../../../server/_lib/agentControl/policy.js'
+import { createActionProposal, createControlCapability, normalizeAddressOrNull, nowIso } from '../../../server/_lib/agentControl/types.js'
 
 import { resolveBaseAppInviteUrl as resolveBaseAppInviteUrlShared } from '../../../server/_lib/baseAppInvite.js'
 import {
@@ -5930,6 +5933,48 @@ function buildTradeSignalReplyMarkup(params: {
   }
 }
 
+const TELEGRAM_TRADE_CONTROL_SUBSYSTEM = 'telegram_trade'
+const TELEGRAM_TRADE_CONTROL_ACTIONS = ['trade.buy', 'trade.sell', 'trade.bid'] as const
+
+function controlTradeAction(actionType: 'buy' | 'sell' | 'bid'): (typeof TELEGRAM_TRADE_CONTROL_ACTIONS)[number] {
+  return `trade.${actionType}` as (typeof TELEGRAM_TRADE_CONTROL_ACTIONS)[number]
+}
+
+async function appendControlAuditBestEffort(
+  params: Parameters<typeof appendControlAuditEvent>[0],
+): Promise<void> {
+  await appendControlAuditEvent(params).catch(() => undefined)
+}
+
+function resolveTradeAmountForPolicy(params: {
+  actionType: 'buy' | 'sell' | 'bid'
+  amountInput: string
+  amountEth: number
+  usdEstimate: number
+}): { unit: string; value: number } | undefined {
+  if (params.actionType === 'buy') {
+    if (Number.isFinite(params.amountEth) && params.amountEth > 0) {
+      return { unit: 'eth', value: params.amountEth }
+    }
+    const amountInput = Number(params.amountInput)
+    if (Number.isFinite(amountInput) && amountInput > 0) {
+      return { unit: 'eth', value: amountInput }
+    }
+    return undefined
+  }
+  if (params.actionType === 'sell') {
+    const amountInput = Number(params.amountInput)
+    if (Number.isFinite(amountInput) && amountInput > 0) {
+      return { unit: 'shares', value: amountInput }
+    }
+    return undefined
+  }
+  if (Number.isFinite(params.usdEstimate) && params.usdEstimate > 0) {
+    return { unit: 'usd', value: params.usdEstimate }
+  }
+  return undefined
+}
+
 async function handleTelegramTradeCallback(params: {
   callbackData: string
   chatId: string
@@ -6020,9 +6065,102 @@ async function handleTelegramTradeCallback(params: {
   const amountInput = asTrimmed(intent.amountInput ?? '')
   const amountEth = Number(intent.amountEth ?? 0)
   const usdEstimate = Number(intent.usdEstimate ?? 0)
+  const controlAction = controlTradeAction(actionTypeSafe)
+  const chainIdRaw = Number(intent.chainId)
+  const chainId = Number.isFinite(chainIdRaw) ? Math.trunc(chainIdRaw) : undefined
+  const scopedVaultAddress = normalizeAddressOrNull(vaultAddress)
+  const scopedCreatorCoinAddress = normalizeAddressOrNull(creatorCoinAddress)
+  const scopedTargetAddress = normalizeAddressOrNull(targetAddress)
+  const proposalCorrelationId = [
+    'tg_trade',
+    params.chatId,
+    params.userId,
+    Date.now().toString(36),
+  ]
+    .map((part) => String(part).replace(/[^a-zA-Z0-9:_-]/g, ''))
+    .join(':')
+  const capability = createControlCapability({
+    actor_type: 'telegram_user',
+    actor_id: params.userId,
+    subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+    action: controlAction,
+    confirmation_class: 'human_plus_policy',
+    issued_by: 'telegram_action_token',
+    expires_at: consumed.expiresAt,
+    scope: {
+      actor_binding: {
+        telegram_user_id: params.userId,
+      },
+    },
+    limits: {
+      ttl_seconds: 90,
+    },
+    metadata: {
+      token_id: callback.token,
+      callback_kind: callback.kind,
+      trade_action_type: actionTypeSafe,
+    },
+  })
+  const proposal = createActionProposal({
+    capability_id: capability.capability_id,
+    subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+    action: controlAction,
+    intent,
+    bounds: {
+      ...(typeof chainId === 'number' ? { chainId } : {}),
+      vaultAddress: scopedVaultAddress,
+      creatorCoinAddress: scopedCreatorCoinAddress,
+      targetAddress: scopedTargetAddress,
+      amountInput,
+      amountEth: Number.isFinite(amountEth) ? amountEth : null,
+      usdEstimate: Number.isFinite(usdEstimate) ? usdEstimate : null,
+    },
+    correlation_id: proposalCorrelationId,
+    requested_confirmation_class: 'human_plus_policy',
+    metadata: {
+      token_id: callback.token,
+      callback_kind: callback.kind,
+      consumed_at: consumed.consumedAt ?? null,
+    },
+  })
+  await appendControlAuditBestEffort({
+    db: db as any,
+    event_type: 'proposal.created',
+    proposal_id: proposal.proposal_id,
+    capability_id: capability.capability_id,
+    actor_type: 'telegram_user',
+    actor_id: params.userId,
+    subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+    action: controlAction,
+    status: 'allow',
+    correlation_id: proposalCorrelationId,
+    metadata: {
+      token_id: callback.token,
+      trade_action_type: actionTypeSafe,
+      chat_id: params.chatId,
+    },
+  })
 
   const link = await getTelegramLinkByUserId({ db: db as any, telegramUserId: params.userId })
   if (!link || link.linkStatus !== 'active' || !link.ownerVerified) {
+    await appendControlAuditBestEffort({
+      db: db as any,
+      event_type: 'proposal.denied',
+      proposal_id: proposal.proposal_id,
+      capability_id: capability.capability_id,
+      actor_type: 'telegram_user',
+      actor_id: params.userId,
+      subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+      action: controlAction,
+      status: 'deny',
+      correlation_id: proposalCorrelationId,
+      reason: 'link_not_active_or_verified',
+      metadata: {
+        link_present: Boolean(link),
+        link_status: link?.linkStatus ?? null,
+        owner_verified: link?.ownerVerified ?? null,
+      },
+    })
     emitTelegramFunnelEvent({
       db,
       telegramUserId: params.userId,
@@ -6052,6 +6190,39 @@ async function handleTelegramTradeCallback(params: {
   }
 
   if (callback.kind === 'decline') {
+    await appendControlAuditBestEffort({
+      db: db as any,
+      event_type: 'confirmation.rejected',
+      proposal_id: proposal.proposal_id,
+      capability_id: capability.capability_id,
+      actor_type: 'telegram_user',
+      actor_id: params.userId,
+      subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+      action: controlAction,
+      status: 'deny',
+      correlation_id: proposalCorrelationId,
+      reason: 'user_declined_confirmation',
+      metadata: {
+        token_id: callback.token,
+        token_consumed_at: consumed.consumedAt ?? null,
+      },
+    })
+    await appendControlAuditBestEffort({
+      db: db as any,
+      event_type: 'proposal.denied',
+      proposal_id: proposal.proposal_id,
+      capability_id: capability.capability_id,
+      actor_type: 'telegram_user',
+      actor_id: params.userId,
+      subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+      action: controlAction,
+      status: 'deny',
+      correlation_id: proposalCorrelationId,
+      reason: 'user_declined_confirmation',
+      metadata: {
+        token_id: callback.token,
+      },
+    })
     tradeFlowState = reduceTradeFlowState(tradeFlowState, {
       type: 'DECLINE',
       actionType: actionTypeSafe,
@@ -6083,6 +6254,23 @@ async function handleTelegramTradeCallback(params: {
       callbackToast: `${actionTypeSafe.toUpperCase()} declined`,
     }
   }
+
+  await appendControlAuditBestEffort({
+    db: db as any,
+    event_type: 'confirmation.accepted',
+    proposal_id: proposal.proposal_id,
+    capability_id: capability.capability_id,
+    actor_type: 'telegram_user',
+    actor_id: params.userId,
+    subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+    action: controlAction,
+    status: 'allow',
+    correlation_id: proposalCorrelationId,
+    metadata: {
+      token_id: callback.token,
+      token_consumed_at: consumed.consumedAt ?? null,
+    },
+  })
 
   const tradePolicy = await getTelegramChatTradePolicy({
     db: db as any,
@@ -6148,6 +6336,22 @@ async function handleTelegramTradeCallback(params: {
 
   const canonicalSenderWallet = toCanonicalWalletOrNull(link.canonicalCswAddress)
   if (!canonicalSenderWallet) {
+    await appendControlAuditBestEffort({
+      db: db as any,
+      event_type: 'policy.denied',
+      proposal_id: proposal.proposal_id,
+      capability_id: capability.capability_id,
+      actor_type: 'telegram_user',
+      actor_id: params.userId,
+      subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+      action: controlAction,
+      status: 'deny',
+      correlation_id: proposalCorrelationId,
+      reason: 'canonical_wallet_missing',
+      metadata: {
+        token_id: callback.token,
+      },
+    })
     emitTelegramFunnelEvent({
       db,
       telegramUserId: params.userId,
@@ -6165,6 +6369,84 @@ async function handleTelegramTradeCallback(params: {
     }
   }
 
+  const policyResult = evaluatePolicy({
+    capability,
+    proposal,
+    context: {
+      actor_type: 'telegram_user',
+      actor_id: params.userId,
+      telegram_user_id: params.userId,
+      chat_id: params.chatId,
+      canonical_wallet: canonicalSenderWallet,
+      subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+      action: controlAction,
+      ...(typeof chainId === 'number' ? { chain_id: chainId } : {}),
+      ...(scopedVaultAddress ? { vault_address: scopedVaultAddress } : {}),
+      ...(scopedCreatorCoinAddress ? { creator_coin_address: scopedCreatorCoinAddress } : {}),
+      group_id: params.groupId,
+      target: scopedTargetAddress ?? undefined,
+      amount: resolveTradeAmountForPolicy({
+        actionType: actionTypeSafe,
+        amountInput,
+        amountEth,
+        usdEstimate,
+      }),
+      replay_key: callback.token,
+      now_ms: Number.isFinite(Date.parse(consumed.consumedAt ?? ''))
+        ? Date.parse(consumed.consumedAt ?? '')
+        : Date.now(),
+      confirmation: {
+        confirmation_class: 'human_plus_policy',
+        approved: true,
+        approved_at: consumed.consumedAt ?? nowIso(),
+        approval_actor_id: params.userId,
+        token_id: callback.token,
+        token_consumed_at: consumed.consumedAt ?? nowIso(),
+      },
+    },
+    allowlist: {
+      subsystems: [TELEGRAM_TRADE_CONTROL_SUBSYSTEM],
+      actions: [...TELEGRAM_TRADE_CONTROL_ACTIONS],
+      targets: scopedTargetAddress ? [scopedTargetAddress] : undefined,
+    },
+  })
+  if (!policyResult.allowed) {
+    await appendControlAuditBestEffort({
+      db: db as any,
+      event_type: 'policy.denied',
+      proposal_id: proposal.proposal_id,
+      capability_id: capability.capability_id,
+      actor_type: 'telegram_user',
+      actor_id: params.userId,
+      subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+      action: controlAction,
+      status: 'deny',
+      correlation_id: proposalCorrelationId,
+      reason: policyResult.reason,
+      error_code: policyResult.deny_code,
+      metadata: policyResult.details ?? {},
+    })
+    emitTelegramFunnelEvent({
+      db,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      eventName: 'trade_confirm_failed',
+      actionType: actionTypeSafe,
+      context: {
+        reason: policyResult.deny_code,
+      },
+    })
+    return {
+      text: [
+        'Trade blocked',
+        '',
+        'Security policy denied this request. Please run the trade command again to create a fresh preview.',
+      ].join('\n'),
+      callbackToast: 'Policy blocked',
+      replyMarkup: buildTradeRecoveryReplyMarkup(),
+    }
+  }
+
   if ((actionTypeSafe === 'buy' || actionTypeSafe === 'sell') && isAddressLike(creatorCoinAddress) && amountInput) {
     tradeFlowState = reduceTradeFlowState(tradeFlowState, {
       type: 'ACCEPT',
@@ -6172,6 +6454,22 @@ async function handleTelegramTradeCallback(params: {
       token: callback.token,
     })
     const commandText = `/coin ${actionTypeSafe} ${creatorCoinAddress} ${amountInput}`
+    await appendControlAuditBestEffort({
+      db: db as any,
+      event_type: 'execution.started',
+      proposal_id: proposal.proposal_id,
+      capability_id: capability.capability_id,
+      actor_type: 'telegram_user',
+      actor_id: params.userId,
+      subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+      action: controlAction,
+      status: 'allow',
+      correlation_id: proposalCorrelationId,
+      metadata: {
+        mode: 'keepr_coin_command',
+        commandText,
+      },
+    })
     const execution = await executeDeterministicCommand({
       groupId: params.groupId,
       senderWallet: canonicalSenderWallet,
@@ -6199,6 +6497,25 @@ async function handleTelegramTradeCallback(params: {
       },
       status,
       errorMessage: execution.ok ? null : asTrimmed(execution.rawResponseText),
+    })
+    await appendControlAuditBestEffort({
+      db: db as any,
+      event_type: execution.ok ? 'execution.succeeded' : 'execution.failed',
+      proposal_id: proposal.proposal_id,
+      capability_id: capability.capability_id,
+      actor_type: 'telegram_user',
+      actor_id: params.userId,
+      subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+      action: controlAction,
+      status: execution.ok ? 'success' : 'failed',
+      correlation_id: proposalCorrelationId,
+      ...(execution.ok ? {} : { reason: asTrimmed(execution.rawResponseText) || 'execution_failed' }),
+      ...(execution.ok ? {} : { error_code: 'keepr_coin_command_failed' }),
+      metadata: {
+        mode: 'keepr_coin_command',
+        commandText,
+        ok: execution.ok,
+      },
     })
     if (execution.ok) {
       emitTelegramFunnelEvent({
@@ -6260,6 +6577,19 @@ async function handleTelegramTradeCallback(params: {
     const amountWeiRaw = asTrimmed((intent as any)?.bid?.amountWei ?? '')
     const usdIntent = Number(intent.usdEstimate ?? 0)
     if (!isAddressLike(strategyAddressRaw) || !isAddressLike(auctionAddressRaw) || !maxPriceQ96Raw || !amountWeiRaw) {
+      await appendControlAuditBestEffort({
+        db: db as any,
+        event_type: 'proposal.denied',
+        proposal_id: proposal.proposal_id,
+        capability_id: capability.capability_id,
+        actor_type: 'telegram_user',
+        actor_id: params.userId,
+        subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+        action: controlAction,
+        status: 'deny',
+        correlation_id: proposalCorrelationId,
+        reason: 'invalid_bid_payload',
+      })
       emitTelegramFunnelEvent({
         db,
         telegramUserId: params.userId,
@@ -6282,6 +6612,22 @@ async function handleTelegramTradeCallback(params: {
       }
     }
 
+    await appendControlAuditBestEffort({
+      db: db as any,
+      event_type: 'execution.started',
+      proposal_id: proposal.proposal_id,
+      capability_id: capability.capability_id,
+      actor_type: 'telegram_user',
+      actor_id: params.userId,
+      subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+      action: controlAction,
+      status: 'allow',
+      correlation_id: proposalCorrelationId,
+      metadata: {
+        mode: 'cca_bid_userop',
+      },
+    })
+
     try {
       const freshQuote = await readCcaAuctionQuote({
         ccaStrategyAddress: strategyAddressRaw as `0x${string}`,
@@ -6293,6 +6639,24 @@ async function handleTelegramTradeCallback(params: {
         const diff = previousAmountWei > nextAmountWei ? previousAmountWei - nextAmountWei : nextAmountWei - previousAmountWei
         const driftBps = Number((diff * 10_000n) / previousAmountWei)
         if (driftBps > 300) {
+          await appendControlAuditBestEffort({
+            db: db as any,
+            event_type: 'execution.failed',
+            proposal_id: proposal.proposal_id,
+            capability_id: capability.capability_id,
+            actor_type: 'telegram_user',
+            actor_id: params.userId,
+            subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+            action: controlAction,
+            status: 'failed',
+            correlation_id: proposalCorrelationId,
+            reason: 'bid_drift_exceeded',
+            error_code: 'bid_drift_exceeded',
+            error_message: `drift_bps_${driftBps}`,
+            metadata: {
+              driftBps,
+            },
+          })
           emitTelegramFunnelEvent({
             db,
             telegramUserId: params.userId,
@@ -6410,6 +6774,22 @@ async function handleTelegramTradeCallback(params: {
         status: 'executed',
         txHash: execution.txHash,
       })
+      await appendControlAuditBestEffort({
+        db: db as any,
+        event_type: 'execution.succeeded',
+        proposal_id: proposal.proposal_id,
+        capability_id: capability.capability_id,
+        actor_type: 'telegram_user',
+        actor_id: params.userId,
+        subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+        action: controlAction,
+        status: 'success',
+        correlation_id: proposalCorrelationId,
+        metadata: {
+          mode: 'cca_bid_userop',
+          txHash: execution.txHash,
+        },
+      })
       emitTelegramFunnelEvent({
         db,
         telegramUserId: params.userId,
@@ -6468,6 +6848,21 @@ async function handleTelegramTradeCallback(params: {
         status: 'failed',
         errorCode: helperCode ?? message,
         errorMessage: helperRetryable === null ? message : `${message} (retryable=${helperRetryable ? 'true' : 'false'})`,
+      })
+      await appendControlAuditBestEffort({
+        db: db as any,
+        event_type: 'execution.failed',
+        proposal_id: proposal.proposal_id,
+        capability_id: capability.capability_id,
+        actor_type: 'telegram_user',
+        actor_id: params.userId,
+        subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+        action: controlAction,
+        status: 'failed',
+        correlation_id: proposalCorrelationId,
+        reason: helperCode ?? message,
+        error_code: helperCode ?? 'bid_execution_failed',
+        error_message: helperRetryable === null ? message : `${message} (retryable=${helperRetryable ? 'true' : 'false'})`,
       })
       emitTelegramFunnelEvent({
         db,

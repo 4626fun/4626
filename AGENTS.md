@@ -15,7 +15,18 @@ Optional components: XMTP Keepr Agent (`frontend/server/agent/eliza/`), CRE auto
 
 ### Default working style
 
-When a user brings an idea or asks for a feature, default to a builder workflow: clarify the problem, reduce the MVP, design a simple system, choose the smallest proven stack, break work into steps, then implement and iterate. Prefer speed, clarity, and maintainability over enterprise-style overengineering.
+Use `.cursor/rules/product-builder-workflow.mdc` as the generic feature-shaping workflow: clarify the problem, reduce the MVP, design a simple system, choose the smallest proven stack, break work into steps, then implement and iterate. Prefer speed, clarity, and maintainability over enterprise-style overengineering.
+
+### Rule precedence
+
+`AGENTS.md` is the repo-level authority for architecture, operations, and cross-cutting product invariants.
+
+Path-scoped or topic-scoped rules in `.cursor/rules/*.mdc` are authoritative inside their scope and override the generic builder workflow when they conflict. In particular:
+
+- `.cursor/rules/ERC-4337-Wallet-Invariants.mdc` owns canonical wallet/account selection.
+- `.cursor/rules/csw-agent-lifecycle.mdc` owns CSW delegation, XMTP identity, ERC-8004 identity, and deploy-session wallet mechanics.
+- `.cursor/rules/waitlist-onboarding-simplicity.mdc` owns waitlist/signup simplification inside its scoped auth and waitlist files.
+- `.cursor/rules/frontend-seo-core.mdc` and `.cursor/rules/frontend-seo-internal-linking.mdc` own frontend SEO policy inside `frontend/`.
 
 Do not preserve legacy routes, aliases, or compatibility shims just for backward compatibility. When replacing a path or interface, migrate active callers and remove the old surface unless product explicitly requires a staged rollout.
 
@@ -76,6 +87,8 @@ Creator Coins and Share tokens are separate assets and must never be treated as 
 
 These are product-level rules, not implementation suggestions. Future auth/onboarding work must preserve them unless product explicitly changes direction.
 
+Canonical wallet/account selection is defined in `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`, and delegated signer / agent lifecycle mechanics are defined in `.cursor/rules/csw-agent-lifecycle.mdc`. This section defines the product-facing account states layered on top of those rules.
+
 - **Verified email is the canonical 4626 identity and recovery key.**
 - **No 4626 account is considered fully created until email OTP verification completes.**
 - **All entry points converge to the same account model**: website, Base app, and Telegram must resolve into one 4626 account model keyed by verified email.
@@ -90,10 +103,10 @@ These are product-level rules, not implementation suggestions. Future auth/onboa
   - if the email is new, create the 4626 account through Privy
   - if the email already exists, attach Telegram to that existing account
 - **Base and Zora are login/linking paths, not separate account systems.** They must still resolve into the same verified-email-based 4626 account model.
-- **Every fully onboarded account must have a Privy embedded EOA.**
-- **If the user has a canonical Coinbase Smart Wallet, the Privy embedded EOA must be installed as an owner on that CSW and confirmed onchain.**
+- **`linked` / `waitlist-joined` is not the same as wallet-ready.** Verified email plus successful channel binding or waitlist join can complete without immediate CSW owner confirmation.
+- **`execution-ready` / wallet-ready requires canonical-wallet completion.** The account must have a Privy embedded EOA, and if the user already has a canonical Coinbase Smart Wallet, that embedded EOA must be installed as an owner on the CSW and confirmed onchain.
+- **Features that require canonical wallet execution must stay gated until the account is `execution-ready`.**
 - **If the user does not yet have a CSW, route them to Base app with the referral flow, then resume CSW owner-installation when they return.**
-- **Features that require canonical wallet execution must stay gated until CSW setup and owner confirmation are complete.**
 - **Cross-account Telegram conflicts must not auto-merge silently.** If a Telegram identity is already attached elsewhere, force explicit recovery/merge UX.
 - **Website sign-in should use email OTP by default.** Do not assume Telegram is the primary website login flow unless product explicitly changes this rule later.
 - **Do not preserve legacy auth paths just for backward compatibility.** If an old path conflicts with these invariants, remove or migrate it.
@@ -115,7 +128,7 @@ The Telegram Mini App account-link/onboarding flow must follow strict architectu
 
 - OTP must be handled **inline inside the Mini App**.
 - Do NOT use Privy modal or popup flows inside Telegram WebView.
-- OTP verification success is **not equivalent** to account/session readiness.
+- OTP verification success is **not equivalent** to account/session readiness or `execution-ready` wallet status.
 - A distinct `wait_for_privy_sync` phase must exist.
 
 ### State Integrity
@@ -145,8 +158,12 @@ Any simplification must keep this semantic order:
 2. perform inline email OTP inside the Mini App
 3. wait for verified-email account readiness + Privy sync explicitly
 4. ensure the active Privy user is linked to Telegram
-5. complete backend persistence with optional single-use link-token claim/consume
+5. complete backend persistence and consume any single-use, claim-bound link-start token on success when that tokenized path is in play
 6. keep canonical CSW / embedded-EOA rules intact without requiring immediate CSW owner confirmation for link success
+
+`Link success` here means the account/channel link can complete and the user can continue the Telegram or waitlist flow.
+
+It does **not** mean the account is `execution-ready`. Features that require canonical wallet execution remain gated until CSW owner installation and onchain confirmation finish per the Account and auth invariants and `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
 
 Do not replace this with hidden provider magic, modal auth, webhook-only
 binding, or a shortcut that binds Telegram before verified-email account

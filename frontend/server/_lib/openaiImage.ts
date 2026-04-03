@@ -1,4 +1,5 @@
 import { readServerEnvVar } from './serverEnv.js'
+import { redactTextForRemoteAi } from './agentControl/redaction.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -144,6 +145,10 @@ export async function generateImageWithOpenAi(params: GenerateParams): Promise<{
   revisedPrompt: string | null
   imageBytes: Uint8Array
 }> {
+  const safePrompt = redactTextForRemoteAi(params.prompt, {
+    maxStringLength: 3_500,
+    maskAddresses: true,
+  })
   const json = await postResponsesApi({
     model: getResponsesModel(),
     previous_response_id: params.previousResponseId ?? undefined,
@@ -151,7 +156,7 @@ export async function generateImageWithOpenAi(params: GenerateParams): Promise<{
       {
         role: 'user',
         content: [
-          { type: 'input_text', text: params.prompt },
+          { type: 'input_text', text: safePrompt },
           { type: 'input_image', image_url: toDataUrl(params.subjectBytes, params.subjectContentType) },
         ],
       },
@@ -208,9 +213,13 @@ function parseEvaluationJson(text: string): ImageEvaluation {
 }
 
 export async function evaluateImageGenerationOutput(params: EvaluateParams): Promise<ImageEvaluation> {
+  const safeBrief = redactTextForRemoteAi(params.brief, {
+    maxStringLength: 2_000,
+    maskAddresses: true,
+  })
   const rubricPrompt = [
     'You are evaluating whether a generated token icon matches the brief.',
-    `Original brief: ${params.brief}`,
+    `Original brief: ${safeBrief}`,
     'Image 1 is the generated output.',
     'Image 2 is the locked frame reference for layout context only.',
     'Image 3 is the subject reference.',

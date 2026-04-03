@@ -1,7 +1,20 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, readJsonBody, requireKeeprApiKey, setCors, setNoStore } from '../../../../packages/server-core/src/index.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  readJsonBody,
+  requireKeeprApiKey,
+  requireOptionalHeaderEnvAuth,
+  setCors,
+  setNoStore,
+} from '../../../../packages/server-core/src/index.js'
 import { executeKeeprAction } from '../../../../server/keepr/xmtpQueueExecutor.js'
+import {
+  KEEPR_TRUST_ZONE_KEY_HEADER,
+  getKeeprTrustZoneEnvKey,
+  resolveKeeprTrustZone,
+} from '../../../../server/_lib/agentControl/trustZones.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -17,6 +30,7 @@ type ExecuteResponse = {
   executed: boolean
   retryable: boolean
   actionType: string
+  trustZone: string
   error?: string
   details?: Record<string, unknown>
 }
@@ -59,6 +73,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Invalid action payload' } satisfies ApiEnvelope<never>)
   }
 
+  const trustZone = resolveKeeprTrustZone(actionType)
+  const trustZoneEnvKey = getKeeprTrustZoneEnvKey(trustZone)
+  if (
+    !requireOptionalHeaderEnvAuth(req, res, {
+      envKey: trustZoneEnvKey,
+      headerName: KEEPR_TRUST_ZONE_KEY_HEADER,
+      unauthorizedError: `Unauthorized trust zone: ${trustZone}`,
+    })
+  ) {
+    return
+  }
+
   const result = await executeKeeprAction({
     id,
     vaultAddress,
@@ -73,6 +99,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       executed: result.success,
       retryable: result.retryable,
       actionType: result.actionType,
+      trustZone,
       error: result.error,
       details: result.details,
     } satisfies ExecuteResponse,

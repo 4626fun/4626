@@ -256,6 +256,7 @@ describe('keepr/actions/enqueue', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(true)
     expect(res.body?.data?.id).toBe(42)
+    expect(res.body?.data?.trustZone).toBe('financial_execution')
     expect(getKeeprVaultAutomationByVaultAddressMock).toHaveBeenCalledWith(
       '0x00000000000000000000000000000000000000bb',
     )
@@ -270,6 +271,51 @@ describe('keepr/actions/enqueue', () => {
         targetBucket: 1234,
       },
     })
+  })
+
+  it('enforces optional zone keys when configured', async () => {
+    const restoreZoneEnv = applyEnv({
+      KEEPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING: 'zone-queue-secret',
+    })
+    enqueueKeeprActionMock.mockResolvedValue({ id: 77 })
+
+    try {
+      const unauthorizedReq = createMockReq({
+        method: 'POST',
+        headers: { authorization: 'Bearer test-keepr-key' },
+        body: {
+          vaultAddress: '0x00000000000000000000000000000000000000bb',
+          groupId: 'group-zone',
+          actionType: 'xmtp.group.add_member',
+          action: { action: 'xmtp.group.add_member', wallet: '0x00000000000000000000000000000000000000aa' },
+        },
+      })
+      const unauthorizedRes = createMockRes()
+      await handler(unauthorizedReq, unauthorizedRes)
+      expect(unauthorizedRes.statusCode).toBe(401)
+      expect(enqueueKeeprActionMock).not.toHaveBeenCalled()
+
+      const authorizedReq = createMockReq({
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer test-keepr-key',
+          'x-keepr-zone-key': 'zone-queue-secret',
+        },
+        body: {
+          vaultAddress: '0x00000000000000000000000000000000000000bb',
+          groupId: 'group-zone',
+          actionType: 'xmtp.group.add_member',
+          action: { action: 'xmtp.group.add_member', wallet: '0x00000000000000000000000000000000000000aa' },
+        },
+      })
+      const authorizedRes = createMockRes()
+      await handler(authorizedReq, authorizedRes)
+      expect(authorizedRes.statusCode).toBe(200)
+      expect(authorizedRes.body?.data?.trustZone).toBe('queue_messaging_monitoring')
+      expect(enqueueKeeprActionMock).toHaveBeenCalledTimes(1)
+    } finally {
+      restoreZoneEnv()
+    }
   })
 })
 

@@ -29,25 +29,29 @@ describe('keepr queue executor', () => {
   const originalFetch = globalThis.fetch;
   const originalApiBase = process.env.KEEPR_API_BASE_URL;
   const originalApiKey = process.env.KEEPR_API_KEY;
+  const originalZoneQueue = process.env.KEEPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING;
 
   beforeEach(() => {
     vi.clearAllMocks();
     process.env.KEEPR_API_BASE_URL = 'https://api.test';
     process.env.KEEPR_API_KEY = 'secret';
+    process.env.KEEPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING = 'zone-queue-secret';
   });
 
   afterEach(() => {
     globalThis.fetch = originalFetch;
     process.env.KEEPR_API_BASE_URL = originalApiBase;
     process.env.KEEPR_API_KEY = originalApiKey;
+    process.env.KEEPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING = originalZoneQueue;
   });
 
   it('marks action executed when execute endpoint succeeds', async () => {
-    const calls: Array<{ url: string; body: any }> = [];
+    const calls: Array<{ url: string; body: any; headers: Record<string, string> }> = [];
     globalThis.fetch = vi.fn(async (input: unknown, init?: RequestInit) => {
       const url = String(input);
       const body = init?.body ? JSON.parse(String(init.body)) : null;
-      calls.push({ url, body });
+      const headers = Object.fromEntries(new Headers(init?.headers ?? {}).entries());
+      calls.push({ url, body, headers });
 
       if (url.endsWith('/keepr/actions/pending?limit=10')) {
         return jsonResponse({
@@ -79,14 +83,18 @@ describe('keepr queue executor', () => {
         (c) => c.url.endsWith('/keepr/actions/updateStatus') && c.body?.status === 'executed',
       ),
     ).toBe(true);
+    const executeCall = calls.find((c) => c.url.endsWith('/keepr/actions/execute'));
+    expect(executeCall?.headers['x-keepr-trust-zone']).toBe('queue_messaging_monitoring');
+    expect(executeCall?.headers['x-keepr-zone-key']).toBe('zone-queue-secret');
   });
 
   it('fails immediately on non-retryable 4xx execute errors', async () => {
-    const calls: Array<{ url: string; body: any }> = [];
+    const calls: Array<{ url: string; body: any; headers: Record<string, string> }> = [];
     globalThis.fetch = vi.fn(async (input: unknown, init?: RequestInit) => {
       const url = String(input);
       const body = init?.body ? JSON.parse(String(init.body)) : null;
-      calls.push({ url, body });
+      const headers = Object.fromEntries(new Headers(init?.headers ?? {}).entries());
+      calls.push({ url, body, headers });
 
       if (url.endsWith('/keepr/actions/pending?limit=10')) {
         return jsonResponse({
@@ -124,11 +132,12 @@ describe('keepr queue executor', () => {
   });
 
   it('retries on retryable execute failures', async () => {
-    const calls: Array<{ url: string; body: any }> = [];
+    const calls: Array<{ url: string; body: any; headers: Record<string, string> }> = [];
     globalThis.fetch = vi.fn(async (input: unknown, init?: RequestInit) => {
       const url = String(input);
       const body = init?.body ? JSON.parse(String(init.body)) : null;
-      calls.push({ url, body });
+      const headers = Object.fromEntries(new Headers(init?.headers ?? {}).entries());
+      calls.push({ url, body, headers });
 
       if (url.endsWith('/keepr/actions/pending?limit=10')) {
         return jsonResponse({

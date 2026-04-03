@@ -78,13 +78,12 @@ describe('deriveWaitlistZoraUi', () => {
 
 describe('canEnterAppFromAccountState', () => {
   it('allows app entry when app access is approved even without points tier', () => {
-    expect(canEnterAppFromAccountState({ appAccessStatus: 'approved', tier: 0 })).toBe(true)
+    expect(canEnterAppFromAccountState({ appAccessStatus: 'approved' })).toBe(true)
   })
 
   it('keeps app entry blocked until admin approval exists', () => {
-    expect(canEnterAppFromAccountState({ appAccessStatus: null, tier: 0 })).toBe(false)
-    expect(canEnterAppFromAccountState({ appAccessStatus: null, tier: 1 })).toBe(false)
-    expect(canEnterAppFromAccountState({ appAccessStatus: 'pending', tier: 10 })).toBe(false)
+    expect(canEnterAppFromAccountState({ appAccessStatus: null })).toBe(false)
+    expect(canEnterAppFromAccountState({ appAccessStatus: 'pending' })).toBe(false)
   })
 })
 

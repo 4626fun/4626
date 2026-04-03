@@ -1,4 +1,5 @@
 import { logger } from '../../_lib/logger.js'
+import { redactTextForRemoteAi } from '../../_lib/agentControl/redaction.js'
 import { readServerEnvVar } from '../../_lib/serverEnv.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -129,7 +130,11 @@ class ElizaEmbeddingService {
   }
 
   async embedText(params: EmbedParams): Promise<EmbeddingResult> {
-    const text = String(params.text ?? '').replace(/\s+/g, ' ').trim().slice(0, this.maxInputChars)
+    const redacted = redactTextForRemoteAi(String(params.text ?? ''), {
+      maxStringLength: this.maxInputChars * 2,
+      maskAddresses: true,
+    })
+    const text = redacted.replace(/\s+/g, ' ').trim().slice(0, this.maxInputChars)
     if (!text) return { embedding: null, provider: null, attempts: [] }
     const providers = this.getAvailableProviders()
     if (providers.length === 0) return { embedding: null, provider: null, attempts: [] }

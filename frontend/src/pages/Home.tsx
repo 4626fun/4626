@@ -19,9 +19,9 @@ import { PrivyClientProvider } from '@/lib/privy/client'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 import { Web3Providers } from '@/web3/Web3Providers'
 
-const LazyThinWaitlistFlow = lazy(async () => {
-  const mod = await import('@/components/waitlist/ThinWaitlistFlow')
-  return { default: mod.ThinWaitlistFlow }
+const LazyWaitlistFlow = lazy(async () => {
+  const mod = await import('@/components/waitlist/WaitlistFlow')
+  return { default: mod.WaitlistFlow }
 })
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}AKITA`
@@ -129,7 +129,7 @@ export function Home() {
                     <PrivyClientProvider showWalletLoginFirst={false}>
                       <Web3Providers>
                         <div className="rounded-[28px] bg-black/45 p-4 shadow-[0_30px_120px_-48px_rgba(0,0,0,0.95)] backdrop-blur-md sm:p-6 lg:p-8">
-                          <LazyThinWaitlistFlow
+                          <LazyWaitlistFlow
                             variant="embedded"
                             sectionId="home-waitlist"
                             autoStartAuth={waitlistAutoStart}

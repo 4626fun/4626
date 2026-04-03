@@ -4,6 +4,7 @@ import {
   type ApiEnvelope,
   handleOptions,
   requireKeeprApiKey,
+  requireOptionalHeaderEnvAuth,
   setCors,
   setNoStore,
   getDb,
@@ -12,6 +13,11 @@ import {
 import { ensureKeeprSchema } from '../../../../server/_lib/keeprSchema.js'
 
 import { normalizeKeeprActionStatusForWorkspace } from '../../../../server/_lib/workspace/normalizer.js'
+import {
+  KEEPR_TRUST_ZONE_KEY_HEADER,
+  getKeeprTrustZoneEnvKey,
+  resolveKeeprTrustZone,
+} from '../../../../server/_lib/agentControl/trustZones.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -26,6 +32,7 @@ type UpdateBody = {
 type UpdateResponse = {
   id: number
   status: string
+  trustZone: string
   updated: boolean
 }
 
@@ -130,6 +137,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     await ensureKeeprSchema()
 
+    const actionRow = await db.sql`
+      SELECT action_type
+      FROM keepr_actions
+      WHERE id = ${id}
+      LIMIT 1;
+    `
+    const rawActionType = actionRow.rows?.[0]?.action_type
+    const trustZone = resolveKeeprTrustZone(typeof rawActionType === 'string' ? rawActionType : null)
+    if (
+      !requireOptionalHeaderEnvAuth(req, res, {
+        envKey: getKeeprTrustZoneEnvKey(trustZone),
+        headerName: KEEPR_TRUST_ZONE_KEY_HEADER,
+        unauthorizedError: `Unauthorized trust zone: ${trustZone}`,
+      })
+    ) {
+      return
+    }
+
     const errorMessage = body.error ? String(body.error).slice(0, 2000) : null
     const retryDelay = Number(body.retryDelaySeconds) || 60
 
@@ -155,7 +180,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       return res.status(200).json({
         success: true,
-        data: { id, status, updated },
+        data: { id, status, trustZone, updated },
       } satisfies ApiEnvelope<UpdateResponse>)
     }
 
@@ -187,7 +212,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       return res.status(200).json({
         success: true,
-        data: { id, status, updated },
+        data: { id, status, trustZone, updated },
       } satisfies ApiEnvelope<UpdateResponse>)
     }
 
@@ -219,7 +244,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       return res.status(200).json({
         success: true,
-        data: { id, status, updated },
+        data: { id, status, trustZone, updated },
       } satisfies ApiEnvelope<UpdateResponse>)
     }
 
@@ -243,7 +268,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         `
         return res.status(200).json({
           success: true,
-          data: { id, status: 'failed', updated: true },
+          data: { id, status: 'failed', trustZone, updated: true },
         } satisfies ApiEnvelope<UpdateResponse>)
       }
 
@@ -275,7 +300,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       return res.status(200).json({
         success: true,
-        data: { id, status, updated },
+        data: { id, status, trustZone, updated },
       } satisfies ApiEnvelope<UpdateResponse>)
     }
 

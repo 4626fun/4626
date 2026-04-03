@@ -2,7 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { apiFetch } from '@/lib/apiBase'
 
-import { isRecoveryRequiredAuthError, runWaitlistPrivyLogout, shouldStopWaitlistAutoAuthRetry } from './waitlistAuthState'
+import {
+  isEmailAlreadyLinkedAuthError,
+  isRecoveryRequiredAuthError,
+  runWaitlistPrivyLogout,
+  shouldStopWaitlistAutoAuthRetry,
+} from './waitlistAuthState'
 
 vi.mock('@/lib/apiBase', () => ({
   apiFetch: vi.fn(async () => ({ ok: true })),
@@ -19,6 +24,19 @@ describe('isRecoveryRequiredAuthError', () => {
   it('returns false for unrelated errors', () => {
     expect(isRecoveryRequiredAuthError({ status: 500, code: 'INTERNAL' })).toBe(false)
     expect(isRecoveryRequiredAuthError(new Error('network timeout'))).toBe(false)
+  })
+})
+
+describe('isEmailAlreadyLinkedAuthError', () => {
+  it('detects Privy duplicate email-link errors', () => {
+    expect(isEmailAlreadyLinkedAuthError(new Error('User already has an account of type email linked.'))).toBe(true)
+    expect(isEmailAlreadyLinkedAuthError({ message: 'already has an account of type email linked' })).toBe(true)
+    expect(isEmailAlreadyLinkedAuthError('Account of type email is linked to this user')).toBe(true)
+  })
+
+  it('returns false for unrelated messages', () => {
+    expect(isEmailAlreadyLinkedAuthError(new Error('Failed to fetch'))).toBe(false)
+    expect(isEmailAlreadyLinkedAuthError({ message: 'Recovery required' })).toBe(false)
   })
 })
 

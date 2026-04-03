@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { motion } from 'framer-motion'
 import { PageMeta, META } from '@/components/seo/PageMeta'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
-import { ExploreHorizontalScrollArrows } from '@/components/explore/ExploreHorizontalScrollArrows'
+import { ExplorePageShell } from '@/components/explore/ExplorePageShell'
+import { ExploreTableSurface } from '@/components/explore/ExploreTableSurface'
 import { TokenRow, TokenTableHeader, TokenRowSkeleton } from '@/components/explore/TokenRow'
 import { ExploreLoadMoreButton, ExploreLoadingMoreRows, ExploreTableMessage } from '@/components/explore/ExploreUiPrimitives'
 import { useExploreHorizontalTableSync } from '@/components/explore/useExploreHorizontalTableSync'
@@ -514,23 +514,12 @@ export function ExploreCreators() {
   }, [currentTimeFilter, collapseIdentity])
 
   return (
-    <div className="relative min-h-screen pt-1 sm:pt-2">
-      <PageMeta title={META.explore.title} description={META.explore.description} canonicalPath="/explore" />
-      <div className="max-w-[1400px] mx-auto px-3 sm:px-6 pt-2 sm:pt-4 pb-4 sm:pb-8">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-          className="mb-4 sm:mb-6"
-        >
-          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-medium text-white mb-1 sm:mb-2">
-            Top Creators on Base
-          </h1>
-          <p className="text-zinc-400 text-[13px] sm:text-sm">
-            Creator Coins ranked by volume, market cap, and more.
-          </p>
-
+    <ExplorePageShell
+      leading={<PageMeta title={META.explore.title} description={META.explore.description} canonicalPath="/explore" />}
+      title="Top Creators on Base"
+      subtitle="Creator Coins ranked by volume, market cap, and more."
+      headerContent={
+        <>
           {/* Metrics strip — compact 2x2 on mobile, 4-col on desktop */}
           <div className="mt-4 sm:mt-6 grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
             <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
@@ -550,9 +539,7 @@ export function ExploreCreators() {
               <div className="mt-0.5 sm:mt-1 text-lg sm:text-[22px] font-medium text-white tabular-nums">
                 {formatCompactUsd(marketCapDisplay)}
               </div>
-              <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">
-                Live market-cap snapshot
-              </div>
+              <div className="mt-0.5 text-[11px] sm:text-[12px] text-zinc-500 hidden sm:block">Live market-cap snapshot</div>
             </div>
 
             <div className="vault-surface-muted vault-hover-lift rounded-xl sm:rounded-2xl px-3 sm:px-4 py-2.5 sm:py-3">
@@ -577,55 +564,88 @@ export function ExploreCreators() {
           </div>
 
           {metricsStatusLine ? <div className="app-meta-value mt-2 text-right text-zinc-500">{metricsStatusLine}</div> : null}
-        </motion.div>
+        </>
+      }
+      subnav={
+        <ExploreSubnav
+          searchPlaceholder="Search creators"
+          searchValue={searchQuery}
+          onSearch={handleSearchChange}
+          onTimeFilterChange={handleTimeFilterChange}
+          onSortChange={handleSortChange}
+          currentTimeFilter={currentTimeFilter}
+          currentSort={currentSort}
+          volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}
+        />
+      }
+      table={
+        <>
+          <ExploreTableSurface
+            headerId="explore-creators-header"
+            bodyId="explore-creators-body"
+            onHeaderScroll={handleHeaderScroll}
+            onBodyScroll={handleBodyScroll}
+            header={
+              <TokenTableHeader
+                timeframe={currentTimeFilter}
+                collapseIdentity={collapseIdentity}
+                currentSort={currentSort}
+                onSortChange={handleSortChange}
+              />
+            }
+            body={
+              <>
+                {isLoading ? (
+                  Array.from({ length: 10 }).map((_, i) => <TokenRowSkeleton key={i} collapseIdentity={collapseIdentity} />)
+                ) : isError ? (
+                  <ExploreTableMessage title="Failed to load creators" detail={(error as Error)?.message || 'Unknown error'} />
+                ) : showSyncingEmptyState ? (
+                  <ExploreTableMessage
+                    title="Creator list is still syncing"
+                    detail="Global stats are available, but the ranked creator rows have not finished loading yet."
+                  />
+                ) : trimmedSearchQuery.length > 0 && filteredCoins.length === 0 && isSearchingDirectMatches ? (
+                  <ExploreTableMessage title="Searching creators..." detail="Checking direct handle/profile matches." />
+                ) : trimmedSearchQuery.length > 0 && filteredCoins.length === 0 && isFetchingNextPage ? (
+                  <ExploreTableMessage title="Searching more creators..." detail="Scanning additional pages for matches." />
+                ) : filteredCoins.length === 0 ? (
+                  <ExploreTableMessage title={trimmedSearchQuery ? 'No creators found matching your search' : 'No creators available'} />
+                ) : (
+                  filteredCoins.map((coin, index) => {
+                    const rowId = coin.address ? String(coin.address).toLowerCase() : `row-${index}`
+                    const isExpanded = expandedFees === rowId
+                    return (
+                      <TokenRow
+                        key={coin.address || index}
+                        rank={index + 1}
+                        coin={coin}
+                        linkPrefix="/explore/creators"
+                        timeframe={currentTimeFilter}
+                        collapseIdentity={collapseIdentity}
+                        migratedCoins={migratedCoins ?? undefined}
+                        isExpanded={isExpanded}
+                        onToggleFees={() => setExpandedFees((prev) => (prev === rowId ? null : rowId))}
+                      />
+                    )
+                  })
+                )}
 
-        {/* Navigation & Filters */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-          className="mb-6"
-        >
-          <ExploreSubnav
-            searchPlaceholder="Search creators"
-            searchValue={searchQuery}
-            onSearch={handleSearchChange}
-            onTimeFilterChange={handleTimeFilterChange}
-            onSortChange={handleSortChange}
-            currentTimeFilter={currentTimeFilter}
-            currentSort={currentSort}
-            volumeColumnNote={getZoraExploreVolumeNote(currentTimeFilter)}
-          />
-        </motion.div>
-
-        {/* Token Table */}
-        <motion.div
-          initial={{ opacity: 0, y: 16 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.2 }}
-          className="vault-surface relative overflow-hidden"
-        >
-          {/* Sticky header - outside horizontal scroll to preserve sticky behavior */}
-          <div className="sticky top-0 z-50 border-b border-white/8 bg-vault-bg shadow-[0_10px_30px_-18px_rgba(0,0,0,0.9)]">
-            <div 
-              className="overflow-x-auto scrollbar-hide" 
-              id="explore-creators-header"
-              data-scrolled="0"
-              onScroll={handleHeaderScroll}
-            >
-              <div className="min-w-max">
-                <TokenTableHeader
-                  timeframe={currentTimeFilter}
-                  collapseIdentity={collapseIdentity}
-                  currentSort={currentSort}
-                  onSortChange={handleSortChange}
+                <ExploreLoadingMoreRows
+                  isFetchingNextPage={isFetchingNextPage}
+                  renderSkeletonRow={() => <TokenRowSkeleton collapseIdentity={collapseIdentity} />}
                 />
-              </div>
-            </div>
-          </div>
 
-          <ExploreHorizontalScrollArrows
-            hasOverflow={hasHorizontalOverflow}
+                <ExploreLoadMoreButton
+                  hasNextPage={Boolean(hasNextPage)}
+                  isFetchingNextPage={isFetchingNextPage}
+                  onLoadMore={() => {
+                    void fetchNextPage()
+                  }}
+                  buttonClassName="px-6 py-2 rounded-full text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/8 transition-colors"
+                />
+              </>
+            }
+            hasHorizontalOverflow={hasHorizontalOverflow}
             canScrollLeft={canScrollLeft}
             canScrollRight={canScrollRight}
             onScrollLeft={() => handleArrowClick('left', columnScrollStops)}
@@ -633,84 +653,9 @@ export function ExploreCreators() {
             leftAriaLabel="Scroll creators table left"
             rightAriaLabel="Scroll creators table right"
           />
-
-          {/* Table body with synced horizontal scroll */}
-          <div 
-            className="overflow-x-auto scrollbar-hide" 
-            id="explore-creators-body"
-            data-scrolled="0"
-            onScroll={handleBodyScroll}
-          >
-            <div className="min-w-max divide-y divide-white/6">
-              {isLoading ? (
-                // Loading skeletons
-                Array.from({ length: 10 }).map((_, i) => <TokenRowSkeleton key={i} collapseIdentity={collapseIdentity} />)
-              ) : isError ? (
-                // Error state
-                <ExploreTableMessage title="Failed to load creators" detail={(error as Error)?.message || 'Unknown error'} />
-              ) : showSyncingEmptyState ? (
-                <ExploreTableMessage
-                  title="Creator list is still syncing"
-                  detail="Global stats are available, but the ranked creator rows have not finished loading yet."
-                />
-              ) : trimmedSearchQuery.length > 0 && filteredCoins.length === 0 && isSearchingDirectMatches ? (
-                <ExploreTableMessage title="Searching creators..." detail="Checking direct handle/profile matches." />
-              ) : trimmedSearchQuery.length > 0 && filteredCoins.length === 0 && isFetchingNextPage ? (
-                <ExploreTableMessage title="Searching more creators..." detail="Scanning additional pages for matches." />
-              ) : filteredCoins.length === 0 ? (
-                // Empty state
-                <ExploreTableMessage title={trimmedSearchQuery ? 'No creators found matching your search' : 'No creators available'} />
-              ) : (
-                // Token rows
-                filteredCoins.map((coin, index) => {
-                  const rowId = coin.address ? String(coin.address).toLowerCase() : `row-${index}`
-                  const isExpanded = expandedFees === rowId
-                  return (
-                    <TokenRow
-                      key={coin.address || index}
-                      rank={index + 1}
-                      coin={coin}
-                      linkPrefix="/explore/creators"
-                      timeframe={currentTimeFilter}
-                      collapseIdentity={collapseIdentity}
-                      migratedCoins={migratedCoins ?? undefined}
-                      isExpanded={isExpanded}
-                      onToggleFees={() => setExpandedFees((prev) => (prev === rowId ? null : rowId))}
-                    />
-                  )
-                })
-              )}
-
-              {/* Loading more indicator */}
-              <ExploreLoadingMoreRows
-                isFetchingNextPage={isFetchingNextPage}
-                renderSkeletonRow={() => <TokenRowSkeleton collapseIdentity={collapseIdentity} />}
-              />
-
-              <ExploreLoadMoreButton
-                hasNextPage={Boolean(hasNextPage)}
-                isFetchingNextPage={isFetchingNextPage}
-                onLoadMore={() => {
-                  void fetchNextPage()
-                }}
-                buttonClassName="px-6 py-2 rounded-full text-sm font-medium text-zinc-400 hover:text-white hover:bg-white/8 transition-colors"
-              />
-            </div>
-          </div>
-        </motion.div>
-
-        {/* Stats footer */}
-        {!isLoading && filteredCoins.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.4, delay: 0.3 }}
-            className="mt-4 text-center text-xs text-zinc-600"
-          >
-            Showing {filteredCoins.length} creators
-          </motion.div>
-        )}
-      </div>
-    </div>
+        </>
+      }
+      footer={!isLoading && filteredCoins.length > 0 ? `Showing ${filteredCoins.length} creators` : null}
+    />
   )
 }

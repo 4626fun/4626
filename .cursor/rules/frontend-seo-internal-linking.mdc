@@ -1,9 +1,14 @@
 ---
 description: Canonical internal-linking structure and link safety for frontend SEO routes
-alwaysApply: true
+globs:
+  - frontend/src/**
+  - frontend/index.html
+alwaysApply: false
 ---
 
 # Frontend SEO Internal Linking Policy (4626.fun)
+
+This file owns canonical-only link safety and creator/vault/category link structure for frontend routes.
 
 Scope:
 - Apply only to user-facing frontend routes/components under `frontend/`.

@@ -54,6 +54,8 @@ const {
   startAkitaVaultDeployFromTelegramMock,
   fetchVaultDeployStatusFromTelegramMock,
   fetchZoraProfileMock,
+  ensureAccountsIdentitySchemaMock,
+  fetchCreatorCoinSummaryMock,
 } = vi.hoisted(() => ({
   executeDeterministicCommandMock: vi.fn(),
   handleTwitterCommandMock: vi.fn(),
@@ -102,6 +104,8 @@ const {
   startAkitaVaultDeployFromTelegramMock: vi.fn(),
   fetchVaultDeployStatusFromTelegramMock: vi.fn(),
   fetchZoraProfileMock: vi.fn(),
+  ensureAccountsIdentitySchemaMock: vi.fn(),
+  fetchCreatorCoinSummaryMock: vi.fn(),
 }))
 
 vi.mock('@privy-io/server-auth', () => ({
@@ -166,6 +170,11 @@ vi.mock('../../server/_lib/zoraProfile.js', () => ({
     const raw = typeof profile?.creatorCoin?.address === 'string' ? profile.creatorCoin.address.trim() : ''
     return /^0x[a-fA-F0-9]{40}$/.test(raw) ? raw.toLowerCase() : null
   },
+}))
+
+vi.mock('../../server/_lib/accountsIdentity.js', () => ({
+  ensureAccountsIdentitySchema: ensureAccountsIdentitySchemaMock,
+  fetchCreatorCoinSummary: fetchCreatorCoinSummaryMock,
 }))
 
 vi.mock('../../server/_lib/telegramTrading.js', () => ({
@@ -251,6 +260,8 @@ describe('telegram webhook handler', () => {
     getDbMock.mockResolvedValue({ sql: vi.fn(async () => ({ rows: [] })) })
     ensureWaitlistSchemaMock.mockResolvedValue(undefined)
     ensureKeeprSchemaMock.mockResolvedValue(undefined)
+    ensureAccountsIdentitySchemaMock.mockResolvedValue(undefined)
+    fetchCreatorCoinSummaryMock.mockResolvedValue(null)
     ensureTelegramTradingSchemaMock.mockResolvedValue(undefined)
     createTelegramLinkStartTokenMock.mockReturnValue({
       token: 'link-token',

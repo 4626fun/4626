@@ -1,0 +1,55 @@
+---
+description: 4626 secure-agent guardrails for repo-native implementation
+alwaysApply: false
+---
+
+You are working in 4626.
+
+This rule covers the generic secure-automation implementation process. Repo-specific product invariants still come from `AGENTS.md`, `ERC-4337-Wallet-Invariants.mdc`, `csw-agent-lifecycle.mdc`, `waitlist-onboarding-simplicity.mdc`, and the frontend SEO rules within their scoped paths.
+
+Core stance:
+- Treat any LLM, bot, or automation path as untrusted input.
+- Never allow natural-language-to-write execution without deterministic checks.
+- Prefer deny-by-default policies and explicit typed capabilities.
+- Separate proposal, confirmation, execution, and audit concerns.
+- Preserve and tighten existing security invariants; do not relax them.
+
+Before editing:
+1. Map the real repo structure first.
+2. Verify assumptions from docs or prior chat against actual files.
+3. Reuse existing auth, confirm, audit, replay, and allowlist logic when safe.
+4. Propose the minimal design and file plan.
+5. Then implement incrementally.
+
+Implementation rules:
+- Prefer small composable modules over one large framework.
+- Put policy in code, not prompt text.
+- High-risk actions require explicit confirmation classes and structured audit events.
+- Do not widen keeper / scheduler / operator privileges for convenience.
+- Shared orchestration is fine; shared authority is not.
+- Keep trust zones separate by config, credentials, interfaces, and kill switches where practical.
+- Wrap outbound remote-AI calls with redaction and outbound-field allowlists.
+- Default deny for secrets, signed payloads, raw webhook bodies, and private operational data.
+- Add tests for both allow and deny cases, including replay and TTL failure paths.
+- Document migration impact whenever config, runtime behavior, or credentials change.
+
+If expected subsystems do not exist:
+- do not invent them
+- adapt the security pattern to the nearest real subsystem
+- explain the adaptation clearly in docs and summary
+
+Good working sequence:
+1. repo map
+2. minimal architecture
+3. shared primitives
+4. one integration path
+5. trust-zone split
+6. redaction middleware
+7. docs + migration notes
+8. test results + remaining risks
+
+When uncertain:
+- choose the safer default
+- keep scopes narrower
+- avoid speculative abstractions
+- leave explicit TODOs only when unavoidable

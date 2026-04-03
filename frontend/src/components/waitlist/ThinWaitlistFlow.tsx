@@ -32,12 +32,19 @@ import { StepIndicator } from '@/components/ui/StepIndicator'
 import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
 
 import type { Variant } from './waitlistTypes'
-import { isRecoveryRequiredAuthError, runWaitlistPrivyLogout, shouldStopWaitlistAutoAuthRetry } from './waitlistAuthState'
+import {
+  isEmailAlreadyLinkedAuthError,
+  isRecoveryRequiredAuthError,
+  runWaitlistPrivyLogout,
+  shouldStopWaitlistAutoAuthRetry,
+} from './waitlistAuthState'
 import {
   buildWaitlistEmailLoginOptions,
   buildWaitlistRecoveryLoginOptions,
 } from './waitlistLoginOptions'
 import {
+  type WaitlistDoneUi,
+  type WaitlistEmailUi,
   canEnterAppFromAccountState,
   deriveWaitlistAuthUi,
   deriveWaitlistDoneUi,
@@ -277,18 +284,16 @@ function getAccessStatusMeta(status: string | null | undefined): {
 }
 
 export function resolveWaitlistStep(params: {
-  account: Pick<AccountsSummary, 'emailVerified' | 'accountSignals' | 'appAccessStatus'>
-  ownerDelegationVerified: boolean | null
+  account: Pick<AccountsSummary, 'emailVerified' | 'appAccessStatus'>
 }): WaitlistStep {
-  const { account, ownerDelegationVerified } = params
+  const { account } = params
   if (!account.emailVerified) return 'auth'
   const appApproved = String(account.appAccessStatus ?? '').trim().toLowerCase() === 'approved'
-  if (appApproved && account.accountSignals.canonicalCswAddress && ownerDelegationVerified === true) return 'done'
+  if (appApproved) return 'done'
   return 'wallet'
 }
 
 export function shouldAutoStartWaitlistAuth(params: {
-  variant?: Variant
   autoStartRequested?: boolean
   step: WaitlistStep
   privyAuthed: boolean
@@ -309,12 +314,65 @@ export function shouldAutoStartWaitlistAuth(params: {
 export function shouldAutoBootstrapWaitlistSession(params: {
   step: WaitlistStep
   privyAuthed: boolean
-  authFlowStarted: boolean
 }): boolean {
-  if (!params.authFlowStarted) return false
   if (params.step !== 'auth') return false
   if (!params.privyAuthed) return false
   return true
+}
+
+export function shouldAutoHandoffApprovedAccount(params: {
+  variant?: Variant
+  step: WaitlistStep
+  canEnterApp: boolean
+  enterAppBusy: boolean
+}): boolean {
+  if (params.variant !== 'embedded') return false
+  if (params.step !== 'done') return false
+  if (!params.canEnterApp) return false
+  if (params.enterAppBusy) return false
+  return true
+}
+
+function useWaitlistAttemptState() {
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [recoveryRequired, setRecoveryRequired] = useState(false)
+  const attemptInFlightRef = useRef(false)
+
+  const clearFeedback = useCallback(() => {
+    setError(null)
+    setNotice(null)
+  }, [])
+
+  const beginAttempt = useCallback((): boolean => {
+    if (busy || attemptInFlightRef.current) return false
+    attemptInFlightRef.current = true
+    setBusy(true)
+    clearFeedback()
+    setRecoveryRequired(false)
+    return true
+  }, [busy, clearFeedback])
+
+  const endAttempt = useCallback(() => {
+    attemptInFlightRef.current = false
+    setBusy(false)
+  }, [])
+
+  return {
+    busy,
+    setBusy,
+    error,
+    setError,
+    notice,
+    setNotice,
+    recoveryRequired,
+    setRecoveryRequired,
+    attemptInFlightRef,
+    clearFeedback,
+    beginAttempt,
+    endAttempt,
+  }
 }
 
 function CoinbaseLogo({ className }: { className?: string }) {
@@ -422,7 +480,694 @@ function WalletPathCard(props: {
   )
 }
 
-export function ThinWaitlistFlow(props: {
+function WaitlistAuthStep(props: {
+  hideAuthShell: boolean
+  useCompactModalAuthStart: boolean
+  authUi: WaitlistEmailUi
+  shouldAutoStartAuth: boolean
+  busy: boolean
+  error: string | null
+  recoveryRequired: boolean
+  onContinueAuth: () => void | Promise<void>
+  onRecoverAccount: () => void | Promise<void>
+}) {
+  const {
+    hideAuthShell,
+    useCompactModalAuthStart,
+    authUi,
+    shouldAutoStartAuth,
+    busy,
+    error,
+    recoveryRequired,
+    onContinueAuth,
+    onRecoverAccount,
+  } = props
+
+  return (
+    <motion.div
+      key="step-auth"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+      className="space-y-5"
+    >
+      {hideAuthShell ? (
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
+          <div className="inline-flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
+            Opening secure email sign-in…
+          </div>
+        </div>
+      ) : useCompactModalAuthStart ? (
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
+          <div className="inline-flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
+            Opening secure email sign-in…
+          </div>
+        </div>
+      ) : (
+        <>
+          <div className="space-y-1">
+            <h2 className="text-2xl font-semibold tracking-tight text-white">{authUi.title}</h2>
+            <p className="text-sm text-zinc-400">{authUi.subtitle}</p>
+          </div>
+
+          {shouldAutoStartAuth ? (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
+                <div className="inline-flex items-center gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
+                  Opening secure email sign-in…
+                </div>
+              </div>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void onContinueAuth()}
+                className="btn-secondary btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                Join waitlist
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void onContinueAuth()}
+              className="btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              {busy ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {authUi.busyLabel}
+                </>
+              ) : (
+                authUi.ctaLabel
+              )}
+            </button>
+          )}
+        </>
+      )}
+
+      {error ? (
+        <div className="space-y-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+          <div>{error}</div>
+          {recoveryRequired ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void onRecoverAccount()}
+              className="inline-flex items-center rounded-lg border border-rose-300/35 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-100 transition hover:bg-rose-500/20 disabled:opacity-60"
+            >
+              Recover account sign-in
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </motion.div>
+  )
+}
+
+function WaitlistWalletStep(props: {
+  accessStatusMeta: ReturnType<typeof getAccessStatusMeta>
+  dashboardSubtitle: string
+  totalPoints: number
+  totalRank: number | null
+  inviteRank: number | null
+  qualifiedReferrals: number
+  pendingReferrals: number
+  walletSelectionNeeded: boolean
+  ownerInstallNeeded: boolean
+  notice: string | null
+  dashboardError: string | null
+  waitlistPosition: WaitlistPositionResponse | null
+  personalReferralCode: string | null
+  personalReferralLink: string | null
+  copiedReferralLink: boolean
+  leaderboardRows: DashboardLeaderboardRow[]
+  leaderboardMe: DashboardLeaderboardRow | null
+  leaderboardMeInTop: boolean
+  dashboardBusy: boolean
+  busy: boolean
+  ownerDelegationVerified: boolean | null
+  canonicalCswAddress: string | null
+  embeddedEoaAddress: string | null
+  ownerDelegationFlags: OwnerDelegationFlags | null
+  error: string | null
+  onCopyReferralLink: () => void | Promise<void>
+  onContinueWithBase: () => void | Promise<void>
+  onContinueWithZora: () => void | Promise<void>
+  onCreateInBaseApp: () => void
+  onEnable4626Signing: () => void | Promise<void>
+  onRefreshStatus: () => void
+}) {
+  const {
+    accessStatusMeta,
+    dashboardSubtitle,
+    totalPoints,
+    totalRank,
+    inviteRank,
+    qualifiedReferrals,
+    pendingReferrals,
+    walletSelectionNeeded,
+    ownerInstallNeeded,
+    notice,
+    dashboardError,
+    waitlistPosition,
+    personalReferralCode,
+    personalReferralLink,
+    copiedReferralLink,
+    leaderboardRows,
+    leaderboardMe,
+    leaderboardMeInTop,
+    dashboardBusy,
+    busy,
+    ownerDelegationVerified,
+    canonicalCswAddress,
+    embeddedEoaAddress,
+    ownerDelegationFlags,
+    error,
+    onCopyReferralLink,
+    onContinueWithBase,
+    onContinueWithZora,
+    onCreateInBaseApp,
+    onEnable4626Signing,
+    onRefreshStatus,
+  } = props
+
+  return (
+    <motion.div
+      key="step-wallet"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+      className="space-y-5"
+    >
+      <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(91,168,255,0.12)_0%,rgba(7,10,18,0.86)_100%)] p-5 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-3">
+            <div className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] ${accessStatusMeta.tone}`}>
+              {accessStatusMeta.label}
+            </div>
+            <div className="space-y-1">
+              <h2 className="text-2xl font-semibold tracking-tight text-white">Climb the waitlist</h2>
+              <p className="max-w-xl text-sm text-zinc-300">{dashboardSubtitle}</p>
+            </div>
+            <p className="text-xs text-zinc-500">{accessStatusMeta.description}</p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3 sm:min-w-[280px]">
+            <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+              <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Total points</div>
+              <div className="mt-2 text-2xl font-semibold text-white">{formatWholeNumber(totalPoints)}</div>
+            </div>
+            <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
+              <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Total rank</div>
+              <div className="mt-2 text-2xl font-semibold text-white">{formatRankLabel(totalRank)}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+          <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Invite rank</div>
+          <div className="mt-2 text-xl font-semibold text-white">{formatRankLabel(inviteRank)}</div>
+          <div className="mt-1 text-xs text-zinc-500">Leaderboard position by referral momentum.</div>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+          <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Qualified referrals</div>
+          <div className="mt-2 text-xl font-semibold text-white">{formatWholeNumber(qualifiedReferrals)}</div>
+          <div className="mt-1 text-xs text-zinc-500">Friends who fully linked into the system.</div>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+          <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Pending referrals</div>
+          <div className="mt-2 text-xl font-semibold text-white">{formatWholeNumber(pendingReferrals)}</div>
+          <div className="mt-1 text-xs text-zinc-500">Signed up but not fully qualified yet.</div>
+        </div>
+        <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
+          <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Wallet readiness</div>
+          <div className="mt-2 text-sm font-semibold text-white">
+            {walletSelectionNeeded ? 'CSW not linked' : ownerInstallNeeded ? 'Signer install pending' : 'Ready'}
+          </div>
+          <div className="mt-1 text-xs text-zinc-500">
+            {walletSelectionNeeded
+              ? 'Connect the wallet you want 4626 to recognize.'
+              : ownerInstallNeeded
+                ? 'One owner-install transaction is still left.'
+                : 'Your canonical wallet path is set.'}
+          </div>
+        </div>
+      </div>
+
+      {notice ? (
+        <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
+          {notice}
+        </div>
+      ) : null}
+
+      {dashboardError ? (
+        <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
+          {dashboardError}
+        </div>
+      ) : null}
+
+      <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
+        <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5 space-y-4">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Points breakdown</div>
+              <div className="mt-1 text-sm text-zinc-300">The mix that determines how far up the queue you show up.</div>
+            </div>
+            <Link to="/accounts" className="text-xs text-brand-primary hover:text-brand-300 transition-colors">
+              Manage account
+            </Link>
+          </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Signup</div>
+              <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(waitlistPosition?.points.signup ?? 0)}</div>
+            </div>
+            <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Invites</div>
+              <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(waitlistPosition?.points.invite ?? 0)}</div>
+            </div>
+            <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Social</div>
+              <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(waitlistPosition?.points.social ?? 0)}</div>
+            </div>
+            <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+              <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Wallet / CSW</div>
+              <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(waitlistPosition?.points.csw ?? 0)}</div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-brand-primary/20 bg-brand-primary/8 p-4">
+            <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-brand-primary">Priority move</div>
+            <div className="mt-2 text-sm font-semibold text-white">
+              {walletSelectionNeeded ? 'Link the CSW you want 4626 to recognize.' : 'Finish 4626 signing on your canonical CSW.'}
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-zinc-300">
+              {walletSelectionNeeded
+                ? 'This is the clearest wallet signal you can give the system while admin approval is pending.'
+                : ownerInstallNeeded
+                  ? 'Installing the embedded signer proves 4626 can actually act through your canonical wallet once you are approved.'
+                  : 'Your wallet setup already puts you in the strongest readiness bucket.'}
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-4">
+          <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Referral link</div>
+                <div className="mt-1 text-sm text-zinc-300">Share one clean invite URL instead of sending people back through messy query strings.</div>
+              </div>
+              {personalReferralCode ? (
+                <div className="rounded-full border border-brand-primary/25 bg-brand-primary/10 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-brand-primary">
+                  {personalReferralCode}
+                </div>
+              ) : null}
+            </div>
+
+            {personalReferralLink ? (
+              <>
+                <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+                  <div className="truncate font-mono text-sm text-zinc-100">{personalReferralLink}</div>
+                  <p className="mt-2 text-xs text-zinc-500">
+                    New signups land on the waitlist signup flow first, then unlock their ranking and referral view after verification.
+                  </p>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Qualified</div>
+                    <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(qualifiedReferrals)}</div>
+                    <div className="mt-1 text-xs text-zinc-500">Friends fully linked and counted.</div>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
+                    <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Pending</div>
+                    <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(pendingReferrals)}</div>
+                    <div className="mt-1 text-xs text-zinc-500">People who still need to finish setup.</div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <button
+                    type="button"
+                    onClick={() => void onCopyReferralLink()}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-3 text-sm font-medium text-zinc-100 transition hover:bg-white/[0.05] sm:flex-1"
+                  >
+                    {copiedReferralLink ? <Check className="h-4 w-4 text-emerald-300" /> : <Copy className="h-4 w-4" />}
+                    {copiedReferralLink ? 'Copied' : 'Copy invite link'}
+                  </button>
+                  <a
+                    href={personalReferralLink}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="inline-flex items-center justify-center rounded-xl border border-white/10 px-4 py-3 text-sm font-medium text-zinc-200 transition hover:bg-white/[0.05] sm:flex-1"
+                  >
+                    Open invite route
+                  </a>
+                </div>
+              </>
+            ) : (
+              <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3 text-sm text-zinc-500">
+                Your invite code will appear here as soon as the waitlist profile finishes syncing.
+              </div>
+            )}
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5 space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Waitlist leaderboard</div>
+                <div className="mt-1 text-sm text-zinc-300">Ranked by total points after verified signup.</div>
+              </div>
+              <Link to="/leaderboard" className="text-xs text-brand-primary hover:text-brand-300 transition-colors">
+                Full board
+              </Link>
+            </div>
+
+            <div className="rounded-xl border border-white/8 bg-white/[0.02] overflow-hidden">
+              {dashboardBusy && leaderboardRows.length === 0 ? (
+                <div className="px-4 py-6 text-sm text-zinc-500">Loading leaderboard…</div>
+              ) : leaderboardRows.length > 0 ? (
+                <div>
+                  {leaderboardRows.map((row) => {
+                    const isMe = Boolean(leaderboardMe && leaderboardMe.signupId === row.signupId)
+                    return (
+                      <div
+                        key={`${row.rank}-${row.signupId}`}
+                        className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-white/6 px-4 py-3 last:border-b-0 ${
+                          isMe ? 'bg-brand-primary/6' : ''
+                        }`}
+                      >
+                        <div className="text-sm font-medium text-zinc-400">#{row.rank}</div>
+                        <div className="min-w-0">
+                          <div className="truncate text-sm text-white">{row.display}</div>
+                          <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-zinc-600">
+                            {row.referralCode ? <span>{row.referralCode}</span> : null}
+                            {row.borderTier >= 1 ? <span>Tier {row.borderTier}</span> : null}
+                            {isMe ? <span className="text-brand-primary">You</span> : null}
+                          </div>
+                        </div>
+                        <div className="text-sm font-semibold tabular-nums text-zinc-100" title={formatLeaderboardPointsTooltip(row)}>
+                          {formatWholeNumber(row.pointsTotal)}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="px-4 py-6 text-sm text-zinc-500">No ranked accounts yet.</div>
+              )}
+            </div>
+
+            {!leaderboardMeInTop && leaderboardMe ? (
+              <div className="rounded-xl border border-brand-primary/20 bg-brand-primary/5 p-3">
+                <div className="text-[10px] uppercase tracking-[0.18em] text-brand-primary">Your standing</div>
+                <div className="mt-2 flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium text-white">{leaderboardMe.display}</div>
+                    <div className="text-xs text-zinc-500">{formatRankLabel(leaderboardMe.rank)}</div>
+                  </div>
+                  <div className="text-sm font-semibold tabular-nums text-zinc-100" title={formatLeaderboardPointsTooltip(leaderboardMe)}>
+                    {formatWholeNumber(leaderboardMe.pointsTotal)}
+                  </div>
+                </div>
+              </div>
+            ) : null}
+          </div>
+        </div>
+      </div>
+
+      <div className="space-y-4">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Wallet actions</div>
+            <div className="mt-1 text-sm text-zinc-300">
+              Optional while you wait for approval, but these actions move your account closer to app-readiness.
+            </div>
+          </div>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={onRefreshStatus}
+            className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+          >
+            Refresh status
+          </button>
+        </div>
+
+        {walletSelectionNeeded ? (
+          <>
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+              <WalletPathCard
+                eyebrow="Existing CSW"
+                title="Link Base Smart Wallet"
+                body="Use your existing Coinbase Smart Wallet from Base app and keep that wallet as the canonical CSW for 4626."
+                bestFor="You already use Base app and want to keep that smart wallet."
+                icon={<CoinbaseLogo className="h-6 w-6" />}
+                busy={busy}
+                busyLabel="Linking Base wallet..."
+                label="Link Base Smart Wallet"
+                onClick={() => void onContinueWithBase()}
+              />
+              <WalletPathCard
+                eyebrow="Existing CSW"
+                title="Link Zora Smart Wallet"
+                body="Choose this when your canonical Coinbase Smart Wallet is already attached to your Zora account."
+                bestFor="Your Zora account already resolves to the CSW you want 4626 to use."
+                icon={<ZoraLogo className="h-6 w-6 rounded-full" />}
+                busy={busy}
+                busyLabel="Linking Zora wallet..."
+                label="Link Zora Smart Wallet"
+                onClick={() => void onContinueWithZora()}
+              />
+              <div className="lg:col-span-2">
+                <WalletPathCard
+                  eyebrow="New Base wallet"
+                  title="Create new wallet in Base app"
+                  body="Start a new Coinbase Smart Wallet in Base app with the 4626 referral flow, then come back here and continue setup."
+                  bestFor="You do not have a CSW yet, or you want a fresh Base-native setup."
+                  icon={<CoinbaseLogo className="h-6 w-6" />}
+                  emphasized
+                  busy={busy}
+                  busyLabel="Opening Base app..."
+                  label="Create new wallet in Base app"
+                  onClick={onCreateInBaseApp}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2">
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Quick guide</p>
+              <div className="space-y-2 text-xs text-zinc-400">
+                <div>
+                  Pick <span className="text-zinc-200">Link Base Smart Wallet</span> when you already use Base app and want that CSW to stay canonical.
+                </div>
+                <div>
+                  Pick <span className="text-zinc-200">Link Zora Smart Wallet</span> when Zora already resolves to the wallet you want 4626 to use.
+                </div>
+                <div>
+                  Pick <span className="text-zinc-200">Create new wallet in Base app</span> when you do not have a CSW yet or want a fresh Base-native setup.
+                </div>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2 text-sm">
+              <div className="flex items-center gap-2">
+                <CoinbaseLogo className="h-4 w-4 shrink-0" />
+                <span className="text-zinc-500">Canonical CSW</span>
+                <span className="font-mono text-zinc-200">{shortAddress(canonicalCswAddress)}</span>
+              </div>
+              {embeddedEoaAddress ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-zinc-500">Privy embedded EOA</span>
+                  <span className="font-mono text-zinc-200">{shortAddress(embeddedEoaAddress)}</span>
+                </div>
+              ) : null}
+              <div className={`text-xs ${ownerDelegationVerified ? 'text-emerald-300' : 'text-amber-200'}`}>
+                {ownerDelegationVerified
+                  ? '4626 signing is enabled on this wallet.'
+                  : '4626 signing is not enabled yet. One owner-install transaction is still required.'}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-sm font-medium">Enable 4626 signing</div>
+                <span className={`text-[10px] font-medium uppercase tracking-[0.18em] ${ownerDelegationVerified ? 'text-emerald-300' : 'text-brand-primary'}`}>
+                  {ownerDelegationVerified ? 'Complete' : 'Recommended'}
+                </span>
+              </div>
+              <p className="text-xs text-zinc-500">
+                This adds your Privy embedded signer as an owner on the canonical CSW. You will sign one transaction with the wallet that currently owns it.
+              </p>
+              <p className="text-xs text-zinc-500">
+                If the current owner wallet is not connected in this browser yet, reconnect it first and then retry.
+              </p>
+              <button
+                type="button"
+                disabled={busy || !ownerInstallNeeded}
+                onClick={() => void onEnable4626Signing()}
+                className="btn-secondary btn-no-icon inline-flex"
+              >
+                {busy ? 'Preparing…' : ownerDelegationVerified ? '4626 signing enabled' : 'Enable 4626 signing'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {ownerDelegationFlags ? (
+          <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-4 text-xs text-amber-100 space-y-1">
+            {ownerDelegationFlags.needsBaseAppSetup ? (
+              <div>
+                Finish Coinbase Smart Wallet setup in Base app, then return here and retry.
+                {ownerDelegationFlags.baseAppUrl ? (
+                  <>
+                    {' '}
+                    <a
+                      href={ownerDelegationFlags.baseAppUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline underline-offset-2"
+                    >
+                      Open Base app
+                    </a>
+                    .
+                  </>
+                ) : null}
+              </div>
+            ) : null}
+            {ownerDelegationFlags.needsEmbeddedWallet ? (
+              <div>Privy embedded wallet provisioning is still settling. Retry in a moment.</div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+
+      {error ? (
+        <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+          {error}
+        </div>
+      ) : null}
+
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <Link
+          to="/accounts"
+          className="btn-accent btn-no-icon inline-flex w-full items-center justify-center rounded-xl py-3 text-sm font-medium sm:flex-1"
+        >
+          Go to accounts
+        </Link>
+        <Link
+          to="/leaderboard"
+          className="inline-flex w-full items-center justify-center rounded-xl border border-white/10 px-4 py-3 text-sm font-medium text-zinc-200 transition hover:bg-white/[0.04] sm:flex-1"
+        >
+          Open full leaderboard
+        </Link>
+      </div>
+    </motion.div>
+  )
+}
+
+function WaitlistDoneStep(props: {
+  doneUi: WaitlistDoneUi
+  accountCanonicalCswAddress: string | null
+  canEnterApp: boolean
+  enterAppBusy: boolean
+  onEnterApp: () => void | Promise<void>
+}) {
+  const { doneUi, accountCanonicalCswAddress, canEnterApp, enterAppBusy, onEnterApp } = props
+  return (
+    <motion.div
+      key="step-done"
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+      className="space-y-5"
+    >
+      <div className="flex flex-col items-center text-center space-y-3 pt-2">
+        <motion.div
+          className="relative"
+          initial={{ scale: 0.6, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 320, damping: 20, delay: 0.05 }}
+        >
+          <div
+            className="h-11 w-11 rounded-xl flex items-center justify-center"
+            style={{
+              background: 'linear-gradient(135deg, rgba(0,52,204,0.35) 0%, rgba(91,168,255,0.18) 100%)',
+              border: '1px solid rgba(91,168,255,0.28)',
+            }}
+          >
+            <CheckCircle2 className="h-5 w-5 text-[#7DBCFF]" />
+          </div>
+          <motion.div
+            className="absolute inset-0 rounded-xl"
+            style={{ border: '1px solid rgba(91,168,255,0.35)' }}
+            initial={{ scale: 1, opacity: 0.5 }}
+            animate={{ scale: 1.6, opacity: 0 }}
+            transition={{ duration: 2.4, repeat: Infinity, ease: 'easeOut', delay: 0.3 }}
+          />
+        </motion.div>
+
+        <div className="space-y-1">
+          <h2 className="text-2xl font-semibold tracking-tight text-white">{doneUi.title}</h2>
+          <p className="text-sm text-zinc-400 max-w-xs mx-auto">{doneUi.subtitle}</p>
+          {accountCanonicalCswAddress ? (
+            <p className="text-xs text-zinc-500">
+              Canonical CSW <span className="font-mono text-zinc-300">{shortAddress(accountCanonicalCswAddress)}</span>
+            </p>
+          ) : null}
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {canEnterApp ? (
+          <button
+            type="button"
+            onClick={() => void onEnterApp()}
+            disabled={enterAppBusy}
+            className="btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
+          >
+            {enterAppBusy ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Entering App…
+              </>
+            ) : (
+              doneUi.primaryLabel
+            )}
+          </button>
+        ) : (
+          <Link
+            to="/accounts"
+            className="btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center"
+          >
+            {doneUi.primaryLabel}
+          </Link>
+        )}
+
+        {doneUi.secondaryLabel ? (
+          <Link
+            to="/accounts"
+            className="w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1 inline-block"
+          >
+            {doneUi.secondaryLabel}
+          </Link>
+        ) : null}
+      </div>
+    </motion.div>
+  )
+}
+
+export function WaitlistFlow(props: {
   variant?: Variant
   sectionId?: string
   autoStartAuth?: boolean
@@ -450,11 +1195,21 @@ export function ThinWaitlistFlow(props: {
 
   const [step, setStep] = useState<WaitlistStep>('auth')
 
-  const [busy, setBusy] = useState(false)
+  const {
+    busy,
+    setBusy,
+    error,
+    setError,
+    notice,
+    setNotice,
+    recoveryRequired,
+    setRecoveryRequired,
+    attemptInFlightRef: authAttemptInFlightRef,
+    clearFeedback,
+    beginAttempt: beginAuthAttempt,
+    endAttempt: endAuthAttempt,
+  } = useWaitlistAttemptState()
   const [enterAppBusy, setEnterAppBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [notice, setNotice] = useState<string | null>(null)
-  const [recoveryRequired, setRecoveryRequired] = useState(false)
   const [ownerDelegationFlags, setOwnerDelegationFlags] = useState<OwnerDelegationFlags | null>(null)
   const [ownerDelegationVerified, setOwnerDelegationVerified] = useState<boolean | null>(null)
   const [embeddedEoaAddress, setEmbeddedEoaAddress] = useState<string | null>(null)
@@ -466,10 +1221,9 @@ export function ThinWaitlistFlow(props: {
   const [waitlistPosition, setWaitlistPosition] = useState<WaitlistPositionResponse | null>(null)
   const [leaderboard, setLeaderboard] = useState<DashboardLeaderboardResponse | null>(null)
   const [copiedReferralLink, setCopiedReferralLink] = useState(false)
-  const authAttemptInFlightRef = useRef(false)
   const authAutoAttemptedRef = useRef(false)
   const authBootstrapAutoAttemptedRef = useRef(false)
-  const authFlowStartedRef = useRef(false)
+  const appHandoffAutoAttemptedRef = useRef(false)
   const dashboardRequestSeqRef = useRef(0)
   const privyLogoutRef = useRef<null | (() => Promise<void>)>(null)
 
@@ -527,7 +1281,6 @@ export function ThinWaitlistFlow(props: {
       'Sign-in token',
     ).catch(() => null)
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-    let nextOwnerDelegationVerified: boolean | null = null
     if (token) {
       headers['X-Privy-Token'] = token
       const canonicalization = await withTimeout(
@@ -541,7 +1294,6 @@ export function ThinWaitlistFlow(props: {
         setOwnerDelegationFlags(null)
         setOwnerDelegationVerified(canonicalization.onboarding.privyIsOwner)
         setEmbeddedEoaAddress(canonicalization.onboarding.privyEmbeddedEoaAddress)
-        nextOwnerDelegationVerified = canonicalization.onboarding.privyIsOwner
       } else {
         const flags = deriveOwnerDelegationFlags(canonicalization.flags)
         setOwnerDelegationFlags(flags)
@@ -590,7 +1342,7 @@ export function ThinWaitlistFlow(props: {
       setError('Verify your email with 4626 to finish creating this account.')
       return nextAccount
     }
-    setStep(resolveWaitlistStep({ account: nextAccount, ownerDelegationVerified: nextOwnerDelegationVerified }))
+    setStep(resolveWaitlistStep({ account: nextAccount }))
     return nextAccount
   }, [activeReferralCode, getAccessToken])
 
@@ -680,29 +1432,24 @@ export function ThinWaitlistFlow(props: {
   )
 
   const onContinueAuth = useCallback(async () => {
-    if (busy || authAttemptInFlightRef.current) return
-    authFlowStartedRef.current = true
-    authAttemptInFlightRef.current = true
-    setBusy(true)
-    setError(null)
-    setNotice(null)
-    setRecoveryRequired(false)
+    if (!beginAuthAttempt()) return
     try {
       if (!privyAuthed && privyClientStatus === 'disabled' && redirectToCanonicalWaitlist()) {
-        authAttemptInFlightRef.current = false
-        setBusy(false)
         return
       }
       if (privyAuthed) {
-        const linked = await maybeCallMethod(privy, ['linkEmail', 'linkEmailAccount'])
-        if (!linked) throw new Error('Email verification is unavailable in this client. Sign out and retry with email.')
+        try {
+          const linked = await maybeCallMethod(privy, ['linkEmail', 'linkEmailAccount'])
+          if (!linked) throw new Error('Email verification is unavailable in this client. Sign out and retry with email.')
+        } catch (linkEmailError: unknown) {
+          // Privy can throw this when email is already linked; continue by bootstrapping current account state.
+          if (!isEmailAlreadyLinkedAuthError(linkEmailError)) throw linkEmailError
+        }
         await runBootstrap()
       } else {
         await runWaitlistPrivyLogout({ logout: null })
         await login(buildWaitlistEmailLoginOptions() as any)
       }
-      authAttemptInFlightRef.current = false
-      setBusy(false)
     } catch (authError: any) {
       const isRecoveryRequired = isRecoveryRequiredAuthError(authError)
       if (isRecoveryRequired) {
@@ -720,19 +1467,23 @@ export function ThinWaitlistFlow(props: {
             ? authError.message
             : 'Failed to start sign-in.',
       )
-      authFlowStartedRef.current = false
-      authAttemptInFlightRef.current = false
-      setBusy(false)
+    } finally {
+      endAuthAttempt()
     }
-  }, [busy, login, privy, privyAuthed, privyClientStatus, redirectToCanonicalWaitlist, resetResolvedAccountState, runBootstrap])
+  }, [
+    beginAuthAttempt,
+    endAuthAttempt,
+    login,
+    privy,
+    privyAuthed,
+    privyClientStatus,
+    redirectToCanonicalWaitlist,
+    resetResolvedAccountState,
+    runBootstrap,
+  ])
 
   const onContinueWithBase = useCallback(async () => {
-    if (busy || authAttemptInFlightRef.current) return
-    authAttemptInFlightRef.current = true
-    setBusy(true)
-    setError(null)
-    setNotice(null)
-    setRecoveryRequired(false)
+    if (!beginAuthAttempt()) return
     try {
       if (!privyAuthed) throw new Error('Verify your email first, then continue with wallet setup.')
       const linked = await maybeCallMethod(privy, ['linkWallet'])
@@ -743,14 +1494,12 @@ export function ThinWaitlistFlow(props: {
           'We could not confirm a Coinbase Smart Wallet from that Base connection. If you need a new one, create one in Base app and then come back.',
         )
       }
-      authAttemptInFlightRef.current = false
-      setBusy(false)
     } catch (authError: any) {
       setError(typeof authError?.message === 'string' ? authError.message : 'Failed to link your Base Smart Wallet.')
-      authAttemptInFlightRef.current = false
-      setBusy(false)
+    } finally {
+      endAuthAttempt()
     }
-  }, [busy, privy, privyAuthed, runBootstrap])
+  }, [beginAuthAttempt, endAuthAttempt, privy, privyAuthed, runBootstrap])
 
   const resolveZora = useCallback(async (token: string): Promise<ZoraResolveResponse | null> => {
     const response = await apiFetch('/api/zora/resolve', {
@@ -764,12 +1513,7 @@ export function ThinWaitlistFlow(props: {
   }, [])
 
   const onContinueWithZora = useCallback(async () => {
-    if (busy || authAttemptInFlightRef.current) return
-    authAttemptInFlightRef.current = true
-    setBusy(true)
-    setError(null)
-    setNotice(null)
-    setRecoveryRequired(false)
+    if (!beginAuthAttempt()) return
     try {
       if (!privyAuthed) throw new Error('Verify your email first, then continue with wallet setup.')
       await performZoraCrossAppAuth({
@@ -794,14 +1538,21 @@ export function ThinWaitlistFlow(props: {
       if (!nextAccount?.accountSignals?.canonicalCswAddress) {
         throw new Error('Your Zora wallet linked, but the canonical Coinbase Smart Wallet is still unavailable. Retry in a moment.')
       }
-      authAttemptInFlightRef.current = false
-      setBusy(false)
     } catch (authError: any) {
       setError(typeof authError?.message === 'string' ? authError.message : 'Failed to link your Zora Smart Wallet.')
-      authAttemptInFlightRef.current = false
-      setBusy(false)
+    } finally {
+      endAuthAttempt()
     }
-  }, [busy, getAccessToken, linkCrossAppAccount, loginWithCrossAppAccount, privyAuthed, resolveZora, runBootstrap])
+  }, [
+    beginAuthAttempt,
+    endAuthAttempt,
+    getAccessToken,
+    linkCrossAppAccount,
+    loginWithCrossAppAccount,
+    privyAuthed,
+    resolveZora,
+    runBootstrap,
+  ])
 
   const onCreateInBaseApp = useCallback(() => {
     if (typeof window === 'undefined') return
@@ -829,8 +1580,7 @@ export function ThinWaitlistFlow(props: {
   const onEnable4626Signing = useCallback(async () => {
     if (!account?.accountSignals?.canonicalCswAddress) return
     setBusy(true)
-    setError(null)
-    setNotice(null)
+    clearFeedback()
     setOwnerDelegationFlags(null)
     try {
       const token = await getAccessToken()
@@ -892,26 +1642,13 @@ export function ThinWaitlistFlow(props: {
     } finally {
       setBusy(false)
     }
-  }, [account?.accountSignals?.canonicalCswAddress, getAccessToken, runBootstrap, sendPreparedOwnerTx])
+  }, [account?.accountSignals?.canonicalCswAddress, clearFeedback, getAccessToken, runBootstrap, sendPreparedOwnerTx])
 
   const onRecoverAccount = useCallback(async () => {
-    if (busy || authAttemptInFlightRef.current) return
-    authFlowStartedRef.current = true
-    authAttemptInFlightRef.current = true
-    setBusy(true)
-    setError(null)
-    setNotice(null)
-    setRecoveryRequired(false)
-    setAccount(null)
-    setOwnerDelegationFlags(null)
-    setOwnerDelegationVerified(null)
-    setEmbeddedEoaAddress(null)
-    setWaitlistPosition(null)
-    setLeaderboard(null)
+    if (!beginAuthAttempt()) return
+    resetResolvedAccountState()
     try {
       if (privyClientStatus === 'disabled' && redirectToCanonicalWaitlist()) {
-        authAttemptInFlightRef.current = false
-        setBusy(false)
         return
       }
       await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
@@ -919,17 +1656,14 @@ export function ThinWaitlistFlow(props: {
     } catch (recoverError: any) {
       if (isPrivyLoginBootstrapError(recoverError) && redirectToCanonicalWaitlist()) {
         setError('Redirecting back to the waitlist sign-in flow…')
-        authFlowStartedRef.current = false
         return
       }
       setError(typeof recoverError?.message === 'string' ? recoverError.message : 'Failed to start account recovery sign-in.')
       setRecoveryRequired(true)
-      authFlowStartedRef.current = false
     } finally {
-      authAttemptInFlightRef.current = false
-      setBusy(false)
+      endAuthAttempt()
     }
-  }, [busy, login, privyClientStatus, redirectToCanonicalWaitlist])
+  }, [beginAuthAttempt, endAuthAttempt, login, privyClientStatus, redirectToCanonicalWaitlist, resetResolvedAccountState])
 
   const onEnterApp = useCallback(async () => {
     if (enterAppBusy) return
@@ -992,7 +1726,6 @@ export function ThinWaitlistFlow(props: {
       !shouldAutoBootstrapWaitlistSession({
         step,
         privyAuthed,
-        authFlowStarted: authFlowStartedRef.current,
       })
     ) {
       authBootstrapAutoAttemptedRef.current = false
@@ -1050,7 +1783,6 @@ export function ThinWaitlistFlow(props: {
       authAttemptInFlightRef.current = false
       authAutoAttemptedRef.current = false
       authBootstrapAutoAttemptedRef.current = false
-      authFlowStartedRef.current = false
       setRecoveryRequired(false)
     }
   }, [step])
@@ -1083,7 +1815,6 @@ export function ThinWaitlistFlow(props: {
 
   const authUi = deriveWaitlistAuthUi()
   const shouldAutoStartAuth = shouldAutoStartWaitlistAuth({
-    variant,
     autoStartRequested: props.autoStartAuth === true,
     step,
     privyAuthed,
@@ -1098,9 +1829,7 @@ export function ThinWaitlistFlow(props: {
   const ownerInstallNeeded = Boolean(canonicalCswAddress && ownerDelegationVerified === false)
   const canEnterApp = canEnterAppFromAccountState({
     appAccessStatus: account?.appAccessStatus ?? null,
-    tier: account?.score?.tier ?? 0,
   })
-  const appApproved = String(account?.appAccessStatus ?? '').trim().toLowerCase() === 'approved'
   const doneUi = deriveWaitlistDoneUi(canEnterApp)
   const accessStatusMeta = getAccessStatusMeta(account?.appAccessStatus)
   const leaderboardRows = leaderboard?.leaderboard ?? []
@@ -1116,14 +1845,11 @@ export function ThinWaitlistFlow(props: {
     () => (personalReferralCode ? getMarketingWaitlistReferralUrl(personalReferralCode) : null),
     [personalReferralCode],
   )
-  const leaderboardTitle = 'Waitlist leaderboard'
-  const dashboardSubtitle = appApproved
-    ? 'Admin approval is in. Finish wallet readiness and then the app handoff will unlock automatically.'
-    : ownerInstallNeeded
-      ? 'You are still on the waitlist. Finish 4626 signing on your canonical CSW and keep building points while admin review is pending.'
-      : walletSelectionNeeded
-        ? 'Your email is verified. Track your rank, build points, and optionally connect the wallet you want 4626 to recognize.'
-        : 'Your wallet is linked. Keep climbing the leaderboard while you wait for admin approval.'
+  const dashboardSubtitle = ownerInstallNeeded
+    ? 'You are still on the waitlist. Finish 4626 signing on your canonical CSW and keep building points while admin review is pending.'
+    : walletSelectionNeeded
+      ? 'Your email is verified. Track your rank, build points, and optionally connect the wallet you want 4626 to recognize.'
+      : 'Your wallet is linked. Keep climbing the leaderboard while you wait for admin approval.'
 
   const onCopyReferralLink = useCallback(async () => {
     if (!personalReferralLink || typeof navigator === 'undefined' || !navigator.clipboard?.writeText) return
@@ -1131,12 +1857,33 @@ export function ThinWaitlistFlow(props: {
     setCopiedReferralLink(true)
   }, [personalReferralLink])
 
+  const onRefreshStatus = useCallback(() => {
+    void runBootstrap()
+    void loadDashboard({ silent: true })
+  }, [loadDashboard, runBootstrap])
+
   useEffect(() => {
     if (!shouldAutoStartAuth) return
     if (busy || authAttemptInFlightRef.current || authAutoAttemptedRef.current) return
     authAutoAttemptedRef.current = true
     void onContinueAuth()
   }, [busy, onContinueAuth, shouldAutoStartAuth])
+
+  const shouldAutoHandoff = shouldAutoHandoffApprovedAccount({
+    variant,
+    step,
+    canEnterApp,
+    enterAppBusy,
+  })
+  useEffect(() => {
+    if (!shouldAutoHandoff) {
+      appHandoffAutoAttemptedRef.current = false
+      return
+    }
+    if (appHandoffAutoAttemptedRef.current) return
+    appHandoffAutoAttemptedRef.current = true
+    void onEnterApp()
+  }, [onEnterApp, shouldAutoHandoff])
 
   const indicatorSteps = [
     {
@@ -1162,600 +1909,63 @@ export function ThinWaitlistFlow(props: {
         {!useCompactModalAuthStart && !hideAuthShell ? <StepIndicator steps={indicatorSteps} /> : null}
 
         {step === 'auth' ? (
-          <motion.div
-            key="step-auth"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-            className="space-y-5"
-          >
-            {hideAuthShell ? (
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
-                <div className="inline-flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
-                  Opening secure email sign-in…
-                </div>
-              </div>
-            ) : useCompactModalAuthStart ? (
-              <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
-                <div className="inline-flex items-center gap-2">
-                  <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
-                  Opening secure email sign-in…
-                </div>
-              </div>
-            ) : (
-              <>
-            <div className="space-y-1">
-              <h2 className="text-2xl font-semibold tracking-tight text-white">{authUi.title}</h2>
-              <p className="text-sm text-zinc-400">{authUi.subtitle}</p>
-            </div>
-
-            {shouldAutoStartAuth ? (
-              <div className="space-y-3">
-                <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
-                  <div className="inline-flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
-                    Opening secure email sign-in…
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => void onContinueAuth()}
-                  className="btn-secondary btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50"
-                >
-                  Join waitlist
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() => void onContinueAuth()}
-                className="btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {busy ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    {authUi.busyLabel}
-                  </>
-                ) : (
-                  authUi.ctaLabel
-                )}
-              </button>
-            )}
-              </>
-            )}
-
-            {error ? (
-              <div className="space-y-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-                <div>{error}</div>
-                {recoveryRequired ? (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void onRecoverAccount()}
-                    className="inline-flex items-center rounded-lg border border-rose-300/35 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-100 transition hover:bg-rose-500/20 disabled:opacity-60"
-                  >
-                    Recover account sign-in
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-          </motion.div>
+          <WaitlistAuthStep
+            hideAuthShell={hideAuthShell}
+            useCompactModalAuthStart={useCompactModalAuthStart}
+            authUi={authUi}
+            shouldAutoStartAuth={shouldAutoStartAuth}
+            busy={busy}
+            error={error}
+            recoveryRequired={recoveryRequired}
+            onContinueAuth={onContinueAuth}
+            onRecoverAccount={onRecoverAccount}
+          />
         ) : null}
 
-        {/* Waitlist dashboard step */}
         {step === 'wallet' ? (
-          <motion.div
-            key="step-wallet"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-            className="space-y-5"
-          >
-            <div className="rounded-2xl border border-white/10 bg-[linear-gradient(180deg,rgba(91,168,255,0.12)_0%,rgba(7,10,18,0.86)_100%)] p-5 sm:p-6">
-              <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-                <div className="space-y-3">
-                  <div className={`inline-flex items-center rounded-full border px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] ${accessStatusMeta.tone}`}>
-                    {accessStatusMeta.label}
-                  </div>
-                  <div className="space-y-1">
-                    <h2 className="text-2xl font-semibold tracking-tight text-white">Climb the waitlist</h2>
-                    <p className="max-w-xl text-sm text-zinc-300">{dashboardSubtitle}</p>
-                  </div>
-                  <p className="text-xs text-zinc-500">{accessStatusMeta.description}</p>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3 sm:min-w-[280px]">
-                  <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
-                    <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Total points</div>
-                    <div className="mt-2 text-2xl font-semibold text-white">{formatWholeNumber(totalPoints)}</div>
-                  </div>
-                  <div className="rounded-2xl border border-white/10 bg-black/25 p-4">
-                    <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Total rank</div>
-                    <div className="mt-2 text-2xl font-semibold text-white">{formatRankLabel(totalRank)}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Invite rank</div>
-                <div className="mt-2 text-xl font-semibold text-white">{formatRankLabel(inviteRank)}</div>
-                <div className="mt-1 text-xs text-zinc-500">Leaderboard position by referral momentum.</div>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Qualified referrals</div>
-                <div className="mt-2 text-xl font-semibold text-white">{formatWholeNumber(qualifiedReferrals)}</div>
-                <div className="mt-1 text-xs text-zinc-500">Friends who fully linked into the system.</div>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Pending referrals</div>
-                <div className="mt-2 text-xl font-semibold text-white">{formatWholeNumber(pendingReferrals)}</div>
-                <div className="mt-1 text-xs text-zinc-500">Signed up but not fully qualified yet.</div>
-              </div>
-              <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-                <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Wallet readiness</div>
-                <div className="mt-2 text-sm font-semibold text-white">
-                  {walletSelectionNeeded ? 'CSW not linked' : ownerInstallNeeded ? 'Signer install pending' : 'Ready'}
-                </div>
-                <div className="mt-1 text-xs text-zinc-500">
-                  {walletSelectionNeeded
-                    ? 'Connect the wallet you want 4626 to recognize.'
-                    : ownerInstallNeeded
-                      ? 'One owner-install transaction is still left.'
-                      : 'Your canonical wallet path is set.'}
-                </div>
-              </div>
-            </div>
-
-            {notice ? (
-              <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-200">
-                {notice}
-              </div>
-            ) : null}
-
-            {dashboardError ? (
-              <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-3 py-2 text-sm text-amber-100">
-                {dashboardError}
-              </div>
-            ) : null}
-
-            <div className="grid gap-4 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,0.85fr)]">
-              <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5 space-y-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Points breakdown</div>
-                    <div className="mt-1 text-sm text-zinc-300">The mix that determines how far up the queue you show up.</div>
-                  </div>
-                  <Link to="/accounts" className="text-xs text-brand-primary hover:text-brand-300 transition-colors">
-                    Manage account
-                  </Link>
-                </div>
-
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Signup</div>
-                    <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(waitlistPosition?.points.signup ?? 0)}</div>
-                  </div>
-                  <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Invites</div>
-                    <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(waitlistPosition?.points.invite ?? 0)}</div>
-                  </div>
-                  <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Social</div>
-                    <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(waitlistPosition?.points.social ?? 0)}</div>
-                  </div>
-                  <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-                    <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Wallet / CSW</div>
-                    <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(waitlistPosition?.points.csw ?? 0)}</div>
-                  </div>
-                </div>
-
-                <div className="rounded-xl border border-brand-primary/20 bg-brand-primary/8 p-4">
-                  <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-brand-primary">Priority move</div>
-                  <div className="mt-2 text-sm font-semibold text-white">
-                    {walletSelectionNeeded ? 'Link the CSW you want 4626 to recognize.' : 'Finish 4626 signing on your canonical CSW.'}
-                  </div>
-                  <p className="mt-1 text-xs leading-relaxed text-zinc-300">
-                    {walletSelectionNeeded
-                      ? 'This is the clearest wallet signal you can give the system while admin approval is pending.'
-                      : ownerInstallNeeded
-                        ? 'Installing the embedded signer proves 4626 can actually act through your canonical wallet once you are approved.'
-                        : 'Your wallet setup already puts you in the strongest readiness bucket.'}
-                  </p>
-                </div>
-              </div>
-
-              <div className="space-y-4">
-                <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5 space-y-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Referral link</div>
-                      <div className="mt-1 text-sm text-zinc-300">Share one clean invite URL instead of sending people back through messy query strings.</div>
-                    </div>
-                    {personalReferralCode ? (
-                      <div className="rounded-full border border-brand-primary/25 bg-brand-primary/10 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-brand-primary">
-                        {personalReferralCode}
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {personalReferralLink ? (
-                    <>
-                      <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-                        <div className="truncate font-mono text-sm text-zinc-100">{personalReferralLink}</div>
-                        <p className="mt-2 text-xs text-zinc-500">
-                          New signups land on the waitlist signup flow first, then unlock their ranking and referral view after verification.
-                        </p>
-                      </div>
-
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-                          <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Qualified</div>
-                          <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(qualifiedReferrals)}</div>
-                          <div className="mt-1 text-xs text-zinc-500">Friends fully linked and counted.</div>
-                        </div>
-                        <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3">
-                          <div className="text-[10px] uppercase tracking-[0.18em] text-zinc-500">Pending</div>
-                          <div className="mt-2 text-lg font-semibold text-white">{formatWholeNumber(pendingReferrals)}</div>
-                          <div className="mt-1 text-xs text-zinc-500">People who still need to finish setup.</div>
-                        </div>
-                      </div>
-
-                      <div className="flex flex-col gap-3 sm:flex-row">
-                        <button
-                          type="button"
-                          onClick={() => void onCopyReferralLink()}
-                          className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-4 py-3 text-sm font-medium text-zinc-100 transition hover:bg-white/[0.05] sm:flex-1"
-                        >
-                          {copiedReferralLink ? <Check className="h-4 w-4 text-emerald-300" /> : <Copy className="h-4 w-4" />}
-                          {copiedReferralLink ? 'Copied' : 'Copy invite link'}
-                        </button>
-                        <a
-                          href={personalReferralLink}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="inline-flex items-center justify-center rounded-xl border border-white/10 px-4 py-3 text-sm font-medium text-zinc-200 transition hover:bg-white/[0.05] sm:flex-1"
-                        >
-                          Open invite route
-                        </a>
-                      </div>
-                    </>
-                  ) : (
-                    <div className="rounded-xl border border-white/8 bg-white/[0.03] p-3 text-sm text-zinc-500">
-                      Your invite code will appear here as soon as the waitlist profile finishes syncing.
-                    </div>
-                  )}
-                </div>
-
-                <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5 space-y-4">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">{leaderboardTitle}</div>
-                      <div className="mt-1 text-sm text-zinc-300">Ranked by total points after verified signup.</div>
-                    </div>
-                    <Link to="/leaderboard" className="text-xs text-brand-primary hover:text-brand-300 transition-colors">
-                      Full board
-                    </Link>
-                  </div>
-
-                  <div className="rounded-xl border border-white/8 bg-white/[0.02] overflow-hidden">
-                    {dashboardBusy && leaderboardRows.length === 0 ? (
-                      <div className="px-4 py-6 text-sm text-zinc-500">Loading leaderboard…</div>
-                    ) : leaderboardRows.length > 0 ? (
-                      <div>
-                        {leaderboardRows.map((row) => {
-                          const isMe = Boolean(leaderboardMe && leaderboardMe.signupId === row.signupId)
-                          return (
-                            <div
-                              key={`${row.rank}-${row.signupId}`}
-                              className={`grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 border-b border-white/6 px-4 py-3 last:border-b-0 ${
-                                isMe ? 'bg-brand-primary/6' : ''
-                              }`}
-                            >
-                              <div className="text-sm font-medium text-zinc-400">#{row.rank}</div>
-                              <div className="min-w-0">
-                                <div className="truncate text-sm text-white">{row.display}</div>
-                                <div className="flex items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-zinc-600">
-                                  {row.referralCode ? <span>{row.referralCode}</span> : null}
-                                  {row.borderTier >= 1 ? <span>Tier {row.borderTier}</span> : null}
-                                  {isMe ? <span className="text-brand-primary">You</span> : null}
-                                </div>
-                              </div>
-                              <div
-                                className="text-sm font-semibold tabular-nums text-zinc-100"
-                                title={formatLeaderboardPointsTooltip(row)}
-                              >
-                                {formatWholeNumber(row.pointsTotal)}
-                              </div>
-                            </div>
-                          )
-                        })}
-                      </div>
-                    ) : (
-                      <div className="px-4 py-6 text-sm text-zinc-500">No ranked accounts yet.</div>
-                    )}
-                  </div>
-
-                  {!leaderboardMeInTop && leaderboardMe ? (
-                    <div className="rounded-xl border border-brand-primary/20 bg-brand-primary/5 p-3">
-                      <div className="text-[10px] uppercase tracking-[0.18em] text-brand-primary">Your standing</div>
-                      <div className="mt-2 flex items-center justify-between gap-3">
-                        <div>
-                          <div className="text-sm font-medium text-white">{leaderboardMe.display}</div>
-                          <div className="text-xs text-zinc-500">{formatRankLabel(leaderboardMe.rank)}</div>
-                        </div>
-                        <div
-                          className="text-sm font-semibold tabular-nums text-zinc-100"
-                          title={formatLeaderboardPointsTooltip(leaderboardMe)}
-                        >
-                          {formatWholeNumber(leaderboardMe.pointsTotal)}
-                        </div>
-                      </div>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-zinc-500">Wallet actions</div>
-                  <div className="mt-1 text-sm text-zinc-300">
-                    Optional while you wait for approval, but these actions move your account closer to app-readiness.
-                  </div>
-                </div>
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => {
-                    void runBootstrap()
-                    void loadDashboard({ silent: true })
-                  }}
-                  className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-                >
-                  Refresh status
-                </button>
-              </div>
-
-              {walletSelectionNeeded ? (
-                <>
-                  <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-                    <WalletPathCard
-                      eyebrow="Existing CSW"
-                      title="Link Base Smart Wallet"
-                      body="Use your existing Coinbase Smart Wallet from Base app and keep that wallet as the canonical CSW for 4626."
-                      bestFor="You already use Base app and want to keep that smart wallet."
-                      icon={<CoinbaseLogo className="h-6 w-6" />}
-                      busy={busy}
-                      busyLabel="Linking Base wallet..."
-                      label="Link Base Smart Wallet"
-                      onClick={() => void onContinueWithBase()}
-                    />
-                    <WalletPathCard
-                      eyebrow="Existing CSW"
-                      title="Link Zora Smart Wallet"
-                      body="Choose this when your canonical Coinbase Smart Wallet is already attached to your Zora account."
-                      bestFor="Your Zora account already resolves to the CSW you want 4626 to use."
-                      icon={<ZoraLogo className="h-6 w-6 rounded-full" />}
-                      busy={busy}
-                      busyLabel="Linking Zora wallet..."
-                      label="Link Zora Smart Wallet"
-                      onClick={() => void onContinueWithZora()}
-                    />
-                    <div className="lg:col-span-2">
-                      <WalletPathCard
-                        eyebrow="New Base wallet"
-                        title="Create new wallet in Base app"
-                        body="Start a new Coinbase Smart Wallet in Base app with the 4626 referral flow, then come back here and continue setup."
-                        bestFor="You do not have a CSW yet, or you want a fresh Base-native setup."
-                        icon={<CoinbaseLogo className="h-6 w-6" />}
-                        emphasized
-                        busy={busy}
-                        busyLabel="Opening Base app..."
-                        label="Create new wallet in Base app"
-                        onClick={onCreateInBaseApp}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2">
-                    <p className="text-xs font-medium uppercase tracking-wide text-zinc-500">Quick guide</p>
-                    <div className="space-y-2 text-xs text-zinc-400">
-                      <div>
-                        Pick <span className="text-zinc-200">Link Base Smart Wallet</span> when you already use Base app and want that CSW to stay canonical.
-                      </div>
-                      <div>
-                        Pick <span className="text-zinc-200">Link Zora Smart Wallet</span> when Zora already resolves to the wallet you want 4626 to use.
-                      </div>
-                      <div>
-                        Pick <span className="text-zinc-200">Create new wallet in Base app</span> when you do not have a CSW yet or want a fresh Base-native setup.
-                      </div>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <div className="space-y-4">
-                  <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2 text-sm">
-                    <div className="flex items-center gap-2">
-                      <CoinbaseLogo className="h-4 w-4 shrink-0" />
-                      <span className="text-zinc-500">Canonical CSW</span>
-                      <span className="font-mono text-zinc-200">{shortAddress(canonicalCswAddress)}</span>
-                    </div>
-                    {embeddedEoaAddress ? (
-                      <div className="flex items-center gap-2">
-                        <span className="text-zinc-500">Privy embedded EOA</span>
-                        <span className="font-mono text-zinc-200">{shortAddress(embeddedEoaAddress)}</span>
-                      </div>
-                    ) : null}
-                    <div className={`text-xs ${ownerDelegationVerified ? 'text-emerald-300' : 'text-amber-200'}`}>
-                      {ownerDelegationVerified
-                        ? '4626 signing is enabled on this wallet.'
-                        : '4626 signing is not enabled yet. One owner-install transaction is still required.'}
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div className="text-sm font-medium">Enable 4626 signing</div>
-                      <span className={`text-[10px] font-medium uppercase tracking-[0.18em] ${ownerDelegationVerified ? 'text-emerald-300' : 'text-brand-primary'}`}>
-                        {ownerDelegationVerified ? 'Complete' : 'Recommended'}
-                      </span>
-                    </div>
-                    <p className="text-xs text-zinc-500">
-                      This adds your Privy embedded signer as an owner on the canonical CSW. You will sign one transaction with the wallet that currently owns it.
-                    </p>
-                    <p className="text-xs text-zinc-500">
-                      If the current owner wallet is not connected in this browser yet, reconnect it first and then retry.
-                    </p>
-                    <button
-                      type="button"
-                      disabled={busy || !ownerInstallNeeded}
-                      onClick={() => void onEnable4626Signing()}
-                      className="btn-secondary btn-no-icon inline-flex"
-                    >
-                      {busy ? 'Preparing…' : ownerDelegationVerified ? '4626 signing enabled' : 'Enable 4626 signing'}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {ownerDelegationFlags ? (
-                <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 p-4 text-xs text-amber-100 space-y-1">
-                  {ownerDelegationFlags.needsBaseAppSetup ? (
-                    <div>
-                      Finish Coinbase Smart Wallet setup in Base app, then return here and retry.
-                      {ownerDelegationFlags.baseAppUrl ? (
-                        <>
-                          {' '}
-                          <a
-                            href={ownerDelegationFlags.baseAppUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="underline underline-offset-2"
-                          >
-                            Open Base app
-                          </a>
-                          .
-                        </>
-                      ) : null}
-                    </div>
-                  ) : null}
-                  {ownerDelegationFlags.needsEmbeddedWallet ? (
-                    <div>Privy embedded wallet provisioning is still settling. Retry in a moment.</div>
-                  ) : null}
-                </div>
-              ) : null}
-            </div>
-
-            {error ? (
-              <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
-                {error}
-              </div>
-            ) : null}
-
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Link
-                to="/accounts"
-                className="btn-accent btn-no-icon inline-flex w-full items-center justify-center rounded-xl py-3 text-sm font-medium sm:flex-1"
-              >
-                Go to accounts
-              </Link>
-              <Link
-                to="/leaderboard"
-                className="inline-flex w-full items-center justify-center rounded-xl border border-white/10 px-4 py-3 text-sm font-medium text-zinc-200 transition hover:bg-white/[0.04] sm:flex-1"
-              >
-                Open full leaderboard
-              </Link>
-            </div>
-          </motion.div>
+          <WaitlistWalletStep
+            accessStatusMeta={accessStatusMeta}
+            dashboardSubtitle={dashboardSubtitle}
+            totalPoints={totalPoints}
+            totalRank={totalRank}
+            inviteRank={inviteRank}
+            qualifiedReferrals={qualifiedReferrals}
+            pendingReferrals={pendingReferrals}
+            walletSelectionNeeded={walletSelectionNeeded}
+            ownerInstallNeeded={ownerInstallNeeded}
+            notice={notice}
+            dashboardError={dashboardError}
+            waitlistPosition={waitlistPosition}
+            personalReferralCode={personalReferralCode}
+            personalReferralLink={personalReferralLink}
+            copiedReferralLink={copiedReferralLink}
+            leaderboardRows={leaderboardRows}
+            leaderboardMe={leaderboardMe}
+            leaderboardMeInTop={leaderboardMeInTop}
+            dashboardBusy={dashboardBusy}
+            busy={busy}
+            ownerDelegationVerified={ownerDelegationVerified}
+            canonicalCswAddress={canonicalCswAddress}
+            embeddedEoaAddress={embeddedEoaAddress}
+            ownerDelegationFlags={ownerDelegationFlags}
+            error={error}
+            onCopyReferralLink={onCopyReferralLink}
+            onContinueWithBase={onContinueWithBase}
+            onContinueWithZora={onContinueWithZora}
+            onCreateInBaseApp={onCreateInBaseApp}
+            onEnable4626Signing={onEnable4626Signing}
+            onRefreshStatus={onRefreshStatus}
+          />
         ) : null}
 
-        {/* Done step */}
         {step === 'done' ? (
-          <motion.div
-            key="step-done"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-            className="space-y-5"
-          >
-            <div className="flex flex-col items-center text-center space-y-3 pt-2">
-              <motion.div
-                className="relative"
-                initial={{ scale: 0.6, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                transition={{ type: 'spring', stiffness: 320, damping: 20, delay: 0.05 }}
-              >
-                <div
-                  className="h-11 w-11 rounded-xl flex items-center justify-center"
-                  style={{
-                    background: 'linear-gradient(135deg, rgba(0,52,204,0.35) 0%, rgba(91,168,255,0.18) 100%)',
-                    border: '1px solid rgba(91,168,255,0.28)',
-                  }}
-                >
-                  <CheckCircle2 className="h-5 w-5 text-[#7DBCFF]" />
-                </div>
-                <motion.div
-                  className="absolute inset-0 rounded-xl"
-                  style={{ border: '1px solid rgba(91,168,255,0.35)' }}
-                  initial={{ scale: 1, opacity: 0.5 }}
-                  animate={{ scale: 1.6, opacity: 0 }}
-                  transition={{ duration: 2.4, repeat: Infinity, ease: 'easeOut', delay: 0.3 }}
-                />
-              </motion.div>
-
-              <div className="space-y-1">
-                <h2 className="text-2xl font-semibold tracking-tight text-white">{doneUi.title}</h2>
-                <p className="text-sm text-zinc-400 max-w-xs mx-auto">{doneUi.subtitle}</p>
-                {account?.accountSignals?.canonicalCswAddress ? (
-                  <p className="text-xs text-zinc-500">
-                    Canonical CSW <span className="font-mono text-zinc-300">{shortAddress(account.accountSignals.canonicalCswAddress)}</span>
-                  </p>
-                ) : null}
-              </div>
-            </div>
-
-            <div className="space-y-3">
-              {canEnterApp ? (
-                <button
-                  type="button"
-                  onClick={() => void onEnterApp()}
-                  disabled={enterAppBusy}
-                  className="btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60"
-                >
-                  {enterAppBusy ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Entering App…
-                    </>
-                  ) : (
-                    doneUi.primaryLabel
-                  )}
-                </button>
-              ) : (
-                <Link
-                  to="/accounts"
-                  className="btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center"
-                >
-                  {doneUi.primaryLabel}
-                </Link>
-              )}
-
-              {doneUi.secondaryLabel ? (
-                <Link
-                  to="/accounts"
-                  className="w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1 inline-block"
-                >
-                  {doneUi.secondaryLabel}
-                </Link>
-              ) : null}
-            </div>
-          </motion.div>
+          <WaitlistDoneStep
+            doneUi={doneUi}
+            accountCanonicalCswAddress={account?.accountSignals?.canonicalCswAddress ?? null}
+            canEnterApp={canEnterApp}
+            enterAppBusy={enterAppBusy}
+            onEnterApp={onEnterApp}
+          />
         ) : null}
       </div>
     </section>

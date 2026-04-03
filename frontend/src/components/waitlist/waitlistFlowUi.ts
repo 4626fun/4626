@@ -41,7 +41,7 @@ export type WaitlistDoneUi = {
   secondaryLabel: string | null
 }
 
-export function canEnterAppFromAccountState(params: { appAccessStatus: string | null; tier: number }): boolean {
+export function canEnterAppFromAccountState(params: { appAccessStatus: string | null }): boolean {
   const status = String(params.appAccessStatus ?? '').trim().toLowerCase()
   return status === 'approved'
 }

@@ -76,6 +76,7 @@ describe('keepr/actions/execute', () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(true)
+    expect(res.body?.data?.trustZone).toBe('queue_messaging_monitoring')
     expect(executeKeeprActionMock).toHaveBeenCalledWith({
       id: 42,
       vaultAddress: '0x00000000000000000000000000000000000000bb',
@@ -148,6 +149,7 @@ describe('keepr/actions/execute', () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.body?.data?.executed).toBe(true)
+    expect(res.body?.data?.trustZone).toBe('financial_execution')
     expect(executeKeeprActionMock).toHaveBeenCalledWith({
       id: 11,
       vaultAddress: '0x00000000000000000000000000000000000000bb',
@@ -211,6 +213,58 @@ describe('keepr/actions/execute', () => {
 
     expect(res.statusCode).toBe(503)
     expect(res.body?.data?.retryable).toBe(true)
+  })
+
+  it('enforces optional trust-zone key when configured', async () => {
+    const restoreZoneEnv = applyEnv({
+      KEEPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING: 'zone-queue-secret',
+    })
+    executeKeeprActionMock.mockResolvedValue({
+      success: true,
+      retryable: false,
+      actionType: 'xmtp.group.add_member',
+      details: {},
+    })
+
+    try {
+      const unauthorizedReq = createMockReq({
+        method: 'POST',
+        headers: { authorization: 'Bearer test-keepr-key' },
+        body: {
+          id: 99,
+          vaultAddress: '0x00000000000000000000000000000000000000bb',
+          groupId: 'group-zone',
+          actionType: 'xmtp.group.add_member',
+          action: { action: 'xmtp.group.add_member', wallet: '0x00000000000000000000000000000000000000aa' },
+        },
+      })
+      const unauthorizedRes = createMockRes()
+      await handler(unauthorizedReq, unauthorizedRes)
+      expect(unauthorizedRes.statusCode).toBe(401)
+      expect(executeKeeprActionMock).not.toHaveBeenCalled()
+
+      const authorizedReq = createMockReq({
+        method: 'POST',
+        headers: {
+          authorization: 'Bearer test-keepr-key',
+          'x-keepr-zone-key': 'zone-queue-secret',
+        },
+        body: {
+          id: 99,
+          vaultAddress: '0x00000000000000000000000000000000000000bb',
+          groupId: 'group-zone',
+          actionType: 'xmtp.group.add_member',
+          action: { action: 'xmtp.group.add_member', wallet: '0x00000000000000000000000000000000000000aa' },
+        },
+      })
+      const authorizedRes = createMockRes()
+      await handler(authorizedReq, authorizedRes)
+      expect(authorizedRes.statusCode).toBe(200)
+      expect(authorizedRes.body?.data?.trustZone).toBe('queue_messaging_monitoring')
+      expect(executeKeeprActionMock).toHaveBeenCalledTimes(1)
+    } finally {
+      restoreZoneEnv()
+    }
   })
 })
 

@@ -5,6 +5,7 @@ import {
   handleOptions,
   readJsonBody,
   requireKeeprApiKey,
+  requireOptionalHeaderEnvAuth,
   setCors,
   setNoStore,
   getDb,
@@ -14,6 +15,11 @@ import {
 import { getKeeprVaultAutomationByVaultAddress } from '../../../../server/_lib/keeprAutomation.js'
 
 import { enqueueKeeprAction } from '../../../../server/_lib/keeprRegistry.js'
+import {
+  KEEPR_TRUST_ZONE_KEY_HEADER,
+  getKeeprTrustZoneEnvKey,
+  resolveKeeprTrustZone,
+} from '../../../../server/_lib/agentControl/trustZones.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -27,6 +33,7 @@ type EnqueueBody = {
 
 type EnqueueResponse = {
   id: number
+  trustZone: string
 }
 
 const AJNA_AUTOMATION_SCOPE = 'ajna_min_bucket_only'
@@ -102,6 +109,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Invalid dedupeKey' } satisfies ApiEnvelope<never>)
   }
 
+  const trustZone = resolveKeeprTrustZone(actionType)
+  const trustZoneEnvKey = getKeeprTrustZoneEnvKey(trustZone)
+  if (
+    !requireOptionalHeaderEnvAuth(req, res, {
+      envKey: trustZoneEnvKey,
+      headerName: KEEPR_TRUST_ZONE_KEY_HEADER,
+      unauthorizedError: `Unauthorized trust zone: ${trustZone}`,
+    })
+  ) {
+    return
+  }
+
   try {
     if (isAjnaRebucketAction(actionType)) {
       const automation = await getKeeprVaultAutomationByVaultAddress(vaultAddressRaw as `0x${string}`)
@@ -129,7 +148,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
     return res.status(200).json({
       success: true,
-      data: { id },
+      data: { id, trustZone },
     } satisfies ApiEnvelope<EnqueueResponse>)
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err)

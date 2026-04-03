@@ -20,6 +20,7 @@ The CSW never "becomes" a separate agent — the agent identity is layered onto 
 
 ## Architecture Invariant
 
+- Wallet/account selection rules live in `ERC-4337-Wallet-Invariants.mdc`; this file defines how delegated signers and agent identity layer onto that canonical wallet.
 - The CSW is the canonical asset-holding account (per `ERC-4337-Wallet-Invariants.mdc`).
 - Privy server wallets are delegated signers added to the CSW's MultiOwnable owner list.
 - The XMTP agent, ERC-8004 identity, and deploy-session automation all present as the CSW address.
@@ -83,7 +84,7 @@ The CSW never "becomes" a separate agent — the agent identity is layered onto 
 
 ## Rules for Code Changes
 
-- NEVER create a new CSW or switch the canonical account to a Privy wallet.
+- Follow `ERC-4337-Wallet-Invariants.mdc` for canonical wallet/account selection; this file does not redefine those rules.
 - NEVER extract private keys from Privy; always use `secp256k1_sign` or `eth_sendTransaction` RPCs.
 - XMTP agent MUST present as the CSW address, not the Privy EOA address.
 - Deploy-session temporary owners MUST be removed after deployment completes.

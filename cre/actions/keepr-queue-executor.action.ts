@@ -13,6 +13,19 @@ import { alertInfo, alertWarning, alertCritical } from '../utils/alerts.js';
 
 const WORKFLOW_NAME = 'keepr-queue-executor';
 
+type KeeprTrustZone =
+  | 'financial_execution'
+  | 'market_maintenance'
+  | 'queue_messaging_monitoring';
+
+const KEEPR_TRUST_ZONE_HEADER = 'x-keepr-trust-zone';
+const KEEPR_TRUST_ZONE_KEY_HEADER = 'x-keepr-zone-key';
+const TRUST_ZONE_ENV_KEY_MAP: Record<KeeprTrustZone, string> = {
+  financial_execution: 'KEEPR_ZONE_KEY_FINANCIAL_EXECUTION',
+  market_maintenance: 'KEEPR_ZONE_KEY_MARKET_MAINTENANCE',
+  queue_messaging_monitoring: 'KEEPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING',
+};
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -22,6 +35,7 @@ interface PendingAction {
   vaultAddress: string;
   groupId: string;
   actionType: string | null;
+  trustZone?: string | null;
   action: Record<string, unknown>;
   dedupeKey: string | null;
   status: string;
@@ -61,6 +75,63 @@ function getApiSecret(): string {
   return requireEnv('KEEPR_API_KEY');
 }
 
+function normalizeActionType(actionType: string | null | undefined): string {
+  return String(actionType ?? '').trim().toLowerCase();
+}
+
+function resolveKeeprTrustZone(actionType: string | null | undefined): KeeprTrustZone {
+  const normalized = normalizeActionType(actionType);
+  if (!normalized) return 'market_maintenance';
+  if (
+    normalized.startsWith('xmtp.group.') ||
+    normalized.startsWith('xmtp.dm.') ||
+    normalized.startsWith('notify.') ||
+    normalized.startsWith('message.') ||
+    normalized.startsWith('telegram.notify')
+  ) {
+    return 'queue_messaging_monitoring';
+  }
+  if (
+    normalized.startsWith('runtime.') ||
+    normalized.startsWith('monitor.') ||
+    normalized.startsWith('healthcheck.') ||
+    normalized.startsWith('keeper.monitor.')
+  ) {
+    return 'market_maintenance';
+  }
+  if (
+    normalized.startsWith('strategy.') ||
+    normalized.startsWith('trade.') ||
+    normalized.startsWith('vault.') ||
+    normalized.startsWith('payout.') ||
+    normalized.startsWith('routing.') ||
+    normalized.startsWith('bridge.') ||
+    normalized.includes('rebucket') ||
+    normalized.includes('rebalance') ||
+    normalized.includes('bid') ||
+    normalized.includes('withdraw') ||
+    normalized.includes('deposit')
+  ) {
+    return 'financial_execution';
+  }
+  return 'financial_execution';
+}
+
+function getTrustZoneKey(zone: KeeprTrustZone): string | null {
+  const envKey = TRUST_ZONE_ENV_KEY_MAP[zone];
+  const value = String(process.env[envKey] ?? '').trim();
+  return value || null;
+}
+
+function buildZoneHeaders(actionType: string | null | undefined): Record<string, string> {
+  const zone = resolveKeeprTrustZone(actionType);
+  const key = getTrustZoneKey(zone);
+  return {
+    [KEEPR_TRUST_ZONE_HEADER]: zone,
+    ...(key ? { [KEEPR_TRUST_ZONE_KEY_HEADER]: key } : {}),
+  };
+}
+
 async function fetchPendingActions(limit = 10): Promise<PendingAction[]> {
   const baseUrl = getApiBaseUrl();
   const secret = getApiSecret();
@@ -91,6 +162,7 @@ async function updateActionStatus(params: {
   status: 'executing' | 'executed' | 'failed' | 'retry';
   error?: string;
   retryDelaySeconds?: number;
+  actionType?: string | null;
 }): Promise<boolean> {
   const baseUrl = getApiBaseUrl();
   const secret = getApiSecret();
@@ -100,6 +172,7 @@ async function updateActionStatus(params: {
     headers: {
       Authorization: `Bearer ${secret}`,
       'Content-Type': 'application/json',
+      ...buildZoneHeaders(params.actionType),
     },
     body: JSON.stringify(params),
     signal: AbortSignal.timeout(15_000),
@@ -129,6 +202,7 @@ async function executeAction(
       headers: {
         Authorization: `Bearer ${secret}`,
         'Content-Type': 'application/json',
+        ...buildZoneHeaders(action.actionType),
       },
       body: JSON.stringify({
         id: action.id,
@@ -205,7 +279,11 @@ export async function executeQueueProcessor(): Promise<QueueExecutorResult> {
     result.processed++;
 
     // Mark as executing
-    const claimed = await updateActionStatus({ id: action.id, status: 'executing' });
+    const claimed = await updateActionStatus({
+      id: action.id,
+      status: 'executing',
+      actionType: action.actionType,
+    });
     if (!claimed) {
       // Another worker may have claimed it
       await alertInfo(WORKFLOW_NAME, `Action ${action.id} already claimed — skipping`);
@@ -217,7 +295,7 @@ export async function executeQueueProcessor(): Promise<QueueExecutorResult> {
 
     if (execResult.success) {
       // Mark as executed
-      await updateActionStatus({ id: action.id, status: 'executed' });
+      await updateActionStatus({ id: action.id, status: 'executed', actionType: action.actionType });
       result.succeeded++;
       result.actions.push({ id: action.id, actionType: action.actionType, outcome: 'executed' });
     } else {
@@ -231,6 +309,7 @@ export async function executeQueueProcessor(): Promise<QueueExecutorResult> {
           status: 'retry',
           error: execResult.error,
           retryDelaySeconds: delay,
+          actionType: action.actionType,
         });
         result.retried++;
         result.actions.push({
@@ -244,6 +323,7 @@ export async function executeQueueProcessor(): Promise<QueueExecutorResult> {
           id: action.id,
           status: 'failed',
           error: execResult.error,
+          actionType: action.actionType,
         });
         result.failed++;
         result.actions.push({

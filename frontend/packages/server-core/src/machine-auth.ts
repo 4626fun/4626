@@ -10,11 +10,27 @@ type BearerAuthOptions = {
   unauthorizedError?: string
 }
 
+type OptionalHeaderAuthOptions = {
+  envKey: string
+  headerName: string
+  unauthorizedError?: string
+}
+
 function safeCompareSecret(provided: string, expected: string): boolean {
   const expectedBytes = Buffer.from(expected)
   const providedBytes = Buffer.from(provided)
   if (expectedBytes.length === 0 || providedBytes.length !== expectedBytes.length) return false
   return timingSafeEqual(providedBytes, expectedBytes)
+}
+
+function readHeaderValue(req: VercelRequest, headerName: string): string | null {
+  const direct = req.headers?.[headerName] ?? req.headers?.[headerName.toLowerCase()]
+  const raw = Array.isArray(direct) ? String(direct[0] ?? '') : String(direct ?? '')
+  const trimmed = raw.trim()
+  if (!trimmed) return null
+  const bearer = /^Bearer\s+(.+)$/i.exec(trimmed)
+  if (bearer?.[1]) return bearer[1].trim() || null
+  return trimmed
 }
 
 export function readBearerToken(authorizationHeader: string | string[] | undefined): string | null {
@@ -61,4 +77,21 @@ export function requireKeeprApiKey(
     missingSecretError: options?.missingSecretError ?? 'KEEPR_API_KEY not configured',
     unauthorizedError: options?.unauthorizedError ?? 'Unauthorized',
   })
+}
+
+export function requireOptionalHeaderEnvAuth(
+  req: VercelRequest,
+  res: VercelResponse,
+  options: OptionalHeaderAuthOptions,
+): boolean {
+  const configuredSecret = String(process.env[options.envKey] ?? '').trim()
+  if (!configuredSecret) return true
+
+  const providedSecret = readHeaderValue(req, options.headerName)
+  if (!providedSecret || !safeCompareSecret(providedSecret, configuredSecret)) {
+    const error = options.unauthorizedError ?? 'Unauthorized'
+    res.status(401).json({ success: false, error } satisfies ApiEnvelope<never>)
+    return false
+  }
+  return true
 }

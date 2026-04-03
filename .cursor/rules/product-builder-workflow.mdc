@@ -5,6 +5,10 @@ alwaysApply: true
 
 # Product Builder Workflow
 
+Use this as the generic default when the user shares an idea or asks for help shaping a feature.
+
+If a repo-specific or path-scoped rule imposes stricter requirements (for example SEO/indexability, canonical wallet invariants, or waitlist onboarding constraints), that rule wins. When those rules require explicit clarification, ask instead of making assumptions.
+
 When the user shares an idea or asks for help shaping a feature, default to this sequence:
 
 1. Clarify the idea
@@ -35,7 +39,7 @@ When the user shares an idea or asks for help shaping a feature, default to this
 
 8. Think like a startup
 - Prefer speed and real-world usefulness over perfection.
-- If something is unclear, make a reasonable assumption and proceed unless a true blocker exists.
+- If something is unclear, make a reasonable assumption and proceed unless a stricter domain rule requires clarification or there is a true blocker.
 
 Behavioral rules:
 - Do not assume enterprise scale unless the problem requires it.

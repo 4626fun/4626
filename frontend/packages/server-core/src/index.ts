@@ -25,7 +25,12 @@ export {
 
 export { guardAgentApiRequest } from './agent.js'
 export { getApiContracts } from './contracts.js'
-export { readBearerToken, requireBearerEnvAuth, requireKeeprApiKey } from './machine-auth.js'
+export {
+  readBearerToken,
+  requireBearerEnvAuth,
+  requireKeeprApiKey,
+  requireOptionalHeaderEnvAuth,
+} from './machine-auth.js'
 export { createCorrelationId, logger } from './observability.js'
 export { ensureCreatorAccessSchema, getDb, getDbInitError, isDbConfigured } from './db.js'
 export { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from './rate-limit.js'

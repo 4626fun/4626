@@ -7,7 +7,7 @@ import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import { performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
-import { readPrivyTelegramLaunchParams } from '@/lib/telegramWebApp'
+import { isTelegramMiniAppContext, readPrivyTelegramLaunchParams } from '@/lib/telegramWebApp'
 import {
   type ApiEnvelope,
   type OwnerDelegationFlags,
@@ -188,6 +188,7 @@ export function AccountsPage(props: {
   const canonicalCswAddress = me?.accountSignals?.canonicalCswAddress ?? null
   const zoraLinked = Boolean(zoraStatus?.zoraLinked || me?.accountSignals?.linked)
   const telegramLaunchParamsAvailable = useMemo(() => Boolean(readPrivyTelegramLaunchParams()?.initDataRaw), [])
+  const inTelegramMiniApp = useMemo(() => isTelegramMiniAppContext(), [])
 
   const authHeaders = useCallback(
     async (): Promise<Record<string, string>> => {
@@ -641,6 +642,21 @@ export function AccountsPage(props: {
 
         {error ? <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div> : null}
         {notice ? <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{notice}</div> : null}
+        {inTelegramMiniApp ? (
+          <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100 space-y-2">
+            <div>
+              You are inside Telegram Mini App. Wallet-owner signatures (MetaMask/Rabby) are more reliable in an external browser context.
+            </div>
+            <a
+              href="/accounts"
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex text-xs font-medium text-amber-200 underline underline-offset-2 hover:text-amber-100"
+            >
+              Open Accounts in browser
+            </a>
+          </div>
+        ) : null}
 
         {!loading && privyAuthed && me ? (
           <>
@@ -798,6 +814,11 @@ export function AccountsPage(props: {
                         <p className="text-xs text-zinc-500">
                           Optional. Transaction is prepared server-side and sent client-side with your currently connected owner wallet.
                         </p>
+                        {inTelegramMiniApp ? (
+                          <p className="text-xs text-amber-300/90">
+                            Tip: if your owner wallet is MetaMask or Rabby, complete this step from an external browser tab.
+                          </p>
+                        ) : null}
                         <button
                           type="button"
                           disabled={advancedBusy}

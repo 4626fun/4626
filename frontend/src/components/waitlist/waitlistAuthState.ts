@@ -53,6 +53,18 @@ export function isRecoveryRequiredAuthError(error: unknown): boolean {
   )
 }
 
+export function isEmailAlreadyLinkedAuthError(error: unknown): boolean {
+  const recordMessage =
+    error && typeof error === 'object' && typeof (error as { message?: unknown }).message === 'string'
+      ? String((error as { message: string }).message)
+      : ''
+  const text = `${recordMessage} ${typeof error === 'string' ? error : ''}`.trim().toLowerCase()
+  return (
+    text.includes('already has an account of type email linked') ||
+    (text.includes('account of type email') && text.includes('linked'))
+  )
+}
+
 export function shouldStopWaitlistAutoAuthRetry(params: {
   isSessionMismatch: boolean
   isRecoveryRequired: boolean
