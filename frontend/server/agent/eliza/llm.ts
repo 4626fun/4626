@@ -1,6 +1,6 @@
 import { AgentError } from './_errors.js'
 import { DailyBudgetGuard, parsePositiveNumber } from './_rateLimit.js'
-import { redactTextForRemoteAi } from '../../_lib/agentControl/redaction.js'
+import { assertRemoteAiEndpoint, prepareRemoteAiText } from '../../_lib/agentControl/remoteAi.js'
 import { logger } from '../../_lib/logger.js'
 import { emitTelemetryEvent } from '../../_lib/telemetry.js'
 import { readServerEnvVar } from '../../_lib/serverEnv.js'
@@ -333,7 +333,7 @@ class ElizaLlmService {
       }
       const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
       try {
-        const response = await fetch(params.provider.apiUrl, {
+        const response = await fetch(assertRemoteAiEndpoint(params.provider.apiUrl), {
           method: 'POST',
           headers: toHeaders(params.provider, params.apiKey),
           body: JSON.stringify(params.body),
@@ -406,15 +406,15 @@ class ElizaLlmService {
       return { text: null, provider: null, attempts: [] }
     }
 
-    const safeUserMessage = redactTextForRemoteAi(params.userMessage, {
+    const safeUserMessage = prepareRemoteAiText(params.userMessage, {
       maxStringLength: this.maxInputChars * 2,
       maskAddresses: true,
     })
-    const safeSystemPrompt = redactTextForRemoteAi(params.systemPrompt, {
+    const safeSystemPrompt = prepareRemoteAiText(params.systemPrompt, {
       maxStringLength: this.maxInputChars * 2,
       maskAddresses: true,
     })
-    const safeVaultContext = redactTextForRemoteAi(params.vaultContext, {
+    const safeVaultContext = prepareRemoteAiText(params.vaultContext, {
       maxStringLength: this.maxInputChars * 2,
       maskAddresses: true,
     })

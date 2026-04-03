@@ -1,5 +1,5 @@
 import { readServerEnvVar } from './serverEnv.js'
-import { redactTextForRemoteAi } from './agentControl/redaction.js'
+import { assertRemoteAiEndpoint, prepareRemoteAiText } from './agentControl/remoteAi.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -66,7 +66,7 @@ async function postResponsesApi(body: Record<string, unknown>): Promise<any> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), getOpenAiImageTimeoutMs())
   try {
-    const response = await fetch('https://api.openai.com/v1/responses', {
+    const response = await fetch(assertRemoteAiEndpoint('https://api.openai.com/v1/responses'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -145,7 +145,7 @@ export async function generateImageWithOpenAi(params: GenerateParams): Promise<{
   revisedPrompt: string | null
   imageBytes: Uint8Array
 }> {
-  const safePrompt = redactTextForRemoteAi(params.prompt, {
+  const safePrompt = prepareRemoteAiText(params.prompt, {
     maxStringLength: 3_500,
     maskAddresses: true,
   })
@@ -213,7 +213,7 @@ function parseEvaluationJson(text: string): ImageEvaluation {
 }
 
 export async function evaluateImageGenerationOutput(params: EvaluateParams): Promise<ImageEvaluation> {
-  const safeBrief = redactTextForRemoteAi(params.brief, {
+  const safeBrief = prepareRemoteAiText(params.brief, {
     maxStringLength: 2_000,
     maskAddresses: true,
   })

@@ -5,7 +5,7 @@ import {
   shouldAutoBootstrapWaitlistSession,
   shouldAutoHandoffApprovedAccount,
   shouldAutoStartWaitlistAuth,
-} from './WaitlistFlow'
+} from './waitlistFlowState'
 
 describe('resolveWaitlistStep', () => {
   it('keeps unverified accounts on auth', () => {

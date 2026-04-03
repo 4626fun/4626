@@ -20,7 +20,7 @@ import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 import { Web3Providers } from '@/web3/Web3Providers'
 
 const LazyWaitlistFlow = lazy(async () => {
-  const mod = await import('@/components/waitlist/WaitlistFlow')
+  const mod = await import('@/components/waitlist/ThinWaitlistFlow')
   return { default: mod.WaitlistFlow }
 })
 
@@ -75,7 +75,7 @@ export function Home() {
         />
       </div>
 
-      <section className="cinematic-section no-divider-bottom !py-16 sm:!py-24 lg:!py-28 min-h-screen flex items-center justify-center relative">
+      <section className="cinematic-section no-divider-bottom !py-16 sm:!py-24 lg:!py-28 min-h-screen flex items-center justify-center relative z-10">
         <div className="mx-auto max-w-7xl space-y-8 px-4 text-center sm:px-6 sm:space-y-14">
           <motion.div
             initial={{ opacity: 0 }}
@@ -111,23 +111,29 @@ export function Home() {
           </motion.p>
 
           {showJoinWaitlistCta ? (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.8, delay: 1.12 }}
-              className="pt-2 sm:pt-6"
-            >
-              {waitlistInlineOpen ? (
-                <div className="mx-auto w-full max-w-3xl text-left">
-                  <Suspense
-                    fallback={
-                      <div className="rounded-[28px] border border-white/10 bg-black/45 px-4 py-6 text-sm text-zinc-300 shadow-[0_30px_120px_-48px_rgba(0,0,0,0.95)] backdrop-blur-md sm:px-6">
-                        Loading waitlist…
-                      </div>
-                    }
-                  >
-                    <PrivyClientProvider showWalletLoginFirst={false}>
-                      <Web3Providers>
+            // PrivyClientProvider + Web3Providers are hoisted above the
+            // waitlistInlineOpen gate so the Privy SDK warms up during the
+            // initial hero render. Without this, Privy only starts
+            // initializing after the first CTA click, meaning the two form
+            // buttons arrive before `ready=true` and `login()` is silently
+            // a no-op.
+            <PrivyClientProvider showWalletLoginFirst={false}>
+              <Web3Providers>
+                <motion.div
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  transition={{ duration: 0.8, delay: 1.12 }}
+                  className="pt-2 sm:pt-6"
+                >
+                  {waitlistInlineOpen ? (
+                    <div className="mx-auto w-full max-w-3xl text-left">
+                      <Suspense
+                        fallback={
+                          <div className="rounded-[28px] border border-white/10 bg-black/45 px-4 py-6 text-sm text-zinc-300 shadow-[0_30px_120px_-48px_rgba(0,0,0,0.95)] backdrop-blur-md sm:px-6">
+                            Loading waitlist…
+                          </div>
+                        }
+                      >
                         <div className="rounded-[28px] bg-black/45 p-4 shadow-[0_30px_120px_-48px_rgba(0,0,0,0.95)] backdrop-blur-md sm:p-6 lg:p-8">
                           <LazyWaitlistFlow
                             variant="embedded"
@@ -135,17 +141,17 @@ export function Home() {
                             autoStartAuth={waitlistAutoStart}
                           />
                         </div>
-                      </Web3Providers>
-                    </PrivyClientProvider>
-                  </Suspense>
-                </div>
-              ) : (
-                <button type="button" onClick={openWaitlistDirectAuth} className={heroCtaClass}>
-                  Join waitlist
-                  <ArrowRight className="h-4 w-4" />
-                </button>
-              )}
-            </motion.div>
+                      </Suspense>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={openWaitlistDirectAuth} className={heroCtaClass}>
+                      Join waitlist
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  )}
+                </motion.div>
+              </Web3Providers>
+            </PrivyClientProvider>
           ) : null}
 
           {showExploreCreatorsCta ? (

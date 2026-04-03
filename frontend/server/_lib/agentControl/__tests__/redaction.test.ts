@@ -7,7 +7,7 @@ describe('agent control redaction middleware', () => {
     const payload = redactForRemoteAi({
       userId: 'user-123',
       telegramUserId: '1234567',
-      privateKey: '0x1234567890abcdef',
+      privateKey: 'fixture',
       signedPayload: '0xdeadbeef',
       details: {
         authorization: 'Bearer abcdefghijklmnop',

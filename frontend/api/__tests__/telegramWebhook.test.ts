@@ -56,6 +56,7 @@ const {
   fetchZoraProfileMock,
   ensureAccountsIdentitySchemaMock,
   fetchCreatorCoinSummaryMock,
+  appendControlAuditEventMock,
 } = vi.hoisted(() => ({
   executeDeterministicCommandMock: vi.fn(),
   handleTwitterCommandMock: vi.fn(),
@@ -106,6 +107,7 @@ const {
   fetchZoraProfileMock: vi.fn(),
   ensureAccountsIdentitySchemaMock: vi.fn(),
   fetchCreatorCoinSummaryMock: vi.fn(),
+  appendControlAuditEventMock: vi.fn(),
 }))
 
 vi.mock('@privy-io/server-auth', () => ({
@@ -175,6 +177,10 @@ vi.mock('../../server/_lib/zoraProfile.js', () => ({
 vi.mock('../../server/_lib/accountsIdentity.js', () => ({
   ensureAccountsIdentitySchema: ensureAccountsIdentitySchemaMock,
   fetchCreatorCoinSummary: fetchCreatorCoinSummaryMock,
+}))
+
+vi.mock('../../server/_lib/agentControl/audit.js', () => ({
+  appendControlAuditEvent: appendControlAuditEventMock,
 }))
 
 vi.mock('../../server/_lib/telegramTrading.js', () => ({
@@ -316,6 +322,7 @@ describe('telegram webhook handler', () => {
     upsertHolderRoomMemberMock.mockResolvedValue(null)
     revokeTelegramLinkMock.mockResolvedValue({ revoked: false, link: null })
     logTelegramActionAuditMock.mockResolvedValue(undefined)
+    appendControlAuditEventMock.mockResolvedValue(undefined)
     setTelegramInlineSignalFeedPausedMock.mockResolvedValue(null)
     touchTelegramInlineSignalFeedPushMock.mockResolvedValue(undefined)
     upsertTelegramInlineSignalFeedMock.mockResolvedValue(null)
@@ -4300,6 +4307,91 @@ describe('telegram webhook handler', () => {
     ).toBe(true)
     expect(signalButtons.some((button: any) => String(button?.text ?? '').trim() === 'View Vault')).toBe(false)
     expect(signalButtons.some((button: any) => String(button?.callback_data ?? '').startsWith('tip:'))).toBe(false)
+    expect(logTelegramActionAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'executed',
+        correlationId: expect.stringMatching(/^tg_trade:/),
+      }),
+    )
+  })
+
+  it('emits aligned control and telegram audits when buy confirmation is blocked by chat policy', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    consumeTelegramActionTokenMock.mockResolvedValueOnce({
+      ok: true,
+      actionType: 'buy',
+      intentPayload: {
+        creatorCoinAddress: '0x2222222222222222222222222222222222222222',
+        amountInput: '0.05',
+        amountEth: 0.05,
+        usdEstimate: 150,
+      },
+      expiresAt: '2026-03-13T00:01:30.000Z',
+      consumedAt: '2026-03-13T00:00:32.000Z',
+    })
+    getTelegramLinkByUserIdMock.mockResolvedValueOnce({
+      telegramUserId: '99',
+      telegramUsername: 'akita',
+      profileId: 7,
+      privyUserId: 'did:privy:7',
+      canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ownerVerified: true,
+      linkStatus: 'active',
+      linkedAt: '2026-03-13T00:00:00.000Z',
+      lastVerifiedAt: '2026-03-13T00:00:00.000Z',
+      revokedAt: null,
+      failureCount: 0,
+      lastFailureReason: null,
+      unlinkRequestedAt: null,
+    })
+    getTelegramChatTradePolicyMock.mockResolvedValueOnce({
+      buySellEnabled: false,
+      bidEnabled: true,
+    })
+
+    ;(fetch as any).mockReset()
+    ;(fetch as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 16_1,
+        callback_query: {
+          id: 'cbq-buy-disabled',
+          data: 'trade:accept:trade-token-disabled',
+          from: { id: 99 },
+          message: { message_id: 20, chat: { id: -100123 } },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(executeDeterministicCommandMock).not.toHaveBeenCalled()
+    const controlAudit = appendControlAuditEventMock.mock.calls
+      .map(([payload]) => payload)
+      .find((payload: any) => payload?.event_type === 'policy.denied' && payload?.reason === 'buy_sell_disabled')
+    expect(controlAudit).toBeDefined()
+    expect(logTelegramActionAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'failed',
+        errorCode: 'buy_sell_disabled',
+        correlationId: controlAudit?.correlation_id,
+      }),
+    )
   })
 
   it('blocks buy callback when canonical wallet is missing', async () => {

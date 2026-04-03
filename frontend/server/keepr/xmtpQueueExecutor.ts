@@ -14,6 +14,12 @@ import { privateKeyToAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
 
 import { getKeeprVaultAutomationByVaultAddress } from '../_lib/keeprAutomation.js'
+import {
+  formatTrustZoneDisabledError,
+  isKeeprTrustZoneWriteEnabled,
+  resolveKeeprEffectiveActionType,
+  resolveKeeprTrustZone,
+} from '../_lib/agentControl/trustZones.js'
 import { getDb } from '../_lib/postgres.js'
 import { logger } from '../_lib/logger.js'
 import { resolveXmtpDbDirectory } from '../_lib/xmtpDbDirectory.js'
@@ -51,27 +57,6 @@ type StrategyActionType =
   | 'strategy.charm.rebalance'
 
 type SupportedActionType = XmtpActionType | StrategyActionType
-
-const ACTION_ALIASES: Record<string, SupportedActionType> = {
-  'xmtp.group.add_member': 'xmtp.group.add_member',
-  add_member: 'xmtp.group.add_member',
-  addMember: 'xmtp.group.add_member',
-  'xmtp.group.remove_member': 'xmtp.group.remove_member',
-  remove_member: 'xmtp.group.remove_member',
-  removeMember: 'xmtp.group.remove_member',
-  'xmtp.group.send_message': 'xmtp.group.send_message',
-  send_message: 'xmtp.group.send_message',
-  sendMessage: 'xmtp.group.send_message',
-  'xmtp.group.sync_members': 'xmtp.group.sync_members',
-  sync_members: 'xmtp.group.sync_members',
-  syncMembers: 'xmtp.group.sync_members',
-  'strategy.ajna.rebucket': 'strategy.ajna.rebucket',
-  ajna_rebucket: 'strategy.ajna.rebucket',
-  ajnaRebucket: 'strategy.ajna.rebucket',
-  'strategy.charm.rebalance': 'strategy.charm.rebalance',
-  charm_rebalance: 'strategy.charm.rebalance',
-  charmRebalance: 'strategy.charm.rebalance',
-}
 
 const AJNA_VAULT_AUTH_ADMIN_ABI = [
   {
@@ -260,12 +245,6 @@ function makeKeeprDbPath(identityKey: string): string {
   rotateLegacyPlaintextDbIfNeeded(p)
   logger.info(`[keepr/xmtp-queue] Using local database: ${p}`)
   return p
-}
-
-function normalizeActionType(actionType?: string | null, actionPayloadType?: string | null): SupportedActionType | null {
-  const raw = String(actionType ?? actionPayloadType ?? '').trim()
-  if (!raw) return null
-  return ACTION_ALIASES[raw] ?? null
 }
 
 function isXmtpActionType(actionType: SupportedActionType): actionType is XmtpActionType {
@@ -964,9 +943,22 @@ async function executeNormalizedAction(
 
 export async function executeKeeprAction(input: ExecuteKeeprActionInput): Promise<ExecuteKeeprActionResult> {
   const normalizedVaultAddress = normalizeAddress(input.vaultAddress, 'vaultAddress')
-  const normalizedActionType = normalizeActionType(input.actionType, String((input.action as any)?.action ?? ''))
+  const normalizedActionType = resolveKeeprEffectiveActionType(
+    input.actionType,
+    input.action ?? {},
+  ) as SupportedActionType | null
   if (!normalizedActionType) {
     return { success: false, retryable: false, actionType: 'unknown', error: 'unknown_action_type' }
+  }
+  const trustZone = resolveKeeprTrustZone(normalizedActionType)
+  if (!isKeeprTrustZoneWriteEnabled(trustZone, process.env)) {
+    return {
+      success: false,
+      retryable: false,
+      actionType: normalizedActionType,
+      error: formatTrustZoneDisabledError(trustZone),
+      details: { trustZone },
+    }
   }
 
   let agent: Agent | null = null

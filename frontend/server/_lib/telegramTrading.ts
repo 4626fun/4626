@@ -957,6 +957,7 @@ export async function logTelegramActionAudit(params: {
   txHash?: string | null
   errorCode?: string | null
   errorMessage?: string | null
+  correlationId?: string | null
 }): Promise<void> {
   const userId = normalizeTelegramUserId(params.telegramUserId)
   const chatId = asTrimmed(params.chatId)
@@ -979,7 +980,8 @@ export async function logTelegramActionAudit(params: {
       status,
       tx_hash,
       error_code,
-      error_message
+      error_message,
+      correlation_id
     )
     VALUES (
       ${userId},
@@ -994,7 +996,8 @@ export async function logTelegramActionAudit(params: {
       ${status},
       ${asTrimmed(params.txHash ?? '') || null},
       ${asTrimmed(params.errorCode ?? '') || null},
-      ${asTrimmed(params.errorMessage ?? '') || null}
+      ${asTrimmed(params.errorMessage ?? '') || null},
+      ${asTrimmed(params.correlationId ?? '') || null}
     );
   `
 }
@@ -1086,10 +1089,12 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
         tx_hash TEXT NULL,
         error_code TEXT NULL,
         error_message TEXT NULL,
+        correlation_id TEXT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `
+    await db.sql`ALTER TABLE telegram_action_audit ADD COLUMN IF NOT EXISTS correlation_id TEXT NULL;`
     await db.sql`
       CREATE TABLE IF NOT EXISTS telegram_funnel_events (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1232,6 +1237,10 @@ export async function ensureTelegramTradingSchema(db: Db): Promise<void> {
     await db.sql`
       CREATE INDEX IF NOT EXISTS telegram_action_audit_user_created_idx
       ON telegram_action_audit (telegram_user_id, created_at DESC);
+    `
+    await db.sql`
+      CREATE INDEX IF NOT EXISTS telegram_action_audit_correlation_idx
+      ON telegram_action_audit (correlation_id);
     `
     await db.sql`
       CREATE INDEX IF NOT EXISTS telegram_inline_signal_feeds_source_idx

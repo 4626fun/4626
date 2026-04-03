@@ -17,7 +17,10 @@ import { getKeeprVaultAutomationByVaultAddress } from '../../../../server/_lib/k
 import { enqueueKeeprAction } from '../../../../server/_lib/keeprRegistry.js'
 import {
   KEEPR_TRUST_ZONE_KEY_HEADER,
+  formatTrustZoneDisabledError,
+  resolveKeeprEffectiveActionType,
   getKeeprTrustZoneEnvKey,
+  isKeeprTrustZoneWriteEnabled,
   resolveKeeprTrustZone,
 } from '../../../../server/_lib/agentControl/trustZones.js'
 
@@ -109,7 +112,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Invalid dedupeKey' } satisfies ApiEnvelope<never>)
   }
 
-  const trustZone = resolveKeeprTrustZone(actionType)
+  const effectiveActionType = resolveKeeprEffectiveActionType(actionType, action) ?? actionType
+  const trustZone = resolveKeeprTrustZone(effectiveActionType)
   const trustZoneEnvKey = getKeeprTrustZoneEnvKey(trustZone)
   if (
     !requireOptionalHeaderEnvAuth(req, res, {
@@ -120,9 +124,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   ) {
     return
   }
+  if (!isKeeprTrustZoneWriteEnabled(trustZone, process.env)) {
+    return res.status(503).json({
+      success: false,
+      error: formatTrustZoneDisabledError(trustZone),
+    } satisfies ApiEnvelope<never>)
+  }
 
   try {
-    if (isAjnaRebucketAction(actionType)) {
+    if (isAjnaRebucketAction(effectiveActionType)) {
       const automation = await getKeeprVaultAutomationByVaultAddress(vaultAddressRaw as `0x${string}`)
       if (!automation) {
         const db = isDbConfigured() ? await getDb() : null
@@ -143,7 +153,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       vaultAddress: vaultAddressRaw,
       groupId,
       action,
-      actionType,
+      actionType: effectiveActionType,
       dedupeKey: dedupeKey || null,
     })
     return res.status(200).json({

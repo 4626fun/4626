@@ -1,5 +1,5 @@
 import { logger } from '../../_lib/logger.js'
-import { redactTextForRemoteAi } from '../../_lib/agentControl/redaction.js'
+import { assertRemoteAiEndpoint, prepareRemoteAiText } from '../../_lib/agentControl/remoteAi.js'
 import { readServerEnvVar } from '../../_lib/serverEnv.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -102,7 +102,7 @@ class ElizaEmbeddingService {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
     try {
-      const response = await fetchImpl(params.provider.apiUrl, {
+      const response = await fetchImpl(assertRemoteAiEndpoint(params.provider.apiUrl), {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${params.apiKey}`,
@@ -130,7 +130,7 @@ class ElizaEmbeddingService {
   }
 
   async embedText(params: EmbedParams): Promise<EmbeddingResult> {
-    const redacted = redactTextForRemoteAi(String(params.text ?? ''), {
+    const redacted = prepareRemoteAiText(String(params.text ?? ''), {
       maxStringLength: this.maxInputChars * 2,
       maskAddresses: true,
     })

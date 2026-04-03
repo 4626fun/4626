@@ -12,7 +12,10 @@ import {
 import { executeKeeprAction } from '../../../../server/keepr/xmtpQueueExecutor.js'
 import {
   KEEPR_TRUST_ZONE_KEY_HEADER,
+  formatTrustZoneDisabledError,
+  resolveKeeprEffectiveActionType,
   getKeeprTrustZoneEnvKey,
+  isKeeprTrustZoneWriteEnabled,
   resolveKeeprTrustZone,
 } from '../../../../server/_lib/agentControl/trustZones.js'
 
@@ -73,7 +76,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: 'Invalid action payload' } satisfies ApiEnvelope<never>)
   }
 
-  const trustZone = resolveKeeprTrustZone(actionType)
+  const effectiveActionType = resolveKeeprEffectiveActionType(actionType, action) ?? actionType
+  const trustZone = resolveKeeprTrustZone(effectiveActionType)
   const trustZoneEnvKey = getKeeprTrustZoneEnvKey(trustZone)
   if (
     !requireOptionalHeaderEnvAuth(req, res, {
@@ -84,12 +88,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   ) {
     return
   }
+  if (!isKeeprTrustZoneWriteEnabled(trustZone, process.env)) {
+    return res.status(503).json({
+      success: false,
+      error: formatTrustZoneDisabledError(trustZone),
+    } satisfies ApiEnvelope<never>)
+  }
 
   const result = await executeKeeprAction({
     id,
     vaultAddress,
     groupId,
-    actionType,
+    actionType: effectiveActionType,
     action,
   })
 

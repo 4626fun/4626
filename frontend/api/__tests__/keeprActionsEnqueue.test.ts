@@ -317,5 +317,70 @@ describe('keepr/actions/enqueue', () => {
       restoreZoneEnv()
     }
   })
+
+  it('derives trust zone from the effective action payload, not only the raw actionType field', async () => {
+    const restoreZoneEnv = applyEnv({
+      KEEPR_ZONE_KEY_FINANCIAL_EXECUTION: 'zone-financial-secret',
+    })
+    enqueueKeeprActionMock.mockResolvedValue({ id: 88 })
+
+    try {
+      const req = createMockReq({
+        method: 'POST',
+        headers: { authorization: 'Bearer test-keepr-key' },
+        body: {
+          vaultAddress: '0x00000000000000000000000000000000000000bb',
+          groupId: 'group-1',
+          actionType: 'monitor.healthcheck',
+          action: {
+            action: 'strategy.ajna.rebucket',
+            authAddress: '0x00000000000000000000000000000000000000cc',
+            targetBucket: 1234,
+          },
+        },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(401)
+      expect(enqueueKeeprActionMock).not.toHaveBeenCalled()
+    } finally {
+      restoreZoneEnv()
+    }
+  })
+
+  it('blocks writes when the resolved trust zone is kill-switched', async () => {
+    const restoreZoneEnv = applyEnv({
+      KEEPR_ZONE_DISABLE_FINANCIAL_EXECUTION: 'true',
+    })
+
+    try {
+      const req = createMockReq({
+        method: 'POST',
+        headers: { authorization: 'Bearer test-keepr-key' },
+        body: {
+          vaultAddress: '0x00000000000000000000000000000000000000bb',
+          groupId: 'group-1',
+          actionType: 'strategy.ajna.rebucket',
+          action: {
+            action: 'strategy.ajna.rebucket',
+            authAddress: '0x00000000000000000000000000000000000000cc',
+            targetBucket: 1234,
+          },
+        },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(503)
+      expect(res.body?.success).toBe(false)
+      expect(String(res.body?.error ?? '')).toContain('Trust zone')
+      expect(enqueueKeeprActionMock).not.toHaveBeenCalled()
+    } finally {
+      restoreZoneEnv()
+    }
+  })
 })
 

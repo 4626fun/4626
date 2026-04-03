@@ -22,7 +22,12 @@ import { ensureKeeprSchema } from '../../../server/_lib/keeprSchema.js'
 import { extractCreatorCoinAddressFromProfile, fetchZoraProfile } from '../../../server/_lib/zoraProfile.js'
 import { appendControlAuditEvent } from '../../../server/_lib/agentControl/audit.js'
 import { evaluatePolicy } from '../../../server/_lib/agentControl/policy.js'
-import { createActionProposal, createControlCapability, normalizeAddressOrNull, nowIso } from '../../../server/_lib/agentControl/types.js'
+import { nowIso } from '../../../server/_lib/agentControl/types.js'
+import {
+  buildTelegramTradeControlBundle,
+  TELEGRAM_TRADE_CONTROL_ACTIONS,
+  TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+} from '../../../server/_lib/agentControl/telegramTradeControl.js'
 
 import { resolveBaseAppInviteUrl as resolveBaseAppInviteUrlShared } from '../../../server/_lib/baseAppInvite.js'
 import {
@@ -5933,13 +5938,6 @@ function buildTradeSignalReplyMarkup(params: {
   }
 }
 
-const TELEGRAM_TRADE_CONTROL_SUBSYSTEM = 'telegram_trade'
-const TELEGRAM_TRADE_CONTROL_ACTIONS = ['trade.buy', 'trade.sell', 'trade.bid'] as const
-
-function controlTradeAction(actionType: 'buy' | 'sell' | 'bid'): (typeof TELEGRAM_TRADE_CONTROL_ACTIONS)[number] {
-  return `trade.${actionType}` as (typeof TELEGRAM_TRADE_CONTROL_ACTIONS)[number]
-}
-
 async function appendControlAuditBestEffort(
   params: Parameters<typeof appendControlAuditEvent>[0],
 ): Promise<void> {
@@ -6043,8 +6041,24 @@ async function handleTelegramTradeCallback(params: {
   }
 
   const actionType = asTrimmed(consumed.actionType).toLowerCase()
-  const actionTypeSafe: 'buy' | 'sell' | 'bid' =
-    actionType === 'buy' || actionType === 'sell' || actionType === 'bid' ? actionType : 'buy'
+  if (actionType !== 'buy' && actionType !== 'sell' && actionType !== 'bid') {
+    emitTelegramFunnelEvent({
+      db,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      eventName: 'trade_confirm_failed',
+      context: {
+        reason: 'unsupported_trade_action_type',
+        actionType,
+      },
+    })
+    return {
+      text: 'Trade blocked: preview action type is unsupported. Please start a fresh trade preview.',
+      callbackToast: 'Unsupported action',
+      replyMarkup: buildTradeRecoveryReplyMarkup(),
+    }
+  }
+  const actionTypeSafe: 'buy' | 'sell' | 'bid' = actionType
   tradeFlowState = reduceTradeFlowState(tradeFlowState, {
     type: 'START',
     actionType: actionTypeSafe,
@@ -6062,67 +6076,32 @@ async function handleTelegramTradeCallback(params: {
     creatorCoinAddress,
     vaultAddress,
   })
-  const amountInput = asTrimmed(intent.amountInput ?? '')
-  const amountEth = Number(intent.amountEth ?? 0)
-  const usdEstimate = Number(intent.usdEstimate ?? 0)
-  const controlAction = controlTradeAction(actionTypeSafe)
-  const chainIdRaw = Number(intent.chainId)
-  const chainId = Number.isFinite(chainIdRaw) ? Math.trunc(chainIdRaw) : undefined
-  const scopedVaultAddress = normalizeAddressOrNull(vaultAddress)
-  const scopedCreatorCoinAddress = normalizeAddressOrNull(creatorCoinAddress)
-  const scopedTargetAddress = normalizeAddressOrNull(targetAddress)
-  const proposalCorrelationId = [
-    'tg_trade',
-    params.chatId,
-    params.userId,
-    Date.now().toString(36),
-  ]
-    .map((part) => String(part).replace(/[^a-zA-Z0-9:_-]/g, ''))
-    .join(':')
-  const capability = createControlCapability({
-    actor_type: 'telegram_user',
-    actor_id: params.userId,
-    subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
-    action: controlAction,
-    confirmation_class: 'human_plus_policy',
-    issued_by: 'telegram_action_token',
-    expires_at: consumed.expiresAt,
-    scope: {
-      actor_binding: {
-        telegram_user_id: params.userId,
-      },
-    },
-    limits: {
-      ttl_seconds: 90,
-    },
-    metadata: {
-      token_id: callback.token,
-      callback_kind: callback.kind,
-      trade_action_type: actionTypeSafe,
-    },
+  const tradeControl = buildTelegramTradeControlBundle({
+    actorId: params.userId,
+    chatId: params.chatId,
+    actionType: actionTypeSafe,
+    callbackToken: callback.token,
+    callbackKind: callback.kind,
+    intentPayload: intent,
+    expiresAt: consumed.expiresAt,
+    consumedAt: consumed.consumedAt ?? null,
+    targetAddress,
+    vaultAddress,
+    creatorCoinAddress,
   })
-  const proposal = createActionProposal({
-    capability_id: capability.capability_id,
-    subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
-    action: controlAction,
-    intent,
-    bounds: {
-      ...(typeof chainId === 'number' ? { chainId } : {}),
-      vaultAddress: scopedVaultAddress,
-      creatorCoinAddress: scopedCreatorCoinAddress,
-      targetAddress: scopedTargetAddress,
-      amountInput,
-      amountEth: Number.isFinite(amountEth) ? amountEth : null,
-      usdEstimate: Number.isFinite(usdEstimate) ? usdEstimate : null,
-    },
-    correlation_id: proposalCorrelationId,
-    requested_confirmation_class: 'human_plus_policy',
-    metadata: {
-      token_id: callback.token,
-      callback_kind: callback.kind,
-      consumed_at: consumed.consumedAt ?? null,
-    },
-  })
+  const {
+    capability,
+    proposal,
+    controlAction,
+    correlationId: proposalCorrelationId,
+    chainId,
+    amountInput,
+    amountEth,
+    usdEstimate,
+    scopedVaultAddress,
+    scopedCreatorCoinAddress,
+    scopedTargetAddress,
+  } = tradeControl
   await appendControlAuditBestEffort({
     db: db as any,
     event_type: 'proposal.created',
@@ -6248,6 +6227,7 @@ async function handleTelegramTradeCallback(params: {
       actionType: actionTypeSafe,
       intent,
       status: 'cancelled',
+      correlationId: proposalCorrelationId,
     })
     return {
       text: `Declined ${actionTypeSafe.toUpperCase()} preview.`,
@@ -6277,6 +6257,22 @@ async function handleTelegramTradeCallback(params: {
     chatId: params.chatId,
   })
   if ((actionTypeSafe === 'buy' || actionTypeSafe === 'sell') && !tradePolicy.buySellEnabled) {
+    await appendControlAuditBestEffort({
+      db: db as any,
+      event_type: 'policy.denied',
+      proposal_id: proposal.proposal_id,
+      capability_id: capability.capability_id,
+      actor_type: 'telegram_user',
+      actor_id: params.userId,
+      subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+      action: controlAction,
+      status: 'deny',
+      correlation_id: proposalCorrelationId,
+      reason: 'buy_sell_disabled',
+      metadata: {
+        token_id: callback.token,
+      },
+    })
     emitTelegramFunnelEvent({
       db,
       telegramUserId: params.userId,
@@ -6287,6 +6283,20 @@ async function handleTelegramTradeCallback(params: {
         reason: 'buy_sell_disabled',
       },
     })
+    await logTelegramActionAudit({
+      db: db as any,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      messageId: params.messageId,
+      profileId: link.profileId,
+      canonicalCswAddress: link.canonicalCswAddress,
+      actionType: actionTypeSafe,
+      intent,
+      status: 'failed',
+      errorCode: 'buy_sell_disabled',
+      errorMessage: 'Trade blocked: buy/sell disabled for this chat scope.',
+      correlationId: proposalCorrelationId,
+    })
     return {
       text: 'Trade blocked: buy/sell disabled for this chat scope.',
       callbackToast: 'Buy/sell disabled',
@@ -6294,6 +6304,22 @@ async function handleTelegramTradeCallback(params: {
     }
   }
   if (actionTypeSafe === 'bid' && !tradePolicy.bidEnabled) {
+    await appendControlAuditBestEffort({
+      db: db as any,
+      event_type: 'policy.denied',
+      proposal_id: proposal.proposal_id,
+      capability_id: capability.capability_id,
+      actor_type: 'telegram_user',
+      actor_id: params.userId,
+      subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+      action: controlAction,
+      status: 'deny',
+      correlation_id: proposalCorrelationId,
+      reason: 'bid_disabled',
+      metadata: {
+        token_id: callback.token,
+      },
+    })
     emitTelegramFunnelEvent({
       db,
       telegramUserId: params.userId,
@@ -6303,6 +6329,20 @@ async function handleTelegramTradeCallback(params: {
       context: {
         reason: 'bid_disabled',
       },
+    })
+    await logTelegramActionAudit({
+      db: db as any,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      messageId: params.messageId,
+      profileId: link.profileId,
+      canonicalCswAddress: link.canonicalCswAddress,
+      actionType: actionTypeSafe,
+      intent,
+      status: 'failed',
+      errorCode: 'bid_disabled',
+      errorMessage: 'Trade blocked: bid disabled for this chat scope.',
+      correlationId: proposalCorrelationId,
     })
     return {
       text: 'Trade blocked: bid disabled for this chat scope.',
@@ -6316,6 +6356,23 @@ async function handleTelegramTradeCallback(params: {
     userId: params.userId,
   })
   if (!membership.ok) {
+    await appendControlAuditBestEffort({
+      db: db as any,
+      event_type: 'policy.denied',
+      proposal_id: proposal.proposal_id,
+      capability_id: capability.capability_id,
+      actor_type: 'telegram_user',
+      actor_id: params.userId,
+      subsystem: TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+      action: controlAction,
+      status: 'deny',
+      correlation_id: proposalCorrelationId,
+      reason: 'membership_required',
+      metadata: {
+        token_id: callback.token,
+        membershipStatus: membership.status ?? null,
+      },
+    })
     emitTelegramFunnelEvent({
       db,
       telegramUserId: params.userId,
@@ -6326,6 +6383,20 @@ async function handleTelegramTradeCallback(params: {
         reason: 'membership_required',
         status: membership.status,
       },
+    })
+    await logTelegramActionAudit({
+      db: db as any,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      messageId: params.messageId,
+      profileId: link.profileId,
+      canonicalCswAddress: link.canonicalCswAddress,
+      actionType: actionTypeSafe,
+      intent,
+      status: 'failed',
+      errorCode: 'membership_required',
+      errorMessage: `membership_status_${membership.status ?? 'unknown'}`,
+      correlationId: proposalCorrelationId,
     })
     return {
       text: `Trade blocked: membership required (status=${membership.status ?? 'unknown'}).`,
@@ -6361,6 +6432,20 @@ async function handleTelegramTradeCallback(params: {
       context: {
         reason: 'canonical_wallet_missing',
       },
+    })
+    await logTelegramActionAudit({
+      db: db as any,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      messageId: params.messageId,
+      profileId: link.profileId,
+      canonicalCswAddress: link.canonicalCswAddress,
+      actionType: actionTypeSafe,
+      intent,
+      status: 'failed',
+      errorCode: 'canonical_wallet_missing',
+      errorMessage: 'Trade blocked: canonical wallet is not available.',
+      correlationId: proposalCorrelationId,
     })
     return {
       text: 'Trade blocked: canonical wallet is not available.',
@@ -6436,6 +6521,23 @@ async function handleTelegramTradeCallback(params: {
         reason: policyResult.deny_code,
       },
     })
+    await logTelegramActionAudit({
+      db: db as any,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      messageId: params.messageId,
+      profileId: link.profileId,
+      canonicalCswAddress: link.canonicalCswAddress,
+      actionType: actionTypeSafe,
+      intent,
+      execution: {
+        mode: 'policy_gate',
+      },
+      status: 'failed',
+      errorCode: policyResult.deny_code,
+      errorMessage: policyResult.reason,
+      correlationId: proposalCorrelationId,
+    })
     return {
       text: [
         'Trade blocked',
@@ -6497,6 +6599,7 @@ async function handleTelegramTradeCallback(params: {
       },
       status,
       errorMessage: execution.ok ? null : asTrimmed(execution.rawResponseText),
+      correlationId: proposalCorrelationId,
     })
     await appendControlAuditBestEffort({
       db: db as any,
@@ -6600,6 +6703,21 @@ async function handleTelegramTradeCallback(params: {
           reason: 'invalid_bid_payload',
         },
       })
+      await logTelegramActionAudit({
+        db: db as any,
+        telegramUserId: params.userId,
+        chatId: params.chatId,
+        messageId: params.messageId,
+        profileId: link.profileId,
+        canonicalCswAddress: link.canonicalCswAddress,
+        actionType: actionTypeSafe,
+        intent,
+        execution: { mode: 'cca_bid_userop' },
+        status: 'failed',
+        errorCode: 'invalid_bid_payload',
+        errorMessage: 'malformed bid intent payload',
+        correlationId: proposalCorrelationId,
+      })
       return {
         text: [
           'Bid blocked',
@@ -6686,6 +6804,7 @@ async function handleTelegramTradeCallback(params: {
             status: 'failed',
             errorCode: 'bid_drift_exceeded',
             errorMessage: `drift_bps_${driftBps}`,
+            correlationId: proposalCorrelationId,
           })
           return {
             text: [
@@ -6790,6 +6909,27 @@ async function handleTelegramTradeCallback(params: {
           txHash: execution.txHash,
         },
       })
+      await logTelegramActionAudit({
+        db: db as any,
+        telegramUserId: params.userId,
+        chatId: params.chatId,
+        messageId: params.messageId,
+        profileId: link.profileId,
+        canonicalCswAddress: link.canonicalCswAddress,
+        actionType: actionTypeSafe,
+        intent,
+        quote: {
+          amountEth: freshQuote.amountEth,
+          usdEstimate: freshQuote.usdIntent,
+        },
+        execution: {
+          mode: 'cca_bid_userop',
+          txHash: execution.txHash,
+        },
+        txHash: execution.txHash,
+        status: 'executed',
+        correlationId: proposalCorrelationId,
+      })
       emitTelegramFunnelEvent({
         db,
         telegramUserId: params.userId,
@@ -6848,6 +6988,7 @@ async function handleTelegramTradeCallback(params: {
         status: 'failed',
         errorCode: helperCode ?? message,
         errorMessage: helperRetryable === null ? message : `${message} (retryable=${helperRetryable ? 'true' : 'false'})`,
+        correlationId: proposalCorrelationId,
       })
       await appendControlAuditBestEffort({
         db: db as any,

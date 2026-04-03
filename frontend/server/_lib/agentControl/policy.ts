@@ -11,15 +11,12 @@ import {
   toSafeLower,
   toTrimmed,
 } from './types.js'
+import { normalizeReplayKeys, type ReplayGuard } from './replay.js'
 
 type PolicyAllowlist = {
   subsystems?: string[]
   actions?: string[]
   targets?: string[]
-}
-
-type ReplayGuard = {
-  isReplay: (replayKey: string) => boolean
 }
 
 type PolicyContext = {
@@ -436,11 +433,11 @@ export function evaluatePolicy(input: EvaluatePolicyInput): PolicyCheckResult {
     })
   }
 
-  const replayCandidates = [
+  const replayCandidates = normalizeReplayKeys([
     toTrimmed(context.replay_key),
     toTrimmed(context.confirmation.token_id),
     toTrimmed(context.confirmation.token_consumed_at),
-  ].filter(Boolean)
+  ])
 
   if (input.replayGuard && replayCandidates.some((candidate) => input.replayGuard?.isReplay(candidate))) {
     return deny({

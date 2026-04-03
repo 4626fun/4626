@@ -266,5 +266,83 @@ describe('keepr/actions/execute', () => {
       restoreZoneEnv()
     }
   })
+
+  it('derives trust zone from the effective action payload, not only the raw actionType field', async () => {
+    const restoreZoneEnv = applyEnv({
+      KEEPR_ZONE_KEY_FINANCIAL_EXECUTION: 'zone-financial-secret',
+    })
+    executeKeeprActionMock.mockResolvedValue({
+      success: true,
+      retryable: false,
+      actionType: 'strategy.ajna.rebucket',
+      details: {},
+    })
+
+    try {
+      const req = createMockReq({
+        method: 'POST',
+        headers: { authorization: 'Bearer test-keepr-key' },
+        body: {
+          id: 11,
+          vaultAddress: '0x00000000000000000000000000000000000000bb',
+          groupId: 'group-strategy',
+          actionType: 'monitor.healthcheck',
+          action: {
+            action: 'strategy.ajna.rebucket',
+            authAddress: '0x00000000000000000000000000000000000000cc',
+            targetBucket: 1200,
+          },
+        },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(401)
+      expect(executeKeeprActionMock).not.toHaveBeenCalled()
+    } finally {
+      restoreZoneEnv()
+    }
+  })
+
+  it('blocks execution when the resolved trust zone is kill-switched', async () => {
+    const restoreZoneEnv = applyEnv({
+      KEEPR_ZONE_DISABLE_FINANCIAL_EXECUTION: 'true',
+    })
+    executeKeeprActionMock.mockResolvedValue({
+      success: true,
+      retryable: false,
+      actionType: 'strategy.ajna.rebucket',
+      details: {},
+    })
+
+    try {
+      const req = createMockReq({
+        method: 'POST',
+        headers: { authorization: 'Bearer test-keepr-key' },
+        body: {
+          id: 11,
+          vaultAddress: '0x00000000000000000000000000000000000000bb',
+          groupId: 'group-strategy',
+          actionType: 'strategy.ajna.rebucket',
+          action: {
+            action: 'strategy.ajna.rebucket',
+            authAddress: '0x00000000000000000000000000000000000000cc',
+            targetBucket: 1200,
+          },
+        },
+      })
+      const res = createMockRes()
+
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(503)
+      expect(res.body?.success).toBe(false)
+      expect(String(res.body?.error ?? '')).toContain('Trust zone')
+      expect(executeKeeprActionMock).not.toHaveBeenCalled()
+    } finally {
+      restoreZoneEnv()
+    }
+  })
 })
 

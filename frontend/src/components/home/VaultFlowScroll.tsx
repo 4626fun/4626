@@ -67,6 +67,29 @@ const SCRAMBLE_CHARS = ['●', '■', '▲', '◆', '○', '□', '△', '◊', 
 const smoothstep = (t: number) => t * t * (3 - 2 * t)
 
 
+// Renders a MotionValue<number> as text via a DOM ref — bypasses React's render cycle entirely.
+const MotionNumber = memo(function MotionNumber({
+  value,
+  className,
+  style,
+  format = (n: number) => n.toLocaleString(),
+}: {
+  value: MotionValue<number>
+  className?: string
+  style?: CSSProperties
+  format?: (n: number) => string
+}) {
+  const ref = useRef<HTMLSpanElement>(null)
+  useMotionValueEvent(value, 'change', (latest) => {
+    if (ref.current) ref.current.textContent = format(Math.round(latest))
+  })
+  return (
+    <span ref={ref} className={className} style={style}>
+      {format(Math.round(value.get()))}
+    </span>
+  )
+})
+
 // Decodes a string from geometric symbols → final text over ~800ms.
 // Writes directly to a DOM ref — no setState, no React re-render per rAF tick.
 function useTextScramble(text: string, trigger: boolean) {
@@ -201,13 +224,13 @@ type VaultSceneProps = {
   landingFlash: MotionValue<number>
   zoraGreenFlash: MotionValue<number>
   coinEntryGlow: MotionValue<number>
-  zorbFillClip: MotionValue<string>
+  zorbFillScale: MotionValue<number>
   zorbFillOp: MotionValue<number>
 }
 const VaultScene = memo(function VaultScene({
   uid, vaultTransform, vaultOpacity, vaultLidOp, vaultWallOp,
   vaultPostProgress, vaultTopProgress, vaultGlow, landingFlash,
-  zoraGreenFlash, coinEntryGlow, zorbFillClip, zorbFillOp,
+  zoraGreenFlash, coinEntryGlow, zorbFillScale, zorbFillOp,
 }: VaultSceneProps) {
   return (
     <motion.div className="absolute left-1/2 top-[44vh] z-20" style={{ transform: vaultTransform, opacity: vaultOpacity }}>
@@ -274,7 +297,17 @@ const VaultScene = memo(function VaultScene({
         <motion.div className="pointer-events-none absolute" style={{ inset: 20, borderRadius: '50%', opacity: landingFlash, background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.20) 0%, rgba(210,230,255,0.08) 50%, transparent 75%)', boxShadow: ['0 0 0 1px rgba(255,255,255,0.75)', '0 0 16px 5px rgba(255,255,255,0.50)', '0 0 42px 14px rgba(210,230,255,0.28)', '0 0 100px 36px rgba(140,180,255,0.12)'].join(', ') }} aria-hidden="true" />
         <motion.div className="pointer-events-none absolute" style={{ inset: 14, borderRadius: '50%', opacity: zoraGreenFlash, background: 'transparent', boxShadow: ['0 0 28px 10px rgba(57,255,20,0.75)', '0 0 70px 28px rgba(57,255,20,0.38)', '0 0 130px 55px rgba(57,255,20,0.14)'].join(', ') }} aria-hidden="true" />
         <motion.div className="pointer-events-none absolute" style={{ inset: 20, borderRadius: '50%', opacity: coinEntryGlow, background: 'transparent', boxShadow: ['0 0 22px 8px rgba(249,115,22,0.50)', '0 0 55px 20px rgba(0,82,255,0.36)', '0 0 105px 42px rgba(0,82,255,0.16)'].join(', ') }} aria-hidden="true" />
-        <motion.div className="pointer-events-none absolute inset-0" style={{ clipPath: zorbFillClip, opacity: zorbFillOp, borderRadius: '50%', background: 'radial-gradient(circle at 50% 55%, rgba(249,115,22,0.60) 0%, rgba(249,100,0,0.40) 45%, rgba(249,80,0,0.12) 100%)', boxShadow: 'inset 0 -8px 18px rgba(249,115,22,0.45)', mixBlendMode: 'screen' }} aria-hidden="true" />
+        {/* ── Deposit fill — orange warmth rises from bottom, no hard edge ── */}
+        <motion.div
+          className="pointer-events-none absolute inset-0"
+          style={{
+            scaleY: zorbFillScale,
+            opacity: zorbFillOp,
+            transformOrigin: '50% 100%',
+            background: 'radial-gradient(circle at 50% 80%, rgba(249,115,22,0.50) 0%, rgba(249,100,0,0.22) 28%, rgba(249,80,0,0.05) 50%, transparent 62%)',
+          }}
+          aria-hidden="true"
+        />
         <ZorbViewer size={96} />
       </div>
     </motion.div>
@@ -494,7 +527,7 @@ const DeploySection = memo(function DeploySection({
   )
 })
 
-export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: Props) {
+export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _shareTokens }: Props) {
   const uid = useId().replace(/:/g, '')
   const outerRef = useRef<HTMLDivElement>(null)
   // Respects the OS/browser reduced-motion preference to skip expensive camera moves
@@ -521,7 +554,8 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
   const depositCompleteRef = useRef(false)
   const [cameoIcons, setCameoIcons] = useState<Record<string, string>>({})
   // Generalised checkpoint system — 4 hard stops, one per stage completion.
-  const [hardStop, setHardStop] = useState<{
+  // State value not currently consumed by UI; keeping setter-side for scroll-blocking side effects.
+  const [_hardStop, setHardStop] = useState<{
     active: boolean; dur: number; label: string; id: number
   }>({ active: false, dur: 2, label: '', id: 0 })
   const hardStopFired = useRef({ s1: false, s2: false, s3: false, s4: false })
@@ -640,7 +674,6 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
     run()
   }, [])
 
-  const currentStage = STAGE_NAV[activeStageIdx]
   const shareTokenLogo = cameoIcons['akita'] ?? '/app-icon.svg'
 
   // HUD / camera
@@ -829,21 +862,15 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
     },
   )
   const depositFillWidth = useTransform(depositFillPct, v => `${(Math.min(v, 1) * 100).toFixed(1)}%`)
-  // Zorb fill overlay — orange liquid rises inside the sphere as akita pours in.
-  // Both suppressed for reduced-motion users (skip clip-path repaint on every frame).
-  const _zorbFillClipBase = useTransform(depositFillPct, v =>
-    `inset(${((1 - Math.min(v, 1)) * 100).toFixed(1)}% 0 0 0 round 50%)`)
-  const zorbFillClip = useTransform(_zorbFillClipBase, v =>
-    prefersReducedMotion ? 'inset(0% 0 0 0 round 50%)' : v)
-  const _zorbFillOpBase = useTransform(scroll, [0.34, 0.38, 0.48, 0.54], [0, 0.70, 0.70, 0])
+  // Zorb fill overlay — GPU-only scaleY from bottom (no clipPath string generation)
+  const _zorbFillScaleBase = useTransform(depositFillPct, v => Math.min(v, 1))
+  const zorbFillScale = useTransform(_zorbFillScaleBase, v => prefersReducedMotion ? 1 : v)
+  const _zorbFillOpBase = useTransform(scroll, [0.34, 0.38, 0.48, 0.54], [0, 0.65, 0.65, 0])
   const zorbFillOp = useTransform(_zorbFillOpBase, v => prefersReducedMotion ? 0 : v)
   // "Vault initiated" confirmation badge — flashes after fill completes
   const vaultInitOp = useTransform(scroll, [0.50, 0.53, 0.55, 0.60], [0, 1, 1, 0])
 
   // (APY reveal removed — allocation percentages are shown permanently)
-
-  // Deposit counter as a MotionValue — written to DOM via MotionNumber, zero React state churn.
-  const depositCountMV = useTransform(depositFillPct, v => Math.min(v, 1) * 50_000_000)
 
   // Per-card distribution counters — MotionValues only, no React state
   const distCount0MV = useTransform(scroll, [0.52, 0.60], [0, 20_000_000])
@@ -862,15 +889,6 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
     scale(${vaultScale})
     rotateZ(${zorbFallRotZ}deg)
   `
-
-  // Share node — floats in above Zorb during distributions, then morphs to underlying $akita at stage 4.
-  // Parent stays visible the whole time; children cross-fade at the stage-3→4 boundary.
-  const shareY = useTransform(scroll, [0.38, 0.50], [30, 0])
-  const shareScale = useTransform(scroll, [0.42, 0.48], [0.94, 1])
-  // Visible from stage-2 mint through end of stage-3 distributions
-  // Share pill fades out AS the dive begins — it's "going inside" with the Zorb.
-  const shareOpacity = useTransform(scroll, [0.42, 0.48, 0.51, 0.55], [0, 1, 1, 0])
-  const shareTransform = useMotionTemplate`translate3d(-50%, ${shareY}px, 0px) scale(${shareScale})`
 
   // Cube interior POV — fades in during the vault-rush moment, then holds steady through all of stage 4.
   const cubeOp = useTransform(scroll, [0.79, 0.86, 1.0], [0, 1.0, 0.82])
@@ -1301,7 +1319,7 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens }: 
               landingFlash={landingFlash}
               zoraGreenFlash={zoraGreenFlash}
               coinEntryGlow={coinEntryGlow}
-              zorbFillClip={zorbFillClip}
+              zorbFillScale={zorbFillScale}
               zorbFillOp={zorbFillOp}
             />
 

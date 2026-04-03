@@ -402,8 +402,8 @@ export default defineConfig(({ command }) => {
     const raw = (process.env.VITE_DEV_SERVER_HOST ?? '').trim()
     const normalized = raw.toLowerCase()
     if (!normalized || normalized === 'false' || normalized === 'no' || normalized === '0') {
-      // Secure-by-default local binding.
-      return '127.0.0.1'
+      // Bind to localhost so browser origin matches Privy/SIWE/CORS allowlists.
+      return 'localhost'
     }
     if (normalized === 'true' || normalized === 'yes' || normalized === '1') {
       // Explicit opt-in for network exposure (binds 0.0.0.0 in Vite).

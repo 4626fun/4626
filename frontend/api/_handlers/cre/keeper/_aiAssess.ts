@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { type ApiEnvelope, handleOptions, requireKeeprApiKey, setCors, setNoStore } from '../../../../packages/server-core/src/index.js'
 import { getElizaLlmService } from '../../../../server/agent/eliza/llm.js'
-import { redactForRemoteAi } from '../../../../server/_lib/agentControl/redaction.js'
+import { prepareRemoteAiJsonPayload } from '../../../../server/_lib/agentControl/remoteAi.js'
 
 type AlertSeverity = 'info' | 'warning' | 'critical'
 type AiVerdict = 'pass' | 'watch' | 'critical' | 'unknown'
@@ -172,7 +172,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     'You are an onchain risk analyst. Return strict JSON only with keys: ' +
     'verdict (pass|watch|critical|unknown), confidence (0..1), summary, suggestedAction.'
 
-  const promptPayload = redactForRemoteAi({
+  const promptPayload = prepareRemoteAiJsonPayload({
     vaultAddress,
     checksRun,
     alertCount: validAlerts.length,

@@ -33,6 +33,13 @@ import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth }
 
 import type { Variant } from './waitlistTypes'
 import {
+  type WaitlistStep,
+  resolveWaitlistStep,
+  shouldAutoBootstrapWaitlistSession,
+  shouldAutoHandoffApprovedAccount,
+  shouldAutoStartWaitlistAuth,
+} from './waitlistFlowState'
+import {
   isEmailAlreadyLinkedAuthError,
   isRecoveryRequiredAuthError,
   runWaitlistPrivyLogout,
@@ -141,8 +148,6 @@ type DashboardLeaderboardResponse = {
   me: DashboardLeaderboardRow | null
 }
 
-type WaitlistStep = 'auth' | 'wallet' | 'done'
-
 const HANDOFF_QUERY_KEY = 'cv_handoff'
 const GET_ACCESS_TOKEN_TIMEOUT_MS = 20_000
 const CANONICALIZATION_TIMEOUT_MS = 20_000
@@ -247,7 +252,7 @@ function formatLeaderboardPointsTooltip(row: DashboardLeaderboardRow): string {
 }
 
 function getRecoveryRequiredMessage(): string {
-  return 'That email already belongs to an existing 4626 account. Click Recover account sign-in to continue with the original account.'
+  return 'This email already has a 4626 account. Use Recover account sign-in to continue.'
 }
 
 function getSessionMismatchMessage(): string {
@@ -281,56 +286,6 @@ function getAccessStatusMeta(status: string | null | undefined): {
     tone: 'border-amber-400/25 bg-amber-500/10 text-amber-100',
     description: 'Admin approval controls entry into v1. Use the actions below to strengthen your spot.',
   }
-}
-
-export function resolveWaitlistStep(params: {
-  account: Pick<AccountsSummary, 'emailVerified' | 'appAccessStatus'>
-}): WaitlistStep {
-  const { account } = params
-  if (!account.emailVerified) return 'auth'
-  const appApproved = String(account.appAccessStatus ?? '').trim().toLowerCase() === 'approved'
-  if (appApproved) return 'done'
-  return 'wallet'
-}
-
-export function shouldAutoStartWaitlistAuth(params: {
-  autoStartRequested?: boolean
-  step: WaitlistStep
-  privyAuthed: boolean
-  privyClientStatus: 'disabled' | 'loading' | 'ready'
-  recoveryRequired: boolean
-  error: string | null
-}): boolean {
-  const autoStartAllowed = params.autoStartRequested === true
-  if (!autoStartAllowed) return false
-  if (params.step !== 'auth') return false
-  if (params.privyAuthed) return false
-  if (params.privyClientStatus !== 'ready') return false
-  if (params.recoveryRequired) return false
-  if (params.error) return false
-  return true
-}
-
-export function shouldAutoBootstrapWaitlistSession(params: {
-  step: WaitlistStep
-  privyAuthed: boolean
-}): boolean {
-  if (params.step !== 'auth') return false
-  if (!params.privyAuthed) return false
-  return true
-}
-
-export function shouldAutoHandoffApprovedAccount(params: {
-  variant?: Variant
-  step: WaitlistStep
-  canEnterApp: boolean
-  enterAppBusy: boolean
-}): boolean {
-  if (params.variant !== 'embedded') return false
-  if (params.step !== 'done') return false
-  if (!params.canEnterApp) return false
-  if (params.enterAppBusy) return false
-  return true
 }
 
 function useWaitlistAttemptState() {
@@ -486,6 +441,7 @@ function WaitlistAuthStep(props: {
   authUi: WaitlistEmailUi
   shouldAutoStartAuth: boolean
   busy: boolean
+  privyClientStatus: 'disabled' | 'loading' | 'ready'
   error: string | null
   recoveryRequired: boolean
   onContinueAuth: () => void | Promise<void>
@@ -497,11 +453,15 @@ function WaitlistAuthStep(props: {
     authUi,
     shouldAutoStartAuth,
     busy,
+    privyClientStatus,
     error,
     recoveryRequired,
     onContinueAuth,
     onRecoverAccount,
   } = props
+
+  const privyReady = privyClientStatus === 'ready'
+  const buttonsDisabled = busy || !privyReady
 
   return (
     <motion.div
@@ -542,7 +502,7 @@ function WaitlistAuthStep(props: {
               </div>
               <button
                 type="button"
-                disabled={busy}
+                disabled={buttonsDisabled}
                 onClick={() => void onContinueAuth()}
                 className="btn-secondary btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50"
               >
@@ -552,7 +512,7 @@ function WaitlistAuthStep(props: {
           ) : (
             <button
               type="button"
-              disabled={busy}
+              disabled={buttonsDisabled}
               onClick={() => void onContinueAuth()}
               className="btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50"
             >
@@ -561,11 +521,35 @@ function WaitlistAuthStep(props: {
                   <Loader2 className="w-4 h-4 animate-spin" />
                   {authUi.busyLabel}
                 </>
+              ) : !privyReady ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin opacity-60" />
+                  Loading sign-in…
+                </>
               ) : (
                 authUi.ctaLabel
               )}
             </button>
           )}
+          {!recoveryRequired ? (
+            <div className="mt-2 text-center">
+              <button
+                type="button"
+                disabled={buttonsDisabled}
+                onClick={() => void onRecoverAccount()}
+                className="inline-flex items-center justify-center rounded-md px-2 py-1 text-xs font-medium text-zinc-400 transition hover:text-zinc-200 disabled:opacity-60"
+              >
+                {!privyReady ? (
+                  <>
+                    <Loader2 className="mr-1.5 h-3 w-3 animate-spin opacity-60" />
+                    Loading…
+                  </>
+                ) : (
+                  'Already joined? Recover sign-in'
+                )}
+              </button>
+            </div>
+          ) : null}
         </>
       )}
 
@@ -1344,7 +1328,7 @@ export function WaitlistFlow(props: {
     }
     setStep(resolveWaitlistStep({ account: nextAccount }))
     return nextAccount
-  }, [activeReferralCode, getAccessToken])
+  }, [activeReferralCode, getAccessToken, setError, setRecoveryRequired])
 
   const loadDashboard = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -1437,6 +1421,10 @@ export function WaitlistFlow(props: {
       if (!privyAuthed && privyClientStatus === 'disabled' && redirectToCanonicalWaitlist()) {
         return
       }
+      if (!privyAuthed && privyClientStatus === 'loading') {
+        setError('Sign-in service is still loading. Please wait a moment and try again.')
+        return
+      }
       if (privyAuthed) {
         try {
           const linked = await maybeCallMethod(privy, ['linkEmail', 'linkEmailAccount'])
@@ -1480,6 +1468,8 @@ export function WaitlistFlow(props: {
     redirectToCanonicalWaitlist,
     resetResolvedAccountState,
     runBootstrap,
+    setError,
+    setRecoveryRequired,
   ])
 
   const onContinueWithBase = useCallback(async () => {
@@ -1499,7 +1489,7 @@ export function WaitlistFlow(props: {
     } finally {
       endAuthAttempt()
     }
-  }, [beginAuthAttempt, endAuthAttempt, privy, privyAuthed, runBootstrap])
+  }, [beginAuthAttempt, endAuthAttempt, privy, privyAuthed, runBootstrap, setError])
 
   const resolveZora = useCallback(async (token: string): Promise<ZoraResolveResponse | null> => {
     const response = await apiFetch('/api/zora/resolve', {
@@ -1552,6 +1542,7 @@ export function WaitlistFlow(props: {
     privyAuthed,
     resolveZora,
     runBootstrap,
+    setError,
   ])
 
   const onCreateInBaseApp = useCallback(() => {
@@ -1642,13 +1633,17 @@ export function WaitlistFlow(props: {
     } finally {
       setBusy(false)
     }
-  }, [account?.accountSignals?.canonicalCswAddress, clearFeedback, getAccessToken, runBootstrap, sendPreparedOwnerTx])
+  }, [account?.accountSignals?.canonicalCswAddress, clearFeedback, getAccessToken, runBootstrap, sendPreparedOwnerTx, setBusy, setError, setNotice])
 
   const onRecoverAccount = useCallback(async () => {
     if (!beginAuthAttempt()) return
     resetResolvedAccountState()
     try {
       if (privyClientStatus === 'disabled' && redirectToCanonicalWaitlist()) {
+        return
+      }
+      if (privyClientStatus === 'loading') {
+        setError('Sign-in service is still loading. Please wait a moment and try again.')
         return
       }
       await runWaitlistPrivyLogout({ logout: privyLogoutRef.current })
@@ -1663,7 +1658,7 @@ export function WaitlistFlow(props: {
     } finally {
       endAuthAttempt()
     }
-  }, [beginAuthAttempt, endAuthAttempt, login, privyClientStatus, redirectToCanonicalWaitlist, resetResolvedAccountState])
+  }, [beginAuthAttempt, endAuthAttempt, login, privyClientStatus, redirectToCanonicalWaitlist, resetResolvedAccountState, setError, setRecoveryRequired])
 
   const onEnterApp = useCallback(async () => {
     if (enterAppBusy) return
@@ -1776,7 +1771,7 @@ export function WaitlistFlow(props: {
     return () => {
       cancelled = true
     }
-  }, [privyAuthed, resetResolvedAccountState, runBootstrap, step])
+  }, [authAttemptInFlightRef, privyAuthed, resetResolvedAccountState, runBootstrap, setBusy, setError, setRecoveryRequired, step])
 
   useEffect(() => {
     if (step !== 'auth') {
@@ -1785,7 +1780,7 @@ export function WaitlistFlow(props: {
       authBootstrapAutoAttemptedRef.current = false
       setRecoveryRequired(false)
     }
-  }, [step])
+  }, [authAttemptInFlightRef, setRecoveryRequired, step])
 
   useEffect(() => {
     if (step !== 'wallet' || !privyAuthed || typeof window === 'undefined' || typeof document === 'undefined') return
@@ -1867,7 +1862,7 @@ export function WaitlistFlow(props: {
     if (busy || authAttemptInFlightRef.current || authAutoAttemptedRef.current) return
     authAutoAttemptedRef.current = true
     void onContinueAuth()
-  }, [busy, onContinueAuth, shouldAutoStartAuth])
+  }, [authAttemptInFlightRef, busy, onContinueAuth, shouldAutoStartAuth])
 
   const shouldAutoHandoff = shouldAutoHandoffApprovedAccount({
     variant,
@@ -1915,6 +1910,7 @@ export function WaitlistFlow(props: {
             authUi={authUi}
             shouldAutoStartAuth={shouldAutoStartAuth}
             busy={busy}
+            privyClientStatus={privyClientStatus}
             error={error}
             recoveryRequired={recoveryRequired}
             onContinueAuth={onContinueAuth}

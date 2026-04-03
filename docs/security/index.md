@@ -9,6 +9,7 @@ sidebar_position: 5
 
 ## Recent Hardening Notes
 
+- [4626 Agent Security Model](./4626-agent-security-model.md)
 - [Payout Router + CreatorCoin Control Hardening (March 2026)](./payout-router-ownership-hardening-2026-03.md)
 - [Security Scan Overview](./scan-overview.md)
 - Canonical disclosure policy: [SECURITY.md](https://github.com/wenakita/4626/blob/main/SECURITY.md)
