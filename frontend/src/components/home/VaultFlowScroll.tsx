@@ -550,39 +550,73 @@ const DeploySection = memo(function DeploySection({
           <motion.span className="pointer-events-none absolute -translate-x-1/2 font-mono text-[9px] text-zinc-500" style={{ left: '62.5%', top: '100%', opacity: s4d2 }}>{STRATEGY_CARDS[2]?.amount} <span style={{ color: 'rgba(249,115,22,0.55)' }}>akita</span></motion.span>
           <motion.span className="pointer-events-none absolute -translate-x-1/2 font-mono text-[9px] text-zinc-500" style={{ left: '87.5%', top: '100%', opacity: s4d3 }}>{STRATEGY_CARDS[3]?.amount} <span style={{ color: 'rgba(249,115,22,0.55)' }}>akita</span></motion.span>
         </div>
-        <div className="mt-8 -mx-3 overflow-x-auto sm:mx-0 sm:overflow-visible" style={{ perspective: '1200px' }}>
-          <div className="flex gap-2.5 px-3 pb-1 sm:grid sm:grid-cols-4 sm:gap-3 sm:px-0 lg:gap-5">
-            {STRATEGY_CARDS.map((card, i) => {
-              // All 4 cards share the same rotateX so they stay Y-parallel.
-              // rotateY fans them horizontally for depth; hover flattens both.
-              const rotX = -18
-              const rotY = [-10, -3, 3, 10][i]
-              return (
-                <motion.div key={card.label} className="flex-shrink-0 sm:flex-shrink" style={{ opacity: cardMotions[i].opacity, y: cardMotions[i].y, minWidth: 'clamp(140px, 42vw, 180px)' }}>
-                  <motion.div
-                    className="relative flex h-full flex-col overflow-hidden rounded-[14px] p-2.5 sm:rounded-[18px] sm:p-4 lg:p-5"
-                    initial={{ rotateX: rotX, rotateY: rotY }}
-                    whileHover={{ rotateX: 0, rotateY: 0 }}
-                    transition={{ duration: 0.45, ease: [0.25, 0, 0.35, 1] }}
-                    style={{ border: '1px solid rgba(255,255,255,0.09)', background: 'linear-gradient(160deg, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0.015) 60%, transparent 100%)', boxShadow: '0 18px 90px -48px rgba(255,255,255,0.18), inset 0 1px 0 rgba(255,255,255,0.05)', transformOrigin: 'center bottom' }}
+        <div className="mt-8 -mx-3 overflow-x-auto sm:mx-0 sm:overflow-visible">
+          <div className="flex items-stretch gap-2 px-3 pb-1 sm:grid sm:grid-cols-4 sm:gap-3 sm:px-0 lg:gap-4">
+            {STRATEGY_CARDS.map((card, i) => (
+              <motion.div
+                key={card.label}
+                className="flex-shrink-0 sm:flex-shrink"
+                style={{ opacity: cardMotions[i].opacity, y: cardMotions[i].y, minWidth: 'clamp(148px, 40vw, 176px)' }}
+              >
+                <motion.div
+                  className="relative flex h-full flex-col overflow-hidden rounded-2xl p-3 sm:p-4 lg:p-5"
+                  whileHover={{ y: -3, boxShadow: '0 24px 64px -20px rgba(0,82,255,0.22), 0 0 0 1px rgba(255,255,255,0.13), inset 0 1px 0 rgba(255,255,255,0.08)' }}
+                  transition={{ duration: 0.30, ease: [0.25, 0, 0.35, 1] }}
+                  style={{
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    background: 'linear-gradient(160deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.02) 55%, rgba(0,0,0,0) 100%)',
+                    boxShadow: '0 12px 48px -18px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.05)',
+                    backdropFilter: 'blur(12px)',
+                  }}
+                >
+                  {/* Top shimmer line */}
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" aria-hidden="true" />
+
+                  {/* Protocol icon + label row */}
+                  <div className="mb-2.5 flex items-center gap-2">
+                    {card.icon ? (
+                      <img src={card.icon} alt={card.iconAlt} className={card.iconClassName} loading="lazy" />
+                    ) : (
+                      <div className="h-3 w-3 rounded-full border border-white/20 bg-white/10" aria-hidden="true" />
+                    )}
+                    <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-zinc-300">{card.label}</p>
+                  </div>
+
+                  {/* Allocation percentage — primary number */}
+                  <p
+                    className="font-mono font-black leading-none"
+                    style={{
+                      fontSize: 'clamp(2rem, 5vw, 2.6rem)',
+                      color: '#f0f0f8',
+                      textShadow: '0 0 18px rgba(255,255,255,0.45)',
+                    }}
                   >
-                    <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
-                    <div className="mb-3 flex items-center gap-1.5">
-                      {card.icon ? (
-                        <img src={card.icon} alt={card.iconAlt} className={card.iconClassName} loading="lazy" />
-                      ) : (
-                        <div className="h-2 w-2 rounded-full bg-white/15" aria-hidden="true" />
-                      )}
-                      <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-zinc-300">{card.label}</p>
-                    </div>
-                    <p className="font-mono font-black leading-none" style={{ fontSize: 'clamp(1.8rem, 4.5vw, 3.5rem)', textShadow: '0 0 22px rgba(255,255,255,0.5), 0 0 48px rgba(255,255,255,0.25)', color: '#f0f0f8' }}>{card.percent}</p>
-                    <p className="mt-1 font-mono text-[10px] text-zinc-400">{card.amount}{' '}<span style={{ color: 'rgba(249,115,22,0.55)' }}>akita</span></p>
-                    <p className="mt-2 grow text-[11px] font-light leading-relaxed text-zinc-400">{card.description}</p>
-                    <Link to={card.route} className="mt-3 self-end text-[9px] font-medium tracking-[0.14em] text-zinc-400 transition-colors hover:text-zinc-200">Learn more →</Link>
-                  </motion.div>
+                    {card.percent}
+                  </p>
+
+                  {/* Token amount */}
+                  <p className="mt-1.5 font-mono text-[10px] font-medium text-zinc-400">
+                    {card.amount}{' '}
+                    <span style={{ color: 'rgba(249,115,22,0.60)' }}>akita</span>
+                  </p>
+
+                  {/* Description */}
+                  <p className="mt-2.5 grow text-[11px] font-light leading-relaxed text-zinc-500">
+                    {card.description}
+                  </p>
+
+                  {/* Separator + link */}
+                  <div className="mt-3 flex items-center justify-between border-t border-white/[0.05] pt-3">
+                    <Link
+                      to={card.route}
+                      className="text-[9px] font-medium tracking-[0.14em] text-zinc-500 transition-colors hover:text-zinc-200"
+                    >
+                      Learn more →
+                    </Link>
+                  </div>
                 </motion.div>
-              )
-            })}
+              </motion.div>
+            ))}
           </div>
         </div>
       </div>
@@ -1304,15 +1338,17 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
                                 <img src={cameoIcons['akita']} alt="" className="h-3.5 w-3.5 rounded-full object-cover opacity-70" loading="lazy" />
                               ) : null}
                               <span className="font-mono text-[7px] uppercase tracking-[0.24em]" style={{ color: 'rgba(249,115,22,0.60)' }}>
-                                akita · yield deployed
+                                akita · principal deployed
                               </span>
                             </div>
-                            <div className="flex items-baseline gap-2">
-                              <span className="font-mono text-[28px] font-black leading-none tracking-tight text-white">4</span>
-                              <span className="font-mono text-[11px] tracking-[0.12em]" style={{ color: 'rgba(255,255,255,0.30)' }}>strategies</span>
+                            <div className="flex items-baseline gap-1.5">
+                              <span className="font-mono font-black leading-none tracking-tight text-white" style={{ fontSize: 'clamp(1.4rem, 4vw, 1.75rem)' }}>50,000,000</span>
                             </div>
-                            <span className="font-mono text-[7px] tracking-[0.16em]" style={{ color: 'rgba(100,160,255,0.38)' }}>
-                              generating yield ↓
+                            <span className="font-mono text-[8px] tracking-[0.14em]" style={{ color: 'rgba(249,115,22,0.45)' }}>
+                              akita
+                            </span>
+                            <span className="mt-1 font-mono text-[7px] tracking-[0.16em]" style={{ color: 'rgba(100,160,255,0.38)' }}>
+                              4 yield strategies ↓
                             </span>
                           </>
                         )}
