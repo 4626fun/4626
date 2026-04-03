@@ -556,21 +556,16 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
   const depositCompleteRef = useRef(false)
   const [cameoIcons, setCameoIcons] = useState<Record<string, string>>({})
   // Generalised checkpoint system — 4 hard stops, one per stage completion.
-  // State value not currently consumed by UI; keeping setter-side for scroll-blocking side effects.
-  const [_hardStop, setHardStop] = useState<{
-    active: boolean; dur: number; label: string; id: number
-  }>({ active: false, dur: 2, label: '', id: 0 })
+  // Pure side-effect: blocks scroll for `dur` seconds, no React state needed.
   const hardStopFired = useRef({ s1: false, s2: false, s3: false, s4: false })
 
-  const fireHardStop = useCallback((label: string, dur: number) => {
-    setHardStop(prev => ({ active: true, dur, label, id: prev.id + 1 }))
+  const fireHardStop = useCallback((_label: string, dur: number) => {
     const block = (e: Event) => e.preventDefault()
     document.addEventListener('wheel',     block, { passive: false })
     document.addEventListener('touchmove', block, { passive: false })
     setTimeout(() => {
       document.removeEventListener('wheel',     block)
       document.removeEventListener('touchmove', block)
-      setHardStop(prev => ({ ...prev, active: false }))
     }, dur * 1000)
   }, [])
 
@@ -817,28 +812,26 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
   // Hard stop fires at 0.82 — users clearly see all 3 before the dive.
   //
   // Path + card 0 (CCA Launch — left): 0.52 start
-  const _n0Raw = useTransform(scroll, [0.52, 0.60], [0, 1])
-  const node0Op = useTransform(_n0Raw, smoothstep)
+  // Single raw drives both pathLength (orbitTrav) and card opacity (node*Op) — identical values.
+  const _d0Raw = useTransform(scroll, [0.52, 0.60], [0, 1])
+  const orbitTrav0 = useTransform(_d0Raw, smoothstep)
+  const node0Op = orbitTrav0
   const dist0CardY = useTransform(scroll, [0.52, 0.60], [22, 0])
-  const _ot0Raw = useTransform(scroll, [0.52, 0.60], [0, 1])
-  const orbitTrav0 = useTransform(_ot0Raw, smoothstep)
   // Glow stays ON through hard stop, fades with dive
   const nodeGlow0 = useTransform(scroll, [0.59, 0.62, 0.73, 0.77], [0, 1, 1, 0])
 
   // Path + card 1 (Creator Vesting — center): 0.60 start
-  const _n1Raw = useTransform(scroll, [0.60, 0.67], [0, 1])
-  const node1Op = useTransform(_n1Raw, smoothstep)
+  const _d1Raw = useTransform(scroll, [0.60, 0.67], [0, 1])
+  const orbitTrav1 = useTransform(_d1Raw, smoothstep)
+  const node1Op = orbitTrav1
   const dist1CardY = useTransform(scroll, [0.60, 0.67], [22, 0])
-  const _ot1Raw = useTransform(scroll, [0.60, 0.67], [0, 1])
-  const orbitTrav1 = useTransform(_ot1Raw, smoothstep)
   const nodeGlow1 = useTransform(scroll, [0.66, 0.69, 0.73, 0.77], [0, 1, 1, 0])
 
   // Path + card 2 (LP Reserve — right): 0.67 start
-  const _n2Raw = useTransform(scroll, [0.67, 0.72], [0, 1])
-  const node2Op = useTransform(_n2Raw, smoothstep)
+  const _d2Raw = useTransform(scroll, [0.67, 0.72], [0, 1])
+  const orbitTrav2 = useTransform(_d2Raw, smoothstep)
+  const node2Op = orbitTrav2
   const dist2CardY = useTransform(scroll, [0.67, 0.72], [22, 0])
-  const _ot2Raw = useTransform(scroll, [0.67, 0.72], [0, 1])
-  const orbitTrav2 = useTransform(_ot2Raw, smoothstep)
   const nodeGlow2 = useTransform(scroll, [0.71, 0.73, 0.75, 0.77], [0, 1, 1, 0])
 
   // "× ERC-4626" suffix appears only after the vault captures the Zorb (~0.28)
@@ -937,28 +930,25 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
 
   // Stage 4 fan — cards stagger in starting at 0.85.
   // Stage 4 now spans 0.77-1.0 (23% of scroll) giving each card ~0.06-0.07 window.
-  const _s4p0r = useTransform(scroll, [0.84, 0.91], [0, 1])
-  const s4p0 = useTransform(_s4p0r, smoothstep)
-  const s4d0 = useTransform(scroll, [0.86, 0.93], [0, 1])
+  // s4cNo (linear 0→1) doubles as the raw input for s4pN (smoothstepped) — saves 4 MV objects.
   const s4c0o = useTransform(scroll, [0.84, 0.91], [0, 1])
+  const s4p0 = useTransform(s4c0o, smoothstep)
+  const s4d0 = useTransform(scroll, [0.86, 0.93], [0, 1])
   const s4c0y = useTransform(scroll, [0.84, 0.91], [28, 0])
 
-  const _s4p1r = useTransform(scroll, [0.88, 0.95], [0, 1])
-  const s4p1 = useTransform(_s4p1r, smoothstep)
-  const s4d1 = useTransform(scroll, [0.90, 0.97], [0, 1])
   const s4c1o = useTransform(scroll, [0.88, 0.95], [0, 1])
+  const s4p1 = useTransform(s4c1o, smoothstep)
+  const s4d1 = useTransform(scroll, [0.90, 0.97], [0, 1])
   const s4c1y = useTransform(scroll, [0.88, 0.95], [28, 0])
 
-  const _s4p2r = useTransform(scroll, [0.92, 0.98], [0, 1])
-  const s4p2 = useTransform(_s4p2r, smoothstep)
-  const s4d2 = useTransform(scroll, [0.93, 1.0], [0, 1])
   const s4c2o = useTransform(scroll, [0.92, 0.98], [0, 1])
+  const s4p2 = useTransform(s4c2o, smoothstep)
+  const s4d2 = useTransform(scroll, [0.93, 1.0], [0, 1])
   const s4c2y = useTransform(scroll, [0.92, 0.98], [28, 0])
 
-  const _s4p3r = useTransform(scroll, [0.95, 1.0], [0, 1])
-  const s4p3 = useTransform(_s4p3r, smoothstep)
-  const s4d3 = useTransform(scroll, [0.97, 1.0], [0, 1])
   const s4c3o = useTransform(scroll, [0.95, 1.0], [0, 1])
+  const s4p3 = useTransform(s4c3o, smoothstep)
+  const s4d3 = useTransform(scroll, [0.97, 1.0], [0, 1])
   const s4c3y = useTransform(scroll, [0.95, 1.0], [28, 0])
 
   return (
@@ -1351,7 +1341,7 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
               deployTitleOp={deployTitleOp}
               deployTitleY={deployTitleY}
               s4p0={s4p0} s4p1={s4p1} s4p2={s4p2} s4p3={s4p3}
-              s4pOp0={_s4p0r} s4pOp1={_s4p1r} s4pOp2={_s4p2r} s4pOp3={_s4p3r}
+              s4pOp0={s4c0o} s4pOp1={s4c1o} s4pOp2={s4c2o} s4pOp3={s4c3o}
               s4d0={s4d0} s4d1={s4d1} s4d2={s4d2} s4d3={s4d3}
               s4c0o={s4c0o} s4c0y={s4c0y}
               s4c1o={s4c1o} s4c1y={s4c1y}
