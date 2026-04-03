@@ -34,6 +34,7 @@ import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth }
 
 import type { Variant } from './waitlistTypes'
 import {
+  mergeCanonicalWaitlistAccount,
   type WaitlistStep,
   resolveWaitlistStep,
   shouldAutoBootstrapWaitlistSession,
@@ -1196,6 +1197,7 @@ export function WaitlistFlow(props: {
   }, [])
 
   const runBootstrap = useCallback(async (): Promise<AccountsSummary | null> => {
+    let bootstrappedCanonicalWallet: OnboardingBootstrapResponse | null = null
     const token = await withTimeout(
       getAccessToken(),
       FLOW_TIMEOUT_MS,
@@ -1227,6 +1229,7 @@ export function WaitlistFlow(props: {
         )
       }
       if (canonicalization.onboardingBootstrapped && canonicalization.onboarding) {
+        bootstrappedCanonicalWallet = canonicalization.onboarding
         setOwnerDelegationFlags(null)
         setOwnerDelegationVerified(canonicalization.onboarding.privyIsOwner)
         setEmbeddedEoaAddress(canonicalization.onboarding.privyEmbeddedEoaAddress)
@@ -1269,7 +1272,7 @@ export function WaitlistFlow(props: {
       return null
     }
 
-    const nextAccount = payload.data
+    const nextAccount = mergeCanonicalWaitlistAccount(payload.data, bootstrappedCanonicalWallet)
     setAccount(nextAccount)
     setRecoveryRequired(false)
     if (activeReferralCode) clearStoredWaitlistReferralCode()

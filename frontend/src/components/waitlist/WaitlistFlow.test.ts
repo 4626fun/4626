@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  mergeCanonicalWaitlistAccount,
   resolveWaitlistStep,
   shouldAutoBootstrapWaitlistSession,
   shouldAutoHandoffApprovedAccount,
@@ -193,6 +194,46 @@ describe('shouldAutoBootstrapWaitlistSession', () => {
         privyAuthed: true,
       }),
     ).toBe(false)
+  })
+})
+
+describe('mergeCanonicalWaitlistAccount', () => {
+  const account = {
+    emailVerified: true,
+    appAccessStatus: null,
+    accountSignals: {
+      linked: false,
+      canonicalCswAddress: null,
+      creatorCoin: null,
+      zoraHandle: null,
+      lastResolvedAt: null,
+    },
+  }
+
+  it('reuses the canonical wallet resolved during bootstrap when the summary payload is still missing it', () => {
+    const merged = mergeCanonicalWaitlistAccount(account, {
+      canonicalCswAddress: '0x1111111111111111111111111111111111111111',
+    })
+
+    expect(merged.accountSignals.canonicalCswAddress).toBe('0x1111111111111111111111111111111111111111')
+    expect(account.accountSignals.canonicalCswAddress).toBeNull()
+  })
+
+  it('prefers the canonical wallet resolved during bootstrap over a stale summary value', () => {
+    const merged = mergeCanonicalWaitlistAccount(
+      {
+        ...account,
+        accountSignals: {
+          ...account.accountSignals,
+          canonicalCswAddress: '0x2222222222222222222222222222222222222222',
+        },
+      },
+      {
+        canonicalCswAddress: '0x1111111111111111111111111111111111111111',
+      },
+    )
+
+    expect(merged.accountSignals.canonicalCswAddress).toBe('0x1111111111111111111111111111111111111111')
   })
 })
 
