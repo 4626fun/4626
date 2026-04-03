@@ -18,6 +18,7 @@ import {
 import { resolveBaseAppInviteUrl } from '@/lib/baseAppInvite'
 import { getAppBaseUrl } from '@/lib/host'
 import { ZORA_PRIVY_APP_ID, usePrivyClientStatus } from '@/lib/privy/client'
+import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import { performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
 import {
   type ApiEnvelope,
@@ -152,6 +153,7 @@ const HANDOFF_QUERY_KEY = 'cv_handoff'
 const GET_ACCESS_TOKEN_TIMEOUT_MS = 20_000
 const CANONICALIZATION_TIMEOUT_MS = 20_000
 const WAITLIST_BOOTSTRAP_TIMEOUT_MS = 20_000
+const EMBEDDED_WALLET_TIMEOUT_MS = 20_000
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -186,39 +188,6 @@ function isPrivyLoginBootstrapError(error: unknown): boolean {
     (normalized.includes('access-control-allow-origin') && normalized.includes('privy')) ||
     normalized.includes('email verification is unavailable in this client')
   )
-}
-
-function useSafePrivy() {
-  try {
-    return usePrivy() as any
-  } catch {
-    return {
-      authenticated: false,
-      ready: false,
-      getAccessToken: async () => null,
-    } as any
-  }
-}
-
-function useSafeLogin() {
-  try {
-    return useLogin({}) as any
-  } catch {
-    return {
-      login: async () => {},
-    } as any
-  }
-}
-
-function useSafeCrossApp() {
-  try {
-    return useCrossAppAccounts() as any
-  } catch {
-    return {
-      loginWithCrossAppAccount: null,
-      linkCrossAppAccount: null,
-    } as any
-  }
 }
 
 async function maybeCallMethod(target: any, methodNames: string[], args: unknown[] = []): Promise<boolean> {
@@ -1160,22 +1129,17 @@ export function WaitlistFlow(props: {
   const variant = props.variant ?? 'embedded'
   const sectionId = props.sectionId ?? 'waitlist'
 
-  const privy = useSafePrivy()
+  const privy = usePrivy()
   const privyClientStatus = usePrivyClientStatus()
-  const { login } = useSafeLogin()
-  const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossApp()
+  const { login } = useLogin({})
+  const { loginWithCrossAppAccount, linkCrossAppAccount } = useCrossAppAccounts()
   const { data: walletClient } = useWalletClient()
   const { chainId } = useAccount()
   const { switchChainAsync } = useSwitchChain()
 
-  const privyAuthed = Boolean(privy?.authenticated)
-  const getAccessToken = useMemo(
-    () =>
-      typeof privy?.getAccessToken === 'function'
-        ? (privy.getAccessToken as () => Promise<string | null>)
-        : async () => null,
-    [privy],
-  )
+  const privyAuthed = privy.authenticated
+  const { getAccessToken } = privy
+  const { ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
 
   const [step, setStep] = useState<WaitlistStep>('auth')
 
@@ -1229,13 +1193,9 @@ export function WaitlistFlow(props: {
   }, [])
 
   useEffect(() => {
-    if (typeof privy?.logout === 'function') {
-      privyLogoutRef.current = async () => {
-        await privy.logout().catch(() => null)
-      }
-      return
+    privyLogoutRef.current = async () => {
+      await privy.logout().catch(() => null)
     }
-    privyLogoutRef.current = null
   }, [privy])
 
   useEffect(() => {
@@ -1267,13 +1227,28 @@ export function WaitlistFlow(props: {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (token) {
       headers['X-Privy-Token'] = token
-      const canonicalization = await withTimeout(
+      let canonicalization = await withTimeout(
         runCanonicalizationPipeline({
           privyToken: token,
         }),
         CANONICALIZATION_TIMEOUT_MS,
         'Account sync',
       )
+      if (!canonicalization.onboardingBootstrapped && canonicalization.flags.needsEmbeddedWallet) {
+        const provisionedWallet = await withTimeout(
+          ensureEmbeddedWallet(),
+          EMBEDDED_WALLET_TIMEOUT_MS,
+          'Embedded wallet provisioning',
+        )
+        setEmbeddedEoaAddress(provisionedWallet.address)
+        canonicalization = await withTimeout(
+          runCanonicalizationPipeline({
+            privyToken: token,
+          }),
+          CANONICALIZATION_TIMEOUT_MS,
+          'Account sync',
+        )
+      }
       if (canonicalization.onboardingBootstrapped && canonicalization.onboarding) {
         setOwnerDelegationFlags(null)
         setOwnerDelegationVerified(canonicalization.onboarding.privyIsOwner)
@@ -1328,7 +1303,7 @@ export function WaitlistFlow(props: {
     }
     setStep(resolveWaitlistStep({ account: nextAccount }))
     return nextAccount
-  }, [activeReferralCode, getAccessToken, setError, setRecoveryRequired])
+  }, [activeReferralCode, ensureEmbeddedWallet, getAccessToken, setError, setRecoveryRequired])
 
   const loadDashboard = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -1577,7 +1552,7 @@ export function WaitlistFlow(props: {
       const token = await getAccessToken()
       if (!token) throw new Error('Missing Privy auth token. Sign in and retry.')
 
-      const preflightRes = await apiFetch('/api/onboarding/bootstrap', {
+      let preflightRes = await apiFetch('/api/onboarding/bootstrap', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -1585,7 +1560,24 @@ export function WaitlistFlow(props: {
         },
         body: JSON.stringify({}),
       })
-      const preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<OnboardingBootstrapResponse> | null
+      let preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<OnboardingBootstrapResponse> | null
+      if ((!preflightRes.ok || !preflightPayload?.success) && (preflightPayload as any)?.needsEmbeddedWallet === true) {
+        const provisionedWallet = await withTimeout(
+          ensureEmbeddedWallet(),
+          EMBEDDED_WALLET_TIMEOUT_MS,
+          'Embedded wallet provisioning',
+        )
+        setEmbeddedEoaAddress(provisionedWallet.address)
+        preflightRes = await apiFetch('/api/onboarding/bootstrap', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Privy-Token': token,
+          },
+          body: JSON.stringify({}),
+        })
+        preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<OnboardingBootstrapResponse> | null
+      }
       if (!preflightRes.ok || !preflightPayload?.success) {
         throw buildOwnerDelegationError(preflightPayload, 'Signer preflight failed.')
       }
@@ -1633,7 +1625,7 @@ export function WaitlistFlow(props: {
     } finally {
       setBusy(false)
     }
-  }, [account?.accountSignals?.canonicalCswAddress, clearFeedback, getAccessToken, runBootstrap, sendPreparedOwnerTx, setBusy, setError, setNotice])
+  }, [account?.accountSignals?.canonicalCswAddress, clearFeedback, ensureEmbeddedWallet, getAccessToken, runBootstrap, sendPreparedOwnerTx, setBusy, setError, setNotice])
 
   const onRecoverAccount = useCallback(async () => {
     if (!beginAuthAttempt()) return

@@ -39,11 +39,11 @@
 
 | # | Sev | Screen | Issue | File(s) |
 |---|-----|--------|-------|---------|
-| 1 | S1 | Waitlist | Stepper bar ("CONNECT → RESERVE SPOT → BOOST RANK → DEPLOY") is purely decorative — steps don't map to user actions and can't be clicked. Creates false expectation of multi-step flow. | `steps/VerifyStep.tsx`, `WaitlistFlow.tsx` |
+| 1 | S1 | Waitlist | Stepper bar ("CONNECT → RESERVE SPOT → BOOST RANK → DEPLOY") is purely decorative — steps don't map to user actions and can't be clicked. Creates false expectation of multi-step flow. | `steps/VerifyStep.tsx`, `ThinWaitlistFlow.tsx` |
 | 2 | S1 | Waitlist | "Wallet sign-in is unavailable. Try another way." error appears on fresh load before user attempts anything, eroding trust. | `steps/VerifyStep.tsx` (line ~719–723) |
 | 3 | S1 | Waitlist | Modal has no focus trap — Tab key escapes modal to background content. Missing `role="dialog"`, `aria-modal="true"`, and return-focus-on-close. | `WaitlistModal.tsx` |
 | 4 | S1 | All | No `prefers-reduced-motion` media query — all Framer Motion and CSS animations run unconditionally. | `index.css`, all motion components |
-| 5 | S2 | Waitlist | Auto-submit after wallet verify has no visible progress or "what's happening" messaging — screen just jumps from verify to done. | `WaitlistFlow.tsx` (~autoSubmit logic) |
+| 5 | S2 | Waitlist | Auto-submit after wallet verify has no visible progress or "what's happening" messaging — screen just jumps from verify to done. | `ThinWaitlistFlow.tsx` (~autoSubmit logic) |
 | 6 | S2 | All | Buttons defined only as CSS classes (`.btn-primary`, `.btn-secondary`) — no React component with loading/disabled/icon props. Every call-site reimplements states. | `index.css` lines 105–202 |
 | 7 | S2 | All | Typography sizes are hardcoded (`text-[12px]`, `text-[13px]`, `text-[9px]`) instead of a consistent scale. Same semantic level uses different sizes across screens. | Throughout `src/` |
 | 8 | S2 | All | No Toast/notification system — success/error feedback is inline only, inconsistent placement, and disappears on navigation. | N/A (missing) |
@@ -56,7 +56,7 @@
 
 ### 1. Waitlist (P0)
 
-**Components**: `WaitlistModal.tsx`, `WaitlistFlow.tsx`, `WaitlistFlowWithProviders.tsx`, `steps/VerifyStep.tsx`, `steps/DoneStep.tsx`
+**Components**: `WaitlistModal.tsx`, `ThinWaitlistFlow.tsx`, `WaitlistFlowWithProviders.tsx`, `steps/VerifyStep.tsx`, `steps/DoneStep.tsx`
 
 #### Flow structure
 Current steps: `'persona' | 'verify' | 'email' | 'done'` — in practice only `verify → done`.

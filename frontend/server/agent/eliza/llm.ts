@@ -1,6 +1,6 @@
 import { AgentError } from './_errors.js'
 import { DailyBudgetGuard, parsePositiveNumber } from './_rateLimit.js'
-import { assertRemoteAiEndpoint, prepareRemoteAiText } from '../../_lib/agentControl/remoteAi.js'
+import { fetchRemoteAi, prepareRemoteAiText } from '../../_lib/agentControl/remoteAi.js'
 import { logger } from '../../_lib/logger.js'
 import { emitTelemetryEvent } from '../../_lib/telemetry.js'
 import { readServerEnvVar } from '../../_lib/serverEnv.js'
@@ -333,7 +333,7 @@ class ElizaLlmService {
       }
       const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
       try {
-        const response = await fetch(assertRemoteAiEndpoint(params.provider.apiUrl), {
+        const response = await fetchRemoteAi(params.provider.apiUrl, {
           method: 'POST',
           headers: toHeaders(params.provider, params.apiKey),
           body: JSON.stringify(params.body),

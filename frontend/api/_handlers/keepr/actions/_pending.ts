@@ -15,6 +15,7 @@ import {
   KEEPR_TRUST_ZONE_KEY_HEADER,
   getKeeprTrustZoneEnvKey,
   parseKeeprTrustZone,
+  resolveKeeprEffectiveActionType,
   resolveKeeprTrustZone,
 } from '../../../../server/_lib/agentControl/trustZones.js'
 
@@ -94,19 +95,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     `
 
     const actions: PendingAction[] = (result.rows ?? [])
-      .map((row: any) => ({
-      id: Number(row.id),
-      vaultAddress: String(row.vault_address),
-      groupId: String(row.group_id),
-      actionType: row.action_type ? String(row.action_type) : null,
-      trustZone: resolveKeeprTrustZone(row.action_type ? String(row.action_type) : null),
-      action: row.action,
-      dedupeKey: row.dedupe_key ? String(row.dedupe_key) : null,
-      status: String(row.status),
-      attemptCount: Number(row.attempt_count ?? 0),
-      lastError: row.last_error ? String(row.last_error) : null,
-      createdAt: row.created_at ? new Date(row.created_at).toISOString() : '',
-      }))
+      .map((row: any) => {
+        const effectiveActionType = resolveKeeprEffectiveActionType(
+          row.action_type ? String(row.action_type) : null,
+          row.action && typeof row.action === 'object' ? (row.action as Record<string, unknown>) : null,
+        )
+        return {
+          id: Number(row.id),
+          vaultAddress: String(row.vault_address),
+          groupId: String(row.group_id),
+          actionType: effectiveActionType,
+          trustZone: resolveKeeprTrustZone(effectiveActionType),
+          action: row.action,
+          dedupeKey: row.dedupe_key ? String(row.dedupe_key) : null,
+          status: String(row.status),
+          attemptCount: Number(row.attempt_count ?? 0),
+          lastError: row.last_error ? String(row.last_error) : null,
+          createdAt: row.created_at ? new Date(row.created_at).toISOString() : '',
+        }
+      })
       .filter((row) => (requestedZone ? row.trustZone === requestedZone : true))
 
     return res.status(200).json({

@@ -26,6 +26,27 @@ const TRUST_ZONE_ENV_KEY_MAP: Record<KeeprTrustZone, string> = {
   queue_messaging_monitoring: 'KEEPR_ZONE_KEY_QUEUE_MESSAGING_MONITORING',
 };
 
+const ACTION_TYPE_ALIASES: Record<string, string> = {
+  'xmtp.group.add_member': 'xmtp.group.add_member',
+  add_member: 'xmtp.group.add_member',
+  addmember: 'xmtp.group.add_member',
+  'xmtp.group.remove_member': 'xmtp.group.remove_member',
+  remove_member: 'xmtp.group.remove_member',
+  removemember: 'xmtp.group.remove_member',
+  'xmtp.group.send_message': 'xmtp.group.send_message',
+  send_message: 'xmtp.group.send_message',
+  sendmessage: 'xmtp.group.send_message',
+  'xmtp.group.sync_members': 'xmtp.group.sync_members',
+  sync_members: 'xmtp.group.sync_members',
+  syncmembers: 'xmtp.group.sync_members',
+  'strategy.ajna.rebucket': 'strategy.ajna.rebucket',
+  ajna_rebucket: 'strategy.ajna.rebucket',
+  ajnarebucket: 'strategy.ajna.rebucket',
+  'strategy.charm.rebalance': 'strategy.charm.rebalance',
+  charm_rebalance: 'strategy.charm.rebalance',
+  charmrebalance: 'strategy.charm.rebalance',
+};
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -79,6 +100,21 @@ function normalizeActionType(actionType: string | null | undefined): string {
   return String(actionType ?? '').trim().toLowerCase();
 }
 
+function resolveEffectiveActionType(
+  actionType: string | null | undefined,
+  actionPayload?: Record<string, unknown> | null,
+): string {
+  const candidates = [
+    normalizeActionType(typeof actionPayload?.action === 'string' ? actionPayload.action : null),
+    normalizeActionType(actionType),
+  ];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    return ACTION_TYPE_ALIASES[candidate] ?? candidate;
+  }
+  return '';
+}
+
 function resolveKeeprTrustZone(actionType: string | null | undefined): KeeprTrustZone {
   const normalized = normalizeActionType(actionType);
   if (!normalized) return 'market_maintenance';
@@ -123,8 +159,11 @@ function getTrustZoneKey(zone: KeeprTrustZone): string | null {
   return value || null;
 }
 
-function buildZoneHeaders(actionType: string | null | undefined): Record<string, string> {
-  const zone = resolveKeeprTrustZone(actionType);
+function buildZoneHeaders(
+  actionType: string | null | undefined,
+  actionPayload?: Record<string, unknown> | null,
+): Record<string, string> {
+  const zone = resolveKeeprTrustZone(resolveEffectiveActionType(actionType, actionPayload));
   const key = getTrustZoneKey(zone);
   return {
     [KEEPR_TRUST_ZONE_HEADER]: zone,
@@ -163,18 +202,23 @@ async function updateActionStatus(params: {
   error?: string;
   retryDelaySeconds?: number;
   actionType?: string | null;
+  action?: Record<string, unknown> | null;
 }): Promise<boolean> {
   const baseUrl = getApiBaseUrl();
   const secret = getApiSecret();
+  const effectiveActionType = resolveEffectiveActionType(params.actionType, params.action) || params.actionType;
 
   const response = await fetch(`${baseUrl}/keepr/actions/updateStatus`, {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${secret}`,
       'Content-Type': 'application/json',
-      ...buildZoneHeaders(params.actionType),
+      ...buildZoneHeaders(params.actionType, params.action),
     },
-    body: JSON.stringify(params),
+    body: JSON.stringify({
+      ...params,
+      actionType: effectiveActionType,
+    }),
     signal: AbortSignal.timeout(15_000),
   });
 
@@ -195,6 +239,7 @@ async function executeAction(
 ): Promise<{ success: boolean; retryable: boolean; error?: string }> {
   const baseUrl = getApiBaseUrl();
   const secret = getApiSecret();
+  const effectiveActionType = resolveEffectiveActionType(action.actionType, action.action) || action.actionType;
 
   try {
     const response = await fetch(`${baseUrl}/keepr/actions/execute`, {
@@ -202,13 +247,13 @@ async function executeAction(
       headers: {
         Authorization: `Bearer ${secret}`,
         'Content-Type': 'application/json',
-        ...buildZoneHeaders(action.actionType),
+        ...buildZoneHeaders(action.actionType, action.action),
       },
       body: JSON.stringify({
         id: action.id,
         vaultAddress: action.vaultAddress,
         groupId: action.groupId,
-        actionType: action.actionType,
+        actionType: effectiveActionType,
         action: action.action,
       }),
       signal: AbortSignal.timeout(30_000),
@@ -277,12 +322,14 @@ export async function executeQueueProcessor(): Promise<QueueExecutorResult> {
   // Step 2: Process each action
   for (const action of pendingActions) {
     result.processed++;
+    const effectiveActionType = resolveEffectiveActionType(action.actionType, action.action) || action.actionType;
 
     // Mark as executing
     const claimed = await updateActionStatus({
       id: action.id,
       status: 'executing',
-      actionType: action.actionType,
+      actionType: effectiveActionType,
+      action: action.action,
     });
     if (!claimed) {
       // Another worker may have claimed it
@@ -295,9 +342,9 @@ export async function executeQueueProcessor(): Promise<QueueExecutorResult> {
 
     if (execResult.success) {
       // Mark as executed
-      await updateActionStatus({ id: action.id, status: 'executed', actionType: action.actionType });
+      await updateActionStatus({ id: action.id, status: 'executed', actionType: effectiveActionType, action: action.action });
       result.succeeded++;
-      result.actions.push({ id: action.id, actionType: action.actionType, outcome: 'executed' });
+      result.actions.push({ id: action.id, actionType: effectiveActionType, outcome: 'executed' });
     } else {
       // Decide: retry or fail
       const shouldRetry = execResult.retryable && action.attemptCount < 4; // Max 5 total attempts (attempt_count is pre-increment)
@@ -309,12 +356,13 @@ export async function executeQueueProcessor(): Promise<QueueExecutorResult> {
           status: 'retry',
           error: execResult.error,
           retryDelaySeconds: delay,
-          actionType: action.actionType,
+          actionType: effectiveActionType,
+          action: action.action,
         });
         result.retried++;
         result.actions.push({
           id: action.id,
-          actionType: action.actionType,
+          actionType: effectiveActionType,
           outcome: 'retry',
           error: execResult.error,
         });
@@ -323,17 +371,18 @@ export async function executeQueueProcessor(): Promise<QueueExecutorResult> {
           id: action.id,
           status: 'failed',
           error: execResult.error,
-          actionType: action.actionType,
+          actionType: effectiveActionType,
+          action: action.action,
         });
         result.failed++;
         result.actions.push({
           id: action.id,
-          actionType: action.actionType,
+          actionType: effectiveActionType,
           outcome: 'failed',
           error: execResult.error,
         });
         await alertWarning(WORKFLOW_NAME, `Action ${action.id} permanently failed`, {
-          actionType: action.actionType,
+          actionType: effectiveActionType,
           error: execResult.error,
           attempts: action.attemptCount + 1,
           retryable: execResult.retryable,

@@ -132,8 +132,8 @@ export function PrivyClientProvider(props: { children: ReactNode; showWalletLogi
     ...(customOAuthRedirectUrl ? { customOAuthRedirectUrl } : {}),
     // Enable embedded wallets - this is the signer for the Coinbase Smart Wallet
     embeddedWallets: {
-      ethereum: { createOnLogin: 'users-without-wallets' },
-      solana: { createOnLogin: 'users-without-wallets' },
+      ethereum: { createOnLogin: 'all-users' },
+      solana: { createOnLogin: 'all-users' },
     },
     loginMethods,
     defaultChain: base,

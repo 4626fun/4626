@@ -6,6 +6,7 @@ import { apiFetch } from '@/lib/apiBase'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import { performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
+import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { isTelegramMiniAppContext, readPrivyTelegramLaunchParams } from '@/lib/telegramWebApp'
 import {
@@ -163,6 +164,7 @@ export function AccountsPage(props: {
   const { data: walletClient } = useWalletClient()
   const { chainId } = useAccount()
   const { switchChainAsync } = useSwitchChain()
+  const { ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
 
   const privyAuthed = Boolean(privy?.authenticated)
   const getAccessToken = useMemo(
@@ -214,9 +216,15 @@ export function AccountsPage(props: {
     try {
       const token = await getAccessToken()
       if (!token) throw new Error('Missing Privy auth token. Sign in and retry.')
-      const canonicalization = await runCanonicalizationPipeline({
+      let canonicalization = await runCanonicalizationPipeline({
         privyToken: token,
       })
+      if (!canonicalization.onboardingBootstrapped && canonicalization.flags.needsEmbeddedWallet) {
+        await ensureEmbeddedWallet()
+        canonicalization = await runCanonicalizationPipeline({
+          privyToken: token,
+        })
+      }
       const actionableDelegationFlags = deriveOwnerDelegationFlags(canonicalization.flags)
       setOwnerDelegationFlags(actionableDelegationFlags)
       const headers = {
@@ -249,7 +257,7 @@ export function AccountsPage(props: {
     } finally {
       setLoading(false)
     }
-  }, [getAccessToken, privyAuthed])
+  }, [ensureEmbeddedWallet, getAccessToken, privyAuthed])
 
   useEffect(() => {
     if (props.initialData) return
@@ -496,12 +504,24 @@ export function AccountsPage(props: {
     setOwnerDelegationFlags(null)
     try {
       const headers = await authHeaders()
-      const preflightRes = await apiFetch('/api/onboarding/bootstrap', {
+      let preflightRes = await apiFetch('/api/onboarding/bootstrap', {
         method: 'POST',
         headers,
         body: JSON.stringify({}),
       })
-      const preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<unknown> | null
+      let preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<unknown> | null
+      if ((!preflightRes.ok || !preflightPayload?.success) && (preflightPayload as any)?.needsEmbeddedWallet === true) {
+        await ensureEmbeddedWallet()
+        preflightRes = await apiFetch('/api/onboarding/bootstrap', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({}),
+        })
+        preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<unknown> | null
+        if (!preflightRes.ok || !preflightPayload?.success) {
+          throw buildOwnerDelegationError(preflightPayload, 'Signer preflight failed.')
+        }
+      }
       if (!preflightRes.ok || !preflightPayload?.success) {
         throw buildOwnerDelegationError(preflightPayload, 'Signer preflight failed.')
       }
@@ -535,7 +555,7 @@ export function AccountsPage(props: {
     } finally {
       setAdvancedBusy(false)
     }
-  }, [authHeaders, canonicalCswAddress, loadMe, sendPreparedOwnerTx])
+  }, [authHeaders, canonicalCswAddress, ensureEmbeddedWallet, loadMe, sendPreparedOwnerTx])
 
   const onAddRabbyCoOwner = useCallback(async () => {
     const normalized = normalizeAddress(advancedOwnerAddress)

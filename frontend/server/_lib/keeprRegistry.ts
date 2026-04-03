@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { resolveKeeprEffectiveActionType } from './agentControl/trustZones.js'
 import { ensureKeeprSchema } from './keeprSchema.js'
 import { getDb } from './postgres.js'
 
@@ -251,7 +252,11 @@ export async function enqueueKeeprAction(params: {
   if (!db) throw new Error('db_not_configured')
   await ensureKeeprSchema()
 
-  const actionType = params.actionType ? String(params.actionType) : String(params.action?.action ?? '')
+  const actionType =
+    resolveKeeprEffectiveActionType(
+      typeof params.actionType === 'string' ? params.actionType : null,
+      params.action,
+    ) ?? String(params.actionType ?? params.action?.action ?? '')
   const dedupeKey = params.dedupeKey ? String(params.dedupeKey) : null
 
   // Idempotency: if a dedupe key is provided, ensure we only keep one in-flight action

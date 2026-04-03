@@ -16,6 +16,7 @@ import { normalizeKeeprActionStatusForWorkspace } from '../../../../server/_lib/
 import {
   KEEPR_TRUST_ZONE_KEY_HEADER,
   getKeeprTrustZoneEnvKey,
+  resolveKeeprEffectiveActionType,
   resolveKeeprTrustZone,
 } from '../../../../server/_lib/agentControl/trustZones.js'
 
@@ -138,13 +139,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await ensureKeeprSchema()
 
     const actionRow = await db.sql`
-      SELECT action_type
+      SELECT action_type, action
       FROM keepr_actions
       WHERE id = ${id}
       LIMIT 1;
     `
-    const rawActionType = actionRow.rows?.[0]?.action_type
-    const trustZone = resolveKeeprTrustZone(typeof rawActionType === 'string' ? rawActionType : null)
+    const row = actionRow.rows?.[0]
+    const effectiveActionType = resolveKeeprEffectiveActionType(
+      typeof row?.action_type === 'string' ? row.action_type : null,
+      row?.action && typeof row.action === 'object' ? (row.action as Record<string, unknown>) : null,
+    )
+    const trustZone = resolveKeeprTrustZone(effectiveActionType)
     if (
       !requireOptionalHeaderEnvAuth(req, res, {
         envKey: getKeeprTrustZoneEnvKey(trustZone),

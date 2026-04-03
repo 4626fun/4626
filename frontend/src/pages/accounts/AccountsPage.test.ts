@@ -9,12 +9,15 @@ vi.mock('@privy-io/react-auth', () => ({
     authenticated: true,
     ready: true,
     getAccessToken: async () => 'test-token',
+    user: { linkedAccounts: [] },
   }),
   useLogin: () => ({ login: async () => {} }),
   useCrossAppAccounts: () => ({
     loginWithCrossAppAccount: async () => {},
     linkCrossAppAccount: async () => {},
   }),
+  useWallets: () => ({ wallets: [] }),
+  useCreateWallet: () => ({ createWallet: async () => ({ address: '0x4444444444444444444444444444444444444444' }) }),
 }))
 
 vi.mock('wagmi', () => ({

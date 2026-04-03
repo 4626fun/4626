@@ -47,7 +47,7 @@ vi.mock('@/lib/privy/client', () => ({
   PrivyClientProvider: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
 }))
 
-vi.mock('@/components/waitlist/WaitlistFlow', () => ({
+vi.mock('@/components/waitlist/ThinWaitlistFlow', () => ({
   WaitlistFlow: ({
     sectionId,
     variant,

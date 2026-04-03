@@ -1,5 +1,5 @@
 import { readServerEnvVar } from './serverEnv.js'
-import { assertRemoteAiEndpoint, prepareRemoteAiText } from './agentControl/remoteAi.js'
+import { fetchRemoteAi, prepareRemoteAiText } from './agentControl/remoteAi.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -66,7 +66,7 @@ async function postResponsesApi(body: Record<string, unknown>): Promise<any> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), getOpenAiImageTimeoutMs())
   try {
-    const response = await fetch(assertRemoteAiEndpoint('https://api.openai.com/v1/responses'), {
+    const response = await fetchRemoteAi('https://api.openai.com/v1/responses', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

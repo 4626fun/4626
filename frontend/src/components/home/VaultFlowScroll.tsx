@@ -489,19 +489,21 @@ const DeploySection = memo(function DeploySection({
           <motion.span className="pointer-events-none absolute -translate-x-1/2 font-mono text-[9px] text-zinc-500" style={{ left: '62.5%', top: '100%', opacity: s4d2 }}>{STRATEGY_CARDS[2]?.amount} <span style={{ color: 'rgba(249,115,22,0.55)' }}>akita</span></motion.span>
           <motion.span className="pointer-events-none absolute -translate-x-1/2 font-mono text-[9px] text-zinc-500" style={{ left: '87.5%', top: '100%', opacity: s4d3 }}>{STRATEGY_CARDS[3]?.amount} <span style={{ color: 'rgba(249,115,22,0.55)' }}>akita</span></motion.span>
         </div>
-        <div className="mt-8 -mx-3 overflow-x-auto sm:mx-0 sm:overflow-visible" style={{ perspective: '900px' }}>
+        <div className="mt-8 -mx-3 overflow-x-auto sm:mx-0 sm:overflow-visible" style={{ perspective: '1200px' }}>
           <div className="flex gap-2.5 px-3 pb-1 sm:grid sm:grid-cols-4 sm:gap-3 sm:px-0 lg:gap-5">
             {STRATEGY_CARDS.map((card, i) => {
-              const tiltZ = [-2.5, -1.0, 1.0, 2.5][i]
-              const tiltY = [-6, -2, 2, 6][i]
+              // All 4 cards share the same rotateX so they stay Y-parallel.
+              // rotateY fans them horizontally for depth; hover flattens both.
+              const rotX = -18
+              const rotY = [-10, -3, 3, 10][i]
               return (
                 <motion.div key={card.label} className="flex-shrink-0 sm:flex-shrink" style={{ opacity: cardMotions[i].opacity, y: cardMotions[i].y, minWidth: 'clamp(140px, 42vw, 180px)' }}>
                   <motion.div
                     className="relative flex h-full flex-col overflow-hidden rounded-[14px] p-2.5 sm:rounded-[18px] sm:p-4 lg:p-5"
-                    initial={{ rotateZ: tiltZ, rotateY: tiltY }}
-                    whileHover={{ rotateZ: 0, rotateY: 0 }}
+                    initial={{ rotateX: rotX, rotateY: rotY }}
+                    whileHover={{ rotateX: 0, rotateY: 0 }}
                     transition={{ duration: 0.45, ease: [0.25, 0, 0.35, 1] }}
-                    style={{ border: '1px solid rgba(255,255,255,0.09)', background: 'linear-gradient(160deg, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0.015) 60%, transparent 100%)', boxShadow: '0 18px 90px -48px rgba(255,255,255,0.18), inset 0 1px 0 rgba(255,255,255,0.05)', transformOrigin: 'bottom center' }}
+                    style={{ border: '1px solid rgba(255,255,255,0.09)', background: 'linear-gradient(160deg, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0.015) 60%, transparent 100%)', boxShadow: '0 18px 90px -48px rgba(255,255,255,0.18), inset 0 1px 0 rgba(255,255,255,0.05)', transformOrigin: 'center bottom' }}
                   >
                     <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
                     <div className="mb-3 flex items-center gap-1.5">

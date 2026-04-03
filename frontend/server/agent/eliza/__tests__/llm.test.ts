@@ -151,6 +151,37 @@ describe('eliza llm service', () => {
     expect(result.text).toBe('anthropic complex response')
   })
 
+  it('disables redirect following for remote ai requests', async () => {
+    process.env.OPENAI_API_KEY = 'openai-key'
+    process.env.ELIZA_LLM_PROVIDER_PRIORITY = 'OpenAI'
+    process.env.ELIZA_LLM_MAX_RETRIES = '0'
+    process.env.ELIZA_LLM_TIMEOUT_MS = '250'
+
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) => {
+      expect(init?.redirect).toBe('error')
+      return new Response(
+        JSON.stringify({
+          choices: [{ message: { content: 'redirect-safe response' } }],
+        }),
+        { status: 200 },
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock as any)
+
+    const { getElizaLlmService } = await import('../llm.ts')
+    const service = getElizaLlmService()
+    const result = await service.generateResponse({
+      agentKey: 'agent-redirect-safe',
+      userMessage: 'hello',
+      systemPrompt: 'system',
+      vaultContext: '',
+      correlationId: 'corr-redirect-safe',
+    })
+
+    expect(result.provider).toBe('OpenAI')
+    expect(result.text).toBe('redirect-safe response')
+  })
+
   it('blocks requests when daily token budget is exceeded before network call', async () => {
     process.env.GROQ_API_KEY = 'groq-key'
     process.env.ELIZA_DAILY_LLM_TOKEN_BUDGET = '1'

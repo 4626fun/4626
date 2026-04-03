@@ -47,7 +47,7 @@
 | Plain "Loading waitlist…" text fallback | Skeleton loading placeholders | Visual continuity during lazy load, no layout shift. |
 | No `role="dialog"` | `role="dialog"` + `aria-modal="true"` | Screen readers properly announce modal context. |
 
-### WaitlistFlow.tsx
+### ThinWaitlistFlow.tsx
 
 | Before | After | Why it's better |
 |--------|-------|-----------------|

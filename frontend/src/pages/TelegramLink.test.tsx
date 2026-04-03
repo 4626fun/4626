@@ -17,6 +17,7 @@ const {
   sendCodeMock,
   loginWithCodeMock,
   linkTelegramMock,
+  createWalletMock,
   privyState,
   trackTelegramLinkTelemetryEventMock,
   createTelegramLinkFlowIdMock,
@@ -49,6 +50,7 @@ const {
   sendCodeMock: vi.fn(),
   loginWithCodeMock: vi.fn(),
   linkTelegramMock: vi.fn(),
+  createWalletMock: vi.fn(),
   privyState: {
     ready: true,
     authenticated: true,
@@ -100,6 +102,8 @@ vi.mock('@privy-io/react-auth', () => ({
     state: 'idle',
   }),
   usePrivy: () => privyState,
+  useWallets: () => ({ wallets: [] }),
+  useCreateWallet: () => ({ createWallet: (...args: any[]) => createWalletMock(...args) }),
 }))
 
 import { TelegramLink } from './TelegramLink'
@@ -158,6 +162,7 @@ beforeEach(() => {
   sendCodeMock.mockResolvedValue(undefined)
   loginWithCodeMock.mockResolvedValue(undefined)
   linkTelegramMock.mockResolvedValue(undefined)
+  createWalletMock.mockResolvedValue({ address: '0x4444444444444444444444444444444444444444' })
   apiFetchMock.mockImplementation(async (path: string) => {
     if (path === '/api/telegram/link/ready') {
       return {

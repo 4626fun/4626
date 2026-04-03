@@ -32,6 +32,13 @@ export function assertRemoteAiEndpoint(url: string): string {
   return parsed.toString()
 }
 
+export function fetchRemoteAi(url: string, init?: RequestInit): Promise<Response> {
+  return fetch(assertRemoteAiEndpoint(url), {
+    ...init,
+    redirect: 'error',
+  })
+}
+
 export function prepareRemoteAiText(
   input: string,
   options: Pick<RemoteAiPayloadOptions, 'maskAddresses' | 'maxStringLength'> = {},

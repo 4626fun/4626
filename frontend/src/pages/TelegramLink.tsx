@@ -13,6 +13,7 @@ import {
   type TelegramMiniAppLinkContext,
 } from '@/lib/telegramMiniAppLink'
 import { createTelegramLinkFlowId, trackTelegramLinkTelemetryEvent } from '@/lib/telegramLinkTelemetry'
+import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import { ensureTelegramMiniAppSession, loadTelegramWebApp, readTelegramWebApp, setupTelegramMiniAppUi } from '@/lib/telegramWebApp'
 
 import {
@@ -398,6 +399,7 @@ export function TelegramLink() {
 
   const privy = usePrivy() as PrivyWithTelegramLink
   const { sendCode, loginWithCode } = useLoginWithEmail()
+  const { embeddedEoaAddress, ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
   const getAccessToken = typeof privy.getAccessToken === 'function' ? privy.getAccessToken.bind(privy) : null
   const stateRef = useRef(state)
   const sendCodeRef = useRef(sendCode)
@@ -563,7 +565,7 @@ export function TelegramLink() {
       )
     }
     lastStateDescriptorRef.current = next
-  }, [emitTelemetry, state])
+  }, [embeddedEoaAddress, emitTelemetry, ensureEmbeddedWallet, state])
 
   useEffect(() => {
     if (state.tag !== 'collect_email') {
@@ -750,7 +752,7 @@ export function TelegramLink() {
     return () => {
       cancelled = true
     }
-  }, [emitTelemetry, state])
+  }, [embeddedEoaAddress, emitTelemetry, ensureEmbeddedWallet, state])
 
   useEffect(() => {
     if (state.tag !== 'verifying_email_code') return
@@ -813,7 +815,7 @@ export function TelegramLink() {
     return () => {
       cancelled = true
     }
-  }, [emitTelemetry, state])
+  }, [embeddedEoaAddress, emitTelemetry, ensureEmbeddedWallet, state])
 
   useEffect(() => {
     if (state.tag !== 'wait_for_privy_sync') return
@@ -872,6 +874,43 @@ export function TelegramLink() {
           const account =
             response.ok && json?.data?.ready === true ? parseTelegramLinkReadyAccount(json.data.account, expectedEmail) : null
           if (account) {
+            if (!embeddedEoaAddress) {
+              emitTelemetry('telegram_link_embedded_wallet_provision_started', {
+                status: 'started',
+                privyUserId: account.privyUserId,
+              })
+              try {
+                const provisionedWallet = await ensureEmbeddedWallet()
+                emitTelemetry('telegram_link_embedded_wallet_provision_succeeded', {
+                  status: provisionedWallet.created ? 'created' : 'existing',
+                  durationMs: Date.now() - startedAt,
+                  pollCount,
+                  accessTokenRetries,
+                  readinessChecks,
+                  privyUserId: account.privyUserId,
+                  embeddedEoaAddress: provisionedWallet.address,
+                })
+              } catch (error) {
+                const flowError = buildPrivySyncFailure(
+                  coerceErrorMessage(error, 'Privy embedded wallet provisioning did not complete. Retry to continue.'),
+                )
+                emitTelemetry('telegram_link_embedded_wallet_provision_failed', {
+                  status: 'failed',
+                  durationMs: Date.now() - startedAt,
+                  pollCount,
+                  accessTokenRetries,
+                  readinessChecks,
+                  privyUserId: account.privyUserId,
+                  errorCode: flowError.code,
+                  recoverable: flowError.recoverable,
+                })
+                dispatch({
+                  type: 'PRIVY_SYNC_FAILED',
+                  error: flowError,
+                })
+                return
+              }
+            }
             emitTelemetry('telegram_link_privy_sync_ready', {
               status: 'ready',
               durationMs: Date.now() - startedAt,
@@ -911,7 +950,7 @@ export function TelegramLink() {
     return () => {
       cancelled = true
     }
-  }, [emitTelemetry, state])
+  }, [embeddedEoaAddress, emitTelemetry, ensureEmbeddedWallet, state])
 
   useEffect(() => {
     if (state.tag !== 'bind_telegram' || state.step !== 'ensure_privy_link') return

@@ -4394,6 +4394,60 @@ describe('telegram webhook handler', () => {
     )
   })
 
+  it('records a telegram audit when a consumed trade token resolves to an unsupported action type', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    consumeTelegramActionTokenMock.mockResolvedValueOnce({
+      ok: true,
+      actionType: 'airdrop',
+      intentPayload: {
+        creatorCoinAddress: '0x2222222222222222222222222222222222222222',
+        amountInput: '0.05',
+      },
+      expiresAt: '2026-03-13T00:01:30.000Z',
+      consumedAt: '2026-03-13T00:00:32.000Z',
+    })
+
+    ;(fetch as any).mockReset()
+    ;(fetch as any)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => ({ ok: true }),
+      })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 16_2,
+        callback_query: {
+          id: 'cbq-unsupported-action',
+          data: 'trade:accept:trade-token-unsupported',
+          from: { id: 99 },
+          message: { message_id: 21, chat: { id: -100123 } },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(logTelegramActionAuditMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'failed',
+        actionType: 'airdrop',
+        errorCode: 'unsupported_trade_action_type',
+        correlationId: expect.stringMatching(/^tg_trade:/),
+      }),
+    )
+  })
+
   it('blocks buy callback when canonical wallet is missing', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
     consumeTelegramActionTokenMock.mockResolvedValueOnce({

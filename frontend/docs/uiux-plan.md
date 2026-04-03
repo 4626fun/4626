@@ -40,7 +40,7 @@
 - Each step shows: label, status icon (pending/active/done), connecting lines
 - Step transitions are animated but respect reduced motion
 
-**Files**: `components/waitlist/steps/VerifyStep.tsx`, `WaitlistFlow.tsx`
+**Files**: `components/waitlist/steps/VerifyStep.tsx`, `ThinWaitlistFlow.tsx`
 
 ---
 
@@ -69,7 +69,7 @@
 - Auto-advance to Done step only after visual confirmation
 - Use the existing `simpleVerifiedMode` checklist as the default verify UX
 
-**Files**: `steps/VerifyStep.tsx`, `WaitlistFlow.tsx`
+**Files**: `steps/VerifyStep.tsx`, `ThinWaitlistFlow.tsx`
 
 ---
 

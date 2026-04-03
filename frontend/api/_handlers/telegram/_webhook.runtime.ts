@@ -6042,6 +6042,14 @@ async function handleTelegramTradeCallback(params: {
 
   const actionType = asTrimmed(consumed.actionType).toLowerCase()
   if (actionType !== 'buy' && actionType !== 'sell' && actionType !== 'bid') {
+    const unsupportedCorrelationId = [
+      'tg_trade',
+      params.chatId,
+      params.userId,
+      Date.now().toString(36),
+    ]
+      .map((part) => String(part).replace(/[^a-zA-Z0-9:_-]/g, ''))
+      .join(':')
     emitTelegramFunnelEvent({
       db,
       telegramUserId: params.userId,
@@ -6051,6 +6059,18 @@ async function handleTelegramTradeCallback(params: {
         reason: 'unsupported_trade_action_type',
         actionType,
       },
+    })
+    await logTelegramActionAudit({
+      db: db as any,
+      telegramUserId: params.userId,
+      chatId: params.chatId,
+      messageId: params.messageId,
+      actionType: actionType || 'unknown',
+      intent: consumed.intentPayload ?? {},
+      status: 'failed',
+      errorCode: 'unsupported_trade_action_type',
+      errorMessage: 'Trade blocked: preview action type is unsupported.',
+      correlationId: unsupportedCorrelationId,
     })
     return {
       text: 'Trade blocked: preview action type is unsupported. Please start a fresh trade preview.',

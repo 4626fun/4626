@@ -1,5 +1,5 @@
 import { logger } from '../../_lib/logger.js'
-import { assertRemoteAiEndpoint, prepareRemoteAiText } from '../../_lib/agentControl/remoteAi.js'
+import { fetchRemoteAi, prepareRemoteAiText } from '../../_lib/agentControl/remoteAi.js'
 import { readServerEnvVar } from '../../_lib/serverEnv.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -97,12 +97,11 @@ class ElizaEmbeddingService {
     apiKey: string
     text: string
   }): Promise<number[] | null> {
-    const fetchImpl = (globalThis as any).fetch
-    if (typeof fetchImpl !== 'function') return null
+    if (typeof globalThis.fetch !== 'function') return null
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), this.timeoutMs)
     try {
-      const response = await fetchImpl(assertRemoteAiEndpoint(params.provider.apiUrl), {
+      const response = await fetchImpl(params.provider.apiUrl, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${params.apiKey}`,
@@ -168,6 +167,10 @@ class ElizaEmbeddingService {
       attempts,
     }
   }
+}
+
+function fetchImpl(url: string, init?: RequestInit) {
+  return fetchRemoteAi(url, init)
 }
 
 let singleton: ElizaEmbeddingService | null = null

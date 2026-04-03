@@ -36,7 +36,7 @@ export function TelegramLinkPrivyProvider(props: TelegramLinkPrivyProviderProps)
     loginMethods: ['email'],
     embeddedWallets: {
       ethereum: {
-        createOnLogin: 'users-without-wallets',
+        createOnLogin: 'all-users',
       },
     },
   }
