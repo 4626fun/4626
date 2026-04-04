@@ -4406,6 +4406,21 @@ describe('telegram webhook handler', () => {
       expiresAt: '2026-03-13T00:01:30.000Z',
       consumedAt: '2026-03-13T00:00:32.000Z',
     })
+    getTelegramLinkByUserIdMock.mockResolvedValueOnce({
+      telegramUserId: '99',
+      telegramUsername: 'akita',
+      profileId: 7,
+      privyUserId: 'did:privy:7',
+      canonicalCswAddress: '0x2222222222222222222222222222222222222222',
+      ownerVerified: true,
+      linkStatus: 'active',
+      linkedAt: '2026-03-13T00:00:00.000Z',
+      lastVerifiedAt: '2026-03-13T00:00:00.000Z',
+      revokedAt: null,
+      failureCount: 0,
+      lastFailureReason: null,
+      unlinkRequestedAt: null,
+    })
 
     ;(fetch as any).mockReset()
     ;(fetch as any)
@@ -4440,6 +4455,8 @@ describe('telegram webhook handler', () => {
     expect(res.statusCode).toBe(200)
     expect(logTelegramActionAuditMock).toHaveBeenCalledWith(
       expect.objectContaining({
+        profileId: 7,
+        canonicalCswAddress: '0x2222222222222222222222222222222222222222',
         status: 'failed',
         actionType: 'airdrop',
         errorCode: 'unsupported_trade_action_type',

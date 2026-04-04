@@ -6041,6 +6041,7 @@ async function handleTelegramTradeCallback(params: {
   }
 
   const actionType = asTrimmed(consumed.actionType).toLowerCase()
+  const link = await getTelegramLinkByUserId({ db: db as any, telegramUserId: params.userId })
   if (actionType !== 'buy' && actionType !== 'sell' && actionType !== 'bid') {
     const unsupportedCorrelationId = [
       'tg_trade',
@@ -6060,18 +6061,22 @@ async function handleTelegramTradeCallback(params: {
         actionType,
       },
     })
-    await logTelegramActionAudit({
-      db: db as any,
-      telegramUserId: params.userId,
-      chatId: params.chatId,
-      messageId: params.messageId,
-      actionType: actionType || 'unknown',
-      intent: consumed.intentPayload ?? {},
-      status: 'failed',
-      errorCode: 'unsupported_trade_action_type',
-      errorMessage: 'Trade blocked: preview action type is unsupported.',
-      correlationId: unsupportedCorrelationId,
-    })
+    if (link && Number.isFinite(link.profileId) && link.profileId > 0) {
+      await logTelegramActionAudit({
+        db: db as any,
+        telegramUserId: params.userId,
+        chatId: params.chatId,
+        messageId: params.messageId,
+        profileId: link.profileId,
+        canonicalCswAddress: link.canonicalCswAddress,
+        actionType: actionType || 'unknown',
+        intent: consumed.intentPayload ?? {},
+        status: 'failed',
+        errorCode: 'unsupported_trade_action_type',
+        errorMessage: 'Trade blocked: preview action type is unsupported.',
+        correlationId: unsupportedCorrelationId,
+      })
+    }
     return {
       text: 'Trade blocked: preview action type is unsupported. Please start a fresh trade preview.',
       callbackToast: 'Unsupported action',
@@ -6140,7 +6145,6 @@ async function handleTelegramTradeCallback(params: {
     },
   })
 
-  const link = await getTelegramLinkByUserId({ db: db as any, telegramUserId: params.userId })
   if (!link || link.linkStatus !== 'active' || !link.ownerVerified) {
     await appendControlAuditBestEffort({
       db: db as any,

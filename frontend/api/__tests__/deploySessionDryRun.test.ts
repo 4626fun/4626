@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createMockReq, createMockRes } from './helpers'
+import { canonicalWalletSchemaReadyResult, createMockReq, createMockRes } from './helpers'
 
 const {
   readJsonBodyMock,
@@ -163,6 +163,8 @@ function makeCanonicalDb() {
     query: vi.fn(async () => ({ rows: [{}] })),
     sql: vi.fn(async (strings: TemplateStringsArray) => {
       const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+      const schemaReady = canonicalWalletSchemaReadyResult(text)
+      if (schemaReady) return schemaReady
       if (text.includes('from profiles p') && text.includes('where p.id =')) {
         return {
           rows: [

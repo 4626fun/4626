@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import handler from '../_handlers/waitlist/_position.ts'
-import { createMockReq, createMockRes } from './helpers'
+import { canonicalWalletSchemaReadyResult, createMockReq, createMockRes } from './helpers'
 
 const { getDbMock, ensureWaitlistSchemaMock } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
@@ -42,6 +42,8 @@ function createPositionDb(params: { id: string | number; email: string }) {
   return {
     sql: vi.fn(async (strings: TemplateStringsArray) => {
       const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+      const schemaReady = canonicalWalletSchemaReadyResult(text)
+      if (schemaReady) return schemaReady
 
       if (text.includes('from profiles p') && text.includes('canonical.address as canonical_wallet')) {
         return {
@@ -137,6 +139,8 @@ function createPositionDbHistoricalLinkedWallet(params: { id: string | number; e
   return {
     sql: vi.fn(async (strings: TemplateStringsArray) => {
       const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+      const schemaReady = canonicalWalletSchemaReadyResult(text)
+      if (schemaReady) return schemaReady
 
       if (text.includes('from profiles p') && text.includes('canonical.address as canonical_wallet')) {
         return {

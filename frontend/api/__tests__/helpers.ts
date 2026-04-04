@@ -107,6 +107,50 @@ export function applyEnv(overrides: Record<string, string | undefined>): () => v
   }
 }
 
+export function canonicalWalletSchemaReadyResult(query: string): { rows: any[] } | null {
+  if (!query.includes("to_regclass('public.wallets') is not null as has_wallets")) {
+    return null
+  }
+
+  return {
+    rows: [
+      {
+        has_wallets: true,
+        has_profile_wallets: true,
+        has_primary_smart_wallet: true,
+        has_primary_embedded_eoa: true,
+        has_canonical_solana_wallet: true,
+        has_profile_wallets_canonical_solana: true,
+        has_profile_wallets_operational_solana: true,
+      },
+    ],
+  }
+}
+
+export function waitlistSchemaReadyResult(query: string): { rows: any[] } | null {
+  if (!query.includes("to_regclass('public.profiles') is not null as has_profiles")) {
+    return null
+  }
+
+  return {
+    rows: [
+      {
+        has_profiles: true,
+        has_referral_clicks: true,
+        has_referral_conversions: true,
+        has_points: true,
+        has_wallets: true,
+        has_profile_wallets: true,
+        has_app_access_status: true,
+        has_verifications: true,
+        has_profile_completed_at: true,
+        has_primary_smart_wallet: true,
+        has_primary_embedded_eoa: true,
+      },
+    ],
+  }
+}
+
 export function withAuthHeader(
   headers: Record<string, string | undefined> = {},
   address = '0x0000000000000000000000000000000000000001',

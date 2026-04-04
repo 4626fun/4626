@@ -78,7 +78,7 @@ jobs:
         run: pnpm --dir frontend lint
 
       - name: No TODO/FIXME markers (first-party)
-        run: bash scripts/check-no-todo-markers.sh
+        run: bash frontend/scripts/check-no-todo-markers.sh
 
       - name: Guard generated output remains untracked
         run: pnpm --dir frontend guard:generated-output
