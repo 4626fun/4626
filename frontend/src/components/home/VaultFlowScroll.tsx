@@ -14,7 +14,6 @@ import {
 } from 'framer-motion'
 
 import { fetchZoraCoin, fetchZoraProfile } from '@/lib/zora/client'
-import { ZorbViewer } from './ModelViewer'
 import { SHARE_DISTRIBUTION_ROWS, STRATEGY_CARDS } from './launchConfig'
 
 const CREATOR_CAMEOS = [
@@ -224,13 +223,11 @@ type VaultSceneProps = {
   landingFlash: MotionValue<number>
   zoraGreenFlash: MotionValue<number>
   coinEntryGlow: MotionValue<number>
-  zorbFillScale: MotionValue<number>
-  zorbFillOp: MotionValue<number>
 }
 const VaultScene = memo(function VaultScene({
   uid, vaultTransform, vaultOpacity, vaultLidOp, vaultWallOp,
   vaultPostProgress, vaultTopProgress, vaultGlow, landingFlash,
-  zoraGreenFlash, coinEntryGlow, zorbFillScale, zorbFillOp,
+  zoraGreenFlash, coinEntryGlow,
 }: VaultSceneProps) {
   return (
     <motion.div className="absolute left-1/2 top-[44vh] z-20" style={{ transform: vaultTransform, opacity: vaultOpacity }}>
@@ -293,22 +290,12 @@ const VaultScene = memo(function VaultScene({
           </svg>
         </motion.div>
 
-        <motion.div className="pointer-events-none absolute" style={{ inset: 20, borderRadius: '50%', opacity: vaultGlow, background: 'transparent', boxShadow: ['0 0 26px 10px rgba(0,82,255,0.60)', '0 0 60px 22px rgba(0,82,255,0.30)', '0 0 110px 44px rgba(0,82,255,0.12)'].join(', ') }} aria-hidden="true" />
-        <motion.div className="pointer-events-none absolute" style={{ inset: 20, borderRadius: '50%', opacity: landingFlash, background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.20) 0%, rgba(210,230,255,0.08) 50%, transparent 75%)', boxShadow: ['0 0 0 1px rgba(255,255,255,0.75)', '0 0 16px 5px rgba(255,255,255,0.50)', '0 0 42px 14px rgba(210,230,255,0.28)', '0 0 100px 36px rgba(140,180,255,0.12)'].join(', ') }} aria-hidden="true" />
-        <motion.div className="pointer-events-none absolute" style={{ inset: 14, borderRadius: '50%', opacity: zoraGreenFlash, background: 'transparent', boxShadow: ['0 0 28px 10px rgba(57,255,20,0.75)', '0 0 70px 28px rgba(57,255,20,0.38)', '0 0 130px 55px rgba(57,255,20,0.14)'].join(', ') }} aria-hidden="true" />
-        <motion.div className="pointer-events-none absolute" style={{ inset: 20, borderRadius: '50%', opacity: coinEntryGlow, background: 'transparent', boxShadow: ['0 0 22px 8px rgba(249,115,22,0.50)', '0 0 55px 20px rgba(0,82,255,0.36)', '0 0 105px 42px rgba(0,82,255,0.16)'].join(', ') }} aria-hidden="true" />
-        {/* ── Deposit fill — orange warmth rises from bottom, no hard edge ── */}
-        <motion.div
-          className="pointer-events-none absolute inset-0"
-          style={{
-            scaleY: zorbFillScale,
-            opacity: zorbFillOp,
-            transformOrigin: '50% 100%',
-            background: 'radial-gradient(circle at 50% 80%, rgba(249,115,22,0.50) 0%, rgba(249,100,0,0.22) 28%, rgba(249,80,0,0.05) 50%, transparent 62%)',
-          }}
-          aria-hidden="true"
-        />
-        <ZorbViewer size={96} />
+        <motion.div className="pointer-events-none absolute" style={{ inset: 20, borderRadius: 4, opacity: vaultGlow, background: 'transparent', boxShadow: ['0 0 26px 10px rgba(0,82,255,0.60)', '0 0 60px 22px rgba(0,82,255,0.30)', '0 0 110px 44px rgba(0,82,255,0.12)'].join(', ') }} aria-hidden="true" />
+        <motion.div className="pointer-events-none absolute" style={{ inset: 20, borderRadius: 4, opacity: landingFlash, background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.18) 0%, rgba(210,230,255,0.06) 50%, transparent 75%)', boxShadow: ['0 0 0 1px rgba(255,255,255,0.65)', '0 0 16px 5px rgba(255,255,255,0.40)', '0 0 42px 14px rgba(210,230,255,0.22)', '0 0 100px 36px rgba(140,180,255,0.10)'].join(', ') }} aria-hidden="true" />
+        <motion.div className="pointer-events-none absolute" style={{ inset: 14, borderRadius: 4, opacity: zoraGreenFlash, background: 'transparent', boxShadow: ['0 0 28px 10px rgba(57,255,20,0.75)', '0 0 70px 28px rgba(57,255,20,0.38)', '0 0 130px 55px rgba(57,255,20,0.14)'].join(', ') }} aria-hidden="true" />
+        <motion.div className="pointer-events-none absolute" style={{ inset: 20, borderRadius: 4, opacity: coinEntryGlow, background: 'transparent', boxShadow: ['0 0 22px 8px rgba(249,115,22,0.50)', '0 0 55px 20px rgba(0,82,255,0.36)', '0 0 105px 42px rgba(0,82,255,0.16)'].join(', ') }} aria-hidden="true" />
+        {/* Empty vault interior — 96×96 placeholder keeps vault proportions */}
+        <div className="h-24 w-24" aria-hidden="true" />
       </div>
     </motion.div>
   )
@@ -821,9 +808,6 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
   const vaultTopProgress  = useTransform(scroll, [0.28, 0.32], [0, 1])
   const vaultWallOp       = useTransform(scroll, [0.18, 0.22, 0.74, 0.78], [0, 1, 1, 0])
 
-  // Share Zorb reflection — materialises after deposit fill, holds at FULL opacity through the
-  // zoom peak (0.77) so the dive visually enters the reflection, then snaps out quickly.
-  const shareZorbOp = useTransform(scroll, [0.48, 0.52, 0.77, 0.80], [0, 1, 1, 0])
 
   // Coin entry glow — fires when deposit fill completes, sustains through all distributions,
   // fades as the dive begins
@@ -892,11 +876,6 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
     },
   )
   const depositFillWidth = useTransform(depositFillPct, v => `${(Math.min(v, 1) * 100).toFixed(1)}%`)
-  // Zorb fill overlay — GPU-only scaleY from bottom (no clipPath string generation)
-  const _zorbFillScaleBase = useTransform(depositFillPct, v => Math.min(v, 1))
-  const zorbFillScale = useTransform(_zorbFillScaleBase, v => prefersReducedMotion ? 1 : v)
-  const _zorbFillOpBase = useTransform(scroll, [0.32, 0.36, 0.46, 0.52], [0, 0.65, 0.65, 0])
-  const zorbFillOp = useTransform(_zorbFillOpBase, v => prefersReducedMotion ? 0 : v)
   // "Vault initiated" confirmation badge — flashes after fill completes
   const vaultInitOp = useTransform(scroll, [0.48, 0.51, 0.53, 0.58], [0, 1, 1, 0])
 
@@ -1352,49 +1331,8 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
               landingFlash={landingFlash}
               zoraGreenFlash={zoraGreenFlash}
               coinEntryGlow={coinEntryGlow}
-              zorbFillScale={zorbFillScale}
-              zorbFillOp={zorbFillOp}
             />
 
-            {/* ── ■AKITA glass-floor reflection ──────────────────────────────────────
-                Lives in WORLD SPACE as a sibling to VaultScene — NOT inside it.
-                This means the worldScale zoom-in (0.73→0.76, 1.25→2.2×) carries it
-                toward the camera naturally, making Stage 3→4 read as "diving INTO the
-                minted ■AKITA Zorb." Z position stays at 0 (no dive animation).
-                Materialises after deposit completes (0.50), fades as dive begins (0.73). */}
-            <motion.div
-              className="pointer-events-none absolute z-20 flex flex-col items-center"
-              style={{ top: 'calc(44vh + 48px)', left: '50%', x: '-50%', width: 200, opacity: shareZorbOp }}
-              aria-hidden="true"
-            >
-              {/* Glowing mirror plane — marks the vault's glass floor / Zorb's bottom edge */}
-              <div
-                style={{
-                  width: '100%',
-                  height: 1,
-                  background: 'linear-gradient(90deg, transparent 0%, rgba(100,160,255,0.22) 8%, rgba(180,220,255,0.88) 28%, rgba(215,240,255,1.0) 50%, rgba(180,220,255,0.88) 72%, rgba(100,160,255,0.22) 92%, transparent 100%)',
-                  boxShadow: '0 0 10px 2.5px rgba(0,82,255,0.30)',
-                }}
-              />
-              {/* ■AKITA label — identity stamp between plane and reflection */}
-              <div className="mb-1 mt-1.5 flex items-center justify-center gap-1.5">
-                <span className="font-mono text-[8px] font-semibold" style={{ color: 'rgba(100,160,255,0.65)' }}>■AKITA</span>
-                <span className="h-px w-2.5 flex-shrink-0" style={{ background: 'rgba(100,160,255,0.28)' }} />
-                <span className="font-mono text-[7px]" style={{ color: 'rgba(100,160,255,0.38)' }}>minted</span>
-              </div>
-              {/* Gradient-masked reflected Zorb — same size=96 as original, vertically flipped */}
-              <div
-                style={{
-                  WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.62) 20%, transparent 76%)',
-                  maskImage:       'linear-gradient(to bottom, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.62) 20%, transparent 76%)',
-                }}
-              >
-                {/* Vertical flip + blue-shift: hue-rotate 192° → electric blue-cyan */}
-                <div style={{ transform: 'scaleY(-1)', filter: 'hue-rotate(192deg) saturate(1.55) brightness(0.65)' }}>
-                  <ZorbViewer size={96} />
-                </div>
-              </div>
-            </motion.div>
 
             {/* Distribution fan chart */}
             <DistributionFan
