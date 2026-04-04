@@ -68,11 +68,12 @@ export function VaultNavBar(props: { interactive?: boolean }) {
     items.map((item) => {
       const active = isActiveLink(location, item)
       if (item.to === getCanonicalMarketingWaitlistPath()) {
-        const className =
-          'group relative inline-flex h-8 items-center justify-center rounded-xl border-0 px-2.5 outline-none transition-all duration-200 focus-visible:ring-1 focus-visible:ring-white/25'
+        const className = `group relative inline-flex h-8 items-center justify-center rounded-lg border-0 px-3 outline-none transition-all duration-200 focus-visible:ring-1 focus-visible:ring-white/25 ${
+            active ? 'bg-white/[0.06]' : 'hover:bg-white/[0.04]'
+          }`
         const content = (
           <span
-            className={`relative z-10 text-[10px] font-medium tracking-[0.01em] ${
+            className={`relative z-10 text-[11px] font-medium tracking-[0.01em] transition-colors ${
               active ? 'text-white' : 'text-zinc-500 group-hover:text-zinc-300'
             }`}
           >
@@ -107,10 +108,12 @@ export function VaultNavBar(props: { interactive?: boolean }) {
           key={item.to}
           to={item.to}
           aria-current={active ? 'page' : undefined}
-          className="group relative inline-flex h-8 items-center justify-center rounded-xl border-0 px-2.5 outline-none transition-all duration-200 focus-visible:ring-1 focus-visible:ring-white/25"
+          className={`group relative inline-flex h-8 items-center justify-center rounded-lg border-0 px-3 outline-none transition-all duration-200 focus-visible:ring-1 focus-visible:ring-white/25 ${
+            active ? 'bg-white/[0.06]' : 'hover:bg-white/[0.04]'
+          }`}
         >
           <span
-            className={`relative z-10 text-[10px] font-medium tracking-[0.01em] ${
+            className={`relative z-10 text-[11px] font-medium tracking-[0.01em] transition-colors ${
               active ? 'text-white' : 'text-zinc-500 group-hover:text-zinc-300'
             }`}
           >
@@ -135,7 +138,7 @@ export function VaultNavBar(props: { interactive?: boolean }) {
           onBlur={() => setBrandHovered(false)}
         >
           <Logo showText={false} width={28} height={28} forceHover={brandHovered} />
-          <span className="text-[12px] tracking-[0.04em] text-white font-medium leading-none">
+          <span className="text-[13px] tracking-[0.03em] text-white font-medium leading-none">
             <TextScramble text="4626.fun" trigger={brandHovered} speed={0.75} complexity="simple" />
           </span>
         </Link>
@@ -147,7 +150,7 @@ export function VaultNavBar(props: { interactive?: boolean }) {
         </nav>
 
         {showConnect ? (
-          <div className="shrink-0 w-[164px] origin-right scale-[0.72] lg:scale-[0.82] xl:scale-95">
+          <div className="shrink-0">
             <ConnectButton variant="nav" />
           </div>
         ) : null}

@@ -14,15 +14,10 @@ import {
 } from 'framer-motion'
 
 import { fetchZoraCoin, fetchZoraProfile } from '@/lib/zora/client'
-import { ZorbViewer } from './ModelViewer'
 import { SHARE_DISTRIBUTION_ROWS, STRATEGY_CARDS } from './launchConfig'
+import { getVaultFlowStage4TimingPreset } from './vaultFlowStageTimings'
 
-const CREATOR_CAMEOS = [
-  { key: 'zora',    label: 'zora creator coin', initials: 'ZO', color: '#a1a1aa', staticIcon: '/protocols/zora.svg',  zoraAddress: null,                                          zoraHandle: null },
-  { key: 'jesse',   label: 'jesse',             initials: 'JP', color: '#0052ff', staticIcon: null,                  zoraAddress: null,                                          zoraHandle: 'jessepollak' },
-  { key: 'akita',   label: 'akita',             initials: 'AK', color: '#f97316', staticIcon: null,                  zoraAddress: '0x5b674196812451b7cec024fe9d22d2c0b172fa75', zoraHandle: null },
-  { key: 'gabriel', label: 'gabrielhaines',     initials: 'GH', color: '#8b5cf6', staticIcon: null,                  zoraAddress: null,                                          zoraHandle: 'gabrielhaines' },
-] as const
+const AKITA_ADDRESS = '0x5b674196812451b7cec024fe9d22d2c0b172fa75' as const
 
 type Props = {
   depositTokens: string
@@ -63,8 +58,17 @@ const STAGE_NAV = [
 
 // Geometric scramble characters — brand-kit "Technical Luxury" aesthetic
 const SCRAMBLE_CHARS = ['●', '■', '▲', '◆', '○', '□', '△', '◊', '✶', '✕']
+const SHARE_TOKEN_SYMBOL = '■AKITA'
+const SHARE_TOKEN_ALT = '■AKITA share token'
 
 const smoothstep = (t: number) => t * t * (3 - 2 * t)
+const parseTokenAmount = (value: string) => {
+  const numeric = value.replace(/[^0-9]/g, '')
+  return numeric ? Number(numeric) : 0
+}
+const stripShareTokenSymbol = (value: string) => value.replace(SHARE_TOKEN_SYMBOL, '').trim()
+const SHARE_DISTRIBUTION_AMOUNTS = SHARE_DISTRIBUTION_ROWS.map((row) => parseTokenAmount(row.amount))
+const SHARE_DISTRIBUTION_TOTAL = SHARE_DISTRIBUTION_AMOUNTS.reduce((sum, amount) => sum + amount, 0)
 
 
 // Renders a MotionValue<number> as text via a DOM ref — bypasses React's render cycle entirely.
@@ -224,91 +228,215 @@ type VaultSceneProps = {
   landingFlash: MotionValue<number>
   zoraGreenFlash: MotionValue<number>
   coinEntryGlow: MotionValue<number>
-  zorbFillScale: MotionValue<number>
-  zorbFillOp: MotionValue<number>
 }
 const VaultScene = memo(function VaultScene({
   uid, vaultTransform, vaultOpacity, vaultLidOp, vaultWallOp,
   vaultPostProgress, vaultTopProgress, vaultGlow, landingFlash,
-  zoraGreenFlash, coinEntryGlow, zorbFillScale, zorbFillOp,
+  zoraGreenFlash, coinEntryGlow,
 }: VaultSceneProps) {
   return (
     <motion.div className="absolute left-1/2 top-[44vh] z-20" style={{ transform: vaultTransform, opacity: vaultOpacity }}>
       <div className="relative">
-        <motion.div className="pointer-events-none absolute" style={{ bottom: -20, left: -66, right: -66, height: 80, opacity: vaultLidOp }} aria-hidden="true">
+        {/*
+          ─── CUBE GEOMETRY ───────────────────────────────────────────────────────
+          8 vertices (SVG coords, viewBox 0 0 244 310):
+            Front face   │  Back face
+            TL (0, 28)   │  TL (28, 52)
+            TR (244, 28) │  TR (216, 52)
+            BR (244,302) │  BR (216,238)
+            BL (0, 302)  │  BL (28, 238)
+
+          Div-space (px from div top, SVG 244→228px → scale ≈ 0.934):
+            Front top    → −164px   Back top    → −142px
+            Floor inner  →   44px   Front outer →  108px
+
+          Sphere mask (198×204px) keeps the 210px orb tucked inside the front face:
+            shell left = −51px, top = −162px
+            orb left = −6px inside shell, top = −4px inside shell
+
+          Glow (140×140): center same, left = −22, top = −116
+          ─────────────────────────────────────────────────────────────────────── */}
+
+        {/* ── FLOOR (LID) — bottom face, fills in after walls ─────────────────── */}
+        <motion.div
+          className="pointer-events-none absolute"
+          style={{ bottom: -20, left: -66, right: -66, height: 80, opacity: vaultLidOp }}
+          aria-hidden="true"
+        >
           <svg viewBox="0 0 244 80" width="100%" height="80" fill="none" xmlns="http://www.w3.org/2000/svg">
             <defs>
-              <linearGradient id={`${uid}-xz-fill`} x1="0.5" y1="0" x2="0.5" y2="1">
-                <stop offset="0%" stopColor="rgba(80,130,255,0.06)" />
-                <stop offset="100%" stopColor="rgba(20,55,180,0.22)" />
+              <linearGradient id={`${uid}-floor-fill`} x1="0.5" y1="0" x2="0.5" y2="1">
+                <stop offset="0%"   stopColor="rgba(60,110,255,0.05)" />
+                <stop offset="100%" stopColor="rgba(20,50,180,0.20)" />
               </linearGradient>
             </defs>
-            <polygon points="28,8 216,8 244,72 0,72" fill={`url(#${uid}-xz-fill)`} />
-            <line x1="0" y1="72" x2="244" y2="72" stroke="rgba(160,205,255,0.68)" strokeWidth="1.6" />
-            <line x1="28" y1="8" x2="216" y2="8" stroke="rgba(100,148,255,0.30)" strokeWidth="0.9" />
-            <line x1="28" y1="8" x2="0" y2="72" stroke="rgba(130,178,255,0.36)" strokeWidth="0.9" />
-            <line x1="216" y1="8" x2="244" y2="72" stroke="rgba(130,178,255,0.36)" strokeWidth="0.9" />
-            <line x1="10" y1="32" x2="234" y2="32" stroke="rgba(80,130,200,0.11)" strokeWidth="0.7" />
-            <line x1="18" y1="52" x2="226" y2="52" stroke="rgba(80,130,200,0.11)" strokeWidth="0.7" />
-            <line x1="84" y1="8" x2="72" y2="72" stroke="rgba(80,130,200,0.09)" strokeWidth="0.7" />
-            <line x1="122" y1="8" x2="122" y2="72" stroke="rgba(80,130,200,0.09)" strokeWidth="0.7" />
-            <line x1="160" y1="8" x2="172" y2="72" stroke="rgba(80,130,200,0.09)" strokeWidth="0.7" />
-            <polyline points="28,20 28,8 42,8" stroke="rgba(190,220,255,0.56)" strokeWidth="1.4" fill="none" />
-            <polyline points="202,8 216,8 216,20" stroke="rgba(190,220,255,0.56)" strokeWidth="1.4" fill="none" />
-            <polyline points="0,60 0,72 16,72" stroke="rgba(190,220,255,0.56)" strokeWidth="1.4" fill="none" />
-            <polyline points="228,72 244,72 244,60" stroke="rgba(190,220,255,0.56)" strokeWidth="1.4" fill="none" />
-            <circle cx="122" cy="40" r="2.8" fill="none" stroke="rgba(155,198,255,0.40)" strokeWidth="0.8" />
-            <line x1="114" y1="40" x2="130" y2="40" stroke="rgba(155,198,255,0.28)" strokeWidth="0.7" />
-            <line x1="122" y1="32" x2="122" y2="48" stroke="rgba(155,198,255,0.28)" strokeWidth="0.7" />
-            <ellipse cx="122" cy="75" rx="100" ry="5.5" fill="rgba(70,120,255,0.16)" />
+            {/* Floor face polygon — trapezoid matching back-bottom→front-bottom */}
+            <polygon points="28,8 216,8 244,72 0,72" fill={`url(#${uid}-floor-fill)`} />
+            {/* Front bottom edge (outer) */}
+            <line x1="0" y1="72" x2="244" y2="72" stroke="rgba(160,205,255,0.62)" strokeWidth="1.5" />
+            {/* Back bottom edge (inner) */}
+            <line x1="28" y1="8" x2="216" y2="8" stroke="rgba(100,148,255,0.28)" strokeWidth="0.8" />
+            {/* Left and right depth diagonals */}
+            <line x1="0" y1="72" x2="28" y2="8"   stroke="rgba(120,168,255,0.32)" strokeWidth="0.8" />
+            <line x1="244" y1="72" x2="216" y2="8" stroke="rgba(120,168,255,0.32)" strokeWidth="0.8" />
+            {/* Corner brackets — all 4 corners of the floor face */}
+            <polyline points="0,60 0,72 16,72"      stroke="rgba(185,218,255,0.55)" strokeWidth="1.3" fill="none" />
+            <polyline points="228,72 244,72 244,60"  stroke="rgba(185,218,255,0.55)" strokeWidth="1.3" fill="none" />
+            <polyline points="28,0 28,8 42,8"        stroke="rgba(185,218,255,0.45)" strokeWidth="1.1" fill="none" />
+            <polyline points="202,8 216,8 216,0"     stroke="rgba(185,218,255,0.45)" strokeWidth="1.1" fill="none" />
+            {/* Floor center marker */}
+            <circle cx="122" cy="40" r="2.4" fill="none" stroke="rgba(140,188,255,0.35)" strokeWidth="0.7" />
+            {/* Ground shadow ellipse */}
+            <ellipse cx="122" cy="74" rx="96" ry="5" fill="rgba(60,110,255,0.14)" />
           </svg>
         </motion.div>
 
-        <motion.div className="pointer-events-none absolute" style={{ left: -66, right: -66, bottom: -20, height: 310, opacity: vaultWallOp }} aria-hidden="true">
-          <svg viewBox="0 0 244 310" width="100%" height="310" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <motion.polygon points="0,28 244,28 244,302 0,302" fill="rgba(140,195,255,0.025)" style={{ opacity: vaultTopProgress }} />
-            <motion.polygon points="28,52 216,52 216,238 28,238" fill="rgba(100,155,255,0.018)" style={{ opacity: vaultTopProgress }} />
-            <motion.path d="M 0 302 L 0 28" stroke="rgba(170,215,255,0.65)" strokeWidth="1.4" strokeLinecap="round" style={{ pathLength: vaultPostProgress }} />
-            <motion.path d="M 244 302 L 244 28" stroke="rgba(170,215,255,0.65)" strokeWidth="1.4" strokeLinecap="round" style={{ pathLength: vaultPostProgress }} />
-            <motion.path d="M 28 238 L 28 52" stroke="rgba(130,175,255,0.32)" strokeWidth="0.9" strokeLinecap="round" style={{ pathLength: vaultPostProgress }} />
-            <motion.path d="M 216 238 L 216 52" stroke="rgba(130,175,255,0.32)" strokeWidth="0.9" strokeLinecap="round" style={{ pathLength: vaultPostProgress }} />
-            <motion.path d="M 0 28 L 244 28" stroke="rgba(200,230,255,0.70)" strokeWidth="1.4" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
-            <motion.path d="M 28 52 L 216 52" stroke="rgba(130,175,255,0.30)" strokeWidth="0.9" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
-            <motion.path d="M 0 28 L 28 52" stroke="rgba(155,195,255,0.40)" strokeWidth="0.9" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
-            <motion.path d="M 244 28 L 216 52" stroke="rgba(155,195,255,0.40)" strokeWidth="0.9" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
-            <motion.path d="M 0 302 L 244 302" stroke="rgba(155,200,255,0.45)" strokeWidth="1.1" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
-            <motion.path d="M 28 238 L 216 238" stroke="rgba(120,165,255,0.25)" strokeWidth="0.8" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
-            <motion.path d="M 0 302 L 28 238" stroke="rgba(140,185,255,0.32)" strokeWidth="0.9" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
-            <motion.path d="M 244 302 L 216 238" stroke="rgba(140,185,255,0.32)" strokeWidth="0.9" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
-            <motion.path d="M 0 165 L 244 165" stroke="rgba(155,195,255,0.22)" strokeWidth="0.8" strokeLinecap="round" strokeDasharray="4 6" style={{ opacity: vaultTopProgress }} />
-            <motion.path d="M 28 145 L 216 145" stroke="rgba(120,160,255,0.14)" strokeWidth="0.6" strokeLinecap="round" strokeDasharray="3 5" style={{ opacity: vaultTopProgress }} />
-            <motion.path d="M 0 165 L 28 145" stroke="rgba(140,185,255,0.16)" strokeWidth="0.6" strokeLinecap="round" style={{ opacity: vaultTopProgress }} />
-            <motion.path d="M 244 165 L 216 145" stroke="rgba(140,185,255,0.16)" strokeWidth="0.6" strokeLinecap="round" style={{ opacity: vaultTopProgress }} />
-            <motion.polyline points="0,28 16,28" stroke="rgba(210,240,255,0.80)" strokeWidth="1.8" fill="none" style={{ opacity: vaultTopProgress }} />
-            <motion.polyline points="0,28 0,46" stroke="rgba(210,240,255,0.80)" strokeWidth="1.8" fill="none" style={{ opacity: vaultTopProgress }} />
-            <motion.polyline points="228,28 244,28" stroke="rgba(210,240,255,0.80)" strokeWidth="1.8" fill="none" style={{ opacity: vaultTopProgress }} />
-            <motion.polyline points="244,28 244,46" stroke="rgba(210,240,255,0.80)" strokeWidth="1.8" fill="none" style={{ opacity: vaultTopProgress }} />
-            <motion.polyline points="0,284 0,302 16,302" stroke="rgba(180,215,255,0.50)" strokeWidth="1.3" fill="none" style={{ opacity: vaultTopProgress }} />
-            <motion.polyline points="228,302 244,302 244,284" stroke="rgba(180,215,255,0.50)" strokeWidth="1.3" fill="none" style={{ opacity: vaultTopProgress }} />
-          </svg>
-        </motion.div>
-
-        <motion.div className="pointer-events-none absolute" style={{ inset: 20, borderRadius: '50%', opacity: vaultGlow, background: 'transparent', boxShadow: ['0 0 26px 10px rgba(0,82,255,0.60)', '0 0 60px 22px rgba(0,82,255,0.30)', '0 0 110px 44px rgba(0,82,255,0.12)'].join(', ') }} aria-hidden="true" />
-        <motion.div className="pointer-events-none absolute" style={{ inset: 20, borderRadius: '50%', opacity: landingFlash, background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.20) 0%, rgba(210,230,255,0.08) 50%, transparent 75%)', boxShadow: ['0 0 0 1px rgba(255,255,255,0.75)', '0 0 16px 5px rgba(255,255,255,0.50)', '0 0 42px 14px rgba(210,230,255,0.28)', '0 0 100px 36px rgba(140,180,255,0.12)'].join(', ') }} aria-hidden="true" />
-        <motion.div className="pointer-events-none absolute" style={{ inset: 14, borderRadius: '50%', opacity: zoraGreenFlash, background: 'transparent', boxShadow: ['0 0 28px 10px rgba(57,255,20,0.75)', '0 0 70px 28px rgba(57,255,20,0.38)', '0 0 130px 55px rgba(57,255,20,0.14)'].join(', ') }} aria-hidden="true" />
-        <motion.div className="pointer-events-none absolute" style={{ inset: 20, borderRadius: '50%', opacity: coinEntryGlow, background: 'transparent', boxShadow: ['0 0 22px 8px rgba(249,115,22,0.50)', '0 0 55px 20px rgba(0,82,255,0.36)', '0 0 105px 42px rgba(0,82,255,0.16)'].join(', ') }} aria-hidden="true" />
-        {/* ── Deposit fill — orange warmth rises from bottom, no hard edge ── */}
+        {/* ── WALLS — full 11-edge wireframe (all but back-bottom which lid draws) */}
         <motion.div
-          className="pointer-events-none absolute inset-0"
+          className="pointer-events-none absolute"
+          style={{ left: -66, right: -66, bottom: -20, height: 310, opacity: vaultWallOp }}
+          aria-hidden="true"
+        >
+          <svg viewBox="0 0 244 310" width="100%" height="310" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <filter id={`${uid}-back-post-blur`} x="-80%" y="-20%" width="260%" height="140%">
+                <feGaussianBlur stdDeviation="0.6" />
+              </filter>
+            </defs>
+
+            {/* Interior fill — subtle atmosphere */}
+            <motion.polygon
+              points="0,28 244,28 244,302 0,302"
+              fill="rgba(130,180,255,0.018)"
+              style={{ opacity: vaultTopProgress }}
+            />
+
+            {/* ── FRONT POSTS (left + right) — grow upward */}
+            <motion.path d="M 0 302 L 0 28"    stroke="rgba(165,212,255,0.68)" strokeWidth="1.5" strokeLinecap="round" style={{ pathLength: vaultPostProgress }} />
+            <motion.path d="M 244 302 L 244 28" stroke="rgba(165,212,255,0.68)" strokeWidth="1.5" strokeLinecap="round" style={{ pathLength: vaultPostProgress }} />
+
+            {/* ── BACK POSTS (left + right) — same timing, dimmer */}
+            <motion.path d="M 28 238 L 28 52"   stroke="rgba(86,124,210,0.18)" strokeWidth="0.75" strokeLinecap="round" filter={`url(#${uid}-back-post-blur)`} style={{ pathLength: vaultPostProgress }} />
+            <motion.path d="M 216 238 L 216 52"  stroke="rgba(86,124,210,0.18)" strokeWidth="0.75" strokeLinecap="round" filter={`url(#${uid}-back-post-blur)`} style={{ pathLength: vaultPostProgress }} />
+
+            {/* ── FRONT TOP EDGE */}
+            <motion.path d="M 0 28 L 244 28"    stroke="rgba(200,228,255,0.72)" strokeWidth="1.5" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
+
+            {/* ── BACK TOP EDGE */}
+            <motion.path d="M 28 52 L 216 52"   stroke="rgba(86,124,210,0.18)" strokeWidth="0.7" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
+
+            {/* ── TOP-FACE DEPTH DIAGONALS (front-TL→back-TL, front-TR→back-TR) */}
+            <motion.path d="M 0 28 L 28 52"     stroke="rgba(124,164,245,0.32)" strokeWidth="0.85" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
+            <motion.path d="M 244 28 L 216 52"  stroke="rgba(124,164,245,0.32)" strokeWidth="0.85" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
+
+            {/* ── TOP CORNER BRACKETS — accent caps at front top corners */}
+            <motion.polyline points="0,28 18,28"    stroke="rgba(215,240,255,0.82)" strokeWidth="2.0" fill="none" style={{ opacity: vaultTopProgress }} />
+            <motion.polyline points="0,28 0,48"     stroke="rgba(215,240,255,0.82)" strokeWidth="2.0" fill="none" style={{ opacity: vaultTopProgress }} />
+            <motion.polyline points="226,28 244,28" stroke="rgba(215,240,255,0.82)" strokeWidth="2.0" fill="none" style={{ opacity: vaultTopProgress }} />
+            <motion.polyline points="244,28 244,48" stroke="rgba(215,240,255,0.82)" strokeWidth="2.0" fill="none" style={{ opacity: vaultTopProgress }} />
+
+          </svg>
+        </motion.div>
+
+        {/* ── SPHERE inside the cube ────────────────────────────────────────────
+            210×210px, centered at x=48 (div-left), resting on inner floor y=44.
+            center-y = 44−105 = −61,  top = 44−210 = −166.
+            left = 48−105 = −57.
+
+            Glow (160×160, 25px inset from sphere edge):
+            left = −57+25 = −32,  top = −166+25 = −141.                         */}
+        <div
+          className="pointer-events-none absolute overflow-hidden"
           style={{
-            scaleY: zorbFillScale,
-            opacity: zorbFillOp,
-            transformOrigin: '50% 100%',
-            background: 'radial-gradient(circle at 50% 80%, rgba(249,115,22,0.50) 0%, rgba(249,100,0,0.22) 28%, rgba(249,80,0,0.05) 50%, transparent 62%)',
+            left: -51,
+            top: -162,
+            width: 198,
+            height: 204,
+            clipPath: 'polygon(6% 0%, 94% 0%, 100% 79%, 0% 79%)',
+          }}
+          aria-hidden="true"
+        >
+          <div
+            className="absolute"
+            style={{
+              left: -6,
+              top: -4,
+              width: 210,
+              height: 210,
+              borderRadius: '50%',
+              background: [
+                'radial-gradient(circle at 36% 33%,',
+                '  rgba(255,255,255,0.07) 0%,',
+                '  rgba(156,194,255,0.028) 44%,',
+                '  rgba(80,120,255,0.008) 68%,',
+                '  transparent 84%)',
+              ].join(''),
+            }}
+          />
+        </div>
+
+        {/* ── GLOWS (centered on sphere, 160×160, left=−32, top=−141) ─────── */}
+        {/* Blue ambient */}
+        <motion.div
+          className="pointer-events-none absolute"
+          style={{
+            left: -32, top: -141, width: 160, height: 160, borderRadius: '50%',
+            opacity: vaultGlow, background: 'transparent',
+            boxShadow: [
+              '0 0 28px 10px rgba(0,82,255,0.56)',
+              '0 0 62px 24px rgba(0,82,255,0.26)',
+              '0 0 120px 48px rgba(0,82,255,0.10)',
+            ].join(', '),
           }}
           aria-hidden="true"
         />
-        <ZorbViewer size={96} />
+        {/* White landing flash */}
+        <motion.div
+          className="pointer-events-none absolute"
+          style={{
+            left: -32, top: -141, width: 160, height: 160, borderRadius: '50%',
+            opacity: landingFlash,
+            background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.17) 0%, rgba(210,230,255,0.05) 52%, transparent 76%)',
+            boxShadow: [
+              '0 0 0 1px rgba(255,255,255,0.60)',
+              '0 0 16px 6px rgba(255,255,255,0.36)',
+              '0 0 44px 16px rgba(210,230,255,0.18)',
+              '0 0 108px 38px rgba(140,180,255,0.08)',
+            ].join(', '),
+          }}
+          aria-hidden="true"
+        />
+        {/* Zora neon-green deposit flash */}
+        <motion.div
+          className="pointer-events-none absolute"
+          style={{
+            left: -40, top: -149, width: 176, height: 176, borderRadius: '50%',
+            opacity: zoraGreenFlash, background: 'transparent',
+            boxShadow: [
+              '0 0 30px 11px rgba(57,255,20,0.70)',
+              '0 0 72px 28px rgba(57,255,20,0.34)',
+              '0 0 140px 56px rgba(57,255,20,0.12)',
+            ].join(', '),
+          }}
+          aria-hidden="true"
+        />
+        {/* Orange-blue share-token mint glow */}
+        <motion.div
+          className="pointer-events-none absolute"
+          style={{
+            left: -32, top: -141, width: 160, height: 160, borderRadius: '50%',
+            opacity: coinEntryGlow, background: 'transparent',
+            boxShadow: [
+              '0 0 22px 9px rgba(249,115,22,0.46)',
+              '0 0 58px 22px rgba(0,82,255,0.32)',
+              '0 0 112px 44px rgba(0,82,255,0.14)',
+            ].join(', '),
+          }}
+          aria-hidden="true"
+        />
+
+        {/* Layout anchor — maintains relative container height */}
+        <div className="h-24 w-24" aria-hidden="true" />
       </div>
     </motion.div>
   )
@@ -317,6 +445,8 @@ const VaultScene = memo(function VaultScene({
 type DistributionFanProps = {
   uid: string
   distSectionOp: MotionValue<number>
+  checkpointOp: MotionValue<number>
+  checkpointWidth: MotionValue<string>
   node0Op: MotionValue<number>; node1Op: MotionValue<number>; node2Op: MotionValue<number>
   orbitTrav0: MotionValue<number>; orbitTrav1: MotionValue<number>; orbitTrav2: MotionValue<number>
   nodeGlow0: MotionValue<number>; nodeGlow1: MotionValue<number>; nodeGlow2: MotionValue<number>
@@ -329,7 +459,7 @@ type DistributionFanProps = {
   distCount0MV: MotionValue<number>; distCount1MV: MotionValue<number>; distCount2MV: MotionValue<number>
 }
 const DistributionFan = memo(function DistributionFan({
-  uid, distSectionOp,
+  uid, distSectionOp, checkpointOp, checkpointWidth,
   node0Op, node1Op, node2Op,
   orbitTrav0, orbitTrav1, orbitTrav2,
   nodeGlow0, nodeGlow1, nodeGlow2,
@@ -341,17 +471,56 @@ const DistributionFan = memo(function DistributionFan({
 }: DistributionFanProps) {
   return (
     <motion.div
-      className="pointer-events-none absolute inset-x-0 z-30 px-3 sm:px-10 lg:px-14"
-      style={{ top: 'clamp(46vh, 50vh, 54vh)', opacity: distSectionOp }}
+      className="pointer-events-none absolute inset-x-0 z-20 px-3 sm:px-10 lg:px-14"
+      style={{ top: 'clamp(42vh, 47vh, 52vh)', opacity: distSectionOp }}
     >
       <div className="mx-auto max-w-3xl">
         {/* Stage 3 section header */}
-        <motion.div className="mb-3 flex items-center justify-center gap-2" style={{ opacity: distSectionOp }}>
+        <motion.div className="mb-3 hidden items-center justify-center gap-2 sm:flex" style={{ opacity: distSectionOp }}>
           <span className="h-px w-5 flex-shrink-0" style={{ background: 'rgba(100,160,255,0.25)' }} />
-          <span className="font-mono text-[7px] uppercase tracking-[0.30em]" style={{ color: 'rgba(100,160,255,0.50)' }}>■AKITA · distributing</span>
+          <span
+            className="inline-flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-full"
+            style={{ border: '1px solid rgba(100,160,255,0.35)', background: 'rgba(0,30,90,0.60)' }}
+          >
+            <img src="/akita-share-token.png" alt={SHARE_TOKEN_ALT} className="h-full w-full object-cover" loading="lazy" />
+          </span>
+          <span className="font-mono text-[7px] uppercase tracking-[0.30em]" style={{ color: 'rgba(100,160,255,0.55)' }}>{SHARE_TOKEN_SYMBOL} · distributing</span>
           <span className="h-px w-5 flex-shrink-0" style={{ background: 'rgba(100,160,255,0.25)' }} />
         </motion.div>
-        <div className="relative mx-auto w-full">
+        <motion.div
+          aria-label="distribution summary"
+          className="mx-auto mb-4 flex max-w-[280px] flex-col gap-2 rounded-2xl border border-white/[0.08] p-3 sm:hidden"
+          style={{
+            opacity: distSectionOp,
+            background: 'rgba(7,7,19,0.96)',
+            boxShadow: '0 12px 36px -14px rgba(0,0,0,0.82), inset 0 1px 0 rgba(255,255,255,0.05)',
+            backdropFilter: 'blur(16px)',
+          }}
+        >
+          <div className="flex items-center gap-1.5">
+            <span
+              className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center overflow-hidden rounded-full"
+              style={{ border: '1px solid rgba(100,160,255,0.35)', background: 'rgba(0,30,90,0.60)' }}
+            >
+              <img src="/akita-share-token.png" alt={SHARE_TOKEN_ALT} className="h-full w-full object-cover" loading="lazy" />
+            </span>
+            <span className="font-mono text-[6px] uppercase tracking-[0.20em]" style={{ color: 'rgba(100,160,255,0.72)' }}>
+              share fan-out live
+            </span>
+          </div>
+          <MotionNumber
+            value={distCount0MV}
+            className="block font-mono text-[32px] font-black leading-none tracking-tight"
+            style={{ color: 'rgba(120,175,255,1)' }}
+          />
+          <span className="font-mono text-[10px] font-black tracking-tight text-white/82">
+            live routing
+          </span>
+          <span className="font-mono text-[6px] tracking-[0.16em]" style={{ color: 'rgba(100,160,255,0.46)' }}>
+            checkpoint + route cards below
+          </span>
+        </motion.div>
+        <div className="relative mx-auto hidden w-full sm:block">
           <svg viewBox="0 0 800 110" preserveAspectRatio="xMidYMid meet" className="w-full" aria-hidden="true" style={{ height: 92 }}>
             <defs>
               <linearGradient id={`${uid}-dg`} gradientUnits="userSpaceOnUse" x1="400" y1="10" x2="400" y2="100">
@@ -385,13 +554,40 @@ const DistributionFan = memo(function DistributionFan({
             { left: '50%',    op: node1Op, countMV: distCount1MV },
             { left: '83.75%', op: node2Op, countMV: distCount2MV },
           ] as const).map(({ left, op, countMV }) => (
-            <motion.div key={left} className="pointer-events-none absolute flex -translate-x-1/2 flex-row items-baseline gap-1" style={{ left, top: 'calc(100% + 6px)', opacity: op }}>
-              <MotionNumber value={countMV} className="font-mono text-[9px] font-semibold tabular-nums" style={{ color: 'rgba(255,255,255,0.90)' }} />
-              <span className="font-mono text-[7px] font-medium" style={{ color: 'rgba(100,160,255,0.75)' }}>■AKITA</span>
+            <motion.div key={left} className="pointer-events-none absolute hidden -translate-x-1/2 flex-row items-baseline gap-0.5 sm:flex sm:gap-1" style={{ left, top: 'calc(100% + 6px)', opacity: op }}>
+              <MotionNumber value={countMV} className="font-mono text-[7px] font-semibold tabular-nums sm:text-[9px]" style={{ color: 'rgba(255,255,255,0.90)' }} />
+              <span className="font-mono text-[6px] font-medium sm:text-[7px]" style={{ color: 'rgba(100,160,255,0.75)' }}>{SHARE_TOKEN_SYMBOL}</span>
             </motion.div>
           ))}
         </div>
-        <div className="mt-8 grid w-full grid-cols-3 gap-1.5 sm:gap-3 lg:gap-5" style={{ perspective: '800px' }}>
+        <motion.div
+          className="mx-auto mt-4 flex max-w-[240px] flex-col items-center gap-1.5"
+          style={{ opacity: checkpointOp }}
+        >
+          <div className="flex w-full items-center justify-between font-mono text-[7px] uppercase tracking-[0.24em] text-zinc-500">
+            <span>read checkpoint</span>
+            <span style={{ color: 'rgba(100,160,255,0.58)' }}>unlocking</span>
+          </div>
+          <div
+            aria-label="distribution checkpoint progress"
+            role="progressbar"
+            className="h-1 w-full overflow-hidden rounded-full bg-white/[0.06]"
+          >
+            <motion.div
+              className="h-full rounded-full"
+              style={{
+                width: checkpointWidth,
+                background: 'linear-gradient(90deg, rgba(100,160,255,0.30) 0%, rgba(100,160,255,0.95) 100%)',
+                boxShadow: '0 0 10px rgba(100,160,255,0.45)',
+              }}
+            />
+          </div>
+          <p className="font-mono text-[7px] tracking-[0.16em] text-zinc-600">
+            Hold at full fan-out so all three routes can land.
+          </p>
+        </motion.div>
+        <div className="mt-5 -mx-3 overflow-x-auto overscroll-x-contain sm:mt-8 sm:mx-0 sm:overflow-visible">
+          <div className="flex snap-x snap-mandatory items-stretch gap-3 px-3 pb-20 sm:grid sm:grid-cols-3 sm:gap-3 sm:px-0 sm:pb-0 lg:gap-5" style={{ perspective: '800px' }}>
           {SHARE_DISTRIBUTION_ROWS.map((row, i) => {
             const ops = [node0Op, node1Op, node2Op]
             const ys = [dist0CardY, dist1CardY, dist2CardY]
@@ -402,7 +598,7 @@ const DistributionFan = memo(function DistributionFan({
             return (
               <motion.div
                 key={row.title}
-                className="group relative flex flex-col overflow-hidden rounded-[14px] p-2.5 sm:rounded-[18px] sm:p-4 lg:p-5"
+                className="group relative w-[min(82vw,280px)] max-w-[280px] flex-shrink-0 snap-center first:ml-[max(0px,calc((100vw-min(82vw,280px))/2-0.75rem))] last:mr-[max(0px,calc((100vw-min(82vw,280px))/2-0.75rem))] flex-col overflow-hidden rounded-[14px] p-3 sm:w-auto sm:max-w-none sm:flex-shrink sm:snap-align-none sm:first:ml-0 sm:last:mr-0 sm:rounded-[18px] sm:p-4 lg:p-5"
                 style={{ opacity: ops[i], y: ys[i], rotateY: rotYValues[i], transformOrigin: 'center bottom', border: '1px solid rgba(255,255,255,0.09)', background: 'linear-gradient(160deg, rgba(255,255,255,0.055) 0%, rgba(255,255,255,0.015) 60%, transparent 100%)', boxShadow: '0 18px 90px -48px rgba(255,255,255,0.18), inset 0 1px 0 rgba(255,255,255,0.05)', transition: 'transform 0.45s ease' }}
                 whileHover={{ rotateY: 0 }}
                 transition={{ duration: 0.45, ease: [0.25, 0, 0.35, 1] }}
@@ -412,18 +608,20 @@ const DistributionFan = memo(function DistributionFan({
                 <motion.div className="pointer-events-none absolute rounded-[14px] sm:rounded-[18px]" style={{ inset: -1, opacity: greenFlashes[i], boxShadow: ['0 0 0 1px rgba(57,255,20,0.55)', '0 0 18px 4px rgba(57,255,20,0.35)', '0 0 50px 14px rgba(57,255,20,0.12)'].join(', ') }} aria-hidden="true" />
                 <div className="mb-1.5 flex items-center gap-1.5">
                   {row.icon && <img src={row.icon} alt={row.title} className="h-3 w-3 opacity-70" loading="lazy" />}
-                  <p className="font-mono text-[8px] font-semibold uppercase tracking-[0.22em] text-zinc-500 sm:text-[9px]">{row.title}</p>
+                  <p className="font-mono text-[7px] font-semibold uppercase tracking-[0.18em] text-zinc-500 sm:text-[9px] sm:tracking-[0.22em]">{row.title}</p>
                 </div>
-                <p className="font-mono font-black leading-none" style={{ fontSize: 'clamp(1.6rem, 5.5vw, 2.6rem)', color: '#f0f0f8', textShadow: '0 0 22px rgba(255,255,255,0.5), 0 0 48px rgba(255,255,255,0.22)' }}>{row.percent}</p>
-                <p className="mt-1 font-mono text-[9.5px] font-medium tabular-nums text-white/70 sm:text-[10px]">
+                <p className="font-mono font-black leading-none" style={{ fontSize: 'clamp(1.3rem, 8vw, 2.6rem)', color: '#f0f0f8', textShadow: '0 0 22px rgba(255,255,255,0.5), 0 0 48px rgba(255,255,255,0.22)' }}>{row.percent}</p>
+                <p className="mt-1 font-mono text-[8px] font-medium tabular-nums text-white/70 sm:text-[10px]">
                   <MotionNumber value={liveCountMVs[i]} />{' '}
-                  <span style={{ color: 'rgba(100,160,255,0.70)' }}>■AKITA</span>
+                  <span style={{ color: 'rgba(100,160,255,0.70)' }}>{SHARE_TOKEN_SYMBOL}</span>
                 </p>
-                <p className="mt-2.5 grow text-[10.5px] font-light leading-relaxed text-zinc-400 sm:text-[11px]">{row.description}</p>
-                <Link to={row.route} className="mt-3 text-[8px] font-medium tracking-[0.14em] text-zinc-500 transition-colors hover:text-zinc-300">Learn more →</Link>
+                <p className="mt-2 hidden grow text-[10.5px] font-light leading-relaxed text-zinc-400 sm:block sm:text-[11px]">{row.description}</p>
+                <p className="mt-1.5 text-[10px] leading-snug text-zinc-400 sm:hidden">{row.amount}</p>
+                <Link to={row.route} className="mt-2 hidden text-[8px] font-medium tracking-[0.14em] text-zinc-500 transition-colors hover:text-zinc-300 sm:block">Learn more →</Link>
               </motion.div>
             )
           })}
+          </div>
         </div>
       </div>
     </motion.div>
@@ -432,13 +630,13 @@ const DistributionFan = memo(function DistributionFan({
 
 type DeploySectionProps = {
   uid: string
+  principalTokensLabel: string
   deployTransform: MotionValue<string>
   deployOpacity: MotionValue<number>
   deployFilter: MotionValue<string>
   deployTitleOp: MotionValue<number>
   deployTitleY: MotionValue<number>
   s4p0: MotionValue<number>; s4p1: MotionValue<number>; s4p2: MotionValue<number>; s4p3: MotionValue<number>
-  s4pOp0: MotionValue<number>; s4pOp1: MotionValue<number>; s4pOp2: MotionValue<number>; s4pOp3: MotionValue<number>
   s4d0: MotionValue<number>; s4d1: MotionValue<number>; s4d2: MotionValue<number>; s4d3: MotionValue<number>
   s4c0o: MotionValue<number>; s4c0y: MotionValue<number>
   s4c1o: MotionValue<number>; s4c1y: MotionValue<number>
@@ -446,10 +644,9 @@ type DeploySectionProps = {
   s4c3o: MotionValue<number>; s4c3y: MotionValue<number>
 }
 const DeploySection = memo(function DeploySection({
-  uid, deployTransform, deployOpacity, deployFilter,
+  uid, principalTokensLabel, deployTransform, deployOpacity, deployFilter,
   deployTitleOp, deployTitleY,
   s4p0, s4p1, s4p2, s4p3,
-  s4pOp0, s4pOp1, s4pOp2, s4pOp3,
   s4d0, s4d1, s4d2, s4d3,
   s4c0o, s4c0y, s4c1o, s4c1y, s4c2o, s4c2y, s4c3o, s4c3y,
 }: DeploySectionProps) {
@@ -462,18 +659,50 @@ const DeploySection = memo(function DeploySection({
   return (
     <motion.section
       className="absolute inset-x-0 z-10 px-3 sm:px-10 lg:px-14"
-      style={{ top: 'clamp(52vh, calc(32vh + 380px), 84vh)', transform: deployTransform, opacity: deployOpacity, filter: deployFilter }}
+      style={{ top: 'clamp(28vh, calc(18vh + 120px), 46vh)', transform: deployTransform, opacity: deployOpacity, filter: deployFilter }}
     >
       <div className="mx-auto max-w-4xl">
-        <motion.div className="mb-4 flex flex-col items-center gap-1 text-center" style={{ opacity: deployTitleOp, y: deployTitleY }}>
+        <motion.div className="mb-3 flex flex-col items-center gap-1 text-center sm:mb-4" style={{ opacity: deployTitleOp, y: deployTitleY }}>
           <div className="flex items-center gap-2">
             <span className="h-px w-5 flex-shrink-0" style={{ background: 'rgba(249,115,22,0.28)' }} />
             <p className="font-mono text-[7px] font-semibold uppercase tracking-[0.30em]" style={{ color: 'rgba(249,115,22,0.55)' }}>akita · yield strategies</p>
             <span className="h-px w-5 flex-shrink-0" style={{ background: 'rgba(249,115,22,0.28)' }} />
           </div>
-          <p className="font-mono text-[10px] font-black tracking-tight text-white/80">50,000,000 akita deployed</p>
+          <p className="hidden font-mono text-[10px] font-black tracking-tight text-white/80 sm:block">{principalTokensLabel} akita deployed</p>
         </motion.div>
-        <div className="relative mx-auto w-full max-w-3xl">
+        <motion.div
+          aria-label="deploy summary"
+          className="mx-auto mb-4 flex max-w-[280px] flex-col gap-2 rounded-2xl border border-white/[0.08] p-3 sm:hidden"
+          style={{
+            opacity: deployTitleOp,
+            y: deployTitleY,
+            background: 'rgba(7,7,19,0.96)',
+            boxShadow: '0 12px 36px -14px rgba(0,0,0,0.82), inset 0 1px 0 rgba(255,255,255,0.05)',
+            backdropFilter: 'blur(16px)',
+          }}
+        >
+          <div className="flex items-center gap-1.5">
+            <span
+              className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full"
+              style={{ background: 'rgba(249,115,22,0.16)', border: '1px solid rgba(249,115,22,0.35)' }}
+            >
+              <span className="h-1.5 w-1.5 rounded-full" style={{ background: 'rgba(249,115,22,0.95)' }} />
+            </span>
+            <span className="font-mono text-[6px] uppercase tracking-[0.20em]" style={{ color: 'rgba(249,115,22,0.62)' }}>
+              akita · principal deployed
+            </span>
+          </div>
+          <div className="font-mono text-[32px] font-black leading-none tracking-tight text-white">
+            {principalTokensLabel}
+          </div>
+          <span className="font-mono text-[10px] font-black tracking-tight text-white/82">
+            {principalTokensLabel} akita deployed
+          </span>
+          <span className="font-mono text-[6px] tracking-[0.16em]" style={{ color: 'rgba(100,160,255,0.46)' }}>
+            4 yield strategies live
+          </span>
+        </motion.div>
+        <div className="relative mx-auto hidden w-full max-w-3xl sm:block">
           <svg viewBox="0 0 800 120" preserveAspectRatio="xMidYMid meet" className="w-full" aria-hidden="true" style={{ height: 108 }}>
             <defs>
               <linearGradient id={`${uid}-sg`} gradientUnits="userSpaceOnUse" x1="400" y1="18" x2="400" y2="108">
@@ -486,10 +715,10 @@ const DeploySection = memo(function DeploySection({
               </filter>
             </defs>
             <motion.circle cx={400} cy={18} r={4} fill="rgba(249,115,22,0.85)" filter={`url(#${uid}-sf)`} style={{ opacity: deployTitleOp, scale: deployTitleOp }} />
-            <motion.path d={STRAT_PATHS[0]} stroke={`url(#${uid}-sg)`} strokeWidth="1.5" fill="none" strokeLinecap="round" style={{ pathLength: s4p0, opacity: s4pOp0 }} />
-            <motion.path d={STRAT_PATHS[1]} stroke={`url(#${uid}-sg)`} strokeWidth="1.5" fill="none" strokeLinecap="round" style={{ pathLength: s4p1, opacity: s4pOp1 }} />
-            <motion.path d={STRAT_PATHS[2]} stroke={`url(#${uid}-sg)`} strokeWidth="1.5" fill="none" strokeLinecap="round" style={{ pathLength: s4p2, opacity: s4pOp2 }} />
-            <motion.path d={STRAT_PATHS[3]} stroke={`url(#${uid}-sg)`} strokeWidth="1.5" fill="none" strokeLinecap="round" style={{ pathLength: s4p3, opacity: s4pOp3 }} />
+            <motion.path d={STRAT_PATHS[0]} stroke={`url(#${uid}-sg)`} strokeWidth="1.5" fill="none" strokeLinecap="round" style={{ pathLength: s4p0, opacity: s4c0o }} />
+            <motion.path d={STRAT_PATHS[1]} stroke={`url(#${uid}-sg)`} strokeWidth="1.5" fill="none" strokeLinecap="round" style={{ pathLength: s4p1, opacity: s4c1o }} />
+            <motion.path d={STRAT_PATHS[2]} stroke={`url(#${uid}-sg)`} strokeWidth="1.5" fill="none" strokeLinecap="round" style={{ pathLength: s4p2, opacity: s4c2o }} />
+            <motion.path d={STRAT_PATHS[3]} stroke={`url(#${uid}-sg)`} strokeWidth="1.5" fill="none" strokeLinecap="round" style={{ pathLength: s4p3, opacity: s4c3o }} />
             <motion.circle cx={STRAT_DESTS[0].cx} cy={STRAT_DESTS[0].cy} r={3.5} fill="rgba(249,115,22,0.75)" filter={`url(#${uid}-sf)`} style={{ opacity: s4d0, scale: s4d0 }} />
             <motion.circle cx={STRAT_DESTS[1].cx} cy={STRAT_DESTS[1].cy} r={3.5} fill="rgba(249,115,22,0.75)" filter={`url(#${uid}-sf)`} style={{ opacity: s4d1, scale: s4d1 }} />
             <motion.circle cx={STRAT_DESTS[2].cx} cy={STRAT_DESTS[2].cy} r={3.5} fill="rgba(249,115,22,0.75)" filter={`url(#${uid}-sf)`} style={{ opacity: s4d2, scale: s4d2 }} />
@@ -500,13 +729,13 @@ const DeploySection = memo(function DeploySection({
           <motion.span className="pointer-events-none absolute -translate-x-1/2 font-mono text-[9px] text-zinc-500" style={{ left: '62.5%', top: '100%', opacity: s4d2 }}>{STRATEGY_CARDS[2]?.amount} <span style={{ color: 'rgba(249,115,22,0.55)' }}>akita</span></motion.span>
           <motion.span className="pointer-events-none absolute -translate-x-1/2 font-mono text-[9px] text-zinc-500" style={{ left: '87.5%', top: '100%', opacity: s4d3 }}>{STRATEGY_CARDS[3]?.amount} <span style={{ color: 'rgba(249,115,22,0.55)' }}>akita</span></motion.span>
         </div>
-        <div className="mt-8 -mx-3 overflow-x-auto sm:mx-0 sm:overflow-visible">
-          <div className="flex items-stretch gap-2 px-3 pb-1 sm:grid sm:grid-cols-4 sm:gap-3 sm:px-0 lg:gap-4">
+        <div className="mt-4 -mx-3 overflow-x-auto overscroll-x-contain sm:mt-8 sm:mx-0 sm:overflow-visible">
+          <div className="flex snap-x snap-mandatory items-stretch gap-3 px-3 pb-24 sm:grid sm:grid-cols-4 sm:gap-3 sm:px-0 sm:pb-1 lg:gap-4">
             {STRATEGY_CARDS.map((card, i) => (
               <motion.div
                 key={card.label}
-                className="flex-shrink-0 sm:flex-shrink"
-                style={{ opacity: cardMotions[i].opacity, y: cardMotions[i].y, minWidth: 'clamp(148px, 40vw, 176px)' }}
+                className="w-[min(82vw,280px)] max-w-[280px] flex-shrink-0 snap-center first:ml-[max(0px,calc((100vw-min(82vw,280px))/2-0.75rem))] last:mr-[max(0px,calc((100vw-min(82vw,280px))/2-0.75rem))] sm:w-auto sm:max-w-none sm:flex-shrink sm:snap-align-none sm:first:ml-0 sm:last:mr-0"
+                style={{ opacity: cardMotions[i].opacity, y: cardMotions[i].y, minWidth: 'clamp(220px, 82vw, 280px)' }}
               >
                 <motion.div
                   className="relative flex h-full flex-col overflow-hidden rounded-2xl p-3 sm:p-4 lg:p-5"
@@ -523,20 +752,20 @@ const DeploySection = memo(function DeploySection({
                   <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-white/20 to-transparent" aria-hidden="true" />
 
                   {/* Protocol icon + label row */}
-                  <div className="mb-2.5 flex items-center gap-2">
+                  <div className="mb-2 flex items-center gap-2 sm:mb-2.5">
                     {card.icon ? (
                       <img src={card.icon} alt={card.iconAlt} className={card.iconClassName} loading="lazy" />
                     ) : (
                       <div className="h-3 w-3 rounded-full border border-white/20 bg-white/10" aria-hidden="true" />
                     )}
-                    <p className="text-[9px] font-semibold uppercase tracking-[0.22em] text-zinc-300">{card.label}</p>
+                    <p className="text-[8px] font-semibold uppercase tracking-[0.18em] text-zinc-300 sm:text-[9px] sm:tracking-[0.22em]">{card.label}</p>
                   </div>
 
                   {/* Allocation percentage — primary number */}
                   <p
                     className="font-mono font-black leading-none"
                     style={{
-                      fontSize: 'clamp(2rem, 5vw, 2.6rem)',
+                      fontSize: 'clamp(2.2rem, 12vw, 2.8rem)',
                       color: '#f0f0f8',
                       textShadow: '0 0 18px rgba(255,255,255,0.45)',
                     }}
@@ -545,13 +774,13 @@ const DeploySection = memo(function DeploySection({
                   </p>
 
                   {/* Token amount */}
-                  <p className="mt-1.5 font-mono text-[10px] font-medium text-zinc-400">
+                  <p className="mt-1.5 font-mono text-[10px] font-medium text-zinc-300">
                     {card.amount}{' '}
                     <span style={{ color: 'rgba(249,115,22,0.60)' }}>akita</span>
                   </p>
 
                   {/* Description */}
-                  <p className="mt-2.5 grow text-[11px] font-light leading-relaxed text-zinc-500">
+                  <p className="mt-2 grow text-[12px] font-light leading-relaxed text-zinc-400 sm:mt-2.5 sm:text-[11px] sm:text-zinc-500">
                     {card.description}
                   </p>
 
@@ -574,12 +803,16 @@ const DeploySection = memo(function DeploySection({
   )
 })
 
-export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _shareTokens }: Props) {
+export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const uid = useId().replace(/:/g, '')
   const outerRef = useRef<HTMLDivElement>(null)
   // Respects the OS/browser reduced-motion preference to skip expensive camera moves
   // and GPU-intensive glow effects.
   const prefersReducedMotion = useReducedMotion() ?? false
+  const [useDesktopStage4Timing, setUseDesktopStage4Timing] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return window.matchMedia('(min-width: 640px)').matches
+  })
 
   const { scrollYProgress } = useScroll({
     target: outerRef,
@@ -600,9 +833,20 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
   const [depositComplete, setDepositComplete] = useState(false)
   const depositCompleteRef = useRef(false)
   const [cameoIcons, setCameoIcons] = useState<Record<string, string>>({})
+  const stage4Timing = getVaultFlowStage4TimingPreset(useDesktopStage4Timing)
+  const [stage4Fan0, stage4Fan1, stage4Fan2, stage4Fan3] = stage4Timing.fanCards
   // Generalised checkpoint system — 4 hard stops, one per stage completion.
   // Pure side-effect: blocks scroll for `dur` seconds, no React state needed.
   const hardStopFired = useRef({ s1: false, s2: false, s3: false, s4: false })
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(min-width: 640px)')
+    const handleChange = () => setUseDesktopStage4Timing(mq.matches)
+    handleChange()
+    mq.addEventListener('change', handleChange)
+    return () => mq.removeEventListener('change', handleChange)
+  }, [])
 
   const fireHardStop = useCallback((_label: string, dur: number) => {
     const block = (e: Event) => e.preventDefault()
@@ -621,7 +865,7 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
   useMotionValueEvent(scroll, 'change', (v) => {
     // Ref guard: only setState when stage actually changes — eliminates per-frame
     // React reconciliation calls during continuous scrolling.
-    const nextStage = v < 0.30 ? 0 : v < 0.48 ? 1 : v < 0.74 ? 2 : 3
+    const nextStage = v < 0.30 ? 0 : v < 0.52 ? 1 : v < 0.74 ? 2 : 3
     if (nextStage !== activeStageRef.current) {
       activeStageRef.current = nextStage
       setActiveStageIdx(nextStage)
@@ -635,7 +879,7 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
     }
 
     // Advance (or retreat) the card phase
-    const next: 1 | 2 | 3 = v >= 0.79 ? 3 : v >= 0.52 ? 2 : 1
+    const next: 1 | 2 | 3 = v >= 0.76 ? 3 : v >= 0.52 ? 2 : 1
     if (next !== cardPhaseRef.current) {
       cardPhaseRef.current = next
       setCardPhase(next)
@@ -649,73 +893,44 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
     // Checkpoint 3: all 3 distribution paths complete (_d2Raw hits 1.0 at 0.70)
     if (!f.s3 && v >= 0.70) { f.s3 = true; fireHardStop('take a moment', 3.2) }
     // Checkpoint 4: all 4 strategy cards at 90%+ opacity
-    if (!f.s4 && v >= 0.99) { f.s4 = true; fireHardStop('strategies deployed', 2.5) }
+    if (!f.s4 && v >= 0.95) { f.s4 = true; fireHardStop('strategies deployed', 2.5) }
   })
 
-  // Prefetch real token/profile images for creator cameos.
-  // Tries multiple fallback paths because the Zora API returns images at
-  // different fields depending on coin vs profile vs creator wallet lookup.
+  // Fetch akita token image — only avatar used in this component.
+  // Tries coin media first, falls back to creator profile avatar.
   useEffect(() => {
     const run = async () => {
-      const updates: Record<string, string> = {}
-      await Promise.allSettled(
-        CREATOR_CAMEOS.map(async (c) => {
-          if (c.staticIcon) { updates[c.key] = c.staticIcon; return }
-          try {
-            // ── Path A: coin address → coin media / coin creatorProfile avatar
-            if (c.zoraAddress) {
-              const coin = await fetchZoraCoin(c.zoraAddress as `0x${string}`)
-              const coinAny = coin as any
-              const img =
-                coin?.mediaContent?.previewImage?.small ??
-                coin?.mediaContent?.previewImage?.medium ??
-                coin?.creatorProfile?.avatar?.previewImage?.small ??
-                coinAny?.image ??
-                coinAny?.metadata?.image
-              if (img) { updates[c.key] = img; return }
+      try {
+        const coin = await fetchZoraCoin(AKITA_ADDRESS)
+        const coinAny = coin as any
+        const img =
+          coin?.mediaContent?.previewImage?.small ??
+          coin?.mediaContent?.previewImage?.medium ??
+          coin?.creatorProfile?.avatar?.previewImage?.small ??
+          coinAny?.image ??
+          coinAny?.metadata?.image
+        if (img) { setCameoIcons({ akita: img }); return }
 
-              // A2: coin has a creatorAddress → look up that profile's avatar
-              const creatorAddr = coin?.creatorAddress
-              if (creatorAddr) {
-                const creatorProfile = await fetchZoraProfile(creatorAddr)
-                const avatar =
-                  creatorProfile?.avatar?.small ??
-                  creatorProfile?.avatar?.medium
-                if (avatar) { updates[c.key] = avatar; return }
-              }
-            }
-
-            // ── Path B: handle → profile avatar (direct, most reliable)
-            if (c.zoraHandle) {
-              const profile = await fetchZoraProfile(c.zoraHandle)
-              const avatar =
-                profile?.avatar?.small ??
-                profile?.avatar?.medium
-              if (avatar) { updates[c.key] = avatar; return }
-
-              // B2: profile has a creator coin → coin's media image
-              const coinAddr = profile?.creatorCoin?.address
-              if (coinAddr) {
-                const coin = await fetchZoraCoin(coinAddr as `0x${string}`)
-                const coinAny = coin as any
-                const img =
-                  coin?.mediaContent?.previewImage?.small ??
-                  coinAny?.image ??
-                  coin?.creatorProfile?.avatar?.previewImage?.small
-                if (img) { updates[c.key] = img; return }
-              }
-            }
-          } catch {
-            // silently fall back to coloured initials circle
-          }
-        }),
-      )
-      setCameoIcons((prev) => ({ ...prev, ...updates }))
+        const creatorAddr = coin?.creatorAddress
+        if (creatorAddr) {
+          const profile = await fetchZoraProfile(creatorAddr)
+          const avatar = profile?.avatar?.small ?? profile?.avatar?.medium
+          if (avatar) setCameoIcons({ akita: avatar })
+        }
+      } catch {
+        // fall back to app-icon.svg
+      }
     }
     run()
   }, [])
 
-  const shareTokenLogo = cameoIcons['akita'] ?? '/app-icon.svg'
+  const normalizedShareTokens = shareTokens.includes(SHARE_TOKEN_SYMBOL)
+    ? shareTokens
+    : `${shareTokens} ${SHARE_TOKEN_SYMBOL}`
+  const displayDepositTokens = depositTokens
+  const displayShareAmount = stripShareTokenSymbol(normalizedShareTokens) || depositTokens
+  const totalShareCount = parseTokenAmount(normalizedShareTokens) || SHARE_DISTRIBUTION_TOTAL
+  const shareTokenLogo = '/akita-share-token.png'
 
   // HUD / camera
   const progressH = useTransform(scroll, [0, 1], ['0%', '100%'])
@@ -788,7 +1003,12 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
   const depositNodeScale = useTransform(scroll, [0.34, 0.37, 0.42], [1.20, 1.04, 1])
   // Card fades in once, then PERSISTS through stage 4 — it IS the principal card.
   const depositNodeOpacity = useTransform(scroll, [0.34, 0.38], [0, 1])
-  const depositNodeTransform = useMotionTemplate`translate3d(-50%, ${topDotY}px, 0px) scale(${depositNodeScale})`
+  // During Stage 4, dock the summary card upward so the strategy grid owns the center.
+  const stage4CardLift = useTransform(scroll, [0.76, 0.82, 0.90], [0, -128, -208])
+  const stage4CardScale = useTransform(scroll, [0.76, 0.82, 0.90], [1, 0.86, 0.68])
+  const depositNodeY = useTransform(() => topDotY.get() + stage4CardLift.get())
+  const depositNodeVisualScale = useTransform(() => depositNodeScale.get() * stage4CardScale.get())
+  const depositNodeTransform = useMotionTemplate`translate3d(-50%, ${depositNodeY}px, 0px) scale(${depositNodeVisualScale})`
 
   // Vault — rockets toward camera while off-screen, slows to a crawl once visible,
   // then settles into the vault anchor with a tiny overshoot before the deposit sequence
@@ -821,9 +1041,6 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
   const vaultTopProgress  = useTransform(scroll, [0.28, 0.32], [0, 1])
   const vaultWallOp       = useTransform(scroll, [0.18, 0.22, 0.74, 0.78], [0, 1, 1, 0])
 
-  // Share Zorb reflection — materialises after deposit fill, holds at FULL opacity through the
-  // zoom peak (0.77) so the dive visually enters the reflection, then snaps out quickly.
-  const shareZorbOp = useTransform(scroll, [0.48, 0.52, 0.77, 0.80], [0, 1, 1, 0])
 
   // Coin entry glow — fires when deposit fill completes, sustains through all distributions,
   // fades as the dive begins
@@ -842,7 +1059,9 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
   // ── Distribution fan chart — one curved path + card revealed at a time ─
   // Fades in immediately after deposit fill completes (0.48), holds through all 3 paths,
   // fades just before zoom peak (0.74) so cards clear before the camera rushes in.
-  const distSectionOp = useTransform(scroll, [0.48, 0.53, 0.74, 0.78], [0, 1, 1, 0])
+  const distSectionOp = useTransform(scroll, [0.48, 0.53, 0.72, 0.76], [0, 1, 1, 0])
+  const distCheckpointOp = useTransform(scroll, [0.56, 0.61, 0.72, 0.76], [0, 1, 1, 0])
+  const distCheckpointWidth = useTransform(scroll, [0.52, 0.70], ['0%', '100%'])
 
   // Distribution paths cascade in — each path starts as the previous one finishes.
   // All 3 complete by 0.70 (2% earlier than before). Checkpoint 3 fires at 0.70.
@@ -882,43 +1101,36 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
   const remainingMinted = useTransform(
     [depositFillPct, orbitTrav0, orbitTrav1, orbitTrav2],
     ([fill, t0, t1, t2]) => {
-      const minted = Math.round((fill as number) * 50_000_000)
+      const minted = Math.round((fill as number) * totalShareCount)
       const distributed = Math.round(
-        (t0 as number) * 20_000_000 +
-        (t1 as number) * 20_000_000 +
-        (t2 as number) * 10_000_000,
+        (t0 as number) * SHARE_DISTRIBUTION_AMOUNTS[0] +
+        (t1 as number) * SHARE_DISTRIBUTION_AMOUNTS[1] +
+        (t2 as number) * SHARE_DISTRIBUTION_AMOUNTS[2],
       )
       return Math.max(0, minted - distributed)
     },
   )
   const depositFillWidth = useTransform(depositFillPct, v => `${(Math.min(v, 1) * 100).toFixed(1)}%`)
-  // Zorb fill overlay — GPU-only scaleY from bottom (no clipPath string generation)
-  const _zorbFillScaleBase = useTransform(depositFillPct, v => Math.min(v, 1))
-  const zorbFillScale = useTransform(_zorbFillScaleBase, v => prefersReducedMotion ? 1 : v)
-  const _zorbFillOpBase = useTransform(scroll, [0.32, 0.36, 0.46, 0.52], [0, 0.65, 0.65, 0])
-  const zorbFillOp = useTransform(_zorbFillOpBase, v => prefersReducedMotion ? 0 : v)
   // "Vault initiated" confirmation badge — flashes after fill completes
   const vaultInitOp = useTransform(scroll, [0.48, 0.51, 0.53, 0.58], [0, 1, 1, 0])
 
   // (APY reveal removed — allocation percentages are shown permanently)
 
   // Per-card distribution counters — MotionValues only, no React state
-  const distCount0MV = useTransform(scroll, [0.50, 0.58], [0, 20_000_000])
-  const distCount1MV = useTransform(scroll, [0.58, 0.65], [0, 20_000_000])
-  const distCount2MV = useTransform(scroll, [0.65, 0.70], [0, 10_000_000])
+  const distCount0MV = useTransform(scroll, [0.50, 0.58], [0, SHARE_DISTRIBUTION_AMOUNTS[0]])
+  const distCount1MV = useTransform(scroll, [0.58, 0.65], [0, SHARE_DISTRIBUTION_AMOUNTS[1]])
+  const distCount2MV = useTransform(scroll, [0.65, 0.70], [0, SHARE_DISTRIBUTION_AMOUNTS[2]])
 
-  // Freefall: Zorb descends from high in the frame, gaining speed as it approaches.
-  // -32vh start → overshoot +4.5vh → snap to 0 on landing. Rotation unwinds simultaneously.
-  // Slightly faster landing (0.16 vs 0.18) to reach the deposit phase sooner.
-  // reduced-motion: skip freefall animation, Zorb appears at rest position immediately.
-  const _zorbFallYBase = useTransform(scroll, [0, 0.05, 0.10, 0.13, 0.16], [-32, -22, -2, 4.5, 0])
-  const zorbFallY = useTransform(_zorbFallYBase, v => prefersReducedMotion ? 0 : v)
-  const zorbFallRotZ = useTransform(scroll, [0, 0.05, 0.10, 0.16], [-18, -12, -2.5, 0])
+  // Vault cage entry freefall: drops in from -32vh, overshoots +4.5vh, snaps to rest.
+  // Rotation unwinds simultaneously for a natural arc. Reduced-motion: skip, appear at rest.
+  const _vaultFallYBase = useTransform(scroll, [0, 0.05, 0.10, 0.13, 0.16], [-32, -22, -2, 4.5, 0])
+  const vaultFallY = useTransform(_vaultFallYBase, v => prefersReducedMotion ? 0 : v)
+  const vaultFallRotZ = useTransform(scroll, [0, 0.05, 0.10, 0.16], [-18, -12, -2.5, 0])
 
   const vaultTransform = useMotionTemplate`
-    translate3d(-50%, ${zorbFallY}vh, ${vaultZ}px)
+    translate3d(-50%, ${vaultFallY}vh, ${vaultZ}px)
     scale(${vaultScale})
-    rotateZ(${zorbFallRotZ}deg)
+    rotateZ(${vaultFallRotZ}deg)
   `
 
   // Cube interior POV — fades in during the vault-rush moment, then holds steady through all of stage 4.
@@ -952,40 +1164,39 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
 
 
   // Deploy chamber — rises from depth after the dive clears Stage 3.
-  // Stage 4 from 0.78→1.0 = generous scroll runway.
-  // Title and pill lock in before the fan cards start unfolding.
-  const deployZ = useTransform(scroll, [0.78, 0.85, 1.0], [-240, 0, 0])
-  const deployOpacity = useTransform(scroll, [0.78, 0.85], [0, 1])
-  const deployBlur = useTransform(scroll, [0.78, 0.85, 1.0], [18, 0, 0])
+  // Desktop gets a slightly earlier Stage 4 reveal so the deploy chamber and first
+  // strategy card land before the fan feels late, while mobile keeps the existing beat.
+  const deployZ = useTransform(scroll, stage4Timing.deployZ, [-240, 0, 0])
+  const deployOpacity = useTransform(scroll, stage4Timing.deployOpacity, [0, 1])
+  const deployBlur = useTransform(scroll, stage4Timing.deployBlur, [18, 0, 0])
   const deployTransform = useMotionTemplate`translate3d(0px, 0px, ${deployZ}px)`
   const deployFilter = useMotionTemplate`blur(${deployBlur}px)`
-  const deployTitleOp = useTransform(scroll, [0.80, 0.87], [0, 1])
-  const deployTitleY = useTransform(scroll, [0.80, 0.87], [28, 0])
+  const deployTitleOp = useTransform(scroll, stage4Timing.deployTitle, [0, 1])
+  const deployTitleY = useTransform(scroll, stage4Timing.deployTitle, [28, 0])
 
   // (Principal card timing kept here for future use — deploy title/chamber serve this role.)
 
-  // Stage 4 fan — cards stagger in starting at 0.86.
-  // Stage 4 spans 0.78-1.0 (22% of scroll) giving each card a ~0.06 window.
-  // s4cNo (linear 0→1) doubles as the raw input for s4pN (smoothstepped) — saves 4 MV objects.
-  const s4c0o = useTransform(scroll, [0.85, 0.92], [0, 1])
+  // Stage 4 fan timing stays data-driven so desktop can reveal slightly earlier
+  // without changing the mobile composition that now reads cleanly.
+  const s4c0o = useTransform(scroll, stage4Fan0.opacity, [0, 1])
   const s4p0 = useTransform(s4c0o, smoothstep)
-  const s4d0 = useTransform(scroll, [0.87, 0.94], [0, 1])
-  const s4c0y = useTransform(scroll, [0.85, 0.92], [28, 0])
+  const s4d0 = useTransform(scroll, stage4Fan0.destination, [0, 1])
+  const s4c0y = useTransform(scroll, stage4Fan0.opacity, [28, 0])
 
-  const s4c1o = useTransform(scroll, [0.89, 0.96], [0, 1])
+  const s4c1o = useTransform(scroll, stage4Fan1.opacity, [0, 1])
   const s4p1 = useTransform(s4c1o, smoothstep)
-  const s4d1 = useTransform(scroll, [0.91, 0.97], [0, 1])
-  const s4c1y = useTransform(scroll, [0.89, 0.96], [28, 0])
+  const s4d1 = useTransform(scroll, stage4Fan1.destination, [0, 1])
+  const s4c1y = useTransform(scroll, stage4Fan1.opacity, [28, 0])
 
-  const s4c2o = useTransform(scroll, [0.93, 0.98], [0, 1])
+  const s4c2o = useTransform(scroll, stage4Fan2.opacity, [0, 1])
   const s4p2 = useTransform(s4c2o, smoothstep)
-  const s4d2 = useTransform(scroll, [0.94, 1.0], [0, 1])
-  const s4c2y = useTransform(scroll, [0.93, 0.98], [28, 0])
+  const s4d2 = useTransform(scroll, stage4Fan2.destination, [0, 1])
+  const s4c2y = useTransform(scroll, stage4Fan2.opacity, [28, 0])
 
-  const s4c3o = useTransform(scroll, [0.96, 1.0], [0, 1])
+  const s4c3o = useTransform(scroll, stage4Fan3.opacity, [0, 1])
   const s4p3 = useTransform(s4c3o, smoothstep)
-  const s4d3 = useTransform(scroll, [0.97, 1.0], [0, 1])
-  const s4c3y = useTransform(scroll, [0.96, 1.0], [28, 0])
+  const s4d3 = useTransform(scroll, stage4Fan3.destination, [0, 1])
+  const s4c3y = useTransform(scroll, stage4Fan3.opacity, [28, 0])
 
   return (
     <>
@@ -1149,7 +1360,7 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
 
             {/* Deposit card — starts at 32vh (above vault) and descends to vault level */}
             <motion.div
-              className="absolute left-1/2 top-[32vh] z-30"
+              className={`absolute left-1/2 top-[32vh] z-30 ${(cardPhase === 2 || cardPhase === 3) ? 'hidden sm:block' : ''}`}
               style={{
                 transform: depositNodeTransform,
                 opacity: depositNodeOpacity,
@@ -1159,16 +1370,27 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
                   Phases swap via a venetian-blind clipPath wipe (top → bottom reveal).
                   Each face is driven by React state so transitions are intentional,
                   not a continuous scroll-position cross-fade. */}
-              <div style={{ perspective: '700px', width: 'min(264px, 90vw)' }}>
+              <div
+                style={{
+                  perspective: '700px',
+                  width: cardPhase === 2
+                    ? 'clamp(272px, 78vw, 360px)'
+                    : cardPhase === 3
+                    ? 'clamp(176px, 46vw, 228px)'
+                    : depositComplete || cardPhase !== 1
+                    ? 'clamp(248px, 68vw, 340px)'
+                    : 'min(280px, 90vw)',
+                }}
+              >
                 <div
                   className="relative overflow-hidden rounded-2xl"
                   style={{
                     transform: 'rotateY(-3deg)',
                     transition: 'transform 0.5s cubic-bezier(0.22,1,0.36,1)',
-                    background: 'rgba(7,7,19,0.90)',
+                    background: 'rgba(7,7,19,0.96)',
                     border: '1px solid rgba(255,255,255,0.08)',
                     backdropFilter: prefersReducedMotion ? 'none' : 'blur(20px)',
-                    boxShadow: '0 8px 32px -8px rgba(0,0,0,0.65), inset 0 1px 0 rgba(255,255,255,0.04)',
+                    boxShadow: '0 10px 40px -10px rgba(0,0,0,0.78), inset 0 1px 0 rgba(255,255,255,0.04), inset 0 0 0 1px rgba(4,6,16,0.42)',
                   }}
                   onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.transform = 'rotateY(0deg)')}
                   onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.transform = 'rotateY(-3deg)')}
@@ -1196,35 +1418,72 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
                         animate={{ clipPath: 'inset(0% 0% 0% 0%)' }}
                         exit={{ clipPath: 'inset(100% 0% 0% 0%)' }}
                         transition={{ duration: 0.30, ease: [0.22, 1, 0.36, 1] }}
-                        className="flex flex-col gap-2.5 px-4 py-4"
+                        className="flex flex-col gap-2 px-3 py-3 sm:gap-2.5 sm:px-4 sm:py-4"
                       >
                         {cardPhase === 1 && (
                           <>
                             {/* Token label */}
                             <div className="flex items-center gap-1.5">
                               {cameoIcons['akita'] ? (
-                                <img src={cameoIcons['akita']} alt="" className="h-3.5 w-3.5 rounded-full object-cover opacity-70" loading="lazy" />
+                                <img src={cameoIcons['akita']} alt="akita creator coin" className="h-3.5 w-3.5 rounded-full object-cover opacity-70" loading="lazy" />
                               ) : (
                                 <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-[4px] font-black text-white" style={{ background: '#f97316' }}>AK</span>
                               )}
-                              <span className="font-mono text-[7px] uppercase tracking-[0.24em]" style={{ color: 'rgba(249,115,22,0.65)' }}>
-                                {depositComplete ? 'akita · deposited ✓' : 'akita · pouring into vault'}
+                              <span className="font-mono text-[6px] uppercase tracking-[0.22em] sm:text-[7px] sm:tracking-[0.24em]" style={{ color: 'rgba(249,115,22,0.65)' }}>
+                                {depositComplete ? 'vault mint confirmed' : 'akita · pouring into vault'}
                               </span>
-                            </div>
-
-                            {/* Static deposit amount — user arrives with 50M, not counting up */}
-                            <div className="font-mono text-[28px] font-black leading-none tracking-tight text-white">
-                              50,000,000
                             </div>
 
                             {depositComplete ? (
-                              /* Mint confirmation */
-                              <span className="font-mono text-[7px] tracking-[0.16em]" style={{ color: 'rgba(57,255,20,0.80)' }}>
-                                50,000,000 ■AKITA minted ✓
-                              </span>
+                              <>
+                                <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] sm:items-end sm:gap-3">
+                                  <div className="flex min-w-0 flex-col gap-1.5">
+                                    <span className="font-mono text-[6px] uppercase tracking-[0.22em] sm:text-[7px] sm:tracking-[0.24em]" style={{ color: 'rgba(249,115,22,0.62)' }}>
+                                      akita deposit
+                                    </span>
+                                    <div className="font-mono font-black leading-none tracking-tight text-white" style={{ fontSize: 'clamp(0.96rem, 4.2vw, 1.45rem)' }}>
+                                      {displayDepositTokens}
+                                    </div>
+                                    <span className="font-mono text-[6px] tracking-[0.14em] sm:text-[7px] sm:tracking-[0.16em]" style={{ color: 'rgba(249,115,22,0.42)' }}>
+                                      creator coin deposited
+                                    </span>
+                                  </div>
+                                  <div className="h-px w-full bg-white/[0.07] sm:h-full sm:w-px" />
+                                  <div className="flex min-w-0 flex-col gap-1.5">
+                                    <div className="flex items-center gap-1.5">
+                                      <span
+                                        className="inline-flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-full"
+                                        style={{ border: '1px solid rgba(100,160,255,0.40)' }}
+                                      >
+                                        <img src={shareTokenLogo} alt={SHARE_TOKEN_ALT} className="h-full w-full object-cover" loading="lazy" />
+                                      </span>
+                                      <span className="font-mono text-[6px] uppercase tracking-[0.22em] sm:text-[7px] sm:tracking-[0.24em]" style={{ color: 'rgba(100,160,255,0.72)' }}>
+                                        {SHARE_TOKEN_SYMBOL} minted
+                                      </span>
+                                    </div>
+                                    <div className="font-mono font-black leading-none tracking-tight" style={{ color: 'rgba(120,175,255,1)', fontSize: 'clamp(0.96rem, 4.2vw, 1.45rem)' }}>
+                                      {displayShareAmount}
+                                    </div>
+                                    <span className="font-mono text-[6px] tracking-[0.14em] sm:text-[7px] sm:tracking-[0.16em]" style={{ color: 'rgba(100,160,255,0.42)' }}>
+                                      vault share token live
+                                    </span>
+                                  </div>
+                                </div>
+                                <div className="mt-1.5 flex flex-col gap-1.5 border-t border-white/[0.06] pt-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                                  <span className="font-mono text-[6px] tracking-[0.14em] sm:text-[7px] sm:tracking-[0.16em]" style={{ color: 'rgba(57,255,20,0.80)' }}>
+                                    {normalizedShareTokens} minted ✓
+                                  </span>
+                                  <span className="font-mono text-[6px] tracking-[0.14em] sm:text-[7px] sm:tracking-[0.16em]" style={{ color: 'rgba(255,255,255,0.30)' }}>
+                                    creators + holders aligned
+                                  </span>
+                                </div>
+                              </>
                             ) : (
                               /* Pour progress bar — drains left→right as akita flows into the vault */
                               <div className="flex flex-col gap-1.5">
+                                <div className="font-mono text-[28px] font-black leading-none tracking-tight text-white">
+                                  {displayDepositTokens}
+                                </div>
                                 <div className="overflow-hidden rounded-full bg-white/[0.05]" style={{ height: 2 }}>
                                   <motion.div
                                     className="h-full rounded-full"
@@ -1250,18 +1509,26 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
                                 className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center overflow-hidden rounded-full"
                                 style={{ border: '1px solid rgba(100,160,255,0.40)' }}
                               >
-                                <img src={shareTokenLogo} alt="" className="h-full w-full object-cover" loading="lazy" />
+                                <img src={shareTokenLogo} alt={SHARE_TOKEN_ALT} className="h-full w-full object-cover" loading="lazy" />
                               </span>
-                              <span className="font-mono text-[7px] uppercase tracking-[0.24em]" style={{ color: 'rgba(100,160,255,0.70)' }}>
-                                ■AKITA · distributing
-                              </span>
+                              <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
+                                <span className="font-mono text-[7px] uppercase tracking-[0.16em] sm:text-[7px] sm:tracking-[0.24em]" style={{ color: 'rgba(100,160,255,0.86)' }}>
+                                  share fan-out
+                                </span>
+                                <span className="font-mono text-[6px] uppercase tracking-[0.16em] text-white/45 sm:hidden">
+                                  live routing
+                                </span>
+                                <span className="hidden font-mono text-[7px] uppercase tracking-[0.24em] sm:inline" style={{ color: 'rgba(100,160,255,0.70)' }}>
+                                  {SHARE_TOKEN_SYMBOL} · distributing
+                                </span>
+                              </div>
                             </div>
                             <MotionNumber
                               value={remainingMinted}
-                              className="font-mono text-[28px] font-black leading-none tracking-tight block"
-                              style={{ color: 'rgba(120,175,255,1)' }}
+                              className="block font-mono font-black leading-none tracking-tight"
+                              style={{ color: 'rgba(120,175,255,1)', fontSize: 'clamp(2rem, 10vw, 28px)' }}
                             />
-                            <span className="font-mono text-[7px] tracking-[0.16em]" style={{ color: 'rgba(100,160,255,0.38)' }}>
+                            <span className="font-mono text-[6px] tracking-[0.14em] sm:text-[7px] sm:tracking-[0.16em]" style={{ color: 'rgba(100,160,255,0.38)' }}>
                               shares remaining to distribute
                             </span>
                           </>
@@ -1271,22 +1538,21 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
                           <>
                             <div className="flex items-center gap-1.5">
                               {cameoIcons['akita'] ? (
-                                <img src={cameoIcons['akita']} alt="" className="h-3.5 w-3.5 rounded-full object-cover opacity-70" loading="lazy" />
+                                <img src={cameoIcons['akita']} alt="akita creator coin" className="h-3.5 w-3.5 rounded-full object-cover opacity-70" loading="lazy" />
                               ) : (
                                 <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-[4px] font-black text-white" style={{ background: '#f97316' }}>AK</span>
                               )}
-                              <span className="font-mono text-[7px] uppercase tracking-[0.24em]" style={{ color: 'rgba(249,115,22,0.60)' }}>
+                              <span className="font-mono text-[6px] uppercase tracking-[0.20em] sm:text-[7px] sm:tracking-[0.24em]" style={{ color: 'rgba(249,115,22,0.60)' }}>
                                 akita · principal deployed
                               </span>
                             </div>
-                            {/* Same 28px as phase 1 — visual consistency across the card */}
-                            <div className="font-mono text-[28px] font-black leading-none tracking-tight text-white">
-                              50,000,000
+                            <div className="font-mono font-black leading-none tracking-tight text-white" style={{ fontSize: 'clamp(1.5rem, 8vw, 28px)' }}>
+                              {displayDepositTokens}
                             </div>
-                            <span className="font-mono text-[8px] tracking-[0.14em]" style={{ color: 'rgba(249,115,22,0.45)' }}>
+                            <span className="font-mono text-[7px] tracking-[0.14em]" style={{ color: 'rgba(249,115,22,0.45)' }}>
                               akita
                             </span>
-                            <span className="mt-1 font-mono text-[7px] tracking-[0.16em]" style={{ color: 'rgba(100,160,255,0.38)' }}>
+                            <span className="mt-1 font-mono text-[6px] tracking-[0.14em] sm:text-[7px] sm:tracking-[0.16em]" style={{ color: 'rgba(100,160,255,0.38)' }}>
                               4 yield strategies ↓
                             </span>
                           </>
@@ -1352,54 +1618,15 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
               landingFlash={landingFlash}
               zoraGreenFlash={zoraGreenFlash}
               coinEntryGlow={coinEntryGlow}
-              zorbFillScale={zorbFillScale}
-              zorbFillOp={zorbFillOp}
             />
 
-            {/* ── ■AKITA glass-floor reflection ──────────────────────────────────────
-                Lives in WORLD SPACE as a sibling to VaultScene — NOT inside it.
-                This means the worldScale zoom-in (0.73→0.76, 1.25→2.2×) carries it
-                toward the camera naturally, making Stage 3→4 read as "diving INTO the
-                minted ■AKITA Zorb." Z position stays at 0 (no dive animation).
-                Materialises after deposit completes (0.50), fades as dive begins (0.73). */}
-            <motion.div
-              className="pointer-events-none absolute z-20 flex flex-col items-center"
-              style={{ top: 'calc(44vh + 48px)', left: '50%', x: '-50%', width: 200, opacity: shareZorbOp }}
-              aria-hidden="true"
-            >
-              {/* Glowing mirror plane — marks the vault's glass floor / Zorb's bottom edge */}
-              <div
-                style={{
-                  width: '100%',
-                  height: 1,
-                  background: 'linear-gradient(90deg, transparent 0%, rgba(100,160,255,0.22) 8%, rgba(180,220,255,0.88) 28%, rgba(215,240,255,1.0) 50%, rgba(180,220,255,0.88) 72%, rgba(100,160,255,0.22) 92%, transparent 100%)',
-                  boxShadow: '0 0 10px 2.5px rgba(0,82,255,0.30)',
-                }}
-              />
-              {/* ■AKITA label — identity stamp between plane and reflection */}
-              <div className="mb-1 mt-1.5 flex items-center justify-center gap-1.5">
-                <span className="font-mono text-[8px] font-semibold" style={{ color: 'rgba(100,160,255,0.65)' }}>■AKITA</span>
-                <span className="h-px w-2.5 flex-shrink-0" style={{ background: 'rgba(100,160,255,0.28)' }} />
-                <span className="font-mono text-[7px]" style={{ color: 'rgba(100,160,255,0.38)' }}>minted</span>
-              </div>
-              {/* Gradient-masked reflected Zorb — same size=96 as original, vertically flipped */}
-              <div
-                style={{
-                  WebkitMaskImage: 'linear-gradient(to bottom, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.62) 20%, transparent 76%)',
-                  maskImage:       'linear-gradient(to bottom, rgba(0,0,0,0.62) 0%, rgba(0,0,0,0.62) 20%, transparent 76%)',
-                }}
-              >
-                {/* Vertical flip + blue-shift: hue-rotate 192° → electric blue-cyan */}
-                <div style={{ transform: 'scaleY(-1)', filter: 'hue-rotate(192deg) saturate(1.55) brightness(0.65)' }}>
-                  <ZorbViewer size={96} />
-                </div>
-              </div>
-            </motion.div>
 
             {/* Distribution fan chart */}
             <DistributionFan
               uid={uid}
               distSectionOp={distSectionOp}
+              checkpointOp={distCheckpointOp}
+              checkpointWidth={distCheckpointWidth}
               node0Op={node0Op} node1Op={node1Op} node2Op={node2Op}
               orbitTrav0={orbitTrav0} orbitTrav1={orbitTrav1} orbitTrav2={orbitTrav2}
               nodeGlow0={nodeGlow0} nodeGlow1={nodeGlow1} nodeGlow2={nodeGlow2}
@@ -1416,13 +1643,13 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
             {/* Deploy chamber */}
             <DeploySection
               uid={uid}
+              principalTokensLabel={displayDepositTokens}
               deployTransform={deployTransform}
               deployOpacity={deployOpacity}
               deployFilter={deployFilter}
               deployTitleOp={deployTitleOp}
               deployTitleY={deployTitleY}
               s4p0={s4p0} s4p1={s4p1} s4p2={s4p2} s4p3={s4p3}
-              s4pOp0={s4c0o} s4pOp1={s4c1o} s4pOp2={s4c2o} s4pOp3={s4c3o}
               s4d0={s4d0} s4d1={s4d1} s4d2={s4d2} s4d3={s4d3}
               s4c0o={s4c0o} s4c0y={s4c0y}
               s4c1o={s4c1o} s4c1y={s4c1y}
@@ -1431,7 +1658,7 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
             />
           </motion.div>
 
-          {/* Opening curtain — lifts as scene awakens, reveals Zorb emerging from darkness */}
+          {/* Opening curtain — lifts as scene awakens, vault descends from darkness */}
           <motion.div
             className="pointer-events-none absolute inset-0 z-50"
             style={{
@@ -1441,9 +1668,8 @@ export function VaultFlowScroll({ depositTokens: _depositTokens, shareTokens: _s
             aria-hidden="true"
           />
 
-          {/* Dive flash — camera punches through the Zorb surface at the deposit→distribution
-              transition. A radial white-to-blue burst centred on the sphere, selling the
-              "we are now inside the vault" moment before distributions appear.             */}
+          {/* Dive flash — full-screen burst as the vault rushes through the camera at the
+              Stage 3 → Stage 4 boundary, selling the "entered the vault" transition.      */}
           <motion.div
             className="pointer-events-none absolute inset-0 z-[49]"
             style={{

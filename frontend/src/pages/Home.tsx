@@ -63,32 +63,17 @@ export function Home() {
   return (
     <div className="relative">
       <PageMeta
-        title="4626.fun - Creator Vaults"
-        description="Deposit creator coins into vaults on Base. Earn from trading fees. Everyone earns together."
+        title="4626.fun — Creator Vaults on Base"
+        description="Deposit your creator coin once. Earn trading fees, yield, and lottery rewards — shared with every holder."
         canonicalPath="/"
       />
 
-      <div className="particles">
-        <div
-          className="absolute left-1/3 top-1/4 h-px w-px rounded-full bg-brand-primary"
-          style={{ animation: 'particle-float 8s ease-in-out infinite' }}
-        />
-        <div
-          className="absolute right-1/4 top-1/2 h-px w-px rounded-full bg-brand-primary/80"
-          style={{ animation: 'particle-float 10s ease-in-out infinite', animationDelay: '2s' }}
-        />
-        <div
-          className="absolute bottom-1/3 left-1/2 h-px w-px rounded-full bg-brand-primary/60"
-          style={{ animation: 'particle-float 12s ease-in-out infinite', animationDelay: '4s' }}
-        />
-      </div>
-
       <section className="cinematic-section no-divider-bottom !py-16 sm:!py-24 lg:!py-28 min-h-screen flex items-center justify-center relative z-10">
-        <div className="mx-auto max-w-7xl space-y-8 px-4 text-center sm:px-6 sm:space-y-14">
+        <div className="mx-auto max-w-4xl space-y-8 px-4 text-center sm:px-6 sm:space-y-12">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.8 }}
+            transition={{ duration: 0.6 }}
             className="inline-flex items-center gap-3"
           >
             <div className="status-active">
@@ -97,10 +82,9 @@ export function Home() {
           </motion.div>
 
           <motion.div
-            initial={{ opacity: 0, y: 30 }}
+            initial={{ opacity: 0, y: 24 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.8, delay: 0.428 }}
-            className="space-y-4 sm:space-y-6"
+            transition={{ duration: 0.7, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
           >
             <h1 className="headline text-4xl leading-[0.94] tracking-[-0.05em] sm:text-6xl md:text-7xl lg:text-[7.5rem] xl:text-[8.25rem]">
               Turn Creator Coins
@@ -112,18 +96,18 @@ export function Home() {
           <motion.p
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ duration: 0.8, delay: 0.856 }}
-            className="mx-auto max-w-2xl text-base font-light tracking-wide text-zinc-400 sm:text-xl"
+            transition={{ duration: 0.7, delay: 0.55 }}
+            className="mx-auto max-w-lg text-[15px] font-light leading-relaxed text-zinc-500 sm:text-lg"
           >
-            Deposit tokens · Earn from trades · Grow together
+            Deposit once. Earn from every trade, forever.
           </motion.p>
 
           {showJoinWaitlistCta ? (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ duration: 0.8, delay: 1.12 }}
-              className="pt-2 sm:pt-6"
+              transition={{ duration: 0.7, delay: 0.75 }}
+              className="pt-2 sm:pt-4"
             >
               <div className="contents">
                 {!waitlistInlineOpen ? (
@@ -146,7 +130,7 @@ export function Home() {
                           <Suspense
                             fallback={
                               <div className="rounded-[28px] border border-white/10 bg-black/45 px-4 py-6 text-sm text-zinc-300 shadow-[0_30px_120px_-48px_rgba(0,0,0,0.95)] backdrop-blur-md sm:px-6">
-                                Loading waitlist…
+                                Loading…
                               </div>
                             }
                           >
@@ -171,8 +155,8 @@ export function Home() {
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ duration: 0.8, delay: 1.12 }}
-              className="pt-2 sm:pt-6"
+              transition={{ duration: 0.7, delay: 0.75 }}
+              className="pt-2 sm:pt-4"
             >
               <Link to="/explore/creators" className={heroCtaClass}>
                 Explore Creators
@@ -181,28 +165,6 @@ export function Home() {
             </motion.div>
           ) : null}
         </div>
-
-        {/* Scroll cue — anchored to hero bottom, desktop only */}
-        <motion.div
-          className="pointer-events-none absolute inset-x-0 bottom-8 hidden flex-col items-center gap-2 sm:flex"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.8, delay: 1.6 }}
-        >
-          <motion.div
-            className="flex flex-col items-center gap-2"
-            animate={{ y: [0, 7, 0] }}
-            transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut' }}
-          >
-            <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.26em] text-zinc-600">
-              Scroll to explore
-            </p>
-            <div className="h-7 w-px rounded-full bg-gradient-to-b from-zinc-700/60 to-transparent" />
-            <svg width="9" height="5" viewBox="0 0 9 5" fill="none" aria-hidden="true">
-              <path d="M1 1L4.5 4L8 1" stroke="rgba(120,120,140,0.5)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </motion.div>
-        </motion.div>
 
         {/* Bottom fade — blends hero into VaultFlowScroll */}
         <div
@@ -214,48 +176,41 @@ export function Home() {
 
       <VaultFlowScroll depositTokens={DEFAULT_DEPOSIT_TOKENS} shareTokens={DEFAULT_SHARE_TOKENS} />
 
-      <section className="cinematic-section !py-10 sm:!py-24 lg:!py-32">
-        <div className="mx-auto max-w-5xl space-y-10 px-4 sm:space-y-14 sm:px-6">
-          {/* ── FAQ */}
+      {/* How it works — 4 clean steps */}
+      <section className="cinematic-section !py-14 sm:!py-24 lg:!py-28">
+        <div className="mx-auto max-w-4xl px-4 sm:px-6">
           <motion.div
-            initial={{ opacity: 0 }}
-            whileInView={{ opacity: 1 }}
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.8 }}
-            className="grid gap-8 rounded-[28px] bg-white/[0.015] p-5 sm:p-6 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)] lg:items-end lg:p-8"
+            transition={{ duration: 0.7 }}
+            className="flex flex-col items-center gap-12"
           >
-            <div className="space-y-4 sm:space-y-6">
-              <span className="label">FAQ</span>
-              <h2 className="headline mt-2 text-3xl sm:text-4xl lg:text-5xl">Read the full launch flow</h2>
-              <p className="max-w-2xl text-[13px] font-light text-zinc-500 sm:text-sm">
-                One concise walkthrough covering deposit mechanics, CCA launch, strategy allocation, and redemptions.
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {WAITLIST_JOURNEY_STEPS.map((step) => (
-                  <span
-                    key={step}
-                    className="rounded-full border border-white/8 bg-white/[0.03] px-3 py-1.5 text-[10px] font-medium uppercase tracking-[0.14em] text-zinc-300 sm:text-[11px]"
-                  >
-                    {step}
+            <div className="text-center space-y-2">
+              <span className="label">How it works</span>
+              <h2 className="headline text-2xl sm:text-3xl lg:text-4xl mt-2">Four steps. No complexity.</h2>
+            </div>
+
+            <div className="grid w-full grid-cols-2 gap-6 sm:grid-cols-4 sm:gap-8">
+              {WAITLIST_JOURNEY_STEPS.map((step, i) => (
+                <div key={step} className="flex flex-col gap-2">
+                  <span className="font-mono text-[9px] tracking-[0.22em] text-zinc-700">
+                    {String(i + 1).padStart(2, '0')}
                   </span>
-                ))}
-              </div>
+                  <h3 className="text-sm font-medium text-white">{step}</h3>
+                  <div className="h-px w-6 bg-white/10" />
+                </div>
+              ))}
             </div>
 
-            <div className="space-y-3 rounded-2xl border border-white/6 bg-black/10 p-4 sm:p-5 lg:max-w-sm lg:justify-self-end">
-              <div className="text-[10px] font-medium uppercase tracking-[0.16em] text-zinc-500">Before you launch</div>
-              <p className="text-sm font-light leading-relaxed text-zinc-400">
-                Use this as the final homepage step when you want the complete mechanics in one place.
-              </p>
-              <div>
-                <Link to="/faq/how-it-works" className="btn-primary btn-no-icon inline-flex items-center">
-                  How it works
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </div>
-            </div>
+            <Link
+              to="/faq/how-it-works"
+              className="btn-secondary btn-no-icon inline-flex items-center gap-2 text-xs"
+            >
+              Read the full launch flow
+              <ArrowRight className="h-3.5 w-3.5" />
+            </Link>
           </motion.div>
-
         </div>
       </section>
 
