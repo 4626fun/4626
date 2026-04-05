@@ -3,15 +3,12 @@ import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 
 import { PageMeta } from '@/components/seo/PageMeta'
-import {
-  DEFAULT_DEPOSIT_TOKENS,
-} from '@/components/home/launchConfig'
 import { VaultFlowRoot } from '@/components/home/vault-flow/VaultFlowRoot'
+import { STORY_CONTENT } from '@/components/home/vault-flow/model/storyContent'
 import { getHostMode } from '@/lib/host'
-import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 
-const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}AKITA`
-const DEFAULT_SHARE_TOKENS = `${DEFAULT_DEPOSIT_TOKENS} ${SHARE_TOKEN}`
+const DEFAULT_DEPOSIT_TOKENS = STORY_CONTENT.defaultDepositTokens
+const DEFAULT_SHARE_TOKENS = `${DEFAULT_DEPOSIT_TOKENS} ${STORY_CONTENT.shareTokenSymbol}`
 const WAITLIST_JOURNEY_STEPS = ['Deposit', 'CCA launch', 'Allocate', 'Redeem'] as const
 
 export function Home() {

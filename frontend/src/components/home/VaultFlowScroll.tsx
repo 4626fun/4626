@@ -14,14 +14,17 @@ import {
 } from 'framer-motion'
 
 import { fetchZoraCoin, fetchZoraProfile } from '@/lib/zora/client'
-import { SHARE_DISTRIBUTION_ROWS, STRATEGY_CARDS } from './launchConfig'
-import { getVaultFlowStage4TimingPreset } from './vaultFlowStageTimings'
+import { STORY_CONTENT } from './vault-flow/model/storyContent'
+import { deriveStoryState, type StoryState } from './vault-flow/model/storyClock'
+import { getVaultFlowStage4TimingPreset } from './vault-flow/model/stage4Timings'
+import { DesktopDistributionHandoffScene } from './vault-flow/scenes/DesktopDistributionHandoffScene'
 
 const AKITA_ADDRESS = '0x5b674196812451b7cec024fe9d22d2c0b172fa75' as const
 
 type Props = {
   depositTokens: string
   shareTokens: string
+  hideLegacyDistribution?: boolean
 }
 
 // SVG flow geometry — 800 × 120 viewBox, source at centre-top
@@ -61,6 +64,29 @@ const SCRAMBLE_CHARS = ['●', '■', '▲', '◆', '○', '□', '△', '◊', 
 const SHARE_TOKEN_SYMBOL = '■AKITA'
 const SHARE_TOKEN_ALT = '■AKITA share token'
 const SHARE_TOKEN_BADGE_SRC = '/akita-share-token-badge.webp'
+
+const SHARE_DISTRIBUTION_ROWS = STORY_CONTENT.distribution.map((row) => ({
+  title: row.title,
+  percent: row.percent,
+  numericPercent: row.numericPercent,
+  amount: row.amount,
+  route: row.route,
+  description: row.purposeCopy,
+  icon: row.icon,
+}))
+
+const STRATEGY_CARDS = STORY_CONTENT.strategies.map((card) => ({
+  label: card.label,
+  percent: card.percent,
+  numericPercent: card.numericPercent,
+  amount: card.amount,
+  apy: card.apy,
+  route: card.route,
+  description: card.purposeCopy,
+  icon: card.icon,
+  iconAlt: card.iconAlt,
+  iconClassName: card.iconClassName,
+}))
 
 // Precomputed star-field: 42 hand-placed white dots over a 900×600 tile.
 // Used as a background-image so it repeats seamlessly and costs zero JS.
@@ -865,7 +891,11 @@ const DeploySection = memo(function DeploySection({
   )
 })
 
-export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
+export function VaultFlowScroll({
+  depositTokens,
+  shareTokens,
+  hideLegacyDistribution = false,
+}: Props) {
   const uid = useId().replace(/:/g, '')
   const outerRef = useRef<HTMLDivElement>(null)
   // Respects the OS/browser reduced-motion preference to skip expensive camera moves
@@ -890,6 +920,10 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
 
   const [activeStageIdx, setActiveStageIdx] = useState(0)
   const activeStageRef = useRef(0)
+  const [desktopStoryState, setDesktopStoryState] = useState<StoryState>(() =>
+    deriveStoryState(0, 'desktop'),
+  )
+  const desktopStoryStateRef = useRef<StoryState>(desktopStoryState)
   // depositComplete is state (not a ref) so the card label updates correctly at the
   // hard-stop pause between v=0.48 and v=0.54 when cardPhase is still 1.
   const [depositComplete, setDepositComplete] = useState(false)
@@ -929,6 +963,19 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const [cardPhase, setCardPhase] = useState<1 | 2 | 3>(1)
 
   useMotionValueEvent(scroll, 'change', (v) => {
+    const nextStoryState = deriveStoryState(v, 'desktop')
+    const prevStoryState = desktopStoryStateRef.current
+    desktopStoryStateRef.current = nextStoryState
+    if (
+      nextStoryState.beat !== prevStoryState.beat ||
+      nextStoryState.phase !== prevStoryState.phase ||
+      nextStoryState.allocationRepresentation !== prevStoryState.allocationRepresentation ||
+      nextStoryState.milestonesHard.loopActive !== prevStoryState.milestonesHard.loopActive ||
+      nextStoryState.milestonesSoft.reEntryHintVisible !== prevStoryState.milestonesSoft.reEntryHintVisible
+    ) {
+      setDesktopStoryState(nextStoryState)
+    }
+
     // Ref guard: only setState when stage actually changes — eliminates per-frame
     // React reconciliation calls during continuous scrolling.
     const nextStage = v < 0.30 ? 0 : v < 0.52 ? 1 : v < 0.74 ? 2 : 3
@@ -1715,22 +1762,31 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
 
 
             {/* Distribution fan chart */}
-            <DistributionFan
-              uid={uid}
-              distSectionOp={distSectionOp}
-              checkpointOp={distCheckpointOp}
-              checkpointWidth={distCheckpointWidth}
-              node0Op={node0Op} node1Op={node1Op} node2Op={node2Op}
-              orbitTrav0={orbitTrav0} orbitTrav1={orbitTrav1} orbitTrav2={orbitTrav2}
-              nodeGlow0={nodeGlow0} nodeGlow1={nodeGlow1} nodeGlow2={nodeGlow2}
-              distGreen0={distGreen0} distGreen1={distGreen1} distGreen2={distGreen2}
-              distDotOp0={distDotOp0} distDotOp1={distDotOp1} distDotOp2={distDotOp2}
-              dist0DotX={dist0DotX} dist0DotY={dist0DotY}
-              dist1DotY={dist1DotY}
-              dist2DotX={dist2DotX} dist2DotY={dist2DotY}
-              dist0CardY={dist0CardY} dist1CardY={dist1CardY} dist2CardY={dist2CardY}
-              distCount0MV={distCount0MV} distCount1MV={distCount1MV} distCount2MV={distCount2MV}
-            />
+            {!hideLegacyDistribution ? (
+              <DistributionFan
+                uid={uid}
+                distSectionOp={distSectionOp}
+                checkpointOp={distCheckpointOp}
+                checkpointWidth={distCheckpointWidth}
+                node0Op={node0Op} node1Op={node1Op} node2Op={node2Op}
+                orbitTrav0={orbitTrav0} orbitTrav1={orbitTrav1} orbitTrav2={orbitTrav2}
+                nodeGlow0={nodeGlow0} nodeGlow1={nodeGlow1} nodeGlow2={nodeGlow2}
+                distGreen0={distGreen0} distGreen1={distGreen1} distGreen2={distGreen2}
+                distDotOp0={distDotOp0} distDotOp1={distDotOp1} distDotOp2={distDotOp2}
+                dist0DotX={dist0DotX} dist0DotY={dist0DotY}
+                dist1DotY={dist1DotY}
+                dist2DotX={dist2DotX} dist2DotY={dist2DotY}
+                dist0CardY={dist0CardY} dist1CardY={dist1CardY} dist2CardY={dist2CardY}
+                distCount0MV={distCount0MV} distCount1MV={distCount1MV} distCount2MV={distCount2MV}
+              />
+            ) : null}
+
+            {hideLegacyDistribution ? (
+              <DesktopDistributionHandoffScene
+                state={desktopStoryState}
+                content={STORY_CONTENT}
+              />
+            ) : null}
 
 
             {/* Deploy chamber */}

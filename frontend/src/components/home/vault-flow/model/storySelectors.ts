@@ -11,7 +11,39 @@
 import type { StoryState } from './storyClock'
 import type { FlowProfile } from './flowProfile'
 import { FLOW_PROFILE_CONFIGS } from './flowProfile'
-import type { AllocationRepresentation, StoryFocus } from './storySemantics'
+import type { AllocationRepresentation, StoryBeatId, StoryFocus } from './storySemantics'
+
+// ── Generic beat / phase selectors (renderer contract) ───────────────────────
+
+export const isBeat = (s: StoryState, beat: StoryBeatId): boolean =>
+  s.beat === beat
+
+export const isPhase = (
+  s: StoryState,
+  phase: StoryState['phase'],
+): boolean => s.phase === phase
+
+export const isEnterPhase = (s: StoryState): boolean =>
+  isPhase(s, 'enter')
+
+export const isHoldPhase = (s: StoryState): boolean =>
+  isPhase(s, 'hold')
+
+export const isExitPhase = (s: StoryState): boolean =>
+  isPhase(s, 'exit')
+
+export function getPhaseLabel(
+  s: StoryState,
+): 'entering' | 'active' | 'transitioning' {
+  switch (s.phase) {
+    case 'enter':
+      return 'entering'
+    case 'hold':
+      return 'active'
+    case 'exit':
+      return 'transitioning'
+  }
+}
 
 // ── Semantic selectors (hard milestones) ─────────────────────────────────────
 
@@ -41,10 +73,16 @@ export const isLoopActive = (s: StoryState): boolean =>
 // ── Beat-presence selectors ──────────────────────────────────────────────────
 
 export const isValueSourceVisible = (s: StoryState): boolean =>
-  s.beat === 'valueFlowsIn'
+  isBeat(s, 'valueFlowsIn')
 
 export const isDistributionVisible = (s: StoryState): boolean =>
-  s.beat === 'distributionMeaningful'
+  isBeat(s, 'distributionMeaningful')
+
+export const isDeployStrategiesVisible = (s: StoryState): boolean =>
+  isBeat(s, 'deployStrategies')
+
+export const isEarningTogetherVisible = (s: StoryState): boolean =>
+  isBeat(s, 'earningTogether')
 
 // ── Choreography selectors (internal to distributionMeaningful) ───────────────
 // These are choreography helpers only — NOT semantic milestones.
@@ -55,11 +93,11 @@ export const isDistributionComplete = (s: StoryState): boolean =>
   s.milestonesHard.allocationEncoded
 
 export const isHandoffActive = (s: StoryState): boolean =>
-  s.beat === 'distributionMeaningful' &&
+  isBeat(s, 'distributionMeaningful') &&
   (s.allocationRepresentation === 'payloads' || s.allocationRepresentation === 'receivingSegments')
 
 export const isSealReady = (s: StoryState): boolean =>
-  s.beat === 'distributionMeaningful' && s.allocationRepresentation === 'unifiedFace'
+  isBeat(s, 'distributionMeaningful') && s.allocationRepresentation === 'unifiedFace'
 
 // ── Soft milestone selectors ─────────────────────────────────────────────────
 

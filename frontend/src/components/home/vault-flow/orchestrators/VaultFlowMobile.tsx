@@ -16,6 +16,10 @@ import {
   isLoopActive,
   isReEntryHintVisible,
   isDistributionFullyVisible,
+  isBeat,
+  getPhaseLabel,
+  isDeployStrategiesVisible,
+  isEarningTogetherVisible,
 } from '../model/storySelectors'
 import type { StoryRendererProps } from '../VaultFlowRoot'
 import type { StoryBeatId } from '../model/storySemantics'
@@ -87,7 +91,7 @@ function MobileBeatCard({ state, content }: { state: StoryState; content: StoryR
         </p>
 
         {/* Distribution rows — shown during distributionMeaningful */}
-        {beat === 'distributionMeaningful' && isDistributionFullyVisible(state) && (
+        {isBeat(state, 'distributionMeaningful') && isDistributionFullyVisible(state) && (
           <div className="mt-3 space-y-1.5">
             {content.distribution.map((dest, i) => (
               <div key={i} className="flex items-center justify-between">
@@ -111,7 +115,7 @@ function MobileBeatCard({ state, content }: { state: StoryState; content: StoryR
         )}
 
         {/* Strategy rows — shown during deployStrategies */}
-        {beat === 'deployStrategies' && (
+        {isDeployStrategiesVisible(state) && (
           <div className="mt-3 space-y-1.5">
             {content.strategies.map((s, i) => (
               <div key={i} className="flex items-center justify-between">
@@ -126,7 +130,7 @@ function MobileBeatCard({ state, content }: { state: StoryState; content: StoryR
         )}
 
         {/* Earning together state */}
-        {beat === 'earningTogether' && (
+        {isEarningTogetherVisible(state) && (
           <div className="mt-3">
             <div
               className="rounded-lg px-3 py-2 text-center"
@@ -264,7 +268,7 @@ export function VaultFlowMobile({
 
         {/* Phase label */}
         <div className="mb-4 font-mono text-[8px] uppercase tracking-[0.28em] text-zinc-700">
-          {state.phase === 'enter' ? 'entering' : state.phase === 'hold' ? 'active' : 'transitioning'}
+          {getPhaseLabel(state)}
         </div>
 
         {/* Beat content — animates between beats */}

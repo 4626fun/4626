@@ -13,6 +13,8 @@ import { useMotionValueEvent } from 'framer-motion'
 
 import { deriveStoryState } from '../model/storyClock'
 import {
+  isBeat,
+  isHoldPhase,
   isLoopActive,
   isDistributionVisible,
   getVisibleSystems,
@@ -42,7 +44,7 @@ export function VaultFlowDesktop({
     // Validate invariants in development
     if (process.env.NODE_ENV === 'development') {
       // loopActive must not be false while earningTogether is held
-      if (state.beat === 'earningTogether' && state.phase === 'hold') {
+      if (isBeat(state, 'earningTogether') && isHoldPhase(state)) {
         if (!isLoopActive(state)) {
           console.warn('[VaultFlowDesktop] loopActive should be true at earningTogether hold phase')
         }
@@ -69,6 +71,7 @@ export function VaultFlowDesktop({
     <VaultFlowScroll
       depositTokens={depositTokens}
       shareTokens={shareTokens}
+      hideLegacyDistribution
     />
   )
 }

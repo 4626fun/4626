@@ -31,6 +31,7 @@ export type StoryContent = {
   shareTokenBadgeSrc: string
   defaultDepositTokens: string
   defaultAuctionWindow: string
+  defaultAuctionEpoch: string
   distribution: readonly DistributionDestination[]
   strategies: readonly StrategyCard[]
   blendedApy: string
@@ -41,6 +42,7 @@ export const STORY_CONTENT: StoryContent = {
   shareTokenBadgeSrc: '/akita-share-token-badge.webp',
   defaultDepositTokens: '50,000,000',
   defaultAuctionWindow: '7 days',
+  defaultAuctionEpoch: 'Thursday 00:00 UTC',
 
   distribution: [
     {

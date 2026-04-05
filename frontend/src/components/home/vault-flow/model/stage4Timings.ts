@@ -45,5 +45,8 @@ export const DESKTOP_STAGE4_TIMING: VaultFlowStage4TimingPreset = {
   ],
 }
 
-export const getVaultFlowStage4TimingPreset = (isDesktop: boolean): VaultFlowStage4TimingPreset =>
+export const getVaultFlowStage4TimingPreset = (
+  isDesktop: boolean,
+): VaultFlowStage4TimingPreset =>
   isDesktop ? DESKTOP_STAGE4_TIMING : MOBILE_STAGE4_TIMING
+

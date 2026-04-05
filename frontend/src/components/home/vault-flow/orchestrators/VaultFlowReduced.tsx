@@ -14,6 +14,10 @@ import {
   isLoopActive,
   isReEntryHintVisible,
   isDistributionFullyVisible,
+  isBeat,
+  isDeployStrategiesVisible,
+  isPhase,
+  isExitPhase,
 } from '../model/storySelectors'
 import type { StoryRendererProps } from '../VaultFlowRoot'
 import type { StoryBeatId } from '../model/storySemantics'
@@ -80,7 +84,7 @@ function ReducedBeatStep({
       </p>
 
       {/* Distribution list (reduced version — static, no animation) */}
-      {beat === 'distributionMeaningful' && isDistributionFullyVisible(state) && (
+      {isBeat(state, 'distributionMeaningful') && isDistributionFullyVisible(state) && (
         <ul className="space-y-2 border-t border-white/[0.05] pt-3">
           {content.distribution.map((dest, i) => (
             <li key={i} className="flex items-start gap-3">
@@ -92,7 +96,7 @@ function ReducedBeatStep({
       )}
 
       {/* Strategy list (reduced version — static) */}
-      {beat === 'deployStrategies' && (
+      {isDeployStrategiesVisible(state) && (
         <ul className="space-y-2 border-t border-white/[0.05] pt-3">
           {content.strategies.map((s, i) => (
             <li key={i} className="flex items-center gap-3">
@@ -114,9 +118,9 @@ function ReducedBeatStep({
             className="h-0.5 flex-1 rounded-full transition-all duration-200"
             style={{
               background:
-                state.phase === p
+                isPhase(state, p)
                   ? 'rgba(140,180,255,0.5)'
-                  : state.phase === 'exit' && p !== 'exit'
+                  : isExitPhase(state) && p !== 'exit'
                   ? 'rgba(140,180,255,0.2)'
                   : 'rgba(255,255,255,0.05)',
             }}

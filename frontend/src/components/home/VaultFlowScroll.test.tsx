@@ -177,11 +177,14 @@ vi.mock('@/lib/zora/client', () => ({
 }))
 
 import { VaultFlowScroll } from './VaultFlowScroll'
-import { SHARE_DISTRIBUTION_ROWS, STRATEGY_CARDS } from './launchConfig'
-import { DESKTOP_STAGE4_TIMING, MOBILE_STAGE4_TIMING } from './vaultFlowStageTimings'
+import { STORY_CONTENT } from './vault-flow/model/storyContent'
+import { DESKTOP_STAGE4_TIMING, MOBILE_STAGE4_TIMING } from './vault-flow/model/stage4Timings'
 
 const isDocumentOrderedBefore = (a: Node, b: Node) =>
   Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING)
+
+const SHARE_DISTRIBUTION_ROWS = STORY_CONTENT.distribution
+const STRATEGY_CARDS = STORY_CONTENT.strategies
 
 const resolveProgressWithinRange = (
   value: number,
