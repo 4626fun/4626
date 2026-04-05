@@ -25,6 +25,8 @@ import {
 import { DesktopDistributionHandoffScene } from './vault-flow/scenes/DesktopDistributionHandoffScene'
 import { DesktopDeployStrategiesScene } from './vault-flow/scenes/DesktopDeployStrategiesScene'
 import { DesktopEarningTogetherScene } from './vault-flow/scenes/DesktopEarningTogetherScene'
+import { CreatorIntroScene } from './vault-flow/scenes/CreatorIntroScene'
+import { TokenDepositScene } from './vault-flow/scenes/TokenDepositScene'
 import { CAPTURE_PROGRESS_RANGE, VaultCaptureSystem } from './vault-flow/VaultCaptureSystem'
 
 const AKITA_ADDRESS = '0x5b674196812451b7cec024fe9d22d2c0b172fa75' as const
@@ -224,387 +226,6 @@ const HUD = memo(function HUD({ progressH, cueOpacity, stage2LabelOp, activeStag
   )
 })
 
-type HeroBlockProps = {
-  heroTransform: MotionValue<string>
-  heroOpacity: MotionValue<number>
-  heroFilter: MotionValue<string>
-  heroTitleOpacity: MotionValue<number>
-  heroTitleY: MotionValue<number>
-  heroPillsOpacity: MotionValue<number>
-  heroPillsY: MotionValue<number>
-  heroBodyOpacity: MotionValue<number>
-  heroBodyY: MotionValue<number>
-}
-const HeroBlock = memo(function HeroBlock({
-  heroTransform, heroOpacity, heroFilter,
-  heroTitleOpacity, heroTitleY, heroPillsOpacity, heroPillsY, heroBodyOpacity, heroBodyY,
-}: HeroBlockProps) {
-  return (
-    <>
-      {/* HERO / Deposit plane */}
-      <motion.div
-        className="absolute left-1/2 top-[20vh] flex w-full max-w-4xl flex-col items-center px-4 sm:px-8 text-center"
-        style={{
-          transform: heroTransform,
-          opacity: heroOpacity,
-          filter: heroFilter,
-        }}
-      >
-        <motion.div
-          className="pointer-events-none absolute left-1/2 top-6 h-px w-[44vw] max-w-[620px]"
-          style={{
-            x: '-50%',
-            background:
-              'linear-gradient(90deg, transparent, rgba(255,255,255,0.06), transparent)',
-          }}
-          animate={{ opacity: [0.2, 0.55, 0.2] }}
-          transition={{ duration: 4.5, repeat: Infinity, ease: 'easeInOut' }}
-          aria-hidden="true"
-        />
-
-        <motion.div
-          className="font-mono font-black leading-none text-center overflow-hidden"
-          style={{
-            fontSize: 'clamp(1.4rem, 5.2vw, 5.2rem)',
-            whiteSpace: 'nowrap',
-            opacity: heroTitleOpacity,
-            y: heroTitleY,
-          }}
-        >
-          <span
-            style={{
-              display: 'inline-block',
-              background: 'linear-gradient(170deg, #ffffff 28%, #9da3b3 100%)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-            }}
-          >
-            Welcome to{' '}
-            <span style={{ WebkitTextFillColor: 'rgba(160,180,255,0.90)' }}>4626.fun</span>
-          </span>
-        </motion.div>
-
-        {/* Subtitle pills — "Zora Creator Coin" appears with the title;
-            "→ ERC-4626 Vault" appears once the vault seals around the Zorb */}
-        <motion.div
-          className="mx-auto mt-5 flex w-full max-w-lg items-center justify-center gap-2"
-          style={{ opacity: heroPillsOpacity, y: heroPillsY }}
-        >
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.07] bg-white/[0.025] px-3 py-1.5">
-            <img src="/protocols/zora.svg" alt="Zora" className="h-3.5 w-3.5 rounded-full" loading="lazy" />
-            <span className="text-[8px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
-              Creator Coin
-            </span>
-          </div>
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.07] bg-white/[0.025] px-3 py-1.5">
-              <img src="/app-icon.svg" alt="4626" className="h-3.5 w-3.5 rounded-[3px]" loading="lazy" />
-              <span className="text-[8px] font-semibold uppercase tracking-[0.22em] text-zinc-500">
-                ERC-4626 Vault
-              </span>
-            </div>
-        </motion.div>
-
-        <motion.p
-          className="mx-auto mt-7 max-w-sm text-center text-[13px] font-light leading-[1.85] text-zinc-600 sm:text-[14px]"
-          style={{ opacity: heroBodyOpacity, y: heroBodyY }}
-        >
-          Deposit your creator coin once.{' '}
-          <span className="text-zinc-400">Creators and holders earn together — and every trader has a chance to win big.</span>
-        </motion.p>
-      </motion.div>
-    </>
-  )
-})
-
-type DepositCardBlockProps = {
-  depositNodeTransform: MotionValue<string>
-  depositNodeOpacity: MotionValue<number>
-  cardPhase: 1 | 2 | 3
-  cameoIcons: Record<string, string>
-  depositComplete: boolean
-  displayDepositTokens: string
-  displayShareAmount: string
-  normalizedShareTokens: string
-  depositFillWidth: MotionValue<string>
-  remainingMinted: MotionValue<number>
-  vaultInitOp: MotionValue<number>
-  topTrail: MotionValue<number>
-  topDotY: MotionValue<number>
-  topDotOp: MotionValue<number>
-  prefersReducedMotion: boolean
-}
-const DepositCardBlock = memo(function DepositCardBlock({
-  depositNodeTransform, depositNodeOpacity,
-  cardPhase, cameoIcons, depositComplete,
-  displayDepositTokens, displayShareAmount, normalizedShareTokens,
-  depositFillWidth, remainingMinted,
-  vaultInitOp, topTrail, topDotY, topDotOp,
-  prefersReducedMotion,
-}: DepositCardBlockProps) {
-  return (
-    <>
-      {/* Deposit card — starts at 32vh (above vault) and descends to vault level */}
-      <motion.div
-        className={`absolute left-1/2 top-[32vh] z-30 ${(cardPhase === 2 || cardPhase === 3) ? 'hidden sm:block' : ''}`}
-        style={{
-          transform: depositNodeTransform,
-          opacity: depositNodeOpacity,
-        }}
-      >
-        {/* ── Deposit / Distribute / Deploy card ───────────────────────────────
-            Phases swap via a venetian-blind clipPath wipe (top → bottom reveal).
-            Each face is driven by React state so transitions are intentional,
-            not a continuous scroll-position cross-fade. */}
-        <div
-          style={{
-            perspective: '700px',
-            width: cardPhase === 2
-              ? 'clamp(272px, 78vw, 360px)'
-              : cardPhase === 3
-              ? 'clamp(176px, 46vw, 228px)'
-              : depositComplete || cardPhase !== 1
-              ? 'clamp(248px, 68vw, 340px)'
-              : 'min(280px, 90vw)',
-          }}
-        >
-          <div
-            className="relative overflow-hidden rounded-2xl"
-            style={{
-              transform: 'rotateY(-3deg)',
-              transition: 'transform 0.5s cubic-bezier(0.22,1,0.36,1)',
-              background: 'linear-gradient(168deg, rgba(14,16,32,0.90) 0%, rgba(7,7,19,0.96) 100%)',
-              border: '1px solid rgba(255,255,255,0.07)',
-              backdropFilter: prefersReducedMotion ? 'none' : 'blur(24px)',
-              boxShadow: '0 12px 48px -12px rgba(0,0,0,0.82), 0 0 0 0.5px rgba(255,255,255,0.03), inset 0 1px 0 rgba(255,255,255,0.06), inset 0 0 0 1px rgba(8,12,24,0.38)',
-            }}
-            onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.transform = 'rotateY(0deg)')}
-            onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.transform = 'rotateY(-3deg)')}
-          >
-            {/* Phase-keyed accent line — colour shifts with each phase */}
-            <div
-              className="pointer-events-none absolute inset-x-0 top-0 h-[1.5px]"
-              style={{
-                background: cardPhase === 1
-                  ? 'linear-gradient(90deg,transparent 0%,rgba(249,115,22,0.9) 38%,rgba(59,95,255,0.9) 62%,transparent 100%)'
-                  : cardPhase === 2
-                  ? 'linear-gradient(90deg,transparent 0%,rgba(100,160,255,0.85) 50%,transparent 100%)'
-                  : 'linear-gradient(90deg,transparent 0%,rgba(255,255,255,0.30) 50%,transparent 100%)',
-                transition: 'background 0.4s ease',
-              }}
-              aria-hidden="true"
-            />
-
-            {/* Blind wipe — content reveals top→bottom on phase change */}
-            <div className="overflow-hidden">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={cardPhase}
-                  initial={{ clipPath: 'inset(0% 0% 100% 0%)' }}
-                  animate={{ clipPath: 'inset(0% 0% 0% 0%)' }}
-                  exit={{ clipPath: 'inset(100% 0% 0% 0%)' }}
-                  transition={{ duration: 0.30, ease: [0.22, 1, 0.36, 1] }}
-                  className="flex flex-col gap-2 px-3 py-3 sm:gap-2.5 sm:px-4 sm:py-4"
-                >
-                  {cardPhase === 1 && (
-                    <>
-                      {/* Token label */}
-                      <div className="flex items-center gap-1.5">
-                        {cameoIcons['akita'] ? (
-                          <img src={cameoIcons['akita']} alt="akita creator coin" className="h-3.5 w-3.5 rounded-full object-cover opacity-70" loading="lazy" />
-                        ) : (
-                          <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-[4px] font-black text-white" style={{ background: '#f97316' }}>AK</span>
-                        )}
-                        <span className="font-mono text-[6px] uppercase tracking-[0.22em] sm:text-[7px] sm:tracking-[0.24em]" style={{ color: 'rgba(249,115,22,0.65)' }}>
-                          {depositComplete ? 'vault mint confirmed' : 'akita · pouring into vault'}
-                        </span>
-                      </div>
-
-                      {depositComplete ? (
-                        <>
-                          {/* Conversion receipt — "this became that" layout */}
-                          <div className="flex flex-col gap-2">
-                            {/* Deposited coin row */}
-                            <div className="flex items-center gap-2">
-                              {cameoIcons['akita'] ? (
-                                <img src={cameoIcons['akita']} alt="akita creator coin" className="h-4 w-4 shrink-0 rounded-full object-cover opacity-80" loading="lazy" />
-                              ) : (
-                                <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[4px] font-black text-white" style={{ background: '#f97316' }}>AK</span>
-                              )}
-                              <div className="flex min-w-0 flex-col gap-0.5">
-                                <div className="font-mono font-black leading-none tracking-tight text-white" style={{ fontSize: 'clamp(0.96rem, 4.2vw, 1.45rem)' }}>
-                                  {displayDepositTokens}
-                                </div>
-                                <span className="font-mono text-[6px] tracking-[0.14em] sm:text-[7px]" style={{ color: 'rgba(249,115,22,0.50)' }}>
-                                  creator coin deposited
-                                </span>
-                              </div>
-                            </div>
-                            {/* Arrow connector */}
-                            <div className="flex items-center gap-1.5 pl-[5px]">
-                              <div className="flex flex-col items-center gap-0">
-                                <div className="h-2.5 w-px" style={{ background: 'rgba(255,255,255,0.10)' }} />
-                                <span style={{ color: 'rgba(100,160,255,0.55)', fontSize: 11, lineHeight: 1 }}>↓</span>
-                              </div>
-                              <span className="font-mono text-[6px] tracking-[0.16em] sm:text-[7px]" style={{ color: 'rgba(100,160,255,0.38)' }}>
-                                minted as vault shares
-                              </span>
-                            </div>
-                            {/* Minted shares row */}
-                            <div className="flex items-center gap-2">
-                              <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ border: '1px solid rgba(100,160,255,0.40)' }}>
-                                <img src={SHARE_TOKEN_BADGE_SRC} alt={SHARE_TOKEN_ALT} className="h-full w-full object-cover" loading="lazy" />
-                              </span>
-                              <div className="flex min-w-0 flex-col gap-0.5">
-                                <div className="font-mono font-black leading-none tracking-tight" style={{ color: 'rgba(120,175,255,1)', fontSize: 'clamp(0.96rem, 4.2vw, 1.45rem)' }}>
-                                  {displayShareAmount}
-                                </div>
-                                <span className="font-mono text-[6px] tracking-[0.14em] sm:text-[7px]" style={{ color: 'rgba(100,160,255,0.42)' }}>
-                                  vault share token live
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                          <div className="mt-1.5 flex items-center justify-between gap-2 border-t border-white/[0.06] pt-2">
-                            <span className="font-mono text-[6px] tracking-[0.14em] sm:text-[7px]" style={{ color: 'rgba(57,255,20,0.80)' }}>
-                              {normalizedShareTokens} minted ✓
-                            </span>
-                            <span className="font-mono text-[6px] tracking-[0.14em] sm:text-[7px]" style={{ color: 'rgba(255,255,255,0.30)' }}>
-                              creators + holders aligned
-                            </span>
-                          </div>
-                        </>
-                      ) : (
-                        /* Pour progress bar — drains left→right as akita flows into the vault */
-                        <div className="flex flex-col gap-1.5">
-                          <div className="font-mono text-[28px] font-black leading-none tracking-tight text-white">
-                            {displayDepositTokens}
-                          </div>
-                          <div className="overflow-hidden rounded-full bg-white/[0.05]" style={{ height: 2 }}>
-                            <motion.div
-                              className="h-full rounded-full"
-                              style={{
-                                width: depositFillWidth,
-                                background: 'linear-gradient(90deg,#f97316 0%,#fb923c 100%)',
-                                boxShadow: '0 0 6px 1px rgba(249,115,22,0.55)',
-                              }}
-                            />
-                          </div>
-                          <span className="font-mono text-[7px] tracking-[0.16em]" style={{ color: 'rgba(249,115,22,0.40)' }}>
-                            pouring into vault…
-                          </span>
-                        </div>
-                      )}
-                    </>
-                  )}
-
-                  {cardPhase === 2 && (
-                    <>
-                      <div className="flex items-center gap-1.5">
-                        <span
-                          className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center overflow-hidden rounded-full"
-                          style={{ border: '1px solid rgba(100,160,255,0.40)' }}
-                        >
-                          <img src={SHARE_TOKEN_BADGE_SRC} alt={SHARE_TOKEN_ALT} className="h-full w-full object-cover" loading="lazy" />
-                        </span>
-                        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5">
-                          <span className="font-mono text-[7px] uppercase tracking-[0.16em] sm:text-[7px] sm:tracking-[0.24em]" style={{ color: 'rgba(100,160,255,0.86)' }}>
-                            share fan-out
-                          </span>
-                          <span className="font-mono text-[6px] uppercase tracking-[0.16em] text-white/45 sm:hidden">
-                            live routing
-                          </span>
-                          <span className="hidden font-mono text-[7px] uppercase tracking-[0.24em] sm:inline" style={{ color: 'rgba(100,160,255,0.70)' }}>
-                            {SHARE_TOKEN_SYMBOL} · distributing
-                          </span>
-                        </div>
-                      </div>
-                      <MotionNumber
-                        value={remainingMinted}
-                        className="block font-mono font-black leading-none tracking-tight"
-                        style={{ color: 'rgba(120,175,255,1)', fontSize: 'clamp(2rem, 10vw, 28px)' }}
-                      />
-                      <span className="font-mono text-[6px] tracking-[0.14em] sm:text-[7px] sm:tracking-[0.16em]" style={{ color: 'rgba(100,160,255,0.38)' }}>
-                        shares remaining to distribute
-                      </span>
-                    </>
-                  )}
-
-                  {cardPhase === 3 && (
-                    <>
-                      <div className="flex items-center gap-1.5">
-                        {cameoIcons['akita'] ? (
-                          <img src={cameoIcons['akita']} alt="akita creator coin" className="h-3.5 w-3.5 rounded-full object-cover opacity-70" loading="lazy" />
-                        ) : (
-                          <span className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full text-[4px] font-black text-white" style={{ background: '#f97316' }}>AK</span>
-                        )}
-                        <span className="font-mono text-[6px] uppercase tracking-[0.20em] sm:text-[7px] sm:tracking-[0.24em]" style={{ color: 'rgba(249,115,22,0.60)' }}>
-                          akita · principal deployed
-                        </span>
-                      </div>
-                      <div className="font-mono font-black leading-none tracking-tight text-white" style={{ fontSize: 'clamp(1.5rem, 8vw, 28px)' }}>
-                        {displayDepositTokens}
-                      </div>
-                      <span className="font-mono text-[7px] tracking-[0.14em]" style={{ color: 'rgba(249,115,22,0.45)' }}>
-                        akita
-                      </span>
-                      <span className="mt-1 font-mono text-[6px] tracking-[0.14em] sm:text-[7px] sm:tracking-[0.16em]" style={{ color: 'rgba(100,160,255,0.38)' }}>
-                        4 yield strategies ↓
-                      </span>
-                    </>
-                  )}
-                </motion.div>
-              </AnimatePresence>
-            </div>
-          </div>
-        </div>
-
-        {/* Vault initiated — fades with deposited side */}
-        <motion.div
-          className="mt-2.5 flex items-center justify-center gap-2"
-          style={{ opacity: vaultInitOp }}
-        >
-          <span className="h-px w-8 bg-blue-500/40" />
-          <span className="font-mono text-[8px] tracking-[0.28em] text-blue-400">vault initiated</span>
-          <span className="h-px w-8 bg-blue-500/40" />
-        </motion.div>
-      </motion.div>
-
-      {/* Connector: deposit -> vault */}
-      <div
-        className="absolute left-1/2 top-[40vh] z-10 -translate-x-1/2"
-        style={{ width: 32, height: 108 }}
-      >
-        <div
-          className="absolute left-1/2 top-0 w-px -translate-x-1/2"
-          style={{ height: '100%', background: 'rgba(255,255,255,0.05)' }}
-        />
-        <motion.div
-          className="absolute left-1/2 top-0 w-px origin-top -translate-x-1/2"
-          style={{
-            height: '100%',
-            scaleY: topTrail,
-            background:
-              'linear-gradient(to bottom, rgba(210,210,230,0.55), rgba(120,120,150,0.12))',
-          }}
-        />
-        <motion.div
-          className="pointer-events-none absolute left-1/2 top-0 h-1 w-1 -translate-x-1/2 rounded-full"
-          style={{
-            y: topDotY,
-            opacity: topDotOp,
-            background: 'rgba(255,255,255,0.9)',
-            boxShadow:
-              '0 0 14px 6px rgba(255,255,255,0.55), 0 0 28px 12px rgba(200,220,255,0.25)',
-          }}
-          aria-hidden="true"
-        />
-      </div>
-    </>
-  )
-})
-
-
 export function VaultFlowScroll({
   depositTokens,
   shareTokens,
@@ -803,6 +424,13 @@ export function VaultFlowScroll({
     translate3d(-50%, ${heroY}px, ${heroZ}px)
     scale(${heroScale})
   `
+
+  // CreatorIntroScene — fades in during creatorEstablishes (0.00–0.14), then exits.
+  const creatorIntroOpacity = useTransform(scroll, [0, 0.04, 0.10, 0.14], [0, 1, 1, 0])
+  const creatorIntroY = useTransform(scroll, [0, 0.06, 0.14], [18, 0, -10])
+
+  // TokenDepositScene — covers valueFlowsIn + participantDeposits (0.14–0.42).
+  const depositSceneOpacity = useTransform(scroll, [0.12, 0.16, 0.38, 0.42], [0, 1, 1, 0])
 
   // Pill -> vault connector — starts only after the freeze pause ends (0.44)
   const _topRaw = useTransform(scroll, [0.34, 0.44], [0, 1])
@@ -1014,49 +642,48 @@ export function VaultFlowScroll({
               aria-hidden="true"
             />
 
-            {/* HERO / Deposit plane — unmounted once distribution starts; hero opacity
-                reaches 0 at v=0.38 and distributionMeaningful begins at v=0.42, so the
-                unmount is invisible. */}
-            {(isBeat(desktopStoryState, 'creatorEstablishes') ||
-              isBeat(desktopStoryState, 'valueFlowsIn') ||
-              isBeat(desktopStoryState, 'participantDeposits')) && (
-              <HeroBlock
-                heroTransform={heroTransform}
-                heroOpacity={heroOpacity}
-                heroFilter={heroFilter}
-                heroTitleOpacity={heroTitleOpacity}
-                heroTitleY={heroTitleY}
-                heroPillsOpacity={heroPillsOpacity}
-                heroPillsY={heroPillsY}
-                heroBodyOpacity={heroBodyOpacity}
-                heroBodyY={heroBodyY}
+            {/* ── Beat: creatorEstablishes (0.00–0.14) ─────────────────────────
+                Creator intro — akita.base.eth establishes identity before tokens
+                start flowing. Unmounts once valueFlowsIn begins.               */}
+            {isBeat(desktopStoryState, 'creatorEstablishes') && (
+              <CreatorIntroScene
+                content={STORY_CONTENT}
+                cameoIcons={cameoIcons}
+                beatProgress={desktopStoryState.beatProgress}
+                prefersReducedMotion={prefersReducedMotion}
+                opacity={creatorIntroOpacity}
+                y={creatorIntroY}
               />
             )}
 
-            {/* Deposit card + connector — not mounted during the two earliest beats where
-                depositNodeOpacity is 0. Mounts at participantDeposits (v=0.26), 8 scroll
-                units before the visible fade-in at v=0.34, and stays through earningTogether. */}
-            {(!isBeat(desktopStoryState, 'creatorEstablishes') &&
-              !isBeat(desktopStoryState, 'valueFlowsIn')) && (
-              <DepositCardBlock
-                depositNodeTransform={depositNodeTransform}
-                depositNodeOpacity={depositNodeOpacity}
-                cardPhase={cardPhase}
+            {/* ── Beats: valueFlowsIn + participantDeposits (0.14–0.42) ────────
+                Three-column literal deposit story: source node → vault fill → share
+                reveal. Replaces the abstract HeroBlock + VaultCaptureSystem for
+                these beats. Mounts when creatorEstablishes ends and unmounts once
+                distributionMeaningful begins.                                    */}
+            {(isBeat(desktopStoryState, 'valueFlowsIn') ||
+              isBeat(desktopStoryState, 'participantDeposits')) && (
+              <TokenDepositScene
+                uid={uid}
+                content={STORY_CONTENT}
                 cameoIcons={cameoIcons}
+                captureProgress={captureProgress}
+                depositFillPct={depositFillPct}
                 depositComplete={depositComplete}
                 displayDepositTokens={displayDepositTokens}
                 displayShareAmount={displayShareAmount}
-                normalizedShareTokens={normalizedShareTokens}
-                depositFillWidth={depositFillWidth}
-                remainingMinted={remainingMinted}
-                vaultInitOp={vaultInitOp}
-                topTrail={topTrail}
-                topDotY={topDotY}
-                topDotOp={topDotOp}
+                beatProgress={desktopStoryState.beatProgress}
                 prefersReducedMotion={prefersReducedMotion}
+                sceneOpacity={depositSceneOpacity}
               />
             )}
 
+            {/* ── Vault sphere (cinematic) ──────────────────────────────────────
+                VaultCaptureSystem owns the 3-D vault Zorb and the dive camera move.
+                It's active during 0.08–0.78 but its internal opacity MotionValues
+                handle the right moments. During the deposit beats (0.14–0.42) the
+                Zorb is still composited but its opacity is intentionally low — the
+                TokenDepositScene's flat vault diagram is the legible element.    */}
             <VaultCaptureSystem
               uid={uid}
               vaultTransform={vaultTransform}
