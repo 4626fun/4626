@@ -1,5 +1,5 @@
-import { memo, useId } from 'react'
-import { motion, useTransform, type MotionValue } from 'framer-motion'
+import { memo, useRef } from 'react'
+import { motion, useMotionValueEvent, useTransform, type MotionValue } from 'framer-motion'
 
 import type { StoryContent } from '../model/storyContent'
 
@@ -204,9 +204,13 @@ const DepositedCounter = memo(function DepositedCounter({
   depositComplete,
   totalAmount,
 }: DepositedCounterProps) {
-  const displayValue = useTransform(depositFillPct, (v) =>
-    Math.round(v * totalAmount).toLocaleString(),
-  )
+  const spanRef = useRef<HTMLSpanElement>(null)
+  // Update DOM directly on every MotionValue change — bypasses React re-renders
+  useMotionValueEvent(depositFillPct, 'change', (latest) => {
+    if (spanRef.current) {
+      spanRef.current.textContent = Math.round(latest * totalAmount).toLocaleString()
+    }
+  })
 
   return (
     <div className="flex flex-col items-center gap-0.5" data-testid="deposited-counter">
@@ -216,7 +220,8 @@ const DepositedCounter = memo(function DepositedCounter({
       >
         Deposited
       </span>
-      <motion.span
+      <span
+        ref={spanRef}
         className="font-mono font-black leading-none tracking-tight"
         style={{
           fontSize: 'clamp(0.85rem, 2.8vw, 1.1rem)',
@@ -224,8 +229,8 @@ const DepositedCounter = memo(function DepositedCounter({
           transition: 'color 0.5s ease',
         }}
       >
-        {displayValue}
-      </motion.span>
+        {Math.round(depositFillPct.get() * totalAmount).toLocaleString()}
+      </span>
     </div>
   )
 })

@@ -1,7 +1,6 @@
 import { memo, useCallback, useEffect, useId, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
+
 import {
-  AnimatePresence,
   motion,
   useMotionTemplate,
   useMotionValueEvent,
@@ -18,9 +17,6 @@ import { deriveStoryState, type StoryState } from './vault-flow/model/storyClock
 import {
   isBeat,
   isMintConfirmed,
-  isDeployStrategiesVisible,
-  isEarningTogetherVisible,
-  isDistributionVisible,
 } from './vault-flow/model/storySelectors'
 import { DesktopDistributionHandoffScene } from './vault-flow/scenes/DesktopDistributionHandoffScene'
 import { DesktopDeployStrategiesScene } from './vault-flow/scenes/DesktopDeployStrategiesScene'
@@ -46,8 +42,6 @@ const STAGE_NAV = [
 // Geometric scramble characters — brand-kit "Technical Luxury" aesthetic
 const SCRAMBLE_CHARS = ['●', '■', '▲', '◆', '○', '□', '△', '◊', '✶', '✕']
 const SHARE_TOKEN_SYMBOL = '■AKITA'
-const SHARE_TOKEN_ALT = '■AKITA share token'
-const SHARE_TOKEN_BADGE_SRC = '/akita-share-token-badge.webp'
 
 
 // Precomputed star-field: 42 hand-placed white dots over a 900×600 tile.
@@ -55,38 +49,10 @@ const SHARE_TOKEN_BADGE_SRC = '/akita-share-token-badge.webp'
 const STAR_FIELD_BG = `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600"><circle cx="42" cy="38" r="0.9" fill="white" opacity="0.7"/><circle cx="247" cy="89" r="0.55" fill="white" opacity="0.5"/><circle cx="612" cy="23" r="1.0" fill="white" opacity="0.72"/><circle cx="754" cy="156" r="0.65" fill="white" opacity="0.62"/><circle cx="125" cy="234" r="0.45" fill="white" opacity="0.45"/><circle cx="389" cy="178" r="0.75" fill="white" opacity="0.65"/><circle cx="528" cy="312" r="0.55" fill="white" opacity="0.5"/><circle cx="837" cy="89" r="0.85" fill="white" opacity="0.68"/><circle cx="193" cy="456" r="0.65" fill="white" opacity="0.55"/><circle cx="671" cy="398" r="0.45" fill="white" opacity="0.45"/><circle cx="76" cy="523" r="0.95" fill="white" opacity="0.7"/><circle cx="445" cy="512" r="0.55" fill="white" opacity="0.52"/><circle cx="823" cy="445" r="0.75" fill="white" opacity="0.62"/><circle cx="301" cy="67" r="0.65" fill="white" opacity="0.6"/><circle cx="567" cy="478" r="0.85" fill="white" opacity="0.68"/><circle cx="148" cy="389" r="0.45" fill="white" opacity="0.45"/><circle cx="712" cy="234" r="0.75" fill="white" opacity="0.65"/><circle cx="234" cy="545" r="0.55" fill="white" opacity="0.5"/><circle cx="489" cy="145" r="0.65" fill="white" opacity="0.58"/><circle cx="867" cy="512" r="0.85" fill="white" opacity="0.7"/><circle cx="356" cy="423" r="0.45" fill="white" opacity="0.45"/><circle cx="623" cy="567" r="0.75" fill="white" opacity="0.65"/><circle cx="89" cy="178" r="0.55" fill="white" opacity="0.52"/><circle cx="478" cy="289" r="0.85" fill="white" opacity="0.7"/><circle cx="756" cy="345" r="0.65" fill="white" opacity="0.6"/><circle cx="167" cy="312" r="0.45" fill="white" opacity="0.45"/><circle cx="534" cy="56" r="0.75" fill="white" opacity="0.67"/><circle cx="812" cy="178" r="0.55" fill="white" opacity="0.52"/><circle cx="289" cy="423" r="0.85" fill="white" opacity="0.7"/><circle cx="645" cy="123" r="0.65" fill="white" opacity="0.62"/><circle cx="23" cy="267" r="0.45" fill="white" opacity="0.45"/><circle cx="412" cy="534" r="0.75" fill="white" opacity="0.65"/><circle cx="778" cy="267" r="0.55" fill="white" opacity="0.52"/><circle cx="134" cy="89" r="0.85" fill="white" opacity="0.7"/><circle cx="567" cy="389" r="0.65" fill="white" opacity="0.6"/><circle cx="345" cy="234" r="0.45" fill="white" opacity="0.45"/><circle cx="689" cy="478" r="0.75" fill="white" opacity="0.65"/><circle cx="201" cy="156" r="0.55" fill="white" opacity="0.52"/><circle cx="456" cy="367" r="0.85" fill="white" opacity="0.7"/><circle cx="823" cy="323" r="0.65" fill="white" opacity="0.62"/><circle cx="59" cy="467" r="0.55" fill="white" opacity="0.5"/><circle cx="720" cy="545" r="0.8" fill="white" opacity="0.65"/></svg>')}")`
 
 const smoothstep = (t: number) => t * t * (3 - 2 * t)
-const parseTokenAmount = (value: string) => {
-  const numeric = value.replace(/[^0-9]/g, '')
-  return numeric ? Number(numeric) : 0
-}
 const stripShareTokenSymbol = (value: string) => value.replace(SHARE_TOKEN_SYMBOL, '').trim()
-const SHARE_DISTRIBUTION_AMOUNTS = STORY_CONTENT.distribution.map((row) => parseTokenAmount(row.amount))
-const SHARE_DISTRIBUTION_TOTAL = SHARE_DISTRIBUTION_AMOUNTS.reduce((sum, amount) => sum + amount, 0)
 
 
 
-// Renders a MotionValue<number> as text via a DOM ref — bypasses React's render cycle entirely.
-const MotionNumber = memo(function MotionNumber({
-  value,
-  className,
-  style,
-  format = (n: number) => n.toLocaleString(),
-}: {
-  value: MotionValue<number>
-  className?: string
-  style?: CSSProperties
-  format?: (n: number) => string
-}) {
-  const ref = useRef<HTMLSpanElement>(null)
-  useMotionValueEvent(value, 'change', (latest) => {
-    if (ref.current) ref.current.textContent = format(Math.round(latest))
-  })
-  return (
-    <span ref={ref} className={className} style={style}>
-      {format(Math.round(value.get()))}
-    </span>
-  )
-})
 
 // Decodes a string from geometric symbols → final text over ~800ms.
 // Writes directly to a DOM ref — no setState, no React re-render per rAF tick.
@@ -305,16 +271,6 @@ export function VaultFlowScroll({
       setDepositComplete(true)
     }
 
-    // Advance (or retreat) the card phase
-    const next: 1 | 2 | 3 =
-      (isDeployStrategiesVisible(nextStoryState) || isEarningTogetherVisible(nextStoryState)) ? 3 :
-      isDistributionVisible(nextStoryState) ? 2 :
-      1
-    if (next !== cardPhaseRef.current) {
-      cardPhaseRef.current = next
-      setCardPhase(next)
-    }
-
     const f = hardStopFired.current
     // Checkpoint 1: vault capture locked — wireframe + containment read as sealed by 0.32
     if (!f.s1 && v >= 0.32) { f.s1 = true; fireHardStop('vault sealed', 2.0) }
@@ -359,7 +315,6 @@ export function VaultFlowScroll({
     : `${shareTokens} ${SHARE_TOKEN_SYMBOL}`
   const displayDepositTokens = depositTokens
   const displayShareAmount = stripShareTokenSymbol(normalizedShareTokens) || depositTokens
-  const totalShareCount = parseTokenAmount(normalizedShareTokens) || SHARE_DISTRIBUTION_TOTAL
 
   // HUD / camera
   const progressH = useTransform(scroll, [0, 1], ['0%', '100%'])

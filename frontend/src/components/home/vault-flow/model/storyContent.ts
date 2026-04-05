@@ -33,6 +33,8 @@ export type EarningTogetherCopy = {
 }
 
 export type StoryContent = {
+  creatorName: string
+  creatorTokenSymbol: string
   shareTokenSymbol: string
   shareTokenBadgeSrc: string
   defaultDepositTokens: string
@@ -47,6 +49,8 @@ export type StoryContent = {
 }
 
 export const STORY_CONTENT: StoryContent = {
+  creatorName: 'akita.base.eth',
+  creatorTokenSymbol: '$AKITA',
   shareTokenSymbol: '■AKITA',
   shareTokenBadgeSrc: '/akita-share-token-badge.webp',
   defaultDepositTokens: '50,000,000',

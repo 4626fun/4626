@@ -72,7 +72,7 @@ export function DesktopDistributionHandoffScene({
         >
           <span className="h-px w-5 bg-blue-300/25" />
           <span className="font-mono text-[7px] uppercase tracking-[0.30em] text-blue-300/60">
-            live routing · distribution handoff
+            initial deposit · shares routed automatically
           </span>
           <span className="h-px w-5 bg-blue-300/25" />
         </div>
@@ -196,7 +196,10 @@ export function DesktopDistributionHandoffScene({
               <p className="font-mono text-[8px] uppercase tracking-[0.22em] text-zinc-500">
                 {row.title}
               </p>
-              <p className="mt-1 font-mono text-lg font-black text-white/90">{row.percent}</p>
+              <div className="mt-1 flex items-baseline gap-1.5">
+                <p className="font-mono text-lg font-black text-white/90">{row.percent}</p>
+                <p className="font-mono text-[9px] text-blue-300/55">{row.amount} shares</p>
+              </div>
               <p className="mt-1 text-[11px] text-zinc-400">{row.purposeCopy}</p>
             </motion.div>
           ))}

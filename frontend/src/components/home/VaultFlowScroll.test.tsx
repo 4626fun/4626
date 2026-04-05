@@ -240,24 +240,24 @@ describe('VaultFlowScroll', () => {
     setMockViewportMode('mobile')
   })
 
-  it('uses the provided deposit amount in the stage 2 confirmation card', async () => {
-    // scroll=0.40 → participantDeposits beat, mintConfirmed=true (depositComplete), cardPhase=1
-    renderVaultFlowScroll(0.40, { depositTokens: '12,345,678', shareTokens: '12,345,678 ■AKITA' })
-
-    await waitFor(() => {
-      expect(screen.getAllByText('12,345,678').length).toBeGreaterThanOrEqual(2)
-    })
-  })
-
-  it('renders conversion receipt with deposited coin and minted shares at the stage 2 confirmation checkpoint', async () => {
-    // scroll=0.40 → participantDeposits beat, depositComplete=true, cardPhase=1
-    // New layout: vertical receipt showing "creator coin deposited → vault share token live"
+  it('shows the token deposit scene with vault and counter during the deposit beat', async () => {
+    // scroll=0.40 → participantDeposits beat, TokenDepositScene is active
     renderVaultFlowScroll(0.40)
 
     await waitFor(() => {
-      expect(screen.getByText(/creator coin deposited/i)).toBeTruthy()
-      expect(screen.getByText(/vault share token live/i)).toBeTruthy()
-      expect(screen.getAllByAltText('■AKITA share token').length).toBeGreaterThan(0)
+      expect(screen.getByTestId('token-deposit-scene')).toBeTruthy()
+      expect(screen.getByTestId('token-deposit-vault')).toBeTruthy()
+      expect(screen.getByTestId('deposited-counter')).toBeTruthy()
+    })
+  })
+
+  it('reveals vault-sealed indicator once the vault deposit is complete', async () => {
+    // scroll=0.40 → participantDeposits beat, atHoldStart → mintConfirmed=true → depositComplete=true
+    // The vault-complete-label only mounts when depositComplete=true
+    renderVaultFlowScroll(0.40)
+
+    await waitFor(() => {
+      expect(screen.getByTestId('vault-complete-label')).toBeTruthy()
     })
   })
 
@@ -289,7 +289,7 @@ describe('VaultFlowScroll', () => {
       expect(distributionSummary).toBeTruthy()
       expect(distributionCheckpoint).toBeTruthy()
       expect(firstRouteCard).toBeTruthy()
-      expect(distributionSummary.textContent?.toLowerCase()).toContain('live routing')
+      expect(distributionSummary.textContent?.toLowerCase()).toContain('initial deposit')
       expect(isDocumentOrderedBefore(distributionSummary, distributionCheckpoint)).toBe(true)
       expect(isDocumentOrderedBefore(distributionCheckpoint, firstRouteCard)).toBe(true)
     })

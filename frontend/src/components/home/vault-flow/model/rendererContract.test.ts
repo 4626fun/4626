@@ -83,27 +83,25 @@ describe('vault-flow renderer contract', () => {
     expect(source).not.toMatch(/v\s*<\s*0\.52\b/)     // old cardPhase 1→2 gate
     expect(source).not.toMatch(/v\s*>=\s*0\.76\b/)    // old cardPhase 2→3 gate
 
-    // Positive: storySelectors must be imported and used for the key transitions
+    // Positive: the mint-confirmed selector drives depositComplete state
     expect(source).toMatch(/isMintConfirmed\(/)
-    expect(source).toMatch(/isDeployStrategiesVisible\(/)
-    expect(source).toMatch(/isDistributionVisible\(/)
   })
 
-  it('Phase 4 visibility guards are in place: HeroBlock and DepositCardBlock use isBeat call-site guards', () => {
+  it('Beat-scoped scene guards are in place for CreatorIntroScene and TokenDepositScene', () => {
     const vaultFlowScrollPath = path.resolve(
       process.cwd(),
       'src/components/home/VaultFlowScroll.tsx',
     )
     const source = readFileSync(vaultFlowScrollPath, 'utf8')
 
-    // HeroBlock guard: isBeat check for the three early beats that precede distribution
+    // CreatorIntroScene gate: single beat
     expect(source).toMatch(/isBeat\(desktopStoryState,\s*'creatorEstablishes'\)/)
+    // TokenDepositScene gate: two beats OR-combined
     expect(source).toMatch(/isBeat\(desktopStoryState,\s*'valueFlowsIn'\)/)
     expect(source).toMatch(/isBeat\(desktopStoryState,\s*'participantDeposits'\)/)
-
-    // DepositCardBlock guard: negated isBeat checks for the two transparent-card beats
-    expect(source).toMatch(/!isBeat\(desktopStoryState,\s*'creatorEstablishes'\)/)
-    expect(source).toMatch(/!isBeat\(desktopStoryState,\s*'valueFlowsIn'\)/)
+    // No negated guards needed — scenes only mount during their own beats
+    expect(source).not.toMatch(/!isBeat\(desktopStoryState,\s*'creatorEstablishes'\)/)
+    expect(source).not.toMatch(/!isBeat\(desktopStoryState,\s*'valueFlowsIn'\)/)
   })
 })
 
