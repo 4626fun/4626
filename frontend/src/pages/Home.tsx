@@ -7,7 +7,7 @@ import { PageMeta } from '@/components/seo/PageMeta'
 import {
   DEFAULT_DEPOSIT_TOKENS,
 } from '@/components/home/launchConfig'
-import { VaultFlowScroll } from '@/components/home/VaultFlowScroll'
+import { VaultFlowRoot } from '@/components/home/vault-flow/VaultFlowRoot'
 import {
   clearStoredWaitlistAuthState,
   clearStoredWaitlistReferralCode,
@@ -174,7 +174,7 @@ export function Home() {
         />
       </section>
 
-      <VaultFlowScroll depositTokens={DEFAULT_DEPOSIT_TOKENS} shareTokens={DEFAULT_SHARE_TOKENS} />
+      <VaultFlowRoot depositTokens={DEFAULT_DEPOSIT_TOKENS} shareTokens={DEFAULT_SHARE_TOKENS} />
 
       {/* How it works — 4 clean steps */}
       <section className="cinematic-section !py-14 sm:!py-24 lg:!py-28">
