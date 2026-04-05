@@ -54,7 +54,7 @@ describe('POST /api/onboarding/bootstrap', () => {
     })
   })
 
-  it('returns Base setup flags when canonical CSW is missing', async () => {
+  it('returns Base setup flags with a soft 200 when canonical CSW is missing', async () => {
     bootstrapCanonicalDelegationStateMock.mockRejectedValue(
       Object.assign(new Error('No canonical Coinbase Smart Wallet is linked to this account yet.'), {
         needsBaseAppSetup: true,
@@ -73,13 +73,13 @@ describe('POST /api/onboarding/bootstrap', () => {
     const res = createMockRes()
     await handler(req, res)
 
-    expect(res.statusCode).toBe(409)
+    expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(false)
     expect(res.body?.needsBaseAppSetup).toBe(true)
     expect(res.body?.baseAppUrl).toBe('https://base.app/invite/4626/T9Y9BZYK')
   })
 
-  it('returns embedded wallet provisioning flags when Privy embedded EOA is not ready', async () => {
+  it('returns embedded wallet provisioning flags with a soft 200 when Privy embedded EOA is not ready', async () => {
     bootstrapCanonicalDelegationStateMock.mockRejectedValue(
       Object.assign(new Error('Privy embedded EOA is not ready for this account yet. Retry in a moment.'), {
         needsEmbeddedWallet: true,
@@ -96,7 +96,7 @@ describe('POST /api/onboarding/bootstrap', () => {
     const res = createMockRes()
     await handler(req, res)
 
-    expect(res.statusCode).toBe(409)
+    expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(false)
     expect(res.body?.needsEmbeddedWallet).toBe(true)
   })

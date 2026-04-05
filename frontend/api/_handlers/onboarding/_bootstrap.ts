@@ -31,7 +31,9 @@ type BootstrapErrorEnvelope = ApiEnvelope<never> & {
 
 function resolveStatusCode(error: unknown): number {
   const flags = extractDelegationFlags(error)
-  if (flags.needsBaseAppSetup || flags.needsEmbeddedWallet) return 409
+  // Actionable setup states are not hard transport failures.
+  // Return 200 + flags so clients can branch without noisy 4xx console errors.
+  if (flags.needsBaseAppSetup || flags.needsEmbeddedWallet) return 200
   const message = error instanceof Error ? error.message : String(error ?? '')
   const lower = message.toLowerCase()
   if (
