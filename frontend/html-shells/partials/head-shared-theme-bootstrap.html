@@ -1,0 +1,25 @@
+    <script>
+      ;(() => {
+        // Theme bootstrap (pre-hydration) to avoid flash.
+        // Values: "light" | "dark" | "system"
+        const KEY = 'cv:theme'
+        const saved = (() => {
+          try {
+            return String(window.localStorage.getItem(KEY) || '').trim()
+          } catch {
+            return ''
+          }
+        })()
+        const wantsSystem = !saved || saved === 'system'
+        const systemDark = (() => {
+          try {
+            return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches
+          } catch {
+            return true
+          }
+        })()
+        const isDark = saved === 'dark' || (wantsSystem && systemDark)
+        document.documentElement.classList.toggle('dark', isDark)
+        document.documentElement.style.colorScheme = isDark ? 'dark' : 'light'
+      })()
+    </script>

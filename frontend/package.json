@@ -4,6 +4,13 @@
   "version": "1.7.1",
   "type": "module",
   "scripts": {
+    "generate:html-shells": "node scripts/generate-html-shells.mjs",
+    "check:html-shells": "node scripts/generate-html-shells.mjs --check",
+    "predev": "pnpm generate:html-shells",
+    "prebuild:app": "pnpm generate:html-shells",
+    "prebuild:telegram-link-standalone": "pnpm generate:html-shells",
+    "prebuild:highmem:app": "pnpm generate:html-shells",
+    "prebuild:highmem:telegram-link-standalone": "pnpm generate:html-shells",
     "dev": "vite --config vite.config.ts",
     "clean:dist": "node scripts/clean-dist.mjs",
     "build:clean": "pnpm clean:dist && pnpm build",

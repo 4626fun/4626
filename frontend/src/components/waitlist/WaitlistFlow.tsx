@@ -1654,6 +1654,7 @@ export function WaitlistFlow(props: {
     privyClientStatus,
     redirectToCanonicalWaitlist,
     resetResolvedAccountState,
+    runBootstrap,
     setError,
     setRecoveryRequired,
     shouldDestroyPrivySession,

@@ -73,8 +73,12 @@ Several files share extensions but target different runtimes/tools:
 - `index.html` - default SPA shell for marketing/public host routing.
 - `app.html` - app-origin shell (for app host and miniapp-specific metadata).
 - `telegram-link.html` - standalone Telegram link/auth entry document.
+- `stale-chunk-recovery.js` - shared stale-chunk reload/cache-buster script used by both `index.html` and `app.html`.
+- `html-shells/` - source templates/partials for generated app + marketing shell HTML.
 - `.env.example` - primary local/server env template.
 - `.env.deploy-dry-run.example` - local Base-fork deploy dry-run preset template.
+
+`index.html`, `app.html`, and `telegram-link.html` are generated from `html-shells/templates/*.tpl` via `pnpm generate:html-shells` (auto-run before `dev` and `build` scripts). Use `pnpm check:html-shells` to verify generated files are in sync.
 
 ## Runtime boundary guardrails
 

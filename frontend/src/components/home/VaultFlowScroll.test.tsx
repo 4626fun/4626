@@ -7,13 +7,25 @@ import { cleanup, render, screen, waitFor } from '@testing-library/react'
 
 type ViewportMode = 'mobile' | 'desktop'
 
-const { getMockScrollValue, getMockViewportMode, setMockScrollValue, setMockViewportMode } = vi.hoisted(() => {
+const {
+  getMockReducedMotion,
+  getMockScrollValue,
+  getMockViewportMode,
+  setMockReducedMotion,
+  setMockScrollValue,
+  setMockViewportMode,
+} = vi.hoisted(() => {
   let mockScrollValue = 0
   let mockViewportMode: ViewportMode = 'mobile'
+  let mockReducedMotion = false
 
   return {
+    getMockReducedMotion: () => mockReducedMotion,
     getMockScrollValue: () => mockScrollValue,
     getMockViewportMode: () => mockViewportMode,
+    setMockReducedMotion: (value: boolean) => {
+      mockReducedMotion = value
+    },
     setMockScrollValue: (value: number) => {
       mockScrollValue = value
     },
@@ -164,7 +176,7 @@ vi.mock('framer-motion', () => {
         if (value?.get) callback(value.get())
       }, [value, callback])
     },
-    useReducedMotion: () => false,
+    useReducedMotion: () => getMockReducedMotion(),
     useScroll: () => ({ scrollYProgress: motionValue(getMockScrollValue()) }),
     useSpring: <T,>(value: T) => value,
     useTransform,
@@ -200,13 +212,16 @@ function renderVaultFlowScroll(
   {
     depositTokens = '50,000,000',
     shareTokens = '50,000,000 ■AKITA',
+    reducedMotion = false,
     viewport = 'mobile',
   }: {
     depositTokens?: string
     shareTokens?: string
+    reducedMotion?: boolean
     viewport?: ViewportMode
   } = {},
 ) {
+  setMockReducedMotion(reducedMotion)
   setMockViewportMode(viewport)
   setMockScrollValue(scrollValue)
 
@@ -220,6 +235,7 @@ function renderVaultFlowScroll(
 describe('VaultFlowScroll', () => {
   afterEach(() => {
     cleanup()
+    setMockReducedMotion(false)
     setMockScrollValue(0)
     setMockViewportMode('mobile')
   })
@@ -339,6 +355,28 @@ describe('VaultFlowScroll', () => {
       // The deposit-card phase labels only appear once the card is mounted
       expect(screen.queryByText(/Deposit complete/)).toBeNull()
       expect(screen.queryByText(/akita ·/)).toBeNull()
+    })
+  })
+
+  it('renders vault capture markers during contact and containment in normal motion', async () => {
+    renderVaultFlowScroll(0.20, { viewport: 'desktop' })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('vault-threshold-plane')).toBeTruthy()
+      expect(screen.getByTestId('vault-entry-ripple')).toBeTruthy()
+      expect(screen.getByTestId('vault-containment-seal')).toBeTruthy()
+      expect(screen.getByTestId('vault-contact-flash')).toBeTruthy()
+    })
+  })
+
+  it('suppresses flash-heavy vault capture effects under reduced motion', async () => {
+    renderVaultFlowScroll(0.20, { viewport: 'desktop', reducedMotion: true })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('vault-threshold-plane')).toBeTruthy()
+      expect(screen.queryByTestId('vault-entry-ripple')).toBeNull()
+      expect(screen.queryByTestId('vault-contact-flash')).toBeNull()
+      expect(screen.getByTestId('vault-containment-seal')).toBeTruthy()
     })
   })
 })
