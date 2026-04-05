@@ -3,13 +3,12 @@ import { motion } from 'framer-motion'
 import { ArrowLeft, ArrowRight } from 'lucide-react'
 
 import { PageMeta } from '@/components/seo/PageMeta'
-import {
-  DEFAULT_AUCTION_EPOCH,
-  DEFAULT_AUCTION_WINDOW,
-  DEFAULT_DEPOSIT_TOKENS,
-} from '@/components/home/launchConfig'
+import { STORY_CONTENT } from '@/components/home/vault-flow/model/storyContent'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 
+const DEFAULT_DEPOSIT_TOKENS = STORY_CONTENT.defaultDepositTokens
+const DEFAULT_AUCTION_WINDOW = STORY_CONTENT.defaultAuctionWindow
+const DEFAULT_AUCTION_EPOCH = STORY_CONTENT.defaultAuctionEpoch
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
 const SHARE_TOKENS = `${DEFAULT_DEPOSIT_TOKENS} ${SHARE_TOKEN}`
 const CCA_AMOUNT = '20,000,000'
