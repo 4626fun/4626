@@ -95,6 +95,14 @@ vi.mock('../../server/_lib/charmVaults.js', () => ({
     `Charm pool ${pool} is not currently indexed by Charm's public vault data source. Deploying a vault against this pool can succeed on-chain but remain invisible on alpha.charm.fi.`,
 }))
 
+vi.mock('../../server/_lib/waitlistSchema.js', () => ({
+  ensureWaitlistSchema: vi.fn(async () => {}),
+}))
+
+vi.mock('../../server/_lib/canonicalWalletsSchema.js', () => ({
+  ensureCanonicalWalletsSchema: vi.fn(async () => {}),
+}))
+
 vi.mock('viem', async (importOriginal) => {
   const actual = await importOriginal<typeof import('viem')>()
   return {

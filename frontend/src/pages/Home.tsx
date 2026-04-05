@@ -1,4 +1,3 @@
-import { Suspense, lazy, useCallback, useState } from 'react'
 import { Link, Navigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
@@ -7,22 +6,9 @@ import { PageMeta } from '@/components/seo/PageMeta'
 import {
   DEFAULT_DEPOSIT_TOKENS,
 } from '@/components/home/launchConfig'
-import { VaultFlowScroll } from '@/components/home/VaultFlowScroll'
-import {
-  clearStoredWaitlistAuthState,
-  clearStoredWaitlistReferralCode,
-  consumeStoredWaitlistAuthArmed,
-  consumeStoredWaitlistAuthAutoStart,
-} from '@/lib/auth/waitlistEntry'
+import { VaultFlowRoot } from '@/components/home/vault-flow/VaultFlowRoot'
 import { getHostMode } from '@/lib/host'
-import { PrivyClientProvider } from '@/lib/privy/client'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
-import { Web3Providers } from '@/web3/Web3Providers'
-
-const LazyWaitlistFlow = lazy(async () => {
-  const mod = await import('@/components/waitlist/WaitlistFlow')
-  return { default: mod.WaitlistFlow }
-})
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}AKITA`
 const DEFAULT_SHARE_TOKENS = `${DEFAULT_DEPOSIT_TOKENS} ${SHARE_TOKEN}`
@@ -32,29 +18,8 @@ export function Home() {
   const hostMode = getHostMode()
   const showJoinWaitlistCta = hostMode === 'marketing'
   const showExploreCreatorsCta = hostMode === 'app'
-  const [initialWaitlistState] = useState(() => {
-    const autoStart = consumeStoredWaitlistAuthAutoStart()
-    const open = consumeStoredWaitlistAuthArmed() || autoStart
-    return { open, autoStart }
-  })
-  const [waitlistInlineOpen, setWaitlistInlineOpen] = useState(initialWaitlistState.open)
-  const [waitlistAutoStart] = useState(initialWaitlistState.autoStart)
-  const [waitlistProvidersArmed, setWaitlistProvidersArmed] = useState(initialWaitlistState.open)
   const heroCtaClass =
     'btn-primary inline-flex items-center justify-center min-h-[52px] px-6 py-3.5 text-[15px]'
-
-  const armWaitlistProviders = useCallback(() => {
-    if (!waitlistProvidersArmed) {
-      setWaitlistProvidersArmed(true)
-    }
-  }, [waitlistProvidersArmed])
-
-  const openWaitlistDirectAuth = useCallback(() => {
-    armWaitlistProviders()
-    clearStoredWaitlistAuthState()
-    clearStoredWaitlistReferralCode()
-    setWaitlistInlineOpen(true)
-  }, [armWaitlistProviders])
 
   if (hostMode === 'app') {
     return <Navigate to="/swap" replace />
@@ -109,45 +74,10 @@ export function Home() {
               transition={{ duration: 0.7, delay: 0.75 }}
               className="pt-2 sm:pt-4"
             >
-              <div className="contents">
-                {!waitlistInlineOpen ? (
-                  <button
-                    type="button"
-                    onClick={openWaitlistDirectAuth}
-                    className={heroCtaClass}
-                  >
-                    Join waitlist
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
-                ) : null}
-              </div>
-              <div className="contents">
-                {waitlistProvidersArmed ? (
-                  <PrivyClientProvider showWalletLoginFirst={false}>
-                    <Web3Providers>
-                      {waitlistInlineOpen ? (
-                        <div className="mx-auto w-full max-w-3xl text-left">
-                          <Suspense
-                            fallback={
-                              <div className="rounded-[28px] border border-white/10 bg-black/45 px-4 py-6 text-sm text-zinc-300 shadow-[0_30px_120px_-48px_rgba(0,0,0,0.95)] backdrop-blur-md sm:px-6">
-                                Loading…
-                              </div>
-                            }
-                          >
-                            <div className="rounded-[28px] bg-black/45 p-4 shadow-[0_30px_120px_-48px_rgba(0,0,0,0.95)] backdrop-blur-md sm:p-6 lg:p-8">
-                              <LazyWaitlistFlow
-                                variant="embedded"
-                                sectionId="home-waitlist"
-                                autoStartAuth={waitlistAutoStart}
-                              />
-                            </div>
-                          </Suspense>
-                        </div>
-                      ) : null}
-                    </Web3Providers>
-                  </PrivyClientProvider>
-                ) : null}
-              </div>
+              <Link to="/waitlist" className={heroCtaClass}>
+                Join waitlist
+                <ArrowRight className="h-4 w-4" />
+              </Link>
             </motion.div>
           ) : null}
 
@@ -174,7 +104,7 @@ export function Home() {
         />
       </section>
 
-      <VaultFlowScroll depositTokens={DEFAULT_DEPOSIT_TOKENS} shareTokens={DEFAULT_SHARE_TOKENS} />
+      <VaultFlowRoot depositTokens={DEFAULT_DEPOSIT_TOKENS} shareTokens={DEFAULT_SHARE_TOKENS} />
 
       {/* How it works — 4 clean steps */}
       <section className="cinematic-section !py-14 sm:!py-24 lg:!py-28">

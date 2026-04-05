@@ -1,6 +1,6 @@
 import { getMarketingBaseUrl, getWaitlistReferralBaseUrl } from '@/lib/host'
 
-const CANONICAL_MARKETING_WAITLIST_PATH = '/'
+const CANONICAL_MARKETING_WAITLIST_PATH = '/waitlist'
 const WAITLIST_REFERRAL_PATH_PREFIX = '/r'
 
 export const WAITLIST_AUTH_ARMED_KEY = 'cv:waitlist:auth_armed'

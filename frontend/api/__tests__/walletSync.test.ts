@@ -11,6 +11,10 @@ vi.mock('../../server/_lib/zoraProfile.js', () => ({
   fetchZoraProfile: fetchZoraProfileMock,
 }))
 
+vi.mock('../../server/_lib/canonicalWalletsSchema.js', () => ({
+  ensureCanonicalWalletsSchema: vi.fn(async () => {}),
+}))
+
 function createLooseDb() {
   const calls: string[] = []
   return {

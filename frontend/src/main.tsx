@@ -13,6 +13,7 @@ import {
 } from '@/lib/privy/passwordlessFetchGuard'
 import '@4626/brand-kit/styles'
 import './index.css'
+import '@google/model-viewer' // registers <model-viewer>; bundled so devtools don't resolve CDN maps under webRoot
 
 function isLockedEthereumDescriptor(descriptor: PropertyDescriptor | undefined): boolean {
   if (!descriptor) return false

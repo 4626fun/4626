@@ -60,6 +60,11 @@ const STAGE_NAV = [
 const SCRAMBLE_CHARS = ['●', '■', '▲', '◆', '○', '□', '△', '◊', '✶', '✕']
 const SHARE_TOKEN_SYMBOL = '■AKITA'
 const SHARE_TOKEN_ALT = '■AKITA share token'
+const SHARE_TOKEN_BADGE_SRC = '/akita-share-token-badge.webp'
+
+// Precomputed star-field: 42 hand-placed white dots over a 900×600 tile.
+// Used as a background-image so it repeats seamlessly and costs zero JS.
+const STAR_FIELD_BG = `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="900" height="600"><circle cx="42" cy="38" r="0.9" fill="white" opacity="0.7"/><circle cx="247" cy="89" r="0.55" fill="white" opacity="0.5"/><circle cx="612" cy="23" r="1.0" fill="white" opacity="0.72"/><circle cx="754" cy="156" r="0.65" fill="white" opacity="0.62"/><circle cx="125" cy="234" r="0.45" fill="white" opacity="0.45"/><circle cx="389" cy="178" r="0.75" fill="white" opacity="0.65"/><circle cx="528" cy="312" r="0.55" fill="white" opacity="0.5"/><circle cx="837" cy="89" r="0.85" fill="white" opacity="0.68"/><circle cx="193" cy="456" r="0.65" fill="white" opacity="0.55"/><circle cx="671" cy="398" r="0.45" fill="white" opacity="0.45"/><circle cx="76" cy="523" r="0.95" fill="white" opacity="0.7"/><circle cx="445" cy="512" r="0.55" fill="white" opacity="0.52"/><circle cx="823" cy="445" r="0.75" fill="white" opacity="0.62"/><circle cx="301" cy="67" r="0.65" fill="white" opacity="0.6"/><circle cx="567" cy="478" r="0.85" fill="white" opacity="0.68"/><circle cx="148" cy="389" r="0.45" fill="white" opacity="0.45"/><circle cx="712" cy="234" r="0.75" fill="white" opacity="0.65"/><circle cx="234" cy="545" r="0.55" fill="white" opacity="0.5"/><circle cx="489" cy="145" r="0.65" fill="white" opacity="0.58"/><circle cx="867" cy="512" r="0.85" fill="white" opacity="0.7"/><circle cx="356" cy="423" r="0.45" fill="white" opacity="0.45"/><circle cx="623" cy="567" r="0.75" fill="white" opacity="0.65"/><circle cx="89" cy="178" r="0.55" fill="white" opacity="0.52"/><circle cx="478" cy="289" r="0.85" fill="white" opacity="0.7"/><circle cx="756" cy="345" r="0.65" fill="white" opacity="0.6"/><circle cx="167" cy="312" r="0.45" fill="white" opacity="0.45"/><circle cx="534" cy="56" r="0.75" fill="white" opacity="0.67"/><circle cx="812" cy="178" r="0.55" fill="white" opacity="0.52"/><circle cx="289" cy="423" r="0.85" fill="white" opacity="0.7"/><circle cx="645" cy="123" r="0.65" fill="white" opacity="0.62"/><circle cx="23" cy="267" r="0.45" fill="white" opacity="0.45"/><circle cx="412" cy="534" r="0.75" fill="white" opacity="0.65"/><circle cx="778" cy="267" r="0.55" fill="white" opacity="0.52"/><circle cx="134" cy="89" r="0.85" fill="white" opacity="0.7"/><circle cx="567" cy="389" r="0.65" fill="white" opacity="0.6"/><circle cx="345" cy="234" r="0.45" fill="white" opacity="0.45"/><circle cx="689" cy="478" r="0.75" fill="white" opacity="0.65"/><circle cx="201" cy="156" r="0.55" fill="white" opacity="0.52"/><circle cx="456" cy="367" r="0.85" fill="white" opacity="0.7"/><circle cx="823" cy="323" r="0.65" fill="white" opacity="0.62"/><circle cx="59" cy="467" r="0.55" fill="white" opacity="0.5"/><circle cx="720" cy="545" r="0.8" fill="white" opacity="0.65"/></svg>')}")`
 
 const smoothstep = (t: number) => t * t * (3 - 2 * t)
 const parseTokenAmount = (value: string) => {
@@ -171,22 +176,38 @@ const HUD = memo(function HUD({ progressH, cueOpacity, stage2LabelOp, activeStag
           }}
         />
       </div>
-      <div className="absolute left-9 top-1/2 hidden -translate-y-1/2 flex-col gap-5 sm:flex">
-        {STAGE_NAV.map((s, i) => (
-          <motion.div
-            key={s.n}
-            className="flex items-center gap-3"
-            animate={{ opacity: activeStageIdx === i ? 1 : 0.16 }}
-            transition={{ duration: 0.65, ease: [0.32, 0, 0.67, 0] }}
-          >
+      <div className="absolute left-8 top-1/2 hidden -translate-y-1/2 sm:block">
+        <div className="relative flex flex-col">
+          {/* Vertical connector track behind dots */}
+          <div
+            className="pointer-events-none absolute left-[3px] top-3 bottom-3 w-px"
+            style={{ background: 'rgba(255,255,255,0.07)' }}
+            aria-hidden="true"
+          />
+          {STAGE_NAV.map((s, i) => (
             <motion.div
-              className="h-px rounded-full bg-white"
-              animate={{ width: activeStageIdx === i ? 20 : 6, opacity: activeStageIdx === i ? 0.75 : 0.25 }}
+              key={s.n}
+              className="relative flex items-center gap-3 py-[11px]"
+              animate={{ opacity: activeStageIdx === i ? 1 : activeStageIdx > i ? 0.38 : 0.14 }}
               transition={{ duration: 0.65, ease: [0.32, 0, 0.67, 0] }}
-            />
-            <span className="text-[8px] font-semibold uppercase tracking-[0.24em] text-zinc-400">{s.label}</span>
-          </motion.div>
-        ))}
+            >
+              {/* Stage dot — glows on active */}
+              <motion.div
+                className="relative z-10 flex-shrink-0 rounded-full"
+                animate={{
+                  width:      activeStageIdx === i ? 7 : 4,
+                  height:     activeStageIdx === i ? 7 : 4,
+                  background: activeStageIdx === i ? 'rgba(255,255,255,0.95)' : 'rgba(255,255,255,0.25)',
+                  boxShadow:  activeStageIdx === i
+                    ? '0 0 0 2px rgba(100,160,255,0.18), 0 0 8px 3px rgba(100,160,255,0.55)'
+                    : '0 0 0 0 transparent',
+                }}
+                transition={{ duration: 0.55, ease: [0.32, 0, 0.67, 0] }}
+              />
+              <span className="text-[8px] font-semibold uppercase tracking-[0.24em] text-zinc-400">{s.label}</span>
+            </motion.div>
+          ))}
+        </div>
       </div>
       <div className="pointer-events-none absolute inset-x-0 top-10 z-30 flex justify-center">
         <StepChip n={currentStage.n} label={currentStage.label} active />
@@ -302,76 +323,117 @@ const VaultScene = memo(function VaultScene({
               <filter id={`${uid}-back-post-blur`} x="-80%" y="-20%" width="260%" height="140%">
                 <feGaussianBlur stdDeviation="0.6" />
               </filter>
+              {/* Front-edge glow — soft bloom on the bright front edges */}
+              <filter id={`${uid}-front-glow`} x="-120%" y="-20%" width="340%" height="140%">
+                <feGaussianBlur stdDeviation="3.5" result="blur" />
+                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+              </filter>
             </defs>
 
-            {/* Interior fill — subtle atmosphere */}
+            {/* Interior fill — slightly warmer atmosphere now */}
             <motion.polygon
               points="0,28 244,28 244,302 0,302"
-              fill="rgba(130,180,255,0.018)"
+              fill="rgba(80,130,255,0.032)"
               style={{ opacity: vaultTopProgress }}
             />
 
-            {/* ── FRONT POSTS (left + right) — grow upward */}
-            <motion.path d="M 0 302 L 0 28"    stroke="rgba(165,212,255,0.68)" strokeWidth="1.5" strokeLinecap="round" style={{ pathLength: vaultPostProgress }} />
-            <motion.path d="M 244 302 L 244 28" stroke="rgba(165,212,255,0.68)" strokeWidth="1.5" strokeLinecap="round" style={{ pathLength: vaultPostProgress }} />
+            {/* ── FRONT POSTS — glow copies (rendered first, behind sharp lines) */}
+            <motion.path d="M 0 302 L 0 28"    stroke="rgba(140,200,255,0.18)" strokeWidth="5" strokeLinecap="round" filter={`url(#${uid}-front-glow)`} style={{ pathLength: vaultPostProgress }} />
+            <motion.path d="M 244 302 L 244 28" stroke="rgba(140,200,255,0.18)" strokeWidth="5" strokeLinecap="round" filter={`url(#${uid}-front-glow)`} style={{ pathLength: vaultPostProgress }} />
 
-            {/* ── BACK POSTS (left + right) — same timing, dimmer */}
-            <motion.path d="M 28 238 L 28 52"   stroke="rgba(86,124,210,0.18)" strokeWidth="0.75" strokeLinecap="round" filter={`url(#${uid}-back-post-blur)`} style={{ pathLength: vaultPostProgress }} />
-            <motion.path d="M 216 238 L 216 52"  stroke="rgba(86,124,210,0.18)" strokeWidth="0.75" strokeLinecap="round" filter={`url(#${uid}-back-post-blur)`} style={{ pathLength: vaultPostProgress }} />
+            {/* ── FRONT POSTS — sharp lines on top */}
+            <motion.path d="M 0 302 L 0 28"    stroke="rgba(172,218,255,0.76)" strokeWidth="1.5" strokeLinecap="round" style={{ pathLength: vaultPostProgress }} />
+            <motion.path d="M 244 302 L 244 28" stroke="rgba(172,218,255,0.76)" strokeWidth="1.5" strokeLinecap="round" style={{ pathLength: vaultPostProgress }} />
 
-            {/* ── FRONT TOP EDGE */}
-            <motion.path d="M 0 28 L 244 28"    stroke="rgba(200,228,255,0.72)" strokeWidth="1.5" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
+            {/* ── BACK POSTS — dimmer, slightly blurred */}
+            <motion.path d="M 28 238 L 28 52"   stroke="rgba(86,124,210,0.17)" strokeWidth="0.75" strokeLinecap="round" filter={`url(#${uid}-back-post-blur)`} style={{ pathLength: vaultPostProgress }} />
+            <motion.path d="M 216 238 L 216 52"  stroke="rgba(86,124,210,0.17)" strokeWidth="0.75" strokeLinecap="round" filter={`url(#${uid}-back-post-blur)`} style={{ pathLength: vaultPostProgress }} />
+
+            {/* ── FRONT TOP EDGE — glow copy */}
+            <motion.path d="M 0 28 L 244 28"    stroke="rgba(160,215,255,0.15)" strokeWidth="5" strokeLinecap="round" filter={`url(#${uid}-front-glow)`} style={{ pathLength: vaultTopProgress }} />
+            {/* ── FRONT TOP EDGE — sharp */}
+            <motion.path d="M 0 28 L 244 28"    stroke="rgba(208,234,255,0.80)" strokeWidth="1.5" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
 
             {/* ── BACK TOP EDGE */}
-            <motion.path d="M 28 52 L 216 52"   stroke="rgba(86,124,210,0.18)" strokeWidth="0.7" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
+            <motion.path d="M 28 52 L 216 52"   stroke="rgba(86,124,210,0.17)" strokeWidth="0.7" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
 
-            {/* ── TOP-FACE DEPTH DIAGONALS (front-TL→back-TL, front-TR→back-TR) */}
-            <motion.path d="M 0 28 L 28 52"     stroke="rgba(124,164,245,0.32)" strokeWidth="0.85" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
-            <motion.path d="M 244 28 L 216 52"  stroke="rgba(124,164,245,0.32)" strokeWidth="0.85" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
+            {/* ── TOP-FACE DEPTH DIAGONALS */}
+            <motion.path d="M 0 28 L 28 52"     stroke="rgba(124,164,245,0.35)" strokeWidth="0.85" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
+            <motion.path d="M 244 28 L 216 52"  stroke="rgba(124,164,245,0.35)" strokeWidth="0.85" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
 
-            {/* ── TOP CORNER BRACKETS — accent caps at front top corners */}
-            <motion.polyline points="0,28 18,28"    stroke="rgba(215,240,255,0.82)" strokeWidth="2.0" fill="none" style={{ opacity: vaultTopProgress }} />
-            <motion.polyline points="0,28 0,48"     stroke="rgba(215,240,255,0.82)" strokeWidth="2.0" fill="none" style={{ opacity: vaultTopProgress }} />
-            <motion.polyline points="226,28 244,28" stroke="rgba(215,240,255,0.82)" strokeWidth="2.0" fill="none" style={{ opacity: vaultTopProgress }} />
-            <motion.polyline points="244,28 244,48" stroke="rgba(215,240,255,0.82)" strokeWidth="2.0" fill="none" style={{ opacity: vaultTopProgress }} />
+            {/* ── TOP CORNER BRACKETS */}
+            <motion.polyline points="0,28 18,28"    stroke="rgba(220,244,255,0.88)" strokeWidth="2.0" fill="none" style={{ opacity: vaultTopProgress }} />
+            <motion.polyline points="0,28 0,48"     stroke="rgba(220,244,255,0.88)" strokeWidth="2.0" fill="none" style={{ opacity: vaultTopProgress }} />
+            <motion.polyline points="226,28 244,28" stroke="rgba(220,244,255,0.88)" strokeWidth="2.0" fill="none" style={{ opacity: vaultTopProgress }} />
+            <motion.polyline points="244,28 244,48" stroke="rgba(220,244,255,0.88)" strokeWidth="2.0" fill="none" style={{ opacity: vaultTopProgress }} />
 
           </svg>
         </motion.div>
 
         {/* ── SPHERE inside the cube ────────────────────────────────────────────
-            210×210px, centered at x=48 (div-left), resting on inner floor y=44.
-            center-y = 44−105 = −61,  top = 44−210 = −166.
-            left = 48−105 = −57.
+            210×210px glass orb — naturally sits inside the cube front face.
+            A soft bottom mask feathers it into the floor instead of a hard clip.
+            center = (48, −61) from vault anchor.
 
             Glow (160×160, 25px inset from sphere edge):
             left = −57+25 = −32,  top = −166+25 = −141.                         */}
         <div
-          className="pointer-events-none absolute overflow-hidden"
+          className="pointer-events-none absolute"
           style={{
-            left: -51,
-            top: -162,
-            width: 198,
-            height: 204,
-            clipPath: 'polygon(6% 0%, 94% 0%, 100% 79%, 0% 79%)',
+            left: -57,
+            top: -168,
+            width: 210,
+            height: 232,
+            maskImage: 'linear-gradient(to bottom, black 72%, transparent 97%)',
+            WebkitMaskImage: 'linear-gradient(to bottom, black 72%, transparent 97%)',
           }}
           aria-hidden="true"
         >
+          {/* Sphere body — dark navy base with rich glass highlight */}
           <div
             className="absolute"
             style={{
-              left: -6,
-              top: -4,
-              width: 210,
-              height: 210,
+              left: 0, top: 2, width: 210, height: 210,
               borderRadius: '50%',
               background: [
-                'radial-gradient(circle at 36% 33%,',
-                '  rgba(255,255,255,0.07) 0%,',
-                '  rgba(156,194,255,0.028) 44%,',
-                '  rgba(80,120,255,0.008) 68%,',
-                '  transparent 84%)',
-              ].join(''),
+                // Solid dark-navy base so the orb reads as an object, not void
+                'radial-gradient(circle at 50% 50%, rgba(6,14,46,0.94) 0%, rgba(3,7,28,0.98) 100%)',
+                // Primary specular — strong catch-light at upper-left
+                'radial-gradient(circle at 33% 25%, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.06) 20%, transparent 38%)',
+                // Secondary highlight — cool-blue diffuse
+                'radial-gradient(circle at 42% 38%, rgba(160,210,255,0.11) 0%, transparent 52%)',
+                // Bottom depth shadow
+                'radial-gradient(circle at 50% 74%, rgba(0,0,20,0.55) 0%, transparent 56%)',
+                // Edge vignette
+                'radial-gradient(circle at 50% 50%, transparent 56%, rgba(0,8,38,0.22) 80%, rgba(0,4,22,0.34) 100%)',
+              ].join(', '),
+              boxShadow: [
+                'inset 0 0 0 0.5px rgba(140,190,255,0.18)',
+                'inset 0 0 48px 8px rgba(18,55,200,0.07)',
+                'inset 0 -28px 44px -20px rgba(0,0,48,0.18)',
+              ].join(', '),
             }}
+          />
+          {/* Rim ring — crisper edge definition */}
+          <div
+            className="absolute"
+            style={{
+              left: 0, top: 2, width: 210, height: 210,
+              borderRadius: '50%',
+              border: '1px solid rgba(160,205,255,0.14)',
+            }}
+          />
+          {/* Breathing pulse — slow ambient luminance suggesting the vault is alive */}
+          <motion.div
+            className="absolute"
+            style={{
+              left: 18, top: 20, width: 174, height: 174,
+              borderRadius: '50%',
+              background: 'radial-gradient(circle at 50% 48%, rgba(60,120,255,0.09) 0%, transparent 68%)',
+            }}
+            animate={{ opacity: [0.4, 0.85, 0.4] }}
+            transition={{ duration: 4.8, repeat: Infinity, ease: 'easeInOut' }}
+            aria-hidden="true"
           />
         </div>
 
@@ -482,7 +544,7 @@ const DistributionFan = memo(function DistributionFan({
             className="inline-flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-full"
             style={{ border: '1px solid rgba(100,160,255,0.35)', background: 'rgba(0,30,90,0.60)' }}
           >
-            <img src="/akita-share-token.png" alt={SHARE_TOKEN_ALT} className="h-full w-full object-cover" loading="lazy" />
+            <img src={SHARE_TOKEN_BADGE_SRC} alt={SHARE_TOKEN_ALT} className="h-full w-full object-cover" loading="lazy" />
           </span>
           <span className="font-mono text-[7px] uppercase tracking-[0.30em]" style={{ color: 'rgba(100,160,255,0.55)' }}>{SHARE_TOKEN_SYMBOL} · distributing</span>
           <span className="h-px w-5 flex-shrink-0" style={{ background: 'rgba(100,160,255,0.25)' }} />
@@ -502,7 +564,7 @@ const DistributionFan = memo(function DistributionFan({
               className="inline-flex h-3.5 w-3.5 shrink-0 items-center justify-center overflow-hidden rounded-full"
               style={{ border: '1px solid rgba(100,160,255,0.35)', background: 'rgba(0,30,90,0.60)' }}
             >
-              <img src="/akita-share-token.png" alt={SHARE_TOKEN_ALT} className="h-full w-full object-cover" loading="lazy" />
+              <img src={SHARE_TOKEN_BADGE_SRC} alt={SHARE_TOKEN_ALT} className="h-full w-full object-cover" loading="lazy" />
             </span>
             <span className="font-mono text-[6px] uppercase tracking-[0.20em]" style={{ color: 'rgba(100,160,255,0.72)' }}>
               share fan-out live
@@ -844,8 +906,12 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
     const mq = window.matchMedia('(min-width: 640px)')
     const handleChange = () => setUseDesktopStage4Timing(mq.matches)
     handleChange()
-    mq.addEventListener('change', handleChange)
-    return () => mq.removeEventListener('change', handleChange)
+    if (typeof mq.addEventListener === 'function') {
+      mq.addEventListener('change', handleChange)
+      return () => mq.removeEventListener('change', handleChange)
+    }
+    mq.addListener(handleChange)
+    return () => mq.removeListener(handleChange)
   }, [])
 
   const fireHardStop = useCallback((_label: string, dur: number) => {
@@ -891,7 +957,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
     // Checkpoint 2: deposit fill done (0.46) + ■AKITA right column fully visible (0.50)
     if (!f.s2 && v >= 0.50) { f.s2 = true; fireHardStop('shares minted', 2.0) }
     // Checkpoint 3: all 3 distribution paths complete (_d2Raw hits 1.0 at 0.70)
-    if (!f.s3 && v >= 0.70) { f.s3 = true; fireHardStop('take a moment', 3.2) }
+    if (!f.s3 && v >= 0.71) { f.s3 = true; fireHardStop('take a moment', 3.2) }
     // Checkpoint 4: all 4 strategy cards at 90%+ opacity
     if (!f.s4 && v >= 0.95) { f.s4 = true; fireHardStop('strategies deployed', 2.5) }
   })
@@ -930,7 +996,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const displayDepositTokens = depositTokens
   const displayShareAmount = stripShareTokenSymbol(normalizedShareTokens) || depositTokens
   const totalShareCount = parseTokenAmount(normalizedShareTokens) || SHARE_DISTRIBUTION_TOTAL
-  const shareTokenLogo = '/akita-share-token.png'
+  const shareTokenLogo = SHARE_TOKEN_BADGE_SRC
 
   // HUD / camera
   const progressH = useTransform(scroll, [0, 1], ['0%', '100%'])
@@ -967,25 +1033,25 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
     rotateX(${worldRotateX}deg)
   `
 
-  // Dark cold-open: atmosphere starts at 0 (near-black sky), builds as Zorb lands and scene unfolds.
-  const atmosphereOpacity = useTransform(scroll, [0, 0.09, 0.20, 1], [0, 0.04, 0.22, 0.44])
+  // Atmosphere: starts with a whisper of blue at scroll=0 so the cold-open
+  // isn't pure void, then blooms as the Zorb lands.
+  const atmosphereOpacity = useTransform(scroll, [0, 0.06, 0.20, 1], [0.06, 0.14, 0.32, 0.50])
 
   // Hero plane — waits in the deep while the Zorb takes its solo moment, then sweeps in
   // from 260px behind camera and locks into position as the title cross-fades up.
   // Arrives 2% sooner (0.13 vs 0.15) to tighten the cold-open before story begins.
-  const heroZ = useTransform(scroll, [0, 0.13, 0.32, 0.44], [260, 32, 32, -60])
-  const heroY = useTransform(scroll, [0, 0.44], [0, -12])
-  // Slight scale-down on arrival: the plane "punches through" the depth field and settles.
-  const heroScale = useTransform(scroll, [0, 0.13, 0.32, 0.44], [1.08, 0.96, 0.96, 0.88])
-  // Hero text appears at 0.12 — Zorb has landed, vault starts sealing, story begins.
-  const heroOpacity = useTransform(scroll, [0, 0.12, 0.18, 0.32, 0.46], [0, 0, 1, 1, 0])
+  const heroZ = useTransform(scroll, [0, 0.13, 0.30, 0.38], [260, 32, 32, -60])
+  const heroY = useTransform(scroll, [0, 0.38], [0, -12])
+  const heroScale = useTransform(scroll, [0, 0.13, 0.30, 0.38], [1.08, 0.96, 0.96, 0.88])
+  // Hero text: crisp from 0.18-0.30, then a brisk 8% fade that clears before the deposit card enters.
+  const heroOpacity = useTransform(scroll, [0, 0.12, 0.18, 0.30, 0.38], [0, 0, 1, 1, 0])
   const heroTitleOpacity = useTransform(scroll, [0.12, 0.18], [0, 1])
   const heroTitleY = useTransform(scroll, [0.12, 0.18], [20, 0])
   const heroPillsOpacity = useTransform(scroll, [0.12, 0.18], [0, 1])
   const heroPillsY = useTransform(scroll, [0.12, 0.18], [14, 0])
   const heroBodyOpacity = useTransform(scroll, [0.18, 0.26], [0, 1])
   const heroBodyY = useTransform(scroll, [0.18, 0.26], [12, 0])
-  const heroBlur = useTransform(scroll, [0.32, 0.42], [0, 7])
+  const heroBlur = useTransform(scroll, [0.30, 0.38], [0, 10])
   const heroFilter = useMotionTemplate`blur(${heroBlur}px)`
   const heroTransform = useMotionTemplate`
     translate3d(-50%, ${heroY}px, ${heroZ}px)
@@ -1003,11 +1069,15 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const depositNodeScale = useTransform(scroll, [0.34, 0.37, 0.42], [1.20, 1.04, 1])
   // Card fades in once, then PERSISTS through stage 4 — it IS the principal card.
   const depositNodeOpacity = useTransform(scroll, [0.34, 0.38], [0, 1])
+  // During Stage 3 distribution, lift the card above the vault so the sphere + fan stay visible.
+  // Returns to baseline before the stage 4 dive so the two lifts don't stack.
+  const stage3CardLift = useTransform(scroll, [0.52, 0.56, 0.73, 0.76], [0, -160, -160, 0])
+  const stage3CardScale = useTransform(scroll, [0.52, 0.56, 0.73, 0.76], [1, 0.82, 0.82, 1])
   // During Stage 4, dock the summary card upward so the strategy grid owns the center.
   const stage4CardLift = useTransform(scroll, [0.76, 0.82, 0.90], [0, -128, -208])
   const stage4CardScale = useTransform(scroll, [0.76, 0.82, 0.90], [1, 0.86, 0.68])
-  const depositNodeY = useTransform(() => topDotY.get() + stage4CardLift.get())
-  const depositNodeVisualScale = useTransform(() => depositNodeScale.get() * stage4CardScale.get())
+  const depositNodeY = useTransform(() => topDotY.get() + stage3CardLift.get() + stage4CardLift.get())
+  const depositNodeVisualScale = useTransform(() => depositNodeScale.get() * stage3CardScale.get() * stage4CardScale.get())
   const depositNodeTransform = useMotionTemplate`translate3d(-50%, ${depositNodeY}px, 0px) scale(${depositNodeVisualScale})`
 
   // Vault — rockets toward camera while off-screen, slows to a crawl once visible,
@@ -1044,49 +1114,48 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
 
   // Coin entry glow — fires when deposit fill completes, sustains through all distributions,
   // fades as the dive begins
-  const _coinEntryGlowBase = useTransform(scroll, [0.48, 0.53, 0.74, 0.78], [0, 1, 1, 0])
+  const _coinEntryGlowBase = useTransform(scroll, [0.50, 0.54, 0.74, 0.78], [0, 1, 1, 0])
   const coinEntryGlow = useTransform(_coinEntryGlowBase, v => prefersReducedMotion ? 0 : v)
   // Zora neon-green mint flash — a quick tribute to Zora's new identity.
   const _zoraGreenFlashBase = useTransform(scroll, [0.46, 0.485, 0.52], [0, 1, 0])
   const zoraGreenFlash = useTransform(_zoraGreenFlashBase, v => prefersReducedMotion ? 0 : v)
   // Green flash on each distribution card when its path finishes drawing
-  const distGreen0 = useTransform(scroll, [0.58, 0.595, 0.63], [0, 1, 0])
-  const distGreen1 = useTransform(scroll, [0.65, 0.665, 0.70], [0, 1, 0])
-  const distGreen2 = useTransform(scroll, [0.70, 0.715, 0.74], [0, 1, 0])
+  const distGreen0 = useTransform(scroll, [0.60, 0.615, 0.65], [0, 1, 0])
+  const distGreen1 = useTransform(scroll, [0.66, 0.675, 0.71], [0, 1, 0])
+  const distGreen2 = useTransform(scroll, [0.71, 0.725, 0.75], [0, 1, 0])
   // Entry radial bloom: peaks as vault rushes through camera, fully faded before deploy content reads
   const vaultEntry = useTransform(scroll, [0.77, 0.81, 0.85], [0, 1, 0])
 
   // ── Distribution fan chart — one curved path + card revealed at a time ─
   // Fades in immediately after deposit fill completes (0.48), holds through all 3 paths,
   // fades just before zoom peak (0.74) so cards clear before the camera rushes in.
-  const distSectionOp = useTransform(scroll, [0.48, 0.53, 0.72, 0.76], [0, 1, 1, 0])
-  const distCheckpointOp = useTransform(scroll, [0.56, 0.61, 0.72, 0.76], [0, 1, 1, 0])
-  const distCheckpointWidth = useTransform(scroll, [0.52, 0.70], ['0%', '100%'])
+  const distSectionOp = useTransform(scroll, [0.52, 0.56, 0.72, 0.76], [0, 1, 1, 0])
+  const distCheckpointOp = useTransform(scroll, [0.58, 0.62, 0.72, 0.76], [0, 1, 1, 0])
+  const distCheckpointWidth = useTransform(scroll, [0.54, 0.71], ['0%', '100%'])
 
   // Distribution paths cascade in — each path starts as the previous one finishes.
   // All 3 complete by 0.70 (2% earlier than before). Checkpoint 3 fires at 0.70.
   //
-  // Path + card 0 (CCA Launch — left): 0.50 start
-  const _d0Raw = useTransform(scroll, [0.50, 0.58], [0, 1])
+  // Path + card 0 (CCA Launch — left): starts after card lift begins
+  const _d0Raw = useTransform(scroll, [0.53, 0.60], [0, 1])
   const orbitTrav0 = useTransform(_d0Raw, smoothstep)
   const node0Op = orbitTrav0
-  const dist0CardY = useTransform(scroll, [0.50, 0.58], [22, 0])
-  // Glow stays ON through all distributions, fades with dive
-  const nodeGlow0 = useTransform(scroll, [0.57, 0.60, 0.74, 0.78], [0, 1, 1, 0])
+  const dist0CardY = useTransform(scroll, [0.53, 0.60], [22, 0])
+  const nodeGlow0 = useTransform(scroll, [0.59, 0.62, 0.74, 0.78], [0, 1, 1, 0])
 
-  // Path + card 1 (Creator Vesting — center): 0.58 start
-  const _d1Raw = useTransform(scroll, [0.58, 0.65], [0, 1])
+  // Path + card 1 (Creator Vesting — center)
+  const _d1Raw = useTransform(scroll, [0.60, 0.66], [0, 1])
   const orbitTrav1 = useTransform(_d1Raw, smoothstep)
   const node1Op = orbitTrav1
-  const dist1CardY = useTransform(scroll, [0.58, 0.65], [22, 0])
-  const nodeGlow1 = useTransform(scroll, [0.64, 0.67, 0.74, 0.78], [0, 1, 1, 0])
+  const dist1CardY = useTransform(scroll, [0.60, 0.66], [22, 0])
+  const nodeGlow1 = useTransform(scroll, [0.65, 0.68, 0.74, 0.78], [0, 1, 1, 0])
 
-  // Path + card 2 (LP Reserve — right): 0.65 start
-  const _d2Raw = useTransform(scroll, [0.65, 0.70], [0, 1])
+  // Path + card 2 (LP Reserve — right)
+  const _d2Raw = useTransform(scroll, [0.66, 0.71], [0, 1])
   const orbitTrav2 = useTransform(_d2Raw, smoothstep)
   const node2Op = orbitTrav2
-  const dist2CardY = useTransform(scroll, [0.65, 0.70], [22, 0])
-  const nodeGlow2 = useTransform(scroll, [0.69, 0.71, 0.74, 0.78], [0, 1, 1, 0])
+  const dist2CardY = useTransform(scroll, [0.66, 0.71], [22, 0])
+  const nodeGlow2 = useTransform(scroll, [0.70, 0.72, 0.74, 0.78], [0, 1, 1, 0])
 
   // "× ERC-4626" suffix appears only after the vault captures the Zorb (~0.28)
   // ercSuffixOp removed — title is now static "Welcome to 4626.fun"
@@ -1112,14 +1181,14 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   )
   const depositFillWidth = useTransform(depositFillPct, v => `${(Math.min(v, 1) * 100).toFixed(1)}%`)
   // "Vault initiated" confirmation badge — flashes after fill completes
-  const vaultInitOp = useTransform(scroll, [0.48, 0.51, 0.53, 0.58], [0, 1, 1, 0])
+  const vaultInitOp = useTransform(scroll, [0.48, 0.51, 0.52, 0.55], [0, 1, 1, 0])
 
   // (APY reveal removed — allocation percentages are shown permanently)
 
   // Per-card distribution counters — MotionValues only, no React state
-  const distCount0MV = useTransform(scroll, [0.50, 0.58], [0, SHARE_DISTRIBUTION_AMOUNTS[0]])
-  const distCount1MV = useTransform(scroll, [0.58, 0.65], [0, SHARE_DISTRIBUTION_AMOUNTS[1]])
-  const distCount2MV = useTransform(scroll, [0.65, 0.70], [0, SHARE_DISTRIBUTION_AMOUNTS[2]])
+  const distCount0MV = useTransform(scroll, [0.53, 0.60], [0, SHARE_DISTRIBUTION_AMOUNTS[0]])
+  const distCount1MV = useTransform(scroll, [0.60, 0.66], [0, SHARE_DISTRIBUTION_AMOUNTS[1]])
+  const distCount2MV = useTransform(scroll, [0.66, 0.71], [0, SHARE_DISTRIBUTION_AMOUNTS[2]])
 
   // Vault cage entry freefall: drops in from -32vh, overshoots +4.5vh, snaps to rest.
   // Rotation unwinds simultaneously for a natural arc. Reduced-motion: skip, appear at rest.
@@ -1144,13 +1213,13 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const dist0DotY = useTransform(orbitTrav0, (t) =>
     (1 - t) ** 3 * 10 + 3 * (1 - t) ** 2 * t * 60 + 3 * (1 - t) * t ** 2 * 60 + t ** 3 * 100,
   )
-  const distDotOp0 = useTransform(scroll, [0.50, 0.52, 0.58, 0.60], [0, 1, 1, 0])
+  const distDotOp0 = useTransform(scroll, [0.53, 0.55, 0.60, 0.62], [0, 1, 1, 0])
 
   // Path 1: M 400 10 C 400 60 400 60 400 100 (x stays at 400)
   const dist1DotY = useTransform(orbitTrav1, (t) =>
     (1 - t) ** 3 * 10 + 3 * (1 - t) ** 2 * t * 60 + 3 * (1 - t) * t ** 2 * 60 + t ** 3 * 100,
   )
-  const distDotOp1 = useTransform(scroll, [0.58, 0.60, 0.65, 0.67], [0, 1, 1, 0])
+  const distDotOp1 = useTransform(scroll, [0.60, 0.62, 0.66, 0.68], [0, 1, 1, 0])
 
   // Path 2: M 400 10 C 400 60 670 60 670 100
   const dist2DotX = useTransform(orbitTrav2, (t) =>
@@ -1159,7 +1228,7 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
   const dist2DotY = useTransform(orbitTrav2, (t) =>
     (1 - t) ** 3 * 10 + 3 * (1 - t) ** 2 * t * 60 + 3 * (1 - t) * t ** 2 * 60 + t ** 3 * 100,
   )
-  const distDotOp2 = useTransform(scroll, [0.65, 0.67, 0.70, 0.72], [0, 1, 1, 0])
+  const distDotOp2 = useTransform(scroll, [0.66, 0.68, 0.71, 0.73], [0, 1, 1, 0])
 
 
 
@@ -1212,36 +1281,60 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
           className="sticky top-0 h-screen overflow-hidden bg-black"
           style={{ perspective: 'clamp(600px, 90vw, 1100px)' }}
         >
-          {/* Atmosphere */}
+          {/* ── SCENE LAYERS (back → front) ──────────────────────────────────── */}
+
+          {/* 1. Deep-space nebula — always faintly visible from frame 0 */}
           <div
             className="pointer-events-none absolute inset-0"
             style={{
-              background:
+              background: [
                 'radial-gradient(ellipse 78% 54% at 50% 34%, rgba(0,82,255,0.10) 0%, rgba(0,82,255,0.035) 44%, transparent 70%)',
+                'radial-gradient(ellipse 50% 40% at 30% 60%, rgba(0,40,160,0.04) 0%, transparent 70%)',
+                'radial-gradient(ellipse 40% 35% at 72% 28%, rgba(60,0,180,0.03) 0%, transparent 68%)',
+              ].join(', '),
             }}
             aria-hidden="true"
           />
+
+          {/* 2. Star field — tiny white dots, very low opacity */}
+          <div
+            className="pointer-events-none absolute inset-0 opacity-[0.22]"
+            style={{
+              backgroundImage: STAR_FIELD_BG,
+              backgroundRepeat: 'repeat',
+              backgroundSize: '900px 600px',
+            }}
+            aria-hidden="true"
+          />
+
+          {/* 3. Scroll-driven atmosphere bloom */}
           <motion.div
             className="pointer-events-none absolute inset-0"
             style={{
               opacity: atmosphereOpacity,
-              background:
+              background: [
                 'radial-gradient(ellipse 72% 72% at 50% 52%, rgba(255,255,255,0.055) 0%, transparent 64%)',
+                'radial-gradient(ellipse 44% 38% at 50% 44%, rgba(60,100,200,0.042) 0%, transparent 68%)',
+              ].join(', '),
             }}
             aria-hidden="true"
           />
+
+          {/* 4. Film grain — subtle texture over everything */}
           <div
-            className="pointer-events-none absolute inset-0 opacity-[0.028] mix-blend-overlay"
+            className="pointer-events-none absolute inset-0 opacity-[0.032] mix-blend-overlay"
             style={{
               backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.88' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
             }}
             aria-hidden="true"
           />
+
+          {/* 5. Edge vignette — dim top/bottom so content floats */}
           <div
             className="pointer-events-none absolute inset-0"
             style={{
               background:
-                'linear-gradient(180deg, rgba(255,255,255,0.02) 0%, transparent 24%, transparent 76%, rgba(255,255,255,0.02) 100%)',
+                'linear-gradient(180deg, rgba(0,0,6,0.18) 0%, transparent 18%, transparent 80%, rgba(0,0,6,0.14) 100%)',
             }}
             aria-hidden="true"
           />
@@ -1387,10 +1480,10 @@ export function VaultFlowScroll({ depositTokens, shareTokens }: Props) {
                   style={{
                     transform: 'rotateY(-3deg)',
                     transition: 'transform 0.5s cubic-bezier(0.22,1,0.36,1)',
-                    background: 'rgba(7,7,19,0.96)',
-                    border: '1px solid rgba(255,255,255,0.08)',
-                    backdropFilter: prefersReducedMotion ? 'none' : 'blur(20px)',
-                    boxShadow: '0 10px 40px -10px rgba(0,0,0,0.78), inset 0 1px 0 rgba(255,255,255,0.04), inset 0 0 0 1px rgba(4,6,16,0.42)',
+                    background: 'linear-gradient(168deg, rgba(14,16,32,0.90) 0%, rgba(7,7,19,0.96) 100%)',
+                    border: '1px solid rgba(255,255,255,0.07)',
+                    backdropFilter: prefersReducedMotion ? 'none' : 'blur(24px)',
+                    boxShadow: '0 12px 48px -12px rgba(0,0,0,0.82), 0 0 0 0.5px rgba(255,255,255,0.03), inset 0 1px 0 rgba(255,255,255,0.06), inset 0 0 0 1px rgba(8,12,24,0.38)',
                   }}
                   onMouseEnter={e => ((e.currentTarget as HTMLDivElement).style.transform = 'rotateY(0deg)')}
                   onMouseLeave={e => ((e.currentTarget as HTMLDivElement).style.transform = 'rotateY(-3deg)')}

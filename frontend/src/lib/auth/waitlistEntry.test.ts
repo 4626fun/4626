@@ -27,17 +27,17 @@ describe('waitlistEntry', () => {
   })
 
   it('builds the canonical waitlist entry path as a clean route', () => {
-    expect(buildWaitlistEntryPath()).toBe('/')
+    expect(buildWaitlistEntryPath()).toBe('/waitlist')
   })
 
   it('builds waitlist entry URLs against the provided base origin', () => {
-    expect(buildWaitlistEntryUrl('https://4626.fun')).toBe('https://4626.fun/')
-    expect(buildWaitlistEntryUrl('https://v1.4626.fun/')).toBe('https://v1.4626.fun/')
+    expect(buildWaitlistEntryUrl('https://4626.fun')).toBe('https://4626.fun/waitlist')
+    expect(buildWaitlistEntryUrl('https://v1.4626.fun/')).toBe('https://v1.4626.fun/waitlist')
   })
 
   it('builds the canonical marketing waitlist path and URL', () => {
-    expect(getCanonicalMarketingWaitlistPath()).toBe('/')
-    expect(buildCanonicalMarketingWaitlistUrl('https://4626.fun/')).toBe('https://4626.fun/')
+    expect(getCanonicalMarketingWaitlistPath()).toBe('/waitlist')
+    expect(buildCanonicalMarketingWaitlistUrl('https://4626.fun/')).toBe('https://4626.fun/waitlist')
   })
 
   it('normalizes referral codes into short url-safe values', () => {
@@ -55,10 +55,10 @@ describe('waitlistEntry', () => {
     expect(readWaitlistEntryReferralCode({ pathname: '/' })).toBeNull()
   })
 
-  it('treats only the homepage route as the live marketing waitlist surface', () => {
-    expect(isMarketingWaitlistEntryLocation({ pathname: '/' })).toBe(true)
+  it('treats the /waitlist route as the live marketing waitlist surface', () => {
+    expect(isMarketingWaitlistEntryLocation({ pathname: '/waitlist' })).toBe(true)
+    expect(isMarketingWaitlistEntryLocation({ pathname: '/' })).toBe(false)
     expect(isMarketingWaitlistEntryLocation({ pathname: '/r/FRIEND42' })).toBe(false)
-    expect(isMarketingWaitlistEntryLocation({ pathname: '/waitlist' })).toBe(false)
     expect(isMarketingWaitlistEntryLocation({ pathname: '/faq' })).toBe(false)
   })
 

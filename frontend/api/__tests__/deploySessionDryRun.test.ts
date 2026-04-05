@@ -108,6 +108,10 @@ vi.mock('../../server/_lib/waitlistSchema.js', () => ({
   ensureWaitlistSchema: vi.fn(async () => {}),
 }))
 
+vi.mock('../../server/_lib/canonicalWalletsSchema.js', () => ({
+  ensureCanonicalWalletsSchema: vi.fn(async () => {}),
+}))
+
 vi.mock('../../server/_lib/erc7712Permissions.js', () => ({
   buildDeployPermissionGrant: vi.fn(() => ({ version: 'erc7712-v1' })),
 }))

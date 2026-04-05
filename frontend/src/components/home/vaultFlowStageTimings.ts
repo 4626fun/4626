@@ -33,15 +33,15 @@ export const MOBILE_STAGE4_TIMING: VaultFlowStage4TimingPreset = {
 }
 
 export const DESKTOP_STAGE4_TIMING: VaultFlowStage4TimingPreset = {
-  deployZ: [0.74, 0.80, 1.0],
-  deployOpacity: [0.74, 0.80],
-  deployBlur: [0.74, 0.80, 1.0],
-  deployTitle: [0.76, 0.81],
+  deployZ: [0.74, 0.79, 1.0],
+  deployOpacity: [0.74, 0.79],
+  deployBlur: [0.74, 0.79, 1.0],
+  deployTitle: [0.75, 0.80],
   fanCards: [
-    { opacity: [0.78, 0.84], destination: [0.80, 0.86] },
-    { opacity: [0.81, 0.87], destination: [0.83, 0.89] },
-    { opacity: [0.84, 0.90], destination: [0.86, 0.92] },
-    { opacity: [0.87, 0.93], destination: [0.89, 0.95] },
+    { opacity: [0.77, 0.82], destination: [0.79, 0.84] },
+    { opacity: [0.79, 0.84], destination: [0.81, 0.86] },
+    { opacity: [0.81, 0.86], destination: [0.83, 0.88] },
+    { opacity: [0.83, 0.88], destination: [0.85, 0.90] },
   ],
 }
 

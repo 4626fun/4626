@@ -32,6 +32,10 @@ vi.mock('../../server/_lib/requestPrincipal.js', () => ({
   readRequestPrincipalAddress: readRequestPrincipalAddressMock,
 }))
 
+vi.mock('../../server/_lib/canonicalWalletsSchema.js', () => ({
+  ensureCanonicalWalletsSchema: vi.fn(async () => {}),
+}))
+
 vi.mock('../../server/_lib/rateLimit.js', () => ({
   checkRateLimit: checkRateLimitMock,
   rateLimitKey: rateLimitKeyMock,

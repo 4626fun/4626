@@ -81,6 +81,10 @@ vi.mock('../../server/_lib/logger.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
 
+vi.mock('../../server/_lib/canonicalWalletsSchema.js', () => ({
+  ensureCanonicalWalletsSchema: vi.fn(async () => {}),
+}))
+
 vi.mock('viem', () => ({
   createPublicClient: vi.fn(() => ({
     readContract: vi.fn(async () => true),
