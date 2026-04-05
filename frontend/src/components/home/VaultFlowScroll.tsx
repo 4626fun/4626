@@ -273,10 +273,6 @@ export function VaultFlowScroll({
     }, dur * 1000)
   }, [])
 
-  // Card phase — drives AnimatePresence for the deposit/distribute/deploy card
-  const cardPhaseRef = useRef<1 | 2 | 3>(1)
-  const [cardPhase, setCardPhase] = useState<1 | 2 | 3>(1)
-
   useMotionValueEvent(scroll, 'change', (v) => {
     const nextStoryState = deriveStoryState(v, 'desktop')
     const prevStoryState = desktopStoryStateRef.current
@@ -404,55 +400,12 @@ export function VaultFlowScroll({
   // isn't pure void, then blooms as the Zorb lands.
   const atmosphereOpacity = useTransform(scroll, [0, 0.06, 0.20, 1], [0.06, 0.14, 0.32, 0.50])
 
-  // Hero plane — waits in the deep while the Zorb takes its solo moment, then sweeps in
-  // from 260px behind camera and locks into position as the title cross-fades up.
-  // Arrives 2% sooner (0.13 vs 0.15) to tighten the cold-open before story begins.
-  const heroZ = useTransform(scroll, [0, 0.13, 0.30, 0.38], [260, 32, 32, -60])
-  const heroY = useTransform(scroll, [0, 0.38], [0, -12])
-  const heroScale = useTransform(scroll, [0, 0.13, 0.30, 0.38], [1.08, 0.96, 0.96, 0.88])
-  // Hero text: crisp from 0.18-0.30, then a brisk 8% fade that clears before the deposit card enters.
-  const heroOpacity = useTransform(scroll, [0, 0.12, 0.18, 0.30, 0.38], [0, 0, 1, 1, 0])
-  const heroTitleOpacity = useTransform(scroll, [0.12, 0.18], [0, 1])
-  const heroTitleY = useTransform(scroll, [0.12, 0.18], [20, 0])
-  const heroPillsOpacity = useTransform(scroll, [0.12, 0.18], [0, 1])
-  const heroPillsY = useTransform(scroll, [0.12, 0.18], [14, 0])
-  const heroBodyOpacity = useTransform(scroll, [0.18, 0.26], [0, 1])
-  const heroBodyY = useTransform(scroll, [0.18, 0.26], [12, 0])
-  const heroBlur = useTransform(scroll, [0.30, 0.38], [0, 10])
-  const heroFilter = useMotionTemplate`blur(${heroBlur}px)`
-  const heroTransform = useMotionTemplate`
-    translate3d(-50%, ${heroY}px, ${heroZ}px)
-    scale(${heroScale})
-  `
-
   // CreatorIntroScene — fades in during creatorEstablishes (0.00–0.14), then exits.
   const creatorIntroOpacity = useTransform(scroll, [0, 0.04, 0.10, 0.14], [0, 1, 1, 0])
   const creatorIntroY = useTransform(scroll, [0, 0.06, 0.14], [18, 0, -10])
 
   // TokenDepositScene — covers valueFlowsIn + participantDeposits (0.14–0.42).
   const depositSceneOpacity = useTransform(scroll, [0.12, 0.16, 0.38, 0.42], [0, 1, 1, 0])
-
-  // Pill -> vault connector — starts only after the freeze pause ends (0.44)
-  const _topRaw = useTransform(scroll, [0.34, 0.44], [0, 1])
-  const topTrail = useTransform(_topRaw, smoothstep)
-  // Start 90px above the card anchor so the card descends from above the vault
-  const topDotY = useTransform(topTrail, (t) => -90 + 198 * t)
-  const topDotOp = useTransform(scroll, [0.34, 0.36, 0.42, 0.44], [0, 1, 1, 0])
-
-  // Card entrance: pop-overshoot (1.20) → micro-bounce (1.04) → settle (1.0).
-  const depositNodeScale = useTransform(scroll, [0.34, 0.37, 0.42], [1.20, 1.04, 1])
-  // Card fades in once, then PERSISTS through stage 4 — it IS the principal card.
-  const depositNodeOpacity = useTransform(scroll, [0.34, 0.38], [0, 1])
-  // During Stage 3 distribution, lift the card above the vault so the sphere + fan stay visible.
-  // Returns to baseline before the stage 4 dive so the two lifts don't stack.
-  const stage3CardLift = useTransform(scroll, [0.52, 0.56, 0.73, 0.76], [0, -160, -160, 0])
-  const stage3CardScale = useTransform(scroll, [0.52, 0.56, 0.73, 0.76], [1, 0.82, 0.82, 1])
-  // During Stage 4, dock the summary card upward so the strategy grid owns the center.
-  const stage4CardLift = useTransform(scroll, [0.76, 0.82, 0.90], [0, -128, -208])
-  const stage4CardScale = useTransform(scroll, [0.76, 0.82, 0.90], [1, 0.86, 0.68])
-  const depositNodeY = useTransform(() => topDotY.get() + stage3CardLift.get() + stage4CardLift.get())
-  const depositNodeVisualScale = useTransform(() => depositNodeScale.get() * stage3CardScale.get() * stage4CardScale.get())
-  const depositNodeTransform = useMotionTemplate`translate3d(-50%, ${depositNodeY}px, 0px) scale(${depositNodeVisualScale})`
 
   // Vault — rockets toward camera while off-screen, slows to a crawl once visible,
   // then settles into the vault anchor with a tiny overshoot before the deposit sequence
@@ -488,31 +441,10 @@ export function VaultFlowScroll({
   const _d2Raw = useTransform(scroll, [0.66, 0.71], [0, 1])
   const orbitTrav2 = useTransform(_d2Raw, smoothstep)
 
-  // "× ERC-4626" suffix appears only after the vault captures the Zorb (~0.28)
-  // ercSuffixOp removed — title is now static "Welcome to 4626.fun"
-  // 4626 pill appears during the pause so users see the full identity at rest
   // Phase 2 corner badge — visible during mint / deposit phase only
   const stage2LabelOp = useTransform(scroll, [0.32, 0.38, 0.52, 0.58], [0, 1, 1, 0])
-  // Deposit fill — drives the counter and progress bar in the deposit pill
+  // Deposit fill — drives the counter and fill animation in TokenDepositScene
   const depositFillPct = useTransform(scroll, [0.34, 0.46], [0, 1])
-  // Distributing counter: counts UP with deposit fill (0→50M in sync with left column),
-  // then drains as each distribution orbit completes. Starting at 0 ensures both
-  // counters animate together during the fill phase.
-  const remainingMinted = useTransform(
-    [depositFillPct, orbitTrav0, orbitTrav1, orbitTrav2],
-    ([fill, t0, t1, t2]) => {
-      const minted = Math.round((fill as number) * totalShareCount)
-      const distributed = Math.round(
-        (t0 as number) * SHARE_DISTRIBUTION_AMOUNTS[0] +
-        (t1 as number) * SHARE_DISTRIBUTION_AMOUNTS[1] +
-        (t2 as number) * SHARE_DISTRIBUTION_AMOUNTS[2],
-      )
-      return Math.max(0, minted - distributed)
-    },
-  )
-  const depositFillWidth = useTransform(depositFillPct, v => `${(Math.min(v, 1) * 100).toFixed(1)}%`)
-  // "Vault initiated" confirmation badge — flashes after fill completes
-  const vaultInitOp = useTransform(scroll, [0.48, 0.51, 0.52, 0.55], [0, 1, 1, 0])
 
   // (APY reveal removed — allocation percentages are shown permanently)
 
