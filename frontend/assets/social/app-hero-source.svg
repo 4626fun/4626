@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" fill="none">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#02040B" />
+      <stop offset="0.52" stop-color="#020A18" />
+      <stop offset="1" stop-color="#010205" />
+    </linearGradient>
+    <radialGradient id="left-glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(220 220) rotate(18) scale(420 320)">
+      <stop offset="0" stop-color="#1D4ED8" stop-opacity="0.34" />
+      <stop offset="1" stop-color="#1D4ED8" stop-opacity="0" />
+    </radialGradient>
+    <radialGradient id="right-glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(1020 120) rotate(138) scale(320 260)">
+      <stop offset="0" stop-color="#22D3EE" stop-opacity="0.1" />
+      <stop offset="1" stop-color="#22D3EE" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="mark-stroke" x1="120" y1="168" x2="408" y2="456" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#E2E8F0" />
+      <stop offset="0.45" stop-color="#94A3B8" />
+      <stop offset="0.84" stop-color="#3B82F6" />
+      <stop offset="1" stop-color="#1D4ED8" />
+    </linearGradient>
+    <linearGradient id="divider" x1="470" y1="0" x2="1060" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#60A5FA" stop-opacity="0.78" />
+      <stop offset="1" stop-color="#60A5FA" stop-opacity="0.08" />
+    </linearGradient>
+  </defs>
+
+  <rect width="1200" height="630" fill="url(#bg)" />
+  <rect width="1200" height="630" fill="url(#left-glow)" />
+  <rect width="1200" height="630" fill="url(#right-glow)" />
+
+  <!-- subtle structure -->
+  <g opacity="0.06" stroke="#94A3B8">
+    <path d="M0 126H1200" />
+    <path d="M0 252H1200" />
+    <path d="M0 378H1200" />
+    <path d="M0 504H1200" />
+    <path d="M160 0V630" />
+    <path d="M320 0V630" />
+    <path d="M480 0V630" />
+    <path d="M640 0V630" />
+    <path d="M800 0V630" />
+    <path d="M960 0V630" />
+    <path d="M1120 0V630" />
+  </g>
+
+  <!-- mark -->
+  <rect x="120" y="168" width="288" height="288" rx="72" fill="#030814" fill-opacity="0.92" stroke="url(#mark-stroke)" stroke-width="14" />
+  <rect x="140" y="188" width="248" height="248" rx="60" fill="#020611" fill-opacity="0.95" stroke="#E2E8F0" stroke-opacity="0.14" stroke-width="2" />
+
+  <!-- type -->
+  <text x="470" y="234" fill="#F8FAFC" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="92" font-weight="500" letter-spacing="-0.8">4626.fun</text>
+  <text x="470" y="286" fill="#CBD5E1" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="24" font-weight="400" letter-spacing="3">CREATOR VAULTS ON BASE</text>
+  <path d="M470 312H1060" stroke="url(#divider)" stroke-width="2" />
+  <text x="470" y="366" fill="#A5B4FC" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="34" font-weight="400">Elegant. Modern. Minimal.</text>
+  <text x="470" y="418" fill="#E2E8F0" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="28" font-weight="300">Built for long-term creator upside.</text>
+</svg>

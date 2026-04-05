@@ -233,13 +233,14 @@ describe('VaultFlowScroll', () => {
     })
   })
 
-  it('renders separate akita deposit and ■AKITA mint columns at the stage 2 confirmation checkpoint', async () => {
+  it('renders conversion receipt with deposited coin and minted shares at the stage 2 confirmation checkpoint', async () => {
     // scroll=0.40 → participantDeposits beat, depositComplete=true, cardPhase=1
+    // New layout: vertical receipt showing "creator coin deposited → vault share token live"
     renderVaultFlowScroll(0.40)
 
     await waitFor(() => {
-      expect(screen.getByText(/akita deposit/i)).toBeTruthy()
-      expect(screen.getAllByText(/■AKITA minted/i).length).toBeGreaterThan(0)
+      expect(screen.getByText(/creator coin deposited/i)).toBeTruthy()
+      expect(screen.getByText(/vault share token live/i)).toBeTruthy()
       expect(screen.getAllByAltText('■AKITA share token').length).toBeGreaterThan(0)
     })
   })
@@ -264,7 +265,10 @@ describe('VaultFlowScroll', () => {
     await waitFor(() => {
       const distributionSummary = screen.getByLabelText(/distribution summary/i)
       const distributionCheckpoint = screen.getByLabelText(/distribution checkpoint progress/i)
-      const firstRouteCard = screen.getByText(SHARE_DISTRIBUTION_ROWS[0].title)
+      const routeCandidates = screen.getAllByText(SHARE_DISTRIBUTION_ROWS[0].title)
+      const firstRouteCard =
+        routeCandidates.find((node) => isDocumentOrderedBefore(distributionCheckpoint, node))
+        ?? routeCandidates[routeCandidates.length - 1]
 
       expect(distributionSummary).toBeTruthy()
       expect(distributionCheckpoint).toBeTruthy()

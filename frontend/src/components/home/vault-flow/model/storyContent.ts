@@ -26,6 +26,12 @@ export type StrategyCard = {
   iconClassName: string
 }
 
+export type EarningTogetherCopy = {
+  title: string
+  subtitle: string
+  summary: string
+}
+
 export type StoryContent = {
   shareTokenSymbol: string
   shareTokenBadgeSrc: string
@@ -35,6 +41,9 @@ export type StoryContent = {
   distribution: readonly DistributionDestination[]
   strategies: readonly StrategyCard[]
   blendedApy: string
+  copy?: {
+    earningTogether?: EarningTogetherCopy
+  }
 }
 
 export const STORY_CONTENT: StoryContent = {
@@ -126,4 +135,12 @@ export const STORY_CONTENT: StoryContent = {
   ] as const,
 
   blendedApy: '~8–12%',
+
+  copy: {
+    earningTogether: {
+      title: 'The vault runs.',
+      subtitle: 'entry point, not ending',
+      summary: 'Creator earns. Participants earn. Value keeps flowing.',
+    },
+  },
 }

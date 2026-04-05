@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.app.json && tsc --noEmit -p tsconfig.node.json",
     "preview": "vite preview --config vite.config.ts",
     "generate:brand-icons": "node scripts/generate-brand-icons.mjs --out public",
+    "generate:social-preview": "node scripts/generate-social-preview.mjs",
     "report:footprint": "node scripts/report-footprint.mjs",
     "guard:generated-output": "node scripts/check-generated-output.mjs",
     "guard:runtime-boundaries": "node scripts/check-runtime-boundaries.mjs",

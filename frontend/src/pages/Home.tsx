@@ -48,8 +48,8 @@ export function Home() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.7, delay: 0.3, ease: [0.22, 1, 0.36, 1] }}
           >
-            <h1 className="headline text-4xl leading-[0.94] tracking-[-0.05em] sm:text-6xl md:text-7xl lg:text-[7.5rem] xl:text-[8.25rem]">
-              Turn Creator Coins
+            <h1 className="headline text-4xl leading-[0.94] tracking-[-0.05em] sm:text-6xl md:text-7xl lg:text-[5.75rem] xl:text-[6.5rem]">
+              <span className="whitespace-nowrap">Turn Creator Coins</span>
               <br />
               <span className="glow-brand">Into Earnings</span>
             </h1>

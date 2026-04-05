@@ -31,5 +31,5 @@ export function WaitlistInviteEntry() {
     requestStoredWaitlistAuthAutoStart()
   }
 
-  return <Navigate to="/" replace />
+  return <Navigate to="/waitlist" replace />
 }

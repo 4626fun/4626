@@ -61,6 +61,7 @@ const SHARE_DISTRIBUTION_AMOUNTS = STORY_CONTENT.distribution.map((row) => parse
 const SHARE_DISTRIBUTION_TOTAL = SHARE_DISTRIBUTION_AMOUNTS.reduce((sum, amount) => sum + amount, 0)
 
 
+
 // Renders a MotionValue<number> as text via a DOM ref — bypasses React's render cycle entirely.
 const MotionNumber = memo(function MotionNumber({
   value,
@@ -222,267 +223,430 @@ const HUD = memo(function HUD({ progressH, cueOpacity, stage2LabelOp, activeStag
   )
 })
 
-type VaultSceneProps = {
+type VaultCaptureSystemProps = {
   uid: string
   vaultTransform: MotionValue<string>
   vaultOpacity: MotionValue<number>
-  vaultLidOp: MotionValue<number>
-  vaultWallOp: MotionValue<number>
-  vaultPostProgress: MotionValue<number>
-  vaultTopProgress: MotionValue<number>
-  vaultGlow: MotionValue<number>
-  landingFlash: MotionValue<number>
-  zoraGreenFlash: MotionValue<number>
+  captureProgress: MotionValue<number>
   coinEntryGlow: MotionValue<number>
 }
-const VaultScene = memo(function VaultScene({
-  uid, vaultTransform, vaultOpacity, vaultLidOp, vaultWallOp,
-  vaultPostProgress, vaultTopProgress, vaultGlow, landingFlash,
-  zoraGreenFlash, coinEntryGlow,
-}: VaultSceneProps) {
+
+const VaultInteriorFill = memo(function VaultInteriorFill({
+  containP,
+}: {
+  containP: MotionValue<number>
+}) {
+  const opacity = useTransform(containP, [0, 0.45, 1], [0, 0.12, 0.18])
+
   return (
-    <motion.div className="absolute left-1/2 top-[44vh] z-20" style={{ transform: vaultTransform, opacity: vaultOpacity }}>
+    <motion.div
+      className="pointer-events-none absolute"
+      style={{ left: -66, right: -66, bottom: -20, height: 310, opacity }}
+      aria-hidden="true"
+    >
+      <svg viewBox="0 0 244 310" width="100%" height="310" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="vault-interior-fill" x1="122" y1="28" x2="122" y2="302" gradientUnits="userSpaceOnUse">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.02)" />
+            <stop offset="42%" stopColor="rgba(90,140,255,0.06)" />
+            <stop offset="100%" stopColor="rgba(30,60,140,0.12)" />
+          </linearGradient>
+          <radialGradient id="vault-interior-bloom" cx="50%" cy="38%" r="60%">
+            <stop offset="0%" stopColor="rgba(90,140,255,0.10)" />
+            <stop offset="100%" stopColor="rgba(90,140,255,0)" />
+          </radialGradient>
+        </defs>
+        <polygon points="0,28 244,28 244,302 0,302" fill="url(#vault-interior-fill)" />
+        <polygon points="0,28 244,28 244,302 0,302" fill="url(#vault-interior-bloom)" />
+      </svg>
+    </motion.div>
+  )
+})
+
+const VaultWireframe = memo(function VaultWireframe({
+  uid,
+  approachP,
+  contactP,
+  containP,
+}: {
+  uid: string
+  approachP: MotionValue<number>
+  contactP: MotionValue<number>
+  containP: MotionValue<number>
+}) {
+  const postsPath = useTransform(approachP, [0, 0.8], [0, 1])
+  const topPath = useTransform(approachP, [0.6, 1], [0, 1])
+  const wallOpacity = useTransform(approachP, [0, 0.2, 1], [0, 1, 1])
+  const lidOpacity = useTransform(containP, [0, 0.4, 1], [0, 1, 1])
+  const scale = useTransform(contactP, [0, 0.5, 1], [1, 0.985, 1])
+  const frontStroke = useTransform(contactP, [0, 1], [0.76, 1.0])
+  const backStroke = useTransform(contactP, [0, 1], [0.17, 0.4])
+  const frontGlowOpacity = useTransform(contactP, [0, 0.3, 1], [0.15, 0.5, 0.18])
+  const edgeFlashOpacity = useTransform(contactP, [0, 0.25, 1], [0, 1, 0.25])
+
+  return (
+    <motion.div
+      className="pointer-events-none absolute"
+      style={{ left: '50%', top: '44vh', transform: 'translateX(-50%)', scale }}
+      aria-hidden="true"
+    >
       <div className="relative">
-        {/*
-          ─── CUBE GEOMETRY ───────────────────────────────────────────────────────
-          8 vertices (SVG coords, viewBox 0 0 244 310):
-            Front face   │  Back face
-            TL (0, 28)   │  TL (28, 52)
-            TR (244, 28) │  TR (216, 52)
-            BR (244,302) │  BR (216,238)
-            BL (0, 302)  │  BL (28, 238)
-
-          Div-space (px from div top, SVG 244→228px → scale ≈ 0.934):
-            Front top    → −164px   Back top    → −142px
-            Floor inner  →   44px   Front outer →  108px
-
-          Sphere mask (198×204px) keeps the 210px orb tucked inside the front face:
-            shell left = −51px, top = −162px
-            orb left = −6px inside shell, top = −4px inside shell
-
-          Glow (140×140): center same, left = −22, top = −116
-          ─────────────────────────────────────────────────────────────────────── */}
-
-        {/* ── FLOOR (LID) — bottom face, fills in after walls ─────────────────── */}
+        {/* Floor / lid */}
         <motion.div
-          className="pointer-events-none absolute"
-          style={{ bottom: -20, left: -66, right: -66, height: 80, opacity: vaultLidOp }}
-          aria-hidden="true"
+          className="absolute"
+          style={{ bottom: -20, left: -66, right: -66, height: 80, opacity: lidOpacity }}
         >
           <svg viewBox="0 0 244 80" width="100%" height="80" fill="none" xmlns="http://www.w3.org/2000/svg">
             <defs>
-              <linearGradient id={`${uid}-floor-fill`} x1="0.5" y1="0" x2="0.5" y2="1">
-                <stop offset="0%"   stopColor="rgba(60,110,255,0.05)" />
+              <linearGradient id={`${uid}-floor-fill`} x1="122" y1="8" x2="122" y2="72" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stopColor="rgba(60,110,255,0.05)" />
                 <stop offset="100%" stopColor="rgba(20,50,180,0.20)" />
               </linearGradient>
             </defs>
-            {/* Floor face polygon — trapezoid matching back-bottom→front-bottom */}
             <polygon points="28,8 216,8 244,72 0,72" fill={`url(#${uid}-floor-fill)`} />
-            {/* Front bottom edge (outer) */}
             <line x1="0" y1="72" x2="244" y2="72" stroke="rgba(160,205,255,0.62)" strokeWidth="1.5" />
-            {/* Back bottom edge (inner) */}
             <line x1="28" y1="8" x2="216" y2="8" stroke="rgba(100,148,255,0.28)" strokeWidth="0.8" />
-            {/* Left and right depth diagonals */}
-            <line x1="0" y1="72" x2="28" y2="8"   stroke="rgba(120,168,255,0.32)" strokeWidth="0.8" />
+            <line x1="0" y1="72" x2="28" y2="8" stroke="rgba(120,168,255,0.32)" strokeWidth="0.8" />
             <line x1="244" y1="72" x2="216" y2="8" stroke="rgba(120,168,255,0.32)" strokeWidth="0.8" />
-            {/* Corner brackets — all 4 corners of the floor face */}
-            <polyline points="0,60 0,72 16,72"      stroke="rgba(185,218,255,0.55)" strokeWidth="1.3" fill="none" />
-            <polyline points="228,72 244,72 244,60"  stroke="rgba(185,218,255,0.55)" strokeWidth="1.3" fill="none" />
-            <polyline points="28,0 28,8 42,8"        stroke="rgba(185,218,255,0.45)" strokeWidth="1.1" fill="none" />
-            <polyline points="202,8 216,8 216,0"     stroke="rgba(185,218,255,0.45)" strokeWidth="1.1" fill="none" />
-            {/* Floor center marker */}
+            <polyline points="0,60 0,72 16,72" stroke="rgba(185,218,255,0.55)" strokeWidth="1.3" fill="none" />
+            <polyline points="228,72 244,72 244,60" stroke="rgba(185,218,255,0.55)" strokeWidth="1.3" fill="none" />
+            <polyline points="28,0 28,8 42,8" stroke="rgba(185,218,255,0.45)" strokeWidth="1.1" fill="none" />
+            <polyline points="202,8 216,8 216,0" stroke="rgba(185,218,255,0.45)" strokeWidth="1.1" fill="none" />
             <circle cx="122" cy="40" r="2.4" fill="none" stroke="rgba(140,188,255,0.35)" strokeWidth="0.7" />
-            {/* Ground shadow ellipse */}
             <ellipse cx="122" cy="74" rx="96" ry="5" fill="rgba(60,110,255,0.14)" />
           </svg>
         </motion.div>
 
-        {/* ── WALLS — full 11-edge wireframe (all but back-bottom which lid draws) */}
+        {/* Walls */}
         <motion.div
-          className="pointer-events-none absolute"
-          style={{ left: -66, right: -66, bottom: -20, height: 310, opacity: vaultWallOp }}
-          aria-hidden="true"
+          className="absolute"
+          style={{ left: -66, right: -66, bottom: -20, height: 310, opacity: wallOpacity }}
         >
           <svg viewBox="0 0 244 310" width="100%" height="310" fill="none" xmlns="http://www.w3.org/2000/svg">
             <defs>
               <filter id={`${uid}-back-post-blur`} x="-80%" y="-20%" width="260%" height="140%">
                 <feGaussianBlur stdDeviation="0.6" />
               </filter>
-              {/* Front-edge glow — soft bloom on the bright front edges */}
               <filter id={`${uid}-front-glow`} x="-120%" y="-20%" width="340%" height="140%">
                 <feGaussianBlur stdDeviation="3.5" result="blur" />
-                <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
               </filter>
             </defs>
 
-            {/* Interior fill — slightly warmer atmosphere now */}
-            <motion.polygon
-              points="0,28 244,28 244,302 0,302"
-              fill="rgba(80,130,255,0.032)"
-              style={{ opacity: vaultTopProgress }}
-            />
+            {/* Front posts glow */}
+            <motion.path d="M 0 302 L 0 28" stroke="rgba(140,200,255,0.18)" strokeWidth="5" strokeLinecap="round" filter={`url(#${uid}-front-glow)`} style={{ pathLength: postsPath, opacity: frontGlowOpacity }} />
+            <motion.path d="M 244 302 L 244 28" stroke="rgba(140,200,255,0.18)" strokeWidth="5" strokeLinecap="round" filter={`url(#${uid}-front-glow)`} style={{ pathLength: postsPath, opacity: frontGlowOpacity }} />
 
-            {/* ── FRONT POSTS — glow copies (rendered first, behind sharp lines) */}
-            <motion.path d="M 0 302 L 0 28"    stroke="rgba(140,200,255,0.18)" strokeWidth="5" strokeLinecap="round" filter={`url(#${uid}-front-glow)`} style={{ pathLength: vaultPostProgress }} />
-            <motion.path d="M 244 302 L 244 28" stroke="rgba(140,200,255,0.18)" strokeWidth="5" strokeLinecap="round" filter={`url(#${uid}-front-glow)`} style={{ pathLength: vaultPostProgress }} />
+            {/* Front posts sharp */}
+            <motion.path d="M 0 302 L 0 28" stroke="rgba(172,218,255,0.90)" strokeWidth="1.5" strokeLinecap="round" style={{ pathLength: postsPath, opacity: frontStroke }} />
+            <motion.path d="M 244 302 L 244 28" stroke="rgba(172,218,255,0.90)" strokeWidth="1.5" strokeLinecap="round" style={{ pathLength: postsPath, opacity: frontStroke }} />
 
-            {/* ── FRONT POSTS — sharp lines on top */}
-            <motion.path d="M 0 302 L 0 28"    stroke="rgba(172,218,255,0.76)" strokeWidth="1.5" strokeLinecap="round" style={{ pathLength: vaultPostProgress }} />
-            <motion.path d="M 244 302 L 244 28" stroke="rgba(172,218,255,0.76)" strokeWidth="1.5" strokeLinecap="round" style={{ pathLength: vaultPostProgress }} />
+            {/* Front posts edge flash */}
+            <motion.path d="M 0 302 L 0 28" stroke="rgba(255,255,255,1)" strokeWidth="2.2" strokeLinecap="round" style={{ pathLength: postsPath, opacity: edgeFlashOpacity }} />
+            <motion.path d="M 244 302 L 244 28" stroke="rgba(255,255,255,1)" strokeWidth="2.2" strokeLinecap="round" style={{ pathLength: postsPath, opacity: edgeFlashOpacity }} />
 
-            {/* ── BACK POSTS — dimmer, slightly blurred */}
-            <motion.path d="M 28 238 L 28 52"   stroke="rgba(86,124,210,0.17)" strokeWidth="0.75" strokeLinecap="round" filter={`url(#${uid}-back-post-blur)`} style={{ pathLength: vaultPostProgress }} />
-            <motion.path d="M 216 238 L 216 52"  stroke="rgba(86,124,210,0.17)" strokeWidth="0.75" strokeLinecap="round" filter={`url(#${uid}-back-post-blur)`} style={{ pathLength: vaultPostProgress }} />
+            {/* Back posts */}
+            <motion.path d="M 28 238 L 28 52" stroke="rgba(86,124,210,0.32)" strokeWidth="0.75" strokeLinecap="round" filter={`url(#${uid}-back-post-blur)`} style={{ pathLength: postsPath, opacity: backStroke }} />
+            <motion.path d="M 216 238 L 216 52" stroke="rgba(86,124,210,0.32)" strokeWidth="0.75" strokeLinecap="round" filter={`url(#${uid}-back-post-blur)`} style={{ pathLength: postsPath, opacity: backStroke }} />
 
-            {/* ── FRONT TOP EDGE — glow copy */}
-            <motion.path d="M 0 28 L 244 28"    stroke="rgba(160,215,255,0.15)" strokeWidth="5" strokeLinecap="round" filter={`url(#${uid}-front-glow)`} style={{ pathLength: vaultTopProgress }} />
-            {/* ── FRONT TOP EDGE — sharp */}
-            <motion.path d="M 0 28 L 244 28"    stroke="rgba(208,234,255,0.80)" strokeWidth="1.5" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
+            {/* Front top edge glow */}
+            <motion.path d="M 0 28 L 244 28" stroke="rgba(160,215,255,0.18)" strokeWidth="5" strokeLinecap="round" filter={`url(#${uid}-front-glow)`} style={{ pathLength: topPath, opacity: frontGlowOpacity }} />
 
-            {/* ── BACK TOP EDGE */}
-            <motion.path d="M 28 52 L 216 52"   stroke="rgba(86,124,210,0.17)" strokeWidth="0.7" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
+            {/* Front top edge sharp */}
+            <motion.path d="M 0 28 L 244 28" stroke="rgba(208,234,255,0.92)" strokeWidth="1.5" strokeLinecap="round" style={{ pathLength: topPath, opacity: frontStroke }} />
 
-            {/* ── TOP-FACE DEPTH DIAGONALS */}
-            <motion.path d="M 0 28 L 28 52"     stroke="rgba(124,164,245,0.35)" strokeWidth="0.85" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
-            <motion.path d="M 244 28 L 216 52"  stroke="rgba(124,164,245,0.35)" strokeWidth="0.85" strokeLinecap="round" style={{ pathLength: vaultTopProgress }} />
+            {/* Front top edge flash */}
+            <motion.path d="M 0 28 L 244 28" stroke="rgba(255,255,255,1)" strokeWidth="2.2" strokeLinecap="round" style={{ pathLength: topPath, opacity: edgeFlashOpacity }} />
 
-            {/* ── TOP CORNER BRACKETS */}
-            <motion.polyline points="0,28 18,28"    stroke="rgba(220,244,255,0.88)" strokeWidth="2.0" fill="none" style={{ opacity: vaultTopProgress }} />
-            <motion.polyline points="0,28 0,48"     stroke="rgba(220,244,255,0.88)" strokeWidth="2.0" fill="none" style={{ opacity: vaultTopProgress }} />
-            <motion.polyline points="226,28 244,28" stroke="rgba(220,244,255,0.88)" strokeWidth="2.0" fill="none" style={{ opacity: vaultTopProgress }} />
-            <motion.polyline points="244,28 244,48" stroke="rgba(220,244,255,0.88)" strokeWidth="2.0" fill="none" style={{ opacity: vaultTopProgress }} />
+            {/* Back top edge */}
+            <motion.path d="M 28 52 L 216 52" stroke="rgba(86,124,210,0.30)" strokeWidth="0.7" strokeLinecap="round" style={{ pathLength: topPath, opacity: backStroke }} />
 
+            {/* Depth diagonals */}
+            <motion.path d="M 0 28 L 28 52" stroke="rgba(124,164,245,0.42)" strokeWidth="0.85" strokeLinecap="round" style={{ pathLength: topPath, opacity: 0.6 }} />
+            <motion.path d="M 244 28 L 216 52" stroke="rgba(124,164,245,0.42)" strokeWidth="0.85" strokeLinecap="round" style={{ pathLength: topPath, opacity: 0.6 }} />
+
+            {/* Corner brackets */}
+            <motion.polyline points="0,28 18,28" stroke="rgba(220,244,255,0.88)" strokeWidth="2.0" fill="none" style={{ opacity: topPath }} />
+            <motion.polyline points="0,28 0,48" stroke="rgba(220,244,255,0.88)" strokeWidth="2.0" fill="none" style={{ opacity: topPath }} />
+            <motion.polyline points="226,28 244,28" stroke="rgba(220,244,255,0.88)" strokeWidth="2.0" fill="none" style={{ opacity: topPath }} />
+            <motion.polyline points="244,28 244,48" stroke="rgba(220,244,255,0.88)" strokeWidth="2.0" fill="none" style={{ opacity: topPath }} />
           </svg>
         </motion.div>
 
-        {/* ── SPHERE inside the cube ────────────────────────────────────────────
-            210×210px glass orb — naturally sits inside the cube front face.
-            A soft bottom mask feathers it into the floor instead of a hard clip.
-            center = (48, −61) from vault anchor.
+        <div className="h-24 w-24" aria-hidden="true" />
+      </div>
+    </motion.div>
+  )
+})
 
-            Glow (160×160, 25px inset from sphere edge):
-            left = −57+25 = −32,  top = −166+25 = −141.                         */}
-        <div
-          className="pointer-events-none absolute"
-          style={{
-            left: -57,
-            top: -168,
-            width: 210,
-            height: 232,
-            maskImage: 'linear-gradient(to bottom, black 72%, transparent 97%)',
-            WebkitMaskImage: 'linear-gradient(to bottom, black 72%, transparent 97%)',
-          }}
-          aria-hidden="true"
-        >
-          {/* Sphere body — dark navy base with rich glass highlight */}
-          <div
-            className="absolute"
-            style={{
-              left: 0, top: 2, width: 210, height: 210,
-              borderRadius: '50%',
-              background: [
-                // Solid dark-navy base so the orb reads as an object, not void
-                'radial-gradient(circle at 50% 50%, rgba(6,14,46,0.94) 0%, rgba(3,7,28,0.98) 100%)',
-                // Primary specular — strong catch-light at upper-left
-                'radial-gradient(circle at 33% 25%, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.06) 20%, transparent 38%)',
-                // Secondary highlight — cool-blue diffuse
-                'radial-gradient(circle at 42% 38%, rgba(160,210,255,0.11) 0%, transparent 52%)',
-                // Bottom depth shadow
-                'radial-gradient(circle at 50% 74%, rgba(0,0,20,0.55) 0%, transparent 56%)',
-                // Edge vignette
-                'radial-gradient(circle at 50% 50%, transparent 56%, rgba(0,8,38,0.22) 80%, rgba(0,4,22,0.34) 100%)',
-              ].join(', '),
-              boxShadow: [
-                'inset 0 0 0 0.5px rgba(140,190,255,0.18)',
-                'inset 0 0 48px 8px rgba(18,55,200,0.07)',
-                'inset 0 -28px 44px -20px rgba(0,0,48,0.18)',
-              ].join(', '),
-            }}
-          />
-          {/* Rim ring — crisper edge definition */}
-          <div
-            className="absolute"
-            style={{
-              left: 0, top: 2, width: 210, height: 210,
-              borderRadius: '50%',
-              border: '1px solid rgba(160,205,255,0.14)',
-            }}
-          />
-          {/* Breathing pulse — slow ambient luminance suggesting the vault is alive */}
-          <motion.div
-            className="absolute"
-            style={{
-              left: 18, top: 20, width: 174, height: 174,
-              borderRadius: '50%',
-              background: 'radial-gradient(circle at 50% 48%, rgba(60,120,255,0.09) 0%, transparent 68%)',
-            }}
-            animate={{ opacity: [0.4, 0.85, 0.4] }}
-            transition={{ duration: 4.8, repeat: Infinity, ease: 'easeInOut' }}
-            aria-hidden="true"
-          />
-        </div>
+const ThresholdPlane = memo(function ThresholdPlane({
+  contactP,
+}: {
+  contactP: MotionValue<number>
+}) {
+  const opacity = useTransform(contactP, [0, 0.15, 0.65, 1], [0, 0.22, 0.8, 0])
+  const scaleX = useTransform(contactP, [0, 1], [0.94, 1.08])
 
-        {/* ── GLOWS (centered on sphere, 160×160, left=−32, top=−141) ─────── */}
-        {/* Blue ambient */}
-        <motion.div
-          className="pointer-events-none absolute"
-          style={{
-            left: -32, top: -141, width: 160, height: 160, borderRadius: '50%',
-            opacity: vaultGlow, background: 'transparent',
-            boxShadow: [
-              '0 0 28px 10px rgba(0,82,255,0.56)',
-              '0 0 62px 24px rgba(0,82,255,0.26)',
-              '0 0 120px 48px rgba(0,82,255,0.10)',
-            ].join(', '),
-          }}
-          aria-hidden="true"
-        />
-        {/* White landing flash */}
-        <motion.div
-          className="pointer-events-none absolute"
-          style={{
-            left: -32, top: -141, width: 160, height: 160, borderRadius: '50%',
-            opacity: landingFlash,
-            background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.17) 0%, rgba(210,230,255,0.05) 52%, transparent 76%)',
-            boxShadow: [
-              '0 0 0 1px rgba(255,255,255,0.60)',
-              '0 0 16px 6px rgba(255,255,255,0.36)',
-              '0 0 44px 16px rgba(210,230,255,0.18)',
-              '0 0 108px 38px rgba(140,180,255,0.08)',
-            ].join(', '),
-          }}
-          aria-hidden="true"
-        />
-        {/* Zora neon-green deposit flash */}
-        <motion.div
-          className="pointer-events-none absolute"
-          style={{
-            left: -40, top: -149, width: 176, height: 176, borderRadius: '50%',
-            opacity: zoraGreenFlash, background: 'transparent',
-            boxShadow: [
-              '0 0 30px 11px rgba(57,255,20,0.70)',
-              '0 0 72px 28px rgba(57,255,20,0.34)',
-              '0 0 140px 56px rgba(57,255,20,0.12)',
-            ].join(', '),
-          }}
-          aria-hidden="true"
-        />
-        {/* Orange-blue share-token mint glow */}
-        <motion.div
-          className="pointer-events-none absolute"
-          style={{
-            left: -32, top: -141, width: 160, height: 160, borderRadius: '50%',
-            opacity: coinEntryGlow, background: 'transparent',
-            boxShadow: [
-              '0 0 22px 9px rgba(249,115,22,0.46)',
-              '0 0 58px 22px rgba(0,82,255,0.32)',
-              '0 0 112px 44px rgba(0,82,255,0.14)',
-            ].join(', '),
-          }}
-          aria-hidden="true"
-        />
+  return (
+    <motion.div
+      className="pointer-events-none absolute left-1/2 top-[44vh] z-[22]"
+      style={{ x: '-50%', y: 42, opacity, scaleX }}
+      aria-label="vault threshold plane"
+      aria-hidden="true"
+    >
+      <svg viewBox="0 0 180 20" width="180" height="20" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <ellipse cx="90" cy="10" rx="62" ry="6" stroke="rgba(160,215,255,0.75)" strokeWidth="1.2" fill="rgba(110,170,255,0.08)" />
+        <ellipse cx="90" cy="10" rx="42" ry="4" stroke="rgba(255,255,255,0.28)" strokeWidth="0.8" fill="none" />
+      </svg>
+    </motion.div>
+  )
+})
 
-        {/* Layout anchor — maintains relative container height */}
+const EntryRipple = memo(function EntryRipple({
+  contactP,
+}: {
+  contactP: MotionValue<number>
+}) {
+  const scale = useTransform(contactP, [0, 1], [0.2, 1.25])
+  const opacity = useTransform(contactP, [0, 0.15, 1], [0, 0.6, 0])
+
+  return (
+    <motion.div
+      className="pointer-events-none absolute left-1/2 top-[44vh] z-[23]"
+      style={{ x: '-50%', y: 42, scale, opacity }}
+      aria-hidden="true"
+    >
+      <svg viewBox="0 0 200 36" width="200" height="36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <ellipse cx="100" cy="18" rx="72" ry="10" stroke="rgba(120,180,255,0.60)" strokeWidth="1.1" fill="none" />
+      </svg>
+    </motion.div>
+  )
+})
+
+const EnergyTransferGlow = memo(function EnergyTransferGlow({
+  captureProgress,
+  contactP,
+  coinEntryGlow,
+}: {
+  captureProgress: MotionValue<number>
+  contactP: MotionValue<number>
+  coinEntryGlow: MotionValue<number>
+}) {
+  const orbY = useTransform(captureProgress, [0, 0.35, 0.48, 0.74, 1], [-220, -60, -20, 0, 0])
+  const orbOuterGlowY = useTransform(orbY, (value) => value + 25)
+  const orbOuterGlow = useTransform(captureProgress, [0, 0.4, 0.65, 1], [0.85, 1, 0.35, 0.1])
+  const vaultInnerGlowBase = useTransform(captureProgress, [0.35, 0.5, 0.8, 1], [0, 0.9, 0.55, 0.25])
+  const edgeFlash = useTransform(contactP, [0, 0.25, 1], [0, 1, 0.25])
+  const vaultInnerGlow = useTransform(
+    [vaultInnerGlowBase, coinEntryGlow],
+    ([base, mint]) => Math.max(base as number, (mint as number) * 0.55),
+  )
+
+  return (
+    <>
+      {/* Orb outer glow */}
+      <motion.div
+        className="pointer-events-none absolute left-1/2 top-[44vh] z-[24]"
+        style={{
+          x: '-50%',
+          y: orbOuterGlowY,
+          opacity: orbOuterGlow,
+          width: 160,
+          height: 160,
+          borderRadius: '50%',
+          background: 'transparent',
+          boxShadow: [
+            '0 0 28px 10px rgba(0,82,255,0.56)',
+            '0 0 62px 24px rgba(0,82,255,0.26)',
+            '0 0 120px 48px rgba(0,82,255,0.10)',
+          ].join(', '),
+        }}
+        aria-hidden="true"
+      />
+      {/* Vault inner glow */}
+      <motion.div
+        className="pointer-events-none absolute left-1/2 top-[44vh] z-[19]"
+        style={{
+          x: '-50%',
+          y: -36,
+          opacity: vaultInnerGlow,
+          width: 220,
+          height: 220,
+          borderRadius: 20,
+          background:
+            'radial-gradient(circle at 50% 42%, rgba(90,140,255,0.22) 0%, rgba(90,140,255,0.08) 42%, transparent 72%)',
+          filter: 'blur(18px)',
+        }}
+        aria-hidden="true"
+      />
+      {/* Contact flash along top/front edge */}
+      <motion.div
+        className="pointer-events-none absolute left-1/2 top-[44vh] z-[25]"
+        style={{
+          x: '-50%',
+          y: -94,
+          opacity: edgeFlash,
+          width: 244,
+          height: 10,
+          background:
+            'linear-gradient(90deg, rgba(255,255,255,0) 0%, rgba(255,255,255,0.95) 50%, rgba(255,255,255,0) 100%)',
+          filter: 'blur(2px)',
+        }}
+        aria-hidden="true"
+      />
+    </>
+  )
+})
+
+const Orb = memo(function Orb({
+  captureProgress,
+  contactP,
+}: {
+  captureProgress: MotionValue<number>
+  contactP: MotionValue<number>
+}) {
+  const y = useTransform(captureProgress, [0, 0.35, 0.48, 0.74, 1], [-220, -60, -20, 0, 0])
+  const scaleX = useTransform(contactP, [0, 0.5, 1], [1, 1.03, 1])
+  const scaleY = useTransform(contactP, [0, 0.5, 1], [1, 0.96, 1])
+  const coreOpacity = useTransform(captureProgress, [0, 0.74, 1], [1, 0.95, 0.8])
+  const highlightX = useTransform(captureProgress, [0, 0.35], [-6, 4])
+
+  return (
+    <motion.div
+      className="pointer-events-none absolute left-1/2 top-[44vh] z-[26]"
+      style={{
+        x: '-50%',
+        y,
+        scaleX,
+        scaleY,
+        width: 210,
+        height: 232,
+        maskImage: 'linear-gradient(to bottom, black 72%, transparent 97%)',
+        WebkitMaskImage: 'linear-gradient(to bottom, black 72%, transparent 97%)',
+      }}
+      aria-hidden="true"
+    >
+      <motion.div
+        className="absolute"
+        style={{
+          left: 0,
+          top: 2,
+          width: 210,
+          height: 210,
+          borderRadius: '50%',
+          opacity: coreOpacity,
+          background: [
+            'radial-gradient(circle at 50% 50%, rgba(6,14,46,0.94) 0%, rgba(3,7,28,0.98) 100%)',
+            'radial-gradient(circle at 33% 25%, rgba(255,255,255,0.30) 0%, rgba(255,255,255,0.06) 20%, transparent 38%)',
+            'radial-gradient(circle at 42% 38%, rgba(160,210,255,0.11) 0%, transparent 52%)',
+            'radial-gradient(circle at 50% 74%, rgba(0,0,20,0.55) 0%, transparent 56%)',
+            'radial-gradient(circle at 50% 50%, transparent 56%, rgba(0,8,38,0.22) 80%, rgba(0,4,22,0.34) 100%)',
+          ].join(', '),
+          boxShadow: [
+            'inset 0 0 0 0.5px rgba(140,190,255,0.18)',
+            'inset 0 0 48px 8px rgba(18,55,200,0.07)',
+            'inset 0 -28px 44px -20px rgba(0,0,48,0.18)',
+          ].join(', '),
+        }}
+      />
+      {/* Rim ring */}
+      <div
+        className="absolute"
+        style={{
+          left: 0,
+          top: 2,
+          width: 210,
+          height: 210,
+          borderRadius: '50%',
+          border: '1px solid rgba(160,205,255,0.14)',
+        }}
+      />
+      {/* Specular drift */}
+      <motion.div
+        className="absolute"
+        style={{
+          left: highlightX,
+          top: 12,
+          width: 120,
+          height: 68,
+          borderRadius: '50%',
+          background: 'radial-gradient(circle at 50% 50%, rgba(255,255,255,0.10) 0%, transparent 72%)',
+          filter: 'blur(8px)',
+        }}
+      />
+      {/* Breathing pulse */}
+      <motion.div
+        className="absolute"
+        style={{
+          left: 18,
+          top: 20,
+          width: 174,
+          height: 174,
+          borderRadius: '50%',
+          background: 'radial-gradient(circle at 50% 48%, rgba(60,120,255,0.09) 0%, transparent 68%)',
+        }}
+        animate={{ opacity: [0.4, 0.85, 0.4] }}
+        transition={{ duration: 4.8, repeat: Infinity, ease: 'easeInOut' }}
+      />
+    </motion.div>
+  )
+})
+
+const DivePortal = memo(function DivePortal({
+  diveP,
+}: {
+  diveP: MotionValue<number>
+}) {
+  const opacity = useTransform(diveP, [0, 0.5, 1], [0, 0.45, 0.9])
+  const scale = useTransform(diveP, [0, 1], [1, 1.8])
+
+  return (
+    <motion.div
+      className="pointer-events-none absolute left-1/2 top-[44vh] z-[21]"
+      style={{
+        x: '-50%',
+        y: -62,
+        opacity,
+        scale,
+        width: 180,
+        height: 180,
+        borderRadius: '50%',
+        background: 'radial-gradient(circle at 50% 50%, rgba(120,160,255,0.28) 0%, transparent 70%)',
+        filter: 'blur(20px)',
+      }}
+      aria-hidden="true"
+    />
+  )
+})
+
+const VaultCaptureSystem = memo(function VaultCaptureSystem({
+  uid,
+  vaultTransform,
+  vaultOpacity,
+  captureProgress,
+  coinEntryGlow,
+}: VaultCaptureSystemProps) {
+  const approachP = useTransform(captureProgress, [0.0, 0.35], [0, 1], { clamp: true })
+  const contactP  = useTransform(captureProgress, [0.35, 0.48], [0, 1], { clamp: true })
+  const containP  = useTransform(captureProgress, [0.48, 0.74], [0, 1], { clamp: true })
+  const diveP     = useTransform(captureProgress, [0.74, 1.0],  [0, 1], { clamp: true })
+
+  return (
+    <motion.div
+      className="absolute left-1/2 top-[44vh] z-20"
+      style={{ transform: vaultTransform, opacity: vaultOpacity }}
+    >
+      <div className="relative">
+        <VaultInteriorFill containP={containP} />
+        <DivePortal diveP={diveP} />
+        <VaultWireframe uid={uid} approachP={approachP} contactP={contactP} containP={containP} />
+        <ThresholdPlane contactP={contactP} />
+        <EntryRipple contactP={contactP} />
+        <EnergyTransferGlow captureProgress={captureProgress} contactP={contactP} coinEntryGlow={coinEntryGlow} />
+        <Orb captureProgress={captureProgress} contactP={contactP} />
         <div className="h-24 w-24" aria-hidden="true" />
       </div>
     </motion.div>
@@ -688,44 +852,54 @@ const DepositCardBlock = memo(function DepositCardBlock({
 
                       {depositComplete ? (
                         <>
-                          <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-[minmax(0,1fr)_1px_minmax(0,1fr)] sm:items-end sm:gap-3">
-                            <div className="flex min-w-0 flex-col gap-1.5">
-                              <span className="font-mono text-[6px] uppercase tracking-[0.22em] sm:text-[7px] sm:tracking-[0.24em]" style={{ color: 'rgba(249,115,22,0.62)' }}>
-                                akita deposit
-                              </span>
-                              <div className="font-mono font-black leading-none tracking-tight text-white" style={{ fontSize: 'clamp(0.96rem, 4.2vw, 1.45rem)' }}>
-                                {displayDepositTokens}
+                          {/* Conversion receipt — "this became that" layout */}
+                          <div className="flex flex-col gap-2">
+                            {/* Deposited coin row */}
+                            <div className="flex items-center gap-2">
+                              {cameoIcons['akita'] ? (
+                                <img src={cameoIcons['akita']} alt="akita creator coin" className="h-4 w-4 shrink-0 rounded-full object-cover opacity-80" loading="lazy" />
+                              ) : (
+                                <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[4px] font-black text-white" style={{ background: '#f97316' }}>AK</span>
+                              )}
+                              <div className="flex min-w-0 flex-col gap-0.5">
+                                <div className="font-mono font-black leading-none tracking-tight text-white" style={{ fontSize: 'clamp(0.96rem, 4.2vw, 1.45rem)' }}>
+                                  {displayDepositTokens}
+                                </div>
+                                <span className="font-mono text-[6px] tracking-[0.14em] sm:text-[7px]" style={{ color: 'rgba(249,115,22,0.50)' }}>
+                                  creator coin deposited
+                                </span>
                               </div>
-                              <span className="font-mono text-[6px] tracking-[0.14em] sm:text-[7px] sm:tracking-[0.16em]" style={{ color: 'rgba(249,115,22,0.42)' }}>
-                                creator coin deposited
+                            </div>
+                            {/* Arrow connector */}
+                            <div className="flex items-center gap-1.5 pl-[5px]">
+                              <div className="flex flex-col items-center gap-0">
+                                <div className="h-2.5 w-px" style={{ background: 'rgba(255,255,255,0.10)' }} />
+                                <span style={{ color: 'rgba(100,160,255,0.55)', fontSize: 11, lineHeight: 1 }}>↓</span>
+                              </div>
+                              <span className="font-mono text-[6px] tracking-[0.16em] sm:text-[7px]" style={{ color: 'rgba(100,160,255,0.38)' }}>
+                                minted as vault shares
                               </span>
                             </div>
-                            <div className="h-px w-full bg-white/[0.07] sm:h-full sm:w-px" />
-                            <div className="flex min-w-0 flex-col gap-1.5">
-                              <div className="flex items-center gap-1.5">
-                                <span
-                                  className="inline-flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-full"
-                                  style={{ border: '1px solid rgba(100,160,255,0.40)' }}
-                                >
-                                  <img src={SHARE_TOKEN_BADGE_SRC} alt={SHARE_TOKEN_ALT} className="h-full w-full object-cover" loading="lazy" />
-                                </span>
-                                <span className="font-mono text-[6px] uppercase tracking-[0.22em] sm:text-[7px] sm:tracking-[0.24em]" style={{ color: 'rgba(100,160,255,0.72)' }}>
-                                  {SHARE_TOKEN_SYMBOL} minted
-                                </span>
-                              </div>
-                              <div className="font-mono font-black leading-none tracking-tight" style={{ color: 'rgba(120,175,255,1)', fontSize: 'clamp(0.96rem, 4.2vw, 1.45rem)' }}>
-                                {displayShareAmount}
-                              </div>
-                              <span className="font-mono text-[6px] tracking-[0.14em] sm:text-[7px] sm:tracking-[0.16em]" style={{ color: 'rgba(100,160,255,0.42)' }}>
-                                vault share token live
+                            {/* Minted shares row */}
+                            <div className="flex items-center gap-2">
+                              <span className="inline-flex h-4 w-4 shrink-0 items-center justify-center overflow-hidden rounded-full" style={{ border: '1px solid rgba(100,160,255,0.40)' }}>
+                                <img src={SHARE_TOKEN_BADGE_SRC} alt={SHARE_TOKEN_ALT} className="h-full w-full object-cover" loading="lazy" />
                               </span>
+                              <div className="flex min-w-0 flex-col gap-0.5">
+                                <div className="font-mono font-black leading-none tracking-tight" style={{ color: 'rgba(120,175,255,1)', fontSize: 'clamp(0.96rem, 4.2vw, 1.45rem)' }}>
+                                  {displayShareAmount}
+                                </div>
+                                <span className="font-mono text-[6px] tracking-[0.14em] sm:text-[7px]" style={{ color: 'rgba(100,160,255,0.42)' }}>
+                                  vault share token live
+                                </span>
+                              </div>
                             </div>
                           </div>
-                          <div className="mt-1.5 flex flex-col gap-1.5 border-t border-white/[0.06] pt-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-                            <span className="font-mono text-[6px] tracking-[0.14em] sm:text-[7px] sm:tracking-[0.16em]" style={{ color: 'rgba(57,255,20,0.80)' }}>
+                          <div className="mt-1.5 flex items-center justify-between gap-2 border-t border-white/[0.06] pt-2">
+                            <span className="font-mono text-[6px] tracking-[0.14em] sm:text-[7px]" style={{ color: 'rgba(57,255,20,0.80)' }}>
                               {normalizedShareTokens} minted ✓
                             </span>
-                            <span className="font-mono text-[6px] tracking-[0.14em] sm:text-[7px] sm:tracking-[0.16em]" style={{ color: 'rgba(255,255,255,0.30)' }}>
+                            <span className="font-mono text-[6px] tracking-[0.14em] sm:text-[7px]" style={{ color: 'rgba(255,255,255,0.30)' }}>
                               creators + holders aligned
                             </span>
                           </div>
@@ -955,7 +1129,7 @@ export function VaultFlowScroll({
     }
 
     const f = hardStopFired.current
-    // Checkpoint 1: vault fully sealed + cage walls drawn (vaultTopProgress hits 1.0 at 0.32)
+    // Checkpoint 1: vault capture locked — wireframe + containment read as sealed by 0.32
     if (!f.s1 && v >= 0.32) { f.s1 = true; fireHardStop('vault sealed', 2.0) }
     // Checkpoint 2: deposit fill done (0.46) + ■AKITA right column fully visible (0.50)
     if (!f.s2 && v >= 0.50) { f.s2 = true; fireHardStop('shares minted', 2.0) }
@@ -1096,31 +1270,13 @@ export function VaultFlowScroll({
   // Starts dark, ignites to full brightness during freefall, stays at 1.0 through all distributions,
   // brightens one last beat as it rushes at camera, then hits 0 — we're inside.
   const vaultOpacity = useTransform(scroll, [0, 0.026, 0.064, 0.40, 0.74, 0.77, 0.78], [0, 0.35, 1, 1, 0.85, 1.0, 0])
-  // Landing unlock flash — bright burst the moment the Zorb settles on the platform
-  // reduced-motion: suppress flashes to avoid strobing effects.
-  const _landingFlashBase = useTransform(scroll, [0.15, 0.19, 0.24, 0.30], [0, 1, 0.45, 0])
-  const landingFlash = useTransform(_landingFlashBase, v => prefersReducedMotion ? 0 : v)
-  // Glow/flash: mint phase only — starts after deposit dot arrives
-  const _vaultGlowBase = useTransform(scroll, [0.24, 0.32, 0.36, 0.40], [0, 1, 0.3, 0])
-  const vaultGlow = useTransform(_vaultGlowBase, v => prefersReducedMotion ? 0 : v)
-  // vaultFlash removed — coinEntryGlow at 0.60+ is the single glow event
-  // Vault lid — snaps closed on capture, turning the open tray into a sealed vault
-  const vaultLidOp = useTransform(scroll, [0.16, 0.24, 0.74, 0.78], [0, 1, 1, 0])
-
-  // Vault walls — 4 corner posts grow upward as deposit threshold nears
-  // then fade out with the Zorb dive. Posts animate first, then top edges connect.
-  const vaultPostProgress = useTransform(scroll, [0.18, 0.28], [0, 1])
-  const vaultTopProgress  = useTransform(scroll, [0.28, 0.32], [0, 1])
-  const vaultWallOp       = useTransform(scroll, [0.18, 0.22, 0.74, 0.78], [0, 1, 1, 0])
-
+  // Capture progress — drives the entire VaultCaptureSystem [0.08, 0.34] window
+  const captureProgress = useTransform(scroll, [0.08, 0.34], [0, 1], { clamp: true })
 
   // Coin entry glow — fires when deposit fill completes, sustains through all distributions,
-  // fades as the dive begins
+  // fades as the dive begins. Passed into VaultCaptureSystem to sustain vault inner glow post-mint.
   const _coinEntryGlowBase = useTransform(scroll, [0.50, 0.54, 0.74, 0.78], [0, 1, 1, 0])
   const coinEntryGlow = useTransform(_coinEntryGlowBase, v => prefersReducedMotion ? 0 : v)
-  // Zora neon-green mint flash — a quick tribute to Zora's new identity.
-  const _zoraGreenFlashBase = useTransform(scroll, [0.46, 0.485, 0.52], [0, 1, 0])
-  const zoraGreenFlash = useTransform(_zoraGreenFlashBase, v => prefersReducedMotion ? 0 : v)
   // Entry radial bloom: peaks as vault rushes through camera, fully faded before deploy content reads
   const vaultEntry = useTransform(scroll, [0.77, 0.81, 0.85], [0, 1, 0])
 
@@ -1174,8 +1330,8 @@ export function VaultFlowScroll({
     rotateZ(${vaultFallRotZ}deg)
   `
 
-  // Cube interior POV — fades in during the vault-rush moment, then holds steady through all of stage 4.
-  const cubeOp = useTransform(scroll, [0.80, 0.87, 1.0], [0, 1.0, 0.82])
+  // Cube interior POV — very faint depth overlay during the vault-rush
+  const cubeOp = useTransform(scroll, [0.80, 0.87, 1.0], [0, 0.18, 0.15])
 
   return (
     <>
@@ -1331,17 +1487,11 @@ export function VaultFlowScroll({
               />
             )}
 
-            <VaultScene
+            <VaultCaptureSystem
               uid={uid}
               vaultTransform={vaultTransform}
               vaultOpacity={vaultOpacity}
-              vaultLidOp={vaultLidOp}
-              vaultWallOp={vaultWallOp}
-              vaultPostProgress={vaultPostProgress}
-              vaultTopProgress={vaultTopProgress}
-              vaultGlow={vaultGlow}
-              landingFlash={landingFlash}
-              zoraGreenFlash={zoraGreenFlash}
+              captureProgress={captureProgress}
               coinEntryGlow={coinEntryGlow}
             />
 
@@ -1350,6 +1500,10 @@ export function VaultFlowScroll({
             <DesktopDistributionHandoffScene
               state={desktopStoryState}
               content={STORY_CONTENT}
+              uid={uid}
+              orbitTrav0={orbitTrav0}
+              orbitTrav1={orbitTrav1}
+              orbitTrav2={orbitTrav2}
             />
 
             {/* Deploy strategies — semantic scene, always active */}
@@ -1388,7 +1542,7 @@ export function VaultFlowScroll({
             aria-hidden="true"
           />
 
-          {/* Cube interior POV — faint perspective box outline, you're inside the vault */}
+          {/* Cube interior POV — very faint perspective depth cue, you're inside the vault */}
           <motion.div
             className="pointer-events-none absolute inset-0 z-[8]"
             style={{ opacity: cubeOp }}

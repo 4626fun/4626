@@ -9,11 +9,51 @@
       "command": "pnpm dev"
     },
     {
-      "name": "Frontend: Chrome (localhost:5173)",
+      "name": "Frontend: Dev + Chrome",
       "type": "pwa-chrome",
       "request": "launch",
       "url": "http://localhost:5173",
       "webRoot": "${workspaceFolder}/frontend",
+      "preLaunchTask": "frontend: vite dev (background)",
+      "sourceMaps": true,
+      "skipFiles": [
+        "${workspaceFolder}/frontend/node_modules/**",
+        "<node_internals>/**"
+      ]
+    },
+    {
+      "name": "Frontend: Chrome only (Vite already running)",
+      "type": "pwa-chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/frontend",
+      "sourceMaps": true,
+      "skipFiles": [
+        "${workspaceFolder}/frontend/node_modules/**",
+        "<node_internals>/**"
+      ]
+    },
+    {
+      "name": "Frontend: Dev + Chrome (WSL → Windows Chrome)",
+      "type": "pwa-chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/frontend",
+      "preLaunchTask": "frontend: vite dev (background)",
+      "runtimeExecutable": "/mnt/c/Program Files/Google/Chrome/Application/chrome.exe",
+      "sourceMaps": true,
+      "skipFiles": [
+        "${workspaceFolder}/frontend/node_modules/**",
+        "<node_internals>/**"
+      ]
+    },
+    {
+      "name": "Frontend: Chrome only (WSL → Windows Chrome)",
+      "type": "pwa-chrome",
+      "request": "launch",
+      "url": "http://localhost:5173",
+      "webRoot": "${workspaceFolder}/frontend",
+      "runtimeExecutable": "/mnt/c/Program Files/Google/Chrome/Application/chrome.exe",
       "sourceMaps": true,
       "skipFiles": [
         "${workspaceFolder}/frontend/node_modules/**",
@@ -26,16 +66,6 @@
       "request": "launch",
       "cwd": "${workspaceFolder}/frontend",
       "command": "pnpm exec vitest run \"${file}\""
-    }
-  ],
-  "compounds": [
-    {
-      "name": "Frontend: Dev + Chrome",
-      "configurations": [
-        "Frontend: Dev Server",
-        "Frontend: Chrome (localhost:5173)"
-      ],
-      "stopAll": true
     }
   ]
 }
