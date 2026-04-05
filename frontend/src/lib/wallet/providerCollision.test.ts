@@ -40,12 +40,43 @@ describe('detectEthereumProviderCollision', () => {
     expect(state.shouldDisableInjectedConnector).toBe(true)
   })
 
+  it('flags collision for own non-writable window.ethereum data descriptor', () => {
+    const win = {}
+    Object.defineProperty(win, 'ethereum', {
+      configurable: true,
+      enumerable: true,
+      writable: false,
+      value: { providers: [] },
+    })
+    setTestWindow(win)
+
+    const state = detectEthereumProviderCollision()
+    expect(state.lockedEthereumProviderGlobal).toBe(true)
+    expect(state.shouldDisableInjectedConnector).toBe(true)
+  })
+
   it('flags collision for inherited getter-only window.ethereum', () => {
     const proto = {}
     Object.defineProperty(proto, 'ethereum', {
       configurable: true,
       enumerable: true,
       get: () => ({ providers: [] }),
+    })
+    const win = Object.create(proto)
+    setTestWindow(win)
+
+    const state = detectEthereumProviderCollision()
+    expect(state.lockedEthereumProviderGlobal).toBe(true)
+    expect(state.shouldDisableInjectedConnector).toBe(true)
+  })
+
+  it('flags collision for inherited non-writable window.ethereum data descriptor', () => {
+    const proto = {}
+    Object.defineProperty(proto, 'ethereum', {
+      configurable: true,
+      enumerable: true,
+      writable: false,
+      value: { providers: [] },
     })
     const win = Object.create(proto)
     setTestWindow(win)

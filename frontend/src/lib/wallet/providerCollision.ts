@@ -14,6 +14,13 @@ function findWindowEthereumDescriptor(target: Window): PropertyDescriptor | null
   return null
 }
 
+function isLockedEthereumDescriptor(descriptor: PropertyDescriptor | null): boolean {
+  if (!descriptor) return false
+  if (typeof descriptor.get === 'function' && typeof descriptor.set !== 'function') return true
+  if (Object.prototype.hasOwnProperty.call(descriptor, 'writable') && descriptor.writable === false) return true
+  return false
+}
+
 export function detectEthereumProviderCollision(): EthereumProviderCollisionState {
   if (typeof window === 'undefined') {
     return {
@@ -33,11 +40,7 @@ export function detectEthereumProviderCollision(): EthereumProviderCollisionStat
   const hasMultipleInjectedProviders = providerList.length > 1
 
   const descriptor = findWindowEthereumDescriptor(window)
-  const lockedEthereumProviderGlobal = Boolean(
-    descriptor &&
-      typeof descriptor.get === 'function' &&
-      typeof descriptor.set !== 'function',
-  )
+  const lockedEthereumProviderGlobal = isLockedEthereumDescriptor(descriptor)
 
   return {
     hasMultipleInjectedProviders,

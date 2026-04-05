@@ -190,6 +190,17 @@ function isPrivyLoginBootstrapError(error: unknown): boolean {
   )
 }
 
+function isWalletProviderCollisionError(error: unknown): boolean {
+  const text = typeof error === 'string' ? error : typeof (error as any)?.message === 'string' ? (error as any).message : ''
+  const normalized = text.trim().toLowerCase()
+  if (!normalized) return false
+  return (
+    normalized.includes('cannot set property ethereum of #<window> which has only a getter') ||
+    normalized.includes('cannot redefine property: ethereum') ||
+    normalized.includes('wallet proxy not initialized')
+  )
+}
+
 async function maybeCallMethod(target: any, methodNames: string[], args: unknown[] = []): Promise<boolean> {
   if (!target) return false
   for (const methodName of methodNames) {
@@ -1206,38 +1217,44 @@ export function WaitlistFlow(props: {
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (token) {
       headers['X-Privy-Token'] = token
-      let canonicalization = await withTimeout(
-        runCanonicalizationPipeline({
-          privyToken: token,
-        }),
-        FLOW_TIMEOUT_MS,
-        'Account sync',
-      )
-      if (!canonicalization.onboardingBootstrapped && canonicalization.flags.needsEmbeddedWallet) {
-        const provisionedWallet = await withTimeout(
-          ensureEmbeddedWallet(),
-          FLOW_TIMEOUT_MS,
-          'Embedded wallet provisioning',
-        )
-        setEmbeddedEoaAddress(provisionedWallet.address)
-        canonicalization = await withTimeout(
+      try {
+        let canonicalization = await withTimeout(
           runCanonicalizationPipeline({
             privyToken: token,
           }),
           FLOW_TIMEOUT_MS,
           'Account sync',
         )
-      }
-      if (canonicalization.onboardingBootstrapped && canonicalization.onboarding) {
-        bootstrappedCanonicalWallet = canonicalization.onboarding
-        setOwnerDelegationFlags(null)
-        setOwnerDelegationVerified(canonicalization.onboarding.privyIsOwner)
-        setEmbeddedEoaAddress(canonicalization.onboarding.privyEmbeddedEoaAddress)
-      } else {
-        const flags = deriveOwnerDelegationFlags(canonicalization.flags)
-        setOwnerDelegationFlags(flags)
-        setOwnerDelegationVerified(null)
-        setEmbeddedEoaAddress(null)
+        if (!canonicalization.onboardingBootstrapped && canonicalization.flags.needsEmbeddedWallet) {
+          const provisionedWallet = await withTimeout(
+            ensureEmbeddedWallet(),
+            FLOW_TIMEOUT_MS,
+            'Embedded wallet provisioning',
+          )
+          setEmbeddedEoaAddress(provisionedWallet.address)
+          canonicalization = await withTimeout(
+            runCanonicalizationPipeline({
+              privyToken: token,
+            }),
+            FLOW_TIMEOUT_MS,
+            'Account sync',
+          )
+        }
+        if (canonicalization.onboardingBootstrapped && canonicalization.onboarding) {
+          bootstrappedCanonicalWallet = canonicalization.onboarding
+          setOwnerDelegationFlags(null)
+          setOwnerDelegationVerified(canonicalization.onboarding.privyIsOwner)
+          setEmbeddedEoaAddress(canonicalization.onboarding.privyEmbeddedEoaAddress)
+        } else {
+          const flags = deriveOwnerDelegationFlags(canonicalization.flags)
+          setOwnerDelegationFlags(flags)
+          setOwnerDelegationVerified(null)
+          setEmbeddedEoaAddress(null)
+        }
+      } catch (canonicalizationError: unknown) {
+        if (isRecoveryRequiredAuthError(canonicalizationError)) throw canonicalizationError
+        // Waitlist login should not fail on non-recovery canonicalization hiccups.
+        // We still continue bootstrap so returning users can re-enter their account.
       }
     }
     const response = await withTimeout(
@@ -1391,7 +1408,12 @@ export function WaitlistFlow(props: {
         await runBootstrap()
       } else {
         await runWaitlistPrivyLogout({ logout: null })
-        await login(buildWaitlistEmailLoginOptions() as any)
+        try {
+          await login(buildWaitlistEmailLoginOptions() as any)
+        } catch (loginError: unknown) {
+          if (!isWalletProviderCollisionError(loginError)) throw loginError
+          await runBootstrap()
+        }
       }
     } catch (authError: any) {
       const isRecoveryRequired = isRecoveryRequiredAuthError(authError)
@@ -1609,7 +1631,12 @@ export function WaitlistFlow(props: {
         return
       }
       await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
-      await login(buildWaitlistRecoveryLoginOptions() as any)
+      try {
+        await login(buildWaitlistRecoveryLoginOptions() as any)
+      } catch (loginError: unknown) {
+        if (!isWalletProviderCollisionError(loginError)) throw loginError
+        await runBootstrap()
+      }
     } catch (recoverError: any) {
       if (isPrivyLoginBootstrapError(recoverError) && redirectToCanonicalWaitlist()) {
         setError('Redirecting back to the waitlist sign-in flow…')

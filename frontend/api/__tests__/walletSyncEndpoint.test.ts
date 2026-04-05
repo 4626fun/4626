@@ -35,6 +35,10 @@ vi.mock('@privy-io/server-auth', () => ({
   },
 }))
 
+vi.mock('../../server/_lib/canonicalWalletsSchema.js', () => ({
+  ensureCanonicalWalletsSchema: vi.fn(async () => {}),
+}))
+
 describe('wallet sync endpoint', () => {
   let restoreEnv: (() => void) | null = null
 

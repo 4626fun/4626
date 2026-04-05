@@ -21,6 +21,7 @@ vi.mock('framer-motion', () => ({
 
 vi.mock('react-router-dom', () => ({
   useSearchParams: () => [new URLSearchParams(), vi.fn()],
+  useLocation: () => ({ pathname: '/', search: '', hash: '', state: null }),
 }))
 
 vi.mock('@tanstack/react-query', () => ({

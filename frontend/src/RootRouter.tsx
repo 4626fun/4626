@@ -14,6 +14,10 @@ const WaitlistInviteEntry = lazy(async () => {
   const m = await import('./pages/WaitlistInviteEntry')
   return { default: m.WaitlistInviteEntry }
 })
+const Waitlist = lazy(async () => {
+  const m = await import('./pages/Waitlist')
+  return { default: m.Waitlist }
+})
 const LazyProtectedAppBoundary = lazy(async () => {
   const [appModule, web3Module] = await Promise.all([
     import('./App'),
@@ -74,6 +78,7 @@ export function RootRouter() {
           element={<Layout interactive={false} chatEnabled={false} />}
         >
           <Route path="/" element={<Home />} />
+          <Route path="/waitlist" element={<Waitlist />} />
           <Route path="/r/:referralCode" element={<WaitlistInviteEntry />} />
         </Route>
         <Route

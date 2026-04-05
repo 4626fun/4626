@@ -4,7 +4,6 @@ import React from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { render, screen } from '@testing-library/react'
-import userEvent from '@testing-library/user-event'
 
 vi.mock('framer-motion', () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
@@ -39,41 +38,6 @@ vi.mock('@/lib/host', () => ({
   getHostMode: () => 'marketing',
 }))
 
-vi.mock('@/web3/Web3Providers', () => ({
-  Web3Providers: ({ children }: { children: React.ReactNode }) =>
-    React.createElement('div', { 'data-testid': 'web3-providers' }, children),
-}))
-
-vi.mock('@/lib/privy/client', () => ({
-  PrivyClientProvider: ({ children }: { children: React.ReactNode }) =>
-    React.createElement('div', { 'data-testid': 'privy-provider' }, children),
-}))
-
-vi.mock('@/components/waitlist/WaitlistFlow', () => ({
-  WaitlistFlow: ({
-    sectionId,
-    variant,
-    autoStartAuth,
-    suppressAuthShell,
-  }: {
-    sectionId?: string
-    variant?: string
-    autoStartAuth?: boolean
-    suppressAuthShell?: boolean
-  }) => (
-    React.createElement(
-      'div',
-      {
-        'data-testid': 'waitlist-flow',
-        'data-variant': variant ?? 'embedded',
-        'data-auto-start': autoStartAuth ? 'yes' : 'no',
-        'data-suppress-auth-shell': suppressAuthShell ? 'yes' : 'no',
-      },
-      sectionId ?? 'waitlist-flow',
-    )
-  ),
-}))
-
 vi.mock('@/components/home/VaultFlowScroll', () => ({
   VaultFlowScroll: ({ depositTokens, shareTokens }: { depositTokens: string; shareTokens: string }) =>
     React.createElement(
@@ -86,85 +50,26 @@ vi.mock('@/components/home/VaultFlowScroll', () => ({
 import { Home } from './Home'
 
 describe('Home', () => {
-  it('keeps the homepage waitlist entry on-page', () => {
+  it('renders a link to /waitlist instead of opening an inline flow', () => {
     render(React.createElement(MemoryRouter, null, React.createElement(Home)))
 
-    expect(screen.getByRole('button', { name: /join waitlist/i })).toBeTruthy()
-    expect(screen.queryByRole('link', { name: /join waitlist/i })).toBeNull()
+    const link = screen.getByRole('link', { name: /join waitlist/i })
+    expect(link).toBeTruthy()
+    expect(link.getAttribute('href')).toBe('/waitlist')
   })
 
-  it('opens the provider-backed waitlist flow on the homepage without routing away', async () => {
-    const user = userEvent.setup()
-    window.sessionStorage.clear()
+  it('does not render any waitlist flow or providers on the home page', () => {
+    render(React.createElement(MemoryRouter, null, React.createElement(Home)))
 
-    render(React.createElement(MemoryRouter, { initialEntries: ['/'] }, React.createElement(Home)))
+    expect(screen.queryByTestId('waitlist-flow')).toBeNull()
+    expect(screen.queryByTestId('privy-provider')).toBeNull()
+    expect(screen.queryByTestId('web3-providers')).toBeNull()
+  })
 
-    await user.click(screen.getByRole('button', { name: /join waitlist/i }))
+  it('does not show an inline waitlist button — the CTA is always a link', () => {
+    render(React.createElement(MemoryRouter, null, React.createElement(Home)))
 
-    expect(await screen.findByTestId('waitlist-flow')).toBeTruthy()
-    expect(screen.getByTestId('waitlist-flow').getAttribute('data-variant')).toBe('embedded')
-    expect(screen.getByTestId('waitlist-flow').getAttribute('data-auto-start')).toBe('no')
-    expect(screen.getByTestId('waitlist-flow').getAttribute('data-suppress-auth-shell')).toBe('no')
     expect(screen.queryByRole('button', { name: /join waitlist/i })).toBeNull()
-    expect(window.location.pathname).toBe('/')
-  })
-
-  it('clears any stale referral code before opening the homepage waitlist flow', async () => {
-    const user = userEvent.setup()
-    window.sessionStorage.clear()
-    window.sessionStorage.setItem('cv:waitlist:referral_code', 'FRIEND42')
-
-    render(React.createElement(MemoryRouter, { initialEntries: ['/'] }, React.createElement(Home)))
-
-    await user.click(screen.getByRole('button', { name: /join waitlist/i }))
-
-    expect(window.sessionStorage.getItem('cv:waitlist:referral_code')).toBeNull()
-  })
-
-  it('opens the homepage waitlist flow from stored auth intent', async () => {
-    window.sessionStorage.clear()
-    window.sessionStorage.setItem('cv:waitlist:auth_armed', '1')
-    window.sessionStorage.setItem('cv:waitlist:auth_auto_start', '1')
-
-    render(React.createElement(MemoryRouter, { initialEntries: ['/'] }, React.createElement(Home)))
-
-    expect(await screen.findByTestId('waitlist-flow')).toBeTruthy()
-    expect(screen.getByTestId('waitlist-flow').getAttribute('data-auto-start')).toBe('yes')
-    expect(window.sessionStorage.getItem('cv:waitlist:auth_armed')).toBeNull()
-    expect(window.sessionStorage.getItem('cv:waitlist:auth_auto_start')).toBeNull()
-  })
-
-  it('does not render the waitlist flow before explicit user intent', () => {
-    render(React.createElement(MemoryRouter, null, React.createElement(Home)))
-
-    expect(screen.queryByTestId('waitlist-flow')).toBeNull()
-  })
-
-  it('keeps waitlist providers quiet before the waitlist flow is explicitly opened', async () => {
-    const user = userEvent.setup()
-    render(React.createElement(MemoryRouter, null, React.createElement(Home)))
-
-    expect(screen.queryByTestId('privy-provider')).toBeNull()
-    expect(screen.queryByTestId('web3-providers')).toBeNull()
-
-    await user.tab()
-
-    expect(screen.getByRole('button', { name: /join waitlist/i })).toBeTruthy()
-    expect(screen.queryByTestId('privy-provider')).toBeNull()
-    expect(screen.queryByTestId('web3-providers')).toBeNull()
-    expect(screen.queryByTestId('waitlist-flow')).toBeNull()
-  })
-
-  it('mounts waitlist providers immediately when stored auth intent is present', async () => {
-    window.sessionStorage.clear()
-    window.sessionStorage.setItem('cv:waitlist:auth_armed', '1')
-    window.sessionStorage.setItem('cv:waitlist:auth_auto_start', '1')
-
-    render(React.createElement(MemoryRouter, { initialEntries: ['/'] }, React.createElement(Home)))
-
-    expect(screen.getByTestId('privy-provider')).toBeTruthy()
-    expect(screen.getByTestId('web3-providers')).toBeTruthy()
-    expect(await screen.findByTestId('waitlist-flow')).toBeTruthy()
   })
 
   it('shows the current launch mechanics and token flow', () => {
