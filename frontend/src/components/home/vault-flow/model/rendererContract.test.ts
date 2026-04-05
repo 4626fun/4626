@@ -71,37 +71,35 @@ describe('vault-flow renderer contract', () => {
     expect(offenders).toEqual([])
   })
 
-  it('VaultFlowScroll stage-transitions use storySelectors, not raw v< thresholds', () => {
+  it('VaultFlowScroll does not use raw scroll-progress thresholds for stage gating', () => {
     const vaultFlowScrollPath = path.resolve(
       process.cwd(),
       'src/components/home/VaultFlowScroll.tsx',
     )
     const source = readFileSync(vaultFlowScrollPath, 'utf8')
 
-    // Old raw stage-gating patterns that Track B replaced with storySelectors
-    expect(source).not.toMatch(/v\s*>=\s*0\.46\b/)    // old depositComplete trigger
-    expect(source).not.toMatch(/v\s*<\s*0\.52\b/)     // old cardPhase 1→2 gate
-    expect(source).not.toMatch(/v\s*>=\s*0\.76\b/)    // old cardPhase 2→3 gate
-
-    // Positive: the mint-confirmed selector drives depositComplete state
-    expect(source).toMatch(/isMintConfirmed\(/)
+    // Raw scroll-progress branching patterns are banned — they were replaced by
+    // the section-based whileInView architecture which has no scroll gating at all.
+    expect(source).not.toMatch(/v\s*>=\s*0\.\d+\b/)
+    expect(source).not.toMatch(/v\s*<\s*0\.\d+\b/)
+    expect(source).not.toMatch(/hardStopFired/)
+    expect(source).not.toMatch(/useSpring/)
   })
 
-  it('Beat-scoped scene guards are in place for CreatorIntroScene and TokenDepositScene', () => {
+  it('VaultFlowScroll is a static section layout — no beat-gated conditional mounts', () => {
     const vaultFlowScrollPath = path.resolve(
       process.cwd(),
       'src/components/home/VaultFlowScroll.tsx',
     )
     const source = readFileSync(vaultFlowScrollPath, 'utf8')
 
-    // CreatorIntroScene gate: single beat
-    expect(source).toMatch(/isBeat\(desktopStoryState,\s*'creatorEstablishes'\)/)
-    // TokenDepositScene gate: two beats OR-combined
-    expect(source).toMatch(/isBeat\(desktopStoryState,\s*'valueFlowsIn'\)/)
-    expect(source).toMatch(/isBeat\(desktopStoryState,\s*'participantDeposits'\)/)
-    // No negated guards needed — scenes only mount during their own beats
-    expect(source).not.toMatch(/!isBeat\(desktopStoryState,\s*'creatorEstablishes'\)/)
-    expect(source).not.toMatch(/!isBeat\(desktopStoryState,\s*'valueFlowsIn'\)/)
+    // Section-based design: all content is always in the tree.
+    // Beat-gated mounts (isBeat guards) belong in the orchestrators, not here.
+    expect(source).not.toMatch(/isBeat\s*\(/)
+    expect(source).not.toMatch(/isMintConfirmed\s*\(/)
+    // No scrolljacking — height:3200vh sticky container is gone
+    expect(source).not.toMatch(/3200vh/)
+    expect(source).not.toMatch(/sticky/)
   })
 })
 

@@ -41,11 +41,26 @@
     />
     <script>
       ;(() => {
+        const COLLISION_SIGNAL_KEY = 'cv:wallet-provider-collision-at'
         const WALLET_NOISE_PATTERNS = [
           /Cannot set property ethereum of #<Window> which has only a getter/i,
           /Cannot redefine property:\s*ethereum/i,
           /Failed to add embedded wallet connector:\s*Wallet proxy not initialized/i,
         ]
+
+        const persistCollisionSignal = () => {
+          const timestamp = String(Date.now())
+          try {
+            window.localStorage?.setItem(COLLISION_SIGNAL_KEY, timestamp)
+          } catch {
+            // ignore
+          }
+          try {
+            window.sessionStorage?.setItem(COLLISION_SIGNAL_KEY, timestamp)
+          } catch {
+            // ignore
+          }
+        }
 
         const isLockedDescriptor = (descriptor) => {
           if (!descriptor) return false
@@ -108,7 +123,10 @@
         window.addEventListener(
           'error',
           (event) => {
-            if (shouldSuppress(event.message, event.filename)) event.preventDefault()
+            if (shouldSuppress(event.message, event.filename)) {
+              persistCollisionSignal()
+              event.preventDefault()
+            }
           },
           true,
         )
@@ -118,7 +136,10 @@
           (event) => {
             const reason = event.reason
             const message = reason instanceof Error ? reason.message : String(reason?.message ?? reason ?? '')
-            if (shouldSuppress(message, '')) event.preventDefault()
+            if (shouldSuppress(message, '')) {
+              persistCollisionSignal()
+              event.preventDefault()
+            }
           },
           true,
         )

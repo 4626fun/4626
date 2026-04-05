@@ -7,12 +7,12 @@ import {
 } from './waitlistFlowUi'
 
 describe('deriveWaitlistAuthUi', () => {
-  it('uses sign-in copy and black-square glyph (email only in Privy)', () => {
+  it('uses sign-in copy that supports both existing and new accounts', () => {
     expect(deriveWaitlistAuthUi()).toEqual({
       title: 'Get early access',
-      subtitle: 'Verify your email to lock your spot and unlock your referral link.',
-      ctaLabel: 'Join waitlist',
-      busyLabel: 'Opening email sign-in…',
+      subtitle: 'Sign in with your existing 4626 identity, or verify your email to lock your spot and unlock your referral link.',
+      ctaLabel: 'Sign in / Join waitlist',
+      busyLabel: 'Opening sign-in…',
     })
   })
 })

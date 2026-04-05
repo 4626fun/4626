@@ -19,14 +19,13 @@ export function canEnterAppFromAccountState(params: { appAccessStatus: string | 
   return status === 'approved'
 }
 
-/** Copy for the waitlist sign-in step (email is collected only in the Privy modal). */
 export function deriveWaitlistAuthUi(): WaitlistEmailUi {
   return {
     title: 'Get early access',
     subtitle:
-      'Verify your email to lock your spot and unlock your referral link.',
-    ctaLabel: 'Join waitlist',
-    busyLabel: 'Opening email sign-in…',
+      'Sign in with your existing 4626 identity, or verify your email to lock your spot and unlock your referral link.',
+    ctaLabel: 'Sign in / Join waitlist',
+    busyLabel: 'Opening sign-in…',
   }
 }
 

@@ -115,4 +115,26 @@ describe('detectEthereumProviderCollision', () => {
     expect(state.lockedEthereumProviderGlobal).toBe(true)
     expect(state.shouldDisableInjectedConnector).toBe(true)
   })
+
+  it('disables injected connector when a recent collision signal is persisted', () => {
+    const localStorage = {
+      getItem: (key: string) => (key === 'cv:wallet-provider-collision-at' ? String(Date.now()) : null),
+      setItem: () => {},
+      removeItem: () => {},
+      clear: () => {},
+      key: () => null,
+      length: 0,
+    }
+    const win = {
+      ethereum: { providers: [{ id: 'single' }] },
+      localStorage,
+      sessionStorage: localStorage,
+    }
+    setTestWindow(win)
+
+    const state = detectEthereumProviderCollision()
+    expect(state.hasMultipleInjectedProviders).toBe(false)
+    expect(state.lockedEthereumProviderGlobal).toBe(false)
+    expect(state.shouldDisableInjectedConnector).toBe(true)
+  })
 })

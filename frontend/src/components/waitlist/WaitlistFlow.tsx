@@ -231,7 +231,7 @@ function formatLeaderboardPointsTooltip(row: DashboardLeaderboardRow): string {
   return `Total ${formatWholeNumber(row.pointsTotal)} • Invite ${formatWholeNumber(row.pointsInvite)} • Agent ${formatWholeNumber(row.pointsAgent)}`
 }
 
-const RECOVERY_REQUIRED_MESSAGE = 'This email already has a 4626 account. Use Recover account sign-in to continue.'
+const RECOVERY_REQUIRED_MESSAGE = 'This email already has a 4626 account. Use existing account sign-in to continue.'
 const SESSION_MISMATCH_MESSAGE = 'Signed in as a different account. Click Continue with email to try again.'
 
 function getAccessStatusMeta(status: string | null | undefined): {
@@ -442,7 +442,7 @@ function WaitlistAuthStep(props: {
     <div className="rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-zinc-300">
       <div className="inline-flex items-center gap-2">
         <Loader2 className="h-4 w-4 animate-spin text-brand-primary" />
-        Opening secure email sign-in…
+        Opening secure sign-in…
       </div>
     </div>
   )
@@ -473,7 +473,7 @@ function WaitlistAuthStep(props: {
                 onClick={() => void onContinueAuth()}
                 className="btn-secondary btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                Join waitlist
+                {authUi.ctaLabel}
               </button>
             </div>
           ) : (
@@ -1159,6 +1159,7 @@ export function WaitlistFlow(props: {
   const [copiedReferralLink, setCopiedReferralLink] = useState(false)
   const authAutoAttemptedRef = useRef(false)
   const authBootstrapAutoAttemptedRef = useRef(false)
+  const recoveryAutoRetryRef = useRef(false)
   const appHandoffAutoAttemptedRef = useRef(false)
   const dashboardRequestSeqRef = useRef(0)
   const privyLogoutRef = useRef<null | (() => Promise<void>)>(null)
@@ -1207,13 +1208,33 @@ export function WaitlistFlow(props: {
     setLeaderboard(null)
   }, [])
 
+  const attemptRecoveryAutoRetry = useCallback(async (): Promise<boolean> => {
+    if (recoveryAutoRetryRef.current) return false
+    recoveryAutoRetryRef.current = true
+    authAutoAttemptedRef.current = true
+    resetResolvedAccountState()
+    await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
+    await login(buildWaitlistRecoveryLoginOptions() as any)
+    return true
+  }, [login, resetResolvedAccountState, shouldDestroyPrivySession])
+
   const runBootstrap = useCallback(async (): Promise<AccountsSummary | null> => {
     let bootstrappedCanonicalWallet: OnboardingBootstrapResponse | null = null
-    const token = await withTimeout(
-      getAccessToken(),
-      FLOW_TIMEOUT_MS,
-      'Sign-in token',
-    ).catch(() => null)
+    const readPrivyToken = async () =>
+      withTimeout(
+        getAccessToken(),
+        FLOW_TIMEOUT_MS,
+        'Sign-in token',
+      ).catch(() => null)
+    let token = await readPrivyToken()
+    if (!token && privyAuthed) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 250))
+      token = await readPrivyToken()
+    }
+    if (!token && privyAuthed) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 500))
+      token = await readPrivyToken()
+    }
     const headers: Record<string, string> = { 'Content-Type': 'application/json' }
     if (token) {
       headers['X-Privy-Token'] = token
@@ -1286,12 +1307,16 @@ export function WaitlistFlow(props: {
 
     if (payload.data.requiresPrivyAuth) {
       setStep('auth')
+      if (privyAuthed) {
+        throw new Error('Sign-in session is still finalizing. Tap Continue once more.')
+      }
       return null
     }
 
     const nextAccount = mergeCanonicalWaitlistAccount(payload.data, bootstrappedCanonicalWallet)
     setAccount(nextAccount)
     setRecoveryRequired(false)
+    recoveryAutoRetryRef.current = false
     if (activeReferralCode) clearStoredWaitlistReferralCode()
     if (!nextAccount.emailVerified) {
       setStep('auth')
@@ -1300,7 +1325,7 @@ export function WaitlistFlow(props: {
     }
     setStep(resolveWaitlistStep({ account: nextAccount }))
     return nextAccount
-  }, [activeReferralCode, ensureEmbeddedWallet, getAccessToken, setError, setRecoveryRequired])
+  }, [activeReferralCode, ensureEmbeddedWallet, getAccessToken, privyAuthed, setError, setRecoveryRequired])
 
   const loadDashboard = useCallback(
     async (opts?: { silent?: boolean }) => {
@@ -1389,6 +1414,7 @@ export function WaitlistFlow(props: {
 
   const onContinueAuth = useCallback(async () => {
     if (!beginAuthAttempt()) return
+    recoveryAutoRetryRef.current = false
     try {
       if (!privyAuthed && privyClientStatus === 'disabled' && redirectToCanonicalWaitlist()) {
         return
@@ -1418,10 +1444,21 @@ export function WaitlistFlow(props: {
     } catch (authError: any) {
       const isRecoveryRequired = isRecoveryRequiredAuthError(authError)
       if (isRecoveryRequired) {
-        authAutoAttemptedRef.current = true
-        resetResolvedAccountState()
-          await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
         setRecoveryRequired(true)
+        try {
+          const startedRecovery = await attemptRecoveryAutoRetry()
+          if (startedRecovery) {
+            setError(null)
+            return
+          }
+        } catch (recoveryError: any) {
+          setError(
+            typeof recoveryError?.message === 'string' && recoveryError.message.trim()
+              ? recoveryError.message
+              : RECOVERY_REQUIRED_MESSAGE,
+          )
+          return
+        }
       }
       setError(
         isRecoveryRequired
@@ -1443,11 +1480,10 @@ export function WaitlistFlow(props: {
     privyAuthed,
     privyClientStatus,
     redirectToCanonicalWaitlist,
-    resetResolvedAccountState,
+    attemptRecoveryAutoRetry,
     runBootstrap,
     setError,
     setRecoveryRequired,
-    shouldDestroyPrivySession,
   ])
 
   const onContinueWithBase = useCallback(async () => {
@@ -1750,12 +1786,30 @@ export function WaitlistFlow(props: {
         ) {
           authAutoAttemptedRef.current = true
         }
-        if (isSessionMismatch || isRecoveryRequired) {
+        if (isSessionMismatch) {
           resetResolvedAccountState()
           await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
         }
+        if (isRecoveryRequired) {
+          if (!cancelled) setRecoveryRequired(true)
+          try {
+            const startedRecovery = await attemptRecoveryAutoRetry()
+            if (startedRecovery) {
+              if (!cancelled) setError(null)
+              return
+            }
+          } catch (recoveryError: any) {
+            if (!cancelled) {
+              setError(
+                typeof recoveryError?.message === 'string' && recoveryError.message.trim()
+                  ? recoveryError.message
+                  : RECOVERY_REQUIRED_MESSAGE,
+              )
+            }
+            return
+          }
+        }
         if (!cancelled) {
-          if (isRecoveryRequired) setRecoveryRequired(true)
           setError(
             isSessionMismatch
               ? SESSION_MISMATCH_MESSAGE
@@ -1773,6 +1827,7 @@ export function WaitlistFlow(props: {
     }
   }, [
     authAttemptInFlightRef,
+    attemptRecoveryAutoRetry,
     privyAuthed,
     resetResolvedAccountState,
     runBootstrap,
@@ -1788,6 +1843,7 @@ export function WaitlistFlow(props: {
       authAttemptInFlightRef.current = false
       authAutoAttemptedRef.current = false
       authBootstrapAutoAttemptedRef.current = false
+      recoveryAutoRetryRef.current = false
       setRecoveryRequired(false)
     }
   }, [authAttemptInFlightRef, setRecoveryRequired, step])

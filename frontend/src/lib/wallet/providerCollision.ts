@@ -4,6 +4,9 @@ type EthereumProviderCollisionState = {
   shouldDisableInjectedConnector: boolean
 }
 
+const PERSISTED_WALLET_COLLISION_KEY = 'cv:wallet-provider-collision-at'
+const PERSISTED_WALLET_COLLISION_WINDOW_MS = 24 * 60 * 60 * 1000
+
 function findWindowEthereumDescriptor(target: Window): PropertyDescriptor | null {
   let cursor: object | null = target
   while (cursor) {
@@ -18,6 +21,36 @@ function isLockedEthereumDescriptor(descriptor: PropertyDescriptor | null): bool
   if (!descriptor) return false
   if (typeof descriptor.get === 'function' && typeof descriptor.set !== 'function') return true
   if (Object.prototype.hasOwnProperty.call(descriptor, 'writable') && descriptor.writable === false) return true
+  return false
+}
+
+function hasRecentPersistedCollisionSignal(nowMs: number): boolean {
+  if (typeof window === 'undefined') return false
+
+  const storages: Storage[] = []
+  try {
+    if (window.localStorage) storages.push(window.localStorage)
+  } catch {
+    // ignore
+  }
+  try {
+    if (window.sessionStorage) storages.push(window.sessionStorage)
+  } catch {
+    // ignore
+  }
+
+  for (const storage of storages) {
+    try {
+      const raw = storage.getItem(PERSISTED_WALLET_COLLISION_KEY)
+      if (!raw) continue
+      const timestampMs = Number(raw)
+      if (!Number.isFinite(timestampMs) || timestampMs <= 0) continue
+      if (nowMs - timestampMs <= PERSISTED_WALLET_COLLISION_WINDOW_MS) return true
+    } catch {
+      // ignore
+    }
+  }
+
   return false
 }
 
@@ -41,10 +74,12 @@ export function detectEthereumProviderCollision(): EthereumProviderCollisionStat
 
   const descriptor = findWindowEthereumDescriptor(window)
   const lockedEthereumProviderGlobal = isLockedEthereumDescriptor(descriptor)
+  const persistedCollisionSignal = hasRecentPersistedCollisionSignal(Date.now())
 
   return {
     hasMultipleInjectedProviders,
     lockedEthereumProviderGlobal,
-    shouldDisableInjectedConnector: hasMultipleInjectedProviders || lockedEthereumProviderGlobal,
+    shouldDisableInjectedConnector:
+      hasMultipleInjectedProviders || lockedEthereumProviderGlobal || persistedCollisionSignal,
   }
 }

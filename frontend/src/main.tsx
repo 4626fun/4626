@@ -91,6 +91,7 @@ const EXTENSION_ETHEREUM_ERROR_PATTERNS: RegExp[] = [
   /Failed to fetch dynamically imported module:\s*(chrome|moz)-extension:\/\//i,
 ]
 
+const WALLET_COLLISION_SIGNAL_KEY = 'cv:wallet-provider-collision-at'
 const VITE_OPTIMIZE_DEP_RECOVERY_KEY = 'cv:vite:optimize-dep-reload-at'
 const VITE_OPTIMIZE_DEP_RECOVERY_WINDOW_MS = 15_000
 
@@ -139,6 +140,30 @@ function isKnownExtensionWalletError(message: string, source: string): boolean {
     src.includes('inpage.js') ||
     src.includes('formatters.js')
   )
+}
+
+function persistWalletCollisionSignal() {
+  if (typeof window === 'undefined') return
+  const timestamp = String(Date.now())
+  const storages: Storage[] = []
+  try {
+    if (window.localStorage) storages.push(window.localStorage)
+  } catch {
+    // ignore
+  }
+  try {
+    if (window.sessionStorage) storages.push(window.sessionStorage)
+  } catch {
+    // ignore
+  }
+
+  for (const storage of storages) {
+    try {
+      storage.setItem(WALLET_COLLISION_SIGNAL_KEY, timestamp)
+    } catch {
+      // ignore
+    }
+  }
 }
 
 function isViteOutdatedOptimizeDepError(message: string, source: string): boolean {
@@ -197,6 +222,7 @@ if (typeof window !== 'undefined') {
           return
         }
         if (isKnownExtensionWalletError(event.message || '', event.filename || '')) {
+          persistWalletCollisionSignal()
           event.preventDefault()
         }
       },
@@ -213,6 +239,7 @@ if (typeof window !== 'undefined') {
           return
         }
         if (isKnownExtensionWalletError(message, source)) {
+          persistWalletCollisionSignal()
           event.preventDefault()
         }
       },
