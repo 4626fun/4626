@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import handler from '../_handlers/v1/creators/_quickstart.ts'
-import { applyEnv, createMockReq, createMockRes } from './helpers'
+import { applyEnv, canonicalWalletSchemaReadyResult, createMockReq, createMockRes } from './helpers'
 
 const {
   readSessionFromRequestMock,
@@ -100,6 +100,8 @@ function createDb() {
   return {
     sql: vi.fn(async (strings: TemplateStringsArray, ...values: unknown[]) => {
       const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+      const schemaReady = canonicalWalletSchemaReadyResult(text)
+      if (schemaReady) return schemaReady
       if (text.includes('select p.id') && text.includes('from profiles p') && text.includes('lower(canonical.address)')) {
         const input = typeof values[0] === 'string' ? values[0].toLowerCase() : ''
         if (input === '0x00000000000000000000000000000000000000aa') {

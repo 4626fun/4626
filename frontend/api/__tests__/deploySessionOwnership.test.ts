@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { decodeFunctionData, encodeFunctionData } from 'viem'
 
 import handler from '../_handlers/deploy/session/_create.ts'
-import { createMockReq, createMockRes } from './helpers'
+import { canonicalWalletSchemaReadyResult, createMockReq, createMockRes } from './helpers'
 
 const {
   readJsonBodyMock,
@@ -18,6 +18,7 @@ const {
   isCharmPoolIndexedMock,
   createPublicClientMock,
   getBytecodeMock,
+  ensureWaitlistSchemaMock,
 } = vi.hoisted(() => ({
   readJsonBodyMock: vi.fn(async (req: any) => req.body),
   readSessionFromRequestMock: vi.fn(() => ({ address: '0x0000000000000000000000000000000000000001' })),
@@ -41,6 +42,7 @@ const {
   createPublicClientMock: vi.fn(() => ({
     getBytecode: getBytecodeMock,
   })),
+  ensureWaitlistSchemaMock: vi.fn(async () => {}),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -96,7 +98,7 @@ vi.mock('../../server/_lib/charmVaults.js', () => ({
 }))
 
 vi.mock('../../server/_lib/waitlistSchema.js', () => ({
-  ensureWaitlistSchema: vi.fn(async () => {}),
+  ensureWaitlistSchema: ensureWaitlistSchemaMock,
 }))
 
 vi.mock('../../server/_lib/canonicalWalletsSchema.js', () => ({
@@ -271,6 +273,8 @@ function makeCanonicalDb() {
     query: vi.fn(async () => ({ rows: [{}] })), // allowlist pass
     sql: vi.fn(async (strings: TemplateStringsArray) => {
       const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+      const schemaReady = canonicalWalletSchemaReadyResult(text)
+      if (schemaReady) return schemaReady
       if (text.includes('from profiles p') && text.includes('where p.id =')) {
         return {
           rows: [
@@ -299,6 +303,8 @@ function makeCanonicalDbWithHistoricalSessionOnly() {
     query: vi.fn(async () => ({ rows: [{}] })),
     sql: vi.fn(async (strings: TemplateStringsArray) => {
       const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+      const schemaReady = canonicalWalletSchemaReadyResult(text)
+      if (schemaReady) return schemaReady
       if (text.includes('from profiles p') && text.includes('where p.id =')) {
         return {
           rows: [
@@ -431,6 +437,8 @@ describe('deploy session ownership guardrails', () => {
       query: vi.fn(async () => ({ rows: [{}] })),
       sql: vi.fn(async (strings: TemplateStringsArray) => {
         const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        const schemaReady = canonicalWalletSchemaReadyResult(text)
+        if (schemaReady) return schemaReady
         if (text.includes('is_canonical_smart_wallet = true')) return { rows: [] }
         return { rows: [] }
       }),

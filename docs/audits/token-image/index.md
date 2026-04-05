@@ -7,7 +7,4 @@ sidebar_position: 0
 
 Renderer research, breakout behavior analysis, and tuning reports.
 
-- [Renderer Rewrite](./deep-research-report.md)
-- [Deep Research Report](./deep-research-report-1.md)
-- [Breakout Behavior Analysis](./deep-research-report-2.md)
-- [Breakout Tuning Report](./breakout-report.md)
+Detailed renderer research exports are currently kept out of the repository until they are condensed into repo-safe documentation.

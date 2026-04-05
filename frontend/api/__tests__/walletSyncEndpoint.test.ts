@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { makeSessionToken } from '../../server/auth/_shared.ts'
 import handler from '../_handlers/wallet/_sync.ts'
-import { applyEnv, createMockReq, createMockRes } from './helpers'
+import { applyEnv, canonicalWalletSchemaReadyResult, createMockReq, createMockRes } from './helpers'
 
 const { getDbMock, ensureWaitlistSchemaMock, syncUserWalletsMock, getUserByIdMock } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
@@ -68,6 +68,8 @@ describe('wallet sync endpoint', () => {
     getDbMock.mockResolvedValue({
       sql: vi.fn(async (strings: TemplateStringsArray) => {
         const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        const schemaReady = canonicalWalletSchemaReadyResult(text)
+        if (schemaReady) return schemaReady
         if (text.includes('select p.id') && text.includes('lower(canonical.address)')) {
           return { rows: [{ id: 1 }] }
         }
@@ -108,6 +110,8 @@ describe('wallet sync endpoint', () => {
     getDbMock.mockResolvedValue({
       sql: vi.fn(async (strings: TemplateStringsArray) => {
         const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        const schemaReady = canonicalWalletSchemaReadyResult(text)
+        if (schemaReady) return schemaReady
         if (text.includes('select p.id') && text.includes('lower(canonical.address)')) {
           return { rows: [] }
         }
@@ -130,6 +134,8 @@ describe('wallet sync endpoint', () => {
     getDbMock.mockResolvedValue({
       sql: vi.fn(async (strings: TemplateStringsArray) => {
         const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        const schemaReady = canonicalWalletSchemaReadyResult(text)
+        if (schemaReady) return schemaReady
         if (text.includes('select p.id') && text.includes('lower(canonical.address)')) {
           return { rows: [{ id: 1 }] }
         }

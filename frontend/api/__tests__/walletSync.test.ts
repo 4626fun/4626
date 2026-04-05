@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { classifyLinkedAccounts } from '../../server/_lib/walletMapping.ts'
 import { syncUserWallets } from '../../server/_lib/walletSync.ts'
+import { canonicalWalletSchemaReadyResult } from './helpers'
 
 const { fetchZoraProfileMock } = vi.hoisted(() => ({
   fetchZoraProfileMock: vi.fn(),
@@ -22,6 +23,8 @@ function createLooseDb() {
     sql: async (strings: TemplateStringsArray, ..._values: any[]) => {
       const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
       calls.push(text)
+      const schemaReady = canonicalWalletSchemaReadyResult(text)
+      if (schemaReady) return schemaReady
 
       if (text.includes('insert into profiles') && text.includes('returning id')) {
         return { rows: [{ id: 101 }] }
@@ -150,6 +153,8 @@ describe('wallet mapping + sync', () => {
       sql: vi.fn(async (strings: TemplateStringsArray, ..._values: any[]) => {
         const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
         calls.push(text)
+        const schemaReady = canonicalWalletSchemaReadyResult(text)
+        if (schemaReady) return schemaReady
         if (text.includes('insert into profiles') && text.includes('returning id')) {
           return { rows: [{ id: 404 }] }
         }
@@ -180,6 +185,8 @@ describe('wallet mapping + sync', () => {
       sql: vi.fn(async (strings: TemplateStringsArray, ..._values: any[]) => {
         const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
         calls.push(text)
+        const schemaReady = canonicalWalletSchemaReadyResult(text)
+        if (schemaReady) return schemaReady
 
         if (text.includes('from profiles') && text.includes('where privy_user_id')) {
           return { rows: [] }
@@ -225,6 +232,8 @@ describe('wallet mapping + sync', () => {
       sql: vi.fn(async (strings: TemplateStringsArray, ..._values: any[]) => {
         const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
         calls.push(text)
+        const schemaReady = canonicalWalletSchemaReadyResult(text)
+        if (schemaReady) return schemaReady
 
         if (text.includes('insert into profiles') && text.includes('returning id')) {
           throw new Error('duplicate key value violates unique constraint "profiles_privy_user_id_unique"')
@@ -315,6 +324,8 @@ describe('wallet mapping + sync', () => {
       sql: vi.fn(async (strings: TemplateStringsArray, ..._values: any[]) => {
         const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
         calls.push(text)
+        const schemaReady = canonicalWalletSchemaReadyResult(text)
+        if (schemaReady) return schemaReady
 
         if (text.includes('from profiles') && text.includes('where privy_user_id')) {
           return { rows: [{ id: 101, email: null }] }
@@ -364,6 +375,8 @@ describe('wallet mapping + sync', () => {
       sql: vi.fn(async (strings: TemplateStringsArray, ..._values: any[]) => {
         const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
         calls.push(text)
+        const schemaReady = canonicalWalletSchemaReadyResult(text)
+        if (schemaReady) return schemaReady
 
         if (text.includes('from profiles') && text.includes('where privy_user_id')) {
           return { rows: [{ id: 101, email: null }] }
@@ -416,6 +429,8 @@ describe('wallet mapping + sync', () => {
     const db = {
       sql: vi.fn(async (strings: TemplateStringsArray, ..._values: any[]) => {
         const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        const schemaReady = canonicalWalletSchemaReadyResult(text)
+        if (schemaReady) return schemaReady
         if (text.includes('from profiles') && text.includes('where privy_user_id')) {
           return { rows: [{ id: 101, email: null }] }
         }
