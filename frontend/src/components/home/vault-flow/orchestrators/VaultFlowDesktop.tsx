@@ -71,7 +71,6 @@ export function VaultFlowDesktop({
     <VaultFlowScroll
       depositTokens={depositTokens}
       shareTokens={shareTokens}
-      hideLegacyDistribution
     />
   )
 }

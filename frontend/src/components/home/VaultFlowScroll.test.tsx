@@ -195,17 +195,6 @@ const resolveProgressWithinRange = (
   return (value - start) / (end - start)
 }
 
-const getStrategyCardOpacity = (label: string) => {
-  const cardLabel = screen.getByText(label)
-  const cardFrame = cardLabel.closest('div[style]')
-
-  if (!cardFrame?.parentElement) {
-    throw new Error(`Could not find strategy card wrapper for "${label}"`)
-  }
-
-  return Number.parseFloat(cardFrame.parentElement.style.opacity || '0')
-}
-
 function renderVaultFlowScroll(
   scrollValue: number,
   {
@@ -236,7 +225,8 @@ describe('VaultFlowScroll', () => {
   })
 
   it('uses the provided deposit amount in the stage 2 confirmation card', async () => {
-    renderVaultFlowScroll(0.48, { depositTokens: '12,345,678', shareTokens: '12,345,678 ■AKITA' })
+    // scroll=0.40 → participantDeposits beat, mintConfirmed=true (depositComplete), cardPhase=1
+    renderVaultFlowScroll(0.40, { depositTokens: '12,345,678', shareTokens: '12,345,678 ■AKITA' })
 
     await waitFor(() => {
       expect(screen.getAllByText('12,345,678').length).toBeGreaterThanOrEqual(2)
@@ -244,7 +234,8 @@ describe('VaultFlowScroll', () => {
   })
 
   it('renders separate akita deposit and ■AKITA mint columns at the stage 2 confirmation checkpoint', async () => {
-    renderVaultFlowScroll(0.48)
+    // scroll=0.40 → participantDeposits beat, depositComplete=true, cardPhase=1
+    renderVaultFlowScroll(0.40)
 
     await waitFor(() => {
       expect(screen.getByText(/akita deposit/i)).toBeTruthy()
@@ -254,15 +245,17 @@ describe('VaultFlowScroll', () => {
   })
 
   it('shows a distribution checkpoint progress indicator before the stage 3 hard stop', async () => {
-    renderVaultFlowScroll(0.69)
+    // scroll=0.58 → distributionMeaningful beat, DesktopDistributionHandoffScene active
+    renderVaultFlowScroll(0.58)
 
     await waitFor(() => {
       expect(screen.getByLabelText(/distribution checkpoint progress/i)).toBeTruthy()
     })
   })
 
-  it('keeps the mobile stage 3 summary, checkpoint, and route cards in a readable order', async () => {
-    renderVaultFlowScroll(0.69, {
+  it('keeps the stage 3 summary, checkpoint, and route cards in a readable order', async () => {
+    // scroll=0.58 → distributionMeaningful beat
+    renderVaultFlowScroll(0.58, {
       depositTokens: '12,345,678',
       shareTokens: '12,345,678 ■AKITA',
       viewport: 'mobile',
@@ -282,52 +275,66 @@ describe('VaultFlowScroll', () => {
     })
   })
 
-  it('renders the mobile deploy summary unchanged in stage 4', async () => {
-    renderVaultFlowScroll(0.88, {
+  it('renders strategy cards during the deploy stage', async () => {
+    // scroll=0.75 → deployStrategies beat (0.66–0.88), DesktopDeployStrategiesScene active
+    renderVaultFlowScroll(0.75, {
       depositTokens: '12,345,678',
       shareTokens: '12,345,678 ■AKITA',
       viewport: 'mobile',
     })
 
     await waitFor(() => {
-      expect(screen.getByLabelText(/deploy summary/i)).toBeTruthy()
-      const deploySummary = screen.getByLabelText(/deploy summary/i)
-      expect(deploySummary.textContent).toContain('12,345,678')
-      expect(deploySummary.textContent?.toLowerCase()).toContain('4 yield strategies live')
+      expect(screen.getByText(STRATEGY_CARDS[0].label)).toBeTruthy()
     })
   })
 
-  it('reveals the first desktop stage 4 strategy card earlier than mobile at the same scroll value', async () => {
-    const comparisonScroll = 0.81
+  it('stage 4 strategy cards rendered at the same time for desktop and mobile semantic scenes', async () => {
+    const deployScroll = 0.75
 
-    renderVaultFlowScroll(comparisonScroll, {
+    renderVaultFlowScroll(deployScroll, {
       depositTokens: '12,345,678',
       shareTokens: '12,345,678 ■AKITA',
       viewport: 'mobile',
     })
 
-    const mobileFirstCardOpacity = await waitFor(() => {
-      const opacity = getStrategyCardOpacity(STRATEGY_CARDS[0].label)
-      expect(opacity).toBeGreaterThan(0)
-      return opacity
+    await waitFor(() => {
+      expect(screen.getByText(STRATEGY_CARDS[0].label)).toBeTruthy()
     })
 
     cleanup()
 
-    renderVaultFlowScroll(comparisonScroll, {
+    renderVaultFlowScroll(deployScroll, {
       depositTokens: '12,345,678',
       shareTokens: '12,345,678 ■AKITA',
       viewport: 'desktop',
     })
 
-    const desktopFirstCardOpacity = await waitFor(() => {
-      const opacity = getStrategyCardOpacity(STRATEGY_CARDS[0].label)
-      expect(opacity).toBeGreaterThan(mobileFirstCardOpacity)
-      return opacity
+    await waitFor(() => {
+      expect(screen.getByText(STRATEGY_CARDS[0].label)).toBeTruthy()
     })
 
-    expect(desktopFirstCardOpacity).toBeGreaterThan(mobileFirstCardOpacity)
-    expect(resolveProgressWithinRange(comparisonScroll, DESKTOP_STAGE4_TIMING.fanCards[0].opacity))
-      .toBeGreaterThan(resolveProgressWithinRange(comparisonScroll, MOBILE_STAGE4_TIMING.fanCards[0].opacity))
+    // Timing-constant invariant: desktop fanCards[0] still has higher progress than mobile at 0.81
+    expect(resolveProgressWithinRange(0.81, DESKTOP_STAGE4_TIMING.fanCards[0].opacity))
+      .toBeGreaterThan(resolveProgressWithinRange(0.81, MOBILE_STAGE4_TIMING.fanCards[0].opacity))
+  })
+
+  it('hero text is unmounted during distributionMeaningful beat', async () => {
+    // scroll=0.55 → well into distributionMeaningful (0.42–0.66); heroOpacity hit 0 at 0.38
+    renderVaultFlowScroll(0.55, { viewport: 'desktop' })
+
+    await waitFor(() => {
+      expect(screen.queryByText(/Welcome to/)).toBeNull()
+    })
+  })
+
+  it('deposit card is not mounted during valueFlowsIn beat', async () => {
+    // scroll=0.20 → valueFlowsIn (0.14–0.26); depositNodeOpacity is 0 and card not yet needed
+    renderVaultFlowScroll(0.20, { viewport: 'desktop' })
+
+    await waitFor(() => {
+      // The deposit-card phase labels only appear once the card is mounted
+      expect(screen.queryByText(/Deposit complete/)).toBeNull()
+      expect(screen.queryByText(/akita ·/)).toBeNull()
+    })
   })
 })

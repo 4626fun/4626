@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import React from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { render, screen } from '@testing-library/react'
 
@@ -53,6 +53,7 @@ import { VaultFlowMobile } from './VaultFlowMobile'
 import { VaultFlowReduced } from './VaultFlowReduced'
 import { STORY_CONTENT } from '../model/storyContent'
 import { deriveStoryState } from '../model/storyClock'
+import { DesktopEarningTogetherScene } from '../scenes/DesktopEarningTogetherScene'
 
 const baseProps = {
   depositTokens: STORY_CONTENT.defaultDepositTokens,
@@ -93,6 +94,53 @@ describe('renderer parity checkpoints', () => {
     )
 
     expect(screen.getAllByText(/deposit open/i).length).toBeGreaterThanOrEqual(2)
+  })
+})
+
+describe('desktop semantic scene parity', () => {
+  beforeEach(() => {
+    // Reset the profile override map so leaked state from other suites does not
+    // contaminate the deriveStoryState mock (which returns stateByProfile[profile]
+    // when non-null, regardless of the requested globalProgress).
+    stateByProfile.desktop = null
+    stateByProfile.mobile = null
+    stateByProfile.reduced = null
+  })
+
+  it('DesktopEarningTogetherScene renders loop-active chip at earningTogether hold', () => {
+    const state = deriveStoryState(0.94, 'desktop')
+
+    render(
+      <MemoryRouter>
+        <DesktopEarningTogetherScene state={state} content={STORY_CONTENT} />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText(/loop active/i)).toBeTruthy()
+  })
+
+  it('DesktopEarningTogetherScene renders deposit-open hint during earningTogether hold window', () => {
+    const state = deriveStoryState(0.91, 'desktop')
+
+    render(
+      <MemoryRouter>
+        <DesktopEarningTogetherScene state={state} content={STORY_CONTENT} />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByText(/deposit open/i)).toBeTruthy()
+  })
+
+  it('DesktopEarningTogetherScene returns null when earningTogether is not active', () => {
+    const state = deriveStoryState(0.5, 'desktop')
+
+    const { container } = render(
+      <MemoryRouter>
+        <DesktopEarningTogetherScene state={state} content={STORY_CONTENT} />
+      </MemoryRouter>,
+    )
+
+    expect(container.firstChild).toBeNull()
   })
 })
 

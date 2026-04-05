@@ -54,5 +54,56 @@ describe('vault-flow renderer contract', () => {
 
     expect(offenders).toEqual([])
   })
+
+  it('no hideLegacy* feature-flag props remain in VaultFlowScroll or orchestrators', () => {
+    const vaultFlowScrollPath = path.resolve(
+      process.cwd(),
+      'src/components/home/VaultFlowScroll.tsx',
+    )
+    const orchestratorFiles = collectFiles(orchestratorsDir).filter((f) => f.endsWith('.tsx'))
+    const filesToCheck = [vaultFlowScrollPath, ...orchestratorFiles]
+
+    const offenders = filesToCheck.filter((file) => {
+      const source = readFileSync(file, 'utf8')
+      return /hideLegacy[A-Z]/.test(source)
+    })
+
+    expect(offenders).toEqual([])
+  })
+
+  it('VaultFlowScroll stage-transitions use storySelectors, not raw v< thresholds', () => {
+    const vaultFlowScrollPath = path.resolve(
+      process.cwd(),
+      'src/components/home/VaultFlowScroll.tsx',
+    )
+    const source = readFileSync(vaultFlowScrollPath, 'utf8')
+
+    // Old raw stage-gating patterns that Track B replaced with storySelectors
+    expect(source).not.toMatch(/v\s*>=\s*0\.46\b/)    // old depositComplete trigger
+    expect(source).not.toMatch(/v\s*<\s*0\.52\b/)     // old cardPhase 1→2 gate
+    expect(source).not.toMatch(/v\s*>=\s*0\.76\b/)    // old cardPhase 2→3 gate
+
+    // Positive: storySelectors must be imported and used for the key transitions
+    expect(source).toMatch(/isMintConfirmed\(/)
+    expect(source).toMatch(/isDeployStrategiesVisible\(/)
+    expect(source).toMatch(/isDistributionVisible\(/)
+  })
+
+  it('Phase 4 visibility guards are in place: HeroBlock and DepositCardBlock use isBeat call-site guards', () => {
+    const vaultFlowScrollPath = path.resolve(
+      process.cwd(),
+      'src/components/home/VaultFlowScroll.tsx',
+    )
+    const source = readFileSync(vaultFlowScrollPath, 'utf8')
+
+    // HeroBlock guard: isBeat check for the three early beats that precede distribution
+    expect(source).toMatch(/isBeat\(desktopStoryState,\s*'creatorEstablishes'\)/)
+    expect(source).toMatch(/isBeat\(desktopStoryState,\s*'valueFlowsIn'\)/)
+    expect(source).toMatch(/isBeat\(desktopStoryState,\s*'participantDeposits'\)/)
+
+    // DepositCardBlock guard: negated isBeat checks for the two transparent-card beats
+    expect(source).toMatch(/!isBeat\(desktopStoryState,\s*'creatorEstablishes'\)/)
+    expect(source).toMatch(/!isBeat\(desktopStoryState,\s*'valueFlowsIn'\)/)
+  })
 })
 

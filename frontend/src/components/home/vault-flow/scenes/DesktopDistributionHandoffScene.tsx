@@ -35,10 +35,13 @@ export function DesktopDistributionHandoffScene({ state, content }: Props) {
       transition={{ duration: 0.28 }}
     >
       <div className="mx-auto max-w-3xl">
-        <div className="mb-4 hidden items-center justify-center gap-2 sm:flex">
+        <div
+          aria-label="distribution summary"
+          className="mb-4 flex items-center justify-center gap-2"
+        >
           <span className="h-px w-5 bg-blue-300/25" />
           <span className="font-mono text-[7px] uppercase tracking-[0.30em] text-blue-300/60">
-            distribution handoff
+            live routing · distribution handoff
           </span>
           <span className="h-px w-5 bg-blue-300/25" />
         </div>
@@ -70,6 +73,18 @@ export function DesktopDistributionHandoffScene({ state, content }: Props) {
           </div>
         </div>
 
+        <div
+          aria-label="distribution checkpoint progress"
+          role="progressbar"
+          className="mx-auto mb-4 h-1 max-w-[240px] overflow-hidden rounded-full bg-white/10"
+          style={{ opacity: handoffActive ? 1 : 0.35 }}
+        >
+          <div
+            className="h-full rounded-full bg-blue-300/70"
+            style={{ width: `${Math.max(8, state.beatProgress * 100)}%` }}
+          />
+        </div>
+
         <div className="grid gap-3 sm:grid-cols-3">
           {content.distribution.map((row) => (
             <motion.div
@@ -90,16 +105,6 @@ export function DesktopDistributionHandoffScene({ state, content }: Props) {
             </motion.div>
           ))}
         </div>
-
-        <motion.div
-          className="mx-auto mt-4 h-1 max-w-[240px] overflow-hidden rounded-full bg-white/10"
-          animate={{ opacity: handoffActive ? 1 : 0.35 }}
-        >
-          <motion.div
-            className="h-full rounded-full bg-blue-300/70"
-            style={{ width: `${Math.max(8, state.beatProgress * 100)}%` }}
-          />
-        </motion.div>
 
         {sealReady ? (
           <div className="mt-3 text-center font-mono text-[8px] uppercase tracking-[0.24em] text-blue-300/65">
