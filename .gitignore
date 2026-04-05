@@ -104,7 +104,12 @@ telegram-bot/prisma/data/*.db
 # Root-level media/scratch files (keep assets inside the appropriate app dirs, e.g. frontend/public)
 /ChatGPT Image*.png
 /4626.png
+/*AKITA.png
 /*.mp4
+
+# Local generated visual outputs
+/output/playwright/
+/frontend/output/
 # Auto-generated documentation
 docs-generated/
 docs-export/
