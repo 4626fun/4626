@@ -542,6 +542,276 @@ describe('TelegramLink UI flow', () => {
     expectProgressStatus('link', 'complete')
   })
 
+  it('recovers when the first Privy access-token read hangs during wait_for_privy_sync', async () => {
+    const user = userEvent.setup()
+    let tokenReadCount = 0
+    privyState.getAccessToken = vi.fn(() => {
+      tokenReadCount += 1
+      if (tokenReadCount === 1) {
+        return new Promise(() => {})
+      }
+      return Promise.resolve('privy-access-token')
+    })
+
+    renderFlow()
+
+    await user.type(await screen.findByLabelText('Email Address'), 'user@example.com')
+    await user.click(screen.getByRole('button', { name: 'Send Code' }))
+    await user.type(await screen.findByLabelText('Email Verification Code'), '123456')
+    await user.click(screen.getByRole('button', { name: 'Verify Code' }))
+
+    await screen.findByText('Resolving Account')
+    await waitFor(() => {
+      expect(screen.getByText('Telegram Linked')).toBeTruthy()
+    }, { timeout: 8_000 })
+
+    expect(privyState.getAccessToken).toHaveBeenCalled()
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/telegram/link/ready',
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    )
+  })
+
+  it('recovers when the first /api/telegram/link/ready call hangs', async () => {
+    const user = userEvent.setup()
+    let readyCallCount = 0
+    apiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/telegram/link/ready') {
+        readyCallCount += 1
+        if (readyCallCount === 1) {
+          return new Promise(() => {})
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            data: {
+              ready: true,
+              account: {
+                privyUserId: 'did:privy:user-1',
+                email: 'user@example.com',
+                emailVerified: true,
+                canonicalCswAddress: CANONICAL_CSW_ADDRESS,
+              },
+            },
+          }),
+        } as Response
+      }
+      if (path === '/api/telegram/link/complete') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            data: {
+              link: {
+                telegramUserId: '42',
+                telegramUsername: 'akita',
+                privyUserId: 'did:privy:user-1',
+                profileId: 11,
+                linkStatus: 'pending_wallet_setup',
+                canonicalCswAddress: CANONICAL_CSW_ADDRESS,
+                ownerVerified: false,
+              },
+              account: {
+                privyUserId: 'did:privy:user-1',
+                email: 'user@example.com',
+                emailVerified: true,
+                appAccessStatus: 'approved',
+                linkedMethods: { email: ['user@example.com'], telegram: ['42'] },
+                accountSignals: {
+                  linked: true,
+                  canonicalCswAddress: CANONICAL_CSW_ADDRESS,
+                  creatorCoin: null,
+                  zoraHandle: null,
+                  lastResolvedAt: '2026-03-23T00:00:00.000Z',
+                },
+                score: {
+                  points: 15,
+                  tier: 1,
+                },
+              },
+            },
+          }),
+        } as Response
+      }
+      throw new Error(`Unexpected apiFetch path: ${path}`)
+    })
+
+    renderFlow()
+
+    await user.type(await screen.findByLabelText('Email Address'), 'user@example.com')
+    await user.click(screen.getByRole('button', { name: 'Send Code' }))
+    await user.type(await screen.findByLabelText('Email Verification Code'), '123456')
+    await user.click(screen.getByRole('button', { name: 'Verify Code' }))
+
+    await screen.findByText('Resolving Account')
+    await waitFor(() => {
+      expect(screen.getByText('Telegram Linked')).toBeTruthy()
+    }, { timeout: 9_000 })
+  })
+
+  it('falls back to bind and succeeds when readiness never reports ready', async () => {
+    const user = userEvent.setup()
+    const realDateNow = Date.now.bind(Date)
+    let dateOffsetMs = 0
+    const dateNowSpy = vi.spyOn(Date, 'now').mockImplementation(() => realDateNow() + dateOffsetMs)
+    try {
+      apiFetchMock.mockImplementation(async (path: string) => {
+        if (path === '/api/telegram/link/ready') {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              success: true,
+              data: {
+                ready: false,
+                account: null,
+              },
+            }),
+          } as Response
+        }
+        if (path === '/api/telegram/link/complete') {
+          return {
+            ok: true,
+            status: 200,
+            json: async () => ({
+              success: true,
+              data: {
+                link: {
+                  telegramUserId: '42',
+                  telegramUsername: 'akita',
+                  privyUserId: 'did:privy:user-1',
+                  profileId: 11,
+                  linkStatus: 'pending_wallet_setup',
+                  canonicalCswAddress: CANONICAL_CSW_ADDRESS,
+                  ownerVerified: false,
+                },
+                account: {
+                  privyUserId: 'did:privy:user-1',
+                  email: 'user@example.com',
+                  emailVerified: true,
+                  appAccessStatus: 'approved',
+                  linkedMethods: { email: ['user@example.com'], telegram: ['42'] },
+                  accountSignals: {
+                    linked: true,
+                    canonicalCswAddress: CANONICAL_CSW_ADDRESS,
+                    creatorCoin: null,
+                    zoraHandle: null,
+                    lastResolvedAt: '2026-03-23T00:00:00.000Z',
+                  },
+                  score: {
+                    points: 15,
+                    tier: 1,
+                  },
+                },
+              },
+            }),
+          } as Response
+        }
+        throw new Error(`Unexpected apiFetch path: ${path}`)
+      })
+
+      renderFlow()
+
+      await user.type(await screen.findByLabelText('Email Address'), 'user@example.com')
+      await user.click(screen.getByRole('button', { name: 'Send Code' }))
+      await user.type(await screen.findByLabelText('Email Verification Code'), '123456')
+      await user.click(screen.getByRole('button', { name: 'Verify Code' }))
+
+      await screen.findByText('Resolving Account')
+      dateOffsetMs = 60_000
+      await waitFor(() => {
+        expect(screen.getByText('Telegram Linked')).toBeTruthy()
+      }, { timeout: 8_000 })
+      expect(screen.getByText(/Telegram linked to user@example\.com/i)).toBeTruthy()
+    } finally {
+      dateNowSpy.mockRestore()
+    }
+  })
+
+  it('shows owner-setup handoff UI when recoverable PRIVY_SYNC_FAILED is reached', async () => {
+    const user = userEvent.setup()
+    apiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/telegram/link/ready') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            data: {
+              ready: false,
+              account: null,
+            },
+          }),
+        } as Response
+      }
+      throw new Error(`Unexpected apiFetch path: ${path}`)
+    })
+    privyState.getAccessToken = vi.fn(async () => '')
+    privyState.user = {
+      id: 'did:privy:user-1',
+      linkedAccounts: [
+        {
+          type: 'email',
+          email: 'user@example.com',
+          verified: true,
+        },
+      ],
+    }
+
+    const realDateNow = Date.now.bind(Date)
+    let dateOffsetMs = 0
+    const dateNowSpy = vi.spyOn(Date, 'now').mockImplementation(() => realDateNow() + dateOffsetMs)
+    try {
+      renderFlow()
+
+      await user.type(await screen.findByLabelText('Email Address'), 'user@example.com')
+      await user.click(screen.getByRole('button', { name: 'Send Code' }))
+      await user.type(await screen.findByLabelText('Email Verification Code'), '123456')
+      await user.click(screen.getByRole('button', { name: 'Verify Code' }))
+
+      await screen.findByText('Resolving Account')
+      dateOffsetMs = 60_000
+
+      await screen.findByText(/Telegram linked to user@example\.com/i)
+      await screen.findByRole('heading', { name: 'Telegram Linked' })
+      expect(screen.queryByText('Reconnect Telegram')).toBeNull()
+      expect(
+        screen.getByText('Email verification completed. Continue on your phone or desktop to finish owner setup for 4626 signing.'),
+      ).toBeTruthy()
+      expect(screen.getAllByRole('link', { name: 'Open Accounts (phone or desktop)' }).length).toBeGreaterThanOrEqual(1)
+      expect(screen.getByRole('button', { name: 'Retry in Mini App' })).toBeTruthy()
+    } finally {
+      dateNowSpy.mockRestore()
+    }
+  })
+
+  it('shows owner-setup handoff UI when recoverable bind finalization fails', async () => {
+    const user = userEvent.setup()
+    linkTelegramMock.mockRejectedValueOnce(new Error('temporary network interruption'))
+
+    renderFlow()
+
+    await user.type(await screen.findByLabelText('Email Address'), 'user@example.com')
+    await user.click(screen.getByRole('button', { name: 'Send Code' }))
+    await user.type(await screen.findByLabelText('Email Verification Code'), '123456')
+    await user.click(screen.getByRole('button', { name: 'Verify Code' }))
+
+    await screen.findByRole('heading', { name: 'Continue Setup' })
+    expect(
+      screen.getByText(
+        'Email verification completed, but Mini App finalization did not finish. Continue on your phone or desktop to complete owner setup.',
+      ),
+    ).toBeTruthy()
+    expect(screen.getByText(/Email verified for user@example\.com/i)).toBeTruthy()
+    expect(screen.getAllByRole('link', { name: 'Open Accounts (phone or desktop)' }).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByRole('button', { name: 'Retry in Mini App' })).toBeTruthy()
+  })
+
   it('advances the 4-step progress indicator across the flow', async () => {
     const user = userEvent.setup()
     renderFlow()

@@ -55,6 +55,11 @@ type PrivyWithTelegramLink = ReturnType<typeof usePrivy> & {
 const OTP_RESEND_DELAY_MS = 30_000
 const OTP_SEND_TIMEOUT_MS = 12_000
 const PRIVY_SYNC_TIMEOUT_MS = 45_000
+const PRIVY_ACCESS_TOKEN_TIMEOUT_MS = 4_000
+const EMBEDDED_WALLET_PROVISION_TIMEOUT_MS = 20_000
+const TELEGRAM_LINK_READY_REQUEST_TIMEOUT_MS = 4_000
+const PRIVY_LINK_TELEGRAM_TIMEOUT_MS = 10_000
+const TELEGRAM_LINK_COMPLETE_REQUEST_TIMEOUT_MS = 10_000
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 const TG_VIEWPORT_STYLE: CSSProperties = {
@@ -82,6 +87,119 @@ const TELEGRAM_LINK_PROGRESS_STEPS = [
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => globalThis.setTimeout(resolve, ms))
+}
+
+function normalizeLower(value: unknown): string {
+  return typeof value === 'string' ? value.trim().toLowerCase() : ''
+}
+
+function isTruthy(value: unknown): boolean {
+  if (typeof value === 'boolean') return value
+  if (typeof value === 'number') return value === 1
+  if (typeof value === 'string') {
+    const lc = value.trim().toLowerCase()
+    return lc === '1' || lc === 'true' || lc === 'yes'
+  }
+  return false
+}
+
+function accountHasVerifiedFlag(value: unknown): boolean {
+  if (!value || typeof value !== 'object') return false
+  const account = value as Record<string, unknown>
+  if (isTruthy(account.verified)) return true
+  if (isTruthy(account.isVerified)) return true
+  if (isTruthy(account.is_verified)) return true
+  const hasTimestamp = (candidate: unknown): boolean => {
+    if (typeof candidate === 'number') return Number.isFinite(candidate) && candidate > 0
+    if (typeof candidate === 'string') return candidate.trim().length > 0
+    return false
+  }
+  return (
+    hasTimestamp(account.verifiedAt) ||
+    hasTimestamp(account.verified_at) ||
+    hasTimestamp(account.firstVerifiedAt) ||
+    hasTimestamp(account.first_verified_at) ||
+    hasTimestamp(account.latestVerifiedAt) ||
+    hasTimestamp(account.latest_verified_at)
+  )
+}
+
+function candidateEmailFromAccount(value: unknown): string | null {
+  if (!value || typeof value !== 'object') return null
+  const account = value as Record<string, unknown>
+  const candidates = [account.address, account.emailAddress, account.email_address, account.email]
+  for (const candidate of candidates) {
+    const normalized = normalizeEmailCandidate(typeof candidate === 'string' ? candidate : '')
+    if (normalized && EMAIL_RE.test(normalized)) return normalized
+  }
+  return null
+}
+
+function extractPrivyVerifiedEmailFromUser(user: unknown): string | null {
+  const record = user && typeof user === 'object' ? (user as Record<string, unknown>) : null
+  if (!record) return null
+
+  const directEmail = record.email && typeof record.email === 'object' ? (record.email as Record<string, unknown>) : null
+  if (directEmail && accountHasVerifiedFlag(directEmail)) {
+    const direct = candidateEmailFromAccount(directEmail)
+    if (direct) return direct
+  }
+
+  const linked = [
+    ...(Array.isArray(record.linkedAccounts) ? (record.linkedAccounts as unknown[]) : []),
+    ...(Array.isArray(record.linked_accounts) ? (record.linked_accounts as unknown[]) : []),
+  ]
+  for (const account of linked) {
+    const linkedRecord = account && typeof account === 'object' ? (account as Record<string, unknown>) : null
+    if (!linkedRecord) continue
+    const type = normalizeLower(linkedRecord.type)
+    if (!type.includes('email')) continue
+    if (!accountHasVerifiedFlag(linkedRecord)) continue
+    const candidate = candidateEmailFromAccount(linkedRecord)
+    if (candidate) return candidate
+  }
+
+  return null
+}
+
+function extractPrivyUserIdFromUser(user: unknown): string {
+  if (!user || typeof user !== 'object') return ''
+  const record = user as Record<string, unknown>
+  const candidates = [record.id, record.userId, record.user_id, record.sub]
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string') continue
+    const trimmed = candidate.trim()
+    if (trimmed) return trimmed
+  }
+  return ''
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = globalThis.setTimeout(() => {
+      reject(new Error(message))
+    }, timeoutMs)
+    promise
+      .then(resolve)
+      .catch(reject)
+      .finally(() => {
+        globalThis.clearTimeout(timeoutId)
+      })
+  })
+}
+
+async function readPrivyAccessToken(read: (() => Promise<unknown>) | null | undefined): Promise<string> {
+  if (typeof read !== 'function') return ''
+  try {
+    const value = await withTimeout(
+      Promise.resolve().then(() => read()),
+      PRIVY_ACCESS_TOKEN_TIMEOUT_MS,
+      'Privy access token read timed out.',
+    )
+    return String(value ?? '').trim()
+  } catch {
+    return ''
+  }
 }
 
 function coerceErrorMessage(error: unknown, fallback: string): string {
@@ -308,6 +426,16 @@ function getErrorTitle(error: FlowError): string {
     default:
       return 'Flow Error'
   }
+}
+
+function isOwnerSetupHandoffState(state: TelegramLinkState): state is Extract<TelegramLinkState, { tag: 'expired_or_error' }> {
+  if (state.tag !== 'expired_or_error' || !state.error.recoverable) return false
+  const retryTag = state.retryTarget?.tag
+  return retryTag === 'wait_for_privy_sync' || retryTag === 'bind_telegram' || state.error.code === 'PRIVY_SYNC_FAILED'
+}
+
+function prefersLinkedHandoffCopy(state: Extract<TelegramLinkState, { tag: 'expired_or_error' }>): boolean {
+  return state.error.code === 'PRIVY_SYNC_FAILED' || state.retryTarget?.tag === 'wait_for_privy_sync'
 }
 
 function formatTelegramHandle(username: string | null, userId: string): string {
@@ -828,6 +956,7 @@ export function TelegramLink() {
       let pollCount = 0
       let accessTokenRetries = 0
       let readinessChecks = 0
+      let readinessTimeouts = 0
       let lastSnapshot = privySnapshotRef.current
 
       emitTelemetry('telegram_link_privy_sync_started', {
@@ -840,17 +969,12 @@ export function TelegramLink() {
         const snapshot = privySnapshotRef.current
         lastSnapshot = snapshot
         pollCount += 1
-        if (!snapshot.ready || !snapshot.authenticated || !snapshot.user || typeof snapshot.getAccessToken !== 'function') {
+        if (typeof snapshot.getAccessToken !== 'function') {
           await sleep(250)
           continue
         }
 
-        let accessToken = ''
-        try {
-          accessToken = String((await snapshot.getAccessToken()) ?? '').trim()
-        } catch {
-          accessToken = ''
-        }
+        const accessToken = await readPrivyAccessToken(snapshot.getAccessToken)
         if (!accessToken) {
           accessTokenRetries += 1
           await sleep(300)
@@ -859,17 +983,21 @@ export function TelegramLink() {
 
         try {
           readinessChecks += 1
-          const response = await apiFetch('/api/telegram/link/ready', {
-            method: 'POST',
-            headers: {
-              Accept: 'application/json',
-              'Content-Type': 'application/json',
-              Authorization: `Bearer ${accessToken}`,
-            },
-            body: JSON.stringify({
-              email: expectedEmail,
+          const response = await withTimeout(
+            apiFetch('/api/telegram/link/ready', {
+              method: 'POST',
+              headers: {
+                Accept: 'application/json',
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${accessToken}`,
+              },
+              body: JSON.stringify({
+                email: expectedEmail,
+              }),
             }),
-          })
+            TELEGRAM_LINK_READY_REQUEST_TIMEOUT_MS,
+            'Telegram link readiness request timed out.',
+          )
           const json = (await response.json().catch(() => null)) as TelegramApiEnvelope<TelegramLinkReadyData> | null
           const account =
             response.ok && json?.data?.ready === true ? parseTelegramLinkReadyAccount(json.data.account, expectedEmail) : null
@@ -880,7 +1008,11 @@ export function TelegramLink() {
                 privyUserId: account.privyUserId,
               })
               try {
-                const provisionedWallet = await ensureEmbeddedWallet()
+                const provisionedWallet = await withTimeout(
+                  Promise.resolve().then(() => ensureEmbeddedWallet()),
+                  EMBEDDED_WALLET_PROVISION_TIMEOUT_MS,
+                  'Privy embedded wallet provisioning timed out.',
+                )
                 emitTelemetry('telegram_link_embedded_wallet_provision_succeeded', {
                   status: provisionedWallet.created ? 'created' : 'existing',
                   durationMs: Date.now() - startedAt,
@@ -917,12 +1049,16 @@ export function TelegramLink() {
               pollCount,
               accessTokenRetries,
               readinessChecks,
+              readinessTimeouts,
               privyUserId: account.privyUserId,
             })
             dispatch({ type: 'PRIVY_SYNC_READY', account })
             return
           }
-        } catch {
+        } catch (error) {
+          if (coerceErrorMessage(error, '').toLowerCase().includes('timed out')) {
+            readinessTimeouts += 1
+          }
           // Stay inside the explicit wait state until timeout.
         }
 
@@ -930,19 +1066,58 @@ export function TelegramLink() {
       }
 
       if (!cancelled) {
+        const fallbackAccessToken = await readPrivyAccessToken(lastSnapshot.getAccessToken)
+        const fallbackPrivyUserId = extractPrivyUserIdFromUser(lastSnapshot.user)
+        const fallbackVerifiedEmail = extractPrivyVerifiedEmailFromUser(lastSnapshot.user)
+        const fallbackEmailMatchesExpected =
+          !fallbackVerifiedEmail || normalizeEmailCandidate(fallbackVerifiedEmail) === expectedEmail
+        if (
+          lastSnapshot.authenticated &&
+          Boolean(fallbackAccessToken) &&
+          Boolean(fallbackPrivyUserId) &&
+          fallbackEmailMatchesExpected
+        ) {
+          emitTelemetry('telegram_link_privy_sync_fallback_to_bind', {
+            status: 'fallback',
+            durationMs: Date.now() - startedAt,
+            pollCount,
+            accessTokenRetries,
+            readinessChecks,
+            readinessTimeouts,
+            privyReady: lastSnapshot.ready,
+            privyAuthenticated: lastSnapshot.authenticated,
+            privyUserId: fallbackPrivyUserId,
+          })
+          dispatch({
+            type: 'PRIVY_SYNC_READY',
+            account: {
+              privyUserId: fallbackPrivyUserId,
+              email: fallbackVerifiedEmail ?? expectedEmail,
+              emailVerified: true,
+              canonicalCswAddress: null,
+            },
+          })
+          return
+        }
+
+        const mismatchMessage =
+          fallbackVerifiedEmail && normalizeEmailCandidate(fallbackVerifiedEmail) !== expectedEmail
+            ? 'Signed-in account email changed before Telegram link could complete. Retry from Telegram to continue.'
+            : undefined
         emitTelemetry('telegram_link_privy_sync_failed', {
           status: 'failed',
           durationMs: Date.now() - startedAt,
           pollCount,
           accessTokenRetries,
           readinessChecks,
+          readinessTimeouts,
           privyReady: lastSnapshot.ready,
           privyAuthenticated: lastSnapshot.authenticated,
           errorCode: 'PRIVY_SYNC_FAILED',
         })
         dispatch({
           type: 'PRIVY_SYNC_FAILED',
-          error: buildPrivySyncFailure(),
+          error: buildPrivySyncFailure(mismatchMessage),
         })
       }
     })()
@@ -1007,11 +1182,17 @@ export function TelegramLink() {
       })
 
       try {
-        await snapshot.linkTelegram({
-          launchParams: {
-            initDataRaw: state.proof.initDataRaw,
-          },
-        })
+        await withTimeout(
+          Promise.resolve().then(() =>
+            snapshot.linkTelegram?.({
+              launchParams: {
+                initDataRaw: state.proof.initDataRaw,
+              },
+            }),
+          ),
+          PRIVY_LINK_TELEGRAM_TIMEOUT_MS,
+          'Privy Telegram link timed out.',
+        )
         if (cancelled) return
         emitTelemetry('telegram_link_privy_link_succeeded', {
           status: 'succeeded',
@@ -1067,12 +1248,7 @@ export function TelegramLink() {
         return
       }
 
-      let accessToken = ''
-      try {
-        accessToken = String((await snapshot.getAccessToken()) ?? '').trim()
-      } catch {
-        accessToken = ''
-      }
+      const accessToken = await readPrivyAccessToken(snapshot.getAccessToken)
       if (!accessToken) {
         emitTelemetry('telegram_link_backend_completion_failed', {
           status: 'failed',
@@ -1089,19 +1265,23 @@ export function TelegramLink() {
       }
 
       try {
-        const response = await apiFetch('/api/telegram/link/complete', {
-          method: 'POST',
-          headers: {
-            Accept: 'application/json',
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${accessToken}`,
-          },
-          body: JSON.stringify({
-            sessionToken: state.proof.sessionToken,
-            linkToken: state.proof.linkContext?.linkToken ?? null,
-            flowId: flowIdRef.current,
+        const response = await withTimeout(
+          apiFetch('/api/telegram/link/complete', {
+            method: 'POST',
+            headers: {
+              Accept: 'application/json',
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${accessToken}`,
+            },
+            body: JSON.stringify({
+              sessionToken: state.proof.sessionToken,
+              linkToken: state.proof.linkContext?.linkToken ?? null,
+              flowId: flowIdRef.current,
+            }),
           }),
-        })
+          TELEGRAM_LINK_COMPLETE_REQUEST_TIMEOUT_MS,
+          'Telegram link completion request timed out.',
+        )
         const json = (await response.json().catch(() => null)) as TelegramApiEnvelope<TelegramLinkCompleteData> | null
         if (cancelled) return
 
@@ -1511,18 +1691,18 @@ export function TelegramLink() {
             <StatusBlock
               icon={CheckCircle2}
               tone="success"
-              body={`Connected to ${state.account.email}. Your Telegram account is verified and attached to your 4626 account.`}
+              body={`Telegram linked to ${state.account.email}. Your Telegram account is attached to your 4626 account.`}
             />
             {walletSetupPending ? (
               <div className="rounded-[18px] border border-[#0052FF]/20 bg-[#0052FF]/8 px-4 py-3 text-sm leading-6 text-[#EDEDED] space-y-2">
                 <div>
-                  Wallet setup pending. Telegram is connected, but wallet and trading actions unlock after your Coinbase Smart Wallet owner setup is confirmed.
+                  Wallet setup pending. Telegram is linked, but wallet and trading actions unlock after your Privy embedded signer is added as an owner on your Zora Coinbase Smart Wallet.
                 </div>
                 <div className="text-xs text-[#A9B9FF]">
-                  Next step: sign in as a current owner of your canonical CSW and run <span className="font-medium text-[#D7E0FF]">Enable 4626 signing</span> in Accounts.
+                  Next step: on your phone or desktop, sign in as a current owner of your Zora Coinbase Smart Wallet and run <span className="font-medium text-[#D7E0FF]">Enable 4626 signing</span> in Accounts.
                 </div>
                 <a href="/accounts" className="inline-flex text-xs font-medium text-[#8FB0FF] underline underline-offset-2 hover:text-[#BBD0FF]">
-                  Open Accounts
+                  Open Accounts (phone or desktop)
                 </a>
               </div>
             ) : null}
@@ -1547,6 +1727,37 @@ export function TelegramLink() {
         )
 
       case 'expired_or_error':
+        if (isOwnerSetupHandoffState(state)) {
+          const handoffEmail = normalizeEmailCandidate(state.email ?? '') || 'your verified email'
+          const linkedHandoffCopy = prefersLinkedHandoffCopy(state)
+          return (
+            <div className="space-y-4">
+              <StatusBlock
+                icon={CheckCircle2}
+                tone="success"
+                body={
+                  linkedHandoffCopy
+                    ? `Telegram linked to ${handoffEmail}. Continue on your phone or desktop to enable 4626 signing on your Zora Coinbase Smart Wallet.`
+                    : `Email verified for ${handoffEmail}. Continue on your phone or desktop to finish 4626 signing setup on your Zora Coinbase Smart Wallet.`
+                }
+              />
+              <div className="rounded-[18px] border border-[#0052FF]/20 bg-[#0052FF]/8 px-4 py-3 text-sm leading-6 text-[#EDEDED] space-y-2">
+                <div>
+                  {linkedHandoffCopy
+                    ? 'Mini App account sync timed out after verification, but you can finish owner setup from Accounts on a phone or desktop browser.'
+                    : 'Mini App finalization was interrupted after verification, but you can still finish owner setup from Accounts on a phone or desktop browser.'}
+                </div>
+                <div className="text-xs text-[#A9B9FF]">
+                  Next step: sign in as a current owner of your Zora Coinbase Smart Wallet and run <span className="font-medium text-[#D7E0FF]">Enable 4626 signing</span>.
+                </div>
+                <a href="/accounts" className="inline-flex text-xs font-medium text-[#8FB0FF] underline underline-offset-2 hover:text-[#BBD0FF]">
+                  Open Accounts (phone or desktop)
+                </a>
+              </div>
+            </div>
+          )
+        }
+
         return (
           <div className="space-y-4">
             <StatusBlock icon={state.error.recoverable ? AlertTriangle : ShieldX} tone="error" body={state.error.message} />
@@ -1622,6 +1833,37 @@ export function TelegramLink() {
         )
 
       case 'expired_or_error':
+        if (isOwnerSetupHandoffState(state)) {
+          return (
+            <div className="space-y-2.5">
+              <a
+                href="/accounts"
+                className={PRIMARY_ACTION_BUTTON_CLASS}
+              >
+                Open Accounts (phone or desktop)
+              </a>
+              {state.retryTarget ? (
+                <button
+                  type="button"
+                  onClick={() => dispatch({ type: 'RETRY' })}
+                  className={SECONDARY_ACTION_BUTTON_CLASS}
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Retry in Mini App
+                </button>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => dispatch({ type: 'RESET' })}
+                className={SECONDARY_ACTION_BUTTON_CLASS}
+              >
+                <Unplug className="h-4 w-4" />
+                Reset Flow
+              </button>
+            </div>
+          )
+        }
+
         return (
           <div className="space-y-2.5">
             {state.retryTarget ? (
@@ -1651,6 +1893,18 @@ export function TelegramLink() {
   }
 
   const footerActions = renderFooterActions()
+  const ownerSetupHandoffState = isOwnerSetupHandoffState(state) ? state : null
+  const ownerSetupHandoffLinkedCopy = ownerSetupHandoffState ? prefersLinkedHandoffCopy(ownerSetupHandoffState) : false
+  const panelHeadline = ownerSetupHandoffState
+    ? ownerSetupHandoffLinkedCopy
+      ? 'Telegram Linked'
+      : 'Continue Setup'
+    : getFlowHeadline(state.tag)
+  const panelDescription = ownerSetupHandoffState
+    ? ownerSetupHandoffLinkedCopy
+      ? 'Email verification completed. Continue on your phone or desktop to finish owner setup for 4626 signing.'
+      : 'Email verification completed, but Mini App finalization did not finish. Continue on your phone or desktop to complete owner setup.'
+    : getFlowDescription(state.tag)
 
   return (
     <div
@@ -1676,8 +1930,8 @@ export function TelegramLink() {
               <div className="inline-flex items-center rounded-full bg-white/[0.04] px-2 py-0.75 text-[9px] font-medium uppercase tracking-[0.2em] text-[#666666]">
                 Telegram Mini App
               </div>
-              <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[#EDEDED]">{getFlowHeadline(state.tag)}</h1>
-              <p className="max-w-xl text-[12px] leading-[1.35] text-[#666666]">{getFlowDescription(state.tag)}</p>
+              <h1 className="text-[22px] font-semibold tracking-[-0.02em] text-[#EDEDED]">{panelHeadline}</h1>
+              <p className="max-w-xl text-[12px] leading-[1.35] text-[#666666]">{panelDescription}</p>
             </div>
           </div>
 

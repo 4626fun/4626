@@ -18,11 +18,18 @@ vi.mock('framer-motion', () => ({
           transition: _t,
           viewport: _v,
           whileInView: _w,
+          style: _s,
           ...props
         }: any) => React.createElement(tag, props, children),
     },
   ),
   useReducedMotion: () => false,
+  // useScroll returns a stub MotionValue (no subscribers needed in tests)
+  useScroll: () => ({ scrollYProgress: { on: () => () => {} } }),
+  // useTransform returns undefined — style props with undefined are ignored by React
+  useTransform: () => undefined,
+  // useMotionValueEvent is a no-op in tests
+  useMotionValueEvent: () => {},
 }))
 
 vi.mock('@/lib/zora/client', () => ({
@@ -32,9 +39,6 @@ vi.mock('@/lib/zora/client', () => ({
 
 import { VaultFlowScroll } from './VaultFlowScroll'
 import { STORY_CONTENT } from './vault-flow/model/storyContent'
-
-const SHARE_DISTRIBUTION_ROWS = STORY_CONTENT.distribution
-const STRATEGY_CARDS = STORY_CONTENT.strategies
 
 function renderVaultFlowScroll() {
   return render(
@@ -47,85 +51,107 @@ function renderVaultFlowScroll() {
 describe('VaultFlowScroll', () => {
   afterEach(cleanup)
 
-  it('renders the deposit section with vault, counter, and sealed indicator', async () => {
+  it('renders all eight narrative beats in the DOM', async () => {
     renderVaultFlowScroll()
-
     await waitFor(() => {
-      expect(screen.getByTestId('token-deposit-scene')).toBeTruthy()
-      expect(screen.getByTestId('token-deposit-vault')).toBeTruthy()
-      expect(screen.getByTestId('deposited-counter')).toBeTruthy()
-      expect(screen.getByTestId('vault-complete-label')).toBeTruthy()
+      expect(screen.getByTestId('beat-1-threshold')).toBeTruthy()
+      expect(screen.getByTestId('beat-2-authority')).toBeTruthy()
+      expect(screen.getByTestId('beat-3-commitment')).toBeTruthy()
+      expect(screen.getByTestId('beat-4-mint')).toBeTruthy()
+      expect(screen.getByTestId('beat-5-structure')).toBeTruthy()
+      expect(screen.getByTestId('beat-6-strategies')).toBeTruthy()
+      expect(screen.getByTestId('beat-7-activation')).toBeTruthy()
+      expect(screen.getByTestId('beat-8-entry')).toBeTruthy()
     })
   })
 
-  it('shows total deposited amount in the deposit counter', async () => {
+  it('beat 1 contains the opening question', async () => {
     renderVaultFlowScroll()
+    await waitFor(() => {
+      const beat = screen.getByTestId('beat-1-threshold')
+      expect(beat.textContent).toMatch(/deploy a vault/i)
+    })
+  })
 
+  it('beat 2 references the creator token symbol', async () => {
+    renderVaultFlowScroll()
+    await waitFor(() => {
+      const beat = screen.getByTestId('beat-2-authority')
+      expect(beat.textContent).toContain(STORY_CONTENT.creatorTokenSymbol)
+    })
+  })
+
+  it('beat 3 shows the deposit commitment number and lowercase token label', async () => {
+    renderVaultFlowScroll()
     await waitFor(() => {
       const counter = screen.getByTestId('deposited-counter')
-      expect(counter.textContent).toMatch(/50,000,000/)
+      expect(counter.textContent).toContain(STORY_CONTENT.defaultDepositTokens)
+      const beat = screen.getByTestId('beat-3-commitment')
+      expect(beat.textContent).toContain(STORY_CONTENT.creatorTokenSymbol.toLowerCase())
     })
   })
 
-  it('renders distribution section with aria labels and correct order', async () => {
+  it('beat 4 shows the minted share token count and symbol', async () => {
     renderVaultFlowScroll()
-
     await waitFor(() => {
-      const summary = screen.getByLabelText(/distribution summary/i)
-      const checkpoint = screen.getByLabelText(/distribution checkpoint progress/i)
-
-      expect(summary).toBeTruthy()
-      expect(checkpoint).toBeTruthy()
-      expect(summary.textContent?.toLowerCase()).toContain('initial deposit')
-
-      // summary must appear before checkpoint in document order
-      expect(
-        Boolean(summary.compareDocumentPosition(checkpoint) & Node.DOCUMENT_POSITION_FOLLOWING),
-      ).toBe(true)
+      const beat = screen.getByTestId('beat-4-mint')
+      expect(beat.textContent).toContain(STORY_CONTENT.defaultDepositTokens)
+      // The ■AKITA badge is in the shared bridge layer (sibling to beat-4-mint),
+      // so query the full document rather than the beat's own subtree.
+      expect(screen.getAllByText(STORY_CONTENT.shareTokenSymbol).length).toBeGreaterThan(0)
     })
   })
 
-  it('shows all three distribution route cards with labels and percentages', async () => {
+  it('beat 5 shows all three distribution cards with titles and percentages', async () => {
     renderVaultFlowScroll()
-
     await waitFor(() => {
-      for (const row of SHARE_DISTRIBUTION_ROWS) {
-        // titles are unique; percentages may repeat (two rows are 40%)
+      for (const row of STORY_CONTENT.distribution) {
         expect(screen.getByText(row.title)).toBeTruthy()
         expect(screen.getAllByText(row.percent).length).toBeGreaterThan(0)
       }
     })
   })
 
-  it('renders all strategy cards in the deploy section', async () => {
+  it('beat 5 has distribution aria landmarks', async () => {
     renderVaultFlowScroll()
-
     await waitFor(() => {
-      for (const s of STRATEGY_CARDS) {
-        expect(screen.getByText(s.label)).toBeTruthy()
+      expect(screen.getByLabelText(/distribution summary/i)).toBeTruthy()
+      expect(screen.getByLabelText(/distribution checkpoint progress/i)).toBeTruthy()
+    })
+  })
+
+  it('beat 6 shows all four yield strategy rows', async () => {
+    renderVaultFlowScroll()
+    await waitFor(() => {
+      const beat = screen.getByTestId('beat-6-strategies')
+      for (const s of STORY_CONTENT.strategies) {
+        expect(beat.textContent).toContain(s.label)
       }
     })
   })
 
-  it('renders all five step sections', async () => {
+  it('beat 7 contains "The vault is live" text', async () => {
     renderVaultFlowScroll()
-
     await waitFor(() => {
-      expect(screen.getByLabelText(/deposit step/i)).toBeTruthy()
-      expect(screen.getByLabelText(/mint step/i)).toBeTruthy()
-      expect(screen.getByLabelText(/distribute step/i)).toBeTruthy()
-      expect(screen.getByLabelText(/deploy step/i)).toBeTruthy()
-      expect(screen.getByLabelText(/earn step/i)).toBeTruthy()
+      const beat = screen.getByTestId('beat-7-activation')
+      expect(beat.textContent).toMatch(/the vault is live/i)
     })
   })
 
-  it('does not contain any scrolljacking era text', async () => {
+  it('beat 8 contains "The vault is open" text', async () => {
     renderVaultFlowScroll()
+    await waitFor(() => {
+      const beat = screen.getByTestId('beat-8-entry')
+      expect(beat.textContent).toMatch(/the vault is open/i)
+    })
+  })
 
+  it('does not contain any scrolljacking-era or static-section text', async () => {
+    renderVaultFlowScroll()
     await waitFor(() => {
       expect(screen.queryByText(/Welcome to/)).toBeNull()
       expect(screen.queryByText(/Scroll to descend/i)).toBeNull()
-      expect(screen.queryByText(/Deposit complete/)).toBeNull()
+      expect(screen.queryByText(/01 — Deposit/i)).toBeNull()
     })
   })
 })

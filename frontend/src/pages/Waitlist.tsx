@@ -15,7 +15,9 @@ export function Waitlist() {
   const [initialWaitlistState] = useState(() => {
     const autoStart = consumeStoredWaitlistAuthAutoStart()
     const armed = consumeStoredWaitlistAuthArmed() || autoStart
-    return { autoStart: autoStart || !armed }
+    // Only auto-start when an upstream entrypoint explicitly armed it.
+    // Direct /waitlist visits should remain manual to avoid auth/bootstrap loops.
+    return { autoStart: autoStart || armed }
   })
 
   return (
@@ -57,7 +59,6 @@ export function Waitlist() {
                   }
                 >
                   <LazyWaitlistFlow
-                    variant="page"
                     sectionId="waitlist-page"
                     autoStartAuth={initialWaitlistState.autoStart}
                   />

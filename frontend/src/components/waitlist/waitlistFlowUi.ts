@@ -22,10 +22,9 @@ export function canEnterAppFromAccountState(params: { appAccessStatus: string | 
 export function deriveWaitlistAuthUi(): WaitlistEmailUi {
   return {
     title: 'Get early access',
-    subtitle:
-      'Sign in with your existing 4626 identity, or verify your email to lock your spot and unlock your referral link.',
-    ctaLabel: 'Sign in / Join waitlist',
-    busyLabel: 'Opening sign-in…',
+    subtitle: 'Use one quick sign-in to save your spot. We handle account setup in the background.',
+    ctaLabel: 'Continue',
+    busyLabel: 'Setting up your account…',
   }
 }
 
@@ -41,7 +40,7 @@ export function deriveWaitlistDoneUi(canEnterApp: boolean): WaitlistDoneUi {
 
   return {
     title: "You're in!",
-    subtitle: 'Visit accounts to manage connected identities, earn points, and wait for admin approval.',
+    subtitle: 'Your waitlist account is set. Visit accounts to manage identities and points while approval is pending.',
     primaryLabel: `${SHARE_SYMBOL_PREFIX} Go to accounts`,
     secondaryLabel: null,
   }

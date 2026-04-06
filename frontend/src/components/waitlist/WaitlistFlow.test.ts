@@ -4,9 +4,9 @@ import {
   mergeCanonicalWaitlistAccount,
   resolveWaitlistStep,
   shouldAutoBootstrapWaitlistSession,
-  shouldAutoHandoffApprovedAccount,
   shouldAutoStartWaitlistAuth,
 } from './waitlistFlowState'
+import { isPrivyLoginBootstrapError } from './WaitlistFlow'
 
 describe('resolveWaitlistStep', () => {
   it('keeps unverified accounts on auth', () => {
@@ -20,7 +20,7 @@ describe('resolveWaitlistStep', () => {
     ).toBe('auth')
   })
 
-  it('routes verified-email accounts without a canonical csw into wallet setup', () => {
+  it('routes verified-email accounts directly into done state', () => {
     expect(
       resolveWaitlistStep({
         account: {
@@ -28,10 +28,10 @@ describe('resolveWaitlistStep', () => {
           appAccessStatus: null,
         },
       }),
-    ).toBe('wallet')
+    ).toBe('done')
   })
 
-  it('keeps verified-but-unapproved accounts in wallet setup', () => {
+  it('keeps verified-but-unapproved accounts in done state', () => {
     expect(
       resolveWaitlistStep({
         account: {
@@ -39,7 +39,7 @@ describe('resolveWaitlistStep', () => {
           appAccessStatus: null,
         },
       }),
-    ).toBe('wallet')
+    ).toBe('done')
   })
 
   it('routes approved, fully linked accounts into done state', () => {
@@ -190,7 +190,7 @@ describe('shouldAutoBootstrapWaitlistSession', () => {
 
     expect(
       shouldAutoBootstrapWaitlistSession({
-        step: 'wallet',
+        step: 'done',
         privyAuthed: true,
       }),
     ).toBe(false)
@@ -237,53 +237,16 @@ describe('mergeCanonicalWaitlistAccount', () => {
   })
 })
 
-describe('shouldAutoHandoffApprovedAccount', () => {
-  it('auto-handoffs approved done-state accounts only on embedded waitlist surfaces', () => {
+describe('isPrivyLoginBootstrapError', () => {
+  it('detects dynamic import fetch failures from extension contexts', () => {
     expect(
-      shouldAutoHandoffApprovedAccount({
-        variant: 'embedded',
-        step: 'done',
-        canEnterApp: true,
-        enterAppBusy: false,
-      }),
+      isPrivyLoginBootstrapError(
+        new Error('Failed to fetch dynamically imported module: chrome-extension://abc123/requestProvider.js'),
+      ),
     ).toBe(true)
-
-    expect(
-      shouldAutoHandoffApprovedAccount({
-        variant: 'page',
-        step: 'done',
-        canEnterApp: true,
-        enterAppBusy: false,
-      }),
-    ).toBe(false)
   })
 
-  it('does not auto-handoff while not done, not approved, or already entering', () => {
-    expect(
-      shouldAutoHandoffApprovedAccount({
-        variant: 'embedded',
-        step: 'wallet',
-        canEnterApp: true,
-        enterAppBusy: false,
-      }),
-    ).toBe(false)
-
-    expect(
-      shouldAutoHandoffApprovedAccount({
-        variant: 'embedded',
-        step: 'done',
-        canEnterApp: false,
-        enterAppBusy: false,
-      }),
-    ).toBe(false)
-
-    expect(
-      shouldAutoHandoffApprovedAccount({
-        variant: 'embedded',
-        step: 'done',
-        canEnterApp: true,
-        enterAppBusy: true,
-      }),
-    ).toBe(false)
+  it('ignores unrelated failures', () => {
+    expect(isPrivyLoginBootstrapError(new Error('Failed to bootstrap waitlist state.'))).toBe(false)
   })
 })

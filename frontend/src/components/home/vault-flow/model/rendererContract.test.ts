@@ -71,35 +71,40 @@ describe('vault-flow renderer contract', () => {
     expect(offenders).toEqual([])
   })
 
-  it('VaultFlowScroll does not use raw scroll-progress thresholds for stage gating', () => {
+  it('VaultFlowScroll uses smooth useTransform scroll-linking, not raw if/else thresholds', () => {
     const vaultFlowScrollPath = path.resolve(
       process.cwd(),
       'src/components/home/VaultFlowScroll.tsx',
     )
     const source = readFileSync(vaultFlowScrollPath, 'utf8')
 
-    // Raw scroll-progress branching patterns are banned — they were replaced by
-    // the section-based whileInView architecture which has no scroll gating at all.
+    // Raw imperative scroll branching is banned.
+    // useTransform([0.10, 0.15, ...]) is the approved pattern.
     expect(source).not.toMatch(/v\s*>=\s*0\.\d+\b/)
     expect(source).not.toMatch(/v\s*<\s*0\.\d+\b/)
     expect(source).not.toMatch(/hardStopFired/)
+    // useSpring introduces physics lag that fights the beat timing — banned.
     expect(source).not.toMatch(/useSpring/)
+    // useTransform must be present (the approved scroll-link mechanism).
+    expect(source).toMatch(/useTransform/)
   })
 
-  it('VaultFlowScroll is a static section layout — no beat-gated conditional mounts', () => {
+  it('VaultFlowScroll beat layout — all beats always in tree, no conditional mounts', () => {
     const vaultFlowScrollPath = path.resolve(
       process.cwd(),
       'src/components/home/VaultFlowScroll.tsx',
     )
     const source = readFileSync(vaultFlowScrollPath, 'utf8')
 
-    // Section-based design: all content is always in the tree.
-    // Beat-gated mounts (isBeat guards) belong in the orchestrators, not here.
+    // All beats always rendered; opacity is driven by useTransform, not mount/unmount.
     expect(source).not.toMatch(/isBeat\s*\(/)
     expect(source).not.toMatch(/isMintConfirmed\s*\(/)
-    // No scrolljacking — height:3200vh sticky container is gone
+    // Old scrolljacking height constant must not reappear.
     expect(source).not.toMatch(/3200vh/)
-    expect(source).not.toMatch(/sticky/)
+    // First and last beat testIds must be present in source.
+    expect(source).toMatch(/beat-1-threshold/)
+    expect(source).toMatch(/beat-4-mint/)
+    expect(source).toMatch(/beat-8-entry/)
   })
 })
 

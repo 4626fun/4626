@@ -1,7 +1,7 @@
 import { memo } from 'react'
 import { motion, useReducedMotion } from 'framer-motion'
 
-type StepStatus = 'pending' | 'active' | 'complete'
+export type StepStatus = 'pending' | 'active' | 'complete'
 
 interface Step {
   label: string

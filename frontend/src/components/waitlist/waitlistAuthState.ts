@@ -65,6 +65,20 @@ export function isEmailAlreadyLinkedAuthError(error: unknown): boolean {
   )
 }
 
+export function isAlreadyLoggedInAuthError(error: unknown): boolean {
+  const recordMessage =
+    error && typeof error === 'object' && typeof (error as { message?: unknown }).message === 'string'
+      ? String((error as { message: string }).message)
+      : ''
+  const text = `${recordMessage} ${typeof error === 'string' ? error : ''}`.trim().toLowerCase()
+  return (
+    text.includes('attempted to log in, but user is already logged in') ||
+    (text.includes('already logged in') && text.includes('link')) ||
+    text.includes('use a `link` helper') ||
+    text.includes('use a link helper')
+  )
+}
+
 export function shouldStopWaitlistAutoAuthRetry(params: {
   isSessionMismatch: boolean
   isRecoveryRequired: boolean

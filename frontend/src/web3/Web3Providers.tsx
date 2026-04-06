@@ -40,7 +40,7 @@ export function AppQueryProvider({ children }: { children: ReactNode }) {
 
 export function WalletProviders({ children }: { children: ReactNode }) {
   return (
-    <WagmiProvider config={wagmiConfig}>
+    <WagmiProvider config={wagmiConfig} reconnectOnMount={false}>
       {children}
     </WagmiProvider>
   )

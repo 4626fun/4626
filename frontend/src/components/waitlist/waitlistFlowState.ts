@@ -1,6 +1,4 @@
-import type { Variant } from './waitlistTypes'
-
-export type WaitlistStep = 'auth' | 'wallet' | 'done'
+export type WaitlistStep = 'auth' | 'done'
 
 type WaitlistAccountWithCanonical = {
   accountSignals: {
@@ -17,9 +15,9 @@ export function resolveWaitlistStep(params: {
 }): WaitlistStep {
   const { account } = params
   if (!account.emailVerified) return 'auth'
-  const appApproved = String(account.appAccessStatus ?? '').trim().toLowerCase() === 'approved'
-  if (appApproved) return 'done'
-  return 'wallet'
+  // Keep waitlist onboarding one-tap: verified accounts move to completion UI.
+  // Any wallet/canonical setup can continue in background or dedicated account surfaces.
+  return 'done'
 }
 
 export function shouldAutoStartWaitlistAuth(params: {
@@ -70,17 +68,4 @@ export function mergeCanonicalWaitlistAccount<T extends WaitlistAccountWithCanon
       canonicalCswAddress: bootstrappedCanonical,
     },
   }
-}
-
-export function shouldAutoHandoffApprovedAccount(params: {
-  variant?: Variant
-  step: WaitlistStep
-  canEnterApp: boolean
-  enterAppBusy: boolean
-}): boolean {
-  if (params.variant !== 'embedded') return false
-  if (params.step !== 'done') return false
-  if (!params.canEnterApp) return false
-  if (params.enterAppBusy) return false
-  return true
 }

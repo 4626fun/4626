@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { apiFetch } from '@/lib/apiBase'
 
 import {
+  isAlreadyLoggedInAuthError,
   isEmailAlreadyLinkedAuthError,
   isRecoveryRequiredAuthError,
   runWaitlistPrivyLogout,
@@ -37,6 +38,21 @@ describe('isEmailAlreadyLinkedAuthError', () => {
   it('returns false for unrelated messages', () => {
     expect(isEmailAlreadyLinkedAuthError(new Error('Failed to fetch'))).toBe(false)
     expect(isEmailAlreadyLinkedAuthError({ message: 'Recovery required' })).toBe(false)
+  })
+})
+
+describe('isAlreadyLoggedInAuthError', () => {
+  it('detects Privy "already logged in" login errors', () => {
+    expect(
+      isAlreadyLoggedInAuthError(new Error('Attempted to log in, but user is already logged in. Use a `link` helper instead.')),
+    ).toBe(true)
+    expect(isAlreadyLoggedInAuthError({ message: 'already logged in, use a link helper' })).toBe(true)
+    expect(isAlreadyLoggedInAuthError('Use a link helper')).toBe(true)
+  })
+
+  it('returns false for unrelated errors', () => {
+    expect(isAlreadyLoggedInAuthError(new Error('Failed to fetch'))).toBe(false)
+    expect(isAlreadyLoggedInAuthError({ message: 'Recovery required' })).toBe(false)
   })
 })
 

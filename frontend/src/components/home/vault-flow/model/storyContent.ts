@@ -74,7 +74,7 @@ export const STORY_CONTENT: StoryContent = {
       amount: '20,000,000',
       route: '/distribute/creator-vesting',
       purposeCopy: 'The creator earns alongside participants — on a one-year schedule.',
-      icon: null,
+      icon: '/akita-share-token-badge.webp',
     },
     {
       title: 'LP reserve',
@@ -83,7 +83,7 @@ export const STORY_CONTENT: StoryContent = {
       amount: '10,000,000',
       route: '/distribute/lp-reserve',
       purposeCopy: 'Liquidity for anyone who wants to exit.',
-      icon: null,
+      icon: '/protocols/uniswap.svg',
     },
   ] as const,
 

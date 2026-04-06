@@ -10,9 +10,9 @@ describe('deriveWaitlistAuthUi', () => {
   it('uses sign-in copy that supports both existing and new accounts', () => {
     expect(deriveWaitlistAuthUi()).toEqual({
       title: 'Get early access',
-      subtitle: 'Sign in with your existing 4626 identity, or verify your email to lock your spot and unlock your referral link.',
-      ctaLabel: 'Sign in / Join waitlist',
-      busyLabel: 'Opening sign-in…',
+      subtitle: 'Use one quick sign-in to save your spot. We handle account setup in the background.',
+      ctaLabel: 'Continue',
+      busyLabel: 'Setting up your account…',
     })
   })
 })
@@ -41,7 +41,7 @@ describe('deriveWaitlistDoneUi', () => {
   it('points unaccepted users toward accounts while they wait for approval', () => {
     expect(deriveWaitlistDoneUi(false)).toEqual({
       title: "You're in!",
-      subtitle: 'Visit accounts to manage connected identities, earn points, and wait for admin approval.',
+      subtitle: 'Your waitlist account is set. Visit accounts to manage identities and points while approval is pending.',
       primaryLabel: '■ Go to accounts',
       secondaryLabel: null,
     })

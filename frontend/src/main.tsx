@@ -177,6 +177,10 @@ function isViteOutdatedOptimizeDepError(message: string, source: string): boolea
 function tryRecoverFromViteOptimizeDepError(message: string, source: string): boolean {
   if (!import.meta.env.DEV || typeof window === 'undefined') return false
   if (!isViteOutdatedOptimizeDepError(message, source)) return false
+  const path = String(window.location.pathname || '').toLowerCase()
+  // Auto reload can feel like a refresh loop on auth-heavy routes.
+  // Keep waitlist/telegram flows stable and let users retry in-place.
+  if (path === '/waitlist' || path.startsWith('/telegram/')) return false
   try {
     const last = Number(window.sessionStorage.getItem(VITE_OPTIMIZE_DEP_RECOVERY_KEY) ?? '0')
     const now = Date.now()
