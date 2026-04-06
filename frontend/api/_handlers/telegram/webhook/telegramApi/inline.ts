@@ -1,8 +1,22 @@
-import type { ExecuteMethod } from '@effect-ak/tg-bot-client'
+type TelegramInlineQueryPayload = {
+  inline_query_id: string
+  results: unknown[]
+  cache_time?: number
+  is_personal?: boolean
+  next_offset?: string
+  button?: Record<string, unknown>
+  switch_pm_text?: string
+  switch_pm_parameter?: string
+}
 
-type TelegramMethodPayload = Parameters<ExecuteMethod>[1]
-type TelegramInlineQueryPayload = Extract<TelegramMethodPayload, { inline_query_id: string }>
-type TelegramSavePreparedInlineMessagePayload = Extract<TelegramMethodPayload, { user_id: number; result: unknown }>
+type TelegramSavePreparedInlineMessagePayload = {
+  user_id: number
+  result: Record<string, unknown>
+  allow_user_chats?: boolean
+  allow_bot_chats?: boolean
+  allow_group_chats?: boolean
+  allow_channel_chats?: boolean
+}
 
 export type TelegramInlineResultsButton =
   | NonNullable<TelegramInlineQueryPayload['button']>
@@ -53,7 +67,7 @@ export async function saveTelegramPreparedInlineMessage(params: {
   const endpoint = `https://api.telegram.org/bot${params.botToken}/savePreparedInlineMessage`
   const payload: TelegramSavePreparedInlineMessagePayload = {
     user_id: Number(params.userId),
-    result: params.result as TelegramSavePreparedInlineMessagePayload['result'],
+    result: params.result as unknown as TelegramSavePreparedInlineMessagePayload['result'],
     allow_user_chats: params.allowUserChats ?? true,
     allow_bot_chats: params.allowBotChats ?? true,
     allow_group_chats: params.allowGroupChats ?? true,

@@ -162,6 +162,15 @@ const TOKENLESS_FINALIZING_BOOTSTRAP_COOLDOWN_MS = 2_500
 const RECOVERY_REQUIRED_BOOTSTRAP_COOLDOWN_MS = 15_000
 const FINALIZING_BACKGROUND_RETRY_MS = 1_500
 
+function isTelegramMiniAppRuntime(): boolean {
+  if (typeof window === 'undefined') return false
+  const maybeTelegram = (window as any)?.Telegram?.WebApp
+  if (maybeTelegram) return true
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent.toLowerCase()
+  return ua.includes('telegram')
+}
+
 function useWaitlistAttemptState() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -437,6 +446,7 @@ export function WaitlistFlow(props: {
   const innerClass = 'card rounded-2xl border border-white/10 bg-black/50 p-6 sm:p-8 space-y-6'
   const activeReferralCode = useMemo(() => readStoredWaitlistReferralCode(), [])
   const enterAppUrl = useMemo(() => buildAppEntryUrl(getAppBaseUrl()), [])
+  const disableAggressiveSessionReset = useMemo(() => isTelegramMiniAppRuntime(), [])
 
   const redirectToCanonicalWaitlist = useCallback(() => {
     if (typeof window === 'undefined') return false
@@ -716,15 +726,26 @@ export function WaitlistFlow(props: {
         } catch (linkEmailError: unknown) {
           if (!isEmailAlreadyLinkedAuthError(linkEmailError)) throw linkEmailError
         }
-        await settleBootstrapAfterRecoverableLoginError({ allowHardReset: true, bypassRecoveryCooldown: true })
+        await settleBootstrapAfterRecoverableLoginError({
+          allowHardReset: !disableAggressiveSessionReset,
+          bypassRecoveryCooldown: true,
+        })
       } else {
-        await runWaitlistPrivyLogout({ logout: null })
+        if (!disableAggressiveSessionReset) {
+          await runWaitlistPrivyLogout({ logout: null })
+        }
         try {
           await login(buildWaitlistEmailLoginOptions() as any)
-          await settleBootstrapAfterRecoverableLoginError({ allowHardReset: true, bypassRecoveryCooldown: true })
+          await settleBootstrapAfterRecoverableLoginError({
+            allowHardReset: !disableAggressiveSessionReset,
+            bypassRecoveryCooldown: true,
+          })
         } catch (loginError: unknown) {
           if (!isWalletProviderCollisionError(loginError) && !isAlreadyLoggedInAuthError(loginError)) throw loginError
-          await settleBootstrapAfterRecoverableLoginError({ allowHardReset: true, bypassRecoveryCooldown: true })
+          await settleBootstrapAfterRecoverableLoginError({
+            allowHardReset: !disableAggressiveSessionReset,
+            bypassRecoveryCooldown: true,
+          })
         }
       }
     } catch (authError: any) {
@@ -768,6 +789,7 @@ export function WaitlistFlow(props: {
     settleBootstrapAfterRecoverableLoginError,
     setError,
     setRecoveryRequired,
+    disableAggressiveSessionReset,
   ])
 
   const onRecoverAccount = useCallback(async () => {
@@ -785,10 +807,16 @@ export function WaitlistFlow(props: {
       await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
       try {
         await login(buildWaitlistRecoveryLoginOptions() as any)
-        await settleBootstrapAfterRecoverableLoginError({ allowHardReset: true, bypassRecoveryCooldown: true })
+        await settleBootstrapAfterRecoverableLoginError({
+          allowHardReset: !disableAggressiveSessionReset,
+          bypassRecoveryCooldown: true,
+        })
       } catch (loginError: unknown) {
         if (!isWalletProviderCollisionError(loginError) && !isAlreadyLoggedInAuthError(loginError)) throw loginError
-        await settleBootstrapAfterRecoverableLoginError({ allowHardReset: true, bypassRecoveryCooldown: true })
+        await settleBootstrapAfterRecoverableLoginError({
+          allowHardReset: !disableAggressiveSessionReset,
+          bypassRecoveryCooldown: true,
+        })
       }
     } catch (recoverError: any) {
       if (isPrivyLoginBootstrapError(recoverError) && redirectToCanonicalWaitlist()) {
@@ -811,6 +839,7 @@ export function WaitlistFlow(props: {
     setError,
     setRecoveryRequired,
     shouldDestroyPrivySession,
+    disableAggressiveSessionReset,
   ])
 
   const onEnterApp = useCallback(async () => {
@@ -908,7 +937,9 @@ export function WaitlistFlow(props: {
         }
         if (isSessionMismatch) {
           resetResolvedAccountState()
-          await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
+          if (!disableAggressiveSessionReset) {
+            await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
+          }
         }
         if (isRecoveryRequired) {
           if (!cancelled) {
@@ -938,6 +969,7 @@ export function WaitlistFlow(props: {
     setRecoveryRequired,
     shouldDestroyPrivySession,
     step,
+    disableAggressiveSessionReset,
   ])
 
   useEffect(() => {
@@ -1020,7 +1052,9 @@ export function WaitlistFlow(props: {
 
           if (isSessionMismatch) {
             resetResolvedAccountState()
-            await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
+            if (!disableAggressiveSessionReset) {
+              await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
+            }
           }
 
           if (isRecoveryRequired) {
@@ -1051,6 +1085,7 @@ export function WaitlistFlow(props: {
     setRecoveryRequired,
     shouldDestroyPrivySession,
     step,
+    disableAggressiveSessionReset,
   ])
 
   const indicatorSteps = [

@@ -1,9 +1,18 @@
 import { asTrimmed } from '../utils.js'
-import type { ExecuteMethod } from '@effect-ak/tg-bot-client'
 
-type TelegramMethodPayload = Parameters<ExecuteMethod>[1]
-type TelegramCallbackQueryPayload = Extract<TelegramMethodPayload, { callback_query_id: string }>
-type TelegramPreCheckoutPayload = Extract<TelegramMethodPayload, { pre_checkout_query_id: string }>
+type TelegramCallbackQueryPayload = {
+  callback_query_id: string
+  text?: string
+  show_alert?: boolean
+  url?: string
+  cache_time?: number
+}
+
+type TelegramPreCheckoutPayload = {
+  pre_checkout_query_id: string
+  ok: boolean
+  error_message?: string
+}
 
 export async function answerTelegramCallbackQuery(params: {
   botToken: string
