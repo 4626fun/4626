@@ -19,7 +19,7 @@ import {
   sendPreparedOwnerTx as submitPreparedOwnerTx,
   shouldRefreshOwnerDelegationOnForeground,
 } from '@/lib/wallet/onboardingWallet'
-import { selectCrossAppAuthAction } from '@/components/waitlist/ownerInstallMapping'
+import { selectCrossAppAuthAction } from '@/features/waitlist/ownerInstallMapping'
 import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
 import { PageMeta } from '@/components/seo/PageMeta'
 

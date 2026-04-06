@@ -104,7 +104,7 @@ describe('vault-flow renderer contract', () => {
     // First and last beat testIds must be present in source.
     expect(source).toMatch(/beat-1-threshold/)
     expect(source).toMatch(/beat-4-mint/)
-    expect(source).toMatch(/beat-8-entry/)
+    expect(source).toMatch(/beat-6-strategies/)
   })
 })
 

@@ -93,7 +93,7 @@ export const STORY_CONTENT: StoryContent = {
       percent: '30%',
       numericPercent: 30,
       amount: '15,000,000',
-      apy: '8–12%',
+      apy: '1–99%',
       route: '/deploy/charm',
       purposeCopy: 'Active Uniswap V3 LP — managed for range efficiency.',
       icon: '/protocols/charm.png',
@@ -105,7 +105,7 @@ export const STORY_CONTENT: StoryContent = {
       percent: '30%',
       numericPercent: 30,
       amount: '15,000,000',
-      apy: '5–9%',
+      apy: '1–99%',
       route: '/deploy/ajna',
       purposeCopy: 'Permissionless lending. Yield without counterparty risk.',
       icon: '/protocols/ajna.svg',
@@ -117,7 +117,7 @@ export const STORY_CONTENT: StoryContent = {
       percent: '30%',
       numericPercent: 30,
       amount: '15,000,000',
-      apy: '10–18%',
+      apy: '1–99%',
       route: '/deploy/solana',
       purposeCopy: 'Cross-chain yield — same principal, different market.',
       icon: '/protocols/solana.svg',
@@ -138,7 +138,7 @@ export const STORY_CONTENT: StoryContent = {
     },
   ] as const,
 
-  blendedApy: '~8–12%',
+  blendedApy: '1–99%+',
 
   copy: {
     earningTogether: {

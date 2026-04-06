@@ -9,7 +9,12 @@ import { getHostMode } from '@/lib/host'
 
 const DEFAULT_DEPOSIT_TOKENS = STORY_CONTENT.defaultDepositTokens
 const DEFAULT_SHARE_TOKENS = `${DEFAULT_DEPOSIT_TOKENS} ${STORY_CONTENT.shareTokenSymbol}`
-const WAITLIST_JOURNEY_STEPS = ['Deposit', 'CCA launch', 'Allocate', 'Redeem'] as const
+const WAITLIST_JOURNEY_STEPS = [
+  { label: 'Deposit',       sub: `${STORY_CONTENT.defaultDepositTokens} ${STORY_CONTENT.creatorTokenSymbol.toLowerCase()} opens the vault` },
+  { label: 'Mint ■AKITA',  sub: 'vault share tokens are issued to depositors' },
+  { label: 'CCA',           sub: 'shares distributed to the public over 7 days' },
+  { label: 'Earn yield',    sub: 'deposited tokens are immediately put to work' },
+] as const
 
 export function Home() {
   const hostMode = getHostMode()
@@ -103,41 +108,66 @@ export function Home() {
 
       <VaultFlowRoot depositTokens={DEFAULT_DEPOSIT_TOKENS} shareTokens={DEFAULT_SHARE_TOKENS} />
 
-      {/* How it works — 4 clean steps */}
-      <section className="cinematic-section !py-14 sm:!py-24 lg:!py-28">
-        <div className="mx-auto max-w-4xl px-4 sm:px-6">
+      {/* How it works — footer summary */}
+      <section className="relative !py-20 sm:!py-28 lg:!py-36 overflow-hidden">
+        {/* top rule — bridges the dark scroll narrative above */}
+        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-white/8 to-transparent" />
+        {/* subtle ambient wash */}
+        <div className="pointer-events-none absolute inset-0" style={{ background: 'radial-gradient(ellipse 80% 50% at 50% 0%, rgba(59,130,246,0.03) 0%, transparent 70%)' }} />
+
+        <div className="relative mx-auto max-w-4xl px-4 sm:px-6 flex flex-col items-center gap-14">
+
+          {/* label + headline */}
           <motion.div
-            initial={{ opacity: 0, y: 16 }}
+            initial={{ opacity: 0, y: 14 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
-            transition={{ duration: 0.7 }}
-            className="flex flex-col items-center gap-12"
+            transition={{ duration: 0.6 }}
+            className="text-center space-y-3"
           >
-            <div className="text-center space-y-2">
-              <span className="label">How it works</span>
-              <h2 className="headline text-2xl sm:text-3xl lg:text-4xl mt-2">Four steps. No complexity.</h2>
-            </div>
+            <span className="label">How it works</span>
+            <h2 className="headline text-2xl sm:text-3xl lg:text-4xl mt-2">
+              Deposit. Mint. Distribute. Earn.
+            </h2>
+          </motion.div>
 
-            <div className="grid w-full grid-cols-2 gap-6 sm:grid-cols-4 sm:gap-8">
-              {WAITLIST_JOURNEY_STEPS.map((step, i) => (
-                <div key={step} className="flex flex-col gap-2">
-                  <span className="font-mono text-[9px] tracking-[0.22em] text-zinc-700">
-                    {String(i + 1).padStart(2, '0')}
-                  </span>
-                  <h3 className="text-sm font-medium text-white">{step}</h3>
-                  <div className="h-px w-6 bg-white/10" />
-                </div>
-              ))}
-            </div>
+          {/* steps — each staggered individually */}
+          <div className="grid w-full grid-cols-2 gap-8 sm:grid-cols-4 sm:gap-10">
+            {WAITLIST_JOURNEY_STEPS.map((step, i) => (
+              <motion.div
+                key={step.label}
+                initial={{ opacity: 0, y: 14 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: true }}
+                transition={{ duration: 0.5, delay: i * 0.10 }}
+                className="flex flex-col gap-2.5"
+              >
+                <span className="font-mono text-[9px] tracking-[0.22em] text-zinc-700">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
+                <h3 className="text-sm font-medium text-white">{step.label}</h3>
+                <div className="h-px w-6 bg-white/10" />
+                <p className="text-[11px] leading-relaxed text-zinc-600 font-light">{step.sub}</p>
+              </motion.div>
+            ))}
+          </div>
 
+          {/* CTA */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            whileInView={{ opacity: 1 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.6, delay: 0.45 }}
+          >
             <Link
               to="/faq/how-it-works"
               className="btn-secondary btn-no-icon inline-flex items-center gap-2 text-xs"
             >
-              Read the full launch flow
+              Learn more about the launch flow
               <ArrowRight className="h-3.5 w-3.5" />
             </Link>
           </motion.div>
+
         </div>
       </section>
 

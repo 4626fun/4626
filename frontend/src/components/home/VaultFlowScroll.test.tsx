@@ -51,7 +51,7 @@ function renderVaultFlowScroll() {
 describe('VaultFlowScroll', () => {
   afterEach(cleanup)
 
-  it('renders all eight narrative beats in the DOM', async () => {
+  it('renders all six narrative beats in the DOM', async () => {
     renderVaultFlowScroll()
     await waitFor(() => {
       expect(screen.getByTestId('beat-1-threshold')).toBeTruthy()
@@ -60,16 +60,14 @@ describe('VaultFlowScroll', () => {
       expect(screen.getByTestId('beat-4-mint')).toBeTruthy()
       expect(screen.getByTestId('beat-5-structure')).toBeTruthy()
       expect(screen.getByTestId('beat-6-strategies')).toBeTruthy()
-      expect(screen.getByTestId('beat-7-activation')).toBeTruthy()
-      expect(screen.getByTestId('beat-8-entry')).toBeTruthy()
     })
   })
 
-  it('beat 1 contains the opening question', async () => {
+  it('beat 1 contains the introducing headline', async () => {
     renderVaultFlowScroll()
     await waitFor(() => {
       const beat = screen.getByTestId('beat-1-threshold')
-      expect(beat.textContent).toMatch(/deploy a vault/i)
+      expect(beat.textContent).toMatch(/earn together/i)
     })
   })
 
@@ -77,7 +75,18 @@ describe('VaultFlowScroll', () => {
     renderVaultFlowScroll()
     await waitFor(() => {
       const beat = screen.getByTestId('beat-2-authority')
-      expect(beat.textContent).toContain(STORY_CONTENT.creatorTokenSymbol)
+      // Beat 2 displays the token symbol lowercase for deposit, and share token on the output side.
+      expect(beat.textContent).toContain(STORY_CONTENT.creatorTokenSymbol.toLowerCase())
+      expect(beat.textContent).toContain(STORY_CONTENT.shareTokenSymbol)
+    })
+  })
+
+  it('beat 2 renders a vault mint machine with input and output tokens', async () => {
+    renderVaultFlowScroll()
+    await waitFor(() => {
+      expect(screen.getByTestId('beat-2-vault-machine')).toBeTruthy()
+      expect(screen.getByTestId('beat-2-input-token')).toBeTruthy()
+      expect(screen.getByTestId('beat-2-output-token')).toBeTruthy()
     })
   })
 
@@ -91,11 +100,19 @@ describe('VaultFlowScroll', () => {
     })
   })
 
+  it('beat 3 frames the commitment as a deposit bill', async () => {
+    renderVaultFlowScroll()
+    await waitFor(() => {
+      expect(screen.getByTestId('deposit-bill')).toBeTruthy()
+    })
+  })
+
   it('beat 4 shows the minted share token count and symbol', async () => {
     renderVaultFlowScroll()
     await waitFor(() => {
       const beat = screen.getByTestId('beat-4-mint')
       expect(beat.textContent).toContain(STORY_CONTENT.defaultDepositTokens)
+      expect(beat.textContent?.toLowerCase()).toContain('shares minted')
       // The ■AKITA badge is in the shared bridge layer (sibling to beat-4-mint),
       // so query the full document rather than the beat's own subtree.
       expect(screen.getAllByText(STORY_CONTENT.shareTokenSymbol).length).toBeGreaterThan(0)
@@ -127,22 +144,6 @@ describe('VaultFlowScroll', () => {
       for (const s of STORY_CONTENT.strategies) {
         expect(beat.textContent).toContain(s.label)
       }
-    })
-  })
-
-  it('beat 7 contains "The vault is live" text', async () => {
-    renderVaultFlowScroll()
-    await waitFor(() => {
-      const beat = screen.getByTestId('beat-7-activation')
-      expect(beat.textContent).toMatch(/the vault is live/i)
-    })
-  })
-
-  it('beat 8 contains "The vault is open" text', async () => {
-    renderVaultFlowScroll()
-    await waitFor(() => {
-      const beat = screen.getByTestId('beat-8-entry')
-      expect(beat.textContent).toMatch(/the vault is open/i)
     })
   })
 

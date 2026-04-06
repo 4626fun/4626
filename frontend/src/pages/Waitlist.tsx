@@ -7,7 +7,7 @@ import { PrivyClientProvider } from '@/lib/privy/client'
 import { Web3Providers } from '@/web3/Web3Providers'
 
 const LazyWaitlistFlow = lazy(async () => {
-  const mod = await import('@/components/waitlist/WaitlistFlow')
+  const mod = await import('@/features/waitlist/WaitlistFlow')
   return { default: mod.WaitlistFlow }
 })
 

@@ -3,7 +3,7 @@ import { apiFetch } from '@/lib/apiBase'
 const SESSION_TOKEN_KEY = 'cv_siwe_session_token'
 const SESSION_TOKEN_CHANGED_EVENT = 'cv-siwe-session-token-change'
 
-function clearStoredWaitlistSessionToken() {
+export function clearStoredWaitlistSessionToken() {
   let changed = false
   try {
     const previous = sessionStorage.getItem(SESSION_TOKEN_KEY)

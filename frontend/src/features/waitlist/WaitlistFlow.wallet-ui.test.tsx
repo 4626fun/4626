@@ -356,6 +356,40 @@ describe('WaitlistFlow simplified completion UI', () => {
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
   })
 
+  it('does not call auth/logout before opening email login', async () => {
+    mockPrivyAuthenticated = false
+    mockGetAccessToken.mockReset()
+    mockGetAccessToken.mockResolvedValue('privy-token-after-login')
+
+    vi.mocked(apiFetch).mockImplementation(async (input: string) => {
+      if (input.startsWith('/api/waitlist/bootstrap')) {
+        return jsonResponse(WAITLIST_BOOTSTRAP_PAYLOAD) as any
+      }
+      if (input.startsWith('/api/auth/privy')) {
+        return jsonResponse({ success: true }) as any
+      }
+      throw new Error(`Unhandled apiFetch call: ${input}`)
+    })
+
+    render(
+      <MemoryRouter>
+        <WaitlistFlow autoStartAuth={false} />
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
+
+    await waitFor(() => {
+      expect(mockLogin).toHaveBeenCalledTimes(1)
+    }, { timeout: 5_000 })
+
+    expect(
+      vi
+        .mocked(apiFetch)
+        .mock.calls.some(([input]) => String(input).startsWith('/api/auth/logout')),
+    ).toBe(false)
+  })
+
   it('avoids bootstrap bursts while auth=true and token is still null', async () => {
     mockPrivyAuthenticated = true
     let bootstrapCalls = 0

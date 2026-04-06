@@ -28,6 +28,7 @@ import {
   shouldAutoStartWaitlistAuth,
 } from './waitlistFlowState'
 import {
+  clearStoredWaitlistSessionToken,
   isAlreadyLoggedInAuthError,
   isEmailAlreadyLinkedAuthError,
   isRecoveryRequiredAuthError,
@@ -165,6 +166,7 @@ const WAITLIST_BUSY_WATCHDOG_MS = 25_000
 const TOKENLESS_FINALIZING_BOOTSTRAP_COOLDOWN_MS = 2_500
 const RECOVERY_REQUIRED_BOOTSTRAP_COOLDOWN_MS = 15_000
 const FINALIZING_BACKGROUND_RETRY_MS = 1_500
+const FINALIZING_BACKGROUND_RETRY_MAX_ATTEMPTS = 5
 
 function isTelegramMiniAppRuntime(): boolean {
   if (typeof window === 'undefined') return false
@@ -439,7 +441,7 @@ export function WaitlistFlow(props: {
   const authBootstrapAutoAttemptedRef = useRef(false)
   const recoveryAutoRetryRef = useRef(false)
   const finalizingAutoRetryCountRef = useRef(0)
-  const finalizingHardResetAttemptedRef = useRef(false)
+  const finalizingBackgroundRetryCountRef = useRef(0)
   const tokenlessFinalizingBootstrapCooldownUntilRef = useRef(0)
   const recoveryRequiredBootstrapCooldownUntilRef = useRef(0)
   const bootstrapRequestSeqRef = useRef(0)
@@ -499,7 +501,16 @@ export function WaitlistFlow(props: {
         throw err
       }
 
-      const readPrivyToken = async () => withTimeout(getAccessToken(), FLOW_TIMEOUT_MS, 'Sign-in token').catch(() => null)
+      const readPrivyToken = async (): Promise<string | null> => {
+        try {
+          return await withTimeout(getAccessToken(), FLOW_TIMEOUT_MS, 'Sign-in token')
+        } catch (tokenError: unknown) {
+          if (isWalletProviderCollisionError(tokenError)) {
+            throw new Error(getWalletProviderCollisionMessage())
+          }
+          return null
+        }
+      }
 
       let token = await readPrivyToken()
       if (!token && waitForTokenHydration) {
@@ -590,7 +601,7 @@ export function WaitlistFlow(props: {
       const nextAccount = mergeCanonicalWaitlistAccount(payload.data, bootstrappedCanonicalWallet)
       setAccount(nextAccount)
       finalizingAutoRetryCountRef.current = 0
-      finalizingHardResetAttemptedRef.current = false
+      finalizingBackgroundRetryCountRef.current = 0
       tokenlessFinalizingBootstrapCooldownUntilRef.current = 0
       recoveryRequiredBootstrapCooldownUntilRef.current = 0
       setRecoveryRequired(false)
@@ -632,8 +643,8 @@ export function WaitlistFlow(props: {
   )
 
   const settleBootstrapAfterRecoverableLoginError = useCallback(
-    async (opts?: { allowHardReset?: boolean; bypassRecoveryCooldown?: boolean }): Promise<AccountsSummary> => {
-      const retryDelaysMs = opts?.allowHardReset === false ? [300, 600, 900, 1_200] : [250, 450, 700, 1_000]
+    async (opts?: { bypassRecoveryCooldown?: boolean }): Promise<AccountsSummary> => {
+      const retryDelaysMs = [300, 600, 900, 1_200]
       finalizingAutoRetryCountRef.current = 0
       for (let attempt = 0; attempt <= retryDelaysMs.length; attempt += 1) {
         finalizingAutoRetryCountRef.current = attempt + 1
@@ -655,45 +666,9 @@ export function WaitlistFlow(props: {
         }
       }
 
-      if (opts?.allowHardReset === true && !finalizingHardResetAttemptedRef.current) {
-        finalizingHardResetAttemptedRef.current = true
-        tokenlessFinalizingBootstrapCooldownUntilRef.current = 0
-        await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
-        try {
-          await login(buildWaitlistEmailLoginOptions() as any)
-        } catch (loginError: unknown) {
-          if (isWalletProviderCollisionError(loginError)) {
-            throw new Error(getWalletProviderCollisionMessage())
-          }
-          if (!isAlreadyLoggedInAuthError(loginError)) throw loginError
-        }
-
-        const hardResetRetryDelaysMs = [300, 550, 900]
-        for (let attempt = 0; attempt <= hardResetRetryDelaysMs.length; attempt += 1) {
-          try {
-            const next = await requestBootstrap({
-              waitForTokenHydration: true,
-              forceNew: true,
-              bypassRecoveryCooldown: true,
-            })
-            if (next) {
-              finalizingHardResetAttemptedRef.current = false
-              finalizingAutoRetryCountRef.current = 0
-              return next
-            }
-          } catch (bootstrapError: unknown) {
-            if (!isSessionFinalizingError(bootstrapError)) throw bootstrapError
-          }
-          const delayMs = hardResetRetryDelaysMs[attempt]
-          if (typeof delayMs === 'number' && Number.isFinite(delayMs) && delayMs > 0) {
-            await new Promise<void>((resolve) => setTimeout(resolve, delayMs))
-          }
-        }
-      }
-
       throw new Error(SESSION_FINALIZING_RETRY_MESSAGE)
     },
-    [login, requestBootstrap, shouldDestroyPrivySession],
+    [requestBootstrap],
   )
 
   const attemptRecoveryAutoRetry = useCallback(async (): Promise<boolean> => {
@@ -704,13 +679,13 @@ export function WaitlistFlow(props: {
     await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
     try {
       await login(buildWaitlistRecoveryLoginOptions() as any)
-      await settleBootstrapAfterRecoverableLoginError({ allowHardReset: false, bypassRecoveryCooldown: true })
+      await settleBootstrapAfterRecoverableLoginError({ bypassRecoveryCooldown: true })
     } catch (loginError: unknown) {
       if (isWalletProviderCollisionError(loginError)) {
         throw new Error(getWalletProviderCollisionMessage())
       }
       if (!isAlreadyLoggedInAuthError(loginError)) throw loginError
-      await settleBootstrapAfterRecoverableLoginError({ allowHardReset: false, bypassRecoveryCooldown: true })
+      await settleBootstrapAfterRecoverableLoginError({ bypassRecoveryCooldown: true })
     }
     return true
   }, [login, resetResolvedAccountState, settleBootstrapAfterRecoverableLoginError, shouldDestroyPrivySession])
@@ -718,7 +693,6 @@ export function WaitlistFlow(props: {
   const onContinueAuth = useCallback(async () => {
     if (!beginAuthAttempt()) return
     recoveryAutoRetryRef.current = false
-    finalizingHardResetAttemptedRef.current = false
     tokenlessFinalizingBootstrapCooldownUntilRef.current = 0
     recoveryRequiredBootstrapCooldownUntilRef.current = 0
     try {
@@ -737,17 +711,15 @@ export function WaitlistFlow(props: {
           if (!isEmailAlreadyLinkedAuthError(linkEmailError)) throw linkEmailError
         }
         await settleBootstrapAfterRecoverableLoginError({
-          allowHardReset: !disableAggressiveSessionReset,
           bypassRecoveryCooldown: true,
         })
       } else {
-        if (!disableAggressiveSessionReset) {
-          await runWaitlistPrivyLogout({ logout: null })
-        }
+        // Pre-login cleanup should stay local to avoid force-logging out server cookies
+        // around every Privy popup open.
+        clearStoredWaitlistSessionToken()
         try {
           await login(buildWaitlistEmailLoginOptions() as any)
           await settleBootstrapAfterRecoverableLoginError({
-            allowHardReset: !disableAggressiveSessionReset,
             bypassRecoveryCooldown: true,
           })
         } catch (loginError: unknown) {
@@ -756,7 +728,6 @@ export function WaitlistFlow(props: {
           }
           if (!isAlreadyLoggedInAuthError(loginError)) throw loginError
           await settleBootstrapAfterRecoverableLoginError({
-            allowHardReset: !disableAggressiveSessionReset,
             bypassRecoveryCooldown: true,
           })
         }
@@ -821,7 +792,6 @@ export function WaitlistFlow(props: {
       try {
         await login(buildWaitlistRecoveryLoginOptions() as any)
         await settleBootstrapAfterRecoverableLoginError({
-          allowHardReset: !disableAggressiveSessionReset,
           bypassRecoveryCooldown: true,
         })
       } catch (loginError: unknown) {
@@ -830,7 +800,6 @@ export function WaitlistFlow(props: {
         }
         if (!isAlreadyLoggedInAuthError(loginError)) throw loginError
         await settleBootstrapAfterRecoverableLoginError({
-          allowHardReset: !disableAggressiveSessionReset,
           bypassRecoveryCooldown: true,
         })
       }
@@ -855,7 +824,6 @@ export function WaitlistFlow(props: {
     setError,
     setRecoveryRequired,
     shouldDestroyPrivySession,
-    disableAggressiveSessionReset,
   ])
 
   const onEnterApp = useCallback(async () => {
@@ -930,7 +898,7 @@ export function WaitlistFlow(props: {
       } catch (bootstrapError: any) {
         if (isSessionFinalizingError(bootstrapError)) {
           try {
-            await settleBootstrapAfterRecoverableLoginError({ allowHardReset: false })
+            await settleBootstrapAfterRecoverableLoginError()
             if (!cancelled) setError(null)
           } catch (finalizingError: unknown) {
             if (!cancelled) {
@@ -1009,7 +977,7 @@ export function WaitlistFlow(props: {
       authBootstrapAutoAttemptedRef.current = false
       recoveryAutoRetryRef.current = false
       finalizingAutoRetryCountRef.current = 0
-      finalizingHardResetAttemptedRef.current = false
+      finalizingBackgroundRetryCountRef.current = 0
       tokenlessFinalizingBootstrapCooldownUntilRef.current = 0
       recoveryRequiredBootstrapCooldownUntilRef.current = 0
       setBusy(false)
@@ -1051,14 +1019,23 @@ export function WaitlistFlow(props: {
         try {
           setBusy(true)
           const next = await requestBootstrap({ waitForTokenHydration: true })
-          if (!cancelled && next) setError(null)
+          if (!cancelled && next) {
+            finalizingBackgroundRetryCountRef.current = 0
+            setError(null)
+          }
         } catch (bootstrapError: unknown) {
           if (cancelled) return
           if (isSessionFinalizingError(bootstrapError)) {
+            finalizingBackgroundRetryCountRef.current += 1
+            if (finalizingBackgroundRetryCountRef.current >= FINALIZING_BACKGROUND_RETRY_MAX_ATTEMPTS) {
+              setError(WAITLIST_SPINNER_TIMEOUT_MESSAGE)
+              return
+            }
             setError(SESSION_FINALIZING_RETRY_MESSAGE)
             return
           }
 
+          finalizingBackgroundRetryCountRef.current = 0
           const message =
             typeof (bootstrapError as { message?: unknown })?.message === 'string'
               ? String((bootstrapError as { message: string }).message)

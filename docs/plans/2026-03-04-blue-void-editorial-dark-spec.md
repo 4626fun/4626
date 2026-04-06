@@ -24,7 +24,7 @@ This spec defines a single dark-first direction:
 ## In-Scope Surfaces
 
 - `frontend/src/pages/Swap.tsx` and swap subcomponents
-- `frontend/src/components/waitlist/**`
+- `frontend/src/features/waitlist/**`
 - `frontend/src/pages/AccountSettings.tsx`
 - Shared primitives/tokens under `frontend/packages/brand-kit/**`
 

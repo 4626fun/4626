@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 
-import { LaunchCoinCard } from '@/components/waitlist/LaunchCoinCard'
+import { LaunchCoinCard } from '@/features/waitlist/LaunchCoinCard'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { useAccountContext } from '@/wallet/accountContext'
 
