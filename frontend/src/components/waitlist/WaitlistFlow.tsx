@@ -511,7 +511,7 @@ export function WaitlistFlow(props: {
         }
       }
 
-      if (!token && privyAuthed) {
+      if (!token) {
         setStep('auth')
         throw new Error(SESSION_FINALIZING_RETRY_MESSAGE)
       }

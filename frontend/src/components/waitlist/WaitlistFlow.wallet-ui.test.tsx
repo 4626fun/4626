@@ -302,7 +302,8 @@ describe('WaitlistFlow simplified completion UI', () => {
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
 
     expect(await screen.findByText(/you're in!/i, undefined, { timeout: 9_000 })).toBeTruthy()
-    expect(bootstrapCalls).toBeGreaterThanOrEqual(2)
+    expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
+    expect(bootstrapCalls).toBeLessThanOrEqual(2)
     expect(screen.queryByText(/sign-in session is still finalizing/i)).toBeNull()
   })
 

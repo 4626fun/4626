@@ -43,6 +43,112 @@
     />
     <script>
       ;(() => {
+        const COLLISION_SIGNAL_KEY = 'cv:wallet-provider-collision-at'
+        const WALLET_NOISE_PATTERNS = [
+          /Cannot set property ethereum of #<Window> which has only a getter/i,
+          /Cannot redefine property:\s*ethereum/i,
+          /Failed to add embedded wallet connector:\s*Wallet proxy not initialized/i,
+        ]
+
+        const persistCollisionSignal = () => {
+          const timestamp = String(Date.now())
+          try {
+            window.localStorage?.setItem(COLLISION_SIGNAL_KEY, timestamp)
+          } catch {
+            // ignore
+          }
+          try {
+            window.sessionStorage?.setItem(COLLISION_SIGNAL_KEY, timestamp)
+          } catch {
+            // ignore
+          }
+        }
+
+        const isLockedDescriptor = (descriptor) => {
+          if (!descriptor) return false
+          if (typeof descriptor.get === 'function' && typeof descriptor.set !== 'function') return true
+          if (Object.prototype.hasOwnProperty.call(descriptor, 'writable') && descriptor.writable === false) return true
+          return false
+        }
+
+        const stabilizeEthereumSlot = () => {
+          const ownDescriptor = Object.getOwnPropertyDescriptor(window, 'ethereum')
+          if (ownDescriptor && !isLockedDescriptor(ownDescriptor)) return
+          if (ownDescriptor && ownDescriptor.configurable !== true) return
+
+          let inheritedDescriptor = null
+          if (!ownDescriptor) {
+            let cursor = window
+            while (cursor) {
+              const descriptor = Object.getOwnPropertyDescriptor(cursor, 'ethereum')
+              if (descriptor) {
+                inheritedDescriptor = descriptor
+                break
+              }
+              cursor = Object.getPrototypeOf(cursor)
+            }
+          }
+
+          const lockedOwn = isLockedDescriptor(ownDescriptor)
+          const lockedInherited = isLockedDescriptor(inheritedDescriptor)
+          if (!lockedOwn && !lockedInherited) return
+
+          let currentProvider
+          try {
+            currentProvider = window.ethereum
+          } catch {
+            currentProvider = undefined
+          }
+
+          Object.defineProperty(window, 'ethereum', {
+            configurable: true,
+            enumerable: true,
+            writable: true,
+            value: currentProvider,
+          })
+        }
+
+        const shouldSuppress = (message, source) => {
+          const msg = String(message || '')
+          const src = String(source || '').toLowerCase()
+          if (WALLET_NOISE_PATTERNS.some((pattern) => pattern.test(msg))) return true
+          if (src.includes('requestprovider.js') && msg.toLowerCase().includes('ethereum')) return true
+          return false
+        }
+
+        try {
+          stabilizeEthereumSlot()
+        } catch {
+          // ignore
+        }
+
+        window.addEventListener(
+          'error',
+          (event) => {
+            if (shouldSuppress(event.message, event.filename)) {
+              persistCollisionSignal()
+              event.preventDefault()
+            }
+          },
+          true,
+        )
+
+        window.addEventListener(
+          'unhandledrejection',
+          (event) => {
+            const reason = event.reason
+            const message = reason instanceof Error ? reason.message : String(reason?.message ?? reason ?? '')
+            if (shouldSuppress(message, '')) {
+              persistCollisionSignal()
+              event.preventDefault()
+            }
+          },
+          true,
+        )
+      })()
+    </script>
+    <script>
+      ;(() => {
         // Theme bootstrap (pre-hydration) to avoid flash.
         // Values: "light" | "dark" | "system"
         const KEY = 'cv:theme'

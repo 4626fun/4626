@@ -3,6 +3,7 @@
   <head>
 {{> partials/head-shared-base-meta.html}}
 {{> partials/head-app-social-meta.html}}
+{{> partials/head-index-wallet-noise-bootstrap.html}}
 {{> partials/head-shared-theme-bootstrap.html}}
 {{> partials/head-shared-stale-script.html}}
 {{> partials/head-shared-fonts.html}}
