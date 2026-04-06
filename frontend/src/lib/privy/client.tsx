@@ -71,7 +71,7 @@ function PrivyStatusObserver(props: { onStatus: (status: PrivyClientStatus) => v
  * - No new wallet is created - they use their existing Zora wallet
  */
 export function PrivyClientProvider(props: { children: ReactNode; showWalletLoginFirst?: boolean }) {
-  const { children, showWalletLoginFirst = true } = props
+  const { children, showWalletLoginFirst = false } = props
   const enabled = isPrivyClientEnabled()
   const appId = enabled ? getPrivyAppId() : null
   const clientId = enabled ? getPrivyClientId() : null

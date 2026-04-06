@@ -4,13 +4,14 @@ type PrivyAppearanceOptions = {
 }
 
 export function createPrivyAppearance(options?: PrivyAppearanceOptions) {
-  const prefersEmailFirst = options?.showWalletLoginFirst === false
+  const showWalletLoginFirst = options?.showWalletLoginFirst ?? false
+  const prefersEmailFirst = showWalletLoginFirst === false
   const walletList = options?.walletCollisionDetected || prefersEmailFirst
     ? ['coinbase_wallet']
     : ['metamask', 'coinbase_wallet', 'detected_ethereum_wallets']
 
   return {
-    showWalletLoginFirst: options?.showWalletLoginFirst ?? true,
+    showWalletLoginFirst,
     walletChainType: 'all',
     walletList,
     landingHeader: 'Continue to 4626',

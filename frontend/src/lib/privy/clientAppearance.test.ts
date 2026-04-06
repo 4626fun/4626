@@ -5,9 +5,9 @@ import { createPrivyAppearance } from './clientAppearance'
 describe('createPrivyAppearance', () => {
   it('uses the shared appearance config by default without an empty logo src', () => {
     expect(createPrivyAppearance()).toEqual({
-      showWalletLoginFirst: true,
+      showWalletLoginFirst: false,
       walletChainType: 'all',
-      walletList: ['metamask', 'coinbase_wallet', 'detected_ethereum_wallets'],
+      walletList: ['coinbase_wallet'],
       landingHeader: 'Continue to 4626',
       loginMessage: 'Use verified email first, or continue with your wallet-native path.',
       theme: '#0f1117',
@@ -16,7 +16,7 @@ describe('createPrivyAppearance', () => {
 
   it('drops detected wallet enumeration when injected-provider collision is present', () => {
     expect(createPrivyAppearance({ walletCollisionDetected: true })).toEqual({
-      showWalletLoginFirst: true,
+      showWalletLoginFirst: false,
       walletChainType: 'all',
       walletList: ['coinbase_wallet'],
       landingHeader: 'Continue to 4626',

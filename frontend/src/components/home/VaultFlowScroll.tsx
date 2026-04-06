@@ -315,11 +315,11 @@ export function VaultFlowScroll(_props: Props) {
           <div className="absolute inset-0 pointer-events-none" style={{ background: BEAT_ACCENTS[2] }} />
           <AvatarNode src={avatarSrc} name={STORY_CONTENT.creatorName} />
           <h2 className="text-2xl md:text-4xl font-medium tracking-tight mb-6 text-center text-white">
-            Only you can do this.
+            Deposit {STORY_CONTENT.creatorTokenSymbol}. Earn yield together.
           </h2>
           <p className="text-base md:text-xl leading-relaxed font-light text-center max-w-md" style={{ color: 'rgba(255,255,255,0.45)' }}>
-            No one else can deploy a vault for {STORY_CONTENT.creatorTokenSymbol}.<br />
-            The authority is absolute.
+            Creator and fans deposit the same coin into one vault —<br />
+            yield flows to everyone, proportional to each share.
           </p>
         </motion.div>
 
