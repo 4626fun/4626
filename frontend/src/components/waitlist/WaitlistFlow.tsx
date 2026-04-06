@@ -160,6 +160,7 @@ const WAITLIST_SPINNER_TIMEOUT_MESSAGE = 'Sign-in is taking longer than expected
 const WAITLIST_BUSY_WATCHDOG_MS = 25_000
 const TOKENLESS_FINALIZING_BOOTSTRAP_COOLDOWN_MS = 2_500
 const RECOVERY_REQUIRED_BOOTSTRAP_COOLDOWN_MS = 15_000
+const FINALIZING_BACKGROUND_RETRY_MS = 1_500
 
 function useWaitlistAttemptState() {
   const [busy, setBusy] = useState(false)
@@ -988,6 +989,69 @@ export function WaitlistFlow(props: {
     authAutoAttemptedRef.current = true
     void onContinueAuth()
   }, [authAttemptInFlightRef, busy, onContinueAuth, shouldAutoStartAuth])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (step !== 'auth') return
+    if (busy) return
+    if (authAttemptInFlightRef.current) return
+    if (error !== SESSION_FINALIZING_RETRY_MESSAGE) return
+
+    let cancelled = false
+    const timeoutId = window.setTimeout(() => {
+      void (async () => {
+        try {
+          setBusy(true)
+          const next = await requestBootstrap({ waitForTokenHydration: true })
+          if (!cancelled && next) setError(null)
+        } catch (bootstrapError: unknown) {
+          if (cancelled) return
+          if (isSessionFinalizingError(bootstrapError)) {
+            setError(SESSION_FINALIZING_RETRY_MESSAGE)
+            return
+          }
+
+          const message =
+            typeof (bootstrapError as { message?: unknown })?.message === 'string'
+              ? String((bootstrapError as { message: string }).message)
+              : 'Failed to load account state.'
+          const isSessionMismatch = isSessionEmailMismatchError(message)
+          const isRecoveryRequired = isRecoveryRequiredAuthError(bootstrapError)
+
+          if (isSessionMismatch) {
+            resetResolvedAccountState()
+            await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
+          }
+
+          if (isRecoveryRequired) {
+            setRecoveryRequired(true)
+            setError(RECOVERY_REQUIRED_MESSAGE)
+            return
+          }
+
+          setError(isSessionMismatch ? SESSION_MISMATCH_MESSAGE : message)
+        } finally {
+          if (!cancelled) setBusy(false)
+        }
+      })()
+    }, FINALIZING_BACKGROUND_RETRY_MS)
+
+    return () => {
+      cancelled = true
+      window.clearTimeout(timeoutId)
+    }
+  }, [
+    authAttemptInFlightRef,
+    busy,
+    error,
+    requestBootstrap,
+    resetResolvedAccountState,
+    setBusy,
+    setError,
+    setRecoveryRequired,
+    shouldDestroyPrivySession,
+    step,
+  ])
 
   const indicatorSteps = [
     { label: 'Sign in', status: (step === 'auth' ? 'active' : 'complete') as StepStatus },

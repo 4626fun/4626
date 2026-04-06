@@ -400,7 +400,7 @@ export async function profileCli(params: {
   const posts: ZoraCliProfilePost[] = edges
     .map((edge: any) => mapCoin(edge?.node))
     .filter((coin: ZoraCliCoin | null): coin is ZoraCliCoin => Boolean(coin))
-    .map((coin) => ({
+    .map((coin: ZoraCliCoin) => ({
       name: coin.name,
       address: coin.address,
       marketCap: coin.marketCap,

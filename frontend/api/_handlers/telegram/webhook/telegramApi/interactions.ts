@@ -1,4 +1,9 @@
 import { asTrimmed } from '../utils.js'
+import type { ExecuteMethod } from '@effect-ak/tg-bot-client'
+
+type TelegramMethodPayload = Parameters<ExecuteMethod>[1]
+type TelegramCallbackQueryPayload = Extract<TelegramMethodPayload, { callback_query_id: string }>
+type TelegramPreCheckoutPayload = Extract<TelegramMethodPayload, { pre_checkout_query_id: string }>
 
 export async function answerTelegramCallbackQuery(params: {
   botToken: string
@@ -7,7 +12,7 @@ export async function answerTelegramCallbackQuery(params: {
   showAlert?: boolean
 }): Promise<void> {
   const endpoint = `https://api.telegram.org/bot${params.botToken}/answerCallbackQuery`
-  const payload: Record<string, unknown> = {
+  const payload: TelegramCallbackQueryPayload = {
     callback_query_id: params.callbackQueryId,
   }
   if (asTrimmed(params.text).length > 0) {
@@ -34,7 +39,7 @@ export async function answerTelegramPreCheckoutQuery(params: {
   errorMessage?: string
 }): Promise<void> {
   const endpoint = `https://api.telegram.org/bot${params.botToken}/answerPreCheckoutQuery`
-  const payload: Record<string, unknown> = {
+  const payload: TelegramPreCheckoutPayload = {
     pre_checkout_query_id: params.preCheckoutQueryId,
     ok: params.ok,
   }

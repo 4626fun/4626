@@ -51,6 +51,9 @@ importers:
       '@coinbase/wallet-sdk':
         specifier: 4.3.7
         version: 4.3.7(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
+      '@effect-ak/tg-bot-client':
+        specifier: ^1.5.0
+        version: 1.5.0
       '@google/model-viewer':
         specifier: 3.5.0
         version: 3.5.0(three@0.163.0)
@@ -458,6 +461,12 @@ packages:
   '@edge-runtime/vm@3.2.0':
     resolution: {integrity: sha512-0dEVyRLM/lG4gp1R/Ik5bfPl/1wX00xFwd5KcNH602tzBa09oF7pbTKETEhR1GjZ75K6OJnYFu8II2dyMhONMw==}
     engines: {node: '>=16'}
+
+  '@effect-ak/tg-bot-api@1.5.0':
+    resolution: {integrity: sha512-lDQhU+GyGTQLXzFChdmPZi1sBo0gtVw6otB+aHc6XWhIVht6NgW63lDp7nlEdLmg1LD1R26fjzQI0bcQ+mKLkA==}
+
+  '@effect-ak/tg-bot-client@1.5.0':
+    resolution: {integrity: sha512-A03+cUYKbmw/c7oDA7B6eAGOXFwJK1KukkJsX/lRXK8bg0ruJoTqaTg0qEjhlQdc19yBStADDO4hzd+O9bGPmw==}
 
   '@elizaos/core@1.7.2':
     resolution: {integrity: sha512-NUw+YIXTejCCB07jevJ6cTbd/FKTqVoPwDrMMuBcjHeM+9UlQKFadDJooWEUREf37WS4KBegwLUOnr9H9CXpcw==}
@@ -6366,6 +6375,12 @@ snapshots:
   '@edge-runtime/vm@3.2.0':
     dependencies:
       '@edge-runtime/primitives': 4.1.0
+
+  '@effect-ak/tg-bot-api@1.5.0': {}
+
+  '@effect-ak/tg-bot-client@1.5.0':
+    dependencies:
+      '@effect-ak/tg-bot-api': 1.5.0
 
   '@elizaos/core@1.7.2':
     dependencies:

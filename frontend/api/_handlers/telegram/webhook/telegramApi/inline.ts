@@ -1,9 +1,11 @@
+import type { ExecuteMethod } from '@effect-ak/tg-bot-client'
+
+type TelegramMethodPayload = Parameters<ExecuteMethod>[1]
+type TelegramInlineQueryPayload = Extract<TelegramMethodPayload, { inline_query_id: string }>
+type TelegramSavePreparedInlineMessagePayload = Extract<TelegramMethodPayload, { user_id: number; result: unknown }>
+
 export type TelegramInlineResultsButton =
-  | {
-      text: string
-      web_app?: { url: string }
-      start_parameter?: string
-    }
+  | NonNullable<TelegramInlineQueryPayload['button']>
   | Record<string, unknown>
 
 export async function answerTelegramInlineQuery(params: {
@@ -18,13 +20,13 @@ export async function answerTelegramInlineQuery(params: {
   switchPmParameter?: string
 }): Promise<void> {
   const endpoint = `https://api.telegram.org/bot${params.botToken}/answerInlineQuery`
-  const payload = {
+  const payload: TelegramInlineQueryPayload = {
     inline_query_id: params.inlineQueryId,
     cache_time: params.cacheTime ?? 5,
     is_personal: params.isPersonal ?? true,
-    results: params.results,
+    results: params.results as TelegramInlineQueryPayload['results'],
     ...(params.nextOffset ? { next_offset: params.nextOffset } : {}),
-    ...(params.button ? { button: params.button } : {}),
+    ...(params.button ? { button: params.button as TelegramInlineQueryPayload['button'] } : {}),
     ...(params.switchPmText ? { switch_pm_text: params.switchPmText } : {}),
     ...(params.switchPmParameter ? { switch_pm_parameter: params.switchPmParameter } : {}),
   }
@@ -49,9 +51,9 @@ export async function saveTelegramPreparedInlineMessage(params: {
   allowChannelChats?: boolean
 }): Promise<{ preparedInlineMessageId: string | null }> {
   const endpoint = `https://api.telegram.org/bot${params.botToken}/savePreparedInlineMessage`
-  const payload = {
+  const payload: TelegramSavePreparedInlineMessagePayload = {
     user_id: Number(params.userId),
-    result: params.result,
+    result: params.result as TelegramSavePreparedInlineMessagePayload['result'],
     allow_user_chats: params.allowUserChats ?? true,
     allow_bot_chats: params.allowBotChats ?? true,
     allow_group_chats: params.allowGroupChats ?? true,
