@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { createMockReq, createMockRes } from './helpers'
+import { COOKIE_SESSION, makeSessionToken } from '../../packages/server-core/src/index.js'
+import { applyEnv, createMockReq, createMockRes } from './helpers'
 
 describe('api catch-all hardening', () => {
   beforeEach(() => {
@@ -133,5 +134,65 @@ describe('api catch-all hardening', () => {
       error: { code: -32000, message: 'request denied - paymaster proxy internal error' },
     })
     errorSpy.mockRestore()
+  })
+
+  it('blocks cookie-authenticated unsafe requests from untrusted origins before handler execution', async () => {
+    const restoreEnv = applyEnv({
+      AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
+      APP_ORIGIN: 'https://trusted.4626.fun',
+      CORS_ALLOWED_ORIGINS: undefined,
+    })
+    try {
+      const routeHandler = vi.fn(async (_req, res) => {
+        res.status(200).json({ ok: true })
+      })
+      const getApiHandler = vi.fn(async (subpath: string) => (subpath === 'unsafe/demo' ? routeHandler : null))
+
+      vi.doMock('../_handlers/_routes.js', () => ({
+        getApiHandler,
+      }))
+
+      const mod = await import('../[...path].ts')
+      const handler = mod.default
+      const token = makeSessionToken({ address: '0x00000000000000000000000000000000000000aa' })
+      const cookie = `${COOKIE_SESSION}=${encodeURIComponent(token)}`
+
+      const blockedReq = createMockReq({
+        method: 'POST',
+        query: { path: 'unsafe/demo' },
+        url: '/api/unsafe/demo',
+        headers: {
+          cookie,
+          origin: 'https://evil.example',
+        },
+      })
+      const blockedRes = createMockRes()
+
+      await handler(blockedReq, blockedRes)
+
+      expect(blockedRes.statusCode).toBe(403)
+      expect(blockedRes.body).toEqual({ success: false, error: 'Forbidden' })
+      expect(blockedRes.getHeader('cache-control')).toBe('no-store')
+      expect(routeHandler).not.toHaveBeenCalled()
+
+      const allowedReq = createMockReq({
+        method: 'POST',
+        query: { path: 'unsafe/demo' },
+        url: '/api/unsafe/demo',
+        headers: {
+          cookie,
+          origin: 'https://trusted.4626.fun',
+        },
+      })
+      const allowedRes = createMockRes()
+
+      await handler(allowedReq, allowedRes)
+
+      expect(allowedRes.statusCode).toBe(200)
+      expect(allowedRes.body).toEqual({ ok: true })
+      expect(routeHandler).toHaveBeenCalledOnce()
+    } finally {
+      restoreEnv()
+    }
   })
 })

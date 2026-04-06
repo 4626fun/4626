@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { enforceCookieSessionTrustedOrigin } from '../../packages/server-core/src/auth.js'
 
 type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
 
@@ -79,6 +80,10 @@ export async function dispatchCatchAllRequest(params: {
     const handler = await resolveHandler(subpath)
     if (!handler) {
       return res.status(404).json({ success: false, error: 'Not found' })
+    }
+
+    if (enforceCookieSessionTrustedOrigin(req, res)) {
+      return
     }
 
     return await handler(req, res)

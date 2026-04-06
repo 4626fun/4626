@@ -5,6 +5,7 @@ export {
   COOKIE_SESSION,
   clearCookie,
   consumeNonce,
+  enforceCookieSessionTrustedOrigin,
   ensureNonceSchema,
   handleOptions,
   hostMatchesDomain,

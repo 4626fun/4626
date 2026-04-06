@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
+import { getTrustedRequestOrigins, normalizeOrigin } from '../_lib/trust.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -10,6 +11,7 @@ export const COOKIE_SESSION = 'cv_auth_session'
 
 const NONCE_TTL_SECONDS = 60 * 15 // 15m
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7 // 7d
+const UNSAFE_HTTP_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 const EIP1271_MAGICVALUE = '0x1626ba7e' as const
 
@@ -261,6 +263,36 @@ export function readSessionFromRequest(req: VercelRequest): { address: string } 
   if (cookieSession) return cookieSession
 
   return null
+}
+
+export function enforceCookieSessionTrustedOrigin(req: VercelRequest, res: VercelResponse): boolean {
+  const method = String(req.method ?? '').trim().toUpperCase()
+  if (method === 'OPTIONS' || !UNSAFE_HTTP_METHODS.has(method)) return false
+
+  const authHeader = typeof req.headers?.authorization === 'string' ? req.headers.authorization.trim() : ''
+  const hasValidBearerSession =
+    authHeader.toLowerCase().startsWith('bearer ') &&
+    Boolean(readSessionToken(authHeader.slice('bearer '.length).trim()))
+
+  const cookies = parseCookies(req)
+  const cookieToken = cookies[COOKIE_SESSION]
+  const hasValidCookieSession = Boolean(readSessionToken(cookieToken))
+
+  // Only enforce trusted-origin checks for ambient cookie-authenticated writes.
+  if (!hasValidCookieSession || hasValidBearerSession) return false
+
+  const originHeader = typeof req.headers?.origin === 'string' ? req.headers.origin : ''
+  const refererHeader = typeof req.headers?.referer === 'string' ? req.headers.referer : ''
+  const requestOrigin = normalizeOrigin(originHeader) ?? normalizeOrigin(refererHeader)
+  const trustedOrigins = getTrustedRequestOrigins(req)
+
+  if (!requestOrigin || !trustedOrigins.has(requestOrigin)) {
+    setNoStore(res)
+    res.status(403).json({ success: false, error: 'Forbidden' })
+    return true
+  }
+
+  return false
 }
 
 export function handleOptions(req: VercelRequest, res: VercelResponse): boolean {
