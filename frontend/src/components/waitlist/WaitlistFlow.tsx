@@ -127,6 +127,10 @@ function isWalletProviderCollisionError(error: unknown): boolean {
   )
 }
 
+function getWalletProviderCollisionMessage(): string {
+  return 'A browser wallet extension is interfering with sign-in. Disable conflicting wallet extensions, then reload and try again.'
+}
+
 function isSessionFinalizingError(error: unknown): boolean {
   const text =
     error && typeof error === 'object' && typeof (error as { message?: unknown }).message === 'string'
@@ -658,7 +662,10 @@ export function WaitlistFlow(props: {
         try {
           await login(buildWaitlistEmailLoginOptions() as any)
         } catch (loginError: unknown) {
-          if (!isWalletProviderCollisionError(loginError) && !isAlreadyLoggedInAuthError(loginError)) throw loginError
+          if (isWalletProviderCollisionError(loginError)) {
+            throw new Error(getWalletProviderCollisionMessage())
+          }
+          if (!isAlreadyLoggedInAuthError(loginError)) throw loginError
         }
 
         const hardResetRetryDelaysMs = [300, 550, 900]
@@ -699,7 +706,10 @@ export function WaitlistFlow(props: {
       await login(buildWaitlistRecoveryLoginOptions() as any)
       await settleBootstrapAfterRecoverableLoginError({ allowHardReset: false, bypassRecoveryCooldown: true })
     } catch (loginError: unknown) {
-      if (!isAlreadyLoggedInAuthError(loginError) && !isWalletProviderCollisionError(loginError)) throw loginError
+      if (isWalletProviderCollisionError(loginError)) {
+        throw new Error(getWalletProviderCollisionMessage())
+      }
+      if (!isAlreadyLoggedInAuthError(loginError)) throw loginError
       await settleBootstrapAfterRecoverableLoginError({ allowHardReset: false, bypassRecoveryCooldown: true })
     }
     return true
@@ -741,7 +751,10 @@ export function WaitlistFlow(props: {
             bypassRecoveryCooldown: true,
           })
         } catch (loginError: unknown) {
-          if (!isWalletProviderCollisionError(loginError) && !isAlreadyLoggedInAuthError(loginError)) throw loginError
+          if (isWalletProviderCollisionError(loginError)) {
+            throw new Error(getWalletProviderCollisionMessage())
+          }
+          if (!isAlreadyLoggedInAuthError(loginError)) throw loginError
           await settleBootstrapAfterRecoverableLoginError({
             allowHardReset: !disableAggressiveSessionReset,
             bypassRecoveryCooldown: true,
@@ -812,7 +825,10 @@ export function WaitlistFlow(props: {
           bypassRecoveryCooldown: true,
         })
       } catch (loginError: unknown) {
-        if (!isWalletProviderCollisionError(loginError) && !isAlreadyLoggedInAuthError(loginError)) throw loginError
+        if (isWalletProviderCollisionError(loginError)) {
+          throw new Error(getWalletProviderCollisionMessage())
+        }
+        if (!isAlreadyLoggedInAuthError(loginError)) throw loginError
         await settleBootstrapAfterRecoverableLoginError({
           allowHardReset: !disableAggressiveSessionReset,
           bypassRecoveryCooldown: true,

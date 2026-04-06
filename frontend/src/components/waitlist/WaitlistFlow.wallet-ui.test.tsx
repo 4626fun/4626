@@ -509,4 +509,40 @@ describe('WaitlistFlow simplified completion UI', () => {
     expect(logoutCalls).toBeLessThanOrEqual(1)
   })
 
+  it('fails fast on wallet-provider collision instead of entering finalizing retries', async () => {
+    mockPrivyAuthenticated = false
+    mockLogin.mockReset()
+    mockLogin.mockRejectedValue(
+      new Error('Cannot set property ethereum of #<window> which has only a getter'),
+    )
+
+    let bootstrapCalls = 0
+    vi.mocked(apiFetch).mockImplementation(async (input: string) => {
+      if (input.startsWith('/api/auth/logout')) {
+        return jsonResponse({ success: true }) as any
+      }
+      if (input.startsWith('/api/waitlist/bootstrap')) {
+        bootstrapCalls += 1
+        return jsonResponse(WAITLIST_BOOTSTRAP_PAYLOAD) as any
+      }
+      throw new Error(`Unhandled apiFetch call: ${input}`)
+    })
+
+    render(
+      <MemoryRouter>
+        <WaitlistFlow autoStartAuth={false} />
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
+
+    expect(
+      await screen.findByText(/browser wallet extension is interfering with sign-in/i, undefined, {
+        timeout: 3_000,
+      }),
+    ).toBeTruthy()
+    expect(screen.queryByText(/sign-in session is still finalizing/i)).toBeNull()
+    expect(bootstrapCalls).toBe(0)
+  })
+
 })
