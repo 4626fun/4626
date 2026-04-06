@@ -5,33 +5,24 @@ import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAccount } from 'wagmi'
 
 import { AppLoadingState } from '@/components/AppLoadingState'
-import { useCreatorAllowlist } from '@/hooks'
 import { useTelegramMiniAppEntryStatus } from '@/hooks/useTelegramMiniAppEntryStatus'
 import { useAdminStatusFromSession } from '@/hooks/useAdminStatus'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
-import { API_ENDPOINTS } from '@/lib/apiEndpoints'
 import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
 import { isScreenshotMode } from '@/lib/screenshotMode'
 import {
   AccessContext,
-  computeAcceptedFromAllowlist,
+  computeAcceptedFromAppAccessStatus,
   resolveAccess,
-  resolveAllowlistMode,
   type AccessState,
-  type CreatorAllowlistMode,
   type RouteId,
   useAccessContext,
 } from './accessShared'
 
-type CreatorAllowlistStatus = {
-  address: string | null
-  coin: string | null
-  creator: string | null
-  payoutRecipient: string | null
-  mode: CreatorAllowlistMode
-  allowed: boolean
+type WaitlistMeResponse = {
+  appAccessStatus: string | null
 }
 
 function isValidEvmAddress(value: string): boolean {
@@ -59,43 +50,28 @@ function useResolvedAccessState(): AccessState {
     const raw = typeof siwe.authAddress === 'string' ? siwe.authAddress : ''
     return isValidEvmAddress(raw) ? raw.toLowerCase() : null
   }, [siwe.authAddress])
-  const effectiveAddress = connectedAddress ?? siweAuthAddress
   const hasSession = Boolean(siweAuthAddress)
-
-  const allowlistModeQuery = useQuery({
-    queryKey: ['creatorAllowlist', 'mode'],
-    enabled: !screenshotMode,
-    queryFn: async (): Promise<CreatorAllowlistStatus> => {
-      const res = await apiFetch(API_ENDPOINTS.creator.allowlist, { method: 'GET' })
-      const json = (await res.json().catch(() => null)) as ApiEnvelope<CreatorAllowlistStatus> | null
-      if (!res.ok || !json) throw new Error('Allowlist check failed')
-      if (!json.success || !json.data) throw new Error(json.error || 'Allowlist check failed')
-      return json.data
+  const acceptedStateQuery = useQuery({
+    queryKey: ['appAccessStatus', 'waitlist-me'],
+    enabled: hasSession && !screenshotMode,
+    queryFn: async (): Promise<WaitlistMeResponse | null> => {
+      const res = await apiFetch('/api/waitlist/me', {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<WaitlistMeResponse | null> | null
+      if (!res.ok || !json?.success) return null
+      return json.data ?? null
     },
-    staleTime: 30_000,
+    staleTime: 15_000,
     retry: 0,
   })
-
-  const allowQuery = useCreatorAllowlist(effectiveAddress)
-  const allowlistMode = resolveAllowlistMode({
-    modeFromGlobal: allowlistModeQuery.data?.mode ?? null,
-    modeFromAddress: allowQuery.data?.mode ?? null,
-  })
-  const allowlistEnforced = allowlistMode !== 'disabled'
-  const allowlisted = allowQuery.data?.allowed === true
-  const accepted = computeAcceptedFromAllowlist({ mode: allowlistMode, allowlisted })
-  // Keep route guards stable during background refetches; only initial loads should block rendering.
-  const allowlistModeLoading = allowlistModeQuery.isLoading
-  const allowlistAddressLoading =
-    allowlistEnforced &&
-    !!effectiveAddress &&
-    allowQuery.isLoading
+  const accepted = computeAcceptedFromAppAccessStatus(acceptedStateQuery.data?.appAccessStatus ?? null)
 
   const loading =
     !siwe.sessionHydrated ||
     siwe.busy ||
-    allowlistModeLoading ||
-    allowlistAddressLoading ||
+    (hasSession && acceptedStateQuery.isLoading) ||
     (hasSession && adminStatus.isLoading)
 
   if (screenshotMode) {
@@ -106,7 +82,7 @@ function useResolvedAccessState(): AccessState {
       accepted: true,
       creator: true,
       admin: false,
-      allowlistEnforced: false,
+      allowlistEnforced: true,
       effectiveAddress: null,
       marketingUrl: getMarketingBaseUrl(),
       hostMode: getHostMode(),
@@ -120,8 +96,8 @@ function useResolvedAccessState(): AccessState {
     accepted,
     creator: accepted,
     admin: adminStatus.isAdmin,
-    allowlistEnforced,
-    effectiveAddress,
+    allowlistEnforced: true,
+    effectiveAddress: connectedAddress ?? siweAuthAddress,
     marketingUrl: getMarketingBaseUrl(),
     hostMode: getHostMode(),
   }

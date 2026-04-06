@@ -27,15 +27,27 @@ const permit2 = getAddress('0x000000000022D473030F116dDEE9F6B43aC78BA3')
 const create2Deployer = getAddress('0x74183076C7D33346880A5bf0e263B761FB4d38BA')
 const bytecodeStore = getAddress('0x6A578022609cdb65C614FF28912C49FC1EC97071')
 
-const readRequestPrincipalMock = vi.fn()
-const getApiContractsMock = vi.fn()
-const isDbConfiguredMock = vi.fn()
-const isSupabaseAdminConfiguredMock = vi.fn()
-const readJsonBodyMock = vi.fn()
-
-const mockReadContract = vi.fn()
-const mockGetBytecode = vi.fn()
-const mockGetLogs = vi.fn()
+const {
+  readRequestPrincipalMock,
+  getApiContractsMock,
+  isDbConfiguredMock,
+  getDbMock,
+  isSupabaseAdminConfiguredMock,
+  readJsonBodyMock,
+  mockReadContract,
+  mockGetBytecode,
+  mockGetLogs,
+} = vi.hoisted(() => ({
+  readRequestPrincipalMock: vi.fn(),
+  getApiContractsMock: vi.fn(),
+  isDbConfiguredMock: vi.fn(),
+  getDbMock: vi.fn(),
+  isSupabaseAdminConfiguredMock: vi.fn(),
+  readJsonBodyMock: vi.fn(),
+  mockReadContract: vi.fn(),
+  mockGetBytecode: vi.fn(),
+  mockGetLogs: vi.fn(),
+}))
 
 vi.mock('../../server/_lib/requestPrincipal.js', () => ({
   readRequestPrincipalAddress: (...args: unknown[]) => readRequestPrincipalMock(...args),
@@ -54,10 +66,14 @@ vi.mock('../../server/_lib/contracts.js', () => ({
 
 vi.mock('../../server/_lib/postgres.js', () => ({
   isDbConfigured: () => isDbConfiguredMock(),
-  getDb: vi.fn(),
+  getDb: getDbMock,
   ensureCreatorWalletsSchema: vi.fn(),
   ensureCreatorAccessSchema: vi.fn(),
   ensureWaitlistSchema: vi.fn(),
+}))
+
+vi.mock('../../server/_lib/creatorWallets.js', () => ({
+  ensureCreatorWalletsSchema: vi.fn(async () => {}),
 }))
 
 vi.mock('../../server/_lib/supabaseAdmin.js', () => ({
@@ -287,6 +303,7 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
       protocolTreasury: sessionAddress,
     })
     isDbConfiguredMock.mockReturnValue(false)
+    getDbMock.mockResolvedValue(null)
     isSupabaseAdminConfiguredMock.mockReturnValue(false)
     readJsonBodyMock.mockImplementation((req: { body?: unknown }) => Promise.resolve(req.body ?? null))
 
@@ -421,6 +438,43 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
 
     expect(errMsg).not.toMatch(/request denied/i)
     expect((globalThis.fetch as any).mock.calls.length).toBe(1)
+  })
+
+  it('rejects finalizePhase2 when only approved app access exists in DB', async () => {
+    mockGetLogs.mockResolvedValue([{ args: { vault, wrapper, shareOFT } }])
+    isDbConfiguredMock.mockReturnValue(true)
+    getDbMock.mockResolvedValue({
+      query: vi.fn(async (sql: string) => {
+        const text = String(sql).toLowerCase().replace(/\s+/g, ' ')
+        if (text.includes('from allowlist') || text.includes('select csw_address from allowlist')) {
+          return { rows: [] }
+        }
+        if (text.includes('from creator_wallets')) {
+          return { rows: [] }
+        }
+        if (text.includes('from profiles')) {
+          return { rows: [{ id: 1 }] }
+        }
+        return { rows: [] }
+      }),
+      sql: vi.fn(),
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      body: buildPaymasterStubBody(buildFinalizePhase2CallData()),
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+
+    expect(errMsg).toMatch(/request denied/i)
+    expect(errMsg).toMatch(/vault allowlist required/i)
+    expect((globalThis.fetch as any).mock.calls.length).toBe(0)
   })
 
   it('rejects finalizePhase2 when wrapper.vault does not match expected vault', async () => {

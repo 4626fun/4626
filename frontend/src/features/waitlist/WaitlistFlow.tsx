@@ -773,7 +773,6 @@ export function WaitlistFlow(props: {
     settleBootstrapAfterRecoverableLoginError,
     setError,
     setRecoveryRequired,
-    disableAggressiveSessionReset,
   ])
 
   const onRecoverAccount = useCallback(async () => {

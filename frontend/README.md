@@ -109,6 +109,10 @@ frontend/
   dist/                  # Generated build output (do not treat as source)
 ```
 
+Testing placement conventions live in:
+
+- `frontend/docs/testing-structure.md`
+
 ## API routing & bundling (important)
 
 Vercel routes all API traffic through `frontend/api/[...path].ts`, which dispatches to handlers under `frontend/api/_handlers/*`.

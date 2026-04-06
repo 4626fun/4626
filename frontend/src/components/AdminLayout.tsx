@@ -13,9 +13,9 @@ const ADMIN_TABS = [
     description: 'Signups and verification metadata',
   },
   {
-    label: 'Creator Access',
+    label: 'Vault Allowlist',
     to: '/admin/creator-access',
-    description: 'Allowlist requests and approvals',
+    description: 'Vault launch requests and approved wallets',
   },
   {
     label: 'Agent Setup',

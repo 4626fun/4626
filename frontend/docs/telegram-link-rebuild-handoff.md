@@ -20,7 +20,7 @@ Rebuild the Telegram Mini App account-link flow from first principles so it is r
 - The prior Telegram link-flow implementation was intentionally removed.
 - [TelegramLink.tsx](https://github.com/wenakita/4626/blob/main/frontend/src/pages/TelegramLink.tsx) is now a placeholder route.
 - The deleted files were:
-  - `frontend/src/pages/telegramLinkFlow.ts`
+  - `frontend/src/features/telegram-link/telegramLinkFlow.ts`
   - `frontend/src/pages/TelegramLink.test.ts`
 
 ## What went wrong before

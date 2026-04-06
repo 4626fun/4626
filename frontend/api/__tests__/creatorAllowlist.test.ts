@@ -100,7 +100,7 @@ describe('/api/creator-allowlist', () => {
     resolveCoinPartiesMock.mockResolvedValue({ creator: null, payoutRecipient: null })
   })
 
-  it('allows approved profile_wallets owner in DB mode', async () => {
+  it('does not treat approved app access as deploy allowlist approval in DB mode', async () => {
     isDbConfiguredMock.mockReturnValue(true)
     const db = {
       sql: vi.fn(async (strings: TemplateStringsArray) => {
@@ -125,10 +125,10 @@ describe('/api/creator-allowlist', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(true)
     expect(res.body?.data?.mode).toBe('enforced')
-    expect(res.body?.data?.allowed).toBe(true)
+    expect(res.body?.data?.allowed).toBe(false)
   })
 
-  it('allows approved profile_wallets owner in Supabase mode', async () => {
+  it('does not treat approved app access as deploy allowlist approval in Supabase mode', async () => {
     isSupabaseAdminConfiguredMock.mockReturnValue(true)
     isDbConfiguredMock.mockReturnValue(false)
 
@@ -154,7 +154,7 @@ describe('/api/creator-allowlist', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body?.success).toBe(true)
     expect(res.body?.data?.mode).toBe('enforced')
-    expect(res.body?.data?.allowed).toBe(true)
+    expect(res.body?.data?.allowed).toBe(false)
   })
 
   it('does not fail the endpoint when Supabase allowlist query errors', async () => {

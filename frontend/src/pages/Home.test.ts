@@ -38,7 +38,7 @@ vi.mock('@/lib/host', () => ({
   getHostMode: () => 'marketing',
 }))
 
-vi.mock('@/components/home/VaultFlowScroll', () => ({
+vi.mock('@/features/home/vault-flow/VaultFlowScroll', () => ({
   VaultFlowScroll: ({ depositTokens, shareTokens }: { depositTokens: string; shareTokens: string }) =>
     React.createElement(
       'div',

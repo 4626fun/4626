@@ -1,30 +1,21 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import {
-  computeAcceptedFromAllowlist,
+  computeAcceptedFromAppAccessStatus,
   getInitialTelegramMiniAppEntryResolution,
   hasTelegramLinkEntryContext,
   hasTelegramLinkQueryContext,
-  resolveAllowlistMode,
   resolveTelegramMiniAppEntryBootstrap,
 } from './App'
 
-describe('allowlist access resolution', () => {
-  it('fails closed when allowlist mode is unresolved', () => {
-    const mode = resolveAllowlistMode({ modeFromGlobal: null, modeFromAddress: null })
-    expect(mode).toBe('unknown')
-    expect(computeAcceptedFromAllowlist({ mode, allowlisted: true })).toBe(false)
+describe('app access resolution', () => {
+  it('accepts approved app access status', () => {
+    expect(computeAcceptedFromAppAccessStatus('approved')).toBe(true)
   })
 
-  it('accepts all sessions when allowlist mode is disabled', () => {
-    const mode = resolveAllowlistMode({ modeFromGlobal: 'disabled', modeFromAddress: null })
-    expect(computeAcceptedFromAllowlist({ mode, allowlisted: false })).toBe(true)
-  })
-
-  it('requires address allowlist approval when mode is enforced', () => {
-    const mode = resolveAllowlistMode({ modeFromGlobal: 'enforced', modeFromAddress: null })
-    expect(computeAcceptedFromAllowlist({ mode, allowlisted: false })).toBe(false)
-    expect(computeAcceptedFromAllowlist({ mode, allowlisted: true })).toBe(true)
+  it('rejects missing or pending app access status', () => {
+    expect(computeAcceptedFromAppAccessStatus(null)).toBe(false)
+    expect(computeAcceptedFromAppAccessStatus('pending')).toBe(false)
   })
 })
 

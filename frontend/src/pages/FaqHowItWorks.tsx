@@ -8,7 +8,7 @@ import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
 import { PageMeta } from '@/components/seo/PageMeta'
-import { STORY_CONTENT } from '@/components/home/vault-flow/model/storyContent'
+import { STORY_CONTENT } from '@/features/home/vault-flow/model/storyContent'
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
 const { defaultDepositTokens, defaultAuctionWindow, distribution, strategies, blendedApy } = STORY_CONTENT

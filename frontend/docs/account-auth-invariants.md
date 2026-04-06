@@ -239,7 +239,7 @@ This is the current working sequence that must survive simplification work:
 
 1. `frontend/src/pages/TelegramLink.tsx` admits the user into an isolated
    Telegram route and starts the reducer in
-   `frontend/src/pages/telegramLinkFlow.ts`.
+   `frontend/src/features/telegram-link/telegramLinkFlow.ts`.
 2. `frontend/src/lib/telegramWebApp.ts` exchanges Telegram `initData` for a
    short-lived backend `sessionToken` through
    `POST /api/telegram/miniapp/session`.

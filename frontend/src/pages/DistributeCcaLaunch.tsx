@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 import { ArrowLeft, ArrowRight } from 'lucide-react'
 
 import { PageMeta } from '@/components/seo/PageMeta'
-import { STORY_CONTENT } from '@/components/home/vault-flow/model/storyContent'
+import { STORY_CONTENT } from '@/features/home/vault-flow/model/storyContent'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 
 const DEFAULT_DEPOSIT_TOKENS = STORY_CONTENT.defaultDepositTokens

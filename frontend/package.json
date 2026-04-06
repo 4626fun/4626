@@ -28,6 +28,7 @@
     "report:footprint": "node scripts/report-footprint.mjs",
     "guard:generated-output": "node scripts/check-generated-output.mjs",
     "guard:runtime-boundaries": "node scripts/check-runtime-boundaries.mjs",
+    "guard:test-file-placement": "node scripts/check-test-file-placement.mjs",
     "capture:app-screens": "node scripts/capture-app-screenshots.mjs",
     "docs": "pnpm exec typedoc",
     "test": "vitest run",

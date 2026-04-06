@@ -80,30 +80,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const autoEnableAgentsRaw = String(process.env.WAITLIST_AUTO_ENABLE_AGENTS ?? '').trim().toLowerCase()
   const autoEnableAgents = autoEnableAgentsRaw === '1' || autoEnableAgentsRaw === 'true' || autoEnableAgentsRaw === 'yes'
 
-  // -------------------------------------------------------------------
-  // Auto-allowlist on approval (fire-and-forget, non-blocking)
-  // -------------------------------------------------------------------
   let allowlisted = false
   let agentEnabled = false
 
   if (creatorWallet && isValidEvmAddress(creatorWallet)) {
-    // 1. Auto-allowlist
-    try {
-      await (db as any).sql`
-        INSERT INTO allowlist (address, csw_address, source, created_at)
-        VALUES (${creatorWallet}, ${creatorWallet}, ${'waitlist_approve'}, NOW())
-        ON CONFLICT (address) DO UPDATE SET
-          csw_address = COALESCE(EXCLUDED.csw_address, allowlist.csw_address),
-          revoked_at = NULL,
-          updated_at = NOW();
-      `
-      allowlisted = true
-      logger.info('[approve] Auto-allowlisted', { id, wallet: creatorWallet.slice(0, 10) })
-    } catch (err) {
-      logger.warn('[approve] Auto-allowlist failed', err)
-    }
-
-    // 2. Automation signer enablement is opt-in by default.
+    // Automation signer enablement remains an explicit opt-in after waitlist approval.
     if (autoEnableAgents) {
       // Optional compatibility path: auto-enable agent on approval when explicitly configured.
       if (serverWalletId && serverWalletAddress) {

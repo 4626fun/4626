@@ -7,7 +7,7 @@ import './index.css'
 import { AppLoadingState } from '@/components/AppLoadingState'
 import { TelegramMiniAppUnavailable } from '@/components/TelegramMiniAppUnavailable'
 import { useTelegramMiniAppEntryStatus } from '@/hooks/useTelegramMiniAppEntryStatus'
-import { TelegramMenu } from '@/pages/TelegramMenu'
+import { TelegramMenu } from '@/pages/telegram/TelegramMenu'
 
 function TelegramMenuStandaloneApp() {
   const search = typeof window === 'undefined' ? '' : window.location.search

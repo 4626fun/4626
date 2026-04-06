@@ -787,7 +787,7 @@ async function isOnchainSmartWalletOwner(params: { smartWallet: Address; ownerAd
   }
 }
 
-type CreatorAllowlistMatch = 'allowlist' | 'creator_wallets' | 'profiles_approved' | 'none'
+type CreatorAllowlistMatch = 'allowlist' | 'creator_wallets' | 'none'
 
 type CreatorAllowlistCheck = {
   allowed: boolean
@@ -861,16 +861,6 @@ async function checkCreatorAllowlist(params: {
         return { allowed: true, matchedBy: 'creator_wallets', checkedAddresses: addressFilters }
       }
 
-      const profileRes = await supabase
-        .from('profiles')
-        .select('id')
-        .or(buildSupabaseOrFilters(['primary_wallet', 'embedded_wallet', 'csw_address'], addressFilters))
-        .eq('app_access_status', 'approved')
-        .limit(1)
-      if (!profileRes.error && Array.isArray(profileRes.data) && profileRes.data.length > 0) {
-        return { allowed: true, matchedBy: 'profiles_approved', checkedAddresses: addressFilters }
-      }
-
       return { allowed: false, matchedBy: 'none', checkedAddresses: addressFilters }
     } catch {
       // Fall through to Postgres
@@ -903,20 +893,6 @@ async function checkCreatorAllowlist(params: {
     )
     if (Array.isArray(linked.rows) && linked.rows.length > 0) {
       return { allowed: true, matchedBy: 'creator_wallets', checkedAddresses: addressFilters }
-    }
-
-    const approved = await db.query(
-      `SELECT 1
-       FROM profiles
-       WHERE (LOWER(primary_wallet) = ANY($1)
-         OR LOWER(embedded_wallet) = ANY($1)
-         OR LOWER(csw_address) = ANY($1))
-         AND COALESCE(app_access_status, 'pending') = 'approved'
-       LIMIT 1;`,
-      [addressFilters],
-    )
-    if (Array.isArray(approved.rows) && approved.rows.length > 0) {
-      return { allowed: true, matchedBy: 'profiles_approved', checkedAddresses: addressFilters }
     }
 
     return { allowed: false, matchedBy: 'none', checkedAddresses: addressFilters }

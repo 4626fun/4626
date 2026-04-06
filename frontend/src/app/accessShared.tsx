@@ -9,8 +9,6 @@ export {
   resolveTelegramMiniAppEntryBootstrap,
 } from '@/lib/telegramMiniAppRouteGuard'
 
-export type CreatorAllowlistMode = 'disabled' | 'enforced'
-
 export type RouteId = 'public' | 'session' | 'accepted' | 'creator' | 'admin'
 export type AccessReason = 'ok' | 'loading' | 'needs-session' | 'needs-acceptance' | 'needs-admin' | 'needs-creator' | 'not-found'
 export type AccessDecision = { allow: true; reason: 'ok' } | { allow: false; reason: Exclude<AccessReason, 'ok'>; redirectTo?: string }
@@ -28,8 +26,6 @@ export type AccessState = {
   hostMode: import('@/lib/host').HostMode
 }
 
-type ResolvedAllowlistMode = CreatorAllowlistMode | 'unknown'
-
 const ROUTE_REQUIREMENTS: Record<RouteId, { session?: boolean; accepted?: boolean; creator?: boolean; admin?: boolean }> = {
   public: {},
   session: { session: true },
@@ -38,22 +34,8 @@ const ROUTE_REQUIREMENTS: Record<RouteId, { session?: boolean; accepted?: boolea
   admin: { session: true, admin: true },
 }
 
-export function resolveAllowlistMode(params: {
-  modeFromGlobal?: CreatorAllowlistMode | null
-  modeFromAddress?: CreatorAllowlistMode | null
-}): ResolvedAllowlistMode {
-  if (params.modeFromGlobal === 'disabled' || params.modeFromGlobal === 'enforced') return params.modeFromGlobal
-  if (params.modeFromAddress === 'disabled' || params.modeFromAddress === 'enforced') return params.modeFromAddress
-  return 'unknown'
-}
-
-export function computeAcceptedFromAllowlist(params: {
-  mode: ResolvedAllowlistMode
-  allowlisted: boolean
-}): boolean {
-  if (params.mode === 'disabled') return true
-  if (params.mode === 'enforced') return params.allowlisted
-  return false
+export function computeAcceptedFromAppAccessStatus(appAccessStatus: string | null): boolean {
+  return String(appAccessStatus ?? '').trim().toLowerCase() === 'approved'
 }
 
 export function waitlistEntryHref(marketingUrl: string): string {

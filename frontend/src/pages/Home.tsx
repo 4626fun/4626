@@ -3,8 +3,8 @@ import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 
 import { PageMeta } from '@/components/seo/PageMeta'
-import { VaultFlowRoot } from '@/components/home/vault-flow/VaultFlowRoot'
-import { STORY_CONTENT } from '@/components/home/vault-flow/model/storyContent'
+import { VaultFlowRoot } from '@/features/home/vault-flow/VaultFlowRoot'
+import { STORY_CONTENT } from '@/features/home/vault-flow/model/storyContent'
 import { getHostMode } from '@/lib/host'
 
 const DEFAULT_DEPOSIT_TOKENS = STORY_CONTENT.defaultDepositTokens

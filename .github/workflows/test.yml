@@ -18,6 +18,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           submodules: recursive
+          fetch-depth: 0
 
       - name: Install pnpm
         uses: pnpm/action-setup@v5
@@ -54,6 +55,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           submodules: recursive
+          fetch-depth: 0
 
       - name: Install pnpm
         uses: pnpm/action-setup@v5
@@ -85,6 +87,9 @@ jobs:
 
       - name: Guard runtime boundaries
         run: pnpm --dir frontend guard:runtime-boundaries
+
+      - name: Guard new test file placement
+        run: pnpm --dir frontend guard:test-file-placement
 
       - name: Frontend TypeScript
         run: pnpm --dir frontend typecheck

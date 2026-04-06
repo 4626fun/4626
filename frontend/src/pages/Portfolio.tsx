@@ -40,7 +40,7 @@ import {
   normalizeAddress,
   resolvePortfolioAddresses,
   isEvmAddress,
-} from './portfolioViewModel'
+} from '@/features/portfolio/portfolioViewModel'
 
 function shortAddr(address: string): string {
   if (!address || address.length < 10) return address

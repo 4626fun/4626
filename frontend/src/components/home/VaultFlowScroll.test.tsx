@@ -38,7 +38,7 @@ vi.mock('@/lib/zora/client', () => ({
 }))
 
 import { VaultFlowScroll } from './VaultFlowScroll'
-import { STORY_CONTENT } from './vault-flow/model/storyContent'
+import { STORY_CONTENT } from '@/features/home/vault-flow/model/storyContent'
 
 function renderVaultFlowScroll() {
   return render(
@@ -104,6 +104,7 @@ describe('VaultFlowScroll', () => {
     renderVaultFlowScroll()
     await waitFor(() => {
       expect(screen.getByTestId('deposit-bill')).toBeTruthy()
+      expect(screen.getByTestId('deposit-slit')).toBeTruthy()
     })
   })
 

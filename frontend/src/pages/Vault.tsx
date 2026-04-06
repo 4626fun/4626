@@ -32,7 +32,7 @@ import { TokenOrb } from '@/components/brand/TokenOrb'
 import { TokenAvatar } from '@/components/swap/TokenAvatar'
 import { SHARE_SYMBOL_PREFIX, toShareSymbol } from '@/lib/tokenSymbols'
 import { CreatorWorkspacePanel } from '@/components/workspace/CreatorWorkspacePanel'
-import { parseVaultWorkspaceQuery, updateVaultWorkspaceQuery } from './vaultWorkspaceQuery'
+import { parseVaultWorkspaceQuery, updateVaultWorkspaceQuery } from '@/features/vault/vaultWorkspaceQuery'
 
 // ABIs
 const WRAPPER_ABI = [

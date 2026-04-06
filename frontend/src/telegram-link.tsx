@@ -10,7 +10,7 @@ import { TelegramMiniAppUnavailable } from '@/components/TelegramMiniAppUnavaila
 import { useTelegramMiniAppEntryStatus } from '@/hooks/useTelegramMiniAppEntryStatus'
 import { TelegramLinkPrivyProvider } from '@/lib/privy/telegramLinkClient'
 import { ThemeProvider } from '@/lib/theme'
-import { TelegramLink } from '@/pages/TelegramLink'
+import { TelegramLink } from '@/pages/telegram/TelegramLink'
 
 function TelegramLinkStandaloneApp() {
   const search = typeof window === 'undefined' ? '' : window.location.search

@@ -89,7 +89,7 @@ The Mini App performs email verification inline with `useLoginWithEmail()`.
 Authoritative files:
 
 - `frontend/src/pages/TelegramLink.tsx`
-- `frontend/src/pages/telegramLinkFlow.ts`
+- `frontend/src/features/telegram-link/telegramLinkFlow.ts`
 
 Current rules:
 
@@ -216,7 +216,7 @@ If one of these changes, review the whole chain:
 - `frontend/src/App.tsx` (Privy route boundary)
 - `frontend/src/app/accessShared.tsx`
 - `frontend/src/pages/TelegramLink.tsx`
-- `frontend/src/pages/telegramLinkFlow.ts`
+- `frontend/src/features/telegram-link/telegramLinkFlow.ts`
 - `frontend/src/lib/telegramMiniAppLink.ts`
 - `frontend/src/lib/telegramWebApp.ts`
 - `frontend/api/_handlers/telegram/_link-ready.ts`
@@ -254,7 +254,7 @@ Keep these rules explicit during refactors:
 At minimum, keep these flows covered:
 
 - `frontend/src/pages/TelegramLink.test.tsx`
-- `frontend/src/pages/telegramLinkFlow.test.ts`
+- `frontend/src/features/telegram-link/telegramLinkFlow.test.ts`
 - `frontend/src/App.access.test.ts`
 - `frontend/api/__tests__/telegramEndpoints.test.ts`
 - `frontend/api/__tests__/telegramLinkReady.test.ts`

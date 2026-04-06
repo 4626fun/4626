@@ -13,12 +13,12 @@ Complete the next desktop migration slice so the immersive demo is semantic-firs
 ### Current State (important)
 
 - Shared semantic engine is live:
-  - `frontend/src/components/home/vault-flow/model/storySemantics.ts`
-  - `frontend/src/components/home/vault-flow/model/storyClock.ts`
-  - `frontend/src/components/home/vault-flow/model/storySelectors.ts`
-  - `frontend/src/components/home/vault-flow/model/storyContent.ts`
+  - `frontend/src/features/home/vault-flow/model/storySemantics.ts`
+  - `frontend/src/features/home/vault-flow/model/storyClock.ts`
+  - `frontend/src/features/home/vault-flow/model/storySelectors.ts`
+  - `frontend/src/features/home/vault-flow/model/storyContent.ts`
 - Profile routing is live in:
-  - `frontend/src/components/home/vault-flow/VaultFlowRoot.tsx`
+  - `frontend/src/features/home/vault-flow/VaultFlowRoot.tsx`
 - Mobile + reduced orchestrators are semanticized:
   - `orchestrators/VaultFlowMobile.tsx`
   - `orchestrators/VaultFlowReduced.tsx`
@@ -47,7 +47,7 @@ Complete the next desktop migration slice so the immersive demo is semantic-firs
 #### Task 1 — Add semantic desktop final-beat scene
 
 Create a new scene file:
-- `frontend/src/components/home/vault-flow/scenes/DesktopEarningTogetherScene.tsx`
+- `frontend/src/features/home/vault-flow/scenes/DesktopEarningTogetherScene.tsx`
 
 Requirements:
 - Props include `state` and `content`.
@@ -60,7 +60,7 @@ Requirements:
 #### Task 2 — Add semantic desktop deploy scene
 
 Create:
-- `frontend/src/components/home/vault-flow/scenes/DesktopDeployStrategiesScene.tsx`
+- `frontend/src/features/home/vault-flow/scenes/DesktopDeployStrategiesScene.tsx`
 
 Requirements:
 - Drive visibility from selectors (`isDeployStrategiesVisible`).
@@ -70,7 +70,7 @@ Requirements:
 #### Task 3 — Integrate both scenes into desktop render path
 
 Modify:
-- `frontend/src/components/home/VaultFlowScroll.tsx`
+- `frontend/src/features/home/vault-flow/VaultFlowScroll.tsx`
 
 Requirements:
 - Integrate new deploy + earning scenes using `desktopStoryState`.
@@ -80,8 +80,8 @@ Requirements:
 #### Task 4 — Tighten contract/tests for desktop parity
 
 Modify/add tests:
-- `frontend/src/components/home/vault-flow/orchestrators/rendererParity.test.tsx`
-- `frontend/src/components/home/vault-flow/model/rendererContract.test.ts`
+- `frontend/src/features/home/vault-flow/orchestrators/rendererParity.test.tsx`
+- `frontend/src/features/home/vault-flow/model/rendererContract.test.ts`
 - Optionally add scene-level tests if useful.
 
 Assertions to add:
@@ -93,7 +93,7 @@ Assertions to add:
 
 Run:
 - `pnpm -C frontend typecheck`
-- `pnpm -C frontend test -- --run src/components/home/vault-flow/orchestrators/rendererParity.test.tsx src/components/home/vault-flow/model/rendererContract.test.ts src/components/home/VaultFlowScroll.test.tsx src/components/home/vault-flow/model/storyClock.test.ts src/components/home/vault-flow/model/storySemantics.test.ts`
+- `pnpm -C frontend test -- --run src/features/home/vault-flow/orchestrators/rendererParity.test.tsx src/features/home/vault-flow/model/rendererContract.test.ts src/features/home/vault-flow/VaultFlowScroll.test.tsx src/features/home/vault-flow/model/storyClock.test.ts src/features/home/vault-flow/model/storySemantics.test.ts`
 - If green, run full:
   - `pnpm -C frontend test`
 

@@ -4,7 +4,7 @@
  * One-shot creator onboarding endpoint. Given an authenticated session:
  *
  * 1. Resolves the user's Zora profile + creator coin
- * 2. Verifies pre-approved creator access (admin-managed allowlist only)
+ * 2. Verifies pre-approved vault allowlist access (admin-managed allowlist only)
  * 3. Provisions a Privy server wallet (for CSW agent signing)
  * 4. Registers a CSW-based XMTP agent
  * 5. Creates a default Keepr vault config (if coin found)
@@ -160,7 +160,7 @@ async function checkIsOwner(cswAddress: string, signerAddress: string): Promise<
 async function hasApprovedCreatorAccess(db: any, creatorAddress: string): Promise<boolean> {
   try {
     const addr = creatorAddress.toLowerCase()
-    // Quickstart is strictly read-only for creator access.
+    // Quickstart is strictly read-only for vault allowlist access.
     // Approval writes are admin-only via /api/admin/creator-access/approve.
     const existing = await db.sql`
       SELECT address
@@ -279,7 +279,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (!allowlisted) {
       return res.status(403).json({
         success: false,
-        error: 'Creator access is pending approval',
+        error: 'Vault allowlist is pending approval',
       } satisfies ApiEnvelope<never>)
     }
 

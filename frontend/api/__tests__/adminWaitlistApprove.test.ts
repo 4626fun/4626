@@ -1,0 +1,109 @@
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+import handler from '../_handlers/admin/waitlist/_approve.ts'
+import { createMockReq, createMockRes } from './helpers'
+
+const {
+  readJsonBodyMock,
+  getDbMock,
+  getSessionAddressMock,
+  isAdminAddressMock,
+  ensureWaitlistSchemaMock,
+  logAdminActionMock,
+} = vi.hoisted(() => ({
+  readJsonBodyMock: vi.fn(async (req: { body?: unknown }) => req.body ?? {}),
+  getDbMock: vi.fn(),
+  getSessionAddressMock: vi.fn(() => '0x00000000000000000000000000000000000000aa'),
+  isAdminAddressMock: vi.fn(() => true),
+  ensureWaitlistSchemaMock: vi.fn(async () => {}),
+  logAdminActionMock: vi.fn(async () => {}),
+}))
+
+vi.mock('../../packages/server-core/src/index.js', () => ({
+  handleOptions: vi.fn(() => false),
+  readJsonBody: readJsonBodyMock,
+  setCors: vi.fn(),
+  setNoStore: vi.fn(),
+  getDb: getDbMock,
+  isDbConfigured: vi.fn(() => true),
+  getSessionAddress: getSessionAddressMock,
+  isAdminAddress: isAdminAddressMock,
+  getClientIp: vi.fn(() => '127.0.0.1'),
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}))
+
+vi.mock('../../server/_lib/waitlistSchema.js', () => ({
+  ensureWaitlistSchema: ensureWaitlistSchemaMock,
+}))
+
+vi.mock('../../server/_lib/adminAudit.js', () => ({
+  logAdminAction: logAdminActionMock,
+}))
+
+vi.mock('../../server/_lib/creatorXmtpAgents.js', () => ({
+  enableCswAgent: vi.fn(),
+  getOrCreateCreatorXmtpAgent: vi.fn(),
+}))
+
+describe('POST /api/admin/waitlist/approve', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    readJsonBodyMock.mockImplementation(async (req: { body?: unknown }) => req.body ?? {})
+    getSessionAddressMock.mockReturnValue('0x00000000000000000000000000000000000000aa')
+    isAdminAddressMock.mockReturnValue(true)
+  })
+
+  it('approves app access without mutating the deploy allowlist', async () => {
+    const queryMock = vi.fn(async (sql: string) => {
+      const text = String(sql).toLowerCase().replace(/\s+/g, ' ')
+      if (text.includes('update profiles')) {
+        return {
+          rows: [
+            {
+              id: 7,
+              primary_wallet: '0x00000000000000000000000000000000000000bb',
+              csw_address: null,
+              preprov_server_wallet_id: null,
+              preprov_server_wallet_address: null,
+              preprov_coin_address: null,
+              preprov_coin_symbol: null,
+            },
+          ],
+        }
+      }
+      throw new Error(`unexpected_query:${text}`)
+    })
+    const sqlMock = vi.fn(async () => {
+      throw new Error('unexpected_allowlist_mutation')
+    })
+
+    getDbMock.mockResolvedValue({ query: queryMock, sql: sqlMock })
+
+    const req = createMockReq({
+      method: 'POST',
+      body: { id: 7, note: 'Approved for app access' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data).toMatchObject({
+      id: 7,
+      status: 'approved',
+      allowlisted: false,
+      agentEnabled: false,
+    })
+    expect(sqlMock).not.toHaveBeenCalled()
+    expect(logAdminActionMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: 'waitlist_approve',
+        details: expect.objectContaining({
+          allowlisted: false,
+          agentEnabled: false,
+        }),
+      }),
+    )
+  })
+})

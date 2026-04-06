@@ -81,10 +81,10 @@ export function RequestCreatorAccess({ coin }: { coin?: string | null }) {
       <div className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-3">
         <div className="flex items-center gap-2 text-sm text-zinc-200">
           <MailQuestion className="w-4 h-4 text-zinc-400" />
-          Request access
+          Request vault allowlist
         </div>
         <div className="text-xs text-zinc-600">
-          Sign in (no transaction) to request creator access.
+          Sign in (no transaction) to request vault deployment allowlist access.
         </div>
         <button
           type="button"
@@ -109,10 +109,10 @@ export function RequestCreatorAccess({ coin }: { coin?: string | null }) {
       <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 p-5 space-y-2">
         <div className="flex items-center gap-2 text-sm text-emerald-200">
           <CheckCircle2 className="w-4 h-4" />
-          Approved
+          Allowlisted
         </div>
         <div className="text-xs text-emerald-200/70">
-          This wallet is approved to launch Creator Vaults.
+          This wallet is allowlisted to launch Creator Vaults.
         </div>
       </div>
     )
@@ -126,7 +126,7 @@ export function RequestCreatorAccess({ coin }: { coin?: string | null }) {
           Pending review
         </div>
         <div className="text-xs text-zinc-600">
-          Your request is in the queue. We’ll approve you shortly.
+          Your vault allowlist request is in the queue. We&apos;ll review it shortly.
         </div>
       </div>
     )
@@ -137,10 +137,10 @@ export function RequestCreatorAccess({ coin }: { coin?: string | null }) {
       <div className="rounded-xl border border-red-500/20 bg-red-500/5 p-5 space-y-2">
         <div className="flex items-center gap-2 text-sm text-red-200">
           <XCircle className="w-4 h-4" />
-          Not approved
+          Not allowlisted
         </div>
         <div className="text-xs text-red-200/70">
-          {req?.decisionNote ? req.decisionNote : 'Your request was not approved. You can request access again later.'}
+          {req?.decisionNote ? req.decisionNote : 'Your vault allowlist request was not approved. You can request access again later.'}
         </div>
       </div>
     )
@@ -150,10 +150,10 @@ export function RequestCreatorAccess({ coin }: { coin?: string | null }) {
     <div className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-3">
       <div className="flex items-center gap-2 text-sm text-zinc-200">
         <MailQuestion className="w-4 h-4 text-zinc-400" />
-        Request access
+        Request vault allowlist
       </div>
       <div className="text-xs text-zinc-600">
-        Creator Vault launches are invite-only during early access.
+        Creator Vault launches are allowlist-only during early access.
       </div>
       <button
         type="button"
@@ -161,7 +161,7 @@ export function RequestCreatorAccess({ coin }: { coin?: string | null }) {
         disabled={requestMutation.isPending || statusQuery.isFetching}
         className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-lg btn-accent btn-no-icon px-5 py-3 text-sm"
       >
-        {requestMutation.isPending ? 'Requesting…' : 'Request access'}
+        {requestMutation.isPending ? 'Requesting…' : 'Request allowlist'}
       </button>
       {requestMutation.error instanceof Error ? (
         <div className="text-[11px] text-red-400/90">{requestMutation.error.message}</div>

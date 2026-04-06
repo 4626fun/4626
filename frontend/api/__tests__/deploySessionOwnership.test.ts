@@ -729,6 +729,26 @@ describe('deploy session ownership guardrails', () => {
     expect(String(res.body?.error ?? '')).toContain('Checked addresses:')
   })
 
+  it('does not allow deploy sessions from approved app access alone', async () => {
+    const db = makeCanonicalDb()
+    ;(db.query as any).mockImplementation(async (sql: string) => {
+      const text = String(sql).toLowerCase()
+      if (text.includes('from allowlist')) return { rows: [] }
+      if (text.includes('from creator_wallets')) return { rows: [] }
+      if (text.includes('from profiles')) return { rows: [{ id: 7 }] }
+      return { rows: [] }
+    })
+    getDbMock.mockResolvedValue(db)
+
+    const req = createMockReq({ method: 'POST', body: makeRequestBody() })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(403)
+    expect(String(res.body?.error ?? '')).toContain('Active session wallet')
+    expect(insertDeploySessionMock).not.toHaveBeenCalled()
+  })
+
   it('returns 503 when agent wallet id is missing', async () => {
     getOrCreateCreatorAgentWalletMock.mockResolvedValueOnce({
       walletId: '',

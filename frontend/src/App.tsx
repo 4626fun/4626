@@ -32,12 +32,11 @@ import { AdminLayout } from './components/AdminLayout'
 import { Layout } from './components/Layout'
 
 export {
-  computeAcceptedFromAllowlist,
+  computeAcceptedFromAppAccessStatus,
   getInitialTelegramMiniAppEntryResolution,
   hasTelegramLinkEntryContext,
   hasTelegramLinkQueryContext,
   resolveAccess,
-  resolveAllowlistMode,
   resolveTelegramMiniAppEntryBootstrap,
 } from './app/accessShared'
 export { getGenericNotFoundCta } from './app/routeGuards'

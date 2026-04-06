@@ -41,7 +41,6 @@ import { getActiveDeploySessionForSender, getDeploySessionByTokenHash, hashDeplo
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/supabaseAdmin.js'
 
 
-import { ensureWaitlistSchema } from '../../server/_lib/waitlistSchema.js'
 import {
   resolvePayoutRouterExternalSwapApprovals,
   resolvePayoutRouterKeeperAddress,
@@ -1094,17 +1093,6 @@ async function isCreatorAllowlisted(params: {
         return { mode: 'enforced', allowed: true }
       }
 
-      // Check profiles with approved app_access_status
-      const waitlistedRes = await supabase
-        .from('profiles')
-        .select('id')
-        .or(buildSupabaseOrFilters(['primary_wallet', 'embedded_wallet', 'csw_address'], addressFilters))
-        .eq('app_access_status', 'approved')
-        .limit(1)
-      if (!waitlistedRes.error && Array.isArray(waitlistedRes.data) && waitlistedRes.data.length > 0) {
-        return { mode: 'enforced', allowed: true }
-      }
-
       // If all checks passed without errors but no match, user is not allowed
       return { mode: 'enforced', allowed: false }
     } catch {
@@ -1117,11 +1105,9 @@ async function isCreatorAllowlisted(params: {
     if (!db) throw new Error('allowlist_check_failed')
     await ensureCreatorAccessSchema()
     if (!db.query || typeof (db as any).sql !== 'function') throw new Error('allowlist_check_failed')
-    // Mirror `/api/creator-allowlist`: allow allowlisted OR linked OR waitlisted creators.
-    // This keeps paymaster/bundler gating consistent with the UI's creator-access decision.
+    // Mirror `/api/creator-allowlist`: deploy requires an explicit allowlist or linked-wallet match.
     try {
       await ensureCreatorWalletsSchema(db as any)
-      await ensureWaitlistSchema(db as any)
     } catch {
       // Don't block everything if optional tables are unavailable; fall back to allowlist-only.
     }
@@ -1159,18 +1145,6 @@ async function isCreatorAllowlisted(params: {
       [addressFilters],
     ).catch(() => ({ rows: [] }))
     if (Array.isArray(linkedQ.rows) && linkedQ.rows.length > 0) {
-      return { mode: 'enforced', allowed: true }
-    }
-
-    // Check waitlist signups
-    const waitlistedQ = await db.query(
-      `SELECT id FROM profiles
-       WHERE (LOWER(primary_wallet) = ANY($1) OR LOWER(embedded_wallet) = ANY($1) OR LOWER(csw_address) = ANY($1))
-         AND COALESCE(app_access_status, 'pending') = 'approved'
-       LIMIT 1;`,
-      [addressFilters],
-    ).catch(() => ({ rows: [] }))
-    if (Array.isArray(waitlistedQ.rows) && waitlistedQ.rows.length > 0) {
       return { mode: 'enforced', allowed: true }
     }
 
@@ -3034,7 +3008,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json(jsonRpcError(null, -32002, 'request denied - rate limited'))
     }
     if (err instanceof Error && err.message === 'not_allowlisted') {
-      return res.status(200).json(jsonRpcError(null, -32002, 'request denied - creator not approved'))
+      return res.status(200).json(jsonRpcError(null, -32002, 'request denied - vault allowlist required'))
     }
     if (err instanceof Error && err.message === 'allowlist_check_failed') {
       logger.error('[paymaster-proxy] allowlist check failed')

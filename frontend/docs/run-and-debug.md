@@ -32,7 +32,7 @@ Best for:
 
 - first run of the day
 - stepping through UI state changes in `frontend/src/pages/Home.tsx`
-- logpoints inside `frontend/src/components/home/VaultFlowScroll.tsx`
+- logpoints inside `frontend/src/features/home/vault-flow/VaultFlowScroll.tsx`
 
 ### `Frontend: Chrome only (Vite already running)`
 
@@ -170,7 +170,7 @@ Good `Debug Console` probes while paused:
 
 ### 3. Practice logpoints on the scroll animation
 
-Open `frontend/src/components/home/VaultFlowScroll.tsx`.
+Open `frontend/src/features/home/vault-flow/VaultFlowScroll.tsx`.
 
 Inside the `useMotionValueEvent(scroll, 'change', (v) => { ... })` callback, add a logpoint on the stage-transition block:
 

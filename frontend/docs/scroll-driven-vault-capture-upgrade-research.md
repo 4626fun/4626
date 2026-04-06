@@ -2,7 +2,7 @@ Scroll‑Driven Vault Capture Upgrade Research
 Executive summary
 Enabled connectors used: GitHub, Figma (confirmed authenticated). The GitHub repo audited is wenakita/4626. Figma access is available but I did not find a Figma file URL/key in the repo, so I could not pull specific nodes/frames without you sharing a Figma URL (fileKey + nodeId).
 
-What’s currently happening (repo reality): the desktop cinematic is still powered by the monolithic frontend/src/components/home/VaultFlowScroll.tsx 
+What’s currently happening (repo reality): the desktop cinematic is still powered by the monolithic frontend/src/features/home/vault-flow/VaultFlowScroll.tsx 
 . The vault visuals inside it are implemented as a VaultScene component driven by several scroll-threshold MotionValues (posts/top edges pathLength, “lid” opacity, landing flash, glow, etc.). The orb is rendered already inside the cube and the cube “draws around it,” which makes the story aesthetic, but not always semantically legible as “coin entered the vault.”
 
 What to change (high impact, low risk): replace VaultScene with a single, phase‑based capture system driven by one normalized MotionValue:
@@ -16,19 +16,19 @@ Repo audit findings
 Files inspected (exact paths)
 Core cinematic renderer and vault visuals:
 
-frontend/src/components/home/VaultFlowScroll.tsx 
-frontend/src/components/home/VaultFlowScroll.test.tsx 
+frontend/src/features/home/vault-flow/VaultFlowScroll.tsx 
+frontend/src/features/home/vault-flow/VaultFlowScroll.test.tsx 
 Public entry + orchestration routing (desktop wraps the monolith):
 
-frontend/src/components/home/vault-flow/VaultFlowRoot.tsx 
-frontend/src/components/home/vault-flow/orchestrators/VaultFlowDesktop.tsx 
+frontend/src/features/home/vault-flow/VaultFlowRoot.tsx 
+frontend/src/features/home/vault-flow/orchestrators/VaultFlowDesktop.tsx 
 frontend/src/pages/Home.tsx 
 Semantic model layer (beats, state derivation, selectors, copy):
 
-frontend/src/components/home/vault-flow/model/storySemantics.ts 
-frontend/src/components/home/vault-flow/model/storyClock.ts 
-frontend/src/components/home/vault-flow/model/storySelectors.ts 
-frontend/src/components/home/vault-flow/model/storyContent.ts 
+frontend/src/features/home/vault-flow/model/storySemantics.ts 
+frontend/src/features/home/vault-flow/model/storyClock.ts 
+frontend/src/features/home/vault-flow/model/storySelectors.ts 
+frontend/src/features/home/vault-flow/model/storyContent.ts 
 What exists today in VaultFlowScroll.tsx that affects vault clarity
 Vault motion values today (high level):
 
@@ -781,7 +781,7 @@ Patch instructions for VaultFlowScroll.tsx
 You asked for an “exact diff/patch or list of lines.” Because VaultScene is a very large block, the safest/fastest way to apply this without merge pain is a surgical replace-by-anchors (copy/paste blocks). Here’s the clean sequence:
 
 Replace component block
-In frontend/src/components/home/VaultFlowScroll.tsx 
+In frontend/src/features/home/vault-flow/VaultFlowScroll.tsx 
 :
 
 Find the block that begins with:
@@ -945,6 +945,6 @@ Accessibility and safety notes
 Suppress flashes/ripples under reduced motion because flashing/motion can be problematic for certain users (vestibular disorders, migraines, etc.). prefers-reduced-motion is the right channel for this. 
 Keep the vault “meaning” without motion: in reduced mode, show the sealed cube + stable inner glow, no pulses.
 Tests likely to touch
-frontend/src/components/home/VaultFlowScroll.test.tsx focuses on stage text visibility and semantic overlays; it should not break unless you change copy or aria-labels. 
+frontend/src/features/home/vault-flow/VaultFlowScroll.test.tsx focuses on stage text visibility and semantic overlays; it should not break unless you change copy or aria-labels. 
 If you add new aria-labels (optional), be consistent so they don’t collide with existing ones like “distribution checkpoint progress.”
 If you want, I can also produce a separate VaultCaptureSystem.tsx file + import to keep VaultFlowScroll.tsx smaller, but the pasteable replacement above is already tailored to the repo’s current geometry and positioning.

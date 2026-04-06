@@ -101,58 +101,58 @@ export const SmartWalletsRouteProvider = lazyNamed(
 )
 
 export const Vault = lazyNamed(() => import('../pages/Vault'), 'Vault')
-export const CompleteAuction = lazyNamed(() => import('../pages/CompleteAuction'), 'CompleteAuction')
-export const AuctionBid = lazyNamed(() => import('../pages/AuctionBid'), 'AuctionBid')
-export const Deploy = lazyNamed(() => import('../pages/Deploy'), 'Deploy')
-export const DeployCoin = lazyNamed(() => import('../pages/DeployCoin'), 'DeployCoin')
-export const DeployVault = lazyNamed(() => import('../pages/DeployVault'), 'DeployVault')
+export const CompleteAuction = lazyNamed(() => import('../pages/auction/CompleteAuction'), 'CompleteAuction')
+export const AuctionBid = lazyNamed(() => import('../pages/auction/AuctionBid'), 'AuctionBid')
+export const Deploy = lazyNamed(() => import('../pages/deploy/Deploy'), 'Deploy')
+export const DeployCoin = lazyNamed(() => import('../pages/deploy/DeployCoin'), 'DeployCoin')
+export const DeployVault = lazyNamed(() => import('../pages/deploy/DeployVault'), 'DeployVault')
 export const Leaderboard = lazyNamed(() => import('../pages/Leaderboard'), 'Leaderboard')
 export const CoinManage = lazyNamed(() => import('../pages/CoinManage'), 'CoinManage')
 export const CreatorEarnings = lazyNamed(() => import('../pages/CreatorEarnings'), 'CreatorEarnings')
 export const Faq = lazyNamed(() => import('../pages/Faq'), 'Faq')
 export const FaqHowItWorks = lazyNamed(() => import('../pages/FaqHowItWorks'), 'FaqHowItWorks')
 export const DistributeCcaLaunch = lazyNamed(() => import('../pages/DistributeCcaLaunch'), 'DistributeCcaLaunch')
-export const Status = lazyNamed(() => import('../pages/Status'), 'Status')
-export const AdminCreatorAccess = lazyNamed(() => import('../pages/AdminCreatorAccess'), 'AdminCreatorAccess')
-export const AdminWaitlist = lazyNamed(() => import('../pages/AdminWaitlist'), 'AdminWaitlist')
-export const AdminOps = lazyNamed(() => import('../pages/AdminOps'), 'AdminOps')
+export const Status = lazyNamed(() => import('../pages/status/Status'), 'Status')
+export const AdminCreatorAccess = lazyNamed(() => import('../pages/admin/AdminCreatorAccess'), 'AdminCreatorAccess')
+export const AdminWaitlist = lazyNamed(() => import('../pages/admin/AdminWaitlist'), 'AdminWaitlist')
+export const AdminOps = lazyNamed(() => import('../pages/admin/AdminOps'), 'AdminOps')
 export const AdminDeployStrategies = lazyNamed(
-  () => import('../pages/AdminDeployStrategies'),
+  () => import('../pages/admin/AdminDeployStrategies'),
   'AdminDeployStrategies',
 )
-export const AdminAgentSetup = lazyNamed(() => import('../pages/AdminAgentSetup'), 'AdminAgentSetup')
+export const AdminAgentSetup = lazyNamed(() => import('../pages/admin/AdminAgentSetup'), 'AdminAgentSetup')
 export const AdminImageGeneration = lazyNamed(
-  () => import('../pages/AdminImageGeneration'),
+  () => import('../pages/admin/AdminImageGeneration'),
   'AdminImageGeneration',
 )
 export const GaugeVoting = lazyDefault(() => import('../pages/GaugeVoting'))
-export const AuctionDemo = lazyDefault(() => import('../pages/AuctionDemo'))
-export const AgentDirectory = lazyNamed(() => import('../pages/AgentDirectory'), 'AgentDirectory')
-export const AgentRegister = lazyNamed(() => import('../pages/AgentRegister'), 'AgentRegister')
-export const AgentUriService = lazyNamed(() => import('../pages/AgentUriService'), 'AgentUriService')
-export const ExploreCreators = lazyNamed(() => import('../pages/ExploreCreators'), 'ExploreCreators')
-export const ExploreContent = lazyNamed(() => import('../pages/ExploreContent'), 'ExploreContent')
-export const ExploreVaults = lazyNamed(() => import('../pages/ExploreVaults'), 'ExploreVaults')
-export const ExploreTrends = lazyNamed(() => import('../pages/ExploreTrends'), 'ExploreTrends')
-export const ExploreTransactions = lazyNamed(() => import('../pages/ExploreTransactions'), 'ExploreTransactions')
+export const AuctionDemo = lazyDefault(() => import('../pages/auction/AuctionDemo'))
+export const AgentDirectory = lazyNamed(() => import('../pages/agents/AgentDirectory'), 'AgentDirectory')
+export const AgentRegister = lazyNamed(() => import('../pages/agents/AgentRegister'), 'AgentRegister')
+export const AgentUriService = lazyNamed(() => import('../pages/agents/AgentUriService'), 'AgentUriService')
+export const ExploreCreators = lazyNamed(() => import('../pages/explore/ExploreCreators'), 'ExploreCreators')
+export const ExploreContent = lazyNamed(() => import('../pages/explore/ExploreContent'), 'ExploreContent')
+export const ExploreVaults = lazyNamed(() => import('../pages/explore/ExploreVaults'), 'ExploreVaults')
+export const ExploreTrends = lazyNamed(() => import('../pages/explore/ExploreTrends'), 'ExploreTrends')
+export const ExploreTransactions = lazyNamed(() => import('../pages/explore/ExploreTransactions'), 'ExploreTransactions')
 export const ExploreCreatorDetail = lazyNamed(
-  () => import('../pages/ExploreCreatorDetail'),
+  () => import('../pages/explore/ExploreCreatorDetail'),
   'ExploreCreatorDetail',
 )
 export const ExploreContentDetail = lazyNamed(
-  () => import('../pages/ExploreContentDetail'),
+  () => import('../pages/explore/ExploreContentDetail'),
   'ExploreContentDetail',
 )
 export const ExploreCreatorTransactions = lazyNamed(
-  () => import('../pages/ExploreCreatorTransactions'),
+  () => import('../pages/explore/ExploreCreatorTransactions'),
   'ExploreCreatorTransactions',
 )
 export const ExploreContentTransactions = lazyNamed(
-  () => import('../pages/ExploreContentTransactions'),
+  () => import('../pages/explore/ExploreContentTransactions'),
   'ExploreContentTransactions',
 )
 export const ExploreContentPoolAlias = lazyNamed(
-  () => import('../pages/ExploreContentPoolAlias'),
+  () => import('../pages/explore/ExploreContentPoolAlias'),
   'ExploreContentPoolAlias',
 )
 export const Swap = lazyNamed(() => import('../pages/Swap'), 'Swap')
