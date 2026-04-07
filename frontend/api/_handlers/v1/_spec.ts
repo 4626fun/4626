@@ -81,6 +81,206 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       '/v1/agents/xmtp/join': { post: { summary: 'Validate room token and return XMTP join instructions', responses: { '200': { description: 'OK' } } } },
       '/v1/agents/telegram/join': { post: { summary: 'Validate room token and return Telegram join instructions', responses: { '200': { description: 'OK' } } } },
       '/v1/agents/identity/verification': { get: { summary: 'Public ERC-8004 discoverability report across onchain state, mirrors, and service health', responses: { '200': { description: 'OK' } } } },
+      '/v1/agents/profile': {
+        get: {
+          summary: 'Aggregated public profile for the canonical ERC-8004 agent',
+          parameters: [
+            { name: 'agentId', in: 'query', required: true, description: 'Canonical ERC-8004 agent token ID', schema: { type: 'integer', minimum: 0 } },
+          ],
+          responses: { '200': { description: 'OK' }, '404': { description: 'Only the canonical agent profile is exposed' } },
+        },
+      },
+      '/agents': {
+        get: {
+          summary: 'Directory-compatible agent listing for the public 4626 agent surface',
+          responses: { '200': { description: 'OK' } },
+        },
+      },
+      '/v1/agents/feedback': {
+        get: {
+          summary: 'Read ERC-8004 feedback from the onchain registry or indexed cache',
+          parameters: [
+            { name: 'agentId', in: 'query', required: true, description: 'ERC-8004 agent token ID', schema: { type: 'integer', minimum: 0 } },
+            { name: 'client', in: 'query', required: false, description: 'Optional reviewer wallet address', schema: { type: 'string' } },
+            { name: 'tag1', in: 'query', required: false, description: 'Optional primary tag filter', schema: { type: 'string' } },
+            { name: 'tag2', in: 'query', required: false, description: 'Optional secondary tag filter', schema: { type: 'string' } },
+            { name: 'includeRevoked', in: 'query', required: false, description: 'Include revoked feedback entries', schema: { type: 'boolean' } },
+            { name: 'mode', in: 'query', required: false, description: 'summary, all, single, or indexed response shape', schema: { type: 'string', enum: ['summary', 'all', 'single', 'indexed'] } },
+            { name: 'feedbackIndex', in: 'query', required: false, description: 'Required when mode=single', schema: { type: 'integer', minimum: 0 } },
+            { name: 'limit', in: 'query', required: false, description: 'Indexed mode page size', schema: { type: 'integer', minimum: 0 } },
+            { name: 'offset', in: 'query', required: false, description: 'Indexed mode offset', schema: { type: 'integer', minimum: 0 } },
+            { name: 'orderBy', in: 'query', required: false, description: 'Indexed mode sort column', schema: { type: 'string', enum: ['created_at', 'value'] } },
+            { name: 'order', in: 'query', required: false, description: 'Indexed mode sort direction', schema: { type: 'string', enum: ['asc', 'desc'] } },
+          ],
+          responses: { '200': { description: 'OK' } },
+        },
+      },
+      '/v1/agents/wallet-intelligence': {
+        get: {
+          summary: 'Build or fetch wallet intelligence for a wallet address',
+          parameters: [
+            { name: 'address', in: 'query', required: true, description: 'Wallet address to enrich', schema: { type: 'string' } },
+            { name: 'hops', in: 'query', required: false, description: 'Funding-trace depth', schema: { type: 'integer', minimum: 1 } },
+            { name: 'chains', in: 'query', required: false, description: 'Comma-separated chain IDs to inspect', schema: { type: 'string' } },
+            { name: 'store', in: 'query', required: false, description: 'Store immutable Grove fallback when true', schema: { type: 'boolean' } },
+            { name: 'portfolio', in: 'query', required: false, description: 'Include portfolio enrichment', schema: { type: 'boolean' } },
+            { name: 'ens', in: 'query', required: false, description: 'Include ENS enrichment', schema: { type: 'boolean' } },
+            { name: 'lens', in: 'query', required: false, description: 'Include Lens enrichment', schema: { type: 'boolean' } },
+            { name: 'labels', in: 'query', required: false, description: 'Include entity labels', schema: { type: 'boolean' } },
+            { name: 'noCache', in: 'query', required: false, description: 'Bypass cached intelligence', schema: { type: 'boolean' } },
+          ],
+          responses: { '200': { description: 'OK' } },
+        },
+        post: {
+          summary: 'Build or fetch wallet intelligence from a JSON request body',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    address: { type: 'string' },
+                    hops: { type: 'integer', minimum: 1 },
+                    chainIds: { type: 'array', items: { type: 'integer', minimum: 1 } },
+                    store: { type: 'boolean' },
+                    includePortfolio: { type: 'boolean' },
+                    includeEns: { type: 'boolean' },
+                    includeLens: { type: 'boolean' },
+                    includeLabels: { type: 'boolean' },
+                    noCache: { type: 'boolean' },
+                  },
+                  required: ['address'],
+                },
+              },
+            },
+          },
+          responses: { '200': { description: 'OK' } },
+        },
+      },
+      '/v1/agents/publish': {
+        post: {
+          summary: 'publish canonical ERC-8004 registration metadata and optional Grove fallback',
+          requestBody: {
+            required: false,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    storeOnGrove: { type: 'boolean' },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            '200': { description: 'Publish status' },
+            '401': { description: 'Authentication required' },
+          },
+        },
+      },
+      '/lens/agent-registration': {
+        get: {
+          summary: 'Preview canonical ERC-8004 registration metadata and optional Grove storage status',
+          parameters: [
+            { name: 'store', in: 'query', required: false, description: 'Store on Grove when true', schema: { type: 'boolean' } },
+          ],
+          responses: { '200': { description: 'OK' }, '401': { description: 'Authentication required when store=true' } },
+        },
+        post: {
+          summary: 'Store or preview canonical ERC-8004 registration metadata on Lens Grove',
+          requestBody: {
+            required: false,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    store: { type: 'boolean' },
+                  },
+                },
+              },
+            },
+          },
+          responses: { '200': { description: 'OK' }, '401': { description: 'Authentication required when store=true' } },
+        },
+      },
+      '/lens/reputation-graph': {
+        get: {
+          summary: 'Build or fetch an ERC-8004 reputation graph',
+          parameters: [
+            { name: 'agentId', in: 'query', required: true, description: 'ERC-8004 agent token ID', schema: { type: 'integer', minimum: 0 } },
+            { name: 'tag1', in: 'query', required: false, description: 'Optional primary tag filter', schema: { type: 'string' } },
+            { name: 'tag2', in: 'query', required: false, description: 'Optional secondary tag filter', schema: { type: 'string' } },
+            { name: 'includeRevoked', in: 'query', required: false, description: 'Include revoked feedback entries', schema: { type: 'boolean' } },
+            { name: 'store', in: 'query', required: false, description: 'Store immutable Grove fallback when true', schema: { type: 'boolean' } },
+          ],
+          responses: { '200': { description: 'OK' }, '401': { description: 'Authentication required when store=true' } },
+        },
+        post: {
+          summary: 'Build or store an ERC-8004 reputation graph from a JSON request body',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    agentId: { type: 'integer', minimum: 0 },
+                    tag1: { type: 'string' },
+                    tag2: { type: 'string' },
+                    includeRevoked: { type: 'boolean' },
+                    store: { type: 'boolean' },
+                  },
+                  required: ['agentId'],
+                },
+              },
+            },
+          },
+          responses: { '200': { description: 'OK' }, '401': { description: 'Authentication required when store=true' } },
+        },
+      },
+      '/lens/feedback-payload': {
+        get: {
+          summary: 'Describe the feedback payload contract used for Lens Grove storage',
+          responses: { '200': { description: 'OK' } },
+        },
+        post: {
+          summary: 'Build and optionally store an ERC-8004 feedback payload on Lens Grove',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    agentId: { type: 'integer', minimum: 0 },
+                    value: { type: 'string' },
+                    valueDecimals: { type: 'integer', minimum: 0, maximum: 18 },
+                    store: { type: 'boolean' },
+                    clientAddress: { type: 'string' },
+                    reasoning: { type: 'string' },
+                    reproducible: { type: 'boolean' },
+                    tag1: { type: 'string' },
+                    tag2: { type: 'string' },
+                    attachments: { type: 'array', items: { type: 'object' } },
+                    proofOfPayment: { type: 'object' },
+                    skill: { type: 'string' },
+                    domain: { type: 'string' },
+                    context: { type: 'string' },
+                    capability: { type: 'string' },
+                    name: { type: 'string' },
+                    endpoint: { type: 'string' },
+                  },
+                  required: ['agentId', 'value', 'valueDecimals'],
+                },
+              },
+            },
+          },
+          responses: { '200': { description: 'OK' }, '401': { description: 'Authentication required when store=true' } },
+        },
+      },
 
       // Build-only endpoints (return unsigned tx calldata)
       '/v1/build/auction/submitBid': { post: { summary: 'Build CCA submitBid calldata', responses: { '200': { description: 'OK' } } } },

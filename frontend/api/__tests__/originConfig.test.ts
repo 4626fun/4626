@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { getCanonicalOrigin } from '../../server/_lib/origin.ts'
+import { getCanonicalOrigin, getErc8004PublicOrigin } from '../../server/_lib/origin.ts'
 import { applyEnv, createMockReq } from './helpers'
 
 describe('origin resolution', () => {
@@ -60,5 +60,23 @@ describe('origin resolution', () => {
     })
 
     expect(() => getCanonicalOrigin()).toThrow('missing_canonical_origin')
+  })
+
+  it('uses the dedicated ERC-8004 public origin when configured', () => {
+    restoreEnv = applyEnv({
+      ERC8004_PUBLIC_ORIGIN: 'https://scanner.4626.fun',
+      VITE_MARKETING_ORIGIN: undefined,
+    })
+
+    expect(getErc8004PublicOrigin()).toBe('https://scanner.4626.fun')
+  })
+
+  it('falls back to the production marketing origin for ERC-8004 public surfaces', () => {
+    restoreEnv = applyEnv({
+      ERC8004_PUBLIC_ORIGIN: undefined,
+      VITE_MARKETING_ORIGIN: undefined,
+    })
+
+    expect(getErc8004PublicOrigin()).toBe('https://4626.fun')
   })
 })

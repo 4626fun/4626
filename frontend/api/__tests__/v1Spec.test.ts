@@ -28,7 +28,7 @@ describe('v1 spec endpoint', () => {
     mocks.getCanonicalOrigin.mockReturnValue('https://api.4626.fun')
   })
 
-  it('includes token metadata, image, logo aliases, token list routes, and the paid ERC-8004 review route', async () => {
+  async function renderSpec() {
     const mod = await import('../_handlers/v1/_spec.ts')
     const handler = mod.default
 
@@ -36,15 +36,37 @@ describe('v1 spec endpoint', () => {
     const res = createMockRes()
 
     await handler(req, res)
-
     expect(res.statusCode).toBe(200)
-    expect(res.body?.paths?.['/v1/token/{address}/metadata']).toBeTruthy()
-    expect(res.body?.paths?.['/v1/token/{address}/image']).toBeTruthy()
-    expect(res.body?.paths?.['/v1/token/{address}/logo.png']).toBeTruthy()
-    expect(res.body?.paths?.['/v1/token/{address}/logo.svg']).toBeTruthy()
-    expect(res.body?.paths?.['/v1/token/{address}/tokenlist']).toBeTruthy()
-    expect(res.body?.paths?.['/v1/explore/vaults']).toBeTruthy()
-    expect(res.body?.paths?.['/v1/agents/feedback/review']).toBeTruthy()
-    expect(res.body?.paths?.['/v1/agents/identity/verification']?.get?.summary).toContain('discoverability')
+    return res.body
+  }
+
+  it('includes token metadata, image, logo aliases, token list routes, and the paid ERC-8004 review route', async () => {
+    const body = await renderSpec()
+
+    expect(body?.paths?.['/v1/token/{address}/metadata']).toBeTruthy()
+    expect(body?.paths?.['/v1/token/{address}/image']).toBeTruthy()
+    expect(body?.paths?.['/v1/token/{address}/logo.png']).toBeTruthy()
+    expect(body?.paths?.['/v1/token/{address}/logo.svg']).toBeTruthy()
+    expect(body?.paths?.['/v1/token/{address}/tokenlist']).toBeTruthy()
+    expect(body?.paths?.['/v1/explore/vaults']).toBeTruthy()
+    expect(body?.paths?.['/v1/agents/feedback/review']).toBeTruthy()
+    expect(body?.paths?.['/v1/agents/identity/verification']?.get?.summary).toContain('discoverability')
+  })
+
+  it('advertises the live public agent directory, publish, feedback, wallet-intelligence, and Lens helper surfaces', async () => {
+    const body = await renderSpec()
+
+    expect(body?.paths?.['/agents']?.get?.summary).toContain('agent')
+    expect(body?.paths?.['/v1/agents/profile']?.get?.summary).toContain('profile')
+    expect(body?.paths?.['/v1/agents/feedback']?.get?.parameters.map((parameter: { name: string }) => parameter.name)).toContain('agentId')
+    expect(body?.paths?.['/v1/agents/wallet-intelligence']?.get?.parameters.map((parameter: { name: string }) => parameter.name)).toContain('address')
+    expect(body?.paths?.['/v1/agents/wallet-intelligence']?.post).toBeTruthy()
+    expect(body?.paths?.['/v1/agents/publish']?.post?.summary).toContain('publish')
+    expect(body?.paths?.['/lens/agent-registration']?.get).toBeTruthy()
+    expect(body?.paths?.['/lens/agent-registration']?.post).toBeTruthy()
+    expect(body?.paths?.['/lens/reputation-graph']?.get).toBeTruthy()
+    expect(body?.paths?.['/lens/reputation-graph']?.post).toBeTruthy()
+    expect(body?.paths?.['/lens/feedback-payload']?.get).toBeTruthy()
+    expect(body?.paths?.['/lens/feedback-payload']?.post).toBeTruthy()
   })
 })
