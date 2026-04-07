@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { access, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -12,8 +12,17 @@ async function readRepoFile(...segments: string[]): Promise<string> {
   return readFile(path.join(repoRoot, ...segments), 'utf8')
 }
 
+async function repoFileExists(...segments: string[]): Promise<boolean> {
+  try {
+    await access(path.join(repoRoot, ...segments))
+    return true
+  } catch {
+    return false
+  }
+}
+
 describe('Solana registry key naming', () => {
-  test('registry seeding scripts prefer SOLANA_REGISTRY_KEY with a deprecated fallback alias', async () => {
+  test('registry seeding scripts use SOLANA_REGISTRY_KEY without compatibility aliases', async () => {
     const [seedRegistry, operationalWiring, seedSolanaPeer] = await Promise.all([
       readRepoFile('script', 'SeedCreatorRegistry.s.sol'),
       readRepoFile('script', 'OperationalWiring.s.sol'),
@@ -22,8 +31,8 @@ describe('Solana registry key naming', () => {
 
     for (const source of [seedRegistry, operationalWiring, seedSolanaPeer]) {
       expect(source).toContain('SOLANA_REGISTRY_KEY')
-      expect(source).toContain('SOLANA_CHAIN_ID')
-      expect(source).toContain('deprecated')
+      expect(source).not.toContain('SOLANA_CHAIN_ID')
+      expect(source).not.toContain('deprecated')
     }
   })
 
@@ -37,5 +46,9 @@ describe('Solana registry key naming', () => {
     expect(seedRegistry).toContain('registry key <-> EID')
     expect(operationalWiring).toContain('registry key <-> EID')
     expect(seedSolanaPeer).toContain('registry key <-> EID')
+  })
+
+  test('retired registry backfill script is removed', async () => {
+    await expect(repoFileExists('script', 'BackfillCreatorRegistry.s.sol')).resolves.toBe(false)
   })
 })

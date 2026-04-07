@@ -126,7 +126,7 @@ contract OperationalWiring is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
-        uint256 solanaRegistryKey = vm.envOr("SOLANA_REGISTRY_KEY", vm.envOr("SOLANA_CHAIN_ID", uint256(0)));
+        uint256 solanaRegistryKey = vm.envOr("SOLANA_REGISTRY_KEY", uint256(0));
         uint32 solanaEid = uint32(vm.envOr("SOLANA_EID", uint256(0)));
         address solanaCreatorToken = vm.envOr("SOLANA_CREATOR_TOKEN", address(0));
         bytes32 solanaRemoteOftPeer = vm.envOr("SOLANA_REMOTE_OFT_PEER_BYTES32", bytes32(0));
@@ -135,7 +135,6 @@ contract OperationalWiring is Script {
         address ovaultShareMeshToken = vm.envOr("OVAULT_SHARE_MESH_TOKEN", address(0));
         bytes32 ovaultSolanaAssetMint = vm.envOr("OVAULT_SOLANA_ASSET_MINT", bytes32(0));
         bool ovaultMeshEnabled = vm.envOr("OVAULT_MESH_ENABLED", uint256(1)) == 1;
-        // SOLANA_CHAIN_ID remains a deprecated fallback alias for backward compatibility.
         bool wantsSolanaRegistryMapping = solanaRegistryKey > 0;
         bool wantsSolanaPeerWiring = solanaCreatorToken != address(0) || solanaRemoteOftPeer != bytes32(0);
         bool wantsOvaultMeshWiring = ovaultHubComposer != address(0) || ovaultAssetMeshToken != address(0)

@@ -27,7 +27,6 @@ import {ICreatorRegistry} from "../contracts/interfaces/core/ICreatorRegistry.so
  *
  * @dev OPTIONAL SOLANA EID MAPPING:
  *      Set SOLANA_REGISTRY_KEY and SOLANA_EID to also seed the Solana registry key <-> EID mapping.
- *      SOLANA_CHAIN_ID remains a deprecated compatibility alias.
  */
 contract SeedCreatorRegistry is Script {
     // ═══════════════════════════════════════════════════════════════════
@@ -102,12 +101,12 @@ contract SeedCreatorRegistry is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
-        uint256 solanaRegistryKey = vm.envOr("SOLANA_REGISTRY_KEY", vm.envOr("SOLANA_CHAIN_ID", uint256(0)));
+        uint256 solanaRegistryKey = vm.envOr("SOLANA_REGISTRY_KEY", uint256(0));
         uint32 solanaEid = uint32(vm.envOr("SOLANA_EID", uint256(0)));
         if (solanaRegistryKey > 0 || solanaEid > 0) {
             require(
                 solanaRegistryKey > 0 && solanaEid > 0,
-                "Set both SOLANA_REGISTRY_KEY (or deprecated SOLANA_CHAIN_ID) and SOLANA_EID"
+                "Set both SOLANA_REGISTRY_KEY and SOLANA_EID"
             );
         }
 
@@ -218,7 +217,7 @@ contract SeedCreatorRegistry is Script {
             console.log(unicode"   ✓ Solana registry key", solanaRegistryKey, unicode"<->", solanaEid);
         } else {
             console.log(
-                unicode"   [skip] Solana registry key <-> EID mapping (set SOLANA_REGISTRY_KEY + SOLANA_EID; SOLANA_CHAIN_ID is a deprecated fallback alias)"
+                unicode"   [skip] Solana registry key <-> EID mapping (set SOLANA_REGISTRY_KEY + SOLANA_EID)"
             );
         }
 
