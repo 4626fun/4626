@@ -604,8 +604,8 @@ export async function confirmOwnerState(params: {
       SET
         metadata = COALESCE(metadata, '{}'::jsonb) ||
           jsonb_build_object(
-            ${metadataKey},
-            jsonb_build_object('status', 'active', 'ownerAddress', ${ownerAddress}, 'updatedAt', NOW())
+            ${metadataKey}::text,
+            jsonb_build_object('status', 'active', 'ownerAddress', ${ownerAddress}::text, 'updatedAt', NOW())
           ),
         last_checked_at = NOW(),
         updated_at = NOW()

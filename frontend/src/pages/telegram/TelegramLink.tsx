@@ -6,6 +6,7 @@ import { useLoginWithEmail, usePrivy } from '@privy-io/react-auth'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { apiFetch } from '@/lib/apiBase'
 import type { ApiEnvelope } from '@/lib/apiEnvelope'
+import { writeStoredSessionToken } from '@/hooks/useSiweAuth'
 import {
   clearStoredTelegramMiniAppLinkContext,
   resolveTelegramMiniAppLinkContext,
@@ -14,7 +15,13 @@ import {
 } from '@/lib/telegramMiniAppLink'
 import { createTelegramLinkFlowId, trackTelegramLinkTelemetryEvent } from '@/lib/telegramLinkTelemetry'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
-import { ensureTelegramMiniAppSession, loadTelegramWebApp, readTelegramWebApp, setupTelegramMiniAppUi } from '@/lib/telegramWebApp'
+import {
+  ensureTelegramMiniAppSession,
+  loadTelegramWebApp,
+  openTelegramExternalLink,
+  readTelegramWebApp,
+  setupTelegramMiniAppUi,
+} from '@/lib/telegramWebApp'
 
 import {
   createFlowError,
@@ -40,6 +47,17 @@ type TelegramLinkReadyData = {
 type TelegramLinkCompleteData = {
   link: TelegramLinkResult
   account: unknown
+}
+
+type PrivyAuthBridgeResponse = {
+  address: string
+  sessionToken: string
+  privyUserId?: string
+}
+
+type HandoffCreateResponse = {
+  code: string
+  expiresAt: string
 }
 
 type LinkTelegramParams = {
@@ -529,6 +547,8 @@ export function TelegramLink() {
     (initialSearch) => createInitialTelegramLinkState(resolveTelegramMiniAppLinkContext(new URLSearchParams(initialSearch))),
   )
   const [nowMs, setNowMs] = useState(() => Date.now())
+  const [ownerSetupHandoffBusy, setOwnerSetupHandoffBusy] = useState(false)
+  const [ownerSetupHandoffError, setOwnerSetupHandoffError] = useState<string | null>(null)
 
   const privy = usePrivy() as PrivyWithTelegramLink
   const { sendCode, loginWithCode } = useLoginWithEmail()
@@ -566,9 +586,75 @@ export function TelegramLink() {
   const hasTelegramMainButton = Boolean(telegramWebApp?.MainButton)
   const canCloseTelegramMiniApp = typeof telegramWebApp?.close === 'function'
 
+  const openOwnerInstallHandoff = useCallback(async () => {
+    const snapshot = privySnapshotRef.current
+    setOwnerSetupHandoffBusy(true)
+    setOwnerSetupHandoffError(null)
+    try {
+      if (typeof snapshot.getAccessToken !== 'function') {
+        throw new Error('Privy access token reader is unavailable. Reopen Telegram linking and retry.')
+      }
+
+      const accessToken = await readPrivyAccessToken(snapshot.getAccessToken)
+      if (!accessToken) {
+        throw new Error('Privy access token is unavailable. Reopen Telegram linking and retry.')
+      }
+
+      const authRes = await apiFetch('/api/auth/privy', {
+        method: 'POST',
+        withCredentials: true,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          Accept: 'application/json',
+        },
+      })
+      const authJson = (await authRes.json().catch(() => null)) as TelegramApiEnvelope<PrivyAuthBridgeResponse> | null
+      if (!authRes.ok || !authJson?.success || !authJson.data?.sessionToken) {
+        throw new Error(authJson?.error || 'Could not establish a 4626 session for setup continuation.')
+      }
+      writeStoredSessionToken(authJson.data.sessionToken)
+
+      const handoffRes = await apiFetch('/api/auth/handoff/create', {
+        method: 'POST',
+        withCredentials: true,
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({ privyToken: accessToken }),
+      })
+      const handoffJson = (await handoffRes.json().catch(() => null)) as TelegramApiEnvelope<HandoffCreateResponse> | null
+      const handoffCode =
+        handoffRes.ok && handoffJson?.success && typeof handoffJson.data?.code === 'string'
+          ? handoffJson.data.code.trim()
+          : ''
+      if (!handoffCode) {
+        throw new Error(handoffJson?.error || 'Could not prepare the setup handoff.')
+      }
+
+      const targetUrl = new URL('/accounts', window.location.origin)
+      targetUrl.searchParams.set('cv_handoff', handoffCode)
+      targetUrl.searchParams.set('setup', 'owner-install')
+      targetUrl.searchParams.set('source', 'telegram')
+
+      if (!openTelegramExternalLink(targetUrl.toString())) {
+        throw new Error('Could not open the Accounts setup surface from Telegram.')
+      }
+    } catch (error) {
+      setOwnerSetupHandoffError(coerceErrorMessage(error, 'Could not open the Accounts setup surface from Telegram.'))
+    } finally {
+      setOwnerSetupHandoffBusy(false)
+    }
+  }, [])
+
   useEffect(() => {
     stateRef.current = state
   }, [state])
+
+  useEffect(() => {
+    setOwnerSetupHandoffBusy(false)
+    setOwnerSetupHandoffError(null)
+  }, [state.tag])
 
   useEffect(() => {
     sendCodeRef.current = sendCode
@@ -1692,38 +1778,29 @@ export function TelegramLink() {
         const canonicalCswAddress = state.link.canonicalCswAddress ?? state.account.canonicalCswAddress
         const walletSetupPending = state.link.linkStatus !== 'active' || !state.link.ownerVerified
         return (
-          <div className="space-y-4">
+          <div className="space-y-3">
             <StatusBlock
               icon={CheckCircle2}
               tone="success"
+              compact
               body={`Telegram linked to ${state.account.email}. Your Telegram account is attached to your 4626 account.`}
             />
             {walletSetupPending ? (
-              <div className="rounded-[18px] border border-[#0052FF]/20 bg-[#0052FF]/8 px-4 py-3 text-sm leading-6 text-[#EDEDED] space-y-2">
+              <div className="rounded-[18px] border border-[#0052FF]/20 bg-[#0052FF]/8 px-3.5 py-3 text-[13px] leading-5 text-[#EDEDED] space-y-1.5">
                 <div>
                   Wallet setup pending. Telegram is linked, but wallet and trading actions unlock after your Privy embedded signer is added as an owner on your Zora Coinbase Smart Wallet.
                 </div>
-                <div className="text-xs text-[#A9B9FF]">
-                  Next step: on your phone or desktop, sign in as a current owner of your Zora Coinbase Smart Wallet and run <span className="font-medium text-[#D7E0FF]">Enable 4626 signing</span> in Accounts.
+                <div className="text-[11px] leading-5 text-[#A9B9FF]">
+                  Next step: continue into Accounts on phone or desktop, connect a current owner of your detected Zora Coinbase Smart Wallet, and run <span className="font-medium text-[#D7E0FF]">Enable 4626 signing</span>.
                 </div>
-                <a href="/accounts" className="inline-flex text-xs font-medium text-[#8FB0FF] underline underline-offset-2 hover:text-[#BBD0FF]">
-                  Open Accounts (phone or desktop)
-                </a>
+                <div className="text-[11px] text-[#8FB0FF]">Use Continue setup below to open Accounts outside Telegram.</div>
               </div>
             ) : null}
-            <div className="rounded-[18px] border border-white/[0.06] bg-white/[0.025] p-3.5">
-              <div className="text-[9px] font-medium uppercase tracking-[0.2em] text-[#666666]">Connected Account</div>
-              <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                <SuccessSummaryCard label="Canonical Email" value={state.account.email} />
-                <SuccessSummaryCard
-                  label="Canonical CSW"
-                  value={canonicalCswAddress ? shortAddress(canonicalCswAddress) : 'Pending wallet setup'}
-                  title={canonicalCswAddress ?? 'Canonical Coinbase Smart Wallet not set yet.'}
-                  mono
-                />
-              </div>
-            </div>
-            <div className="text-sm leading-6 text-[#666666]">
+            <SuccessAccountSummary
+              email={state.account.email}
+              canonicalCswAddress={canonicalCswAddress}
+            />
+            <div className="text-[13px] leading-5 text-[#666666]">
               {walletSetupPending
                 ? 'You can close this Mini App now. Finish wallet setup to unlock trading and wallet actions in Telegram.'
                 : 'You can close this Mini App and return to the bot. Wallet, trade, and creator actions are ready there.'}
@@ -1753,11 +1830,9 @@ export function TelegramLink() {
                     : 'Mini App finalization was interrupted after verification, but you can still finish owner setup from Accounts on a phone or desktop browser.'}
                 </div>
                 <div className="text-xs text-[#A9B9FF]">
-                  Next step: sign in as a current owner of your Zora Coinbase Smart Wallet and run <span className="font-medium text-[#D7E0FF]">Enable 4626 signing</span>.
+                  Next step: continue into Accounts, connect a current owner of your Zora Coinbase Smart Wallet, and run <span className="font-medium text-[#D7E0FF]">Enable 4626 signing</span>.
                 </div>
-                <a href="/accounts" className="inline-flex text-xs font-medium text-[#8FB0FF] underline underline-offset-2 hover:text-[#BBD0FF]">
-                  Open Accounts (phone or desktop)
-                </a>
+                <div className="text-xs text-[#8FB0FF]">Use the Continue setup button below to open the real Accounts flow outside Telegram.</div>
               </div>
             </div>
           )
@@ -1825,6 +1900,26 @@ export function TelegramLink() {
         )
 
       case 'success':
+        if (state.link.linkStatus !== 'active' || !state.link.ownerVerified) {
+          return (
+            <div className="space-y-2.5">
+              <button
+                type="button"
+                onClick={() => void openOwnerInstallHandoff()}
+                className={PRIMARY_ACTION_BUTTON_CLASS}
+                disabled={ownerSetupHandoffBusy}
+              >
+                {ownerSetupHandoffBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                {ownerSetupHandoffBusy ? 'Opening setup…' : 'Continue setup'}
+              </button>
+              {ownerSetupHandoffError ? (
+                <div className="rounded-[16px] border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-xs leading-5 text-rose-100">
+                  {ownerSetupHandoffError}
+                </div>
+              ) : null}
+            </div>
+          )
+        }
         if (!canCloseTelegramMiniApp) return null
         return (
           <button
@@ -1841,12 +1936,20 @@ export function TelegramLink() {
         if (isOwnerSetupHandoffState(state)) {
           return (
             <div className="space-y-2.5">
-              <a
-                href="/accounts"
+              <button
+                type="button"
+                onClick={() => void openOwnerInstallHandoff()}
                 className={PRIMARY_ACTION_BUTTON_CLASS}
+                disabled={ownerSetupHandoffBusy}
               >
-                Open Accounts (phone or desktop)
-              </a>
+                {ownerSetupHandoffBusy ? <LoaderCircle className="h-4 w-4 animate-spin" /> : null}
+                {ownerSetupHandoffBusy ? 'Opening setup…' : 'Continue setup'}
+              </button>
+              {ownerSetupHandoffError ? (
+                <div className="rounded-[16px] border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-xs leading-5 text-rose-100">
+                  {ownerSetupHandoffError}
+                </div>
+              ) : null}
               {state.retryTarget ? (
                 <button
                   type="button"
@@ -1854,9 +1957,9 @@ export function TelegramLink() {
                   className={SECONDARY_ACTION_BUTTON_CLASS}
                 >
                   <RefreshCw className="h-4 w-4" />
-                  Retry in Mini App
-                </button>
-              ) : null}
+                Retry in Mini App
+              </button>
+            ) : null}
               <button
                 type="button"
                 onClick={() => dispatch({ type: 'RESET' })}
@@ -1900,6 +2003,7 @@ export function TelegramLink() {
   const footerActions = renderFooterActions()
   const ownerSetupHandoffState = isOwnerSetupHandoffState(state) ? state : null
   const ownerSetupHandoffLinkedCopy = ownerSetupHandoffState ? prefersLinkedHandoffCopy(ownerSetupHandoffState) : false
+  const compactMiniAppLayout = state.tag === 'success' || ownerSetupHandoffState !== null
   const panelHeadline = ownerSetupHandoffState
     ? ownerSetupHandoffLinkedCopy
       ? 'Telegram Linked'
@@ -1907,8 +2011,8 @@ export function TelegramLink() {
     : getFlowHeadline(state.tag)
   const panelDescription = ownerSetupHandoffState
     ? ownerSetupHandoffLinkedCopy
-      ? 'Email verification completed. Continue on your phone or desktop to finish owner setup for 4626 signing.'
-      : 'Email verification completed, but Mini App finalization did not finish. Continue on your phone or desktop to complete owner setup.'
+      ? 'Linked. Finish owner setup in Accounts.'
+      : 'Verified. Continue in Accounts to finish setup.'
     : getFlowDescription(state.tag)
 
   return (
@@ -1928,7 +2032,9 @@ export function TelegramLink() {
         <div
           data-flow-state={state.tag}
           data-testid="telegram-link-panel"
-          className="flex w-full flex-col overflow-hidden rounded-[24px] border border-white/[0.06] bg-[linear-gradient(180deg,rgba(10,10,10,0.94),rgba(10,10,10,0.84))] px-4 py-3 shadow-[0_24px_96px_rgba(0,0,0,0.5)] backdrop-blur-xl"
+          className={`flex w-full flex-col overflow-hidden rounded-[24px] border border-white/[0.06] bg-[linear-gradient(180deg,rgba(10,10,10,0.94),rgba(10,10,10,0.84))] shadow-[0_24px_96px_rgba(0,0,0,0.5)] backdrop-blur-xl ${
+            compactMiniAppLayout ? 'px-4 py-3' : 'px-4 py-3.5'
+          }`}
         >
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0 flex-1 space-y-1">
@@ -1940,21 +2046,21 @@ export function TelegramLink() {
             </div>
           </div>
 
-          <FlowProgress currentTag={state.tag} />
+          <FlowProgress currentTag={state.tag} compact={compactMiniAppLayout} />
 
           {proof ? (
-            <div className="mt-3 grid gap-x-3 gap-y-2 border-t border-white/[0.05] pt-2.5 text-sm sm:grid-cols-3">
+            <div className={`grid grid-cols-3 gap-x-2 gap-y-2 border-t border-white/[0.05] text-sm ${compactMiniAppLayout ? 'mt-2 pt-2' : 'mt-3 pt-2.5'}`}>
               <MetaField label="Telegram" value={formatTelegramHandle(proof.telegramUsername, proof.telegramUserId)} />
               <MetaField label="Chat" value={proof.chatId ?? 'direct'} />
               <MetaField label="Session" value={new Date(proof.expiresAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} />
             </div>
           ) : null}
 
-          <div className="mt-3">{renderContent()}</div>
+          <div className={compactMiniAppLayout ? 'mt-2.5' : 'mt-3'}>{renderContent()}</div>
         </div>
 
         {footerActions ? (
-          <div data-testid="telegram-link-footer-actions" className="mt-auto pt-4">
+          <div data-testid="telegram-link-footer-actions" className={`mt-auto ${compactMiniAppLayout ? 'pt-3' : 'pt-4'}`}>
             {footerActions}
           </div>
         ) : null}
@@ -1963,12 +2069,12 @@ export function TelegramLink() {
   )
 }
 
-function FlowProgress(props: { currentTag: TelegramLinkState['tag'] }) {
+function FlowProgress(props: { currentTag: TelegramLinkState['tag']; compact?: boolean }) {
   const currentStep = getFlowProgressIndex(props.currentTag)
   const isComplete = props.currentTag === 'success'
 
   return (
-    <ol data-testid="telegram-link-progress" className="mt-3 flex items-start justify-between gap-2">
+    <ol data-testid="telegram-link-progress" className={`${props.compact ? 'mt-2.5 gap-1.5' : 'mt-3 gap-2'} flex items-start justify-between`}>
       {TELEGRAM_LINK_PROGRESS_STEPS.map((step, index) => {
         const stepNumber = index + 1
         const status = isComplete
@@ -1993,10 +2099,10 @@ function FlowProgress(props: { currentTag: TelegramLinkState['tag'] }) {
             className="min-w-0 flex-1"
           >
             <div className="flex items-center gap-2">
-              <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold ${statusClasses}`}>
+              <div className={`flex shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold ${props.compact ? 'h-6.5 w-6.5' : 'h-7 w-7'} ${statusClasses}`}>
                 {stepNumber}
               </div>
-              <div className="min-w-0 text-[11px] font-medium text-[#CFCFCF]">{step.label}</div>
+              <div className={`min-w-0 font-medium text-[#CFCFCF] ${props.compact ? 'text-[10px]' : 'text-[11px]'}`}>{step.label}</div>
             </div>
           </li>
         )
@@ -2010,6 +2116,7 @@ function StatusBlock(props: {
   body: string
   spinning?: boolean
   tone: 'info' | 'success' | 'error'
+  compact?: boolean
 }) {
   const toneClasses =
     props.tone === 'success'
@@ -2020,12 +2127,12 @@ function StatusBlock(props: {
   const Icon = props.icon
 
   return (
-    <div className={`rounded-[18px] border px-3.5 py-2.5 ${toneClasses}`}>
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 rounded-full border border-white/10 bg-white/[0.05] p-1.5">
-          <Icon className={`h-4 w-4 ${props.spinning ? 'animate-spin' : ''}`} />
+    <div className={`rounded-[18px] border ${props.compact ? 'px-3 py-2.5' : 'px-3.5 py-2.5'} ${toneClasses}`}>
+      <div className={`flex items-start ${props.compact ? 'gap-2.5' : 'gap-3'}`}>
+        <div className={`rounded-full border border-white/10 bg-white/[0.05] ${props.compact ? 'mt-0.5 p-1.25' : 'mt-0.5 p-1.5'}`}>
+          <Icon className={`${props.compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} ${props.spinning ? 'animate-spin' : ''}`} />
         </div>
-        <div className="text-[13px] leading-5">{props.body}</div>
+        <div className={`${props.compact ? 'text-[12.5px] leading-5' : 'text-[13px] leading-5'}`}>{props.body}</div>
       </div>
     </div>
   )
@@ -2051,6 +2158,34 @@ function MetaField(props: { label: string; value: string; title?: string }) {
 function SuccessSummaryCard(props: { label: string; value: string; title?: string; mono?: boolean }) {
   return (
     <div className="rounded-[16px] border border-white/[0.06] bg-white/[0.03] px-3 py-3" title={props.title}>
+      <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-[#666666]">{props.label}</div>
+      <div className={`mt-1 min-w-0 truncate text-[13px] text-[#EDEDED] ${props.mono ? 'font-mono' : 'font-medium'}`}>
+        {props.value}
+      </div>
+    </div>
+  )
+}
+
+function SuccessAccountSummary(props: { email: string; canonicalCswAddress: string | null }) {
+  return (
+    <div className="rounded-[18px] border border-white/[0.06] bg-white/[0.025] p-3">
+      <div className="text-[9px] font-medium uppercase tracking-[0.2em] text-[#666666]">Connected Account</div>
+      <div className="mt-2.5 space-y-2">
+        <CompactSummaryRow label="Canonical Email" value={props.email} />
+        <CompactSummaryRow
+          label="Canonical CSW"
+          value={props.canonicalCswAddress ? shortAddress(props.canonicalCswAddress) : 'Pending wallet setup'}
+          title={props.canonicalCswAddress ?? 'Canonical Coinbase Smart Wallet not set yet.'}
+          mono
+        />
+      </div>
+    </div>
+  )
+}
+
+function CompactSummaryRow(props: { label: string; value: string; title?: string; mono?: boolean }) {
+  return (
+    <div className="rounded-[15px] border border-white/[0.06] bg-white/[0.03] px-3 py-2.5" title={props.title}>
       <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-[#666666]">{props.label}</div>
       <div className={`mt-1 min-w-0 truncate text-[13px] text-[#EDEDED] ${props.mono ? 'font-mono' : 'font-medium'}`}>
         {props.value}

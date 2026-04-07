@@ -1,5 +1,5 @@
 /**
- * CRE Workflow: Auction Settlement (Smart Polling)
+ * CRE Workflow: CCA Finalization (Smart Polling)
  *
  * Graduation is a one-time event ~7 days after vault deployment. This
  * workflow runs hourly (not every 5 min) and only fetches vaults that
@@ -199,7 +199,7 @@ const onCronTrigger = (runtime: Runtime<Config>): SettlementResult => {
   const apiKey = apiKeySecret.value
   const chainId = resolveChainId(runtime.config.chainName, runtime.config.chainId)
 
-  runtime.log("Auction settlement (smart polling) starting")
+  runtime.log("CCA finalization (smart polling) starting")
 
   // Step 1: Fetch only unsettled vaults
   const httpClient = new HTTPClient()

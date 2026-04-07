@@ -108,8 +108,8 @@ Naming policy:
 | `docs/contracts/strategies/cca-launch.md` | Mostly aligned to non-automatic hook completion and onchain floor behavior | Keep as primary strategy truth; no semantic rollback to "migrate completes everything" |
 | `frontend/src/pages/CompleteAuction.tsx` | Explicit manual steps (sweep -> migrate -> configure hook) and conditional fee-plane language | Keep lane wording; optionally render split values from live gauge reads instead of static labels |
 | `frontend/api/_handlers/cre/keeper/_sweep.ts` | Canonical completion endpoint includes sweep+migrate+optional hook and invariant gate | Treat this as operational truth; keep response-stage vocabulary stable for runbooks |
-| `cre/cre-workflows/auction-settlement/main.ts` | Marks settled only when completion endpoint returns `completed` | Keep this settled-state rule; do not regress to sweep-only settlement |
-| `cre/actions/auction-settlement.action.ts` | Contains stale header wording around sweep semantics; implementation includes migrate but no hook/invariant stage | Patch header comments to match current completion semantics or mark this path non-canonical |
+| `cre/cre-workflows/cca-finalization/main.ts` | Marks settled only when completion endpoint returns `completed` | Keep this settled-state rule; do not regress to sweep-only settlement |
+| `cre/actions/cca-finalization.action.ts` | Contains stale header wording around sweep semantics; implementation includes migrate but no hook/invariant stage | Patch header comments to match current completion semantics or mark this path non-canonical |
 | `README.md` / tokenomics pages | Conditional fee-plane language is largely aligned | Keep "buy+sell claims require hook activation" rule explicit and prominent |
 
 # 5. Deployment Invariant Checklist
@@ -184,5 +184,5 @@ What users can safely be told:
 1. Creator-coin implementation source is out-of-repo in this workspace; this spec relies on observed interface usage for CreatorCoin `payoutRecipient` routing.
 2. Hook ownership domain can still require owner-manual writes depending on deployed hook contract auth rules.
 3. Environment-policy toggles can weaken hard gates if intentionally disabled; operational governance must treat this as a high-risk override.
-4. An alternate settlement action file (`cre/actions/auction-settlement.action.ts`) can diverge from canonical completion semantics if used without guardrails.
+4. An alternate settlement action file (`cre/actions/cca-finalization.action.ts`) can diverge from canonical completion semantics if used without guardrails.
 5. Cross-chain timing still depends on remote fee flush cadence and keeper liveness (especially for smooth burn-stream progression).

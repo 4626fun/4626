@@ -78,7 +78,7 @@ This rollout does not introduce a separate secure-agent service. The control pla
   - [`frontend/api/_handlers/deploy/_registerSolanaBridgeToken.ts`](../../frontend/api/_handlers/deploy/_registerSolanaBridgeToken.ts)
   - [`frontend/server/solana-provisioner/index.ts`](../../frontend/server/solana-provisioner/index.ts)
 - Payout processor:
-  - [`cre/actions/payout-router-processor.action.ts`](../../cre/actions/payout-router-processor.action.ts)
+  - [`cre/actions/payout-router-harvest.action.ts`](../../cre/actions/payout-router-harvest.action.ts)
 
 ### Outbound remote-AI call sites
 

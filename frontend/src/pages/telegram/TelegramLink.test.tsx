@@ -13,6 +13,7 @@ const {
   telegramCloseMock,
   telegramMainButtonMock,
   telegramMainButtonState,
+  openTelegramExternalLinkMock,
   apiFetchMock,
   sendCodeMock,
   loginWithCodeMock,
@@ -46,6 +47,7 @@ const {
       }
     }),
   },
+  openTelegramExternalLinkMock: vi.fn((_url: string) => true),
   apiFetchMock: vi.fn(),
   sendCodeMock: vi.fn(),
   loginWithCodeMock: vi.fn(),
@@ -79,6 +81,7 @@ vi.mock('@/lib/telegramWebApp', () => ({
     ...(telegramWebAppState.hasMainButton ? { MainButton: telegramMainButtonMock } : {}),
     ...(telegramWebAppState.hasClose ? { close: telegramCloseMock } : {}),
   })),
+  openTelegramExternalLink: openTelegramExternalLinkMock,
   readTelegramWebApp: () => ({
     ...(telegramWebAppState.hasMainButton ? { MainButton: telegramMainButtonMock } : {}),
     ...(telegramWebAppState.hasClose ? { close: telegramCloseMock } : {}),
@@ -153,6 +156,8 @@ beforeEach(() => {
   telegramWebAppState.hasMainButton = false
   telegramWebAppState.hasClose = false
   telegramMainButtonState.clickHandler = null
+  openTelegramExternalLinkMock.mockReset()
+  openTelegramExternalLinkMock.mockReturnValue(true)
   mockVerifiedSession()
   privyState.ready = true
   privyState.authenticated = true
@@ -216,6 +221,33 @@ beforeEach(() => {
                 tier: 1,
               },
             },
+          },
+        }),
+      } as Response
+    }
+    if (path === '/api/auth/privy') {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          data: {
+            address: '0x4444444444444444444444444444444444444444',
+            sessionToken: 'cv-session-token',
+            privyUserId: 'did:privy:user-1',
+          },
+        }),
+      } as Response
+    }
+    if (path === '/api/auth/handoff/create') {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          success: true,
+          data: {
+            code: 'handoff-code-123',
+            expiresAt: '2099-01-01T00:00:00.000Z',
           },
         }),
       } as Response
@@ -780,10 +812,8 @@ describe('TelegramLink UI flow', () => {
       await screen.findByText(/Telegram linked to user@example\.com/i)
       await screen.findByRole('heading', { name: 'Telegram Linked' })
       expect(screen.queryByText('Reconnect Telegram')).toBeNull()
-      expect(
-        screen.getByText('Email verification completed. Continue on your phone or desktop to finish owner setup for 4626 signing.'),
-      ).toBeTruthy()
-      expect(screen.getAllByRole('link', { name: 'Open Accounts (phone or desktop)' }).length).toBeGreaterThanOrEqual(1)
+      expect(screen.getByText('Linked. Finish owner setup in Accounts.')).toBeTruthy()
+      expect(screen.getByRole('button', { name: 'Continue setup' })).toBeTruthy()
       expect(screen.getByRole('button', { name: 'Retry in Mini App' })).toBeTruthy()
     } finally {
       dateNowSpy.mockRestore()
@@ -802,14 +832,48 @@ describe('TelegramLink UI flow', () => {
     await user.click(screen.getByRole('button', { name: 'Verify Code' }))
 
     await screen.findByRole('heading', { name: 'Continue Setup' })
-    expect(
-      screen.getByText(
-        'Email verification completed, but Mini App finalization did not finish. Continue on your phone or desktop to complete owner setup.',
-      ),
-    ).toBeTruthy()
+    expect(screen.getByText('Verified. Continue in Accounts to finish setup.')).toBeTruthy()
     expect(screen.getByText(/Email verified for user@example\.com/i)).toBeTruthy()
-    expect(screen.getAllByRole('link', { name: 'Open Accounts (phone or desktop)' }).length).toBeGreaterThanOrEqual(1)
+    expect(screen.getByRole('button', { name: 'Continue setup' })).toBeTruthy()
     expect(screen.getByRole('button', { name: 'Retry in Mini App' })).toBeTruthy()
+  })
+
+  it('creates an auth handoff and opens external Accounts setup for pending wallet setup', async () => {
+    const user = userEvent.setup()
+    renderFlow()
+
+    await user.type(await screen.findByLabelText('Email Address'), 'user@example.com')
+    await user.click(screen.getByRole('button', { name: 'Send Code' }))
+    await user.type(await screen.findByLabelText('Email Verification Code'), '123456')
+    await user.click(screen.getByRole('button', { name: 'Verify Code' }))
+
+    await screen.findByText('Telegram Linked')
+
+    await user.click(screen.getByRole('button', { name: 'Continue setup' }))
+
+    await waitFor(() => {
+      expect(apiFetchMock).toHaveBeenCalledWith(
+        '/api/auth/privy',
+        expect.objectContaining({
+          method: 'POST',
+          headers: expect.objectContaining({
+            Authorization: 'Bearer privy-access-token',
+          }),
+        }),
+      )
+    })
+    expect(apiFetchMock).toHaveBeenCalledWith(
+      '/api/auth/handoff/create',
+      expect.objectContaining({
+        method: 'POST',
+      }),
+    )
+    expect(openTelegramExternalLinkMock).toHaveBeenCalledTimes(1)
+    const handoffTarget = String(openTelegramExternalLinkMock.mock.calls[0]?.[0] ?? '')
+    expect(handoffTarget).toContain('/accounts?')
+    expect(handoffTarget).toContain('cv_handoff=handoff-code-123')
+    expect(handoffTarget).toContain('setup=owner-install')
+    expect(handoffTarget).toContain('source=telegram')
   })
 
   it('advances the 4-step progress indicator across the flow', async () => {
@@ -908,6 +972,65 @@ describe('TelegramLink UI flow', () => {
   it('offers a Telegram close action after the link succeeds when WebApp.close is available', async () => {
     const user = userEvent.setup()
     telegramWebAppState.hasClose = true
+    apiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/telegram/link/ready') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            data: {
+              ready: true,
+              account: {
+                privyUserId: 'did:privy:user-1',
+                email: 'user@example.com',
+                emailVerified: true,
+                canonicalCswAddress: CANONICAL_CSW_ADDRESS,
+              },
+            },
+          }),
+        } as Response
+      }
+      if (path === '/api/telegram/link/complete') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            data: {
+              link: {
+                telegramUserId: '42',
+                telegramUsername: 'akita',
+                privyUserId: 'did:privy:user-1',
+                profileId: 11,
+                linkStatus: 'active',
+                canonicalCswAddress: CANONICAL_CSW_ADDRESS,
+                ownerVerified: true,
+              },
+              account: {
+                privyUserId: 'did:privy:user-1',
+                email: 'user@example.com',
+                emailVerified: true,
+                appAccessStatus: 'approved',
+                linkedMethods: { email: ['user@example.com'], telegram: ['42'] },
+                accountSignals: {
+                  linked: true,
+                  canonicalCswAddress: CANONICAL_CSW_ADDRESS,
+                  creatorCoin: null,
+                  zoraHandle: null,
+                  lastResolvedAt: '2026-03-23T00:00:00.000Z',
+                },
+                score: {
+                  points: 15,
+                  tier: 1,
+                },
+              },
+            },
+          }),
+        } as Response
+      }
+      throw new Error(`Unexpected apiFetch path: ${path}`)
+    })
     renderFlow()
 
     await user.type(await screen.findByLabelText('Email Address'), 'user@example.com')
@@ -940,7 +1063,7 @@ describe('TelegramLink UI flow', () => {
     await user.click(screen.getByRole('button', { name: 'Verify Code' }))
 
     await screen.findByText('Telegram Linked')
-    expect(within(screen.getByTestId('telegram-link-footer-actions')).getByRole('button', { name: 'Close' })).toBeTruthy()
+    expect(within(screen.getByTestId('telegram-link-footer-actions')).getByRole('button', { name: 'Continue setup' })).toBeTruthy()
   })
 
   it('emits transition and completion telemetry for the happy path', async () => {

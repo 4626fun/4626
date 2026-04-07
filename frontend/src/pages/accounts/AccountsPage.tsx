@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Link, useLocation } from 'react-router-dom'
 import { useActiveWallet, useConnectWallet, useCrossAppAccounts, useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
 import { createWalletClient, custom, type Address } from 'viem'
 import { base } from 'viem/chains'
@@ -337,6 +337,7 @@ export function AccountsPage(props: {
     zoraStatus: ZoraLinkStatusResponse | null
   }
 }) {
+  const location = useLocation()
   const privy = useSafePrivy()
   const { login } = useSafeLogin()
   const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossApp()
@@ -348,6 +349,7 @@ export function AccountsPage(props: {
   const { address: connectedAddress, chainId } = useAccount()
   const { switchChainAsync } = useSwitchChain()
   const { ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
+  const ownerInstallSectionRef = useRef<HTMLElement | null>(null)
 
   const privyAuthed = Boolean(privy?.authenticated)
   const getAccessToken = useMemo(
@@ -383,6 +385,18 @@ export function AccountsPage(props: {
   const zoraLinked = Boolean(zoraStatus?.zoraLinked || me?.accountSignals?.linked)
   const telegramLaunchParamsAvailable = useMemo(() => Boolean(readPrivyTelegramLaunchParams()?.initDataRaw), [])
   const inTelegramMiniApp = useMemo(() => isTelegramMiniAppContext(), [])
+  const ownerInstallResumeState = useMemo(() => {
+    const params = new URLSearchParams(location.search)
+    const setup = (params.get('setup') ?? '').trim().toLowerCase()
+    if (setup !== 'owner-install') {
+      return { requested: false, source: null as string | null }
+    }
+    const source = (params.get('source') ?? '').trim().toLowerCase()
+    return {
+      requested: true,
+      source: source || null,
+    }
+  }, [location.search])
   const prefersWalletConnectQr = useMemo(() => !isMobileWalletEnvironment(), [])
   const activeExternalOwnerWallet = useMemo(() => {
     if (isPrivyExternalEthereumWallet(activePrivyWallet)) return activePrivyWallet
@@ -1087,6 +1101,19 @@ export function AccountsPage(props: {
     })
   }, [me])
 
+  useEffect(() => {
+    if (!ownerInstallResumeState.requested) return
+    const section = ownerInstallSectionRef.current
+    if (!section) return
+    const timer = window.setTimeout(() => {
+      section.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      section.focus({ preventScroll: true })
+    }, 120)
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [ownerInstallResumeState.requested, canonicalCswAddress, ownerApprovalReady])
+
   return (
     <div className="min-h-screen bg-black text-white">
       <PageMeta
@@ -1121,6 +1148,22 @@ export function AccountsPage(props: {
 
         {error ? <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div> : null}
         {notice ? <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{notice}</div> : null}
+        {ownerInstallResumeState.requested ? (
+          <div className="rounded-2xl border border-brand-primary/30 bg-[linear-gradient(180deg,rgba(37,99,235,0.18),rgba(37,99,235,0.06))] px-5 py-4 text-sm text-brand-50 shadow-[0_0_0_1px_rgba(37,99,235,0.08)]">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-brand-200">
+              <span className="inline-flex rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2.5 py-1">
+                {ownerInstallResumeState.source === 'telegram' ? 'Continue from Telegram' : 'Continue setup'}
+              </span>
+              <span className="text-brand-100/70">Owner install required</span>
+            </div>
+            <div className="mt-2 text-base font-medium text-white">
+              Your Telegram account is linked. Finish wallet setup here.
+            </div>
+            <div className="mt-1 max-w-3xl text-sm leading-relaxed text-brand-50/85">
+              4626 detected your Zora Coinbase Smart Wallet. The next step is to connect one of that wallet&apos;s current owners, verify authority on Base, and approve one transaction so 4626 can act through the same wallet.
+            </div>
+          </div>
+        ) : null}
         {inTelegramMiniApp ? (
           <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100 space-y-2">
             <div>
@@ -1243,7 +1286,16 @@ export function AccountsPage(props: {
                       ) : null}
                     </div>
 
-                    <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5">
+                    <section
+                      ref={ownerInstallSectionRef}
+                      tabIndex={-1}
+                      className={`rounded-2xl p-4 sm:p-5 outline-none ${
+                        ownerInstallResumeState.requested
+                          ? 'border border-brand-primary/30 bg-[linear-gradient(180deg,rgba(37,99,235,0.12),rgba(255,255,255,0.02))] shadow-[0_0_0_1px_rgba(37,99,235,0.08)]'
+                          : 'border border-white/10 bg-black/30'
+                      }`}
+                      aria-label="Owner install step"
+                    >
                       <div className="flex flex-wrap items-start justify-between gap-3">
                         <div className="space-y-1.5">
                           <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Step 3</div>
@@ -1260,6 +1312,11 @@ export function AccountsPage(props: {
                           {canonicalCswAddress ? ownerPrimaryCtaLabel : 'Blocked'}
                         </div>
                       </div>
+                      {ownerInstallResumeState.requested ? (
+                        <div className="mt-4 rounded-xl border border-brand-primary/20 bg-brand-primary/10 px-3 py-3 text-xs leading-5 text-brand-50/90">
+                          This step was resumed from another surface. Connect a current owner of the detected CSW, verify the signer, then approve the Base transaction below.
+                        </div>
+                      ) : null}
                       <div className="mt-4 grid gap-2 md:grid-cols-3">
                         {ownerChecklist.map((step) => (
                           <div
@@ -1392,7 +1449,7 @@ export function AccountsPage(props: {
                             : ''}
                         </div>
                       ) : null}
-                    </div>
+                    </section>
                   </div>
                 </div>
 

@@ -19,13 +19,13 @@ if [[ "$engine_logs" == "1" || "$engine_logs" == "true" ]]; then
 fi
 
 workflows=(
-  keepr-queue
+  keepr-action-queue
   vault-keeper
-  auction-settlement
+  cca-finalization
   payout-integrity
   ajna-bucket-manager
   charm-rebalance-manager
-  strategy-event-listener
+  strategy-signal-listener
   solana-orchestrator
 )
 

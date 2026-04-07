@@ -193,7 +193,7 @@ Workflow mapping file: `cre/cre-workflows/secrets.yaml`
     - `cre workflow simulate solana-orchestrator --target local-simulation --non-interactive --trigger-index 1 --http-payload @../fixtures/http/solana-orchestrator.manual.json`
   - Add `--engine-logs` when diagnosing payload/trigger issues.
 - **Log trigger not firing**
-  - Verify watched addresses in `strategy-event-listener/config.*.json`
+  - Verify watched addresses in `strategy-signal-listener/config.*.json`
   - Confirm chain selector in `project.yaml` and workflow `chainName` alignment
 - **Solana reconcile path not executing**
   - Check `/api/cre/keeper/solana/reconcile` auth header (`Bearer KEEPR_API_KEY`)

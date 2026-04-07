@@ -1,5 +1,5 @@
 /**
- * Keepr Action Queue Executor — offchain HTTP-driven logic.
+ * Keepr Action Queue — offchain HTTP-driven logic.
  *
  * Polls the Vercel API for pending keepr_actions, executes XMTP group
  * operations, and updates action status via the API.
@@ -11,7 +11,7 @@
 import { requireEnv } from '../config.js';
 import { alertInfo, alertWarning, alertCritical } from '../utils/alerts.js';
 
-const WORKFLOW_NAME = 'keepr-queue-executor';
+const WORKFLOW_NAME = 'keepr-action-queue';
 
 type KeeprTrustZone =
   | 'financial_execution'
@@ -71,7 +71,7 @@ interface ApiResponse<T> {
   error?: string;
 }
 
-export interface QueueExecutorResult {
+export interface KeeprActionQueueResult {
   processed: number;
   succeeded: number;
   failed: number;
@@ -293,8 +293,8 @@ async function executeAction(
 // Main execution
 // ---------------------------------------------------------------------------
 
-export async function executeQueueProcessor(): Promise<QueueExecutorResult> {
-  const result: QueueExecutorResult = {
+export async function executeKeeprActionQueue(): Promise<KeeprActionQueueResult> {
+  const result: KeeprActionQueueResult = {
     processed: 0,
     succeeded: 0,
     failed: 0,
@@ -391,7 +391,7 @@ export async function executeQueueProcessor(): Promise<QueueExecutorResult> {
     }
   }
 
-  await alertInfo(WORKFLOW_NAME, 'Queue processing complete', {
+  await alertInfo(WORKFLOW_NAME, 'Keepr action queue processing complete', {
     processed: result.processed,
     succeeded: result.succeeded,
     failed: result.failed,

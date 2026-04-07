@@ -15,12 +15,12 @@ Chainlink Runtime Environment (CRE) workflows that automate critical onchain ope
 
 Core CRE workflow files:
 - `cre/cre-workflows/project.yaml`
-- `cre/cre-workflows/keepr-queue/main.ts`
-- `cre/cre-workflows/keepr-queue/workflow.yaml`
+- `cre/cre-workflows/keepr-action-queue/main.ts`
+- `cre/cre-workflows/keepr-action-queue/workflow.yaml`
 - `cre/cre-workflows/vault-keeper/main.ts`
 - `cre/cre-workflows/vault-keeper/workflow.yaml`
-- `cre/cre-workflows/auction-settlement/main.ts`
-- `cre/cre-workflows/auction-settlement/workflow.yaml`
+- `cre/cre-workflows/cca-finalization/main.ts`
+- `cre/cre-workflows/cca-finalization/workflow.yaml`
 - `cre/cre-workflows/payout-integrity/main.ts`
 - `cre/cre-workflows/payout-integrity/workflow.yaml`
 - `cre/cre-workflows/runtime-indexer-block/main.ts`
@@ -60,14 +60,14 @@ cre workflow simulate ./payout-integrity --target local-simulation \
   | tee ../../docs/hackathon/evidence/cre-payout-integrity-local-simulation.log
 
 # Terminal B: Queue orchestration proof
-cre workflow simulate ./keepr-queue --target local-simulation \
-  | tee ../../docs/hackathon/evidence/cre-keepr-queue-local-simulation.log
+cre workflow simulate ./keepr-action-queue --target local-simulation \
+  | tee ../../docs/hackathon/evidence/cre-keepr-action-queue-local-simulation.log
 ```
 
 Expected output highlights:
 - `payout-integrity`: `AI assessment: enabled=true verdict=critical confidence=0.93`
 - `payout-integrity`: `alertsSent: 2` with deterministic alerts in result payload
-- `keepr-queue`: `processed=0 succeeded=0 failed=0 retried=0 skipped=0`
+- `keepr-action-queue`: `processed=0 succeeded=0 failed=0 retried=0 skipped=0`
 
 ## What It Does
 
@@ -78,15 +78,15 @@ Every 5 minutes, the unified `4626` workflow runs six tasks in sequence:
 | **Vault Keeper** | Deploy idle funds (`tend`), harvest yields (`report`) | Revenue |
 | **Ajna Bucket Manager** | Move Ajna liquidity buckets using oracle TWAP + local liquidity | Risk/Execution |
 | **Charm Rebalance Manager** | Trigger Charm vault `rebalance()` when price deviates by >= configured threshold | Risk/Execution |
-| **Auction Settlement** | Attempt canonical completion for graduated CCA auctions (`sweepCurrency`, `migrate`, optional hook config, `sweepUnsoldTokens`) | Feature |
-| **Keepr Queue** | Process pending XMTP group ops + Neynar/Farcaster actions | Infrastructure |
+| **CCA Finalization** | Attempt canonical completion for graduated CCA auctions (`sweepCurrency`, `migrate`, optional hook config, `sweepUnsoldTokens`) | Feature |
+| **Keepr Action Queue** | Process pending XMTP group ops + Neynar/Farcaster actions | Infrastructure |
 | **Bridge Integrity Monitor** | Monitor bridge signer overlap, canonical route/scalar drift, and liveness freshness | Risk/Integrity |
 
 An optional always-on listener complements cron for lower-latency strategy reactions:
 
 | Service | What | Mode |
 |---------|------|------|
-| **Strategy Event Listener** | Subscribes to oracle v3Pool `Swap` events, evaluates Ajna/Charm thresholds, enqueues deduped strategy actions | Continuous (WebSocket) |
+| **Strategy Signal Listener** | Subscribes to oracle v3Pool `Swap` events, evaluates Ajna/Charm thresholds, enqueues deduped strategy actions | Continuous (WebSocket) |
 
 Cron Ajna/Charm workflows stay enabled as fallback heartbeat and recovery path.
 
@@ -147,7 +147,7 @@ Auction settlement is a one-time event (~7 days after deployment). The system tr
 - `settlement_stage` — current completion phase (`graduated_detected`, `awaiting_migration_block`, `awaiting_owner_hook_config`, `invariant_failed`, `completed`, ...)
 - `settled_at` — only after canonical completion (`sweepCurrency` + `migrate` + hook policy + invariant gate satisfied)
 
-Once settled, vaults are excluded from the auction-settlement workflow to avoid redundant reads. The on-chain `sweepCurrencyBlock` check remains a secondary guard.
+Once settled, vaults are excluded from the `cca-finalization` workflow to avoid redundant reads. The on-chain `sweepCurrencyBlock` check remains a secondary guard.
 ## Solana Workflows
 
 The Solana integration runs as separate workflows (cron-driven, independent from the unified 4626 runner):
@@ -285,14 +285,14 @@ cron (*/5 * * * *)
 ```
 Chainlink DON
     │
-    ├── keepr-queue (every 30s)
+    ├── keepr-action-queue (every 30s)
     │       └── HTTPClient → Vercel API
     │
     ├── vault-keeper (every 5m)
     │       ├── EVMClient → read vault state (Base)
     │       └── HTTPClient → POST /cre/keeper/tend|report
     │
-    ├── auction-settlement (hourly, unsettled vaults only)
+    ├── cca-finalization (hourly, unsettled vaults only)
     │       ├── HTTPClient → GET /cre/vaults/active?settled=false
     │       ├── EVMClient → currentAuction, isGraduated, sweepCurrencyBlock
     │       ├── HTTPClient → POST /cre/keeper/sweep
@@ -364,7 +364,7 @@ Optional (Charm rebalance manager):
 - `CHARM_REBALANCE_VAULT_ADDRESS` / `CHARM_REBALANCE_ORACLE_ADDRESS` — explicit single-vault targeting for Charm workflow
 - `CHARM_REBALANCE_TWAP_DURATION`, `CHARM_REBALANCE_PRICE_CHANGE_TRIGGER_BPS`
 
-Optional (strategy event listener):
+Optional (strategy signal listener):
 - `BASE_WS_RPC_URL` — Base WebSocket RPC for `Swap` subscriptions
 - `STRATEGY_EVENT_DEBOUNCE_MS`, `STRATEGY_EVENT_COOLDOWN_SECONDS`, `STRATEGY_EVENT_MAX_ACTIONS_PER_HOUR`
 - `STRATEGY_EVENT_STATE_FILE`, `STRATEGY_EVENT_BACKFILL_CHUNK_BLOCKS`, `STRATEGY_EVENT_START_LOOKBACK_BLOCKS`, `STRATEGY_EVENT_BACKLOG_ALERT_BLOCKS`
@@ -437,9 +437,9 @@ npm run dry-run
 npm run start:vault-keeper
 npm run start:ajna-bucket-manager
 npm run start:charm-rebalance-manager
-npm run start:auction-settlement
-npm run start:keepr-queue
-npm run start:strategy-event-listener
+npm run start:cca-finalization
+npm run start:keepr-action-queue
+npm run start:strategy-signal-listener
 npm run start:bridge-integrity-monitor
 
 # Tests
@@ -467,7 +467,7 @@ cre/
 │   │   ├── CreatorCoin.ts
 │   │   ├── ERC20.ts
 │   │   └── index.ts
-│   ├── keepr-queue/                    # HTTP-only queue processor
+│   ├── keepr-action-queue/             # HTTP-only queue processor
 │   │   ├── main.ts                     # CRE workflow (CronCapability + HTTPClient)
 │   │   ├── workflow.yaml
 │   │   ├── config.staging.json
@@ -481,7 +481,7 @@ cre/
 │   │   ├── config.production.json
 │   │   ├── package.json
 │   │   └── tsconfig.json
-│   ├── auction-settlement/             # Smart polling (hourly, DB-tracked)
+│   ├── cca-finalization/               # Smart polling (hourly, DB-tracked)
 │   │   ├── main.ts                     # CRE workflow (EVMClient + HTTPClient)
 │   │   ├── workflow.yaml
 │   │   ├── config.staging.json
@@ -501,14 +501,14 @@ cre/
 │   ├── vault-keeper.workflow.ts        # Standalone vault keeper
 │   ├── ajna-bucket-manager.workflow.ts # Standalone Ajna bucket manager
 │   ├── charm-rebalance-manager.workflow.ts # Standalone Charm rebalance manager
-│   ├── auction-settlement.workflow.ts  # Standalone auction settlement
-│   ├── keepr-queue-executor.workflow.ts
-│   └── strategy-event-listener.workflow.ts # Always-on WS listener (event-driven queue enqueue)
+│   ├── cca-finalization.workflow.ts    # Standalone CCA finalization
+│   ├── keepr-action-queue.workflow.ts
+│   └── strategy-signal-listener.workflow.ts # Always-on WS listener (event-driven queue enqueue)
 ├── actions/
 │   ├── vault-keeper.action.ts          # tend/report logic (multi-vault)
-│   ├── auction-settlement.action.ts    # sweep logic (multi-vault, sweepCurrencyBlock guard)
-│   ├── keepr-queue-executor.action.ts  # XMTP/Neynar queue processor
-│   └── strategy-event-listener.action.ts # Swap event listener + trigger evaluation
+│   ├── cca-finalization.action.ts      # finalization logic (multi-vault, sweepCurrencyBlock guard)
+│   ├── keepr-action-queue.action.ts    # XMTP/Neynar queue processor
+│   └── strategy-signal-listener.action.ts # Swap event listener + trigger evaluation
 ├── utils/
 │   ├── onchain.ts                      # viem clients, read/write/dry-run
 │   ├── registry.ts                     # Vault registry client
@@ -516,7 +516,7 @@ cre/
 │   └── strategy-event-state.ts         # .state persistence (lastProcessedBlock/cooldowns/rate limit)
 ├── tests/
 │   ├── vault-keeper.test.ts
-│   └── auction-settlement.test.ts
+│   └── cca-finalization.test.ts
 └── secrets.example.env
 ```
 
@@ -526,7 +526,7 @@ Use a dedicated unit so cron workflows remain independent:
 
 ```ini
 [Unit]
-Description=4626 strategy event listener
+Description=4626 strategy signal listener
 After=network-online.target
 Wants=network-online.target
 
@@ -536,7 +536,7 @@ User=app4626
 Group=app4626
 WorkingDirectory=/opt/4626/cre
 EnvironmentFile=/etc/4626/cre.env
-ExecStart=/usr/bin/env pnpm --dir /opt/4626/cre start:strategy-event-listener
+ExecStart=/usr/bin/env pnpm --dir /opt/4626/cre start:strategy-signal-listener
 Restart=always
 RestartSec=2
 
@@ -576,17 +576,17 @@ All require `Authorization: Bearer $KEEPR_API_KEY`.
 
 ```bash
 # Install dependencies for a workflow
-cd cre/cre-workflows/keepr-queue && bun install
+cd cre/cre-workflows/keepr-action-queue && bun install
 
 # Simulate locally (requires cre login)
 cd cre/cre-workflows
-cre workflow simulate keepr-queue --target local-simulation
+cre workflow simulate keepr-action-queue --target local-simulation
 cre workflow simulate vault-keeper --target local-simulation
-cre workflow simulate auction-settlement --target local-simulation
+cre workflow simulate cca-finalization --target local-simulation
 cre workflow simulate payout-integrity --target local-simulation
 
 # Deploy to DON (requires cre login + funded account)
-cre workflow deploy keepr-queue --target production-settings
+cre workflow deploy keepr-action-queue --target production-settings
 cre workflow deploy payout-integrity --target production-settings
 ```
 
@@ -607,14 +607,14 @@ For local simulation, add these to `cre/cre-workflows/.env`.
 | Resource | Limit | Impact |
 |----------|-------|--------|
 | EVM reads | ~11 per execution | vault-keeper: 1 vault per run; payout-integrity: 1 vault per run |
-| HTTP calls | 5 per execution | keepr-queue: 2 actions per run |
-| Cron interval | 30s minimum | keepr-queue uses 30s; auction-settlement uses 1h |
+| HTTP calls | 5 per execution | keepr-action-queue: 2 actions per run |
+| Cron interval | 30s minimum | keepr-action-queue uses 30s; cca-finalization uses 1h |
 | Concurrent capabilities | 3 | Sequential reads within each workflow |
 | Execution timeout | 5 minutes | All workflows complete well within this |
 
 ### CRE Quota Budget
 
-**auction-settlement (hourly)**:
+**cca-finalization (hourly)**:
 - 1 HTTP (fetch unsettled vaults) + 3 EVM reads (currentAuction, isGraduated, sweepCurrencyBlock) + 1 HTTP (sweep) + 1 HTTP (mark-settled) = 3 HTTP + 3 EVM reads
 
 **payout-integrity (every 30 min, 1 vault per run)**:

@@ -180,12 +180,12 @@ Generated from `docs/operations/action-matrix.csv`.
 
 | Action                     | Endpoint / Method                     | Permission                          | Mode      | Notes                      | Source                                       |
 | -------------------------- | ------------------------------------- | ----------------------------------- | --------- | -------------------------- | -------------------------------------------- |
-| `xmtp_add_member`          | `actionType=xmtp.group.add_member`    | queue executor                      | automated | XMTP membership add        | `frontend/server/keepr/xmtpQueueExecutor.ts` |
-| `xmtp_remove_member`       | `actionType=xmtp.group.remove_member` | queue executor                      | automated | XMTP membership remove     | `frontend/server/keepr/xmtpQueueExecutor.ts` |
-| `xmtp_send_message`        | `actionType=xmtp.group.send_message`  | queue executor                      | automated | XMTP message send          | `frontend/server/keepr/xmtpQueueExecutor.ts` |
-| `xmtp_sync_members`        | `actionType=xmtp.group.sync_members`  | queue executor                      | automated | XMTP membership sync       | `frontend/server/keepr/xmtpQueueExecutor.ts` |
-| `strategy_ajna_rebucket`   | `actionType=strategy.ajna.rebucket`   | canonical precheck + queue executor | automated | Executes setMinBucketIndex | `frontend/server/keepr/xmtpQueueExecutor.ts` |
-| `strategy_charm_rebalance` | `actionType=strategy.charm.rebalance` | queue executor + onchain auth       | automated | Executes rebalance         | `frontend/server/keepr/xmtpQueueExecutor.ts` |
+| `xmtp_add_member`          | `actionType=xmtp.group.add_member`    | keepr action queue                      | automated | XMTP membership add        | `frontend/server/keepr/xmtpQueueExecutor.ts` |
+| `xmtp_remove_member`       | `actionType=xmtp.group.remove_member` | keepr action queue                      | automated | XMTP membership remove     | `frontend/server/keepr/xmtpQueueExecutor.ts` |
+| `xmtp_send_message`        | `actionType=xmtp.group.send_message`  | keepr action queue                      | automated | XMTP message send          | `frontend/server/keepr/xmtpQueueExecutor.ts` |
+| `xmtp_sync_members`        | `actionType=xmtp.group.sync_members`  | keepr action queue                      | automated | XMTP membership sync       | `frontend/server/keepr/xmtpQueueExecutor.ts` |
+| `strategy_ajna_rebucket`   | `actionType=strategy.ajna.rebucket`   | canonical precheck + keepr action queue | automated | Executes setMinBucketIndex | `frontend/server/keepr/xmtpQueueExecutor.ts` |
+| `strategy_charm_rebalance` | `actionType=strategy.charm.rebalance` | keepr action queue + onchain auth       | automated | Executes rebalance         | `frontend/server/keepr/xmtpQueueExecutor.ts` |
 
 
 ## cre_bridge
@@ -213,12 +213,12 @@ Generated from `docs/operations/action-matrix.csv`.
 | -------------------------- | ------------------------------------------------------ | -------------------------------------- | --------- | --------------------------------------- | ------------------------------------------------------ |
 | `unified_4626`             | `cre/workflows/4626.workflow.ts`                       | CRE env+secrets                        | automated | Runs all core protocol automation tasks | `cre/workflows/4626.workflow.ts`                       |
 | `vault_keeper`             | `cre/workflows/vault-keeper.workflow.ts`               | keeper authorization                   | automated | tend/report loop                        | `cre/workflows/vault-keeper.workflow.ts`               |
-| `payout_router_processor`  | `cre/workflows/payout-router-processor.workflow.ts`    | keeper authorization                   | automated | claim and convertAndQueue               | `cre/workflows/payout-router-processor.workflow.ts`    |
+| `payout_router_harvest`   | `cre/workflows/payout-router-harvest.workflow.ts`      | keeper authorization                   | automated | claim and convertAndQueue               | `cre/workflows/payout-router-harvest.workflow.ts`      |
 | `ajna_bucket_manager`      | `cre/workflows/ajna-bucket-manager.workflow.ts`        | canonical Ajna context                 | automated | setMinBucketIndex policy loop           | `cre/workflows/ajna-bucket-manager.workflow.ts`        |
 | `charm_rebalance_manager`  | `cre/workflows/charm-rebalance-manager.workflow.ts`    | onchain auth checks                    | automated | rebalance threshold loop                | `cre/workflows/charm-rebalance-manager.workflow.ts`    |
-| `auction_settlement`       | `cre/workflows/auction-settlement.workflow.ts`         | permissionless strategy calls + checks | automated | sweep/migrate/sweepUnsold path          | `cre/workflows/auction-settlement.workflow.ts`         |
-| `keepr_queue_executor`     | `cre/workflows/keepr-queue-executor.workflow.ts`       | queue API key + XMTP creds             | automated | consume/execute/retry queue actions     | `cre/workflows/keepr-queue-executor.workflow.ts`       |
-| `strategy_event_listener`  | `cre/workflows/strategy-event-listener.workflow.ts`    | ws rpc + queue auth                    | automated | Enqueues deduped Ajna/Charm actions     | `cre/workflows/strategy-event-listener.workflow.ts`    |
+| `cca_finalization`        | `cre/workflows/cca-finalization.workflow.ts`           | permissionless strategy calls + checks | automated | sweep/migrate/sweepUnsold path          | `cre/workflows/cca-finalization.workflow.ts`           |
+| `keepr_action_queue`      | `cre/workflows/keepr-action-queue.workflow.ts`         | queue API key + XMTP creds             | automated | consume/execute/retry queue actions     | `cre/workflows/keepr-action-queue.workflow.ts`         |
+| `strategy_signal_listener` | `cre/workflows/strategy-signal-listener.workflow.ts`  | ws rpc + queue auth                    | automated | Enqueues deduped Ajna/Charm actions     | `cre/workflows/strategy-signal-listener.workflow.ts`   |
 | `bridge_integrity_monitor` | `cre/workflows/bridge-integrity-monitor.workflow.ts`   | monitor config                         | automated | Signer/route/scalar/liveness integrity  | `cre/workflows/bridge-integrity-monitor.workflow.ts`   |
 | `solana_relay_entries`     | `cre/workflows/keepr-solana-relay-entries.workflow.ts` | solana+base creds                      | automated | Relay Solana entries to Base            | `cre/workflows/keepr-solana-relay-entries.workflow.ts` |
 | `solana_settle_fees`       | `cre/workflows/keepr-solana-settle-fees.workflow.ts`   | solana+base creds                      | automated | Settle fees to Base gauge               | `cre/workflows/keepr-solana-settle-fees.workflow.ts`   |
@@ -234,14 +234,14 @@ Generated from `docs/operations/action-matrix.csv`.
 | -------------------------- | ------------------------------------------------ | ------------------------------- | --------- | ------------------------------- | -------------------------------------------------- |
 | `vault_tend`               | `CreatorOVault.tend()`                           | keeper                          | automated | Idle funds deployment           | `cre/actions/vault-keeper.action.ts`               |
 | `vault_report`             | `CreatorOVault.report()`                         | keeper                          | automated | Harvest/report yields           | `cre/actions/vault-keeper.action.ts`               |
-| `payout_convert_and_queue` | `PayoutRouter.convertAndQueue()`                 | keeper/owner path               | automated | Routes payout balances          | `cre/actions/payout-router-processor.action.ts`    |
-| `payout_claim_rewards`     | `PayoutRouter.claimAllProtocolRewards()`         | keeper/owner path               | automated | Optional protocol rewards claim | `cre/actions/payout-router-processor.action.ts`    |
+| `payout_convert_and_queue` | `PayoutRouter.convertAndQueue()`                 | keeper/owner path               | automated | Routes payout balances          | `cre/actions/payout-router-harvest.action.ts`    |
+| `payout_claim_rewards`     | `PayoutRouter.claimAllProtocolRewards()`         | keeper/owner path               | automated | Optional protocol rewards claim | `cre/actions/payout-router-harvest.action.ts`    |
 | `ajna_set_min_bucket`      | `AjnaVaultAuth.setMinBucketIndex()`              | canonical CSW admin             | automated | Ajna rebucket execution         | `cre/actions/ajna-bucket-manager.action.ts`        |
 | `charm_rebalance`          | `CharmVault.rebalance()`                         | manager/delegate/keeper context | automated | Charm rebalance                 | `cre/actions/charm-rebalance-manager.action.ts`    |
-| `auction_sweep_currency`   | `CCAStrategy.sweepCurrency()`                    | permissionless                  | automated | Settlement phase                | `cre/actions/auction-settlement.action.ts`         |
-| `auction_migrate`          | `CCAStrategy.migrate()`                          | permissionless                  | automated | Settlement phase                | `cre/actions/auction-settlement.action.ts`         |
-| `auction_sweep_unsold`     | `CCAStrategy.sweepUnsoldTokens()`                | permissionless                  | automated | Settlement phase                | `cre/actions/auction-settlement.action.ts`         |
-| `auction_finalize_failed`  | `CCAStrategy.finalizeFailedAuction()`            | as configured                   | automated | Failure handling path           | `cre/actions/auction-settlement.action.ts`         |
+| `auction_sweep_currency`   | `CCAStrategy.sweepCurrency()`                    | permissionless                  | automated | Settlement phase                | `cre/actions/cca-finalization.action.ts`         |
+| `auction_migrate`          | `CCAStrategy.migrate()`                          | permissionless                  | automated | Settlement phase                | `cre/actions/cca-finalization.action.ts`         |
+| `auction_sweep_unsold`     | `CCAStrategy.sweepUnsoldTokens()`                | permissionless                  | automated | Settlement phase                | `cre/actions/cca-finalization.action.ts`         |
+| `auction_finalize_failed`  | `CCAStrategy.finalizeFailedAuction()`            | as configured                   | automated | Failure handling path           | `cre/actions/cca-finalization.action.ts`         |
 | `solana_process_entry`     | `LotteryManager.processLotteryEntryFromSolana()` | bridge relay authority          | automated | Solana entry relay write        | `cre/actions/keepr-solana-relay-entries.action.ts` |
 | `solana_receive_fee`       | `...receiveFeeFromSolana()`                      | bridge relay authority          | automated | Solana fee settlement write     | `cre/actions/keepr-solana-settle-fees.action.ts`   |
 

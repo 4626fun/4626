@@ -1,5 +1,5 @@
 /**
- * CRE Workflow: Keepr Queue Executor
+ * CRE Workflow: Keepr Action Queue
  *
  * Polls the Vercel API for pending keepr_actions, executes them via the
  * API, and updates their status. This is a pure HTTP workflow — no EVM
@@ -81,7 +81,7 @@ type ExecuteResponse = {
 // Result type returned by the workflow
 // ---------------------------------------------------------------------------
 
-type QueueResult = {
+type KeeprActionQueueResult = {
   processed: number
   succeeded: number
   failed: number
@@ -97,7 +97,7 @@ function fetchPendingActions(
   nodeRuntime: NodeRuntime<Config>,
   httpClient: HTTPClient,
   apiKey: string,
-): QueueResult {
+): KeeprActionQueueResult {
   const limit = nodeRuntime.config.maxActionsPerExecution
 
   // --- Call 1: Fetch pending actions ---
@@ -117,7 +117,7 @@ function fetchPendingActions(
     return { processed: 0, succeeded: 0, failed: 0, retried: 0, skipped: 0 }
   }
 
-  const result: QueueResult = {
+  const result: KeeprActionQueueResult = {
     processed: 0,
     succeeded: 0,
     failed: 0,
@@ -227,12 +227,12 @@ function fetchPendingActions(
 // CRE Callback — triggered by cron
 // ---------------------------------------------------------------------------
 
-const onCronTrigger = (runtime: Runtime<Config>): QueueResult => {
+const onCronTrigger = (runtime: Runtime<Config>): KeeprActionQueueResult => {
   // Retrieve the API key from CRE secrets
   const apiKeySecret = runtime.getSecret({ id: "KEEPR_API_KEY" }).result()
   const apiKey = apiKeySecret.value
 
-  runtime.log("Keepr queue executor starting")
+  runtime.log("Keepr action queue starting")
 
   // Run HTTP calls in node mode with identical aggregation
   // (all nodes should see the same API responses)
@@ -244,7 +244,7 @@ const onCronTrigger = (runtime: Runtime<Config>): QueueResult => {
   )().result()
 
   runtime.log(
-    `Queue processing complete: processed=${result.processed} succeeded=${result.succeeded} failed=${result.failed} retried=${result.retried} skipped=${result.skipped}`,
+    `Keepr action queue complete: processed=${result.processed} succeeded=${result.succeeded} failed=${result.failed} retried=${result.retried} skipped=${result.skipped}`,
   )
 
   return result

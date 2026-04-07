@@ -15,7 +15,7 @@ The repo has already moved the canonical Ajna integration to a nested model:
 Current state is still mixed:
 
 - Some frontend/API/operator surfaces still preserve direct `AjnaStrategy` actions for backward compatibility.
-- The paymaster and queue executor still contain legacy compatibility paths.
+- The paymaster and Keepr Action Queue path still contain legacy compatibility paths.
 - Docs still describe the direct `AjnaStrategy` path as legacy rather than removing it entirely.
 - The direct strategy contract source still exists in-tree.
 

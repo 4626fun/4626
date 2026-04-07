@@ -1,5 +1,5 @@
 /**
- * CRE Workflow: Payout Router Processor
+ * CRE Workflow: Payout Router Harvest
  *
  * Schedule: Every 5 minutes
  * Pattern: cron -> read router balances -> conditional writes
@@ -11,14 +11,14 @@
  *   4. (Optional) convertAndQueue WETH balances
  */
 
-import { executePayoutRouterProcessor } from '../actions/payout-router-processor.action.js';
+import { executePayoutRouterHarvest } from '../actions/payout-router-harvest.action.js';
 import { alertCritical } from '../utils/alerts.js';
 
-const WORKFLOW_NAME = 'payout-router-processor';
+const WORKFLOW_NAME = 'payout-router-harvest';
 
 export async function handler(): Promise<void> {
   try {
-    const result = await executePayoutRouterProcessor();
+    const result = await executePayoutRouterHarvest();
 
     console.log(
       JSON.stringify({

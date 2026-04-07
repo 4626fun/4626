@@ -57,19 +57,19 @@ set -a && source .env && set +a
 node ../scripts/hackathon/mock-cre-api-server.mjs
 
 cre workflow simulate ./payout-integrity --target local-simulation
-cre workflow simulate ./keepr-queue --target local-simulation
+cre workflow simulate ./keepr-action-queue --target local-simulation
 ```
 
 Narration points:
 1. “This is the explicit CRE CLI simulation proof for submission.”
 2. “`payout-integrity` shows deterministic checks plus AI advisory fields.”
-3. “`keepr-queue` shows successful orchestration metrics.”
+3. “`keepr-action-queue` shows successful orchestration metrics.”
 
 ## 3:20 - 3:50 — Show Evidence Bundle + Requirement Mapping
 
 Open:
 - `docs/hackathon/evidence/cre-payout-integrity-local-simulation.md`
-- `docs/hackathon/evidence/cre-keepr-queue-local-simulation.md`
+- `docs/hackathon/evidence/cre-keepr-action-queue-local-simulation.md`
 - `docs/hackathon/evidence/cre-runtime-indexer-block-local-simulation.md`
 - `docs/hackathon/evidence/cre-runtime-orchestrator-cron-local-simulation.md`
 - `docs/hackathon/chainlink-cre-submission.md`

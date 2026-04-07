@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { executeQueueProcessor } from '../actions/keepr-queue-executor.action.js';
+import { executeKeeprActionQueue } from '../actions/keepr-action-queue.action.js';
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -25,7 +25,7 @@ function pendingAction(overrides: Partial<Record<string, unknown>> = {}) {
   };
 }
 
-describe('keepr queue executor', () => {
+describe('keepr action queue', () => {
   const originalFetch = globalThis.fetch;
   const originalApiBase = process.env.KEEPR_API_BASE_URL;
   const originalApiKey = process.env.KEEPR_API_KEY;
@@ -74,7 +74,7 @@ describe('keepr queue executor', () => {
       return jsonResponse({ success: false, error: 'unexpected' }, 500);
     }) as any;
 
-    const result = await executeQueueProcessor();
+    const result = await executeKeeprActionQueue();
 
     expect(result.processed).toBe(1);
     expect(result.succeeded).toBe(1);
@@ -121,7 +121,7 @@ describe('keepr queue executor', () => {
       return jsonResponse({ success: false, error: 'unexpected' }, 500);
     }) as any;
 
-    const result = await executeQueueProcessor();
+    const result = await executeKeeprActionQueue();
 
     expect(result.processed).toBe(1);
     expect(result.succeeded).toBe(0);
@@ -164,7 +164,7 @@ describe('keepr queue executor', () => {
       return jsonResponse({ success: false, error: 'unexpected' }, 500);
     }) as any;
 
-    const result = await executeQueueProcessor();
+    const result = await executeKeeprActionQueue();
 
     expect(result.processed).toBe(1);
     expect(result.succeeded).toBe(0);
@@ -220,7 +220,7 @@ describe('keepr queue executor', () => {
       return jsonResponse({ success: false, error: 'unexpected' }, 500);
     }) as any;
 
-    await executeQueueProcessor();
+    await executeKeeprActionQueue();
 
     const executeCall = calls.find((c) => c.url.endsWith('/keepr/actions/execute'));
     expect(executeCall?.headers['x-keepr-trust-zone']).toBe('financial_execution');

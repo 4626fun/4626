@@ -18,9 +18,9 @@
 
 import { executeKeeper, type BatchKeeperResult } from '../actions/vault-keeper.action.js';
 import {
-  executePayoutRouterProcessor,
-  type BatchPayoutRouterResult,
-} from '../actions/payout-router-processor.action.js';
+  executePayoutRouterHarvest,
+  type BatchPayoutRouterHarvestResult,
+} from '../actions/payout-router-harvest.action.js';
 import {
   executeAjnaBucketManager,
   type BatchAjnaBucketResult,
@@ -29,8 +29,8 @@ import {
   executeCharmRebalanceManager,
   type BatchCharmRebalanceResult,
 } from '../actions/charm-rebalance-manager.action.js';
-import { executeSettlement, type BatchSettlementResult } from '../actions/auction-settlement.action.js';
-import { executeQueueProcessor, type QueueExecutorResult } from '../actions/keepr-queue-executor.action.js';
+import { executeCcaFinalization, type BatchCcaFinalizationResult } from '../actions/cca-finalization.action.js';
+import { executeKeeprActionQueue, type KeeprActionQueueResult } from '../actions/keepr-action-queue.action.js';
 import {
   executeBridgeIntegrityMonitor,
   type BridgeIntegrityMonitorResult,
@@ -41,11 +41,11 @@ const WORKFLOW_NAME = '4626';
 
 export interface UnifiedResult {
   keeper: BatchKeeperResult | null;
-  payoutRouter: BatchPayoutRouterResult | null;
+  payoutRouter: BatchPayoutRouterHarvestResult | null;
   ajnaBuckets: BatchAjnaBucketResult | null;
   charmRebalance: BatchCharmRebalanceResult | null;
-  settlement: BatchSettlementResult | null;
-  queue: QueueExecutorResult | null;
+  settlement: BatchCcaFinalizationResult | null;
+  queue: KeeprActionQueueResult | null;
   bridgeIntegrity: BridgeIntegrityMonitorResult | null;
   errors: string[];
   durationMs: number;
@@ -58,11 +58,11 @@ export async function handler(): Promise<void> {
   const start = Date.now();
   const errors: string[] = [];
   let keeperResult: BatchKeeperResult | null = null;
-  let payoutRouterResult: BatchPayoutRouterResult | null = null;
+  let payoutRouterResult: BatchPayoutRouterHarvestResult | null = null;
   let ajnaBucketsResult: BatchAjnaBucketResult | null = null;
   let charmRebalanceResult: BatchCharmRebalanceResult | null = null;
-  let settlementResult: BatchSettlementResult | null = null;
-  let queueResult: QueueExecutorResult | null = null;
+  let settlementResult: BatchCcaFinalizationResult | null = null;
+  let queueResult: KeeprActionQueueResult | null = null;
   let bridgeIntegrityResult: BridgeIntegrityMonitorResult | null = null;
 
   // ── 1. Vault Keeper (tend + report) ──────────────────────────────────
@@ -81,8 +81,8 @@ export async function handler(): Promise<void> {
 
   // ── 2. Payout Router Processor (claim + convertAndQueue) ─────────────
   try {
-    console.log('═══ Payout Router Processor ═══');
-    payoutRouterResult = await executePayoutRouterProcessor();
+    console.log('═══ Payout Router Harvest ═══');
+    payoutRouterResult = await executePayoutRouterHarvest();
     console.log(
       `  vaults=${payoutRouterResult.totalVaults} processed=${payoutRouterResult.processed} ` +
         `claimed=${payoutRouterResult.claimedVaults} converted=${payoutRouterResult.converted} ` +
@@ -90,8 +90,8 @@ export async function handler(): Promise<void> {
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`  payout-router-processor failed: ${msg}`);
-    errors.push(`payout-router-processor: ${msg}`);
+    console.error(`  payout-router-harvest failed: ${msg}`);
+    errors.push(`payout-router-harvest: ${msg}`);
   }
 
   // ── 3. Ajna Bucket Manager (TWAP + liquidity-aware) ──────────────────
@@ -125,22 +125,22 @@ export async function handler(): Promise<void> {
 
   // ── 5. Auction Settlement (sweepCurrency + sweepUnsoldTokens) ────────
   try {
-    console.log('═══ Auction Settlement ═══');
-    settlementResult = await executeSettlement();
+    console.log('═══ CCA Finalization ═══');
+    settlementResult = await executeCcaFinalization();
     console.log(
       `  strategies=${settlementResult.totalStrategies} settled=${settlementResult.settled} ` +
         `skipped=${settlementResult.skipped} errors=${settlementResult.errors}`
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error(`  auction-settlement failed: ${msg}`);
-    errors.push(`auction-settlement: ${msg}`);
+    console.error(`  cca-finalization failed: ${msg}`);
+    errors.push(`cca-finalization: ${msg}`);
   }
 
   // ── 6. Keepr Queue (XMTP group ops + Neynar/Farcaster) ──────────────
   try {
-    console.log('═══ Keepr Queue ═══');
-    queueResult = await executeQueueProcessor();
+    console.log('═══ Keepr Action Queue ═══');
+    queueResult = await executeKeeprActionQueue();
     console.log(
       `  processed=${queueResult.processed} succeeded=${queueResult.succeeded} ` +
         `failed=${queueResult.failed} retried=${queueResult.retried}`
@@ -149,10 +149,10 @@ export async function handler(): Promise<void> {
     const msg = err instanceof Error ? err.message : String(err);
     // Queue errors are non-fatal if the API isn't configured yet
     if (msg.includes('Missing required env var')) {
-      console.log(`  keepr-queue skipped: ${msg}`);
+      console.log(`  keepr-action-queue skipped: ${msg}`);
     } else {
-      console.error(`  keepr-queue failed: ${msg}`);
-      errors.push(`keepr-queue: ${msg}`);
+      console.error(`  keepr-action-queue failed: ${msg}`);
+      errors.push(`keepr-action-queue: ${msg}`);
     }
   }
 

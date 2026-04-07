@@ -1,5 +1,5 @@
 /**
- * CRE Workflow: Keepr Action Queue Executor
+ * CRE Workflow: Keepr Action Queue
  *
  * Schedule: Every 30 seconds
  * Pattern:  cron → HTTP read (poll API) → execute XMTP ops → HTTP write (update status)
@@ -20,17 +20,17 @@
  *   - Join requests, member syncs, and group messages all stall
  */
 
-import { executeQueueProcessor } from '../actions/keepr-queue-executor.action.js';
+import { executeKeeprActionQueue } from '../actions/keepr-action-queue.action.js';
 import { alertCritical } from '../utils/alerts.js';
 
-const WORKFLOW_NAME = 'keepr-queue-executor';
+const WORKFLOW_NAME = 'keepr-action-queue';
 
 /**
  * CRE entrypoint — called on each cron trigger.
  */
 export async function handler(): Promise<void> {
   try {
-    const result = await executeQueueProcessor();
+    const result = await executeKeeprActionQueue();
 
     console.log(
       JSON.stringify({

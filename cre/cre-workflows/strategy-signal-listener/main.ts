@@ -21,7 +21,7 @@ type Config = AjnaManagerConfig & CharmManagerConfig & {
   watchedPoolAddresses: `0x${string}`[]
 }
 
-type StrategyEventResult = {
+type StrategySignalResult = {
   trigger: "cron" | "log"
   observedPool?: string
   ajnaEnqueuedActions: number
@@ -39,17 +39,17 @@ function runReconciliation(runtime: Runtime<Config>, trigger: "cron" | "log", ob
     ajnaEnqueuedActions: ajna.enqueuedActions,
     charmEnqueuedActions: charm.enqueuedActions,
     errors: [...ajna.errors, ...charm.errors],
-  } satisfies StrategyEventResult
+  } satisfies StrategySignalResult
 }
 
-const onCronTrigger = (runtime: Runtime<Config>): StrategyEventResult => {
-  runtime.log("Strategy event listener cron backfill running")
+const onCronTrigger = (runtime: Runtime<Config>): StrategySignalResult => {
+  runtime.log("Strategy signal listener cron backfill running")
   return runReconciliation(runtime, "cron")
 }
 
-const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): StrategyEventResult => {
+const onLogTrigger = (runtime: Runtime<Config>, log: EVMLog): StrategySignalResult => {
   const pool = log.address ? `0x${Buffer.from(log.address).toString("hex")}` : undefined
-  runtime.log(`Strategy event listener log trigger fired${pool ? ` for ${pool}` : ""}`)
+  runtime.log(`Strategy signal listener log trigger fired${pool ? ` for ${pool}` : ""}`)
   return runReconciliation(runtime, "log", pool)
 }
 

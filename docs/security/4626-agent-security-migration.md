@@ -59,7 +59,7 @@ Check rows in `agent_control_audit_events` for:
 
 For each worker/operator environment, set only the zone keys it should hold.
 
-CRE queue executor automatically attaches:
+The keepr action queue automatically attaches:
 
 - `x-keepr-trust-zone`
 - `x-keepr-zone-key` (when corresponding env key exists)
@@ -92,7 +92,7 @@ Smoke-check:
   - `policy.test.ts`
   - `redaction.test.ts`
   - keepr action auth tests
-  - queue executor tests
+  - keepr action queue tests
 
 ## Rollback Plan
 

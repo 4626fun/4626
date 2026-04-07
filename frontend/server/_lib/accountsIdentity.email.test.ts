@@ -10,11 +10,13 @@ function normalizeSql(strings: TemplateStringsArray): string {
   return strings.join(' ').toLowerCase().replace(/\s+/g, ' ').trim()
 }
 
+type RecordingQueryResult = { rows: any[] }
+
 function createRecordingDb() {
   const calls: Array<{ text: string; values: any[] }> = []
   return {
     calls,
-    sql: vi.fn(async (strings: TemplateStringsArray, ...values: any[]) => {
+    sql: vi.fn(async (strings: TemplateStringsArray, ...values: any[]): Promise<RecordingQueryResult> => {
       calls.push({ text: normalizeSql(strings), values })
       const text = normalizeSql(strings)
       if (text.includes("to_regclass('public.profiles') is not null as has_profiles")) {
@@ -172,11 +174,13 @@ describe('accountsIdentity verified email handling', () => {
 
   it('re-reads the canonical profile after losing a privy_user_id insert race', async () => {
     const db = createRecordingDb()
-    const originalSql = db.sql.getMockImplementation()
+    const originalSql = db.sql.getMockImplementation() as
+      | ((strings: TemplateStringsArray, ...values: any[]) => Promise<RecordingQueryResult>)
+      | undefined
     let profileLookupCount = 0
     let profileInsertCount = 0
 
-    db.sql.mockImplementation(async (strings: TemplateStringsArray, ...values: any[]) => {
+    db.sql.mockImplementation(async (strings: TemplateStringsArray, ...values: any[]): Promise<RecordingQueryResult> => {
       const text = normalizeSql(strings)
       if (text.includes('select id from profiles where privy_user_id =')) {
         profileLookupCount += 1
@@ -187,7 +191,8 @@ describe('accountsIdentity verified email handling', () => {
         profileInsertCount += 1
         throw new Error('duplicate key value violates unique constraint "profiles_privy_user_id_unique"')
       }
-      return await originalSql?.(strings, ...values)
+      if (originalSql) return await originalSql(strings, ...values)
+      return { rows: [] }
     })
 
     await expect(

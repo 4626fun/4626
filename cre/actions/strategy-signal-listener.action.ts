@@ -1,5 +1,5 @@
 /**
- * Strategy Event Listener — always-on, event-driven trigger evaluation.
+ * Strategy Signal Listener — always-on, event-driven trigger evaluation.
  *
  * Watches Uniswap V3 Swap events for each vault oracle's configured v3Pool,
  * reuses Ajna/Charm trigger logic, and enqueues deduplicated actions into the
@@ -58,7 +58,7 @@ import {
   type StrategyEventState,
 } from '../utils/strategy-event-state.js';
 
-const WORKFLOW_NAME = 'strategy-event-listener';
+const WORKFLOW_NAME = 'strategy-signal-listener';
 
 const UNISWAP_V3_POOL_SWAP_EVENT_ABI = [
   {
@@ -160,7 +160,7 @@ function buildConfig(): ListenerConfig {
     backfillChunkBlocks: BigInt(parsePositiveIntEnv('STRATEGY_EVENT_BACKFILL_CHUNK_BLOCKS', 5000)),
     startLookbackBlocks: BigInt(parsePositiveIntEnv('STRATEGY_EVENT_START_LOOKBACK_BLOCKS', 500)),
     backlogAlertBlocks: BigInt(parsePositiveIntEnv('STRATEGY_EVENT_BACKLOG_ALERT_BLOCKS', 25000)),
-    stateFile: process.env.STRATEGY_EVENT_STATE_FILE || `${process.cwd()}/.state/strategy-event-listener.json`,
+    stateFile: process.env.STRATEGY_EVENT_STATE_FILE || `${process.cwd()}/.state/strategy-signal-listener.json`,
     reconnectDelayMs: parsePositiveIntEnv('STRATEGY_EVENT_RECONNECT_DELAY_MS', 2000),
     reconnectDelayMaxMs: parsePositiveIntEnv('STRATEGY_EVENT_RECONNECT_DELAY_MAX_MS', 30000),
     reconnectBackoffMultiplier: parsePositiveIntEnv('STRATEGY_EVENT_RECONNECT_BACKOFF_MULTIPLIER', 2),
@@ -994,7 +994,7 @@ async function runListenerSession(cfg: ListenerConfig, state: StrategyEventState
   }
 }
 
-export async function startStrategyEventListener(): Promise<void> {
+export async function startStrategySignalListener(): Promise<void> {
   const cfg = buildConfig();
   const state = await loadStrategyEventState(cfg.stateFile);
   let reconnectDelay = cfg.reconnectDelayMs;

@@ -6,7 +6,7 @@ import {
   makeCooldownKey,
   makeDedupeKey,
   resolveAjnaWatchedVaultExecutionContext,
-} from '../actions/strategy-event-listener.action.js'
+} from '../actions/strategy-signal-listener.action.js'
 
 const CANONICAL_SMART_WALLET = '0x00000000000000000000000000000000000000bb' as `0x${string}`
 const EMBEDDED_OWNER = '0x00000000000000000000000000000000000000cc' as `0x${string}`
@@ -34,7 +34,7 @@ function watchedVault(overrides: Partial<Record<string, unknown>> = {}) {
   }
 }
 
-describe('strategy event listener keys', () => {
+describe('strategy signal listener keys', () => {
   it('builds normalized cooldown keys', () => {
     const out = makeCooldownKey({
       vaultAddress: '0xAbCd000000000000000000000000000000000001',

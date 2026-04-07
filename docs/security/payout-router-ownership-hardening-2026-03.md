@@ -91,8 +91,8 @@ What this provides:
 
 Added:
 
-- `cre/actions/payout-router-processor.action.ts`
-- `cre/workflows/payout-router-processor.workflow.ts`
+- `cre/actions/payout-router-harvest.action.ts`
+- `cre/workflows/payout-router-harvest.workflow.ts`
 
 Integrated into unified workflow:
 

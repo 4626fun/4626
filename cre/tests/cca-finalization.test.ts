@@ -1,12 +1,12 @@
 /**
- * Unit tests for Auction Settlement Keeper action logic.
+ * Unit tests for CCA Finalization action logic.
  *
  * These tests verify the state reading and decision logic
  * without making actual onchain calls.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { AuctionState, SettlementResult } from '../actions/auction-settlement.action.js';
+import type { AuctionState, CcaFinalizationResult } from '../actions/cca-finalization.action.js';
 
 // ---------------------------------------------------------------------------
 // Test data factories
@@ -130,7 +130,7 @@ describe('settlement decision logic', () => {
 
 describe('settlement result structure', () => {
   it('creates correct result for skipped settlement (no auction)', () => {
-    const result: SettlementResult = {
+    const result: CcaFinalizationResult = {
       ccaStrategyAddress: SAMPLE_STRATEGY,
       swept: false,
       unsoldSwept: false,
@@ -146,7 +146,7 @@ describe('settlement result structure', () => {
   });
 
   it('creates correct result for skipped settlement (not graduated)', () => {
-    const result: SettlementResult = {
+    const result: CcaFinalizationResult = {
       ccaStrategyAddress: SAMPLE_STRATEGY,
       swept: false,
       unsoldSwept: false,
@@ -160,7 +160,7 @@ describe('settlement result structure', () => {
   });
 
   it('creates correct result for successful settlement', () => {
-    const result: SettlementResult = {
+    const result: CcaFinalizationResult = {
       ccaStrategyAddress: SAMPLE_STRATEGY,
       swept: true,
       unsoldSwept: true,
@@ -183,7 +183,7 @@ describe('settlement result structure', () => {
   });
 
   it('creates correct result for partial failure (sweep succeeded, unsold failed)', () => {
-    const result: SettlementResult = {
+    const result: CcaFinalizationResult = {
       ccaStrategyAddress: SAMPLE_STRATEGY,
       swept: true,
       unsoldSwept: false,
@@ -206,7 +206,7 @@ describe('settlement result structure', () => {
   });
 
   it('creates correct result for sweep failure (stops early)', () => {
-    const result: SettlementResult = {
+    const result: CcaFinalizationResult = {
       ccaStrategyAddress: SAMPLE_STRATEGY,
       swept: false,
       unsoldSwept: false,

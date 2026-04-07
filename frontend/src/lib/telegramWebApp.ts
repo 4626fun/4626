@@ -43,6 +43,13 @@ type TelegramWebAppLike = {
   ready?: () => void
   expand?: () => void
   close?: () => void
+  openLink?: (
+    url: string,
+    options?: {
+      try_instant_view?: boolean
+      try_browser?: boolean
+    },
+  ) => void
   MainButton?: TelegramMainButtonLike
   switchInlineQuery?: (query: string, chooseChatTypes?: TelegramInlineQueryChatType[]) => void
   onEvent?: (eventType: string, eventHandler: () => void) => void
@@ -243,6 +250,36 @@ export function readTelegramMiniAppInitData(): string {
 
 export function isTelegramMiniAppContext(): boolean {
   return readTelegramMiniAppInitData().length > 0
+}
+
+export function openTelegramExternalLink(url: string): boolean {
+  const targetUrl = asTrimmed(url)
+  if (!targetUrl) return false
+
+  const webApp = readTelegramWebAppUnsafe()
+  if (typeof webApp?.openLink === 'function') {
+    try {
+      webApp.openLink(targetUrl, { try_browser: true })
+      return true
+    } catch {
+      // Fall through to browser fallback.
+    }
+  }
+
+  if (typeof window === 'undefined') return false
+  try {
+    const opened = window.open(targetUrl, '_blank', 'noopener,noreferrer')
+    if (opened) return true
+  } catch {
+    // Fall through to same-window fallback.
+  }
+
+  try {
+    window.location.assign(targetUrl)
+    return true
+  } catch {
+    return false
+  }
 }
 
 export function hasTelegramMiniAppEntrypointContext(): boolean {

@@ -6,7 +6,7 @@
  *   tsx runner.ts [workflow-name] [--dry-run]
  *
  * No argument runs the unified workflow
- * (vault-keeper + payout-router-processor + ajna-bucket-manager + charm-rebalance-manager + auction-settlement + keepr-queue).
+ * (vault-keeper + payout-router-harvest + ajna-bucket-manager + charm-rebalance-manager + cca-finalization + keepr-action-queue).
  *
  * Examples:
  *   tsx runner.ts                        # Run everything
@@ -14,10 +14,10 @@
  *   tsx runner.ts vault-keeper           # Run just vault keeper
  *   tsx runner.ts ajna-bucket-manager    # Run just Ajna bucket manager
  *   tsx runner.ts charm-rebalance-manager # Run just Charm rebalance manager
- *   tsx runner.ts auction-settlement     # Run just auction settlement
- *   tsx runner.ts payout-router-processor # Run just payout router processor
- *   tsx runner.ts keepr-queue            # Run just the keepr queue processor
- *   tsx runner.ts strategy-event-listener # Run always-on event listener
+ *   tsx runner.ts cca-finalization       # Run just CCA finalization
+ *   tsx runner.ts payout-router-harvest  # Run just payout router harvest
+ *   tsx runner.ts keepr-action-queue     # Run the Keepr action queue
+ *   tsx runner.ts strategy-signal-listener # Run always-on strategy signal listener
  *   tsx runner.ts bridge-integrity-monitor # Run bridge integrity monitor
  *
  * Environment:
@@ -66,17 +66,17 @@ async function main() {
       case 'charm-rebalance-manager':
         workflow = await import('./workflows/charm-rebalance-manager.workflow.js');
         break;
-      case 'auction-settlement':
-        workflow = await import('./workflows/auction-settlement.workflow.js');
+      case 'cca-finalization':
+        workflow = await import('./workflows/cca-finalization.workflow.js');
         break;
-      case 'payout-router-processor':
-        workflow = await import('./workflows/payout-router-processor.workflow.js');
+      case 'payout-router-harvest':
+        workflow = await import('./workflows/payout-router-harvest.workflow.js');
         break;
-      case 'keepr-queue':
-        workflow = await import('./workflows/keepr-queue-executor.workflow.js');
+      case 'keepr-action-queue':
+        workflow = await import('./workflows/keepr-action-queue.workflow.js');
         break;
-      case 'strategy-event-listener':
-        workflow = await import('./workflows/strategy-event-listener.workflow.js');
+      case 'strategy-signal-listener':
+        workflow = await import('./workflows/strategy-signal-listener.workflow.js');
         break;
       case 'bridge-integrity-monitor':
         workflow = await import('./workflows/bridge-integrity-monitor.workflow.js');
@@ -86,15 +86,15 @@ async function main() {
         console.error('');
         console.error('Available:');
         console.error(
-          '  (no arg)             — run all (vault-keeper + payout-router-processor + ajna-bucket-manager + charm-rebalance-manager + auction-settlement + keepr-queue)',
+          '  (no arg)             — run all (vault-keeper + payout-router-harvest + ajna-bucket-manager + charm-rebalance-manager + cca-finalization + keepr-action-queue)',
         );
         console.error('  vault-keeper         — tend/report per vault');
-        console.error('  payout-router-processor — claim + convert payout-router balances');
+        console.error('  payout-router-harvest — claim + harvest payout-router balances');
         console.error('  ajna-bucket-manager  — liquidity-aware Ajna bucket management');
         console.error('  charm-rebalance-manager — trigger Charm rebalance on 10%+ price move');
-        console.error('  auction-settlement   — sweep graduated auctions');
-        console.error('  keepr-queue          — process XMTP/Neynar queue');
-        console.error('  strategy-event-listener — always-on WS listener for Ajna/Charm triggers');
+        console.error('  cca-finalization     — finalize graduated CCAs');
+        console.error('  keepr-action-queue   — process queued Keepr actions');
+        console.error('  strategy-signal-listener — always-on WS listener for Ajna/Charm triggers');
         console.error('  bridge-integrity-monitor — monitor Solana bridge route/liveness integrity');
         process.exit(1);
     }

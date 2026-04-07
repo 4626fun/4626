@@ -48,7 +48,7 @@ CRE improves determinism, replay resistance, and observability in local workspac
   - Periodic run loop (`startScheduler` + `run`)
   - Oracle/subgraph checks, bucket selection, move execution.
 - CRE workflows (`cre/cre-workflows/*`)
-  - `vault-keeper`, `auction-settlement`, `keepr-queue`, `runtime-*`, `payout-integrity`, `ajna-bucket-manager`.
+  - `vault-keeper`, `cca-finalization`, `keepr-action-queue`, `runtime-*`, `payout-integrity`, `ajna-bucket-manager`.
 - Vercel bridge handlers
   - `/api/cre/keeper/*`, `/api/cre/runtime/*`, `/api/cre/vaults/active`.
 - Queue execution path
@@ -230,7 +230,7 @@ CRE improves determinism, replay resistance, and observability in local workspac
 - Q68: Never rely on AI for write auth, safety gating, liquidation-sensitive actions, or emergency actions.
 - Q69: CRE should be scheduler + monitor + deterministic policy engine + constrained tx orchestrator + HITL escalation.
 - Q70:
-  - reusable: `runtime-*`, `keepr-queue`, sink/idempotency, registry filtering;
+  - reusable: `runtime-*`, `keepr-action-queue`, sink/idempotency, registry filtering;
   - demo-grade aspects: heavy HTTP bridge dependence and prototype native-write fallback pathing;
   - hardening needed: key management, stricter auth defaults, invariant/chaos testing.
 - Q71: CRE adds real value (determinism, replay protection, observability) but also complexity.

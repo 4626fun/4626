@@ -16,9 +16,9 @@ Reference set used during implementation:
 
 | Workflow | Trigger(s) | Primary capabilities | Writes |
 |---|---|---|---|
-| `keepr-queue` | Cron | HTTP queue orchestration | Indirect via API |
+| `keepr-action-queue` | Cron | HTTP queue orchestration | Indirect via API |
 | `vault-keeper` | Cron | EVM reads + decisioning + write fallback | HTTP bridge + native-write prototype |
-| `auction-settlement` | Cron | EVM reads + settlement decisioning | HTTP bridge + native-write prototype |
+| `cca-finalization` | Cron | EVM reads + settlement decisioning | HTTP bridge + native-write prototype |
 | `payout-integrity` | Cron | EVM integrity checks + alerting + AI advisory | Alert/AI HTTP only |
 
 ### New CRE workflows added
@@ -27,17 +27,17 @@ Reference set used during implementation:
 |---|---|---|
 | `ajna-bucket-manager` | Cron + HTTP | CRE-native Ajna rebucket orchestration and deduped queue enqueue |
 | `charm-rebalance-manager` | Cron + HTTP | CRE-native Charm rebalance orchestration and deduped queue enqueue |
-| `strategy-event-listener` | EVM log trigger + Cron | Reactive strategy orchestration with periodic backfill |
+| `strategy-signal-listener` | EVM log trigger + Cron | Reactive strategy orchestration with periodic backfill |
 | `solana-orchestrator` | Cron + HTTP | Solana offchain orchestration via typed HTTP reconcile/checkpoint path |
 
 ## Gaps Found (Phase 0) and Resolution
 
-- **Settlement local sim miswire**: fixed by adding `auction-settlement/config.local-simulation.json` and wiring `workflow.yaml` correctly.
+- **Settlement local sim miswire**: fixed by adding `cca-finalization/config.local-simulation.json` and wiring `workflow.yaml` correctly.
 - **Hardcoded chain targeting**: replaced with config-driven chain resolution (`chainName` + optional `chainId`) in CRE workflows.
 - **Single-vault starvation risk**: added deterministic rotation helper so each run advances through eligible vaults.
 - **Cross-workflow duplication**: added shared modules under `cre/cre-workflows/_shared` for HTTP, EVM reads, rotation, strategy queue, strategy math, and native-write prototype.
 - **Missing CRE-native Ajna/Charm orchestration**: added dedicated CRE SDK workflows with cron + HTTP triggers.
-- **Missing reactive strategy execution**: added `strategy-event-listener` with EVM log trigger and cron backfill.
+- **Missing reactive strategy execution**: added `strategy-signal-listener` with EVM log trigger and cron backfill.
 - **Solana orchestration outside CRE boundary**: added CRE-managed `solana-orchestrator` and typed/idempotent API checkpoint endpoint.
 - **CI hardening gap**: added `.github/workflows/cre-workflows.yml` with layout validation, workflow typecheck, focused API tests, optional simulation job, and secret scanning.
 
@@ -60,7 +60,7 @@ EVMLogTrigger -----/         |                                         |
 
 1. **Phase 0/1 foundation standardization**
    - Added Phase 0 audit output doc: `docs/plans/2026-03-03-cre-phase0-audit.md`.
-   - Fixed local simulation config wiring for `auction-settlement`.
+   - Fixed local simulation config wiring for `cca-finalization`.
    - Added generated artifact ignore for `.cre_build_tmp.js`.
    - Added workflow layout validator and unified typecheck script.
 
@@ -77,7 +77,7 @@ EVMLogTrigger -----/         |                                         |
    - Preserved guardrails via threshold checks, dedupe keys, and deterministic action payloads.
 
 4. **Reactive strategy orchestration**
-   - Added `strategy-event-listener` with:
+   - Added `strategy-signal-listener` with:
      - EVM log-trigger path (reactive mode)
      - Cron backfill path (missed-event recovery)
 
@@ -87,7 +87,7 @@ EVMLogTrigger -----/         |                                         |
    - Added route registration in `frontend/api/_handlers/_routes.ts`.
 
 6. **Native write-path prototype**
-   - `vault-keeper` and `auction-settlement` now attempt native report-write first (when enabled/configured), then fall back to existing HTTP bridge.
+   - `vault-keeper` and `cca-finalization` now attempt native report-write first (when enabled/configured), then fall back to existing HTTP bridge.
 
 7. **CI + ops readiness**
    - Added GitHub Actions pipeline: `.github/workflows/cre-workflows.yml`.
@@ -111,13 +111,13 @@ bash cre/cre-workflows/scripts/typecheck-workflows.sh
 
 ```bash
 cd cre/cre-workflows
-cre workflow simulate keepr-queue --target local-simulation
+cre workflow simulate keepr-action-queue --target local-simulation
 cre workflow simulate vault-keeper --target local-simulation
-cre workflow simulate auction-settlement --target local-simulation
+cre workflow simulate cca-finalization --target local-simulation
 cre workflow simulate payout-integrity --target local-simulation
 cre workflow simulate ajna-bucket-manager --target local-simulation
 cre workflow simulate charm-rebalance-manager --target local-simulation
-cre workflow simulate strategy-event-listener --target local-simulation
+cre workflow simulate strategy-signal-listener --target local-simulation
 cre workflow simulate solana-orchestrator --target local-simulation
 ```
 

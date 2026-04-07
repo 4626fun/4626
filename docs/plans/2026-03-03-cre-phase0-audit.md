@@ -10,15 +10,15 @@ Audit target: `cre/cre-workflows` as the CRE SDK layer that should become the pr
 
 | Workflow | Trigger | Schedule | Chains | Onchain reads | Writes | External calls |
 |---|---|---|---|---|---|---|
-| `keepr-queue` | Cron | `*/30 * * * * *` | N/A (HTTP-only) | None | Indirect via queue executor | `/keepr/actions/pending`, `/keepr/actions/updateStatus`, `/keepr/actions/execute` |
+| `keepr-action-queue` | Cron | `*/30 * * * * *` | N/A (HTTP-only) | None | Indirect via keepr action queue | `/keepr/actions/pending`, `/keepr/actions/updateStatus`, `/keepr/actions/execute` |
 | `vault-keeper` | Cron | `0 */5 * * * *` | Base (`ethereum-mainnet-base-1`) | Vault state fields (`coinBalance`, `minimumTotalIdle`, `lastReport`, etc.) | HTTP bridge to onchain | `/cre/vaults/active`, `/cre/keeper/tend`, `/cre/keeper/report` |
-| `auction-settlement` | Cron | `0 0 * * * *` | Base (`ethereum-mainnet-base-1`) | `currentAuction`, `isGraduated`, `sweepCurrencyBlock` | HTTP bridge to onchain + DB mark | `/cre/vaults/active?settled=false`, `/cre/keeper/sweep`, `/cre/keeper/mark-settled` |
+| `cca-finalization` | Cron | `0 0 * * * *` | Base (`ethereum-mainnet-base-1`) | `currentAuction`, `isGraduated`, `sweepCurrencyBlock` | HTTP bridge to onchain + DB mark | `/cre/vaults/active?settled=false`, `/cre/keeper/sweep`, `/cre/keeper/mark-settled` |
 | `payout-integrity` | Cron | `0 */30 * * * *` | Base (`ethereum-mainnet-base-1`) | Creator coin, gauge, burn stream, balance checks | No direct onchain writes | `/cre/vaults/active`, `/cre/keeper/alert`, `/cre/keeper/aiAssess` |
 
 ### B) Structure and correctness findings
 
 1. **Local simulation miswire**
-   - `auction-settlement/workflow.yaml` maps `local-simulation` to `config.staging.json`.
+   - `cca-finalization/workflow.yaml` maps `local-simulation` to `config.staging.json`.
    - No `config.local-simulation.json` exists for settlement workflow.
 
 2. **Config/runtime chain drift**

@@ -10,9 +10,9 @@ Reference templates: [smartcontractkit/cre-templates](https://github.com/smartco
 
 | Requirement | Evidence in this repo |
 |---|---|
-| CRE workflow orchestrates blockchain + external system and simulates successfully | `cre/cre-workflows/payout-integrity/main.ts` (EVM reads + HTTP bridge + AI advisory), `cre/cre-workflows/keepr-queue/main.ts` (HTTP orchestration), simulation logs in `docs/hackathon/evidence/` |
+| CRE workflow orchestrates blockchain + external system and simulates successfully | `cre/cre-workflows/payout-integrity/main.ts` (EVM reads + HTTP bridge + AI advisory), `cre/cre-workflows/keepr-action-queue/main.ts` (HTTP orchestration), simulation logs in `docs/hackathon/evidence/` |
 | Integrates at least one blockchain with external API/system/LLM/AI | Blockchain reads via `EVMClient` in `cre/cre-workflows/payout-integrity/main.ts`; external API bridge at `frontend/api/_handlers/cre/keeper/_alert.ts`; AI endpoint at `frontend/api/_handlers/cre/keeper/_aiAssess.ts` using `frontend/server/agent/eliza/llm.ts` |
-| Successful simulation via CRE CLI | `docs/hackathon/evidence/cre-payout-integrity-local-simulation.md` and `docs/hackathon/evidence/cre-keepr-queue-local-simulation.md` |
+| Successful simulation via CRE CLI | `docs/hackathon/evidence/cre-payout-integrity-local-simulation.md` and `docs/hackathon/evidence/cre-keepr-action-queue-local-simulation.md` |
 | Runtime orchestration simulations (webhook + cron + feeds + checkpoint orchestrator) | `docs/hackathon/evidence/cre-runtime-indexer-block-local-simulation.md`, `docs/hackathon/evidence/cre-runtime-indexer-data-fetch-local-simulation.md`, `docs/hackathon/evidence/cre-runtime-reference-feeds-local-simulation.md`, `docs/hackathon/evidence/cre-runtime-orchestrator-cron-local-simulation.md`, `docs/hackathon/evidence/cre-runtime-orchestrator-http-local-simulation.md` |
 | AI-assisted CRE workflow where deterministic logic remains authoritative | Deterministic checks and alert generation in `cre/cre-workflows/payout-integrity/main.ts`; advisory AI classification in `frontend/api/_handlers/cre/keeper/_aiAssess.ts`; fallback normalization in `cre/utils/payoutIntegrityAi.ts` |
 | Solana operational workflow path is demonstrated | Solana monitor implementation `cre/actions/keepr-solana-price-monitor.action.ts`, workflow `cre/workflows/keepr-solana-price-monitor.workflow.ts`, operator command path `/cre solana` in `frontend/server/agent/eliza/plugins/cre/index.ts`, and test proof `cre/tests/keepr-solana-price-monitor.test.ts` |
@@ -131,8 +131,8 @@ node ../scripts/hackathon/mock-cre-api-server.mjs
 cre workflow simulate ./payout-integrity --target local-simulation \
   | tee ../../docs/hackathon/evidence/cre-payout-integrity-local-simulation.log
 
-cre workflow simulate ./keepr-queue --target local-simulation \
-  | tee ../../docs/hackathon/evidence/cre-keepr-queue-local-simulation.log
+cre workflow simulate ./keepr-action-queue --target local-simulation \
+  | tee ../../docs/hackathon/evidence/cre-keepr-action-queue-local-simulation.log
 
 # Runtime orchestration simulation set
 cre workflow simulate runtime-indexer-block --target local-simulation --non-interactive --trigger-index 0 --http-payload @test-block.json \
@@ -149,7 +149,7 @@ cre workflow simulate runtime-orchestrator --target local-simulation --non-inter
 
 Raw CLI logs are captured as `*.log` during execution; committed submission snapshots are in:
 - `docs/hackathon/evidence/cre-payout-integrity-local-simulation.md`
-- `docs/hackathon/evidence/cre-keepr-queue-local-simulation.md`
+- `docs/hackathon/evidence/cre-keepr-action-queue-local-simulation.md`
 - `docs/hackathon/evidence/cre-runtime-indexer-block-local-simulation.md`
 - `docs/hackathon/evidence/cre-runtime-indexer-data-fetch-local-simulation.md`
 - `docs/hackathon/evidence/cre-runtime-reference-feeds-local-simulation.md`
@@ -164,7 +164,7 @@ From `cre-payout-integrity-local-simulation.md`:
 - `alertsSent: 2`
 - deterministic alert payloads emitted and forwarded via bridge
 
-From `cre-keepr-queue-local-simulation.md`:
+From `cre-keepr-action-queue-local-simulation.md`:
 - queue orchestration executes cleanly with `processed=0`, `failed=0`
 
 ## New Work Added for Submission

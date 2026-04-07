@@ -1,5 +1,5 @@
 /**
- * CRE Workflow: Auction Settlement Keeper
+ * CRE Workflow: CCA Finalization
  *
  * Schedule: Every 10 minutes
  * Pattern:  cron → onchain read → conditional onchain write
@@ -20,17 +20,17 @@
  *   - Raised currency never reaches the funds recipient
  */
 
-import { executeSettlement } from '../actions/auction-settlement.action.js';
+import { executeCcaFinalization } from '../actions/cca-finalization.action.js';
 import { alertCritical } from '../utils/alerts.js';
 
-const WORKFLOW_NAME = 'auction-settlement';
+const WORKFLOW_NAME = 'cca-finalization';
 
 /**
  * CRE entrypoint — called on each cron trigger.
  */
 export async function handler(): Promise<void> {
   try {
-    const result = await executeSettlement();
+    const result = await executeCcaFinalization();
 
     console.log(
       JSON.stringify({

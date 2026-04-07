@@ -84,7 +84,9 @@ function buildReadTransport(url: string) {
   return http(normalized)
 }
 
-function readInjectedProvidersFromWindow(windowRef: Window | undefined): any[] {
+type InjectedProviderWindow = { ethereum?: unknown } | undefined
+
+function readInjectedProvidersFromWindow(windowRef: InjectedProviderWindow): any[] {
   if (!windowRef) return []
   try {
     const ethereum = (windowRef as any)?.ethereum
@@ -96,7 +98,7 @@ function readInjectedProvidersFromWindow(windowRef: Window | undefined): any[] {
   }
 }
 
-function findNamedInjectedProvider(windowRef: Window | undefined, predicate: (provider: any) => boolean): any | undefined {
+function findNamedInjectedProvider(windowRef: InjectedProviderWindow, predicate: (provider: any) => boolean): any | undefined {
   const providers = readInjectedProvidersFromWindow(windowRef)
   return providers.find((provider) => {
     try {

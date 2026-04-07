@@ -6,7 +6,7 @@
 
 **Goal:** Let Ajna automation run from each creator's canonical Coinbase Smart Wallet using that creator's Privy embedded EOA signer context, with explicit opt-in, revocation, and no non-canonical sender fallback.
 
-**Architecture:** Persist a per-vault automation signer context in the frontend/backend data layer, expose that context through protected `keepr`/`cre` read models, and update both the frontend queue executor and CRE Ajna runtime to resolve sender context dynamically per vault. Start with `AjnaVaultAuth.setMinBucketIndex(...)` only, keep the allowlist vault-scoped, and hard-stop whenever canonical-wallet ownership cannot be revalidated.
+**Architecture:** Persist a per-vault automation signer context in the frontend/backend data layer, expose that context through protected `keepr`/`cre` read models, and update both the frontend Keepr Action Queue path and CRE Ajna runtime to resolve sender context dynamically per vault. Start with `AjnaVaultAuth.setMinBucketIndex(...)` only, keep the allowlist vault-scoped, and hard-stop whenever canonical-wallet ownership cannot be revalidated.
 
 **Tech Stack:** TypeScript, Vercel API handlers, Postgres/Supabase, Privy Wallet API, viem/account-abstraction, CRE workflows, Vitest
 
@@ -201,7 +201,7 @@ Expected: PASS.
 
 **Step 1: Write the failing tests**
 
-Expand the queue executor tests so they assert:
+Expand the Keepr Action Queue tests so they assert:
 
 - `strategy.ajna.rebucket` executes via a Privy-backed UserOp from the stored canonical CSW sender
 - Ajna execution verifies that `AjnaVaultAuth.admin()` equals the canonical CSW, not the generic keeper EOA
@@ -250,9 +250,9 @@ Expected: PASS.
 - Modify: `cre/actions/ajna-bucket-manager.action.ts`
 - Modify: `cre/cre-workflows/_shared/strategyQueue.ts`
 - Modify: `cre/cre-workflows/_shared/ajnaManager.ts`
-- Modify: `cre/actions/strategy-event-listener.action.ts`
+- Modify: `cre/actions/strategy-signal-listener.action.ts`
 - Test: `cre/tests/ajna-bucket-manager.test.ts`
-- Test: `cre/tests/strategy-event-listener.test.ts`
+- Test: `cre/tests/strategy-signal-listener.test.ts`
 - Create: `cre/tests/canonical-sender-context.test.ts`
 
 **Step 1: Write the failing tests**
@@ -276,7 +276,7 @@ Run:
 pnpm -C cre exec vitest run \
   tests/canonical-sender-context.test.ts \
   tests/ajna-bucket-manager.test.ts \
-  tests/strategy-event-listener.test.ts
+  tests/strategy-signal-listener.test.ts
 ```
 
 Expected: FAIL because CRE still assumes a singleton signer config.
@@ -345,7 +345,7 @@ Run:
 pnpm -C cre exec vitest run \
   tests/canonical-sender-context.test.ts \
   tests/ajna-bucket-manager.test.ts \
-  tests/strategy-event-listener.test.ts
+  tests/strategy-signal-listener.test.ts
 ```
 
 Expected: PASS.

@@ -1,10 +1,10 @@
 # ==========================================================================
-# Strategy Event Listener — CRE Workflow Configuration
+# Keepr Action Queue — CRE Workflow Configuration
 # ==========================================================================
 
 local-simulation:
   user-workflow:
-    workflow-name: "strategy-event-listener-local-simulation"
+    workflow-name: "keepr-action-queue-local-simulation"
   workflow-artifacts:
     workflow-path: "./main.ts"
     config-path: "./config.local-simulation.json"
@@ -12,7 +12,7 @@ local-simulation:
 
 staging-settings:
   user-workflow:
-    workflow-name: "strategy-event-listener-staging"
+    workflow-name: "keepr-action-queue-staging"
   workflow-artifacts:
     workflow-path: "./main.ts"
     config-path: "./config.staging.json"
@@ -20,7 +20,7 @@ staging-settings:
 
 production-settings:
   user-workflow:
-    workflow-name: "strategy-event-listener-production"
+    workflow-name: "keepr-action-queue-production"
   workflow-artifacts:
     workflow-path: "./main.ts"
     config-path: "./config.production.json"

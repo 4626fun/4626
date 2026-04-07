@@ -7,7 +7,7 @@ Use this on a machine with normal outbound internet access.
 Get the required Chainlink CRE simulations running locally for the hackathon submission:
 
 - `payout-integrity`
-- `keepr-queue`
+- `keepr-action-queue`
 
 ## 1. Install the official Chainlink CRE CLI
 
@@ -79,7 +79,7 @@ Open Terminal 2:
 cd cre/cre-workflows
 set -a && source .env && set +a
 cre workflow simulate ./payout-integrity --target local-simulation
-cre workflow simulate ./keepr-queue --target local-simulation
+cre workflow simulate ./keepr-action-queue --target local-simulation
 ```
 
 ## 9. Optional full runtime simulation set
@@ -101,7 +101,7 @@ cre workflow simulate runtime-orchestrator --target local-simulation --non-inter
 - [ ] `cre login` succeeds
 - [ ] mock server starts on `http://127.0.0.1:8789`
 - [ ] `payout-integrity` simulation completes
-- [ ] `keepr-queue` simulation completes
+- [ ] `keepr-action-queue` simulation completes
 
 ## 11. If it fails
 

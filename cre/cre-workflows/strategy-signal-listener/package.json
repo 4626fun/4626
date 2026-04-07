@@ -1,5 +1,5 @@
 {
-  "name": "strategy-event-listener",
+  "name": "strategy-signal-listener",
   "version": "1.7.1",
   "private": true,
   "scripts": {

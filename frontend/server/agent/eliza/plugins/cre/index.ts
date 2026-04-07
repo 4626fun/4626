@@ -13,12 +13,12 @@
  *   Trigger (admin-only, requires OWNER/ADMIN role):
  *     /cre tend [vault]       — Force-tend a vault (deploy idle funds)
  *     /cre report [vault]     — Force-report a vault (harvest yields)
- *     /cre settle [strategy]  — Force-settle a CCA auction
+ *     /cre settle [strategy]  — Force CCA finalization
  *     /cre settle-fees        — Force Solana fee settlement to Base
  *     /cre relay-entries      — Force relay of Solana lottery entries to Base
  *     /cre relay-winners      — Force relay winners to Solana
  *     /cre graduate           — Force graduation check
- *     /cre queue              — Force process pending queue actions
+ *     /cre queue              — Force process pending Keepr action queue items
  *
  * Graceful degradation: if required env vars are missing, commands return
  * a helpful "not configured" message instead of crashing.
@@ -80,7 +80,7 @@ type BatchKeeperResult = {
   }>
 }
 
-type BatchSettlementResult = {
+type BatchCcaFinalizationResult = {
   totalStrategies: number
   processed: number
   settled: number
@@ -128,7 +128,7 @@ type GraduationResult = {
   deadlineTriggered: boolean
 }
 
-type QueueExecutorResult = {
+type KeeprActionQueueResult = {
   processed: number
   succeeded: number
   failed: number
@@ -203,12 +203,12 @@ async function importVaultKeeper() {
   return import(/* @vite-ignore */ `${CRE_BASE}/actions/vault-keeper.action.js`)
 }
 
-async function importAuctionSettlement() {
-  return import(/* @vite-ignore */ `${CRE_BASE}/actions/auction-settlement.action.js`)
+async function importCcaFinalization() {
+  return import(/* @vite-ignore */ `${CRE_BASE}/actions/cca-finalization.action.js`)
 }
 
-async function importQueueExecutor() {
-  return import(/* @vite-ignore */ `${CRE_BASE}/actions/keepr-queue-executor.action.js`)
+async function importKeeprActionQueue() {
+  return import(/* @vite-ignore */ `${CRE_BASE}/actions/keepr-action-queue.action.js`)
 }
 
 async function importRelayEntries() {
@@ -376,7 +376,7 @@ async function handleObserveStatus(callback: HandlerCallback | undefined, includ
       const vaults = await registry.fetchActiveVaults()
       const withCCA = vaults.filter((v: any) => v.ccaStrategyAddress)
       if (withCCA.length > 0) {
-        const as = await importAuctionSettlement()
+        const as = await importCcaFinalization()
         parts.push(`**Auctions (${withCCA.length}):**`)
         for (const v of withCCA.slice(0, 10)) {
           try {
@@ -422,7 +422,7 @@ async function handleObserveAuction(callback: HandlerCallback | undefined): Prom
       return
     }
 
-    const as = await importAuctionSettlement()
+    const as = await importCcaFinalization()
     const lines = [`**CCA Auction Status (${withCCA.length}):**\n`]
 
     for (const v of withCCA.slice(0, 15)) {
@@ -627,17 +627,17 @@ async function handleTriggerSettle(callback: HandlerCallback | undefined, strate
     return
   }
 
-  await callback?.({ text: `Running auction settlement${strategy ? ` for ${strategy.slice(0, 10)}...` : ' (all strategies)'}...` } as Content)
+  await callback?.({ text: `Running CCA finalization${strategy ? ` for ${strategy.slice(0, 10)}...` : ' (all strategies)'}...` } as Content)
 
-  const as = await importAuctionSettlement()
+  const as = await importCcaFinalization()
 
   if (strategy) {
-    const result = await as.executeSettlementForStrategy(strategy)
-    await callback?.({ text: `Settlement: ${result.swept ? 'swept' : 'skipped'}${result.unsoldSwept ? ' + unsold swept' : ''}${result.skippedReason ? ` (${result.skippedReason})` : ''}` } as Content)
+    const result = await as.executeCcaFinalizationForStrategy(strategy)
+    await callback?.({ text: `CCA finalization: ${result.swept ? 'swept' : 'skipped'}${result.unsoldSwept ? ' + unsold swept' : ''}${result.skippedReason ? ` (${result.skippedReason})` : ''}` } as Content)
   } else {
-    const result: BatchSettlementResult = await as.executeSettlement()
+    const result: BatchCcaFinalizationResult = await as.executeCcaFinalization()
     const lines = [
-      `**Settlement complete**`,
+      `**CCA Finalization complete**`,
       `  Strategies: ${result.totalStrategies} | Settled: ${result.settled}`,
       `  Skipped: ${result.skipped} | Errors: ${result.errors}`,
     ]
@@ -732,13 +732,13 @@ async function handleTriggerQueue(callback: HandlerCallback | undefined): Promis
     return
   }
 
-  await callback?.({ text: 'Processing pending queue actions...' } as Content)
+  await callback?.({ text: 'Processing pending Keepr action queue items...' } as Content)
 
-  const qe = await importQueueExecutor()
-  const result: QueueExecutorResult = await qe.executeQueueProcessor()
+  const qe = await importKeeprActionQueue()
+  const result: KeeprActionQueueResult = await qe.executeKeeprActionQueue()
 
   const lines = [
-    `**Queue Processor Result**`,
+    `**Keepr Action Queue Result**`,
     `  Processed: ${result.processed}`,
     `  Succeeded: ${result.succeeded}`,
     `  Failed: ${result.failed}`,
@@ -792,7 +792,7 @@ const creHelpAction: Action = {
       '**Trigger (execute operations):**',
       '  `/cre tend [vault]` — Deploy idle funds',
       '  `/cre report [vault]` — Harvest yields',
-      '  `/cre settle [strategy]` — Settle CCA auction',
+      '  `/cre settle [strategy]` — Run CCA finalization',
       '  `/cre settle-fees` — Settle Solana fees to Base',
       '  `/cre relay-entries` — Relay lottery entries from Solana',
       '  `/cre relay-winners` — Relay winners to Solana',

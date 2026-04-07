@@ -94,6 +94,46 @@ describe('AccountsPage', () => {
     expect(html).toContain('Why this setup')
   })
 
+  it('surfaces the Telegram owner-install resume banner when requested from query params', () => {
+    const html = renderToStaticMarkup(
+      React.createElement(
+        MemoryRouter,
+        { initialEntries: ['/accounts?setup=owner-install&source=telegram'] },
+        React.createElement(AccountsPage, {
+          initialData: {
+            me: {
+              privyUserId: 'did:privy:test-user',
+              email: 'user@example.com',
+              emailVerified: true,
+              linkedMethods: {
+                email: ['user@example.com'],
+              },
+              accountSignals: {
+                linked: true,
+                canonicalCswAddress: '0x2222222222222222222222222222222222222222',
+                creatorCoin: { address: '0x3333333333333333333333333333333333333333' },
+                zoraHandle: 'akita',
+                lastResolvedAt: '2026-03-04T00:00:00.000Z',
+              },
+              score: {
+                points: 130,
+                tier: 2,
+              },
+            },
+            zoraStatus: {
+              zoraLinked: true,
+              zoraCrossAppAccounts: [],
+            },
+          },
+        }),
+      ),
+    )
+
+    expect(html).toContain('Continue from Telegram')
+    expect(html).toContain('Your Telegram account is linked. Finish wallet setup here.')
+    expect(html).toContain('This step was resumed from another surface.')
+  })
+
   it('treats Zora status as optional when the response is unavailable', () => {
     expect(
       readOptionalZoraStatus({

@@ -1,5 +1,5 @@
 /**
- * Payout Router Processor — claims protocol rewards and converts routed balances into vault shares.
+ * Payout Router Harvest — claims protocol rewards and converts routed balances into vault shares.
  *
  * Per vault (when payoutRouterAddress is configured):
  *   1) Optionally claim protocol rewards into the router (claimAllProtocolRewards)
@@ -18,7 +18,7 @@ import {
   type VaultConfig,
 } from '../utils/registry.js';
 
-const WORKFLOW_NAME = 'payout-router-processor';
+const WORKFLOW_NAME = 'payout-router-harvest';
 
 const DEFAULT_ZORA_TOKEN = '0x1111111111166b7fe7bd91427724b487980afc69' as const;
 const DEFAULT_WETH = '0x4200000000000000000000000000000000000006' as const;
@@ -131,7 +131,7 @@ export interface RouterVaultResult {
   skippedReason?: string;
 }
 
-export interface BatchPayoutRouterResult {
+export interface BatchPayoutRouterHarvestResult {
   totalVaults: number;
   processed: number;
   claimedVaults: number;
@@ -343,7 +343,7 @@ async function fetchDefiLlamaExternalQuote(params: {
   };
 }
 
-export async function executePayoutRouterProcessor(): Promise<BatchPayoutRouterResult> {
+export async function executePayoutRouterHarvest(): Promise<BatchPayoutRouterHarvestResult> {
   const zoraTokens = resolveZoraTokens();
   const wethToken = (process.env.WETH?.trim() || DEFAULT_WETH) as `0x${string}`;
   const claimProtocolRewards = parseBoolEnv('PAYOUT_ROUTER_CLAIM_PROTOCOL_REWARDS', true);
@@ -360,14 +360,14 @@ export async function executePayoutRouterProcessor(): Promise<BatchPayoutRouterR
   let vaults: VaultConfig[];
   try {
     const allVaults = await fetchActiveVaults(CHAINS.base.id);
-    vaults = filterVaultsForWorkflow(allVaults, 'payout-router-processor');
+    vaults = filterVaultsForWorkflow(allVaults, 'payout-router-harvest');
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await alertCritical(WORKFLOW_NAME, 'Failed to fetch vaults from registry', { error: message });
     throw err;
   }
 
-  const batch: BatchPayoutRouterResult = {
+  const batch: BatchPayoutRouterHarvestResult = {
     totalVaults: vaults.length,
     processed: 0,
     claimedVaults: 0,
@@ -640,7 +640,7 @@ export async function executePayoutRouterProcessor(): Promise<BatchPayoutRouterR
   }
 
   if (batch.converted > 0 || batch.claimedVaults > 0) {
-    await alertInfo(WORKFLOW_NAME, 'Payout router processing complete', {
+    await alertInfo(WORKFLOW_NAME, 'Payout router harvest complete', {
       totalVaults: batch.totalVaults,
       processed: batch.processed,
       claimedVaults: batch.claimedVaults,
@@ -649,7 +649,7 @@ export async function executePayoutRouterProcessor(): Promise<BatchPayoutRouterR
       skipped: batch.skipped,
     });
   } else if (batch.errors > 0) {
-    await alertWarning(WORKFLOW_NAME, 'Payout router processing completed with errors', {
+    await alertWarning(WORKFLOW_NAME, 'Payout router harvest completed with errors', {
       totalVaults: batch.totalVaults,
       processed: batch.processed,
       claimedVaults: batch.claimedVaults,

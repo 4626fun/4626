@@ -46,7 +46,7 @@ rg -n "(PRIVATE_KEY|API_KEY|SECRET|TOKEN|PASSWORD)" \
 test -f docs/hackathon/chainlink-cre-submission.md
 test -f docs/hackathon/video-script.md
 test -f docs/hackathon/evidence/cre-payout-integrity-local-simulation.md
-test -f docs/hackathon/evidence/cre-keepr-queue-local-simulation.md
+test -f docs/hackathon/evidence/cre-keepr-action-queue-local-simulation.md
 
 # 5) Push to a public remote
 git remote add public <PUBLIC_REPO_URL>

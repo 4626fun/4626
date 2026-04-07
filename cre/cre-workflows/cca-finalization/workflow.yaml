@@ -1,10 +1,10 @@
 # ==========================================================================
-# Auction Settlement — CRE Workflow Configuration
+# CCA Finalization — CRE Workflow Configuration
 # ==========================================================================
 
 local-simulation:
   user-workflow:
-    workflow-name: "auction-settlement-local-simulation"
+    workflow-name: "cca-finalization-local-simulation"
   workflow-artifacts:
     workflow-path: "./main.ts"
     config-path: "./config.local-simulation.json"
@@ -12,7 +12,7 @@ local-simulation:
 
 staging-settings:
   user-workflow:
-    workflow-name: "auction-settlement-staging"
+    workflow-name: "cca-finalization-staging"
   workflow-artifacts:
     workflow-path: "./main.ts"
     config-path: "./config.staging.json"
@@ -20,7 +20,7 @@ staging-settings:
 
 production-settings:
   user-workflow:
-    workflow-name: "auction-settlement-production"
+    workflow-name: "cca-finalization-production"
   workflow-artifacts:
     workflow-path: "./main.ts"
     config-path: "./config.production.json"

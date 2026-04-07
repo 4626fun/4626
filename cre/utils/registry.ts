@@ -157,20 +157,20 @@ export function filterVaultsForWorkflow(
   vaults: VaultConfig[],
   workflow:
     | 'vault-keeper'
-    | 'auction-settlement'
+    | 'cca-finalization'
     | 'oracle-broadcaster'
     | 'vrf-health-monitor'
     | 'ajna-bucket-manager'
     | 'charm-rebalance-manager'
-    | 'payout-router-processor'
+    | 'payout-router-harvest'
 ): VaultConfig[] {
   switch (workflow) {
     case 'vault-keeper':
       // Vault keeper only needs the vault address
       return vaults.filter((v) => v.vaultAddress);
 
-    case 'auction-settlement':
-      // Auction settlement needs CCA strategy address
+    case 'cca-finalization':
+      // CCA finalization needs CCA strategy address
       return vaults.filter((v) => v.vaultAddress && v.ccaStrategyAddress);
 
     case 'oracle-broadcaster':
@@ -189,7 +189,7 @@ export function filterVaultsForWorkflow(
       // Charm rebalance manager needs vault + oracle for price trigger checks.
       return vaults.filter((v) => v.vaultAddress && v.oracleAddress);
 
-    case 'payout-router-processor':
+    case 'payout-router-harvest':
       // Payout processor needs creator coin + router wiring.
       return vaults.filter((v) => v.creatorCoinAddress && v.payoutRouterAddress);
 

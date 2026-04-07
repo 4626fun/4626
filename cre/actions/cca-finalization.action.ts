@@ -1,5 +1,5 @@
 /**
- * Auction Settlement Keeper Action — onchain read/write logic.
+ * CCA Finalization Action — onchain read/write logic.
  *
  * Monitors CCALaunchStrategy for graduated auctions and:
  *   1. Calls sweepCurrency() when isGraduated() == true (settles auction + configures V4 pool)
@@ -34,7 +34,7 @@ import {
   type VaultConfig,
 } from '../utils/registry.js';
 
-const WORKFLOW_NAME = 'auction-settlement';
+const WORKFLOW_NAME = 'cca-finalization';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -53,7 +53,7 @@ export interface AuctionState {
   failedFinalized: boolean;
 }
 
-export interface SettlementResult {
+export interface CcaFinalizationResult {
   ccaStrategyAddress: `0x${string}`;
   swept: boolean;
   unsoldSwept: boolean;
@@ -66,13 +66,13 @@ export interface SettlementResult {
   skippedReason?: string;
 }
 
-export interface BatchSettlementResult {
+export interface BatchCcaFinalizationResult {
   totalStrategies: number;
   processed: number;
   settled: number;
   skipped: number;
   errors: number;
-  results: SettlementResult[];
+  results: CcaFinalizationResult[];
 }
 
 // ---------------------------------------------------------------------------
@@ -131,12 +131,12 @@ export async function isAlreadySwept(auctionAddress: `0x${string}`): Promise<boo
 // ---------------------------------------------------------------------------
 
 /**
- * Execute settlement logic for a single CCA strategy.
+ * Execute finalization logic for a single CCA strategy.
  */
-export async function executeSettlementForStrategy(ccaStrategyAddress: `0x${string}`): Promise<SettlementResult> {
+export async function executeCcaFinalizationForStrategy(ccaStrategyAddress: `0x${string}`): Promise<CcaFinalizationResult> {
   const state = await readAuctionStateForAddress(ccaStrategyAddress);
   const shortAddr = `${ccaStrategyAddress.slice(0, 6)}...${ccaStrategyAddress.slice(-4)}`;
-  const result: SettlementResult = {
+  const result: CcaFinalizationResult = {
     ccaStrategyAddress,
     swept: false,
     unsoldSwept: false,
@@ -262,15 +262,15 @@ export async function executeSettlementForStrategy(ccaStrategyAddress: `0x${stri
 // ---------------------------------------------------------------------------
 
 /**
- * Execute settlement logic for all CCA strategies from the registry.
+ * Execute finalization logic for all CCA strategies from the registry.
  * Falls back to single-strategy mode if CCA_STRATEGY_ADDRESS is set.
  */
-export async function executeSettlement(): Promise<BatchSettlementResult> {
+export async function executeCcaFinalization(): Promise<BatchCcaFinalizationResult> {
   // Check for single-strategy mode (backwards compatibility)
   const singleStrategy = process.env.CCA_STRATEGY_ADDRESS;
   if (singleStrategy && singleStrategy.startsWith('0x') && singleStrategy.length === 42) {
     console.log('Running in single-strategy mode (CCA_STRATEGY_ADDRESS is set)');
-    const result = await executeSettlementForStrategy(singleStrategy as `0x${string}`);
+    const result = await executeCcaFinalizationForStrategy(singleStrategy as `0x${string}`);
     return {
       totalStrategies: 1,
       processed: 1,
@@ -287,7 +287,7 @@ export async function executeSettlement(): Promise<BatchSettlementResult> {
   let vaults: VaultConfig[];
   try {
     const allVaults = await fetchActiveVaults(CHAINS.base.id);
-    vaults = filterVaultsForWorkflow(allVaults, 'auction-settlement');
+    vaults = filterVaultsForWorkflow(allVaults, 'cca-finalization');
     console.log(`Found ${vaults.length} strategies to process`);
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -307,7 +307,7 @@ export async function executeSettlement(): Promise<BatchSettlementResult> {
     };
   }
 
-  const batchResult: BatchSettlementResult = {
+  const batchResult: BatchCcaFinalizationResult = {
     totalStrategies: vaults.length,
     processed: 0,
     settled: 0,
@@ -340,7 +340,7 @@ export async function executeSettlement(): Promise<BatchSettlementResult> {
         continue;
       }
 
-      const result = await executeSettlementForStrategy(vault.ccaStrategyAddress);
+      const result = await executeCcaFinalizationForStrategy(vault.ccaStrategyAddress);
       batchResult.results.push(result);
       batchResult.processed++;
 
