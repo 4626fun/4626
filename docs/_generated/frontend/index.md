@@ -202,6 +202,7 @@
 - [api/\_handlers/v1/\_spec](api/_handlers/v1/_spec.md)
 - [api/\_handlers/v1/agents/\_accessSchemas](api/_handlers/v1/agents/_accessSchemas.md)
 - [api/\_handlers/v1/agents/\_capabilities](api/_handlers/v1/agents/_capabilities.md)
+- [api/\_handlers/v1/agents/\_profile](api/_handlers/v1/agents/_profile.md)
 - [api/\_handlers/v1/agents/\_publish](api/_handlers/v1/agents/_publish.md)
 - [api/\_handlers/v1/agents/\_wallet-intelligence](api/_handlers/v1/agents/_wallet-intelligence.md)
 - [api/\_handlers/v1/agents/access-proof/\_request](api/_handlers/v1/agents/access-proof/_request.md)
