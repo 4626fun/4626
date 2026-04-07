@@ -5,8 +5,7 @@ function formatSkillSummary(skill) {
   return `- ${skill.name}${description} (${skill.path})`;
 }
 
-function buildSystemPrompt(basePrompt = '') {
-  const skills = getSkillMetadata();
+function buildSystemPrompt(basePrompt = '', skills = getSkillMetadata()) {
   if (!skills.length) {
     return basePrompt;
   }
@@ -19,4 +18,5 @@ function buildSystemPrompt(basePrompt = '') {
 
 module.exports = {
   buildSystemPrompt,
+  formatSkillSummary,
 };

@@ -1,9 +1,9 @@
-const { discoverSkills, getConfiguredSkillDirectories } = require('./skills');
+const { discoverSkills, getDefaultSkillDirectories } = require('./skills');
 
 let cachedSkills = null;
 
 function initializeSkillCache() {
-  const directories = getConfiguredSkillDirectories();
+  const directories = getDefaultSkillDirectories();
   cachedSkills = discoverSkills(directories);
   return cachedSkills;
 }
@@ -16,7 +16,12 @@ function getSkillMetadata() {
   return cachedSkills;
 }
 
+function resetSkillCache() {
+  cachedSkills = null;
+}
+
 module.exports = {
   getSkillMetadata,
   initializeSkillCache,
+  resetSkillCache,
 };

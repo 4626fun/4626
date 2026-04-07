@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
+// @ts-expect-error NodeNext/Bundler typing for local .mjs helper is not resolved in this test project.
 import { validateDiscoverabilityPayload } from '../../scripts/check-agent-discoverability.mjs'
 
 const readyPayload = {

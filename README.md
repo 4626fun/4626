@@ -21,6 +21,7 @@
 - [Supported Chains](#supported-chains-current-configuration)
 - [Quick Start (Local Development)](#quick-start-local-development)
 - [Testing and Build Commands](#testing-and-build-commands)
+- [Agent Workflow](#agent-workflow)
 - [XMTP Agent Runtime](#xmtp-agent-runtime)
 - [Frontend Routes and API Surface](#frontend-routes-and-api-surface)
 - [Environment and Secrets](#environment-and-secrets)
@@ -307,12 +308,22 @@ pnpm -C apps/docs-site start
 
 | Surface        | Commands                                                                             |
 | -------------- | ------------------------------------------------------------------------------------ |
+| Agent workflow | `pnpm agent:verify-change -- <paths...>`                                             |
 | Frontend       | `pnpm -C frontend test`<br/>`pnpm -C frontend typecheck`<br/>`pnpm -C frontend lint` |
 | CRE            | `npm --prefix cre test`<br/>`npm --prefix cre run typecheck`                         |
 | Contracts      | `forge build`<br/>`forge test -vvv`                                                  |
 | Security sweep | `pnpm security:local` — Forge tests, CRE workflow checks, frontend lint/typecheck/test, optional Semgrep (Docker) + gitleaks + audit printouts ([`docs/audits/README.md`](docs/audits/README.md)) |
 | Frontend build | `pnpm -C frontend build`                                                             |
 | Docs build     | `pnpm -C apps/docs-site build`                                                       |
+
+## Agent Workflow
+
+This repo ships a small repo-native agent layer for Cursor/Codex-style use. It does not attempt to be a full orchestration platform.
+
+- Authority order: `AGENTS.md` -> scoped `.cursor/rules/*.mdc` -> relevant repo skill -> verification selector.
+- Bundled skills live under `script/agent-runtime/skills/`.
+- Verification selector CLI: `pnpm agent:verify-change -- <paths...>`.
+- Operator docs: [`docs/agent-workflow.md`](docs/agent-workflow.md), skill index: [`docs/agent-skills.md`](docs/agent-skills.md).
 
 ## XMTP Agent Runtime
 
@@ -452,6 +463,8 @@ For complete env references, see `frontend/README.md` and `cre/README.md`.
 - Security docs: `docs/security/index.md`
 - Payout router + ownership hardening memo: `docs/security/payout-router-ownership-hardening-2026-03.md`
 - Internal audit / CI security index: `docs/audits/README.md`
+- Agent workflow: `docs/agent-workflow.md`
+- Repo skill index: `docs/agent-skills.md`
 - Frontend guide: `frontend/README.md`
 - Swap integration/runtime notes: `frontend/docs/uniswap-integration-notes.md`
 - Account + onboarding architecture: `frontend/docs/account-auth-invariants.md`, `frontend/docs/waitlist-accounts-architecture.md`

@@ -49,6 +49,7 @@ In one click, creators deploy institutional-grade **ERC-4626 vault** infrastruct
 
 - [Getting Started](/getting-started) - Install and deploy
 - [Architecture](/architecture) - System architecture deep dive
+- [Agent Workflow](/agent-workflow) - Repo-native rules, skills, and verification flow
 - [Tokenomics](/tokenomics) - Fee structure and lottery mechanics
 - [Security](/security) - Threat surfaces and mitigations
 - [Roadmap](/roadmap) - Staged and deferred feature rollout posture

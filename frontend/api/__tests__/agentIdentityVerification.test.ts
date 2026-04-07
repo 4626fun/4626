@@ -80,7 +80,7 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('node:dns/promises', () => ({
-  lookup: (...args: unknown[]) => mocks.lookup(...args),
+  lookup: mocks.lookup as unknown as typeof import('node:dns/promises').lookup,
 }))
 
 vi.mock('../../packages/server-core/src/index.js', async () => {
@@ -99,7 +99,7 @@ vi.mock('../../server/_lib/agentRegistration.js', () => ({
 }))
 
 vi.mock('../../server/_lib/origin.js', () => ({
-  getCanonicalOrigin: (req: unknown) => mocks.getCanonicalOrigin(req),
+  getCanonicalOrigin: mocks.getCanonicalOrigin as unknown as typeof import('../../server/_lib/origin.js').getCanonicalOrigin,
 }))
 
 vi.mock('../../server/_lib/teeAttestationGate.js', () => ({
@@ -110,8 +110,8 @@ vi.mock('viem', async () => {
   const actual = await vi.importActual<typeof import('viem')>('viem')
   return {
     ...actual,
-    createPublicClient: (...args: unknown[]) => mocks.createPublicClient(...args),
-    http: (...args: unknown[]) => mocks.http(...args),
+    createPublicClient: mocks.createPublicClient as unknown as typeof import('viem').createPublicClient,
+    http: mocks.http as unknown as typeof import('viem').http,
   }
 })
 

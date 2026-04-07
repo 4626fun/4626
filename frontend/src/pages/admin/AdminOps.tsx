@@ -27,7 +27,6 @@ import { appendBuilderSuffixToHex } from '@/lib/baseBuilderCodes'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import {
-  buildAgentUriPolicy,
   STRICT_IMMUTABLE_AGENT_URI_SUMMARY,
   toRegistrationDataUri,
   type AgentUriPolicy,
