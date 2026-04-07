@@ -594,4 +594,119 @@ describe('AdminAgentSetup Ajna automation', () => {
     expect(html).toContain('Grove fallback is unavailable right now.')
     expect(html).not.toContain('Grove fallback stored successfully.')
   })
+
+  it('renders the current ERC-8004 operator snapshot with next-action guidance', async () => {
+    vi.resetModules()
+
+    vi.doMock('@tanstack/react-query', () => ({
+      useQuery: vi.fn((options: { queryKey: unknown[] }) => {
+        const queryKey = Array.isArray(options.queryKey) ? options.queryKey : []
+
+        if (queryKey[0] === 'admin' && queryKey[1] === 'waitlist-me') {
+          return { data: { cswAddress: CANONICAL_CSW_ADDRESS }, isLoading: false, error: null, isError: false }
+        }
+        if (queryKey[0] === 'admin' && queryKey[1] === 'agent') {
+          return { data: null, isLoading: false, error: null, isError: false }
+        }
+        if (queryKey[0] === 'admin' && queryKey[1] === 'serverWallet') {
+          return { data: null, isLoading: false, error: null, isError: false }
+        }
+        if (queryKey[0] === 'admin' && queryKey[1] === 'isOwner') {
+          return { data: false, isLoading: false, error: null, isError: false }
+        }
+        if (queryKey[0] === 'admin' && queryKey[1] === 'ajna-automation') {
+          return { data: null, isLoading: false, error: null, isError: false }
+        }
+        if (queryKey[0] === 'admin' && queryKey[1] === 'erc8004-operator-status') {
+          return {
+            data: {
+              registration: {
+                name: '4626 Agent',
+                registrations: [{ agentId: 2205, agentRegistry: 'eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432' }],
+              },
+              publish: {
+                uriPolicy: {
+                  mode: 'strict-immutable',
+                  preferredOnchainUri: 'data:application/json;base64,abc',
+                  preferredOnchainUriKind: 'data:',
+                  mirrorUrl: 'https://4626.fun/.well-known/agent-registration.json',
+                  domainVerificationUrl: 'https://4626.fun/.well-known/erc8004.json',
+                  compatibilityFallbackUrl: 'https://api.grove.storage/registration-key',
+                  writeOnchainHint: 'Write the strict immutable URI onchain.',
+                },
+                groveStatus: 'stored',
+                grove: {
+                  lensUri: 'lens://registration-key',
+                  gatewayUrl: 'https://api.grove.storage/registration-key',
+                  storageKey: 'registration-key',
+                  statusUrl: null,
+                },
+              },
+              discoverability: {
+                agentId: 2205,
+                discoverabilityReady: false,
+                walletBoundToCanonical: false,
+                tokenUriIsStrictImmutable: true,
+                tokenUriMatchesCanonical: true,
+              },
+              nextActions: [
+                {
+                  id: 'set_agent_wallet',
+                  label: 'Bind agentWallet to the canonical CSW',
+                  detail: 'Onchain agentWallet is missing or does not match the canonical CSW.',
+                },
+              ],
+              checkedAt: '2026-04-07T00:00:00.000Z',
+            },
+            isLoading: false,
+            error: null,
+            isError: false,
+          }
+        }
+        return { data: null, isLoading: false, error: null, isError: false }
+      }),
+      useMutation: vi.fn(() => ({
+        data: null,
+        error: null,
+        isPending: false,
+        isSuccess: false,
+        isError: false,
+        mutate: vi.fn(),
+        mutateAsync: vi.fn(),
+        variables: undefined,
+      })),
+      useQueryClient: vi.fn(() => ({
+        invalidateQueries: vi.fn(),
+        setQueryData: vi.fn(),
+      })),
+    }))
+    vi.doMock('@privy-io/react-auth', () => ({
+      useWallets: () => ({
+        wallets: [{ address: EMBEDDED_EOA_ADDRESS, id: PRIVY_WALLET_ID, walletClientType: 'privy' }],
+      }),
+    }))
+    vi.doMock('wagmi', () => ({
+      useAccount: () => ({ address: CREATOR_ADDRESS }),
+      usePublicClient: () => null,
+      useWalletClient: () => ({ data: null }),
+    }))
+    vi.doMock('@/hooks/useSiweAuth', () => ({
+      useSiweAuth: () => ({ authAddress: CREATOR_ADDRESS }),
+    }))
+    vi.doMock('@/hooks/useDeploymentTracker', () => ({
+      getDeploymentsForOwner: () => [],
+    }))
+    vi.doMock('@/components/deploy/DeploymentSuccess', () => ({
+      AjnaAutomationOptInCard: () => React.createElement('div', { 'data-testid': 'ajna-automation-card' }),
+    }))
+
+    const { AdminAgentSetup } = await import('./AdminAgentSetup')
+    const html = renderToStaticMarkup(React.createElement(AdminAgentSetup))
+
+    expect(html).toContain('ERC-8004 operator status')
+    expect(html).toContain('Needs follow-through')
+    expect(html).toContain('Bind agentWallet to the canonical CSW')
+    expect(html).toContain('Canonical immutable URI ready for onchain write.')
+    expect(html).toContain('Operator order for agent')
+  })
 })

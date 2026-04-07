@@ -17,6 +17,7 @@ import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import { resolveBaseAppInviteUrl } from '@/lib/baseAppInvite'
 import { getAppBaseUrl } from '@/lib/host'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privyEmbeddedEoa'
+import { AgentOperatorStatus, type AgentOperatorStatusData } from './AgentOperatorStatus'
 import { AgentPublishStatus, type AgentPublishData } from './AgentPublishStatus'
 
 export { AjnaAutomationOptInCard } from '@/components/deploy/DeploymentSuccess'
@@ -113,6 +114,18 @@ async function publishAgentProfile(): Promise<PublishData> {
   })
   const json = (await res.json().catch(() => null)) as ApiEnvelope<PublishData> | null
   if (!res.ok || !json?.success || !json.data) throw new Error(json?.error ?? 'Failed to publish agent profile')
+  return json.data
+}
+
+async function getAgentOperatorStatus(): Promise<AgentOperatorStatusData> {
+  const res = await apiFetch('/api/v1/agents/operator-status', {
+    method: 'GET',
+    headers: { Accept: 'application/json' },
+  })
+  const json = (await res.json().catch(() => null)) as ApiEnvelope<AgentOperatorStatusData> | null
+  if (!res.ok || !json?.success || !json.data) {
+    throw new Error(json?.error ?? 'Failed to load ERC-8004 operator status')
+  }
   return json.data
 }
 
@@ -623,8 +636,20 @@ export function AdminAgentSetup() {
   const ajnaAutomationStatus = ajnaAutomationViewState.status
   const ajnaAutomationError = ajnaAutomationViewState.errorMessage
   const ajnaAutomationStatusUnavailable = ajnaAutomationViewState.statusUnavailable
+  const operatorStatusQuery = useQuery({
+    queryKey: ['admin', 'erc8004-operator-status', creatorAddress],
+    queryFn: async (): Promise<AgentOperatorStatusData | null> => {
+      if (!creatorAddress) return null
+      return getAgentOperatorStatus()
+    },
+    enabled: Boolean(creatorAddress),
+    staleTime: 30_000,
+  })
   const publishMutation = useMutation({
     mutationFn: async (): Promise<PublishData> => publishAgentProfile(),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'erc8004-operator-status'] })
+    },
   })
 
   const oneClickMutation = useMutation({
@@ -685,6 +710,7 @@ export function AdminAgentSetup() {
       void queryClient.invalidateQueries({ queryKey: ['admin', 'serverWallet'] })
       void queryClient.invalidateQueries({ queryKey: ['admin', 'isOwner'] })
       void queryClient.invalidateQueries({ queryKey: ['admin', 'agent'] })
+      void queryClient.invalidateQueries({ queryKey: ['admin', 'erc8004-operator-status'] })
     },
   })
 
@@ -769,6 +795,17 @@ export function AdminAgentSetup() {
             Publish Agent
           </button>
         </div>
+        {operatorStatusQuery.data ? (
+          <AgentOperatorStatus status={operatorStatusQuery.data} className="app-meta-value" />
+        ) : null}
+        {operatorStatusQuery.isLoading ? (
+          <div className="app-meta-value text-zinc-500">Loading ERC-8004 operator status…</div>
+        ) : null}
+        {operatorStatusQuery.error ? (
+          <div className="app-meta-value text-red-300">
+            {(operatorStatusQuery.error as Error).message}
+          </div>
+        ) : null}
         {publishMutation.data ? (
           <AgentPublishStatus publish={publishMutation.data} className="app-meta-value" />
         ) : null}
