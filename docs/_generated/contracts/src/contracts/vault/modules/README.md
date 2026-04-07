@@ -8,3 +8,4 @@
 - [CreatorOVaultModuleBase](CreatorOVaultModuleBase.sol/abstract.CreatorOVaultModuleBase.md)
 - [CreatorOVaultModuleStorage](CreatorOVaultModuleStorage.sol/abstract.CreatorOVaultModuleStorage.md)
 - [CreatorOVaultStrategiesModule](CreatorOVaultStrategiesModule.sol/contract.CreatorOVaultStrategiesModule.md)
+- [ICreatorOVaultModuleIdentity](ICreatorOVaultModuleIdentity.sol/interface.ICreatorOVaultModuleIdentity.md)

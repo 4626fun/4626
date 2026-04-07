@@ -10,6 +10,20 @@ uint24 internal constant V3_FEE_TIER = 3000
 ```
 
 
+### CHARM_MANAGER_FEE_PIPS
+
+```solidity
+uint24 internal constant CHARM_MANAGER_FEE_PIPS = 160_000
+```
+
+
+### CHARM_DEFAULT_PROTOCOL_FEE_PIPS
+
+```solidity
+uint24 internal constant CHARM_DEFAULT_PROTOCOL_FEE_PIPS = 10_000
+```
+
+
 ### CHARM_MAX_TWAP_DEVIATION
 
 ```solidity
@@ -131,7 +145,7 @@ function _saltFor(bytes32 baseSalt, string memory label) internal pure returns (
 
 
 ```solidity
-function _enforceCharmFactoryGovernance() internal view;
+function _enforceCharmFactoryGovernance(uint24 expectedProtocolFeePipsConfig) internal view;
 ```
 
 ### _enforceCharmVaultManager
@@ -171,6 +185,12 @@ error V3PoolMissing();
 
 ```solidity
 error CharmFactoryGovernanceMismatch(address expected, address actual);
+```
+
+### CharmFactoryProtocolFeeMismatch
+
+```solidity
+error CharmFactoryProtocolFeeMismatch(uint256 expected, uint256 actual);
 ```
 
 ### CharmVaultManagerMismatch

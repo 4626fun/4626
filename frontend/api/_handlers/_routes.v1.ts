@@ -41,6 +41,7 @@ const v1RouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
   'agents/feedback': () => import('./v1/agents/feedback/_read.js'),
   'agents/feedback/review': () => import('./v1/agents/feedback/_review.js'),
   'agents/feedback/submit': () => import('./v1/agents/feedback/_submit.js'),
+  'agents/profile': () => import('./v1/agents/_profile.js'),
   'agents/identity/verification': () => import('./v1/agents/identity/_verification.js'),
   'agents/identity/set-agent-wallet': () => import('./v1/agents/identity/_setAgentWallet.js'),
   'agents/access-proof/request': () => import('./v1/agents/access-proof/_request.js'),

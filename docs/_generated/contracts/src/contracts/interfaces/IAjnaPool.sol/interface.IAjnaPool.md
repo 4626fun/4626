@@ -39,6 +39,60 @@ function addQuoteToken(uint256 amount, uint256 index, uint256 expiry)
 |`addedAmount`|`uint256`|The actual amount of tokens added|
 
 
+### drawDebt
+
+Borrow quote token and/or pledge collateral.
+
+Amounts use Ajna WAD precision (1e18), even for non-18-decimal tokens.
+
+
+```solidity
+function drawDebt(address borrowerAddress, uint256 amountToBorrow, uint256 limitIndex, uint256 collateralToPledge)
+    external;
+```
+**Parameters**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`borrowerAddress`|`address`|Borrower account to mutate|
+|`amountToBorrow`|`uint256`|Quote token amount to borrow (WAD)|
+|`limitIndex`|`uint256`|Lower bound on tolerated LUP move|
+|`collateralToPledge`|`uint256`|Collateral amount to pledge (WAD)|
+
+
+### repayDebt
+
+Repay quote token debt and optionally pull collateral.
+
+Amounts use Ajna WAD precision (1e18), even for non-18-decimal tokens.
+
+
+```solidity
+function repayDebt(
+    address borrowerAddress,
+    uint256 maxQuoteTokenAmountToRepay,
+    uint256 collateralAmountToPull,
+    address recipient,
+    uint256 limitIndex
+) external returns (uint256 amountRepaid);
+```
+**Parameters**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`borrowerAddress`|`address`|Borrower account to mutate|
+|`maxQuoteTokenAmountToRepay`|`uint256`|Maximum quote token to repay (WAD)|
+|`collateralAmountToPull`|`uint256`|Maximum collateral to pull (WAD)|
+|`recipient`|`address`|Recipient of pulled collateral|
+|`limitIndex`|`uint256`|Lower bound on tolerated LUP move while pulling collateral|
+
+**Returns**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`amountRepaid`|`uint256`|Actual quote token repaid (WAD)|
+
+
 ### removeQuoteToken
 
 Remove quote tokens from a lending bucket
@@ -141,6 +195,50 @@ function bucketInfo(uint256 index)
 |`bankruptcyTime`|`uint256`|Bankruptcy timestamp|
 |`deposit`|`uint256`|Total quote tokens deposited|
 |`scale`|`uint256`|Scaling factor|
+
+
+### borrowerInfo
+
+Get borrower debt and collateral state.
+
+Values are Ajna WAD precision.
+
+
+```solidity
+function borrowerInfo(address borrower)
+    external
+    view
+    returns (uint256 t0Debt, uint256 collateral, uint256 npTpRatio);
+```
+**Parameters**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`borrower`|`address`|Borrower address|
+
+**Returns**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`t0Debt`|`uint256`|Borrower t0 debt (WAD)|
+|`collateral`|`uint256`|Borrower pledged collateral (WAD)|
+|`npTpRatio`|`uint256`|Borrower neutral/threshold ratio (WAD)|
+
+
+### inflatorInfo
+
+Get pool inflator state used to transform t0Debt into current debt.
+
+
+```solidity
+function inflatorInfo() external view returns (uint256 inflator, uint256 lastUpdate);
+```
+**Returns**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`inflator`|`uint256`|Pool inflator (WAD)|
+|`lastUpdate`|`uint256`|Timestamp of inflator update|
 
 
 ### quoteTokenAddress

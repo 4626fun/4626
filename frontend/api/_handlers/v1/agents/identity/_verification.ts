@@ -15,12 +15,14 @@ import {
   readOnchainSnapshot,
   type RegistrationProbe,
 } from '../../../../../server/_lib/erc8004Review.js'
-import { getCanonicalOrigin } from '../../../../../server/_lib/origin.js'
+import { getErc8004PublicOrigin } from '../../../../../server/_lib/origin.js'
 import { getTeeAttestationStatus } from '../../../../../server/_lib/teeAttestationGate.js'
 import {
   buildAgentUriPolicy,
+  type AgentUriPolicy,
   buildPublicAgentRegistrationUrl,
   buildPublicDomainVerificationUrl,
+  ERC8004_DOMAIN_VERIFICATION_PATH,
   STRICT_IMMUTABLE_AGENT_URI_KIND,
   STRICT_IMMUTABLE_AGENT_URI_SCHEMES,
 } from '../../../../../src/lib/erc8004AgentUriPolicy.js'
@@ -31,6 +33,14 @@ type RegistrationRef = {
   chainId: number
   registryAddress: string
 }
+
+type VerificationCheck = {
+  id: string
+  passed: boolean
+  detail: string
+}
+
+type TeeAttestationStatus = Awaited<ReturnType<typeof getTeeAttestationStatus>>
 
 function setPublicCors(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')
@@ -59,7 +69,7 @@ function getExplorerBaseUrl(chainId: number): string {
   return 'https://basescan.org'
 }
 
-type MirrorProbe = {
+export type MirrorProbe = {
   url: string
   reachable: boolean
   finalUrl: string | null
@@ -135,7 +145,7 @@ async function fetchMirrorProbe(params: {
   }
 }
 
-type DomainVerificationProbe = {
+export type DomainVerificationProbe = {
   url: string
   reachable: boolean
   finalUrl: string | null
@@ -143,27 +153,95 @@ type DomainVerificationProbe = {
   error: string | null
 }
 
+export type AgentVerificationData = {
+  chainId: number
+  registryAddress: string
+  agentId: number
+  canonicalCsw: string | null
+  ownerAddress: string | null
+  agentWallet: string | null
+  tokenUri: string | null
+  agentRegistered: boolean
+  walletBoundToCanonical: boolean
+  discoverabilityReady: boolean
+  tokenUriIsStrictImmutable: boolean
+  tokenUriMatchesCanonical: boolean
+  uriPolicy: AgentUriPolicy
+  onchainRegistration: RegistrationProbe
+  endpoint: Awaited<ReturnType<typeof probeEndpoint>>
+  mirrors: {
+    registration: MirrorProbe
+    domainVerification: DomainVerificationProbe
+  }
+  checks: VerificationCheck[]
+  teeAttestation: TeeAttestationStatus
+  links: {
+    registry: string
+    token: string
+    canonicalCsw: string | null
+    ownerAddress: string | null
+    agentWallet: string | null
+  }
+  rpcHealthy: boolean
+  rpcErrorCount: number
+}
+
+function toCanonicalDomain(origin: string): string | null {
+  try {
+    return new URL(origin).hostname.toLowerCase()
+  } catch {
+    return null
+  }
+}
+
+export function buildExpectedVerifiedEndpoints(origin: string): string[] {
+  const canonicalOrigin = origin.replace(/\/+$/, '')
+  return [
+    canonicalOrigin,
+    `${canonicalOrigin}/api/v1/spec.json`,
+    `${canonicalOrigin}/api/v1/agents/feedback`,
+    `${canonicalOrigin}/api/lens/reputation-graph`,
+    `${canonicalOrigin}/api/lens/feedback-payload`,
+    `${canonicalOrigin}/api/v1/agents/wallet-intelligence`,
+  ]
+}
+
 async function fetchDomainVerificationProbe(params: {
   url: string
+  expectedDomain: string | null
   expectedAgentId: number
   expectedRegistry: string
   expectedRegistrationUrl: string
+  expectedVerifiedEndpoints: string[]
 }): Promise<DomainVerificationProbe> {
   const fetched = await fetchRegistrationPayload(params.url)
   const payload = fetched.payload as Record<string, unknown> | null
+  const payloadVerifiedEndpoints = Array.isArray(payload?.verifiedEndpoints)
+    ? payload.verifiedEndpoints.map((entry) => String(entry ?? '').trim()).filter(Boolean)
+    : []
+  const verifiedEndpointsMatch = stableJsonStringify(payloadVerifiedEndpoints) === stableJsonStringify(params.expectedVerifiedEndpoints)
+  const domainMatches = String(payload?.domain ?? '').trim().toLowerCase() === String(params.expectedDomain ?? '').trim().toLowerCase()
   const matchesCanonical = Boolean(
     payload &&
+      domainMatches &&
       Number(payload.agentId) === params.expectedAgentId &&
       String(payload.agentRegistry ?? '').trim().toLowerCase() === params.expectedRegistry &&
-      String(payload.registrationUrl ?? '').trim() === params.expectedRegistrationUrl,
+      String(payload.registrationUrl ?? '').trim() === params.expectedRegistrationUrl &&
+      verifiedEndpointsMatch,
   )
+  let error = fetched.error
+  if (!error && payload && !domainMatches) {
+    error = `Domain proof domain does not match canonical host (${params.expectedDomain ?? 'unknown'}).`
+  } else if (!error && payload && !verifiedEndpointsMatch) {
+    error = 'Domain proof verifiedEndpoints do not match the canonical public endpoints.'
+  }
 
   return {
     url: params.url,
     reachable: Boolean(payload && !fetched.error),
     finalUrl: fetched.finalUrl,
     matchesCanonical,
-    error: fetched.error,
+    error,
   }
 }
 
@@ -181,7 +259,7 @@ function buildChecks(params: {
   registrationMirror: MirrorProbe
   domainVerification: DomainVerificationProbe
   endpoint: Awaited<ReturnType<typeof probeEndpoint>>
-}): Array<{ id: string; passed: boolean; detail: string }> {
+}): VerificationCheck[] {
   return [
     {
       id: 'onchain-registration',
@@ -240,48 +318,40 @@ function buildChecks(params: {
   ]
 }
 
-export default async function handler(req: VercelRequest, res: VercelResponse) {
-  setPublicCors(res)
-  if (handleOptions(req, res)) return
-  if (req.method !== 'GET') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' })
-  }
+function buildVerificationError(message: string, statusCode: number, missing?: string[]) {
+  return Object.assign(new Error(message), {
+    statusCode,
+    ...(missing && missing.length > 0 ? { missing } : {}),
+  })
+}
 
-  const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/agents/identity/verification', kind: 'read' })
-  if (!g.ok) return
-
-  const origin = (() => {
-    try {
-      return getCanonicalOrigin(req)
-    } catch {
-      return 'https://4626.fun'
-    }
-  })()
+export async function buildAgentVerificationData(req?: VercelRequest): Promise<AgentVerificationData> {
+  const origin = getErc8004PublicOrigin(req)
 
   const registration = buildAgentRegistration(origin)
   if (!registration.payload) {
-    return res.status(503).json({
-      success: false,
-      error: registration.error || 'Missing ERC-8004 registry configuration.',
-      missing: registration.missing ?? [],
-    })
+    throw buildVerificationError(
+      registration.error || 'Missing ERC-8004 registry configuration.',
+      503,
+      registration.missing ?? [],
+    )
   }
 
   const primaryRegistration = Array.isArray(registration.payload.registrations)
     ? registration.payload.registrations[0]
     : null
   if (!primaryRegistration || typeof primaryRegistration.agentRegistry !== 'string') {
-    return res.status(503).json({ success: false, error: 'Agent registration metadata is missing registrations[0].' })
+    throw buildVerificationError('Agent registration metadata is missing registrations[0].', 503)
   }
 
   const ref = parseRegistrationRef(primaryRegistration.agentRegistry)
   if (!ref) {
-    return res.status(503).json({ success: false, error: 'Invalid agentRegistry reference in registration metadata.' })
+    throw buildVerificationError('Invalid agentRegistry reference in registration metadata.', 503)
   }
 
   const agentId = Number(primaryRegistration.agentId)
   if (!Number.isFinite(agentId) || agentId < 0 || Math.floor(agentId) !== agentId) {
-    return res.status(503).json({ success: false, error: 'Invalid agentId in registration metadata.' })
+    throw buildVerificationError('Invalid agentId in registration metadata.', 503)
   }
 
   const canonicalCsw = extractCanonicalCsw(registration.payload)
@@ -305,6 +375,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const expectedRegistry = primaryRegistration.agentRegistry.trim().toLowerCase()
   const registrationMirrorUrl = buildPublicAgentRegistrationUrl(origin)
   const domainVerificationUrl = buildPublicDomainVerificationUrl(origin)
+  const expectedVerifiedEndpoints = buildExpectedVerifiedEndpoints(origin)
   const registrationMirror = await fetchMirrorProbe({
     url: registrationMirrorUrl,
     canonicalPayload: registration.payload,
@@ -313,9 +384,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   })
   const domainVerification = await fetchDomainVerificationProbe({
     url: domainVerificationUrl,
+    expectedDomain: toCanonicalDomain(origin),
     expectedAgentId: agentId,
     expectedRegistry,
     expectedRegistrationUrl: registrationMirrorUrl,
+    expectedVerifiedEndpoints,
   })
   const endpointUrl = findEndpointFromRegistration(onchainRegistration.payload ?? registration.payload)
   const endpoint = await probeEndpoint(endpointUrl ?? '')
@@ -340,7 +413,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     endpoint,
   })
   const discoverabilityReady = checks.every((check) => check.passed)
-  const teeAttestation = await getTeeAttestationStatus().catch(() => ({
+  const teeAttestation: TeeAttestationStatus = await getTeeAttestationStatus().catch(() => ({
     enabled: false,
     passed: false,
     reason: 'tee_attestation_lookup_failed',
@@ -353,40 +426,69 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     checkedAtMs: Date.now(),
   }))
 
-  setCache(res, 30)
-  return res.status(200).json({
-    success: true,
-    data: {
-      chainId: ref.chainId,
-      registryAddress: ref.registryAddress,
-      agentId,
-      canonicalCsw,
-      ownerAddress: onchain.ownerAddress,
-      agentWallet: onchain.agentWallet,
-      tokenUri: onchain.tokenUri,
-      agentRegistered: onchain.agentRegistered,
-      walletBoundToCanonical,
-      discoverabilityReady,
-      tokenUriIsStrictImmutable,
-      tokenUriMatchesCanonical,
-      uriPolicy,
-      onchainRegistration,
-      endpoint,
-      mirrors: {
-        registration: registrationMirror,
-        domainVerification,
-      },
-      checks,
-      teeAttestation,
-      links: {
-        registry: `${explorer}/address/${ref.registryAddress}`,
-        token: `${explorer}/token/${ref.registryAddress}?a=${agentId}`,
-        canonicalCsw: canonicalCsw ? `${explorer}/address/${canonicalCsw}` : null,
-        ownerAddress: onchain.ownerAddress ? `${explorer}/address/${onchain.ownerAddress}` : null,
-        agentWallet: onchain.agentWallet ? `${explorer}/address/${onchain.agentWallet}` : null,
-      },
-      rpcHealthy: onchain.rpcErrorCount === 0,
-      rpcErrorCount: onchain.rpcErrorCount,
+  return {
+    chainId: ref.chainId,
+    registryAddress: ref.registryAddress,
+    agentId,
+    canonicalCsw,
+    ownerAddress: onchain.ownerAddress,
+    agentWallet: onchain.agentWallet,
+    tokenUri: onchain.tokenUri,
+    agentRegistered: onchain.agentRegistered,
+    walletBoundToCanonical,
+    discoverabilityReady,
+    tokenUriIsStrictImmutable,
+    tokenUriMatchesCanonical,
+    uriPolicy,
+    onchainRegistration,
+    endpoint,
+    mirrors: {
+      registration: registrationMirror,
+      domainVerification,
     },
-  })
+    checks,
+    teeAttestation,
+    links: {
+      registry: `${explorer}/address/${ref.registryAddress}`,
+      token: `${explorer}/token/${ref.registryAddress}?a=${agentId}`,
+      canonicalCsw: canonicalCsw ? `${explorer}/address/${canonicalCsw}` : null,
+      ownerAddress: onchain.ownerAddress ? `${explorer}/address/${onchain.ownerAddress}` : null,
+      agentWallet: onchain.agentWallet ? `${explorer}/address/${onchain.agentWallet}` : null,
+    },
+    rpcHealthy: onchain.rpcErrorCount === 0,
+    rpcErrorCount: onchain.rpcErrorCount,
+  }
+}
+
+export default async function handler(req: VercelRequest, res: VercelResponse) {
+  setPublicCors(res)
+  if (handleOptions(req, res)) return
+  if (req.method !== 'GET') {
+    return res.status(405).json({ success: false, error: 'Method not allowed' })
+  }
+
+  const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/agents/identity/verification', kind: 'read' })
+  if (!g.ok) return
+
+  try {
+    const data = await buildAgentVerificationData(req)
+
+    setCache(res, 30)
+    return res.status(200).json({
+      success: true,
+      data,
+    })
+  } catch (error) {
+    const statusCode = typeof (error as { statusCode?: unknown })?.statusCode === 'number'
+      ? Number((error as { statusCode?: number }).statusCode)
+      : 500
+    const missing = Array.isArray((error as { missing?: unknown })?.missing)
+      ? ((error as { missing?: string[] }).missing ?? [])
+      : undefined
+    return res.status(statusCode).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to build agent verification snapshot.',
+      ...(missing && missing.length > 0 ? { missing } : {}),
+    })
+  }
 }

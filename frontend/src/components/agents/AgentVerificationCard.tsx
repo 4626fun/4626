@@ -5,6 +5,14 @@ import { AlertTriangle, ExternalLink, Loader2, ShieldCheck } from 'lucide-react'
 import { apiFetch } from '@/lib/apiBase'
 import type { ApiEnvelope } from '@/lib/apiEnvelope'
 
+type MirrorProbeData = {
+  url: string
+  reachable: boolean
+  finalUrl: string | null
+  matchesCanonical: boolean
+  error: string | null
+}
+
 type VerificationData = {
   chainId: number
   registryAddress: string
@@ -25,16 +33,10 @@ type VerificationData = {
     error: string | null
   }
   mirrors: {
-    registration: {
-      url: string
-      matchesCanonical: boolean
-      error: string | null
+    registration: MirrorProbeData & {
+      agentIdMatches: boolean
     }
-    domainVerification: {
-      url: string
-      matchesCanonical: boolean
-      error: string | null
-    }
+    domainVerification: MirrorProbeData
   }
   checks: Array<{
     id: string
@@ -68,6 +70,40 @@ function chainLabel(chainId: number): string {
   if (chainId === 8453) return 'Base'
   if (chainId === 1) return 'Ethereum'
   return `Chain ${chainId}`
+}
+
+type MirrorStatusView = {
+  label: string
+  tone: 'ok' | 'warn'
+}
+
+function isMirrorTransportError(error: string | null | undefined): boolean {
+  const value = String(error ?? '').trim().toLowerCase()
+  if (!value) return false
+  return (
+    value.includes('returned ') ||
+    value.includes('failed to fetch') ||
+    value.includes('no registration url') ||
+    value.includes('invalid registration url') ||
+    value.includes('unsupported registration url protocol') ||
+    value.includes('forbidden host')
+  )
+}
+
+function getMirrorStatusView(params: {
+  mirror: MirrorProbeData
+  successLabel: string
+}): MirrorStatusView {
+  if (params.mirror.matchesCanonical) {
+    return { label: params.successLabel, tone: 'ok' }
+  }
+  if (!params.mirror.reachable && isMirrorTransportError(params.mirror.error)) {
+    return { label: 'Unreachable', tone: 'warn' }
+  }
+  if (params.mirror.error) {
+    return { label: 'Invalid payload', tone: 'warn' }
+  }
+  return { label: 'Mismatch detected', tone: 'warn' }
 }
 
 export function AgentVerificationCard() {
@@ -109,6 +145,28 @@ export function AgentVerificationCard() {
 
   const failingChecks = useMemo(
     () => (query.data?.checks ?? []).filter((check) => !check.passed).slice(0, 3),
+    [query.data],
+  )
+
+  const registrationMirrorStatus = useMemo(
+    () =>
+      query.data
+        ? getMirrorStatusView({
+            mirror: query.data.mirrors.registration,
+            successLabel: 'Matches canonical payload',
+          })
+        : null,
+    [query.data],
+  )
+
+  const domainProofStatus = useMemo(
+    () =>
+      query.data
+        ? getMirrorStatusView({
+            mirror: query.data.mirrors.domainVerification,
+            successLabel: 'Matches canonical identity',
+          })
+        : null,
     [query.data],
   )
 
@@ -280,15 +338,15 @@ export function AgentVerificationCard() {
           <div className="grid gap-2 text-xs text-zinc-300 sm:grid-cols-2">
             <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
               <div className="app-meta-value text-zinc-400">Registration mirror</div>
-              <div className={query.data.mirrors.registration.matchesCanonical ? 'text-emerald-300' : 'text-amber-200'}>
-                {query.data.mirrors.registration.matchesCanonical ? 'Matches canonical payload' : 'Mismatch detected'}
+              <div className={registrationMirrorStatus?.tone === 'ok' ? 'text-emerald-300' : 'text-amber-200'}>
+                {registrationMirrorStatus?.label ?? 'Mismatch detected'}
               </div>
               <div className="mt-1 text-zinc-500">{shortUri(query.data.mirrors.registration.url)}</div>
             </div>
             <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
               <div className="app-meta-value text-zinc-400">Domain proof</div>
-              <div className={query.data.mirrors.domainVerification.matchesCanonical ? 'text-emerald-300' : 'text-amber-200'}>
-                {query.data.mirrors.domainVerification.matchesCanonical ? 'Matches canonical identity' : 'Mismatch detected'}
+              <div className={domainProofStatus?.tone === 'ok' ? 'text-emerald-300' : 'text-amber-200'}>
+                {domainProofStatus?.label ?? 'Mismatch detected'}
               </div>
               <div className="mt-1 text-zinc-500">{shortUri(query.data.mirrors.domainVerification.url)}</div>
             </div>

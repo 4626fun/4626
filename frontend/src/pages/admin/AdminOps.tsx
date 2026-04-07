@@ -26,10 +26,10 @@ import { CONTRACTS } from '@/config/contracts'
 import { appendBuilderSuffixToHex } from '@/lib/baseBuilderCodes'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
+import { AgentPublishStatus, type AgentPublishData } from './AgentPublishStatus'
 import {
   STRICT_IMMUTABLE_AGENT_URI_SUMMARY,
   toRegistrationDataUri,
-  type AgentUriPolicy,
 } from '@/lib/erc8004AgentUriPolicy'
 import { logger } from '@/lib/logger'
 const CANONICAL_SMART_WALLET = '0xAb6d5C10b03300326CD7fAb7267Ae192842967b5'
@@ -736,11 +736,7 @@ function AgentRegistration() {
     status: 'idle' | 'loading' | 'success' | 'error'
     error?: string
   }>({ status: 'idle' })
-  const [lensPublishResult, setLensPublishResult] = useState<{
-    lensUri?: string
-    gatewayUrl?: string
-    uriPolicy?: AgentUriPolicy
-  } | null>(null)
+  const [lensPublishResult, setLensPublishResult] = useState<AgentPublishData | null>(null)
   const [registerTxState, setRegisterTxState] = useState<TxState>({ status: 'idle' })
   const [updateTxState, setUpdateTxState] = useState<TxState>({ status: 'idle' })
   const [registeredAgentId, setRegisteredAgentId] = useState<string | null>(null)
@@ -899,24 +895,14 @@ function AgentRegistration() {
       if (!res.ok || !payload?.success) {
         throw new Error(payload?.error || `Request failed (${res.status}).`)
       }
-      const grove = payload?.data?.grove
-      const uriPolicy = payload?.data?.uriPolicy ?? null
-      const lensUri = grove?.lensUri ? String(grove.lensUri) : undefined
-      const gatewayUrl = grove?.gatewayUrl ? String(grove.gatewayUrl) : undefined
+      const publishData = payload?.data as AgentPublishData | null
+      if (!publishData?.uriPolicy?.preferredOnchainUri) {
+        throw new Error('Lens response did not include a canonical immutable URI.')
+      }
       // Keep strict content-addressed URI as default; gateway is opt-in.
-      setLensPublishResult({ lensUri, gatewayUrl, uriPolicy: uriPolicy ?? undefined })
-      if (uriPolicy?.preferredOnchainUri) {
-        setAgentUri(String(uriPolicy.preferredOnchainUri))
-      }
-      if (gatewayUrl || uriPolicy?.preferredOnchainUri) {
-        setLensPublishState({ status: 'success' })
-      } else {
-        setLensPublishState({
-          status: 'error',
-          error:
-            'Lens returned a lens:// URI without a gateway URL. Keep using a validator-safe agent URI (https://, http://, ipfs://, ar://, or data:) and do not write lens:// on-chain.',
-        })
-      }
+      setLensPublishResult(publishData)
+      setAgentUri(String(publishData.uriPolicy.preferredOnchainUri))
+      setLensPublishState({ status: 'success' })
     } catch (e: any) {
       const msg = String(e?.message || 'Failed to publish registration.')
       setLensPublishState({ status: 'error', error: msg })
@@ -1609,45 +1595,14 @@ function AgentRegistration() {
               {lensPublishState.status === 'error' ? (
                 <div className="text-xs text-red-400">{lensPublishState.error}</div>
               ) : lensPublishState.status === 'success' ? (
-                <div className="text-xs text-emerald-300/90">Published registration metadata and refreshed the canonical immutable URI.</div>
+                <div className="text-xs text-emerald-300/90">Refreshed the canonical immutable URI and updated publish status.</div>
               ) : null}
-              {lensPublishResult?.uriPolicy?.preferredOnchainUri ? (
-                <div className="space-y-1 text-xs text-zinc-500">
-                  <div>
-                    Canonical immutable URI:
-                    <span className="ml-1 font-mono text-zinc-300">{lensPublishResult.uriPolicy.preferredOnchainUriKind}</span>
-                  </div>
-                  <div className="break-all font-mono text-zinc-300">{lensPublishResult.uriPolicy.preferredOnchainUri}</div>
-                </div>
-              ) : null}
-              {lensPublishResult?.lensUri ? (
-                <div className="text-xs text-zinc-500">
-                  Grove storage URI: <span className="font-mono text-zinc-300">{lensPublishResult.lensUri}</span>
-                </div>
-              ) : null}
-              {lensPublishResult?.gatewayUrl ? (
-                <div className="space-y-1">
-                  <a
-                    className="text-xs text-brand-accent hover:text-brand-primary"
-                    href={lensPublishResult.gatewayUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    View Grove gateway
-                  </a>
-                  <div className="text-xs text-zinc-500">
-                    Compatibility fallback for scanners that cannot resolve the canonical immutable URI.
-                  </div>
-                  <div>
-                    <button
-                      type="button"
-                      onClick={() => setAgentUri(lensPublishResult.gatewayUrl ?? '')}
-                      className="text-xs text-zinc-300 hover:text-white transition-colors"
-                    >
-                      Use gateway URL anyway (requires allowlist)
-                    </button>
-                  </div>
-                </div>
+              {lensPublishResult ? (
+                <AgentPublishStatus
+                  publish={lensPublishResult}
+                  onUseGatewayUrl={(gatewayUrl) => setAgentUri(gatewayUrl)}
+                  className="space-y-1"
+                />
               ) : null}
               <Link className="text-xs text-brand-accent hover:text-brand-primary" to="/agents/uri-service">
                 Agent URI service docs

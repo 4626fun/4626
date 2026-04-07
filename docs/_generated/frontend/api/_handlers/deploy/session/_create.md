@@ -306,7 +306,7 @@ Defined in: [api/\_handlers/deploy/session/\_create.ts:123](https://github.com/w
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/deploy/session/\_create.ts:1255](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/session/_create.ts#L1255)
+Defined in: [api/\_handlers/deploy/session/\_create.ts:1231](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/session/_create.ts#L1231)
 
 #### Parameters
 
@@ -328,7 +328,7 @@ Defined in: [api/\_handlers/deploy/session/\_create.ts:1255](https://github.com/
 
 > **validateDeploySessionRequest**(`params`): `Promise`\<[`ValidatedDeploySessionRequest`](#validateddeploysessionrequest)\>
 
-Defined in: [api/\_handlers/deploy/session/\_create.ts:1033](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/session/_create.ts#L1033)
+Defined in: [api/\_handlers/deploy/session/\_create.ts:1009](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/session/_create.ts#L1009)
 
 #### Parameters
 

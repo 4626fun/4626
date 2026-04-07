@@ -303,6 +303,13 @@ uint8 private constant IGNORE_REASON_INVALID_PAYLOAD = 3
 ```
 
 
+### IGNORE_REASON_RATE_LIMITED
+
+```solidity
+uint8 private constant IGNORE_REASON_RATE_LIMITED = 4
+```
+
+
 ## Functions
 ### constructor
 

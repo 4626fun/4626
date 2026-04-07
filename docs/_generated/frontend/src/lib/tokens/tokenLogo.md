@@ -68,7 +68,7 @@ Defined in: [src/lib/tokens/tokenLogo.ts:9](https://github.com/wenakita/4626/blo
 
 > **getTokenLogo**(`token`): [`TokenLogoLookup`](#tokenlogolookup)
 
-Defined in: [src/lib/tokens/tokenLogo.ts:115](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenLogo.ts#L115)
+Defined in: [src/lib/tokens/tokenLogo.ts:120](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenLogo.ts#L120)
 
 Build a deterministic logo list in priority order.
 It includes curated metadata first, then curated fallbacks by chain.
@@ -90,7 +90,7 @@ Returns the cached successful URL separately to avoid stale broken chains.
 
 > **markTokenLogoSuccess**(`cacheKey`, `url`): `void`
 
-Defined in: [src/lib/tokens/tokenLogo.ts:153](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenLogo.ts#L153)
+Defined in: [src/lib/tokens/tokenLogo.ts:164](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenLogo.ts#L164)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/deploy/\_registerSolanaBridgeToken.ts:1305](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/_registerSolanaBridgeToken.ts#L1305)
+Defined in: [api/\_handlers/deploy/\_registerSolanaBridgeToken.ts:949](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/_registerSolanaBridgeToken.ts#L949)
 
 #### Parameters
 

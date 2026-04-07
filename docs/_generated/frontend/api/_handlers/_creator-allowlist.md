@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/\_creator-allowlist.ts:206](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_creator-allowlist.ts#L206)
+Defined in: [api/\_handlers/\_creator-allowlist.ts:137](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_creator-allowlist.ts#L137)
 
 #### Parameters
 

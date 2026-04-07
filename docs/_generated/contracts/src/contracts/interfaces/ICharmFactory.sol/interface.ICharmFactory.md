@@ -59,6 +59,15 @@ Charm governance address
 function governance() external view returns (address);
 ```
 
+### protocolFee
+
+Factory-level protocol fee (1e6 precision)
+
+
+```solidity
+function protocolFee() external view returns (uint24);
+```
+
 ## Structs
 ### VaultParams
 

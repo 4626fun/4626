@@ -1,6 +1,8 @@
 
 
 # Contents
+- [IApprovedV4HooksRegistry](ApprovedV4HooksRegistry.sol/interface.IApprovedV4HooksRegistry.md)
+- [ApprovedV4HooksRegistry](ApprovedV4HooksRegistry.sol/contract.ApprovedV4HooksRegistry.md)
 - [StrategyType](ConcentratedStrategy.sol/enum.StrategyType.md)
 - [ConcentratedStrategy](ConcentratedStrategy.sol/contract.ConcentratedStrategy.md)
 - [CreatorLPManager](CreatorLPManager.sol/contract.CreatorLPManager.md)

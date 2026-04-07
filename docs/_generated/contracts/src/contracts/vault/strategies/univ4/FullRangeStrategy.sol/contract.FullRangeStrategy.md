@@ -103,6 +103,15 @@ address public permit2
 ```
 
 
+### hookRegistry
+Governance-managed hook allowlist for V4 pool configuration.
+
+
+```solidity
+IApprovedV4HooksRegistry public immutable hookRegistry
+```
+
+
 ### positionTokenId
 Current position token ID (NFT)
 
@@ -160,7 +169,8 @@ Initialize full range strategy
 
 
 ```solidity
-constructor(address _creatorCoin, address _pairedToken, address _lpManager, address _owner) Ownable(_owner);
+constructor(address _creatorCoin, address _pairedToken, address _lpManager, address _owner, address _hookRegistry)
+    Ownable(_owner);
 ```
 **Parameters**
 
@@ -170,6 +180,7 @@ constructor(address _creatorCoin, address _pairedToken, address _lpManager, addr
 |`_pairedToken`|`address`|Paired token (WETH)|
 |`_lpManager`|`address`|LP Manager address|
 |`_owner`|`address`|Owner address|
+|`_hookRegistry`|`address`|Registry of approved V4 hooks|
 
 
 ### configurePool
@@ -191,6 +202,17 @@ function configurePool(address _poolManager, address _positionManager, address _
 |`_permit2`|`address`|Permit2 contract used by PosM|
 |`_poolKey`|`PoolKey`|The pool key (pool id is derived from this)|
 
+
+### reconfigureApprovals
+
+Rotate Permit2/PosM approval targets and revoke stale approvals.
+
+Useful for operator key rotation or explicit approval hygiene.
+
+
+```solidity
+function reconfigureApprovals(address _positionManager, address _permit2) external onlyOwner;
+```
 
 ### deposit
 
@@ -436,6 +458,14 @@ event PoolConfigured(
 );
 ```
 
+### ApprovalsReconfigured
+
+```solidity
+event ApprovalsReconfigured(
+    address oldPositionManager, address oldPermit2, address newPositionManager, address newPermit2
+);
+```
+
 ### EmergencyModeEnabled
 
 ```solidity
@@ -483,5 +513,23 @@ error InsufficientLiquidity();
 
 ```solidity
 error PoolNotFullyConfigured();
+```
+
+### PoolAlreadyConfigured
+
+```solidity
+error PoolAlreadyConfigured();
+```
+
+### InvalidHook
+
+```solidity
+error InvalidHook(address hook);
+```
+
+### HookNotApproved
+
+```solidity
+error HookNotApproved(address hook);
 ```
 

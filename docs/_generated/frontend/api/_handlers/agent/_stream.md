@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/agent/\_stream.ts:33](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_stream.ts#L33)
+Defined in: [api/\_handlers/agent/\_stream.ts:35](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_stream.ts#L35)
 
 #### Parameters
 

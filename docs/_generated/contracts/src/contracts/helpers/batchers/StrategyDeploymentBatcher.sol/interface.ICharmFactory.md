@@ -22,6 +22,13 @@ function createVault(VaultParams calldata params) external returns (address vaul
 function governance() external view returns (address);
 ```
 
+### protocolFee
+
+
+```solidity
+function protocolFee() external view returns (uint24);
+```
+
 ## Structs
 ### VaultParams
 

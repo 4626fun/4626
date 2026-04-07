@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/keepr/actions/\_enqueue.ts:67](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/keepr/actions/_enqueue.ts#L67)
+Defined in: [api/\_handlers/keepr/actions/\_enqueue.ts:78](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/keepr/actions/_enqueue.ts#L78)
 
 #### Parameters
 

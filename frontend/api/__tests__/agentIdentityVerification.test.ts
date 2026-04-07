@@ -49,6 +49,9 @@ const canonicalDomainProof = {
     'https://4626.fun',
     'https://4626.fun/api/v1/spec.json',
     'https://4626.fun/api/v1/agents/feedback',
+    'https://4626.fun/api/lens/reputation-graph',
+    'https://4626.fun/api/lens/feedback-payload',
+    'https://4626.fun/api/v1/agents/wallet-intelligence',
   ],
   registrationUrl: MIRROR_URL,
   generatedAt: '2026-04-07T00:00:00.000Z',
@@ -61,6 +64,7 @@ const mocks = vi.hoisted(() => ({
   guardAgentApiRequest: vi.fn(async () => ({ ok: true, ip: '127.0.0.1', auth: null })),
   buildAgentRegistration: vi.fn(),
   getCanonicalOrigin: vi.fn(() => 'https://4626.fun'),
+  getErc8004PublicOrigin: vi.fn(() => 'https://4626.fun'),
   getTeeAttestationStatus: vi.fn(async () => ({
     enabled: false,
     passed: false,
@@ -100,6 +104,7 @@ vi.mock('../../server/_lib/agentRegistration.js', () => ({
 
 vi.mock('../../server/_lib/origin.js', () => ({
   getCanonicalOrigin: mocks.getCanonicalOrigin as unknown as typeof import('../../server/_lib/origin.js').getCanonicalOrigin,
+  getErc8004PublicOrigin: mocks.getErc8004PublicOrigin as unknown as typeof import('../../server/_lib/origin.js').getErc8004PublicOrigin,
 }))
 
 vi.mock('../../server/_lib/teeAttestationGate.js', () => ({
@@ -165,16 +170,25 @@ function installPublicClient(params?: { tokenUri?: string | null; agentWallet?: 
   })
 }
 
-function installFetch(params?: { mirrorRegistration?: unknown; domainProof?: unknown; endpointStatus?: number }) {
+function installFetch(params?: {
+  mirrorRegistration?: unknown
+  domainProof?: unknown
+  endpointStatus?: number
+  tokenUriUrl?: string
+  tokenUriPayload?: unknown
+}) {
   const mirrorRegistration = params?.mirrorRegistration ?? canonicalRegistration
   const domainProof = params?.domainProof ?? canonicalDomainProof
   const endpointStatus = params?.endpointStatus ?? 200
+  const tokenUriUrl = params?.tokenUriUrl ?? null
+  const tokenUriPayload = params?.tokenUriPayload ?? canonicalRegistration
 
   mocks.fetch.mockImplementation(async (input: RequestInfo | URL) => {
     const url = String(input)
     if (url === MIRROR_URL) return jsonResponse(mirrorRegistration)
     if (url === DOMAIN_PROOF_URL) return jsonResponse(domainProof)
     if (url === API_ENDPOINT_URL) return textResponse('ok', endpointStatus, { 'content-type': 'application/json' })
+    if (tokenUriUrl && url === tokenUriUrl) return jsonResponse(tokenUriPayload)
     throw new Error(`Unexpected fetch: ${url}`)
   })
 }
@@ -191,6 +205,7 @@ describe('v1/agents/identity/verification', () => {
       error: null,
     })
     mocks.getCanonicalOrigin.mockReturnValue('https://4626.fun')
+    mocks.getErc8004PublicOrigin.mockReturnValue('https://4626.fun')
     installPublicClient()
     installFetch()
   })
@@ -229,6 +244,22 @@ describe('v1/agents/identity/verification', () => {
     )
   })
 
+  it('uses the canonical ERC-8004 public origin even when the request resolves to a preview host', async () => {
+    mocks.getCanonicalOrigin.mockReturnValue('https://preview-4626.vercel.app')
+
+    const { default: handler } = await import('../_handlers/v1/agents/identity/_verification.ts')
+    const req = createMockReq({ method: 'GET', url: '/api/v1/agents/identity/verification' })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body.data.mirrors.registration.url).toBe(MIRROR_URL)
+    expect(res.body.data.mirrors.domainVerification.url).toBe(DOMAIN_PROOF_URL)
+    expect(res.body.data.uriPolicy.mirrorUrl).toBe(MIRROR_URL)
+    expect(res.body.data.discoverabilityReady).toBe(true)
+  })
+
   it('fails discoverability when tokenURI is missing even if both mirrors still match', async () => {
     installPublicClient({ tokenUri: null })
 
@@ -244,6 +275,26 @@ describe('v1/agents/identity/verification', () => {
     expect(res.body.data.mirrors.registration.matchesCanonical).toBe(true)
     expect(tokenUriCheck?.passed).toBe(false)
     expect(tokenUriCheck?.detail).toContain('tokenURI')
+  })
+
+  it('fails discoverability when tokenURI uses a mutable https URL even if the payload matches', async () => {
+    const tokenUriUrl = 'https://api.grove.storage/registration-key'
+    installPublicClient({ tokenUri: tokenUriUrl })
+    installFetch({ tokenUriUrl, tokenUriPayload: canonicalRegistration })
+
+    const { default: handler } = await import('../_handlers/v1/agents/identity/_verification.ts')
+    const req = createMockReq({ method: 'GET', url: '/api/v1/agents/identity/verification' })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    const immutableCheck = res.body.data.checks.find((check: { id: string }) => check.id === 'token-uri-immutable')
+
+    expect(res.body.data.discoverabilityReady).toBe(false)
+    expect(res.body.data.tokenUriIsStrictImmutable).toBe(false)
+    expect(res.body.data.tokenUriMatchesCanonical).toBe(true)
+    expect(immutableCheck?.passed).toBe(false)
+    expect(String(immutableCheck?.detail)).toContain('data:, ipfs://, or ar://')
   })
 
   it('surfaces a non-canonical onchain agentWallet separately from registration validity', async () => {
@@ -279,5 +330,74 @@ describe('v1/agents/identity/verification', () => {
     expect(res.body.data.endpoint.ok).toBe(false)
     expect(serviceCheck?.passed).toBe(false)
     expect(serviceCheck?.detail).toContain('503')
+  })
+
+  it('fails discoverability when the public registration mirror drifts from the canonical payload', async () => {
+    installFetch({
+      mirrorRegistration: {
+        ...canonicalRegistration,
+        description: 'Drifted mirror payload',
+      },
+    })
+
+    const { default: handler } = await import('../_handlers/v1/agents/identity/_verification.ts')
+    const req = createMockReq({ method: 'GET', url: '/api/v1/agents/identity/verification' })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    const mirrorCheck = res.body.data.checks.find((check: { id: string }) => check.id === 'registration-mirror')
+
+    expect(res.body.data.discoverabilityReady).toBe(false)
+    expect(res.body.data.mirrors.registration.matchesCanonical).toBe(false)
+    expect(mirrorCheck?.passed).toBe(false)
+    expect(String(mirrorCheck?.detail)).toContain('diverges')
+  })
+
+  it('fails discoverability when the domain proof advertises the wrong domain', async () => {
+    installFetch({
+      domainProof: {
+        ...canonicalDomainProof,
+        domain: 'v1.4626.fun',
+      },
+    })
+
+    const { default: handler } = await import('../_handlers/v1/agents/identity/_verification.ts')
+    const req = createMockReq({ method: 'GET', url: '/api/v1/agents/identity/verification' })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    const domainCheck = res.body.data.checks.find((check: { id: string }) => check.id === 'domain-proof')
+
+    expect(res.body.data.discoverabilityReady).toBe(false)
+    expect(res.body.data.mirrors.domainVerification.matchesCanonical).toBe(false)
+    expect(domainCheck?.passed).toBe(false)
+    expect(String(domainCheck?.detail)).toContain('domain')
+  })
+
+  it('fails discoverability when the domain proof verifiedEndpoints drift from the canonical public surface', async () => {
+    installFetch({
+      domainProof: {
+        ...canonicalDomainProof,
+        verifiedEndpoints: [
+          'https://4626.fun',
+          'https://4626.fun/api/v1/spec.json',
+        ],
+      },
+    })
+
+    const { default: handler } = await import('../_handlers/v1/agents/identity/_verification.ts')
+    const req = createMockReq({ method: 'GET', url: '/api/v1/agents/identity/verification' })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    const domainCheck = res.body.data.checks.find((check: { id: string }) => check.id === 'domain-proof')
+
+    expect(res.body.data.discoverabilityReady).toBe(false)
+    expect(res.body.data.mirrors.domainVerification.matchesCanonical).toBe(false)
+    expect(domainCheck?.passed).toBe(false)
+    expect(String(domainCheck?.detail)).toContain('verifiedEndpoints')
   })
 })

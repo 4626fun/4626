@@ -34,7 +34,7 @@ Defined in: [src/lib/privy/clientAppearance.ts:6](https://github.com/wenakita/46
 
 ##### showWalletLoginFirst
 
-> `readonly` **showWalletLoginFirst**: `boolean`
+> **showWalletLoginFirst**: `boolean`
 
 ##### theme
 

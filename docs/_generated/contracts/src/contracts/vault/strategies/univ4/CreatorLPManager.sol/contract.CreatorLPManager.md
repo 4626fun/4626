@@ -144,6 +144,15 @@ address public permit2
 ```
 
 
+### hookRegistry
+Governance-managed hook allowlist for V4 pool configuration.
+
+
+```solidity
+IApprovedV4HooksRegistry public immutable hookRegistry
+```
+
+
 ### vault
 Vault that owns this manager
 
@@ -330,7 +339,8 @@ modifier onlyManager() ;
 
 
 ```solidity
-constructor(address _creatorCoin, address _pairedToken, address _vault, address _owner) Ownable(_owner);
+constructor(address _creatorCoin, address _pairedToken, address _vault, address _owner, address _hookRegistry)
+    Ownable(_owner);
 ```
 
 ### configurePool
@@ -340,6 +350,17 @@ constructor(address _creatorCoin, address _pairedToken, address _vault, address 
 function configurePool(address _poolManager, address _positionManager, address _permit2, PoolKey calldata _poolKey)
     external
     onlyOwner;
+```
+
+### reconfigureApprovals
+
+Rotate Permit2/PosM approval targets and revoke stale approvals.
+
+Useful for operator key rotation or explicit approval hygiene.
+
+
+```solidity
+function reconfigureApprovals(address _positionManager, address _permit2) external onlyOwner;
 ```
 
 ### setTwapOracle
@@ -629,6 +650,14 @@ event PoolConfigured(
 );
 ```
 
+### ApprovalsReconfigured
+
+```solidity
+event ApprovalsReconfigured(
+    address oldPositionManager, address oldPermit2, address newPositionManager, address newPermit2
+);
+```
+
 ## Errors
 ### NotVault
 
@@ -712,6 +741,24 @@ error InvalidPoolKey();
 
 ```solidity
 error TwapOracleNotSet();
+```
+
+### PoolAlreadyConfigured
+
+```solidity
+error PoolAlreadyConfigured();
+```
+
+### InvalidHook
+
+```solidity
+error InvalidHook(address hook);
+```
+
+### HookNotApproved
+
+```solidity
+error HookNotApproved(address hook);
 ```
 
 ## Structs

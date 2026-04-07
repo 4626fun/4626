@@ -38,6 +38,24 @@ function getExplicitAppOrigin(): string | null {
   return normalizeOrigin((process.env.APP_ORIGIN ?? '').trim())
 }
 
+function getExplicitErc8004PublicOrigin(): string | null {
+  return (
+    normalizeOrigin((process.env.ERC8004_PUBLIC_ORIGIN ?? '').trim()) ??
+    normalizeOrigin((process.env.MARKETING_ORIGIN ?? '').trim()) ??
+    normalizeOrigin((process.env.VITE_MARKETING_ORIGIN ?? '').trim()) ??
+    normalizeOrigin('https://4626.fun')
+  )
+}
+
+function getForwardedOrigin(req?: VercelRequest): string | null {
+  if (!req) return null
+  const proto = String(req.headers['x-forwarded-proto'] ?? 'http').toLowerCase()
+  const host = String(req.headers['x-forwarded-host'] ?? req.headers.host ?? '').trim()
+  const safeProto = proto.startsWith('https') ? 'https' : 'http'
+  if (!host) return null
+  return normalizeOrigin(`${safeProto}://${host}`)
+}
+
 export function getCanonicalOrigin(req?: VercelRequest): string {
   const explicit = getExplicitAppOrigin()
   if (explicit) return explicit
@@ -63,5 +81,21 @@ export function getCanonicalOrigin(req?: VercelRequest): string {
 
 export function getCanonicalAppOrigin(req?: VercelRequest): string {
   return getCanonicalOrigin(req)
+}
+
+export function getErc8004PublicOrigin(_req?: VercelRequest): string {
+  const explicit = getExplicitErc8004PublicOrigin()
+  if ((process.env.ERC8004_PUBLIC_ORIGIN ?? '').trim()) return explicit as string
+  if ((process.env.MARKETING_ORIGIN ?? '').trim()) return explicit as string
+  if ((process.env.VITE_MARKETING_ORIGIN ?? '').trim()) return explicit as string
+
+  const nodeEnv = (process.env.NODE_ENV ?? '').trim().toLowerCase()
+  const forwardedOrigin = getForwardedOrigin(_req)
+  if (nodeEnv !== 'production' && forwardedOrigin && DEFAULT_LOCAL_ORIGINS.has(forwardedOrigin)) {
+    return forwardedOrigin
+  }
+
+  if (explicit) return explicit
+  throw new Error('missing_erc8004_public_origin')
 }
 

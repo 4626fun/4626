@@ -45,7 +45,10 @@ function asset() external view returns (address);
 
 ### getTotalAssets
 
-Get strategy's total value in underlying tokens
+Get strategy net equity in underlying tokens.
+
+Implementations with borrow liabilities MUST return net assets
+(gross assets minus liabilities), never gross exposure.
 
 
 ```solidity
@@ -55,7 +58,7 @@ function getTotalAssets() external view returns (uint256);
 
 |Name|Type|Description|
 |----|----|-----------|
-|`<none>`|`uint256`|Total amount of underlying tokens managed by strategy|
+|`<none>`|`uint256`|Net amount of underlying tokens attributable to vault shareholders|
 
 
 ### deposit

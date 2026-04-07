@@ -6,13 +6,31 @@
 
 # api/\_handlers/portfolio/\_me
 
+## Variables
+
+### \_\_testables
+
+> `const` **\_\_testables**: `object`
+
+Defined in: [api/\_handlers/portfolio/\_me.ts:570](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/portfolio/_me.ts#L570)
+
+#### Type Declaration
+
+##### clearPublicOnchainSummaryCacheForTests()
+
+> **clearPublicOnchainSummaryCacheForTests**: () => `void`
+
+###### Returns
+
+`void`
+
 ## Functions
 
 ### default()
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/portfolio/\_me.ts:363](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/portfolio/_me.ts#L363)
+Defined in: [api/\_handlers/portfolio/\_me.ts:422](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/portfolio/_me.ts#L422)
 
 #### Parameters
 

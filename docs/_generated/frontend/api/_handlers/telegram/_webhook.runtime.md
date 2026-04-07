@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/telegram/\_webhook.runtime.ts:6590](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/_webhook.runtime.ts#L6590)
+Defined in: [api/\_handlers/telegram/\_webhook.runtime.ts:7150](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/_webhook.runtime.ts#L7150)
 
 #### Parameters
 

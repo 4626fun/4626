@@ -498,4 +498,100 @@ describe('AdminAgentSetup Ajna automation', () => {
     expect(html).toContain(`data-vault-address="${VAULT_ADDRESS}"`)
     expect(html).toContain('data-status-enabled="true"')
   })
+
+  it('renders canonical URI readiness separately from Grove-unavailable publish state', async () => {
+    vi.resetModules()
+
+    let mutationCallCount = 0
+
+    vi.doMock('@tanstack/react-query', () => ({
+      useQuery: vi.fn((options: { queryKey: unknown[] }) => {
+        const queryKey = Array.isArray(options.queryKey) ? options.queryKey : []
+
+        if (queryKey[0] === 'admin' && queryKey[1] === 'waitlist-me') {
+          return { data: { cswAddress: CANONICAL_CSW_ADDRESS }, isLoading: false, error: null, isError: false }
+        }
+        if (queryKey[0] === 'admin' && queryKey[1] === 'agent') {
+          return { data: null, isLoading: false, error: null, isError: false }
+        }
+        if (queryKey[0] === 'admin' && queryKey[1] === 'serverWallet') {
+          return { data: null, isLoading: false, error: null, isError: false }
+        }
+        if (queryKey[0] === 'admin' && queryKey[1] === 'isOwner') {
+          return { data: false, isLoading: false, error: null, isError: false }
+        }
+        if (queryKey[0] === 'admin' && queryKey[1] === 'ajna-automation') {
+          return { data: null, isLoading: false, error: null, isError: false }
+        }
+        return { data: null, isLoading: false, error: null, isError: false }
+      }),
+      useMutation: vi.fn(() => {
+        mutationCallCount += 1
+        if (mutationCallCount === 6) {
+          return {
+            data: {
+              registration: { name: '4626 Agent' },
+              uriPolicy: {
+                mode: 'strict-immutable',
+                preferredOnchainUri: 'data:application/json;base64,abc',
+                preferredOnchainUriKind: 'data:',
+                mirrorUrl: 'https://4626.fun/.well-known/agent-registration.json',
+                domainVerificationUrl: 'https://4626.fun/.well-known/erc8004.json',
+                compatibilityFallbackUrl: null,
+                writeOnchainHint: 'Write the strict immutable URI onchain.',
+              },
+              groveStatus: 'unavailable',
+            },
+            error: null,
+            isPending: false,
+            isSuccess: true,
+            isError: false,
+            mutate: vi.fn(),
+            mutateAsync: vi.fn(),
+            variables: undefined,
+          }
+        }
+        return {
+          data: null,
+          error: null,
+          isPending: false,
+          isSuccess: false,
+          isError: false,
+          mutate: vi.fn(),
+          mutateAsync: vi.fn(),
+          variables: undefined,
+        }
+      }),
+      useQueryClient: vi.fn(() => ({
+        invalidateQueries: vi.fn(),
+        setQueryData: vi.fn(),
+      })),
+    }))
+    vi.doMock('@privy-io/react-auth', () => ({
+      useWallets: () => ({
+        wallets: [{ address: EMBEDDED_EOA_ADDRESS, id: PRIVY_WALLET_ID, walletClientType: 'privy' }],
+      }),
+    }))
+    vi.doMock('wagmi', () => ({
+      useAccount: () => ({ address: CREATOR_ADDRESS }),
+      usePublicClient: () => null,
+      useWalletClient: () => ({ data: null }),
+    }))
+    vi.doMock('@/hooks/useSiweAuth', () => ({
+      useSiweAuth: () => ({ authAddress: CREATOR_ADDRESS }),
+    }))
+    vi.doMock('@/hooks/useDeploymentTracker', () => ({
+      getDeploymentsForOwner: () => [],
+    }))
+    vi.doMock('@/components/deploy/DeploymentSuccess', () => ({
+      AjnaAutomationOptInCard: () => React.createElement('div', { 'data-testid': 'ajna-automation-card' }),
+    }))
+
+    const { AdminAgentSetup } = await import('./AdminAgentSetup')
+    const html = renderToStaticMarkup(React.createElement(AdminAgentSetup))
+
+    expect(html).toContain('Canonical immutable URI ready for onchain write.')
+    expect(html).toContain('Grove fallback is unavailable right now.')
+    expect(html).not.toContain('Grove fallback stored successfully.')
+  })
 })

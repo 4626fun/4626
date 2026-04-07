@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/uniswap/\_query.ts:198](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/uniswap/_query.ts#L198)
+Defined in: [api/\_handlers/uniswap/\_query.ts:199](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/uniswap/_query.ts#L199)
 
 #### Parameters
 

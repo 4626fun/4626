@@ -10,9 +10,9 @@
 
 ### TelegramInlineResultsButton
 
-> **TelegramInlineResultsButton** = \{ `start_parameter?`: `string`; `text`: `string`; `web_app?`: \{ `url`: `string`; \}; \} \| `Record`\<`string`, `unknown`\>
+> **TelegramInlineResultsButton** = `NonNullable`\<`TelegramInlineQueryPayload`\[`"button"`\]\> \| `Record`\<`string`, `unknown`\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/inline.ts:1](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/inline.ts#L1)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/inline.ts:21](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/inline.ts#L21)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/telegram/webhook/telegramApi/inline.ts:1](https://gi
 
 > **answerTelegramInlineQuery**(`params`): `Promise`\<`void`\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/inline.ts:9](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/inline.ts#L9)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/inline.ts:25](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/inline.ts#L25)
 
 #### Parameters
 
@@ -32,7 +32,7 @@ Defined in: [api/\_handlers/telegram/webhook/telegramApi/inline.ts:9](https://gi
 
 ###### button?
 
-[`TelegramInlineResultsButton`](#telegraminlineresultsbutton)
+`Record`\<`string`, `unknown`\>
 
 ###### cacheTime?
 
@@ -72,7 +72,7 @@ Defined in: [api/\_handlers/telegram/webhook/telegramApi/inline.ts:9](https://gi
 
 > **saveTelegramPreparedInlineMessage**(`params`): `Promise`\<\{ `preparedInlineMessageId`: `string` \| `null`; \}\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/inline.ts:42](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/inline.ts#L42)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/inline.ts:58](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/inline.ts#L58)
 
 #### Parameters
 

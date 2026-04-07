@@ -265,6 +265,15 @@ DeploymentBatcherPhase3Helper public immutable phase3Helper
 ```
 
 
+### uniV4Helper
+Dedicated UniV4 execution helper to keep this contract under EIP-170 runtime limits.
+
+
+```solidity
+DeploymentBatcherUniV4Helper public immutable uniV4Helper
+```
+
+
 ## Functions
 ### constructor
 
@@ -402,6 +411,21 @@ function deployPhase3Strategies(Phase3Params calldata params, StrategyCodeIds ca
     returns (Phase3Result memory out);
 ```
 
+### deployUniV4Strategies
+
+Deploy + configure UniV4 strategy set with approved-hook enforcement.
+
+Deploys a hook registry + FullRange + Concentrated + LimitOrder + CreatorLPManager,
+configures all pools using the same hook, then transfers ownerships.
+
+
+```solidity
+function deployUniV4Strategies(UniV4DeployParams calldata params, UniV4CodeIds calldata codeIds)
+    external
+    nonReentrant
+    returns (UniV4DeploymentResult memory out);
+```
+
 ### setSolanaConfig
 
 Set Solana bridge adapter + destination configuration.
@@ -470,6 +494,13 @@ function _requirePhase1CodeIds(CodeIds calldata codeIds) internal pure;
 
 ```solidity
 function _requirePhase2CodeIds(CodeIds calldata codeIds) internal pure;
+```
+
+### _requireUniV4CodeIds
+
+
+```solidity
+function _requireUniV4CodeIds(UniV4CodeIds calldata codeIds) internal pure;
 ```
 
 ### _phase1ParamsHash
@@ -629,6 +660,23 @@ event Phase3StrategiesDeployed(
     uint256 charmWeightBps,
     uint256 ajnaWeightBps,
     uint256 solanaWeightBps
+);
+```
+
+### UniV4StrategiesDeployed
+
+```solidity
+event UniV4StrategiesDeployed(
+    address indexed creatorToken,
+    address indexed owner,
+    address indexed vault,
+    address hookRegistry,
+    address fullRangeStrategy,
+    address concentratedStrategy,
+    address limitOrderStrategy,
+    address creatorLPManager,
+    address poolHook,
+    address registryOwner
 );
 ```
 
@@ -802,10 +850,28 @@ error InvalidPayoutRecipient();
 error CharmFactoryGovernanceMismatch(address expected, address actual);
 ```
 
+### CharmFactoryProtocolFeeMismatch
+
+```solidity
+error CharmFactoryProtocolFeeMismatch(uint256 expected, uint256 actual);
+```
+
 ### CharmVaultManagerMismatch
 
 ```solidity
 error CharmVaultManagerMismatch(address expected, address actual);
+```
+
+### InvalidTickSpacing
+
+```solidity
+error InvalidTickSpacing();
+```
+
+### InvalidPoolCurrencies
+
+```solidity
+error InvalidPoolCurrencies();
 ```
 
 ## Structs
@@ -999,6 +1065,9 @@ struct Phase3Params {
     uint16 solanaMinBaseLiquidityBps;
     address solanaBridgeAddress;
     bool enableAutoAllocate;
+    // Optional override: expected Charm factory protocol fee in 1e6 precision.
+    // Set to 0 to use CHARM_DEFAULT_PROTOCOL_FEE_PIPS.
+    uint24 expectedCharmProtocolFeePips;
 }
 ```
 
@@ -1013,6 +1082,49 @@ struct Phase3Result {
     address ajnaVault;
     address ajnaStrategy;
     address solanaStrategy;
+}
+```
+
+### UniV4CodeIds
+
+```solidity
+struct UniV4CodeIds {
+    bytes32 approvedV4HooksRegistry;
+    bytes32 fullRangeStrategy;
+    bytes32 concentratedStrategy;
+    bytes32 limitOrderStrategy;
+    bytes32 creatorLPManager;
+}
+```
+
+### UniV4DeployParams
+
+```solidity
+struct UniV4DeployParams {
+    address creatorToken;
+    address pairedToken;
+    address vault;
+    address owner;
+    string version;
+    address positionManager;
+    uint24 fee;
+    int24 tickSpacing;
+    bool creatorIsCurrency0;
+    address poolHook;
+    address registryOwner;
+    address[] hooksToApprove;
+}
+```
+
+### UniV4DeploymentResult
+
+```solidity
+struct UniV4DeploymentResult {
+    address hookRegistry;
+    address fullRangeStrategy;
+    address concentratedStrategy;
+    address limitOrderStrategy;
+    address creatorLPManager;
 }
 ```
 

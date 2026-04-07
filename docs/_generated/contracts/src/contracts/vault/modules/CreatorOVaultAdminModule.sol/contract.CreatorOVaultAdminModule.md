@@ -2,7 +2,7 @@
 [Git Source](https://github.com/wenakita/4626/blob/main/contracts/vault/modules/CreatorOVaultAdminModule.sol)
 
 **Inherits:**
-[CreatorOVaultModuleBase](/contracts/vault/modules/CreatorOVaultModuleBase.sol/abstract.CreatorOVaultModuleBase.md)
+[CreatorOVaultModuleBase](/contracts/vault/modules/CreatorOVaultModuleBase.sol/abstract.CreatorOVaultModuleBase.md), [ICreatorOVaultModuleIdentity](/contracts/vault/modules/ICreatorOVaultModuleIdentity.sol/interface.ICreatorOVaultModuleIdentity.md)
 
 Admin + emergency + rescue + config logic for CreatorOVault.
 
@@ -10,6 +10,20 @@ Must be invoked via delegatecall from CreatorOVault.
 
 
 ## State Variables
+### MODULE_KIND
+
+```solidity
+bytes32 internal constant MODULE_KIND = keccak256("CreatorOVaultModule.admin")
+```
+
+
+### MODULE_STORAGE_VERSION
+
+```solidity
+bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v1")
+```
+
+
 ### MAX_BPS
 
 ```solidity
@@ -46,6 +60,20 @@ uint64 internal constant MAX_RESCUE_DELAY = 30 days
 
 
 ## Functions
+### moduleKind
+
+
+```solidity
+function moduleKind() external pure returns (bytes32);
+```
+
+### moduleStorageVersion
+
+
+```solidity
+function moduleStorageVersion() external pure returns (bytes32);
+```
+
 ### shutdownVault
 
 

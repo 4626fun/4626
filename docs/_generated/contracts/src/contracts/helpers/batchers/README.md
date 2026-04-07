@@ -2,7 +2,10 @@
 
 # Contents
 - [IUniversalCreate2DeployerFromStore](DeploymentBatcher.sol/interface.IUniversalCreate2DeployerFromStore.md)
+- [IApprovedV4HooksRegistryAdmin](DeploymentBatcher.sol/interface.IApprovedV4HooksRegistryAdmin.md)
+- [IUniV4ConfigurableStrategy](DeploymentBatcher.sol/interface.IUniV4ConfigurableStrategy.md)
 - [DeploymentBatcherPhase3Helper](DeploymentBatcher.sol/contract.DeploymentBatcherPhase3Helper.md)
+- [DeploymentBatcherUniV4Helper](DeploymentBatcher.sol/contract.DeploymentBatcherUniV4Helper.md)
 - [IUniversalBytecodeStore](DeploymentBatcher.sol/interface.IUniversalBytecodeStore.md)
 - [ICreatorOVaultWrapper](DeploymentBatcher.sol/interface.ICreatorOVaultWrapper.md)
 - [ICreatorShareOFT](DeploymentBatcher.sol/interface.ICreatorShareOFT.md)

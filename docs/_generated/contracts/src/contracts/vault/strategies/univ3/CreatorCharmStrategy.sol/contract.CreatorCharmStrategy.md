@@ -111,6 +111,92 @@ bool public autoFeeTier = false
 ```
 
 
+### ajnaPool
+Optional Ajna ERC20 pool used as CREATOR borrow backstop against USDC collateral.
+
+
+```solidity
+IAjnaPool public ajnaPool
+```
+
+
+### ajnaBorrowEnabled
+
+```solidity
+bool public ajnaBorrowEnabled
+```
+
+
+### ajnaMaxDebt
+
+```solidity
+uint256 public ajnaMaxDebt = type(uint256).max
+```
+
+
+### ajnaMaxBorrowPerWithdraw
+
+```solidity
+uint256 public ajnaMaxBorrowPerWithdraw = type(uint256).max
+```
+
+
+### ajnaMinCollateralRatioBps
+
+```solidity
+uint256 public ajnaMinCollateralRatioBps = 12_500
+```
+
+
+### ajnaBorrowLimitIndex
+
+```solidity
+uint256 public ajnaBorrowLimitIndex
+```
+
+
+### ajnaRepayLimitIndex
+
+```solidity
+uint256 public ajnaRepayLimitIndex
+```
+
+
+### AJNA_WAD
+
+```solidity
+uint256 internal constant AJNA_WAD = 1e18
+```
+
+
+### USDC_TO_AJNA_WAD
+
+```solidity
+uint256 internal constant USDC_TO_AJNA_WAD = 1e12
+```
+
+
+### AJNA_MIN_BUCKET_INDEX
+
+```solidity
+uint256 internal constant AJNA_MIN_BUCKET_INDEX = 1
+```
+
+
+### AJNA_MAX_BUCKET_INDEX
+
+```solidity
+uint256 internal constant AJNA_MAX_BUCKET_INDEX = 7_388
+```
+
+
+### AJNA_APPROX_BUCKET_STEP_BPS
+
+```solidity
+uint256 internal constant AJNA_APPROX_BUCKET_STEP_BPS = 50
+```
+
+
 ### maxSwapPercent
 Configurable parameters
 
@@ -237,6 +323,27 @@ Toggle automatic fee tier discovery
 function setAutoFeeTier(bool _autoFeeTier) external onlyOwner;
 ```
 
+### setAjnaPool
+
+
+```solidity
+function setAjnaPool(address _ajnaPool) external onlyOwner;
+```
+
+### setAjnaBorrowConfig
+
+
+```solidity
+function setAjnaBorrowConfig(
+    bool _enabled,
+    uint256 _maxDebt,
+    uint256 _maxBorrowPerWithdraw,
+    uint256 _minCollateralRatioBps,
+    uint256 _borrowLimitIndex,
+    uint256 _repayLimitIndex
+) external onlyOwner;
+```
+
 ### _findBestFeeTier
 
 Find best fee tier for a token pair (checks liquidity)
@@ -292,13 +399,29 @@ function asset() external view override returns (address);
 
 Strategy valuation health check for ERC-4626 deposit/mint gating.
 
-MUST NOT revert. If the strategy has any USDC exposure, this requires a
-configured and fresh `creatorOracle` price. If there is no USDC exposure,
-returns true even if the oracle is unset.
+MUST NOT revert. Any USDC exposure (idle/charm/Ajna collateral) requires a
+fresh CreatorOracle price. Ajna debt state must be readable and above the
+configured collateral ratio threshold when debt is outstanding.
 
 
 ```solidity
 function isValuationReady() external view override returns (bool);
+```
+
+### getAjnaPosition
+
+
+```solidity
+function getAjnaPosition()
+    external
+    view
+    returns (
+        bool configured,
+        bool readable,
+        uint256 debtCreator,
+        uint256 collateralUsdc,
+        uint256 collateralRatioBps
+    );
 ```
 
 ### getTotalAssets
@@ -308,11 +431,49 @@ function isValuationReady() external view override returns (bool);
 function getTotalAssets() public view override returns (uint256);
 ```
 
+### _getCharmExposure
+
+
+```solidity
+function _getCharmExposure() internal view returns (uint256 creatorAmount, uint256 usdcAmount, bool readable);
+```
+
+### _readAjnaDebtState
+
+
+```solidity
+function _readAjnaDebtState() internal view returns (AjnaDebtState memory state);
+```
+
+### _getFreshCreatorPrice
+
+
+```solidity
+function _getFreshCreatorPrice() internal view returns (uint256 priceUsd, bool fresh);
+```
+
 ### _usdcToCreatorValue
 
 
 ```solidity
 function _usdcToCreatorValue(uint256 usdcAmount) internal view returns (uint256 creatorAmount);
+```
+
+### _usdcToCreatorValueWithPrice
+
+
+```solidity
+function _usdcToCreatorValueWithPrice(uint256 usdcAmount, uint256 creatorPriceUsd) internal pure returns (uint256);
+```
+
+### _computeCollateralRatioBps
+
+
+```solidity
+function _computeCollateralRatioBps(uint256 collateralValueCreator, uint256 debtCreator)
+    internal
+    pure
+    returns (uint256);
 ```
 
 ### _getPoolPriceTWAP
@@ -454,6 +615,65 @@ function _swapUsdcToCreatorRequired(uint256 amountIn) internal returns (uint256 
 function _swapUsdcToCreator(uint256 amountIn, bool required) internal returns (uint256 amountOut);
 ```
 
+### _tryAjnaBorrow
+
+
+```solidity
+function _tryAjnaBorrow(uint256 creatorNeeded) internal returns (uint256 borrowed);
+```
+
+### _repayAjnaDebtWithCreator
+
+
+```solidity
+function _repayAjnaDebtWithCreator(uint256 availableCreator)
+    internal
+    returns (uint256 repaid, uint256 collateralPulledUsdc);
+```
+
+### _usdcToAjnaWad
+
+
+```solidity
+function _usdcToAjnaWad(uint256 usdcAmount) internal pure returns (uint256);
+```
+
+### _resolveAjnaLimitIndex
+
+Resolve Ajna draw/repay limit index.
+
+Configured non-zero index is used as-is (clamped); 0 enables oracle-driven auto mode:
+base bucket from CreatorOracle V3 TWAP helper + conservative collateral-ratio buffer.
+
+
+```solidity
+function _resolveAjnaLimitIndex(bool forBorrow) internal view returns (uint256 limitIndex);
+```
+
+### _oracleSuggestedAjnaBucket
+
+
+```solidity
+function _oracleSuggestedAjnaBucket() internal view returns (uint256 bucketIndex);
+```
+
+### _clampAjnaBucketIndex
+
+
+```solidity
+function _clampAjnaBucketIndex(uint256 index) internal pure returns (uint256);
+```
+
+### _creatorToUsdcAmountWithPrice
+
+
+```solidity
+function _creatorToUsdcAmountWithPrice(uint256 creatorAmount, uint256 creatorPriceUsd)
+    internal
+    pure
+    returns (uint256);
+```
+
 ### harvest
 
 
@@ -540,6 +760,37 @@ event TwapDurationUpdated(uint32 oldDuration, uint32 newDuration);
 event CreatorOracleUpdated(address indexed oldOracle, address indexed newOracle);
 ```
 
+### AjnaPoolUpdated
+
+```solidity
+event AjnaPoolUpdated(address indexed oldPool, address indexed newPool);
+```
+
+### AjnaBorrowConfigUpdated
+
+```solidity
+event AjnaBorrowConfigUpdated(
+    bool enabled,
+    uint256 maxDebt,
+    uint256 maxBorrowPerWithdraw,
+    uint256 minCollateralRatioBps,
+    uint256 borrowLimitIndex,
+    uint256 repayLimitIndex
+);
+```
+
+### AjnaBorrowed
+
+```solidity
+event AjnaBorrowed(uint256 requestedCreator, uint256 borrowedCreator, uint256 pledgedUsdc);
+```
+
+### AjnaRepaid
+
+```solidity
+event AjnaRepaid(uint256 repaidCreator, uint256 collateralPulledUsdc);
+```
+
 ## Errors
 ### NotVault
 
@@ -581,5 +832,48 @@ error TwapUnavailable();
 
 ```solidity
 error RequiredSwapFailed();
+```
+
+### InvalidCollateralRatioBps
+
+```solidity
+error InvalidCollateralRatioBps(uint256 ratioBps);
+```
+
+### InvalidAjnaLimitIndex
+
+```solidity
+error InvalidAjnaLimitIndex(uint256 limitIndex);
+```
+
+### InvalidAjnaPool
+
+```solidity
+error InvalidAjnaPool(
+    address expectedQuote, address actualQuote, address expectedCollateral, address actualCollateral
+);
+```
+
+### AjnaPositionOpen
+
+```solidity
+error AjnaPositionOpen(uint256 debtCreator, uint256 collateralUsdc);
+```
+
+### WithdrawLiquidityUnavailable
+
+```solidity
+error WithdrawLiquidityUnavailable(uint256 requested, uint256 available);
+```
+
+## Structs
+### AjnaDebtState
+
+```solidity
+struct AjnaDebtState {
+    bool readable;
+    uint256 debtCreator;
+    uint256 collateralUsdc;
+}
 ```
 

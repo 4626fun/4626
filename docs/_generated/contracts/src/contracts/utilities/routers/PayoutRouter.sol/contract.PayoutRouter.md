@@ -88,6 +88,24 @@ mapping(address => bytes) public swapPathToCreator
 ```
 
 
+### approvedExternalSwapTargets
+Optional allowlist of external swap executors (e.g. universal routers).
+
+
+```solidity
+mapping(address => bool) public approvedExternalSwapTargets
+```
+
+
+### approvedExternalSwapSpenders
+Optional allowlist of spenders approved for tokenIn transferFrom.
+
+
+```solidity
+mapping(address => bool) public approvedExternalSwapSpenders
+```
+
+
 ## Functions
 ### onlyOwnerOrKeeper
 
@@ -135,6 +153,24 @@ This also pre-approves the router to spend tokenIn.
 function setSwapPath(address tokenIn, bytes calldata path) external onlyOwner;
 ```
 
+### setExternalSwapTargetApproval
+
+Approve or revoke an external swap execution target.
+
+
+```solidity
+function setExternalSwapTargetApproval(address target, bool approved) external onlyOwner;
+```
+
+### setExternalSwapSpenderApproval
+
+Approve or revoke an external swap spender (token allowance receiver).
+
+
+```solidity
+function setExternalSwapSpenderApproval(address spender, bool approved) external onlyOwner;
+```
+
 ### convertAndQueue
 
 Convert external-revenue token into creatorCoin and inject into the vault (PPS-only).
@@ -155,6 +191,36 @@ function convertAndQueue(address tokenIn, uint256 amountIn, uint256 minCreatorOu
 |`amountIn`|`uint256`|Amount of tokenIn to convert/inject (must already be held by this router).|
 |`minCreatorOut`|`uint256`|Minimum creatorCoin received from swap (slippage guard). Ignored when tokenIn==creatorCoin.|
 
+
+### convertViaExternalAndQueue
+
+Convert via allowlisted external swap target, then queue creatorCoin into the vault.
+
+This is intended for aggregated routing flows (e.g. offchain quote + encoded calldata).
+
+
+```solidity
+function convertViaExternalAndQueue(ExternalSwapParams calldata params)
+    external
+    nonReentrant
+    onlyOwnerOrKeeper
+    returns (uint256 creatorOut, uint256 sharesQueued);
+```
+
+### processBatch
+
+Structured batch processing for swap/deposit actions in one transaction.
+
+kind=0 => convertAndQueue path; kind=1 => external swap path.
+
+
+```solidity
+function processBatch(BatchAction[] calldata actions)
+    external
+    nonReentrant
+    onlyOwnerOrKeeper
+    returns (uint256 totalCreatorOut, uint256 totalSharesQueued);
+```
 
 ### emergencyWithdraw
 
@@ -198,11 +264,48 @@ Claimed ETH is wrapped to WETH by `receive()`.
 function claimAllProtocolRewards() external onlyOwnerOrKeeper nonReentrant returns (uint256 claimed);
 ```
 
+### _convertAndQueueViaV3OrDirect
+
+
+```solidity
+function _convertAndQueueViaV3OrDirect(address tokenIn, uint256 amountIn, uint256 minCreatorOut)
+    internal
+    returns (uint256 creatorOut, uint256 sharesQueued);
+```
+
+### _convertViaExternalAndQueue
+
+
+```solidity
+function _convertViaExternalAndQueue(
+    address tokenIn,
+    uint256 amountIn,
+    uint256 minCreatorOut,
+    address spender,
+    address swapTarget,
+    bytes calldata swapCallData
+) internal returns (uint256 creatorOut, uint256 sharesQueued);
+```
+
+### _queueCreatorOut
+
+
+```solidity
+function _queueCreatorOut(uint256 creatorOut) internal returns (uint256 sharesQueued);
+```
+
 ### _readAddress
 
 
 ```solidity
 function _readAddress(bytes memory data, uint256 offset) internal pure returns (address addr);
+```
+
+### _revertWithBytes
+
+
+```solidity
+function _revertWithBytes(bytes memory revertData) internal pure;
 ```
 
 ### _claimProtocolRewards
@@ -229,6 +332,37 @@ event SwapPathSet(address indexed tokenIn, bytes path);
 
 ```solidity
 event ConvertedAndQueued(address indexed tokenIn, uint256 amountIn, uint256 creatorOut, uint256 vaultSharesQueued);
+```
+
+### ExternalSwapTargetApprovalSet
+
+```solidity
+event ExternalSwapTargetApprovalSet(address indexed target, bool approved);
+```
+
+### ExternalSwapSpenderApprovalSet
+
+```solidity
+event ExternalSwapSpenderApprovalSet(address indexed spender, bool approved);
+```
+
+### ExternalSwapAndQueued
+
+```solidity
+event ExternalSwapAndQueued(
+    address indexed tokenIn,
+    address indexed swapTarget,
+    address indexed spender,
+    uint256 amountIn,
+    uint256 creatorOut,
+    uint256 vaultSharesQueued
+);
+```
+
+### BatchProcessed
+
+```solidity
+event BatchProcessed(uint256 actionCount, uint256 totalCreatorOut, uint256 totalSharesQueued);
 ```
 
 ### ProtocolRewardsClaimed
@@ -274,9 +408,75 @@ error PathNotSet(address tokenIn);
 error InvalidPath(address tokenIn);
 ```
 
+### ExternalSwapTargetNotApproved
+
+```solidity
+error ExternalSwapTargetNotApproved(address target);
+```
+
+### ExternalSwapSpenderNotApproved
+
+```solidity
+error ExternalSwapSpenderNotApproved(address spender);
+```
+
+### ExternalSwapOverspent
+
+```solidity
+error ExternalSwapOverspent(address tokenIn, uint256 spent, uint256 maxAmountIn);
+```
+
+### MinCreatorOutNotMet
+
+```solidity
+error MinCreatorOutNotMet(uint256 minExpected, uint256 actualOut);
+```
+
+### InvalidBatchAction
+
+```solidity
+error InvalidBatchAction(uint8 kind);
+```
+
+### ExternalSwapCallFailed
+
+```solidity
+error ExternalSwapCallFailed();
+```
+
 ### ProtocolRewardsClaimFailed
 
 ```solidity
 error ProtocolRewardsClaimFailed();
+```
+
+## Structs
+### ExternalSwapParams
+
+```solidity
+struct ExternalSwapParams {
+    address tokenIn;
+    uint256 amountIn;
+    uint256 minCreatorOut;
+    address spender;
+    address swapTarget;
+    bytes swapCallData;
+}
+```
+
+### BatchAction
+
+```solidity
+struct BatchAction {
+    // kind=0 => convertAndQueue (v3 path/direct creator coin)
+    // kind=1 => convertViaExternalAndQueue (allowlisted external swap target/spender)
+    uint8 kind;
+    address tokenIn;
+    uint256 amountIn;
+    uint256 minCreatorOut;
+    address spender;
+    address swapTarget;
+    bytes swapCallData;
+}
 ```
 

@@ -12,7 +12,7 @@
 
 > `const` **\_\_testables**: `object`
 
-Defined in: [api/\_handlers/token/\_image.ts:2557](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_image.ts#L2557)
+Defined in: [api/\_handlers/token/\_image.ts:2676](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_image.ts#L2676)
 
 #### Type Declaration
 
@@ -53,6 +53,38 @@ Defined in: [api/\_handlers/token/\_image.ts:2557](https://github.com/wenakita/4
 ###### Returns
 
 `TokenIconLayout`
+
+##### isLikelyImagePayload()
+
+> **isLikelyImagePayload**: (`bytes`, `contentType`) => `boolean`
+
+###### Parameters
+
+###### bytes
+
+`Uint8Array`
+
+###### contentType
+
+`string` | `null`
+
+###### Returns
+
+`boolean`
+
+##### isTrustedRawArtworkUrl()
+
+> **isTrustedRawArtworkUrl**: (`upstreamUrl`) => `boolean`
+
+###### Parameters
+
+###### upstreamUrl
+
+`string` | `null` | `undefined`
+
+###### Returns
+
+`boolean`
 
 ##### normalizeSourceArtworkUrl()
 
@@ -168,7 +200,7 @@ Defined in: [api/\_handlers/token/\_image.ts:2557](https://github.com/wenakita/4
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/token/\_image.ts:171](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_image.ts#L171)
+Defined in: [api/\_handlers/token/\_image.ts:263](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_image.ts#L263)
 
 Token Image Generator API
 

@@ -168,7 +168,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:4](https://github.com/wenakita/4626/bl
 
 > **areEquivalentSwapTokens**(`tokenA`, `tokenB`, `wrappedNativeAddress?`): `boolean`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:180](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/swapUtils.ts#L180)
+Defined in: [src/lib/uniswap/swapUtils.ts:184](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/swapUtils.ts#L184)
 
 #### Parameters
 
@@ -194,7 +194,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:180](https://github.com/wenakita/4626/
 
 > **buildTokenOptions**(`params`): [`TokenOption`](#tokenoption)[]
 
-Defined in: [src/lib/uniswap/swapUtils.ts:212](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/swapUtils.ts#L212)
+Defined in: [src/lib/uniswap/swapUtils.ts:216](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/swapUtils.ts#L216)
 
 #### Parameters
 
@@ -238,6 +238,28 @@ Defined in: [src/lib/uniswap/swapUtils.ts:212](https://github.com/wenakita/4626/
 
 ***
 
+### creatorCoinRawLogo()
+
+> **creatorCoinRawLogo**(`address`, `chainId`): `string`
+
+Defined in: [src/lib/uniswap/swapUtils.ts:115](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/swapUtils.ts#L115)
+
+#### Parameters
+
+##### address
+
+`string`
+
+##### chainId
+
+`number` = `BASE_CHAIN_ID`
+
+#### Returns
+
+`string`
+
+***
+
 ### getCoreTokensForChain()
 
 > **getCoreTokensForChain**(`config`): [`TokenOption`](#tokenoption)[]
@@ -260,7 +282,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:77](https://github.com/wenakita/4626/b
 
 > **getNestedAmountOut**(`input`): `string` \| `null`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:153](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/swapUtils.ts#L153)
+Defined in: [src/lib/uniswap/swapUtils.ts:157](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/swapUtils.ts#L157)
 
 #### Parameters
 
@@ -278,7 +300,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:153](https://github.com/wenakita/4626/
 
 > **normalizeTokenAddress**(`value`): `string` \| `null`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:174](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/swapUtils.ts#L174)
+Defined in: [src/lib/uniswap/swapUtils.ts:178](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/swapUtils.ts#L178)
 
 #### Parameters
 
@@ -296,7 +318,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:174](https://github.com/wenakita/4626/
 
 > **resolveTokenDisplay**(`params`): [`TokenDisplay`](#tokendisplay)
 
-Defined in: [src/lib/uniswap/swapUtils.ts:253](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/swapUtils.ts#L253)
+Defined in: [src/lib/uniswap/swapUtils.ts:257](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/swapUtils.ts#L257)
 
 #### Parameters
 
@@ -328,7 +350,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:253](https://github.com/wenakita/4626/
 
 > **sanitizeDecimalInput**(`value`, `maxFractionDigits`): `string`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:130](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/swapUtils.ts#L130)
+Defined in: [src/lib/uniswap/swapUtils.ts:134](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/swapUtils.ts#L134)
 
 #### Parameters
 
@@ -350,7 +372,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:130](https://github.com/wenakita/4626/
 
 > **sanitizeIntegerInput**(`value`, `maxDigits`): `string`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:147](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/swapUtils.ts#L147)
+Defined in: [src/lib/uniswap/swapUtils.ts:151](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/swapUtils.ts#L151)
 
 #### Parameters
 
@@ -398,7 +420,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:110](https://github.com/wenakita/4626/
 
 > **shortAddress**(`value`): `string`
 
-Defined in: [src/lib/uniswap/swapUtils.ts:125](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/swapUtils.ts#L125)
+Defined in: [src/lib/uniswap/swapUtils.ts:129](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/swapUtils.ts#L129)
 
 #### Parameters
 
@@ -474,7 +496,7 @@ Defined in: [src/lib/uniswap/swapUtils.ts:30](https://github.com/wenakita/4626/b
 
 > **uniqueTokenOptions**(`options`): [`TokenOption`](#tokenoption)[]
 
-Defined in: [src/lib/uniswap/swapUtils.ts:200](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/swapUtils.ts#L200)
+Defined in: [src/lib/uniswap/swapUtils.ts:204](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/swapUtils.ts#L204)
 
 #### Parameters
 

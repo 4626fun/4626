@@ -323,7 +323,7 @@ Defined in: [src/lib/xmtp/provider.tsx:326](https://github.com/wenakita/4626/blo
 
 > **XmtpChatProvider**(`__namedParameters`): `Element`
 
-Defined in: [src/lib/xmtp/provider.tsx:847](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L847)
+Defined in: [src/lib/xmtp/provider.tsx:848](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L848)
 
 #### Parameters
 

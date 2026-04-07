@@ -85,6 +85,20 @@ bytes4 private constant ADD_STRATEGY_SELECTOR = bytes4(keccak256("addStrategy(ad
 ```
 
 
+### CHARM_MANAGER_FEE_PIPS
+
+```solidity
+uint24 private constant CHARM_MANAGER_FEE_PIPS = 160_000
+```
+
+
+### CHARM_EXPECTED_PROTOCOL_FEE_PIPS
+
+```solidity
+uint24 private constant CHARM_EXPECTED_PROTOCOL_FEE_PIPS = 10_000
+```
+
+
 ### CHARM_MAX_TWAP_DEVIATION
 
 ```solidity
@@ -251,6 +265,12 @@ error NotProtocolOwner();
 
 ```solidity
 error CharmFactoryGovernanceMismatch(address expected, address actual);
+```
+
+### CharmFactoryProtocolFeeMismatch
+
+```solidity
+error CharmFactoryProtocolFeeMismatch(uint256 expected, uint256 actual);
 ```
 
 ### CharmVaultManagerMismatch

@@ -17,6 +17,7 @@ import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import { resolveBaseAppInviteUrl } from '@/lib/baseAppInvite'
 import { getAppBaseUrl } from '@/lib/host'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privyEmbeddedEoa'
+import { AgentPublishStatus, type AgentPublishData } from './AgentPublishStatus'
 
 export { AjnaAutomationOptInCard } from '@/components/deploy/DeploymentSuccess'
 export { pickPrivyEmbeddedEoaWallet } from '@/lib/privyEmbeddedEoa'
@@ -39,24 +40,8 @@ type VaultUpsertResponse = {
 }
 
 
-type PublishData = {
+type PublishData = AgentPublishData & {
   registration: Record<string, unknown>
-  uriPolicy: {
-    mode: string
-    preferredOnchainUri: string
-    preferredOnchainUriKind: string
-    mirrorUrl: string
-    domainVerificationUrl: string
-    compatibilityFallbackUrl: string | null
-    writeOnchainHint: string
-  }
-  groveStatus: 'stored' | 'unavailable' | 'skipped'
-  grove?: {
-    lensUri: string
-    gatewayUrl: string
-    storageKey: string
-    statusUrl: string | null
-  }
 }
 
 type WaitlistMeData = {
@@ -784,25 +769,8 @@ export function AdminAgentSetup() {
             Publish Agent
           </button>
         </div>
-        {publishMutation.data?.uriPolicy ? (
-          <div className="space-y-1 app-meta-value text-zinc-400">
-            <div>
-              Canonical immutable URI:
-              <span className="ml-1 text-zinc-300">{publishMutation.data.uriPolicy.preferredOnchainUriKind}</span>
-            </div>
-            <div className="break-all text-zinc-500">{publishMutation.data.uriPolicy.preferredOnchainUri}</div>
-            <div>
-              Public mirror: <span className="text-zinc-300">{publishMutation.data.uriPolicy.mirrorUrl}</span>
-            </div>
-          </div>
-        ) : null}
-        {publishMutation.data?.grove?.gatewayUrl ? (
-          <a href={publishMutation.data.grove.gatewayUrl} target="_blank" rel="noreferrer" className="app-meta-value text-emerald-300 underline">
-            Compatibility fallback: {publishMutation.data.grove.gatewayUrl}
-          </a>
-        ) : null}
-        {publishMutation.data?.grove?.lensUri ? (
-          <div className="app-meta-value text-zinc-500">Grove storage URI: {publishMutation.data.grove.lensUri}</div>
+        {publishMutation.data ? (
+          <AgentPublishStatus publish={publishMutation.data} className="app-meta-value" />
         ) : null}
         <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2 app-meta-value text-zinc-400">
           Operator order for agent <span className="text-zinc-200">2205</span>: publish canonical payload, write the strict immutable
@@ -989,20 +957,8 @@ export function AdminAgentSetup() {
                         Owner tx: <span className="text-zinc-300">{truncAddr(oneClickMutation.data.ownerTxHash)}</span>
                       </div>
                     ) : null}
-                    {oneClickMutation.data?.publish?.uriPolicy ? (
-                      <div className="app-meta-value mt-1 text-zinc-400">
-                        Canonical immutable URI: <span className="text-zinc-300">{oneClickMutation.data.publish.uriPolicy.preferredOnchainUriKind}</span>
-                      </div>
-                    ) : null}
-                    {oneClickMutation.data?.publish?.grove?.gatewayUrl ? (
-                      <div className="app-meta-value mt-1 text-zinc-400">
-                        Compatibility fallback: <span className="text-zinc-300">{oneClickMutation.data.publish.grove.gatewayUrl}</span>
-                      </div>
-                    ) : null}
-                    {oneClickMutation.data?.publish?.grove?.lensUri ? (
-                      <div className="app-meta-value mt-1 text-zinc-500">
-                        Grove storage URI: <span className="text-zinc-300">{oneClickMutation.data.publish.grove.lensUri}</span>
-                      </div>
+                    {oneClickMutation.data?.publish ? (
+                      <AgentPublishStatus publish={oneClickMutation.data.publish} className="app-meta-value mt-1" />
                     ) : null}
                     {oneClickMutation.error ? (
                       <div className="mt-2 text-[10px] text-red-300">{(oneClickMutation.error as Error).message}</div>

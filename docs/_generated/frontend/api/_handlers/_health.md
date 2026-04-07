@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/\_health.ts:179](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_health.ts#L179)
+Defined in: [api/\_handlers/\_health.ts:207](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_health.ts#L207)
 
 #### Parameters
 

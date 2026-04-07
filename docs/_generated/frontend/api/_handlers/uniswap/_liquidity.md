@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/uniswap/\_liquidity.ts:52](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/uniswap/_liquidity.ts#L52)
+Defined in: [api/\_handlers/uniswap/\_liquidity.ts:53](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/uniswap/_liquidity.ts#L53)
 
 #### Parameters
 

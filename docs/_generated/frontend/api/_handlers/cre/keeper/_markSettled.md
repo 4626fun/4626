@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/cre/keeper/\_markSettled.ts:31](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/cre/keeper/_markSettled.ts#L31)
+Defined in: [api/\_handlers/cre/keeper/\_markSettled.ts:32](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/cre/keeper/_markSettled.ts#L32)
 
 #### Parameters
 

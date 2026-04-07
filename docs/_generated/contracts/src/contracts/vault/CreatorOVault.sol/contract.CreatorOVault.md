@@ -83,6 +83,34 @@ uint256 public constant MAX_STRATEGIES = 5
 ```
 
 
+### MODULE_STORAGE_VERSION
+
+```solidity
+bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v1")
+```
+
+
+### MODULE_KIND_CORE
+
+```solidity
+bytes32 internal constant MODULE_KIND_CORE = keccak256("CreatorOVaultModule.core")
+```
+
+
+### MODULE_KIND_STRATEGIES
+
+```solidity
+bytes32 internal constant MODULE_KIND_STRATEGIES = keccak256("CreatorOVaultModule.strategies")
+```
+
+
+### MODULE_KIND_ADMIN
+
+```solidity
+bytes32 internal constant MODULE_KIND_ADMIN = keccak256("CreatorOVaultModule.admin")
+```
+
+
 ### VIRTUAL_SHARES_OFFSET
 Virtual offset for share calculations (prevents first-depositor inflation attack)
 
@@ -776,6 +804,13 @@ constructor(address _creatorCoin, address _owner, string memory _name, string me
 
 ```solidity
 function setModulesOnce(address coreModule, address strategiesModule, address adminModule) external onlyOwner;
+```
+
+### _validateModuleIdentity
+
+
+```solidity
+function _validateModuleIdentity(address module, bytes32 expectedKind) internal view;
 ```
 
 ### _requireModulesSet
