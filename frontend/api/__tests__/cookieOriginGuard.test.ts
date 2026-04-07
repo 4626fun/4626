@@ -28,6 +28,23 @@ describe('cookie origin guard', () => {
     return `${COOKIE_SESSION}=${encodeURIComponent(token)}`
   }
 
+  it('allows unsafe requests with cookie session from the marketing origin when app origin is separate', () => {
+    const req = createMockReq({
+      method: 'POST',
+      headers: {
+        cookie: buildSessionCookie(),
+        origin: 'https://4626.fun',
+      },
+    })
+    const res = createMockRes()
+
+    const handled = enforceCookieSessionTrustedOrigin(req, res)
+
+    expect(handled).toBe(false)
+    expect(res.statusCode).toBe(200)
+    expect(res.body).toBeUndefined()
+  })
+
   it('blocks unsafe requests with cookie session from untrusted origins', () => {
     const req = createMockReq({
       method: 'POST',
@@ -77,6 +94,22 @@ describe('cookie origin guard', () => {
     expect(handled).toBe(false)
   })
 
+  it('skips the guard when explicit Privy auth is present', () => {
+    const req = createMockReq({
+      method: 'POST',
+      headers: {
+        cookie: buildSessionCookie(),
+        origin: 'https://evil.example',
+        'x-privy-token': 'privy-token',
+      },
+    })
+    const res = createMockRes()
+
+    const handled = enforceCookieSessionTrustedOrigin(req, res)
+
+    expect(handled).toBe(false)
+  })
+
   it('does not block safe methods', () => {
     const req = createMockReq({
       method: 'GET',
@@ -109,4 +142,3 @@ describe('cookie origin guard', () => {
     expect(handled).toBe(false)
   })
 })
-

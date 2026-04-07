@@ -4,12 +4,17 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+let mockAppOrigin = 'https://v1.4626.fun'
+let mockHostMode: 'app' | 'marketing' = 'app'
+
 vi.mock('@/lib/host', async () => {
   const actual = await vi.importActual<typeof import('@/lib/host')>('@/lib/host')
   return {
     ...actual,
-    APP_ORIGIN: 'https://v1.4626.fun',
-    getHostMode: () => 'app' as const,
+    get APP_ORIGIN() {
+      return mockAppOrigin
+    },
+    getHostMode: () => mockHostMode,
   }
 })
 
@@ -33,6 +38,8 @@ let RootRouter: (typeof import('./RootRouter'))['RootRouter']
 describe('RootRouter', () => {
   beforeEach(async () => {
     vi.resetModules()
+    mockAppOrigin = 'https://v1.4626.fun'
+    mockHostMode = 'app'
     ;({ RootRouter } = await import('./RootRouter'))
   })
 
@@ -74,5 +81,22 @@ describe('RootRouter', () => {
 
     expect(await screen.findByTestId('home-page')).toBeTruthy()
     expect(screen.queryByTestId('protected-app')).toBeNull()
+  })
+
+  it('does not self-redirect app-only routes when marketing override shares the current origin', async () => {
+    mockHostMode = 'marketing'
+    mockAppOrigin = 'http://localhost:3000'
+    window.history.replaceState({}, '', 'http://localhost:3000/swap')
+    const replaceSpy = vi.spyOn(window.location, 'replace').mockImplementation(() => {})
+
+    render(
+      <MemoryRouter initialEntries={['/swap']}>
+        <RootRouter />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByTestId('protected-app')).toBeTruthy()
+    expect(replaceSpy).not.toHaveBeenCalled()
+    replaceSpy.mockRestore()
   })
 })

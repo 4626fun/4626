@@ -103,17 +103,16 @@ export function PrivyClientProvider(props: {
   const externalWallets = useMemo(
     () => ({
       // Some extension stacks expose a getter-only `window.ethereum`, and EIP-6963
-      // provider discovery can trigger extension-side assignment crashes.
-      ...(mode === 'waitlist-email-only' || providerCollision.shouldDisableInjectedConnector
-        ? { disableAllExternalWallets: true as const }
-        : null),
-      walletConnect: { enabled: false },
+      // provider discovery can trigger extension-side assignment crashes on waitlist/email-only
+      // surfaces. Keep those quiet there, but allow external wallet flows on app/account surfaces.
+      ...(mode === 'waitlist-email-only' ? { disableAllExternalWallets: true as const } : null),
+      walletConnect: { enabled: true },
       crossApp: {
         providerAppIds: [ZORA_PRIVY_APP_ID],
       },
       solana: { connectors: solanaConnectors },
     }),
-    [mode, providerCollision.shouldDisableInjectedConnector, solanaConnectors],
+    [mode, solanaConnectors],
   )
 
   if (!hasRuntimeConfig || !appId) {

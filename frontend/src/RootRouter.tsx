@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, type ComponentType, type ReactNode } from 'react'
 import { Route, Routes, useLocation } from 'react-router-dom'
 import { Toaster } from 'sonner'
-import { APP_ORIGIN, getHostMode } from '@/lib/host'
+import { APP_ORIGIN, getHostMode, isCurrentWindowUrl } from '@/lib/host'
 import { isAppOnlyPath } from '@/lib/appOnlyPaths'
 import { AppLoadingState } from '@/components/layout/AppLoadingState'
 import { Layout } from '@/components/layout/Layout'
@@ -55,13 +55,12 @@ function StandaloneDocumentRedirect(props: { htmlPath: '/telegram-link.html' }) 
   return <AppLoadingState />
 }
 
-function AppHostRedirect() {
-  const location = useLocation()
-
+function AppHostRedirect(props: { target: string }) {
   useEffect(() => {
     if (typeof window === 'undefined') return
-    window.location.replace(`${APP_ORIGIN}${location.pathname}${location.search}${location.hash}`)
-  }, [location.hash, location.pathname, location.search])
+    if (isCurrentWindowUrl(props.target)) return
+    window.location.replace(props.target)
+  }, [props.target])
 
   return <AppLoadingState />
 }
@@ -73,7 +72,11 @@ function MarketingLayout() {
 export function RootRouter() {
   const location = useLocation()
   const isMarketingHost = getHostMode() === 'marketing'
-  const shouldRouteToApp = isMarketingHost && isAppOnlyPath(location.pathname)
+  const appRedirectTarget = `${APP_ORIGIN}${location.pathname}${location.search}${location.hash}`
+  const shouldRouteToApp =
+    isMarketingHost &&
+    isAppOnlyPath(location.pathname) &&
+    !isCurrentWindowUrl(appRedirectTarget)
 
   return (
     <>
@@ -92,7 +95,7 @@ export function RootRouter() {
       />
 
       {shouldRouteToApp ? (
-        <AppHostRedirect />
+        <AppHostRedirect target={appRedirectTarget} />
       ) : (
         <Routes>
           <Route element={<MarketingLayout />}>
