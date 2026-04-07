@@ -14,6 +14,7 @@ import {
   resolveAgentRegistrationKey,
 } from '../../../../server/_lib/agentRegistrationPublisher.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
+import { buildAgentUriPolicy, type AgentUriPolicy } from '../../../../src/lib/erc8004AgentUriPolicy.js'
 
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string; missing?: string[] }
@@ -22,6 +23,7 @@ type Body = { storeOnGrove?: boolean }
 
 type PublishResult = {
   registration: Record<string, unknown>
+  uriPolicy: AgentUriPolicy
   groveStatus: 'stored' | 'unavailable' | 'skipped'
   grove?: {
     lensUri: string
@@ -70,6 +72,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let groveStatus: PublishResult['groveStatus'] = 'skipped'
   let grove: PublishResult['grove'] | undefined
+  let compatibilityFallbackUrl: string | null = null
   if (storeOnGrove) {
     const agentKey = resolveAgentRegistrationKey(registration, baseAgentKey)
     const publish = await publishAgentRegistrationToGrove({
@@ -84,15 +87,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         storageKey: publish.storageKey ?? publish.lensUri.replace(/^lens:\/\//, ''),
         statusUrl: null,
       }
+      compatibilityFallbackUrl = publish.gatewayUrl
     } else {
       groveStatus = 'unavailable'
     }
   }
 
+  const uriPolicy = buildAgentUriPolicy({
+    origin,
+    registration,
+    compatibilityFallbackUrl,
+  })
+
   return res.status(200).json({
     success: true,
     data: {
       registration,
+      uriPolicy,
       groveStatus,
       grove,
     } satisfies PublishResult,

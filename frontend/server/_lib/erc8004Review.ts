@@ -24,7 +24,7 @@ const MAX_RESPONSE_BYTES = 256_000
 const MAX_REDIRECTS = 3
 const DEFAULT_DATA_GATEWAY_HOSTS = ['ipfs.io', 'arweave.net'] as const
 
-type RegistrationProbe = {
+export type RegistrationProbe = {
   source: 'provided' | 'onchain-token-uri' | 'none'
   rawUrl: string | null
   finalUrl: string | null
@@ -38,7 +38,7 @@ type RegistrationProbe = {
   error: string | null
 }
 
-type EndpointProbe = {
+export type EndpointProbe = {
   source: 'provided' | 'registration' | 'none'
   url: string | null
   finalUrl: string | null
@@ -50,7 +50,7 @@ type EndpointProbe = {
   error: string | null
 }
 
-type IdentitySnapshot = {
+export type IdentitySnapshot = {
   ownerAddress: string | null
   agentWallet: string | null
   tokenUri: string | null
@@ -101,6 +101,54 @@ function normalizeRpcUrl(raw: string): string | null {
   if (!value) return null
   if (!value.startsWith('http://') && !value.startsWith('https://')) return `https://${value}`
   return value
+}
+
+function parseAccountAddress(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const match = value.trim().match(/^eip155:\d+:(0x[a-fA-F0-9]{40})$/)
+  if (!match || !isAddress(match[1])) return null
+  return getAddress(match[1])
+}
+
+function readAddressLike(value: unknown): string | null {
+  if (typeof value !== 'string' || !isAddress(value)) return null
+  return getAddress(value)
+}
+
+function parseAddressFromText(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  const match = value.match(/0x[a-fA-F0-9]{40}/)
+  if (!match || !isAddress(match[0])) return null
+  return getAddress(match[0])
+}
+
+function readServiceAddress(service: Record<string, unknown>): string | null {
+  const fromAccount = parseAccountAddress(service.account)
+  if (fromAccount) return fromAccount
+  const fromAddress = readAddressLike(service.address)
+  if (fromAddress) return fromAddress
+  return parseAddressFromText(service.endpoint)
+}
+
+export function extractCanonicalCsw(payload: RegistrationFile): string | null {
+  const services = Array.isArray(payload.services) ? payload.services : []
+  const byName = (name: string) =>
+    services.find((service) => String(service?.name ?? '').trim().toLowerCase() === name)
+
+  const walletService = byName('agentwallet')
+  if (walletService && typeof walletService === 'object') {
+    const fromWalletService = readServiceAddress(walletService as Record<string, unknown>)
+    if (fromWalletService) return fromWalletService
+  }
+
+  const xmtpService = byName('xmtp')
+  if (xmtpService && typeof xmtpService === 'object') {
+    const fromXmtpService = readServiceAddress(xmtpService as Record<string, unknown>)
+    if (fromXmtpService) return fromXmtpService
+  }
+
+  const fromEnv = readAddressLike((process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim())
+  return fromEnv
 }
 
 function getRpcUrls(): string[] {
@@ -269,7 +317,7 @@ function toGatewayUrl(raw: string): string | null {
   return null
 }
 
-async function fetchRegistrationPayload(rawUrl: string): Promise<{
+export async function fetchRegistrationPayload(rawUrl: string): Promise<{
   payload: RegistrationFile | null
   finalUrl: string | null
   fetched: boolean
@@ -339,7 +387,7 @@ async function fetchRegistrationPayload(rawUrl: string): Promise<{
   }
 }
 
-async function probeEndpoint(rawUrl: string): Promise<EndpointProbe> {
+export async function probeEndpoint(rawUrl: string): Promise<EndpointProbe> {
   if (!rawUrl.trim()) {
     return {
       source: 'none',
@@ -438,7 +486,7 @@ function isValidRegistrationPayload(payload: RegistrationFile | null, agentId: n
   return registrations.some((entry) => Number(entry?.agentId) === agentId)
 }
 
-function findEndpointFromRegistration(payload: RegistrationFile | null): string | null {
+export function findEndpointFromRegistration(payload: RegistrationFile | null): string | null {
   if (!payload || !Array.isArray(payload.services)) return null
   const ranked = ['api', 'wallet-intelligence', 'feedback', 'reputation-graph', 'web']
   for (const name of ranked) {
@@ -453,7 +501,7 @@ function findEndpointFromRegistration(payload: RegistrationFile | null): string 
   return null
 }
 
-async function readOnchainSnapshot(agentId: number): Promise<IdentitySnapshot> {
+export async function readOnchainSnapshot(agentId: number): Promise<IdentitySnapshot> {
   const chainId = Number(process.env.ERC8004_AGENT_CHAIN_ID ?? '8453')
   const registryAddress = getAddress(getIdentityRegistryAddress())
   const chain = resolveChain(chainId)

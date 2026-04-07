@@ -30,6 +30,8 @@ Stretch tracks stay opt-in:
 
 - Public agent spec with x402 review endpoint: `frontend/api/_handlers/v1/_spec.ts`
 - Real x402-gated ERC-8004 review handler: `frontend/api/_handlers/v1/agents/feedback/_review.ts`
+- Public discoverability report across onchain state, mirrors, and service health: `frontend/api/_handlers/v1/agents/identity/_verification.ts`
+- Operator CLI verification loop: `frontend/scripts/check-agent-discoverability.mjs`
 - x402 payment service helpers: `frontend/server/_lib/x402Service.ts`
 - Runtime registration defaults keep the paid review surface discoverable: `frontend/server/_lib/agentRegistration.ts`
 
@@ -72,6 +74,7 @@ Framing note:
 The repo is implementation-complete enough for the core story, but final submissions still need live artifacts:
 
 - One successful `deploy-run.json`
+- One successful `check:agent-discoverability` run against the deployed verification route
 - One explorer-visible Uniswap tx hash
 - One ENS/Basename-first demo capture:
   - portfolio auto-discovery
@@ -134,6 +137,7 @@ pnpm -C frontend run synthesis:artifacts -- \
 Validate the repo before packaging:
 
 ```bash
+pnpm -C frontend check:agent-discoverability
 pnpm -C frontend typecheck
 pnpm -C frontend test
 ```
@@ -168,8 +172,9 @@ If an evidence file is provided, it also copies:
 Use one short judge flow:
 
 1. Show the public registration and API spec.
-2. Run or replay the deploy autopilot evidence.
-3. Show the generated `agent.json` and `agent_log.json`.
-4. Show one live Uniswap proof.
-5. Show ENS/Basename-first identity or messaging.
-6. If available, show one paid x402 review proof.
+2. Show the discoverability report and the `check:agent-discoverability` pass.
+3. Run or replay the deploy autopilot evidence.
+4. Show the generated `agent.json` and `agent_log.json`.
+5. Show one live Uniswap proof.
+6. Show ENS/Basename-first identity or messaging.
+7. If available, show one paid x402 review proof.

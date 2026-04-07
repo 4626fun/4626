@@ -18,7 +18,8 @@
     {
       "name": "agentWallet",
       "endpoint": "eip155:8453:0xab6d5c10b03300326cd7fab7267ae192842967b5",
-      "account": "eip155:8453:0xab6d5c10b03300326cd7fab7267ae192842967b5"
+      "account": "eip155:8453:0xab6d5c10b03300326cd7fab7267ae192842967b5",
+      "explorer": "https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5"
     },
     {
       "name": "api",
@@ -60,9 +61,9 @@
   "registrations": [
     {
       "agentId": 2205,
-      "agentRegistry": "eip155:8453:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432"
+      "agentRegistry": "eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432"
     }
   ],
-  "reputationRegistry": "eip155:8453:0x8004BAa17C55a88189AE136b182e5fdA19dE9b63",
+  "reputationRegistry": "eip155:8453:0x8004baa17c55a88189ae136b182e5fda19de9b63",
   "supportedTrust": ["reputation", "crypto-economic", "tee-attestation"]
 }

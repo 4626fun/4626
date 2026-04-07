@@ -48,31 +48,15 @@ function prefersReducedMotion(): boolean {
   return window.matchMedia('(prefers-reduced-motion: reduce)').matches
 }
 
-function isConstrainedDevice(): boolean {
-  if (typeof navigator === 'undefined') return false
-  // Low logical CPU core count is a reasonable proxy for constrained
-  const cores = (navigator as Navigator & { hardwareConcurrency?: number }).hardwareConcurrency
-  if (cores !== undefined && cores <= 2) return true
-  // Save-Data header hint
-  const conn = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection
-  if (conn?.saveData) return true
-  return false
-}
-
-function isConstrainedWebview(): boolean {
-  if (typeof navigator === 'undefined') return false
-  // Detect common in-app browser indicators (Instagram, TikTok, etc.)
-  const ua = navigator.userAgent
-  return /FB_IAB|FBAN|Instagram|Twitter|Line\/|TikTok/i.test(ua)
-}
-
 /**
  * Resolves the FlowProfile at mount time based on device capabilities.
  * The resolved profile is stable for the lifetime of the component — no
  * mid-session profile switching.
  */
 export function resolveFlowProfile(): FlowProfile {
-  if (prefersReducedMotion() || isConstrainedDevice() || isConstrainedWebview()) {
+  // Keep renderer selection predictable across mobile devices:
+  // only use reduced profile when the user has explicitly requested reduced motion.
+  if (prefersReducedMotion()) {
     return 'reduced'
   }
   if (isMobileViewport()) {
@@ -85,18 +69,12 @@ export function resolveFlowProfile(): FlowProfile {
  * React hook that resolves profile once on mount and returns a stable value.
  * Import from this file; do not call resolveFlowProfile() directly in renderers.
  */
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 
 export function useVaultFlowProfile(): FlowProfile {
-  // SSR-safe: start with 'reduced' until we can read window
-  const [profile, setProfile] = useState<FlowProfile>('reduced')
-
-  useEffect(() => {
-    // SSR-safe deferred capability detection: first render uses 'reduced' default,
-    // then we update to the real resolved profile after mount.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setProfile(resolveFlowProfile())
-  }, [])
-
+  // Resolve once at mount time; avoid reduced->mobile renderer swapping after paint.
+  const [profile] = useState<FlowProfile>(() =>
+    typeof window === 'undefined' ? 'reduced' : resolveFlowProfile(),
+  )
   return profile
 }

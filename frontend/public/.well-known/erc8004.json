@@ -2,7 +2,7 @@
   "type": "https://eips.ethereum.org/EIPS/eip-8004#domain-verification-v1",
   "domain": "4626.fun",
   "agentId": 2205,
-  "agentRegistry": "eip155:8453:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432",
+  "agentRegistry": "eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432",
   "verifiedEndpoints": [
     "https://4626.fun",
     "https://4626.fun/api/v1/spec.json",

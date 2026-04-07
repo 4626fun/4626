@@ -34,37 +34,108 @@ const BEAT_ACCENTS: Record<number, string> = {
 const FLOW_CYCLE = 6.8 // seconds for one full deposit cycle
 
 function DepositFlowViz({ avatarSrc }: { avatarSrc: string | null }) {
+  const machineRef = useRef<HTMLDivElement>(null)
+  const vaultRef = useRef<HTMLDivElement>(null)
+  const [machineSize, setMachineSize] = useState({ width: 640, height: 204 })
+  const [vaultCore, setVaultCore] = useState({ x: 320, y: 102 })
+
+  useEffect(() => {
+    const node = machineRef.current
+    if (!node) return
+
+    const measure = () => {
+      const rect = node.getBoundingClientRect()
+      if (rect.width > 0 && rect.height > 0) {
+        setMachineSize({ width: rect.width, height: rect.height })
+      }
+
+      const vaultNode = vaultRef.current
+      if (vaultNode) {
+        const vaultRect = vaultNode.getBoundingClientRect()
+        const x = vaultRect.left - rect.left + vaultRect.width / 2
+        const y = vaultRect.top - rect.top + vaultRect.height / 2
+        setVaultCore((prev) =>
+          Math.abs(prev.x - x) > 0.5 || Math.abs(prev.y - y) > 0.5
+            ? { x, y }
+            : prev,
+        )
+      }
+    }
+
+    measure()
+    if (typeof ResizeObserver === 'undefined') return
+
+    const observer = new ResizeObserver(() => measure())
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+
+  const { width: machineW, height: machineH } = machineSize
+
   const tokenRing = {
     border: '1.5px solid rgba(255,255,255,0.12)',
     background: 'rgba(255,255,255,0.04)',
   }
+  const depositPathStroke = `rgba(${ORANGE},0.52)`
   const depositorSeat = {
     border: '1px solid rgba(255,255,255,0.08)',
     background: 'radial-gradient(circle at 50% 45%, rgba(255,255,255,0.08), rgba(255,255,255,0.01) 72%)',
     boxShadow: `0 0 0 1px rgba(${BLUE},0.05), inset 0 1px 0 rgba(255,255,255,0.05)`,
   }
-  // Path 1: depositor -> vault entry -> downward into vault interior.
-  const depositPath = 'path("M 78 100 C 168 100 236 76 286 74 C 306 74 318 86 320 102 L 320 164")'
-  // Path 2: receipt/share token exits vault and returns to depositor.
-  const receiptPath = 'path("M 320 148 C 300 122 250 92 190 88 C 138 85 104 90 78 100")'
+  // Vault core point aligns to the center of the 4626 mark in the machine.
+  const VAULT_CORE_X = vaultCore.x
+  const VAULT_CORE_Y = vaultCore.y
+  // Keep the deposited token traveling inside the vault body before it fades.
+  const VAULT_INNER_Y = machineH * 0.8
+  const START_X = machineW * 0.121875
+  const START_Y = machineH * 0.490196
+  const C1_X = machineW * 0.275
+  const C1_Y = machineH * 0.490196
+  const C2_X = machineW * 0.384375
+  const C2_Y = machineH * 0.431373
+  const MID_X = machineW * 0.465625
+  const C3_X = machineW * 0.484375
+  const C4_X = machineW * 0.496875
+  const R1_X = machineW * 0.446875
+  const R1_Y = machineH * 0.529412
+  const R2_X = machineW * 0.340625
+  const R2_Y = machineH * 0.519608
+
+  // Path 1: depositor -> vault center -> descends inside vault.
+  const depositPath = `path("M ${START_X} ${START_Y} C ${C1_X} ${C1_Y} ${C2_X} ${C2_Y} ${MID_X} ${VAULT_CORE_Y} C ${C3_X} ${VAULT_CORE_Y} ${C4_X} ${VAULT_CORE_Y} ${VAULT_CORE_X} ${VAULT_CORE_Y} L ${VAULT_CORE_X} ${VAULT_INNER_Y}")`
+  // Visible guide for path 1 stays on the full depositor -> vault-core route.
+  const depositGuidePath = `M ${START_X} ${START_Y} C ${C1_X} ${C1_Y} ${C2_X} ${C2_Y} ${MID_X} ${VAULT_CORE_Y} C ${C3_X} ${VAULT_CORE_Y} ${C4_X} ${VAULT_CORE_Y} ${VAULT_CORE_X} ${VAULT_CORE_Y} L ${VAULT_CORE_X} ${VAULT_INNER_Y}`
+  // Path 2: receipt/share token travels in one direction from vault core to depositor.
+  const receiptPath = `path("M ${VAULT_CORE_X} ${VAULT_CORE_Y} C ${R1_X} ${R1_Y} ${R2_X} ${R2_Y} ${START_X} ${START_Y}")`
 
   return (
     <div className="mb-6 w-full max-w-[720px] sm:mb-8" data-testid="beat-2-vault-machine">
-      <div className="relative mx-auto h-[204px] w-full">
+      <div ref={machineRef} className="relative mx-auto h-[204px] w-full">
         <div className="pointer-events-none absolute left-1/2 top-0 z-30 flex -translate-x-1/2 items-center gap-2">
-          <span
+          <motion.span
             className="rounded-full px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.1em]"
+            animate={{ opacity: [0, 1, 1, 0, 0] }}
+            transition={{ duration: FLOW_CYCLE, repeat: Infinity, times: [0, 0.10, 0.48, 0.56, 1], ease: 'linear' }}
             style={{ border: '1px solid rgba(255,255,255,0.14)', color: 'rgba(255,255,255,0.75)', background: 'rgba(255,255,255,0.03)' }}
           >
             1. Deposit {STORY_CONTENT.creatorTokenSymbol.toLowerCase()}
-          </span>
-          <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.32)' }}>→</span>
-          <span
+          </motion.span>
+          <motion.span
+            className="text-[10px]"
+            animate={{ opacity: [0, 1, 1, 1, 0] }}
+            transition={{ duration: FLOW_CYCLE, repeat: Infinity, times: [0, 0.10, 0.58, 0.92, 1], ease: 'linear' }}
+            style={{ color: 'rgba(255,255,255,0.32)' }}
+          >
+            →
+          </motion.span>
+          <motion.span
             className="rounded-full px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.1em]"
+            animate={{ opacity: [0, 0, 1, 1, 0] }}
+            transition={{ duration: FLOW_CYCLE, repeat: Infinity, times: [0, 0.68, 0.74, 0.92, 1], ease: 'linear' }}
             style={{ border: `1px solid rgba(${BLUE},0.30)`, color: `rgba(${BLUE},0.90)`, background: `rgba(${BLUE},0.08)` }}
           >
             2. Receive shares
-          </span>
+          </motion.span>
         </div>
 
         <div
@@ -79,55 +150,53 @@ function DepositFlowViz({ avatarSrc }: { avatarSrc: string | null }) {
         </div>
 
         {/* Two explicit guides: deposit in, receipt out. */}
-        <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 640 190" aria-hidden="true">
+        <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${machineW} ${machineH}`} aria-hidden="true">
           <path
-            d="M 78 100 C 168 100 236 76 286 74 C 306 74 318 86 320 102 L 320 164"
-            stroke={`rgba(${BLUE},0.18)`}
+            d={depositGuidePath}
+            stroke={depositPathStroke}
             strokeWidth="1.2"
             fill="none"
             strokeLinecap="round"
           />
-          <path
-            d="M 320 148 C 300 122 250 92 190 88 C 138 85 104 90 78 100"
-            stroke={`rgba(${BLUE},0.14)`}
-            strokeWidth="1.2"
-            fill="none"
-            strokeLinecap="round"
-          />
+          <path d={`M ${VAULT_CORE_X} ${VAULT_CORE_Y} C ${R1_X} ${R1_Y} ${R2_X} ${R2_Y} ${START_X} ${START_Y}`} stroke={`rgba(${BLUE},0.14)`} strokeWidth="1.2" fill="none" strokeLinecap="round" />
         </svg>
 
-        {/* Path 1: creator token deposits into vault and continues downward while fading. */}
+        {/* Path 1: one creator token follows one deposit path into vault center, then down. */}
         <motion.div
-          className="pointer-events-none absolute left-0 top-0 z-20"
+          className="pointer-events-none absolute left-0 top-0 z-20 -translate-x-1/2 -translate-y-1/2"
           data-testid="beat-2-input-token"
           style={{ offsetPath: depositPath, offsetRotate: '0deg' }}
           animate={{
-            offsetDistance: ['0%', '100%', '100%'],
-            scale: [1, 0.98, 0.92, 0.82],
-            opacity: [0.08, 1, 1, 0.26, 0],
+            offsetDistance: ['0%', '0%', '100%', '100%'],
+            scale: [1, 0.98, 0.9, 0.78],
+            opacity: [0, 0.92, 1, 1, 1, 0],
           }}
           transition={{
-            offsetDistance: { duration: FLOW_CYCLE, repeat: Infinity, times: [0, 0.54, 1], ease: 'linear' },
-            scale: { duration: FLOW_CYCLE, repeat: Infinity, times: [0, 0.55, 0.86, 1], ease: [0.22, 1, 0.36, 1] },
-            opacity: { duration: FLOW_CYCLE, repeat: Infinity, times: [0, 0.06, 0.42, 0.52, 0.58], ease: 'linear' },
+            offsetDistance: { duration: FLOW_CYCLE, repeat: Infinity, times: [0, 0.12, 0.56, 1], ease: 'linear' },
+            scale: { duration: FLOW_CYCLE, repeat: Infinity, times: [0, 0.14, 0.56, 0.60], ease: [0.22, 1, 0.36, 1] },
+            opacity: { duration: FLOW_CYCLE, repeat: Infinity, times: [0, 0.08, 0.12, 0.56, 0.94, 1], ease: 'linear' },
           }}
         >
-          <div className="flex flex-col items-center gap-1.5">
+          <div className="relative flex flex-col items-center">
             <div className="h-14 w-14 overflow-hidden rounded-full" style={tokenRing}>
               {avatarSrc
                 ? <img src={avatarSrc} alt={STORY_CONTENT.creatorTokenSymbol} className="h-full w-full rounded-full object-cover" loading="lazy" />
                 : <div className="flex h-full w-full items-center justify-center"><div className="h-2.5 w-2.5 rounded-full bg-white/40" /></div>
               }
             </div>
-            <span className="text-[10px] font-mono" style={{ color: 'rgba(255,255,255,0.28)' }}>
+            <span
+              className="pointer-events-none absolute top-full mt-1.5 left-1/2 -translate-x-1/2 text-[10px] font-mono whitespace-nowrap"
+              style={{ color: `rgba(${ORANGE},0.68)` }}
+            >
               {STORY_CONTENT.creatorTokenSymbol.toLowerCase()}
             </span>
           </div>
         </motion.div>
 
         {/* Vault factory */}
-        <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-2">
+        <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
           <motion.div
+            ref={vaultRef}
             className="relative h-[116px] w-[128px] overflow-hidden rounded-[28px]"
             animate={{
               scale: [1, 1.02, 1],
@@ -191,33 +260,60 @@ function DepositFlowViz({ avatarSrc }: { avatarSrc: string | null }) {
               <img src="/brand/4626.svg" alt="4626 vault" className="h-11 w-11 object-contain" loading="lazy" style={{ opacity: 0.82 }} />
             </div>
           </motion.div>
-          <span className="text-[10px] font-mono" style={{ color: `rgba(${BLUE},0.45)` }}>vault</span>
+          <span
+            className="pointer-events-none absolute left-1/2 top-full mt-2 -translate-x-1/2 text-[10px] font-mono whitespace-nowrap"
+            style={{ color: `rgba(${BLUE},0.45)` }}
+          >
+            vault
+          </span>
         </div>
 
-        {/* Path 2: receipt/share token returns from the vault to depositor. */}
+        {/* Path 2: one share token fades/scales in at center, then travels out. */}
         <motion.div
           className="pointer-events-none absolute left-0 top-0 z-20"
           data-testid="beat-2-output-token"
           style={{ offsetPath: receiptPath, offsetRotate: '0deg' }}
           animate={{
             offsetDistance: ['0%', '0%', '100%', '100%'],
-            scale: [0.78, 0.78, 0.9, 1],
-            opacity: [0, 0, 0.88, 1, 0.36],
+            opacity: [0, 0, 0.96, 1, 0.22, 0],
           }}
           transition={{
-            offsetDistance: { duration: FLOW_CYCLE, repeat: Infinity, times: [0, 0.54, 0.96, 1], ease: 'linear' },
-            scale: { duration: FLOW_CYCLE, repeat: Infinity, times: [0, 0.54, 0.82, 0.96], ease: [0.22, 1, 0.36, 1] },
-            opacity: { duration: FLOW_CYCLE, repeat: Infinity, times: [0, 0.52, 0.66, 0.94, 1], ease: 'linear' },
+            offsetDistance: { duration: FLOW_CYCLE, repeat: Infinity, times: [0, 0.74, 0.98, 1], ease: 'linear' },
+            opacity: { duration: FLOW_CYCLE, repeat: Infinity, times: [0, 0.68, 0.74, 0.98, 0.995, 1], ease: 'linear' },
           }}
         >
-          <div className="flex flex-col items-center gap-1.5">
-            <div className="h-14 w-14 overflow-hidden rounded-lg" style={{ boxShadow: `0 0 20px rgba(${BLUE},0.16)` }}>
-              <img src={STORY_CONTENT.shareTokenBadgeSrc} alt={STORY_CONTENT.shareTokenSymbol} className="h-full w-full object-contain" loading="lazy" />
+          <motion.div
+            className="-translate-x-1/2 -translate-y-1/2"
+            animate={{ scale: [0.2, 0.2, 1, 1, 0.94] }}
+            transition={{
+              duration: FLOW_CYCLE,
+              repeat: Infinity,
+              times: [0, 0.68, 0.74, 0.92, 1],
+              ease: [0.22, 1, 0.36, 1],
+            }}
+          >
+            <div className="relative flex flex-col items-center">
+              <div className="h-14 w-14 overflow-hidden rounded-lg" style={{ boxShadow: `0 0 20px rgba(${BLUE},0.16)` }}>
+                <img
+                  src={STORY_CONTENT.shareTokenBadgeSrc}
+                  alt={STORY_CONTENT.shareTokenSymbol}
+                  className="h-full w-full object-contain"
+                  loading="lazy"
+                  style={{
+                    opacity: 0.96,
+                    WebkitMaskImage: 'radial-gradient(circle at center, rgba(0,0,0,1) 70%, rgba(0,0,0,0.88) 84%, rgba(0,0,0,0) 100%)',
+                    maskImage: 'radial-gradient(circle at center, rgba(0,0,0,1) 70%, rgba(0,0,0,0.88) 84%, rgba(0,0,0,0) 100%)',
+                  }}
+                />
+              </div>
+              <span
+                className="pointer-events-none absolute top-full mt-1.5 left-1/2 -translate-x-1/2 text-[10px] font-mono whitespace-nowrap"
+                style={{ color: `rgba(${BLUE},0.50)` }}
+              >
+                {STORY_CONTENT.shareTokenSymbol}
+              </span>
             </div>
-            <span className="text-[10px] font-mono" style={{ color: `rgba(${BLUE},0.50)` }}>
-              {STORY_CONTENT.shareTokenSymbol}
-            </span>
-          </div>
+          </motion.div>
         </motion.div>
       </div>
     </div>
@@ -271,19 +367,57 @@ function DepositSlot({ testId }: { testId?: string }) {
 // Paths are white so they read as neutral connectors; nodes are blue accent dots.
 type PathProps3 = { p1: MotionValue<number>; p2: MotionValue<number>; p3: MotionValue<number> }
 
+const DIST_PATH_LEFT = 'M 300 6 C 300 65 80 65 80 114'
+const DIST_PATH_MID = 'M 300 6 C 300 65 300 65 300 114'
+const DIST_PATH_RIGHT = 'M 300 6 C 300 65 520 65 520 114'
+
 function DistributionPaths({ p1, p2, p3 }: PathProps3) {
   const stroke = 'rgba(255,255,255,0.38)'
   const dot    = `rgba(${BLUE},0.95)`
+  const tokenLeftDistance = useTransform(p1, [0, 1], ['0%', '100%'])
+  const tokenMidDistance = useTransform(p2, [0, 1], ['0%', '100%'])
+  const tokenRightDistance = useTransform(p3, [0, 1], ['0%', '100%'])
+  const tokenLeftOpacity = useTransform(p1, [0, 0.08, 0.9, 1], [0, 1, 1, 0])
+  const tokenMidOpacity = useTransform(p2, [0, 0.08, 0.9, 1], [0, 1, 1, 0])
+  const tokenRightOpacity = useTransform(p3, [0, 0.08, 0.9, 1], [0, 1, 1, 0])
+  const tokenLeftScale = useTransform(p1, [0, 0.8, 1], [0.7, 1, 0.9])
+  const tokenMidScale = useTransform(p2, [0, 0.8, 1], [0.7, 1, 0.9])
+  const tokenRightScale = useTransform(p3, [0, 0.8, 1], [0.7, 1, 0.9])
+
   return (
-    <svg viewBox="0 0 600 120" className="w-full max-w-3xl mx-auto" style={{ height: 120, overflow: 'visible' }} aria-hidden="true">
-      <circle cx="300" cy="6" r="3.5" fill={dot} />
-      <motion.path d="M 300 6 C 300 65 80 65 80 114"   stroke={stroke} strokeWidth="1.2" fill="none" strokeLinecap="round" style={{ pathLength: p1 }} />
-      <motion.path d="M 300 6 C 300 65 300 65 300 114" stroke={stroke} strokeWidth="1.2" fill="none" strokeLinecap="round" style={{ pathLength: p2 }} />
-      <motion.path d="M 300 6 C 300 65 520 65 520 114" stroke={stroke} strokeWidth="1.2" fill="none" strokeLinecap="round" style={{ pathLength: p3 }} />
-      <motion.circle cx="80"  cy="114" r="3" fill={dot} style={{ opacity: p1 }} />
-      <motion.circle cx="300" cy="114" r="3" fill={dot} style={{ opacity: p2 }} />
-      <motion.circle cx="520" cy="114" r="3" fill={dot} style={{ opacity: p3 }} />
-    </svg>
+    <div className="relative w-full max-w-3xl mx-auto" style={{ height: 120 }}>
+      <svg viewBox="0 0 600 120" className="absolute inset-0 h-full w-full" style={{ overflow: 'visible' }} aria-hidden="true">
+        <circle cx="300" cy="6" r="3.5" fill={dot} />
+        <motion.path d={DIST_PATH_LEFT} stroke={stroke} strokeWidth="1.2" fill="none" strokeLinecap="round" style={{ pathLength: p1 }} />
+        <motion.path d={DIST_PATH_MID} stroke={stroke} strokeWidth="1.2" fill="none" strokeLinecap="round" style={{ pathLength: p2 }} />
+        <motion.path d={DIST_PATH_RIGHT} stroke={stroke} strokeWidth="1.2" fill="none" strokeLinecap="round" style={{ pathLength: p3 }} />
+        <motion.circle cx="80"  cy="114" r="3" fill={dot} style={{ opacity: p1 }} />
+        <motion.circle cx="300" cy="114" r="3" fill={dot} style={{ opacity: p2 }} />
+        <motion.circle cx="520" cy="114" r="3" fill={dot} style={{ opacity: p3 }} />
+      </svg>
+
+      <motion.div
+        className="pointer-events-none absolute left-0 top-0 -translate-x-1/2 -translate-y-[44%]"
+        style={{ offsetPath: `path("${DIST_PATH_LEFT}")`, offsetRotate: '0deg', offsetDistance: tokenLeftDistance, opacity: tokenLeftOpacity, scale: tokenLeftScale }}
+        aria-hidden="true"
+      >
+        <img src={STORY_CONTENT.shareTokenBadgeSrc} alt="" className="h-5 w-5 object-contain drop-shadow-[0_0_7px_rgba(59,130,246,0.55)]" loading="lazy" />
+      </motion.div>
+      <motion.div
+        className="pointer-events-none absolute left-0 top-0 -translate-x-1/2 -translate-y-[44%]"
+        style={{ offsetPath: `path("${DIST_PATH_MID}")`, offsetRotate: '0deg', offsetDistance: tokenMidDistance, opacity: tokenMidOpacity, scale: tokenMidScale }}
+        aria-hidden="true"
+      >
+        <img src={STORY_CONTENT.shareTokenBadgeSrc} alt="" className="h-5 w-5 object-contain drop-shadow-[0_0_7px_rgba(59,130,246,0.55)]" loading="lazy" />
+      </motion.div>
+      <motion.div
+        className="pointer-events-none absolute left-0 top-0 -translate-x-1/2 -translate-y-[44%]"
+        style={{ offsetPath: `path("${DIST_PATH_RIGHT}")`, offsetRotate: '0deg', offsetDistance: tokenRightDistance, opacity: tokenRightOpacity, scale: tokenRightScale }}
+        aria-hidden="true"
+      >
+        <img src={STORY_CONTENT.shareTokenBadgeSrc} alt="" className="h-5 w-5 object-contain drop-shadow-[0_0_7px_rgba(59,130,246,0.55)]" loading="lazy" />
+      </motion.div>
+    </div>
   )
 }
 
@@ -299,31 +433,95 @@ type PathProps2 = {
   pRight: MotionValue<number>
   pBotLeft: MotionValue<number>
   pBotRight: MotionValue<number>
+  tokenSrc?: string | null
+  tokenSymbol: string
 }
 
-function StrategyBranches({ pLeft, pRight, pBotLeft, pBotRight }: PathProps2) {
+const STRAT_PATH_LEFT = 'M 300 6 C 300 80 150 80 150 128'
+const STRAT_PATH_RIGHT = 'M 300 6 C 300 80 450 80 450 128'
+const STRAT_PATH_BOT_LEFT = 'M 300 6 C 300 165 150 165 150 226'
+const STRAT_PATH_BOT_RIGHT = 'M 300 6 C 300 165 450 165 450 226'
+
+function StrategyBranches({ pLeft, pRight, pBotLeft, pBotRight, tokenSrc, tokenSymbol }: PathProps2) {
   const stroke   = 'rgba(255,255,255,0.22)'
   const nodeFill = `rgba(${ORANGE},0.65)`
   const nodeGlow = `drop-shadow(0 0 4px rgba(${ORANGE},0.40))`
+  const tokenLeftDistance = useTransform(pLeft, [0, 1], ['0%', '100%'])
+  const tokenRightDistance = useTransform(pRight, [0, 1], ['0%', '100%'])
+  const tokenBotLeftDistance = useTransform(pBotLeft, [0, 1], ['0%', '100%'])
+  const tokenBotRightDistance = useTransform(pBotRight, [0, 1], ['0%', '100%'])
+  const tokenLeftOpacity = useTransform(pLeft, [0, 0.08, 0.9, 1], [0, 1, 1, 0])
+  const tokenRightOpacity = useTransform(pRight, [0, 0.08, 0.9, 1], [0, 1, 1, 0])
+  const tokenBotLeftOpacity = useTransform(pBotLeft, [0, 0.08, 0.9, 1], [0, 1, 1, 0])
+  const tokenBotRightOpacity = useTransform(pBotRight, [0, 0.08, 0.9, 1], [0, 1, 1, 0])
+  const tokenLeftScale = useTransform(pLeft, [0, 0.8, 1], [0.7, 1, 0.9])
+  const tokenRightScale = useTransform(pRight, [0, 0.8, 1], [0.7, 1, 0.9])
+  const tokenBotLeftScale = useTransform(pBotLeft, [0, 0.8, 1], [0.7, 1, 0.9])
+  const tokenBotRightScale = useTransform(pBotRight, [0, 0.8, 1], [0.7, 1, 0.9])
+
+  const tokenBadge = tokenSrc ? (
+    <img
+      src={tokenSrc}
+      alt=""
+      className="h-5 w-5 rounded-full object-cover ring-1 ring-orange-300/25 drop-shadow-[0_0_7px_rgba(245,158,11,0.45)]"
+      loading="lazy"
+    />
+  ) : (
+    <div className="flex h-5 w-5 items-center justify-center rounded-full bg-orange-400/30 ring-1 ring-orange-300/25 text-[9px] font-mono text-orange-200/90 drop-shadow-[0_0_7px_rgba(245,158,11,0.45)]">
+      {tokenSymbol.trim().charAt(0) || '$'}
+    </div>
+  )
+
   return (
-    <svg viewBox="0 0 600 120" className="w-full max-w-2xl mx-auto" style={{ height: 120, overflow: 'visible' }} aria-hidden="true">
-      {/* source */}
-      <circle cx="300" cy="6" r="4" fill={nodeFill} style={{ filter: nodeGlow }} />
+    <div className="relative w-full max-w-2xl mx-auto" style={{ height: 120 }}>
+      <svg viewBox="0 0 600 120" className="absolute inset-0 h-full w-full" style={{ overflow: 'visible' }} aria-hidden="true">
+        {/* source */}
+        <circle cx="300" cy="6" r="4" fill={nodeFill} style={{ filter: nodeGlow }} />
 
-      {/* top-row arcs — tighter curve, arrives at top of top cards */}
-      <motion.path d="M 300 6 C 300 80 150 80 150 128" stroke={stroke} strokeWidth="1.2" fill="none" strokeLinecap="round" style={{ pathLength: pLeft }} />
-      <motion.path d="M 300 6 C 300 80 450 80 450 128" stroke={stroke} strokeWidth="1.2" fill="none" strokeLinecap="round" style={{ pathLength: pRight }} />
+        {/* top-row arcs — tighter curve, arrives at top of top cards */}
+        <motion.path d={STRAT_PATH_LEFT} stroke={stroke} strokeWidth="1.2" fill="none" strokeLinecap="round" style={{ pathLength: pLeft }} />
+        <motion.path d={STRAT_PATH_RIGHT} stroke={stroke} strokeWidth="1.2" fill="none" strokeLinecap="round" style={{ pathLength: pRight }} />
 
-      {/* bottom-row arcs — deeper curve, arrives at top of bottom cards */}
-      <motion.path d="M 300 6 C 300 165 150 165 150 226" stroke={stroke} strokeWidth="1.2" fill="none" strokeLinecap="round" style={{ pathLength: pBotLeft }} />
-      <motion.path d="M 300 6 C 300 165 450 165 450 226" stroke={stroke} strokeWidth="1.2" fill="none" strokeLinecap="round" style={{ pathLength: pBotRight }} />
+        {/* bottom-row arcs — deeper curve, arrives at top of bottom cards */}
+        <motion.path d={STRAT_PATH_BOT_LEFT} stroke={stroke} strokeWidth="1.2" fill="none" strokeLinecap="round" style={{ pathLength: pBotLeft }} />
+        <motion.path d={STRAT_PATH_BOT_RIGHT} stroke={stroke} strokeWidth="1.2" fill="none" strokeLinecap="round" style={{ pathLength: pBotRight }} />
 
-      {/* four endpoint nodes */}
-      <motion.circle cx="150" cy="128" r="3.5" fill={nodeFill} style={{ opacity: pLeft,    filter: nodeGlow }} />
-      <motion.circle cx="450" cy="128" r="3.5" fill={nodeFill} style={{ opacity: pRight,   filter: nodeGlow }} />
-      <motion.circle cx="150" cy="226" r="3.5" fill={nodeFill} style={{ opacity: pBotLeft, filter: nodeGlow }} />
-      <motion.circle cx="450" cy="226" r="3.5" fill={nodeFill} style={{ opacity: pBotRight,filter: nodeGlow }} />
-    </svg>
+        {/* four endpoint nodes */}
+        <motion.circle cx="150" cy="128" r="3.5" fill={nodeFill} style={{ opacity: pLeft,    filter: nodeGlow }} />
+        <motion.circle cx="450" cy="128" r="3.5" fill={nodeFill} style={{ opacity: pRight,   filter: nodeGlow }} />
+        <motion.circle cx="150" cy="226" r="3.5" fill={nodeFill} style={{ opacity: pBotLeft, filter: nodeGlow }} />
+        <motion.circle cx="450" cy="226" r="3.5" fill={nodeFill} style={{ opacity: pBotRight,filter: nodeGlow }} />
+      </svg>
+
+      <motion.div
+        className="pointer-events-none absolute left-0 top-0 -translate-x-1/2 -translate-y-[44%]"
+        style={{ offsetPath: `path("${STRAT_PATH_LEFT}")`, offsetRotate: '0deg', offsetDistance: tokenLeftDistance, opacity: tokenLeftOpacity, scale: tokenLeftScale }}
+        aria-hidden="true"
+      >
+        {tokenBadge}
+      </motion.div>
+      <motion.div
+        className="pointer-events-none absolute left-0 top-0 -translate-x-1/2 -translate-y-[44%]"
+        style={{ offsetPath: `path("${STRAT_PATH_RIGHT}")`, offsetRotate: '0deg', offsetDistance: tokenRightDistance, opacity: tokenRightOpacity, scale: tokenRightScale }}
+        aria-hidden="true"
+      >
+        {tokenBadge}
+      </motion.div>
+      <motion.div
+        className="pointer-events-none absolute left-0 top-0 -translate-x-1/2 -translate-y-[44%]"
+        style={{ offsetPath: `path("${STRAT_PATH_BOT_LEFT}")`, offsetRotate: '0deg', offsetDistance: tokenBotLeftDistance, opacity: tokenBotLeftOpacity, scale: tokenBotLeftScale }}
+        aria-hidden="true"
+      >
+        {tokenBadge}
+      </motion.div>
+      <motion.div
+        className="pointer-events-none absolute left-0 top-0 -translate-x-1/2 -translate-y-[44%]"
+        style={{ offsetPath: `path("${STRAT_PATH_BOT_RIGHT}")`, offsetRotate: '0deg', offsetDistance: tokenBotRightDistance, opacity: tokenBotRightOpacity, scale: tokenBotRightScale }}
+        aria-hidden="true"
+      >
+        {tokenBadge}
+      </motion.div>
+    </div>
   )
 }
 
@@ -347,17 +545,18 @@ export function VaultFlowScroll(_props: Props) {
   //
   // Crossfade windows are 4–5% (64–80vh) so dissolves read as intentional.
   //
-  // Exception: Beat 3 exits via a hard clip-through-floor; Beat 4 enters
+  // Exception: Beat 4 exits via a hard clip-through-floor; Beat 5 enters
   // with a 150px pop-up — these are deliberate moment-of-transformation beats.
   //
   //  Beat  │ in       │ hold / sequence │ out
   //  ────────────────────────────────────────────────────────────
   //  1     │ 0–3%     │ 3–9%            │ 9–12%
   //  2     │ 10–16%   │ 16–30%          │ 30–34%
-  //  3     │ 30–35%   │ 35–43%          │ clip 40–43%, opac 43–45%
-  //  4     │ 36–40%   │ 40–48%          │ 48–52%
-  //  5     │ 50–56%   │ paths+cards     │ 77–81%
-  //  6     │ 78–84%   │ branches+cards  │ 84–100%
+  //  3     │ 34–37%   │ 37–42%          │ 42–45%
+  //  4     │ 42–47%   │ 47–55%          │ clip 52–55%, opac 55–57%
+  //  5     │ 58–62%   │ 62–70%          │ 70–74%
+  //  6     │ 68–74%   │ paths+cards     │ 89–93%
+  //  7     │ 90–95%   │ branches+cards  │ 95–100%
 
   // Beat 1: The Threshold
   const opacityBeat1 = useTransform(scrollYProgress, [0, 0.03, 0.09, 0.12], [1, 1, 1, 0])
@@ -367,47 +566,49 @@ export function VaultFlowScroll(_props: Props) {
   const opacityBeat2 = useTransform(scrollYProgress, [0.10, 0.16, 0.30, 0.34], [0, 1, 1, 0])
   const yBeat2       = useTransform(scrollYProgress, [0.10, 0.16, 0.34], [30, 0, -30])
 
-  // Beat 3: The Commitment — let the full number settle, then pull the bill left
-  // as it turns clockwise and drops into a vault slit.
-  const opacityBeat3 = useTransform(scrollYProgress, [0.30, 0.35, 0.43, 0.45], [0, 1, 1, 0])
-  const scaleBeat3   = useTransform(scrollYProgress, [0.30, 0.35], [0.92, 1])
-  const billRotate3  = useTransform(scrollYProgress, [0.40, 0.427], [0, 90])
-  const billX3       = useTransform(scrollYProgress, [0.40, 0.427], [0, -96])
-  const billY3       = useTransform(scrollYProgress, [0.40, 0.437], [0, 214])
-  const slotOpacity3 = useTransform(scrollYProgress, [0.387, 0.407], [0, 1])
-  const slitGlow3    = useTransform(scrollYProgress, [0.387, 0.407, 0.445], [0.94, 1, 0.98])
-  const countMV      = useTransform(scrollYProgress, [0.30, 0.39], [0, TOTAL_TOKENS])
+  // Beat 3: Dedicated bridge card.
+  const opacityBeat3Intro = useTransform(scrollYProgress, [0.34, 0.37, 0.42, 0.45], [0, 1, 1, 0])
+  const yBeat3Intro       = useTransform(scrollYProgress, [0.34, 0.37, 0.45], [30, 0, -30])
 
-  // Beat 4: The Mint — shares appear only after the bill has committed into the slit.
-  const opacityBeat4 = useTransform(scrollYProgress, [0.44, 0.48, 0.56, 0.60], [0, 1, 1, 0])
-  const scaleBeat4   = useTransform(scrollYProgress, [0.44, 0.48], [0.72, 1])
-  const yBeat4       = useTransform(scrollYProgress, [0.44, 0.48, 0.60], [150, 0, -30])
+  // Beat 4: The Commitment — keep the bill upright, then drop it into the slit.
+  const opacityBeat4 = useTransform(scrollYProgress, [0.42, 0.47, 0.55, 0.57], [0, 1, 1, 0])
+  const scaleBeat4   = useTransform(scrollYProgress, [0.42, 0.47], [0.92, 1])
+  const billY4       = useTransform(scrollYProgress, [0.52, 0.557], [0, 214])
+  const billOpacity4 = useTransform(scrollYProgress, [0.52, 0.545, 0.557], [1, 1, 0])
+  const slotOpacity4 = useTransform(scrollYProgress, [0.507, 0.527], [0, 1])
+  const slitGlow4    = useTransform(scrollYProgress, [0.507, 0.527, 0.565], [0.94, 1, 0.98])
+  const countMV      = useTransform(scrollYProgress, [0.42, 0.51], [0, TOTAL_TOKENS])
 
-  // Beat 5: Distribution — slower stagger so each destination reads before the next.
-  const opacityBeat5 = useTransform(scrollYProgress, [0.50, 0.56, 0.77, 0.81], [0, 1, 1, 0])
-  const yBeat5       = useTransform(scrollYProgress, [0.50, 0.56, 0.77, 0.81], [30, 0, 0, -30])
-  const path5A       = useTransform(scrollYProgress, [0.56, 0.64], [0, 1])
-  const path5B       = useTransform(scrollYProgress, [0.61, 0.69], [0, 1])
-  const path5C       = useTransform(scrollYProgress, [0.66, 0.74], [0, 1])
-  const opac5A       = useTransform(scrollYProgress, [0.62, 0.66], [0, 1])
-  const opac5B       = useTransform(scrollYProgress, [0.67, 0.71], [0, 1])
-  const opac5C       = useTransform(scrollYProgress, [0.72, 0.76], [0, 1])
+  // Beat 5: The Mint — shares appear only after the bill has committed into the slit.
+  const opacityBeat5 = useTransform(scrollYProgress, [0.58, 0.62, 0.70, 0.74], [0, 1, 1, 0])
+  const scaleBeat5   = useTransform(scrollYProgress, [0.58, 0.62], [0.72, 1])
+  const yBeat5       = useTransform(scrollYProgress, [0.58, 0.62, 0.74], [150, 0, -30])
 
-  // Beat 6: Yield Strategies — stays slower and calmer now that it is the final landing beat.
-  const opacityBeat6 = useTransform(scrollYProgress, [0.78, 0.84], [0, 1])
-  const yBeat6       = useTransform(scrollYProgress, [0.78, 0.84], [30, 0])
-  const path6L       = useTransform(scrollYProgress, [0.84, 0.91], [0, 1])
-  const path6R       = useTransform(scrollYProgress, [0.87, 0.94], [0, 1])
-  const path6BL      = useTransform(scrollYProgress, [0.91, 0.96], [0, 1])
-  const path6BR      = useTransform(scrollYProgress, [0.93, 0.98], [0, 1])
-  const opac6A       = useTransform(scrollYProgress, [0.89, 0.93], [0, 1])
-  const opac6B       = useTransform(scrollYProgress, [0.91, 0.95], [0, 1])
-  const opac6C       = useTransform(scrollYProgress, [0.94, 0.97], [0, 1])
-  const opac6D       = useTransform(scrollYProgress, [0.96, 0.99], [0, 1])
-  const y6A          = useTransform(scrollYProgress, [0.89, 0.93], [16, 0])
-  const y6B          = useTransform(scrollYProgress, [0.91, 0.95], [16, 0])
-  const y6C          = useTransform(scrollYProgress, [0.94, 0.97], [16, 0])
-  const y6D          = useTransform(scrollYProgress, [0.96, 0.99], [16, 0])
+  // Beat 6: Distribution — slower stagger so each destination reads before the next.
+  const opacityBeat6 = useTransform(scrollYProgress, [0.68, 0.74, 0.89, 0.93], [0, 1, 1, 0])
+  const yBeat6       = useTransform(scrollYProgress, [0.68, 0.74, 0.89, 0.93], [30, 0, 0, -30])
+  const path6A       = useTransform(scrollYProgress, [0.74, 0.80], [0, 1])
+  const path6B       = useTransform(scrollYProgress, [0.77, 0.83], [0, 1])
+  const path6C       = useTransform(scrollYProgress, [0.80, 0.86], [0, 1])
+  const opac6A       = useTransform(scrollYProgress, [0.78, 0.82], [0, 1])
+  const opac6B       = useTransform(scrollYProgress, [0.81, 0.85], [0, 1])
+  const opac6C       = useTransform(scrollYProgress, [0.84, 0.88], [0, 1])
+
+  // Beat 7: Yield Strategies — final landing beat.
+  const opacityBeat7 = useTransform(scrollYProgress, [0.90, 0.95], [0, 1])
+  const yBeat7       = useTransform(scrollYProgress, [0.90, 0.95], [30, 0])
+  const path7L       = useTransform(scrollYProgress, [0.95, 0.97], [0, 1])
+  const path7R       = useTransform(scrollYProgress, [0.96, 0.98], [0, 1])
+  const path7BL      = useTransform(scrollYProgress, [0.97, 0.99], [0, 1])
+  const path7BR      = useTransform(scrollYProgress, [0.98, 1.00], [0, 1])
+  const opac7A       = useTransform(scrollYProgress, [0.965, 0.975], [0, 1])
+  const opac7B       = useTransform(scrollYProgress, [0.975, 0.985], [0, 1])
+  const opac7C       = useTransform(scrollYProgress, [0.985, 0.995], [0, 1])
+  const opac7D       = useTransform(scrollYProgress, [0.99, 1.00], [0, 1])
+  const y7A          = useTransform(scrollYProgress, [0.965, 0.975], [16, 0])
+  const y7B          = useTransform(scrollYProgress, [0.975, 0.985], [16, 0])
+  const y7C          = useTransform(scrollYProgress, [0.985, 0.995], [16, 0])
+  const y7D          = useTransform(scrollYProgress, [0.99, 1.00], [16, 0])
 
   // Drive counter DOM text directly — avoids re-renders on every frame.
   useMotionValueEvent(countMV, 'change', (v) => {
@@ -439,13 +640,13 @@ export function VaultFlowScroll(_props: Props) {
 
   const dist  = STORY_CONTENT.distribution
   const strats = STORY_CONTENT.strategies
-  const cardOpacities  = [opac5A, opac5B, opac5C]
-  const cardPaths      = [path5A, path5B, path5C]
-  const stratOpacities = [opac6A, opac6B, opac6C, opac6D]
-  const stratYs        = [y6A, y6B, y6C, y6D]
+  const cardOpacities  = [opac6A, opac6B, opac6C]
+  const cardPaths      = [path6A, path6B, path6C]
+  const stratOpacities = [opac7A, opac7B, opac7C, opac7D]
+  const stratYs        = [y7A, y7B, y7C, y7D]
 
   // ── Layout note ────────────────────────────────────────────────────────────
-  // Beats 4, 5 and 6 each use a single centered flex-column container so
+  // Beats 5, 6 and 7 each use a single centered flex-column container so
   // sub-element spacing is controlled by gap/margin rather than independent
   // absolute positions.  The container top is chosen so the stack is visually
   // centred in the viewport (50vh).  Approximate stack heights:
@@ -511,15 +712,37 @@ export function VaultFlowScroll(_props: Props) {
         </motion.div>
 
         {/* ── Beat 3 ─────────────────────────────────────────────────────── */}
-        {/* Exit: inner content drops through overflow:hidden floor — hard clip, no fade. */}
-        <motion.div style={{ opacity: opacityBeat3, scale: scaleBeat3 }}
+        {/* Dedicated bridge beat between deposit/receive and commitment. */}
+        <motion.div
+          style={{ opacity: opacityBeat3Intro, y: yBeat3Intro }}
+          className="absolute inset-0 flex flex-col items-center justify-center px-6"
+          data-testid="beat-3-intro"
+        >
+          <div className="absolute inset-0 pointer-events-none" style={{ background: BEAT_ACCENTS[3] }} />
+          <p
+            className="text-[11px] font-mono uppercase tracking-[0.28em]"
+            style={{ color: 'rgba(255,255,255,0.42)' }}
+          >
+            In the beginning
+          </p>
+        </motion.div>
+
+        {/* ── Beat 4 ─────────────────────────────────────────────────────── */}
+        {/* Upright bill deposits downward into slit and fades into the vault. */}
+        <motion.div style={{ opacity: opacityBeat4, scale: scaleBeat4 }}
           className="absolute inset-0 flex flex-col items-center justify-center px-6"
           data-testid="beat-3-commitment">
           <div className="absolute inset-0 pointer-events-none" style={{ background: BEAT_ACCENTS[3] }} />
           <div className="flex flex-col items-center justify-center overflow-hidden w-full" style={{ height: '58vh' }}>
             <div className="relative flex w-full items-center justify-center" style={{ minHeight: 420 }}>
               <motion.div
-                style={{ opacity: slotOpacity3, scale: slitGlow3 }}
+                className="absolute top-[246px] h-[52px] w-px bg-linear-to-b from-white/0 via-white/24 to-white/0"
+                style={{ opacity: slotOpacity4, scaleY: slitGlow4, transformOrigin: 'top center' }}
+                aria-hidden="true"
+              />
+
+              <motion.div
+                style={{ opacity: slotOpacity4, scale: slitGlow4 }}
                 className="absolute top-[294px]"
               >
                 <DepositSlot testId="deposit-slit" />
@@ -527,7 +750,7 @@ export function VaultFlowScroll(_props: Props) {
 
               <motion.div
                 className="flex flex-col items-center"
-                style={{ x: billX3, y: billY3, rotate: billRotate3, transformOrigin: '78% 54%' }}
+                style={{ y: billY4, opacity: billOpacity4 }}
                 data-testid="deposit-bill"
               >
                 <div
@@ -541,7 +764,7 @@ export function VaultFlowScroll(_props: Props) {
                   <p className="mb-8 max-w-xs text-center text-xs font-light leading-relaxed" style={{ color: 'rgba(255,255,255,0.32)' }}>
                     To deploy a vault, a creator must first deposit:
                   </p>
-                  <motion.div className="flex flex-col items-center" style={{ scale: scaleBeat3 }}>
+                  <motion.div className="flex flex-col items-center" style={{ scale: scaleBeat4 }}>
                     <div
                       ref={numberRef}
                       className="text-6xl md:text-8xl lg:text-9xl font-semibold tracking-tighter tabular-nums text-transparent bg-clip-text bg-gradient-to-b from-white to-white/50"
@@ -561,15 +784,15 @@ export function VaultFlowScroll(_props: Props) {
 
               <motion.div
                 className="pointer-events-none absolute inset-0"
-                style={{ opacity: opacityBeat3 }}
+                style={{ opacity: opacityBeat4 }}
               />
             </div>
           </div>
         </motion.div>
 
-        {/* ── Beat 4 ─────────────────────────────────────────────────────── */}
+        {/* ── Beat 5 ─────────────────────────────────────────────────────── */}
         {/* The slot remains visible so the minted shares feel like they emerge from the deposit. */}
-        <motion.div style={{ opacity: opacityBeat4, scale: scaleBeat4, y: yBeat4, paddingTop: 'calc(50vh - 122px)' }}
+        <motion.div style={{ opacity: opacityBeat5, scale: scaleBeat5, y: yBeat5, paddingTop: 'calc(50vh - 122px)' }}
           className="absolute inset-0 flex flex-col items-center px-6"
           data-testid="beat-4-mint">
           <div className="absolute inset-0 pointer-events-none" style={{ background: BEAT_ACCENTS[4] }} />
@@ -598,10 +821,10 @@ export function VaultFlowScroll(_props: Props) {
           </div>
         </motion.div>
 
-        {/* ── Beat 5 ─────────────────────────────────────────────────────── */}
+        {/* ── Beat 6 ─────────────────────────────────────────────────────── */}
         {/* Single flex-column centred at 50vh − 165px (stack ≈ 330px tall). */}
         {/* Source → bezier paths → 3 distribution cards, one card at a time. */}
-        <motion.div style={{ opacity: opacityBeat5, y: yBeat5, paddingTop: 'calc(50vh - 140px)' }}
+        <motion.div style={{ opacity: opacityBeat6, y: yBeat6, paddingTop: 'calc(50vh - 140px)' }}
           className="absolute inset-0 flex flex-col items-center px-6"
           data-testid="beat-5-structure">
           <div className="absolute inset-0 pointer-events-none" style={{ background: BEAT_ACCENTS[5] }} />
@@ -659,12 +882,12 @@ export function VaultFlowScroll(_props: Props) {
           </div>
         </motion.div>
 
-        {/* ── Beat 6 ─────────────────────────────────────────────────────── */}
+        {/* ── Beat 7 ─────────────────────────────────────────────────────── */}
         {/* Single flex-column centred at 50vh − 226px (stack ≈ 452px tall). */}
         {/* Source → two bezier branches → 2×2 strategy grid → blended APY.  */}
         {/* Left branch: strats[0] Charm (top-left), strats[2] Solana (btm-left)  */}
         {/* Right branch: strats[1] Ajna (top-right), strats[3] Idle (btm-right) */}
-        <motion.div style={{ opacity: opacityBeat6, y: yBeat6, paddingTop: 'calc(50vh - 226px)' }}
+        <motion.div style={{ opacity: opacityBeat7, y: yBeat7, paddingTop: 'calc(50vh - 226px)' }}
           className="absolute inset-0 flex flex-col items-center px-6"
           data-testid="beat-6-strategies">
           <div className="absolute inset-0 pointer-events-none" style={{ background: BEAT_ACCENTS[6] }} />
@@ -685,7 +908,14 @@ export function VaultFlowScroll(_props: Props) {
             </div>
 
             {/* Two-branch bezier SVG — left col, right col */}
-            <StrategyBranches pLeft={path6L} pRight={path6R} pBotLeft={path6BL} pBotRight={path6BR} />
+            <StrategyBranches
+              pLeft={path7L}
+              pRight={path7R}
+              pBotLeft={path7BL}
+              pBotRight={path7BR}
+              tokenSrc={avatarSrc}
+              tokenSymbol={STORY_CONTENT.creatorTokenSymbol}
+            />
 
             {/* 2×2 strategy grid */}
             <div className="grid grid-cols-2 gap-3 w-full mt-2">

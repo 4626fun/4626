@@ -45,5 +45,6 @@ describe('v1 spec endpoint', () => {
     expect(res.body?.paths?.['/v1/token/{address}/tokenlist']).toBeTruthy()
     expect(res.body?.paths?.['/v1/explore/vaults']).toBeTruthy()
     expect(res.body?.paths?.['/v1/agents/feedback/review']).toBeTruthy()
+    expect(res.body?.paths?.['/v1/agents/identity/verification']?.get?.summary).toContain('discoverability')
   })
 })

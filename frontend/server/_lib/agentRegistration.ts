@@ -1,6 +1,14 @@
 import fs from 'node:fs'
 import path from 'node:path'
 
+import {
+  AGENT_REGISTRATION_WELL_KNOWN_PATH,
+  buildPublicAgentRegistrationUrl,
+  buildPublicDomainVerificationUrl,
+  ERC8004_DOMAIN_VERIFICATION_PATH,
+  STRICT_IMMUTABLE_AGENT_URI_SUMMARY,
+} from '../../src/lib/erc8004AgentUriPolicy.js'
+
 export type RegistrationService = {
   name: string
   endpoint: string
@@ -24,6 +32,8 @@ export type RegistrationFile = {
 
 const REGISTRATION_TYPE = 'https://eips.ethereum.org/EIPS/eip-8004#registration-v1'
 const SUPPORTED_ENDPOINT_PREFIXES = ['https://', 'http://', 'ipfs://', 'ar://', 'data:'] as const
+export { AGENT_REGISTRATION_WELL_KNOWN_PATH, ERC8004_DOMAIN_VERIFICATION_PATH }
+export const STRICT_IMMUTABLE_AGENT_URI_HINT = STRICT_IMMUTABLE_AGENT_URI_SUMMARY
 
 const fallbackRegistration: RegistrationFile = {
   type: REGISTRATION_TYPE,
@@ -64,7 +74,7 @@ const fallbackRegistration: RegistrationFile = {
   registrations: [
     {
       agentId: 2205,
-      agentRegistry: 'eip155:8453:0x8004A169FB4a3325136EB29fA0ceB6D2e539a432',
+      agentRegistry: 'eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432',
     },
   ],
   supportedTrust: ['reputation', 'crypto-economic', 'tee-attestation'],
@@ -85,6 +95,8 @@ function parseRegistration(raw: string): RegistrationFile | null {
     return null
   }
 }
+
+export { buildPublicAgentRegistrationUrl, buildPublicDomainVerificationUrl }
 
 function readRegistrationFromEnv(): RegistrationFile | null {
   const raw = (process.env.ERC8004_AGENT_REGISTRATION_JSON || '').trim()

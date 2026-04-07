@@ -1,8 +1,17 @@
 import { PageMeta } from '@/components/seo/PageMeta'
+import {
+  buildPublicAgentRegistrationUrl,
+  buildPublicDomainVerificationUrl,
+  STRICT_IMMUTABLE_AGENT_URI_KIND,
+  STRICT_IMMUTABLE_AGENT_URI_SUMMARY,
+  STRICT_IMMUTABLE_AGENT_URI_WRITE_HINT,
+} from '@/lib/erc8004AgentUriPolicy'
 
 export function AgentUriService() {
   const origin = typeof window === 'undefined' ? 'https://4626.fun' : window.location.origin
   const endpoint = `${origin}/api/lens/agent-registration`
+  const mirrorUrl = buildPublicAgentRegistrationUrl(origin)
+  const domainVerificationUrl = buildPublicDomainVerificationUrl(origin)
 
   const curlExample = `curl -s "${endpoint}" \\
   -X POST \\
@@ -19,6 +28,14 @@ export function AgentUriService() {
   "success": true,
   "data": {
     "registration": { "...": "..." },
+    "uriPolicy": {
+      "mode": "strict-immutable",
+      "preferredOnchainUriKind": "${STRICT_IMMUTABLE_AGENT_URI_KIND}",
+      "preferredOnchainUri": "data:application/json;base64,...",
+      "mirrorUrl": "${mirrorUrl}",
+      "domainVerificationUrl": "${domainVerificationUrl}",
+      "compatibilityFallbackUrl": "https://api.grove.storage/..."
+    },
     "grove": {
       "lensUri": "lens://...",
       "gatewayUrl": "https://api.grove.storage/...",
@@ -41,11 +58,11 @@ export function AgentUriService() {
         <h1 className="text-2xl sm:text-3xl text-zinc-100 font-semibold tracking-tight">Agent URI service</h1>
         <p className="text-sm text-zinc-500 max-w-prose">
           This service builds the 4626 ERC-8004 registration from the deployed config and publishes it to Lens
-          Grove. Prefer a strict content-addressed <span className="font-mono text-zinc-300">agentURI</span>{" "}
-          (<span className="font-mono text-zinc-300">data:</span>,{" "}
-          <span className="font-mono text-zinc-300">ipfs://</span>,{" "}
-          <span className="font-mono text-zinc-300">ar://</span>) for clean 8004scan validation. The returned{" "}
-          <span className="font-mono text-zinc-300">gatewayUrl</span> is an optional compatibility fallback.
+          Grove. The canonical immutable onchain <span className="font-mono text-zinc-300">agentURI</span> should stay
+          strict content-addressed (<span className="font-mono text-zinc-300">data:</span>,{" "}
+          <span className="font-mono text-zinc-300">ipfs://</span>, or{" "}
+          <span className="font-mono text-zinc-300">ar://</span>). The returned{" "}
+          <span className="font-mono text-zinc-300">gatewayUrl</span> is only a compatibility fallback.
         </p>
       </header>
 
@@ -67,6 +84,7 @@ export function AgentUriService() {
           </div>
           <div>
             Response: <span className="font-mono text-zinc-300">registration</span> plus optional{" "}
+            <span className="font-mono text-zinc-300">uriPolicy</span> and{" "}
             <span className="font-mono text-zinc-300">grove</span> details.
           </div>
           <div className="mt-2 text-amber-500/80">
@@ -96,12 +114,20 @@ export function AgentUriService() {
 {responseExample}
         </pre>
         <div className="text-xs text-zinc-600">
-          For strict mode, use <span className="font-mono text-zinc-300">data:</span>,{" "}
-          <span className="font-mono text-zinc-300">ipfs://</span>, or{" "}
-          <span className="font-mono text-zinc-300">ar://</span> as on-chain{" "}
-          <span className="font-mono text-zinc-300">agentURI</span>. If needed, use{" "}
-          <span className="font-mono text-zinc-300">gatewayUrl</span> instead of{" "}
-          <span className="font-mono text-zinc-300">lens://</span>.
+          {STRICT_IMMUTABLE_AGENT_URI_SUMMARY}
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-white/5 bg-white/2 p-6 space-y-3">
+        <div className="text-sm text-zinc-200">Canonical references</div>
+        <div className="text-xs text-zinc-600 space-y-2">
+          <div>
+            Public mirror: <span className="font-mono text-zinc-300">{mirrorUrl}</span>
+          </div>
+          <div>
+            Domain verification: <span className="font-mono text-zinc-300">{domainVerificationUrl}</span>
+          </div>
+          <div>{STRICT_IMMUTABLE_AGENT_URI_WRITE_HINT}</div>
         </div>
       </section>
 

@@ -14,12 +14,14 @@ import {
   resolveAgentRegistrationKey,
 } from '../../../server/_lib/agentRegistrationPublisher.js'
 import { getCanonicalOrigin } from '../../../server/_lib/origin.js'
+import { buildAgentUriPolicy, type AgentUriPolicy } from '../../../src/lib/erc8004AgentUriPolicy.js'
 
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string; missing?: string[] }
 
 type LensAgentRegistrationResponse = {
   registration: Record<string, unknown> | null
+  uriPolicy: AgentUriPolicy
   grove?: {
     lensUri: string
     gatewayUrl: string
@@ -81,6 +83,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Adding timestamps here changes the hash and therefore the resulting lens:// URI on every call.
   let grove: LensAgentRegistrationResponse['grove']
   let groveStatus: 'stored' | 'unavailable' | 'skipped' = 'skipped'
+  let compatibilityFallbackUrl: string | null = null
   if (shouldStore) {
     const publish = await publishAgentRegistrationToGrove({
       payload: registration,
@@ -93,11 +96,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         storageKey: publish.storageKey ?? publish.lensUri.replace(/^lens:\/\//, ''),
         statusUrl: null,
       }
+      compatibilityFallbackUrl = publish.gatewayUrl
       groveStatus = 'stored'
     } else {
       groveStatus = 'unavailable'
     }
   }
 
-  return res.status(200).json({ success: true, data: { registration, grove, groveStatus } } satisfies ApiEnvelope<LensAgentRegistrationResponse>)
+  const uriPolicy = buildAgentUriPolicy({
+    origin,
+    registration,
+    compatibilityFallbackUrl,
+  })
+
+  return res.status(200).json({
+    success: true,
+    data: { registration, uriPolicy, grove, groveStatus },
+  } satisfies ApiEnvelope<LensAgentRegistrationResponse>)
 }

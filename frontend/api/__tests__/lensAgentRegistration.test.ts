@@ -97,4 +97,45 @@ describe('lens/agent-registration handler', () => {
     expect(res.status).toHaveBeenCalledWith(401)
     expect(publishAgentRegistrationToGroveMock).not.toHaveBeenCalled()
   })
+
+  it('returns strict immutable URI guidance plus the Grove compatibility fallback after publish', async () => {
+    const { default: handler } = await import('../_handlers/lens/_agent-registration.ts')
+    const req = createMockReq({ method: 'POST', body: { store: true } })
+    const res = createMockRes()
+    readRequestPrincipalMock.mockReturnValue({ type: 'session', address: '0x1234' })
+    publishAgentRegistrationToGroveMock.mockResolvedValue({
+      ok: true,
+      status: 'stored',
+      lensUri: 'lens://registration-key',
+      gatewayUrl: 'https://api.grove.storage/registration-key',
+      storageKey: 'registration-key',
+      payloadHash: 'hash',
+      mode: 'on-change',
+      pipeline: 'immutable',
+    })
+
+    await handler(req, res)
+
+    expect(res.status).toHaveBeenCalledWith(200)
+    expect(res.json).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: true,
+        data: expect.objectContaining({
+          groveStatus: 'stored',
+          grove: expect.objectContaining({
+            lensUri: 'lens://registration-key',
+            gatewayUrl: 'https://api.grove.storage/registration-key',
+          }),
+          uriPolicy: expect.objectContaining({
+            mode: 'strict-immutable',
+            preferredOnchainUriKind: 'data:',
+            mirrorUrl: 'https://4626.fun/.well-known/agent-registration.json',
+            domainVerificationUrl: 'https://4626.fun/.well-known/erc8004.json',
+            compatibilityFallbackUrl: 'https://api.grove.storage/registration-key',
+            preferredOnchainUri: expect.stringMatching(/^data:application\/json;base64,/),
+          }),
+        }),
+      }),
+    )
+  })
 })

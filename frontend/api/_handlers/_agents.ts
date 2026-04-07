@@ -1,6 +1,11 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { guardAgentApiRequest } from '../../packages/server-core/src/index.js'
+import {
+  buildPublicAgentRegistrationUrl,
+  buildPublicDomainVerificationUrl,
+  STRICT_IMMUTABLE_AGENT_URI_SUMMARY,
+} from '../../src/lib/erc8004AgentUriPolicy.js'
 import { getCanonicalOrigin } from '../../server/_lib/origin.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -119,8 +124,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const origin = resolveAppOrigin(req)
   const byo = {
     registrationUrlTemplate: 'https://{your-domain}/.well-known/agent-registration.json',
-    agentUriHint:
-      'Use a content-addressed agentURI for clean scanner results: data:, ipfs://, or ar://. HTTPS gateway URLs remain valid fallback; if using Lens Grove, use gatewayUrl (not lens://).',
+    registrationMirrorUrl: buildPublicAgentRegistrationUrl(origin),
+    domainVerificationUrl: buildPublicDomainVerificationUrl(origin),
+    agentUriHint: STRICT_IMMUTABLE_AGENT_URI_SUMMARY,
     agentUriService: `${origin}/api/lens/agent-registration`,
     requiredFields: ['type', 'name', 'description', 'image', 'services', 'x402Support', 'active', 'registrations'],
     specUrl: 'https://eips.ethereum.org/EIPS/eip-8004',

@@ -15,6 +15,32 @@ type VerificationData = {
   tokenUri: string | null
   agentRegistered: boolean
   walletBoundToCanonical: boolean
+  discoverabilityReady: boolean
+  tokenUriIsStrictImmutable: boolean
+  tokenUriMatchesCanonical: boolean
+  endpoint: {
+    url: string | null
+    ok: boolean
+    status: number | null
+    error: string | null
+  }
+  mirrors: {
+    registration: {
+      url: string
+      matchesCanonical: boolean
+      error: string | null
+    }
+    domainVerification: {
+      url: string
+      matchesCanonical: boolean
+      error: string | null
+    }
+  }
+  checks: Array<{
+    id: string
+    passed: boolean
+    detail: string
+  }>
   links: {
     registry: string
     token: string
@@ -22,7 +48,6 @@ type VerificationData = {
     ownerAddress: string | null
     agentWallet: string | null
   }
-  diagnostics: string[]
 }
 
 function shortAddress(value: string | null | undefined): string {
@@ -64,13 +89,28 @@ export function AgentVerificationCard() {
 
   const registrationBadge = useMemo(() => {
     if (!query.data) return null
-    return query.data.agentRegistered ? { label: 'Registered', tone: 'ok' as const } : { label: 'Not registered', tone: 'warn' as const }
+    return query.data.discoverabilityReady
+      ? { label: 'Scanner-ready', tone: 'ok' as const }
+      : { label: 'Needs follow-through', tone: 'warn' as const }
   }, [query.data])
 
   const walletBadge = useMemo(() => {
     if (!query.data) return null
     return query.data.walletBoundToCanonical ? { label: 'agentWallet verified', tone: 'ok' as const } : { label: 'agentWallet not bound', tone: 'warn' as const }
   }, [query.data])
+
+  const uriBadge = useMemo(() => {
+    if (!query.data) return null
+    if (!query.data.tokenUri) return { label: 'tokenURI missing', tone: 'warn' as const }
+    return query.data.tokenUriIsStrictImmutable && query.data.tokenUriMatchesCanonical
+      ? { label: 'tokenURI canonical', tone: 'ok' as const }
+      : { label: 'tokenURI drift', tone: 'warn' as const }
+  }, [query.data])
+
+  const failingChecks = useMemo(
+    () => (query.data?.checks ?? []).filter((check) => !check.passed).slice(0, 3),
+    [query.data],
+  )
 
   return (
     <section className="rounded-2xl border border-white/5 bg-white/2 p-5 space-y-4">
@@ -126,6 +166,16 @@ export function AgentVerificationCard() {
                 ].join(' ')}
               >
                 {walletBadge.label}
+              </span>
+            ) : null}
+            {uriBadge ? (
+              <span
+                className={[
+                  'rounded-full px-2 py-0.5 text-[10px]',
+                  uriBadge.tone === 'ok' ? 'bg-emerald-500/15 text-emerald-300' : 'bg-amber-500/15 text-amber-200',
+                ].join(' ')}
+              >
+                {uriBadge.label}
               </span>
             ) : null}
           </div>
@@ -226,6 +276,44 @@ export function AgentVerificationCard() {
               <div className="text-zinc-500">Not available</div>
             )}
           </div>
+
+          <div className="grid gap-2 text-xs text-zinc-300 sm:grid-cols-2">
+            <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
+              <div className="app-meta-value text-zinc-400">Registration mirror</div>
+              <div className={query.data.mirrors.registration.matchesCanonical ? 'text-emerald-300' : 'text-amber-200'}>
+                {query.data.mirrors.registration.matchesCanonical ? 'Matches canonical payload' : 'Mismatch detected'}
+              </div>
+              <div className="mt-1 text-zinc-500">{shortUri(query.data.mirrors.registration.url)}</div>
+            </div>
+            <div className="rounded-lg border border-white/8 bg-black/20 px-3 py-2">
+              <div className="app-meta-value text-zinc-400">Domain proof</div>
+              <div className={query.data.mirrors.domainVerification.matchesCanonical ? 'text-emerald-300' : 'text-amber-200'}>
+                {query.data.mirrors.domainVerification.matchesCanonical ? 'Matches canonical identity' : 'Mismatch detected'}
+              </div>
+              <div className="mt-1 text-zinc-500">{shortUri(query.data.mirrors.domainVerification.url)}</div>
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-white/8 bg-black/20 px-3 py-2 text-xs text-zinc-300">
+            <div className="app-meta-value text-zinc-400">Primary endpoint</div>
+            <div className={query.data.endpoint.ok ? 'text-emerald-300' : 'text-amber-200'}>
+              {query.data.endpoint.ok
+                ? `Healthy${query.data.endpoint.status ? ` (${query.data.endpoint.status})` : ''}`
+                : query.data.endpoint.error || 'Unavailable'}
+            </div>
+            {query.data.endpoint.url ? <div className="mt-1 text-zinc-500">{shortUri(query.data.endpoint.url)}</div> : null}
+          </div>
+
+          {failingChecks.length > 0 ? (
+            <div className="rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-3 text-xs text-amber-100 space-y-2">
+              <div className="app-meta-value text-amber-200">Next fixes</div>
+              {failingChecks.map((check) => (
+                <div key={check.id}>
+                  <span className="text-amber-300">{check.id}</span>: {check.detail}
+                </div>
+              ))}
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap items-center gap-2 text-xs">
             <a

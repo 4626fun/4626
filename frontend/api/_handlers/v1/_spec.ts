@@ -80,7 +80,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       '/v1/agents/access-proof/verify': { post: { summary: 'Verify signed proof and issue short-lived room token', responses: { '200': { description: 'OK' } } } },
       '/v1/agents/xmtp/join': { post: { summary: 'Validate room token and return XMTP join instructions', responses: { '200': { description: 'OK' } } } },
       '/v1/agents/telegram/join': { post: { summary: 'Validate room token and return Telegram join instructions', responses: { '200': { description: 'OK' } } } },
-      '/v1/agents/identity/verification': { get: { summary: 'Public ERC-8004 agent verification snapshot', responses: { '200': { description: 'OK' } } } },
+      '/v1/agents/identity/verification': { get: { summary: 'Public ERC-8004 discoverability report across onchain state, mirrors, and service health', responses: { '200': { description: 'OK' } } } },
 
       // Build-only endpoints (return unsigned tx calldata)
       '/v1/build/auction/submitBid': { post: { summary: 'Build CCA submitBid calldata', responses: { '200': { description: 'OK' } } } },

@@ -26,6 +26,12 @@ import { CONTRACTS } from '@/config/contracts'
 import { appendBuilderSuffixToHex } from '@/lib/baseBuilderCodes'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
+import {
+  buildAgentUriPolicy,
+  STRICT_IMMUTABLE_AGENT_URI_SUMMARY,
+  toRegistrationDataUri,
+  type AgentUriPolicy,
+} from '@/lib/erc8004AgentUriPolicy'
 import { logger } from '@/lib/logger'
 const CANONICAL_SMART_WALLET = '0xAb6d5C10b03300326CD7fAb7267Ae192842967b5'
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
@@ -86,17 +92,6 @@ function agentUriValidationMessage(): string {
     return 'Agent URI must be ipfs://, ar://, data:, or an https:// URL on the VITE_AGENT_URI_HTTPS_ALLOWLIST.'
   }
   return 'Agent URI must be strict content-addressed (ipfs://, ar://, or data:). HTTPS/http and lens:// are blocked for on-chain writes.'
-}
-
-function toRegistrationDataUri(payload: unknown): string {
-  const json = JSON.stringify(payload)
-  const bytes = new TextEncoder().encode(json)
-  let binary = ''
-  bytes.forEach((b) => {
-    binary += String.fromCharCode(b)
-  })
-  const base64 = btoa(binary)
-  return `data:application/json;base64,${base64}`
 }
 
 type LegacyVaultHint = {
@@ -742,7 +737,11 @@ function AgentRegistration() {
     status: 'idle' | 'loading' | 'success' | 'error'
     error?: string
   }>({ status: 'idle' })
-  const [lensPublishResult, setLensPublishResult] = useState<{ lensUri?: string; gatewayUrl?: string } | null>(null)
+  const [lensPublishResult, setLensPublishResult] = useState<{
+    lensUri?: string
+    gatewayUrl?: string
+    uriPolicy?: AgentUriPolicy
+  } | null>(null)
   const [registerTxState, setRegisterTxState] = useState<TxState>({ status: 'idle' })
   const [updateTxState, setUpdateTxState] = useState<TxState>({ status: 'idle' })
   const [registeredAgentId, setRegisteredAgentId] = useState<string | null>(null)
@@ -902,11 +901,15 @@ function AgentRegistration() {
         throw new Error(payload?.error || `Request failed (${res.status}).`)
       }
       const grove = payload?.data?.grove
+      const uriPolicy = payload?.data?.uriPolicy ?? null
       const lensUri = grove?.lensUri ? String(grove.lensUri) : undefined
       const gatewayUrl = grove?.gatewayUrl ? String(grove.gatewayUrl) : undefined
       // Keep strict content-addressed URI as default; gateway is opt-in.
-      setLensPublishResult({ lensUri, gatewayUrl })
-      if (gatewayUrl) {
+      setLensPublishResult({ lensUri, gatewayUrl, uriPolicy: uriPolicy ?? undefined })
+      if (uriPolicy?.preferredOnchainUri) {
+        setAgentUri(String(uriPolicy.preferredOnchainUri))
+      }
+      if (gatewayUrl || uriPolicy?.preferredOnchainUri) {
         setLensPublishState({ status: 'success' })
       } else {
         setLensPublishState({
@@ -1581,7 +1584,7 @@ function AgentRegistration() {
               />
               <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-600">
                 <span>
-                  Strict mode keeps a content-addressed URI (data:, ipfs://, ar://) by default. HTTPS gateways require explicit allowlisting.
+                  {STRICT_IMMUTABLE_AGENT_URI_SUMMARY}
                 </span>
                 <button
                   type="button"
@@ -1607,11 +1610,20 @@ function AgentRegistration() {
               {lensPublishState.status === 'error' ? (
                 <div className="text-xs text-red-400">{lensPublishState.error}</div>
               ) : lensPublishState.status === 'success' ? (
-                <div className="text-xs text-emerald-300/90">Published to Lens Grove.</div>
+                <div className="text-xs text-emerald-300/90">Published registration metadata and refreshed the canonical immutable URI.</div>
+              ) : null}
+              {lensPublishResult?.uriPolicy?.preferredOnchainUri ? (
+                <div className="space-y-1 text-xs text-zinc-500">
+                  <div>
+                    Canonical immutable URI:
+                    <span className="ml-1 font-mono text-zinc-300">{lensPublishResult.uriPolicy.preferredOnchainUriKind}</span>
+                  </div>
+                  <div className="break-all font-mono text-zinc-300">{lensPublishResult.uriPolicy.preferredOnchainUri}</div>
+                </div>
               ) : null}
               {lensPublishResult?.lensUri ? (
                 <div className="text-xs text-zinc-500">
-                  Grove URI: <span className="font-mono text-zinc-300">{lensPublishResult.lensUri}</span>
+                  Grove storage URI: <span className="font-mono text-zinc-300">{lensPublishResult.lensUri}</span>
                 </div>
               ) : null}
               {lensPublishResult?.gatewayUrl ? (
@@ -1624,13 +1636,16 @@ function AgentRegistration() {
                   >
                     View Grove gateway
                   </a>
+                  <div className="text-xs text-zinc-500">
+                    Compatibility fallback for scanners that cannot resolve the canonical immutable URI.
+                  </div>
                   <div>
                     <button
                       type="button"
                       onClick={() => setAgentUri(lensPublishResult.gatewayUrl ?? '')}
                       className="text-xs text-zinc-300 hover:text-white transition-colors"
                     >
-                      Use gateway URL (requires allowlist)
+                      Use gateway URL anyway (requires allowlist)
                     </button>
                   </div>
                 </div>

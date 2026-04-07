@@ -10,7 +10,6 @@ import type { MotionValue } from 'framer-motion'
 import { useVaultFlowProfile } from './model/flowProfile'
 import { STORY_CONTENT } from './model/storyContent'
 import { VaultFlowDesktop } from './orchestrators/VaultFlowDesktop'
-import { VaultFlowMobile } from './orchestrators/VaultFlowMobile'
 import { VaultFlowReduced } from './orchestrators/VaultFlowReduced'
 
 type Props = {
@@ -34,11 +33,8 @@ export function VaultFlowRoot({ depositTokens, shareTokens }: Props) {
 
   return (
     <div ref={containerRef} className="relative">
-      {profile === 'desktop' && (
+      {(profile === 'desktop' || profile === 'mobile') && (
         <VaultFlowDesktop {...commonProps} profile={profile} />
-      )}
-      {profile === 'mobile' && (
-        <VaultFlowMobile {...commonProps} profile={profile} />
       )}
       {profile === 'reduced' && (
         <VaultFlowReduced {...commonProps} profile={profile} />
