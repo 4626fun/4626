@@ -155,6 +155,7 @@ tools/*
 !tools/
 !tools/vanity-salt-grinder/
 !tools/vanity-salt-grinder/**
+tools/vanity-salt-grinder/target/
 
 # Docusaurus build artifacts
 apps/docs-site/build/
