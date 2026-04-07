@@ -1,4 +1,4 @@
-import { DeployStrategies } from '@/components/DeployStrategies'
+import { DeployStrategies } from '@/components/deploy/DeployStrategies'
 import { AKITA } from '@/config/contracts'
 
 export function AdminDeployStrategies() {

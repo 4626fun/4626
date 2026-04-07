@@ -8,8 +8,8 @@
  */
 
 import { useState, memo } from 'react'
-import { useTokenMetadata } from '../hooks/useTokenMetadata'
-import { OrbBorder } from './brand/OrbBorder'
+import { useTokenMetadata } from '@/hooks/useTokenMetadata'
+import { OrbBorder } from '@/components/brand/OrbBorder'
 
 interface TokenImageProps {
   tokenAddress: `0x${string}`

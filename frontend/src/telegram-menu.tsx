@@ -4,8 +4,8 @@ import ReactDOM from 'react-dom/client'
 import '@4626/brand-kit/styles'
 import './index.css'
 
-import { AppLoadingState } from '@/components/AppLoadingState'
-import { TelegramMiniAppUnavailable } from '@/components/TelegramMiniAppUnavailable'
+import { AppLoadingState } from '@/components/layout/AppLoadingState'
+import { TelegramMiniAppUnavailable } from '@/components/telegram/TelegramMiniAppUnavailable'
 import { useTelegramMiniAppEntryStatus } from '@/hooks/useTelegramMiniAppEntryStatus'
 import { TelegramMenu } from '@/pages/telegram/TelegramMenu'
 

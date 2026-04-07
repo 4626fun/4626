@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 
-import { ConnectButton } from '@/components/ConnectButton'
+import { ConnectButton } from '@/components/account/ConnectButton'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
 import {
   buildCanonicalMarketingWaitlistUrl,

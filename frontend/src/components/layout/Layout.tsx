@@ -8,20 +8,20 @@ import {
 } from '@/lib/auth/waitlistEntry'
 import { isPublicSiteMode } from '@/lib/flags'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
-import { AppLoadingState } from '@/components/AppLoadingState'
+import { AppLoadingState } from '@/components/layout/AppLoadingState'
 
 const LazyVaultNavBar = lazy(async () => {
-  const mod = await import('./brand/VaultNavBar')
+  const mod = await import('../brand/VaultNavBar')
   return { default: mod.VaultNavBar }
 })
 
 const LazyChatWidget = lazy(async () => {
-  const mod = await import('./chat/ChatWidget')
+  const mod = await import('../chat/ChatWidget')
   return { default: mod.ChatWidget }
 })
 
 const LazyAccountWalletRail = lazy(async () => {
-  const mod = await import('./account/AccountWalletRail')
+  const mod = await import('../account/AccountWalletRail')
   return { default: mod.AccountWalletRail }
 })
 

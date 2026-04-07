@@ -9,7 +9,7 @@ import {
   AjnaAutomationOptInCard,
   type AjnaAutomationPayload,
   type AjnaAutomationStatus,
-} from '@/components/DeploymentSuccess'
+} from '@/components/deploy/DeploymentSuccess'
 import { getDeploymentsForOwner } from '@/hooks/useDeploymentTracker'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
@@ -18,7 +18,7 @@ import { resolveBaseAppInviteUrl } from '@/lib/baseAppInvite'
 import { getAppBaseUrl } from '@/lib/host'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privyEmbeddedEoa'
 
-export { AjnaAutomationOptInCard } from '@/components/DeploymentSuccess'
+export { AjnaAutomationOptInCard } from '@/components/deploy/DeploymentSuccess'
 export { pickPrivyEmbeddedEoaWallet } from '@/lib/privyEmbeddedEoa'
 
 type AgentData = {

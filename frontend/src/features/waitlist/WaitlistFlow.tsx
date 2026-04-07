@@ -88,6 +88,13 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
   })
 }
 
+async function runPrivyLoginWithTimeout(
+  login: (options?: unknown) => Promise<unknown>,
+  options: unknown,
+): Promise<void> {
+  await withTimeout(Promise.resolve().then(() => login(options)), FLOW_TIMEOUT_MS, 'Sign-in')
+}
+
 function readApiErrorMessage(payload: unknown, fallback: string): string {
   if (payload && typeof payload === 'object') {
     const maybeError = (payload as { error?: unknown }).error
@@ -678,7 +685,7 @@ export function WaitlistFlow(props: {
     resetResolvedAccountState()
     await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
     try {
-      await login(buildWaitlistRecoveryLoginOptions() as any)
+      await runPrivyLoginWithTimeout(login as (options?: unknown) => Promise<unknown>, buildWaitlistRecoveryLoginOptions() as any)
       await settleBootstrapAfterRecoverableLoginError({ bypassRecoveryCooldown: true })
     } catch (loginError: unknown) {
       if (isWalletProviderCollisionError(loginError)) {
@@ -718,7 +725,7 @@ export function WaitlistFlow(props: {
         // around every Privy popup open.
         clearStoredWaitlistSessionToken()
         try {
-          await login(buildWaitlistEmailLoginOptions() as any)
+          await runPrivyLoginWithTimeout(login as (options?: unknown) => Promise<unknown>, buildWaitlistEmailLoginOptions() as any)
           await settleBootstrapAfterRecoverableLoginError({
             bypassRecoveryCooldown: true,
           })
@@ -789,7 +796,7 @@ export function WaitlistFlow(props: {
       }
       await runWaitlistPrivyLogout({ logout: privyLogoutRef.current, shouldLogout: shouldDestroyPrivySession })
       try {
-        await login(buildWaitlistRecoveryLoginOptions() as any)
+        await runPrivyLoginWithTimeout(login as (options?: unknown) => Promise<unknown>, buildWaitlistRecoveryLoginOptions() as any)
         await settleBootstrapAfterRecoverableLoginError({
           bypassRecoveryCooldown: true,
         })

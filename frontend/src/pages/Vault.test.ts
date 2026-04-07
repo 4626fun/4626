@@ -157,7 +157,7 @@ vi.mock('@/wallet/accountContext', () => ({
   }),
 }))
 
-vi.mock('../components/ClaimPrizeToSolana', () => ({
+vi.mock('@/components/lottery/ClaimPrizeToSolana', () => ({
   ClaimPrizeToSolana: () => null,
 }))
 

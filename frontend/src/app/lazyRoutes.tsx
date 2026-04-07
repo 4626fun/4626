@@ -1,7 +1,7 @@
 import { Suspense, lazy, type ComponentType, type LazyExoticComponent, type ReactNode } from 'react'
 import { Outlet } from 'react-router-dom'
 
-import { AppLoadingState } from '@/components/AppLoadingState'
+import { AppLoadingState } from '@/components/layout/AppLoadingState'
 
 export function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof TModule>(
   loader: () => Promise<TModule>,

@@ -37,7 +37,7 @@ vi.mock('@/lib/zora/client', () => ({
   fetchZoraProfile: vi.fn().mockResolvedValue(null),
 }))
 
-import { VaultFlowScroll } from './VaultFlowScroll'
+import { VaultFlowScroll } from '@/features/home/vault-flow/VaultFlowScroll'
 import { STORY_CONTENT } from '@/features/home/vault-flow/model/storyContent'
 
 function renderVaultFlowScroll() {

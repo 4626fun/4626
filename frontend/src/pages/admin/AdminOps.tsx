@@ -21,7 +21,7 @@ import { usePrivy, useWallets } from '@privy-io/react-auth'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
-import { ConnectButton } from '@/components/ConnectButton'
+import { ConnectButton } from '@/components/account/ConnectButton'
 import { CONTRACTS } from '@/config/contracts'
 import { appendBuilderSuffixToHex } from '@/lib/baseBuilderCodes'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'

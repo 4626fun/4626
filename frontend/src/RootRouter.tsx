@@ -3,8 +3,8 @@ import { Route, Routes, useLocation } from 'react-router-dom'
 import { Toaster } from 'sonner'
 import { APP_ORIGIN, getHostMode } from '@/lib/host'
 import { isAppOnlyPath } from '@/lib/appOnlyPaths'
-import { AppLoadingState } from '@/components/AppLoadingState'
-import { Layout } from '@/components/Layout'
+import { AppLoadingState } from '@/components/layout/AppLoadingState'
+import { Layout } from '@/components/layout/Layout'
 
 function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof TModule>(
   loader: () => Promise<TModule>,

@@ -1,6 +1,6 @@
 import { Navigate, useLocation } from 'react-router-dom'
 
-import { AppLoadingState } from '@/components/AppLoadingState'
+import { AppLoadingState } from '@/components/layout/AppLoadingState'
 import { useTelegramMiniAppEntryStatus } from '@/hooks/useTelegramMiniAppEntryStatus'
 import { TelegramMenu } from './TelegramMenu'
 

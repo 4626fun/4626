@@ -3,7 +3,7 @@
 import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 import { apiFetch } from '@/lib/apiBase'
 
@@ -578,6 +578,46 @@ describe('WaitlistFlow simplified completion UI', () => {
     ).toBeTruthy()
     expect(screen.queryByText(/sign-in session is still finalizing/i)).toBeNull()
     expect(bootstrapCalls).toBe(0)
+  })
+
+  it('releases busy lock when login hangs and surfaces a retryable timeout', async () => {
+    vi.useFakeTimers()
+    try {
+      mockPrivyAuthenticated = false
+      mockLogin.mockReset()
+      mockLogin.mockImplementation(() => new Promise<never>(() => undefined))
+
+      let bootstrapCalls = 0
+      vi.mocked(apiFetch).mockImplementation(async (input: string) => {
+        if (input.startsWith('/api/waitlist/bootstrap')) {
+          bootstrapCalls += 1
+          return jsonResponse(WAITLIST_BOOTSTRAP_PAYLOAD) as any
+        }
+        if (input.startsWith('/api/auth/logout')) {
+          return jsonResponse({ success: true }) as any
+        }
+        throw new Error(`Unhandled apiFetch call: ${input}`)
+      })
+
+      render(
+        <MemoryRouter>
+          <WaitlistFlow autoStartAuth={false} />
+        </MemoryRouter>,
+      )
+
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: /continue/i }))
+      })
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_100)
+      })
+
+      expect(screen.getByText(/sign-in timed out/i)).toBeTruthy()
+      expect(screen.getByRole('button', { name: /^continue$/i })).toBeTruthy()
+      expect(bootstrapCalls).toBe(0)
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
 })

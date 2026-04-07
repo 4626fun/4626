@@ -30,8 +30,8 @@ const BEAT_ACCENTS: Record<number, string> = {
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
 
-// Beat 2 — one continuous deposit → mint → return loop.
-const FLOW_CYCLE = 4.8 // seconds for one full deposit cycle
+// Beat 2 — one continuous depositor -> vault pass.
+const FLOW_CYCLE = 6.8 // seconds for one full deposit cycle
 
 function DepositFlowViz({ avatarSrc }: { avatarSrc: string | null }) {
   const tokenRing = {
@@ -43,12 +43,30 @@ function DepositFlowViz({ avatarSrc }: { avatarSrc: string | null }) {
     background: 'radial-gradient(circle at 50% 45%, rgba(255,255,255,0.08), rgba(255,255,255,0.01) 72%)',
     boxShadow: `0 0 0 1px rgba(${BLUE},0.05), inset 0 1px 0 rgba(255,255,255,0.05)`,
   }
-  const inputPath = 'path("M 78 100 C 164 100 230 74 286 74 C 308 74 320 86 320 102 L 320 164")'
-  const outputPath = 'path("M 320 152 C 314 132 278 94 220 88 C 160 84 116 88 78 100")'
+  // Path 1: depositor -> vault entry -> downward into vault interior.
+  const depositPath = 'path("M 78 100 C 168 100 236 76 286 74 C 306 74 318 86 320 102 L 320 164")'
+  // Path 2: receipt/share token exits vault and returns to depositor.
+  const receiptPath = 'path("M 320 148 C 300 122 250 92 190 88 C 138 85 104 90 78 100")'
 
   return (
     <div className="mb-6 w-full max-w-[720px] sm:mb-8" data-testid="beat-2-vault-machine">
       <div className="relative mx-auto h-[204px] w-full">
+        <div className="pointer-events-none absolute left-1/2 top-0 z-30 flex -translate-x-1/2 items-center gap-2">
+          <span
+            className="rounded-full px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.1em]"
+            style={{ border: '1px solid rgba(255,255,255,0.14)', color: 'rgba(255,255,255,0.75)', background: 'rgba(255,255,255,0.03)' }}
+          >
+            1. Deposit {STORY_CONTENT.creatorTokenSymbol.toLowerCase()}
+          </span>
+          <span className="text-[10px]" style={{ color: 'rgba(255,255,255,0.32)' }}>→</span>
+          <span
+            className="rounded-full px-2.5 py-1 text-[10px] font-mono uppercase tracking-[0.1em]"
+            style={{ border: `1px solid rgba(${BLUE},0.30)`, color: `rgba(${BLUE},0.90)`, background: `rgba(${BLUE},0.08)` }}
+          >
+            2. Receive shares
+          </span>
+        </div>
+
         <div
           className="pointer-events-none absolute z-0 flex flex-col items-center gap-1.5"
           data-testid="beat-2-depositor-anchor"
@@ -60,39 +78,38 @@ function DepositFlowViz({ avatarSrc }: { avatarSrc: string | null }) {
           </span>
         </div>
 
-        {/* Guides keep the loop readable without feeling diagram-heavy. */}
+        {/* Two explicit guides: deposit in, receipt out. */}
         <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox="0 0 640 190" aria-hidden="true">
           <path
-            d="M 78 100 C 164 100 230 74 286 74 C 308 74 320 86 320 102 L 320 164"
-            stroke="rgba(255,255,255,0.09)"
+            d="M 78 100 C 168 100 236 76 286 74 C 306 74 318 86 320 102 L 320 164"
+            stroke={`rgba(${BLUE},0.18)`}
             strokeWidth="1.2"
             fill="none"
             strokeLinecap="round"
           />
           <path
-            d="M 320 152 C 314 132 278 94 220 88 C 160 84 116 88 78 100"
-            stroke={`rgba(${BLUE},0.18)`}
+            d="M 320 148 C 300 122 250 92 190 88 C 138 85 104 90 78 100"
+            stroke={`rgba(${BLUE},0.14)`}
             strokeWidth="1.2"
             fill="none"
             strokeLinecap="round"
           />
         </svg>
 
-        {/* The creator token stays visible through the full deposit path and inner drop. */}
+        {/* Path 1: creator token deposits into vault and continues downward while fading. */}
         <motion.div
           className="pointer-events-none absolute left-0 top-0 z-20"
           data-testid="beat-2-input-token"
-          style={{ offsetPath: inputPath, offsetRotate: '0deg' }}
+          style={{ offsetPath: depositPath, offsetRotate: '0deg' }}
           animate={{
-            offsetDistance: ['0%', '0%', '14%', '34%', '58%', '80%', '100%', '100%'],
-            scale: [1, 1, 1, 0.99, 0.97, 0.93, 0.84, 0.84],
-            opacity: [1, 1, 1, 1, 1, 0.96, 0.18, 0],
+            offsetDistance: ['0%', '100%', '100%'],
+            scale: [1, 0.98, 0.92, 0.82],
+            opacity: [0.08, 1, 1, 0.26, 0],
           }}
           transition={{
-            duration: FLOW_CYCLE,
-            repeat: Infinity,
-            times: [0, 0.08, 0.22, 0.38, 0.56, 0.72, 0.84, 1],
-            ease: [0.22, 1, 0.36, 1],
+            offsetDistance: { duration: FLOW_CYCLE, repeat: Infinity, times: [0, 0.54, 1], ease: 'linear' },
+            scale: { duration: FLOW_CYCLE, repeat: Infinity, times: [0, 0.55, 0.86, 1], ease: [0.22, 1, 0.36, 1] },
+            opacity: { duration: FLOW_CYCLE, repeat: Infinity, times: [0, 0.06, 0.42, 0.52, 0.58], ease: 'linear' },
           }}
         >
           <div className="flex flex-col items-center gap-1.5">
@@ -177,21 +194,20 @@ function DepositFlowViz({ avatarSrc }: { avatarSrc: string | null }) {
           <span className="text-[10px] font-mono" style={{ color: `rgba(${BLUE},0.45)` }}>vault</span>
         </div>
 
-        {/* The share token picks up from the vault and returns to the depositor. */}
+        {/* Path 2: receipt/share token returns from the vault to depositor. */}
         <motion.div
           className="pointer-events-none absolute left-0 top-0 z-20"
           data-testid="beat-2-output-token"
-          style={{ offsetPath: outputPath, offsetRotate: '0deg' }}
+          style={{ offsetPath: receiptPath, offsetRotate: '0deg' }}
           animate={{
-            offsetDistance: ['0%', '0%', '0%', '24%', '56%', '84%', '100%', '100%'],
-            scale: [0.72, 0.72, 0.72, 0.82, 0.92, 1, 1, 1],
-            opacity: [0, 0, 0, 0.22, 0.88, 1, 1, 0.35],
+            offsetDistance: ['0%', '0%', '100%', '100%'],
+            scale: [0.78, 0.78, 0.9, 1],
+            opacity: [0, 0, 0.88, 1, 0.36],
           }}
           transition={{
-            duration: FLOW_CYCLE,
-            repeat: Infinity,
-            times: [0, 0.60, 0.68, 0.78, 0.88, 0.95, 0.98, 1],
-            ease: [0.22, 1, 0.36, 1],
+            offsetDistance: { duration: FLOW_CYCLE, repeat: Infinity, times: [0, 0.54, 0.96, 1], ease: 'linear' },
+            scale: { duration: FLOW_CYCLE, repeat: Infinity, times: [0, 0.54, 0.82, 0.96], ease: [0.22, 1, 0.36, 1] },
+            opacity: { duration: FLOW_CYCLE, repeat: Infinity, times: [0, 0.52, 0.66, 0.94, 1], ease: 'linear' },
           }}
         >
           <div className="flex flex-col items-center gap-1.5">
@@ -337,8 +353,8 @@ export function VaultFlowScroll(_props: Props) {
   //  Beat  │ in       │ hold / sequence │ out
   //  ────────────────────────────────────────────────────────────
   //  1     │ 0–3%     │ 3–9%            │ 9–12%
-  //  2     │ 10–14%   │ 14–24%          │ 24–27%
-  //  3     │ 24–28%   │ 28–36%          │ clip 33–36%, opac 36–38%
+  //  2     │ 10–16%   │ 16–30%          │ 30–34%
+  //  3     │ 30–35%   │ 35–43%          │ clip 40–43%, opac 43–45%
   //  4     │ 36–40%   │ 40–48%          │ 48–52%
   //  5     │ 50–56%   │ paths+cards     │ 77–81%
   //  6     │ 78–84%   │ branches+cards  │ 84–100%
@@ -348,24 +364,24 @@ export function VaultFlowScroll(_props: Props) {
   const yBeat1       = useTransform(scrollYProgress, [0, 0.12], [0, -30])
 
   // Beat 2: one continuous deposit → mint → return scene.
-  const opacityBeat2 = useTransform(scrollYProgress, [0.10, 0.14, 0.24, 0.27], [0, 1, 1, 0])
-  const yBeat2       = useTransform(scrollYProgress, [0.10, 0.14, 0.27], [30, 0, -30])
+  const opacityBeat2 = useTransform(scrollYProgress, [0.10, 0.16, 0.30, 0.34], [0, 1, 1, 0])
+  const yBeat2       = useTransform(scrollYProgress, [0.10, 0.16, 0.34], [30, 0, -30])
 
   // Beat 3: The Commitment — let the full number settle, then pull the bill left
   // as it turns clockwise and drops into a vault slit.
-  const opacityBeat3 = useTransform(scrollYProgress, [0.24, 0.28, 0.375, 0.395], [0, 1, 1, 0])
-  const scaleBeat3   = useTransform(scrollYProgress, [0.24, 0.28], [0.92, 1])
-  const billRotate3  = useTransform(scrollYProgress, [0.345, 0.372], [0, 90])
-  const billX3       = useTransform(scrollYProgress, [0.345, 0.372], [0, -96])
-  const billY3       = useTransform(scrollYProgress, [0.345, 0.382], [0, 214])
-  const slotOpacity3 = useTransform(scrollYProgress, [0.332, 0.352], [0, 1])
-  const slitGlow3    = useTransform(scrollYProgress, [0.332, 0.352, 0.39], [0.94, 1, 0.98])
-  const countMV      = useTransform(scrollYProgress, [0.24, 0.33], [0, TOTAL_TOKENS])
+  const opacityBeat3 = useTransform(scrollYProgress, [0.30, 0.35, 0.43, 0.45], [0, 1, 1, 0])
+  const scaleBeat3   = useTransform(scrollYProgress, [0.30, 0.35], [0.92, 1])
+  const billRotate3  = useTransform(scrollYProgress, [0.40, 0.427], [0, 90])
+  const billX3       = useTransform(scrollYProgress, [0.40, 0.427], [0, -96])
+  const billY3       = useTransform(scrollYProgress, [0.40, 0.437], [0, 214])
+  const slotOpacity3 = useTransform(scrollYProgress, [0.387, 0.407], [0, 1])
+  const slitGlow3    = useTransform(scrollYProgress, [0.387, 0.407, 0.445], [0.94, 1, 0.98])
+  const countMV      = useTransform(scrollYProgress, [0.30, 0.39], [0, TOTAL_TOKENS])
 
   // Beat 4: The Mint — shares appear only after the bill has committed into the slit.
-  const opacityBeat4 = useTransform(scrollYProgress, [0.382, 0.422, 0.49, 0.53], [0, 1, 1, 0])
-  const scaleBeat4   = useTransform(scrollYProgress, [0.382, 0.422], [0.72, 1])
-  const yBeat4       = useTransform(scrollYProgress, [0.382, 0.422, 0.53], [150, 0, -30])
+  const opacityBeat4 = useTransform(scrollYProgress, [0.44, 0.48, 0.56, 0.60], [0, 1, 1, 0])
+  const scaleBeat4   = useTransform(scrollYProgress, [0.44, 0.48], [0.72, 1])
+  const yBeat4       = useTransform(scrollYProgress, [0.44, 0.48, 0.60], [150, 0, -30])
 
   // Beat 5: Distribution — slower stagger so each destination reads before the next.
   const opacityBeat5 = useTransform(scrollYProgress, [0.50, 0.56, 0.77, 0.81], [0, 1, 1, 0])

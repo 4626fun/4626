@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Navigate, Outlet, useLocation } from 'react-router-dom'
 import { useAccount } from 'wagmi'
 
-import { AppLoadingState } from '@/components/AppLoadingState'
+import { AppLoadingState } from '@/components/layout/AppLoadingState'
 import { useTelegramMiniAppEntryStatus } from '@/hooks/useTelegramMiniAppEntryStatus'
 import { useAdminStatusFromSession } from '@/hooks/useAdminStatus'
 import { useSiweAuth } from '@/hooks/useSiweAuth'

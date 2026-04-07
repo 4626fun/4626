@@ -340,7 +340,7 @@ describe('AdminAgentSetup Ajna automation', () => {
     vi.doMock('@/lib/zora/referrals', () => ({
       buildZoraHandoffUrl: () => 'https://zora.co/handoff',
     }))
-    vi.doMock('@/components/DeploymentSuccess', () => ({
+    vi.doMock('@/components/deploy/DeploymentSuccess', () => ({
       AjnaAutomationOptInCard: (props: Record<string, unknown>) => {
         capturedAjnaCardProps.push(props)
         return React.createElement('div', { 'data-testid': 'ajna-automation-card' })
@@ -471,7 +471,7 @@ describe('AdminAgentSetup Ajna automation', () => {
     vi.doMock('@/lib/zora/referrals', () => ({
       buildZoraHandoffUrl: () => 'https://zora.co/handoff',
     }))
-    vi.doMock('@/components/DeploymentSuccess', () => ({
+    vi.doMock('@/components/deploy/DeploymentSuccess', () => ({
       AjnaAutomationOptInCard: (props: Record<string, unknown>) => {
         capturedAjnaCardProps.push(props)
         return React.createElement('div', {

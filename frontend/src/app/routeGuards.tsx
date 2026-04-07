@@ -1,8 +1,8 @@
 import { useEffect, type ReactNode } from 'react'
 import { useLocation } from 'react-router-dom'
 
-import { AppLoadingState } from '@/components/AppLoadingState'
-import { Layout } from '@/components/Layout'
+import { AppLoadingState } from '@/components/layout/AppLoadingState'
+import { Layout } from '@/components/layout/Layout'
 import { isAppOnlyPath } from '@/lib/appOnlyPaths'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
 import { APP_ORIGIN, MARKETING_ORIGIN, getHostMode, type HostMode } from '@/lib/host'

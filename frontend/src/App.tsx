@@ -28,8 +28,8 @@ import {
   LazyRequireAdmin,
   Leaderboard,
 } from './app/lazyRoutes'
-import { AdminLayout } from './components/AdminLayout'
-import { Layout } from './components/Layout'
+import { AdminLayout } from './components/layout/AdminLayout'
+import { Layout } from './components/layout/Layout'
 
 export {
   computeAcceptedFromAppAccessStatus,

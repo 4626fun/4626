@@ -18,45 +18,45 @@ const TIMING = {
   beat1: { inStart: 0.00, inEnd: 0.04, holdEnd: 0.12, outEnd: 0.16 },
   beat2: {
     inStart: 0.18, inEnd: 0.24, holdEnd: 0.32, outEnd: 0.36,
-    phase1: [0.19, 0.24, 0.265, 0.285] as const,
-    phase2: [0.255, 0.29, 0.33, 0.36] as const,
-    phase3: [0.305, 0.335, 0.35, 0.36] as const,
+    phase1: [0.19, 0.24, 0.265, 0.285],
+    phase2: [0.255, 0.29, 0.33, 0.36],
+    phase3: [0.305, 0.335, 0.35, 0.36],
   },
   beat3: {
     inStart: 0.39, inEnd: 0.45, holdEnd: 0.53, outEnd: 0.56,
-    slot: [0.462, 0.49] as const,
-    slitGlow: [0.462, 0.49, 0.55] as const,
-    rotateDrop: [0.475, 0.505, 0.525] as const,
-    count: [0.39, 0.485] as const,
+    slot: [0.462, 0.49],
+    slitGlow: [0.462, 0.49, 0.55],
+    rotateDrop: [0.475, 0.505, 0.525],
+    count: [0.39, 0.485],
   },
   beat4: { inStart: 0.54, inEnd: 0.60, holdEnd: 0.66, outEnd: 0.70 },
   beat5: {
     inStart: 0.68, inEnd: 0.74, holdEnd: 0.86, outEnd: 0.90,
-    pathA: [0.74, 0.79] as const,
-    pathB: [0.765, 0.815] as const,
-    pathC: [0.79, 0.84] as const,
-    cardA: [0.78, 0.805] as const,
-    cardB: [0.805, 0.83] as const,
-    cardC: [0.83, 0.855] as const,
+    pathA: [0.74, 0.79],
+    pathB: [0.765, 0.815],
+    pathC: [0.79, 0.84],
+    cardA: [0.78, 0.805],
+    cardB: [0.805, 0.83],
+    cardC: [0.83, 0.855],
   },
   beat6: {
     inStart: 0.84, inEnd: 0.89, holdEnd: 0.985, outEnd: 1.0,
-    pathL: [0.89, 0.935] as const,
-    pathR: [0.905, 0.95] as const,
-    pathBL: [0.935, 0.97] as const,
-    pathBR: [0.95, 0.98] as const,
-    cardA: [0.92, 0.945] as const,
-    cardB: [0.935, 0.96] as const,
-    cardC: [0.95, 0.975] as const,
-    cardD: [0.965, 0.99] as const,
-    revA: [0.895, 0.925, 0.995] as const,
-    revB: [0.91, 0.94, 0.997] as const,
-    revC: [0.925, 0.955, 1] as const,
-    growthPanel: [0.93, 0.955, 0.997, 1] as const,
-    growthBar: [0.89, 0.985] as const,
-    growthCurve: [0.89, 0.94, 0.965, 0.985] as const,
+    pathL: [0.89, 0.935],
+    pathR: [0.905, 0.95],
+    pathBL: [0.935, 0.97],
+    pathBR: [0.95, 0.98],
+    cardA: [0.92, 0.945],
+    cardB: [0.935, 0.96],
+    cardC: [0.95, 0.975],
+    cardD: [0.965, 0.99],
+    revA: [0.895, 0.925, 0.995],
+    revB: [0.91, 0.94, 0.997],
+    revC: [0.925, 0.955, 1],
+    growthPanel: [0.93, 0.955, 0.997, 1],
+    growthBar: [0.89, 0.985],
+    growthCurve: [0.89, 0.94, 0.965, 0.985],
   },
-} as const
+}
 
 type Props = {
   depositTokens: string
@@ -77,6 +77,10 @@ const BEAT_ACCENTS: Record<number, string> = {
   4: `radial-gradient(ellipse 60% 55% at 50% 50%, rgba(${BLUE},0.14) 0%, transparent 70%)`,
   5: `radial-gradient(ellipse 85% 55% at 50% 55%, rgba(${BLUE},0.08) 0%, transparent 70%)`,
   6: `radial-gradient(ellipse 85% 60% at 50% 55%, rgba(${ORANGE},0.06) 0%, transparent 70%)`,
+}
+
+function toInputRange(values: readonly number[]): number[] {
+  return Array.from(values)
 }
 
 // ── Sub-components ─────────────────────────────────────────────────────────────
@@ -396,11 +400,11 @@ export function VaultFlowScroll(_props: Props) {
     [0, 1, 1, 0],
   )
   const yBeat2 = useTransform(scrollYProgress, [t.beat2.inStart, t.beat2.inEnd, t.beat2.outEnd], [30, 0, -30])
-  const b2P1   = useTransform(scrollYProgress, t.beat2.phase1, [0, 1, 1, 0])
+  const b2P1   = useTransform(scrollYProgress, toInputRange(t.beat2.phase1), [0, 1, 1, 0])
   const b2Y1   = useTransform(scrollYProgress, [t.beat2.phase1[0], t.beat2.phase1[1], t.beat2.phase1[3]], [18, 0, -10])
-  const b2P2   = useTransform(scrollYProgress, t.beat2.phase2, [0, 1, 1, 0])
+  const b2P2   = useTransform(scrollYProgress, toInputRange(t.beat2.phase2), [0, 1, 1, 0])
   const b2Y2   = useTransform(scrollYProgress, [t.beat2.phase2[0], t.beat2.phase2[1], t.beat2.phase2[3]], [18, 0, -10])
-  const b2P3   = useTransform(scrollYProgress, t.beat2.phase3, [0, 1, 1, 0])
+  const b2P3   = useTransform(scrollYProgress, toInputRange(t.beat2.phase3), [0, 1, 1, 0])
   const b2Y3   = useTransform(scrollYProgress, [t.beat2.phase3[0], t.beat2.phase3[1], t.beat2.phase3[3]], [12, 0, -6])
 
   // Beat 3: The Commitment — keep the bill centered while it rotates to 90deg,
@@ -411,13 +415,13 @@ export function VaultFlowScroll(_props: Props) {
     [0, 1, 1, 0],
   )
   const scaleBeat3   = useTransform(scrollYProgress, [t.beat3.inStart, t.beat3.inEnd], [0.92, 1])
-  const billRotate3  = useTransform(scrollYProgress, t.beat3.rotateDrop, [0, 90, 90])
-  const billX3       = useTransform(scrollYProgress, t.beat3.rotateDrop, [0, 0, 0])
-  const billY3       = useTransform(scrollYProgress, t.beat3.rotateDrop, [0, 0, 118])
-  const billScale3   = useTransform(scrollYProgress, t.beat3.rotateDrop, [1, 1, 0.9])
-  const slotOpacity3 = useTransform(scrollYProgress, t.beat3.slot, [0, 1])
-  const slitGlow3    = useTransform(scrollYProgress, t.beat3.slitGlow, [0.94, 1, 0.98])
-  const countMV      = useTransform(scrollYProgress, t.beat3.count, [0, TOTAL_TOKENS])
+  const billRotate3  = useTransform(scrollYProgress, toInputRange(t.beat3.rotateDrop), [0, 90, 90])
+  const billX3       = useTransform(scrollYProgress, toInputRange(t.beat3.rotateDrop), [0, 0, 0])
+  const billY3       = useTransform(scrollYProgress, toInputRange(t.beat3.rotateDrop), [0, 0, 118])
+  const billScale3   = useTransform(scrollYProgress, toInputRange(t.beat3.rotateDrop), [1, 1, 0.9])
+  const slotOpacity3 = useTransform(scrollYProgress, toInputRange(t.beat3.slot), [0, 1])
+  const slitGlow3    = useTransform(scrollYProgress, toInputRange(t.beat3.slitGlow), [0.94, 1, 0.98])
+  const countMV      = useTransform(scrollYProgress, toInputRange(t.beat3.count), [0, TOTAL_TOKENS])
 
   // Beat 4: The Mint — shares appear only after the bill has committed into the slit.
   const opacityBeat4 = useTransform(
@@ -443,9 +447,9 @@ export function VaultFlowScroll(_props: Props) {
   const path5A = path5Progress
   const path5B = path5Progress
   const path5C = path5Progress
-  const opac5A = useTransform(scrollYProgress, t.beat5.cardA, [0, 1])
-  const opac5B = useTransform(scrollYProgress, t.beat5.cardB, [0, 1])
-  const opac5C = useTransform(scrollYProgress, t.beat5.cardC, [0, 1])
+  const opac5A = useTransform(scrollYProgress, toInputRange(t.beat5.cardA), [0, 1])
+  const opac5B = useTransform(scrollYProgress, toInputRange(t.beat5.cardB), [0, 1])
+  const opac5C = useTransform(scrollYProgress, toInputRange(t.beat5.cardC), [0, 1])
 
   // Beat 6: Yield Strategies — one shared branch expansion, then value accretion story.
   const opacityBeat6 = useTransform(
@@ -459,24 +463,24 @@ export function VaultFlowScroll(_props: Props) {
   const path6R = path6Progress
   const path6BL = path6Progress
   const path6BR = path6Progress
-  const opac6A = useTransform(scrollYProgress, t.beat6.cardA, [0, 1])
-  const opac6B = useTransform(scrollYProgress, t.beat6.cardB, [0, 1])
-  const opac6C = useTransform(scrollYProgress, t.beat6.cardC, [0, 1])
-  const opac6D = useTransform(scrollYProgress, t.beat6.cardD, [0, 1])
-  const y6A    = useTransform(scrollYProgress, t.beat6.cardA, [16, 0])
-  const y6B    = useTransform(scrollYProgress, t.beat6.cardB, [16, 0])
-  const y6C    = useTransform(scrollYProgress, t.beat6.cardC, [16, 0])
-  const y6D    = useTransform(scrollYProgress, t.beat6.cardD, [16, 0])
-  const rev6A  = useTransform(scrollYProgress, t.beat6.revA, [0, 1, 0.35])
-  const rev6B  = useTransform(scrollYProgress, t.beat6.revB, [0, 1, 0.25])
-  const rev6C  = useTransform(scrollYProgress, t.beat6.revC, [0, 1, 0.2])
-  const rev6YA = useTransform(scrollYProgress, t.beat6.revA, [8, 0, -4])
-  const rev6YB = useTransform(scrollYProgress, t.beat6.revB, [8, 0, -4])
-  const rev6YC = useTransform(scrollYProgress, t.beat6.revC, [8, 0, -4])
-  const growthPanelOpacity6 = useTransform(scrollYProgress, t.beat6.growthPanel, [0, 1, 1, 0])
-  const growthProgress6 = useTransform(scrollYProgress, t.beat6.growthBar, [0, 1])
-  const growthDay6 = useTransform(scrollYProgress, t.beat6.growthCurve, [0, 24, 30, 75])
-  const growthRatio6 = useTransform(scrollYProgress, t.beat6.growthCurve, [1, 1.024, 1.03, 1.075])
+  const opac6A = useTransform(scrollYProgress, toInputRange(t.beat6.cardA), [0, 1])
+  const opac6B = useTransform(scrollYProgress, toInputRange(t.beat6.cardB), [0, 1])
+  const opac6C = useTransform(scrollYProgress, toInputRange(t.beat6.cardC), [0, 1])
+  const opac6D = useTransform(scrollYProgress, toInputRange(t.beat6.cardD), [0, 1])
+  const y6A    = useTransform(scrollYProgress, toInputRange(t.beat6.cardA), [16, 0])
+  const y6B    = useTransform(scrollYProgress, toInputRange(t.beat6.cardB), [16, 0])
+  const y6C    = useTransform(scrollYProgress, toInputRange(t.beat6.cardC), [16, 0])
+  const y6D    = useTransform(scrollYProgress, toInputRange(t.beat6.cardD), [16, 0])
+  const rev6A  = useTransform(scrollYProgress, toInputRange(t.beat6.revA), [0, 1, 0.35])
+  const rev6B  = useTransform(scrollYProgress, toInputRange(t.beat6.revB), [0, 1, 0.25])
+  const rev6C  = useTransform(scrollYProgress, toInputRange(t.beat6.revC), [0, 1, 0.2])
+  const rev6YA = useTransform(scrollYProgress, toInputRange(t.beat6.revA), [8, 0, -4])
+  const rev6YB = useTransform(scrollYProgress, toInputRange(t.beat6.revB), [8, 0, -4])
+  const rev6YC = useTransform(scrollYProgress, toInputRange(t.beat6.revC), [8, 0, -4])
+  const growthPanelOpacity6 = useTransform(scrollYProgress, toInputRange(t.beat6.growthPanel), [0, 1, 1, 0])
+  const growthProgress6 = useTransform(scrollYProgress, toInputRange(t.beat6.growthBar), [0, 1])
+  const growthDay6 = useTransform(scrollYProgress, toInputRange(t.beat6.growthCurve), [0, 24, 30, 75])
+  const growthRatio6 = useTransform(scrollYProgress, toInputRange(t.beat6.growthCurve), [1, 1.024, 1.03, 1.075])
 
   // Drive counter DOM text directly — avoids re-renders on every frame.
   useMotionValueEvent(countMV, 'change', (v) => {
