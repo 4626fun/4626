@@ -124,6 +124,12 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+function isMobileWalletEnvironment(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const userAgent = navigator.userAgent || ''
+  return /android|iphone|ipad|ipod|mobile/i.test(userAgent)
+}
+
 function deriveOwnerAuthorityState(input: {
   canonicalCswAddress: string | null
   connectedAddress: string | null | undefined
@@ -377,6 +383,7 @@ export function AccountsPage(props: {
   const zoraLinked = Boolean(zoraStatus?.zoraLinked || me?.accountSignals?.linked)
   const telegramLaunchParamsAvailable = useMemo(() => Boolean(readPrivyTelegramLaunchParams()?.initDataRaw), [])
   const inTelegramMiniApp = useMemo(() => isTelegramMiniAppContext(), [])
+  const prefersWalletConnectQr = useMemo(() => !isMobileWalletEnvironment(), [])
   const activeExternalOwnerWallet = useMemo(() => {
     if (isPrivyExternalEthereumWallet(activePrivyWallet)) return activePrivyWallet
     const externalWallets = Array.isArray(privyWallets) ? privyWallets.filter(isPrivyExternalEthereumWallet) : []
@@ -642,11 +649,16 @@ export function AccountsPage(props: {
     setError(null)
     setNotice(null)
     connectWallet({
-      walletList: ['metamask', 'coinbase_wallet', 'detected_ethereum_wallets', 'wallet_connect_qr'],
+      walletList: [
+        'metamask',
+        'coinbase_wallet',
+        'detected_ethereum_wallets',
+        prefersWalletConnectQr ? 'wallet_connect_qr' : 'wallet_connect',
+      ],
       walletChainType: 'ethereum-only',
       description: 'Connect one of the current owners of your Coinbase Smart Wallet on Base to approve the 4626 owner install.',
     })
-  }, [connectWallet])
+  }, [connectWallet, prefersWalletConnectQr])
 
   const callLinkEndpoint = useCallback(
     async (provider: AccountLinkProvider, value?: string | null) => {
@@ -1374,7 +1386,7 @@ export function AccountsPage(props: {
                       </div>
                       {!connectedOwnerReady ? (
                         <div className="mt-3 text-xs text-zinc-500">
-                          Privy will open a wallet modal with MetaMask, Coinbase Wallet, detected browser wallets like Rabby, and WalletConnect QR fallback.
+                          Privy will open a wallet modal with MetaMask, Coinbase Wallet, detected browser wallets like Rabby, and WalletConnect fallback.
                           {providerCollision.shouldDisableInjectedConnector
                             ? ' This browser still reports an injected-provider collision, so Coinbase/Base may be the most reliable option if a browser wallet fails to answer.'
                             : ''}
