@@ -5,7 +5,7 @@ import { AppLoadingState } from '@/components/layout/AppLoadingState'
 import { Layout } from '@/components/layout/Layout'
 import { isAppOnlyPath } from '@/lib/appOnlyPaths'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
-import { APP_ORIGIN, MARKETING_ORIGIN, getHostMode, type HostMode } from '@/lib/host'
+import { APP_ORIGIN, MARKETING_ORIGIN, getHostMode, isCurrentWindowUrl, type HostMode } from '@/lib/host'
 import { AccountContextProvider } from '@/wallet/accountContext'
 
 import {
@@ -32,6 +32,7 @@ export function HostGuard() {
   const { pathname, search, hash } = location
   if (!isAppOnlyPath(pathname)) return null
   const target = `${APP_ORIGIN}${pathname}${search}${hash}`
+  if (isCurrentWindowUrl(target)) return null
   return <ReplaceOnMount to={target} />
 }
 
@@ -42,6 +43,7 @@ export function MarketingOnlyRoute(props: { children: ReactNode }) {
   if (mode === 'marketing') return <>{props.children}</>
 
   const target = `${MARKETING_ORIGIN}${location.pathname}${location.search}${location.hash}`
+  if (isCurrentWindowUrl(target)) return <>{props.children}</>
   return <ReplaceOnMount to={target} />
 }
 

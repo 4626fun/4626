@@ -1,6 +1,6 @@
 import { http, createConfig, fallback } from 'wagmi'
 import { base, mainnet, arbitrum, optimism, polygon } from 'wagmi/chains'
-import { coinbaseWallet, injected } from 'wagmi/connectors'
+import { coinbaseWallet, injected, metaMask } from 'wagmi/connectors'
 import { DATA_SUFFIX, warnGlobalWagmiDataSuffixBehavior } from '@/lib/baseBuilderCodes'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 
@@ -84,6 +84,29 @@ function buildReadTransport(url: string) {
   return http(normalized)
 }
 
+function readInjectedProvidersFromWindow(windowRef: Window | undefined): any[] {
+  if (!windowRef) return []
+  try {
+    const ethereum = (windowRef as any)?.ethereum
+    const providers = Array.isArray(ethereum?.providers) ? ethereum.providers : []
+    if (providers.length > 0) return providers
+    return ethereum ? [ethereum] : []
+  } catch {
+    return []
+  }
+}
+
+function findNamedInjectedProvider(windowRef: Window | undefined, predicate: (provider: any) => boolean): any | undefined {
+  const providers = readInjectedProvidersFromWindow(windowRef)
+  return providers.find((provider) => {
+    try {
+      return predicate(provider)
+    } catch {
+      return false
+    }
+  })
+}
+
 // Browser RPC reality: some providers (or API keys) block browser `fetch` via CORS / allowlists.
 // Use a fallback list so reads don't hard-fail when a single endpoint is unreachable.
 const BASE_READ_RPC_URLS = uniqueNonEmptyStrings(
@@ -140,12 +163,23 @@ function buildConnectors() {
       appName: 'Creator Vaults',
       preference: 'smartWalletOnly',
     }),
+    metaMask(),
+    injected({
+      target: {
+        id: 'rabby',
+        name: 'Rabby',
+        provider(window) {
+          return findNamedInjectedProvider(window, (provider) => provider?.isRabby === true)
+        },
+      },
+      shimDisconnect: true,
+    }),
   ] as const
 
   // Some wallet extensions install a getter-only `window.ethereum`, which causes
   // other extensions to throw during provider injection. Avoid injected connector
   // in that state (or when multiple injected providers conflict); users can still
-  // connect via Coinbase Wallet.
+  // connect via Coinbase Wallet / Base app, MetaMask, or targeted connectors like Rabby.
   const providerCollision = detectEthereumProviderCollision()
   const shouldUseInjected = ENABLE_INJECTED_CONNECTOR && !providerCollision.shouldDisableInjectedConnector
   if (!shouldUseInjected) return baseConnectors as any

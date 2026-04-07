@@ -1,14 +1,20 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
-import { useAccount, useSwitchChain, useWalletClient } from 'wagmi'
+import { Link } from 'react-router-dom'
+import { useActiveWallet, useConnectWallet, useCrossAppAccounts, useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
+import { createWalletClient, custom, type Address } from 'viem'
+import { base } from 'viem/chains'
+import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 
 import { apiFetch } from '@/lib/apiBase'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
-import { performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
+import { performZoraCrossAppAuth, isUnauthorizedCrossAppLinkError } from '@/lib/privy/zoraCrossApp'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { isTelegramMiniAppContext, readPrivyTelegramLaunchParams } from '@/lib/telegramWebApp'
+import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
+import { buildZoraHandoffUrl } from '@/lib/zora/referrals'
+import { checkEoaOwnershipOfCsw } from '@/wallet/accountContext/ownership'
 import {
   type ApiEnvelope,
   type OwnerDelegationFlags,
@@ -54,11 +60,38 @@ type ZoraResolveResponse = {
   zoraHandle: string | null
 }
 
+type SmartWalletOwnersResponse = {
+  smartWallet: `0x${string}`
+  ownerCount: number
+  nextOwnerIndex: number | null
+  owners: Array<{
+    index: number
+    ownerBytes: `0x${string}`
+    ownerAddress: `0x${string}` | null
+    isAddressOwner: boolean
+  }>
+}
+
 
 type ProviderRow = {
   provider: AccountLinkProvider
   label: string
   hint: string
+}
+
+type OwnerAuthorityState = {
+  phase:
+    | 'blocked'
+    | 'canonical_wallet'
+    | 'owner_connected'
+    | 'needs_base'
+    | 'check_wallet'
+    | 'wrong_wallet'
+    | 'needs_wallet'
+  label: string
+  hint: string
+  detail: string
+  badgeClass: string
 }
 
 const PROVIDER_ROWS: ProviderRow[] = [
@@ -81,6 +114,95 @@ function shortValue(value: string | null | undefined): string {
   if (!value) return '—'
   if (value.length <= 18) return value
   return `${value.slice(0, 8)}...${value.slice(-6)}`
+}
+
+function hasResolvedZoraSignals(data: ZoraResolveResponse | null | undefined): boolean {
+  return Boolean(data?.canonicalCswAddress || data?.creatorCoin?.address || data?.zoraHandle)
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function isMobileWalletEnvironment(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const userAgent = navigator.userAgent || ''
+  return /android|iphone|ipad|ipod|mobile/i.test(userAgent)
+}
+
+function deriveOwnerAuthorityState(input: {
+  canonicalCswAddress: string | null
+  connectedAddress: string | null | undefined
+  connectedCanonicalWalletSelected: boolean
+  connectedOwnerState: { value: boolean | null; reason: 'idle' | 'ok' | 'network_mismatch' | 'missing_params' | 'read_failed' }
+}): OwnerAuthorityState {
+  if (!input.canonicalCswAddress) {
+    return {
+      phase: 'blocked',
+      label: 'Blocked',
+      hint: 'Detect your canonical CSW first.',
+      detail: 'We cannot verify signer authority until the Coinbase Smart Wallet is known.',
+      badgeClass: 'border border-white/10 bg-white/5 text-zinc-400',
+    }
+  }
+
+  if (input.connectedCanonicalWalletSelected) {
+    return {
+      phase: 'canonical_wallet',
+      label: 'Canonical wallet',
+      hint: `Same wallet detected: ${shortValue(input.connectedAddress)}`,
+      detail: 'This is the same Coinbase Smart Wallet detected from Zora/Base. It can approve the add-owner transaction directly.',
+      badgeClass: 'border border-brand-primary/30 bg-brand-primary/10 text-brand-200',
+    }
+  }
+
+  if (input.connectedOwnerState.value === true) {
+    return {
+      phase: 'owner_connected',
+      label: 'Owner connected',
+      hint: `Ready to approve with ${shortValue(input.connectedAddress)}`,
+      detail: 'This wallet is already one of the current CSW owners and can approve the add-owner transaction.',
+      badgeClass: 'border border-emerald-400/20 bg-emerald-500/10 text-emerald-200',
+    }
+  }
+
+  if (input.connectedOwnerState.reason === 'network_mismatch') {
+    return {
+      phase: 'needs_base',
+      label: 'Base required',
+      hint: 'Switch the connected wallet to Base and retry the owner check.',
+      detail: 'Your signer must be connected on Base before 4626 can verify owner authority.',
+      badgeClass: 'border border-amber-400/20 bg-amber-500/10 text-amber-200',
+    }
+  }
+
+  if (input.connectedOwnerState.reason === 'read_failed') {
+    return {
+      phase: 'check_wallet',
+      label: 'Check wallet',
+      hint: 'We could not verify owner status from the connected wallet. Reconnect the owner wallet and retry.',
+      detail: 'The owner read failed or the wallet provider did not answer the owner check cleanly.',
+      badgeClass: 'border border-orange-400/20 bg-orange-500/10 text-orange-200',
+    }
+  }
+
+  if (input.connectedAddress) {
+    return {
+      phase: 'wrong_wallet',
+      label: 'Connect owner',
+      hint: `Connected wallet ${shortValue(input.connectedAddress)} is not one of the current owners of this CSW.`,
+      detail: 'Switch to one of the listed owner addresses below, then retry the approval step.',
+      badgeClass: 'border border-rose-400/20 bg-rose-500/10 text-rose-200',
+    }
+  }
+
+  return {
+    phase: 'needs_wallet',
+    label: 'Wallet required',
+    hint: 'Connect a wallet that is already an owner of your existing Coinbase Smart Wallet.',
+    detail: 'Once a current owner is connected, 4626 can prepare one Base approval transaction.',
+    badgeClass: 'border border-white/10 bg-white/5 text-zinc-400',
+  }
 }
 
 export function shouldRefreshAccountsOnForeground(input: {
@@ -136,6 +258,63 @@ function useSafeCrossApp() {
   }
 }
 
+function useSafeConnectWallet() {
+  try {
+    return useConnectWallet() as any
+  } catch {
+    return { connectWallet: () => {} } as any
+  }
+}
+
+function useSafeWallets() {
+  try {
+    return useWallets() as any
+  } catch {
+    return { wallets: [], ready: false } as any
+  }
+}
+
+function useSafeActiveWallet() {
+  try {
+    return useActiveWallet() as any
+  } catch {
+    return { wallet: undefined, setActiveWallet: () => {} } as any
+  }
+}
+
+function parseChainId(value: string | number | null | undefined): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  if (trimmed.includes(':')) {
+    const [, suffix] = trimmed.split(':')
+    const parsed = Number(suffix)
+    return Number.isFinite(parsed) ? parsed : null
+  }
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) ? parsed : null
+}
+
+function isPrivyExternalEthereumWallet(wallet: any): boolean {
+  if (!wallet || wallet.type !== 'ethereum') return false
+  const walletClientType = String(wallet.walletClientType ?? '').toLowerCase()
+  return walletClientType !== 'privy' && walletClientType !== 'privy-v2'
+}
+
+async function getPrivyEthereumProvider(wallet: any): Promise<any | null> {
+  if (!wallet) return null
+  if (wallet?.provider && typeof wallet.provider.request === 'function') return wallet.provider
+  if (typeof wallet.getEthereumProvider === 'function') {
+    const provider = await wallet.getEthereumProvider().catch(() => null)
+    if (provider && typeof provider.request === 'function') return provider
+  }
+  if (typeof wallet.request === 'function') {
+    return { request: wallet.request.bind(wallet) }
+  }
+  return null
+}
+
 function selectLinkedValues(me: AccountsMeResponse | null, provider: AccountLinkProvider): string[] {
   if (!me) return []
   return Array.isArray(me.linkedMethods?.[provider]) ? me.linkedMethods[provider] : []
@@ -161,8 +340,12 @@ export function AccountsPage(props: {
   const privy = useSafePrivy()
   const { login } = useSafeLogin()
   const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossApp()
+  const { connectWallet } = useSafeConnectWallet()
+  const { wallets: privyWallets } = useSafeWallets()
+  const { wallet: activePrivyWallet } = useSafeActiveWallet()
+  const publicClient = usePublicClient()
   const { data: walletClient } = useWalletClient()
-  const { chainId } = useAccount()
+  const { address: connectedAddress, chainId } = useAccount()
   const { switchChainAsync } = useSwitchChain()
   const { ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
 
@@ -186,11 +369,39 @@ export function AccountsPage(props: {
   const [advancedBusy, setAdvancedBusy] = useState(false)
   const [advancedOwnerAddress, setAdvancedOwnerAddress] = useState('')
   const [ownerDelegationFlags, setOwnerDelegationFlags] = useState<OwnerDelegationFlags | null>(null)
+  const [connectedOwnerState, setConnectedOwnerState] = useState<{
+    value: boolean | null
+    reason: 'idle' | 'ok' | 'network_mismatch' | 'missing_params' | 'read_failed'
+  }>({ value: null, reason: 'idle' })
+  const [cswOwnersState, setCswOwnersState] = useState<{
+    status: 'idle' | 'loading' | 'ready' | 'error'
+    owners: SmartWalletOwnersResponse['owners']
+    error: string | null
+  }>({ status: 'idle', owners: [], error: null })
 
   const canonicalCswAddress = me?.accountSignals?.canonicalCswAddress ?? null
   const zoraLinked = Boolean(zoraStatus?.zoraLinked || me?.accountSignals?.linked)
   const telegramLaunchParamsAvailable = useMemo(() => Boolean(readPrivyTelegramLaunchParams()?.initDataRaw), [])
   const inTelegramMiniApp = useMemo(() => isTelegramMiniAppContext(), [])
+  const prefersWalletConnectQr = useMemo(() => !isMobileWalletEnvironment(), [])
+  const activeExternalOwnerWallet = useMemo(() => {
+    if (isPrivyExternalEthereumWallet(activePrivyWallet)) return activePrivyWallet
+    const externalWallets = Array.isArray(privyWallets) ? privyWallets.filter(isPrivyExternalEthereumWallet) : []
+    if (externalWallets.length === 0) return null
+    return (
+      externalWallets
+        .slice()
+        .sort((a: any, b: any) => Number(b?.connectedAt ?? 0) - Number(a?.connectedAt ?? 0))[0] ?? null
+    )
+  }, [activePrivyWallet, privyWallets])
+  const ownerSignerAddress = activeExternalOwnerWallet?.address ?? connectedAddress ?? null
+  const ownerSignerChainId =
+    parseChainId(activeExternalOwnerWallet?.chainId) ?? (typeof chainId === 'number' ? chainId : null)
+  const connectedCanonicalWalletSelected = Boolean(
+    canonicalCswAddress &&
+      ownerSignerAddress &&
+      canonicalCswAddress.toLowerCase() === ownerSignerAddress.toLowerCase(),
+  )
 
   const authHeaders = useCallback(
     async (): Promise<Record<string, string>> => {
@@ -282,6 +493,82 @@ export function AccountsPage(props: {
     }
   }, [advancedBusy, loadMe, ownerDelegationFlags, privyAuthed])
 
+  useEffect(() => {
+    let cancelled = false
+
+    if (!canonicalCswAddress) {
+      setConnectedOwnerState({ value: null, reason: 'idle' })
+      return
+    }
+
+    if (connectedCanonicalWalletSelected) {
+      setConnectedOwnerState({ value: true, reason: 'ok' })
+      return
+    }
+
+    const run = async () => {
+      const result = await checkEoaOwnershipOfCsw({
+        publicClient,
+        chainId: ownerSignerChainId,
+        cswAddress: canonicalCswAddress,
+        ownerAddress: ownerSignerAddress ?? null,
+      })
+      if (cancelled) return
+      setConnectedOwnerState(result)
+    }
+
+    void run()
+    return () => {
+      cancelled = true
+    }
+  }, [canonicalCswAddress, connectedCanonicalWalletSelected, ownerSignerAddress, ownerSignerChainId, publicClient])
+
+  useEffect(() => {
+    let cancelled = false
+
+    if (!canonicalCswAddress) {
+      setCswOwnersState({ status: 'idle', owners: [], error: null })
+      return
+    }
+
+    setCswOwnersState((current) => ({ status: 'loading', owners: current.owners, error: null }))
+
+    const run = async () => {
+      try {
+        const res = await apiFetch('/api/deploy/smartWalletOwners', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ smartWallet: canonicalCswAddress }),
+        })
+        const payload = (await res.json().catch(() => null)) as ApiEnvelope<SmartWalletOwnersResponse> | null
+        if (!res.ok || !payload?.success || !payload.data) {
+          throw new Error(readApiError(payload, 'Failed to load current smart wallet owners.'))
+        }
+        if (cancelled) return
+        setCswOwnersState({
+          status: 'ready',
+          owners: Array.isArray(payload.data.owners) ? payload.data.owners : [],
+          error: null,
+        })
+      } catch (ownerListError: any) {
+        if (cancelled) return
+        setCswOwnersState({
+          status: 'error',
+          owners: [],
+          error:
+            typeof ownerListError?.message === 'string'
+              ? ownerListError.message
+              : 'Failed to load current smart wallet owners.',
+        })
+      }
+    }
+
+    void run()
+    return () => {
+      cancelled = true
+    }
+  }, [canonicalCswAddress])
+
   const performClientSideLink = useCallback(
     async (provider: AccountLinkProvider) => {
       if (provider === 'zora_cross_app') {
@@ -358,6 +645,21 @@ export function AccountsPage(props: {
     await maybeCallMethod(privy, unlinkMethods[provider], value ? [{ value }] : [])
   }, [privy])
 
+  const connectOwnerWallet = useCallback(() => {
+    setError(null)
+    setNotice(null)
+    connectWallet({
+      walletList: [
+        'metamask',
+        'coinbase_wallet',
+        'detected_ethereum_wallets',
+        prefersWalletConnectQr ? 'wallet_connect_qr' : 'wallet_connect',
+      ],
+      walletChainType: 'ethereum-only',
+      description: 'Connect one of the current owners of your Coinbase Smart Wallet on Base to approve the 4626 owner install.',
+    })
+  }, [connectWallet, prefersWalletConnectQr])
+
   const callLinkEndpoint = useCallback(
     async (provider: AccountLinkProvider, value?: string | null) => {
       const headers = await authHeaders()
@@ -401,7 +703,33 @@ export function AccountsPage(props: {
     setNotice(null)
     try {
       await performClientSideLink(provider)
-      await callLinkEndpoint(provider)
+      if (provider === 'external_eoa') {
+        let linked = false
+        let lastError: Error | null = null
+        for (let attempt = 0; attempt < 4; attempt += 1) {
+          try {
+            await callLinkEndpoint(provider)
+            linked = true
+            break
+          } catch (linkError: any) {
+            const message = typeof linkError?.message === 'string' ? linkError.message : ''
+            if (!/No linked value found for provider "external_eoa"\./i.test(message)) {
+              throw linkError
+            }
+            lastError = linkError instanceof Error ? linkError : new Error(message)
+            await sleep(500)
+          }
+        }
+        if (!linked) {
+          await loadMe()
+          throw (
+            lastError ??
+            new Error('No external owner wallet was linked in Privy yet. Connect a real Base wallet and retry.')
+          )
+        }
+      } else {
+        await callLinkEndpoint(provider)
+      }
       await loadMe()
     } catch (linkError: any) {
       setError(typeof linkError?.message === 'string' ? linkError.message : `Failed to link ${provider}.`)
@@ -432,24 +760,49 @@ export function AccountsPage(props: {
     setError(null)
     setNotice(null)
     try {
+      const headers = await authHeaders()
+      const resolveSignals = async () => {
+        const resolveRes = await apiFetch('/api/zora/resolve', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({}),
+        })
+        const resolvePayload = (await resolveRes.json().catch(() => null)) as ApiEnvelope<ZoraResolveResponse> | null
+        if (!resolveRes.ok || !resolvePayload?.success || !resolvePayload.data) {
+          const resolveError = new Error(readApiError(resolvePayload, 'Failed to resolve Zora signals.')) as Error & {
+            status?: number
+          }
+          resolveError.status = resolveRes.status
+          throw resolveError
+        }
+        return resolvePayload.data
+      }
+
+      const existingSignals = await resolveSignals()
+      if (hasResolvedZoraSignals(existingSignals)) {
+        setNotice('Zora signals were detected from your current account. Cross-app login was not needed.')
+        await loadMe()
+        return
+      }
+
       await performClientSideLink('zora_cross_app')
       await callLinkEndpoint('zora_cross_app')
-
-      const headers = await authHeaders()
-      const resolveRes = await apiFetch('/api/zora/resolve', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({}),
-      })
-      const resolvePayload = (await resolveRes.json().catch(() => null)) as ApiEnvelope<ZoraResolveResponse> | null
-      if (!resolveRes.ok || !resolvePayload?.success || !resolvePayload.data) {
-        throw new Error(readApiError(resolvePayload, 'Failed to resolve Zora signals.'))
-      }
-      setNotice('Zora linked and signals resolved.')
+      const resolvedSignals = await resolveSignals()
+      setNotice(
+        hasResolvedZoraSignals(resolvedSignals)
+          ? 'Zora linked and signals resolved.'
+          : 'Zora linked. Open Zora once if needed, then refresh signals here.',
+      )
       await loadMe()
     } catch (zoraError: any) {
       if (isPrivyRedirectUrlNotAllowedError(zoraError)) {
         setError('Privy redirect URL is not allowed for this origin. Add this app URL in Privy settings and retry.')
+      } else if (
+        isUnauthorizedCrossAppLinkError(zoraError) ||
+        Number(zoraError?.status) === 401 ||
+        String(zoraError?.message ?? '').toLowerCase().includes('oauth/init')
+      ) {
+        setError('Privy cross-app Zora auth is unavailable right now. Open Zora, confirm your wallet there, then return here and use Refresh Zora signals.')
       } else {
         setError(typeof zoraError?.message === 'string' ? zoraError.message : 'Failed to link Zora.')
       }
@@ -484,16 +837,37 @@ export function AccountsPage(props: {
 
   const sendPreparedOwnerTx = useCallback(
     async (txRequest: { chainId: 8453; to: `0x${string}`; data: `0x${string}`; value: '0x0' }, ownerAddress?: string | null) => {
+      let effectiveWalletClient = walletClient
+      let effectiveChainId = chainId
+      let effectiveSwitchChain = switchChainAsync
+
+      if (activeExternalOwnerWallet && ownerSignerAddress) {
+        const provider = await getPrivyEthereumProvider(activeExternalOwnerWallet)
+        if (!provider?.request) {
+          throw new Error('Connected owner wallet signer is unavailable. Reconnect the wallet and retry.')
+        }
+        effectiveWalletClient = createWalletClient({
+          account: ownerSignerAddress as Address,
+          chain: base,
+          transport: custom(provider),
+        }) as any
+        effectiveChainId = parseChainId(activeExternalOwnerWallet.chainId) ?? effectiveChainId
+        effectiveSwitchChain =
+          typeof activeExternalOwnerWallet.switchChain === 'function'
+            ? ({ chainId: targetChainId }: { chainId: number }) => activeExternalOwnerWallet.switchChain(targetChainId)
+            : switchChainAsync
+      }
+
       await submitPreparedOwnerTx({
         txRequest,
-        walletClient,
-        chainId,
-        switchChainAsync,
+        walletClient: effectiveWalletClient,
+        chainId: typeof effectiveChainId === 'number' ? effectiveChainId : undefined,
+        switchChainAsync: effectiveSwitchChain,
         authHeaders,
         ownerAddress,
       })
     },
-    [authHeaders, chainId, switchChainAsync, walletClient],
+    [activeExternalOwnerWallet, authHeaders, chainId, ownerSignerAddress, switchChainAsync, walletClient],
   )
 
   const onEnable4626Signing = useCallback(async () => {
@@ -503,6 +877,24 @@ export function AccountsPage(props: {
     setNotice(null)
     setOwnerDelegationFlags(null)
     try {
+      const ownerCheck = await checkEoaOwnershipOfCsw({
+        publicClient,
+        chainId: ownerSignerChainId,
+        cswAddress: canonicalCswAddress,
+        ownerAddress: connectedCanonicalWalletSelected ? canonicalCswAddress : ownerSignerAddress ?? null,
+      })
+      const effectiveOwnerCheck = connectedCanonicalWalletSelected ? { value: true, reason: 'ok' as const } : ownerCheck
+      setConnectedOwnerState(effectiveOwnerCheck)
+      if (effectiveOwnerCheck.value !== true) {
+        if (ownerCheck.reason === 'network_mismatch') {
+          throw new Error('Switch the connected wallet to Base, then retry owner approval.')
+        }
+        if (ownerSignerAddress) {
+          throw new Error('Connected wallet is not a current owner of your Coinbase Smart Wallet. Connect an existing owner and retry.')
+        }
+        throw new Error('Connect a wallet that is already an owner of your Coinbase Smart Wallet before enabling 4626 signing.')
+      }
+
       const headers = await authHeaders()
       let preflightRes = await apiFetch('/api/onboarding/bootstrap', {
         method: 'POST',
@@ -539,7 +931,10 @@ export function AccountsPage(props: {
         setNotice('4626 signing is already enabled.')
         return
       }
-      await sendPreparedOwnerTx(preparePayload.data.txRequest, null)
+      await sendPreparedOwnerTx(
+        preparePayload.data.txRequest,
+        connectedCanonicalWalletSelected ? null : ownerSignerAddress ?? null,
+      )
       setNotice('4626 signing is enabled on your canonical CSW.')
       await loadMe()
     } catch (ownerError: any) {
@@ -555,7 +950,7 @@ export function AccountsPage(props: {
     } finally {
       setAdvancedBusy(false)
     }
-  }, [authHeaders, canonicalCswAddress, ensureEmbeddedWallet, loadMe, sendPreparedOwnerTx])
+  }, [authHeaders, canonicalCswAddress, connectedCanonicalWalletSelected, ensureEmbeddedWallet, loadMe, ownerSignerAddress, ownerSignerChainId, publicClient, sendPreparedOwnerTx])
 
   const onAddRabbyCoOwner = useCallback(async () => {
     const normalized = normalizeAddress(advancedOwnerAddress)
@@ -620,6 +1015,70 @@ export function AccountsPage(props: {
 
   const zoraCrossAppCount = zoraStatus?.zoraCrossAppAccounts?.length ?? 0
   const canShowAdvanced = Boolean(canonicalCswAddress)
+  const baseAppUrl = ownerDelegationFlags?.baseAppUrl ?? null
+  const needsBaseAppSetup = Boolean(ownerDelegationFlags?.needsBaseAppSetup)
+  const needsEmbeddedWallet = Boolean(ownerDelegationFlags?.needsEmbeddedWallet)
+  const zoraHandoffUrl = useMemo(() => buildZoraHandoffUrl({ returnPath: '/accounts', context: 'signup' }), [])
+  const connectedOwnerReady = connectedOwnerState.value === true
+  const signerClientReady = Boolean(walletClient?.account && typeof walletClient?.sendTransaction === 'function')
+  const privySignerClientReady = Boolean(activeExternalOwnerWallet && ownerSignerAddress)
+  const ownerApprovalReady = connectedOwnerReady && (signerClientReady || privySignerClientReady) && !needsEmbeddedWallet
+  const ownerAuthorityState = useMemo(
+    () =>
+      deriveOwnerAuthorityState({
+        canonicalCswAddress,
+        connectedAddress: ownerSignerAddress,
+        connectedCanonicalWalletSelected,
+        connectedOwnerState,
+      }),
+    [canonicalCswAddress, ownerSignerAddress, connectedCanonicalWalletSelected, connectedOwnerState],
+  )
+  const connectedSignerLabel = ownerSignerAddress ? shortValue(ownerSignerAddress) : 'No wallet connected'
+  const connectedSignerDetail = ownerApprovalReady
+    ? ownerAuthorityState.detail
+    : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
+      ? 'Wallet connection is still finishing. Wait for the signer session to hydrate before approving the Base transaction.'
+      : ownerAuthorityState.detail
+  const readableCswOwners = useMemo(
+    () => cswOwnersState.owners.filter((owner) => owner.ownerAddress),
+    [cswOwnersState.owners],
+  )
+  const providerCollision = useMemo(() => detectEthereumProviderCollision(), [])
+  const journeyBadgeClass =
+    'inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] tracking-[0.08em] uppercase'
+  const ownerChecklist = useMemo(
+    () => [
+      {
+        title: 'Connect owner',
+        description: ownerSignerAddress
+          ? `Wallet ${shortValue(ownerSignerAddress)} is connected.`
+          : 'Connect one of the current CSW owners.',
+        state: ownerSignerAddress ? 'complete' : 'active',
+      },
+      {
+        title: 'Verify authority',
+        description: ownerAuthorityState.hint,
+        state: connectedOwnerReady ? 'complete' : ownerSignerAddress ? 'active' : 'blocked',
+      },
+      {
+        title: 'Approve on Base',
+        description: ownerApprovalReady
+          ? '4626 can now add its embedded owner through one Base transaction.'
+          : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
+            ? 'Wait for the signer client to finish hydrating, then approve.'
+            : 'Approval unlocks after a current owner is connected and verified.',
+        state: ownerApprovalReady ? 'complete' : connectedOwnerReady ? 'active' : 'blocked',
+      },
+    ],
+    [connectedOwnerReady, ownerApprovalReady, ownerAuthorityState.hint, ownerSignerAddress, privySignerClientReady, signerClientReady],
+  )
+  const ownerPrimaryCtaLabel = ownerApprovalReady
+    ? 'Approve 4626 on this wallet'
+    : needsEmbeddedWallet
+      ? 'Provisioning embedded wallet…'
+      : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
+        ? 'Finishing wallet session…'
+        : 'Owner approval required'
 
   const providerCards = useMemo(() => {
     return PROVIDER_ROWS.map((row) => {
@@ -638,9 +1097,9 @@ export function AccountsPage(props: {
       <div className="mx-auto w-full max-w-4xl px-6 py-10 space-y-6">
         <div className="space-y-2">
           <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Accounts</div>
-          <h1 className="text-3xl font-semibold">Identity management</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Workspace</h1>
           <p className="text-sm text-zinc-400">
-            Accounts is the canonical place to link identities, refresh optional Zora profile signals, and manage your canonical Coinbase Smart Wallet.
+            Start with Zora. If you already use a Coinbase Smart Wallet there, 4626 keeps that wallet as the primary surface and adds 4626 as an owner so you can continue with the same account.
           </p>
         </div>
 
@@ -680,24 +1139,340 @@ export function AccountsPage(props: {
 
         {!loading && privyAuthed && me ? (
           <>
-            <section className="card rounded-2xl border border-white/10 bg-black/40 p-6 space-y-3">
-              <h2 className="text-lg font-medium">Notifications</h2>
-              <div className="text-sm text-zinc-300">
-                <div>Email: <span className="text-zinc-100">{me.email ?? 'Not linked'}</span></div>
-                <div>Verified: <span className="text-zinc-100">{me.emailVerified ? 'Yes' : 'No'}</span></div>
+            <section className="overflow-hidden rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.16),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] p-6 sm:p-8">
+              <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.95fr)]">
+                <div className="space-y-5">
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                      <span className={`${journeyBadgeClass} border-brand-primary/30 bg-brand-primary/10 text-brand-200`}>
+                        Zora first
+                      </span>
+                      <span className={`${journeyBadgeClass} border-white/10 bg-white/5 text-zinc-400`}>
+                        Existing CSW stays primary
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-[2rem]">
+                        Bring your Zora smart wallet into 4626
+                      </h2>
+                      <p className="max-w-2xl text-sm leading-relaxed text-zinc-300">
+                        We are not trying to replace the wallet you already use on Zora. The preferred path is to link your Zora account, detect the Coinbase Smart Wallet that already represents you, and then add the 4626 owner so the same wallet can operate here.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3">
+                    <div className="rounded-2xl border border-brand-primary/20 bg-black/30 p-4 sm:p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1.5">
+                          <div className="text-[11px] uppercase tracking-[0.18em] text-brand-200">Step 1</div>
+                          <div className="text-base font-medium text-white">Link your Zora identity</div>
+                          <p className="text-sm leading-relaxed text-zinc-400">
+                            Zora is the first pick because it gives us the cleanest path to your existing creator identity and canonical smart wallet.
+                          </p>
+                        </div>
+                        <div className={`rounded-full px-2.5 py-1 text-xs ${
+                          zoraLinked ? 'border border-emerald-400/20 bg-emerald-500/10 text-emerald-200' : 'border border-white/10 bg-white/5 text-zinc-400'
+                        }`}>
+                          {zoraLinked ? 'Linked' : 'Action required'}
+                        </div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap items-center gap-2">
+                        {!zoraLinked ? (
+                          <button
+                            type="button"
+                            disabled={busyProvider === 'zora_cross_app'}
+                            onClick={() => void onLinkZora()}
+                            className="btn-accent btn-no-icon inline-flex"
+                          >
+                            {busyProvider === 'zora_cross_app' ? 'Linking…' : 'Link Zora'}
+                          </button>
+                        ) : null}
+                        <a
+                          href={zoraHandoffUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="btn-secondary btn-no-icon inline-flex"
+                        >
+                          Open Zora
+                        </a>
+                        <button
+                          type="button"
+                          disabled={busyProvider === 'zora_cross_app'}
+                          onClick={() => void onRefreshZora()}
+                          className="btn-secondary btn-no-icon inline-flex"
+                        >
+                          {busyProvider === 'zora_cross_app' ? 'Refreshing…' : 'Refresh Zora signals'}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1.5">
+                          <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Step 2</div>
+                          <div className="text-base font-medium text-white">Detect your Coinbase Smart Wallet</div>
+                          <p className="text-sm leading-relaxed text-zinc-400">
+                            If Base app already knows your CSW, we keep using it. If not, finish setup there first, then come back here.
+                          </p>
+                        </div>
+                        <div className={`rounded-full px-2.5 py-1 text-xs ${
+                          canonicalCswAddress ? 'border border-emerald-400/20 bg-emerald-500/10 text-emerald-200' : 'border border-white/10 bg-white/5 text-zinc-400'
+                        }`}>
+                          {canonicalCswAddress ? 'Detected' : needsBaseAppSetup ? 'Base app required' : 'Waiting'}
+                        </div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-zinc-300">
+                        <span className="text-zinc-500">Canonical CSW</span>
+                        <span className="font-mono text-zinc-100">{shortValue(me.accountSignals.canonicalCswAddress)}</span>
+                      </div>
+                      {needsBaseAppSetup && baseAppUrl ? (
+                        <div className="mt-4 flex flex-wrap items-center gap-3">
+                          <a
+                            href={baseAppUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="btn-secondary btn-no-icon inline-flex"
+                          >
+                            Open Base app
+                          </a>
+                          <span className="text-xs text-zinc-500">
+                            Create or connect your CSW there, then return here.
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5">
+                      <div className="flex flex-wrap items-start justify-between gap-3">
+                        <div className="space-y-1.5">
+                          <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Step 3</div>
+                          <div className="text-base font-medium text-white">Enable 4626 signing on that wallet</div>
+                          <p className="text-sm leading-relaxed text-zinc-400">
+                            This adds the 4626 Privy embedded owner to your existing CSW. Your wallet stays primary; 4626 just gets permission to act through it.
+                          </p>
+                        </div>
+                        <div className={`rounded-full px-2.5 py-1 text-xs ${
+                          ownerApprovalReady
+                            ? 'border border-brand-primary/30 bg-brand-primary/10 text-brand-200'
+                            : ownerAuthorityState.badgeClass
+                        }`}>
+                          {canonicalCswAddress ? ownerPrimaryCtaLabel : 'Blocked'}
+                        </div>
+                      </div>
+                      <div className="mt-4 grid gap-2 md:grid-cols-3">
+                        {ownerChecklist.map((step) => (
+                          <div
+                            key={step.title}
+                            className={`rounded-xl border px-3 py-3 ${
+                              step.state === 'complete'
+                                ? 'border-emerald-400/20 bg-emerald-500/10'
+                                : step.state === 'active'
+                                  ? 'border-brand-primary/20 bg-brand-primary/10'
+                                  : 'border-white/8 bg-black/20'
+                            }`}
+                          >
+                            <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">{step.title}</div>
+                            <div className="mt-1 text-sm font-medium text-white">
+                              {step.state === 'complete'
+                                ? 'Complete'
+                                : step.state === 'active'
+                                  ? 'In progress'
+                                  : 'Waiting'}
+                            </div>
+                            <div className="mt-1 text-xs leading-relaxed text-zinc-400">{step.description}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-4 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3 text-xs text-zinc-300">
+                        <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Owner authority</div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <span className="text-sm text-zinc-100">{ownerAuthorityState.hint}</span>
+                          <span className={`rounded-full px-2.5 py-1 text-[11px] ${ownerAuthorityState.badgeClass}`}>
+                            {ownerAuthorityState.label}
+                          </span>
+                        </div>
+                        <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-white/8 bg-black/25 px-3 py-2">
+                          <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Connected signer</div>
+                          <div className="font-mono text-sm text-zinc-100">{connectedSignerLabel}</div>
+                          <div className="text-xs text-zinc-500">{connectedSignerDetail}</div>
+                        </div>
+                        <div className="mt-3 rounded-xl border border-white/8 bg-black/25 px-3 py-3">
+                          <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Current owners</div>
+                          {cswOwnersState.status === 'loading' ? (
+                            <div className="mt-2 text-xs text-zinc-500">Loading current CSW owners…</div>
+                          ) : null}
+                          {cswOwnersState.status === 'error' ? (
+                            <div className="mt-2 text-xs text-rose-300">{cswOwnersState.error ?? 'Failed to load owner list.'}</div>
+                          ) : null}
+                          {cswOwnersState.status !== 'error' && readableCswOwners.length > 0 ? (
+                            <div className="mt-2 flex flex-wrap gap-2">
+                              {readableCswOwners.map((owner) => {
+                                const isConnectedOwner =
+                                  Boolean(owner.ownerAddress && ownerSignerAddress) &&
+                                  owner.ownerAddress!.toLowerCase() === ownerSignerAddress!.toLowerCase()
+                                return (
+                                  <span
+                                    key={`${owner.index}:${owner.ownerAddress}`}
+                                    className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] ${
+                                      isConnectedOwner
+                                        ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200'
+                                        : 'border-white/10 bg-white/5 text-zinc-300'
+                                    }`}
+                                  >
+                                    <span className="font-mono">{shortValue(owner.ownerAddress)}</span>
+                                    {isConnectedOwner ? <span>Connected</span> : null}
+                                  </span>
+                                )
+                              })}
+                            </div>
+                          ) : null}
+                          {cswOwnersState.status === 'ready' && readableCswOwners.length === 0 ? (
+                            <div className="mt-2 text-xs text-zinc-500">No readable EOA owners were returned for this CSW.</div>
+                          ) : null}
+                        </div>
+                      </div>
+                      {needsEmbeddedWallet ? (
+                        <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                          Privy embedded wallet provisioning is still settling. Retry signer setup in a moment.
+                        </div>
+                      ) : null}
+                      {inTelegramMiniApp ? (
+                        <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                          Complete owner-wallet signatures from an external browser tab if you are using MetaMask or Rabby.
+                        </div>
+                      ) : null}
+                      <div className="mt-4 flex flex-wrap items-center gap-3">
+                        {!connectedOwnerReady ? (
+                          <button
+                            type="button"
+                            onClick={() => connectOwnerWallet()}
+                            className="btn-secondary btn-no-icon inline-flex"
+                          >
+                            Connect owner wallet
+                          </button>
+                        ) : null}
+                        <button
+                          type="button"
+                          disabled={advancedBusy || !canonicalCswAddress || !ownerApprovalReady}
+                          onClick={() => void onEnable4626Signing()}
+                          className="btn-primary btn-no-icon inline-flex"
+                        >
+                          {advancedBusy ? 'Preparing…' : ownerPrimaryCtaLabel}
+                        </button>
+                        {!connectedOwnerReady ? (
+                          <button
+                            type="button"
+                            disabled={advancedBusy}
+                            onClick={() => {
+                              void (async () => {
+                                const result = await checkEoaOwnershipOfCsw({
+                                  publicClient,
+                                  chainId: ownerSignerChainId,
+                                  cswAddress: canonicalCswAddress,
+                                  ownerAddress: ownerSignerAddress ?? null,
+                                })
+                                setConnectedOwnerState(result)
+                              })()
+                            }}
+                            className="rounded-lg border border-white/15 px-3 py-2 text-xs text-zinc-300 hover:border-white/30"
+                          >
+                            Retry owner check
+                          </button>
+                        ) : null}
+                        <span className="text-xs text-zinc-500">
+                          Server prepares the transaction. One of the currently installed CSW owners signs it on Base, then 4626 refreshes the account automatically.
+                        </span>
+                      </div>
+                      {!connectedOwnerReady ? (
+                        <div className="mt-3 text-xs text-zinc-500">
+                          Privy will open a wallet modal with MetaMask, Coinbase Wallet, detected browser wallets like Rabby, and WalletConnect fallback.
+                          {providerCollision.shouldDisableInjectedConnector
+                            ? ' This browser still reports an injected-provider collision, so Coinbase/Base may be the most reliable option if a browser wallet fails to answer.'
+                            : ''}
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <section className="rounded-2xl border border-white/10 bg-black/35 p-5 space-y-4">
+                    <div className="space-y-1">
+                      <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Account summary</div>
+                      <h3 className="text-lg font-medium text-white">Current state</h3>
+                    </div>
+                    <div className="grid gap-3 text-sm">
+                      <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3">
+                        <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Email</div>
+                        <div className="mt-1 text-zinc-100">{me.email ?? 'Not linked'}</div>
+                        <div className="mt-1 text-xs text-zinc-500">{me.emailVerified ? 'Verified and canonical' : 'Needs verification'}</div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3">
+                          <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Points</div>
+                          <div className="mt-1 text-xl font-semibold text-zinc-100">{me.score.points}</div>
+                        </div>
+                        <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3">
+                          <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Tier</div>
+                          <div className="mt-1 text-xl font-semibold text-zinc-100">{me.score.tier}</div>
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3 space-y-2">
+                        <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Signals</div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-zinc-500">Zora handle</span>
+                          <span className="text-zinc-100">{me.accountSignals.zoraHandle ? `@${me.accountSignals.zoraHandle}` : '—'}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-zinc-500">Creator coin</span>
+                          <span className="font-mono text-zinc-100">{shortValue(me.accountSignals.creatorCoin?.address)}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="text-zinc-500">Cross-app accounts</span>
+                          <span className="text-zinc-100">{zoraCrossAppCount}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link to="/leaderboard" className="btn-secondary btn-no-icon inline-flex">
+                        Open leaderboard
+                      </Link>
+                      <button
+                        type="button"
+                        disabled={busyProvider === 'email'}
+                        onClick={() => void onLinkProvider('email')}
+                        className="rounded-lg border border-white/15 px-3 py-2 text-xs text-zinc-300 hover:border-white/30"
+                      >
+                        {busyProvider === 'email' ? 'Syncing…' : 'Verify / update email'}
+                      </button>
+                    </div>
+                  </section>
+
+                  <section className="rounded-2xl border border-white/10 bg-black/35 p-5 space-y-3">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Why this setup</div>
+                    <div className="space-y-2 text-sm leading-relaxed text-zinc-400">
+                      <p>
+                        4626 should operate through the wallet you already use for your creator identity, not force you into a parallel account model.
+                      </p>
+                      <p>
+                        That is why we prefer Zora first, then Base app for CSW confirmation, and only after that do we install the 4626 owner.
+                      </p>
+                    </div>
+                  </section>
+                </div>
               </div>
-              <button
-                type="button"
-                disabled={busyProvider === 'email'}
-                onClick={() => void onLinkProvider('email')}
-                className="btn-secondary btn-no-icon inline-flex"
-              >
-                {busyProvider === 'email' ? 'Syncing…' : 'Verify / update email'}
-              </button>
             </section>
 
             <section className="card rounded-2xl border border-white/10 bg-black/40 p-6 space-y-4">
-              <h2 className="text-lg font-medium">Linked identities</h2>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-medium">Linked identities</h2>
+                  <p className="mt-1 text-sm text-zinc-500">
+                    Secondary account controls live here after the primary Zora and CSW setup is done.
+                  </p>
+                </div>
+              </div>
               <div className="grid gap-3 sm:grid-cols-2">
                 {providerCards.map((provider) => (
                   <div key={provider.provider} className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">
@@ -747,27 +1522,6 @@ export function AccountsPage(props: {
                     </div>
                   </div>
                 ))}
-              </div>
-            </section>
-
-            <section className="card rounded-2xl border border-white/10 bg-black/40 p-6 space-y-4">
-              <h2 className="text-lg font-medium">Zora</h2>
-              <div className="grid gap-2 text-sm text-zinc-300">
-                <div>Zora linked: <span className="text-zinc-100">{zoraLinked ? 'Yes' : 'No'}</span></div>
-                <div>Cross-app accounts: <span className="text-zinc-100">{zoraCrossAppCount}</span></div>
-                <div>Canonical CSW: <span className="text-zinc-100">{shortValue(me.accountSignals.canonicalCswAddress)}</span></div>
-                <div>Creator coin: <span className="text-zinc-100">{shortValue(me.accountSignals.creatorCoin?.address)}</span></div>
-                <div>Zora handle: <span className="text-zinc-100">{me.accountSignals.zoraHandle ? `@${me.accountSignals.zoraHandle}` : '—'}</span></div>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                {!zoraLinked ? (
-                  <button type="button" disabled={busyProvider === 'zora_cross_app'} onClick={() => void onLinkZora()} className="btn-accent btn-no-icon inline-flex">
-                    {busyProvider === 'zora_cross_app' ? 'Linking…' : 'Link Zora'}
-                  </button>
-                ) : null}
-                <button type="button" disabled={busyProvider === 'zora_cross_app'} onClick={() => void onRefreshZora()} className="btn-secondary btn-no-icon inline-flex">
-                  {busyProvider === 'zora_cross_app' ? 'Refreshing…' : 'Refresh Zora signals'}
-                </button>
               </div>
             </section>
 
@@ -829,26 +1583,6 @@ export function AccountsPage(props: {
                           ) : null}
                         </div>
                       ) : null}
-                      <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-3">
-                        <div className="text-sm font-medium">Enable 4626 signing (add Privy embedded EOA as CSW owner)</div>
-                        <p className="text-xs text-zinc-500">
-                          Optional. Transaction is prepared server-side and sent client-side with your currently connected owner wallet.
-                        </p>
-                        {inTelegramMiniApp ? (
-                          <p className="text-xs text-amber-300/90">
-                            Tip: if your owner wallet is MetaMask or Rabby, complete this step from an external browser tab.
-                          </p>
-                        ) : null}
-                        <button
-                          type="button"
-                          disabled={advancedBusy}
-                          onClick={() => void onEnable4626Signing()}
-                          className="btn-secondary btn-no-icon inline-flex"
-                        >
-                          {advancedBusy ? 'Preparing…' : 'Enable 4626 signing'}
-                        </button>
-                      </div>
-
                       <div className="rounded-xl border border-amber-400/20 bg-amber-500/10 p-4 space-y-3">
                         <div className="text-sm font-medium text-amber-100">Add Rabby as co-owner (advanced)</div>
                         <p className="text-xs text-amber-200/80">
@@ -873,12 +1607,6 @@ export function AccountsPage(props: {
                   )}
                 </div>
               ) : null}
-            </section>
-
-            <section className="card rounded-2xl border border-white/10 bg-black/40 p-6 space-y-2">
-              <h2 className="text-lg font-medium">Score</h2>
-              <div className="text-sm text-zinc-300">Points: <span className="text-zinc-100">{me.score.points}</span></div>
-              <div className="text-sm text-zinc-300">Tier: <span className="text-zinc-100">{me.score.tier}</span></div>
             </section>
           </>
         ) : null}

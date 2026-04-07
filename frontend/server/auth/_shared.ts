@@ -273,13 +273,23 @@ export function enforceCookieSessionTrustedOrigin(req: VercelRequest, res: Verce
   const hasValidBearerSession =
     authHeader.toLowerCase().startsWith('bearer ') &&
     Boolean(readSessionToken(authHeader.slice('bearer '.length).trim()))
+  const privyTokenHeader = req.headers?.['x-privy-token']
+  const hasExplicitPrivyAuth =
+    (typeof privyTokenHeader === 'string' && privyTokenHeader.trim().length > 0) ||
+    (Array.isArray(privyTokenHeader) && privyTokenHeader.some((value) => String(value).trim().length > 0))
+  const siwaReceiptHeader = req.headers?.['x-siwa-receipt']
+  const hasExplicitSiwaReceipt =
+    (typeof siwaReceiptHeader === 'string' && siwaReceiptHeader.trim().length > 0) ||
+    (Array.isArray(siwaReceiptHeader) && siwaReceiptHeader.some((value) => String(value).trim().length > 0))
 
   const cookies = parseCookies(req)
   const cookieToken = cookies[COOKIE_SESSION]
   const hasValidCookieSession = Boolean(readSessionToken(cookieToken))
 
   // Only enforce trusted-origin checks for ambient cookie-authenticated writes.
-  if (!hasValidCookieSession || hasValidBearerSession) return false
+  // Explicit header-based auth is an intentional request and should not be
+  // downgraded into cookie-only CSRF handling.
+  if (!hasValidCookieSession || hasValidBearerSession || hasExplicitPrivyAuth || hasExplicitSiwaReceipt) return false
 
   const originHeader = typeof req.headers?.origin === 'string' ? req.headers.origin : ''
   const refererHeader = typeof req.headers?.referer === 'string' ? req.headers.referer : ''

@@ -37,6 +37,15 @@ export function resolveLoopbackOriginForCurrentWindow(input: LoopbackOriginResol
   }
 }
 
+export function isCurrentWindowUrl(target: string): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    return new URL(target, window.location.origin).href === window.location.href
+  } catch {
+    return false
+  }
+}
+
 function resolveConfiguredOrigin(rawOrigin: string): string {
   if (typeof window === 'undefined') return rawOrigin
   return resolveLoopbackOriginForCurrentWindow({
