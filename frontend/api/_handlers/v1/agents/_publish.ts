@@ -13,7 +13,7 @@ import {
   publishAgentRegistrationToGrove,
   resolveAgentRegistrationKey,
 } from '../../../../server/_lib/agentRegistrationPublisher.js'
-import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
+import { getErc8004PublicOrigin } from '../../../../server/_lib/origin.js'
 import { buildAgentUriPolicy, type AgentUriPolicy } from '../../../../src/lib/erc8004AgentUriPolicy.js'
 
 
@@ -50,13 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const body = (await readJsonBody<Body>(req)) ?? {}
   const storeOnGrove = body.storeOnGrove !== false
 
-  const origin = (() => {
-    try {
-      return getCanonicalOrigin(req)
-    } catch {
-      return 'https://4626.fun'
-    }
-  })()
+  const origin = getErc8004PublicOrigin(req)
 
   const result = buildAgentRegistration(origin)
   if (!result.payload) {

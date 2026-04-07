@@ -73,4 +73,26 @@ describe('check-agent-discoverability script', () => {
       ),
     ).toThrowError(/service-availability: Primary public endpoint responded with 503\./)
   })
+
+  it('fails with a precise error when the expected agent id does not match', () => {
+    expect(() =>
+      validateDiscoverabilityPayload(readyPayload, {
+        expectedAgentId: 9999,
+        expectedAgentRegistry: 'eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432',
+        expectReady: true,
+      }),
+    ).toThrowError('Expected agentId 9999, received 2205.')
+  })
+
+  it('fails with a precise error when the expected registry ref does not match', () => {
+    expect(() =>
+      validateDiscoverabilityPayload(readyPayload, {
+        expectedAgentId: 2205,
+        expectedAgentRegistry: 'eip155:8453:0x1111111111111111111111111111111111111111',
+        expectReady: true,
+      }),
+    ).toThrowError(
+      'Expected agentRegistry eip155:8453:0x1111111111111111111111111111111111111111, received eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432.',
+    )
+  })
 })

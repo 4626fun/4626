@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { buildAgentRegistration, type RegistrationFile } from '../server/_lib/agentRegistration.js'
-import { getCanonicalOrigin } from '../server/_lib/origin.js'
+import { getErc8004PublicOrigin } from '../server/_lib/origin.js'
 
 function setNoStore(res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store')
@@ -32,13 +32,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
   }
 
-  const origin = (() => {
-    try {
-      return getCanonicalOrigin(req)
-    } catch {
-      return 'https://4626.fun'
-    }
-  })()
+  const origin = getErc8004PublicOrigin(req)
   const result = buildAgentRegistration(origin)
   if (!result.payload) {
     return res.status(503).json({

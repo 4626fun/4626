@@ -5,6 +5,7 @@ import { applyEnv, createMockReq, createMockRes } from './helpers'
 const mocks = vi.hoisted(() => ({
   guardAgentApiRequest: vi.fn(async () => ({ ok: true, ip: '127.0.0.1', auth: null })),
   getCanonicalOrigin: vi.fn(() => 'https://4626.fun'),
+  getErc8004PublicOrigin: vi.fn(() => 'https://4626.fun'),
 }))
 
 vi.mock('../../packages/server-core/src/index.js', () => ({
@@ -13,6 +14,7 @@ vi.mock('../../packages/server-core/src/index.js', () => ({
 
 vi.mock('../../server/_lib/origin.js', () => ({
   getCanonicalOrigin: mocks.getCanonicalOrigin,
+  getErc8004PublicOrigin: mocks.getErc8004PublicOrigin,
 }))
 
 describe('/api/agents directory hints', () => {
@@ -51,5 +53,21 @@ describe('/api/agents directory hints', () => {
     expect(String(res.body.byo.agentUriHint)).toContain('strict immutable')
     expect(String(res.body.byo.agentUriHint)).toContain('/.well-known/agent-registration.json')
     expect(String(res.body.byo.agentUriHint)).toContain('compatibility fallback')
+  })
+
+  it('keeps discoverability hints pinned to the ERC-8004 public origin even when the request host differs', async () => {
+    mocks.getCanonicalOrigin.mockReturnValue('https://preview-4626.vercel.app')
+
+    const { default: handler } = await import('../_handlers/_agents.ts')
+    const req = createMockReq({ method: 'GET', url: '/api/agents' })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body.byo.registrationMirrorUrl).toBe('https://4626.fun/.well-known/agent-registration.json')
+    expect(res.body.byo.domainVerificationUrl).toBe('https://4626.fun/.well-known/erc8004.json')
+    expect(res.body.byo.agentUriService).toBe('https://4626.fun/api/lens/agent-registration')
+    expect(res.body.erc8004.registrationUrl).toBe('https://4626.fun/.well-known/agent-registration.json')
   })
 })

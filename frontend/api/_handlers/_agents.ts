@@ -6,7 +6,7 @@ import {
   buildPublicDomainVerificationUrl,
   STRICT_IMMUTABLE_AGENT_URI_SUMMARY,
 } from '../../src/lib/erc8004AgentUriPolicy.js'
-import { getCanonicalOrigin } from '../../server/_lib/origin.js'
+import { getErc8004PublicOrigin } from '../../server/_lib/origin.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -28,13 +28,8 @@ function handleOptions(req: VercelRequest, res: VercelResponse): boolean {
   return false
 }
 
-function resolveAppOrigin(req: VercelRequest): string {
-  try {
-    return getCanonicalOrigin(req)
-  } catch {
-    // Keep directory metadata deterministic when env wiring is incomplete.
-    return 'https://v1.4626.fun'
-  }
+function resolvePublicOrigin(req: VercelRequest): string {
+  return getErc8004PublicOrigin(req)
 }
 
 function isAddressLike(value: string): boolean {
@@ -80,7 +75,7 @@ function getErc8004Meta(req: VercelRequest): {
   if (!Number.isFinite(chainId) || chainId <= 0) return null
   if (!Number.isFinite(agentId) || agentId < 0 || Math.floor(agentId) !== agentId) return null
 
-  const origin = resolveAppOrigin(req)
+  const origin = resolvePublicOrigin(req)
   const agentRegistry = `eip155:${chainId}:${registry.toLowerCase()}`
   const registrationUrl = `${origin}/.well-known/agent-registration.json`
   const supportedTrust = parseSupportedTrust(process.env.ERC8004_AGENT_SUPPORTED_TRUST)
@@ -121,7 +116,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     : []
 
   const erc8004 = getErc8004Meta(req)
-  const origin = resolveAppOrigin(req)
+  const origin = resolvePublicOrigin(req)
   const byo = {
     registrationUrlTemplate: 'https://{your-domain}/.well-known/agent-registration.json',
     registrationMirrorUrl: buildPublicAgentRegistrationUrl(origin),
