@@ -76,7 +76,6 @@ function DepositFlowViz({ avatarSrc }: { avatarSrc: string | null }) {
     border: '1.5px solid rgba(255,255,255,0.12)',
     background: 'rgba(255,255,255,0.04)',
   }
-  const depositPathStroke = `rgba(${ORANGE},0.52)`
   const depositorSeat = {
     border: '1px solid rgba(255,255,255,0.08)',
     background: 'radial-gradient(circle at 50% 45%, rgba(255,255,255,0.08), rgba(255,255,255,0.01) 72%)',
@@ -89,6 +88,8 @@ function DepositFlowViz({ avatarSrc }: { avatarSrc: string | null }) {
   const VAULT_INNER_Y = machineH * 0.8
   const START_X = machineW * 0.121875
   const START_Y = machineH * 0.490196
+  const DEPOSITOR_X = machineW * 0.078125
+  const DEPOSITOR_Y = machineH * 0.352941
   const C1_X = machineW * 0.275
   const C1_Y = machineH * 0.490196
   const C2_X = machineW * 0.384375
@@ -141,7 +142,7 @@ function DepositFlowViz({ avatarSrc }: { avatarSrc: string | null }) {
         <div
           className="pointer-events-none absolute z-0 flex flex-col items-center gap-1.5"
           data-testid="beat-2-depositor-anchor"
-          style={{ left: 50, top: 72 }}
+          style={{ left: DEPOSITOR_X, top: DEPOSITOR_Y }}
         >
           <div className="h-14 w-14 rounded-full" style={depositorSeat} />
           <span className="text-[10px] font-mono" style={{ color: 'rgba(255,255,255,0.20)' }}>
@@ -149,17 +150,44 @@ function DepositFlowViz({ avatarSrc }: { avatarSrc: string | null }) {
           </span>
         </div>
 
-        {/* Two explicit guides: deposit in, receipt out. */}
+        {/* The motion paths stay active for the token animation but remain visually invisible. */}
         <svg className="pointer-events-none absolute inset-0 h-full w-full" viewBox={`0 0 ${machineW} ${machineH}`} aria-hidden="true">
-          <path
-            d={depositGuidePath}
-            stroke={depositPathStroke}
-            strokeWidth="1.2"
-            fill="none"
-            strokeLinecap="round"
-          />
-          <path d={`M ${VAULT_CORE_X} ${VAULT_CORE_Y} C ${R1_X} ${R1_Y} ${R2_X} ${R2_Y} ${START_X} ${START_Y}`} stroke={`rgba(${BLUE},0.14)`} strokeWidth="1.2" fill="none" strokeLinecap="round" />
+          <path d={depositGuidePath} stroke="transparent" strokeWidth="1.2" fill="none" strokeLinecap="round" />
+          <path d={`M ${VAULT_CORE_X} ${VAULT_CORE_Y} C ${R1_X} ${R1_Y} ${R2_X} ${R2_Y} ${START_X} ${START_Y}`} stroke="transparent" strokeWidth="1.2" fill="none" strokeLinecap="round" />
         </svg>
+
+        <div className="pointer-events-none absolute inset-0 z-0" aria-hidden="true">
+          {[
+            { left: DEPOSITOR_X - 20, top: DEPOSITOR_Y - 18, delay: 0 },
+            { left: DEPOSITOR_X - 10, top: DEPOSITOR_Y + 52, delay: 0.04 },
+            { left: DEPOSITOR_X + 34, top: DEPOSITOR_Y + 12, delay: 0.08 },
+          ].map((ghost, index) => (
+            <motion.div
+              key={`${ghost.left}-${ghost.top}`}
+              className="absolute"
+              style={{ left: ghost.left, top: ghost.top }}
+              animate={{
+                opacity: [0, 0, 0.16, 0.24, 0.18],
+                scale: [0.84, 0.84, 0.96, 1, 0.98],
+              }}
+              transition={{
+                duration: FLOW_CYCLE,
+                repeat: Infinity,
+                times: [0, 0.58 + ghost.delay, 0.72 + ghost.delay, 0.90 + ghost.delay, 1],
+                ease: 'linear',
+              }}
+            >
+              <div
+                className={`rounded-full ${index === 2 ? 'h-8 w-8' : 'h-7 w-7'}`}
+                style={{
+                  border: '1px solid rgba(255,255,255,0.07)',
+                  background: 'radial-gradient(circle at 50% 45%, rgba(255,255,255,0.06), rgba(255,255,255,0.01) 72%)',
+                  boxShadow: `0 0 0 1px rgba(${BLUE},0.03), inset 0 1px 0 rgba(255,255,255,0.04)`,
+                }}
+              />
+            </motion.div>
+          ))}
+        </div>
 
         {/* Path 1: one creator token follows one deposit path into vault center, then down. */}
         <motion.div
@@ -362,6 +390,95 @@ function DepositSlot({ testId }: { testId?: string }) {
   )
 }
 
+type RailTone = 'neutral' | 'blue' | 'orange'
+
+type NarrativeRailLine = {
+  text: string
+  opacity: MotionValue<number>
+  y: MotionValue<number>
+  className: string
+  color: string
+}
+
+type NarrativeRailProps = {
+  testId: string
+  opacity: MotionValue<number>
+  y: MotionValue<number>
+  scale?: MotionValue<number>
+  chip?: {
+    tone: RailTone
+    iconSrc?: string
+    leftText: string
+    rightText?: string
+    opacity?: MotionValue<number>
+    scale?: MotionValue<number>
+  }
+  lines: NarrativeRailLine[]
+}
+
+const RAIL_TONE_STYLES: Record<RailTone, { border: string; background: string; boxShadow: string; rightColor: string }> = {
+  neutral: {
+    border: '1px solid rgba(255,255,255,0.14)',
+    background: 'linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02))',
+    boxShadow: '0 0 18px rgba(255,255,255,0.04)',
+    rightColor: 'rgba(255,255,255,0.78)',
+  },
+  blue: {
+    border: `1px solid rgba(${BLUE},0.22)`,
+    background: `linear-gradient(180deg, rgba(${BLUE},0.10), rgba(${BLUE},0.04))`,
+    boxShadow: `0 0 22px rgba(${BLUE},0.08)`,
+    rightColor: `rgba(${BLUE},0.90)`,
+  },
+  orange: {
+    border: `1px solid rgba(${ORANGE},0.18)`,
+    background: `linear-gradient(180deg, rgba(${ORANGE},0.10), rgba(${ORANGE},0.03))`,
+    boxShadow: `0 0 22px rgba(${ORANGE},0.08)`,
+    rightColor: `rgba(${ORANGE},0.80)`,
+  },
+}
+
+function NarrativeRail({ testId, opacity, y, scale, chip, lines }: NarrativeRailProps) {
+  const chipStyle = chip ? RAIL_TONE_STYLES[chip.tone] : null
+
+  return (
+    <motion.div
+      style={{ opacity, y, scale }}
+      className="pointer-events-none absolute left-1/2 top-16 z-30 flex w-full max-w-4xl -translate-x-1/2 justify-center px-6 sm:top-18"
+      data-testid={testId}
+    >
+      <div className="flex max-w-2xl flex-col items-center gap-3 text-center">
+        {chip && chipStyle && (
+          <motion.div
+            className="flex items-center gap-2 rounded-full px-3 py-1.5"
+            style={{
+              opacity: chip.opacity,
+              scale: chip.scale,
+              border: chipStyle.border,
+              background: chipStyle.background,
+              boxShadow: chipStyle.boxShadow,
+            }}
+          >
+            {chip.iconSrc ? <img src={chip.iconSrc} alt="" aria-hidden="true" className="h-4 w-4 object-contain" loading="lazy" /> : null}
+            <span className="font-mono text-[11px]" style={{ color: 'rgba(255,255,255,0.62)' }}>
+              {chip.leftText}
+            </span>
+            {chip.rightText ? (
+              <span className="font-mono text-[11px]" style={{ color: chipStyle.rightColor }}>
+                {chip.rightText}
+              </span>
+            ) : null}
+          </motion.div>
+        )}
+        {lines.map((line) => (
+          <motion.p key={line.text} className={line.className} style={{ color: line.color, opacity: line.opacity, y: line.y }}>
+            {line.text}
+          </motion.p>
+        ))}
+      </div>
+    </motion.div>
+  )
+}
+
 // Beat 5 — three cubic bezier paths fanning from a central source to three cards.
 // viewBox 600×120: source (300,6), endpoints (80,114) (300,114) (520,114).
 // Paths are white so they read as neutral connectors; nodes are blue accent dots.
@@ -536,7 +653,7 @@ export function VaultFlowScroll(_props: Props) {
   const { scrollYProgress } = useScroll({ target: containerRef, offset: ['start start', 'end end'] })
 
   // ── Timing system ──────────────────────────────────────────────────────────
-  // 1600vh total.  1% = 16vh.
+  // 1900vh total.  1% = 19vh.
   //
   // Every crossfade uses the SAME ±30px y-motion so each scroll unit feels
   // identical regardless of where you are in the story:
@@ -550,65 +667,120 @@ export function VaultFlowScroll(_props: Props) {
   //
   //  Beat  │ in       │ hold / sequence │ out
   //  ────────────────────────────────────────────────────────────
-  //  1     │ 0–3%     │ 3–9%            │ 9–12%
-  //  2     │ 10–16%   │ 16–30%          │ 30–34%
-  //  3     │ 34–37%   │ 37–42%          │ 42–45%
-  //  4     │ 42–47%   │ 47–55%          │ clip 52–55%, opac 55–57%
-  //  5     │ 58–62%   │ 62–70%          │ 70–74%
-  //  6     │ 68–74%   │ paths+cards     │ 89–93%
-  //  7     │ 90–95%   │ branches+cards  │ 95–100%
+  //  1     │ 0–3%     │ 3–10%           │ 10–13%
+  //  2     │ 10–16%   │ 16–32%          │ 32–36%
+  //  3     │ 36–39%   │ 39–45%          │ 45–48%
+  //  4     │ 45–50%   │ 50–58%          │ clip 55–58%, opac 58–60%
+  //  5     │ 61–65%   │ 65–74%          │ 74–78%
+  //  6     │ 72–78%   │ paths+cards     │ 90–94%
+  //  7     │ 92–96%   │ branches+cards  │ 96–100%
 
   // Beat 1: The Threshold
-  const opacityBeat1 = useTransform(scrollYProgress, [0, 0.03, 0.09, 0.12], [1, 1, 1, 0])
-  const yBeat1       = useTransform(scrollYProgress, [0, 0.12], [0, -30])
+  const opacityBeat1 = useTransform(scrollYProgress, [0, 0.03, 0.10, 0.13], [1, 1, 1, 0])
+  const yBeat1       = useTransform(scrollYProgress, [0, 0.13], [0, -30])
 
   // Beat 2: one continuous deposit → mint → return scene.
-  const opacityBeat2 = useTransform(scrollYProgress, [0.10, 0.16, 0.30, 0.34], [0, 1, 1, 0])
-  const yBeat2       = useTransform(scrollYProgress, [0.10, 0.16, 0.34], [30, 0, -30])
+  const opacityBeat2 = useTransform(scrollYProgress, [0.10, 0.16, 0.32, 0.36], [0, 1, 1, 0])
+  const yBeat2       = useTransform(scrollYProgress, [0.10, 0.16, 0.36], [30, 0, -30])
+  const beat12NarrativeOpacity = useTransform(scrollYProgress, [0.07, 0.11, 0.30, 0.34], [0, 1, 1, 0])
+  const beat12NarrativeY       = useTransform(scrollYProgress, [0.07, 0.11, 0.34], [18, 0, -10])
+  const beat12ChipOpacity      = useTransform(scrollYProgress, [0.07, 0.11, 0.28, 0.32], [0, 1, 1, 0])
+  const beat12ChipScale        = useTransform(scrollYProgress, [0.07, 0.13, 0.34], [0.94, 1, 0.98])
+  const beat12Line1Opacity     = useTransform(scrollYProgress, [0.075, 0.115, 0.29, 0.33], [0, 1, 1, 0])
+  const beat12Line2Opacity     = useTransform(scrollYProgress, [0.085, 0.125, 0.29, 0.33], [0, 1, 1, 0])
+  const beat12Line3Opacity     = useTransform(scrollYProgress, [0.10, 0.14, 0.28, 0.32], [0, 0.68, 0.68, 0])
+  const beat12Line1Y           = useTransform(scrollYProgress, [0.075, 0.115, 0.33], [8, 0, -6])
+  const beat12Line2Y           = useTransform(scrollYProgress, [0.085, 0.125, 0.33], [8, 0, -6])
+  const beat12Line3Y           = useTransform(scrollYProgress, [0.10, 0.14, 0.32], [10, 0, -6])
 
   // Beat 3: Dedicated bridge card.
-  const opacityBeat3Intro = useTransform(scrollYProgress, [0.34, 0.37, 0.42, 0.45], [0, 1, 1, 0])
-  const yBeat3Intro       = useTransform(scrollYProgress, [0.34, 0.37, 0.45], [30, 0, -30])
+  const opacityBeat3Intro = useTransform(scrollYProgress, [0.36, 0.39, 0.45, 0.48], [0, 1, 1, 0])
+  const yBeat3Intro       = useTransform(scrollYProgress, [0.36, 0.39, 0.48], [30, 0, -30])
+  const beat34NarrativeOpacity = useTransform(scrollYProgress, [0.36, 0.39, 0.58, 0.60], [0, 1, 1, 0])
+  const beat34NarrativeY       = useTransform(scrollYProgress, [0.36, 0.39, 0.60], [20, 0, -12])
+  const beat34NarrativeScale   = useTransform(scrollYProgress, [0.36, 0.50, 0.60], [0.985, 1, 0.985])
+  const beat3Line1Opacity = useTransform(scrollYProgress, [0.36, 0.375, 0.45, 0.48], [0, 1, 1, 0])
+  const beat3Line2Opacity = useTransform(scrollYProgress, [0.365, 0.385, 0.45, 0.48], [0, 1, 1, 0])
+  const beat3Line3Opacity = useTransform(scrollYProgress, [0.37, 0.395, 0.45, 0.48], [0, 1, 1, 0])
+  const beat3Line1Y       = useTransform(scrollYProgress, [0.36, 0.385, 0.48], [10, 0, -6])
+  const beat3Line2Y       = useTransform(scrollYProgress, [0.365, 0.39, 0.48], [10, 0, -6])
+  const beat3Line3Y       = useTransform(scrollYProgress, [0.37, 0.395, 0.48], [10, 0, -6])
 
   // Beat 4: The Commitment — keep the bill upright, then drop it into the slit.
-  const opacityBeat4 = useTransform(scrollYProgress, [0.42, 0.47, 0.55, 0.57], [0, 1, 1, 0])
-  const scaleBeat4   = useTransform(scrollYProgress, [0.42, 0.47], [0.92, 1])
-  const billY4       = useTransform(scrollYProgress, [0.52, 0.557], [0, 214])
-  const billOpacity4 = useTransform(scrollYProgress, [0.52, 0.545, 0.557], [1, 1, 0])
-  const slotOpacity4 = useTransform(scrollYProgress, [0.507, 0.527], [0, 1])
-  const slitGlow4    = useTransform(scrollYProgress, [0.507, 0.527, 0.565], [0.94, 1, 0.98])
-  const countMV      = useTransform(scrollYProgress, [0.42, 0.51], [0, TOTAL_TOKENS])
+  const opacityBeat4 = useTransform(scrollYProgress, [0.45, 0.50, 0.58, 0.60], [0, 1, 1, 0])
+  const scaleBeat4   = useTransform(scrollYProgress, [0.45, 0.50], [0.92, 1])
+  const beat4Line1Opacity = useTransform(scrollYProgress, [0.45, 0.475, 0.58, 0.60], [0, 1, 1, 0])
+  const beat4Line2Opacity = useTransform(scrollYProgress, [0.46, 0.485, 0.58, 0.60], [0, 1, 1, 0])
+  const beat4Line3Opacity = useTransform(scrollYProgress, [0.49, 0.525, 0.58, 0.60], [0, 0.62, 0.62, 0])
+  const beat4Line1Y       = useTransform(scrollYProgress, [0.45, 0.475, 0.60], [8, 0, -6])
+  const beat4Line2Y       = useTransform(scrollYProgress, [0.46, 0.485, 0.60], [8, 0, -6])
+  const beat4Line3Y       = useTransform(scrollYProgress, [0.49, 0.525, 0.60], [10, 0, -6])
+  const billY4       = useTransform(scrollYProgress, [0.55, 0.589], [0, 214])
+  const billOpacity4 = useTransform(scrollYProgress, [0.55, 0.578, 0.589], [1, 1, 0])
+  const slotOpacity4 = useTransform(scrollYProgress, [0.535, 0.555], [0, 1])
+  const slitGlow4    = useTransform(scrollYProgress, [0.535, 0.555, 0.595], [0.94, 1, 0.98])
+  const countMV      = useTransform(scrollYProgress, [0.45, 0.54], [0, TOTAL_TOKENS])
+  const beat45NarrativeOpacity = useTransform(scrollYProgress, [0.53, 0.57, 0.72, 0.76], [0, 1, 1, 0])
+  const beat45NarrativeY       = useTransform(scrollYProgress, [0.53, 0.57, 0.76], [18, 0, -10])
+  const beat45ChipOpacity      = useTransform(scrollYProgress, [0.53, 0.57, 0.70, 0.74], [0, 1, 1, 0])
+  const beat45ChipScale        = useTransform(scrollYProgress, [0.53, 0.59, 0.76], [0.94, 1, 0.98])
+  const beat45Line1Opacity     = useTransform(scrollYProgress, [0.54, 0.58, 0.71, 0.75], [0, 1, 1, 0])
+  const beat45Line2Opacity     = useTransform(scrollYProgress, [0.55, 0.59, 0.71, 0.75], [0, 1, 1, 0])
+  const beat45Line1Y           = useTransform(scrollYProgress, [0.54, 0.58, 0.75], [8, 0, -6])
+  const beat45Line2Y           = useTransform(scrollYProgress, [0.55, 0.59, 0.75], [8, 0, -6])
 
   // Beat 5: The Mint — shares appear only after the bill has committed into the slit.
-  const opacityBeat5 = useTransform(scrollYProgress, [0.58, 0.62, 0.70, 0.74], [0, 1, 1, 0])
-  const scaleBeat5   = useTransform(scrollYProgress, [0.58, 0.62], [0.72, 1])
-  const yBeat5       = useTransform(scrollYProgress, [0.58, 0.62, 0.74], [150, 0, -30])
+  const opacityBeat5 = useTransform(scrollYProgress, [0.61, 0.65, 0.74, 0.78], [0, 1, 1, 0])
+  const scaleBeat5   = useTransform(scrollYProgress, [0.61, 0.65], [0.72, 1])
+  const yBeat5       = useTransform(scrollYProgress, [0.61, 0.65, 0.78], [150, 0, -30])
+  const beat56NarrativeOpacity = useTransform(scrollYProgress, [0.64, 0.68, 0.90, 0.94], [0, 1, 1, 0])
+  const beat56NarrativeY       = useTransform(scrollYProgress, [0.64, 0.68, 0.94], [18, 0, -10])
+  const beat56ChipOpacity      = useTransform(scrollYProgress, [0.64, 0.68, 0.90, 0.94], [0, 1, 1, 0])
+  const beat56ChipScale        = useTransform(scrollYProgress, [0.64, 0.70, 0.94], [0.92, 1, 0.98])
+  const beat56Line1Opacity     = useTransform(scrollYProgress, [0.64, 0.68, 0.89, 0.93], [0, 1, 1, 0])
+  const beat56Line2Opacity     = useTransform(scrollYProgress, [0.66, 0.70, 0.89, 0.93], [0, 1, 1, 0])
+  const beat56Line1Y           = useTransform(scrollYProgress, [0.64, 0.68, 0.93], [8, 0, -6])
+  const beat56Line2Y           = useTransform(scrollYProgress, [0.66, 0.70, 0.93], [8, 0, -6])
 
   // Beat 6: Distribution — slower stagger so each destination reads before the next.
-  const opacityBeat6 = useTransform(scrollYProgress, [0.68, 0.74, 0.89, 0.93], [0, 1, 1, 0])
-  const yBeat6       = useTransform(scrollYProgress, [0.68, 0.74, 0.89, 0.93], [30, 0, 0, -30])
-  const path6A       = useTransform(scrollYProgress, [0.74, 0.80], [0, 1])
-  const path6B       = useTransform(scrollYProgress, [0.77, 0.83], [0, 1])
-  const path6C       = useTransform(scrollYProgress, [0.80, 0.86], [0, 1])
-  const opac6A       = useTransform(scrollYProgress, [0.78, 0.82], [0, 1])
-  const opac6B       = useTransform(scrollYProgress, [0.81, 0.85], [0, 1])
-  const opac6C       = useTransform(scrollYProgress, [0.84, 0.88], [0, 1])
+  const opacityBeat6 = useTransform(scrollYProgress, [0.72, 0.78, 0.90, 0.94], [0, 1, 1, 0])
+  const yBeat6       = useTransform(scrollYProgress, [0.72, 0.78, 0.90, 0.94], [30, 0, 0, -30])
+  const path6A       = useTransform(scrollYProgress, [0.78, 0.84], [0, 1])
+  const path6B       = useTransform(scrollYProgress, [0.81, 0.87], [0, 1])
+  const path6C       = useTransform(scrollYProgress, [0.84, 0.90], [0, 1])
+  const opac6A       = useTransform(scrollYProgress, [0.82, 0.86], [0, 1])
+  const opac6B       = useTransform(scrollYProgress, [0.85, 0.89], [0, 1])
+  const opac6C       = useTransform(scrollYProgress, [0.88, 0.92], [0, 1])
+  const y6A          = useTransform(scrollYProgress, [0.82, 0.86], [18, 0])
+  const y6B          = useTransform(scrollYProgress, [0.85, 0.89], [18, 0])
+  const y6C          = useTransform(scrollYProgress, [0.88, 0.92], [18, 0])
+  const scale6A      = useTransform(scrollYProgress, [0.82, 0.86], [0.96, 1])
+  const scale6B      = useTransform(scrollYProgress, [0.85, 0.89], [0.96, 1])
+  const scale6C      = useTransform(scrollYProgress, [0.88, 0.92], [0.96, 1])
+  const beat67NarrativeOpacity = useTransform(scrollYProgress, [0.88, 0.92, 0.99, 1], [0, 1, 1, 0])
+  const beat67NarrativeY       = useTransform(scrollYProgress, [0.88, 0.92, 1], [18, 0, -10])
+  const beat67ChipOpacity      = useTransform(scrollYProgress, [0.88, 0.92, 0.99, 1], [0, 1, 1, 0])
+  const beat67ChipScale        = useTransform(scrollYProgress, [0.88, 0.94, 1], [0.94, 1, 0.98])
+  const beat67Line1Opacity     = useTransform(scrollYProgress, [0.885, 0.925, 0.99, 1], [0, 1, 1, 0])
+  const beat67Line2Opacity     = useTransform(scrollYProgress, [0.895, 0.935, 0.99, 1], [0, 1, 1, 0])
+  const beat67Line1Y           = useTransform(scrollYProgress, [0.885, 0.925, 1], [8, 0, -6])
+  const beat67Line2Y           = useTransform(scrollYProgress, [0.895, 0.935, 1], [8, 0, -6])
 
   // Beat 7: Yield Strategies — final landing beat.
-  const opacityBeat7 = useTransform(scrollYProgress, [0.90, 0.95], [0, 1])
-  const yBeat7       = useTransform(scrollYProgress, [0.90, 0.95], [30, 0])
-  const path7L       = useTransform(scrollYProgress, [0.95, 0.97], [0, 1])
-  const path7R       = useTransform(scrollYProgress, [0.96, 0.98], [0, 1])
-  const path7BL      = useTransform(scrollYProgress, [0.97, 0.99], [0, 1])
-  const path7BR      = useTransform(scrollYProgress, [0.98, 1.00], [0, 1])
-  const opac7A       = useTransform(scrollYProgress, [0.965, 0.975], [0, 1])
-  const opac7B       = useTransform(scrollYProgress, [0.975, 0.985], [0, 1])
-  const opac7C       = useTransform(scrollYProgress, [0.985, 0.995], [0, 1])
-  const opac7D       = useTransform(scrollYProgress, [0.99, 1.00], [0, 1])
-  const y7A          = useTransform(scrollYProgress, [0.965, 0.975], [16, 0])
-  const y7B          = useTransform(scrollYProgress, [0.975, 0.985], [16, 0])
-  const y7C          = useTransform(scrollYProgress, [0.985, 0.995], [16, 0])
-  const y7D          = useTransform(scrollYProgress, [0.99, 1.00], [16, 0])
+  const opacityBeat7 = useTransform(scrollYProgress, [0.92, 0.96], [0, 1])
+  const yBeat7       = useTransform(scrollYProgress, [0.92, 0.96], [30, 0])
+  const path7L       = useTransform(scrollYProgress, [0.96, 0.975], [0, 1])
+  const path7R       = useTransform(scrollYProgress, [0.97, 0.985], [0, 1])
+  const path7BL      = useTransform(scrollYProgress, [0.98, 0.992], [0, 1])
+  const path7BR      = useTransform(scrollYProgress, [0.988, 1.00], [0, 1])
+  const opac7A       = useTransform(scrollYProgress, [0.972, 0.982], [0, 1])
+  const opac7B       = useTransform(scrollYProgress, [0.982, 0.99], [0, 1])
+  const opac7C       = useTransform(scrollYProgress, [0.99, 0.996], [0, 1])
+  const opac7D       = useTransform(scrollYProgress, [0.994, 1.00], [0, 1])
+  const y7A          = useTransform(scrollYProgress, [0.972, 0.982], [16, 0])
+  const y7B          = useTransform(scrollYProgress, [0.982, 0.99], [16, 0])
+  const y7C          = useTransform(scrollYProgress, [0.99, 0.996], [16, 0])
+  const y7D          = useTransform(scrollYProgress, [0.994, 1.00], [16, 0])
 
   // Drive counter DOM text directly — avoids re-renders on every frame.
   useMotionValueEvent(countMV, 'change', (v) => {
@@ -642,6 +814,8 @@ export function VaultFlowScroll(_props: Props) {
   const strats = STORY_CONTENT.strategies
   const cardOpacities  = [opac6A, opac6B, opac6C]
   const cardPaths      = [path6A, path6B, path6C]
+  const cardYs         = [y6A, y6B, y6C]
+  const cardScales     = [scale6A, scale6B, scale6C]
   const stratOpacities = [opac7A, opac7B, opac7C, opac7D]
   const stratYs        = [y7A, y7B, y7C, y7D]
 
@@ -655,10 +829,10 @@ export function VaultFlowScroll(_props: Props) {
   //   Beat 6: source 40 + SVG 120 + gap 8 + 2×2 grid ~252 + APY 32 ≈ 452px → top = 50vh − 226px
 
   return (
-    // 1600vh — 6 beats with longer dwell windows so each reveal can fully land
+    // 1900vh — extended dwell windows so the narrative and handoffs have room to read
     <div
       ref={containerRef}
-      className="h-[1600vh] bg-black text-white relative font-sans selection:bg-white/20"
+      className="h-[1900vh] bg-black text-white relative font-sans selection:bg-white/20"
       style={{ borderTop: '1px solid rgba(255,255,255,0.035)' }}
     >
       <div className="sticky top-0 h-screen w-full flex flex-col items-center justify-center overflow-hidden">
@@ -696,13 +870,13 @@ export function VaultFlowScroll(_props: Props) {
           data-testid="beat-2-authority">
           <div className="absolute inset-0 pointer-events-none" style={{ background: BEAT_ACCENTS[2] }} />
 
-          <div className="relative flex min-h-[360px] w-full max-w-3xl flex-col items-center justify-center">
-            <h2 className="mb-7 text-center text-2xl font-medium tracking-tight text-white md:text-3xl">
+          <div className="relative flex min-h-[400px] w-full max-w-3xl flex-col items-center justify-center sm:min-h-[360px]">
+            <h2 className="mb-5 max-w-[14ch] text-center text-2xl font-medium tracking-tight text-white sm:mb-7 sm:max-w-none md:text-3xl">
               Deposit {STORY_CONTENT.creatorTokenSymbol.toLowerCase()}. Receive {STORY_CONTENT.shareTokenSymbol}.
             </h2>
             <DepositFlowViz avatarSrc={avatarSrc} />
             <p
-              className="max-w-md text-center text-sm font-light leading-relaxed md:text-base"
+              className="max-w-[19rem] text-center text-sm font-light leading-relaxed sm:max-w-md md:text-base"
               style={{ color: 'rgba(255,255,255,0.38)' }}
             >
               <span style={{ color: `rgba(${BLUE},0.70)` }}>{STORY_CONTENT.shareTokenSymbol}</span>{' '}
@@ -710,6 +884,94 @@ export function VaultFlowScroll(_props: Props) {
             </p>
           </div>
         </motion.div>
+
+        <NarrativeRail
+          testId="beat-1-2-narrative"
+          opacity={beat12NarrativeOpacity}
+          y={beat12NarrativeY}
+          chip={{
+            tone: 'neutral',
+            iconSrc: avatarSrc ?? undefined,
+            leftText: 'core concept',
+            opacity: beat12ChipOpacity,
+            scale: beat12ChipScale,
+          }}
+          lines={[
+            {
+              text: 'Everything starts with creator commitment.',
+              opacity: beat12Line1Opacity,
+              y: beat12Line1Y,
+              className: 'text-sm font-light md:text-base',
+              color: 'rgba(255,255,255,0.62)',
+            },
+            {
+              text: 'Deposit a native Zora Creator Coin and receive a vault share in return.',
+              opacity: beat12Line2Opacity,
+              y: beat12Line2Y,
+              className: 'text-[11px] font-mono uppercase tracking-[0.2em]',
+              color: 'rgba(255,255,255,0.38)',
+            },
+            {
+              text: `Shown with ${STORY_CONTENT.creatorTokenSymbol.toLowerCase()} as an example creator coin.`,
+              opacity: beat12Line3Opacity,
+              y: beat12Line3Y,
+              className: 'text-[10px] font-light tracking-[0.01em]',
+              color: 'rgba(255,255,255,0.20)',
+            },
+          ]}
+        />
+
+        {/* Shared narrative rail — persists from beat 3 into beat 4. */}
+        <NarrativeRail
+          testId="beat-3-4-narrative"
+          opacity={beat34NarrativeOpacity}
+          y={beat34NarrativeY}
+          scale={beat34NarrativeScale}
+          lines={[
+            {
+              text: 'In the beginning',
+              opacity: beat3Line1Opacity,
+              y: beat3Line1Y,
+              className: 'text-[11px] font-mono uppercase tracking-[0.28em]',
+              color: 'rgba(255,255,255,0.46)',
+            },
+            {
+              text: 'Every vault begins with commitment.',
+              opacity: beat3Line2Opacity,
+              y: beat3Line2Y,
+              className: 'text-base font-light md:text-lg',
+              color: 'rgba(255,255,255,0.66)',
+            },
+            {
+              text: 'The creator deposits first.',
+              opacity: beat3Line3Opacity,
+              y: beat3Line3Y,
+              className: 'text-sm font-light md:text-base',
+              color: 'rgba(255,255,255,0.48)',
+            },
+            {
+              text: 'That opening act begins issuance and sets the vault in motion.',
+              opacity: beat4Line1Opacity,
+              y: beat4Line1Y,
+              className: 'text-sm font-light md:text-base',
+              color: 'rgba(255,255,255,0.58)',
+            },
+            {
+              text: 'The vault share becomes the receipt.',
+              opacity: beat4Line2Opacity,
+              y: beat4Line2Y,
+              className: 'text-sm font-light md:text-base',
+              color: `rgba(${BLUE},0.72)`,
+            },
+            {
+              text: `Shown with ${STORY_CONTENT.creatorTokenSymbol.toLowerCase()} as an example creator coin.`,
+              opacity: beat4Line3Opacity,
+              y: beat4Line3Y,
+              className: 'text-[10px] font-light tracking-[0.01em]',
+              color: 'rgba(255,255,255,0.20)',
+            },
+          ]}
+        />
 
         {/* ── Beat 3 ─────────────────────────────────────────────────────── */}
         {/* Dedicated bridge beat between deposit/receive and commitment. */}
@@ -719,12 +981,6 @@ export function VaultFlowScroll(_props: Props) {
           data-testid="beat-3-intro"
         >
           <div className="absolute inset-0 pointer-events-none" style={{ background: BEAT_ACCENTS[3] }} />
-          <p
-            className="text-[11px] font-mono uppercase tracking-[0.28em]"
-            style={{ color: 'rgba(255,255,255,0.42)' }}
-          >
-            In the beginning
-          </p>
         </motion.div>
 
         {/* ── Beat 4 ─────────────────────────────────────────────────────── */}
@@ -754,26 +1010,30 @@ export function VaultFlowScroll(_props: Props) {
                 data-testid="deposit-bill"
               >
                 <div
-                  className="flex min-w-[560px] max-w-[86vw] flex-col items-center rounded-[2rem] px-10 py-9 md:min-w-[640px] md:px-12 md:py-10"
-                  style={{
-                    border: '1px solid rgba(255,255,255,0.12)',
-                    background: 'linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015))',
-                    boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.05), 0 30px 80px rgba(0,0,0,0.30)',
-                  }}
+                  className="flex w-[min(88vw,640px)] flex-col items-center px-6 py-8 sm:px-10 sm:py-9 md:px-12 md:py-10"
                 >
-                  <p className="mb-8 max-w-xs text-center text-xs font-light leading-relaxed" style={{ color: 'rgba(255,255,255,0.32)' }}>
-                    To deploy a vault, a creator must first deposit:
-                  </p>
                   <motion.div className="flex flex-col items-center" style={{ scale: scaleBeat4 }}>
+                    <div className="mb-6 flex flex-col items-center gap-2">
+                      <span
+                        className="font-mono text-[10px] uppercase tracking-[0.28em]"
+                        style={{ color: 'rgba(255,255,255,0.24)' }}
+                      >
+                        creator deposit
+                      </span>
+                      <div
+                        className="h-px w-20"
+                        style={{ background: 'linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.22), rgba(255,255,255,0))' }}
+                      />
+                    </div>
                     <div
                       ref={numberRef}
-                      className="text-6xl md:text-8xl lg:text-9xl font-semibold tracking-tighter tabular-nums text-transparent bg-clip-text bg-gradient-to-b from-white to-white/50"
+                      className="text-5xl sm:text-6xl md:text-8xl lg:text-9xl font-semibold tracking-tighter tabular-nums text-transparent bg-clip-text bg-gradient-to-b from-white to-white/50"
                       data-testid="deposited-counter"
                     >
                       {STORY_CONTENT.defaultDepositTokens}
                     </div>
-                    <p className="mt-8 text-xl tracking-wide" style={{ color: 'rgba(255,255,255,0.35)' }}>
-                      {STORY_CONTENT.creatorTokenSymbol.toLowerCase()} tokens
+                    <p className="mt-6 text-lg tracking-wide sm:mt-8 sm:text-xl" style={{ color: 'rgba(255,255,255,0.40)' }}>
+                      {STORY_CONTENT.creatorTokenSymbol.toLowerCase()}
                     </p>
                     <p className="mt-3 text-xs font-mono" style={{ color: `rgba(${BLUE},0.50)` }}>
                       = 5% of total supply
@@ -789,6 +1049,36 @@ export function VaultFlowScroll(_props: Props) {
             </div>
           </div>
         </motion.div>
+
+        <NarrativeRail
+          testId="beat-4-5-narrative"
+          opacity={beat45NarrativeOpacity}
+          y={beat45NarrativeY}
+          chip={{
+            tone: 'neutral',
+            iconSrc: avatarSrc ?? undefined,
+            leftText: 'creator deposit',
+            rightText: 'committed',
+            opacity: beat45ChipOpacity,
+            scale: beat45ChipScale,
+          }}
+          lines={[
+            {
+              text: 'That opening act begins issuance.',
+              opacity: beat45Line1Opacity,
+              y: beat45Line1Y,
+              className: 'text-sm font-light md:text-base',
+              color: 'rgba(255,255,255,0.60)',
+            },
+            {
+              text: 'The vault share becomes the receipt.',
+              opacity: beat45Line2Opacity,
+              y: beat45Line2Y,
+              className: 'text-[11px] font-mono uppercase tracking-[0.22em]',
+              color: `rgba(${BLUE},0.58)`,
+            },
+          ]}
+        />
 
         {/* ── Beat 5 ─────────────────────────────────────────────────────── */}
         {/* The slot remains visible so the minted shares feel like they emerge from the deposit. */}
@@ -821,6 +1111,37 @@ export function VaultFlowScroll(_props: Props) {
           </div>
         </motion.div>
 
+        {/* Shared allocation rail — persists from mint into distribution. */}
+        <NarrativeRail
+          testId="beat-5-6-narrative"
+          opacity={beat56NarrativeOpacity}
+          y={beat56NarrativeY}
+          chip={{
+            tone: 'blue',
+            iconSrc: STORY_CONTENT.shareTokenBadgeSrc,
+            leftText: STORY_CONTENT.defaultDepositTokens,
+            rightText: STORY_CONTENT.shareTokenSymbol,
+            opacity: beat56ChipOpacity,
+            scale: beat56ChipScale,
+          }}
+          lines={[
+            {
+              text: 'From there, the split begins',
+              opacity: beat56Line1Opacity,
+              y: beat56Line1Y,
+              className: 'text-[11px] font-mono uppercase tracking-[0.28em]',
+              color: 'rgba(255,255,255,0.40)',
+            },
+            {
+              text: 'From there, issuance is split across launch, vesting, and reserve.',
+              opacity: beat56Line2Opacity,
+              y: beat56Line2Y,
+              className: 'text-sm font-light md:text-base',
+              color: 'rgba(255,255,255,0.60)',
+            },
+          ]}
+        />
+
         {/* ── Beat 6 ─────────────────────────────────────────────────────── */}
         {/* Single flex-column centred at 50vh − 165px (stack ≈ 330px tall). */}
         {/* Source → bezier paths → 3 distribution cards, one card at a time. */}
@@ -834,19 +1155,15 @@ export function VaultFlowScroll(_props: Props) {
           <div aria-label="distribution checkpoint progress" role="progressbar" className="sr-only" />
 
           <div className="relative flex flex-col items-center w-full max-w-3xl">
-            {/* Source: text-only "50,000,000 ■AKITA" — no badge icon so there is nothing
-                to clash with Beat 4's badge (which exits at the bottom of the screen).
-                The ■ symbol carries the identity without needing the image duplicate. */}
-            <div className="flex flex-col items-center mb-2">
+            <div className="flex flex-col items-center mb-3">
               <p className="text-[10px] uppercase tracking-[0.38em] font-medium mb-1.5" style={{ color: 'rgba(255,255,255,0.22)' }}>
-                Initial deposit only
-              </p>
-              <p className="font-mono text-sm font-medium">
-                <span style={{ color: 'rgba(255,255,255,0.58)' }}>{STORY_CONTENT.defaultDepositTokens} </span>
-                <span style={{ color: `rgba(${BLUE},0.90)` }}>{STORY_CONTENT.shareTokenSymbol}</span>
+                Next, the split
               </p>
               <p className="mt-1.5 text-[11px] text-center max-w-xs font-light" style={{ color: 'rgba(255,255,255,0.28)' }}>
-                A portion distributed to the public via Uniswap CCA — over {STORY_CONTENT.defaultAuctionWindow}
+                Public launch, creator vesting, and reserve are defined up front.
+              </p>
+              <p className="mt-2 text-[10px] font-mono uppercase tracking-[0.22em]" style={{ color: `rgba(${BLUE},0.44)` }}>
+                lane by lane
               </p>
             </div>
 
@@ -854,17 +1171,32 @@ export function VaultFlowScroll(_props: Props) {
             <DistributionPaths p1={cardPaths[0]} p2={cardPaths[1]} p3={cardPaths[2]} />
 
             {/* Distribution cards — fade in one at a time as paths reach them */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 w-full mt-1">
+            <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3 w-full mt-1">
               {dist.map((row, i) => (
-                <motion.div key={row.title} style={{ opacity: cardOpacities[i] }}>
-                  <div className="p-6 rounded-3xl h-full" style={{
+                <motion.div key={row.title} style={{ opacity: cardOpacities[i], y: cardYs[i], scale: cardScales[i] }}>
+                  <div className="h-full rounded-3xl p-5 sm:p-6" style={{
                     border: `1px solid rgba(${BLUE},0.22)`,
                     background: `rgba(${BLUE},0.04)`,
                     backdropFilter: 'blur(12px)',
                     boxShadow: `inset 0 1px 0 rgba(255,255,255,0.06), 0 0 0 1px rgba(${BLUE},0.10), 0 0 28px rgba(${BLUE},0.14)`,
                   }}>
-                    <div className="text-4xl font-medium mb-3 tracking-tight">{row.percent}</div>
-                    <div className="text-sm mb-6 font-mono">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <p className="text-[10px] font-mono uppercase tracking-[0.24em]" style={{ color: 'rgba(255,255,255,0.24)' }}>
+                        committed lane
+                      </p>
+                      <span
+                        className="rounded-full px-2 py-0.5 text-[10px] font-mono"
+                        style={{
+                          color: `rgba(${BLUE},0.84)`,
+                          border: `1px solid rgba(${BLUE},0.22)`,
+                          background: `rgba(${BLUE},0.08)`,
+                        }}
+                      >
+                        {String(i + 1).padStart(2, '0')}
+                      </span>
+                    </div>
+                    <div className="text-3xl font-medium tracking-tight sm:text-4xl md:text-5xl">{row.percent}</div>
+                    <div className="mb-5 text-sm font-mono sm:mb-6">
                       <span style={{ color: 'rgba(255,255,255,0.36)' }}>{row.amount} </span>
                       <span style={{ color: `rgba(${BLUE},0.75)` }}>{STORY_CONTENT.shareTokenSymbol}</span>
                     </div>
@@ -882,6 +1214,36 @@ export function VaultFlowScroll(_props: Props) {
           </div>
         </motion.div>
 
+        {/* Shared deployment rail — persists from allocation into strategy deployment. */}
+        <NarrativeRail
+          testId="beat-6-7-narrative"
+          opacity={beat67NarrativeOpacity}
+          y={beat67NarrativeY}
+          chip={{
+            tone: 'orange',
+            leftText: 'deployed across',
+            rightText: '4 yield lanes',
+            opacity: beat67ChipOpacity,
+            scale: beat67ChipScale,
+          }}
+          lines={[
+            {
+              text: 'Then capital goes to work',
+              opacity: beat67Line1Opacity,
+              y: beat67Line1Y,
+              className: 'text-[11px] font-mono uppercase tracking-[0.28em]',
+              color: 'rgba(255,255,255,0.38)',
+            },
+            {
+              text: 'while capital is deployed into active strategies.',
+              opacity: beat67Line2Opacity,
+              y: beat67Line2Y,
+              className: 'text-sm font-light md:text-base',
+              color: 'rgba(255,255,255,0.58)',
+            },
+          ]}
+        />
+
         {/* ── Beat 7 ─────────────────────────────────────────────────────── */}
         {/* Single flex-column centred at 50vh − 226px (stack ≈ 452px tall). */}
         {/* Source → two bezier branches → 2×2 strategy grid → blended APY.  */}
@@ -893,17 +1255,12 @@ export function VaultFlowScroll(_props: Props) {
           <div className="absolute inset-0 pointer-events-none" style={{ background: BEAT_ACCENTS[6] }} />
 
           <div className="relative flex flex-col items-center w-full max-w-2xl">
-            {/* Source label — the deposited underlying token */}
             <div className="flex flex-col items-center mb-2">
               <p className="text-xs uppercase tracking-[0.32em] font-medium" style={{ color: 'rgba(255,255,255,0.26)' }}>
-                Immediately put to work
-              </p>
-              <p className="mt-1 text-lg font-mono">
-                <span style={{ color: 'rgba(255,255,255,0.45)' }}>{STORY_CONTENT.defaultDepositTokens} </span>
-                <span style={{ color: `rgba(${ORANGE},0.65)` }}>{STORY_CONTENT.creatorTokenSymbol.toLowerCase()}</span>
+                Then capital goes to work
               </p>
               <p className="mt-1 text-[11px] text-center max-w-xs font-light" style={{ color: 'rgba(255,255,255,0.26)' }}>
-                begins generating yield for the vault the moment it's deposited
+                It moves into active strategies as soon as the structure is set.
               </p>
             </div>
 
@@ -918,35 +1275,38 @@ export function VaultFlowScroll(_props: Props) {
             />
 
             {/* 2×2 strategy grid */}
-            <div className="grid grid-cols-2 gap-3 w-full mt-2">
+            <div className="grid w-full grid-cols-2 gap-2 sm:gap-3 mt-2">
               {strats.map((s, i) => (
                 <motion.div key={s.label} style={{ opacity: stratOpacities[i], y: stratYs[i] }}>
-                  <div className="flex items-center justify-between rounded-2xl px-4 py-4" style={{
+                  <div className="flex items-start justify-between rounded-2xl px-3 py-3 sm:px-4 sm:py-4" style={{
                     border: `1px solid rgba(${ORANGE},0.08)`,
                     background: 'rgba(255,255,255,0.012)',
                     backdropFilter: 'blur(12px)',
                     boxShadow: `inset 0 1px 0 rgba(255,255,255,0.05), 0 0 0 1px rgba(${ORANGE},0.05), 0 0 20px rgba(${ORANGE},0.07)`,
                   }}>
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex min-w-0 items-center gap-2.5 sm:gap-3">
                       {s.icon ? (
                         <img src={s.icon} alt={s.iconAlt} className={s.iconClassName} loading="lazy" />
                       ) : (
                         <div className="h-3.5 w-3.5 shrink-0 rounded-sm" style={{ background: 'rgba(255,255,255,0.08)' }} />
                       )}
                       <div className="min-w-0">
-                        <p className="text-sm font-medium truncate" style={{ color: 'rgba(255,255,255,0.85)' }}>{s.label}</p>
-                        <p className="mt-0.5 text-[11px] leading-snug" style={{ color: 'rgba(255,255,255,0.32)' }}>{s.purposeCopy}</p>
+                        <p className="text-[13px] font-medium leading-tight sm:text-sm truncate" style={{ color: 'rgba(255,255,255,0.85)' }}>{s.label}</p>
+                        <p className="mt-0.5 text-[9px] font-mono uppercase tracking-[0.18em] sm:text-[10px] sm:tracking-[0.2em]" style={{ color: `rgba(${ORANGE},0.44)` }}>
+                          active strategy
+                        </p>
+                        <p className="mt-1 text-[10px] leading-snug sm:mt-1.5 sm:text-[11px]" style={{ color: 'rgba(255,255,255,0.32)' }}>{s.purposeCopy}</p>
                       </div>
                     </div>
-                    <div className="ml-4 flex shrink-0 flex-col items-end gap-0.5">
-                      <span className="font-mono text-sm font-semibold" style={{ color: 'rgba(255,255,255,0.72)' }}>{s.percent}</span>
+                    <div className="ml-3 flex shrink-0 flex-col items-end gap-1 sm:ml-4">
+                      <span className="font-mono text-sm font-semibold sm:text-base" style={{ color: `rgba(${ORANGE},0.82)` }}>{s.percent}</span>
                       {s.apy !== '—' ? (
-                        <span className="font-mono text-[10px]" style={{ color: 'rgba(255,255,255,0.26)' }}>
+                        <span className="font-mono text-[9px] sm:text-[10px]" style={{ color: 'rgba(255,255,255,0.26)' }}>
                           {s.apy}{' '}
                           <span style={{ color: 'rgba(255,255,255,0.14)' }}>APR</span>
                         </span>
                       ) : (
-                        <span className="font-mono text-[10px]" style={{ color: 'rgba(255,255,255,0.18)' }}>—</span>
+                        <span className="font-mono text-[9px] sm:text-[10px]" style={{ color: 'rgba(255,255,255,0.18)' }}>—</span>
                       )}
                     </div>
                   </div>

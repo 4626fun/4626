@@ -1,6 +1,7 @@
 type EthereumProviderCollisionState = {
   hasMultipleInjectedProviders: boolean
   lockedEthereumProviderGlobal: boolean
+  persistedCollisionSignal: boolean
   shouldDisableInjectedConnector: boolean
 }
 
@@ -59,6 +60,7 @@ export function detectEthereumProviderCollision(): EthereumProviderCollisionStat
     return {
       hasMultipleInjectedProviders: false,
       lockedEthereumProviderGlobal: false,
+      persistedCollisionSignal: false,
       shouldDisableInjectedConnector: false,
     }
   }
@@ -79,6 +81,7 @@ export function detectEthereumProviderCollision(): EthereumProviderCollisionStat
   return {
     hasMultipleInjectedProviders,
     lockedEthereumProviderGlobal,
+    persistedCollisionSignal,
     shouldDisableInjectedConnector:
       hasMultipleInjectedProviders || lockedEthereumProviderGlobal || persistedCollisionSignal,
   }

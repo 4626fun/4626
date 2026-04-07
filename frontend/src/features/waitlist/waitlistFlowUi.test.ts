@@ -31,18 +31,18 @@ describe('canEnterAppFromAccountState', () => {
 describe('deriveWaitlistDoneUi', () => {
   it('points accepted users toward app entry first', () => {
     expect(deriveWaitlistDoneUi(true)).toEqual({
-      title: "You're in!",
-      subtitle: 'Your account is ready. Enter the app now, or visit accounts to manage connected identities and points.',
+      title: 'Access approved',
+      subtitle: 'Your account is ready and app access is live. Enter the app now, or open Accounts to manage identities and points.',
       primaryLabel: '■ Enter App',
-      secondaryLabel: 'Go to accounts',
+      secondaryLabel: 'Open Accounts',
     })
   })
 
   it('points unaccepted users toward accounts while they wait for approval', () => {
     expect(deriveWaitlistDoneUi(false)).toEqual({
-      title: "You're in!",
-      subtitle: 'Your waitlist account is set. Visit accounts to manage identities and points while approval is pending.',
-      primaryLabel: '■ Go to accounts',
+      title: 'Account ready',
+      subtitle: 'Your account is set up. App access is still pending. Open Accounts to manage identities and points while you wait.',
+      primaryLabel: '■ Open Accounts',
       secondaryLabel: null,
     })
   })

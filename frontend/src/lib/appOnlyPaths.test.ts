@@ -19,7 +19,7 @@ describe('appOnlyPaths', () => {
     expect(isAppOnlyPath('/swap')).toBe(true)
     expect(isAppOnlyPath('/telegram/link')).toBe(true)
     expect(isAppOnlyPath('/deploy')).toBe(true)
-    expect(isAppOnlyPath('/continue')).toBe(true)
+    expect(isAppOnlyPath('/continue')).toBe(false)
     expect(isAppOnlyPath('/portfolio/0xabc')).toBe(true)
   })
 })

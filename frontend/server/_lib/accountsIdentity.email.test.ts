@@ -169,4 +169,40 @@ describe('accountsIdentity verified email handling', () => {
 
     expect(db.calls).toHaveLength(0)
   })
+
+  it('re-reads the canonical profile after losing a privy_user_id insert race', async () => {
+    const db = createRecordingDb()
+    const originalSql = db.sql.getMockImplementation()
+    let profileLookupCount = 0
+    let profileInsertCount = 0
+
+    db.sql.mockImplementation(async (strings: TemplateStringsArray, ...values: any[]) => {
+      const text = normalizeSql(strings)
+      if (text.includes('select id from profiles where privy_user_id =')) {
+        profileLookupCount += 1
+        if (profileLookupCount === 1) return { rows: [] }
+        return { rows: [{ id: 42 }] }
+      }
+      if (text.includes('insert into profiles (privy_user_id, created_at, updated_at)')) {
+        profileInsertCount += 1
+        throw new Error('duplicate key value violates unique constraint "profiles_privy_user_id_unique"')
+      }
+      return await originalSql?.(strings, ...values)
+    })
+
+    await expect(
+      syncEmailIdentity({
+        db: db as any,
+        privyUserId: 'did:privy:test-user',
+        privyUser: {
+          id: 'did:privy:test-user',
+          email: { address: 'verified@example.com', verified: true },
+          linkedAccounts: [{ type: 'email', address: 'verified@example.com', verified: true }],
+        } as any,
+      }),
+    ).resolves.toBeUndefined()
+
+    expect(profileInsertCount).toBe(1)
+    expect(profileLookupCount).toBeGreaterThanOrEqual(2)
+  })
 })

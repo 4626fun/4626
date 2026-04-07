@@ -10,8 +10,10 @@ const {
   ensureAccountsIdentitySchemaMock,
   syncEmailIdentityMock,
   upsertAccountMock,
+  upsertLinkedMethodMock,
   buildAccountsMePayloadMock,
   assertNoEmailPrivyCollisionMock,
+  classifyLinkedAccountsMock,
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   ensureWaitlistSchemaMock: vi.fn(),
@@ -19,8 +21,10 @@ const {
   ensureAccountsIdentitySchemaMock: vi.fn(),
   syncEmailIdentityMock: vi.fn(),
   upsertAccountMock: vi.fn(),
+  upsertLinkedMethodMock: vi.fn(),
   buildAccountsMePayloadMock: vi.fn(),
   assertNoEmailPrivyCollisionMock: vi.fn(),
+  classifyLinkedAccountsMock: vi.fn(),
 }))
 
 vi.mock('../../server/_lib/postgres.js', () => ({
@@ -36,7 +40,12 @@ vi.mock('../../server/_lib/accountsIdentity.js', () => ({
   ensureAccountsIdentitySchema: ensureAccountsIdentitySchemaMock,
   syncEmailIdentity: syncEmailIdentityMock,
   upsertAccount: upsertAccountMock,
+  upsertLinkedMethod: upsertLinkedMethodMock,
   buildAccountsMePayload: buildAccountsMePayloadMock,
+}))
+
+vi.mock('../../server/_lib/walletMapping.js', () => ({
+  classifyLinkedAccounts: classifyLinkedAccountsMock,
 }))
 
 vi.mock('../../server/_lib/identityRecovery.js', () => ({
@@ -52,6 +61,15 @@ describe('POST /api/waitlist/bootstrap', () => {
     verifyPrivyForAccountsMock.mockResolvedValue({
       privyUserId: 'did:privy:test-user',
       privyUser: { id: 'did:privy:test-user', email: { address: 'user@example.com' } },
+    })
+    classifyLinkedAccountsMock.mockReturnValue({
+      embeddedEoa: { address: '0xabc1230000000000000000000000000000000000', chainType: 'evm', clientType: 'privy' },
+      activeOwnerWallet: null,
+      canonicalSmartWallet: null,
+      canonicalSolanaWallet: null,
+      operationalSolanaWallet: null,
+      allWallets: [{ address: '0xabc1230000000000000000000000000000000000', walletType: 'embedded_eoa', provider: 'privy', chain: 'evm', clientType: 'privy' }],
+      primaryWalletAddress: '0xabc1230000000000000000000000000000000000',
     })
     buildAccountsMePayloadMock.mockResolvedValue({
       privyUserId: 'did:privy:test-user',
@@ -82,6 +100,50 @@ describe('POST /api/waitlist/bootstrap', () => {
     )
   })
 
+  it('rebinds the canonical email profile when a placeholder privy profile collides on email', async () => {
+    const duplicateEmailError = new Error('duplicate key value violates unique constraint "waitlist_signups_email_key"')
+    getDbMock.mockResolvedValue({
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        if (text.startsWith('update profiles') && text.includes('set email = coalesce')) {
+          throw duplicateEmailError
+        }
+        if (text.includes('from profiles') && text.includes('where lower(email) = lower(')) {
+          return { rows: [{ id: 42 }] }
+        }
+        if (text.startsWith('update profiles') && text.includes('set privy_user_id =') && text.includes('where id =')) {
+          return { rows: [] }
+        }
+        if (text.includes('from profiles') && text.includes('where privy_user_id =') && text.includes('and id <>')) {
+          return { rows: [{ id: 99 }] }
+        }
+        if (text.startsWith('insert into points') && text.includes('select')) {
+          return { rows: [] }
+        }
+        if (text.startsWith('delete from points')) {
+          return { rows: [] }
+        }
+        if (text.startsWith('update profiles') && text.includes('set privy_user_id = null')) {
+          return { rows: [] }
+        }
+        return { rows: [] }
+      }),
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-token' },
+      body: { email: 'user@example.com' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(upsertAccountMock).toHaveBeenCalled()
+  })
+
   it('returns deterministic recovery-required payload on email collision without a transport error status', async () => {
     const error = Object.assign(new Error('collision'), {
       code: 'IDENTITY_RECOVERY_REQUIRED',
@@ -101,6 +163,196 @@ describe('POST /api/waitlist/bootstrap', () => {
     expect(res.body?.success).toBe(false)
     expect(res.body?.code).toBe('RECOVERY_REQUIRED_EMAIL_BOUND')
     expect(res.body?.recoveryRequired).toBe(true)
+  })
+
+  it('adopts a wallet-owned email profile when sync hits a privy-user collision', async () => {
+    const recoveryError = Object.assign(new Error('collision'), {
+      code: 'IDENTITY_RECOVERY_REQUIRED',
+      reason: 'EMAIL_BOUND_TO_DIFFERENT_PRIVY_USER',
+      email: 'user@example.com',
+      requestedPrivyUserId: 'did:privy:test-user',
+      existingPrivyUserId: 'did:privy:old-user',
+    })
+    syncEmailIdentityMock.mockRejectedValueOnce(recoveryError).mockResolvedValueOnce(undefined)
+    getDbMock.mockResolvedValue({
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        if (text.includes('from profiles') && text.includes('where lower(email) = lower(')) {
+          return {
+            rows: [
+              {
+                id: 42,
+                privy_user_id: 'did:privy:old-user',
+                primary_wallet: '0xAbC1230000000000000000000000000000000000',
+                solana_wallet: null,
+                canonical_solana_wallet: null,
+                operational_solana_wallet: null,
+                embedded_wallet: null,
+                base_sub_account: null,
+                csw_address: null,
+                primary_smart_wallet: null,
+                primary_embedded_eoa: null,
+              },
+            ],
+          }
+        }
+        if (text.includes('update profiles') && text.includes('returning id')) {
+          return { rows: [{ id: 42 }] }
+        }
+        if (text.includes('from profile_wallets') && text.includes('where profile_id =')) {
+          return { rows: [] }
+        }
+        return { rows: [] }
+      }),
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-token' },
+      body: { email: 'user@example.com' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(syncEmailIdentityMock).toHaveBeenCalledTimes(2)
+    expect(upsertLinkedMethodMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        privyUserId: 'did:privy:test-user',
+        type: 'email',
+        value: 'user@example.com',
+        verified: true,
+      }),
+    )
+  })
+
+  it('does not adopt when the recovery error belongs to a different email', async () => {
+    const recoveryError = Object.assign(new Error('collision'), {
+      code: 'IDENTITY_RECOVERY_REQUIRED',
+      reason: 'EMAIL_BOUND_TO_DIFFERENT_PRIVY_USER',
+      email: 'other@example.com',
+      requestedPrivyUserId: 'did:privy:test-user',
+      existingPrivyUserId: 'did:privy:old-user',
+    })
+    syncEmailIdentityMock.mockRejectedValueOnce(recoveryError)
+    getDbMock.mockResolvedValue({
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        if (text.includes('from profiles') && text.includes('where lower(email) = lower(')) {
+          return {
+            rows: [
+              {
+                id: 42,
+                primary_wallet: '0xAbC1230000000000000000000000000000000000',
+              },
+            ],
+          }
+        }
+        return { rows: [] }
+      }),
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-token' },
+      body: { email: 'user@example.com' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(false)
+    expect(res.body?.code).toBe('RECOVERY_REQUIRED_EMAIL_BOUND')
+    expect(syncEmailIdentityMock).toHaveBeenCalledTimes(1)
+    expect(upsertLinkedMethodMock).not.toHaveBeenCalled()
+  })
+
+  it('does not adopt when the collision belongs to a different privy user than the current request', async () => {
+    const recoveryError = Object.assign(new Error('collision'), {
+      code: 'IDENTITY_RECOVERY_REQUIRED',
+      reason: 'EMAIL_BOUND_TO_DIFFERENT_PRIVY_USER',
+      email: 'user@example.com',
+      requestedPrivyUserId: 'did:privy:someone-else',
+      existingPrivyUserId: 'did:privy:old-user',
+    })
+    syncEmailIdentityMock.mockRejectedValueOnce(recoveryError)
+    getDbMock.mockResolvedValue({
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        if (text.includes('from profiles') && text.includes('where lower(email) = lower(')) {
+          return {
+            rows: [
+              {
+                id: 42,
+                primary_wallet: '0xAbC1230000000000000000000000000000000000',
+              },
+            ],
+          }
+        }
+        return { rows: [] }
+      }),
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-token' },
+      body: { email: 'user@example.com' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(false)
+    expect(res.body?.code).toBe('RECOVERY_REQUIRED_EMAIL_BOUND')
+    expect(syncEmailIdentityMock).toHaveBeenCalledTimes(1)
+    expect(upsertLinkedMethodMock).not.toHaveBeenCalled()
+  })
+
+  it('does not adopt when the stored profile owner changed after the collision was detected', async () => {
+    const recoveryError = Object.assign(new Error('collision'), {
+      code: 'IDENTITY_RECOVERY_REQUIRED',
+      reason: 'EMAIL_BOUND_TO_DIFFERENT_PRIVY_USER',
+      email: 'user@example.com',
+      requestedPrivyUserId: 'did:privy:test-user',
+      existingPrivyUserId: 'did:privy:old-user',
+    })
+    syncEmailIdentityMock.mockRejectedValueOnce(recoveryError)
+    getDbMock.mockResolvedValue({
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+        if (text.includes('from profiles') && text.includes('where lower(email) = lower(')) {
+          return {
+            rows: [
+              {
+                id: 42,
+                privy_user_id: 'did:privy:new-owner',
+                primary_wallet: '0xAbC1230000000000000000000000000000000000',
+              },
+            ],
+          }
+        }
+        return { rows: [] }
+      }),
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-token' },
+      body: { email: 'user@example.com' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(false)
+    expect(res.body?.code).toBe('RECOVERY_REQUIRED_EMAIL_BOUND')
+    expect(syncEmailIdentityMock).toHaveBeenCalledTimes(1)
+    expect(upsertLinkedMethodMock).not.toHaveBeenCalled()
   })
 
   it('returns requiresPrivyAuth plus existing waitlist entry id before auth', async () => {

@@ -3,17 +3,17 @@ import { describe, expect, it } from 'vitest'
 import { APP_ENTRY_DEFAULT_NEXT, buildAppEntryPath, buildAppEntryUrl, readSafeNextPath } from './appEntry'
 
 describe('appEntry helpers', () => {
-  it('builds the canonical waitlist handoff path to the app landing route', () => {
-    expect(buildAppEntryPath()).toBe('/continue')
+  it('builds the direct app landing path', () => {
+    expect(buildAppEntryPath()).toBe('/swap')
   })
 
   it('builds a full app-entry URL from an origin', () => {
-    expect(buildAppEntryUrl('https://v1.4626.fun')).toBe('https://v1.4626.fun/continue')
+    expect(buildAppEntryUrl('https://v1.4626.fun')).toBe('https://v1.4626.fun/swap')
   })
 
-  it('preserves an explicit non-default app destination with a minimal next query', () => {
-    expect(buildAppEntryPath('/accounts')).toBe('/continue?next=%2Faccounts')
-    expect(buildAppEntryUrl('https://v1.4626.fun', '/accounts')).toBe('https://v1.4626.fun/continue?next=%2Faccounts')
+  it('preserves an explicit app destination directly', () => {
+    expect(buildAppEntryPath('/accounts')).toBe('/accounts')
+    expect(buildAppEntryUrl('https://v1.4626.fun', '/accounts')).toBe('https://v1.4626.fun/accounts')
   })
 
   it('accepts safe internal paths for next routing', () => {

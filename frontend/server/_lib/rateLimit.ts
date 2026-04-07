@@ -85,6 +85,10 @@ export const RATE_LIMITS = {
   deployCreate: { windowMs: 60_000, maxRequests: 3 },
   // Admin actions: 30 per minute per address
   adminAction: { windowMs: 60_000, maxRequests: 30 },
+  // Creative generation API: 30 per minute per IP
+  agentCreative: { windowMs: 60_000, maxRequests: 30 },
+  // OpenClaw creative adapter: 20 per minute per actor+IP
+  openclawCreativeAdapter: { windowMs: 60_000, maxRequests: 20 },
   // General API: 60 per minute per IP
   general: { windowMs: 60_000, maxRequests: 60 },
 } as const

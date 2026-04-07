@@ -21,7 +21,7 @@ describe('WaitlistInviteEntry', () => {
     window.sessionStorage.clear()
   })
 
-  it('stores the referral code, arms waitlist auth, and redirects to waitlist', async () => {
+  it('stores the referral code and redirects to waitlist without auto-starting auth', async () => {
     render(
       <MemoryRouter initialEntries={['/r/friend-42']}>
         <Routes>
@@ -33,7 +33,7 @@ describe('WaitlistInviteEntry', () => {
 
     expect((await screen.findByTestId('location')).textContent).toBe('/waitlist')
     expect(window.sessionStorage.getItem('cv:waitlist:referral_code')).toBe('FRIEND42')
-    expect(window.sessionStorage.getItem('cv:waitlist:auth_armed')).toBe('1')
-    expect(window.sessionStorage.getItem('cv:waitlist:auth_auto_start')).toBe('1')
+    expect(window.sessionStorage.getItem('cv:waitlist:auth_armed')).toBeNull()
+    expect(window.sessionStorage.getItem('cv:waitlist:auth_auto_start')).toBeNull()
   })
 })

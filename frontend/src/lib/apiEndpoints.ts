@@ -48,4 +48,7 @@ export const API_ENDPOINTS = {
     checkDelegation: '/api/uniswap/checkDelegation',
     plan: '/api/uniswap/plan',
   },
+  agent: {
+    creative: '/api/agent/creative',
+  },
 } as const

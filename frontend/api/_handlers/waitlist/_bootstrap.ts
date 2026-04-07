@@ -28,6 +28,7 @@ import {
   upsertAccount,
   verifyPrivyForAccounts,
 } from '../../../server/_lib/accountsIdentity.js'
+import { runWithOwnedEmailCollisionAdoption } from '../../../server/_lib/emailCollisionAdoption.js'
 
 type BootstrapBody = { email?: string; referralCode?: string }
 type WaitlistBootstrapResponse =
@@ -64,6 +65,15 @@ function isPrivyUserIdUniqueViolation(error: unknown): boolean {
   )
 }
 
+function isProfileEmailUniqueViolation(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('waitlist_signups_email_key') ||
+    (lower.includes('duplicate key value') && lower.includes('email'))
+  )
+}
+
 function readPrivyToken(req: VercelRequest): string | null {
   const fromHeader = typeof req.headers?.['x-privy-token'] === 'string' ? req.headers['x-privy-token'].trim() : ''
   if (fromHeader) return fromHeader
@@ -82,6 +92,58 @@ async function upsertBootstrapProfile(params: {
 }): Promise<void> {
   const { db, email, privyUserId } = params
 
+  const rebindEmailProfileToPrivyUser = async (): Promise<boolean> => {
+    const emailProfile = await db.sql`
+      SELECT id
+      FROM profiles
+      WHERE LOWER(email) = LOWER(${email})
+      ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
+      LIMIT 1;
+    `
+    const targetIdRaw = emailProfile.rows?.[0]?.id
+    const targetId = typeof targetIdRaw === 'number' ? targetIdRaw : Number(targetIdRaw)
+    if (!Number.isFinite(targetId) || targetId <= 0) return false
+
+    await db.sql`
+      UPDATE profiles
+      SET privy_user_id = ${privyUserId}, updated_at = NOW()
+      WHERE id = ${targetId};
+    `
+
+    const placeholderProfiles = await db.sql`
+      SELECT id
+      FROM profiles
+      WHERE privy_user_id = ${privyUserId}
+        AND id <> ${targetId}
+      ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC;
+    `
+
+    for (const row of placeholderProfiles.rows ?? []) {
+      const placeholderIdRaw = (row as { id?: unknown })?.id
+      const placeholderId = typeof placeholderIdRaw === 'number' ? placeholderIdRaw : Number(placeholderIdRaw)
+      if (!Number.isFinite(placeholderId) || placeholderId <= 0) continue
+
+      await db.sql`
+        INSERT INTO points (signup_id, source, source_id, amount, created_at)
+        SELECT ${targetId}, source, source_id, amount, created_at
+        FROM points
+        WHERE signup_id = ${placeholderId}
+        ON CONFLICT DO NOTHING;
+      `
+      await db.sql`
+        DELETE FROM points
+        WHERE signup_id = ${placeholderId};
+      `
+      await db.sql`
+        UPDATE profiles
+        SET privy_user_id = NULL, updated_at = NOW()
+        WHERE id = ${placeholderId};
+      `
+    }
+
+    return true
+  }
+
   const updateByPrivyUserId = async () =>
     db.sql`
       UPDATE profiles
@@ -92,8 +154,14 @@ async function upsertBootstrapProfile(params: {
       RETURNING id;
     `
 
-  const existingByPrivy = await updateByPrivyUserId()
-  if (Array.isArray(existingByPrivy.rows) && existingByPrivy.rows.length > 0) return
+  try {
+    const existingByPrivy = await updateByPrivyUserId()
+    if (Array.isArray(existingByPrivy.rows) && existingByPrivy.rows.length > 0) return
+  } catch (error) {
+    if (!isProfileEmailUniqueViolation(error)) throw error
+    if (await rebindEmailProfileToPrivyUser()) return
+    throw error
+  }
 
   try {
     await db.sql`
@@ -105,8 +173,10 @@ async function upsertBootstrapProfile(params: {
     `
     return
   } catch (error) {
-    if (!isPrivyUserIdUniqueViolation(error)) throw error
+    if (!isPrivyUserIdUniqueViolation(error) && !isProfileEmailUniqueViolation(error)) throw error
   }
+
+  if (await rebindEmailProfileToPrivyUser()) return
 
   const recoveredByPrivy = await updateByPrivyUserId()
   if (Array.isArray(recoveredByPrivy.rows) && recoveredByPrivy.rows.length > 0) return
@@ -341,20 +411,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const context = await verifyPrivyForAccounts(req)
     await ensureAccountsIdentitySchema(db as any)
 
-    await syncEmailIdentity({
+    const privyEmail = normalizeEmail((context.privyUser as any)?.email?.address)
+    await runWithOwnedEmailCollisionAdoption({
       db: db as any,
+      email: privyEmail,
       privyUserId: context.privyUserId,
       privyUser: context.privyUser,
+      action: () =>
+        syncEmailIdentity({
+          db: db as any,
+          privyUserId: context.privyUserId,
+          privyUser: context.privyUser,
+        }),
     })
 
-    const privyEmail = normalizeEmail((context.privyUser as any)?.email?.address)
     // Only Privy's verified email is allowed to become the canonical account email.
     // Pre-auth form input is intent, not proof.
     if (privyEmail) {
-      await assertNoEmailPrivyCollision({
+      await runWithOwnedEmailCollisionAdoption({
         db: db as any,
         email: privyEmail,
         privyUserId: context.privyUserId,
+        privyUser: context.privyUser,
+        action: () =>
+          assertNoEmailPrivyCollision({
+            db: db as any,
+            email: privyEmail,
+            privyUserId: context.privyUserId,
+          }),
       })
       await upsertAccount({
         db: db as any,

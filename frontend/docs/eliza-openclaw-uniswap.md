@@ -37,3 +37,16 @@ Example:
 ```text
 /uniswap uniswap_quote {"tokenIn":"0x4200000000000000000000000000000000000006","tokenOut":"0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913","tokenInChainId":8453,"tokenOutChainId":8453,"type":"EXACT_INPUT","amount":"1000000000000000","swapper":"0x1111111111111111111111111111111111111111"}
 ```
+
+## Creative rate-limit policy
+
+Creative generation now has intentionally split limits so the direct API path stays primary:
+
+- `POST /api/agent/creative` uses `RATE_LIMITS.agentCreative` (`30/min` per IP).
+- `POST /api/openclaw/execute` for creative tools (`referral_og`, `share_page_copy`, `quest_reward`, `metadata_bundle`) also enforces `RATE_LIMITS.openclawCreativeAdapter` (`20/min` per actor+IP).
+
+Why this split:
+
+- Direct creative endpoint is the canonical path and gets the higher budget.
+- OpenClaw creative adapter is a compatibility layer, so it is intentionally stricter.
+- Both limits are independently tunable without changing creative contract behavior.

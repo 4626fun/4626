@@ -2,7 +2,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import type { Address } from 'viem'
 
 import {
+  RATE_LIMITS,
+  checkRateLimit,
   handleOptions,
+  rateLimitKey,
   readJsonBody,
   setCors,
   setNoStore,
@@ -22,6 +25,11 @@ import { getCanonicalOrigin } from '../../../server/_lib/origin.js'
 import { buildShareTokenMetadata } from '../../../server/_lib/shareTokenMetadata.js'
 import { requireServerKey } from '../../../server/zora/_shared.js'
 import { executeUniswapSkill, type UniswapSkillName } from '../../../server/uniswap/agentSkills.js'
+import {
+  generateCreativeEnvelope,
+  getCreativeContextValidationError,
+  type CreativeMode,
+} from '../agent/_creative.js'
 
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
@@ -37,6 +45,25 @@ function normalizeAddress(value: unknown): string {
 
 function isAddressLike(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
+}
+
+function isCreativeMode(value: string): value is CreativeMode {
+  return (
+    value === 'referral_og' ||
+    value === 'share_page_copy' ||
+    value === 'quest_reward' ||
+    value === 'metadata_bundle'
+  )
+}
+
+function resolveCreativeContext(input: Record<string, unknown>): Record<string, unknown> {
+  if (input.context && typeof input.context === 'object' && !Array.isArray(input.context)) {
+    return input.context as Record<string, unknown>
+  }
+  if (input.input && typeof input.input === 'object' && !Array.isArray(input.input)) {
+    return input.input as Record<string, unknown>
+  }
+  return input
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -79,6 +106,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         ? (input.payload as Record<string, unknown>)
         : {}
       const data = await executeUniswapSkill(tool as UniswapSkillName, payload)
+      return res.status(200).json({ success: true, data } satisfies ApiEnvelope<unknown>)
+    }
+
+    if (isCreativeMode(tool)) {
+      const creativeRateActor = typeof guard.auth?.address === 'string' ? guard.auth.address.toLowerCase() : 'unknown'
+      const creativeRate = checkRateLimit(
+        rateLimitKey('openclaw-creative', creativeRateActor, guard.ip),
+        RATE_LIMITS.openclawCreativeAdapter,
+      )
+      res.setHeader(
+        'X-OpenClaw-Creative-RateLimit-Limit',
+        String(RATE_LIMITS.openclawCreativeAdapter.maxRequests),
+      )
+      res.setHeader('X-OpenClaw-Creative-RateLimit-Remaining', String(Math.max(0, creativeRate.remaining)))
+      res.setHeader('X-OpenClaw-Creative-RateLimit-Reset', String(Math.floor(creativeRate.resetAt / 1000)))
+      if (!creativeRate.allowed) {
+        res.setHeader('Retry-After', String(Math.max(1, Math.ceil((creativeRate.resetAt - Date.now()) / 1000))))
+        return res
+          .status(429)
+          .json({ success: false, error: 'Creative adapter rate limit exceeded' } satisfies ApiEnvelope<never>)
+      }
+
+      const creativeContext = resolveCreativeContext(input)
+      const contextValidationError = getCreativeContextValidationError(creativeContext)
+      if (contextValidationError) {
+        const statusCode = contextValidationError === 'Creative context too large' ? 413 : 400
+        return res.status(statusCode).json({ success: false, error: contextValidationError } satisfies ApiEnvelope<never>)
+      }
+
+      const data = await generateCreativeEnvelope({
+        mode: tool,
+        context: creativeContext,
+        // Keep OpenClaw compatibility path deterministic and low-latency.
+        allowLlm: false,
+      })
       return res.status(200).json({ success: true, data } satisfies ApiEnvelope<unknown>)
     }
 

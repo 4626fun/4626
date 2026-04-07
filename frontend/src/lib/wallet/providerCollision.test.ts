@@ -22,6 +22,7 @@ describe('detectEthereumProviderCollision', () => {
     expect(detectEthereumProviderCollision()).toEqual({
       hasMultipleInjectedProviders: false,
       lockedEthereumProviderGlobal: false,
+      persistedCollisionSignal: false,
       shouldDisableInjectedConnector: false,
     })
   })
@@ -135,6 +136,7 @@ describe('detectEthereumProviderCollision', () => {
     const state = detectEthereumProviderCollision()
     expect(state.hasMultipleInjectedProviders).toBe(false)
     expect(state.lockedEthereumProviderGlobal).toBe(false)
+    expect(state.persistedCollisionSignal).toBe(true)
     expect(state.shouldDisableInjectedConnector).toBe(true)
   })
 })

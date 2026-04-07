@@ -16,6 +16,9 @@ describe('AdminImageGeneration', () => {
     expect(html).toContain('Generate')
     expect(html).toContain('Refine output')
     expect(html).toContain('Preview expects a public Supabase image bucket')
+    expect(html).toContain('Generate brief from Agent Creative endpoint')
+    expect(html).toContain('/api/agent/creative')
+    expect(html).toContain('Generate brief')
   })
 
   it('documents the local Vite imagegen API routes needed for localhost /admin/imagegen testing', () => {
@@ -28,5 +31,6 @@ describe('AdminImageGeneration', () => {
     expect(viteConfigSource).toContain("'/api/image/jobs/status': () => import('./api/_handlers/image/_jobs-status')")
     expect(viteConfigSource).toContain("'/api/image/projects/get': () => import('./api/_handlers/image/_projects-get')")
     expect(viteConfigSource).toContain("'/api/image/external': () => import('./api/_handlers/image/_external-proxy')")
+    expect(viteConfigSource).toContain("'/api/agent/creative': () => import('./api/_handlers/agent/_creative')")
   })
 })

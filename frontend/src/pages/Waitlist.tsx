@@ -1,10 +1,9 @@
-import { Suspense, lazy, useState } from 'react'
+import { Suspense, lazy } from 'react'
 import { motion } from 'framer-motion'
 
 import { PageMeta } from '@/components/seo/PageMeta'
-import { consumeStoredWaitlistAuthArmed, consumeStoredWaitlistAuthAutoStart } from '@/lib/auth/waitlistEntry'
 import { PrivyClientProvider } from '@/lib/privy/client'
-import { Web3Providers } from '@/web3/Web3Providers'
+import { AppQueryProvider } from '@/web3/Web3Providers'
 
 const LazyWaitlistFlow = lazy(async () => {
   const mod = await import('@/features/waitlist/WaitlistFlow')
@@ -12,14 +11,6 @@ const LazyWaitlistFlow = lazy(async () => {
 })
 
 export function Waitlist() {
-  const [initialWaitlistState] = useState(() => {
-    const autoStart = consumeStoredWaitlistAuthAutoStart()
-    const armed = consumeStoredWaitlistAuthArmed() || autoStart
-    // Only auto-start when an upstream entrypoint explicitly armed it.
-    // Direct /waitlist visits should remain manual to avoid auth/bootstrap loops.
-    return { autoStart: autoStart || armed }
-  })
-
   return (
     <div className="min-h-screen flex flex-col">
       <PageMeta
@@ -49,8 +40,8 @@ export function Waitlist() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5, delay: 0.2 }}
           >
-            <PrivyClientProvider showWalletLoginFirst={false}>
-              <Web3Providers>
+            <PrivyClientProvider showWalletLoginFirst={false} mode="waitlist-email-only">
+              <AppQueryProvider>
                 <Suspense
                   fallback={
                     <div className="card rounded-2xl border border-white/10 bg-black/50 p-6 sm:p-8 text-sm text-zinc-400">
@@ -58,12 +49,9 @@ export function Waitlist() {
                     </div>
                   }
                 >
-                  <LazyWaitlistFlow
-                    sectionId="waitlist-page"
-                    autoStartAuth={initialWaitlistState.autoStart}
-                  />
+                  <LazyWaitlistFlow sectionId="waitlist-page" />
                 </Suspense>
-              </Web3Providers>
+              </AppQueryProvider>
             </PrivyClientProvider>
           </motion.div>
         </div>

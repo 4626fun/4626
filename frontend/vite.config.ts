@@ -279,6 +279,7 @@ function localApiRoutesPlugin(): Plugin {
         '/api/uniswap/plan': () => import('./api/_handlers/uniswap/_plan'),
         '/api/uniswap/liquidity': () => import('./api/_handlers/uniswap/_liquidity'),
         '/api/agent/invokeSkill': () => import('./api/_handlers/agent/_invokeSkill'),
+        '/api/agent/creative': () => import('./api/_handlers/agent/_creative'),
         '/api/lens/mapping': () => import('./api/_handlers/lens/_mapping'),
         '/api/lens/graph': () => import('./api/_handlers/lens/_graph'),
         '/api/lens/share-token-metadata': () => import('./api/_handlers/lens/_share-token-metadata'),

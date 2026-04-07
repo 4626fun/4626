@@ -12,7 +12,66 @@ vi.mock('@tanstack/react-query', () => ({
 
 import { AgentVerificationCard } from './AgentVerificationCard'
 
-const baseVerificationData = {
+type VerificationPayload = {
+  chainId: number
+  registryAddress: string
+  agentId: number
+  canonicalCsw: string | null
+  ownerAddress: string | null
+  agentWallet: string | null
+  tokenUri: string | null
+  agentRegistered: boolean
+  walletBoundToCanonical: boolean
+  discoverabilityReady: boolean
+  tokenUriIsStrictImmutable: boolean
+  tokenUriMatchesCanonical: boolean
+  endpoint: {
+    url: string | null
+    ok: boolean
+    status: number | null
+    error: string | null
+  }
+  mirrors: {
+    registration: {
+      url: string
+      reachable: boolean
+      finalUrl: string | null
+      matchesCanonical: boolean
+      agentIdMatches: boolean
+      error: string | null
+    }
+    domainVerification: {
+      url: string
+      reachable: boolean
+      finalUrl: string | null
+      matchesCanonical: boolean
+      error: string | null
+    }
+  }
+  checks: Array<{
+    id: string
+    passed: boolean
+    detail: string
+  }>
+  links: {
+    registry: string
+    token: string
+    canonicalCsw: string | null
+    ownerAddress: string | null
+    agentWallet: string | null
+  }
+}
+
+type VerificationOverrides =
+  Omit<Partial<VerificationPayload>, 'endpoint' | 'mirrors'> & {
+    endpoint?: Partial<VerificationPayload['endpoint']>
+    mirrors?: {
+      registration?: Partial<VerificationPayload['mirrors']['registration']>
+      domainVerification?: Partial<VerificationPayload['mirrors']['domainVerification']>
+    }
+  }
+
+const baseVerificationData: VerificationPayload = {
   chainId: 8453,
   registryAddress: '0x1111111111111111111111111111111111111111',
   agentId: 2205,
@@ -56,9 +115,9 @@ const baseVerificationData = {
     ownerAddress: 'https://basescan.org/address/0x3333333333333333333333333333333333333333',
     agentWallet: 'https://basescan.org/address/0x2222222222222222222222222222222222222222',
   },
-} as const
+}
 
-function renderCard(data: Partial<typeof baseVerificationData> = {}) {
+function renderCard(data: VerificationOverrides = {}) {
   useQueryMock.mockReturnValue({
     data: {
       ...baseVerificationData,

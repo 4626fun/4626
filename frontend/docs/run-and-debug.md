@@ -138,15 +138,12 @@ VITE_MARKETING_ORIGIN=http://localhost:5173
 
 Open `frontend/src/pages/Home.tsx`.
 
-Set a breakpoint inside `openWaitlistDirectAuth()`:
+Set a breakpoint on the waitlist CTA link:
 
-```ts
-const openWaitlistDirectAuth = useCallback(() => {
-  armWaitlistProviders()
-  clearStoredWaitlistAuthState()
-  clearStoredWaitlistReferralCode()
-  setWaitlistInlineOpen(true)
-}, [armWaitlistProviders])
+```tsx
+<Link to="/waitlist" className={heroCtaClass}>
+  Join waitlist
+</Link>
 ```
 
 Launch `Frontend: Dev + Chrome`.
@@ -154,18 +151,12 @@ Launch `Frontend: Dev + Chrome`.
 When the page loads:
 
 1. Click `Join waitlist`.
-2. When the breakpoint hits, add these watch expressions:
-   - `waitlistProvidersArmed`
-   - `waitlistInlineOpen`
-   - `waitlistAutoStart`
-3. Use `Step Over` through the function body.
-4. Notice that the watched state values still reflect the pre-click render while you are inside the callback.
-5. Hit `Continue`, then confirm the UI re-renders with the embedded waitlist flow visible.
+2. Confirm navigation lands on `/waitlist`.
+3. Confirm the waitlist page stays manual until the user explicitly clicks `Continue`.
 
 Good `Debug Console` probes while paused:
 
 - `window.location.pathname`
-- `window.sessionStorage.getItem('cv:waitlist:auth_armed')`
 - `window.sessionStorage.getItem('cv:waitlist:referral_code')`
 
 ### 3. Practice logpoints on the scroll animation

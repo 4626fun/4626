@@ -119,6 +119,15 @@ function normalizeString(value: unknown): string | null {
   return raw.length > 0 ? raw : null
 }
 
+function isPrivyUserIdUniqueViolation(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('profiles_privy_user_id_unique') ||
+    (lower.includes('duplicate key value') && lower.includes('privy_user_id'))
+  )
+}
+
 function toScoreTier(points: number): number {
   if (points >= 250) return 3
   if (points >= 120) return 2
@@ -444,10 +453,14 @@ async function resolveOrCreateCanonicalProfileIdForPrivyUser(db: Db, privyUserId
   const existing = await listProfileIdsForPrivyUser(db, privyUserId)
   if (existing.length > 0) return existing[0]
 
-  await db.sql`
-    INSERT INTO profiles (privy_user_id, created_at, updated_at)
-    VALUES (${privyUserId}, NOW(), NOW());
-  `
+  try {
+    await db.sql`
+      INSERT INTO profiles (privy_user_id, created_at, updated_at)
+      VALUES (${privyUserId}, NOW(), NOW());
+    `
+  } catch (error) {
+    if (!isPrivyUserIdUniqueViolation(error)) throw error
+  }
   const created = await listProfileIdsForPrivyUser(db, privyUserId)
   if (created.length > 0) return created[0]
   throw new Error('accounts_profile_upsert_failed')

@@ -20,30 +20,14 @@ export function resolveWaitlistStep(params: {
   return 'done'
 }
 
-export function shouldAutoStartWaitlistAuth(params: {
-  autoStartRequested?: boolean
-  step: WaitlistStep
-  privyAuthed: boolean
-  privyClientStatus: 'disabled' | 'loading' | 'ready'
-  recoveryRequired: boolean
-  error: string | null
-}): boolean {
-  const autoStartAllowed = params.autoStartRequested === true
-  if (!autoStartAllowed) return false
-  if (params.step !== 'auth') return false
-  if (params.privyAuthed) return false
-  if (params.privyClientStatus !== 'ready') return false
-  if (params.recoveryRequired) return false
-  if (params.error) return false
-  return true
-}
-
 export function shouldAutoBootstrapWaitlistSession(params: {
   step: WaitlistStep
   privyAuthed: boolean
+  recoveryRequired: boolean
 }): boolean {
   if (params.step !== 'auth') return false
   if (!params.privyAuthed) return false
+  if (params.recoveryRequired) return false
   return true
 }
 

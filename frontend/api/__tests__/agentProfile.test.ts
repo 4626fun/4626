@@ -107,11 +107,11 @@ vi.mock('../../packages/server-core/src/index.js', async () => {
 })
 
 vi.mock('../../server/_lib/origin.js', () => ({
-  getErc8004PublicOrigin: (...args: unknown[]) => mocks.getErc8004PublicOrigin(...args),
+  getErc8004PublicOrigin: () => mocks.getErc8004PublicOrigin(),
 }))
 
 vi.mock('../../server/_lib/agentRegistration.js', () => ({
-  buildAgentRegistration: (...args: unknown[]) => mocks.buildAgentRegistration(...args),
+  buildAgentRegistration: (origin: string) => mocks.buildAgentRegistration(origin),
 }))
 
 vi.mock('../_handlers/v1/agents/identity/_verification.ts', async () => {
@@ -120,12 +120,12 @@ vi.mock('../_handlers/v1/agents/identity/_verification.ts', async () => {
   )
   return {
     ...actual,
-    buildAgentVerificationData: (...args: unknown[]) => mocks.buildAgentVerificationData(...args),
+    buildAgentVerificationData: (req?: unknown) => mocks.buildAgentVerificationData(req),
   }
 })
 
 vi.mock('../../server/_lib/reputationGraph.js', () => ({
-  buildReputationGraph: (...args: unknown[]) => mocks.buildReputationGraph(...args),
+  buildReputationGraph: (params: unknown) => mocks.buildReputationGraph(params),
 }))
 
 vi.mock('../../server/_lib/walletIntelligenceCache.js', async () => {
@@ -134,12 +134,12 @@ vi.mock('../../server/_lib/walletIntelligenceCache.js', async () => {
   )
   return {
     ...actual,
-    queryFeedbackIndex: (...args: unknown[]) => mocks.queryFeedbackIndex(...args),
+    queryFeedbackIndex: (params: unknown) => mocks.queryFeedbackIndex(params),
   }
 })
 
 vi.mock('../../server/_lib/walletIntelligence.js', () => ({
-  buildWalletIntelligence: (...args: unknown[]) => mocks.buildWalletIntelligence(...args),
+  buildWalletIntelligence: (address: string, options?: unknown) => mocks.buildWalletIntelligence(address, options),
 }))
 
 describe('v1/agents/profile', () => {
@@ -276,6 +276,6 @@ describe('v1/agents/profile', () => {
     expect(res.body.data.walletIntelligence.summary.netWorth).toBe(42000)
     expect(res.body.data.advertisedServices).toHaveLength(3)
     expect(res.body.data.domainProof.verifiedEndpoints).toContain('https://4626.fun/api/v1/agents/wallet-intelligence')
-    expect(mocks.buildWalletIntelligence).toHaveBeenCalledWith(CANONICAL_CSW)
+    expect(mocks.buildWalletIntelligence).toHaveBeenCalledWith(CANONICAL_CSW, undefined)
   })
 })

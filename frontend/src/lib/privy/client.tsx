@@ -8,6 +8,7 @@ import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 
 type PrivyClientStatus = 'disabled' | 'loading' | 'ready'
 export const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
+type PrivyClientMode = 'default' | 'waitlist-email-only'
 
 const PrivyClientContext = createContext<PrivyClientStatus>('disabled')
 
@@ -70,8 +71,12 @@ function PrivyStatusObserver(props: { onStatus: (status: PrivyClientStatus) => v
  * - The embedded wallet from Zora is shared with 4626
  * - No new wallet is created - they use their existing Zora wallet
  */
-export function PrivyClientProvider(props: { children: ReactNode; showWalletLoginFirst?: boolean }) {
-  const { children, showWalletLoginFirst = false } = props
+export function PrivyClientProvider(props: {
+  children: ReactNode
+  showWalletLoginFirst?: boolean
+  mode?: PrivyClientMode
+}) {
+  const { children, showWalletLoginFirst = false, mode = 'default' } = props
   const enabled = isPrivyClientEnabled()
   const appId = enabled ? getPrivyAppId() : null
   const clientId = enabled ? getPrivyClientId() : null
@@ -99,7 +104,7 @@ export function PrivyClientProvider(props: { children: ReactNode; showWalletLogi
     () => ({
       // Some extension stacks expose a getter-only `window.ethereum`, and EIP-6963
       // provider discovery can trigger extension-side assignment crashes.
-      ...(providerCollision.shouldDisableInjectedConnector
+      ...(mode === 'waitlist-email-only' || providerCollision.shouldDisableInjectedConnector
         ? { disableAllExternalWallets: true as const }
         : null),
       walletConnect: { enabled: false },
@@ -108,7 +113,7 @@ export function PrivyClientProvider(props: { children: ReactNode; showWalletLogi
       },
       solana: { connectors: solanaConnectors },
     }),
-    [providerCollision.shouldDisableInjectedConnector, solanaConnectors],
+    [mode, providerCollision.shouldDisableInjectedConnector, solanaConnectors],
   )
 
   if (!hasRuntimeConfig || !appId) {
@@ -117,11 +122,11 @@ export function PrivyClientProvider(props: { children: ReactNode; showWalletLogi
 
   const appearance = createPrivyAppearance({
     showWalletLoginFirst,
-    walletCollisionDetected: providerCollision.shouldDisableInjectedConnector,
+    walletCollisionDetected: mode === 'waitlist-email-only' || providerCollision.shouldDisableInjectedConnector,
   })
   // Keep generic web login methods aligned with the canonical account model:
   // verified email first, wallet-native Base second. Zora uses cross-app auth.
-  const loginMethods = ['email', 'wallet'] as const
+  const loginMethods = mode === 'waitlist-email-only' ? (['email'] as const) : (['email', 'wallet'] as const)
 
   // Privy OAuth redirects are validated against an allowlist and must match exactly.
   // Use the bare origin so transient search/hash state on the current page never breaks OAuth init.
@@ -131,10 +136,15 @@ export function PrivyClientProvider(props: { children: ReactNode; showWalletLogi
     appearance,
     ...(customOAuthRedirectUrl ? { customOAuthRedirectUrl } : {}),
     // Enable embedded wallets - this is the signer for the Coinbase Smart Wallet
-    embeddedWallets: {
-      ethereum: { createOnLogin: 'all-users' },
-      solana: { createOnLogin: 'all-users' },
-    },
+    embeddedWallets:
+      mode === 'waitlist-email-only'
+        ? {
+            ethereum: { createOnLogin: 'all-users' },
+          }
+        : {
+            ethereum: { createOnLogin: 'all-users' },
+            solana: { createOnLogin: 'all-users' },
+          },
     loginMethods,
     defaultChain: base,
     supportedChains: [base],

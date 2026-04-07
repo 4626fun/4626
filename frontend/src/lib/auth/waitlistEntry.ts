@@ -3,8 +3,6 @@ import { getMarketingBaseUrl, getWaitlistReferralBaseUrl } from '@/lib/host'
 const CANONICAL_MARKETING_WAITLIST_PATH = '/waitlist'
 const WAITLIST_REFERRAL_PATH_PREFIX = '/r'
 
-export const WAITLIST_AUTH_ARMED_KEY = 'cv:waitlist:auth_armed'
-export const WAITLIST_AUTH_AUTO_START_KEY = 'cv:waitlist:auth_auto_start'
 export const WAITLIST_REFERRAL_CODE_STORAGE_KEY = 'cv:waitlist:referral_code'
 export const WAITLIST_REFERRAL_CLICK_SESSION_KEY = 'cv:waitlist:referral_click_session'
 
@@ -80,66 +78,6 @@ export function getPrivyCapableWaitlistEntryUrl(): string {
 
 export function getMarketingWaitlistEntryUrl(): string {
   return buildWaitlistEntryUrl(getMarketingBaseUrl())
-}
-
-export function readStoredWaitlistAuthArmed(): boolean {
-  if (typeof window === 'undefined') return false
-  try {
-    return window.sessionStorage.getItem(WAITLIST_AUTH_ARMED_KEY) === '1'
-  } catch {
-    return false
-  }
-}
-
-export function consumeStoredWaitlistAuthArmed(): boolean {
-  if (typeof window === 'undefined') return false
-  try {
-    const armed = window.sessionStorage.getItem(WAITLIST_AUTH_ARMED_KEY) === '1'
-    window.sessionStorage.removeItem(WAITLIST_AUTH_ARMED_KEY)
-    return armed
-  } catch {
-    return false
-  }
-}
-
-export function writeStoredWaitlistAuthArmed(value: boolean): void {
-  if (typeof window === 'undefined') return
-  try {
-    if (value) window.sessionStorage.setItem(WAITLIST_AUTH_ARMED_KEY, '1')
-    else window.sessionStorage.removeItem(WAITLIST_AUTH_ARMED_KEY)
-  } catch {
-    // ignore
-  }
-}
-
-export function requestStoredWaitlistAuthAutoStart(): void {
-  if (typeof window === 'undefined') return
-  try {
-    window.sessionStorage.setItem(WAITLIST_AUTH_AUTO_START_KEY, '1')
-  } catch {
-    // ignore
-  }
-}
-
-export function consumeStoredWaitlistAuthAutoStart(): boolean {
-  if (typeof window === 'undefined') return false
-  try {
-    const shouldAutoStart = window.sessionStorage.getItem(WAITLIST_AUTH_AUTO_START_KEY) === '1'
-    window.sessionStorage.removeItem(WAITLIST_AUTH_AUTO_START_KEY)
-    return shouldAutoStart
-  } catch {
-    return false
-  }
-}
-
-export function clearStoredWaitlistAuthState(): void {
-  if (typeof window === 'undefined') return
-  try {
-    window.sessionStorage.removeItem(WAITLIST_AUTH_ARMED_KEY)
-    window.sessionStorage.removeItem(WAITLIST_AUTH_AUTO_START_KEY)
-  } catch {
-    // ignore
-  }
 }
 
 export function readStoredWaitlistReferralCode(): string | null {

@@ -21,6 +21,54 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const tools: ToolSchema[] = [
+    {
+      name: 'referral_og',
+      description: 'Generate strict JSON referral OG creative for 4626.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          context: { type: 'object', description: 'Creative context payload.' },
+          input: { type: 'object', description: 'Legacy alias for context.' },
+        },
+      },
+      outputSchema: { type: 'object' },
+    },
+    {
+      name: 'share_page_copy',
+      description: 'Generate strict JSON share-page copy for 4626.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          context: { type: 'object', description: 'Creative context payload.' },
+          input: { type: 'object', description: 'Legacy alias for context.' },
+        },
+      },
+      outputSchema: { type: 'object' },
+    },
+    {
+      name: 'quest_reward',
+      description: 'Generate deterministic quest reward JSON for 4626.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          context: { type: 'object', description: 'Quest state payload.' },
+          input: { type: 'object', description: 'Legacy alias for context.' },
+        },
+      },
+      outputSchema: { type: 'object' },
+    },
+    {
+      name: 'metadata_bundle',
+      description: 'Generate strict JSON metadata bundle for 4626 asset packaging.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          context: { type: 'object', description: 'Metadata context payload.' },
+          input: { type: 'object', description: 'Legacy alias for context.' },
+        },
+      },
+      outputSchema: { type: 'object' },
+    },
 
     {
       name: 'uniswap_quote',

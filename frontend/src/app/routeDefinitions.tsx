@@ -12,7 +12,6 @@ import {
   AgentDirectory,
   AgentRegister,
   AgentUriService,
-  AppContinue,
   AuctionBid,
   AuctionDemo,
   CoinManage,
@@ -67,7 +66,6 @@ export const MARKETING_ONLY_ROUTES: PathRouteDef[] = [
 ]
 
 export const ACCOUNT_ROUTES: PathRouteDef[] = [
-  { path: '/continue', element: <AppContinue /> },
   { path: '/accounts', element: <AccountsPage /> },
   { path: '/account', element: <AccountsPage /> },
 ]

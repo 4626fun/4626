@@ -25,8 +25,14 @@ type DerivedSiweSessionState = {
 
 const SESSION_TOKEN_KEY = 'cv_siwe_session_token'
 const SESSION_TOKEN_CHANGED_EVENT = 'cv-siwe-session-token-change'
+const AUTH_HANDOFF_QUERY_KEY = 'cv_handoff'
 
 type PrivySessionResponse = { address: string; sessionToken: string; privyUserId?: string } | null
+type AuthHandoffRedeemResponse = {
+  address: string
+  sessionToken: string
+  privyToken: string | null
+}
 
 /**
  * Explicit user-initiated Privy sign-in should prefer identity-first methods.
@@ -48,6 +54,8 @@ let authMeCacheResolvedAt = 0
 let authMeInFlightToken: string | null = null
 let authMeInFlight: Promise<string | null> | null = null
 let autoPrivyBridgeAttempted = false
+let authHandoffRedeemInFlightCode: string | null = null
+let authHandoffRedeemInFlight: Promise<AuthHandoffRedeemResponse | null> | null = null
 
 function shouldSkipAutoPrivyBridge(): boolean {
   const now = Date.now()
@@ -187,6 +195,73 @@ function getStoredSessionToken(): string | null {
   } catch {
     return null
   }
+}
+
+function readAuthHandoffCodeFromLocation(): string | null {
+  if (typeof window === 'undefined') return null
+  const code = new URLSearchParams(window.location.search).get(AUTH_HANDOFF_QUERY_KEY)
+  const normalized = typeof code === 'string' ? code.trim() : ''
+  return normalized.length > 0 ? normalized : null
+}
+
+function clearAuthHandoffCodeFromLocation() {
+  if (typeof window === 'undefined') return
+  const url = new URL(window.location.href)
+  if (!url.searchParams.has(AUTH_HANDOFF_QUERY_KEY)) return
+  url.searchParams.delete(AUTH_HANDOFF_QUERY_KEY)
+  const nextUrl = `${url.pathname}${url.search}${url.hash}`
+  try {
+    window.history.replaceState(window.history.state, document.title, nextUrl)
+  } catch {
+    // ignore
+  }
+}
+
+async function redeemAuthHandoffCode(code: string): Promise<AuthHandoffRedeemResponse | null> {
+  const normalized = String(code ?? '').trim()
+  if (!normalized) return null
+
+  if (authHandoffRedeemInFlight && authHandoffRedeemInFlightCode === normalized) {
+    return authHandoffRedeemInFlight
+  }
+
+  let requestPromise!: Promise<AuthHandoffRedeemResponse | null>
+  requestPromise = (async () => {
+    try {
+      const res = await apiFetch('/api/auth/handoff/redeem', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+        body: JSON.stringify({ code: normalized }),
+      })
+      const json = (await res.json().catch(() => null)) as ApiEnvelope<AuthHandoffRedeemResponse> | null
+      if (!res.ok || !json?.success || !json.data) return null
+
+      const sessionToken =
+        typeof json.data.sessionToken === 'string' ? json.data.sessionToken.trim() : ''
+      const address = typeof json.data.address === 'string' ? json.data.address.trim() : ''
+      const privyToken =
+        typeof json.data.privyToken === 'string' ? json.data.privyToken.trim() : ''
+
+      if (!sessionToken || !address) return null
+
+      return {
+        address,
+        sessionToken,
+        privyToken: privyToken || null,
+      }
+    } catch {
+      return null
+    } finally {
+      if (authHandoffRedeemInFlight === requestPromise) {
+        authHandoffRedeemInFlight = null
+        authHandoffRedeemInFlightCode = null
+      }
+    }
+  })()
+
+  authHandoffRedeemInFlight = requestPromise
+  authHandoffRedeemInFlightCode = normalized
+  return requestPromise
 }
 
 function invalidateAuthMeCache() {
@@ -371,13 +446,38 @@ export function useSiweAuth() {
   useEffect(() => {
     let cancelled = false
     void (async () => {
+      const handoffCode = readAuthHandoffCodeFromLocation()
+      if (handoffCode) {
+        clearAuthHandoffCodeFromLocation()
+        const redeemed = await redeemAuthHandoffCode(handoffCode)
+        if (redeemed?.sessionToken && redeemed?.address) {
+          writeStoredSessionToken(redeemed.sessionToken)
+          primeAuthMeCache(redeemed.sessionToken, redeemed.address)
+          supersedePendingRefresh()
+          setAuthAddress(redeemed.address)
+          setCswOwnership(null)
+          if (redeemed.privyToken) {
+            await apiFetch('/api/auth/privy', {
+              method: 'POST',
+              withCredentials: true,
+              headers: {
+                Authorization: `Bearer ${redeemed.privyToken}`,
+                Accept: 'application/json',
+              },
+            }).catch(() => null)
+          }
+          if (!cancelled) setSessionHydrated(true)
+          return
+        }
+      }
+
       await refresh()
       if (!cancelled) setSessionHydrated(true)
     })()
     return () => {
       cancelled = true
     }
-  }, [refresh])
+  }, [refresh, supersedePendingRefresh])
 
   useEffect(() => {
     if (typeof window === 'undefined') return

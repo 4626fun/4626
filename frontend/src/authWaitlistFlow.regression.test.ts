@@ -2,33 +2,14 @@ import { describe, expect, it } from 'vitest'
 
 import { getGenericNotFoundCta, resolveAccess } from './App'
 import { buildAppEntryPath } from './lib/auth/appEntry'
-import { buildWaitlistEntryUrl } from './lib/auth/waitlistEntry'
-import { shouldNavigateAfterAppEntryHandoff } from './lib/auth/appContinueGate'
 import { MARKETING_ORIGIN } from './lib/host'
+import { buildWaitlistEntryUrl } from './lib/auth/waitlistEntry'
 
 const SESSION_ADDRESS = '0x1234567890123456789012345678901234567890'
 
 describe('waitlist to gated-app route regression', () => {
   it('allows the canonical waitlist handoff into an accepted app route once the session is established', () => {
-    expect(buildAppEntryPath('/swap')).toBe('/continue')
-
-    expect(
-      shouldNavigateAfterAppEntryHandoff({
-        siweAuthAddress: null,
-        privyClientStatus: 'ready',
-        privyReady: true,
-        privyAuthenticated: false,
-      }),
-    ).toBe(false)
-
-    expect(
-      shouldNavigateAfterAppEntryHandoff({
-        siweAuthAddress: SESSION_ADDRESS,
-        privyClientStatus: 'ready',
-        privyReady: true,
-        privyAuthenticated: false,
-      }),
-    ).toBe(true)
+    expect(buildAppEntryPath('/swap')).toBe('/swap')
 
     expect(
       resolveAccess('accepted', {
@@ -47,15 +28,6 @@ describe('waitlist to gated-app route regression', () => {
   })
 
   it('redirects back to the waitlist when the session is established but app acceptance fails', () => {
-    expect(
-      shouldNavigateAfterAppEntryHandoff({
-        siweAuthAddress: SESSION_ADDRESS,
-        privyClientStatus: 'ready',
-        privyReady: true,
-        privyAuthenticated: false,
-      }),
-    ).toBe(true)
-
     expect(
       resolveAccess('accepted', {
         loading: false,

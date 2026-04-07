@@ -9,16 +9,12 @@ import {
   buildWaitlistReferralPath,
   buildWaitlistReferralUrl,
   clearStoredWaitlistReferralCode,
-  consumeStoredWaitlistAuthArmed,
   getCanonicalMarketingWaitlistPath,
   isMarketingWaitlistEntryLocation,
   normalizeWaitlistReferralCode,
   readStoredWaitlistReferralCode,
-  readStoredWaitlistAuthArmed,
   readWaitlistEntryReferralCode,
-  requestStoredWaitlistAuthAutoStart,
   storeWaitlistReferralCode,
-  writeStoredWaitlistAuthArmed,
 } from './waitlistEntry'
 
 describe('waitlistEntry', () => {
@@ -68,14 +64,5 @@ describe('waitlistEntry', () => {
     expect(readStoredWaitlistReferralCode()).toBe('FRIEND42')
     clearStoredWaitlistReferralCode()
     expect(readStoredWaitlistReferralCode()).toBeNull()
-  })
-
-  it('consumes the armed waitlist entry state once', () => {
-    expect(readStoredWaitlistAuthArmed()).toBe(false)
-    writeStoredWaitlistAuthArmed(true)
-    requestStoredWaitlistAuthAutoStart()
-    expect(readStoredWaitlistAuthArmed()).toBe(true)
-    expect(consumeStoredWaitlistAuthArmed()).toBe(true)
-    expect(readStoredWaitlistAuthArmed()).toBe(false)
   })
 })

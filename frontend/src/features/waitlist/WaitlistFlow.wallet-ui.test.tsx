@@ -28,6 +28,12 @@ vi.mock('framer-motion', () => ({
 }))
 
 let mockPrivyAuthenticated = true
+let mockProviderCollisionState = {
+  hasMultipleInjectedProviders: false,
+  lockedEthereumProviderGlobal: false,
+  persistedCollisionSignal: false,
+  shouldDisableInjectedConnector: false,
+}
 const mockGetAccessToken = vi.fn<() => Promise<string | null>>(async () => 'privy-token-default')
 const mockPrivyLogout = vi.fn(async () => undefined)
 const mockLinkEmail = vi.fn(async () => undefined)
@@ -87,6 +93,10 @@ vi.mock('@/hooks/siweAuthCrossApp', () => ({
   sanitizeCrossAppRedirectUrlForAuth: () => '',
 }))
 
+vi.mock('@/lib/wallet/providerCollision', () => ({
+  detectEthereumProviderCollision: () => mockProviderCollisionState,
+}))
+
 vi.mock('@/components/ui/StepIndicator', () => ({
   StepIndicator: () => <div data-testid="step-indicator" />,
 }))
@@ -125,6 +135,12 @@ const WAITLIST_BOOTSTRAP_PAYLOAD = {
 describe('WaitlistFlow simplified completion UI', () => {
   beforeEach(() => {
     mockPrivyAuthenticated = true
+    mockProviderCollisionState = {
+      hasMultipleInjectedProviders: false,
+      lockedEthereumProviderGlobal: false,
+      persistedCollisionSignal: false,
+      shouldDisableInjectedConnector: false,
+    }
     mockGetAccessToken.mockReset()
     mockGetAccessToken.mockResolvedValue('privy-token-default')
     mockPrivyLogout.mockReset()
@@ -152,8 +168,8 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/you're in!/i)).toBeTruthy()
-    expect(screen.getByRole('link', { name: /go to accounts/i })).toBeTruthy()
+    expect(await screen.findByText(/account ready/i)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /open accounts/i })).toBeTruthy()
     expect(screen.queryByText(/climb the waitlist/i)).toBeNull()
     expect(screen.queryByText(/waitlist leaderboard/i)).toBeNull()
     expect(
@@ -168,48 +184,121 @@ describe('WaitlistFlow simplified completion UI', () => {
     ).toBe(false)
   })
 
-  it('recovers after recovery-required bootstrap when user taps Continue', async () => {
+  it('uses the canonical app-entry handoff before opening accounts from waitlist completion', async () => {
+    render(
+      <MemoryRouter>
+        <WaitlistFlow />
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /open accounts/i }))
+
+    await waitFor(() => {
+      expect(
+        vi
+          .mocked(apiFetch)
+          .mock.calls.some(([input]) => String(input).startsWith('/api/auth/handoff/create')),
+      ).toBe(true)
+    })
+  })
+
+  it('shows manual existing-account recovery when bootstrap returns recovery-required', async () => {
     let bootstrapCalls = 0
     vi.mocked(apiFetch).mockImplementation(async (input: string) => {
       if (input.startsWith('/api/waitlist/bootstrap')) {
         bootstrapCalls += 1
-        if (bootstrapCalls === 1) {
-          return jsonResponse(
-            {
-              success: false,
-              code: 'RECOVERY_REQUIRED_EMAIL_BOUND',
-              error: 'Recovery required',
-              recoveryRequired: true,
-            },
-            false,
-            409,
-          ) as any
-        }
-        return jsonResponse(WAITLIST_BOOTSTRAP_PAYLOAD) as any
-      }
-      if (input.startsWith('/api/auth/logout')) {
-        return jsonResponse({ success: true }) as any
-      }
-      if (input.startsWith('/api/auth/privy')) {
-        return jsonResponse({ success: true }) as any
+        return jsonResponse(
+          {
+            success: false,
+            code: 'RECOVERY_REQUIRED_EMAIL_BOUND',
+            error: 'Recovery required',
+            recoveryRequired: true,
+          },
+          false,
+          409,
+        ) as any
       }
       throw new Error(`Unhandled apiFetch call: ${input}`)
     })
 
     render(
       <MemoryRouter>
-        <WaitlistFlow autoStartAuth={false} />
+        <WaitlistFlow />
       </MemoryRouter>,
     )
 
     const continueButton = await screen.findByRole('button', { name: /^continue$/i }, { timeout: 6_000 })
     fireEvent.click(continueButton)
 
+    expect(
+      await screen.findByText(/this email already has a 4626 account/i, undefined, { timeout: 5_000 }),
+    ).toBeTruthy()
+    expect(screen.getByRole('button', { name: /try existing account sign-in/i })).toBeTruthy()
+    expect(mockLogin).toHaveBeenCalledTimes(0)
+    expect(mockPrivyLogout).toHaveBeenCalledTimes(0)
+    expect(bootstrapCalls).toBeLessThanOrEqual(2)
+  })
+
+  it('hands off into accounts when user taps existing-account sign-in', async () => {
+    let bootstrapCalls = 0
+    vi.mocked(apiFetch).mockImplementation(async (input: string) => {
+      if (input.startsWith('/api/waitlist/bootstrap')) {
+        bootstrapCalls += 1
+        return jsonResponse(
+          {
+            success: false,
+            code: 'RECOVERY_REQUIRED_EMAIL_BOUND',
+            error: 'Recovery required',
+            recoveryRequired: true,
+          },
+          false,
+          409,
+        ) as any
+      }
+      if (input.startsWith('/api/auth/privy')) {
+        return jsonResponse({ success: true }) as any
+      }
+      if (input.startsWith('/api/auth/handoff/create')) {
+        return jsonResponse({ success: true, data: { code: 'handoff-code', expiresAt: '2099-01-01T00:00:00.000Z' } }) as any
+      }
+      throw new Error(`Unhandled apiFetch call: ${input}`)
+    })
+
+    const originalLocation = window.location
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: {
+        ...originalLocation,
+        origin: 'http://localhost:5173',
+        href: 'http://localhost:5173/waitlist',
+        assign: vi.fn(),
+      },
+    })
+
+    render(
+      <MemoryRouter>
+        <WaitlistFlow />
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /^continue$/i }))
+    const recoverButton = await screen.findByRole('button', { name: /try existing account sign-in/i }, { timeout: 5_000 })
+    fireEvent.click(recoverButton)
+
     await waitFor(() => {
-      expect(mockLogin).toHaveBeenCalledTimes(0)
-      expect(bootstrapCalls).toBeGreaterThanOrEqual(2)
+      expect(
+        vi
+          .mocked(apiFetch)
+          .mock.calls.some(([input]) => String(input).startsWith('/api/auth/handoff/create')),
+      ).toBe(true)
     }, { timeout: 5_000 })
-    expect(await screen.findByText(/you're in!/i, undefined, { timeout: 5_000 })).toBeTruthy()
+    expect(bootstrapCalls).toBeLessThanOrEqual(2)
+    expect(mockPrivyLogout).toHaveBeenCalledTimes(0)
+
+    Object.defineProperty(window, 'location', {
+      configurable: true,
+      value: originalLocation,
+    })
   })
 
   it('retries session-finalizing bootstrap and advances without manual second tap', async () => {
@@ -246,11 +335,11 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     render(
       <MemoryRouter>
-        <WaitlistFlow autoStartAuth={false} />
+        <WaitlistFlow />
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/you're in!/i, undefined, { timeout: 7_000 })).toBeTruthy()
+    expect(await screen.findByText(/account ready/i, undefined, { timeout: 7_000 })).toBeTruthy()
     // Scheduler keeps retries bounded while still allowing completion.
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     expect(bootstrapCalls).toBeLessThanOrEqual(3)
@@ -295,13 +384,13 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     render(
       <MemoryRouter>
-        <WaitlistFlow autoStartAuth={false} />
+        <WaitlistFlow />
       </MemoryRouter>,
     )
 
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
 
-    expect(await screen.findByText(/you're in!/i, undefined, { timeout: 9_000 })).toBeTruthy()
+    expect(await screen.findByText(/account ready/i, undefined, { timeout: 9_000 })).toBeTruthy()
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     expect(bootstrapCalls).toBeLessThanOrEqual(2)
     expect(screen.queryByText(/sign-in session is still finalizing/i)).toBeNull()
@@ -346,20 +435,22 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     render(
       <MemoryRouter>
-        <WaitlistFlow autoStartAuth={false} />
+        <WaitlistFlow />
       </MemoryRouter>,
     )
 
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
 
-    expect(await screen.findByText(/you're in!/i, undefined, { timeout: 10_000 })).toBeTruthy()
+    expect(await screen.findByText(/account ready/i, undefined, { timeout: 10_000 })).toBeTruthy()
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
   })
 
   it('does not call auth/logout before opening email login', async () => {
     mockPrivyAuthenticated = false
     mockGetAccessToken.mockReset()
-    mockGetAccessToken.mockResolvedValue('privy-token-after-login')
+    mockGetAccessToken
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue('privy-token-after-login')
 
     vi.mocked(apiFetch).mockImplementation(async (input: string) => {
       if (input.startsWith('/api/waitlist/bootstrap')) {
@@ -373,7 +464,7 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     render(
       <MemoryRouter>
-        <WaitlistFlow autoStartAuth={false} />
+        <WaitlistFlow />
       </MemoryRouter>,
     )
 
@@ -388,6 +479,112 @@ describe('WaitlistFlow simplified completion UI', () => {
         .mocked(apiFetch)
         .mock.calls.some(([input]) => String(input).startsWith('/api/auth/logout')),
     ).toBe(false)
+  })
+
+  it('recovers when Privy rejects login because a session already exists', async () => {
+    mockPrivyAuthenticated = false
+    mockGetAccessToken.mockReset()
+    mockGetAccessToken
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce('privy-token-existing-session')
+    mockLogin.mockReset()
+    mockLogin.mockRejectedValue(
+      new Error('Attempted to log in, but user is already logged in. Use a `link` helper instead.'),
+    )
+
+    let bootstrapCalls = 0
+    vi.mocked(apiFetch).mockImplementation(async (input: string, init?: RequestInit) => {
+      if (input.startsWith('/api/waitlist/bootstrap')) {
+        bootstrapCalls += 1
+        const headers = (init?.headers ?? {}) as Record<string, string | undefined>
+        const token = headers['X-Privy-Token'] ?? headers['x-privy-token']
+        if (!token) {
+          return jsonResponse({
+            success: true,
+            data: {
+              requiresPrivyAuth: true,
+              email: 'waitlisted@example.com',
+              waitlistEntryId: 77,
+            },
+          }) as any
+        }
+        return jsonResponse(WAITLIST_BOOTSTRAP_PAYLOAD) as any
+      }
+      if (input.startsWith('/api/auth/privy')) {
+        return jsonResponse({ success: true }) as any
+      }
+      throw new Error(`Unhandled apiFetch call: ${input}`)
+    })
+
+    render(
+      <MemoryRouter>
+        <WaitlistFlow />
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
+
+    expect(await screen.findByText(/account ready/i, undefined, { timeout: 9_000 })).toBeTruthy()
+    expect(mockLogin).toHaveBeenCalledTimes(1)
+    expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
+  })
+
+  it('surfaces a fresh-retry message when stale Privy session reset still yields no token', async () => {
+    mockPrivyAuthenticated = false
+    mockGetAccessToken.mockReset()
+    mockGetAccessToken
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue(null)
+    mockPrivyLogout.mockReset()
+    mockPrivyLogout.mockResolvedValue(undefined)
+    mockLogin.mockReset()
+    mockLogin
+      .mockRejectedValueOnce(new Error('Attempted to log in, but user is already logged in. Use a `link` helper instead.'))
+      .mockResolvedValueOnce(undefined)
+
+    let bootstrapCalls = 0
+    vi.mocked(apiFetch).mockImplementation(async (input: string, init?: RequestInit) => {
+      if (input.startsWith('/api/auth/logout')) {
+        return jsonResponse({ success: true }) as any
+      }
+      if (input.startsWith('/api/waitlist/bootstrap')) {
+        bootstrapCalls += 1
+        const headers = (init?.headers ?? {}) as Record<string, string | undefined>
+        const token = headers['X-Privy-Token'] ?? headers['x-privy-token']
+        if (!token) {
+          return jsonResponse({
+            success: true,
+            data: {
+              requiresPrivyAuth: true,
+              email: 'waitlisted@example.com',
+              waitlistEntryId: 77,
+            },
+          }) as any
+        }
+        return jsonResponse(WAITLIST_BOOTSTRAP_PAYLOAD) as any
+      }
+      if (input.startsWith('/api/auth/privy')) {
+        return jsonResponse({ success: true }) as any
+      }
+      throw new Error(`Unhandled apiFetch call: ${input}`)
+    })
+
+    render(
+      <MemoryRouter>
+        <WaitlistFlow />
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: /continue/i }))
+
+    expect(
+      await screen.findByText(/sign-in got stuck in an old session/i, undefined, { timeout: 9_000 }),
+    ).toBeTruthy()
+    expect(mockPrivyLogout).toHaveBeenCalledTimes(1)
+    expect(mockLogin).toHaveBeenCalledTimes(2)
+    expect(screen.queryByText(/sign-in session is still finalizing/i)).toBeNull()
+    expect(screen.getByRole('button', { name: /^continue$/i })).toBeTruthy()
   })
 
   it('avoids bootstrap bursts while auth=true and token is still null', async () => {
@@ -427,11 +624,11 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     render(
       <MemoryRouter>
-        <WaitlistFlow autoStartAuth={false} />
+        <WaitlistFlow />
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/you're in!/i, undefined, { timeout: 9_000 })).toBeTruthy()
+    expect(await screen.findByText(/account ready/i, undefined, { timeout: 9_000 })).toBeTruthy()
     // No token means no bootstrap burst; once token hydrates we should only need one tokened bootstrap.
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     expect(bootstrapCalls).toBeLessThanOrEqual(2)
@@ -484,11 +681,11 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     render(
       <MemoryRouter>
-        <WaitlistFlow autoStartAuth={false} />
+        <WaitlistFlow />
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/you're in!/i, undefined, { timeout: 9_000 })).toBeTruthy()
+    expect(await screen.findByText(/account ready/i, undefined, { timeout: 9_000 })).toBeTruthy()
     // first requiresPrivyAuth + one cooldown-respected retry to recover
     expect(bootstrapCalls).toBeGreaterThanOrEqual(2)
     expect(bootstrapCalls).toBeLessThanOrEqual(3)
@@ -525,7 +722,7 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     render(
       <MemoryRouter>
-        <WaitlistFlow autoStartAuth={false} />
+        <WaitlistFlow />
       </MemoryRouter>,
     )
 
@@ -546,6 +743,8 @@ describe('WaitlistFlow simplified completion UI', () => {
 
   it('fails fast on wallet-provider collision instead of entering finalizing retries', async () => {
     mockPrivyAuthenticated = false
+    mockGetAccessToken.mockReset()
+    mockGetAccessToken.mockResolvedValue(null)
     mockLogin.mockReset()
     mockLogin.mockRejectedValue(
       new Error('Cannot set property ethereum of #<window> which has only a getter'),
@@ -565,7 +764,7 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     render(
       <MemoryRouter>
-        <WaitlistFlow autoStartAuth={false} />
+        <WaitlistFlow />
       </MemoryRouter>,
     )
 
@@ -580,10 +779,49 @@ describe('WaitlistFlow simplified completion UI', () => {
     expect(bootstrapCalls).toBe(0)
   })
 
+  it('does not let a persisted wallet collision signal block email-only waitlist auth', async () => {
+    mockPrivyAuthenticated = false
+    mockGetAccessToken.mockReset()
+    mockGetAccessToken
+      .mockResolvedValueOnce(null)
+      .mockResolvedValue('privy-token-after-login')
+    mockProviderCollisionState = {
+      hasMultipleInjectedProviders: false,
+      lockedEthereumProviderGlobal: false,
+      persistedCollisionSignal: true,
+      shouldDisableInjectedConnector: true,
+    }
+
+    let bootstrapCalls = 0
+    vi.mocked(apiFetch).mockImplementation(async (input: string) => {
+      if (input.startsWith('/api/waitlist/bootstrap')) {
+        bootstrapCalls += 1
+        return jsonResponse(WAITLIST_BOOTSTRAP_PAYLOAD) as any
+      }
+      throw new Error(`Unhandled apiFetch call: ${input}`)
+    })
+
+    render(
+      <MemoryRouter>
+        <WaitlistFlow />
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /continue/i }))
+
+    await waitFor(() => {
+      expect(mockLogin).toHaveBeenCalledTimes(1)
+      expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
+    }, { timeout: 3_000 })
+    expect(screen.queryByText(/browser wallet extension is interfering with sign-in/i)).toBeNull()
+  })
+
   it('releases busy lock when login hangs and surfaces a retryable timeout', async () => {
     vi.useFakeTimers()
     try {
       mockPrivyAuthenticated = false
+      mockGetAccessToken.mockReset()
+      mockGetAccessToken.mockResolvedValue(null)
       mockLogin.mockReset()
       mockLogin.mockImplementation(() => new Promise<never>(() => undefined))
 
@@ -601,7 +839,7 @@ describe('WaitlistFlow simplified completion UI', () => {
 
       render(
         <MemoryRouter>
-          <WaitlistFlow autoStartAuth={false} />
+          <WaitlistFlow />
         </MemoryRouter>,
       )
 
