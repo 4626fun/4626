@@ -11,7 +11,7 @@ import {Script, console} from "forge-std/Script.sol";
  *         - VRF Consumer gets subscriptionId + keyHash config
  *         - LotteryManager authorizes SolanaBridgeAdapter as swap contract
  *         - Registry points to LotteryManager
- *         - (Optional) Registry sets Solana chain EID + bytes32 remote OFT peer
+ *         - (Optional) Registry sets Solana registry key <-> EID + bytes32 remote OFT peer
  *         - (Optional) Registry sets per-creator OVault mesh metadata
  *
  * @dev This script is idempotent — safe to re-run.
@@ -126,7 +126,7 @@ contract OperationalWiring is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
-        uint256 solanaChainId = vm.envOr("SOLANA_CHAIN_ID", uint256(0));
+        uint256 solanaRegistryKey = vm.envOr("SOLANA_REGISTRY_KEY", vm.envOr("SOLANA_CHAIN_ID", uint256(0)));
         uint32 solanaEid = uint32(vm.envOr("SOLANA_EID", uint256(0)));
         address solanaCreatorToken = vm.envOr("SOLANA_CREATOR_TOKEN", address(0));
         bytes32 solanaRemoteOftPeer = vm.envOr("SOLANA_REMOTE_OFT_PEER_BYTES32", bytes32(0));
@@ -135,11 +135,12 @@ contract OperationalWiring is Script {
         address ovaultShareMeshToken = vm.envOr("OVAULT_SHARE_MESH_TOKEN", address(0));
         bytes32 ovaultSolanaAssetMint = vm.envOr("OVAULT_SOLANA_ASSET_MINT", bytes32(0));
         bool ovaultMeshEnabled = vm.envOr("OVAULT_MESH_ENABLED", uint256(1)) == 1;
-        bool wantsSolanaChainMapping = solanaChainId > 0;
+        // SOLANA_CHAIN_ID remains a deprecated fallback alias for backward compatibility.
+        bool wantsSolanaRegistryMapping = solanaRegistryKey > 0;
         bool wantsSolanaPeerWiring = solanaCreatorToken != address(0) || solanaRemoteOftPeer != bytes32(0);
         bool wantsOvaultMeshWiring = ovaultHubComposer != address(0) || ovaultAssetMeshToken != address(0)
             || ovaultShareMeshToken != address(0) || ovaultSolanaAssetMint != bytes32(0);
-        if (wantsSolanaChainMapping || wantsSolanaPeerWiring || wantsOvaultMeshWiring) {
+        if (wantsSolanaRegistryMapping || wantsSolanaPeerWiring || wantsOvaultMeshWiring) {
             require(solanaEid != 0, "SOLANA_EID required when wiring Solana registry config");
         }
         if (wantsSolanaPeerWiring) {
@@ -275,20 +276,20 @@ contract OperationalWiring is Script {
         console.log(unicode"   ✓ VaultActivationBatcher");
 
         // ────────────────────────────────────────────────────────────────
-        //  8. Registry: Optional Solana chain/EID + bytes32 peer wiring
+        //  8. Registry: Optional Solana registry key <-> EID + bytes32 peer wiring
         // ────────────────────────────────────────────────────────────────
 
         console.log("\n[8/8] Registry: Optional Solana bytes32 peer wiring...");
-        if (!wantsSolanaChainMapping && !wantsSolanaPeerWiring && !wantsOvaultMeshWiring) {
+        if (!wantsSolanaRegistryMapping && !wantsSolanaPeerWiring && !wantsOvaultMeshWiring) {
             console.log(unicode"   [skip] No SOLANA_* / OVAULT_* wiring env provided");
         } else {
-            if (wantsSolanaChainMapping) {
-                uint32 currentEid = registry.getEidForChainId(solanaChainId);
+            if (wantsSolanaRegistryMapping) {
+                uint32 currentEid = registry.getEidForChainId(solanaRegistryKey);
                 if (currentEid == solanaEid) {
-                    console.log(unicode"   [skip] chainId <-> EID already mapped");
+                    console.log(unicode"   [skip] registry key <-> EID already mapped");
                 } else {
-                    registry.setChainIdToEid(solanaChainId, solanaEid);
-                    console.log(unicode"   ✓ setChainIdToEid for Solana chain");
+                    registry.setChainIdToEid(solanaRegistryKey, solanaEid);
+                    console.log(unicode"   ✓ setChainIdToEid for Solana registry key");
                 }
             }
 

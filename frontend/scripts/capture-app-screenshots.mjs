@@ -2,10 +2,11 @@
  * Capture real app screenshots from a running frontend (Playwright).
  *
  * Why:
- * - Open graph previews use PNGs served from `public/`.
  * - "Screenshot" should reflect the actual product UI (not a stylized mock).
- * - This script owns UI-derived assets only: the wide social hero and portrait
- *   install screenshots. Small install/browser icons stay in
+ * - This script owns UI-derived assets only: the miniapp preview hero and
+ *   portrait install screenshots. The marketing social card is generated from
+ *   `assets/social/app-hero-source.svg` via `generate-social-preview.mjs`.
+ * - Small install/browser icons stay in
  *   `generate-brand-icons.mjs`.
  *
  * Usage:
@@ -119,8 +120,7 @@ async function gotoApp(page, url) {
   await page.waitForTimeout(250)
 }
 
-async function captureHero() {
-  const browser = await chromium.launch()
+async function captureHero(browser) {
   const context = await browser.newContext({
     viewport: { width: 1200, height: 630 },
     deviceScaleFactor: 1,
@@ -131,16 +131,14 @@ async function captureHero() {
   await gotoApp(page, urlFor(heroPath))
 
   await page.screenshot({
-    path: path.join(OUT_DIR, 'app-hero.png'),
+    path: path.join(OUT_DIR, 'miniapp-hero.png'),
     type: 'png',
   })
-  await fs.copyFile(path.join(OUT_DIR, 'app-hero.png'), path.join(OUT_DIR, 'miniapp-hero.png'))
 
-  await browser.close()
+  await context.close()
 }
 
-async function capturePortrait() {
-  const browser = await chromium.launch()
+async function capturePortrait(browser) {
   const context = await browser.newContext({
     // Featured checklist asks for portrait screenshots at 1284x2778.
     // Use a 642x1389 viewport at 2x scale to match exactly.
@@ -168,29 +166,34 @@ async function capturePortrait() {
     )
   }
 
-  await browser.close()
+  await context.close()
 }
 
 async function main() {
   // eslint-disable-next-line no-console
   console.log('Capturing app screenshots from', baseUrl)
   // eslint-disable-next-line no-console
-  console.log(' - hero:', heroPath)
+  console.log(' - miniapp hero:', heroPath)
   // eslint-disable-next-line no-console
   console.log(
     ' - screenshots:',
     screenshotTargets.map((target) => `${target.fileName} <= ${target.path}`).join(', ') || '(none)',
   )
 
-  await captureHero()
-  // eslint-disable-next-line no-console
-  console.log('wrote app-hero.png, miniapp-hero.png')
+  const browser = await chromium.launch()
+  try {
+    await captureHero(browser)
+    // eslint-disable-next-line no-console
+    console.log('wrote miniapp-hero.png')
 
-  await capturePortrait()
-  // eslint-disable-next-line no-console
-  console.log(
-    `wrote ${screenshotTargets.map((target) => target.fileName).join(', ')}${screenshotTargets.length ? `, ${screenshotPortraitAliasName}` : ''}`,
-  )
+    await capturePortrait(browser)
+    // eslint-disable-next-line no-console
+    console.log(
+      `wrote ${screenshotTargets.map((target) => target.fileName).join(', ')}${screenshotTargets.length ? `, ${screenshotPortraitAliasName}` : ''}`,
+    )
+  } finally {
+    await browser.close()
+  }
 }
 
 main().catch((err) => {

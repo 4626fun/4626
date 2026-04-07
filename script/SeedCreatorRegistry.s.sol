@@ -26,14 +26,15 @@ import {ICreatorRegistry} from "../contracts/interfaces/core/ICreatorRegistry.so
  *          -vvvv
  *
  * @dev OPTIONAL SOLANA EID MAPPING:
- *      Set SOLANA_CHAIN_ID and SOLANA_EID to also seed non-EVM chainId<->EID mapping.
+ *      Set SOLANA_REGISTRY_KEY and SOLANA_EID to also seed the Solana registry key <-> EID mapping.
+ *      SOLANA_CHAIN_ID remains a deprecated compatibility alias.
  */
 contract SeedCreatorRegistry is Script {
     // ═══════════════════════════════════════════════════════════════════
     //                    DEPLOYED REGISTRY
     // ═══════════════════════════════════════════════════════════════════
 
-    address internal constant DEFAULT_REGISTRY = 0x888482d648D1fCa1A735268A9e579b44Bf644626;
+    address internal constant DEFAULT_REGISTRY = 0x888506B92181c57A2fD06516FFFb6F375b7A4626;
 
     // ═══════════════════════════════════════════════════════════════════
     //                    CHAIN CONSTANTS
@@ -70,7 +71,7 @@ contract SeedCreatorRegistry is Script {
     address constant AVAX_LZ_ENDPOINT = 0x1a44076050125825900e736c501f859c50fE728c;
 
     // --- Monad ---
-    uint256 constant MONAD_CHAIN_ID = 10143;
+    uint256 constant MONAD_CHAIN_ID = 143;
     uint32 constant MONAD_EID = 30390;
     address constant MONAD_WMON = address(0); // TBD at launch
     address constant MONAD_LZ_ENDPOINT = 0x6F475642a6e85809B1c36Fa62763669b1b48DD5B;
@@ -101,10 +102,13 @@ contract SeedCreatorRegistry is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
-        uint256 solanaChainId = vm.envOr("SOLANA_CHAIN_ID", uint256(0));
+        uint256 solanaRegistryKey = vm.envOr("SOLANA_REGISTRY_KEY", vm.envOr("SOLANA_CHAIN_ID", uint256(0)));
         uint32 solanaEid = uint32(vm.envOr("SOLANA_EID", uint256(0)));
-        if (solanaChainId > 0 || solanaEid > 0) {
-            require(solanaChainId > 0 && solanaEid > 0, "Set both SOLANA_CHAIN_ID and SOLANA_EID");
+        if (solanaRegistryKey > 0 || solanaEid > 0) {
+            require(
+                solanaRegistryKey > 0 && solanaEid > 0,
+                "Set both SOLANA_REGISTRY_KEY (or deprecated SOLANA_CHAIN_ID) and SOLANA_EID"
+            );
         }
 
         address registryAddr = vm.envOr("REGISTRY", DEFAULT_REGISTRY);
@@ -187,7 +191,7 @@ contract SeedCreatorRegistry is Script {
         //  3. SET CHAIN ID ↔ EID MAPPINGS
         // ────────────────────────────────────────────────────────────────
 
-        console.log("\n[3/5] Setting chainId <-> EID mappings...");
+        console.log("\n[3/5] Setting chain IDs / registry key <-> EID mappings...");
 
         registry.setChainIdToEid(BASE_CHAIN_ID, BASE_EID);
         console.log(unicode"   ✓ Base  8453 <-> 30184");
@@ -206,14 +210,16 @@ contract SeedCreatorRegistry is Script {
 
         if (MONAD_WMON != address(0)) {
             registry.setChainIdToEid(MONAD_CHAIN_ID, MONAD_EID);
-            console.log(unicode"   ✓ Monad  10143 <-> 30390");
+            console.log(unicode"   ✓ Monad  143 <-> 30390");
         }
 
-        if (solanaChainId > 0) {
-            registry.setChainIdToEid(solanaChainId, solanaEid);
-            console.log(unicode"   ✓ Solana", solanaChainId, unicode"<->", solanaEid);
+        if (solanaRegistryKey > 0) {
+            registry.setChainIdToEid(solanaRegistryKey, solanaEid);
+            console.log(unicode"   ✓ Solana registry key", solanaRegistryKey, unicode"<->", solanaEid);
         } else {
-            console.log(unicode"   [skip] Solana chainId <-> EID mapping (set SOLANA_CHAIN_ID + SOLANA_EID)");
+            console.log(
+                unicode"   [skip] Solana registry key <-> EID mapping (set SOLANA_REGISTRY_KEY + SOLANA_EID; SOLANA_CHAIN_ID is a deprecated fallback alias)"
+            );
         }
 
         // ────────────────────────────────────────────────────────────────
@@ -267,7 +273,7 @@ contract SeedCreatorRegistry is Script {
         console.log(unicode"  ✓ Registry:          ", registryAddr);
         console.log(unicode"  ✓ Chains registered:  Base, Ethereum, Arbitrum, BSC, Avalanche");
         console.log(unicode"  ✓ LZ endpoints set:   5 chains");
-        console.log(unicode"  ✓ EID mappings set:   5 chains (+ optional Solana)");
+        console.log(unicode"  ✓ EID mappings set:   5 chains (+ optional Solana registry key)");
         console.log(unicode"  ✓ Hub chain:          Base (8453 / EID 30184)");
         console.log(unicode"  ✓ DEX infra:          PoolManager + SwapRouter on Base");
         console.log(unicode"  ✓ Factories auth'd:   CreatorOVaultFactory, Batcher, ActivationBatcher");

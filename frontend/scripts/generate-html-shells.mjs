@@ -4,6 +4,8 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
+import { HTML_SHELL_TEMPLATE_VARS } from './html-shells.config.mjs'
+
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const frontendRoot = path.resolve(__dirname, '..')
@@ -17,6 +19,7 @@ const templateTargets = [
 
 const INCLUDE_LINE_PATTERN = /^[ \t]*\{\{>\s*([^\}\n]+)\s*\}\}[ \t]*\r?\n?/gm
 const INCLUDE_TOKEN_PATTERN = /\{\{>\s*([^\}\n]+)\s*\}\}/
+const VARIABLE_PATTERN = /\{\{\s*([A-Z0-9_]+)\s*\}\}/g
 const KNOWN_ARGS = new Set(['--check'])
 
 function resolveShellPath(relativePath) {
@@ -48,7 +51,16 @@ function renderShellFile(relativePath, stack = []) {
     throw new Error(`unresolved include token "${unresolved[0]}" in ${relativePath}`)
   }
 
-  return rendered
+  const interpolated = rendered.replace(VARIABLE_PATTERN, (_, variableNameRaw) => {
+    const variableName = variableNameRaw.trim()
+    const value = HTML_SHELL_TEMPLATE_VARS[variableName]
+    if (typeof value !== 'string') {
+      throw new Error(`unresolved template variable "${variableName}" in ${relativePath}`)
+    }
+    return value
+  })
+
+  return interpolated
 }
 
 function writeIfChanged(relativeOutputPath, nextContent) {

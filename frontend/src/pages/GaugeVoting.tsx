@@ -2,7 +2,7 @@ import { motion } from 'framer-motion'
 import { VaultGaugeVotingPanel } from '../components/ve33/VaultGaugeVotingPanel'
 import { AKITA } from '../config/contracts'
 import { toShareSymbol } from '@/lib/tokenSymbols'
-import { PageMeta } from '@/components/seo/PageMeta'
+import { META, PageMeta } from '@/components/seo/PageMeta'
 
 // Example vaults - in production, fetch from registry
 const EXAMPLE_VAULTS = [
@@ -19,7 +19,7 @@ const SHARE_SYMBOL = toShareSymbol('4626')
 export default function GaugeVoting() {
   return (
     <div className="min-h-screen bg-black">
-      <PageMeta title="Gauge Voting" description="Vote on 4626 gauge allocations to direct protocol rewards." canonicalPath="/gauge" />
+      <PageMeta title={META.gaugeVoting.title} description={META.gaugeVoting.description} canonicalPath="/gauge" />
       {/* Hero Section */}
       <section className="relative py-16 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-brand-primary/10 to-transparent" />
@@ -139,4 +139,3 @@ export default function GaugeVoting() {
     </div>
   )
 }
-

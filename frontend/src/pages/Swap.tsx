@@ -7,6 +7,7 @@ import { useAccount, useBalance, usePublicClient, useSwitchChain, useWalletClien
 import { usePrivy, useWallets } from '@privy-io/react-auth'
 import { useDebounceValue } from 'usehooks-ts'
 
+import { META, PageMeta } from '@/components/seo/PageMeta'
 import { SwapSettingsModal } from '@/components/trade/SwapSettingsModal'
 import { Alert } from '@/components/ui/Alert'
 import { SwapCard } from '@/components/swap/SwapCard'
@@ -49,7 +50,6 @@ import {
 import { ensureProviderOnBase } from '@/lib/wallet/safeSwitchToBase'
 import { resolveCreatorTradeTokenAddress } from '@/lib/onchain/vaultResolve'
 import { useAccountContext } from '@/wallet/accountContext'
-import { PageMeta } from '@/components/seo/PageMeta'
 import { useScreenshotReady } from '@/lib/screenshotMode'
 
 const CORE_TOKENS: TokenOption[] = [
@@ -1326,7 +1326,7 @@ export function Swap() {
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <>
-      <PageMeta title="Swap" description="Swap tokens on Base using 4626 — best-price routing via Uniswap." canonicalPath="/swap" />
+      <PageMeta title={META.swap.title} description={META.swap.description} canonicalPath="/swap" />
       <SwapPageLayout
         swapPanel={
           activePanel === 'swap' ? (
@@ -1654,7 +1654,7 @@ function LiquidityPanel(props: {
 }) {
   return (
     <div className="space-y-4">
-      <PageMeta title="Swap" description="Swap tokens on Base using 4626 — best-price routing via Uniswap." canonicalPath="/swap" />
+      <PageMeta title={META.swap.title} description={META.swap.description} canonicalPath="/swap" />
       {/* ─── Execution bar (mirrors swap panel) ─── */}
       <div className="flex items-center gap-2">
         <div className="inline-flex rounded-full border border-white/12 bg-black/40 p-0.5 text-xs">

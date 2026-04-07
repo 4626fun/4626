@@ -80,6 +80,27 @@ Several files share extensions but target different runtimes/tools:
 
 `index.html`, `app.html`, and `telegram-link.html` are generated from `html-shells/templates/*.tpl` via `pnpm generate:html-shells` (auto-run before `dev` and `build` scripts). Use `pnpm check:html-shells` to verify generated files are in sync.
 
+## Brand, Social, And Mini App Assets
+
+Static public assets in `frontend/public/` are served directly and copied into `dist/` at build time. Treat `dist/manifest.json` as generated output; the source manifest is [`public/manifest.json`](./public/manifest.json).
+
+- Keep creative master assets under [`assets/brand/master/`](./assets/brand/master/) instead of `tmp/` or `public/`.
+- Marketing social card: edit `assets/social/app-hero-source.svg`, then run `pnpm -C frontend generate:social-preview` to refresh `public/app-hero.png`.
+- Base miniapp and Telegram preview hero: run `pnpm -C frontend capture:app-screens` to refresh `public/miniapp-hero.png` from the live UI.
+- Miniapp splash and install icons: edit `public/app-splash.svg` or `public/app-icon.svg`, then run `pnpm -C frontend generate:brand-icons`.
+- Manifest screenshots: `pnpm -C frontend capture:app-screens` refreshes `public/screenshot-swap.png`, `public/screenshot-explore.png`, and `public/screenshot-deploy.png`.
+- To clear derived image outputs before a full refresh, run `pnpm -C frontend clean:derived-assets`. This removes generated PNGs plus `dist/` and `build/`, but preserves source SVGs and `public/manifest.json`.
+- To regenerate the static, non-screenshot brand assets after a reset, run `pnpm -C frontend generate:brand-assets:static`.
+- Full workflow: see [`docs/brand-refresh-checklist.md`](./docs/brand-refresh-checklist.md).
+
+These pipelines are intentionally separate:
+
+- `app-hero.png` is the curated marketing/social card.
+- `miniapp-hero.png` is the UI-derived miniapp/Telegram preview image.
+- `miniapp-splash.png` is the splash screen used by Base miniapp metadata.
+- `assets/brand/master/` is the long-term intake area for design masters before they are converted into repo-owned SVG sources.
+- Shell-level social/meta URLs and IDs are centralized in `scripts/html-shells.config.mjs`.
+
 ## Runtime boundary guardrails
 
 - `pnpm guard:api-server-shims` blocks imports that resolve into deprecated `frontend/api/server/*` shim paths.

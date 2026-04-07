@@ -5,7 +5,14 @@ import { describe, expect, it } from 'vitest'
 const frontendRoot = path.resolve(import.meta.dirname, '../..')
 const publicRoot = path.join(frontendRoot, 'public')
 const manifestPath = path.join(publicRoot, 'manifest.json')
-const htmlEntryPaths = [path.join(frontendRoot, 'index.html'), path.join(frontendRoot, 'app.html')]
+const marketingHtmlPath = path.join(frontendRoot, 'index.html')
+const appHtmlPath = path.join(frontendRoot, 'app.html')
+const telegramLinkHtmlPath = path.join(frontendRoot, 'telegram-link.html')
+const htmlEntryPaths = [marketingHtmlPath, appHtmlPath]
+const MARKETING_SOCIAL_IMAGE_URL = 'https://4626.fun/app-hero.png?v=6'
+const APP_SOCIAL_IMAGE_URL = 'https://4626.fun/app-hero.png'
+const MINIAPP_HERO_URL = 'https://4626.fun/miniapp-hero.png'
+const MINIAPP_SPLASH_URL = 'https://4626.fun/miniapp-splash.png'
 
 describe('public manifest assets', () => {
   it('ships every referenced manifest icon and screenshot in public for local dev', () => {
@@ -67,5 +74,28 @@ describe('public manifest assets', () => {
       expect(html).toContain('<link rel="manifest" href="/manifest.json?v=3" crossorigin="use-credentials" />')
       expect(html).toContain('<meta name="theme-color" content="#0052FF" />')
     }
+  })
+
+  it('keeps shell-level social assets aligned with their intended surfaces', () => {
+    const marketingHtml = readFileSync(marketingHtmlPath, 'utf8')
+    const appHtml = readFileSync(appHtmlPath, 'utf8')
+    const telegramLinkHtml = readFileSync(telegramLinkHtmlPath, 'utf8')
+
+    expect(marketingHtml).toContain(`<meta property="og:image" content="${MARKETING_SOCIAL_IMAGE_URL}" />`)
+    expect(marketingHtml).toContain(`<meta name="twitter:image" content="${MARKETING_SOCIAL_IMAGE_URL}" />`)
+    expect(marketingHtml).not.toContain('miniapp-hero.png')
+    expect(marketingHtml).not.toContain('miniapp-splash.png')
+
+    expect(appHtml).toContain(`<meta property="og:image" content="${APP_SOCIAL_IMAGE_URL}" />`)
+    expect(appHtml).toContain(`<meta name="twitter:image" content="${APP_SOCIAL_IMAGE_URL}" />`)
+    expect(appHtml).toContain(`"imageUrl":"${MINIAPP_HERO_URL}"`)
+    expect(appHtml).toContain(`"splashImageUrl":"${MINIAPP_SPLASH_URL}"`)
+    expect(appHtml).not.toContain('https://v1.4626.fun/app-hero.png')
+    expect((appHtml.match(/<meta property="og:image"/g) ?? [])).toHaveLength(1)
+    expect((appHtml.match(/<meta name="twitter:image"/g) ?? [])).toHaveLength(1)
+
+    expect(telegramLinkHtml).toContain(`<meta property="og:image" content="${MINIAPP_HERO_URL}" />`)
+    expect(telegramLinkHtml).toContain(`<meta name="twitter:image" content="${MINIAPP_HERO_URL}" />`)
+    expect(telegramLinkHtml).not.toContain('app-hero.png?v=6')
   })
 })

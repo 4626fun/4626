@@ -9,14 +9,17 @@ sidebar_position: 6
 
 ## Chain Configuration
 
-| Network | Chain ID | LZ Endpoint ID | Status | Explorer |
-|---------|----------|----------------|--------|----------|
+For EVM chains, the registry key matches the native `chainId`. For non-EVM chains like Solana, `CreatorRegistry` stores the LayerZero chain key used for routing rather than a native signing chain ID.
+
+| Network | Registry Key / Chain ID | LZ Endpoint ID | Status | Explorer |
+|---------|--------------------------|----------------|--------|----------|
 | **Base** | 8453 | 30184 | Hub chain | [BaseScan](https://basescan.org) |
 | **Ethereum** | 1 | 30101 | Configured | [Etherscan](https://etherscan.io) |
 | **Arbitrum** | 42161 | 30110 | Configured | [Arbiscan](https://arbiscan.io) |
 | **BSC** | 56 | 30102 | Configured | [BscScan](https://bscscan.com) |
 | **Avalanche** | 43114 | 30106 | Configured | [SnowTrace](https://snowtrace.io) |
-| **Monad** | 10143 | 30390 | Configured | [MonadExplorer](https://monadexplorer.com) |
+| **Monad** | 143 | 30390 | Configured | [MonadExplorer](https://monadexplorer.com) |
+| **Solana** | 101 | 30168 | Configured (non-EVM registry key) | [Solana Explorer](https://explorer.solana.com) |
 | **Sonic** | 146 | 30332 | Configured | [SonicScan](https://sonicscan.org) |
 | **HyperEVM** | 999 | 30275 | Configured | [Hyperliquid](https://hyperliquid.xyz) |
 

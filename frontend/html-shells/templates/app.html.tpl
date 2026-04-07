@@ -7,7 +7,6 @@
 {{> partials/head-shared-theme-bootstrap.html}}
 {{> partials/head-shared-stale-script.html}}
 {{> partials/head-shared-fonts.html}}
-{{> partials/head-app-secondary-social-meta.html}}
 {{> partials/head-shared-pwa.html}}
 {{> partials/head-shared-style.html}}
   </head>

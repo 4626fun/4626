@@ -2,7 +2,7 @@ import { Link, Navigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
 
-import { PageMeta } from '@/components/seo/PageMeta'
+import { META, PageMeta } from '@/components/seo/PageMeta'
 import { VaultFlowRoot } from '@/features/home/vault-flow/VaultFlowRoot'
 import { STORY_CONTENT } from '@/features/home/vault-flow/model/storyContent'
 import { getHostMode } from '@/lib/host'
@@ -29,11 +29,7 @@ export function Home() {
 
   return (
     <div className="relative">
-      <PageMeta
-        title="4626.fun — Creator Vaults on Base"
-        description="Deposit your creator coin once. Earn trading fees, yield, and lottery rewards — shared with every holder."
-        canonicalPath="/"
-      />
+      <PageMeta title={META.home.title} description={META.home.description} canonicalPath="/" />
 
       <section className="cinematic-section no-divider-bottom !py-16 sm:!py-24 lg:!py-28 min-h-screen flex items-center justify-center relative z-10">
         <div className="mx-auto max-w-4xl space-y-8 px-4 text-center sm:px-6 sm:space-y-12">

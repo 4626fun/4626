@@ -1,23 +1,21 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" fill="none">
   <defs>
-    <linearGradient id="cv-stroke" x1="0" y1="0" x2="256" y2="256" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#D6DCE8" />
-      <stop offset="45%" stop-color="#8492B0" />
-      <stop offset="80%" stop-color="#0052FF" />
-      <stop offset="100%" stop-color="#0033CC" />
+    <linearGradient id="mark-stroke" x1="52" y1="48" x2="204" y2="208" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#D8DEE9" />
+      <stop offset="50%" stop-color="#97A8CC" />
+      <stop offset="100%" stop-color="#0A5BFF" />
     </linearGradient>
   </defs>
 
-  <rect width="256" height="256" fill="#000000" />
   <rect
-    x="36"
-    y="36"
-    width="184"
-    height="184"
-    rx="30"
-    fill="none"
-    stroke="url(#cv-stroke)"
-    stroke-width="12"
+    x="44"
+    y="44"
+    width="168"
+    height="168"
+    rx="34"
+    stroke="url(#mark-stroke)"
+    stroke-width="14"
+    stroke-linecap="round"
     stroke-linejoin="round"
   />
 </svg>

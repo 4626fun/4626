@@ -5,7 +5,7 @@ import { apiFetch } from '@/lib/apiBase'
 import { API_ENDPOINTS } from '@/lib/apiEndpoints'
 import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
-import { PageMeta } from '@/components/seo/PageMeta'
+import { META, PageMeta } from '@/components/seo/PageMeta'
 
 type LeaderboardRow = {
   rank: number
@@ -116,7 +116,7 @@ export function Leaderboard() {
 
   return (
     <section className="relative overflow-hidden bg-vault-bg text-white min-h-[calc(100vh-0px)]">
-      <PageMeta title="Leaderboard" description="See the top creators and contributors on 4626 ranked by total points." canonicalPath="/leaderboard" />
+      <PageMeta title={META.leaderboard.title} description={META.leaderboard.description} canonicalPath="/leaderboard" />
       <div className="relative max-w-3xl mx-auto px-6 py-12">
         <div className="flex items-start justify-between gap-4">
           <div>

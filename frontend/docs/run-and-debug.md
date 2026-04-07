@@ -17,6 +17,7 @@ The debugger-friendly entrypoints in this repo live in `frontend/package.json`:
 - `pnpm -C frontend dev`
 - `pnpm -C frontend test`
 - `pnpm -C frontend test:watch`
+- `pnpm -C frontend generate:social-preview`
 - `pnpm -C frontend capture:app-screens`
 - `pnpm -C frontend generate:brand-icons`
 

@@ -3,7 +3,7 @@ import { AlertTriangle, CheckCircle2, LoaderCircle, RefreshCw, ShieldCheck, Shie
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useLoginWithEmail, usePrivy } from '@privy-io/react-auth'
 
-import { PageMeta } from '@/components/seo/PageMeta'
+import { META, PageMeta } from '@/components/seo/PageMeta'
 import { apiFetch } from '@/lib/apiBase'
 import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import { writeStoredSessionToken } from '@/hooks/useSiweAuth'
@@ -2021,7 +2021,7 @@ export function TelegramLink() {
       className="relative flex overflow-hidden bg-[#020202] text-[#EDEDED]"
       style={TG_VIEWPORT_STYLE}
     >
-      <PageMeta title="Telegram Link" description="Verify email inside Telegram and bind Telegram to the canonical 4626 account." canonicalPath="/telegram/link" />
+      <PageMeta title={META.telegramLink.title} description={META.telegramLink.description} canonicalPath="/telegram/link" />
       <div data-testid="telegram-link-decorative-overlay" className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute left-[-12%] top-[-8%] h-72 w-72 rounded-full bg-[#0052FF]/18 blur-3xl" />
         <div className="absolute right-[-10%] top-[8%] h-80 w-80 rounded-full bg-[#3B82F6]/12 blur-3xl" />
@@ -2151,17 +2151,6 @@ function MetaField(props: { label: string; value: string; title?: string }) {
     <div className="min-w-0" title={props.title}>
       <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-[#666666]">{props.label}</div>
       <div className="mt-0.5 truncate font-mono text-[12px] text-[#EDEDED]">{props.value}</div>
-    </div>
-  )
-}
-
-function SuccessSummaryCard(props: { label: string; value: string; title?: string; mono?: boolean }) {
-  return (
-    <div className="rounded-[16px] border border-white/[0.06] bg-white/[0.03] px-3 py-3" title={props.title}>
-      <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-[#666666]">{props.label}</div>
-      <div className={`mt-1 min-w-0 truncate text-[13px] text-[#EDEDED] ${props.mono ? 'font-mono' : 'font-medium'}`}>
-        {props.value}
-      </div>
     </div>
   )
 }

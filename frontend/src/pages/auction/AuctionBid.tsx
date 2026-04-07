@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react'
 import { isAddress, type Address } from 'viem'
 
 import { AKITA } from '@/config/contracts'
-import { PageMeta } from '@/components/seo/PageMeta'
+import { META, PageMeta } from '@/components/seo/PageMeta'
 import { CcaAuctionPanel } from '@/components/cca/CcaAuctionPanel'
 import { toShareSymbol } from '@/lib/tokenSymbols'
 
@@ -36,7 +36,7 @@ export function AuctionBid() {
 
   return (
     <div className="relative min-h-screen">
-      <PageMeta title="Auction Bid" description="Participate in the vault auction on 4626." canonicalPath={`/auction/${address ?? ''}`} />
+      <PageMeta title={META.auctionBid.title} description={META.auctionBid.description} canonicalPath={`/auction/${address ?? ''}`} />
       <section className="cinematic-section">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <Link
@@ -64,6 +64,5 @@ export function AuctionBid() {
     </div>
   )
 }
-
 
 

@@ -1,0 +1,49 @@
+#!/usr/bin/env node
+
+import fs from 'node:fs/promises'
+import path from 'node:path'
+
+const root = process.cwd()
+const publicDir = path.resolve(root, 'public')
+const distDir = path.resolve(root, 'dist')
+const buildDir = path.resolve(root, 'build')
+
+const derivedPublicAssets = [
+  'app-hero.png',
+  'app-icon.png',
+  'apple-touch-icon.png',
+  'favicon-16x16.png',
+  'favicon-32x32.png',
+  'icon-192-maskable.png',
+  'icon-192.png',
+  'icon-512.png',
+  'miniapp-hero.png',
+  'miniapp-icon.png',
+  'miniapp-splash.png',
+  'pwa-512-maskable.png',
+  'pwa-512.png',
+  'screenshot-deploy.png',
+  'screenshot-explore.png',
+  'screenshot-portrait.png',
+  'screenshot-swap.png',
+]
+
+async function rmIfExists(targetPath) {
+  await fs.rm(targetPath, { recursive: true, force: true })
+}
+
+async function main() {
+  for (const relativePath of derivedPublicAssets) {
+    await rmIfExists(path.join(publicDir, relativePath))
+  }
+
+  await rmIfExists(distDir)
+  await rmIfExists(buildDir)
+
+  console.log(
+    `removed ${derivedPublicAssets.length} derived public assets and cleared dist/build.\n` +
+      'Source SVGs, manifest.json, and other checked-in source assets were left intact.',
+  )
+}
+
+await main()

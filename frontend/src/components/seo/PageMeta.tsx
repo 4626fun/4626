@@ -12,7 +12,8 @@
 
 import { useEffect } from 'react'
 
-const SITE_NAME = '4626'
+import { PAGE_META } from '@/lib/pageMetaContent'
+import { SITE_APP_NAME } from '@/lib/siteMeta'
 
 function getPageOrigin(): string {
   if (typeof window === 'undefined') return 'https://v1.4626.fun'
@@ -64,7 +65,7 @@ export function PageMeta({
 }: PageMetaProps) {
   useEffect(() => {
     // Title
-    const fullTitle = title ? `${title} | ${SITE_NAME}` : SITE_NAME
+    const fullTitle = title ? `${title} | ${SITE_APP_NAME}` : SITE_APP_NAME
     document.title = fullTitle
 
     // Robots
@@ -79,7 +80,7 @@ export function PageMeta({
 
     // OG tags
     setOrCreateMeta('og:title', fullTitle, 'property')
-    setOrCreateMeta('og:site_name', SITE_NAME, 'property')
+    setOrCreateMeta('og:site_name', SITE_APP_NAME, 'property')
     setOrCreateMeta('og:type', 'website', 'property')
     setOrCreateMeta('twitter:card', 'summary_large_image', 'name')
     setOrCreateMeta('twitter:title', fullTitle, 'name')
@@ -103,37 +104,4 @@ export function PageMeta({
 /**
  * Common page metadata presets
  */
-export const META = {
-  home: {
-    title: 'Home',
-    description: '4626 — tokenized creator vaults on Base.',
-  },
-  explore: {
-    title: 'Explore Creators',
-    description: 'Discover and invest in creator vaults on Base.',
-  },
-  deploy: {
-    title: 'Deploy Vault',
-    description: 'Launch your ERC-4626 creator vault on Base.',
-  },
-  agents: {
-    title: 'Creator Agents',
-    description: 'Browse and message creator XMTP agents.',
-  },
-  agentRegister: {
-    title: 'Register Agent',
-    description: 'Register and activate your 4626 agent stack (ERC-8004, XMTP, SIWA, Lens/Grove).',
-  },
-  faq: {
-    title: 'FAQ',
-    description: 'Frequently asked questions about 4626.',
-  },
-  vault: (symbol: string) => ({
-    title: `${symbol} Vault`,
-    description: `Deposit and manage ${symbol} in 4626.`,
-  }),
-  creator: (name: string) => ({
-    title: name,
-    description: `${name}'s creator vault and earnings on 4626.`,
-  }),
-} as const
+export const META = PAGE_META

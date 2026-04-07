@@ -1,7 +1,7 @@
 import { Suspense, lazy } from 'react'
 import { motion } from 'framer-motion'
 
-import { PageMeta } from '@/components/seo/PageMeta'
+import { META, PageMeta } from '@/components/seo/PageMeta'
 import { PrivyClientProvider } from '@/lib/privy/client'
 import { AppQueryProvider } from '@/web3/Web3Providers'
 
@@ -13,11 +13,7 @@ const LazyWaitlistFlow = lazy(async () => {
 export function Waitlist() {
   return (
     <div className="min-h-screen flex flex-col">
-      <PageMeta
-        title="Join the Waitlist — 4626.fun"
-        description="Get early access to Creator Vaults on Base. Deposit once. Earn from every trade, forever."
-        canonicalPath="/waitlist"
-      />
+      <PageMeta title={META.waitlist.title} description={META.waitlist.description} canonicalPath="/waitlist" />
 
       <main className="flex-1 flex items-start justify-center px-4 py-16 sm:py-24">
         <div className="w-full max-w-2xl space-y-10">

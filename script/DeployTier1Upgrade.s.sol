@@ -18,7 +18,7 @@ import {VaultActivationBatcher} from "../contracts/helpers/batchers/VaultActivat
  *                                  (40% CCA / 40% creator vesting / 20% Solana)
  *
  * @dev WHAT THIS DOES NOT DEPLOY:
- *      - CreatorRegistry — the existing registry (0x02c8...52D) is fully compatible with
+ *      - CreatorRegistry — the existing registry is fully compatible with
  *        the new LotteryManager. Remote OFT peer features are additive and can be deployed
  *        later when multi-chain OFTs are ready.
  *
@@ -51,7 +51,7 @@ contract DeployTier1Upgrade is Script {
     // ═══════════════════════════════════════════════════════════════════
 
     /// @notice Existing CreatorRegistry on Base (compatible with new LotteryManager)
-    address constant REGISTRY = 0x888482d648D1fCa1A735268A9e579b44Bf644626;
+    address constant REGISTRY = 0x888506B92181c57A2fD06516FFFb6F375b7A4626;
 
     /// @notice Existing VRF Consumer on Base (unchanged, just needs configuration)
     address constant VRF_CONSUMER = 0x0265236984DE964CB0422BaeFbDb2de7C9d590F5;
@@ -186,7 +186,7 @@ contract DeployTier1Upgrade is Script {
         //  The registry is owned by a different address. This step must
         //  be executed manually by the registry owner after deployment:
         //
-        //    cast send 0x02c8031c39E10832A831b954Df7a2c1bf9Df052D \
+        //    cast send 0x888506B92181c57A2fD06516FFFb6F375b7A4626 \
         //      "setLotteryManager(uint16,address)" 8453 <NEW_LOTTERY_MANAGER> \
         //      --rpc-url base --private-key <REGISTRY_OWNER_PK>
         //

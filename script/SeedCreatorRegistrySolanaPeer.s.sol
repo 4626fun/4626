@@ -17,7 +17,8 @@ import {ICreatorRegistry} from "../contracts/interfaces/core/ICreatorRegistry.so
  * - SOLANA_REMOTE_OFT_PEER_BYTES32
  *
  * Optional env:
- * - SOLANA_CHAIN_ID (if set > 0, writes chainId <-> EID mapping too)
+ * - SOLANA_REGISTRY_KEY (if set > 0, writes the Solana registry key <-> EID mapping too)
+ * - SOLANA_CHAIN_ID remains a deprecated compatibility alias
  * - OVAULT_HUB_COMPOSER
  * - OVAULT_ASSET_MESH_TOKEN
  * - OVAULT_SHARE_MESH_TOKEN
@@ -33,7 +34,7 @@ contract SeedCreatorRegistrySolanaPeer is Script {
         address creatorToken = vm.envAddress("CREATOR_TOKEN");
         uint32 solanaEid = uint32(vm.envUint("SOLANA_EID"));
         bytes32 remotePeer = vm.envBytes32("SOLANA_REMOTE_OFT_PEER_BYTES32");
-        uint256 solanaChainId = vm.envOr("SOLANA_CHAIN_ID", uint256(0));
+        uint256 solanaRegistryKey = vm.envOr("SOLANA_REGISTRY_KEY", vm.envOr("SOLANA_CHAIN_ID", uint256(0)));
         address ovaultHubComposer = vm.envOr("OVAULT_HUB_COMPOSER", address(0));
         address ovaultAssetMeshToken = vm.envOr("OVAULT_ASSET_MESH_TOKEN", address(0));
         address ovaultShareMeshToken = vm.envOr("OVAULT_SHARE_MESH_TOKEN", address(0));
@@ -58,10 +59,11 @@ contract SeedCreatorRegistrySolanaPeer is Script {
 
         vm.startBroadcast(deployerPrivateKey);
 
-        if (solanaChainId > 0) {
-            registry.setChainIdToEid(solanaChainId, solanaEid);
-            console.log("Set chainId<->EID mapping for Solana chain ID");
-            console.log(solanaChainId);
+        // SOLANA_CHAIN_ID remains a deprecated fallback alias for backward compatibility.
+        if (solanaRegistryKey > 0) {
+            registry.setChainIdToEid(solanaRegistryKey, solanaEid);
+            console.log("Set registry key <-> EID mapping for Solana");
+            console.log(solanaRegistryKey);
         }
 
         registry.setRemoteOFTPeerBytes32(creatorToken, solanaEid, remotePeer);

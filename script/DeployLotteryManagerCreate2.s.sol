@@ -25,7 +25,7 @@ contract DeployLotteryManagerCreate2 is Script {
     address constant EXPECTED_ADDRESS = 0x77740C44A3E1d8262e8bfAB6204A29B2cbeE4626;
 
     /// @notice Base mainnet registry + owner
-    address constant REGISTRY = 0x888482d648D1fCa1A735268A9e579b44Bf644626;
+    address constant REGISTRY = 0x888506B92181c57A2fD06516FFFb6F375b7A4626;
     address constant OWNER = 0xB05Cf01231cF2fF99499682E64D3780d57c80FdD;
 
     function run() external {

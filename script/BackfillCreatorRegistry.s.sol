@@ -21,7 +21,7 @@ interface IERC20MetadataLike {
  */
 contract BackfillCreatorRegistry is Script {
     // Current Base defaults (can be overridden with env vars).
-    address internal constant DEFAULT_REGISTRY = 0x888482d648D1fCa1A735268A9e579b44Bf644626;
+    address internal constant DEFAULT_REGISTRY = 0x888506B92181c57A2fD06516FFFb6F375b7A4626;
     address internal constant DEFAULT_CREATOR_TOKEN = 0x5b674196812451B7cEC024FE9d22D2c0b172fa75;
     address internal constant DEFAULT_CREATOR_CANONICAL_WALLET = 0xAb6d5C10b03300326CD7fAb7267Ae192842967b5;
     address internal constant DEFAULT_VAULT = 0xD0785a6DF70F7f2486F3962869003c4C68F90532;

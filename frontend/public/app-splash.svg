@@ -1,28 +1,52 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 1200" fill="none">
   <defs>
-    <radialGradient id="bg" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(420 360) rotate(55) scale(1400 1400)">
-      <stop stop-color="#151515"/>
-      <stop offset="0.55" stop-color="#070707"/>
-      <stop offset="1" stop-color="#000000"/>
+    <radialGradient id="bg-glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(300 250) rotate(42) scale(1040 920)">
+      <stop offset="0%" stop-color="#12203B" />
+      <stop offset="38%" stop-color="#08101E" />
+      <stop offset="100%" stop-color="#020306" />
     </radialGradient>
-    <linearGradient id="cv-stroke" x1="280" y1="280" x2="920" y2="920" gradientUnits="userSpaceOnUse">
-      <stop offset="0%" stop-color="#D6DCE8" />
-      <stop offset="45%" stop-color="#8492B0" />
-      <stop offset="80%" stop-color="#0052FF" />
-      <stop offset="100%" stop-color="#0033CC" />
+    <radialGradient id="corner-glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(910 360) rotate(138) scale(420 520)">
+      <stop offset="0%" stop-color="#0A5BFF" stop-opacity="0.34" />
+      <stop offset="100%" stop-color="#0A5BFF" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="mark-stroke" x1="350" y1="330" x2="850" y2="870" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#D8DEE9" />
+      <stop offset="50%" stop-color="#97A8CC" />
+      <stop offset="100%" stop-color="#0A5BFF" />
     </linearGradient>
   </defs>
 
-  <rect width="1200" height="1200" fill="url(#bg)"/>
+  <rect width="1200" height="1200" fill="#020306" />
+  <rect width="1200" height="1200" fill="url(#bg-glow)" />
+  <rect width="1200" height="1200" fill="url(#corner-glow)" />
 
-  <!-- blue-outline mark -->
-  <rect x="330" y="330" width="540" height="540" rx="94" fill="none" stroke="url(#cv-stroke)" stroke-width="44" opacity="0.14" stroke-linejoin="round" />
-  <rect x="330" y="330" width="540" height="540" rx="94" fill="none" stroke="url(#cv-stroke)" stroke-width="26" stroke-linejoin="round" />
+  <g opacity="0.08" stroke="#94A3B8">
+    <path d="M180 0V1200" />
+    <path d="M420 0V1200" />
+    <path d="M660 0V1200" />
+    <path d="M900 0V1200" />
+    <path d="M0 240H1200" />
+    <path d="M0 480H1200" />
+    <path d="M0 720H1200" />
+    <path d="M0 960H1200" />
+  </g>
 
-  <text x="600" y="980" text-anchor="middle" fill="rgba(255,255,255,0.82)" font-family="Inter, ui-sans-serif, system-ui" font-size="56" font-weight="600" letter-spacing="0.5">
+  <rect
+    x="320"
+    y="280"
+    width="560"
+    height="560"
+    rx="118"
+    stroke="url(#mark-stroke)"
+    stroke-width="34"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+  />
+
+  <text x="600" y="964" text-anchor="middle" fill="#F8FAFC" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="66" font-weight="500" letter-spacing="-0.8">
     4626.fun
   </text>
-  <text x="600" y="1042" text-anchor="middle" fill="rgba(255,255,255,0.56)" font-family="Inter, ui-sans-serif, system-ui" font-size="24" font-weight="400" letter-spacing="0.2">
-    Creator Vaults
+  <text x="600" y="1026" text-anchor="middle" fill="#A9B6CC" font-family="Avenir Next, Helvetica Neue, Arial, sans-serif" font-size="26" font-weight="400" letter-spacing="3.2">
+    CREATOR VAULTS
   </text>
 </svg>

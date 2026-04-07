@@ -5,7 +5,7 @@ import { ArrowRight, ChevronDown, Search, ShieldCheck, X } from 'lucide-react'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
-import { PageMeta } from '@/components/seo/PageMeta'
+import { META, PageMeta } from '@/components/seo/PageMeta'
 
 type FaqItem = {
   id: string
@@ -753,7 +753,7 @@ export function Faq() {
 
   return (
     <div className="relative">
-      <PageMeta title="FAQ" description="Frequently asked questions about 4626 — vaults, creator coins, fees, and getting started." canonicalPath="/faq" />
+      <PageMeta title={META.faq.title} description={META.faq.description} canonicalPath="/faq" />
       <section className="cinematic-section">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <motion.div
