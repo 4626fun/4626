@@ -80,12 +80,13 @@ cast chain-id --rpc-url $RPC_URL
 # 1) Registry is the source of truth for what the app should use.
 cast call --rpc-url $RPC_URL $CREATOR_REGISTRY "getVaultForToken(address)(address)" $CREATOR_COIN
 
-# 2) Factory is useful to see “which stack was registered by which infra deploy”.
+# 2) Legacy CreatorOVaultFactory registrar is useful to see “which stack was registered by which legacy infra deploy”.
 cast call --rpc-url $RPC_URL $CREATOR_FACTORY "isDeployed(address)(bool)" $CREATOR_COIN
 cast call --rpc-url $RPC_URL $CREATOR_FACTORY "getDeployment(address)((address,address,address,address,address,address,address,address,uint256,bool))" $CREATOR_COIN
 ```
 
 If you’re using the multi-phase deployer, prefer checking deterministic addresses first (computeAddress/create2) rather than “guessing”.
+Treat `CreatorOVaultFactory` as a historical registration/lookup surface only; `DeploymentBatcher` is the current deployment engine.
 
 ## Deployment Workflows
 
@@ -138,7 +139,7 @@ Common required approvals (high level):
 ## Troubleshooting (common failures)
 
 - “Already deployed”:
-  - `CreatorOVaultFactory.registerDeployment` reverts if `deployments[token].exists == true`
+  - legacy registrar `CreatorOVaultFactory.registerDeployment` reverts if `deployments[token].exists == true`
 - “AA deploy stuck / reverted”:
   - check bundler error and paymaster sponsorship; reduce batch size or switch to multi-phase deployer
 - “Launch/activate reverted”:

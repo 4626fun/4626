@@ -19,7 +19,7 @@ This path assumes legacy per-creator scripts are retired and `/deploy` is the ca
 - `PRIVATE_KEY`
 - `BASE_RPC_URL`
 - `ETHERSCAN_API_KEY` (or `BASESCAN_API_KEY`)
-- `DEPLOYMENT_EPOCH_TAG` (recommended, example: `v1.7.1`)
+- `DEPLOYMENT_EPOCH_TAG` (recommended, example: `v1.8.1`)
 
 Optional:
 
@@ -28,13 +28,14 @@ Optional:
 
 ## 1) Choose Epoch Tag
 
-Pick an immutable epoch token (example: `v1.7.1`) and keep it in release notes.
+Pick an immutable epoch token (example: `v1.8.1`) and keep it in release notes.
 
 ```bash
-export DEPLOYMENT_EPOCH_TAG="v1.7.1"
+export DEPLOYMENT_EPOCH_TAG="v1.8.1"
 ```
 
 Deployment scripts derive salts from this tag automatically unless raw `INFRA_*_SALT` values are provided.
+For the vanity epoch, the wrapper scripts also auto-generate and pin `INFRA_VANITY_MANIFEST_PATH` unless you provide one explicitly.
 
 ## 2) Deploy Core Infra (Registry, factories, shared services)
 
@@ -100,6 +101,7 @@ Repeat for:
 Record the release hash snapshot after regenerating deploy bytecode:
 
 - `deployments/base/v1.7.1-bytecode-manifest.json`
+- `deployments/base/v1.8.1-vanity-manifest.json`
 
 ## 6) App/API Cutover
 

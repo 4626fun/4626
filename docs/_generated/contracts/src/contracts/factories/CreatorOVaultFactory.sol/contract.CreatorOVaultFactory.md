@@ -1,5 +1,5 @@
 # CreatorOVaultFactory
-[Git Source](https://github.com/wenakita/4626/blob/main/contracts/factories/CreatorOVaultFactory.sol)
+[Git Source](https://github.com/wenakita/4626/blob/95caf47d5e6c8aec0e02fead34a6187f7acbf71b/contracts/factories/CreatorOVaultFactory.sol)
 
 **Inherits:**
 Ownable
@@ -10,11 +10,15 @@ CreatorOVaultFactory
 **Author:**
 0xakita.eth
 
-Registry for Creator Vault deployments (contracts deployed via script)
+Legacy deployment registrar and lookup surface for Creator Vault stacks deployed via script
 
 DEPRECATED: This factory is superseded by DeploymentBatcher (contracts/helpers/batchers/).
 DeploymentBatcher handles phased deployment (Phase 1-3) with CREATE2 deterministic
 addresses, hub-centric architecture support, and remote chain OFT-only deployment.
+The historical "Factory" name is preserved for backwards compatibility with existing
+deployments, artifacts, scripts, and operator documentation.
+This contract does not instantiate vault stacks itself. Authorized deployers register
+already-deployed addresses here so they can be enumerated and mirrored into CreatorRegistry.
 This contract is kept for backwards compatibility with existing deployments.
 New deployments should use DeploymentBatcher exclusively.
 
@@ -23,14 +27,14 @@ Original factory exceeded EVM contract size limit (88KB > 24KB)
 because it embedded bytecode for 6 contracts.
 LEGACY APPROACH:
 - Contracts deployed directly via Foundry script (no size limit)
-- This contract just stores deployment info
+- This contract records deployment info after the fact
 - Enables lookup, enumeration, and registry integration
 
 DEPLOYMENT FLOW (LEGACY):
-1. Deploy this factory (part of infrastructure)
+1. Deploy this legacy registrar (part of infrastructure)
 2. Run DeployVaultStack script which:
 - Deploys all 6 contracts individually
-- Calls factory.registerDeployment() to store info
+- Calls factory.registerDeployment() to store and mirror the addresses
 3. Addresses stored here for lookup
 
 

@@ -234,14 +234,14 @@ contract SeedCreatorRegistry is Script {
         console.log(unicode"   ✓ Hub chain set to Base");
 
         // ────────────────────────────────────────────────────────────────
-        //  5. AUTHORIZE FACTORIES & BATCHERS
+        //  5. AUTHORIZE LEGACY REGISTRAR & BATCHERS
         // ────────────────────────────────────────────────────────────────
 
-        console.log("\n[5/5] Authorizing factories and batchers...");
+        console.log("\n[5/5] Authorizing legacy registrar and batchers...");
 
         if (CREATOR_FACTORY != address(0)) {
             registry.setAuthorizedFactory(CREATOR_FACTORY, true);
-            console.log(unicode"   ✓ CreatorOVaultFactory authorized");
+            console.log(unicode"   ✓ CreatorOVaultFactory (legacy registrar) authorized");
         }
 
         if (VAULT_BATCHER != address(0)) {
@@ -275,7 +275,7 @@ contract SeedCreatorRegistry is Script {
         console.log(unicode"  ✓ EID mappings set:   5 chains (+ optional Solana registry key)");
         console.log(unicode"  ✓ Hub chain:          Base (8453 / EID 30184)");
         console.log(unicode"  ✓ DEX infra:          PoolManager + SwapRouter on Base");
-        console.log(unicode"  ✓ Factories auth'd:   CreatorOVaultFactory, Batcher, ActivationBatcher");
+        console.log(unicode"  ✓ Auth'd surfaces:    CreatorOVaultFactory legacy registrar, Batcher, ActivationBatcher");
         console.log("");
         console.log("   No creator-specific data was registered.");
         console.log("   Creator tokens/vaults are registered via the app deploy-session flow (/deploy).");

@@ -21,7 +21,7 @@ import {CreatorVRFConsumerV2_5} from "../contracts/utilities/lottery/vrf/Creator
  *      │  PHASE 1: Core Infrastructure (One-time deployment)             │
  *      │  ────────────────────────────────────────────────────────────   │
  *      │  1. CreatorRegistry         - Central registry for all data    │
- *      │  2. CreatorOVaultFactory    - Deploys per-creator contracts    │
+ *      │  2. CreatorOVaultFactory    - Legacy registrar for script-deployed stacks │
  *      │  3. CreatorLotteryManager   - Shared lottery service           │
  *      │  4. CreatorVRFConsumerV2_5  - Chainlink VRF hub                │
  *      └─────────────────────────────────────────────────────────────────┘
@@ -115,8 +115,8 @@ contract DeployInfrastructure is Script {
         registry = new CreatorRegistry(deployer);
         console.log("       Address:", address(registry));
 
-        // 2. CreatorOVaultFactory
-        console.log("\n[2/4] Deploying CreatorOVaultFactory...");
+        // 2. CreatorOVaultFactory (legacy deployment registrar)
+        console.log("\n[2/4] Deploying CreatorOVaultFactory (legacy registrar)...");
         vaultFactory = new CreatorOVaultFactory(address(registry), deployer);
         console.log("       Address:", address(vaultFactory));
 
@@ -164,8 +164,8 @@ contract DeployInfrastructure is Script {
         console.log("[Config] Setting chain ID to EID mapping...");
         registry.setChainIdToEid(BASE_CHAIN_ID, BASE_EID);
 
-        // Authorize factories
-        console.log("[Config] Authorizing vault factory...");
+        // Authorize legacy registrar/factory surface for backwards compatibility
+        console.log("[Config] Authorizing legacy vault registrar...");
         registry.setAuthorizedFactory(address(vaultFactory), true);
 
         // Set hub chain (Base is the hub)
@@ -245,7 +245,7 @@ contract DeployInfrastructure is Script {
         );
         console.log(unicode"│                                                                 │");
         console.log("   CreatorRegistry:        ", address(registry));
-        console.log("   CreatorOVaultFactory:   ", address(vaultFactory));
+        console.log("   CreatorOVaultFactory (legacy registrar):", address(vaultFactory));
         console.log("   CreatorLotteryManager:  ", address(lotteryManager));
         console.log("   CreatorVRFConsumerV2_5: ", address(vrfConsumer));
         console.log(unicode"│                                                                 │");
@@ -279,7 +279,7 @@ contract DeployInfrastructure is Script {
         );
         console.log(unicode"│                                                                 │");
         console.log("   # Add to your .env file:");
-        console.log("   CREATOR_FACTORY=", address(vaultFactory));
+        console.log("   CREATOR_FACTORY=", address(vaultFactory), "   # legacy registrar");
         console.log("   CREATOR_REGISTRY=", address(registry));
         console.log("   LOTTERY_MANAGER=", address(lotteryManager));
         console.log(unicode"│                                                                 │");
@@ -291,14 +291,16 @@ contract DeployInfrastructure is Script {
         console.log(
             unicode"┌─────────────────────────────────────────────────────────────────┐"
         );
-        console.log(unicode"│  COINBASE PAYMASTER - CONTRACT ALLOWLIST                        │");
+        console.log(unicode"│  LEGACY FACTORY NOTE                                             │");
         console.log(
             unicode"├─────────────────────────────────────────────────────────────────┤"
         );
-        console.log(unicode"│  Add these contracts to your Coinbase Developer Portal:         │");
+        console.log(unicode"│  CreatorOVaultFactory is a legacy registrar, not the current    │");
+        console.log(unicode"│  deployment engine. Do not build new paymaster allowlist        │");
+        console.log(unicode"│  assumptions around it. Use the app deploy-session flow and     │");
+        console.log(unicode"│  DeploymentBatcher for current deployments.                     │");
         console.log(unicode"│                                                                 │");
-        console.log("   1. CreatorOVaultFactory:    ", address(vaultFactory));
-        console.log("      Function: deploy(address)");
+        console.log("   Legacy registrar:", address(vaultFactory));
         console.log(unicode"│                                                                 │");
         console.log(
             unicode"└─────────────────────────────────────────────────────────────────┘"
@@ -314,9 +316,9 @@ contract DeployInfrastructure is Script {
         );
         console.log(unicode"║                                                                ║");
         console.log(unicode"║  1. Copy contract addresses to .env file                       ║");
-        console.log(unicode"║  2. Add contracts to Coinbase Paymaster allowlist              ║");
-        console.log(unicode"║  3. Create & fund VRF subscription on Chainlink                ║");
-        console.log(unicode"║  4. Launch creator vaults via app deploy-session flow (/deploy) ║");
+        console.log(unicode"║  2. Create & fund VRF subscription on Chainlink                ║");
+        console.log(unicode"║  3. Launch creator vaults via app deploy-session flow (/deploy) ║");
+        console.log(unicode"║  4. Treat CreatorOVaultFactory as legacy registry-only infra    ║");
         console.log(unicode"║                                                                ║");
         console.log(
             unicode"╚════════════════════════════════════════════════════════════════╝"

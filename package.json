@@ -1,5 +1,5 @@
 {
-  "version": "1.7.1",
+  "version": "1.8.1",
   "scripts": {
     "agent:verify-change": "node script/agent-runtime/verify-change.js",
     "check:no-todo-markers": "bash frontend/scripts/check-no-todo-markers.sh",

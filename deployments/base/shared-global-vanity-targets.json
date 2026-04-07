@@ -1,0 +1,225 @@
+{
+  "version": 1,
+  "chain": "base",
+  "chainId": 8453,
+  "vanitySuffix": "4626",
+  "recommendedEpochTag": "v1.8.1",
+  "recommendedManifestPath": "deployments/base/v1.8.1-vanity-manifest.json",
+  "historicalReferenceEpochTag": "v1.7.1",
+  "notes": [
+    "This catalog is the machine-readable source of truth for the shared/global Base contracts considered by the vanity epoch tooling.",
+    "Phase 1 targets are the only contracts that must satisfy the explicit ...4626 suffix gate.",
+    "Derived targets are constructor-created children whose addresses are tracked and verified, but not independently suffix-ground.",
+    "Deferred targets stay on their current addresses until a separate migration plan exists.",
+    "Naming taxonomy entries describe behavioral suffix expectations only; legacy source names stay frozen until a dedicated migration track lands."
+  ],
+  "baseMainnetDefaults": {
+    "create2Factory": "0x4e59b44847b379578588920cA78FbF26c0B4956C",
+    "registry": "0x888506B92181c57A2fD06516FFFb6F375b7A4626",
+    "protocolTreasury": "0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3",
+    "poolManager": "0x498581fF718922c3f8e6A244956aF099B2652b2b",
+    "taxHook": "0xca975B9dAF772C71161f3648437c3616E5Be0088",
+    "chainlinkEthUsd": "0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70",
+    "vaultActivationBatcher": "0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB",
+    "lotteryManager": "0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3",
+    "permit2": "0x000000000022D473030F116dDEE9F6B43aC78BA3",
+    "usdc": "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    "uniswapV3Factory": "0x33128a8fC17869897dcE68Ed026d694621f6FDfD",
+    "uniswapRouter": "0x2626664c2603336E57B271c5C0b26F421741e481",
+    "ajnaFactory": "0x214f62B5836D83f3D6c4f71F174209097B1A779C"
+  },
+  "phase1VanityTargets": [
+    {
+      "contractName": "UniversalBytecodeStoreV2",
+      "deploymentKind": "create2_shared_infra",
+      "artifactPath": "out/UniversalBytecodeStoreV2.sol/UniversalBytecodeStoreV2.json",
+      "deploymentJsonPath": "deployments/base/contracts/helpers/infra/UniversalBytecodeStore.json",
+      "saltEnv": "INFRA_STORE_SALT",
+      "saltTagEnv": "INFRA_STORE_SALT_TAG",
+      "defaultSaltTagTemplate": "4626:UniversalBytecodeStore:{epoch}",
+      "referenceSaltTag": "4626:UniversalBytecodeStore:v1.7.1",
+      "suffixRequired": true,
+      "notes": [
+        "Top-level CREATE2 deployment from the EIP-2470 universal factory.",
+        "Current canonical address already ends with 4626."
+      ]
+    },
+    {
+      "contractName": "UniversalCreate2DeployerFromStore",
+      "deploymentKind": "create2_shared_infra",
+      "artifactPath": "out/UniversalCreate2DeployerFromStore.sol/UniversalCreate2DeployerFromStore.json",
+      "deploymentJsonPath": "deployments/base/contracts/factories/UniversalCreate2DeployerFromStore.json",
+      "saltEnv": "INFRA_DEPLOYER_FROM_STORE_SALT",
+      "saltTagEnv": "INFRA_DEPLOYER_FROM_STORE_SALT_TAG",
+      "defaultSaltTagTemplate": "4626:UniversalCreate2DeployerFromStore:{epoch}",
+      "referenceSaltTag": "4626:UniversalCreate2DeployerFromStore:v1.7.1",
+      "suffixRequired": true,
+      "notes": [
+        "Top-level CREATE2 deployment from the EIP-2470 universal factory.",
+        "Depends on the predicted bytecode store address."
+      ]
+    },
+    {
+      "contractName": "CreatorOVaultCoreModule",
+      "deploymentKind": "create2_shared_logic_module",
+      "artifactPath": "out/CreatorOVaultCoreModule.sol/CreatorOVaultCoreModule.json",
+      "deploymentJsonPath": "",
+      "saltEnv": "INFRA_VAULT_CORE_MODULE_SALT",
+      "saltTagEnv": "INFRA_VAULT_CORE_MODULE_SALT_TAG",
+      "defaultSaltTagTemplate": "4626:CreatorOVaultCoreModule:{epoch}",
+      "referenceSaltTag": "4626:CreatorOVaultCoreModule:v1.7.1",
+      "suffixRequired": true,
+      "notes": [
+        "Shared delegatecall logic module deployed with CREATE2."
+      ]
+    },
+    {
+      "contractName": "CreatorOVaultStrategiesModule",
+      "deploymentKind": "create2_shared_logic_module",
+      "artifactPath": "out/CreatorOVaultStrategiesModule.sol/CreatorOVaultStrategiesModule.json",
+      "deploymentJsonPath": "",
+      "saltEnv": "INFRA_VAULT_STRATEGIES_MODULE_SALT",
+      "saltTagEnv": "INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG",
+      "defaultSaltTagTemplate": "4626:CreatorOVaultStrategiesModule:{epoch}",
+      "referenceSaltTag": "4626:CreatorOVaultStrategiesModule:v1.7.1",
+      "suffixRequired": true,
+      "notes": [
+        "Shared delegatecall logic module deployed with CREATE2."
+      ]
+    },
+    {
+      "contractName": "CreatorOVaultAdminModule",
+      "deploymentKind": "create2_shared_logic_module",
+      "artifactPath": "out/CreatorOVaultAdminModule.sol/CreatorOVaultAdminModule.json",
+      "deploymentJsonPath": "",
+      "saltEnv": "INFRA_VAULT_ADMIN_MODULE_SALT",
+      "saltTagEnv": "INFRA_VAULT_ADMIN_MODULE_SALT_TAG",
+      "defaultSaltTagTemplate": "4626:CreatorOVaultAdminModule:{epoch}",
+      "referenceSaltTag": "4626:CreatorOVaultAdminModule:v1.7.1",
+      "suffixRequired": true,
+      "notes": [
+        "Shared delegatecall logic module deployed with CREATE2."
+      ]
+    },
+    {
+      "contractName": "DeploymentBatcher",
+      "deploymentKind": "create2_shared_orchestrator",
+      "artifactPath": "out/DeploymentBatcher.sol/DeploymentBatcher.json",
+      "deploymentJsonPath": "deployments/base/contracts/helpers/batchers/DeploymentBatcher.json",
+      "saltEnv": "INFRA_DEPLOYMENT_BATCHER_SALT",
+      "saltTagEnv": "INFRA_DEPLOYMENT_BATCHER_SALT_TAG",
+      "defaultSaltTagTemplate": "4626:DeploymentBatcher:{epoch}",
+      "referenceSaltTag": "4626:DeploymentBatcher:v1.7.1-r2-lottery3f7",
+      "suffixRequired": true,
+      "notes": [
+        "CREATE2 target with chain-specific constructor args.",
+        "This contract creates two constructor-derived helpers whose addresses must also be verified."
+      ]
+    }
+  ],
+  "derivedTargets": [
+    {
+      "contractName": "DeploymentBatcherPhase3Helper",
+      "deploymentKind": "constructor_child_create",
+      "artifactPath": "out/DeploymentBatcher.sol/DeploymentBatcherPhase3Helper.json",
+      "deploymentJsonPath": "deployments/base/contracts/helpers/batchers/DeploymentBatcherPhase3Helper.json",
+      "parentContractName": "DeploymentBatcher",
+      "parentCreateNonce": 1,
+      "suffixRequired": false,
+      "reason": "Constructor-created helper; tracked for deterministic drift but not independently suffix-ground."
+    },
+    {
+      "contractName": "DeploymentBatcherUniV4Helper",
+      "deploymentKind": "constructor_child_create",
+      "artifactPath": "out/DeploymentBatcher.sol/DeploymentBatcherUniV4Helper.json",
+      "deploymentJsonPath": "",
+      "parentContractName": "DeploymentBatcher",
+      "parentCreateNonce": 2,
+      "suffixRequired": false,
+      "reason": "Constructor-created helper; tracked for deterministic drift but not independently suffix-ground."
+    }
+  ],
+  "deferredTargets": [
+    {
+      "contractName": "VaultActivationBatcher",
+      "deploymentKind": "shared_global_low_state",
+      "deploymentJsonPath": "deployments/base/contracts/helpers/batchers/VaultActivationBatcher.json",
+      "currentAddress": "0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB",
+      "reasonDeferred": "Shared runtime dependency referenced by deployment flows; keep stable until a dedicated cutover includes approval and downstream config validation."
+    },
+    {
+      "contractName": "CreatorRegistry",
+      "deploymentKind": "stateful_global_registry",
+      "deploymentJsonPath": "deployments/base/contracts/core/CreatorRegistry.json",
+      "currentAddress": "0x888506B92181c57A2fD06516FFFb6F375b7A4626",
+      "reasonDeferred": "Holds live creator/token/vault/OFT mappings, reverse indexes, and chain configuration."
+    },
+    {
+      "contractName": "CreatorLotteryManager",
+      "deploymentKind": "stateful_global_service",
+      "deploymentJsonPath": "deployments/base/contracts/services/lottery/CreatorLotteryManager.json",
+      "currentAddress": "0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3",
+      "reasonDeferred": "Maintains shared lottery configuration, authorization, sponsorship state, and cross-chain VRF routing."
+    },
+    {
+      "contractName": "CreatorVRFConsumerV2_5",
+      "deploymentKind": "stateful_global_service",
+      "deploymentJsonPath": "deployments/base/contracts/services/lottery/vrf/CreatorVRFConsumerV2_5.json",
+      "currentAddress": "0x9F85d8EEe5d2b8dC1E99b598B9c2B084934d0304",
+      "reasonDeferred": "Stateful lottery/VRF integration with live coordinator and request lifecycle concerns."
+    },
+    {
+      "contractName": "SolanaBridgeAdapter",
+      "deploymentKind": "stateful_global_adapter",
+      "deploymentJsonPath": "deployments/base/contracts/services/bridge/SolanaBridgeAdapter.json",
+      "currentAddress": "0x2414b595c4f18532A5836B6e2E6d536832c572e8",
+      "reasonDeferred": "Maintains token registration, keeper authorization, twin mapping, and bridge/lottery routing state."
+    }
+  ],
+  "namingTaxonomy": [
+    {
+      "name": "Factory",
+      "meaning": "Primary responsibility is instantiating other contracts with minimal orchestration."
+    },
+    {
+      "name": "Deployer",
+      "meaning": "Low-level bytecode deployment primitive or deterministic address engine."
+    },
+    {
+      "name": "Registry",
+      "meaning": "Stateful lookup or indexing surface that records canonical relationships."
+    },
+    {
+      "name": "Manager",
+      "meaning": "Long-lived stateful coordinator for ongoing protocol or runtime behavior."
+    },
+    {
+      "name": "Batcher",
+      "meaning": "Multi-step deploy, configure, and launch orchestrator."
+    },
+    {
+      "name": "Adapter",
+      "meaning": "Boundary layer translating between 4626 surfaces and external systems or interfaces."
+    },
+    {
+      "name": "Helper",
+      "meaning": "Satellite contract created by a parent or batcher to split logic, bytecode, or orchestration concerns."
+    },
+    {
+      "name": "Hub",
+      "meaning": "Hub-chain messaging endpoint or compose receiver centered on cross-chain coordination."
+    }
+  ],
+  "renameCandidates": [
+    {
+      "contractName": "CreatorOVaultFactory",
+      "currentPath": "contracts/factories/CreatorOVaultFactory.sol",
+      "recommendedName": "LegacyCreatorOVaultDeploymentRegistry",
+      "status": "deferred",
+      "reason": "Deprecated legacy deployment recorder/lookup surface; current behavior is registry-like rather than factory-like.",
+      "currentBehavior": "Authorized legacy deployment registrar for script-deployed stacks; records addresses and mirrors them into CreatorRegistry but does not instantiate vault contracts itself.",
+      "deferredFollowUp": "Only rename alongside a dedicated ABI, artifact, env, and operator-doc migration after the vanity epoch cutover is complete.",
+      "blastRadius": "Touches artifacts, deployment JSON, scripts, docs, skills, and registry authorization references keyed to CreatorOVaultFactory or CREATOR_FACTORY."
+    }
+  ]
+}

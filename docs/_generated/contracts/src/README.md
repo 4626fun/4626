@@ -200,7 +200,8 @@ flowchart LR
   Arb["Arbitrum\n(42161 / 30110)"]
   BSC["BSC\n(56 / 30102)"]
   Avax["Avalanche\n(43114 / 30106)"]
-  Monad["Monad\n(10143 / 30390)"]
+  Monad["Monad\n(143 / 30390)"]
+  Solana["Solana\n(101 / 30168)"]
   Sonic["Sonic\n(146 / 30332)"]
   Hyper["HyperEVM\n(999 / 30275)"]
 
@@ -209,13 +210,14 @@ flowchart LR
   Base <--> |OFT messaging| BSC
   Base <--> |OFT messaging| Avax
   Base <--> |OFT messaging| Monad
+  Base <--> |OFT messaging| Solana
   Base <--> |OFT messaging| Sonic
   Base <--> |OFT messaging| Hyper
 
   classDef hub fill:#DCFCE7,stroke:#16A34A,stroke-width:2.5px,color:#14532D;
   classDef satellite fill:#DBEAFE,stroke:#2563EB,stroke-width:2px,color:#1E3A8A;
   class Base hub;
-  class Eth,Arb,BSC,Avax,Monad,Sonic,Hyper satellite;
+  class Eth,Arb,BSC,Avax,Monad,Solana,Sonic,Hyper satellite;
 ```
 
 ## Core Protocol Components
@@ -242,7 +244,8 @@ Source of truth: `docs/reference/chains.md`.
 | Arbitrum  | 42161    | 30110                 | Configured |
 | BSC       | 56       | 30102                 | Configured |
 | Avalanche | 43114    | 30106                 | Configured |
-| Monad     | 10143    | 30390                 | Configured |
+| Monad     | 143      | 30390                 | Configured |
+| Solana    | 101      | 30168                 | Configured |
 | Sonic     | 146      | 30332                 | Configured |
 | HyperEVM  | 999      | 30275                 | Configured |
 

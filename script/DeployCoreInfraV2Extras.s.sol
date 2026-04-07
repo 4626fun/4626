@@ -13,7 +13,7 @@ interface ICreatorRegistryAuth {
 
 /**
  * @notice Deploys the remaining "core infra" contracts that sit next to the vanity registry/lottery:
- *         - CreatorOVaultFactory
+ *         - CreatorOVaultFactory (legacy deployment registrar)
  *         - CreatorVRFConsumerV2_5 (VRF hub)
  *
  * Wiring:
@@ -65,11 +65,11 @@ contract DeployCoreInfraV2Extras is Script {
 
         if (!skipFactory) {
             factory = new CreatorOVaultFactory(registryAddr, owner);
-            console2.log("CreatorOVaultFactory:", address(factory));
+            console2.log("CreatorOVaultFactory (legacy registrar):", address(factory));
             registry.setAuthorizedFactory(address(factory), true);
-            console2.log("registry.setAuthorizedFactory(factory, true)");
+            console2.log("registry.setAuthorizedFactory(legacyRegistrar, true)");
         } else {
-            console2.log("SKIP factory deploy");
+            console2.log("SKIP legacy registrar deploy");
         }
 
         if (!skipVrfConsumer) {

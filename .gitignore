@@ -151,7 +151,10 @@ frontend/xmtp-production-*.db3*
 /lib/v3-core/
 /lib/v3-periphery/
 /lib/solidity-lib/
-tools/
+tools/*
+!tools/
+!tools/vanity-salt-grinder/
+!tools/vanity-salt-grinder/**
 
 # Docusaurus build artifacts
 apps/docs-site/build/

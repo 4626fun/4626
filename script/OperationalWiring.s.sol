@@ -96,7 +96,7 @@ contract OperationalWiring is Script {
     // Uniswap V4 Tax Hook (processes swaps)
     address constant TAX_HOOK = 0xca975B9dAF772C71161f3648437c3616E5Be0088;
 
-    // Factories / Batchers
+    // Legacy registrar / batchers
     address constant CREATOR_FACTORY = 0x90D25129072059ed5AfF321434f36d40B4556Cfc;
     address constant VAULT_BATCHER = 0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753;
     address constant VAULT_ACT_BATCHER = 0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB;
@@ -261,12 +261,12 @@ contract OperationalWiring is Script {
         }
 
         // ────────────────────────────────────────────────────────────────
-        //  7. Registry: Authorize factories (idempotent re-auth)
+        //  7. Registry: Authorize legacy registrar + batchers (idempotent re-auth)
         // ────────────────────────────────────────────────────────────────
 
-        console.log("\n[7/8] Registry: Re-confirming factory authorizations...");
+        console.log("\n[7/8] Registry: Re-confirming registrar/batcher authorizations...");
         registry.setAuthorizedFactory(CREATOR_FACTORY, true);
-        console.log(unicode"   ✓ CreatorOVaultFactory");
+        console.log(unicode"   ✓ CreatorOVaultFactory (legacy registrar)");
 
         registry.setAuthorizedFactory(VAULT_BATCHER, true);
         console.log(unicode"   ✓ DeploymentBatcher");

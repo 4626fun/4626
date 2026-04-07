@@ -51,12 +51,12 @@ Production override safety:
 
 ### Split Phase-1 rollout (Base mainnet + Vercel)
 
-Current canonical Base defaults (`v1.7.1` reset target):
-- Deployment batcher (`DeploymentBatcher`, split Phase-1): `0x14435cc4A8D307b4d3979148E5AB71Af1ed19088`
-- Deployment batcher auto-handoff alias: `0x14435cc4A8D307b4d3979148E5AB71Af1ed19088`
+Current canonical Base defaults (live `v1.7.1`, planned vanity `v1.8.1`):
+- Deployment batcher (`DeploymentBatcher`, split Phase-1): live `0x14435cc4A8D307b4d3979148E5AB71Af1ed19088`, planned `0xaE81C19c2A2E964e65cCacE89A6eb2309d6E4626`
+- Deployment batcher auto-handoff alias: live `0x14435cc4A8D307b4d3979148E5AB71Af1ed19088`, planned `0xaE81C19c2A2E964e65cCacE89A6eb2309d6E4626`
 - Creator lottery manager: `0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3`
-- `UniversalBytecodeStoreV2`: `0x6A578022609cdb65C614FF28912C49FC1EC97071`
-- `UniversalCreate2DeployerFromStoreV2`: `0x5ea71D4d03dEe596E93B5e6BEddA6F96BBF9d36a`
+- `UniversalBytecodeStoreV2`: live `0x6A578022609cdb65C614FF28912C49FC1EC97071`, planned `0x58071d59d2f5E61A80b3f8770B6564289acD4626`
+- `UniversalCreate2DeployerFromStoreV2`: live `0x5ea71D4d03dEe596E93B5e6BEddA6F96BBF9d36a`, planned `0x1c1596090B0e0Bb35b2F7cd77e865FbeE3654626`
 
 Mainnet deploy order:
 

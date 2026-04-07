@@ -12,7 +12,8 @@ optimizer_runs = 200
 # Keep this narrow (read-only) for safety.
 fs_permissions = [
     { access = "read", path = "./frontend/src/deploy" },
-    { access = "read", path = "./out" }
+    { access = "read", path = "./out" },
+    { access = "read", path = "./deployments/base" }
 ]
 
 # Remappings for LayerZero and other deps

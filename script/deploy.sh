@@ -107,6 +107,10 @@ deploy_infra_v2() {
         exit 1
     fi
 
+    if [ -z "${DEPLOYMENT_EPOCH_TAG:-}" ]; then
+        export DEPLOYMENT_EPOCH_TAG="v1.8.1"
+    fi
+
     if [ -n "${DEPLOYMENT_EPOCH_TAG:-}" ]; then
         : "${INFRA_STORE_SALT_TAG:=4626:UniversalBytecodeStore:${DEPLOYMENT_EPOCH_TAG}}"
         : "${INFRA_DEPLOYER_FROM_STORE_SALT_TAG:=4626:UniversalCreate2DeployerFromStore:${DEPLOYMENT_EPOCH_TAG}}"
@@ -122,22 +126,33 @@ deploy_infra_v2() {
         export INFRA_DEPLOYMENT_BATCHER_SALT_TAG
     fi
 
+    : "${INFRA_VANITY_MANIFEST_PATH:=${ROOT_DIR}/deployments/base/${DEPLOYMENT_EPOCH_TAG}-vanity-manifest.json}"
+    export INFRA_VANITY_MANIFEST_PATH
+
+    if [ ! -f "${INFRA_VANITY_MANIFEST_PATH}" ]; then
+        echo -e "${GREEN}Generating vanity manifest...${NC}"
+        cargo run --manifest-path "${ROOT_DIR}/tools/vanity-salt-grinder/Cargo.toml" -- \
+            --epoch-tag "${DEPLOYMENT_EPOCH_TAG}" \
+            --out "deployments/base/${DEPLOYMENT_EPOCH_TAG}-vanity-manifest.json"
+    fi
+
     echo -e "${GREEN}Deploying v2 bytecode store + deployer...${NC}"
     echo ""
     echo -e "${YELLOW}Infra Salt Configuration:${NC}"
     echo "  DEPLOYMENT_EPOCH_TAG=${DEPLOYMENT_EPOCH_TAG:-[not set]}"
+    echo "  INFRA_VANITY_MANIFEST_PATH=${INFRA_VANITY_MANIFEST_PATH}"
     echo "  INFRA_STORE_SALT=${INFRA_STORE_SALT:-[auto by tag/default]}"
-    echo "  INFRA_STORE_SALT_TAG=${INFRA_STORE_SALT_TAG:-4626:UniversalBytecodeStore:v1.7.1 (default)}"
+    echo "  INFRA_STORE_SALT_TAG=${INFRA_STORE_SALT_TAG:-4626:UniversalBytecodeStore:v1.8.1 (default)}"
     echo "  INFRA_DEPLOYER_FROM_STORE_SALT=${INFRA_DEPLOYER_FROM_STORE_SALT:-[auto by tag/default]}"
-    echo "  INFRA_DEPLOYER_FROM_STORE_SALT_TAG=${INFRA_DEPLOYER_FROM_STORE_SALT_TAG:-4626:UniversalCreate2DeployerFromStore:v1.7.1 (default)}"
+    echo "  INFRA_DEPLOYER_FROM_STORE_SALT_TAG=${INFRA_DEPLOYER_FROM_STORE_SALT_TAG:-4626:UniversalCreate2DeployerFromStore:v1.8.1 (default)}"
     echo "  INFRA_VAULT_CORE_MODULE_SALT=${INFRA_VAULT_CORE_MODULE_SALT:-[auto by tag/default]}"
-    echo "  INFRA_VAULT_CORE_MODULE_SALT_TAG=${INFRA_VAULT_CORE_MODULE_SALT_TAG:-4626:CreatorOVaultCoreModule:v1.7.1 (default)}"
+    echo "  INFRA_VAULT_CORE_MODULE_SALT_TAG=${INFRA_VAULT_CORE_MODULE_SALT_TAG:-4626:CreatorOVaultCoreModule:v1.8.1 (default)}"
     echo "  INFRA_VAULT_STRATEGIES_MODULE_SALT=${INFRA_VAULT_STRATEGIES_MODULE_SALT:-[auto by tag/default]}"
-    echo "  INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG=${INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG:-4626:CreatorOVaultStrategiesModule:v1.7.1 (default)}"
+    echo "  INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG=${INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG:-4626:CreatorOVaultStrategiesModule:v1.8.1 (default)}"
     echo "  INFRA_VAULT_ADMIN_MODULE_SALT=${INFRA_VAULT_ADMIN_MODULE_SALT:-[auto by tag/default]}"
-    echo "  INFRA_VAULT_ADMIN_MODULE_SALT_TAG=${INFRA_VAULT_ADMIN_MODULE_SALT_TAG:-4626:CreatorOVaultAdminModule:v1.7.1 (default)}"
+    echo "  INFRA_VAULT_ADMIN_MODULE_SALT_TAG=${INFRA_VAULT_ADMIN_MODULE_SALT_TAG:-4626:CreatorOVaultAdminModule:v1.8.1 (default)}"
     echo "  INFRA_DEPLOYMENT_BATCHER_SALT=${INFRA_DEPLOYMENT_BATCHER_SALT:-[auto by tag/default]}"
-    echo "  INFRA_DEPLOYMENT_BATCHER_SALT_TAG=${INFRA_DEPLOYMENT_BATCHER_SALT_TAG:-4626:DeploymentBatcher:v1.7.1 (default)}"
+    echo "  INFRA_DEPLOYMENT_BATCHER_SALT_TAG=${INFRA_DEPLOYMENT_BATCHER_SALT_TAG:-4626:DeploymentBatcher:v1.8.1 (default)}"
     echo ""
 
     forge script script/DeployBaseMainnetDeployer.s.sol:DeployBaseMainnetDeployer \
