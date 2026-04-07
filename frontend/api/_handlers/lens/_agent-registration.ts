@@ -8,28 +8,14 @@ import {
   readRequestPrincipal,
 } from '../../../packages/server-core/src/index.js'
 
-import { buildAgentRegistration } from '../../../server/_lib/agentRegistration.js'
-import {
-  publishAgentRegistrationToGrove,
-  resolveAgentRegistrationKey,
-} from '../../../server/_lib/agentRegistrationPublisher.js'
-import { getErc8004PublicOrigin } from '../../../server/_lib/origin.js'
-import { buildAgentUriPolicy, type AgentUriPolicy } from '../../../src/lib/erc8004AgentUriPolicy.js'
+import { buildAgentPublishStatus, type AgentPublishData } from '../../../server/_lib/erc8004OperatorStatus.js'
 
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string; missing?: string[] }
 
 type LensAgentRegistrationResponse = {
   registration: Record<string, unknown> | null
-  uriPolicy: AgentUriPolicy
-  grove?: {
-    lensUri: string
-    gatewayUrl: string
-    storageKey: string
-    statusUrl: string | null
-  }
-  groveStatus?: 'stored' | 'unavailable' | 'skipped'
-}
+} & AgentPublishData
 
 type LensAgentRegistrationRequest = {
   store?: boolean
@@ -59,52 +45,33 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  const origin = getErc8004PublicOrigin(req)
+  try {
+    const result = await buildAgentPublishStatus({
+      req,
+      storeOnGrove: shouldStore,
+      includeStoredGroveState: false,
+    })
 
-  const result = buildAgentRegistration(origin)
-  if (!result.payload) {
-    return res.status(503).json({
+    return res.status(200).json({
+      success: true,
+      data: {
+        registration: result.registration,
+        ...result.publish,
+        grove: result.publish.grove,
+      } satisfies ApiEnvelope<LensAgentRegistrationResponse>['data'],
+    } satisfies ApiEnvelope<LensAgentRegistrationResponse>)
+  } catch (error) {
+    const statusCode = typeof (error as { statusCode?: unknown })?.statusCode === 'number'
+      ? Number((error as { statusCode?: number }).statusCode)
+      : 500
+    const missing = Array.isArray((error as { missing?: unknown })?.missing)
+      ? ((error as { missing?: string[] }).missing ?? [])
+      : undefined
+
+    return res.status(statusCode).json({
       success: false,
-      error: result.error || 'Missing ERC-8004 registry configuration.',
-      missing: result.missing ?? [],
+      error: error instanceof Error ? error.message : 'Failed to build Lens agent registration payload.',
+      ...(missing && missing.length > 0 ? { missing } : {}),
     } satisfies ApiEnvelope<never>)
   }
-
-  const registration = result.payload
-  const baseAgentKey = resolveAgentRegistrationKey(registration, 'single-agent')
-
-  // Keep uploaded payload deterministic/content-addressed.
-  // Adding timestamps here changes the hash and therefore the resulting lens:// URI on every call.
-  let grove: LensAgentRegistrationResponse['grove']
-  let groveStatus: 'stored' | 'unavailable' | 'skipped' = 'skipped'
-  let compatibilityFallbackUrl: string | null = null
-  if (shouldStore) {
-    const publish = await publishAgentRegistrationToGrove({
-      payload: registration,
-      agentKey: resolveAgentRegistrationKey(registration, baseAgentKey),
-    })
-    if (publish.ok) {
-      grove = {
-        lensUri: publish.lensUri,
-        gatewayUrl: publish.gatewayUrl,
-        storageKey: publish.storageKey ?? publish.lensUri.replace(/^lens:\/\//, ''),
-        statusUrl: null,
-      }
-      compatibilityFallbackUrl = publish.gatewayUrl
-      groveStatus = 'stored'
-    } else {
-      groveStatus = 'unavailable'
-    }
-  }
-
-  const uriPolicy = buildAgentUriPolicy({
-    origin,
-    registration,
-    compatibilityFallbackUrl,
-  })
-
-  return res.status(200).json({
-    success: true,
-    data: { registration, uriPolicy, grove, groveStatus },
-  } satisfies ApiEnvelope<LensAgentRegistrationResponse>)
 }
