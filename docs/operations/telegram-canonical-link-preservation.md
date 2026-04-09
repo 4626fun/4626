@@ -43,7 +43,7 @@ Authoritative files:
 - `frontend/src/app/accessRuntime.tsx`
 - `frontend/src/app/accessShared.tsx`
 - `frontend/src/lib/telegramMiniAppLink.ts`
-- `frontend/src/pages/TelegramLink.tsx`
+- `frontend/src/pages/telegram/TelegramLink.tsx`
 
 Required behavior:
 
@@ -65,7 +65,7 @@ for a short-lived server session token before doing anything else.
 Frontend:
 
 - `frontend/src/lib/telegramWebApp.ts`
-- `frontend/src/pages/TelegramLink.tsx`
+- `frontend/src/pages/telegram/TelegramLink.tsx`
 
 Backend:
 
@@ -88,7 +88,7 @@ The Mini App performs email verification inline with `useLoginWithEmail()`.
 
 Authoritative files:
 
-- `frontend/src/pages/TelegramLink.tsx`
+- `frontend/src/pages/telegram/TelegramLink.tsx`
 - `frontend/src/features/telegram-link/telegramLinkFlow.ts`
 
 Current rules:
@@ -105,7 +105,7 @@ hydration before attempting any Telegram bind.
 
 Authoritative files:
 
-- `frontend/src/pages/TelegramLink.tsx`
+- `frontend/src/pages/telegram/TelegramLink.tsx`
 - `frontend/api/_handlers/telegram/_link-ready.ts`
 - `frontend/server/_lib/accountsIdentity.ts`
 
@@ -131,7 +131,7 @@ is linked to Telegram.
 
 Authoritative files:
 
-- `frontend/src/pages/TelegramLink.tsx`
+- `frontend/src/pages/telegram/TelegramLink.tsx`
 
 Current behavior:
 
@@ -148,7 +148,7 @@ The final bind is not complete until backend persistence succeeds.
 
 Frontend:
 
-- `frontend/src/pages/TelegramLink.tsx`
+- `frontend/src/pages/telegram/TelegramLink.tsx`
 
 Backend:
 
@@ -215,7 +215,7 @@ If one of these changes, review the whole chain:
 - `frontend/docs/telegram-miniapp-link-architecture.md`
 - `frontend/src/App.tsx` (Privy route boundary)
 - `frontend/src/app/accessShared.tsx`
-- `frontend/src/pages/TelegramLink.tsx`
+- `frontend/src/pages/telegram/TelegramLink.tsx`
 - `frontend/src/features/telegram-link/telegramLinkFlow.ts`
 - `frontend/src/lib/telegramMiniAppLink.ts`
 - `frontend/src/lib/telegramWebApp.ts`
@@ -253,7 +253,7 @@ Keep these rules explicit during refactors:
 
 At minimum, keep these flows covered:
 
-- `frontend/src/pages/TelegramLink.test.tsx`
+- `frontend/src/pages/telegram/TelegramLink.test.tsx`
 - `frontend/src/features/telegram-link/telegramLinkFlow.test.ts`
 - `frontend/src/App.access.test.ts`
 - `frontend/api/__tests__/telegramEndpoints.test.ts`

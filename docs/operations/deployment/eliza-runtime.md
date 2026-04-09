@@ -59,7 +59,6 @@ Before shipping, verify these values are configured:
   - Single CSW: `XMTP_AGENT_CSW_ADDRESS` + `XMTP_AGENT_PRIVY_WALLET_ID`
   - Single EOA (dev only): `XMTP_AGENT_PRIVATE_KEY`
 - At least one LLM key for conversational fallback (`GROQ_API_KEY`, `OPENAI_API_KEY`, etc)
-- `NEYNAR_API_KEY` + `NEYNAR_SIGNER_UUID` if Farcaster mention replies are required
 
 ## Deploy Procedure (Railway)
 
@@ -134,7 +133,6 @@ Symptoms: repeated new installations, approaching 10/10 installation limit, or d
 
 - Send `"/keepr status"` in XMTP and confirm response returns.
 - Trigger a plain `/ai` question and confirm non-empty response (or explicit budget/rate-limit message).
-- Confirm Farcaster mention webhook route is reachable (`/api/farcaster/mention`) when enabled.
 - If Telegram bot flows matter for the release, verify them separately; Telegram is not served by this Railway XMTP runtime.
 
 ## Optional Telemetry And Channels

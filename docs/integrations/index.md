@@ -14,7 +14,6 @@ Guides for integrating with 4626.
 | **[OFT](/integrations/oft)** | LayerZero cross-chain integration |
 | **[Lens](/integrations/lens)** | Lens + Grove Phase 1 storage/profile conventions |
 | **[Lens Grove Storage](/integrations/lens-grove)** | Immutable Grove upload model and URI conventions |
-| **[Farcaster Rollout](/integrations/farcaster-close-gap-phases)** | Provider migration phases and close-the-gap checklist |
 | **[Solana](/integrations/solana-integration)** | Future Solana support |
 | **[Solana Spoke Article](/integrations/solana-spoke-article)** | Hub-and-spoke architecture narrative |
 
