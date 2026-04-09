@@ -46,7 +46,6 @@
 - [api/\_handlers/admin/waitlist/\_list](api/_handlers/admin/waitlist/_list.md)
 - [api/\_handlers/admin/wallet/\_canonicalOwnerLinkStatus](api/_handlers/admin/wallet/_canonicalOwnerLinkStatus.md)
 - [api/\_handlers/admin/wallet/\_duplicatePrincipals](api/_handlers/admin/wallet/_duplicatePrincipals.md)
-- [api/\_handlers/agent/\_invokeSkill](api/_handlers/agent/_invokeSkill.md)
 - [api/\_handlers/agent/\_process](api/_handlers/agent/_process.md)
 - [api/\_handlers/agent/\_stream](api/_handlers/agent/_stream.md)
 - [api/\_handlers/auth/\_admin](api/_handlers/auth/_admin.md)

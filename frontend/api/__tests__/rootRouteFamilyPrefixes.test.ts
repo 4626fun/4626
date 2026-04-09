@@ -57,5 +57,6 @@ describe('root api route family prefixes', () => {
     expect(await getApiHandler('token/image')).toBe(tokenImageHandler)
     expect(await getApiHandler('telegram/webhook')).toBe(telegramWebhookHandler)
     expect(await getApiHandler('v1/spec.json')).toBe(v1Handler)
+    expect(await getApiHandler('agent/invokeSkill')).toBeNull()
   })
 })
