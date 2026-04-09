@@ -164,6 +164,28 @@ describe('openclaw execute handler', () => {
     expect(creativeMocks.generateCreativeEnvelope).not.toHaveBeenCalled()
   })
 
+  it('rejects creative requests without a context object', async () => {
+    mocks.guardAgentApiRequest.mockResolvedValueOnce({
+      ok: true,
+      ip: '127.0.0.1',
+      auth: { type: 'session', address: '0x1234567890abcdef1234567890abcdef12345678' },
+    })
+    mocks.readJsonBody.mockResolvedValueOnce({
+      tool: 'referral_og',
+      input: {},
+    })
+
+    const { default: handler } = await import('../_handlers/openclaw/_execute.ts')
+    const req = createMockReq({ method: 'POST', body: null })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toEqual({ success: false, error: 'context is required' })
+    expect(creativeMocks.generateCreativeEnvelope).not.toHaveBeenCalled()
+  })
+
   it('returns 429 when openclaw creative adapter rate limit is exceeded', async () => {
     const actorAddress = '0x9999999999999999999999999999999999999999'
     const actorIp = '203.0.113.77'

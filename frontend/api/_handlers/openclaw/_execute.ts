@@ -56,13 +56,6 @@ function isCreativeMode(value: string): value is CreativeMode {
   )
 }
 
-function resolveCreativeContext(input: Record<string, unknown>): Record<string, unknown> {
-  if (input.context && typeof input.context === 'object' && !Array.isArray(input.context)) {
-    return input.context as Record<string, unknown>
-  }
-  return input
-}
-
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -125,7 +118,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .json({ success: false, error: 'Creative adapter rate limit exceeded' } satisfies ApiEnvelope<never>)
       }
 
-      const creativeContext = resolveCreativeContext(input)
+      const creativeContext =
+        input.context && typeof input.context === 'object' && !Array.isArray(input.context)
+          ? (input.context as Record<string, unknown>)
+          : null
+      if (!creativeContext) {
+        return res.status(400).json({ success: false, error: 'context is required' } satisfies ApiEnvelope<never>)
+      }
       const contextValidationError = getCreativeContextValidationError(creativeContext)
       if (contextValidationError) {
         const statusCode = contextValidationError === 'Creative context too large' ? 413 : 400
