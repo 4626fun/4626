@@ -182,7 +182,7 @@ contract DeployInfrastructure is Script {
         //                         SUMMARY
         // ═══════════════════════════════════════════════════════════════
 
-        _printSummary(deployer);
+        _printSummary();
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -226,7 +226,7 @@ contract DeployInfrastructure is Script {
         console.log("Network:  Base Mainnet");
     }
 
-    function _printSummary(address deployer) internal view {
+    function _printSummary() internal view {
         console.log("\n");
         console.log(
             unicode"╔════════════════════════════════════════════════════════════════╗"
@@ -330,7 +330,7 @@ contract DeployInfrastructure is Script {
  * @dev Kept only to fail fast with an explicit message if invoked by stale ops docs/tooling.
  */
 contract DeployVaultStack is Script {
-    function run() external {
+    function run() external pure {
         revert(
             "DeployVaultStack retired: use app deploy-session flow (/deploy) with DeploymentBatcher phases"
         );

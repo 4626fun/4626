@@ -164,7 +164,6 @@ bun.lock
 docs/audits/codex/security-findings.md
 docs/audits/codex/security-second-pass.csv
 docs/audits/codex/codex-security-findings-*.csv
-!docs/audits/codex/codex-security-findings-2026-04-02T04-05-04.818Z.csv
 docs/security/scan-overview.md
 docs/audits/token-image/breakout-report.md
 docs/audits/token-image/deep-research-report*.md

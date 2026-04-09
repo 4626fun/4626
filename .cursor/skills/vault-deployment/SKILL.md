@@ -7,7 +7,7 @@ description: Deploy and configure 4626 vault infrastructure (CreatorOVault, wrap
 
 - Determine target chain and deployment mode:
   - Foundry scripts (EOA / operator, infra only): `script/DeployInfrastructure.s.sol` and `script/deploy.sh`
-  - ERC-4337 / AA (smart account): use `frontend/src/pages/DeployVault.tsx` (CLI AA script is retired)
+  - ERC-4337 / AA (smart account): use `frontend/src/pages/deploy/DeployVault.tsx` (CLI AA script is retired)
   - Multi-phase orchestrator (Base code-deposit limits): `contracts/helpers/batchers/DeploymentBatcher.sol` (Phase 1–2; Phase 3 is strategies)
   - “Infra v2” deterministic deployment helpers: `./script/deploy.sh infra-v2` → `script/DeployBaseMainnetDeployer.s.sol`
   - Post-deploy batchers (strategies + activation): `contracts/helpers/batchers/StrategyDeploymentBatcher.sol`, `contracts/helpers/batchers/VaultActivationBatcher.sol`
@@ -50,7 +50,7 @@ There are multiple layers:
 - “Infra v2” deployer (bytecode store + deployer + multi-phase deploy contract):
   - `script/DeployBaseMainnetDeployer.s.sol` (used by `./script/deploy.sh infra-v2`)
 - AA deployment (frontend UI):
-  - `frontend/src/pages/DeployVault.tsx` (Privy + smart wallet 1-click deploy; can also operate via external owner wallet in some flows)
+  - `frontend/src/pages/deploy/DeployVault.tsx` (Privy + smart wallet 1-click deploy; can also operate via external owner wallet in some flows)
 - Multi-phase deploy orchestrator:
   - `contracts/helpers/batchers/DeploymentBatcher.sol` (Phase 1: vault/wrapper/shareOFT; Phase 2: gauge/cca/oracle + deposit/auction; Phase 3: strategies)
 - Strategy deployment:
@@ -160,4 +160,3 @@ Return a structured result:
 - Actions taken: commands run or transactions sent (hashes)
 - Verification: post-state reads showing wiring/ownership
 - Follow-ups: approvals required, remaining phases, monitoring
-
