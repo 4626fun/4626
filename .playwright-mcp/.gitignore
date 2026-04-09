@@ -1,5 +1,0 @@
-# Ignore all Playwright MCP test artifacts
-*
-# Keep only the final reference output
-!.gitignore
-!akita-simple.png

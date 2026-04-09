@@ -29,8 +29,15 @@ broadcast/
 .cre_build_tmp*
 
 # Rust build artifacts
-target/
+target/*
+!target/idl/
+target/idl/*
+!target/idl/creator_share_hook.json
+!target/types/
+target/types/*
+!target/types/creator_share_hook.ts
 Cargo.lock
+!programs/creator-share-hook/Cargo.lock
 
 # Solana keypairs (NEVER commit private keys!)
 target/deploy/*-keypair.json
@@ -107,35 +114,25 @@ telegram-bot/prisma/data/*.db
 /*AKITA.png
 /*.mp4
 
+# Local workspace/tooling caches
+/.worktrees/
+/.playwright-mcp/
+/.tmp-ssh-venv/
+/.venv-paramiko/
+/agent-logs/
+
 # Local generated visual outputs
+/output/
 /output/playwright/
 /frontend/output/
+/tmp/
 # Auto-generated documentation
 docs-generated/
 docs-export/
 
-# Development and testing directories (excluded from repo)
-scripts/
-!apps/docs-site/scripts/
-!apps/docs-site/scripts/**
-!frontend/scripts/
-!frontend/scripts/**
-!cre/scripts/
-!cre/scripts/**
-!cre/cre-workflows/scripts/
-!cre/cre-workflows/scripts/**
-!scripts/solana/
-!scripts/solana/**
-scripts/solana/vanity-pool/available/*.json
-scripts/solana/vanity-pool/reserved/*.json
-scripts/solana/vanity-pool/used/*.json
-scripts/solana/vanity-pool/failed/*.json
-scripts/solana/vanity-pool/*.lock
-# script/ - Keep deployment scripts
-!script/DeployBase.s.sol
-!script/DeployInfrastructure.s.sol
-!script/deploy-with-aa.ts
-!script/deploy.sh
+# Scripts are versioned; keep local secrets/state out of git.
+scripts/**/.env*
+scripts/**/keys/
 # Track tests by default; keep only local scratch tests out of repo.
 test/local/**
 test/tmp/**
@@ -147,33 +144,8 @@ devtools/
 tasks/
 security-reports/
 
-# Test documentation and scripts (keep local only)
-ARBITRUM_*.md
-ASSET_*.md
-CHARM_*.md
-COMPOSER_*.md
-DEPLOY_*.md
-EAGLEOVAULT_*.md
-GITHUB_*.md
-HYBRID_*.md
-IMPLEMENTATION_*.md
-OPEN_*.md
-QUICK_*.md
-REBALANCING_*.md
-SMART_*.md
-START_*.md
-STUCK_*.md
-TESTING_*.md
-VAULT_*.md
-WHEN_*.md
-WHY_*.md
-docs/yearn/
+# Local scratch directories (keep out of repo)
 vanity-generator/
-
-# Local notes / scratch (keep out of repo)
-farcasterllm.txt
-docs/integrations/notes.md
-docs/keepr/
 
 # XMTP local dev files
 frontend/.xmtp/
@@ -187,59 +159,33 @@ frontend/xmtp-production-*.db3*
 **/xmtp-*.db3-*
 
 # Test and development files (keep local)
-bsc-production-ready.json
-eagle-vanity-data.json
-vanity-result-found.json
-reference.sol
 .vercel
 .env*.local
 
 # Local artifacts / generated files (do not commit)
-/CharmStrategyUSD1V2.sol
-/JQSEpu4gTTpU7_XF.mp4
 /latest.graphql
 /metadata.json
-/remappings.txt
 /lib/v3-core/
 /lib/v3-periphery/
 /lib/solidity-lib/
 tools/
-
-# Ignore old standalone docs-site folder at repo root (if it exists)
-./docs-site/
 
 # Docusaurus build artifacts
 apps/docs-site/build/
 apps/docs-site/.docusaurus/
 apps/docs-site/.cache/
 
-# Local hackathon secrets/value dumps
-docs/hackathon/submission-env-vars-and-secrets.actual.local.md
-docs/hackathon/*.actual.local.md
-docs/hackathon/*secrets*.local.md
-
 # Dependencies
 **/node_modules/
 bun.lock
+!bun.lock
+!cre/cre-workflows/**/bun.lock
+# Local audit outputs (generated ad hoc)
 docs/audits/codex/security-findings.md
-docs/audits/codex/codex-security-findings-2026-03-19T04-18-41.400Z.csv
-docs/audits/codex/codex-security-findings-2026-03-19T07-59-43.276Z.csv
 docs/audits/codex/security-second-pass.csv
-docs/audits/codex/codex-security-findings-2026-03-20T08-50-52.178Z.csv
+docs/audits/codex/codex-security-findings-*.csv
+!docs/audits/codex/codex-security-findings-2026-04-02T04-05-04.818Z.csv
 docs/security/scan-overview.md
-docs/Building-at-the-synthesis.md
-docs/synthesis_llm_Bounties-AgentsOptimized.txt
-docs/synthesis-hackathon.md
-docs/operations/deployment/launch/ship-checklist.md
-frontend/server/solana-provisioner/deploy/solana-provisioner.env.example
-docs/audits/token-image/deep-research-report.md
 docs/audits/token-image/breakout-report.md
-docs/audits/token-image/deep-research-report-1.md
-docs/audits/token-image/deep-research-report-2.md
-blue.glb
-ZORB3D.glb
-docs/audits/codex/codex-security-findings-2026-03-31T12-07-52.241Z.csv
+docs/audits/token-image/deep-research-report*.md
 frontend/docs/deep-research-report.md
-docs/hackathon/synthesis-submission-runbook.md
-
-docs/hackathon/synthesis-submission-runbook.md

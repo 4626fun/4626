@@ -56,7 +56,7 @@ Never include private keys or full `.env` contents in output.
 - Spoke contract: `contracts/utilities/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol`
 - Lottery manager: `contracts/utilities/lottery/CreatorLotteryManager.sol`
 - Example deployed hub metadata/ABI: `deployments/base/contracts/services/lottery/vrf/CreatorVRFConsumerV2_5.json`
-- Historical run artifacts: `broadcast/**` and `agent-logs/*.json`
+- Historical run artifacts: `broadcast/**` (local JSON logs may also be generated ad hoc)
 - Notes: `docs/primitives/game-loop/lottery.md`
 
 ## Read-only Health Checks (preferred first)
@@ -154,4 +154,3 @@ Return a structured result:
 - Actions taken (if any): tx hashes and which functions were called
 - Verification: events observed or post-state reads confirming the fix
 - Follow-ups: anything still risky or needing off-chain action (e.g., Chainlink subscription consumer add)
-

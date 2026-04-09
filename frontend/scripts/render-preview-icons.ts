@@ -218,6 +218,8 @@ async function buildPreparedHeroCutout(subjectName: string, sourceImage: Uint8Ar
 }
 
 async function run() {
+  await fsp.mkdir(OUT_DIR, { recursive: true })
+
   for (const subject of SUBJECTS) {
     const originalPath = path.join(OUT_DIR, subject.original)
     let sourceImage: Uint8Array | undefined

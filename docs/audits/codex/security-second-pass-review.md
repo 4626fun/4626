@@ -7,7 +7,7 @@ sidebar_position: 2
 
 > Archival note: this document is a security review record, not current product or architecture guidance. Where its finding text quotes older code, wording may reflect historical states rather than current account-model terminology.
 
-Re-evaluation of all findings in `docs/audits/codex/security-second-pass.csv` against current `HEAD` code. This pass explicitly checks for false positives, superficial fixes, and security-theater remediations.
+Re-evaluation of archival Codex finding exports against current `HEAD` code. This pass explicitly checks for false positives, superficial fixes, and security-theater remediations.
 
 ## Summary
 
