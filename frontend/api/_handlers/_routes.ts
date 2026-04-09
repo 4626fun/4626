@@ -88,7 +88,6 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'token/metadata': () => import('./token/_metadata.js'),
   'tokenlist': () => import('./token/_managedTokenList.js'),
 
-  'openclaw/tools': () => import('./openclaw/_tools.js'),
   'openclaw/execute': () => import('./openclaw/_execute.js'),
 
   'admin/creator-access/allowlist': () => import('./admin/creator-access/_allowlist.js'),

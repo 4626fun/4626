@@ -120,7 +120,6 @@
 - [api/\_handlers/onchain/\_protocolRewardsClaimable](api/_handlers/onchain/_protocolRewardsClaimable.md)
 - [api/\_handlers/onchain/\_protocolRewardsWithdrawn](api/_handlers/onchain/_protocolRewardsWithdrawn.md)
 - [api/\_handlers/openclaw/\_execute](api/_handlers/openclaw/_execute.md)
-- [api/\_handlers/openclaw/\_tools](api/_handlers/openclaw/_tools.md)
 - [api/\_handlers/portfolio/\_me](api/_handlers/portfolio/_me.md)
 - [api/\_handlers/referrals/\_click](api/_handlers/referrals/_click.md)
 - [api/\_handlers/referrals/\_leaderboard](api/_handlers/referrals/_leaderboard.md)
