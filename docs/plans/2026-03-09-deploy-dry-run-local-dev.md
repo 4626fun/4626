@@ -13,7 +13,7 @@
 ### Task 1: Add failing tests for the workflow wiring
 
 **Files:**
-- Create: `frontend/scripts/deployDryRunLocalDev.test.ts`
+- Create: `frontend/src/lib/deployDryRunLocalDev.test.ts`
 
 **Step 1: Write the failing test**
 
@@ -26,7 +26,7 @@ Add assertions that:
 
 **Step 2: Run test to verify it fails**
 
-Run: `pnpm -C frontend exec vitest run scripts/deployDryRunLocalDev.test.ts`
+Run: `pnpm -C frontend exec vitest run src/lib/deployDryRunLocalDev.test.ts`
 
 Expected: FAIL because the script, preset, and docs do not exist yet.
 
@@ -36,7 +36,7 @@ Add only the files and text needed to satisfy the assertions.
 
 **Step 4: Run test to verify it passes**
 
-Run: `pnpm -C frontend exec vitest run scripts/deployDryRunLocalDev.test.ts`
+Run: `pnpm -C frontend exec vitest run src/lib/deployDryRunLocalDev.test.ts`
 
 Expected: PASS.
 
@@ -57,7 +57,7 @@ Extend the test to require:
 
 **Step 2: Run test to verify it fails**
 
-Run: `pnpm -C frontend exec vitest run scripts/deployDryRunLocalDev.test.ts`
+Run: `pnpm -C frontend exec vitest run src/lib/deployDryRunLocalDev.test.ts`
 
 Expected: FAIL because the script does not yet implement the full lifecycle.
 
@@ -73,7 +73,7 @@ Implement the shell script with:
 
 **Step 4: Run test to verify it passes**
 
-Run: `pnpm -C frontend exec vitest run scripts/deployDryRunLocalDev.test.ts`
+Run: `pnpm -C frontend exec vitest run src/lib/deployDryRunLocalDev.test.ts`
 
 Expected: PASS.
 
@@ -94,7 +94,7 @@ Require the docs to explain:
 
 **Step 2: Run test to verify it fails**
 
-Run: `pnpm -C frontend exec vitest run scripts/deployDryRunLocalDev.test.ts`
+Run: `pnpm -C frontend exec vitest run src/lib/deployDryRunLocalDev.test.ts`
 
 Expected: FAIL until the docs and preset reflect the new workflow.
 
@@ -104,7 +104,7 @@ Add a concise section and keep it dry-run-specific.
 
 **Step 4: Run test to verify it passes**
 
-Run: `pnpm -C frontend exec vitest run scripts/deployDryRunLocalDev.test.ts`
+Run: `pnpm -C frontend exec vitest run src/lib/deployDryRunLocalDev.test.ts`
 
 Expected: PASS.
 
@@ -117,7 +117,7 @@ Expected: PASS.
 
 Run:
 
-- `pnpm -C frontend exec vitest run scripts/deployDryRunLocalDev.test.ts src/pages/DeployVaultDryRun.test.ts api/__tests__/deploySessionDryRun.test.ts`
+- `pnpm -C frontend exec vitest run src/lib/deployDryRunLocalDev.test.ts src/pages/deploy/DeployVaultDryRun.test.ts api/__tests__/deploySessionDryRun.test.ts`
 
 Expected: PASS.
 
@@ -125,7 +125,7 @@ Expected: PASS.
 
 Run:
 
-- `pnpm -C frontend exec eslint scripts/deployDryRunLocalDev.test.ts src/pages/DeployVaultDryRun.test.ts api/__tests__/deploySessionDryRun.test.ts package.json README.md`
+- `pnpm -C frontend exec eslint src/lib/deployDryRunLocalDev.test.ts src/pages/deploy/DeployVaultDryRun.test.ts api/__tests__/deploySessionDryRun.test.ts package.json README.md`
 
 If shell-script linting is not available, inspect the script manually and report that limitation.
 

@@ -105,7 +105,7 @@ Outputs/verification:
 
 ### B) Foundry legacy per-creator scripts
 
-Retired. Do not use `DeployVaultStack`/`deploy.sh vault`.
+Retired. Do not use `DeployVaultStack`.
 
 ### C) ERC-4337 deploy path
 
