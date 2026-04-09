@@ -220,15 +220,14 @@ function parseCreativeEnvelope(payload: unknown): CreativeEnvelope {
 
 export async function generateAgentCreative(params: {
   mode: CreativeMode
-  context?: Record<string, unknown>
+  context: Record<string, unknown>
 }): Promise<CreativeEnvelope> {
-  const context = params.context ?? {}
   const response = await apiFetch(API_ENDPOINTS.agent.creative, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       mode: params.mode,
-      context,
+      context: params.context,
     }),
   })
 
