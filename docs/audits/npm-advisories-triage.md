@@ -22,7 +22,7 @@ Local sweep: `pnpm security:local` at repo root ([scripts/security-audit-local.s
 
 | Severity | Package | Notes |
 |----------|---------|--------|
-| Low | **elliptic** | Via `@eth-optimism`/ethers v5 under LayerZero messagelib. **No patched release** on npm for GHSA-848j; custom patch mitigates a separate signing issue. In GitHub **Dependabot**, you can **dismiss** with reason *“No fixed version; tracked in repo patch + triage doc.”* |
+| Low | **elliptic** | Via `@eth-optimism`/ethers v5 under LayerZero messagelib. **No patched release** on npm for GHSA-848j; custom patch mitigates a separate signing issue. Tracking + time-boxed risk acceptance: [Issue #227](https://github.com/wenakita/4626/issues/227). In GitHub **Dependabot**, you can **dismiss** with reason *“No fixed version; tracked in repo patch + triage doc + issue #227.”* |
 
 ---
 
@@ -40,6 +40,12 @@ Local sweep: `pnpm security:local` at repo root ([scripts/security-audit-local.s
 | **picomatch** | `picomatch@2` → **2.3.2**, `picomatch@4` → **4.0.4**. |
 | **brace-expansion** | **5.0.5**. |
 
+### Current status (2026-04-09)
+
+- `vite` resolved to `7.3.2` (fixes reported moderate/high Vite advisories on `7.3.1`).
+- `hono` override updated to `4.12.12` (fixes moderated advisories from `porto` chain).
+- Remaining advisory: `elliptic` low only (same no-upstream-fix state as root, tracked in [#227](https://github.com/wenakita/4626/issues/227)).
+
 ---
 
 ## CRE — [cre/pnpm-lock.yaml](https://github.com/wenakita/4626/blob/main/cre/pnpm-lock.yaml)
@@ -47,6 +53,11 @@ Local sweep: `pnpm security:local` at repo root ([scripts/security-audit-local.s
 | Issue | Mitigation |
 |-------|------------|
 | **path-to-regexp** (high, express <0.1.13) | `express>path-to-regexp` → **0.1.13** in `overrides` + `pnpm.overrides` (Meteora → express chain). |
+
+### Current status (2026-04-09)
+
+- Upgraded `vitest` to `3.2.4`, which moved transitive `vite` to `7.3.2`.
+- `pnpm -C cre audit` is clean.
 
 ---
 

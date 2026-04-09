@@ -20,6 +20,9 @@ jobs:
           submodules: recursive
           fetch-depth: 0
 
+      - name: Guard forbidden tracked secrets/key files
+        run: bash scripts/check-forbidden-tracked-files.sh
+
       - name: Install pnpm
         uses: pnpm/action-setup@v5
 
@@ -56,6 +59,9 @@ jobs:
         with:
           submodules: recursive
           fetch-depth: 0
+
+      - name: Guard forbidden tracked secrets/key files
+        run: bash scripts/check-forbidden-tracked-files.sh
 
       - name: Install pnpm
         uses: pnpm/action-setup@v5
