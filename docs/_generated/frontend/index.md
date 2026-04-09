@@ -12,7 +12,6 @@
 - [api/\_handlers/\_creator-wallets-claim](api/_handlers/_creator-wallets-claim.md)
 - [api/\_handlers/\_health](api/_handlers/_health.md)
 - [api/\_handlers/\_paymaster](api/_handlers/_paymaster.md)
-- [api/\_handlers/\_revert-finance](api/_handlers/_revert-finance.md)
 - [api/\_handlers/\_routes](api/_handlers/_routes.md)
 - [api/\_handlers/\_routes.auth](api/_handlers/_routes.auth.md)
 - [api/\_handlers/\_routes.cre](api/_handlers/_routes.cre.md)

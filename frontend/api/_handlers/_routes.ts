@@ -74,8 +74,6 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'onchain/protocolRewardsWithdrawn': () => import('./onchain/_protocolRewardsWithdrawn.js'),
 
   'paymaster': () => import('./_paymaster.js'),
-  'revert-finance': () => import('./_revert-finance.js'),
-
   'social/recipient': () => import('./social/_recipient.js'),
   'social/talent': () => import('./social/_talent.js'),
   'social/twitter': () => import('./social/_twitter.js'),
