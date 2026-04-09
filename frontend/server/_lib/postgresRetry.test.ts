@@ -143,17 +143,8 @@ describe('postgres session-mode retry', () => {
     expect(queryCallCount).toBe(2)
   })
 
-  it('retries init once with relaxed TLS on SELF_SIGNED_CERT_IN_CHAIN', async () => {
+  it('does not auto-fallback even when legacy self-signed fallback env is set', async () => {
     vi.stubEnv('POSTGRES_SSL_ALLOW_SELF_SIGNED_FALLBACK', 'true')
-    queryBehavior = 'self_signed_once'
-    const db = await getDb()
-    expect(db).not.toBeNull()
-    // First query fails with self-signed chain, second succeeds after TLS fallback.
-    expect(queryCallCount).toBe(2)
-  })
-
-  it('does not auto-fallback when self-signed fallback is explicitly disabled', async () => {
-    vi.stubEnv('POSTGRES_SSL_ALLOW_SELF_SIGNED_FALLBACK', 'false')
     queryBehavior = 'self_signed_once'
     const db = await getDb()
     expect(db).toBeNull()
@@ -161,8 +152,25 @@ describe('postgres session-mode retry', () => {
     expect(queryCallCount).toBe(1)
   })
 
-  it('honors PGSSLMODE=no-verify when building pg SSL options', async () => {
+  it('does not auto-fallback on self-signed chain by default', async () => {
+    queryBehavior = 'self_signed_once'
+    const db = await getDb()
+    expect(db).toBeNull()
+    expect(getDbInitError()).toMatch(/self-signed certificate in certificate chain/i)
+    expect(queryCallCount).toBe(1)
+  })
+
+  it('ignores PGSSLMODE=no-verify unless explicit env override is set', async () => {
     vi.stubEnv('PGSSLMODE', 'no-verify')
+    queryBehavior = 'succeed'
+    const db = await getDb()
+    expect(db).not.toBeNull()
+    const firstCtorArgs = mockPoolCtor.mock.calls[0]?.[0] as { ssl?: { rejectUnauthorized?: boolean } } | undefined
+    expect(firstCtorArgs?.ssl?.rejectUnauthorized).toBe(true)
+  })
+
+  it('honors explicit POSTGRES_SSL_REJECT_UNAUTHORIZED=false override', async () => {
+    vi.stubEnv('POSTGRES_SSL_REJECT_UNAUTHORIZED', 'false')
     queryBehavior = 'succeed'
     const db = await getDb()
     expect(db).not.toBeNull()

@@ -101,13 +101,20 @@ function stripQueryParams(connectionString: string, keys: string[]): string {
 function sslOptionsForConnection(connectionString: string): any | undefined {
   if (!requiresSsl(connectionString)) return undefined
   // Secure by default: require valid TLS certificates for remote Postgres.
-  // Operators can explicitly relax this via env or sslmode=no-verify when needed.
+  // Operators may explicitly relax this via POSTGRES_SSL_REJECT_UNAUTHORIZED=false.
   const envOverride = parseEnvBool(process.env.POSTGRES_SSL_REJECT_UNAUTHORIZED)
   if (envOverride !== undefined) return { rejectUnauthorized: envOverride }
 
   // Respect PGSSLMODE env when present (common provider guidance), then URL sslmode.
+  // We intentionally ignore `no-verify` here to avoid implicit insecure transport.
+  // If operators need relaxed TLS for a trusted environment, they must set
+  // POSTGRES_SSL_REJECT_UNAUTHORIZED=false explicitly.
   const mode = getPgSslModeFromEnv() ?? getSslMode(connectionString)
-  if (mode === 'no-verify') return { rejectUnauthorized: false }
+  if (mode === 'no-verify') {
+    console.warn(
+      '[postgres] Ignoring PGSSLMODE=no-verify; set POSTGRES_SSL_REJECT_UNAUTHORIZED=false explicitly to relax TLS validation.',
+    )
+  }
   if (mode === 'disable') return undefined
   return { rejectUnauthorized: true }
 }
@@ -117,21 +124,6 @@ function isSelfSignedCertChainError(err: unknown): boolean {
   if (code === 'SELF_SIGNED_CERT_IN_CHAIN') return true
   const message = String((err as any)?.message ?? err ?? '').toLowerCase()
   return message.includes('self-signed certificate in certificate chain')
-}
-
-function shouldRetryWithRelaxedTls(params: {
-  error: unknown
-  connectionString: string
-  ssl: any
-}): boolean {
-  if (!isSelfSignedCertChainError(params.error)) return false
-  if (!params.ssl || params.ssl.rejectUnauthorized !== true) return false
-  if (!requiresSsl(params.connectionString)) return false
-  // Respect explicit operator choice. If this is set (true/false), do not auto-fallback.
-  if (parseEnvBool(process.env.POSTGRES_SSL_REJECT_UNAUTHORIZED) !== undefined) return false
-  // Secure by default: only allow this fallback when explicitly enabled.
-  const allowFallback = parseEnvBool(process.env.POSTGRES_SSL_ALLOW_SELF_SIGNED_FALLBACK)
-  return allowFallback === true
 }
 
 type DbResult = { rows: any[]; rowCount?: number }
@@ -436,19 +428,6 @@ export async function getDb(): Promise<DbPool | null> {
           if (rawPool && typeof rawPool.end === 'function') {
             await rawPool.end().catch(() => {})
           }
-          if (shouldRetryWithRelaxedTls({
-            error: pgInitError,
-            connectionString: cs,
-            ssl,
-          })) {
-            console.warn(
-              'Postgres TLS validation failed with SELF_SIGNED_CERT_IN_CHAIN; retrying once with rejectUnauthorized=false because POSTGRES_SSL_ALLOW_SELF_SIGNED_FALLBACK=true. ' +
-                'Set POSTGRES_SSL_REJECT_UNAUTHORIZED=false to make this explicit for all connections.',
-            )
-            const relaxedSsl = { ...(ssl && typeof ssl === 'object' ? ssl : {}), rejectUnauthorized: false }
-            cachedDb = await createPgDb(relaxedSsl)
-            return cachedDb
-          }
           throw pgInitError
         }
       } catch (err) {
@@ -494,7 +473,7 @@ export async function getDb(): Promise<DbPool | null> {
           ) {
             console.error(
               'Postgres TLS validation failed with SELF_SIGNED_CERT_IN_CHAIN while POSTGRES_SSL_REJECT_UNAUTHORIZED=true. ' +
-                'Set POSTGRES_SSL_REJECT_UNAUTHORIZED=false (or PGSSLMODE=no-verify) for this provider chain.',
+                'Set POSTGRES_SSL_REJECT_UNAUTHORIZED=false for this provider chain.',
             )
           }
           if (shouldLogInitError(signature, retryWindow)) {
