@@ -148,7 +148,7 @@ export default async function handler(req: any, res: any) {
   `
 
   // Award CSW link points (idempotent via ledger unique key)
-  // Use csw: prefix to match format in _waitlist.ts
+  // Use csw: prefix to preserve existing ledger source-id format.
   const cswPointsAwarded = await awardWaitlistPoints({
     db,
     signupId,

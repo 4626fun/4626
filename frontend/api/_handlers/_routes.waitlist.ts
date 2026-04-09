@@ -1,10 +1,7 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
+import type { ApiRouteLoaders } from './_routeLoader.js'
+import { loadHandlerFromMap } from './_routeLoader.js'
 
-type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
-type ApiHandlerModule = { default?: ApiHandler }
-
-export const waitlistRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
-  '': () => import('./_waitlist.js'),
+export const waitlistRouteLoaders: ApiRouteLoaders = {
   'join': () => import('./waitlist/_join.js'),
   'bootstrap': () => import('./waitlist/_bootstrap.js'),
   'csw-link': () => import('./waitlist/_csw-link.js'),
@@ -23,9 +20,6 @@ export const waitlistRouteLoaders: Record<string, () => Promise<ApiHandlerModule
   'verify-x': () => import('./waitlist/_verify-x.js'),
 }
 
-export async function getWaitlistApiHandler(subpath: string): Promise<ApiHandler | null> {
-  const loader = waitlistRouteLoaders[subpath]
-  if (!loader) return null
-  const mod = await loader()
-  return typeof mod?.default === 'function' ? (mod.default as ApiHandler) : null
+export function getWaitlistApiHandler(subpath: string) {
+  return loadHandlerFromMap(subpath, waitlistRouteLoaders)
 }

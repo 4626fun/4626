@@ -63,7 +63,7 @@ export const STORY_CONTENT: StoryContent = {
       percent: '40%',
       numericPercent: 40,
       amount: '20,000,000',
-      route: '/distribute/cca-launch',
+      route: '/cca',
       purposeCopy: 'Price discovery that benefits early supporters.',
       icon: '/protocols/uniswap.svg',
     },

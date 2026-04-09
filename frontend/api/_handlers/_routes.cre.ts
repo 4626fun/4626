@@ -1,9 +1,7 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
+import type { ApiRouteLoaders } from './_routeLoader.js'
+import { loadHandlerFromMap } from './_routeLoader.js'
 
-type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
-type ApiHandlerModule = { default?: ApiHandler }
-
-export const creRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
+export const creRouteLoaders: ApiRouteLoaders = {
   'vaults/active': () => import('./cre/vaults/_active.js'),
   'keeper/tend': () => import('./cre/keeper/_tend.js'),
   'keeper/report': () => import('./cre/keeper/_report.js'),
@@ -17,9 +15,6 @@ export const creRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = 
   'runtime/trigger': () => import('./cre/runtime/_trigger.js'),
 }
 
-export async function getCreApiHandler(subpath: string): Promise<ApiHandler | null> {
-  const loader = creRouteLoaders[subpath]
-  if (!loader) return null
-  const mod = await loader()
-  return typeof mod?.default === 'function' ? (mod.default as ApiHandler) : null
+export function getCreApiHandler(subpath: string) {
+  return loadHandlerFromMap(subpath, creRouteLoaders)
 }

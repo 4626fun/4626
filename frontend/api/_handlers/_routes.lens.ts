@@ -1,9 +1,7 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
+import type { ApiRouteLoaders } from './_routeLoader.js'
+import { loadHandlerFromMap } from './_routeLoader.js'
 
-type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
-type ApiHandlerModule = { default?: ApiHandler }
-
-export const lensRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
+export const lensRouteLoaders: ApiRouteLoaders = {
   'mapping': () => import('./lens/_mapping.js'),
   'graph': () => import('./lens/_graph.js'),
   'share-token-metadata': () => import('./lens/_share-token-metadata.js'),
@@ -12,9 +10,6 @@ export const lensRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> =
   'feedback-payload': () => import('./lens/_feedback-payload.js'),
 }
 
-export async function getLensApiHandler(subpath: string): Promise<ApiHandler | null> {
-  const loader = lensRouteLoaders[subpath]
-  if (!loader) return null
-  const mod = await loader()
-  return typeof mod?.default === 'function' ? (mod.default as ApiHandler) : null
+export function getLensApiHandler(subpath: string) {
+  return loadHandlerFromMap(subpath, lensRouteLoaders)
 }

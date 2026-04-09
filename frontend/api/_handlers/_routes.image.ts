@@ -1,9 +1,7 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
+import type { ApiRouteLoaders } from './_routeLoader.js'
+import { loadHandlerFromMap } from './_routeLoader.js'
 
-type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
-type ApiHandlerModule = { default?: ApiHandler }
-
-export const imageRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
+export const imageRouteLoaders: ApiRouteLoaders = {
   'external': () => import('./image/_external-proxy.js'),
   'jobs/status': () => import('./image/_jobs-status.js'),
   'projects/assets/upload': () => import('./image/_assets-upload.js'),
@@ -17,9 +15,6 @@ export const imageRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> 
   'projects/vault-image': () => import('./image/_vault-image-get.js'),
 }
 
-export async function getImageApiHandler(subpath: string): Promise<ApiHandler | null> {
-  const loader = imageRouteLoaders[subpath]
-  if (!loader) return null
-  const mod = await loader()
-  return typeof mod?.default === 'function' ? (mod.default as ApiHandler) : null
+export function getImageApiHandler(subpath: string) {
+  return loadHandlerFromMap(subpath, imageRouteLoaders)
 }

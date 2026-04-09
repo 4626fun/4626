@@ -61,13 +61,11 @@ export const MARKETING_ONLY_ROUTES: PathRouteDef[] = [
   { path: '/faq', element: <Faq /> },
   { path: '/faq/how-it-works', element: <FaqHowItWorks /> },
   { path: '/cca', element: <DistributeCcaLaunch /> },
-  { path: '/distribute/cca-launch', element: <DistributeCcaLaunch /> },
   { path: '/status', element: <Status /> },
 ]
 
 export const ACCOUNT_ROUTES: PathRouteDef[] = [
   { path: '/accounts', element: <AccountsPage /> },
-  { path: '/account', element: <AccountsPage /> },
 ]
 
 export const EXPLORE_ROUTES: PathRouteDef[] = [

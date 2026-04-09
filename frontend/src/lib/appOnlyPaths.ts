@@ -1,14 +1,11 @@
 /** App-only paths that should always run on v1.4626.fun. */
 export const APP_ONLY_PATHS = [
   '/explore',
-  '/home',
-  '/trade',
   '/swap',
   '/telegram',
   '/positions',
   '/portfolio',
   '/deploy',
-  '/launch',
   '/vault',
   '/vote',
   '/auction',
@@ -16,8 +13,6 @@ export const APP_ONLY_PATHS = [
   '/agents',
   '/coin',
   '/creator',
-  '/activate-akita',
-  '/dashboard',
   '/complete-auction',
 ]
 

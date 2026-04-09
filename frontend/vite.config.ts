@@ -179,7 +179,6 @@ function localApiRoutesPlugin(): Plugin {
       // Vite's config TS project to type-check every function signature.
       const routes: Record<string, () => Promise<{ default: (req: any, res: any) => any }>> = {
         '/api/creator-allowlist': () => import('./api/_handlers/_creator-allowlist'),
-        '/api/waitlist': () => import('./api/[...path]'),
         '/api/waitlist/join': () => import('./api/_handlers/waitlist/_join'),
         '/api/waitlist/bootstrap': () => import('./api/_handlers/waitlist/_bootstrap'),
         '/api/waitlist/csw-link': () => import('./api/_handlers/waitlist/_csw-link'),

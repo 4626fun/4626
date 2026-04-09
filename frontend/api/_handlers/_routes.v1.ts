@@ -1,9 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import { loadHandlerFromMap } from './_routeLoader.js'
+import type { ApiHandler, ApiRouteLoaders } from './_routeLoader.js'
 
-type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
-type ApiHandlerModule = { default?: ApiHandler }
-
-const v1RouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
+const v1RouteLoaders: ApiRouteLoaders = {
   'spec.json': () => import('./v1/_spec.js'),
   'vault/report': () => import('./v1/vault/_report.js'),
   'vault/strategies': () => import('./v1/vault/_strategies.js'),
@@ -88,10 +87,7 @@ const VE4626_USER_PATTERN = /^ve4626\/user\/([a-fA-F0-9x]+)$/
 const CHARM_STRATEGY_PATTERN = /^charm\/strategy\/([a-fA-F0-9x]+)$/
 
 async function loadExact(routeKey: string): Promise<ApiHandler | null> {
-  const loader = v1RouteLoaders[routeKey]
-  if (!loader) return null
-  const mod = await loader()
-  return typeof mod?.default === 'function' ? (mod.default as ApiHandler) : null
+  return loadHandlerFromMap(routeKey, v1RouteLoaders)
 }
 
 function withInjectedQuery(baseHandler: ApiHandler, inject: (req: VercelRequest) => void): ApiHandler {

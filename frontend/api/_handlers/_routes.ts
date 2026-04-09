@@ -1,4 +1,4 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
+import type { ApiHandler, ApiRouteLoaders } from './_routeLoader.js'
 import { authRouteLoaders } from './_routes.auth.js'
 import { creRouteLoaders } from './_routes.cre.js'
 import { deployRouteLoaders } from './_routes.deploy.js'
@@ -11,11 +11,8 @@ import { getV1ApiHandler } from './_routes.v1.js'
 import { waitlistRouteLoaders } from './_routes.waitlist.js'
 import { walletSolanaRouteLoaders } from './_routes.wallet.solana.js'
 import { zoraRouteLoaders } from './_routes.zora.js'
-
-export type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
-
-type ApiHandlerModule = { default?: ApiHandler }
-type ApiRouteLoaders = Record<string, () => Promise<ApiHandlerModule>>
+import { loadHandlerFromMap } from './_routeLoader.js'
+export type { ApiHandler } from './_routeLoader.js'
 
 function prefixRouteLoaders(prefix: string, loaders: ApiRouteLoaders): ApiRouteLoaders {
   return Object.fromEntries(
@@ -26,7 +23,7 @@ function prefixRouteLoaders(prefix: string, loaders: ApiRouteLoaders): ApiRouteL
 // Keep the root catch-all small enough to be practical, but fold the thinner
 // route families back into it so Vercel doesn't spend extra packaging passes
 // on wrappers that do not need runtime isolation.
-export const apiRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
+export const apiRouteLoaders: ApiRouteLoaders = {
   'analytics': () => import('./_analytics.js'),
   'agents': () => import('./_agents.js'),
   'agent/invokeSkill': () => import('./agent/_invokeSkill.js'),
@@ -135,8 +132,5 @@ export async function getApiHandler(subpath: string): Promise<ApiHandler | null>
   if (subpath === 'v1' || subpath.startsWith('v1/')) {
     return getV1ApiHandler(subpath.slice(3))
   }
-  const loader = apiRouteLoaders[subpath]
-  if (!loader) return null
-  const mod = await loader()
-  return typeof mod?.default === 'function' ? (mod.default as ApiHandler) : null
+  return loadHandlerFromMap(subpath, apiRouteLoaders)
 }

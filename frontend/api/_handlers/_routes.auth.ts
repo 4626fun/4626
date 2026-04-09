@@ -1,9 +1,7 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
+import type { ApiRouteLoaders } from './_routeLoader.js'
+import { loadHandlerFromMap } from './_routeLoader.js'
 
-type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
-type ApiHandlerModule = { default?: ApiHandler }
-
-export const authRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
+export const authRouteLoaders: ApiRouteLoaders = {
   'admin': () => import('./auth/_admin.js'),
   'agent-nonce': () => import('./auth/_agent-nonce.js'),
   'agent-verify': () => import('./auth/_agent-verify.js'),
@@ -16,9 +14,6 @@ export const authRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> =
   'verify': () => import('./auth/_verify.js'),
 }
 
-export async function getAuthApiHandler(subpath: string): Promise<ApiHandler | null> {
-  const loader = authRouteLoaders[subpath]
-  if (!loader) return null
-  const mod = await loader()
-  return typeof mod?.default === 'function' ? (mod.default as ApiHandler) : null
+export function getAuthApiHandler(subpath: string) {
+  return loadHandlerFromMap(subpath, authRouteLoaders)
 }

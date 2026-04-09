@@ -85,11 +85,6 @@
       "continue": true
     },
     {
-      "src": "/trade",
-      "headers": { "x-robots-tag": "noindex, follow" },
-      "continue": true
-    },
-    {
       "src": "/positions",
       "headers": { "x-robots-tag": "noindex, follow" },
       "continue": true
@@ -120,12 +115,7 @@
       "continue": true
     },
     {
-      "src": "/profile/(.*)",
-      "headers": { "x-robots-tag": "noindex, follow" },
-      "continue": true
-    },
-    {
-      "src": "/account",
+      "src": "/accounts(.*)",
       "headers": { "x-robots-tag": "noindex, follow" },
       "continue": true
     },
@@ -140,27 +130,12 @@
       "continue": true
     },
     {
-      "src": "/gauge(.*)",
-      "headers": { "x-robots-tag": "noindex, follow" },
-      "continue": true
-    },
-    {
-      "src": "/earnings(.*)",
-      "headers": { "x-robots-tag": "noindex, follow" },
-      "continue": true
-    },
-    {
       "src": "/coin/(.*)",
       "headers": { "x-robots-tag": "noindex, follow" },
       "continue": true
     },
     {
       "src": "/status",
-      "headers": { "x-robots-tag": "noindex, follow" },
-      "continue": true
-    },
-    {
-      "src": "/dashboard",
       "headers": { "x-robots-tag": "noindex, follow" },
       "continue": true
     },

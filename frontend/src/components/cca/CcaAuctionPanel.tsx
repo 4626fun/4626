@@ -217,7 +217,7 @@ export function CcaAuctionPanel({
     if (auctionTokenAddress && isAddress(auctionTokenAddress)) {
       return `/api/v1/token/${String(auctionTokenAddress).toLowerCase()}/image?chain=8453&format=png`
     }
-    return '/logo.svg'
+    return '/brand/logo.svg'
   }, [auctionTokenAddress, auctionTokenImageUrl])
 
   useEffect(() => {
@@ -417,7 +417,7 @@ export function CcaAuctionPanel({
             <div className="flex items-center gap-3 mb-3">
               <div className="w-10 h-10 rounded-full overflow-hidden border border-white/10 bg-black/50 shrink-0">
                 <img
-                  src={tokenImageBroken ? '/logo.svg' : tokenImageSrc}
+                  src={tokenImageBroken ? '/brand/logo.svg' : tokenImageSrc}
                   alt={`${tokenSymbol} token image`}
                   className="w-full h-full object-cover"
                   loading="lazy"

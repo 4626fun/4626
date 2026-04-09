@@ -5,7 +5,7 @@ export type FixedContentBox = {
   height: number
 }
 
-// Derived from 4626fun.svg: stroke rect (120,120,784,784,rx=190), stroke-width=64
+// Derived from the legacy 4626 ring geometry: stroke rect (120,120,784,784,rx=190), stroke-width=64
 // Inner edge = stroke center ± half-stroke → (152,152,720,720), inner rx ≈ 158
 export function getFixedContentBox(width: number, height: number): FixedContentBox {
   return {

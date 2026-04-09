@@ -1,16 +1,15 @@
 /**
  * POST /api/agent/process
  *
- * Vercel cron-compatible one-shot message processor.
+ * One-shot message processor for the fallback/on-demand Vercel surface.
  * Loads creator agents, syncs conversations, processes recent unhandled
  * messages, sends replies, then exits.
  *
- * Designed to be called by Vercel Cron (every 1 minute) or manually.
+ * This handler remains compatible with Vercel Cron-style auth headers, but
+ * production XMTP consumption runs on the Railway primary rather than a
+ * Vercel cron schedule.
  * Requires: CRON_SECRET (to prevent unauthorized invocations).
  * Auth is header-only: `Authorization: Bearer <CRON_SECRET>` (or `x-cron-secret`).
- *
- * vercel.json:
- *   { "crons": [{ "path": "/api/agent/process", "schedule": "* * * * *" }] }
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
@@ -438,7 +437,8 @@ export function readCronSecretFromHeaders(req: VercelRequest): string {
 }
 
 export function isAuthorized(req: VercelRequest): boolean {
-  // Vercel Cron sets the Authorization header with the CRON_SECRET.
+  // Accept the header shape Vercel Cron would send, even though production
+  // does not schedule this handler from Vercel.
   const cronSecret = (process.env.CRON_SECRET ?? '').trim()
   if (!cronSecret) return false // Require CRON_SECRET to be configured.
 

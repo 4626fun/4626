@@ -1,9 +1,7 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
+import type { ApiRouteLoaders } from './_routeLoader.js'
+import { loadHandlerFromMap } from './_routeLoader.js'
 
-type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
-type ApiHandlerModule = { default?: ApiHandler }
-
-export const uniswapRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
+export const uniswapRouteLoaders: ApiRouteLoaders = {
   'query': () => import('./uniswap/_query.js'),
   'poolHistory': () => import('./uniswap/_poolHistory.js'),
   'quote': () => import('./uniswap/_quote.js'),
@@ -17,9 +15,6 @@ export const uniswapRouteLoaders: Record<string, () => Promise<ApiHandlerModule>
   'liquidity': () => import('./uniswap/_liquidity.js'),
 }
 
-export async function getUniswapApiHandler(subpath: string): Promise<ApiHandler | null> {
-  const loader = uniswapRouteLoaders[subpath]
-  if (!loader) return null
-  const mod = await loader()
-  return typeof mod?.default === 'function' ? (mod.default as ApiHandler) : null
+export function getUniswapApiHandler(subpath: string) {
+  return loadHandlerFromMap(subpath, uniswapRouteLoaders)
 }

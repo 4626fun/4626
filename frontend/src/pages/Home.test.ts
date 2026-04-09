@@ -32,6 +32,12 @@ vi.mock('framer-motion', () => ({
 
 vi.mock('@/components/seo/PageMeta', () => ({
   PageMeta: () => null,
+  META: {
+    home: {
+      title: 'Home',
+      description: 'Home',
+    },
+  },
 }))
 
 vi.mock('@/lib/host', () => ({

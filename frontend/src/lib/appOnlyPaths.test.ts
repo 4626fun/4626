@@ -13,6 +13,11 @@ describe('appOnlyPaths', () => {
     expect(isAppOnlyPath('/account')).toBe(false)
     expect(isAppOnlyPath('/accounts')).toBe(false)
     expect(isAppOnlyPath('/settings')).toBe(false)
+    expect(isAppOnlyPath('/home')).toBe(false)
+    expect(isAppOnlyPath('/trade')).toBe(false)
+    expect(isAppOnlyPath('/activate-akita')).toBe(false)
+    expect(isAppOnlyPath('/dashboard')).toBe(false)
+    expect(isAppOnlyPath('/launch')).toBe(false)
   })
 
   it('continues marking core app routes as app-only', () => {

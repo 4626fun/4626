@@ -46,6 +46,7 @@ describe('AccountsPage', () => {
               privyUserId: 'did:privy:test-user',
               email: 'user@example.com',
               emailVerified: true,
+              appAccessStatus: 'approved',
               linkedMethods: {
                 email: ['user@example.com'],
                 google: ['google-sub-1'],
@@ -105,6 +106,7 @@ describe('AccountsPage', () => {
               privyUserId: 'did:privy:test-user',
               email: 'user@example.com',
               emailVerified: true,
+              appAccessStatus: 'approved',
               linkedMethods: {
                 email: ['user@example.com'],
               },

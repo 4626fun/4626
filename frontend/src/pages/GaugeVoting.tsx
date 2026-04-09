@@ -19,7 +19,7 @@ const SHARE_SYMBOL = toShareSymbol('4626')
 export default function GaugeVoting() {
   return (
     <div className="min-h-screen bg-black">
-      <PageMeta title={META.gaugeVoting.title} description={META.gaugeVoting.description} canonicalPath="/gauge" />
+      <PageMeta title={META.gaugeVoting.title} description={META.gaugeVoting.description} canonicalPath="/vote" />
       {/* Hero Section */}
       <section className="relative py-16 overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-b from-brand-primary/10 to-transparent" />

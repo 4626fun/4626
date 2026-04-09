@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto'
 import { readFile, unlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { promisify } from 'node:util'
 
 import sharp from 'sharp'
@@ -586,8 +587,11 @@ const TOKEN_ICON_STYLE = {
   glowOpacity: 0.82,
 } as const
 
-const DEFAULT_TOKEN_FRAME_OVERLAY_PATH =
-  '/home/akitav2/.cursor/projects/home-akitav2-projects-4626/assets/c__Users_akitav2_AppData_Roaming_Cursor_User_workspaceStorage_a50cc50be1149bd304676ca17e49fedc_images_logo-10f83404-a513-4669-ace8-8c70ed794902.png'
+const DEFAULT_TOKEN_FRAME_OVERLAY_CANDIDATES = [
+  '/mnt/data/logo.png',
+  fileURLToPath(new URL('../../../public/app-icon.svg', import.meta.url)),
+  fileURLToPath(new URL('../../../public/app-splash.svg', import.meta.url)),
+] as const
 
 const TOKEN_ICON_RECIPES: Record<LayoutMode, Omit<TokenIconRecipe, 'breakout'>> = {
   cover: { mode: 'cover', scale: 1.10, innerPadding: 0.0, breakoutTopRatio: 0.22 },
@@ -2062,11 +2066,7 @@ async function renderDeterministicBaseLayer(params: {
 
 async function loadFrameOverlay(size: number, layout?: TokenIconLayout): Promise<Buffer | null> {
   const envPath = typeof process.env.TOKEN_FRAME_OVERLAY_PATH === 'string' ? process.env.TOKEN_FRAME_OVERLAY_PATH.trim() : ''
-  const candidates = [
-    envPath,
-    '/mnt/data/logo.png',
-    DEFAULT_TOKEN_FRAME_OVERLAY_PATH,
-  ].filter((value) => value.length > 0)
+  const candidates = [envPath, ...DEFAULT_TOKEN_FRAME_OVERLAY_CANDIDATES].filter((value) => value.length > 0)
 
   for (const path of candidates) {
     try {

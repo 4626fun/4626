@@ -1,10 +1,8 @@
-import type { VercelRequest, VercelResponse } from '@vercel/node'
+import type { ApiRouteLoaders } from './_routeLoader.js'
+import { loadHandlerFromMap } from './_routeLoader.js'
 import { zoraCliRouteSubpaths } from './zora/cli/_routes.js'
 
-type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
-type ApiHandlerModule = { default?: ApiHandler }
-
-export const zoraRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> = {
+export const zoraRouteLoaders: ApiRouteLoaders = {
   'coin': () => import('./zora/_coin.js'),
   [zoraCliRouteSubpaths.authStatus]: () => import('./zora/cli/_authStatus.js'),
   [zoraCliRouteSubpaths.explore]: () => import('./zora/cli/_explore.js'),
@@ -26,9 +24,6 @@ export const zoraRouteLoaders: Record<string, () => Promise<ApiHandlerModule>> =
   'topCreators': () => import('./zora/_topCreators.js'),
 }
 
-export async function getZoraApiHandler(subpath: string): Promise<ApiHandler | null> {
-  const loader = zoraRouteLoaders[subpath]
-  if (!loader) return null
-  const mod = await loader()
-  return typeof mod?.default === 'function' ? (mod.default as ApiHandler) : null
+export function getZoraApiHandler(subpath: string) {
+  return loadHandlerFromMap(subpath, zoraRouteLoaders)
 }
