@@ -71,7 +71,6 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'paymaster': () => import('./_paymaster.js'),
   'social/recipient': () => import('./social/_recipient.js'),
   'social/talent': () => import('./social/_talent.js'),
-  'social/twitter': () => import('./social/_twitter.js'),
   'status/protocolReport': () => import('./status/_protocolReport.js'),
   'status/vaultReport': () => import('./status/_vaultReport.js'),
 
@@ -92,14 +91,11 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'admin/creator-access/deny': () => import('./admin/creator-access/_deny.js'),
   'admin/creator-access/list': () => import('./admin/creator-access/_list.js'),
   'admin/creator-access/revoke': () => import('./admin/creator-access/_revoke.js'),
-  'admin/db/index-usage': () => import('./admin/db/_indexUsage.js'),
   'admin/waitlist/detail': () => import('./admin/waitlist/_detail.js'),
   'admin/waitlist/list': () => import('./admin/waitlist/_list.js'),
   'admin/waitlist/approve': () => import('./admin/waitlist/_approve.js'),
   'admin/waitlist/deny': () => import('./admin/waitlist/_deny.js'),
   'admin/waitlist/delete': () => import('./admin/waitlist/_delete.js'),
-  'admin/wallet/canonical-owner-link-status': () => import('./admin/wallet/_canonicalOwnerLinkStatus.js'),
-  'admin/wallet/duplicate-principals': () => import('./admin/wallet/_duplicatePrincipals.js'),
 
   ...prefixRouteLoaders('auth', authRouteLoaders),
   ...prefixRouteLoaders('cre', creRouteLoaders),

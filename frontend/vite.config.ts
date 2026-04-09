@@ -290,7 +290,6 @@ function localApiRoutesPlugin(): Plugin {
         '/api/referrals/leaderboard': () => import('./api/_handlers/referrals/_leaderboard'),
         // Social proxies
         '/api/social/recipient': () => import('./api/_handlers/social/_recipient'),
-        '/api/social/twitter': () => import('./api/_handlers/social/_twitter'),
         '/api/social/talent': () => import('./api/_handlers/social/_talent'),
         '/api/openclaw/execute': () => import('./api/_handlers/openclaw/_execute'),
         '/api/v1/chat/command-preflight': () => import('./api/_handlers/v1/chat/_commandPreflight'),
