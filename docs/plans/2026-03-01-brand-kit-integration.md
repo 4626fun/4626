@@ -239,7 +239,7 @@ git commit -m "refactor(ui): bridge Button and Card through @4626/brand-kit"
 - Modify: `frontend/src/pages/Swap.tsx` (if import adjustments needed)
 - Modify: `frontend/src/pages/Vault.tsx` (if import adjustments needed)
 - Modify: `frontend/src/pages/Portfolio.tsx` (if import adjustments needed)
-- Modify: `frontend/src/pages/DeployVault.tsx` (if import adjustments needed)
+- Modify: `frontend/src/pages/deploy/DeployVault.tsx` (if import adjustments needed)
 - Test: existing frontend test files
 
 **Step 1: Write failing verification check**
@@ -277,7 +277,7 @@ Expected: PASS.
 **Step 5: Commit**
 
 ```bash
-git add frontend/src/components/ui/index.ts frontend/src/pages/Swap.tsx frontend/src/pages/Vault.tsx frontend/src/pages/Portfolio.tsx frontend/src/pages/DeployVault.tsx
+git add frontend/src/components/ui/index.ts frontend/src/pages/Swap.tsx frontend/src/pages/Vault.tsx frontend/src/pages/Portfolio.tsx frontend/src/pages/deploy/DeployVault.tsx
 git commit -m "chore(brand-kit): finalize compatibility sweep and verification"
 ```
 

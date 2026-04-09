@@ -198,7 +198,7 @@ Expected: PASS.
 ### Task 6: Verify literal composite output with real reference assets
 
 **Files:**
-- Modify: `frontend/src/pages/AdminImageGeneration.test.ts` only if needed for expectations
+- Modify: `frontend/src/pages/admin/AdminImageGeneration.test.ts` only if needed for expectations
 - No required production file changes unless verification exposes a bug
 
 **Step 1: Write the failing test**

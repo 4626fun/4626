@@ -184,7 +184,7 @@ Expected: PASS.
 
 **Files:**
 - Modify: `frontend/vite.config.ts`
-- Modify: `frontend/src/pages/AdminImageGeneration.test.ts`
+- Modify: `frontend/src/pages/admin/AdminImageGeneration.test.ts`
 
 **Step 1: Write the failing test**
 

@@ -128,7 +128,7 @@ This keeps solvency conservative during stale/unhealthy periods.
 
 - Add new strategy code ID to bytecode store seed flow:
   - `script/SeedUniversalBytecodeStore.s.sol`
-  - frontend deploy code ID checks in `frontend/src/pages/DeployVault.tsx`
+  - frontend deploy code ID checks in `frontend/src/pages/deploy/DeployVault.tsx`
 - Extend batcher phase-3 deploy path to include SolanaStrategy deployment + vault `addStrategy(...)` weighting.
 - Extend phase-3 params/code IDs for Solana-specific config while keeping Ajna/Charm behavior intact.
 - Keep Solana route registration at strategy-stage boundary, now aligned with SolanaStrategy deployment.

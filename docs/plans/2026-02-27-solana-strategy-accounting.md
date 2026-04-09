@@ -274,7 +274,7 @@ git commit -m "chore(deploy): add SolanaStrategy bytecode store coverage"
 ## Task 5: Update Frontend Deploy Plan Construction
 
 **Files:**
-- Modify: `frontend/src/pages/DeployVault.tsx`
+- Modify: `frontend/src/pages/deploy/DeployVault.tsx`
 - Test: `frontend/api/__tests__/deploySession.test.ts` (if payload shape assertions need updates)
 
 **Step 1: Write failing payload-shape test**
@@ -313,7 +313,7 @@ Expected: PASS.
 **Step 5: Commit**
 
 ```bash
-git add frontend/src/pages/DeployVault.tsx frontend/api/__tests__/deploySession.test.ts
+git add frontend/src/pages/deploy/DeployVault.tsx frontend/api/__tests__/deploySession.test.ts
 git commit -m "feat(frontend): include SolanaStrategy in phase3 deploy session planning"
 ```
 

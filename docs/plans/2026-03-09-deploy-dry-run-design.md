@@ -36,7 +36,7 @@ This keeps semantics clear:
 
 The dry-run should:
 
-1. Accept the exact phased call bundle built by `frontend/src/pages/DeployVault.tsx`
+1. Accept the exact phased call bundle built by `frontend/src/pages/deploy/DeployVault.tsx`
 2. Re-run the existing auth, canonical wallet, creator access, and infra checks
 3. Simulate each phase call in order with read-only RPC execution
 4. Stop on first failure and return the failing phase, call index, target, and reason
@@ -86,7 +86,7 @@ Use TDD:
 - `frontend/api/_handlers/deploy/session/_create.ts`
 - `frontend/api/_handlers/deploy/session/_dryRun.ts`
 - `frontend/api/__tests__/deploySessionDryRun.test.ts` or adjacent deploy-session tests
-- `frontend/src/pages/DeployVault.tsx`
+- `frontend/src/pages/deploy/DeployVault.tsx`
 
 ## Recommendation
 

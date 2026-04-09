@@ -76,7 +76,7 @@ Implement the persistence layer:
   - `ajnaInnerVault`
   - `ajnaAuth`
   - `ajnaPool`
-- extend `cre/vaults/_active.ts` to include protected automation metadata for CRE
+- extend `frontend/api/_handlers/cre/vaults/_active.ts` to include protected automation metadata for CRE
 - extend `vaults/_active.ts` only with safe public fields like `automationEnabled` / `automationScope` if needed, but never `privyWalletId`
 
 **Step 4: Run the tests to verify they pass**
@@ -144,11 +144,11 @@ Expected: PASS.
 ### Task 3: Wire launch/admin surfaces to capture explicit creator opt-in
 
 **Files:**
-- Modify: `frontend/src/pages/DeployVault.tsx`
-- Modify: `frontend/src/components/DeploymentSuccess.tsx`
-- Modify: `frontend/src/pages/AdminAgentSetup.tsx`
+- Modify: `frontend/src/pages/deploy/DeployVault.tsx`
+- Modify: `frontend/src/components/deploy/DeploymentSuccess.tsx`
+- Modify: `frontend/src/pages/admin/AdminAgentSetup.tsx`
 - Modify: `frontend/api/_handlers/v1/creators/_quickstart.ts`
-- Test: `frontend/src/pages/AdminAgentSetup.test.tsx`
+- Test: `frontend/src/pages/admin/AdminAgentSetup.test.tsx`
 
 **Step 1: Write the failing UI test**
 
@@ -285,7 +285,7 @@ Expected: FAIL because CRE still assumes a singleton signer config.
 
 Refactor the Ajna runtime only:
 
-- extend `cre/vaults/_active` consumption in `strategyQueue.ts` so the vault record can carry the protected automation block
+- extend `frontend/api/_handlers/cre/vaults/_active.ts` consumption in `strategyQueue.ts` so the vault record can carry the protected automation block
 - add an optional `executionContext` parameter to `writeContract` / ERC-4337 helpers in `cre/utils/onchain.ts`
 - for Ajna only, use the per-vault context returned by the API:
   - `canonicalCswAddress`

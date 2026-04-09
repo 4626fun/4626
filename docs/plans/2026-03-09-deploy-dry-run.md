@@ -103,7 +103,7 @@ Expected: PASS.
 ### Task 4: Wire `/deploy` to the dry-run endpoint
 
 **Files:**
-- Modify: `frontend/src/pages/DeployVault.tsx`
+- Modify: `frontend/src/pages/deploy/DeployVault.tsx`
 
 **Step 1: Write the failing test**
 

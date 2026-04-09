@@ -41,7 +41,7 @@ Expected: PASS
 ### Task 2: Update Status "Verify a vault" UX + AKITA example
 
 **Files:**
-- Modify: `frontend/src/pages/Status.tsx`
+- Modify: `frontend/src/pages/status/Status.tsx`
 
 **Step 1: Adjust "Use AKITA example" behavior**
 
@@ -98,4 +98,3 @@ Expected: PASS
 
 - Status page still injects `meta[name="robots"]=noindex, nofollow`
 - Status page canonical remains `https://4626.fun/status`
-

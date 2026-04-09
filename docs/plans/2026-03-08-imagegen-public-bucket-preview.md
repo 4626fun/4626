@@ -13,8 +13,8 @@
 ### Task 1: Admin UI note
 
 **Files:**
-- Modify: `frontend/src/pages/AdminImageGeneration.test.ts`
-- Modify: `frontend/src/pages/AdminImageGeneration.tsx`
+- Modify: `frontend/src/pages/admin/AdminImageGeneration.test.ts`
+- Modify: `frontend/src/pages/admin/AdminImageGeneration.tsx`
 
 **Step 1: Write the failing test**
 

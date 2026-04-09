@@ -65,7 +65,7 @@ Files:
 
 ### Status "Verify a vault" UX
 
-File: `frontend/src/pages/Status.tsx`
+File: `frontend/src/pages/status/Status.tsx`
 
 - Adjust the "Use AKITA example" button:
   - fills the input only (does not set `?vault=` automatically)
@@ -82,4 +82,3 @@ File: `frontend/src/pages/Status.tsx`
   - Confirm "View on Basescan" appears for that address.
   - Confirm the vault report shows either checks or an error message (e.g. "Vault is not readable (or not a CreatorOVault)").
 - Visit `https://4626.fun/faq/how-it-works` and confirm the bottom CTA navigates to `https://4626.fun/faq`.
-

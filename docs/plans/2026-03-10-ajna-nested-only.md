@@ -24,7 +24,7 @@
 - Modify: `frontend/api/_handlers/v1/vault/_strategies.ts`
 - Modify: `frontend/api/_handlers/status/_vaultReport.ts`
 - Modify: `frontend/api/_handlers/deploy/session/_status.ts`
-- Modify: `frontend/src/pages/Status.tsx`
+- Modify: `frontend/src/pages/status/Status.tsx`
 - Modify: `frontend/server/keepr/xmtpQueueExecutor.ts`
 - Test: `frontend/api/__tests__/v1BuildAjnaHandlers.test.ts`
 - Test: `frontend/api/__tests__/v1BuildPhase1CatchAll.test.ts`
@@ -278,7 +278,7 @@ Expected:
 **Files:**
 - Verify: `frontend/api/_handlers/deploy/session/_status.ts`
 - Verify: `frontend/api/_handlers/status/_vaultReport.ts`
-- Verify: `frontend/src/pages/Status.tsx`
+- Verify: `frontend/src/pages/status/Status.tsx`
 - Verify: `frontend/api/_handlers/_paymaster.ts`
 - Verify: `contracts/helpers/batchers/DeploymentBatcher.sol`
 
