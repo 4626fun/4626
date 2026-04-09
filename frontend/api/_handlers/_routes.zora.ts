@@ -18,8 +18,6 @@ export const zoraRouteLoaders: ApiRouteLoaders = {
   'resolve': () => import('./zora/_resolve.js'),
   'trendStatus': () => import('./zora/_trendStatus.js'),
   'trendReserve': () => import('./zora/_trendReserve.js'),
-  'trendFunnelRun': () => import('./zora/_trendFunnelRun.js'),
-  'trendMetrics': () => import('./zora/_trendMetrics.js'),
   'trendSentinelProcess': () => import('./zora/_trendSentinelProcess.js'),
   'topCreators': () => import('./zora/_topCreators.js'),
 }

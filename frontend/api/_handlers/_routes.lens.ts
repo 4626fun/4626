@@ -2,8 +2,6 @@ import type { ApiRouteLoaders } from './_routeLoader.js'
 import { loadHandlerFromMap } from './_routeLoader.js'
 
 export const lensRouteLoaders: ApiRouteLoaders = {
-  'mapping': () => import('./lens/_mapping.js'),
-  'graph': () => import('./lens/_graph.js'),
   'share-token-metadata': () => import('./lens/_share-token-metadata.js'),
   'agent-registration': () => import('./lens/_agent-registration.js'),
   'reputation-graph': () => import('./lens/_reputation-graph.js'),
