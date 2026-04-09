@@ -225,7 +225,6 @@ function localApiRoutesPlugin(): Plugin {
         '/api/accounts/me': () => import('./api/_handlers/accounts/_me'),
         '/api/accounts/link': () => import('./api/_handlers/accounts/_link'),
         '/api/accounts/unlink': () => import('./api/_handlers/accounts/_unlink'),
-        '/api/creator-wallets/claim': () => import('./api/_handlers/_creator-wallets-claim'),
         '/api/image/projects/create': () => import('./api/_handlers/image/_projects-create'),
         '/api/image/projects/assets/upload': () => import('./api/_handlers/image/_assets-upload'),
         '/api/image/projects/generate': () => import('./api/_handlers/image/_generate'),

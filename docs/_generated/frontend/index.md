@@ -9,7 +9,6 @@
 - [api/\_handlers/\_agents](api/_handlers/_agents.md)
 - [api/\_handlers/\_analytics](api/_handlers/_analytics.md)
 - [api/\_handlers/\_creator-allowlist](api/_handlers/_creator-allowlist.md)
-- [api/\_handlers/\_creator-wallets-claim](api/_handlers/_creator-wallets-claim.md)
 - [api/\_handlers/\_health](api/_handlers/_health.md)
 - [api/\_handlers/\_paymaster](api/_handlers/_paymaster.md)
 - [api/\_handlers/\_routes](api/_handlers/_routes.md)

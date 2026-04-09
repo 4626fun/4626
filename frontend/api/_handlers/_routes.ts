@@ -46,7 +46,6 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'vaults/active': () => import('./vaults/_active.js'),
 
   'creator-allowlist': () => import('./_creator-allowlist.js'),
-  'creator-wallets/claim': () => import('./_creator-wallets-claim.js'),
   'creator-access/request': () => import('./creator-access/_request.js'),
   'creator-access/status': () => import('./creator-access/_status.js'),
 
