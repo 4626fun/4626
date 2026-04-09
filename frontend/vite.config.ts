@@ -211,7 +211,6 @@ function localApiRoutesPlugin(): Plugin {
         '/api/zora/topCreators': () => import('./api/_handlers/zora/_topCreators'),
         '/api/debank/totalBalanceBatch': () => import('./api/_handlers/debank/_totalBalanceBatch'),
         '/api/debank/tokenList': () => import('./api/_handlers/debank/_tokenList'),
-        '/api/dexscreener/tokenStatsBatch': () => import('./api/_handlers/dexscreener/_tokenStatsBatch'),
         '/api/status/protocolReport': () => import('./api/_handlers/status/_protocolReport'),
         '/api/status/vaultReport': () => import('./api/_handlers/status/_vaultReport'),
         '/api/auth/admin': () => import('./api/_handlers/auth/_admin'),

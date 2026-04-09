@@ -52,8 +52,6 @@ export const apiRouteLoaders: ApiRouteLoaders = {
 
   'debank/totalBalanceBatch': () => import('./debank/_totalBalanceBatch.js'),
   'debank/tokenList': () => import('./debank/_tokenList.js'),
-  'dexscreener/tokenStatsBatch': () => import('./dexscreener/_tokenStatsBatch.js'),
-
   'deploy/session/cancel': () => import('./deploy/session/_cancel.js'),
   'deploy/session/bootstrapSwap': () => import('./deploy/session/_bootstrapSwap.js'),
   'deploy/session/continue': () => import('./deploy/session/_continue.js'),

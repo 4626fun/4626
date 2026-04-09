@@ -86,7 +86,6 @@
 - [api/\_handlers/deploy/session/\_sessionAccess](api/_handlers/deploy/session/_sessionAccess.md)
 - [api/\_handlers/deploy/session/\_start](api/_handlers/deploy/session/_start.md)
 - [api/\_handlers/deploy/session/\_status](api/_handlers/deploy/session/_status.md)
-- [api/\_handlers/dexscreener/\_tokenStatsBatch](api/_handlers/dexscreener/_tokenStatsBatch.md)
 - [api/\_handlers/image/\_assets-upload](api/_handlers/image/_assets-upload.md)
 - [api/\_handlers/image/\_associate-vault](api/_handlers/image/_associate-vault.md)
 - [api/\_handlers/image/\_auto-assets](api/_handlers/image/_auto-assets.md)

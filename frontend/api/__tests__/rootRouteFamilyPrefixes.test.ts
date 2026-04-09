@@ -60,5 +60,6 @@ describe('root api route family prefixes', () => {
     expect(await getApiHandler('agent/invokeSkill')).toBeNull()
     expect(await getApiHandler('creator-access/debug')).toBeNull()
     expect(await getApiHandler('revert-finance')).toBeNull()
+    expect(await getApiHandler('dexscreener/tokenStatsBatch')).toBeNull()
   })
 })
