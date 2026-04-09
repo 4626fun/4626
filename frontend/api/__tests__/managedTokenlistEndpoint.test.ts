@@ -50,6 +50,9 @@ describe('managed tokenlist endpoint', () => {
     const handlerJson = await getApiHandler('tokenlist.json')
     expect(handlerJson).toBeNull()
 
+    const legacySingleTokenListAlias = await getApiHandler('token/tokenlist')
+    expect(legacySingleTokenListAlias).toBeNull()
+
     const req = createMockReq({
       method: 'GET',
       query: { chain: '8453' },

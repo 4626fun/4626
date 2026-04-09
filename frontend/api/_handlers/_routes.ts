@@ -92,7 +92,6 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'rpc': () => import('./rpc/_proxy.js'),
 
   'token/metadata': () => import('./token/_metadata.js'),
-  'token/tokenlist': () => import('./token/_tokenlist.js'),
   'tokenlist': () => import('./token/_managedTokenList.js'),
 
   'openclaw/tools': () => import('./openclaw/_tools.js'),
