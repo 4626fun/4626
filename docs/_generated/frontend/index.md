@@ -342,7 +342,6 @@
 - [src/lib/apiEndpoints](src/lib/apiEndpoints.md)
 - [src/lib/apiEnvelope](src/lib/apiEnvelope.md)
 - [src/lib/appOnlyPaths](src/lib/appOnlyPaths.md)
-- [src/lib/auth/appContinueGate](src/lib/auth/appContinueGate.md)
 - [src/lib/auth/appEntry](src/lib/auth/appEntry.md)
 - [src/lib/auth/canonicalization](src/lib/auth/canonicalization.md)
 - [src/lib/auth/waitlistEntry](src/lib/auth/waitlistEntry.md)
