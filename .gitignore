@@ -1,11 +1,10 @@
 # Dependencies
-node_modules/
+**/node_modules/
 
 # Docs - ignore drafts but keep source and generated
 docs/_drafts/
 docs/_archive/
 !docs/_generated/
-docs-site/node_modules/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -79,11 +78,6 @@ frontend/v4-subgraph/
 ehthumbs.db
 Thumbs.db
 
-# Hardhat files
-artifacts
-cache
-typechain
-
 # Coverage reports
 coverage/
 lcov.info
@@ -98,7 +92,6 @@ logs/
 *.db-journal
 *.db-shm
 *.db-wal
-telegram-bot/prisma/data/*.db
 
 # Temporary files
 *.tmp
@@ -136,13 +129,6 @@ scripts/**/keys/
 # Track tests by default; keep only local scratch tests out of repo.
 test/local/**
 test/tmp/**
-telegram-bot/
-relayer/
-monitoring/
-infrastructure/
-devtools/
-tasks/
-security-reports/
 
 # Local scratch directories (keep out of repo)
 vanity-generator/
@@ -175,10 +161,7 @@ apps/docs-site/build/
 apps/docs-site/.docusaurus/
 apps/docs-site/.cache/
 
-# Dependencies
-**/node_modules/
 bun.lock
-!bun.lock
 !cre/cre-workflows/**/bun.lock
 # Local audit outputs (generated ad hoc)
 docs/audits/codex/security-findings.md
