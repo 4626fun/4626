@@ -238,7 +238,7 @@ The flow must be implemented as an explicit state machine with at least:
 
 This is the current working sequence that must survive simplification work:
 
-1. `frontend/src/pages/TelegramLink.tsx` admits the user into an isolated
+1. `frontend/src/pages/telegram/TelegramLink.tsx` admits the user into an isolated
    Telegram route and starts the reducer in
    `frontend/src/features/telegram-link/telegramLinkFlow.ts`.
 2. `frontend/src/lib/telegramWebApp.ts` exchanges Telegram `initData` for a

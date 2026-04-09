@@ -59,8 +59,6 @@ Required input:
 - **Contracts (slow)**: done from repo root via Foundry (`forge build`, `forge test`) when you’re actively changing Solidity
 
 This mirrors the “build vs build:js” split described in Zora’s monorepo architecture doc: keep the default loop fast, and only pay the heavy compile cost when you need it.
-
-wow
 ## Why multiple config files exist
 
 Several files share extensions but target different runtimes/tools:
@@ -103,17 +101,15 @@ These pipelines are intentionally separate:
 
 ## Runtime boundary guardrails
 
-- `pnpm guard:api-server-shims` blocks imports that resolve into deprecated `frontend/api/server/*` shim paths.
 - `pnpm guard:server-core-boundary` enforces shared API primitives to flow through `packages/server-core` instead of direct `server/auth/_shared` or `server/_lib/*` imports.
 - `pnpm guard:runtime-boundaries` enforces that browser code in `frontend/src/*` does not import server/api/service runtime modules.
 - `pnpm guard:generated-output` enforces `dist`/`build` as generated-only outputs (untracked by git).
 
 ## Tech Stack
 
-- **React 18** + TypeScript
-- **Vite** - Fast builds
+- **React 19** + TypeScript
+- **Vite 7** - Fast builds
 - **Wagmi v2** + **viem** - Wallet integration
-- **OnchainKit** - Coinbase components
 - **Tailwind CSS** - Styling
 - **Framer Motion** - Animations
 
@@ -126,7 +122,7 @@ frontend/
   public/                # Static asset source (copied to dist at build)
   src/                   # Browser app source
   api/                   # Canonical API handlers/runtime source
-  server/                # Node runtime source (migration in progress)
+  server/                # Node/server runtime source shared by API handlers and long-lived workers
   dist/                  # Generated build output (do not treat as source)
 ```
 
@@ -136,11 +132,16 @@ Testing placement conventions live in:
 
 ## API routing & bundling (important)
 
-Vercel routes all API traffic through `frontend/api/[...path].ts`, which dispatches to handlers under `frontend/api/_handlers/*`.
+Vercel routes most API traffic through `frontend/api/[...path].ts`, which dispatches to handlers under `frontend/api/_handlers/*`.
+Two heavy endpoints remain standalone functions:
+
+- `frontend/api/agent/process.ts`
+- `frontend/api/keepr/actions/execute.ts`
 
 - **Do not** add new API handlers and rely on dynamic imports.
 - **Do** register new endpoints in `frontend/api/_handlers/_routes.ts` (static loader map) so Vercel’s bundler includes them.
-- For local dev, `frontend/vite.config.ts` also maps a subset of `/api/*` to handlers and the API catch-all route.
+- The client prefers the `/__api/*` alias and falls back to `/api/*` when needed.
+- For local dev, `frontend/vite.config.ts` maps both `/api/*` and `/__api/*` to the API runtime.
 
 ### Zora CLI compatibility endpoints
 
@@ -172,9 +173,7 @@ Guardrails:
 | `/`               | Landing page with features          |
 | `/deploy`         | Deploy + activate vault (canonical) |
 | `/waitlist`       | Collect emails for early access     |
-| `/dashboard`      | Legacy route (redirects)            |
 | `/vault/:address` | Deposit/withdraw from vault         |
-| `/launch`         | Redirects to `/deploy` (legacy)     |
 
 ## Deployed Contracts (Base)
 
@@ -226,9 +225,8 @@ pnpm build
 | `CREATOR_ACCESS_ADMIN_ADDRESSES` | Optional           | server | Admin wallets allowed to approve/deny creator access                                               |
 | `CREATOR_ACCESS_ADMIN_EMAILS`    | Optional           | server | Admin emails allowed to approve/deny creator access (looked up by wallet)                          |
 | `CREATOR_ALLOWLIST`              | Optional           | server | Legacy fallback allowlist (env-based, only used if DB is not configured)                           |
-| `PRIVY_APP_ID`                   | Optional           | server | Privy App ID (server-side). Used by `/api/waitlist` when enabled                                   |
-| `PRIVY_APP_SECRET`               | Optional           | server | Privy App Secret (server-side). Used by `/api/waitlist` when enabled                               |
-| `PRIVY_WAITLIST_PREGENERATE`     | Optional           | server | If true, `/api/waitlist` creates/fetches a Privy user and pregenerates an embedded Ethereum wallet |
+| `PRIVY_APP_ID`                   | Optional           | server | Privy App ID (server-side). Used by server-side Privy auth/sync handlers                           |
+| `PRIVY_APP_SECRET`               | Optional           | server | Privy App Secret (server-side). Used by server-side Privy auth/sync handlers                       |
 
 ## Base Builder Codes Attribution
 

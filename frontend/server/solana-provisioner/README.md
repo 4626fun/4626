@@ -120,7 +120,7 @@ From `frontend/`:
 ## Run from your workstation + Cloudflare Tunnel
 
 Use this flow when the bridge CLI only exists on your own machine (for example
-`/home/akitav2/projects/tools/base-bridge/scripts`) and not in a cloud VM.
+`/home/<you>/projects/tools/base-bridge/scripts`) and not in a cloud VM.
 
 1. Install `cloudflared`:
 
@@ -147,7 +147,7 @@ Use this flow when the bridge CLI only exists on your own machine (for example
    ```bash
    cd ~/projects/4626/frontend
    PROVISIONER_BEARER_TOKEN=<set-long-random-token> \
-   SOLANA_BRIDGE_CLI_DIR=/home/akitav2/projects/tools/base-bridge/scripts \
+   SOLANA_BRIDGE_CLI_DIR=/home/<you>/projects/tools/base-bridge/scripts \
    BASE_RPC_URL=https://mainnet.base.org \
    npx tsx server/solana-provisioner/index.ts
    ```
@@ -193,7 +193,7 @@ curl -fsS -H "Authorization: Bearer $PROVISIONER_BEARER_TOKEN" http://127.0.0.1:
 Important:
 
 - `--service-user` must be able to traverse/read your repo path.
-- If repo is under `/home/<you>/...` and home perms are `750`, use your own user (for example `--service-user akitav2`) unless you changed ACLs.
+- If repo is under `/home/<you>/...` and home perms are `750`, use your own user (for example `--service-user <you>`) unless you changed ACLs.
 
 ## Reverse proxy examples
 

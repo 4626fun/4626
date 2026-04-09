@@ -57,7 +57,7 @@ Use the autopilot script:
 
 ```bash
 pnpm -C frontend run deploy:autopilot -- \
-  --origin https://app.4626.fun \
+  --origin https://v1.4626.fun \
   --plan ./deploy-plan.json \
   --auth-bearer "$CV_AUTH_SESSION_TOKEN"
 ```
@@ -86,4 +86,3 @@ The plan file is the same payload shape used by `deploy/session/create`:
 - Never bypass paymaster/session headers.
 - Never run prod with contract override flags enabled unless explicitly canarying.
 - Always report `sessionId`, `step`, `lastUserOpHash`, `lastTxHash`, `lastError`.
-

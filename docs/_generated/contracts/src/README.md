@@ -315,7 +315,7 @@ pnpm -C apps/docs-site start
 | Frontend       | `pnpm -C frontend test`<br/>`pnpm -C frontend typecheck`<br/>`pnpm -C frontend lint` |
 | CRE            | `npm --prefix cre test`<br/>`npm --prefix cre run typecheck`                         |
 | Contracts      | `forge build`<br/>`forge test -vvv`                                                  |
-| Security sweep | `pnpm security:local` — Forge tests, CRE workflow checks, frontend lint/typecheck/test, optional Semgrep (Docker) + gitleaks + audit printouts ([`docs/audits/README.md`](docs/audits/README.md)) |
+| Security sweep | `pnpm security:local` — Forge tests, CRE workflow checks, frontend lint/typecheck/test, optional Semgrep (Docker) + gitleaks + audit printouts ([`docs/audits/README.md`](../../../audits/README.md)) |
 | Frontend build | `pnpm -C frontend build`                                                             |
 | Docs build     | `pnpm -C apps/docs-site build`                                                       |
 
@@ -326,7 +326,7 @@ This repo ships a small repo-native agent layer for Cursor/Codex-style use. It d
 - Authority order: `AGENTS.md` -> scoped `.cursor/rules/*.mdc` -> relevant repo skill -> verification selector.
 - Bundled skills live under `script/agent-runtime/skills/`.
 - Verification selector CLI: `pnpm agent:verify-change -- <paths...>`.
-- Operator docs: [`docs/agent-workflow.md`](docs/agent-workflow.md), skill index: [`docs/agent-skills.md`](docs/agent-skills.md).
+- Operator docs: [`docs/agent-workflow.md`](../../../agent-workflow.md), skill index: [`docs/agent-skills.md`](../../../agent-skills.md).
 
 ## XMTP Agent Runtime
 
@@ -454,7 +454,7 @@ For complete env references, see `frontend/README.md` and `cre/README.md`.
 - Wallet/account invariants are documented in `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
 - Deploy/session ownership + creator access checks are enforced server-side before phased execution.
 - CRE automation uses an HTTP bridge pattern; write execution happens through audited API surfaces.
-- CI: `.github/workflows/security-scanning.yml` (secret scan, dependency reports, Semgrep on API/server lib, Slither report-only); `.github/workflows/dependency-review.yml` (PR dependency review, high+ in runtime **and** dev deps). Enable Dependency graph + optional branch protection: [`docs/audits/github-supply-chain-setup.md`](docs/audits/github-supply-chain-setup.md). Audit index: [`docs/audits/README.md`](docs/audits/README.md). Trust-boundary rules: [`AGENTS.md`](AGENTS.md).
+- CI: `.github/workflows/security-scanning.yml` (secret scan, dependency reports, Semgrep on API/server lib, Slither report-only); `.github/workflows/dependency-review.yml` (PR dependency review, high+ in runtime **and** dev deps). Enable Dependency graph + optional branch protection: [`docs/audits/github-supply-chain-setup.md`](../../../audits/github-supply-chain-setup.md). Audit index: [`docs/audits/README.md`](../../../audits/README.md). Trust-boundary rules: [`AGENTS.md`](../../../../AGENTS.md).
 
 ## Documentation Map
 

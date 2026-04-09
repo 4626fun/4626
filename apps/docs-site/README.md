@@ -14,7 +14,7 @@ This site publishes curated documentation from multiple sources across the monor
 | **Contract API** | `docs/_generated/contracts/` | `/api/contracts/` | Solidity NatSpec (forge doc) |
 | **Frontend API** | `docs/_generated/frontend/` | `/api/frontend/` | TypeScript TSDoc (typedoc) |
 | **CRE workflows** | `cre/` | `/operations/cre/` | Automation docs (README + guides) |
-| **Frontend docs** | `frontend/` | `/frontend/` | Design system, guides, overview |
+| **Frontend docs** | `frontend/` | `/frontend/` | Frontend guides, architecture notes, overview |
 
 ### Key Rules
 
@@ -144,27 +144,11 @@ Brand assets are managed in `frontend/public/brand/` and automatically synced to
 |-------|--------|----------|
 | `logo.svg` | `frontend/public/brand/logo.svg` | Navbar logo |
 | `favicon.svg` | `frontend/public/brand/favicon.svg` | Browser tab icon |
-| `social-card.svg` | `frontend/public/brand/social-card.svg` | Open Graph / Twitter cards |
 
 To update brand assets:
 1. Edit files in `frontend/public/brand/`
 2. Run `pnpm sync-docs` to copy to docs site
 3. Commit changes to `frontend/public/brand/`
-
-### External brand assets
-
-External brand assets (e.g., Base, LayerZero) are stored in `static/brands/` and committed directly.
-
-| Asset | Location | Usage |
-|-------|----------|-------|
-| Base logomark | `static/brands/base/base-logomark.svg` | Integration sections, network context |
-| Base wordmark | `static/brands/base/base-wordmark.svg` | Not currently used |
-
-**Usage guidelines:**
-- Use for contextual attribution only (e.g., "Deployed on Base")
-- Keep usage small and subtle — no hero banners
-- Do not alter colors or stretch/distort
-- Do not imply endorsement
 
 ## Project Structure
 

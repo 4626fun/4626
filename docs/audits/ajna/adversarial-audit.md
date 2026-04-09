@@ -6,7 +6,7 @@ sidebar_position: 2
 # Adversarial Audit Paper: Ajna ERC-4626 Vaults + CRE Automation
 
 Date: 2026-03-24  
-Scope: `ajna-finance/4626-ajna-vault`, `ajna-finance/4626-ajna-vault-keeper`, `4626fun/convergence-chainlink-hackathon`, and official CRE documentation.
+Scope: `ajna-finance/4626-ajna-vault`, `ajna-finance/4626-ajna-vault-keeper`, `4626fun/4626`, and official CRE documentation.
 
 # 1. Executive Summary
 
@@ -24,7 +24,7 @@ CRE improves determinism, replay resistance, and observability in local workspac
 | --- | --- | --- | --- |
 | `ajna-finance/4626-ajna-vault` (latest head, local clone in `tmp/audit-sources/4626-ajna-vault`) | `src/Vault.sol`, `src/Buffer.sol`, `src/VaultAuth.sol`, `src/AjnaVaultLibrary.sol`, `interfaces/*`, `test/*`, `config/vault-config.example.json`, `script/Vault.s.sol`, `README.md` | Onchain vault/accounting/liquidity logic | Core asset safety, share integrity, role risk, withdrawal behavior |
 | `ajna-finance/4626-ajna-vault-keeper` (latest head, local clone in `tmp/audit-sources/4626-ajna-vault-keeper`) | `src/keeper.ts`, `src/utils/env.ts`, `src/utils/transaction.ts`, `src/oracle/*`, `src/subgraph/poolHealth.ts`, `src/utils/scheduler.ts`, `.env.example`, `README.md`, integration tests | Offchain rebalance decision and execution logic | Primary liveness + economic decision engine |
-| `4626fun/convergence-chainlink-hackathon` (local workspace) | `cre/cre-workflows/*`, `cre/cre-workflows/_shared/*`, `cre/utils/onchain.ts`, `frontend/api/_handlers/cre/*`, `frontend/server/_lib/cre/runtimeBridge.ts`, `frontend/server/_lib/keeprRegistry.ts`, `frontend/server/keepr/xmtpQueueExecutor.ts`, `cre/README.md` | CRE orchestration, queueing, runtime sink, execution authority | Determines replay/idempotency, authority boundaries, CRE migration feasibility |
+| `4626fun/4626` (local workspace) | `cre/cre-workflows/*`, `cre/cre-workflows/_shared/*`, `cre/utils/onchain.ts`, `frontend/api/_handlers/cre/*`, `frontend/server/_lib/cre/runtimeBridge.ts`, `frontend/server/_lib/keeprRegistry.ts`, `frontend/server/keepr/xmtpQueueExecutor.ts`, `cre/README.md` | CRE orchestration, queueing, runtime sink, execution authority | Determines replay/idempotency, authority boundaries, CRE migration feasibility |
 | Chainlink CRE Docs (official) | `docs.chain.link/cre/`, simulation, limits, consensus, deploy access, service quotas | Runtime guarantees and constraints | Required to judge simulation confidence vs production readiness |
 
 # 3. Implemented System Architecture

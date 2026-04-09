@@ -84,6 +84,6 @@ Run the placement guard (checks only newly added test files):
 pnpm -C frontend guard:test-file-placement
 ```
 
-## Migration Note
+## Repository Note
 
-The repo is in active folder-structure cleanup. When touching legacy paths, prefer moving tests toward this structure rather than adding new tests in old locations.
+Keep new and updated tests aligned with this structure. When touching older test locations, move them toward these placement rules when practical.

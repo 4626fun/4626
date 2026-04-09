@@ -388,7 +388,7 @@ Use CRE as scheduler + monitor + deterministic policy engine + constrained trans
 
 - what is already relevant to keeper supervision,
 - what is reusable,
-- what is only hackathon/demo quality,
+- what is only prototype quality,
 - what would need hardening for production.
 
 In current Converge workflows, runtime/queue/idempotency pieces are reusable; bridge-heavy and prototype native-write paths need production hardening.

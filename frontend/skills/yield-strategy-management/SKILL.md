@@ -38,7 +38,7 @@ Key ideas:
 
 - Vault: `contracts/vault/CreatorOVault.sol`
 - Strategy interface: `contracts/interfaces/IStrategy.sol`
-- Base strategy pattern: `contracts/vault/strategies/BaseCreatorStrategy.sol`
+- Strategy module logic: `contracts/vault/modules/CreatorOVaultStrategiesModule.sol`
 - Ajna strategy adapter: `contracts/vault/strategies/ERC4626StrategyAdapter.sol`
 - Strategy deploy tooling:
   - `contracts/helpers/batchers/StrategyDeploymentBatcher.sol`
@@ -112,4 +112,3 @@ Return a structured result:
 - Proposed changes: exact onchain calls needed (read-only plan unless approved)
 - Verification plan: post-state reads/events to confirm
 - Risks: liquidity impact, withdrawal queue behavior, unrealized loss exposure
-

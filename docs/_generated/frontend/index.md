@@ -28,7 +28,6 @@
 - [api/\_handlers/\_routes.zora](api/_handlers/_routes.zora.md)
 - [api/\_handlers/\_sync-creator-metrics](api/_handlers/_sync-creator-metrics.md)
 - [api/\_handlers/\_sync-vault-data](api/_handlers/_sync-vault-data.md)
-- [api/\_handlers/\_waitlist](api/_handlers/_waitlist.md)
 - [api/\_handlers/accounts/\_link](api/_handlers/accounts/_link.md)
 - [api/\_handlers/accounts/\_me](api/_handlers/accounts/_me.md)
 - [api/\_handlers/accounts/\_unlink](api/_handlers/accounts/_unlink.md)

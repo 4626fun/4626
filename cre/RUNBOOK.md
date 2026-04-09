@@ -22,19 +22,15 @@ Do not rely on `npx cre` in locked-down environments, since registry access may 
 ## Fresh Machine Bootstrap
 
 ```bash
-git clone https://github.com/4626fun/convergence-chainlink-hackathon.git
-cd convergence-chainlink-hackathon
+# Run from an existing checkout of this repository:
+# /home/akitav2/projects/4626
 npm --prefix cre install
 cp cre/cre-workflows/.env.example cre/cre-workflows/.env
 cp cre/secrets.example.env cre/.env
 cp frontend/.env.example frontend/.env.local
 ```
 
-Then fill in the required values described in:
-
-- `docs/hackathon/submission-env-vars-and-secrets.md`
-
-Minimum required for hackathon simulation:
+Minimum required for local simulation:
 
 - `CRE_ETH_PRIVATE_KEY`
 - `KEEPR_API_KEY_VALUE`

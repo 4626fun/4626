@@ -233,7 +233,6 @@ const RENAME_MAP = {
   },
   frontendDocs: {
     'README.md': 'overview.md',
-    'DESIGN_SYSTEM.md': 'design-system.md',
   },
 };
 

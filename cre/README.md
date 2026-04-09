@@ -4,13 +4,6 @@ Chainlink Runtime Environment (CRE) workflows that automate critical onchain ope
 
 **A single workflow manages every registered vault automatically.**
 
-## Hackathon Submission Quick Links
-
-- Requirement mapping: `docs/hackathon/chainlink-cre-submission.md`
-- 3-5 minute walkthrough script: `docs/hackathon/video-script.md`
-- Simulation evidence logs: `docs/hackathon/evidence/`
-- Public-source packaging runbook: `docs/hackathon/public-source-packaging.md`
-
 ## Files Using Chainlink
 
 Core CRE workflow files:
@@ -46,22 +39,25 @@ CRE-to-app orchestration bridge files:
 - `frontend/api/_handlers/_routes.ts`
 - `frontend/server/agent/eliza/llm.ts`
 
-## Simulation-First Proof (Hackathon)
+## Simulation-First Proof
 
-All commands below were run from `cre/cre-workflows` and logs were saved under `docs/hackathon/evidence`.
+All commands below run from `cre/cre-workflows` and save logs under `cre/tmp/evidence`.
 
 ```bash
+# Create local evidence directory
+mkdir -p ../tmp/evidence
+
 # Terminal A: start local mock API bridge
 set -a && source .env && set +a
-node ../scripts/hackathon/mock-cre-api-server.mjs
+node ../scripts/mock-cre-api-server.mjs
 
 # Terminal B: DeFi + AI orchestration proof
 cre workflow simulate ./payout-integrity --target local-simulation \
-  | tee ../../docs/hackathon/evidence/cre-payout-integrity-local-simulation.log
+  | tee ../tmp/evidence/cre-payout-integrity-local-simulation.log
 
 # Terminal B: Queue orchestration proof
 cre workflow simulate ./keepr-action-queue --target local-simulation \
-  | tee ../../docs/hackathon/evidence/cre-keepr-action-queue-local-simulation.log
+  | tee ../tmp/evidence/cre-keepr-action-queue-local-simulation.log
 ```
 
 Expected output highlights:

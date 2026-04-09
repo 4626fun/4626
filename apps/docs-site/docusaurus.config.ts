@@ -60,7 +60,7 @@ const config: Config = {
   ],
 
   themeConfig: {
-    image: 'brand/social-card.svg',
+    image: 'brand/logo.svg',
     navbar: {
       title: '4626.fun',
       logo: {

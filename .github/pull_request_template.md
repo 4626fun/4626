@@ -22,10 +22,9 @@ Complete this section if the PR touches swap route logic, swap hooks, route acce
 - [ ] Non-critical auth/admin checks are route-scoped and do not refetch on focus/reconnect by default
 - [ ] Stale quote is rebuilt on action/review path (not by idle polling)
 - [ ] React Profiler confirms no fixed-cadence commit loop on idle `/swap`
-- [ ] Reviewed `frontend/docs/uniswap-qa.md` and completed relevant checks
+- [ ] Reviewed `frontend/docs/uniswap-integration-notes.md` and completed relevant checks
 
 ## Risks / Rollback
 
 - Risk level: low / medium / high
 - Rollback plan:
-
