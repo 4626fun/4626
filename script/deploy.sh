@@ -174,20 +174,6 @@ deploy_infra_v2() {
     echo "2. If Solana is enabled, ensure adapter is authorized on LotteryManager"
 }
 
-# Deploy vault for creator coin
-deploy_vault() {
-    echo -e "${RED}Error: ./script/deploy.sh vault is retired.${NC}"
-    echo "Use the app deploy-session flow at /deploy."
-    exit 1
-}
-
-# Deploy via ERC-4337
-deploy_aa() {
-    echo -e "${RED}Error: ./script/deploy.sh aa is retired.${NC}"
-    echo "Use the app deploy-session flow at /deploy."
-    exit 1
-}
-
 # Main
 main() {
     print_banner
@@ -203,13 +189,6 @@ main() {
         "infra-v2"|"deployer-v2"|"v2")
             check_prereqs
             deploy_infra_v2
-            ;;
-        "vault")
-            check_prereqs
-            deploy_vault "$@"
-            ;;
-        "aa"|"4337")
-            deploy_aa "$@"
             ;;
         "help"|"-h"|"--help"|"")
             print_usage
