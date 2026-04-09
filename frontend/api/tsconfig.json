@@ -16,15 +16,7 @@
   // Only typecheck our local API proxy handlers used by the Vite dev server.
   // Avoid pulling in unrelated serverless files that depend on backend-only deps.
   "include": [
-    "./zora/**/*.ts",
-    "./debank/**/*.ts",
-    "./dexscreener/**/*.ts",
-    "./onchain/**/*.ts",
-    "./auth/**/*.ts",
-    "./status/**/*.ts",
     "./_handlers/**/*.ts",
-    "./creator-access/**/*.ts",
-    "./admin/**/*.ts",
     "./_lib/**/*.ts"
   ],
   "exclude": ["node_modules"]

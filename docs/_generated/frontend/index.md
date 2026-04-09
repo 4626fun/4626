@@ -324,7 +324,6 @@
 - [api/\_handlers/zora/cli/\_shared](api/_handlers/zora/cli/_shared.md)
 - [api/\_handlers/zora/link/\_status](api/_handlers/zora/link/_status.md)
 - [api/\_lib/dispatchCatchAll](api/_lib/dispatchCatchAll.md)
-- [api/\_lib/typeOverrides](api/_lib/typeOverrides.md)
 - [api/\[...path\]](api/[...path].md)
 - [api/agent-registration](api/agent-registration.md)
 - [api/agent/process](api/agent/process.md)
