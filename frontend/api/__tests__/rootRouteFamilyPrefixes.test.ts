@@ -75,5 +75,8 @@ describe('root api route family prefixes', () => {
     expect(await getApiHandler('lens/graph')).toBeNull()
     expect(await getApiHandler('zora/trendFunnelRun')).toBeNull()
     expect(await getApiHandler('zora/trendMetrics')).toBeNull()
+    expect(await getApiHandler('referrals/click')).toBeNull()
+    expect(await getApiHandler('referrals/me')).toBeNull()
+    expect(await getApiHandler('referrals/leaderboard')).toBeNull()
   })
 })

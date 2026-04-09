@@ -282,10 +282,6 @@ function localApiRoutesPlugin(): Plugin {
         '/api/v1/agents/feedback': () => import('./api/_handlers/v1/agents/feedback/_read'),
         '/api/v1/agents/feedback/submit': () => import('./api/_handlers/v1/agents/feedback/_submit'),
         '/api/v1/agents/wallet-intelligence': () => import('./api/_handlers/v1/agents/_wallet-intelligence'),
-        // Referrals
-        '/api/referrals/click': () => import('./api/_handlers/referrals/_click'),
-        '/api/referrals/me': () => import('./api/_handlers/referrals/_me'),
-        '/api/referrals/leaderboard': () => import('./api/_handlers/referrals/_leaderboard'),
         // Social proxies
         '/api/social/recipient': () => import('./api/_handlers/social/_recipient'),
         '/api/social/talent': () => import('./api/_handlers/social/_talent'),

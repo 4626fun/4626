@@ -76,9 +76,6 @@ export const apiRouteLoaders: ApiRouteLoaders = {
 
   'sync-creator-metrics': () => import('./_sync-creator-metrics.js'),
   'sync-vault-data': () => import('./_sync-vault-data.js'),
-  'referrals/click': () => import('./referrals/_click.js'),
-  'referrals/me': () => import('./referrals/_me.js'),
-  'referrals/leaderboard': () => import('./referrals/_leaderboard.js'),
   'rpc': () => import('./rpc/_proxy.js'),
 
   'token/metadata': () => import('./token/_metadata.js'),
