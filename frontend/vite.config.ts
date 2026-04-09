@@ -46,6 +46,38 @@ function loadDotEnvFile(filePath: string) {
   }
 }
 
+function parsePortCandidate(value: unknown): number | null {
+  const raw = typeof value === 'number' ? String(value) : typeof value === 'string' ? value.trim() : ''
+  if (!raw) return null
+  const parsed = Number(raw)
+  if (!Number.isInteger(parsed) || parsed <= 0 || parsed > 65_535) return null
+  return parsed
+}
+
+function readCliPort(): number | null {
+  const argv = process.argv
+  for (let i = 0; i < argv.length; i += 1) {
+    const arg = argv[i]
+    if (arg === '--port') {
+      return parsePortCandidate(argv[i + 1])
+    }
+    if (arg.startsWith('--port=')) {
+      return parsePortCandidate(arg.slice('--port='.length))
+    }
+  }
+  return null
+}
+
+function resolveDevServerPort(): number {
+  const cliPort = readCliPort()
+  if (cliPort) return cliPort
+
+  const envPort = parsePortCandidate(process.env.VITE_DEV_SERVER_PORT) ?? parsePortCandidate(process.env.PORT)
+  if (envPort) return envPort
+
+  return 5173
+}
+
 async function readRequestBody(req: IncomingMessage): Promise<string | undefined> {
   const method = (req.method ?? '').toUpperCase()
   if (method !== 'POST' && method !== 'PUT' && method !== 'PATCH') return undefined
@@ -178,18 +210,15 @@ function localApiRoutesPlugin(): Plugin {
       // Keep this loosely typed: API handlers often return `VercelResponse`, and we don't want
       // Vite's config TS project to type-check every function signature.
       const routes: Record<string, () => Promise<{ default: (req: any, res: any) => any }>> = {
+        '/api/robots.txt': () => import('./api/robots.txt'),
+        '/api/sitemap.xml': () => import('./api/sitemap.xml'),
+        '/api/social-preview': () => import('./api/social-preview'),
+        '/api/social-preview-debug': () => import('./api/social-preview-debug'),
         '/api/creator-allowlist': () => import('./api/_handlers/_creator-allowlist'),
-        '/api/waitlist/join': () => import('./api/_handlers/waitlist/_join'),
         '/api/waitlist/bootstrap': () => import('./api/_handlers/waitlist/_bootstrap'),
-        '/api/waitlist/csw-link': () => import('./api/_handlers/waitlist/_csw-link'),
-        '/api/waitlist/ledger': () => import('./api/_handlers/waitlist/_ledger'),
         '/api/waitlist/me': () => import('./api/_handlers/waitlist/_me'),
         '/api/waitlist/leaderboard': () => import('./api/_handlers/waitlist/_leaderboard'),
         '/api/waitlist/position': () => import('./api/_handlers/waitlist/_position'),
-        '/api/waitlist/profile-complete': () => import('./api/_handlers/waitlist/_profile-complete'),
-        '/api/waitlist/task-claim': () => import('./api/_handlers/waitlist/_task-claim'),
-        '/api/waitlist/update-email': () => import('./api/_handlers/waitlist/_update-email'),
-        '/api/waitlist/verify-social': () => import('./api/_handlers/waitlist/_verify-social'),
         '/api/onchain/coinTradeRewardsBatch': () => import('./api/_handlers/onchain/_coinTradeRewardsBatch'),
         '/api/token/metadata': () => import('./api/_handlers/token/_metadata'),
         '/api/token/image': () => import('./api/_handlers/token/_image'),
@@ -237,7 +266,6 @@ function localApiRoutesPlugin(): Plugin {
         '/api/deploy/config': () => import('./api/_handlers/deploy/_config'),
         '/api/deploy/smartWalletOwner': () => import('./api/_handlers/deploy/_smartWalletOwner'),
         '/api/deploy/session/cancel': () => import('./api/_handlers/deploy/session/_cancel'),
-        '/api/deploy/session/bootstrapSwap': () => import('./api/_handlers/deploy/session/_bootstrapSwap'),
         '/api/deploy/session/continue': () => import('./api/_handlers/deploy/session/_continue'),
         '/api/deploy/session/create': () => import('./api/_handlers/deploy/session/_create'),
         '/api/deploy/session/dry-run': () => import('./api/_handlers/deploy/session/_dryRun'),
@@ -285,7 +313,6 @@ function localApiRoutesPlugin(): Plugin {
         // Social proxies
         '/api/social/recipient': () => import('./api/_handlers/social/_recipient'),
         '/api/social/talent': () => import('./api/_handlers/social/_talent'),
-        '/api/openclaw/execute': () => import('./api/_handlers/openclaw/_execute'),
         '/api/v1/chat/command-preflight': () => import('./api/_handlers/v1/chat/_commandPreflight'),
         '/api/v1/chat/telemetry': () => import('./api/_handlers/v1/chat/_telemetry'),
       }
@@ -381,6 +408,14 @@ function resolveOxCjsPlugin(): Plugin {
 }
 
 export default defineConfig(({ command }) => {
+  const devServerPort = resolveDevServerPort()
+  const viteCacheDir = (() => {
+    const configured = (process.env.VITE_CACHE_DIR ?? '').trim()
+    if (configured) return configured
+    // Keep optimize-deps caches isolated per dev-server port so parallel local servers
+    // do not race on the same chunk manifest and trigger "Outdated Optimize Dep" loops.
+    return `node_modules/.vite/port-${devServerPort}`
+  })()
   const enableSourcemap = (() => {
     const raw = (process.env.VITE_BUILD_SOURCEMAP ?? '').trim().toLowerCase()
     return raw === '1' || raw === 'true' || raw === 'yes'
@@ -409,11 +444,12 @@ export default defineConfig(({ command }) => {
       }
 
   return {
+    cacheDir: viteCacheDir,
     plugins: [resolveOxCjsPlugin(), react(), tailwindcss(), ...(command === 'serve' ? [localApiRoutesPlugin()] : [])],
     // Default localhost-only. Set VITE_DEV_SERVER_HOST=true (or 0.0.0.0) to expose on LAN/WSL.
     server: {
       host: devServerHost,
-      port: 5173,
+      port: devServerPort,
       strictPort: true,
     },
   resolve: {

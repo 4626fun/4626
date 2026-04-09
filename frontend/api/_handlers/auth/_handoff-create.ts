@@ -26,6 +26,7 @@ type HandoffCreateResponse = {
   code: string
   expiresAt: string
 }
+const HANDOFF_CREATE_MAX_BODY_BYTES = 8_192
 
 function isAddressLike(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
@@ -59,7 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Auth service unavailable' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<HandoffCreateBody>(req).catch(() => null)) ?? (req.body as HandoffCreateBody | null) ?? {}
+  const body = (await readJsonBody<HandoffCreateBody>(req, { maxBytes: HANDOFF_CREATE_MAX_BODY_BYTES }).catch(() => null)) ?? (req.body as HandoffCreateBody | null) ?? {}
   const privyToken = typeof body.privyToken === 'string' && body.privyToken.trim() ? body.privyToken.trim() : null
 
   try {

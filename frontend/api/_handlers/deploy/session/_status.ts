@@ -6,12 +6,21 @@ import { toAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
 import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinbaseSmartAccount } from 'viem/account-abstraction'
 
-import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../packages/server-core/src/index.js'
+import {
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  checkRateLimit,
+  RATE_LIMITS,
+  rateLimitKey,
+} from '../../../../packages/server-core/src/index.js'
 import { getDeploySessionById, signDeployToken, transitionDeploySession, updateDeploySession } from '../../../../server/_lib/deploySessions.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { buildUserOpErrorDebug } from '../../../../server/_lib/userOpRevertDebug.js'
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 import { parseGrant, validateCallsAgainstGrant } from '../../../../server/_lib/erc7712Permissions.js'
+import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 import { DEFAULT_CHAIN_ID } from '../../../../server/zora/_shared.js'
 import {
   ensureLaunchImageReady,
@@ -26,7 +35,7 @@ import { verifyDeployPhase2Invariants } from '../../../../server/_lib/deployPhas
 import { ingestShareOftIntoManagedTokenlist } from '../../token/_managedTokenList.js'
 import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../server/_lib/solanaOvaultCompatibility.js'
 import { validateSponsoredSmartWalletCalls } from '../../_paymaster.js'
-import { DeploySessionAccessError, loadAuthorizedDeploySession } from './_sessionAccess.js'
+import { DeploySessionAccessError, loadAuthorizedDeploySession, normalizeDeploySessionId } from './_sessionAccess.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -2538,9 +2547,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<null>)
   }
 
-  const body = await readJsonBody<StatusRequest>(req)
-  const sessionId = body?.sessionId ? String(body.sessionId).trim() : ''
-  if (!sessionId) return res.status(400).json({ success: false, error: 'Missing sessionId' } satisfies ApiEnvelope<null>)
+  const auth = readDeployAuthFromRequest(req)
+  if (!auth?.address) {
+    return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<null>)
+  }
+  const limiter = checkRateLimit(
+    rateLimitKey('deploy-session-status', auth.address.toLowerCase()),
+    RATE_LIMITS.deploySessionStatus,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Too many status checks' } satisfies ApiEnvelope<null>)
+  }
+
+  const body = await readJsonBody<StatusRequest>(req, { maxBytes: 8_192 })
+  const sessionId = normalizeDeploySessionId(body?.sessionId)
+  if (!sessionId) return res.status(400).json({ success: false, error: 'Missing or invalid sessionId' } satisfies ApiEnvelope<null>)
 
   let rec!: NonNullable<Awaited<ReturnType<typeof getDeploySessionById>>>
   let sessionAddress!: Address

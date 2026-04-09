@@ -77,7 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const body = await readJsonBody<PrepareRabbyBody>(req)
+  const body = await readJsonBody<PrepareRabbyBody>(req, { maxBytes: 8_192 })
   if (body?.confirmedAdvanced !== true) {
     return res.status(400).json({
       success: false,

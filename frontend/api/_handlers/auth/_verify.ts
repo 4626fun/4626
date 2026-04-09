@@ -52,7 +52,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const body = await readJsonBody<VerifyBody>(req)
+  const body = await readJsonBody<VerifyBody>(req, { maxBytes: 16_384 })
   const message = typeof body?.message === 'string' ? body.message : ''
   const signature = typeof body?.signature === 'string' ? body.signature : ''
   const nonceTokenRaw = typeof body?.nonceToken === 'string' ? body.nonceToken : ''
@@ -169,4 +169,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     data: { address: verified.address, sessionToken: token, cswOwnership } satisfies VerifyResponse,
   } satisfies ApiEnvelope<VerifyResponse>)
 }
-

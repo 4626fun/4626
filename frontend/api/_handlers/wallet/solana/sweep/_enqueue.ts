@@ -9,6 +9,9 @@ import {
   getDb,
   readRequestPrincipalAddress,
   resolveAuthorizedRequestPrincipal,
+  checkRateLimit,
+  RATE_LIMITS,
+  rateLimitKey,
 } from '../../../../../packages/server-core/src/index.js'
 
 
@@ -69,7 +72,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<never>)
   }
 
-  const body = await readJsonBody<Body>(req)
+  const limiter = checkRateLimit(
+    rateLimitKey('solana-sweep-enqueue', principalAddress),
+    RATE_LIMITS.solanaSweepEnqueue,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Too many sweep requests' } satisfies ApiEnvelope<never>)
+  }
+
+  const body = await readJsonBody<Body>(req, { maxBytes: 8_192 })
   const minLamports = parseOptionalMinLamports(body?.minLamports)
 
   const db = await getDb()
@@ -148,4 +160,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   return res.status(200).json({ success: true, data } satisfies ApiEnvelope<EnqueueSweepResponse>)
 }
-

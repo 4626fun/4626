@@ -50,7 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/build/charm/vault/rebalance', kind: 'build' })
   if (!g.ok) return
 
-  const body = (await readJsonBody<Body>(req)) ?? ({} as any)
+  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? ({} as any)
   try {
     if (hasRemovedLegacyInputs(body as Record<string, unknown>)) {
       throw new Error('Legacy rebalance params were removed. Use { vault } only.')

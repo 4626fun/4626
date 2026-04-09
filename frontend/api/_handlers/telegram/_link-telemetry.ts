@@ -50,7 +50,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<TelegramLinkTelemetryBody>(req).catch(() => null)) ?? (req.body as TelegramLinkTelemetryBody | null) ?? {}
+  const body = (await readJsonBody<TelegramLinkTelemetryBody>(req, { maxBytes: 65_536 }).catch(() => null)) ?? (req.body as TelegramLinkTelemetryBody | null) ?? {}
   const event = asTrimmed(body.event)
   if (!event || !event.startsWith('telegram_link_')) {
     return res.status(400).json({ success: false, error: 'Missing or invalid event' } satisfies ApiEnvelope<never>)

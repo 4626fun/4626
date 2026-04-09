@@ -86,7 +86,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!requireKeeprApiKey(req, res, { missingSecretError: 'Server misconfigured' })) return
 
-  const body = (await readJsonBody<EnqueueBody>(req)) ?? {}
+  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
   const vaultAddressRaw = typeof body.vaultAddress === 'string' ? body.vaultAddress.trim().toLowerCase() : ''
   const groupId = typeof body.groupId === 'string' ? body.groupId.trim() : ''
   const actionType = typeof body.actionType === 'string' ? body.actionType.trim() : null

@@ -95,7 +95,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<JoinBody>(req)) ?? {}
+  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
   const vaultRaw = typeof body?.vaultAddress === 'string' ? body.vaultAddress.trim() : ''
   const vaultAddress = isAddressLike(vaultRaw) ? (vaultRaw.toLowerCase() as `0x${string}`) : null
   if (!vaultAddress) {

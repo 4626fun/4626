@@ -1,6 +1,7 @@
 import { Link, Navigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowRight } from 'lucide-react'
+import { useMemo } from 'react'
 
 import { META, PageMeta } from '@/components/seo/PageMeta'
 import { VaultFlowRoot } from '@/features/home/vault-flow/VaultFlowRoot'
@@ -22,6 +23,25 @@ export function Home() {
   const showExploreCreatorsCta = hostMode === 'app'
   const heroCtaClass =
     'btn-primary inline-flex items-center justify-center min-h-[52px] px-6 py-3.5 text-[15px]'
+  const homeStructuredData = useMemo(
+    () => ({
+      '@context': 'https://schema.org',
+      '@graph': [
+        {
+          '@type': 'WebSite',
+          name: '4626.fun',
+          url: 'https://4626.fun/',
+        },
+        {
+          '@type': 'WebPage',
+          name: META.home.title,
+          url: 'https://4626.fun/',
+          description: META.home.description,
+        },
+      ],
+    }),
+    [],
+  )
 
   if (hostMode === 'app') {
     return <Navigate to="/swap" replace />
@@ -29,7 +49,12 @@ export function Home() {
 
   return (
     <div className="relative">
-      <PageMeta title={META.home.title} description={META.home.description} canonicalPath="/" />
+      <PageMeta
+        title={META.home.title}
+        description={META.home.description}
+        canonicalPath="/"
+        structuredData={homeStructuredData}
+      />
 
       <section className="cinematic-section no-divider-bottom !py-16 sm:!py-24 lg:!py-28 min-h-screen flex items-center justify-center relative z-10">
         <div className="mx-auto max-w-4xl space-y-8 px-4 text-center sm:px-6 sm:space-y-12">

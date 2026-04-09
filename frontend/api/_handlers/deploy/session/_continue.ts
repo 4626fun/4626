@@ -12,6 +12,9 @@ import {
   setCors,
   setNoStore,
   logger,
+  checkRateLimit,
+  RATE_LIMITS,
+  rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 
 
@@ -20,11 +23,12 @@ import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { buildUserOpErrorDebug } from '../../../../server/_lib/userOpRevertDebug.js'
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 import { parseGrant, validateCallsAgainstGrant } from '../../../../server/_lib/erc7712Permissions.js'
+import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 import { ensureLaunchImageReady } from '../../../../server/_lib/deployLaunchImage.js'
 import { verifyDeployPhase2Invariants } from '../../../../server/_lib/deployPhase2Invariants.js'
 import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../server/_lib/solanaOvaultCompatibility.js'
 import { validateSponsoredSmartWalletCalls } from '../../_paymaster.js'
-import { DeploySessionAccessError, loadAuthorizedDeploySession } from './_sessionAccess.js'
+import { DeploySessionAccessError, loadAuthorizedDeploySession, normalizeDeploySessionId } from './_sessionAccess.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -545,9 +549,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<null>)
   }
 
-  const body = await readJsonBody<ContinueRequest>(req)
-  const sessionId = body?.sessionId ? String(body.sessionId).trim() : ''
-  if (!sessionId) return res.status(400).json({ success: false, error: 'Missing sessionId' } satisfies ApiEnvelope<null>)
+  const authHeader = readDeployAuthFromRequest(req)
+  if (!authHeader?.address) {
+    return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<null>)
+  }
+  const limiter = checkRateLimit(
+    rateLimitKey('deploy-session-continue', authHeader.address.toLowerCase()),
+    RATE_LIMITS.deploySessionContinue,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Too many continue attempts' } satisfies ApiEnvelope<null>)
+  }
+
+  const body = await readJsonBody<ContinueRequest>(req, { maxBytes: 8_192 })
+  const sessionId = normalizeDeploySessionId(body?.sessionId)
+  if (!sessionId) return res.status(400).json({ success: false, error: 'Missing or invalid sessionId' } satisfies ApiEnvelope<null>)
 
   // Best-effort stage context for server-side revert debugging (persisted to DB payload only).
   let attemptedStage: string | null = null

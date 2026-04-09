@@ -76,7 +76,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
   handleOptions: vi.fn(() => false),
   setCors: vi.fn(),
   setNoStore: vi.fn(),
-  readJsonBody: (req: { body?: unknown }) => readJsonBodyMock(req),
+  readJsonBody: (...args: unknown[]) => readJsonBodyMock(...args),
 }))
 
 vi.mock('../../server/_lib/coinParties.js', () => ({
@@ -237,6 +237,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     const errMsg = responseBody?.error?.message ?? ''
     expect(errMsg).not.toMatch(/request denied/i)
     expect(errMsg).not.toMatch(/missing_primary_call/i)
+    expect(readJsonBodyMock).toHaveBeenCalledWith(req, { maxBytes: 512_000 })
   })
 
   it('rejects addOwnerAddress self-call when deploy session owner has contract bytecode', async () => {

@@ -19,6 +19,7 @@ const {
   ensureLaunchImageReadyMock,
   validateSponsoredSmartWalletCallsMock,
   verifyDeployPhase2InvariantsMock,
+  checkRateLimitMock,
 } = vi.hoisted(() => ({
   readJsonBodyMock: vi.fn(async (req: any) => req.body),
   readSessionFromRequestMock: vi.fn(() => ({ address: '0xsession' })),
@@ -50,6 +51,7 @@ const {
       expectations: null,
     }),
   ),
+  checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -70,6 +72,16 @@ vi.mock('../../server/_lib/deploySessions.js', () => ({
   updateDeploySession: updateDeploySessionMock,
   signDeployToken: signDeployTokenMock,
   decryptWithSecret: decryptWithSecretMock,
+}))
+
+vi.mock('../../server/_lib/rateLimit.js', () => ({
+  checkRateLimit: checkRateLimitMock,
+  RATE_LIMITS: {
+    deploySessionStatus: { windowMs: 60_000, maxRequests: 240 },
+    deploySessionContinue: { windowMs: 60_000, maxRequests: 30 },
+    deploySessionCancel: { windowMs: 60_000, maxRequests: 20 },
+  },
+  rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
 }))
 
 vi.mock('../../server/_lib/origin.js', () => ({
@@ -186,6 +198,7 @@ describe('deploy session optimistic concurrency', () => {
     process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = 'internal-secret'
     delete process.env.DEPLOY_SOLANA_REGISTRATION_ORIGINS
     delete process.env.SOLANA_REGISTRATION_ORIGINS
+    checkRateLimitMock.mockReturnValue({ allowed: true, resetAt: Date.now() + 60_000 })
   })
 
   it('allows one continue transition and returns 409 on the second', async () => {
@@ -204,6 +217,25 @@ describe('deploy session optimistic concurrency', () => {
     expect(res2.statusCode).toBe(409)
     expect(res2.body?.error).toBe('Concurrent modification')
     expect(sendUserOperationMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('returns 400 when session id format is invalid', async () => {
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'bad id with spaces' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+    expect(res.statusCode).toBe(400)
+    expect(String(res.body?.error ?? '')).toContain('Missing or invalid sessionId')
+    expect(getDeploySessionByIdMock).not.toHaveBeenCalled()
+  })
+
+  it('returns 429 when status polling is rate limited', async () => {
+    checkRateLimitMock.mockReturnValueOnce({ allowed: false, resetAt: Date.now() + 15_000 })
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+    expect(res.statusCode).toBe(429)
+    expect(String(res.body?.error ?? '')).toContain('Too many status checks')
+    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
   it('returns 409 in status handler on stale transition conflict', async () => {
@@ -441,8 +473,8 @@ describe('deploy session optimistic concurrency', () => {
       sessionAddress: '0x0000000000000000000000000000000000000001',
     }
     getDeploySessionByIdMock.mockResolvedValue(rec)
-    readSessionFromRequestMock.mockReturnValueOnce(null as any)
-    readSiwaAgentFromRequestMock.mockReturnValueOnce({
+    readSessionFromRequestMock.mockReturnValue(null as any)
+    readSiwaAgentFromRequestMock.mockReturnValue({
       address: '0x0000000000000000000000000000000000000001',
       agentId: 34,
       agentRegistry: 'eip155:8453:0x8004a169fb4a3325136eb29fa0ceb6d2e539a432',

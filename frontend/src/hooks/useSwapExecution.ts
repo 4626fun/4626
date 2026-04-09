@@ -15,7 +15,7 @@ import {
   readClientSwapPolicy,
   shouldEnable7702CanaryForAddress,
 } from '@/lib/uniswap/policy'
-import { normalizeUniswapError } from '@/lib/uniswap/error'
+import { normalizeUniswapError, type NormalizedUniswapError, type UniswapErrorCode } from '@/lib/uniswap/error'
 import { areEquivalentSwapTokens, BASE_CHAIN_ID, getNestedAmountOut, NATIVE_TOKEN_ADDRESS } from '@/lib/uniswap/swapUtils'
 import { isAllowedCanonicalSigner, isTargetCanonicalCsw, shouldApplyCanonicalEnforcement } from '@/wallet/canonicalWalletPolicy'
 import type { components } from '@/lib/uniswap/generated/tradeApi'
@@ -40,6 +40,9 @@ import {
 import type { AccountCapabilities, SignerType } from '@/wallet/accountContext'
 
 const QUOTE_TTL_MS = 30_000
+const HARD_FAILURE_WINDOW_MS = 20_000
+const HARD_FAILURE_THRESHOLD = 3
+const HARD_FAILURE_COOLDOWN_MS = 15_000
 const CALIBUR_DELEGATION_ADDRESS = '0x000000009B1D0aF20D8C6d0A44e162d11F9b8f00' as const
 
 type TxLifecycleState = 'idle' | 'review' | 'signing' | 'pending' | 'success' | 'error'
@@ -290,6 +293,7 @@ export function useSwapExecution(params: {
   const swapDebugEnabled = useMemo(() => isSwapDebugEnabled(), [])
   const [estimatedOut, setEstimatedOut] = useState<string>('')
   const [quote, setQuote] = useState<TradeQuoteResponse | null>(null)
+  const [quoteCooldownUntil, setQuoteCooldownUntil] = useState<number | null>(null)
   const [approvalData, setApprovalData] = useState<Record<string, unknown> | null>(null)
   const [swapTx, setSwapTx] = useState<TransactionRequest | null>(null)
   const [orderRequest, setOrderRequest] = useState<{
@@ -349,11 +353,69 @@ export function useSwapExecution(params: {
   })
   const txDebugSnapshotRef = useRef<string>('')
   const quoteRunRef = useRef(0)
-  const getErrorMessage = useCallback((value: unknown, fallback: string): string => {
+  const quoteFailureTrackerRef = useRef<{ count: number; windowStartedAt: number }>({
+    count: 0,
+    windowStartedAt: 0,
+  })
+  const getErrorDetails = useCallback((value: unknown, fallback: string): NormalizedUniswapError => {
     const normalized = normalizeUniswapError(value)
-    const message = normalized.message.trim()
-    return message || fallback
+    const message = normalized.message.trim() || fallback
+    return {
+      ...normalized,
+      message,
+    }
   }, [])
+  const getErrorMessage = useCallback((value: unknown, fallback: string): string => {
+    return getErrorDetails(value, fallback).message
+  }, [getErrorDetails])
+  const quoteCooldownActive = Boolean(quoteCooldownUntil && quoteCooldownUntil > Date.now())
+  const resetQuoteFailureTracker = useCallback(() => {
+    quoteFailureTrackerRef.current = {
+      count: 0,
+      windowStartedAt: 0,
+    }
+  }, [])
+  const registerQuoteHardFailure = useCallback((code: UniswapErrorCode) => {
+    const hardFailureCodes = new Set<UniswapErrorCode>([
+      'FORBIDDEN_ORIGIN',
+      'RPC_UNAVAILABLE',
+      'RATE_LIMITED',
+    ])
+    if (!hardFailureCodes.has(code)) {
+      resetQuoteFailureTracker()
+      return
+    }
+    const now = Date.now()
+    const tracker = quoteFailureTrackerRef.current
+    if (tracker.windowStartedAt <= 0 || now - tracker.windowStartedAt > HARD_FAILURE_WINDOW_MS) {
+      tracker.windowStartedAt = now
+      tracker.count = 1
+      return
+    }
+    tracker.count += 1
+    if (tracker.count >= HARD_FAILURE_THRESHOLD) {
+      tracker.count = 0
+      tracker.windowStartedAt = 0
+      const cooldownEndsAt = now + HARD_FAILURE_COOLDOWN_MS
+      setQuoteCooldownUntil(cooldownEndsAt)
+      setStatus('Auto-quote paused briefly after repeated upstream failures.')
+    }
+  }, [resetQuoteFailureTracker])
+
+  useEffect(() => {
+    if (!quoteCooldownUntil) return
+    const remaining = quoteCooldownUntil - Date.now()
+    if (remaining <= 0) {
+      setQuoteCooldownUntil(null)
+      return
+    }
+    const timer = window.setTimeout(() => {
+      setQuoteCooldownUntil(null)
+    }, remaining)
+    return () => {
+      window.clearTimeout(timer)
+    }
+  }, [quoteCooldownUntil])
   const swapPolicy = useMemo(() => readClientSwapPolicy(), [])
 
   type ChainId = components['schemas']['ChainId']
@@ -754,6 +816,7 @@ export function useSwapExecution(params: {
   const resetTradeState = useCallback(() => {
     quoteRunRef.current += 1
     setQuote(null)
+    setQuoteCooldownUntil(null)
     setApprovalData(null)
     setSwapTx(null)
     setOrderRequest(null)
@@ -768,6 +831,7 @@ export function useSwapExecution(params: {
     setError('')
     setTxState('idle')
     setTxHash(null)
+    resetQuoteFailureTracker()
     if (swapDebugEnabled) {
       setTxDebug((prev) => ({
         ...prev,
@@ -780,10 +844,14 @@ export function useSwapExecution(params: {
         swapAttempt: null,
       }))
     }
-  }, [swapDebugEnabled])
+  }, [resetQuoteFailureTracker, swapDebugEnabled])
 
   const handleQuote = useCallback(async () => {
     if (!params.address || !isReady || !params.executionAddress) return
+    if (quoteCooldownUntil && quoteCooldownUntil > Date.now()) {
+      setStatus('Auto-quote is paused briefly after repeated API failures.')
+      return
+    }
     const runId = ++quoteRunRef.current
     setBusy('quote')
     setError('')
@@ -817,6 +885,7 @@ export function useSwapExecution(params: {
       setSwapTx(null)
       setOrderRequest(null)
       setOrderStatus(null)
+      resetQuoteFailureTracker()
       const outRaw = getNestedAmountOut(pickQuote(data) ?? data)
       if (outRaw) {
         const tokenOutDecimals = await getTokenDecimals(params.tokenOut)
@@ -829,7 +898,9 @@ export function useSwapExecution(params: {
     } catch (e: any) {
       if (runId !== quoteRunRef.current) return
       setEstimatedOut('')
-      setError(getErrorMessage(e, 'Quote failed'))
+      const normalizedError = getErrorDetails(e, 'Quote failed')
+      setError(normalizedError.message)
+      registerQuoteHardFailure(normalizedError.code)
     } finally {
       if (runId === quoteRunRef.current) setBusy(null)
     }
@@ -843,10 +914,13 @@ export function useSwapExecution(params: {
     params.tokenOut,
     swapChainId,
     isReady,
+    quoteCooldownUntil,
     getTokenDecimals,
-    getErrorMessage,
+    getErrorDetails,
     guardInputPolicy,
     guardRoutingPolicy,
+    registerQuoteHardFailure,
+    resetQuoteFailureTracker,
     syncPermitRequirement,
   ])
 
@@ -1060,7 +1134,8 @@ export function useSwapExecution(params: {
       setConfirmIntent('swap')
     } catch (e: any) {
       if (runId !== quoteRunRef.current) return
-      setError(getErrorMessage(e, 'Unable to prepare trade'))
+      const normalizedError = getErrorDetails(e, 'Unable to prepare trade')
+      setError(normalizedError.message)
     } finally {
       if (runId === quoteRunRef.current) setBusy(null)
     }
@@ -1074,7 +1149,7 @@ export function useSwapExecution(params: {
     swapChainId,
     isReady,
     getTokenDecimals,
-    getErrorMessage,
+    getErrorDetails,
     guardInputPolicy,
     guardRoutingPolicy,
     syncPermitRequirement,
@@ -1491,6 +1566,8 @@ export function useSwapExecution(params: {
     approvalRequired,
     tokensEquivalent,
     quoteIsStale,
+    quoteCooldownActive,
+    quoteCooldownUntil,
     permitSignatureRequired,
     permitSignaturePending,
     permitSignatureReady,

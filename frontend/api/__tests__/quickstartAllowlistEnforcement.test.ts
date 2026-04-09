@@ -11,6 +11,9 @@ const {
   readRequestPrincipalAddressMock,
   resolveAuthorizedRequestPrincipalMock,
   resolvePersistedWalletIdentityMock,
+  checkRateLimitMock,
+  getClientIpMock,
+  rateLimitKeyMock,
 } = vi.hoisted(() => ({
   readJsonBodyMock: vi.fn(async () => ({})),
   getDbMock: vi.fn(),
@@ -20,6 +23,9 @@ const {
     canonicalSmartWalletAddress: CREATOR,
   })),
   resolvePersistedWalletIdentityMock: vi.fn(async () => null),
+  checkRateLimitMock: vi.fn(() => ({ allowed: true, remaining: 19, resetAt: Date.now() + 60_000 })),
+  getClientIpMock: vi.fn(() => '127.0.0.1'),
+  rateLimitKeyMock: vi.fn((...parts: string[]) => parts.join(':')),
 }))
 
 vi.mock('../../packages/server-core/src/index.js', () => ({
@@ -31,6 +37,12 @@ vi.mock('../../packages/server-core/src/index.js', () => ({
   isDbConfigured: isDbConfiguredMock,
   readRequestPrincipalAddress: readRequestPrincipalAddressMock,
   resolveAuthorizedRequestPrincipal: resolveAuthorizedRequestPrincipalMock,
+  checkRateLimit: checkRateLimitMock,
+  getClientIp: getClientIpMock,
+  rateLimitKey: rateLimitKeyMock,
+  RATE_LIMITS: {
+    creatorQuickstart: { windowMs: 60_000, maxRequests: 20 },
+  },
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
 

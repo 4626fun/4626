@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, ArrowRight, Check } from 'lucide-react'
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { TokenImage } from '@/components/token/TokenImage'
 import { AKITA } from '@/config/contracts'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
@@ -30,6 +30,38 @@ export function FaqHowItWorks() {
     if (getHostMode() !== 'app') return
     window.location.replace(`${getMarketingBaseUrl()}/faq/how-it-works`)
   }, [])
+  const howToSchema = useMemo(
+    () => ({
+      '@context': 'https://schema.org',
+      '@type': 'HowTo',
+      name: 'How Creator Vaults works',
+      description:
+        'Deposit a creator coin, mint vault share tokens, distribute via CCA, and earn from strategy performance.',
+      step: [
+        {
+          '@type': 'HowToStep',
+          name: 'Deposit',
+          text: `Deposit ${defaultDepositTokens} creator coins to open the vault and establish the first share price.`,
+        },
+        {
+          '@type': 'HowToStep',
+          name: 'Mint shares',
+          text: `Receive ${defaultDepositTokens} ${SHARE_TOKEN} as transferable vault shares.`,
+        },
+        {
+          '@type': 'HowToStep',
+          name: 'CCA distribution',
+          text: `Distribute initial shares through a ${defaultAuctionWindow} Continuous Clearing Auction for public price discovery.`,
+        },
+        {
+          '@type': 'HowToStep',
+          name: 'Earn',
+          text: 'Vault assets are allocated across configured strategies, and share value tracks vault performance.',
+        },
+      ],
+    }),
+    [],
+  )
 
   return (
     <div className="relative">
@@ -37,6 +69,7 @@ export function FaqHowItWorks() {
         title="How It Works"
         description="Deposit a Zora Creator Coin, receive vault share tokens, distribute via CCA, and earn yield automatically."
         canonicalPath="/faq/how-it-works"
+        structuredData={howToSchema}
       />
 
       <section className="cinematic-section">

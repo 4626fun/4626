@@ -487,7 +487,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(404).json({ success: false, error: 'Profile not found' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<PatchBody>(req)) ?? {}
+  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
   const hasDisplayName = Object.prototype.hasOwnProperty.call(body, 'displayName')
   const hasBio = Object.prototype.hasOwnProperty.call(body, 'bio')
   const hasWebsite = Object.prototype.hasOwnProperty.call(body, 'website')

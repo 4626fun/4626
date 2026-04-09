@@ -6,6 +6,10 @@ import {
   readJsonBody,
   getApiContracts,
   guardAgentApiRequest,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from '../../../../../packages/server-core/src/index.js'
 
 
@@ -33,13 +37,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/build/gauge/vote', kind: 'build' })
   if (!g.ok) return
 
+  const limiter = checkRateLimit(
+    rateLimitKey('v1-build-gauge-vote', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
+    RATE_LIMITS.buildGaugeVote,
+  )
+  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+
   const gauge = getApiContracts().vaultGaugeVoting
   if (!gauge) {
     return res.status(503).json({ success: false, error: 'VaultGaugeVoting not configured' })
   }
 
   try {
-    const body = (await readJsonBody<Body>(req)) ?? ({} as Body)
+    const body = (await readJsonBody(req, { maxBytes: 16_384 })) ?? ({} as Body)
     const vaultsIn = Array.isArray(body.vaults) ? body.vaults : []
     const weightsIn = Array.isArray(body.weights) ? body.weights : []
 
@@ -85,4 +95,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: e?.message || 'Invalid params' })
   }
 }
-

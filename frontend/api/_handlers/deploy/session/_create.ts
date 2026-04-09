@@ -1246,7 +1246,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<null>)
   }
 
-  const body = await readJsonBody<CreateDeploySessionRequest>(req)
+  const body = await readJsonBody<CreateDeploySessionRequest>(req, { maxBytes: 512_000 })
   if (!body) return res.status(400).json({ success: false, error: 'Invalid JSON body' } satisfies ApiEnvelope<null>)
   const preflightOnly = body.preflightOnly === true
 

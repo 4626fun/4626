@@ -68,7 +68,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  const body = req.method === 'POST' ? (await readJsonBody<ReputationGraphRequest>(req)) ?? {} : {}
+  const body = req.method === 'POST' ? (await readJsonBody(req, { maxBytes: 512_000 })) ?? {} : {}
   const agentIdRaw = String(body.agentId ?? req.query.agentId ?? '').trim()
 
   if (req.method === 'GET' && !agentIdRaw) {

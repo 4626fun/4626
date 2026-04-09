@@ -13,6 +13,9 @@ const mocks = vi.hoisted(() => ({
   handleOptions: vi.fn(() => false),
   readJsonBody: vi.fn(async (req: any) => req.body ?? null),
   guardAgentApiRequest: vi.fn(async (_ctx?: any) => ({ ok: true, ip: '127.0.0.1', auth: null })),
+  checkRateLimit: vi.fn(() => ({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })),
+  getClientIp: vi.fn(() => '127.0.0.1'),
+  rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
 }))
 
 vi.mock('../../server/auth/_shared.js', () => ({
@@ -22,6 +25,15 @@ vi.mock('../../server/auth/_shared.js', () => ({
 
 vi.mock('../../server/_lib/agentApiGuard.js', () => ({
   guardAgentApiRequest: mocks.guardAgentApiRequest,
+}))
+
+vi.mock('../../server/_lib/rateLimit.js', () => ({
+  checkRateLimit: mocks.checkRateLimit,
+  getClientIp: mocks.getClientIp,
+  rateLimitKey: mocks.rateLimitKey,
+  RATE_LIMITS: {
+    buildAjnaCalldata: { windowMs: 60_000, maxRequests: 120 },
+  },
 }))
 
 const POOL = '0x1111111111111111111111111111111111111111'
@@ -72,6 +84,19 @@ describe('v1 build Ajna handlers', () => {
     mocks.handleOptions.mockReturnValue(false)
     mocks.readJsonBody.mockImplementation(async (req: any) => req.body ?? null)
     mocks.guardAgentApiRequest.mockResolvedValue({ ok: true, ip: '127.0.0.1', auth: null })
+    mocks.checkRateLimit.mockReturnValue({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })
+  })
+
+  it('returns 429 when Ajna build rate limit is exceeded', async () => {
+    mocks.checkRateLimit.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+    const req = createMockReq({
+      method: 'POST',
+      body: { pool: POOL, borrower: BORROWER, amountToBorrow: '1', limitIndex: '100' },
+    })
+    const res = createMockRes()
+    await borrowHandler(req, res)
+    expect(res.statusCode).toBe(429)
+    expect(res.body?.error).toBe('Too many requests')
   })
 
   it('returns 405 for non-POST requests', async () => {

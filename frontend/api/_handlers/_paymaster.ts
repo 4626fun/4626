@@ -71,6 +71,7 @@ const METHODS_REQUIRING_USEROP = new Set<string>([
   'eth_sendUserOperation',
   'eth_estimateUserOperationGas',
 ])
+const PAYMASTER_MAX_BODY_BYTES = 512_000
 
 const ENTRYPOINT_V06 = getAddress(`0x${'5ff137d4b0fdcd49dca30c7cf57e578a026d2789'}`)
 const BASE_CHAIN_ID = 8453
@@ -2881,7 +2882,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json(jsonRpcError(null, -32000, 'Server misconfigured: AUTH_SESSION_SECRET is not set'))
   }
 
-  const body = await readJsonBody<unknown>(req).catch(() => null)
+  const body = await readJsonBody<unknown>(req, { maxBytes: PAYMASTER_MAX_BODY_BYTES }).catch(() => null)
   if (!body) {
     return res.status(200).json(jsonRpcError(null, -32600, 'Invalid JSON body'))
   }

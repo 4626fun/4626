@@ -28,6 +28,7 @@ type HandoffRedeemResponse = {
   sessionToken: string
   privyToken: string | null
 }
+const HANDOFF_REDEEM_MAX_BODY_BYTES = 8_192
 
 function isHandoffCode(value: string): boolean {
   return /^[a-f0-9]{64}$/i.test(value)
@@ -51,7 +52,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
   }
 
-  const body = await readJsonBody<RedeemBody>(req)
+  const body = await readJsonBody<RedeemBody>(req, { maxBytes: HANDOFF_REDEEM_MAX_BODY_BYTES })
   const code = typeof body?.code === 'string' ? body.code.trim() : ''
   if (!isHandoffCode(code)) {
     return res.status(400).json({ success: false, error: 'Invalid handoff code' } satisfies ApiEnvelope<never>)

@@ -8,6 +8,9 @@ import { createMockReq, createMockRes } from './helpers'
 const mocks = vi.hoisted(() => ({
   handleOptions: vi.fn(() => false),
   readJsonBody: vi.fn(async (req: any) => req.body ?? null),
+  checkRateLimit: vi.fn(() => ({ allowed: true, remaining: 59, resetAt: Date.now() + 60_000 })),
+  getClientIp: vi.fn(() => '127.0.0.1'),
+  rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
   authenticateRuntimeRequest: vi.fn(async () => ({ ok: true, correlationId: 'corr-test' })),
   listRuntimeRecords: vi.fn(async () => []),
   storeRuntimeRecord: vi.fn(async (_input: any) => ({
@@ -52,6 +55,18 @@ vi.mock('../../server/auth/_shared.js', () => ({
   setNoStore: vi.fn(),
 }))
 
+vi.mock('../../server/_lib/rateLimit.js', () => ({
+  checkRateLimit: mocks.checkRateLimit,
+  getClientIp: mocks.getClientIp,
+  rateLimitKey: mocks.rateLimitKey,
+  RATE_LIMITS: {
+    creRuntimeIngestRead: { windowMs: 60_000, maxRequests: 120 },
+    creRuntimeIngestWrite: { windowMs: 60_000, maxRequests: 60 },
+    creRuntimeDecisionsWrite: { windowMs: 60_000, maxRequests: 60 },
+    creRuntimeTriggerWrite: { windowMs: 60_000, maxRequests: 30 },
+  },
+}))
+
 vi.mock('../../server/_lib/cre/runtimeBridge.js', () => ({
   authenticateRuntimeRequest: mocks.authenticateRuntimeRequest,
   listRuntimeRecords: mocks.listRuntimeRecords,
@@ -66,7 +81,17 @@ describe('CRE runtime bridge handlers', () => {
     vi.clearAllMocks()
     mocks.handleOptions.mockReturnValue(false)
     mocks.readJsonBody.mockImplementation(async (req: any) => req.body ?? null)
+    mocks.checkRateLimit.mockReturnValue({ allowed: true, remaining: 59, resetAt: Date.now() + 60_000 })
     mocks.authenticateRuntimeRequest.mockResolvedValue({ ok: true, correlationId: 'corr-test' })
+  })
+
+  it('returns 429 when ingest runtime rate limit is exceeded', async () => {
+    mocks.checkRateLimit.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+    const req = createMockReq({ method: 'POST', body: {} })
+    const res = createMockRes()
+    await ingestHandler(req, res)
+    expect(res.statusCode).toBe(429)
+    expect(String(res.body?.error ?? '')).toContain('Too many requests')
   })
 
   it('validates ingest POST required fields', async () => {

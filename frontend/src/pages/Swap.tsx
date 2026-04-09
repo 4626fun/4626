@@ -4,7 +4,7 @@ import { Droplets, Plus, RefreshCw } from 'lucide-react'
 import { getAddress, isAddress, toHex, type Address, type Hex } from 'viem'
 import { useQuery } from '@tanstack/react-query'
 import { useAccount, useBalance, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
-import { usePrivy, useWallets } from '@privy-io/react-auth'
+import { usePrivy } from '@privy-io/react-auth'
 import { useDebounceValue } from 'usehooks-ts'
 
 import { META, PageMeta } from '@/components/seo/PageMeta'
@@ -20,6 +20,7 @@ import { useSwapState } from '@/hooks/useSwapState'
 import { useTokenIdentity } from '@/hooks/useTokenIdentity'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { usePrivyClientStatus } from '@/lib/privy/client'
+import { extractPrivyWalletsFromUser } from '@/lib/privy/embeddedWallet'
 import type { ApiEnvelope } from '@/lib/apiEnvelope'
 import { apiFetch } from '@/lib/apiBase'
 import { API_ENDPOINTS } from '@/lib/apiEndpoints'
@@ -201,17 +202,6 @@ function useSafeSwapPrivyHook(enabled: boolean) {
       user: null,
       getAccessToken: null as null | (() => Promise<string | null>),
     } as any
-  }
-}
-
-function useSafeSwapWalletsHook(enabled: boolean) {
-  try {
-    const value = useWallets() as any
-    if (!enabled) return { wallets: [] } as any
-    return value
-  } catch (error) {
-    warnSwapPrivyHookFailure('useWallets', error)
-    return { wallets: [] } as any
   }
 }
 
@@ -417,7 +407,7 @@ export function Swap() {
     user: privyUser,
     getAccessToken,
   } = useSafeSwapPrivyHook(privyHooksEnabled)
-  const { wallets: privyWallets } = useSafeSwapWalletsHook(privyHooksEnabled)
+  const privyWallets = useMemo(() => extractPrivyWalletsFromUser(privyUser), [privyUser])
   const auth = useSiweAuth()
   const {
     authAddress,
@@ -969,6 +959,8 @@ export function Swap() {
     confirmIntent,
     quoteUpdatedAt,
     isReady,
+    quoteCooldownActive,
+    quoteCooldownUntil,
     approvalRequired,
     diagnosticsEnabled,
     txDebug,
@@ -1212,14 +1204,14 @@ export function Swap() {
 
   // Debounced auto-quote: only fires when actual swap inputs change.
   useEffect(() => {
-    if (!executionReady || !isReady) return
+    if (!executionReady || !isReady || quoteCooldownActive) return
     const timer = window.setTimeout(() => {
       if (busyRef.current) return
       void handleQuote()
     }, 450)
     return () => window.clearTimeout(timer)
     // `busy` intentionally omitted — use busyRef to check at call-time.
-  }, [tokenIn, tokenOut, amountInUnits, parsedSlippage, executionReady, isReady, handleQuote])
+  }, [tokenIn, tokenOut, amountInUnits, parsedSlippage, executionReady, isReady, quoteCooldownActive, handleQuote])
 
   // One-click flow: after review/build, immediately execute without an extra in-app confirm modal.
   useEffect(() => {
@@ -1463,6 +1455,19 @@ export function Swap() {
         <div data-screenshot-hide="true" className="mx-auto mt-4 max-w-4xl">
           <Alert variant="warning" title="Initializing Privy for canonical signing">
             Waiting for the Privy client/session to finish loading before canonical signer checks can complete.
+          </Alert>
+        </div>
+      ) : null}
+
+      {activePanel === 'swap' && quoteCooldownActive ? (
+        <div data-screenshot-hide="true" className="mx-auto mt-4 max-w-4xl">
+          <Alert variant="warning" title="Auto-quote paused briefly">
+            Repeated upstream failures were detected. Auto-quote will resume in a few seconds.
+            {quoteCooldownUntil ? (
+              <div className="mt-1 text-zinc-300">
+                Resume time: {new Date(quoteCooldownUntil).toLocaleTimeString()}
+              </div>
+            ) : null}
           </Alert>
         </div>
       ) : null}

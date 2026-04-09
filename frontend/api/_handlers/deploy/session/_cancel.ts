@@ -12,6 +12,9 @@ import {
   setCors,
   setNoStore,
   logger,
+  checkRateLimit,
+  RATE_LIMITS,
+  rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 
 
@@ -20,6 +23,7 @@ import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 import { validateSponsoredSmartWalletCalls } from '../../_paymaster.js'
+import { normalizeDeploySessionId } from './_sessionAccess.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -140,9 +144,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<null>)
   }
 
-  const body = await readJsonBody<CancelRequest>(req)
-  const sessionId = body?.sessionId ? String(body.sessionId).trim() : ''
-  if (!sessionId) return res.status(400).json({ success: false, error: 'Missing sessionId' } satisfies ApiEnvelope<null>)
+  const limiter = checkRateLimit(
+    rateLimitKey('deploy-session-cancel', auth.address.toLowerCase()),
+    RATE_LIMITS.deploySessionCancel,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Too many cancel attempts' } satisfies ApiEnvelope<null>)
+  }
+
+  const body = await readJsonBody<CancelRequest>(req, { maxBytes: 8_192 })
+  const sessionId = normalizeDeploySessionId(body?.sessionId)
+  if (!sessionId) return res.status(400).json({ success: false, error: 'Missing or invalid sessionId' } satisfies ApiEnvelope<null>)
 
   const rec = await getDeploySessionById(sessionId)
   if (!rec) return res.status(404).json({ success: false, error: 'Not found' } satisfies ApiEnvelope<null>)

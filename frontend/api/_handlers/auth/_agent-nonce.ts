@@ -79,7 +79,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<AgentNonceBody>(req)) ?? {}
+  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
   const agentId = parseAgentId(body.agentId)
   if (agentId === null) {
     return res.status(400).json({ success: false, error: 'agentId is required (non-negative integer)' } satisfies ApiEnvelope<never>)

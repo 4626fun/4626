@@ -8,6 +8,9 @@ const { readJsonBodyMock, readSessionFromRequestMock, readSiwaAgentFromRequestMo
   readSessionFromRequestMock: vi.fn(() => ({ address: '0xsession' })),
   readSiwaAgentFromRequestMock: vi.fn(() => null),
 }))
+const { checkRateLimitMock } = vi.hoisted(() => ({
+  checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
+}))
 
 vi.mock('../../server/auth/_shared.js', () => ({
   handleOptions: vi.fn(() => false),
@@ -19,6 +22,12 @@ vi.mock('../../server/auth/_shared.js', () => ({
 
 vi.mock('../../server/auth/_siwa.js', () => ({
   readSiwaAgentFromRequest: readSiwaAgentFromRequestMock,
+}))
+
+vi.mock('../../server/_lib/rateLimit.js', () => ({
+  checkRateLimit: checkRateLimitMock,
+  RATE_LIMITS: { deploySessionStart: { windowMs: 60_000, maxRequests: 20 } },
+  rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
 }))
 
 vi.mock('../../server/_lib/origin.js', () => ({
@@ -52,6 +61,7 @@ describe('deploy session start wrapper', () => {
     vi.clearAllMocks()
     readSessionFromRequestMock.mockReturnValue({ address: '0xsession' })
     readSiwaAgentFromRequestMock.mockReturnValue(null)
+    checkRateLimitMock.mockReturnValue({ allowed: true, resetAt: Date.now() + 60_000 })
   })
 
   it('returns 401 for unauthenticated requests', async () => {
@@ -85,6 +95,25 @@ describe('deploy session start wrapper', () => {
 
     expect(res.statusCode).toBe(400)
     expect(res.body?.error).toBe('bad_create')
+  })
+
+  it('returns 429 when start is rate limited', async () => {
+    checkRateLimitMock.mockReturnValueOnce({ allowed: false, resetAt: Date.now() + 30_000 })
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        smartWallet: '0x0000000000000000000000000000000000000002',
+        creatorToken: '0x0000000000000000000000000000000000000003',
+        ownerAddress: '0x0000000000000000000000000000000000000001',
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(429)
+    expect(String(res.body?.error ?? '')).toContain('Too many start attempts')
+    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
   it('accepts SIWA auth when session cookie is missing', async () => {

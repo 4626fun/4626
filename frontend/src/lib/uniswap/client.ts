@@ -15,6 +15,12 @@ import type {
   HistoricalVolumeData,
   TimeframeData,
 } from './types'
+import { apiFetch } from '@/lib/apiBase'
+import {
+  classifyUniswapRequestFailure,
+  extractGraphqlOperationName,
+  warnUniswapRequestOnce,
+} from './requestDiagnostics'
 
 // Fallback: Use our API route which handles the key securely
 const API_BASE = '/api/uniswap'
@@ -25,27 +31,53 @@ type GraphQLResponse<T> = {
 }
 
 async function fetchGraphQL<T>(query: string, variables?: Record<string, unknown>): Promise<T | null> {
+  const operationName = extractGraphqlOperationName(query)
   try {
-    const response = await fetch(`${API_BASE}/query`, {
+    const response = await apiFetch(`${API_BASE}/query`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ query, variables }),
+      body: JSON.stringify({
+        query,
+        ...(operationName ? { operation: operationName } : null),
+        variables,
+      }),
     })
-    
+
     if (!response.ok) {
-      console.error(`GraphQL request failed: ${response.status}`)
+      const failure = classifyUniswapRequestFailure(response.status)
+      warnUniswapRequestOnce({
+        scope: 'query',
+        failure,
+        detail: operationName ?? null,
+      })
       return null
     }
-    
-    const result = (await response.json()) as GraphQLResponse<T>
+
+    const result = (await response.json().catch(() => null)) as GraphQLResponse<T> | null
+    if (!result) {
+      warnUniswapRequestOnce({
+        scope: 'query',
+        failure: classifyUniswapRequestFailure(502),
+        detail: operationName ?? 'invalid-json',
+      })
+      return null
+    }
     if (result.errors?.length) {
-      console.error('GraphQL errors:', result.errors)
+      warnUniswapRequestOnce({
+        scope: 'query-graphql-error',
+        failure: classifyUniswapRequestFailure(502),
+        detail: result.errors[0]?.message ?? operationName ?? 'unknown-operation',
+      })
       return null
     }
-    
+
     return result.data ?? null
-  } catch (error) {
-    console.error('GraphQL fetch error:', error)
+  } catch {
+    warnUniswapRequestOnce({
+      scope: 'query-network',
+      failure: classifyUniswapRequestFailure(null),
+      detail: operationName ?? null,
+    })
     return null
   }
 }

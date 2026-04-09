@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { useActiveWallet, useConnectWallet, useCrossAppAccounts, useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
+import { useActiveWallet, useConnectWallet, useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
 import { createWalletClient, custom, type Address } from 'viem'
 import { base } from 'viem/chains'
 import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
@@ -8,7 +8,7 @@ import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wa
 import { apiFetch } from '@/lib/apiBase'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
-import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
+import { extractPrivyWalletsFromUser, useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import { isUnauthorizedCrossAppLinkError, performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
 import { isTelegramMiniAppContext, readPrivyTelegramLaunchParams } from '@/lib/telegramWebApp'
 import {
@@ -54,9 +54,14 @@ function parseChainId(value: string | number | null | undefined): number | null 
 }
 
 function isPrivyExternalEthereumWallet(wallet: any): boolean {
-  if (!wallet || wallet.type !== 'ethereum') return false
-  const walletClientType = String(wallet.walletClientType ?? '').toLowerCase()
-  return walletClientType !== 'privy' && walletClientType !== 'privy-v2'
+  if (!wallet || typeof wallet !== 'object') return false
+  const chainType = String(wallet.chainType ?? wallet.chain_type ?? wallet.type ?? '').toLowerCase().trim()
+  if (chainType.includes('solana')) return false
+  const walletClientType = String(wallet.walletClientType ?? wallet.wallet_client_type ?? '').toLowerCase().trim()
+  if (walletClientType === 'privy' || walletClientType === 'privy-v2' || walletClientType.includes('embedded')) {
+    return false
+  }
+  return /^0x[a-fA-F0-9]{40}$/.test(String(wallet.address ?? '').trim())
 }
 
 async function getPrivyEthereumProvider(wallet: any): Promise<any | null> {
@@ -149,14 +154,6 @@ function useSafeConnectWallet() {
   }
 }
 
-function useSafeWallets() {
-  try {
-    return useWallets() as any
-  } catch {
-    return { wallets: [], ready: false } as any
-  }
-}
-
 function useSafeActiveWallet() {
   try {
     return useActiveWallet() as any
@@ -174,7 +171,6 @@ export function useAccountSetupController(params: {
   const { login } = useSafeLogin()
   const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossApp()
   const { connectWallet } = useSafeConnectWallet()
-  const { wallets: privyWallets } = useSafeWallets()
   const { wallet: activePrivyWallet } = useSafeActiveWallet()
   const publicClient = usePublicClient()
   const { data: walletClient } = useWalletClient()
@@ -185,6 +181,7 @@ export function useAccountSetupController(params: {
   const hasInitialDataRef = useRef(Boolean(params.initialData))
 
   const privyAuthed = Boolean(privy?.authenticated)
+  const privyWallets = useMemo(() => extractPrivyWalletsFromUser(privy?.user), [privy?.user])
   const getAccessToken = useMemo(
     () =>
       typeof privy?.getAccessToken === 'function'

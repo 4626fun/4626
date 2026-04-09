@@ -12,6 +12,9 @@ import {
   getSessionAddress,
   isAdminAddress,
   getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 
 
@@ -46,8 +49,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!isAdminAddress(admin)) {
     return res.status(403).json({ success: false, error: 'Admin only' } satisfies ApiEnvelope<never>)
   }
+  const rate = checkRateLimit(
+    rateLimitKey('admin-creator-access-deny', admin.toLowerCase(), getClientIp(req)),
+    RATE_LIMITS.adminAction,
+  )
+  if (!rate.allowed) {
+    return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
+  }
 
-  const body = await readJsonBody<DenyBody>(req)
+  const body = await readJsonBody(req, { maxBytes: 512_000 })
   const requestId = typeof body?.requestId === 'number' && Number.isFinite(body.requestId) ? Math.floor(body.requestId) : NaN
   const note = typeof body?.note === 'string' ? body.note.slice(0, 4000) : null
   if (!Number.isFinite(requestId) || requestId <= 0) {
@@ -141,5 +151,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     data: { requestId, denied: true } satisfies DenyResponse,
   } satisfies ApiEnvelope<DenyResponse>)
 }
-
 

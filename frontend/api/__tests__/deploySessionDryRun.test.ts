@@ -6,6 +6,7 @@ const {
   readJsonBodyMock,
   readDeployAuthFromRequestMock,
   isDbConfiguredMock,
+  checkRateLimitMock,
   getDbMock,
   getBytecodeMock,
   readContractMock,
@@ -26,6 +27,7 @@ const {
     type: 'session' as const,
   })),
   isDbConfiguredMock: vi.fn(() => true),
+  checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
   getDbMock: vi.fn(),
   getBytecodeMock: vi.fn(async () => '0x'),
   readContractMock: vi.fn(async () => ({ amount: 1n })),
@@ -62,8 +64,11 @@ vi.mock('../../server/_lib/postgres.js', () => ({
 }))
 
 vi.mock('../../server/_lib/rateLimit.js', () => ({
-  checkRateLimit: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
-  RATE_LIMITS: { deployCreate: { limit: 3, windowMs: 60_000 } },
+  checkRateLimit: checkRateLimitMock,
+  RATE_LIMITS: {
+    deployCreate: { limit: 3, windowMs: 60_000 },
+    deploySessionDryRun: { windowMs: 60_000, maxRequests: 10 },
+  },
   rateLimitKey: vi.fn(() => 'rl_key'),
 }))
 
@@ -220,6 +225,7 @@ describe('deploy session dry run', () => {
       address: '0x0000000000000000000000000000000000000001',
       type: 'session',
     })
+    checkRateLimitMock.mockReturnValue({ allowed: true, resetAt: Date.now() + 60_000 })
   })
 
   it('requires authenticated deploy auth even when legacy dev-bypass header is present', async () => {
@@ -242,6 +248,19 @@ describe('deploy session dry run', () => {
       if (typeof previousBypass === 'undefined') delete process.env.DEPLOY_DRY_RUN_DEV_BYPASS
       else process.env.DEPLOY_DRY_RUN_DEV_BYPASS = previousBypass
     }
+  })
+
+  it('returns 429 when dry-run is rate limited', async () => {
+    checkRateLimitMock.mockReturnValueOnce({ allowed: false, resetAt: Date.now() + 45_000 })
+    const { default: handler } = await import('../_handlers/deploy/session/_dryRun.ts')
+    const req = createMockReq({ method: 'POST', body: makeRequestBody() })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(429)
+    expect(String(res.body?.error ?? '')).toContain('Too many dry-run attempts')
+    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
   it('returns a phase summary without persisting session state or sending user operations', async () => {

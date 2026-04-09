@@ -7,6 +7,10 @@ import {
   setCors,
   setNoStore,
   logger,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from "../../../../packages/server-core/src/index.js"
 
 import {
@@ -57,7 +61,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: "Method not allowed" } satisfies ApiEnvelope<never>)
   }
 
-  const body = req.method === "POST" ? ((await readJsonBody<IngestBody>(req)) ?? {}) : {}
+  const limiter = checkRateLimit(
+    rateLimitKey("cre-runtime-ingest", req.method.toLowerCase(), getClientIp(req)),
+    req.method === "GET" ? RATE_LIMITS.creRuntimeIngestRead : RATE_LIMITS.creRuntimeIngestWrite,
+  )
+  if (!limiter.allowed) {
+    return res.status(429).json({
+      success: false,
+      error: "Too many requests",
+    } satisfies ApiEnvelope<never>)
+  }
+
+  const body = req.method === "POST" ? ((await readJsonBody(req, { maxBytes: 131_072 })) ?? {}) : {}
   const enforceHmac = (process.env.CRE_RUNTIME_ENFORCE_HMAC ?? "false").toLowerCase() === "true"
   const auth = await authenticateRuntimeRequest(req, body, {
     allowUnsignedWhenHmacConfigured: req.method === "GET" || !enforceHmac,

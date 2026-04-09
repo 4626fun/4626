@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useCreateWallet, usePrivy, useWallets } from '@privy-io/react-auth'
+import { useCreateWallet, usePrivy } from '@privy-io/react-auth'
 import { getAddress, isAddress, type Address } from 'viem'
 
 function sleep(ms: number): Promise<void> {
@@ -29,6 +29,86 @@ function isEmbeddedEthereumWalletRecord(value: unknown): value is { address?: un
   return walletClientType === 'privy' || walletClientType.includes('embedded') || walletClientType.includes('privy')
 }
 
+function normalizedWalletRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object') return null
+  return value as Record<string, unknown>
+}
+
+function walletDedupKey(record: Record<string, unknown>): string {
+  const address = normalizeAddressOrNull(record.address)?.toLowerCase() ?? ''
+  const chainType = normalizePrivyText(record.chain_type ?? record.chainType ?? '')
+  const walletClientType = normalizePrivyText(
+    record.wallet_client_type ?? record.walletClientType ?? record.connector_type ?? record.connectorType ?? '',
+  )
+  const type = normalizePrivyText(record.type ?? record.provider ?? '')
+  return `${address}|${chainType}|${walletClientType}|${type}`
+}
+
+function pushWalletRecord(params: {
+  target: Record<string, unknown>[]
+  seen: Set<string>
+  value: unknown
+  defaults?: Record<string, unknown>
+}) {
+  const record = normalizedWalletRecord(params.value)
+  if (!record) return
+  const merged = params.defaults ? { ...params.defaults, ...record } : record
+  const key = walletDedupKey(merged)
+  if (params.seen.has(key)) return
+  params.seen.add(key)
+  params.target.push(merged)
+}
+
+export function extractPrivyWalletsFromUser(user: unknown): Record<string, unknown>[] {
+  const record = normalizedWalletRecord(user)
+  if (!record) return []
+
+  const wallets: Record<string, unknown>[] = []
+  const seen = new Set<string>()
+
+  pushWalletRecord({ target: wallets, seen, value: record.wallet })
+  if (Array.isArray(record.wallets)) {
+    for (const wallet of record.wallets) {
+      pushWalletRecord({ target: wallets, seen, value: wallet })
+    }
+  }
+
+  const linkedAccounts = Array.isArray(record.linkedAccounts)
+    ? record.linkedAccounts
+    : Array.isArray(record.linked_accounts)
+      ? record.linked_accounts
+      : []
+  for (const account of linkedAccounts) {
+    const linkedRecord = normalizedWalletRecord(account)
+    if (!linkedRecord) continue
+
+    const linkedType = normalizePrivyText(linkedRecord.type)
+    if (linkedType.includes('wallet') || linkedType === 'cross_app' || linkedRecord.address) {
+      pushWalletRecord({ target: wallets, seen, value: linkedRecord })
+    }
+
+    const embeddedWallets = Array.isArray(linkedRecord.embeddedWallets)
+      ? linkedRecord.embeddedWallets
+      : Array.isArray(linkedRecord.embedded_wallets)
+        ? linkedRecord.embedded_wallets
+        : []
+    for (const embeddedWallet of embeddedWallets) {
+      pushWalletRecord({
+        target: wallets,
+        seen,
+        value: embeddedWallet,
+        defaults: {
+          type: 'wallet',
+          wallet_client_type: 'privy',
+          chain_type: 'ethereum',
+        },
+      })
+    }
+  }
+
+  return wallets
+}
+
 export function pickPrivyEmbeddedEoaAddressFromWallets(wallets: unknown): Address | null {
   const entries = Array.isArray(wallets) ? wallets : []
   for (const wallet of entries) {
@@ -40,39 +120,8 @@ export function pickPrivyEmbeddedEoaAddressFromWallets(wallets: unknown): Addres
 }
 
 export function pickPrivyEmbeddedEoaAddressFromUser(user: unknown): Address | null {
-  const record = user && typeof user === 'object' ? (user as Record<string, unknown>) : null
-  if (!record) return null
-
-  const directWalletCandidates = [
-    ...(record.wallet && typeof record.wallet === 'object' ? [record.wallet] : []),
-    ...(Array.isArray(record.wallets) ? record.wallets : []),
-  ]
-  const directWalletAddress = pickPrivyEmbeddedEoaAddressFromWallets(directWalletCandidates)
-  if (directWalletAddress) return directWalletAddress
-
-  const linkedAccounts = Array.isArray(record.linkedAccounts)
-    ? record.linkedAccounts
-    : Array.isArray(record.linked_accounts)
-      ? record.linked_accounts
-      : []
-
-  for (const account of linkedAccounts) {
-    if (!isEmbeddedEthereumWalletRecord(account)) continue
-    const address = normalizeAddressOrNull((account as Record<string, unknown>).address)
-    if (address) return address
-  }
-
-  for (const account of linkedAccounts) {
-    const nestedWallets = Array.isArray((account as Record<string, unknown>).embeddedWallets)
-      ? (account as Record<string, unknown>).embeddedWallets
-      : Array.isArray((account as Record<string, unknown>).embedded_wallets)
-        ? (account as Record<string, unknown>).embedded_wallets
-        : []
-    const nestedAddress = pickPrivyEmbeddedEoaAddressFromWallets(nestedWallets)
-    if (nestedAddress) return nestedAddress
-  }
-
-  return null
+  const walletCandidates = extractPrivyWalletsFromUser(user)
+  return pickPrivyEmbeddedEoaAddressFromWallets(walletCandidates)
 }
 
 type CreateWalletFn = (() => Promise<unknown>) | null
@@ -95,16 +144,6 @@ function useSafePrivy() {
   }
 }
 
-function useSafeWallets() {
-  try {
-    return useWallets() as any
-  } catch {
-    return {
-      wallets: [],
-    } as any
-  }
-}
-
 function useSafeCreateWallet() {
   try {
     return useCreateWallet() as any
@@ -117,13 +156,13 @@ function useSafeCreateWallet() {
 
 export function useEnsurePrivyEmbeddedWallet() {
   const privy = useSafePrivy()
-  const { wallets } = useSafeWallets()
   const { createWallet } = useSafeCreateWallet()
   const [isCreatingEmbeddedWallet, setIsCreatingEmbeddedWallet] = useState(false)
+  const wallets = useMemo(() => extractPrivyWalletsFromUser(privy.user), [privy.user])
 
   const embeddedEoaAddress = useMemo(() => {
-    return pickPrivyEmbeddedEoaAddressFromWallets(wallets) ?? pickPrivyEmbeddedEoaAddressFromUser(privy.user)
-  }, [privy.user, wallets])
+    return pickPrivyEmbeddedEoaAddressFromWallets(wallets)
+  }, [wallets])
 
   const snapshotRef = useRef<EmbeddedWalletSnapshot>({
     authenticated: Boolean(privy.authenticated),

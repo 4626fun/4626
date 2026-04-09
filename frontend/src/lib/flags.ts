@@ -47,10 +47,23 @@ function getPrivyAllowedOrigins(): Set<string> {
   return new Set(list.length > 0 ? list : Array.from(DEFAULT_PRIVY_ALLOWED_ORIGINS))
 }
 
+function isLoopbackOrigin(origin: string): boolean {
+  try {
+    const hostname = new URL(origin).hostname.toLowerCase()
+    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]'
+  } catch {
+    return false
+  }
+}
+
 function isPrivyOriginAllowed(): boolean {
   const origin = getCurrentOrigin()
   if (!origin) return true
-  return getPrivyAllowedOrigins().has(origin)
+  if (getPrivyAllowedOrigins().has(origin)) return true
+  // Local dev often runs multiple Vite ports in parallel (for isolated browser checks).
+  // Keep Privy available on loopback origins so auth hooks do not crash on those routes.
+  if (import.meta.env.DEV && isLoopbackOrigin(origin)) return true
+  return false
 }
 
 export function isPrivyHostModeAllowed(mode: HostMode): boolean {

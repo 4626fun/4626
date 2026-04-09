@@ -65,7 +65,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } satisfies ApiEnvelope<RequestAccessResponse>)
       }
 
-      const body = (await readJsonBody<RequestBody>(req)) ?? {}
+      const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
       const coinRaw = typeof body?.coin === 'string' ? body.coin.trim() : ''
       const coin = isAddressLike(coinRaw) ? (coinRaw.toLowerCase() as `0x${string}`) : null
       const now = new Date().toISOString()
@@ -146,7 +146,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<RequestAccessResponse>)
   }
 
-  const body = (await readJsonBody<RequestBody>(req)) ?? {}
+  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
   const coinRaw = typeof body?.coin === 'string' ? body.coin.trim() : ''
   const coin = isAddressLike(coinRaw) ? (coinRaw.toLowerCase() as `0x${string}`) : null
 

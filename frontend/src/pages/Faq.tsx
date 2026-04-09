@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { isValidElement, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, ChevronDown, Search, ShieldCheck, X } from 'lucide-react'
@@ -10,7 +10,7 @@ import { META, PageMeta } from '@/components/seo/PageMeta'
 type FaqItem = {
   id: string
   question: string
-  answer: React.ReactNode
+  answer: ReactNode
   search: string
 }
 
@@ -26,7 +26,7 @@ function ExternalLink({
   children,
 }: {
   href: string
-  children: React.ReactNode
+  children: ReactNode
 }) {
   return (
     <a
@@ -47,6 +47,20 @@ const surfaceInteractive =
   'transition-colors hover:border-white/10 hover:ring-white/10'
 
 const SHARE_TOKEN = `${SHARE_SYMBOL_PREFIX}TOKEN`
+
+function faqNodeToPlainText(node: ReactNode): string {
+  if (node === null || node === undefined || typeof node === 'boolean') return ''
+  if (typeof node === 'string' || typeof node === 'number') return String(node)
+  if (Array.isArray(node)) return node.map((child) => faqNodeToPlainText(child)).join(' ')
+  if (isValidElement<{ children?: ReactNode }>(node)) {
+    return faqNodeToPlainText(node.props.children)
+  }
+  return ''
+}
+
+function normalizeSchemaText(node: ReactNode): string {
+  return faqNodeToPlainText(node).replace(/\s+/g, ' ').trim()
+}
 
 function FaqAccordionItem({
   item,
@@ -673,6 +687,23 @@ export function Faq() {
     () => sections.reduce((sum, s) => sum + s.items.length, 0),
     [sections],
   )
+  const faqSchema = useMemo(
+    () => ({
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: FAQ_SECTIONS.flatMap((section) =>
+        section.items.map((item) => ({
+          '@type': 'Question',
+          name: item.question,
+          acceptedAnswer: {
+            '@type': 'Answer',
+            text: normalizeSchemaText(item.answer) || item.search,
+          },
+        })),
+      ),
+    }),
+    [],
+  )
 
   const visibleItemIds = useMemo(() => sections.flatMap((s) => s.items.map((i) => i.id)), [sections])
   const effectiveActiveSection = useMemo(() => {
@@ -753,7 +784,12 @@ export function Faq() {
 
   return (
     <div className="relative">
-      <PageMeta title={META.faq.title} description={META.faq.description} canonicalPath="/faq" />
+      <PageMeta
+        title={META.faq.title}
+        description={META.faq.description}
+        canonicalPath="/faq"
+        structuredData={faqSchema}
+      />
       <section className="cinematic-section">
         <div className="max-w-6xl mx-auto px-4 sm:px-6">
           <motion.div

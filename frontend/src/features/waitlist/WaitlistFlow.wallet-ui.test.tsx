@@ -97,6 +97,7 @@ vi.mock('@/lib/privy/client', () => ({
 }))
 
 vi.mock('@/lib/privy/embeddedWallet', () => ({
+  extractPrivyWalletsFromUser: () => [],
   useEnsurePrivyEmbeddedWallet: () => ({
     ensureEmbeddedWallet: async () => ({ address: '0x0000000000000000000000000000000000000042' }),
   }),

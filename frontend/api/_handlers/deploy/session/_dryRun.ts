@@ -9,6 +9,9 @@ import {
   setCors,
   setNoStore,
   isDbConfigured,
+  checkRateLimit,
+  RATE_LIMITS,
+  rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
@@ -196,7 +199,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<null>)
   }
 
-  const body = await readJsonBody<CreateDeploySessionRequest>(req)
+  const limiter = checkRateLimit(
+    rateLimitKey('deploy-session-dry-run', auth.address.toLowerCase()),
+    RATE_LIMITS.deploySessionDryRun,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Too many dry-run attempts' } satisfies ApiEnvelope<null>)
+  }
+
+  const body = await readJsonBody<CreateDeploySessionRequest>(req, { maxBytes: 512_000 })
   if (!body) {
     return res.status(400).json({ success: false, error: 'Invalid JSON body' } satisfies ApiEnvelope<null>)
   }

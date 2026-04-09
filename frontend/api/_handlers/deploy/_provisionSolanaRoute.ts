@@ -12,6 +12,10 @@ import {
   setCors,
   setNoStore,
   logger,
+  checkRateLimit,
+  RATE_LIMITS,
+  rateLimitKey,
+  getClientIp,
 } from '../../../packages/server-core/src/index.js'
 
 
@@ -101,7 +105,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Unauthorized' } satisfies ApiEnvelope<never>)
   }
 
-  const body = await readJsonBody<ProvisionRouteRequest>(req)
+  const limiter = checkRateLimit(
+    rateLimitKey('solana-route-provision', getClientIp(req)),
+    RATE_LIMITS.solanaRouteProvision,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Too many provision requests' } satisfies ApiEnvelope<never>)
+  }
+
+  const body = await readJsonBody<ProvisionRouteRequest>(req, { maxBytes: 16_384 })
   const bridgeTokenRaw = typeof body?.bridgeToken === 'string' ? body.bridgeToken.trim() : ''
   if (!isAddress(bridgeTokenRaw)) {
     return res.status(400).json({ success: false, error: 'Invalid bridgeToken address' } satisfies ApiEnvelope<never>)

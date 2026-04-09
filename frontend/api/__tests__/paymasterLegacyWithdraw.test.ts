@@ -60,7 +60,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
   handleOptions: vi.fn(() => false),
   setCors: vi.fn(),
   setNoStore: vi.fn(),
-  readJsonBody: (req: { body?: unknown }) => readJsonBodyMock(req),
+  readJsonBody: (...args: unknown[]) => readJsonBodyMock(...args),
 }))
 
 vi.mock('../../server/_lib/coinParties.js', () => ({

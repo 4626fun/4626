@@ -31,6 +31,10 @@ import {
   setCors,
   setNoStore,
   guardAgentApiRequest,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from '../../../../../packages/server-core/src/index.js'
 
 
@@ -69,7 +73,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/agents/identity/set-agent-wallet', kind: 'write' })
   if (!g.ok) return
 
-  const body = await readJsonBody<Record<string, unknown>>(req)
+  const limiter = checkRateLimit(
+    rateLimitKey('v1-agent-identity-set-wallet', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
+    RATE_LIMITS.agentIdentitySetWallet,
+  )
+  if (!limiter.allowed) {
+    return res.status(429).json({ success: false, error: 'Too many requests' })
+  }
+
+  const body = await readJsonBody<Record<string, unknown>>(req, { maxBytes: 8_192 })
   const action = String(body?.action ?? 'prepare').trim().toLowerCase()
   const agentIdRaw = String(body?.agentId ?? '').trim()
   const newWalletRaw = String(body?.newWallet ?? '').trim()

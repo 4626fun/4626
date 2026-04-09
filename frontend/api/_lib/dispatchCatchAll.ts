@@ -1,7 +1,9 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { enforceCookieSessionTrustedOrigin } from '../../packages/server-core/src/auth.js'
+import { enforceCookieSessionTrustedOrigin, setNoStore } from '../../packages/server-core/src/auth.js'
 
 type ApiHandler = (req: VercelRequest, res: VercelResponse) => unknown | Promise<unknown>
+const MAX_API_SUBPATH_LENGTH = 256
+const ALLOWED_HTTP_METHODS = new Set(['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS', 'HEAD'])
 
 function firstQueryPathSegment(value: unknown): string {
   if (typeof value === 'string' && value.trim()) return value.trim()
@@ -53,11 +55,22 @@ function getApiSubpath(req: VercelRequest, prefixes: string[]): string {
 function isSafeSubpath(p: string): boolean {
   if (p === '') return true
   if (!p) return false
+  if (p.length > MAX_API_SUBPATH_LENGTH) return false
   if (p.includes('\\')) return false
   if (p.includes('..')) return false
   if (p.includes('%')) return false
   if (p.includes('\0')) return false
   return /^[a-zA-Z0-9/_\.-]+$/.test(p)
+}
+
+function setApiSecurityHeaders(res: VercelResponse) {
+  try {
+    res.setHeader('X-Content-Type-Options', 'nosniff')
+    res.setHeader('X-Frame-Options', 'DENY')
+    res.setHeader('Referrer-Policy', 'no-referrer')
+  } catch {
+    // ignore header errors in edge cases where the response is already finalized
+  }
 }
 
 export async function dispatchCatchAllRequest(params: {
@@ -72,13 +85,22 @@ export async function dispatchCatchAllRequest(params: {
 
   let subpath = ''
   try {
+    setApiSecurityHeaders(res)
+    const method = String(req.method ?? '').trim().toUpperCase()
+    if (!ALLOWED_HTTP_METHODS.has(method)) {
+      setNoStore(res)
+      return res.status(405).json({ success: false, error: 'Method not allowed' })
+    }
+
     subpath = getApiSubpath(req, prefixes)
     if (!isSafeSubpath(subpath)) {
+      setNoStore(res)
       return res.status(404).json({ success: false, error: 'Not found' })
     }
 
     const handler = await resolveHandler(subpath)
     if (!handler) {
+      setNoStore(res)
       return res.status(404).json({ success: false, error: 'Not found' })
     }
 
@@ -105,11 +127,7 @@ export async function dispatchCatchAllRequest(params: {
       })
     }
 
-    try {
-      if (!res.headersSent) res.setHeader('Cache-Control', 'no-store')
-    } catch {
-      // ignore
-    }
+    setNoStore(res)
     return res.status(500).json({ success: false, error: 'Internal server error' })
   }
 }

@@ -5,6 +5,8 @@ import { getAddress, type Address } from 'viem'
 import type { DeploySessionRecord } from '../../../../server/_lib/deploySessions.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 
+const DEPLOY_SESSION_ID_RE = /^[A-Za-z0-9_-]{1,128}$/
+
 export class DeploySessionAccessError extends Error {
   status: number
 
@@ -13,6 +15,12 @@ export class DeploySessionAccessError extends Error {
     this.name = 'DeploySessionAccessError'
     this.status = status
   }
+}
+
+export function normalizeDeploySessionId(value: unknown): string | null {
+  const sessionId = typeof value === 'string' ? value.trim() : ''
+  if (!sessionId) return null
+  return DEPLOY_SESSION_ID_RE.test(sessionId) ? sessionId : null
 }
 
 export async function loadAuthorizedDeploySession(params: {

@@ -2,11 +2,13 @@ export type UniswapErrorCode =
   | 'INSUFFICIENT_FUNDS'
   | 'INSUFFICIENT_GAS'
   | 'AUTH_REQUIRED'
+  | 'FORBIDDEN_ORIGIN'
   | 'APPROVAL_REQUIRED'
   | 'QUOTE_EXPIRED'
   | 'CHAIN_MISMATCH'
   | 'SLIPPAGE_EXCEEDED'
   | 'RATE_LIMITED'
+  | 'RPC_UNAVAILABLE'
   | 'WALLET_REJECTED'
   | 'NONCE_CONFLICT'
   | 'NETWORK_TIMEOUT'
@@ -80,6 +82,19 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
     }
   }
 
+  // Trusted-origin / cookie-session CSRF guard and forbidden request surfaces
+  if (
+    msg.includes('forbidden') ||
+    msg.includes('trusted origin') ||
+    msg.includes('origin or session policy')
+  ) {
+    return {
+      code: 'FORBIDDEN_ORIGIN',
+      message: 'Request blocked by origin/session policy. Refresh and sign in again on the app domain.',
+      retryable: true,
+    }
+  }
+
   // Quote expired
   if (msg.includes('expired') || msg.includes('stale quote') || msg.includes('deadline')) {
     return {
@@ -112,6 +127,21 @@ export function normalizeUniswapError(input: unknown): NormalizedUniswapError {
     return {
       code: 'RATE_LIMITED',
       message: 'Too many requests. Wait a moment and try again.',
+      retryable: true,
+    }
+  }
+
+  // RPC proxy / upstream availability
+  if (
+    msg.includes('rpc_upstream') ||
+    msg.includes('upstream rpc') ||
+    msg.includes('rpc proxy') ||
+    msg.includes('rpc request timeout') ||
+    msg.includes('rpc unavailable')
+  ) {
+    return {
+      code: 'RPC_UNAVAILABLE',
+      message: 'RPC provider is temporarily unavailable. Retry in a few seconds.',
       retryable: true,
     }
   }

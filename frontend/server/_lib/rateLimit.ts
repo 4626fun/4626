@@ -83,12 +83,66 @@ export const RATE_LIMITS = {
   cswLink: { windowMs: 60_000, maxRequests: 10 },
   // Deploy session creation: 3 per minute per address
   deployCreate: { windowMs: 60_000, maxRequests: 3 },
+  // Deploy session start wrapper: 20 per minute per address
+  deploySessionStart: { windowMs: 60_000, maxRequests: 20 },
+  // Deploy session status polling: 240 per minute per address
+  deploySessionStatus: { windowMs: 60_000, maxRequests: 240 },
+  // Deploy session continue attempts: 30 per minute per address
+  deploySessionContinue: { windowMs: 60_000, maxRequests: 30 },
+  // Deploy session cancellation attempts: 20 per minute per address
+  deploySessionCancel: { windowMs: 60_000, maxRequests: 20 },
+  // Deploy dry-run requests: 10 per minute per address
+  deploySessionDryRun: { windowMs: 60_000, maxRequests: 10 },
+  // Solana route provisioning calls: 20 per minute per client IP
+  solanaRouteProvision: { windowMs: 60_000, maxRequests: 20 },
+  // Solana canonical wallet mutation: 30 per minute per principal
+  solanaSetCanonical: { windowMs: 60_000, maxRequests: 30 },
+  // Solana sweep enqueue: 20 per minute per principal
+  solanaSweepEnqueue: { windowMs: 60_000, maxRequests: 20 },
+  // Solana sweep processor trigger: 30 per minute per client IP
+  solanaSweepProcess: { windowMs: 60_000, maxRequests: 30 },
+  // Smart-wallet owner read endpoints: 120 per minute per client IP
+  smartWalletOwnerRead: { windowMs: 60_000, maxRequests: 120 },
   // Admin actions: 30 per minute per address
   adminAction: { windowMs: 60_000, maxRequests: 30 },
   // Creative generation API: 30 per minute per IP
   agentCreative: { windowMs: 60_000, maxRequests: 30 },
-  // OpenClaw creative adapter: 20 per minute per actor+IP
-  openclawCreativeAdapter: { windowMs: 60_000, maxRequests: 20 },
+  // Agent access proof request minting: 40 per minute per principal
+  agentAccessProofRequest: { windowMs: 60_000, maxRequests: 40 },
+  // Agent access proof verification: 40 per minute per principal
+  agentAccessProofVerify: { windowMs: 60_000, maxRequests: 40 },
+  // Agent join token consumption (XMTP/Telegram): 60 per minute per principal
+  agentAccessJoin: { windowMs: 60_000, maxRequests: 60 },
+  // Agent identity wallet binding payload generation/encoding: 30 per minute per principal
+  agentIdentitySetWallet: { windowMs: 60_000, maxRequests: 30 },
+  // Agent feedback calldata builder: 40 per minute per principal
+  agentFeedbackSubmit: { windowMs: 60_000, maxRequests: 40 },
+  // Paid agent technical review generation: 20 per minute per principal
+  agentFeedbackReview: { windowMs: 60_000, maxRequests: 20 },
+  // Chat command preflight checks: 120 per minute per client IP
+  chatCommandPreflight: { windowMs: 60_000, maxRequests: 120 },
+  // Chat telemetry ingestion: 180 per minute per client IP
+  chatTelemetry: { windowMs: 60_000, maxRequests: 180 },
+  // Workspace action mutations: 40 per minute per principal
+  workspaceActions: { windowMs: 60_000, maxRequests: 40 },
+  // Creator quickstart onboarding: 20 per minute per principal
+  creatorQuickstart: { windowMs: 60_000, maxRequests: 20 },
+  // CRE runtime ingest reads: 120 per minute per client IP
+  creRuntimeIngestRead: { windowMs: 60_000, maxRequests: 120 },
+  // CRE runtime ingest writes: 60 per minute per client IP
+  creRuntimeIngestWrite: { windowMs: 60_000, maxRequests: 60 },
+  // CRE runtime decisions writes: 60 per minute per client IP
+  creRuntimeDecisionsWrite: { windowMs: 60_000, maxRequests: 60 },
+  // CRE runtime trigger writes: 30 per minute per client IP
+  creRuntimeTriggerWrite: { windowMs: 60_000, maxRequests: 30 },
+  // Ajna calldata build endpoints: 120 per minute per principal
+  buildAjnaCalldata: { windowMs: 60_000, maxRequests: 120 },
+  // Auction submitBid calldata build endpoint: 80 per minute per principal
+  buildAuctionSubmitBid: { windowMs: 60_000, maxRequests: 80 },
+  // Gauge vote calldata build endpoint: 80 per minute per principal
+  buildGaugeVote: { windowMs: 60_000, maxRequests: 80 },
+  // ve4626 lock/increase/extend calldata build endpoints: 80 per minute per principal
+  buildVe4626Calldata: { windowMs: 60_000, maxRequests: 80 },
   // General API: 60 per minute per IP
   general: { windowMs: 60_000, maxRequests: 60 },
 } as const
@@ -98,14 +152,26 @@ export const RATE_LIMITS = {
  */
 export function getClientIp(req: { headers?: Record<string, any> }): string {
   const h = req?.headers ?? {}
-  const xf = h['x-forwarded-for']
-  if (typeof xf === 'string' && xf.trim()) {
-    return xf.split(',')[0]?.trim() || 'unknown'
+  const firstHeaderValue = (value: unknown): string => {
+    if (Array.isArray(value)) {
+      return value.find((entry) => typeof entry === 'string' && entry.trim().length > 0)?.trim() ?? ''
+    }
+    return typeof value === 'string' ? value.trim() : ''
   }
-  if (Array.isArray(xf) && xf.length > 0) {
-    const first = String(xf[0] ?? '').trim()
-    if (first) return first
+  const extractFirstIp = (value: string): string => value.split(',')[0]?.trim() ?? ''
+
+  const fromVercel = extractFirstIp(firstHeaderValue(h['x-vercel-forwarded-for']))
+  if (fromVercel) return fromVercel
+
+  const fromRealIp = extractFirstIp(firstHeaderValue(h['x-real-ip']))
+  if (fromRealIp) return fromRealIp
+
+  const nodeEnv = String(process.env.NODE_ENV ?? '').trim().toLowerCase()
+  if (nodeEnv !== 'production') {
+    const fromForwarded = extractFirstIp(firstHeaderValue(h['x-forwarded-for']))
+    if (fromForwarded) return fromForwarded
   }
+
   return 'unknown'
 }
 

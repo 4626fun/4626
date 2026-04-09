@@ -3,7 +3,15 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createPublicClient, encodeAbiParameters, getAddress, http, type Address, type Hex } from 'viem'
 import { base } from 'viem/chains'
 
-import { handleOptions, readJsonBody, setCors, setNoStore } from '../../../../packages/server-core/src/index.js'
+import {
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  checkRateLimit,
+  RATE_LIMITS,
+  rateLimitKey,
+} from '../../../../packages/server-core/src/index.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 
@@ -118,7 +126,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<null>)
   }
 
-  const body = await readJsonBody<StartRequest>(req)
+  const limiter = checkRateLimit(
+    rateLimitKey('deploy-session-start', auth.address.toLowerCase()),
+    RATE_LIMITS.deploySessionStart,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Too many start attempts' } satisfies ApiEnvelope<null>)
+  }
+
+  const body = await readJsonBody<StartRequest>(req, { maxBytes: 512_000 })
   if (!body) {
     return res.status(400).json({ success: false, error: 'Invalid JSON body' } satisfies ApiEnvelope<null>)
   }

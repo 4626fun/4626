@@ -113,7 +113,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return respondOk(res, row)
     }
 
-    const body = (await readJsonBody<AutomationBody>(req)) ?? {}
+    const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
 
     if (req.method === 'DELETE') {
       const vaultAddress =

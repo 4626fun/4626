@@ -46,7 +46,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Authentication required (session or SIWA receipt)' })
   }
 
-  const body = (await readJsonBody<RequestBody>(req)) ?? {}
+  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
   // The creator address defaults to the signed-in address.
   const requestedAddress = body.creatorAddress?.trim().toLowerCase() || principalAddress
   const canonicalForPrincipal = await resolveCanonicalSmartWalletAddress(principalAddress)

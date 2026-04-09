@@ -30,6 +30,7 @@ import { resolveVaultByAnyAddress } from '@/lib/onchain/vaultResolve'
 import { OrbBorder } from '@/components/brand/OrbBorder'
 import { TokenOrb } from '@/components/brand/TokenOrb'
 import { TokenAvatar } from '@/components/swap/TokenAvatar'
+import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugCopy'
 import { SHARE_SYMBOL_PREFIX, toShareSymbol } from '@/lib/tokenSymbols'
 import { CreatorWorkspacePanel } from '@/components/workspace/CreatorWorkspacePanel'
 import { parseVaultWorkspaceQuery, updateVaultWorkspaceQuery } from '@/features/vault/vaultWorkspaceQuery'
@@ -183,6 +184,7 @@ export function Vault() {
   const shareOFTAddress = (resolved?.info.shareOFT ?? (akitaFallback ? (AKITA.shareOFT as Address) : null)) as Address | null
   const vaultAddress = (resolved?.info.vault ?? (akitaFallback ? (AKITA.vault as Address) : null)) as Address | null
   const ccaStrategy = (resolved?.ccaStrategy ?? (akitaFallback ? (AKITA.ccaStrategy as Address) : null)) as Address | null
+  const socialPreviewPath = vaultAddress ? `/vault/${vaultAddress.toLowerCase()}` : null
 
   const underlyingSymbol = useMemo(() => {
     const s = (resolved?.info.symbol ?? '').trim()
@@ -650,6 +652,7 @@ export function Vault() {
                 </div>
 
                 <div className="mt-7 flex flex-col gap-3 border-t border-white/6 pt-5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
+                  {socialPreviewPath ? <ExploreUnfurlDebugCopy path={socialPreviewPath} /> : null}
                   {wrapperAddress ? (
                     <a
                       href={`https://basescan.org/address/${wrapperAddress}`}

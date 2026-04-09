@@ -7,6 +7,7 @@ import { ExploreMetricsDashboard } from '@/components/explore/ExploreMetricsDash
 import { ExploreTableSurface } from '@/components/explore/ExploreTableSurface'
 import { PoolRow, PoolTableHeader, PoolRowSkeleton } from '@/components/explore/PoolRow'
 import { ExploreLoadMoreButton, ExploreLoadingMoreRows, ExploreTableMessage } from '@/components/explore/ExploreUiPrimitives'
+import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugCopy'
 import { useExploreHorizontalTableSync } from '@/components/explore/useExploreHorizontalTableSync'
 import { getExploreColumns, getHorizontalScrollStops } from '@/components/explore/tableColumns'
 import { fetchZoraExplore } from '@/lib/zora/client'
@@ -108,7 +109,14 @@ export function ExploreTrends() {
     <ExplorePageShell
       title="Top Trends on Base"
       subtitle="Trend Coins ranked by trend velocity, volume, and market cap."
-      headerContent={<ExploreMetricsDashboard className="mt-4 sm:mt-6" />}
+      headerContent={
+        <>
+          <div className="mt-3 flex justify-end">
+            <ExploreUnfurlDebugCopy path={`/explore/trends?sort=${encodeURIComponent(currentSort)}&time=${encodeURIComponent(currentTimeFilter)}`} />
+          </div>
+          <ExploreMetricsDashboard className="mt-4 sm:mt-6" />
+        </>
+      }
       subnav={
         <ExploreSubnav
           searchPlaceholder="Search trends"

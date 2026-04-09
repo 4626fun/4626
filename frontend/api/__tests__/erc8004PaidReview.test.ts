@@ -4,6 +4,9 @@ import { createMockReq, createMockRes } from './helpers'
 
 const mocks = vi.hoisted(() => ({
   guardAgentApiRequest: vi.fn(async () => ({ ok: true, ip: '127.0.0.1', auth: null })),
+  checkRateLimit: vi.fn(() => ({ allowed: true, remaining: 19, resetAt: Date.now() + 60_000 })),
+  getClientIp: vi.fn(() => '127.0.0.1'),
+  rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
   evaluateX402Payment: vi.fn(),
   sendPaymentRequiredResponse: vi.fn(),
   setSettlementResponseHeaders: vi.fn(),
@@ -29,6 +32,15 @@ vi.mock('../../server/_lib/erc8004Review.js', () => ({
 
 vi.mock('../../server/_lib/lensGrove.js', () => ({
   tryUploadImmutableJson: mocks.tryUploadImmutableJson,
+}))
+
+vi.mock('../../server/_lib/rateLimit.js', () => ({
+  checkRateLimit: mocks.checkRateLimit,
+  getClientIp: mocks.getClientIp,
+  rateLimitKey: mocks.rateLimitKey,
+  RATE_LIMITS: {
+    agentFeedbackReview: { windowMs: 60_000, maxRequests: 20 },
+  },
 }))
 
 const paidReview = {
@@ -98,6 +110,7 @@ const paidReview = {
 describe('v1/agents/feedback/review', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mocks.checkRateLimit.mockReturnValue({ allowed: true, remaining: 19, resetAt: Date.now() + 60_000 })
     mocks.guardAgentApiRequest.mockResolvedValue({ ok: true, ip: '127.0.0.1', auth: null })
     mocks.sendPaymentRequiredResponse.mockImplementation((_, res, params) =>
       res.status(402).json({
@@ -118,6 +131,18 @@ describe('v1/agents/feedback/review', () => {
       },
     })
     mocks.buildErc8004TechnicalReview.mockResolvedValue(paidReview)
+  })
+
+  it('returns 429 when paid review rate limit is exceeded', async () => {
+    mocks.checkRateLimit.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+    const mod = await import('../_handlers/v1/agents/feedback/_review.ts')
+    const req = createMockReq({ method: 'POST', body: { agentId: 2205 } })
+    const res = createMockRes()
+
+    await mod.default(req, res)
+
+    expect(res.statusCode).toBe(429)
+    expect(res.body?.error).toBe('Too many requests')
   })
 
   it('returns 402 when no payment header has been provided', async () => {

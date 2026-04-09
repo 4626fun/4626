@@ -7,6 +7,9 @@ const {
   readSessionFromRequestMock,
   readSiwaAgentFromRequestMock,
   readJsonBodyMock,
+  checkRateLimitMock,
+  getClientIpMock,
+  rateLimitKeyMock,
   getDbMock,
   isDbConfiguredMock,
   getOrCreateCreatorAgentWalletMock,
@@ -17,6 +20,9 @@ const {
   readSessionFromRequestMock: vi.fn(),
   readSiwaAgentFromRequestMock: vi.fn(),
   readJsonBodyMock: vi.fn(async () => ({})),
+  checkRateLimitMock: vi.fn(() => ({ allowed: true, remaining: 19, resetAt: Date.now() + 60_000 })),
+  getClientIpMock: vi.fn(() => '127.0.0.1'),
+  rateLimitKeyMock: vi.fn((...parts: string[]) => parts.join(':')),
   getDbMock: vi.fn(),
   isDbConfiguredMock: vi.fn(() => true),
   getOrCreateCreatorAgentWalletMock: vi.fn(async () => ({
@@ -56,6 +62,15 @@ vi.mock('../../server/auth/_shared.js', () => ({
 
 vi.mock('../../server/auth/_siwa.js', () => ({
   readSiwaAgentFromRequest: readSiwaAgentFromRequestMock,
+}))
+
+vi.mock('../../server/_lib/rateLimit.js', () => ({
+  checkRateLimit: checkRateLimitMock,
+  getClientIp: getClientIpMock,
+  rateLimitKey: rateLimitKeyMock,
+  RATE_LIMITS: {
+    creatorQuickstart: { windowMs: 60_000, maxRequests: 20 },
+  },
 }))
 
 vi.mock('../../server/_lib/postgres.js', () => ({
@@ -146,6 +161,7 @@ describe('v1/creators/quickstart auth parity', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    checkRateLimitMock.mockReturnValue({ allowed: true, remaining: 19, resetAt: Date.now() + 60_000 })
     getDbMock.mockResolvedValue(createDb())
     readSessionFromRequestMock.mockReturnValue(null)
     readSiwaAgentFromRequestMock.mockReturnValue(null)
@@ -164,6 +180,15 @@ describe('v1/creators/quickstart auth parity', () => {
     const res = createMockRes()
     await handler(req as any, res as any)
     expect(res.statusCode).toBe(401)
+  })
+
+  it('returns 429 when quickstart rate limit is exceeded', async () => {
+    checkRateLimitMock.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+    readSessionFromRequestMock.mockReturnValue({ address: '0x00000000000000000000000000000000000000aa' } as any)
+    const req = createMockReq({ method: 'POST' })
+    const res = createMockRes()
+    await handler(req as any, res as any)
+    expect(res.statusCode).toBe(429)
   })
 
   it('accepts session principal', async () => {

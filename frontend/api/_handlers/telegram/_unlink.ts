@@ -32,7 +32,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Unauthorized' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<UnlinkBody>(req).catch(() => null)) ?? (req.body as UnlinkBody | null) ?? {}
+  const body = (await readJsonBody<UnlinkBody>(req, { maxBytes: 8_192 }).catch(() => null)) ?? (req.body as UnlinkBody | null) ?? {}
   const telegramUserId = readTelegramUserId(body.telegramUserId)
   if (!telegramUserId) {
     return res.status(400).json({ success: false, error: 'telegramUserId is required' } satisfies ApiEnvelope<never>)
@@ -85,4 +85,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     canonicalCswAddress: string | null
   }>)
 }
-

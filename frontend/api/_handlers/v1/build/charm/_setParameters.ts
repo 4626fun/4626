@@ -29,13 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!g.ok) return
 
   const body =
-    (await readJsonBody<{
-      strategy: Address
-      maxSwapPercent: string | number | bigint
-      swapSlippageBps: string | number | bigint
-      depositSlippageBps: string | number | bigint
-      swapPoolFee: string | number | bigint
-    }>(req)) ?? ({} as any)
+    (await readJsonBody(req, { maxBytes: 512_000 })) ?? ({} as any)
 
   try {
     const strategy = requireAddress(body.strategy, 'strategy')

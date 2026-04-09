@@ -14,6 +14,9 @@ const mocks = vi.hoisted(() => ({
   handleOptions: vi.fn(() => false),
   readJsonBody: vi.fn(async (req: any) => req.body ?? null),
   guardAgentApiRequest: vi.fn(async () => ({ ok: true, ip: '127.0.0.1', auth: null })),
+  checkRateLimit: vi.fn(() => ({ allowed: true, remaining: 79, resetAt: Date.now() + 60_000 })),
+  getClientIp: vi.fn(() => '127.0.0.1'),
+  rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
   getApiContracts: vi.fn(() => ({
     vaultGaugeVoting: '0x1111111111111111111111111111111111111111',
     ve4626: '0x2222222222222222222222222222222222222222',
@@ -31,6 +34,17 @@ vi.mock('../../server/_lib/agentApiGuard.js', () => ({
 
 vi.mock('../../server/_lib/contracts.js', () => ({
   getApiContracts: mocks.getApiContracts,
+}))
+
+vi.mock('../../server/_lib/rateLimit.js', () => ({
+  checkRateLimit: mocks.checkRateLimit,
+  getClientIp: mocks.getClientIp,
+  rateLimitKey: mocks.rateLimitKey,
+  RATE_LIMITS: {
+    buildAuctionSubmitBid: { windowMs: 60_000, maxRequests: 80 },
+    buildGaugeVote: { windowMs: 60_000, maxRequests: 80 },
+    buildVe4626Calldata: { windowMs: 60_000, maxRequests: 80 },
+  },
 }))
 
 const AUCTION = '0x3333333333333333333333333333333333333333'
@@ -139,10 +153,28 @@ describe('v1 build phase 1 handlers', () => {
     mocks.handleOptions.mockReturnValue(false)
     mocks.readJsonBody.mockImplementation(async (req: any) => req.body ?? null)
     mocks.guardAgentApiRequest.mockResolvedValue({ ok: true, ip: '127.0.0.1', auth: null })
+    mocks.checkRateLimit.mockReturnValue({ allowed: true, remaining: 79, resetAt: Date.now() + 60_000 })
     mocks.getApiContracts.mockReturnValue({
       vaultGaugeVoting: '0x1111111111111111111111111111111111111111',
       ve4626: '0x2222222222222222222222222222222222222222',
     })
+  })
+
+  it('returns 429 when phase1 build rate limit is exceeded', async () => {
+    mocks.checkRateLimit.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        auction: AUCTION,
+        owner: OWNER,
+        maxPriceQ96: '1000000000000',
+        amountWei: '12345',
+      },
+    })
+    const res = createMockRes()
+    await auctionSubmitBidHandler(req, res)
+    expect(res.statusCode).toBe(429)
+    expect(res.body?.error).toBe('Too many requests')
   })
 
   it('returns 405 for non-POST requests', async () => {

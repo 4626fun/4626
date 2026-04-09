@@ -26,6 +26,10 @@ import {
   readRequestPrincipalAddress,
   resolveAuthorizedRequestPrincipal,
   logger,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 
 
@@ -190,7 +194,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<QuickstartRequestBody>(req)) ?? {}
+  const body = (await readJsonBody(req, { maxBytes: 8_192 })) ?? {}
   const enableAutomation = body.enableAutomation === true
 
   // Require authenticated session or SIWA
@@ -199,6 +203,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({
       success: false,
       error: 'Authentication required (session or SIWA receipt)',
+    } satisfies ApiEnvelope<never>)
+  }
+
+  const quickstartRate = checkRateLimit(
+    rateLimitKey('v1-creators-quickstart', principalAddress.toLowerCase(), getClientIp(req)),
+    RATE_LIMITS.creatorQuickstart,
+  )
+  if (!quickstartRate.allowed) {
+    return res.status(429).json({
+      success: false,
+      error: 'Too many requests',
     } satisfies ApiEnvelope<never>)
   }
 

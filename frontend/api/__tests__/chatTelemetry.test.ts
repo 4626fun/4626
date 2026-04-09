@@ -6,14 +6,46 @@ import { createMockReq, createMockRes } from './helpers'
 const { trackChatCommandCenterEventMock } = vi.hoisted(() => ({
   trackChatCommandCenterEventMock: vi.fn(),
 }))
+const { checkRateLimitMock, getClientIpMock, rateLimitKeyMock } = vi.hoisted(() => ({
+  checkRateLimitMock: vi.fn(() => ({ allowed: true, remaining: 179, resetAt: Date.now() + 60_000 })),
+  getClientIpMock: vi.fn(() => '127.0.0.1'),
+  rateLimitKeyMock: vi.fn((...parts: string[]) => parts.join(':')),
+}))
 
 vi.mock('../../server/_lib/chatCommandCenterTelemetry.js', () => ({
   trackChatCommandCenterEvent: trackChatCommandCenterEventMock,
 }))
 
+vi.mock('../../server/_lib/rateLimit.js', () => ({
+  checkRateLimit: checkRateLimitMock,
+  getClientIp: getClientIpMock,
+  rateLimitKey: rateLimitKeyMock,
+  RATE_LIMITS: {
+    chatTelemetry: { windowMs: 60_000, maxRequests: 180 },
+  },
+}))
+
 describe('POST /api/v1/chat/telemetry', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    checkRateLimitMock.mockReturnValue({ allowed: true, remaining: 179, resetAt: Date.now() + 60_000 })
+  })
+
+  it('returns 429 when telemetry rate limit is exceeded', async () => {
+    checkRateLimitMock.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        event: 'chat_command_sent',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(429)
+    expect(res.body?.error).toBe('Too many requests')
+    expect(trackChatCommandCenterEventMock).not.toHaveBeenCalled()
   })
 
   it('rejects payloads with missing event name', async () => {

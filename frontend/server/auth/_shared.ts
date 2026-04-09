@@ -376,7 +376,7 @@ export function clearCookie(req: VercelRequest, res: VercelResponse, name: strin
   setCookie(req, res, name, '', { maxAgeSeconds: 0, httpOnly: true })
 }
 
-export async function readJsonBody<T>(req: VercelRequest, opts: { maxBytes?: number } = {}): Promise<T | null> {
+export async function readJsonBody<T = any>(req: VercelRequest, opts: { maxBytes?: number } = {}): Promise<T | null> {
   // Vercel may populate req.body; our local dev middleware doesn't.
   const b: unknown = (req as any).body
   if (b && typeof b === 'object') return b as T

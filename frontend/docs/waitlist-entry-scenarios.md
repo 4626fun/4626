@@ -25,7 +25,7 @@ We have multiple entry points (web, Base app, Zora, Telegram) and multiple ident
 
 ## API-side rules (authoritative)
 
-`POST /api/waitlist/join` and the auth/bootstrap flows enforce:
+`POST /api/waitlist/bootstrap` and the auth flows enforce:
 
 1. Basic email shape must be valid.
 2. Only Privy-verified email can become the canonical account email.

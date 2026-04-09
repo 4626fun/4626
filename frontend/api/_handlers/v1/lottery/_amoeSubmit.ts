@@ -233,7 +233,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/lottery/amoe/submit', kind: 'read' })
   if (!g.ok) return
 
-  const body = (await readJsonBody<SubmitBody>(req)) ?? {}
+  const body = (await readJsonBody(req, { maxBytes: 16_384 })) ?? {}
   const creatorCoinRaw = typeof body.creatorCoin === 'string' ? body.creatorCoin.trim() : ''
   const message = typeof body.message === 'string' ? body.message : ''
   const signatureRaw = typeof body.signature === 'string' ? body.signature.trim() : ''

@@ -6,11 +6,14 @@ import { createMockReq, createMockRes } from './helpers'
 // Hoisted mocks
 // ---------------------------------------------------------------------------
 
-const { guardMock, tryUploadMock, buildReputationGraphMock, readRequestPrincipalMock } = vi.hoisted(() => ({
+const { guardMock, tryUploadMock, buildReputationGraphMock, readRequestPrincipalMock, checkRateLimitMock, getClientIpMock, rateLimitKeyMock } = vi.hoisted(() => ({
   guardMock: vi.fn(),
   tryUploadMock: vi.fn(),
   buildReputationGraphMock: vi.fn(),
   readRequestPrincipalMock: vi.fn(),
+  checkRateLimitMock: vi.fn(() => ({ allowed: true, remaining: 39, resetAt: Date.now() + 60_000 })),
+  getClientIpMock: vi.fn(() => '127.0.0.1'),
+  rateLimitKeyMock: vi.fn((...parts: string[]) => parts.join(':')),
 }))
 
 // Mock the rate-limit guard so tests don't need a real DB / IP lookup.
@@ -38,6 +41,16 @@ vi.mock('../../server/_lib/reputationGraph.js', () => ({
 
 vi.mock('../../server/_lib/requestPrincipal.js', () => ({
   readRequestPrincipal: readRequestPrincipalMock,
+}))
+
+vi.mock('../../server/_lib/rateLimit.js', () => ({
+  checkRateLimit: checkRateLimitMock,
+  getClientIp: getClientIpMock,
+  rateLimitKey: rateLimitKeyMock,
+  RATE_LIMITS: {
+    agentFeedbackSubmit: { windowMs: 60_000, maxRequests: 40 },
+    agentFeedbackReview: { windowMs: 60_000, maxRequests: 20 },
+  },
 }))
 // ---------------------------------------------------------------------------
 // Helpers
@@ -74,9 +87,19 @@ describe('v1/agents/feedback/submit', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks()
+    checkRateLimitMock.mockReturnValue({ allowed: true, remaining: 39, resetAt: Date.now() + 60_000 })
     guardMock.mockResolvedValue({ ok: true, ip: '127.0.0.1' })
     const mod = await import('../_handlers/v1/agents/feedback/_submit.ts')
     handler = mod.default
+  })
+
+  it('returns 429 when feedback submit rate limit is exceeded', async () => {
+    checkRateLimitMock.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+    const req = createMockReq({ method: 'POST', body: { action: 'give', agentId: 1, value: 5 } })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(429)
+    expect(res.body?.error).toBe('Too many requests')
   })
 
   it('returns 405 for GET', async () => {

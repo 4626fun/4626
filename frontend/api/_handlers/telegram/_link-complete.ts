@@ -70,7 +70,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Database unavailable' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<LinkCompleteBody>(req).catch(() => null)) ?? (req.body as LinkCompleteBody | null) ?? {}
+  const body = (await readJsonBody<LinkCompleteBody>(req, { maxBytes: 16_384 }).catch(() => null)) ?? (req.body as LinkCompleteBody | null) ?? {}
   const sessionToken = asTrimmed(body.sessionToken)
   const linkToken = asTrimmed(body.linkToken ?? '')
   const flowId = asTrimmed(body.flowId ?? '')

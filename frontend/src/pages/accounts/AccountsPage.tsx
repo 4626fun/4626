@@ -25,18 +25,47 @@ export function AccountsPage(props: {
   const [advancedOwnerAddress, setAdvancedOwnerAddress] = useState('')
 
   const {
+    activePrivyWallet,
     advancedBusy,
     busyProvider,
     canShowAdvanced,
+    connectedCanonicalWalletSelected,
+    connectedOwnerState,
     me,
+    ownerSignerAddress,
+    ownerSignerChainId,
     onAddRabbyCoOwner,
     onLinkProvider,
     onUnlinkProvider,
     ownerDelegationFlags,
+    privyWallets,
     privyAuthed,
     providerCards,
     telegramLaunchParamsAvailable,
   } = controller
+
+  const linkedPrivyWalletRows = Array.isArray(privyWallets)
+    ? privyWallets
+        .filter((wallet: any) => typeof wallet?.address === 'string' && wallet.address.length > 0)
+        .map((wallet: any) => ({
+          address: String(wallet.address),
+          type: String(wallet.type ?? 'unknown'),
+          walletClientType: String(wallet.walletClientType ?? wallet.wallet_client_type ?? 'unknown'),
+          chainId: wallet.chainId ?? wallet.chain_id ?? null,
+        }))
+    : []
+  const activePrivyWalletAddress =
+    activePrivyWallet && typeof (activePrivyWallet as any).address === 'string'
+      ? String((activePrivyWallet as any).address)
+      : null
+  const ownerSignerStatus =
+    connectedOwnerState.value === true
+      ? 'Owner verified'
+      : connectedOwnerState.reason === 'network_mismatch'
+        ? 'Switch wallet to Base'
+        : ownerSignerAddress
+          ? 'Owner verification pending'
+          : 'No owner signer connected'
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -87,6 +116,60 @@ export function AccountsPage(props: {
                 </>
               }
             />
+
+            <section className="card rounded-2xl border border-white/10 bg-black/40 p-6 space-y-4">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-medium">Active wallets & signers</h2>
+                  <p className="mt-1 text-sm text-zinc-500">
+                    Current signer state for owner actions and wallet methods currently linked in Privy.
+                  </p>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2">
+                  <div className="text-xs uppercase tracking-wide text-zinc-500">Owner signer</div>
+                  <div className="text-sm text-zinc-200">
+                    {ownerSignerAddress ? shortValue(ownerSignerAddress) : 'No connected signer'}
+                  </div>
+                  <div className="text-xs text-zinc-500">
+                    {ownerSignerChainId ? `Chain ${ownerSignerChainId}` : 'Chain unknown'} · {ownerSignerStatus}
+                  </div>
+                  {connectedCanonicalWalletSelected ? (
+                    <div className="text-xs text-emerald-300">Canonical CSW currently selected as active wallet.</div>
+                  ) : null}
+                </div>
+                <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2">
+                  <div className="text-xs uppercase tracking-wide text-zinc-500">Active Privy wallet</div>
+                  <div className="text-sm text-zinc-200">
+                    {activePrivyWalletAddress ? shortValue(activePrivyWalletAddress) : 'No active Privy wallet'}
+                  </div>
+                  <div className="text-xs text-zinc-500">
+                    {activePrivyWallet
+                      ? `${String((activePrivyWallet as any).type ?? 'unknown')} · ${String((activePrivyWallet as any).walletClientType ?? (activePrivyWallet as any).wallet_client_type ?? 'unknown')}`
+                      : 'No wallet selected in Privy'}
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-xl border border-white/10 bg-black/30 p-4 space-y-2">
+                <div className="text-xs uppercase tracking-wide text-zinc-500">Linked Privy wallets</div>
+                {linkedPrivyWalletRows.length > 0 ? (
+                  <div className="space-y-2">
+                    {linkedPrivyWalletRows.map((wallet) => (
+                      <div key={`${wallet.address}-${wallet.walletClientType}`} className="flex items-center justify-between gap-3 text-xs text-zinc-300">
+                        <span>{shortValue(wallet.address)}</span>
+                        <span className="text-zinc-500">
+                          {wallet.type} · {wallet.walletClientType}
+                          {wallet.chainId ? ` · chain ${wallet.chainId}` : ''}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-xs text-zinc-500">No Privy wallets linked yet.</div>
+                )}
+              </div>
+            </section>
 
             <section className="card rounded-2xl border border-white/10 bg-black/40 p-6 space-y-4">
               <div className="flex items-center justify-between gap-3">

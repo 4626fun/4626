@@ -369,7 +369,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<BootstrapBody>(req).catch(() => null)) ?? (req.body as BootstrapBody | null) ?? {}
+  const body = (await readJsonBody(req, { maxBytes: 512_000 }).catch(() => null)) ?? (req.body as BootstrapBody | null) ?? {}
   const email = normalizeEmail(body?.email)
   const referralCode = normalizeReferralCodeOrNull(body?.referralCode)
   const token = readPrivyToken(req)

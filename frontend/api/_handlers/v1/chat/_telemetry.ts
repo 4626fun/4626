@@ -1,6 +1,16 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../../packages/server-core/src/index.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  readJsonBody,
+  setCors,
+  setNoStore,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
+} from '../../../../packages/server-core/src/index.js'
 import { trackChatCommandCenterEvent } from '../../../../server/_lib/chatCommandCenterTelemetry.js'
 
 type TelemetryBody = {
@@ -21,7 +31,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const body = await readJsonBody<TelemetryBody>(req)
+  const limiter = checkRateLimit(
+    rateLimitKey('v1-chat-telemetry', getClientIp(req)),
+    RATE_LIMITS.chatTelemetry,
+  )
+  if (!limiter.allowed) {
+    return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
+  }
+
+  const body = await readJsonBody(req, { maxBytes: 65_536 })
   const event = typeof body?.event === 'string' ? body.event.trim() : ''
   if (!event) {
     return res.status(400).json({ success: false, error: 'Missing event' } satisfies ApiEnvelope<never>)

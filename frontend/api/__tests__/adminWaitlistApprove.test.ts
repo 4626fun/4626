@@ -8,6 +8,7 @@ const {
   getDbMock,
   getSessionAddressMock,
   isAdminAddressMock,
+  checkRateLimitMock,
   ensureWaitlistSchemaMock,
   logAdminActionMock,
 } = vi.hoisted(() => ({
@@ -15,6 +16,7 @@ const {
   getDbMock: vi.fn(),
   getSessionAddressMock: vi.fn(() => '0x00000000000000000000000000000000000000aa'),
   isAdminAddressMock: vi.fn(() => true),
+  checkRateLimitMock: vi.fn(() => ({ allowed: true, remaining: 99, resetAt: Date.now() + 60_000 })),
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
   logAdminActionMock: vi.fn(async () => {}),
 }))
@@ -28,6 +30,9 @@ vi.mock('../../packages/server-core/src/index.js', () => ({
   isDbConfigured: vi.fn(() => true),
   getSessionAddress: getSessionAddressMock,
   isAdminAddress: isAdminAddressMock,
+  RATE_LIMITS: { adminAction: { windowMs: 60_000, maxRequests: 30 } },
+  checkRateLimit: checkRateLimitMock,
+  rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
   getClientIp: vi.fn(() => '127.0.0.1'),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
@@ -51,6 +56,7 @@ describe('POST /api/admin/waitlist/approve', () => {
     readJsonBodyMock.mockImplementation(async (req: { body?: unknown }) => req.body ?? {})
     getSessionAddressMock.mockReturnValue('0x00000000000000000000000000000000000000aa')
     isAdminAddressMock.mockReturnValue(true)
+    checkRateLimitMock.mockReturnValue({ allowed: true, remaining: 99, resetAt: Date.now() + 60_000 })
   })
 
   it('approves app access without mutating the deploy allowlist', async () => {
@@ -105,5 +111,23 @@ describe('POST /api/admin/waitlist/approve', () => {
         }),
       }),
     )
+  })
+
+  it('returns 429 when admin action rate limit is exceeded', async () => {
+    checkRateLimitMock.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+    getDbMock.mockResolvedValue({ query: vi.fn(), sql: vi.fn() })
+
+    const req = createMockReq({
+      method: 'POST',
+      body: { id: 7 },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(429)
+    expect(res.body).toEqual({ success: false, error: 'Too many requests' })
+    expect(readJsonBodyMock).not.toHaveBeenCalled()
+    expect(getDbMock).not.toHaveBeenCalled()
   })
 })

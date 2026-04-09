@@ -51,7 +51,6 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'debank/totalBalanceBatch': () => import('./debank/_totalBalanceBatch.js'),
   'debank/tokenList': () => import('./debank/_tokenList.js'),
   'deploy/session/cancel': () => import('./deploy/session/_cancel.js'),
-  'deploy/session/bootstrapSwap': () => import('./deploy/session/_bootstrapSwap.js'),
   'deploy/session/continue': () => import('./deploy/session/_continue.js'),
   'deploy/session/create': () => import('./deploy/session/_create.js'),
   'deploy/session/dry-run': () => import('./deploy/session/_dryRun.js'),
@@ -74,13 +73,10 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'status/vaultReport': () => import('./status/_vaultReport.js'),
 
   'sync-creator-metrics': () => import('./_sync-creator-metrics.js'),
-  'sync-vault-data': () => import('./_sync-vault-data.js'),
   'rpc': () => import('./rpc/_proxy.js'),
 
   'token/metadata': () => import('./token/_metadata.js'),
   'tokenlist': () => import('./token/_managedTokenList.js'),
-
-  'openclaw/execute': () => import('./openclaw/_execute.js'),
 
   'admin/creator-access/allowlist': () => import('./admin/creator-access/_allowlist.js'),
   'admin/creator-access/approve': () => import('./admin/creator-access/_approve.js'),

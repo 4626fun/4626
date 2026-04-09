@@ -49,7 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<LinkReadyBody>(req).catch(() => null)) ?? (req.body as LinkReadyBody | null) ?? {}
+  const body = (await readJsonBody<LinkReadyBody>(req, { maxBytes: 16_384 }).catch(() => null)) ?? (req.body as LinkReadyBody | null) ?? {}
   const expectedEmail = normalizeEmail(body.email)
   if (!expectedEmail) {
     return res.status(400).json({ success: false, error: 'email is required' } satisfies ApiEnvelope<never>)

@@ -37,7 +37,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Authentication required (session or SIWA receipt)' })
   }
 
-  const body = (await readJsonBody<EnableBody>(req)) ?? {}
+  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
   const listedPublicly = typeof body.listedPublicly === 'boolean' ? body.listedPublicly : true
 
   try {

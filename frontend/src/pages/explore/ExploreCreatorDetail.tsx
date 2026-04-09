@@ -7,6 +7,7 @@ import { getAddress, isAddress } from 'viem'
 import { useQuery } from '@tanstack/react-query'
 
 import { ExploreCopyButton, ExploreStatRow } from '@/components/explore/ExploreUiPrimitives'
+import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugCopy'
 import { fetchZoraCoin } from '@/lib/zora/client'
 import { useZoraProfile, useZoraProfileCoins } from '@/lib/zora/hooks'
 import type { ZoraCoin, ZoraProfile } from '@/lib/zora/types'
@@ -416,6 +417,8 @@ export function ExploreCreatorDetail() {
     labelClassName: 'text-sm text-zinc-400',
     valueClassName: 'text-sm text-white font-medium',
   } as const
+  const normalizedChain = chain.toLowerCase()
+  const socialPreviewPath = `/explore/creators/${normalizedChain}/${tokenAddress.toLowerCase()}`
 
   return (
     <div className="relative min-h-screen bg-black">
@@ -813,6 +816,7 @@ export function ExploreCreatorDetail() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
+                  <ExploreUnfurlDebugCopy path={socialPreviewPath} className="px-2.5 py-0.5" />
                   <ExploreCopyButton
                     text={tokenAddress}
                     {...copyButtonProps}

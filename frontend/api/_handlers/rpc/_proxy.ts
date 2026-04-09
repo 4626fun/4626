@@ -62,6 +62,7 @@ const EXPECTED_CHAIN_ID_HEX: Record<RpcChain, string> = {
 }
 
 const RETRYABLE_STATUS = new Set([429])
+const ENV_RPC_FAILOVER_STATUS = new Set([401, 403, 404, 405])
 const MAX_ATTEMPTS_PER_RPC = 2
 const RETRY_BACKOFF_MS = [0, 150]
 const RPC_CHAIN_ID_CACHE_TTL_MS = 5 * 60_000
@@ -90,6 +91,7 @@ const RPC_TELEMETRY_WINDOW_MS = clampInteger(
   300_000,
 )
 const RPC_TELEMETRY_MAX_METHOD_KEYS = 24
+const MAX_RPC_BATCH_SIZE = 100
 const rpcChainIdCache = new Map<string, { value: string | null; expiresAt: number }>()
 const rpcRateLimitState = new Map<string, { count: number; resetAt: number }>()
 let rpcInFlightRequests = 0
@@ -395,7 +397,7 @@ async function readRpcChainIdCached(url: string): Promise<string | null> {
 
 function isValidRpcBody(body: unknown): body is JsonRpcRequest | JsonRpcRequest[] {
   if (!body) return false
-  if (Array.isArray(body)) return body.length > 0
+  if (Array.isArray(body)) return body.length > 0 && body.length <= MAX_RPC_BATCH_SIZE
   if (typeof body !== 'object') return false
   const b = body as JsonRpcRequest
   return Boolean(b.method)
@@ -429,6 +431,14 @@ function parseRetryAfterSeconds(value: string | null | undefined): number | null
   const diffMs = at - Date.now()
   if (diffMs <= 0) return 1
   return Math.ceil(diffMs / 1000)
+}
+
+function shouldFailoverFromEnvRpc(params: {
+  status: number
+  rpcUrl: string
+  envRpcUrls: Set<string>
+}): boolean {
+  return params.envRpcUrls.has(params.rpcUrl) && ENV_RPC_FAILOVER_STATUS.has(params.status)
 }
 
 function toRetryAfterSeconds(resetAt: number): number {
@@ -528,6 +538,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     const principalAddress = readRequestPrincipalAddress(req)
     if (!principalAddress) {
+      logger.info('[rpc-proxy][local-guard] unauthenticated request', { chain })
       finalizeTelemetry(401, 'unauthenticated')
       return res.status(401).json({ success: false, error: 'Authentication required' })
     }
@@ -548,6 +559,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       resetAt: rateLimitResetAt,
     })
     if (!principalRateLimit.allowed || !ipRateLimit.allowed) {
+      logger.warn('[rpc-proxy][local-guard] local rate limit exceeded', {
+        chain,
+        principalAddress,
+        clientIp,
+        principalAllowed: principalRateLimit.allowed,
+        ipAllowed: ipRateLimit.allowed,
+      })
       res.setHeader('Retry-After', String(toRetryAfterSeconds(rateLimitResetAt)))
       finalizeTelemetry(429, 'local_rate_limited')
       return res.status(429).json({
@@ -567,10 +585,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const requestedMethods = extractRpcMethods(payload)
     telemetry.methods = requestedMethods
     if (requestedMethods.length === 0) {
+      logger.warn('[rpc-proxy][local-guard] missing method in request', { chain })
       finalizeTelemetry(400, 'missing_method')
       return res.status(400).json({ success: false, error: 'Missing JSON-RPC method' })
     }
     if (requestedMethods.some(isBlockedRpcMethod)) {
+      logger.warn('[rpc-proxy][local-guard] blocked rpc method', {
+        chain,
+        methods: requestedMethods,
+      })
       finalizeTelemetry(400, 'blocked_method')
       return res.status(400).json({ success: false, error: 'Unsupported JSON-RPC method' })
     }
@@ -630,7 +653,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             break
           }
 
-          logger.warn('[rpc-proxy] non-retryable upstream rejection', {
+          if (shouldFailoverFromEnvRpc({ status, rpcUrl: rpc, envRpcUrls })) {
+            lastStatus = status
+            lastError = text || `Upstream RPC fallback candidate (${status})`
+            logger.warn('[rpc-proxy][upstream-env-fallback] skipping rejected env RPC', {
+              chain,
+              status,
+              upstreamHost: readRpcHost(rpc),
+              bodyPreview: (text || '').slice(0, 240),
+            })
+            break
+          }
+
+          logger.warn('[rpc-proxy][upstream-rejected] non-retryable upstream rejection', {
             chain,
             status,
             upstreamHost: readRpcHost(rpc),
@@ -662,7 +697,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       lastStatus,
       lastStatus === 429 ? 'upstream_rate_limited' : 'upstream_failed',
     )
-    logger.warn('[rpc-proxy] upstream request failed', {
+    logger.warn('[rpc-proxy][upstream-failed] upstream request failed', {
       chain,
       status: lastStatus,
       attempts: telemetry.attempts,

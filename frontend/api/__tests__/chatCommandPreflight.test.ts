@@ -7,10 +7,16 @@ const {
   getKeeprVaultByGroupIdMock,
   isCreWriteCommandTextMock,
   readSessionFromRequestMock,
+  checkRateLimitMock,
+  getClientIpMock,
+  rateLimitKeyMock,
 } = vi.hoisted(() => ({
   getKeeprVaultByGroupIdMock: vi.fn(),
   isCreWriteCommandTextMock: vi.fn(),
   readSessionFromRequestMock: vi.fn(),
+  checkRateLimitMock: vi.fn(() => ({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })),
+  getClientIpMock: vi.fn(() => '127.0.0.1'),
+  rateLimitKeyMock: vi.fn((...parts: string[]) => parts.join(':')),
 }))
 
 vi.mock('../../server/_lib/keeprRegistry.js', () => ({
@@ -19,6 +25,15 @@ vi.mock('../../server/_lib/keeprRegistry.js', () => ({
 
 vi.mock('../../server/agent/eliza/plugins/cre/index.js', () => ({
   isCreWriteCommandText: isCreWriteCommandTextMock,
+}))
+
+vi.mock('../../server/_lib/rateLimit.js', () => ({
+  checkRateLimit: checkRateLimitMock,
+  getClientIp: getClientIpMock,
+  rateLimitKey: rateLimitKeyMock,
+  RATE_LIMITS: {
+    chatCommandPreflight: { windowMs: 60_000, maxRequests: 120 },
+  },
 }))
 
 vi.mock('../../server/auth/_shared.js', async () => {
@@ -32,6 +47,7 @@ vi.mock('../../server/auth/_shared.js', async () => {
 describe('POST /api/v1/chat/command-preflight', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    checkRateLimitMock.mockReturnValue({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })
     isCreWriteCommandTextMock.mockReturnValue(false)
     getKeeprVaultByGroupIdMock.mockResolvedValue({
       canonicalOwnerAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -44,6 +60,24 @@ describe('POST /api/v1/chat/command-preflight', () => {
     readSessionFromRequestMock.mockReturnValue({
       address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     })
+  })
+
+  it('returns 429 when preflight rate limit is exceeded', async () => {
+    checkRateLimitMock.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        conversationId: 'group-1',
+        senderWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        command: '/cre tend',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(429)
+    expect(res.body?.error).toBe('Too many requests')
   })
 
   it('allows non-mutating commands', async () => {

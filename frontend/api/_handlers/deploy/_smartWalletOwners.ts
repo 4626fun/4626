@@ -6,6 +6,10 @@ import {
   readJsonBody,
   setCors,
   setNoStore,
+  checkRateLimit,
+  RATE_LIMITS,
+  rateLimitKey,
+  getClientIp,
 } from '../../../packages/server-core/src/index.js'
 
 const DEFAULT_BASE_RPCS = [
@@ -69,7 +73,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const body = req.method === 'POST' ? await readJsonBody<RequestBody>(req) : null
+  const limiter = checkRateLimit(
+    rateLimitKey('smart-wallet-owners-read', getClientIp(req)),
+    RATE_LIMITS.smartWalletOwnerRead,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Too many owner checks' } satisfies ApiEnvelope<never>)
+  }
+
+  const body = req.method === 'POST' ? await readJsonBody<RequestBody>(req, { maxBytes: 8_192 }) : null
   const querySmartWallet = typeof req.query?.smartWallet === 'string' ? req.query.smartWallet : ''
   const bodySmartWallet = typeof body?.smartWallet === 'string' ? body.smartWallet : ''
   const smartWallet = String(querySmartWallet || bodySmartWallet || '').trim()
@@ -161,4 +174,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     error: lastError?.message || 'Failed to read smart wallet owners',
   } satisfies ApiEnvelope<never>)
 }
-

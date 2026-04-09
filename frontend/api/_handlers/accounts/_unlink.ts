@@ -51,7 +51,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Database unavailable' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<UnlinkBody>(req).catch(() => null)) ?? (req.body as UnlinkBody | null) ?? {}
+  const body = (await readJsonBody(req, { maxBytes: 512_000 }).catch(() => null)) ?? (req.body as UnlinkBody | null) ?? {}
   const provider = body.provider
   if (!provider || !ALLOWED_PROVIDERS.has(provider)) {
     return res.status(400).json({ success: false, error: 'Invalid provider' } satisfies ApiEnvelope<never>)

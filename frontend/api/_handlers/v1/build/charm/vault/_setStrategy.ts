@@ -29,7 +29,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/build/charm/vault/setStrategy', kind: 'build' })
   if (!g.ok) return
 
-  const body = (await readJsonBody<Body>(req)) ?? ({} as any)
+  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? ({} as any)
   try {
     const vault = requireAddress(body.vault, 'vault')
     const strategy = requireAddress(body.strategy, 'strategy')

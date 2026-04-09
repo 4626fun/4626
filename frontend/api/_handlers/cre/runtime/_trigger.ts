@@ -7,6 +7,10 @@ import {
   setCors,
   setNoStore,
   logger,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from "../../../../packages/server-core/src/index.js"
 
 import {
@@ -64,7 +68,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: "Method not allowed" } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<TriggerBody>(req)) ?? {}
+  const limiter = checkRateLimit(
+    rateLimitKey("cre-runtime-trigger", getClientIp(req)),
+    RATE_LIMITS.creRuntimeTriggerWrite,
+  )
+  if (!limiter.allowed) {
+    return res.status(429).json({
+      success: false,
+      error: "Too many requests",
+    } satisfies ApiEnvelope<never>)
+  }
+
+  const body = (await readJsonBody(req, { maxBytes: 65_536 })) ?? {}
   const auth = await authenticateRuntimeRequest(req, body, {
     allowUnsignedWhenHmacConfigured: true,
   })

@@ -7,6 +7,7 @@ import { ExplorePageShell } from '@/components/explore/ExplorePageShell'
 import { ExploreTableSurface } from '@/components/explore/ExploreTableSurface'
 import { TokenRow, TokenTableHeader, TokenRowSkeleton } from '@/components/explore/TokenRow'
 import { ExploreLoadMoreButton, ExploreLoadingMoreRows, ExploreTableMessage } from '@/components/explore/ExploreUiPrimitives'
+import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugCopy'
 import { useExploreHorizontalTableSync } from '@/components/explore/useExploreHorizontalTableSync'
 import { getExploreColumns, getHorizontalScrollStops } from '@/components/explore/tableColumns'
 import { fetchZoraCoin, fetchZoraExplore, fetchZoraProfile, fetchZoraProfileCoins } from '@/lib/zora/client'
@@ -628,6 +629,9 @@ export function ExploreCreators() {
           </div>
 
           {metricsStatusLine ? <div className="app-meta-value mt-2 text-right text-zinc-500">{metricsStatusLine}</div> : null}
+          <div className="mt-3 flex justify-end">
+            <ExploreUnfurlDebugCopy path="/explore/creators" />
+          </div>
         </>
       }
       subnav={

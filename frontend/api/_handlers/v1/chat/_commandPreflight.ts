@@ -7,6 +7,10 @@ import {
   readSessionFromRequest,
   setCors,
   setNoStore,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 import { getKeeprVaultByGroupId } from '../../../../server/_lib/keeprRegistry.js'
 import { isCreWriteCommandText } from '../../../../server/agent/eliza/plugins/cre/index.js'
@@ -51,7 +55,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const body = await readJsonBody<PreflightBody>(req)
+  const limiter = checkRateLimit(
+    rateLimitKey('v1-chat-command-preflight', getClientIp(req)),
+    RATE_LIMITS.chatCommandPreflight,
+  )
+  if (!limiter.allowed) {
+    return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
+  }
+
+  const body = await readJsonBody(req, { maxBytes: 16_384 })
   const conversationId = String(body?.conversationId ?? '').trim()
   const senderWallet = String(body?.senderWallet ?? '').trim().toLowerCase()
   const command = String(body?.command ?? '').trim()

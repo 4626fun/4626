@@ -67,7 +67,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Unauthorized' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<BotConfigBody>(req).catch(() => null)) ?? (req.body as BotConfigBody | null) ?? {}
+  const body = (await readJsonBody<BotConfigBody>(req, { maxBytes: 32_768 }).catch(() => null)) ?? (req.body as BotConfigBody | null) ?? {}
   const config = getTelegramWebhookConfig()
   const botToken = resolveTelegramBotToken()
   if (!botToken) {

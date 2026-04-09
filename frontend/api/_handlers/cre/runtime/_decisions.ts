@@ -8,6 +8,10 @@ import {
   setCors,
   setNoStore,
   logger,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from "../../../../packages/server-core/src/index.js"
 
 import {
@@ -123,7 +127,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: "Method not allowed" } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<DecisionBody>(req)) ?? {}
+  const limiter = checkRateLimit(
+    rateLimitKey("cre-runtime-decisions", getClientIp(req)),
+    RATE_LIMITS.creRuntimeDecisionsWrite,
+  )
+  if (!limiter.allowed) {
+    return res.status(429).json({
+      success: false,
+      error: "Too many requests",
+    } satisfies ApiEnvelope<never>)
+  }
+
+  const body = (await readJsonBody(req, { maxBytes: 131_072 })) ?? {}
   const enforceHmac = (process.env.CRE_RUNTIME_ENFORCE_HMAC ?? "false").toLowerCase() === "true"
   const auth = await authenticateRuntimeRequest(req, body, {
     allowUnsignedWhenHmacConfigured: !enforceHmac,

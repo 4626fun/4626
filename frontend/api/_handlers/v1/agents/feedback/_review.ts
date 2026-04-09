@@ -8,6 +8,10 @@ import {
   setCors,
   setNoStore,
   guardAgentApiRequest,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from '../../../../../packages/server-core/src/index.js'
 
 
@@ -61,7 +65,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/agents/feedback/review', kind: 'write' })
   if (!g.ok) return
 
-  const body = (await readJsonBody<ReviewRequest>(req)) ?? {}
+  const limiter = checkRateLimit(
+    rateLimitKey('v1-agent-feedback-review', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
+    RATE_LIMITS.agentFeedbackReview,
+  )
+  if (!limiter.allowed) {
+    return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
+  }
+
+  const body = (await readJsonBody(req, { maxBytes: 65_536 })) ?? {}
   const agentId = Number(body.agentId ?? -1)
   if (!Number.isFinite(agentId) || agentId < 0 || Math.floor(agentId) !== agentId) {
     return res.status(400).json({

@@ -94,6 +94,9 @@ jobs:
       - name: Guard runtime boundaries
         run: pnpm --dir frontend guard:runtime-boundaries
 
+      - name: Guard mutating API body-size caps
+        run: pnpm --dir frontend guard:api-readjsonbody-maxbytes
+
       - name: Guard new test file placement
         run: pnpm --dir frontend guard:test-file-placement
 

@@ -7,6 +7,10 @@ import {
   setCors,
   setNoStore,
   getDb,
+  checkRateLimit,
+  RATE_LIMITS,
+  rateLimitKey,
+  getClientIp,
 } from '../../../../../packages/server-core/src/index.js'
 
 
@@ -46,7 +50,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Unauthorized' } satisfies ApiEnvelope<never>)
   }
 
-  const body = await readJsonBody<Body>(req)
+  const limiter = checkRateLimit(
+    rateLimitKey('solana-sweep-process', getClientIp(req)),
+    RATE_LIMITS.solanaSweepProcess,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Too many processor requests' } satisfies ApiEnvelope<never>)
+  }
+
+  const body = await readJsonBody<Body>(req, { maxBytes: 8_192 })
   const db = await getDb()
   if (!db) {
     return res.status(503).json({ success: false, error: 'Service unavailable' } satisfies ApiEnvelope<never>)
@@ -66,4 +79,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   return res.status(200).json({ success: true, data } satisfies ApiEnvelope<ProcessSweepResponse>)
 }
-

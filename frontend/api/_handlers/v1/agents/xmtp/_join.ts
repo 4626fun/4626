@@ -7,6 +7,10 @@ import {
   setCors,
   setNoStore,
   guardAgentApiRequest,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from '../../../../../packages/server-core/src/index.js'
 
 
@@ -37,7 +41,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   })
   if (!g.ok) return
 
-  const rawBody = (await readJsonBody<Record<string, unknown>>(req)) ?? {}
+  const limiter = checkRateLimit(
+    rateLimitKey('v1-agent-xmtp-join', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
+    RATE_LIMITS.agentAccessJoin,
+  )
+  if (!limiter.allowed) {
+    return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
+  }
+
+  const rawBody = (await readJsonBody<Record<string, unknown>>(req, { maxBytes: 8_192 })) ?? {}
   const parsedBody = joinBodySchema.safeParse(rawBody)
   if (!parsedBody.success) {
     return res.status(400).json({

@@ -25,6 +25,18 @@
     },
     "api/[...path].ts": {
       "maxDuration": 60
+    },
+    "api/social-preview.ts": {
+      "maxDuration": 10
+    },
+    "api/social-preview-debug.ts": {
+      "maxDuration": 10
+    },
+    "api/robots.txt.ts": {
+      "maxDuration": 10
+    },
+    "api/sitemap.xml.ts": {
+      "maxDuration": 10
     }
   },
   "crons": [
@@ -177,6 +189,85 @@
     { "src": "/__api/(.*)", "dest": "/api/$1", "continue": true },
     { "src": "/api/keepr/actions/execute", "dest": "/api/keepr/actions/execute" },
     { "src": "/api/agent/process", "dest": "/api/agent/process" },
+    { "src": "/robots.txt", "dest": "/api/robots.txt" },
+    { "src": "/sitemap.xml", "dest": "/api/sitemap.xml" },
+    {
+      "src": "/explore/creators",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*([Tt]witterbot|[Tt]elegram[Bb]ot|[Ff]acebookexternalhit|[Ss]lackbot|[Dd]iscord[Bb]ot|[Ll]inked[Ii]n[Bb]ot|[Ww]hats[Aa]pp).*"
+        }
+      ],
+      "dest": "/api/social-preview?kind=creator"
+    },
+    {
+      "src": "/explore/creators/([a-zA-Z0-9-]+)/([a-fA-F0-9x]{42})",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*([Tt]witterbot|[Tt]elegram[Bb]ot|[Ff]acebookexternalhit|[Ss]lackbot|[Dd]iscord[Bb]ot|[Ll]inked[Ii]n[Bb]ot|[Ww]hats[Aa]pp).*"
+        }
+      ],
+      "dest": "/api/social-preview?kind=creator&chain=$1&address=$2"
+    },
+    {
+      "src": "/explore/content",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*([Tt]witterbot|[Tt]elegram[Bb]ot|[Ff]acebookexternalhit|[Ss]lackbot|[Dd]iscord[Bb]ot|[Ll]inked[Ii]n[Bb]ot|[Ww]hats[Aa]pp).*"
+        }
+      ],
+      "dest": "/api/social-preview?kind=content"
+    },
+    {
+      "src": "/explore/content/([a-zA-Z0-9-]+)/([a-fA-F0-9x]{42})",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*([Tt]witterbot|[Tt]elegram[Bb]ot|[Ff]acebookexternalhit|[Ss]lackbot|[Dd]iscord[Bb]ot|[Ll]inked[Ii]n[Bb]ot|[Ww]hats[Aa]pp).*"
+        }
+      ],
+      "dest": "/api/social-preview?kind=content&chain=$1&address=$2"
+    },
+    {
+      "src": "/explore/vaults",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*([Tt]witterbot|[Tt]elegram[Bb]ot|[Ff]acebookexternalhit|[Ss]lackbot|[Dd]iscord[Bb]ot|[Ll]inked[Ii]n[Bb]ot|[Ww]hats[Aa]pp).*"
+        }
+      ],
+      "dest": "/api/social-preview?kind=vault"
+    },
+    {
+      "src": "/vault/([a-fA-F0-9x]{42})",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*([Tt]witterbot|[Tt]elegram[Bb]ot|[Ff]acebookexternalhit|[Ss]lackbot|[Dd]iscord[Bb]ot|[Ll]inked[Ii]n[Bb]ot|[Ww]hats[Aa]pp).*"
+        }
+      ],
+      "dest": "/api/social-preview?kind=vault&address=$1"
+    },
+    {
+      "src": "/explore/trends",
+      "has": [
+        {
+          "type": "header",
+          "key": "user-agent",
+          "value": ".*([Tt]witterbot|[Tt]elegram[Bb]ot|[Ff]acebookexternalhit|[Ss]lackbot|[Dd]iscord[Bb]ot|[Ll]inked[Ii]n[Bb]ot|[Ww]hats[Aa]pp).*"
+        }
+      ],
+      "dest": "/api/social-preview?kind=trends"
+    },
     { "src": "/api/v1/token/([a-fA-F0-9x]+)/image", "dest": "/api/token/image?address=$1" },
     { "src": "/api/v1/token/([a-fA-F0-9x]+)/logo\\.(png|svg)", "dest": "/api/token/image?address=$1&format=$2&size=64" },
     { "src": "/api/(.*)", "dest": "/api/[...path]?path=$1" },

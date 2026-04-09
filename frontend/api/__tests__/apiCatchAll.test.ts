@@ -55,6 +55,48 @@ describe('api catch-all hardening', () => {
 
     expect(res.statusCode).toBe(404)
     expect(res.body).toEqual({ success: false, error: 'Not found' })
+    expect(res.getHeader('cache-control')).toBe('no-store')
+    expect(res.getHeader('x-content-type-options')).toBe('nosniff')
+  })
+
+  it('rejects unsupported HTTP methods before route resolution', async () => {
+    const getApiHandler = vi.fn(async () => null)
+    vi.doMock('../_handlers/_routes.js', () => ({ getApiHandler }))
+
+    const mod = await import('../[...path].ts')
+    const handler = mod.default
+
+    const req = createMockReq({
+      method: 'TRACE',
+      query: { path: 'health' },
+      url: '/api/health',
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(405)
+    expect(res.body).toEqual({ success: false, error: 'Method not allowed' })
+    expect(res.getHeader('cache-control')).toBe('no-store')
+    expect(getApiHandler).not.toHaveBeenCalled()
+  })
+
+  it('rejects overly long route subpaths', async () => {
+    const mod = await import('../[...path].ts')
+    const handler = mod.default
+    const longSubpath = `health/${'a'.repeat(300)}`
+    const req = createMockReq({
+      method: 'GET',
+      query: { path: longSubpath },
+      url: `/api/${longSubpath}`,
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(404)
+    expect(res.body).toEqual({ success: false, error: 'Not found' })
+    expect(res.getHeader('cache-control')).toBe('no-store')
   })
 
   it('allows dotted API subpaths like v1/spec.json', async () => {

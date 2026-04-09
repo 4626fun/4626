@@ -1,4 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
+import { apiFetch } from '@/lib/apiBase'
+import { classifyUniswapRequestFailure, warnUniswapRequestOnce } from './requestDiagnostics'
 
 export type PoolHistoryData = {
   tokenAddress: string
@@ -26,24 +28,57 @@ type ApiResponse = {
   error?: string
 }
 
+type UniswapServiceReason =
+  | 'auth-required'
+  | 'forbidden'
+  | 'rate-limited'
+  | 'not-configured'
+  | 'network-error'
+  | 'error'
+
+function toServiceReason(status: number | null): UniswapServiceReason {
+  const failure = classifyUniswapRequestFailure(status)
+  if (failure.code === 'auth-required') return 'auth-required'
+  if (failure.code === 'forbidden') return 'forbidden'
+  if (failure.code === 'rate-limited') return 'rate-limited'
+  if (failure.code === 'not-configured') return 'not-configured'
+  if (failure.code === 'network-error') return 'network-error'
+  return 'error'
+}
+
 async function fetchPoolHistory(
   tokenAddress: string,
   timeframe: string
 ): Promise<PoolHistoryData | null> {
   try {
-    const response = await fetch(
+    const response = await apiFetch(
       `/api/uniswap/poolHistory?token=${encodeURIComponent(tokenAddress)}&timeframe=${timeframe}`
     )
-    
+
     if (!response.ok) {
-      console.error('Pool history fetch failed:', response.status)
+      warnUniswapRequestOnce({
+        scope: 'pool-history',
+        failure: classifyUniswapRequestFailure(response.status),
+        detail: `timeframe=${timeframe}`,
+      })
       return null
     }
-    
-    const result = (await response.json()) as ApiResponse
+
+    const result = (await response.json().catch(() => null)) as ApiResponse | null
+    if (!result?.success || !result.data) {
+      warnUniswapRequestOnce({
+        scope: 'pool-history',
+        failure: classifyUniswapRequestFailure(502),
+        detail: result?.error ?? 'invalid-envelope',
+      })
+      return null
+    }
     return result.data ?? null
-  } catch (error) {
-    console.error('Pool history error:', error)
+  } catch {
+    warnUniswapRequestOnce({
+      scope: 'pool-history-network',
+      failure: classifyUniswapRequestFailure(null),
+    })
     return null
   }
 }
@@ -80,25 +115,30 @@ export function useUniswapServiceStatus() {
     queryFn: async () => {
       try {
         // Try a minimal query to check if service is configured
-        const response = await fetch('/api/uniswap/query', {
+        const response = await apiFetch('/api/uniswap/query', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
+            operation: 'HealthMeta',
             query: 'query HealthMeta { _meta { block { number } } }',
           }),
         })
-        
-        if (response.status === 503) {
-          // Service not configured
-          return { available: false, reason: 'not-configured' }
-        }
-        
+
         if (!response.ok) {
-          return { available: false, reason: 'error' }
+          const failure = classifyUniswapRequestFailure(response.status)
+          warnUniswapRequestOnce({
+            scope: 'status',
+            failure,
+          })
+          return { available: false, reason: toServiceReason(response.status) }
         }
-        
+
         return { available: true, reason: null }
       } catch {
+        warnUniswapRequestOnce({
+          scope: 'status-network',
+          failure: classifyUniswapRequestFailure(null),
+        })
         return { available: false, reason: 'network-error' }
       }
     },

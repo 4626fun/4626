@@ -9,6 +9,9 @@ import {
   getDb,
   readRequestPrincipalAddress,
   resolveAuthorizedRequestPrincipal,
+  checkRateLimit,
+  RATE_LIMITS,
+  rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 
 
@@ -47,7 +50,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<never>)
   }
 
-  const body = await readJsonBody<Body>(req)
+  const limiter = checkRateLimit(
+    rateLimitKey('solana-set-canonical', principalAddress),
+    RATE_LIMITS.solanaSetCanonical,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Too many canonical wallet updates' } satisfies ApiEnvelope<never>)
+  }
+
+  const body = await readJsonBody<Body>(req, { maxBytes: 8_192 })
   const requestedWallet = typeof body?.wallet === 'string' ? body.wallet.trim() : ''
   if (!isValidSolanaAddress(requestedWallet)) {
     return res.status(400).json({ success: false, error: 'Invalid Solana wallet address' } satisfies ApiEnvelope<never>)
@@ -141,4 +153,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   return res.status(200).json({ success: true, data } satisfies ApiEnvelope<SetCanonicalSolanaResponse>)
 }
-

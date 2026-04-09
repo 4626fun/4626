@@ -52,7 +52,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Telegram bot is not configured' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<MiniAppSessionBody>(req).catch(() => null)) ?? (req.body as MiniAppSessionBody | null) ?? {}
+  const body = (await readJsonBody<MiniAppSessionBody>(req, { maxBytes: 16_384 }).catch(() => null)) ?? (req.body as MiniAppSessionBody | null) ?? {}
   const initData = asTrimmed(body.initData ?? '')
   const flowId = asTrimmed(body.flowId ?? '')
   const verified = verifyTelegramMiniAppInitData({

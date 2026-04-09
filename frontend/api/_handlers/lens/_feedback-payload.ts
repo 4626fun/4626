@@ -89,7 +89,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<FeedbackPayloadRequest>(req)) ?? {}
+  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
 
   // Validate required fields
   const agentId = Number(body.agentId ?? -1)

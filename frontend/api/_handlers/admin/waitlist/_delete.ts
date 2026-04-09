@@ -11,6 +11,9 @@ import {
   getSessionAddress,
   isAdminAddress,
   getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 
 
@@ -41,8 +44,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const admin = getSessionAddress(req)
   if (!admin) return res.status(401).json({ success: false, error: 'Sign in required' } satisfies ApiEnvelope<never>)
   if (!isAdminAddress(admin)) return res.status(403).json({ success: false, error: 'Admin only' } satisfies ApiEnvelope<never>)
+  const rate = checkRateLimit(
+    rateLimitKey('admin-waitlist-delete', admin.toLowerCase(), getClientIp(req)),
+    RATE_LIMITS.adminAction,
+  )
+  if (!rate.allowed) {
+    return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
+  }
 
-  const body = (await readJsonBody<Body>(req)) ?? {}
+  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
   const id = typeof body.id === 'number' ? Math.floor(body.id) : NaN
   if (!Number.isFinite(id) || id <= 0) {
     return res.status(400).json({ success: false, error: 'Missing id' } satisfies ApiEnvelope<never>)

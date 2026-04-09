@@ -7,7 +7,7 @@ describe('createPrivyAppearance', () => {
     expect(createPrivyAppearance()).toEqual({
       showWalletLoginFirst: false,
       walletChainType: 'all',
-      walletList: ['coinbase_wallet'],
+      walletList: ['metamask', 'coinbase_wallet', 'detected_ethereum_wallets', 'wallet_connect'],
       landingHeader: 'Continue to 4626',
       loginMessage: 'Use verified email first, or continue with your wallet-native path.',
       theme: '#0f1117',
@@ -18,7 +18,7 @@ describe('createPrivyAppearance', () => {
     expect(createPrivyAppearance({ walletCollisionDetected: true })).toEqual({
       showWalletLoginFirst: false,
       walletChainType: 'all',
-      walletList: ['coinbase_wallet'],
+      walletList: ['coinbase_wallet', 'wallet_connect'],
       landingHeader: 'Continue to 4626',
       loginMessage: 'Use verified email first, or continue with your wallet-native path.',
       theme: '#0f1117',
@@ -29,7 +29,7 @@ describe('createPrivyAppearance', () => {
     expect(createPrivyAppearance({ showWalletLoginFirst: false })).toEqual({
       showWalletLoginFirst: false,
       walletChainType: 'all',
-      walletList: ['coinbase_wallet'],
+      walletList: ['metamask', 'coinbase_wallet', 'detected_ethereum_wallets', 'wallet_connect'],
       landingHeader: 'Continue to 4626',
       loginMessage: 'Use verified email first, or continue with your wallet-native path.',
       theme: '#0f1117',

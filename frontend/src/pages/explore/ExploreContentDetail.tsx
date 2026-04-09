@@ -17,6 +17,7 @@ import { useQuery } from '@tanstack/react-query'
 
 import { PageMeta } from '@/components/seo/PageMeta'
 import { ExploreCopyButton, ExploreStatRow } from '@/components/explore/ExploreUiPrimitives'
+import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugCopy'
 import { fetchZoraCoin } from '@/lib/zora/client'
 import { usePoolHistory } from '@/lib/uniswap/hooks'
 import { getPoolSwaps, getPoolsByToken } from '@/lib/uniswap/client'
@@ -263,6 +264,7 @@ export function ExploreContentDetail() {
   const marketCapUsd = parseNumber(coin?.marketCap)
   const createdLabel = formatDateLabel(coin?.createdAt)
   const canonicalPath = `/explore/content/${chain.toLowerCase()}/${contentCoinAddress}`
+  const socialPreviewPath = `/explore/content/${chain.toLowerCase()}/${contentCoinAddress.toLowerCase()}`
 
   const pairLabel = primaryPool ? `${primaryPool.token0.symbol} / ${primaryPool.token1.symbol}` : `${symbol} / ZORA`
   const token0Price = parseNumber(primaryPool?.token0Price)
@@ -573,16 +575,19 @@ export function ExploreContentDetail() {
             <div className="rounded-2xl border border-white/8 bg-white/3 p-5">
               <div className="flex items-center justify-between mb-3">
                 <div className="text-xs font-medium text-zinc-500">Pool Snapshot</div>
-                <button
-                  type="button"
-                  className="text-zinc-400 hover:text-white transition-colors"
-                  title="Share"
-                  onClick={async () => {
-                    await navigator.clipboard.writeText(window.location.href)
-                  }}
-                >
-                  <Share2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <ExploreUnfurlDebugCopy path={socialPreviewPath} className="px-2.5 py-0.5" />
+                  <button
+                    type="button"
+                    className="text-zinc-400 hover:text-white transition-colors"
+                    title="Share"
+                    onClick={async () => {
+                      await navigator.clipboard.writeText(window.location.href)
+                    }}
+                  >
+                    <Share2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
 
               <ExploreStatRow label="TVL" value={formatUsd(tvlUsd)} />

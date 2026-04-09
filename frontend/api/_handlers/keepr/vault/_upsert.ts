@@ -61,7 +61,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Sign in required' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<UpsertBody>(req)) ?? {}
+  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
   const config = body?.config
   if (!config || typeof config !== 'object') {
     return res.status(400).json({ success: false, error: 'Missing config' } satisfies ApiEnvelope<never>)
