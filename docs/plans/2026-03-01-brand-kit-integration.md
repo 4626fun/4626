@@ -1,6 +1,6 @@
 # 4626 Brand Kit Integration Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Execution note:** Follow this plan task-by-task.
 
 **Goal:** Move the Brand Kit source of truth into this monorepo and make the current app consume shared brand tokens/primitives without breaking routes or behavior.
 

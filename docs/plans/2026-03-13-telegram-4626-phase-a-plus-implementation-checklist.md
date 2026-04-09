@@ -1,6 +1,6 @@
 # Telegram 4626 Phase A+ Implementation Checklist
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Execution note:** Follow this plan task-by-task.
 
 **Goal:** Ship Phase A+ foundation for Telegram-native 4626 trading: link status/unlink, read commands, onboarding menu, and audit/schema plumbing.
 

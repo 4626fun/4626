@@ -1,6 +1,6 @@
 # Ajna Nested-Only Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Execution note:** Follow this plan task-by-task.
 
 **Goal:** Remove the direct `AjnaStrategy` path from the repo and make the nested `CreatorOVault -> ERC4626StrategyAdapter -> AjnaERC4626Vault -> AjnaVaultAuth` stack the only supported Ajna model.
 

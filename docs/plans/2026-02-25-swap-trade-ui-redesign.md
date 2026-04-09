@@ -1,6 +1,6 @@
 # Swap Trade UI Redesign Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Execution note:** Follow this plan task-by-task.
 
 **Goal:** Deliver an aggressive Uniswap + DefiLlama-inspired redesign for `/swap` while preserving current Trading API execution behavior and improving token icon reliability.
 

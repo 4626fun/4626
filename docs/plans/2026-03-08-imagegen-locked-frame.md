@@ -1,6 +1,6 @@
 # Locked Frame + Smart Breakout Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Execution note:** Follow this plan task-by-task.
 
 **Goal:** Make the frame identical across generated token images by moving frame rendering into deterministic code, while allowing breakout only when a subject image supports it.
 

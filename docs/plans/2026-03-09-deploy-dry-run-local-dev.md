@@ -1,6 +1,6 @@
 # Deploy Dry-Run Local Dev Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Execution note:** Follow this plan task-by-task.
 
 **Goal:** Add a one-command local workflow that starts a Base fork and the frontend dev server with the right env overrides for `/deploy` dry-run testing.
 

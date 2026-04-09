@@ -1,6 +1,6 @@
 # FAQ + Status Marketing Canonicalization Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Execution note:** Follow this plan task-by-task.
 
 **Goal:** Make `https://4626.fun/status` the canonical Status page (public read-only) and update `/faq/how-it-works` to link users back to `/faq`, while improving the Status "Verify a vault" flow with an AKITA example.
 

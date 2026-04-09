@@ -1,6 +1,6 @@
 # Imagegen Public Bucket Preview Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Execution note:** Follow this plan task-by-task.
 
 **Goal:** Make the `/admin/imagegen` runtime assumption explicit: the Supabase image bucket should be public for direct preview URLs.
 

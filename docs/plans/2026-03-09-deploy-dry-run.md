@@ -1,6 +1,6 @@
 # Deploy Dry-Run Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Execution note:** Follow this plan task-by-task.
 
 **Goal:** Add a safe operator-facing deploy dry-run that simulates the exact `/deploy` phased payload without creating a session or broadcasting transactions.
 

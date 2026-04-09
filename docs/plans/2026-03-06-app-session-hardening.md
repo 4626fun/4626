@@ -1,6 +1,6 @@
 # App Session Hardening Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Execution note:** Follow this plan task-by-task.
 
 **Goal:** Make `app.4626.fun` reliably reflect a restored 4626 session after cross-origin Privy handoff, without weakening stricter wallet-match checks used by admin/deploy flows.
 

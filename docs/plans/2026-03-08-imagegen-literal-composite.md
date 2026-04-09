@@ -1,6 +1,6 @@
 # Literal Subject Composite Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Execution note:** Follow this plan task-by-task.
 
 **Goal:** Replace the default imagegen runtime path with deterministic literal subject compositing so the uploaded subject image is used directly inside the locked frame instead of being redrawn by OpenAI.
 

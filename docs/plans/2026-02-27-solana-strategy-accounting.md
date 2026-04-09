@@ -1,6 +1,6 @@
 # Solana Strategy Accounting Implementation Plan
 
-> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+> **Execution note:** Follow this plan task-by-task.
 
 **Goal:** Implement a first-class `SolanaStrategy` so Solana exposure is managed under `CreatorOVault` strategy accounting semantics while keeping synchronous Base withdrawals.
 
