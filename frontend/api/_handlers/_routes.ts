@@ -64,8 +64,6 @@ export const apiRouteLoaders: ApiRouteLoaders = {
 
   'health': () => import('./_health.js'),
 
-  'onchain/coinMarketRewardsByCoin': () => import('./onchain/_coinMarketRewardsByCoin.js'),
-  'onchain/coinMarketRewardsCurrency': () => import('./onchain/_coinMarketRewardsCurrency.js'),
   'onchain/coinTradeRewardsBatch': () => import('./onchain/_coinTradeRewardsBatch.js'),
   'onchain/protocolRewardsClaimable': () => import('./onchain/_protocolRewardsClaimable.js'),
   'onchain/protocolRewardsWithdrawn': () => import('./onchain/_protocolRewardsWithdrawn.js'),

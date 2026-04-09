@@ -190,8 +190,6 @@ function localApiRoutesPlugin(): Plugin {
         '/api/waitlist/task-claim': () => import('./api/_handlers/waitlist/_task-claim'),
         '/api/waitlist/update-email': () => import('./api/_handlers/waitlist/_update-email'),
         '/api/waitlist/verify-social': () => import('./api/_handlers/waitlist/_verify-social'),
-        '/api/onchain/coinMarketRewardsByCoin': () => import('./api/_handlers/onchain/_coinMarketRewardsByCoin'),
-        '/api/onchain/coinMarketRewardsCurrency': () => import('./api/_handlers/onchain/_coinMarketRewardsCurrency'),
         '/api/onchain/coinTradeRewardsBatch': () => import('./api/_handlers/onchain/_coinTradeRewardsBatch'),
         '/api/token/metadata': () => import('./api/_handlers/token/_metadata'),
         '/api/token/image': () => import('./api/_handlers/token/_image'),

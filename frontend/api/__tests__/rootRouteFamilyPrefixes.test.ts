@@ -63,5 +63,7 @@ describe('root api route family prefixes', () => {
     expect(await getApiHandler('dexscreener/tokenStatsBatch')).toBeNull()
     expect(await getApiHandler('openclaw/tools')).toBeNull()
     expect(await getApiHandler('creator-wallets/claim')).toBeNull()
+    expect(await getApiHandler('onchain/coinMarketRewardsByCoin')).toBeNull()
+    expect(await getApiHandler('onchain/coinMarketRewardsCurrency')).toBeNull()
   })
 })

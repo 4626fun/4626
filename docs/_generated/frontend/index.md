@@ -113,8 +113,6 @@
 - [api/\_handlers/lens/\_reputation-graph](api/_handlers/lens/_reputation-graph.md)
 - [api/\_handlers/lens/\_share-token-metadata](api/_handlers/lens/_share-token-metadata.md)
 - [api/\_handlers/onboarding/\_bootstrap](api/_handlers/onboarding/_bootstrap.md)
-- [api/\_handlers/onchain/\_coinMarketRewardsByCoin](api/_handlers/onchain/_coinMarketRewardsByCoin.md)
-- [api/\_handlers/onchain/\_coinMarketRewardsCurrency](api/_handlers/onchain/_coinMarketRewardsCurrency.md)
 - [api/\_handlers/onchain/\_coinTradeRewardsBatch](api/_handlers/onchain/_coinTradeRewardsBatch.md)
 - [api/\_handlers/onchain/\_protocolRewardsClaimable](api/_handlers/onchain/_protocolRewardsClaimable.md)
 - [api/\_handlers/onchain/\_protocolRewardsWithdrawn](api/_handlers/onchain/_protocolRewardsWithdrawn.md)
