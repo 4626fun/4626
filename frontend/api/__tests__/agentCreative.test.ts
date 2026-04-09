@@ -304,7 +304,7 @@ describe('agent creative handler', () => {
     })
   })
 
-  it('accepts legacy input payload key as compatibility adapter', async () => {
+  it('rejects legacy input payload key and requires context', async () => {
     const mod = await import('../_handlers/agent/_creative.ts')
     const handler = mod.default
 
@@ -324,16 +324,8 @@ describe('agent creative handler', () => {
 
     await handler(req, res)
 
-    expect(res.statusCode).toBe(200)
-    expect(res.body).toMatchObject({
-      ok: true,
-      mode: 'referral_og',
-      version: 'v1',
-      voice: 'premium_dark_crypto',
-      result: {
-        headline: expect.any(String),
-      },
-    })
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toEqual({ success: false, error: 'Invalid request body' })
   })
 
   it('accepts valid llm envelope when enabled', async () => {

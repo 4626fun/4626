@@ -236,8 +236,6 @@ Managed multi-token list (stable URL for tokenlists ingestion):
 
 - TokenLists-compatible multi-token document:  
   `https://api.4626.fun/api/tokenlist`
-- Optional extension alias (some ingestion pipelines prefer a .json filename):  
-  `https://api.4626.fun/api/tokenlist.json`
 
 When enabled, deploy automation can append newly deployed `shareOFT` addresses into the stable multi-token document so ingestion can pick them up without changing the URL.
 

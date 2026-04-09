@@ -60,9 +60,6 @@ function resolveCreativeContext(input: Record<string, unknown>): Record<string, 
   if (input.context && typeof input.context === 'object' && !Array.isArray(input.context)) {
     return input.context as Record<string, unknown>
   }
-  if (input.input && typeof input.input === 'object' && !Array.isArray(input.input)) {
-    return input.input as Record<string, unknown>
-  }
   return input
 }
 

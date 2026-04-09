@@ -48,7 +48,7 @@ describe('managed tokenlist endpoint', () => {
     expect(handler).toBeTypeOf('function')
 
     const handlerJson = await getApiHandler('tokenlist.json')
-    expect(handlerJson).toBeTypeOf('function')
+    expect(handlerJson).toBeNull()
 
     const req = createMockReq({
       method: 'GET',
@@ -76,4 +76,3 @@ describe('managed tokenlist endpoint', () => {
     expect(String(token.logoURI).startsWith('https://')).toBe(true)
   })
 })
-

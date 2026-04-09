@@ -28,7 +28,6 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
         type: 'object',
         properties: {
           context: { type: 'object', description: 'Creative context payload.' },
-          input: { type: 'object', description: 'Legacy alias for context.' },
         },
       },
       outputSchema: { type: 'object' },
@@ -40,7 +39,6 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
         type: 'object',
         properties: {
           context: { type: 'object', description: 'Creative context payload.' },
-          input: { type: 'object', description: 'Legacy alias for context.' },
         },
       },
       outputSchema: { type: 'object' },
@@ -52,7 +50,6 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
         type: 'object',
         properties: {
           context: { type: 'object', description: 'Quest state payload.' },
-          input: { type: 'object', description: 'Legacy alias for context.' },
         },
       },
       outputSchema: { type: 'object' },
@@ -64,7 +61,6 @@ export default function handler(req: VercelRequest, res: VercelResponse) {
         type: 'object',
         properties: {
           context: { type: 'object', description: 'Metadata context payload.' },
-          input: { type: 'object', description: 'Legacy alias for context.' },
         },
       },
       outputSchema: { type: 'object' },

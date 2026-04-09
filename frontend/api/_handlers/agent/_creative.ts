@@ -37,11 +37,7 @@ const creativeModeSchema = z.enum([
 const creativeRequestSchema = z
   .object({
     mode: creativeModeSchema,
-    context: z.record(z.string(), z.unknown()).optional(),
-    input: z.record(z.string(), z.unknown()).optional(),
-  })
-  .refine((value) => value.context != null || value.input != null, {
-    message: 'context or input is required',
+    context: z.record(z.string(), z.unknown()),
   })
   .strict()
 
@@ -754,7 +750,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const mode = parsedBody.data.mode
-  const context = (parsedBody.data.context ?? parsedBody.data.input ?? {}) as Record<string, unknown>
+  const context = parsedBody.data.context as Record<string, unknown>
   const contextValidationError = getCreativeContextValidationError(context)
   if (contextValidationError) {
     const statusCode = contextValidationError === 'Creative context too large' ? 413 : 400
