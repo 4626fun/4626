@@ -33,8 +33,6 @@
 - [api/\_handlers/admin/creator-access/\_approve](api/_handlers/admin/creator-access/_approve.md)
 - [api/\_handlers/admin/creator-access/\_deny](api/_handlers/admin/creator-access/_deny.md)
 - [api/\_handlers/admin/creator-access/\_list](api/_handlers/admin/creator-access/_list.md)
-- [api/\_handlers/admin/creator-access/\_note](api/_handlers/admin/creator-access/_note.md)
-- [api/\_handlers/admin/creator-access/\_restore](api/_handlers/admin/creator-access/_restore.md)
 - [api/\_handlers/admin/creator-access/\_revoke](api/_handlers/admin/creator-access/_revoke.md)
 - [api/\_handlers/admin/db/\_indexUsage](api/_handlers/admin/db/_indexUsage.md)
 - [api/\_handlers/admin/waitlist/\_approve](api/_handlers/admin/waitlist/_approve.md)

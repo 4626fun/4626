@@ -65,5 +65,7 @@ describe('root api route family prefixes', () => {
     expect(await getApiHandler('creator-wallets/claim')).toBeNull()
     expect(await getApiHandler('onchain/coinMarketRewardsByCoin')).toBeNull()
     expect(await getApiHandler('onchain/coinMarketRewardsCurrency')).toBeNull()
+    expect(await getApiHandler('admin/creator-access/note')).toBeNull()
+    expect(await getApiHandler('admin/creator-access/restore')).toBeNull()
   })
 })
