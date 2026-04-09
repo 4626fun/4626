@@ -3,7 +3,7 @@ import { motion } from 'framer-motion'
 
 import { META, PageMeta } from '@/components/seo/PageMeta'
 import { PrivyClientProvider } from '@/lib/privy/client'
-import { AppQueryProvider } from '@/web3/Web3Providers'
+import { AppQueryProvider, WalletProviders } from '@/web3/Web3Providers'
 
 const LazyWaitlistFlow = lazy(async () => {
   const mod = await import('@/features/waitlist/WaitlistFlow')
@@ -38,15 +38,17 @@ export function Waitlist() {
           >
             <PrivyClientProvider showWalletLoginFirst={false} mode="waitlist-email-only">
               <AppQueryProvider>
-                <Suspense
-                  fallback={
-                    <div className="card rounded-2xl border border-white/10 bg-black/50 p-6 sm:p-8 text-sm text-zinc-400">
-                      Loading…
-                    </div>
-                  }
-                >
-                  <LazyWaitlistFlow sectionId="waitlist-page" />
-                </Suspense>
+                <WalletProviders>
+                  <Suspense
+                    fallback={
+                      <div className="card rounded-2xl border border-white/10 bg-black/50 p-6 sm:p-8 text-sm text-zinc-400">
+                        Loading…
+                      </div>
+                    }
+                  >
+                    <LazyWaitlistFlow sectionId="waitlist-page" />
+                  </Suspense>
+                </WalletProviders>
               </AppQueryProvider>
             </PrivyClientProvider>
           </motion.div>

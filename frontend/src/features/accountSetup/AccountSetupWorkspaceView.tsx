@@ -1,0 +1,409 @@
+import type { ReactNode } from 'react'
+
+import { shortValue } from './shared'
+import type { useAccountSetupController } from './useAccountSetupController'
+
+type AccountSetupWorkspaceController = ReturnType<typeof useAccountSetupController>
+
+export function AccountSetupWorkspaceView(props: {
+  context: 'accounts' | 'waitlist'
+  controller: AccountSetupWorkspaceController
+  summaryActions?: ReactNode
+}) {
+  const { context, controller, summaryActions } = props
+  const {
+    advancedBusy,
+    baseAppUrl,
+    busyProvider,
+    canonicalCswAddress,
+    connectedOwnerReady,
+    connectedSignerDetail,
+    connectedSignerLabel,
+    connectOwnerWallet,
+    cswOwnersState,
+    error,
+    inTelegramMiniApp,
+    loading,
+    me,
+    needsBaseAppSetup,
+    needsEmbeddedWallet,
+    notice,
+    onEnable4626Signing,
+    onLinkZora,
+    onRefreshZora,
+    ownerApprovalReady,
+    ownerAuthorityState,
+    ownerChecklist,
+    ownerInstallResumeState,
+    ownerInstallSectionRef,
+    ownerPrimaryCtaLabel,
+    providerCollision,
+    readableCswOwners,
+    retryOwnerCheck,
+    zoraCrossAppCount,
+    zoraHandoffUrl,
+    zoraLinked,
+  } = controller
+
+  if (loading && !me) {
+    return (
+      <div className="card rounded-2xl border border-white/10 bg-black/40 p-6 text-sm text-zinc-400">
+        Loading account state...
+      </div>
+    )
+  }
+
+  if (!me) return null
+
+  const headerEyebrow = context === 'waitlist' ? 'Waitlist workspace' : 'Accounts'
+  const headerTitle = context === 'waitlist' ? 'Finish setup here' : 'Workspace'
+  const headerBody =
+    context === 'waitlist'
+      ? 'Stay on this page to link Zora, detect your canonical Coinbase Smart Wallet, and enable 4626 signing before app access opens.'
+      : 'Start with Zora. If you already use a Coinbase Smart Wallet there, 4626 keeps that wallet as the primary surface and adds 4626 as an owner so you can continue with the same account.'
+  const summaryTitle = context === 'waitlist' ? 'Account snapshot' : 'Current state'
+  const journeyBadgeClass =
+    'inline-flex items-center rounded-full border px-2.5 py-1 text-[11px] tracking-[0.08em] uppercase'
+
+  return (
+    <div className="space-y-6">
+      {error ? <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">{error}</div> : null}
+      {notice ? <div className="rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">{notice}</div> : null}
+
+      {ownerInstallResumeState.requested ? (
+        <div className="rounded-2xl border border-brand-primary/30 bg-[linear-gradient(180deg,rgba(37,99,235,0.18),rgba(37,99,235,0.06))] px-5 py-4 text-sm text-brand-50 shadow-[0_0_0_1px_rgba(37,99,235,0.08)]">
+          <div className="flex flex-wrap items-center gap-2 text-[11px] uppercase tracking-[0.18em] text-brand-200">
+            <span className="inline-flex rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2.5 py-1">
+              {ownerInstallResumeState.source === 'telegram' ? 'Continue from Telegram' : 'Continue setup'}
+            </span>
+            <span className="text-brand-100/70">Owner install required</span>
+          </div>
+          <div className="mt-2 text-base font-medium text-white">
+            Your Telegram account is linked. Finish wallet setup here.
+          </div>
+          <div className="mt-1 max-w-3xl text-sm leading-relaxed text-brand-50/85">
+            4626 detected your Zora Coinbase Smart Wallet. The next step is to connect one of that wallet&apos;s current owners, verify authority on Base, and approve one transaction so 4626 can act through the same wallet.
+          </div>
+        </div>
+      ) : null}
+
+      {inTelegramMiniApp ? (
+        <div className="rounded-xl border border-amber-400/25 bg-amber-500/10 px-4 py-3 text-sm text-amber-100 space-y-2">
+          <div>
+            You are inside Telegram Mini App. Wallet-owner signatures (MetaMask/Rabby) are more reliable in an external browser context.
+          </div>
+          <a
+            href="/accounts"
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex text-xs font-medium text-amber-200 underline underline-offset-2 hover:text-amber-100"
+          >
+            Open Accounts in browser
+          </a>
+        </div>
+      ) : null}
+
+      <section className="overflow-hidden rounded-[28px] border border-white/10 bg-[radial-gradient(circle_at_top_left,rgba(37,99,235,0.16),transparent_42%),linear-gradient(180deg,rgba(255,255,255,0.03),rgba(255,255,255,0.01))] p-6 sm:p-8">
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1.35fr)_minmax(300px,0.95fr)]">
+          <div className="space-y-5">
+            <div className="space-y-3">
+              <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">{headerEyebrow}</div>
+              <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                <span className={`${journeyBadgeClass} border-brand-primary/30 bg-brand-primary/10 text-brand-200`}>
+                  Zora first
+                </span>
+                <span className={`${journeyBadgeClass} border-white/10 bg-white/5 text-zinc-400`}>
+                  Existing CSW stays primary
+                </span>
+              </div>
+              <div className="space-y-2">
+                <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-[2rem]">{headerTitle}</h2>
+                <p className="max-w-2xl text-sm leading-relaxed text-zinc-300">{headerBody}</p>
+              </div>
+            </div>
+
+            <div className="grid gap-3">
+              <div className="rounded-2xl border border-brand-primary/20 bg-black/30 p-4 sm:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-1.5">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-brand-200">Step 1</div>
+                    <div className="text-base font-medium text-white">Link your Zora identity</div>
+                    <p className="text-sm leading-relaxed text-zinc-400">
+                      Zora is the first pick because it gives us the cleanest path to your existing creator identity and canonical smart wallet.
+                    </p>
+                  </div>
+                  <div className={`rounded-full px-2.5 py-1 text-xs ${
+                    zoraLinked ? 'border border-emerald-400/20 bg-emerald-500/10 text-emerald-200' : 'border border-white/10 bg-white/5 text-zinc-400'
+                  }`}>
+                    {zoraLinked ? 'Linked' : 'Action required'}
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2">
+                  {!zoraLinked ? (
+                    <button
+                      type="button"
+                      disabled={busyProvider === 'zora_cross_app'}
+                      onClick={() => void onLinkZora()}
+                      className="btn-accent btn-no-icon inline-flex"
+                    >
+                      {busyProvider === 'zora_cross_app' ? 'Linking...' : 'Link Zora'}
+                    </button>
+                  ) : null}
+                  <a
+                    href={zoraHandoffUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="btn-secondary btn-no-icon inline-flex"
+                  >
+                    Open Zora
+                  </a>
+                  <button
+                    type="button"
+                    disabled={busyProvider === 'zora_cross_app'}
+                    onClick={() => void onRefreshZora()}
+                    className="btn-secondary btn-no-icon inline-flex"
+                  >
+                    {busyProvider === 'zora_cross_app' ? 'Refreshing...' : 'Refresh Zora signals'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-black/30 p-4 sm:p-5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-1.5">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Step 2</div>
+                    <div className="text-base font-medium text-white">Detect your Coinbase Smart Wallet</div>
+                    <p className="text-sm leading-relaxed text-zinc-400">
+                      If Base app already knows your CSW, we keep using it. If not, finish setup there first, then come back here.
+                    </p>
+                  </div>
+                  <div className={`rounded-full px-2.5 py-1 text-xs ${
+                    canonicalCswAddress ? 'border border-emerald-400/20 bg-emerald-500/10 text-emerald-200' : 'border border-white/10 bg-white/5 text-zinc-400'
+                  }`}>
+                    {canonicalCswAddress ? 'Detected' : needsBaseAppSetup ? 'Base app required' : 'Waiting'}
+                  </div>
+                </div>
+                <div className="mt-4 flex flex-wrap items-center gap-2 text-sm text-zinc-300">
+                  <span className="text-zinc-500">Canonical CSW</span>
+                  <span className="font-mono text-zinc-100">{shortValue(me.accountSignals.canonicalCswAddress)}</span>
+                </div>
+                {needsBaseAppSetup && baseAppUrl ? (
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    <a
+                      href={baseAppUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn-secondary btn-no-icon inline-flex"
+                    >
+                      Open Base app
+                    </a>
+                    <span className="text-xs text-zinc-500">
+                      Create or connect your CSW there, then return here.
+                    </span>
+                  </div>
+                ) : null}
+              </div>
+
+              <section
+                ref={ownerInstallSectionRef}
+                tabIndex={-1}
+                className={`rounded-2xl p-4 sm:p-5 outline-none ${
+                  ownerInstallResumeState.requested
+                    ? 'border border-brand-primary/30 bg-[linear-gradient(180deg,rgba(37,99,235,0.12),rgba(255,255,255,0.02))] shadow-[0_0_0_1px_rgba(37,99,235,0.08)]'
+                    : 'border border-white/10 bg-black/30'
+                }`}
+                aria-label="Owner install step"
+              >
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div className="space-y-1.5">
+                    <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Step 3</div>
+                    <div className="text-base font-medium text-white">Enable 4626 signing on that wallet</div>
+                    <p className="text-sm leading-relaxed text-zinc-400">
+                      This adds the 4626 Privy embedded owner to your existing CSW. Your wallet stays primary; 4626 just gets permission to act through it.
+                    </p>
+                  </div>
+                  <div className={`rounded-full px-2.5 py-1 text-xs ${
+                    ownerApprovalReady
+                      ? 'border border-brand-primary/30 bg-brand-primary/10 text-brand-200'
+                      : ownerAuthorityState.badgeClass
+                  }`}>
+                    {canonicalCswAddress ? ownerPrimaryCtaLabel : 'Blocked'}
+                  </div>
+                </div>
+                {ownerInstallResumeState.requested ? (
+                  <div className="mt-4 rounded-xl border border-brand-primary/20 bg-brand-primary/10 px-3 py-3 text-xs leading-5 text-brand-50/90">
+                    This step was resumed from another surface. Connect a current owner of the detected CSW, verify the signer, then approve the Base transaction below.
+                  </div>
+                ) : null}
+                <div className="mt-4 grid gap-2 md:grid-cols-3">
+                  {ownerChecklist.map((step) => (
+                    <div
+                      key={step.title}
+                      className={`rounded-xl border px-3 py-3 ${
+                        step.state === 'complete'
+                          ? 'border-emerald-400/20 bg-emerald-500/10'
+                          : step.state === 'active'
+                            ? 'border-brand-primary/20 bg-brand-primary/10'
+                            : 'border-white/8 bg-black/20'
+                      }`}
+                    >
+                      <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">{step.title}</div>
+                      <div className="mt-1 text-sm font-medium text-white">
+                        {step.state === 'complete'
+                          ? 'Complete'
+                          : step.state === 'active'
+                            ? 'In progress'
+                            : 'Waiting'}
+                      </div>
+                      <div className="mt-1 text-xs leading-relaxed text-zinc-400">{step.description}</div>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-4 rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3 text-xs text-zinc-300">
+                  <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Owner authority</div>
+                  <div className="mt-1 flex flex-wrap items-center gap-2">
+                    <span className="text-sm text-zinc-100">{ownerAuthorityState.hint}</span>
+                    <span className={`rounded-full px-2.5 py-1 text-[11px] ${ownerAuthorityState.badgeClass}`}>
+                      {ownerAuthorityState.label}
+                    </span>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-3 rounded-xl border border-white/8 bg-black/25 px-3 py-2">
+                    <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Connected signer</div>
+                    <div className="font-mono text-sm text-zinc-100">{connectedSignerLabel}</div>
+                    <div className="text-xs text-zinc-500">{connectedSignerDetail}</div>
+                  </div>
+                  <div className="mt-3 rounded-xl border border-white/8 bg-black/25 px-3 py-3">
+                    <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Current owners</div>
+                    {cswOwnersState.status === 'loading' ? (
+                      <div className="mt-2 text-xs text-zinc-500">Loading current CSW owners...</div>
+                    ) : null}
+                    {cswOwnersState.status === 'error' ? (
+                      <div className="mt-2 text-xs text-rose-300">{cswOwnersState.error ?? 'Failed to load owner list.'}</div>
+                    ) : null}
+                    {cswOwnersState.status !== 'error' && readableCswOwners.length > 0 ? (
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {readableCswOwners.map((owner) => {
+                          const isConnectedOwner =
+                            Boolean(owner.ownerAddress && controller.ownerSignerAddress) &&
+                            owner.ownerAddress!.toLowerCase() === controller.ownerSignerAddress!.toLowerCase()
+                          return (
+                            <span
+                              key={`${owner.index}:${owner.ownerAddress}`}
+                              className={`inline-flex items-center gap-2 rounded-full border px-2.5 py-1 text-[11px] ${
+                                isConnectedOwner
+                                  ? 'border-emerald-400/20 bg-emerald-500/10 text-emerald-200'
+                                  : 'border-white/10 bg-white/5 text-zinc-300'
+                              }`}
+                            >
+                              <span className="font-mono">{shortValue(owner.ownerAddress)}</span>
+                              {isConnectedOwner ? <span>Connected</span> : null}
+                            </span>
+                          )
+                        })}
+                      </div>
+                    ) : null}
+                    {cswOwnersState.status === 'ready' && readableCswOwners.length === 0 ? (
+                      <div className="mt-2 text-xs text-zinc-500">No readable EOA owners were returned for this CSW.</div>
+                    ) : null}
+                  </div>
+                </div>
+                {needsEmbeddedWallet ? (
+                  <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                    Privy embedded wallet provisioning is still settling. Retry signer setup in a moment.
+                  </div>
+                ) : null}
+                {inTelegramMiniApp ? (
+                  <div className="mt-4 rounded-xl border border-amber-400/20 bg-amber-500/10 px-3 py-2 text-xs text-amber-100">
+                    Complete owner-wallet signatures from an external browser tab if you are using MetaMask or Rabby.
+                  </div>
+                ) : null}
+                <div className="mt-4 flex flex-wrap items-center gap-3">
+                  {!connectedOwnerReady ? (
+                    <button
+                      type="button"
+                      onClick={() => connectOwnerWallet()}
+                      className="btn-secondary btn-no-icon inline-flex"
+                    >
+                      Connect owner wallet
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    disabled={advancedBusy || !canonicalCswAddress || !ownerApprovalReady}
+                    onClick={() => void onEnable4626Signing()}
+                    className="btn-primary btn-no-icon inline-flex"
+                  >
+                    {advancedBusy ? 'Preparing...' : ownerPrimaryCtaLabel}
+                  </button>
+                  {!connectedOwnerReady ? (
+                    <button
+                      type="button"
+                      disabled={advancedBusy}
+                      onClick={() => void retryOwnerCheck()}
+                      className="rounded-lg border border-white/15 px-3 py-2 text-xs text-zinc-300 hover:border-white/30"
+                    >
+                      Retry owner check
+                    </button>
+                  ) : null}
+                  <span className="text-xs text-zinc-500">
+                    Server prepares the transaction. One of the currently installed CSW owners signs it on Base, then 4626 refreshes the account automatically.
+                  </span>
+                </div>
+                {!connectedOwnerReady ? (
+                  <div className="mt-3 text-xs text-zinc-500">
+                    Privy will open a wallet modal with MetaMask, Coinbase Wallet, detected browser wallets like Rabby, and WalletConnect fallback.
+                    {providerCollision.shouldDisableInjectedConnector
+                      ? ' This browser still reports an injected-provider collision, so Coinbase/Base may be the most reliable option if a browser wallet fails to answer.'
+                      : ''}
+                  </div>
+                ) : null}
+              </section>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <section className="rounded-2xl border border-white/10 bg-black/35 p-5 space-y-4">
+              <div className="space-y-1">
+                <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Account summary</div>
+                <h3 className="text-lg font-medium text-white">{summaryTitle}</h3>
+              </div>
+              <div className="grid gap-3 text-sm">
+                <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3">
+                  <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Email</div>
+                  <div className="mt-1 text-zinc-100">{me.email ?? 'Not linked'}</div>
+                  <div className="mt-1 text-xs text-zinc-500">{me.emailVerified ? 'Verified and canonical' : 'Needs verification'}</div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3">
+                    <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Points</div>
+                    <div className="mt-1 text-xl font-semibold text-zinc-100">{me.score.points}</div>
+                  </div>
+                  <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3">
+                    <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Tier</div>
+                    <div className="mt-1 text-xl font-semibold text-zinc-100">{me.score.tier}</div>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-white/8 bg-white/[0.03] px-3 py-3 space-y-2">
+                  <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Signals</div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-zinc-500">Zora handle</span>
+                    <span className="text-zinc-100">{me.accountSignals.zoraHandle ? `@${me.accountSignals.zoraHandle}` : '—'}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-zinc-500">Creator coin</span>
+                    <span className="font-mono text-zinc-100">{shortValue(me.accountSignals.creatorCoin?.address)}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-zinc-500">Cross-app accounts</span>
+                    <span className="text-zinc-100">{zoraCrossAppCount}</span>
+                  </div>
+                </div>
+              </div>
+              {summaryActions ? <div className="flex flex-wrap items-center gap-2">{summaryActions}</div> : null}
+            </section>
+          </div>
+        </div>
+      </section>
+    </div>
+  )
+}

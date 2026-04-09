@@ -74,8 +74,8 @@ describe('AccountsPage', () => {
       ),
     )
 
+    expect(html).toContain('Advanced account settings')
     expect(html).toContain('Workspace')
-    expect(html).toContain('Bring your Zora smart wallet into 4626')
     expect(html).toContain('Open leaderboard')
     expect(html).toContain('Linked identities')
     expect(html).toContain('Open Zora')
@@ -90,8 +90,8 @@ describe('AccountsPage', () => {
     expect(html).toContain('MetaMask, Coinbase Wallet, detected browser wallets like Rabby, and WalletConnect fallback')
     expect(html).toContain('Connected signer')
     expect(html).toContain('0x111111...111111')
-    expect(html).toContain('Advanced')
-    expect(html).toContain('Why this setup')
+    expect(html).toContain('Advanced recovery')
+    expect(html).toContain('/waitlist')
   })
 
   it('surfaces the Telegram owner-install resume banner when requested from query params', () => {

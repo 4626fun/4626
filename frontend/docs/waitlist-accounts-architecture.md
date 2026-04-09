@@ -8,7 +8,8 @@ This is the canonical product model for identity onboarding:
 - No account is fully created until email OTP verification completes.
 - Privy is the auth/session backend and should create the embedded EOA during signup/auth.
 - Every fully onboarded account must have a Privy embedded EOA.
-- `frontend/src/pages/accounts/AccountsPage.tsx` is the identity hub for linked methods, Zora refresh, and advanced owner actions.
+- After verified email + embedded EOA creation, signed-in users stay on `/waitlist` for the setup-first workspace: Zora linking, canonical CSW detection, owner-install status, and the gated `Enter App` handoff.
+- `frontend/src/pages/accounts/AccountsPage.tsx` is now the advanced settings and recovery backstop: linked identities, Telegram/browser escapes, secondary owner actions, and recovery-only tooling.
 - Accepted users who choose `Enter App` continue through `frontend/src/pages/AppContinue.tsx`, which completes cross-origin auth handoff and then sends them to the canonical app landing route.
 - Telegram, Base app, and website must all converge into the same verified-email-based account model.
 - Normal web auth should expose email first, then Base and Zora as optional native entry paths.
@@ -16,10 +17,12 @@ This is the canonical product model for identity onboarding:
 Source of truth by concern:
 
 - Waitlist entry + email capture: `frontend/api/_handlers/waitlist/*`
+- Signed-in setup workspace shell: `frontend/src/features/waitlist/WaitlistFlow.tsx` and `frontend/src/features/waitlist/WaitlistSetupWorkspace.tsx`
+- Shared setup-first account modules: `frontend/src/features/accountSetup/*`
 - Linked identity state + scoring: `frontend/api/_handlers/accounts/*` and `frontend/server/_lib/accountsIdentity.ts`
 - Zora discovery + canonical CSW refresh: `frontend/api/_handlers/zora/*`
 - Cross-origin auth/session continuation: `frontend/api/_handlers/auth/_handoff-create.ts`, `frontend/api/_handlers/auth/_handoff-redeem.ts`, and `frontend/src/pages/AppContinue.tsx`
-- Advanced canonical-wallet owner actions: `frontend/src/pages/accounts/AccountsPage.tsx`
+- Advanced linked-identity / recovery surface: `frontend/src/pages/accounts/AccountsPage.tsx`
 - Product-level auth invariants: `frontend/docs/account-auth-invariants.md`
 
 Telegram-specific rules:
@@ -43,11 +46,13 @@ Implementation posture:
 - New UI surfaces should reuse that session path rather than layering separate `/api/auth/me` refresh loops.
 - Canonical account-context lookup should be deferred until a signer exists; disconnected route loads should not eagerly fetch wallet topology that cannot yet be used.
 - Provider-heavy surfaces should be route-scoped or user-intent-gated where practical.
+- `frontend/src/pages/Waitlist.tsx` is allowed to widen provider coverage for the signed-in setup workspace, but signed-out marketing/waitlist entry should stay comparatively light.
 
 Legacy note:
 
 - The older heavy waitlist flow and its private step/hook files were removed after the thin waitlist convergence pass.
-- New product work should build on `frontend/src/features/waitlist/WaitlistFlow.tsx`, `frontend/src/pages/Waitlist.tsx`, and `frontend/src/pages/accounts/AccountsPage.tsx`.
+- New product work should treat `/waitlist` as the default post-auth setup surface and `/accounts` as the advanced backstop.
+- New product work should build on `frontend/src/features/waitlist/WaitlistFlow.tsx`, `frontend/src/features/waitlist/WaitlistSetupWorkspace.tsx`, `frontend/src/features/accountSetup/*`, `frontend/src/pages/Waitlist.tsx`, and `frontend/src/pages/accounts/AccountsPage.tsx`.
 - If an older auth path conflicts with `frontend/docs/account-auth-invariants.md`, remove or migrate it rather than preserving it.
 
 ## Telegram Flow Routing Boundary

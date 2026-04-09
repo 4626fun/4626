@@ -8,6 +8,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { apiFetch } from '@/lib/apiBase'
 
 import { WaitlistFlow } from './WaitlistFlow'
+import { WaitlistSetupWorkspace } from './WaitlistSetupWorkspace'
 
 vi.mock('framer-motion', () => ({
   motion: new Proxy(
@@ -38,6 +39,19 @@ const mockGetAccessToken = vi.fn<() => Promise<string | null>>(async () => 'priv
 const mockPrivyLogout = vi.fn(async () => undefined)
 const mockLinkEmail = vi.fn(async () => undefined)
 const mockLogin = vi.fn(async () => undefined)
+const mockPrivyHookState = {
+  wallet: undefined as unknown,
+  wallets: [] as unknown[],
+}
+const mockWagmiPublicClient = {
+  readContract: async () => true,
+}
+const mockWagmiSwitchChain = {
+  switchChainAsync: async () => undefined,
+}
+const mockWagmiWalletClientState = {
+  data: null as unknown,
+}
 
 vi.mock('@privy-io/react-auth', () => ({
   usePrivy: () => ({
@@ -47,16 +61,20 @@ vi.mock('@privy-io/react-auth', () => ({
     linkEmail: mockLinkEmail,
   }),
   useLogin: () => ({ login: mockLogin }),
+  useConnectWallet: () => ({ connectWallet: () => undefined }),
   useCrossAppAccounts: () => ({
     loginWithCrossAppAccount: async () => undefined,
     linkCrossAppAccount: async () => undefined,
   }),
+  useActiveWallet: () => ({ wallet: mockPrivyHookState.wallet }),
+  useWallets: () => ({ wallets: mockPrivyHookState.wallets }),
 }))
 
 vi.mock('wagmi', () => ({
-  useAccount: () => ({ chainId: 8453 }),
-  useSwitchChain: () => ({ switchChainAsync: async () => undefined }),
-  useWalletClient: () => ({ data: null }),
+  useAccount: () => ({ chainId: 8453, address: '0x1111111111111111111111111111111111111111' }),
+  usePublicClient: () => mockWagmiPublicClient,
+  useSwitchChain: () => mockWagmiSwitchChain,
+  useWalletClient: () => mockWagmiWalletClientState,
 }))
 
 vi.mock('@/lib/apiBase', () => ({
@@ -109,26 +127,30 @@ function jsonResponse(body: unknown, ok = true, status = 200) {
   }
 }
 
+const WAITLIST_ACCOUNT = {
+  privyUserId: 'did:privy:test-user',
+  email: 'waitlisted@example.com',
+  emailVerified: true,
+  appAccessStatus: 'pending',
+  linkedMethods: { email: ['waitlisted@example.com'] },
+  accountSignals: {
+    linked: true,
+    canonicalCswAddress: null,
+    creatorCoin: null,
+    zoraHandle: null,
+    lastResolvedAt: null,
+  },
+  score: {
+    points: 1234,
+    tier: 1,
+  },
+}
+
 const WAITLIST_BOOTSTRAP_PAYLOAD = {
   success: true,
   data: {
     requiresPrivyAuth: false,
-    privyUserId: 'did:privy:test-user',
-    email: 'waitlisted@example.com',
-    emailVerified: true,
-    appAccessStatus: 'pending',
-    linkedMethods: { email: ['waitlisted@example.com'] },
-    accountSignals: {
-      linked: true,
-      canonicalCswAddress: null,
-      creatorCoin: null,
-      zoraHandle: null,
-      lastResolvedAt: null,
-    },
-    score: {
-      points: 1234,
-      tier: 1,
-    },
+    ...WAITLIST_ACCOUNT,
   },
 }
 
@@ -157,6 +179,12 @@ describe('WaitlistFlow simplified completion UI', () => {
       if (input.startsWith('/api/auth/privy')) {
         return jsonResponse({ success: true }) as any
       }
+      if (input.startsWith('/api/auth/handoff/create')) {
+        return jsonResponse({
+          success: true,
+          data: { code: 'handoff-code', expiresAt: '2099-01-01T00:00:00.000Z' },
+        }) as any
+      }
       throw new Error(`Unhandled apiFetch call: ${input}`)
     })
   })
@@ -168,8 +196,8 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/account ready/i)).toBeTruthy()
-    expect(screen.getByRole('button', { name: /open accounts/i })).toBeTruthy()
+    expect(await screen.findByText(/finish setup here/i)).toBeTruthy()
+    expect(screen.getByRole('button', { name: /advanced account settings/i })).toBeTruthy()
     expect(screen.queryByText(/climb the waitlist/i)).toBeNull()
     expect(screen.queryByText(/waitlist leaderboard/i)).toBeNull()
     expect(
@@ -184,22 +212,41 @@ describe('WaitlistFlow simplified completion UI', () => {
     ).toBe(false)
   })
 
-  it('uses the canonical app-entry handoff before opening accounts from waitlist completion', async () => {
+  it('renders a setup-first workspace for verified users instead of a CTA-only completion state', async () => {
     render(
       <MemoryRouter>
         <WaitlistFlow />
       </MemoryRouter>,
     )
 
-    fireEvent.click(await screen.findByRole('button', { name: /open accounts/i }))
+    expect(await screen.findByText(/link your zora identity/i)).toBeTruthy()
+    expect(screen.getByText(/detect your coinbase smart wallet/i)).toBeTruthy()
+    expect(screen.getByText(/enable 4626 signing on that wallet/i)).toBeTruthy()
+    expect(screen.getByText(/^points$/i)).toBeTruthy()
+    expect(screen.getByText(/^tier$/i)).toBeTruthy()
+    expect(screen.getByRole('link', { name: /open zora/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /refresh zora signals/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /advanced account settings/i })).toBeTruthy()
+  })
 
-    await waitFor(() => {
-      expect(
-        vi
-          .mocked(apiFetch)
-          .mock.calls.some(([input]) => String(input).startsWith('/api/auth/handoff/create')),
-      ).toBe(true)
-    })
+  it('shows the advanced account settings escape hatch from the waitlist workspace', async () => {
+    const openAccounts = vi.fn()
+
+    render(
+      <MemoryRouter>
+        <WaitlistSetupWorkspace
+          initialAccount={WAITLIST_ACCOUNT as any}
+          canEnterApp={false}
+          completionBusy={false}
+          onEnterApp={vi.fn()}
+          onOpenAccounts={openAccounts}
+        />
+      </MemoryRouter>,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: /advanced account settings/i }))
+
+    expect(openAccounts).toHaveBeenCalledTimes(1)
   })
 
   it('shows manual existing-account recovery when bootstrap returns recovery-required', async () => {
@@ -339,7 +386,7 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/account ready/i, undefined, { timeout: 7_000 })).toBeTruthy()
+    expect(await screen.findByText(/finish setup here/i, undefined, { timeout: 7_000 })).toBeTruthy()
     // Scheduler keeps retries bounded while still allowing completion.
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     expect(bootstrapCalls).toBeLessThanOrEqual(3)
@@ -390,7 +437,7 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
 
-    expect(await screen.findByText(/account ready/i, undefined, { timeout: 9_000 })).toBeTruthy()
+    expect(await screen.findByText(/finish setup here/i, undefined, { timeout: 9_000 })).toBeTruthy()
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     expect(bootstrapCalls).toBeLessThanOrEqual(2)
     expect(screen.queryByText(/sign-in session is still finalizing/i)).toBeNull()
@@ -441,7 +488,7 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
 
-    expect(await screen.findByText(/account ready/i, undefined, { timeout: 10_000 })).toBeTruthy()
+    expect(await screen.findByText(/finish setup here/i, undefined, { timeout: 10_000 })).toBeTruthy()
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
   })
 
@@ -524,7 +571,7 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
 
-    expect(await screen.findByText(/account ready/i, undefined, { timeout: 9_000 })).toBeTruthy()
+    expect(await screen.findByText(/finish setup here/i, undefined, { timeout: 9_000 })).toBeTruthy()
     expect(mockLogin).toHaveBeenCalledTimes(1)
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
   })
@@ -628,7 +675,7 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/account ready/i, undefined, { timeout: 9_000 })).toBeTruthy()
+    expect(await screen.findByText(/finish setup here/i, undefined, { timeout: 9_000 })).toBeTruthy()
     // No token means no bootstrap burst; once token hydrates we should only need one tokened bootstrap.
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     expect(bootstrapCalls).toBeLessThanOrEqual(2)
@@ -685,7 +732,7 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/account ready/i, undefined, { timeout: 9_000 })).toBeTruthy()
+    expect(await screen.findByText(/finish setup here/i, undefined, { timeout: 9_000 })).toBeTruthy()
     // first requiresPrivyAuth + one cooldown-respected retry to recover
     expect(bootstrapCalls).toBeGreaterThanOrEqual(2)
     expect(bootstrapCalls).toBeLessThanOrEqual(3)

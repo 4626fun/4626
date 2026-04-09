@@ -132,6 +132,7 @@ Rules:
 - do not make CSW existence a prerequisite for account creation
 - do not treat CSW linkage as complete until owner confirmation succeeds
 - features that require canonical CSW execution must stay gated until this owner-installation step is complete
+- after verified email, the default web setup surface is `/waitlist`; `/accounts` is reserved for advanced settings, recovery, and secondary identity controls
 
 ### Session implementation notes
 

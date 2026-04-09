@@ -20,7 +20,7 @@ We have multiple entry points (web, Base app, Zora, Telegram) and multiple ident
 | Base app entry | Base context present, email absent | `email` | Verified email required | User can start in Base, but must finish email OTP before account creation completes |
 | Zora cross-app entry | Zora identity present, email absent | `email` | Verified email required | Zora can seed wallet/profile signals, but verified email still gates account creation |
 | Telegram Mini App entry | Telegram session present, email absent | `email` | Verified email required | Telegram can prove chat/user context, but account creation/linking still requires email OTP |
-| Existing account with verified email | signed in | `email` | Already satisfied | User may continue to wallet setup, CSW resolution, or linked identity management |
+| Existing account with verified email | signed in | `email` | Already satisfied | User stays on the signed-in `/waitlist` workspace for Zora/CSW setup; `/accounts` remains the advanced recovery and secondary-identity surface |
 | Any flow without verified email | any | `email` | Not satisfied | Account remains incomplete and wallet-dependent actions stay gated |
 
 ## API-side rules (authoritative)
@@ -38,6 +38,7 @@ When touching onboarding/waitlist logic, validate all of the following:
 
 1. **Entry-point convergence**: website, Base, Zora, and Telegram must all end at the same verified-email account model.
 2. **API validation**: only Privy-verified email may populate canonical account email.
-3. **Wallet finalization**: canonical CSW resolution and embedded-EOA owner install must remain explicit post-auth steps.
-4. **Deploy/session coupling**: deploy/session flows must not regress to single-provider or wallet-first authentication prompts.
-5. **Regression tests**: run waitlist, account bootstrap, and deploy-session auth tests.
+3. **Workspace split**: signed-in `/waitlist` remains the default setup-first workspace; `/accounts` remains the advanced escape hatch.
+4. **Wallet finalization**: canonical CSW resolution and embedded-EOA owner install must remain explicit post-auth steps.
+5. **Deploy/session coupling**: deploy/session flows must not regress to single-provider or wallet-first authentication prompts.
+6. **Regression tests**: run waitlist, account bootstrap, and deploy-session auth tests.

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLogin, usePrivy } from '@privy-io/react-auth'
 import { motion } from 'framer-motion'
-import { CheckCircle2, Loader2 } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 
 import { apiFetch } from '@/lib/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
@@ -33,13 +33,9 @@ import {
   runWaitlistPrivyLogout,
 } from './waitlistAuthState'
 import { buildWaitlistEmailLoginOptions, buildWaitlistRecoveryLoginOptions } from './waitlistLoginOptions'
-import {
-  type WaitlistDoneUi,
-  type WaitlistEmailUi,
-  canEnterAppFromAccountState,
-  deriveWaitlistAuthUi,
-  deriveWaitlistDoneUi,
-} from './waitlistFlowUi'
+import { type WaitlistEmailUi, canEnterAppFromAccountState, deriveWaitlistAuthUi } from './waitlistFlowUi'
+import { bridgePrivySession, createAuthHandoffCode } from './waitlistHandoff'
+import { WaitlistSetupWorkspace } from './WaitlistSetupWorkspace'
 
 type AccountsSummary = {
   privyUserId: string
@@ -66,11 +62,6 @@ type WaitlistBootstrapResponse =
   | ({
       requiresPrivyAuth: false
     } & AccountsSummary)
-
-type HandoffCreateResponse = {
-  code: string
-  expiresAt: string
-}
 
 const HANDOFF_QUERY_KEY = 'cv_handoff'
 const FLOW_TIMEOUT_MS = 20_000
@@ -155,11 +146,6 @@ async function maybeCallMethod(target: any, methodNames: string[], args: unknown
     }
   }
   return false
-}
-
-function shortAddress(value: string | null | undefined): string {
-  if (!value) return '--'
-  return value.length <= 12 ? value : `${value.slice(0, 6)}...${value.slice(-4)}`
 }
 
 const RECOVERY_REQUIRED_MESSAGE = 'This email already has a 4626 account. Use existing account sign-in to continue.'
@@ -293,147 +279,6 @@ function WaitlistAuthStep(props: {
           ) : null}
         </div>
       ) : null}
-    </motion.div>
-  )
-}
-
-function WaitlistDoneStep(props: {
-  doneUi: WaitlistDoneUi
-  accountCanonicalCswAddress: string | null
-  canEnterApp: boolean
-  completionBusy: boolean
-  onEnterApp: () => void | Promise<void>
-  onOpenAccounts: () => void | Promise<void>
-}) {
-  const { doneUi, accountCanonicalCswAddress, canEnterApp, completionBusy, onEnterApp, onOpenAccounts } = props
-  const statusLabel = canEnterApp ? 'App unlocked' : 'Pending app access'
-  const helperCopy = canEnterApp
-    ? 'We will carry your signed-in session into the app now.'
-    : 'Accounts is the right place while approval is pending. You can manage linked identities and points there without hitting an app-access redirect.'
-  const iconShellStyle = canEnterApp
-    ? {
-        background: 'linear-gradient(135deg, rgba(0,52,204,0.42) 0%, rgba(91,168,255,0.22) 100%)',
-        border: '1px solid rgba(91,168,255,0.32)',
-      }
-    : {
-        background: 'linear-gradient(135deg, rgba(255,255,255,0.08) 0%, rgba(148,163,184,0.06) 100%)',
-        border: '1px solid rgba(255,255,255,0.12)',
-      }
-  const pulseStyle = canEnterApp
-    ? { border: '1px solid rgba(91,168,255,0.35)' }
-    : { border: '1px solid rgba(255,255,255,0.18)' }
-  const primaryButtonClass = canEnterApp
-    ? 'btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-60'
-    : 'w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 border border-white/12 bg-white/5 text-zinc-100 hover:bg-white/8 transition-colors disabled:opacity-60'
-
-  return (
-    <motion.div
-      key="step-done"
-      initial={{ opacity: 0, y: 8 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-      className="space-y-5"
-    >
-      <div className="flex flex-col items-center text-center space-y-3 pt-2">
-        <motion.div
-          className="relative"
-          initial={{ scale: 0.6, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ type: 'spring', stiffness: 320, damping: 20, delay: 0.05 }}
-        >
-          <div
-            className="h-11 w-11 rounded-xl flex items-center justify-center"
-            style={iconShellStyle}
-          >
-            <CheckCircle2 className={`h-5 w-5 ${canEnterApp ? 'text-[#7DBCFF]' : 'text-zinc-200'}`} />
-          </div>
-          <motion.div
-            className="absolute inset-0 rounded-xl"
-            style={pulseStyle}
-            initial={{ scale: 1, opacity: 0.5 }}
-            animate={{ scale: 1.6, opacity: 0 }}
-            transition={{ duration: 2.4, repeat: Infinity, ease: 'easeOut', delay: 0.3 }}
-          />
-        </motion.div>
-
-        <div className="space-y-1">
-          <div className="flex justify-center">
-            <span
-              className={`rounded-full px-2.5 py-1 text-[10px] font-medium uppercase tracking-[0.16em] ${
-                canEnterApp
-                  ? 'border border-brand-primary/25 bg-brand-primary/12 text-[#B8D7FF]'
-                  : 'border border-white/10 bg-white/6 text-zinc-300'
-              }`}
-            >
-              {statusLabel}
-            </span>
-          </div>
-          <h2 className="text-2xl font-semibold tracking-tight text-white">{doneUi.title}</h2>
-          <p className="text-sm text-zinc-400 max-w-xs mx-auto">{doneUi.subtitle}</p>
-          {accountCanonicalCswAddress ? (
-            <p className="text-xs text-zinc-500">
-              Canonical CSW <span className="font-mono text-zinc-300">{shortAddress(accountCanonicalCswAddress)}</span>
-            </p>
-          ) : null}
-        </div>
-      </div>
-
-      <div className="space-y-3">
-        <div
-          className={`rounded-xl border px-4 py-3 text-xs leading-relaxed ${
-            canEnterApp
-              ? 'border-brand-primary/18 bg-brand-primary/[0.07] text-[#C9DEFF]'
-              : 'border-white/10 bg-white/[0.03] text-zinc-300'
-          }`}
-        >
-          {helperCopy}
-        </div>
-
-        {canEnterApp ? (
-          <button
-            type="button"
-            onClick={() => void onEnterApp()}
-            disabled={completionBusy}
-            className={primaryButtonClass}
-          >
-            {completionBusy ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Entering App...
-              </>
-            ) : (
-              doneUi.primaryLabel
-            )}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={() => void onOpenAccounts()}
-            disabled={completionBusy}
-            className={primaryButtonClass}
-          >
-            {completionBusy ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Opening Accounts...
-              </>
-            ) : (
-              doneUi.primaryLabel
-            )}
-          </button>
-        )}
-
-        {doneUi.secondaryLabel ? (
-          <button
-            type="button"
-            onClick={() => void onOpenAccounts()}
-            disabled={completionBusy}
-            className="w-full text-center text-sm text-zinc-500 hover:text-zinc-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-primary/40 rounded py-1 inline-block"
-          >
-            {doneUi.secondaryLabel}
-          </button>
-        ) : null}
-      </div>
     </motion.div>
   )
 }
@@ -775,32 +620,14 @@ export function WaitlistFlow(props: {
       throw new Error(STALE_PRIVY_SESSION_MESSAGE)
     }
 
-    await apiFetch('/api/auth/privy', {
-      method: 'POST',
-      withCredentials: true,
-      headers: {
-        Authorization: `Bearer ${privyToken}`,
-        Accept: 'application/json',
-      },
-    }).catch(() => null)
+    const sessionToken = await bridgePrivySession(privyToken)
 
     let target = accountsUrl
     if (target.startsWith('http') && typeof window !== 'undefined') {
       try {
         const parsed = new URL(target)
         if (parsed.origin !== window.location.origin) {
-          const handoffRes = await apiFetch('/api/auth/handoff/create', {
-            method: 'POST',
-            withCredentials: true,
-            headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-            body: JSON.stringify({ privyToken }),
-          }).catch(() => null)
-          const handoffJson =
-            handoffRes ? ((await handoffRes.json().catch(() => null)) as ApiEnvelope<HandoffCreateResponse> | null) : null
-          const handoffCode =
-            handoffRes?.ok && handoffJson?.success && typeof handoffJson?.data?.code === 'string'
-              ? handoffJson.data.code.trim()
-              : ''
+          const handoffCode = await createAuthHandoffCode({ privyToken, sessionToken })
           if (handoffCode) {
             parsed.searchParams.set(HANDOFF_QUERY_KEY, handoffCode)
             target = parsed.toString()
@@ -929,18 +756,12 @@ export function WaitlistFlow(props: {
     async (initialTarget: string) => {
       let target = initialTarget
       let privyToken: string | null = null
+      let sessionToken: string | null = null
 
       if (privyAuthed) {
         privyToken = await getAccessToken().catch(() => null)
         if (privyToken) {
-          await apiFetch('/api/auth/privy', {
-            method: 'POST',
-            withCredentials: true,
-            headers: {
-              Authorization: `Bearer ${privyToken}`,
-              Accept: 'application/json',
-            },
-          }).catch(() => null)
+          sessionToken = await bridgePrivySession(privyToken)
         }
       }
 
@@ -948,19 +769,7 @@ export function WaitlistFlow(props: {
         try {
           const parsed = new URL(target)
           if (parsed.origin !== window.location.origin) {
-            const handoffRes = await apiFetch('/api/auth/handoff/create', {
-              method: 'POST',
-              withCredentials: true,
-              headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
-              body: JSON.stringify({ privyToken }),
-            }).catch(() => null)
-            const handoffJson = handoffRes
-              ? ((await handoffRes.json().catch(() => null)) as ApiEnvelope<HandoffCreateResponse> | null)
-              : null
-            const handoffCode =
-              handoffRes?.ok && handoffJson?.success && typeof handoffJson?.data?.code === 'string'
-                ? handoffJson.data.code.trim()
-                : ''
+            const handoffCode = await createAuthHandoffCode({ privyToken, sessionToken })
             if (handoffCode) {
               parsed.searchParams.set(HANDOFF_QUERY_KEY, handoffCode)
               target = parsed.toString()
@@ -1100,7 +909,6 @@ export function WaitlistFlow(props: {
   const canEnterApp = canEnterAppFromAccountState({
     appAccessStatus: account?.appAccessStatus ?? null,
   })
-  const doneUi = deriveWaitlistDoneUi(canEnterApp)
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -1200,14 +1008,15 @@ export function WaitlistFlow(props: {
         ) : null}
 
         {step === 'done' ? (
-          <WaitlistDoneStep
-            doneUi={doneUi}
-            accountCanonicalCswAddress={account?.accountSignals?.canonicalCswAddress ?? null}
-            canEnterApp={canEnterApp}
-            completionBusy={completionBusy}
-            onEnterApp={onEnterApp}
-            onOpenAccounts={onOpenAccounts}
-          />
+          account ? (
+            <WaitlistSetupWorkspace
+              initialAccount={account}
+              canEnterApp={canEnterApp}
+              completionBusy={completionBusy}
+              onEnterApp={onEnterApp}
+              onOpenAccounts={onOpenAccounts}
+            />
+          ) : null
         ) : null}
       </div>
     </section>
