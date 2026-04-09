@@ -69,7 +69,6 @@
 - [api/\_handlers/cre/runtime/\_ingest](api/_handlers/cre/runtime/_ingest.md)
 - [api/\_handlers/cre/runtime/\_trigger](api/_handlers/cre/runtime/_trigger.md)
 - [api/\_handlers/cre/vaults/\_active](api/_handlers/cre/vaults/_active.md)
-- [api/\_handlers/creator-access/\_debug](api/_handlers/creator-access/_debug.md)
 - [api/\_handlers/creator-access/\_request](api/_handlers/creator-access/_request.md)
 - [api/\_handlers/creator-access/\_status](api/_handlers/creator-access/_status.md)
 - [api/\_handlers/debank/\_tokenList](api/_handlers/debank/_tokenList.md)
