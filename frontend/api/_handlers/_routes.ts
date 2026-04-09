@@ -24,7 +24,6 @@ function prefixRouteLoaders(prefix: string, loaders: ApiRouteLoaders): ApiRouteL
 // route families back into it so Vercel doesn't spend extra packaging passes
 // on wrappers that do not need runtime isolation.
 export const apiRouteLoaders: ApiRouteLoaders = {
-  'analytics': () => import('./_analytics.js'),
   'agents': () => import('./_agents.js'),
   'agent/creative': () => import('./agent/_creative.js'),
   'agent/stream': () => import('./agent/_stream.js'),

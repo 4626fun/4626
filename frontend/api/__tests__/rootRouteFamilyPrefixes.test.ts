@@ -78,5 +78,6 @@ describe('root api route family prefixes', () => {
     expect(await getApiHandler('referrals/click')).toBeNull()
     expect(await getApiHandler('referrals/me')).toBeNull()
     expect(await getApiHandler('referrals/leaderboard')).toBeNull()
+    expect(await getApiHandler('analytics')).toBeNull()
   })
 })
