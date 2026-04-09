@@ -31,7 +31,7 @@ This creates a dedicated, explicit admin surface for CreatorCoin policy instead 
 
 Updated deployment flow in:
 
-- `frontend/src/pages/DeployVault.tsx`
+- `frontend/src/pages/deploy/DeployVault.tsx`
 - `frontend/api/_handlers/_paymaster.ts`
 - `contracts/helpers/batchers/DeploymentBatcher.sol`
 
@@ -166,4 +166,3 @@ Executed and passing:
 1. Run full `forge test` in a non-interrupted session for complete suite confirmation.
 2. Add dedicated unit tests for new `PayoutRouter` protocol-rewards claim methods.
 3. Add explicit regression tests for `CreatorCoinPolicyController` deployment + transfer path.
-

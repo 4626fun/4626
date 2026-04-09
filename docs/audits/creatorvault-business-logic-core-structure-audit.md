@@ -106,7 +106,7 @@ Naming policy:
 | File | Current state | Patch requirement |
 |---|---|---|
 | `docs/contracts/strategies/cca-launch.md` | Mostly aligned to non-automatic hook completion and onchain floor behavior | Keep as primary strategy truth; no semantic rollback to "migrate completes everything" |
-| `frontend/src/pages/CompleteAuction.tsx` | Explicit manual steps (sweep -> migrate -> configure hook) and conditional fee-plane language | Keep lane wording; optionally render split values from live gauge reads instead of static labels |
+| `frontend/src/pages/auction/CompleteAuction.tsx` | Explicit manual steps (sweep -> migrate -> configure hook) and conditional fee-plane language | Keep lane wording; optionally render split values from live gauge reads instead of static labels |
 | `frontend/api/_handlers/cre/keeper/_sweep.ts` | Canonical completion endpoint includes sweep+migrate+optional hook and invariant gate | Treat this as operational truth; keep response-stage vocabulary stable for runbooks |
 | `cre/cre-workflows/cca-finalization/main.ts` | Marks settled only when completion endpoint returns `completed` | Keep this settled-state rule; do not regress to sweep-only settlement |
 | `cre/actions/cca-finalization.action.ts` | Contains stale header wording around sweep semantics; implementation includes migrate but no hook/invariant stage | Patch header comments to match current completion semantics or mark this path non-canonical |

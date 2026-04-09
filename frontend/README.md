@@ -89,7 +89,7 @@ Static public assets in `frontend/public/` are served directly and copied into `
 - Manifest screenshots: `pnpm -C frontend capture:app-screens` refreshes `public/screenshot-swap.png`, `public/screenshot-explore.png`, and `public/screenshot-deploy.png`.
 - To clear derived image outputs before a full refresh, run `pnpm -C frontend clean:derived-assets`. This removes generated PNGs plus `dist/` and `build/`, but preserves source SVGs and `public/manifest.json`.
 - To regenerate the static, non-screenshot brand assets after a reset, run `pnpm -C frontend generate:brand-assets:static`.
-- Full workflow: see [`docs/brand-refresh-checklist.md`](./docs/brand-refresh-checklist.md).
+- Full workflow: see [`frontend/docs/brand-refresh-checklist.md`](./docs/brand-refresh-checklist.md).
 
 These pipelines are intentionally separate:
 
@@ -97,7 +97,7 @@ These pipelines are intentionally separate:
 - `miniapp-hero.png` is the UI-derived miniapp/Telegram preview image.
 - `miniapp-splash.png` is the splash screen used by Base miniapp metadata.
 - `assets/brand/master/` is the long-term intake area for design masters before they are converted into repo-owned SVG sources.
-- Shell-level social/meta URLs and IDs are centralized in `scripts/html-shells.config.mjs`.
+- Shell-level social/meta URLs and IDs are centralized in `frontend/scripts/html-shells.config.mjs`.
 
 ## Runtime boundary guardrails
 
@@ -306,7 +306,7 @@ If a future change makes `/swap` feel like it is hard-refreshing, inspect these 
 
 ## Waitlist (DB)
 
-See also: `docs/waitlist-entry-scenarios.md` for entry-path and email-rule behavior (including CSW-first flows).
+See also: `frontend/docs/waitlist-entry-scenarios.md` for entry-path and email-rule behavior (including CSW-first flows).
 
 The waitlist API stores signups in Postgres. Create the table once:
 
