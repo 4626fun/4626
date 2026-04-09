@@ -1,5 +1,6 @@
 # Dependencies
 **/node_modules/
+/cre/package-lock.json
 
 # Docs - ignore drafts but keep source and generated
 docs/_drafts/
