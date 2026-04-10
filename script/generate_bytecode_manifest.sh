@@ -24,6 +24,17 @@ echo "Generating bytecode manifest → deployments/base/${RELEASE_TAG}-bytecode-
 forge build --skip test --skip script >/dev/null
 
 contracts=(
+  "CreatorRegistry"
+  "CreatorOVaultFactory"
+  "CreatorLotteryManager"
+  "CreatorVRFConsumerV2_5"
+  "VaultActivationBatcher"
+  "SolanaBridgeAdapter"
+  "UniversalBytecodeStoreV2"
+  "UniversalCreate2DeployerFromStore"
+  "CreatorOVaultCoreModule"
+  "CreatorOVaultStrategiesModule"
+  "CreatorOVaultAdminModule"
   "CreatorOVault"
   "CreatorOVaultWrapper"
   "CreatorShareOFT"
@@ -41,6 +52,7 @@ contracts=(
   "SolanaStrategy"
   "DeploymentBatcher"
   "DeploymentBatcherPhase3Helper"
+  "DeploymentBatcherUniV4Helper"
 )
 
 bytecode() {

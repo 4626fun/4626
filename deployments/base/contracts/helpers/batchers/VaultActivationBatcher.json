@@ -2,9 +2,10 @@
   "contractName": "VaultActivationBatcher",
   "network": "Base",
   "chainId": 8453,
-  "address": "0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB",
+  "address": "0x8b63912cD2490D1Ab0796c57Cc5909fF0059CECd",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-04-01T00:00:00Z",
+  "deployedAt": "2026-04-10T09:11:53Z",
+  "deploymentTx": "0xfbdcf961bbff14ec0766f5de86aff59efe721c12172267f43b87299d5bfb6b89",
   "abi": [
     {
       "type": "constructor",
@@ -161,6 +162,109 @@
     },
     {
       "type": "function",
+      "name": "batchActivateWithPermit2ForWithReserve",
+      "inputs": [
+        {
+          "name": "identity",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "creatorToken",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "vault",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "wrapper",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "ccaStrategy",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "depositAmount",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "auctionPercent",
+          "type": "uint8",
+          "internalType": "uint8"
+        },
+        {
+          "name": "creatorReservePercent",
+          "type": "uint8",
+          "internalType": "uint8"
+        },
+        {
+          "name": "creatorReserveRecipient",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "requiredRaise",
+          "type": "uint128",
+          "internalType": "uint128"
+        },
+        {
+          "name": "permit",
+          "type": "tuple",
+          "internalType": "struct ISignatureTransfer.PermitTransferFrom",
+          "components": [
+            {
+              "name": "permitted",
+              "type": "tuple",
+              "internalType": "struct ISignatureTransfer.TokenPermissions",
+              "components": [
+                {
+                  "name": "token",
+                  "type": "address",
+                  "internalType": "address"
+                },
+                {
+                  "name": "amount",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                }
+              ]
+            },
+            {
+              "name": "nonce",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "name": "signature",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "auction",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "batchActivateWithPermit2FromOperator",
       "inputs": [
         {
@@ -241,6 +345,168 @@
           "name": "signature",
           "type": "bytes",
           "internalType": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "auction",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "batchActivateWithPermit2FromOperatorWithReserve",
+      "inputs": [
+        {
+          "name": "identity",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "creatorToken",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "vault",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "wrapper",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "ccaStrategy",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "depositAmount",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "auctionPercent",
+          "type": "uint8",
+          "internalType": "uint8"
+        },
+        {
+          "name": "creatorReservePercent",
+          "type": "uint8",
+          "internalType": "uint8"
+        },
+        {
+          "name": "creatorReserveRecipient",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "requiredRaise",
+          "type": "uint128",
+          "internalType": "uint128"
+        },
+        {
+          "name": "permit",
+          "type": "tuple",
+          "internalType": "struct ISignatureTransfer.PermitTransferFrom",
+          "components": [
+            {
+              "name": "permitted",
+              "type": "tuple",
+              "internalType": "struct ISignatureTransfer.TokenPermissions",
+              "components": [
+                {
+                  "name": "token",
+                  "type": "address",
+                  "internalType": "address"
+                },
+                {
+                  "name": "amount",
+                  "type": "uint256",
+                  "internalType": "uint256"
+                }
+              ]
+            },
+            {
+              "name": "nonce",
+              "type": "uint256",
+              "internalType": "uint256"
+            },
+            {
+              "name": "deadline",
+              "type": "uint256",
+              "internalType": "uint256"
+            }
+          ]
+        },
+        {
+          "name": "signature",
+          "type": "bytes",
+          "internalType": "bytes"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "auction",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "batchActivateWithReserve",
+      "inputs": [
+        {
+          "name": "creatorToken",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "vault",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "wrapper",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "ccaStrategy",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "depositAmount",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "auctionPercent",
+          "type": "uint8",
+          "internalType": "uint8"
+        },
+        {
+          "name": "creatorReservePercent",
+          "type": "uint8",
+          "internalType": "uint8"
+        },
+        {
+          "name": "creatorReserveRecipient",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "requiredRaise",
+          "type": "uint128",
+          "internalType": "uint128"
         }
       ],
       "outputs": [
@@ -346,9 +612,67 @@
       "anonymous": false
     },
     {
+      "type": "event",
+      "name": "CreatorReserveAllocated",
+      "inputs": [
+        {
+          "name": "identity",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "recipient",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "shareToken",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "reservePercent",
+          "type": "uint8",
+          "indexed": false,
+          "internalType": "uint8"
+        }
+      ],
+      "anonymous": false
+    },
+    {
       "type": "error",
       "name": "InvalidPercent",
       "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidReserve",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidReserveRecipient",
+      "inputs": [
+        {
+          "name": "expectedRecipient",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "actualRecipient",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
     },
     {
       "type": "error",

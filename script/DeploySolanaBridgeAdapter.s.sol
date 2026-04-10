@@ -29,10 +29,10 @@ interface ILotteryManagerAdmin {
  */
 contract DeploySolanaBridgeAdapter is Script {
     // Base mainnet CreatorRegistry (see deployments/base/contracts/core/CreatorRegistry.json)
-    address constant DEFAULT_CREATOR_REGISTRY = 0x888506B92181c57A2fD06516FFFb6F375b7A4626;
+    address constant DEFAULT_CREATOR_REGISTRY = 0x79d0d68904BbB50361C9721CbDD17276E046771D;
 
     // Base mainnet CreatorLotteryManager (hub)
-    address constant DEFAULT_LOTTERY_MANAGER = 0x77705A2f173dd52F28300447506Dc35086c34626;
+    address constant DEFAULT_LOTTERY_MANAGER = 0xA137BEef789B80c76187E1b6DEef60fC7db6d280;
 
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");
@@ -74,5 +74,10 @@ contract DeploySolanaBridgeAdapter is Script {
         }
 
         vm.stopBroadcast();
+
+        console2.log(string.concat("HANDOFF:CREATOR_REGISTRY=", vm.toString(registry)));
+        console2.log(string.concat("HANDOFF:CREATOR_LOTTERY_MANAGER=", vm.toString(lotteryManager)));
+        console2.log(string.concat("HANDOFF:LOTTERY_MANAGER=", vm.toString(lotteryManager)));
+        console2.log(string.concat("HANDOFF:SOLANA_BRIDGE_ADAPTER=", vm.toString(address(adapter))));
     }
 }

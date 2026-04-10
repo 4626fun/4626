@@ -15,31 +15,28 @@ const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as ContractAddress
 
 export const BASE_DEFAULTS = {
   // Shared infrastructure
-  // NOTE: If you redeploy CreatorRegistry (e.g. after ABI/storage breaking changes),
-  // set `VITE_REGISTRY` in the environment and/or update this default.
-  registry: addr('888506B92181c57A2fD06516FFFb6F375b7A4626'),
-  lotteryManager: addr('3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3'),
-  vrfConsumer: addr('9F85d8EEe5d2b8dC1E99b598B9c2B084934d0304'),
+  // Canonical Base full redeploy defaults for release v1.8.2.
+  registry: addr('79d0d68904BbB50361C9721CbDD17276E046771D'),
+  lotteryManager: addr('A137BEef789B80c76187E1b6DEef60fC7db6d280'),
+  vrfConsumer: addr('22ae936027Fe0c348758634bF8694E00D96338ac'),
   payoutRouterFactory: addr('9C53cEaA15AdDB436c89A1F929fF12ED2BD26ea9'),
 
   // Base↔Solana bridge integration
-  solanaBridgeAdapter: addr('2414b595c4f18532A5836B6e2E6d536832c572e8'),
+  solanaBridgeAdapter: addr('1B3E713852dEC5d983AD11BD1567eed0723ceA9b'),
 
   // CREATE2 infra
   create2Factory: addr('4e59b44847b379578588920cA78FbF26c0B4956C'),
   create2Deployer: addr('aBf645362104F34D9C3FE48440bE7c99aaDE58E7'),
-  // Phase-2 v2 bytecode store (chunked) + deterministic CREATE2 deployer-from-store
-  // (rolled to match phased split Phase-1 deployment-batcher infra)
-  universalBytecodeStore: addr('6A578022609cdb65C614FF28912C49FC1EC97071'),
-  universalCreate2DeployerFromStore: addr('5ea71D4d03dEe596E93B5e6BEddA6F96BBF9d36a'),
+  // Phase-2 v2 bytecode store (chunked) + deterministic CREATE2 deployer-from-store.
+  universalBytecodeStore: addr('c8050cfeDA4CCd04079f37f1D95cD54279156E46'),
+  universalCreate2DeployerFromStore: addr('95700DA39462f97b0E874ED7e05BBF76413d7Ac1'),
 
   // AA helpers
-  vaultActivationBatcher: addr('d17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB'),
-  // v2 deployment batcher (deterministic, deployed via CREATE2 factory)
-  // NOTE: This is the phased batcher for Phases 1-3.
-  creatorVaultBatcher: addr('14435cc4A8D307b4d3979148E5AB71Af1ed19088'),
+  vaultActivationBatcher: addr('8b63912cD2490D1Ab0796c57Cc5909fF0059CECd'),
+  // v2 deployment batcher (deterministic, deployed via CREATE2 factory).
+  creatorVaultBatcher: addr('721420F190cc4525bb8Adc72D4c66eEB806AFC37'),
   // Optional alias used by env-based rollout/cutover logic.
-  creatorVaultBatcherAutoHandoff: addr('14435cc4A8D307b4d3979148E5AB71Af1ed19088'),
+  creatorVaultBatcherAutoHandoff: addr('721420F190cc4525bb8Adc72D4c66eEB806AFC37'),
 
   // Treasury
   protocolTreasury: addr('7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3'),

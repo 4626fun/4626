@@ -2,9 +2,10 @@
   "contractName": "CreatorLotteryManager",
   "network": "Base",
   "chainId": 8453,
-  "address": "0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3",
+  "address": "0xA137BEef789B80c76187E1b6DEef60fC7db6d280",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-04-01T00:00:00Z",
+  "deployedAt": "2026-04-10T09:11:53Z",
+  "deploymentTx": "0x246db47d63c1885c94fc4b0836241952c0a994802633a63626ed6d792fd10ae1",
   "abi": [
     {
       "type": "constructor",
@@ -28,19 +29,6 @@
     },
     {
       "type": "function",
-      "name": "BASE_CHAIN_ID",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
       "name": "BASIS_POINTS",
       "inputs": [],
       "outputs": [
@@ -54,46 +42,7 @@
     },
     {
       "type": "function",
-      "name": "DEFAULT_GAS_LIMIT",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint128",
-          "internalType": "uint128"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "DEFAULT_MSG_VALUE",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint128",
-          "internalType": "uint128"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
       "name": "MAX_SWAP_USD",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "MAX_VE_BOOST",
       "inputs": [],
       "outputs": [
         {
@@ -119,7 +68,7 @@
     },
     {
       "type": "function",
-      "name": "MSG_TYPE_WINNER_BROADCAST",
+      "name": "MSG_TYPE_LOTTERY_ENTRY",
       "inputs": [],
       "outputs": [
         {
@@ -132,7 +81,7 @@
     },
     {
       "type": "function",
-      "name": "MSG_TYPE_WINNER_NOTIFY",
+      "name": "MSG_TYPE_WINNER_CALLBACK",
       "inputs": [],
       "outputs": [
         {
@@ -142,87 +91,6 @@
         }
       ],
       "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "_quoteBroadcast",
-      "inputs": [
-        {
-          "name": "dstEid",
-          "type": "uint32",
-          "internalType": "uint32"
-        },
-        {
-          "name": "payload",
-          "type": "bytes",
-          "internalType": "bytes"
-        },
-        {
-          "name": "options",
-          "type": "bytes",
-          "internalType": "bytes"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "",
-          "type": "tuple",
-          "internalType": "struct MessagingFee",
-          "components": [
-            {
-              "name": "nativeFee",
-              "type": "uint256",
-              "internalType": "uint256"
-            },
-            {
-              "name": "lzTokenFee",
-              "type": "uint256",
-              "internalType": "uint256"
-            }
-          ]
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
-      "name": "_sendBroadcast",
-      "inputs": [
-        {
-          "name": "dstEid",
-          "type": "uint32",
-          "internalType": "uint32"
-        },
-        {
-          "name": "payload",
-          "type": "bytes",
-          "internalType": "bytes"
-        },
-        {
-          "name": "options",
-          "type": "bytes",
-          "internalType": "bytes"
-        },
-        {
-          "name": "fee",
-          "type": "tuple",
-          "internalType": "struct MessagingFee",
-          "components": [
-            {
-              "name": "nativeFee",
-              "type": "uint256",
-              "internalType": "uint256"
-            },
-            {
-              "name": "lzTokenFee",
-              "type": "uint256",
-              "internalType": "uint256"
-            }
-          ]
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "payable"
     },
     {
       "type": "function",
@@ -262,6 +130,30 @@
     },
     {
       "type": "function",
+      "name": "authorizedRemoteOFTs",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint32",
+          "internalType": "uint32"
+        },
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "authorizedSwapContracts",
       "inputs": [
         {
@@ -278,6 +170,29 @@
         }
       ],
       "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "batchSetAuthorizedRemoteOFTs",
+      "inputs": [
+        {
+          "name": "srcEids",
+          "type": "uint32[]",
+          "internalType": "uint32[]"
+        },
+        {
+          "name": "senders",
+          "type": "bytes32[]",
+          "internalType": "bytes32[]"
+        },
+        {
+          "name": "authorized",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
     },
     {
       "type": "function",
@@ -305,6 +220,159 @@
       "outputs": [
         {
           "name": "winChancePPM",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "callbackBuyerEpochStart",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "callbackGasLimit",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint128",
+          "internalType": "uint128"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "callbackMaxSponsoredPerBuyerPerEpoch",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "callbackMaxSponsoredPerOriginPerEpoch",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "callbackOriginEpochStart",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "callbackSponsoredCountByBuyer",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "callbackSponsoredCountByOrigin",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "callbackSponsorshipPolicy",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "enabled",
+          "type": "bool",
+          "internalType": "bool"
+        },
+        {
+          "name": "maxFeePerMessage",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "budgetPerEpoch",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "epochDuration",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "epochStart",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "spentInEpoch",
           "type": "uint256",
           "internalType": "uint256"
         }
@@ -502,6 +570,25 @@
     },
     {
       "type": "function",
+      "name": "hasPendingRandomWord",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "isComposeMsgSender",
       "inputs": [
         {
@@ -542,6 +629,44 @@
           "name": "",
           "type": "bool",
           "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "lastAcceptedPriceTimestamp",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "lastAcceptedPriceUSD1e18",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "stateMutability": "view"
@@ -649,19 +774,6 @@
     },
     {
       "type": "function",
-      "name": "minVaultWeightBps",
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "",
-          "type": "uint256",
-          "internalType": "uint256"
-        }
-      ],
-      "stateMutability": "view"
-    },
-    {
-      "type": "function",
       "name": "nextNonce",
       "inputs": [
         {
@@ -701,6 +813,45 @@
         }
       ],
       "stateMutability": "pure"
+    },
+    {
+      "type": "function",
+      "name": "oracleDeviationWindow",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "oracleMaxDeviationBps",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "oracleMaxStaleness",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
     },
     {
       "type": "function",
@@ -756,6 +907,38 @@
     },
     {
       "type": "function",
+      "name": "pendingRandomWord",
+      "inputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "processPendingVrfResult",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "processSwapLottery",
       "inputs": [
         {
@@ -772,6 +955,11 @@
           "name": "amountIn",
           "type": "uint256",
           "internalType": "uint256"
+        },
+        {
+          "name": "buyerCurrentShareBalance",
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "outputs": [
@@ -782,52 +970,6 @@
         }
       ],
       "stateMutability": "payable"
-    },
-    {
-      "type": "function",
-      "name": "quoteWinnerBroadcast",
-      "inputs": [
-        {
-          "name": "dstEid",
-          "type": "uint32",
-          "internalType": "uint32"
-        },
-        {
-          "name": "creatorCoin",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "winner",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "payoutBps",
-          "type": "uint16",
-          "internalType": "uint16"
-        }
-      ],
-      "outputs": [
-        {
-          "name": "fee",
-          "type": "tuple",
-          "internalType": "struct MessagingFee",
-          "components": [
-            {
-              "name": "nativeFee",
-              "type": "uint256",
-              "internalType": "uint256"
-            },
-            {
-              "name": "lzTokenFee",
-              "type": "uint256",
-              "internalType": "uint256"
-            }
-          ]
-        }
-      ],
-      "stateMutability": "view"
     },
     {
       "type": "function",
@@ -887,6 +1029,29 @@
     },
     {
       "type": "function",
+      "name": "setAuthorizedRemoteOFT",
+      "inputs": [
+        {
+          "name": "srcEid",
+          "type": "uint32",
+          "internalType": "uint32"
+        },
+        {
+          "name": "sender",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "authorized",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "setAuthorizedSwapContract",
       "inputs": [
         {
@@ -911,6 +1076,70 @@
           "name": "_manager",
           "type": "address",
           "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setCallbackGasLimit",
+      "inputs": [
+        {
+          "name": "_gasLimit",
+          "type": "uint128",
+          "internalType": "uint128"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setCallbackOptions",
+      "inputs": [
+        {
+          "name": "dstEid",
+          "type": "uint32",
+          "internalType": "uint32"
+        },
+        {
+          "name": "gasLimit",
+          "type": "uint128",
+          "internalType": "uint128"
+        },
+        {
+          "name": "msgValue",
+          "type": "uint128",
+          "internalType": "uint128"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setCallbackSponsorshipPolicy",
+      "inputs": [
+        {
+          "name": "enabled",
+          "type": "bool",
+          "internalType": "bool"
+        },
+        {
+          "name": "maxFeePerMessage",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "budgetPerEpoch",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "epochDuration",
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "outputs": [],
@@ -1012,10 +1241,28 @@
     },
     {
       "type": "function",
-      "name": "setMinVaultWeightBps",
+      "name": "setOracleDeviationGuard",
       "inputs": [
         {
-          "name": "_minWeightBps",
+          "name": "_maxDeviationBps",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "_deviationWindow",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setOracleMaxStaleness",
+      "inputs": [
+        {
+          "name": "_maxStaleness",
           "type": "uint256",
           "internalType": "uint256"
         }
@@ -1036,6 +1283,47 @@
           "name": "_peer",
           "type": "bytes32",
           "internalType": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setSponsoredVrfMinSwapAmountUSD",
+      "inputs": [
+        {
+          "name": "_minSwapAmountUSD",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setSponsorshipRateLimits",
+      "inputs": [
+        {
+          "name": "_vrfMaxPerBuyerPerEpoch",
+          "type": "uint32",
+          "internalType": "uint32"
+        },
+        {
+          "name": "_vrfMaxPerOriginPerEpoch",
+          "type": "uint32",
+          "internalType": "uint32"
+        },
+        {
+          "name": "_callbackMaxPerBuyerPerEpoch",
+          "type": "uint32",
+          "internalType": "uint32"
+        },
+        {
+          "name": "_callbackMaxPerOriginPerEpoch",
+          "type": "uint32",
+          "internalType": "uint32"
         }
       ],
       "outputs": [],
@@ -1095,26 +1383,44 @@
     },
     {
       "type": "function",
-      "name": "setWinnerBroadcastOptions",
+      "name": "setVrfSponsorshipPolicy",
       "inputs": [
         {
-          "name": "dstEid",
-          "type": "uint32",
-          "internalType": "uint32"
+          "name": "enabled",
+          "type": "bool",
+          "internalType": "bool"
         },
         {
-          "name": "gasLimit",
-          "type": "uint128",
-          "internalType": "uint128"
+          "name": "maxFeePerMessage",
+          "type": "uint256",
+          "internalType": "uint256"
         },
         {
-          "name": "msgValue",
-          "type": "uint128",
-          "internalType": "uint128"
+          "name": "budgetPerEpoch",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "epochDuration",
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "outputs": [],
       "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "sponsoredVrfMinSwapAmountUSD",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
     },
     {
       "type": "function",
@@ -1132,6 +1438,19 @@
     {
       "type": "function",
       "name": "totalLotteryEntries",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "totalRemoteLotteryEntries",
       "inputs": [],
       "outputs": [
         {
@@ -1235,6 +1554,25 @@
     },
     {
       "type": "function",
+      "name": "vrfBuyerEpochStart",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "vrfIntegrator",
       "inputs": [],
       "outputs": [
@@ -1242,6 +1580,51 @@
           "name": "",
           "type": "address",
           "internalType": "contract IChainlinkVRFIntegrator"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "vrfMaxSponsoredPerBuyerPerEpoch",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "vrfMaxSponsoredPerOriginPerEpoch",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "vrfOriginEpochStart",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "stateMutability": "view"
@@ -1273,47 +1656,108 @@
           "internalType": "uint256"
         },
         {
+          "name": "effectiveWinChancePPM",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
           "name": "vrfType",
           "type": "uint8",
           "internalType": "enum CreatorLotteryManager.VRFType"
+        },
+        {
+          "name": "sourceChainEid",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "vrfSponsoredCountByBuyer",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "vrfSponsoredCountByOrigin",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "vrfSponsorshipPolicy",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "enabled",
+          "type": "bool",
+          "internalType": "bool"
+        },
+        {
+          "name": "maxFeePerMessage",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "budgetPerEpoch",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "epochDuration",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "epochStart",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "spentInEpoch",
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "stateMutability": "view"
     },
     {
       "type": "event",
-      "name": "BoostManagerUpdated",
+      "name": "CallbackGasLimitUpdated",
       "inputs": [
         {
-          "name": "manager",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "CrossChainBroadcastFailed",
-      "inputs": [
-        {
-          "name": "dstEid",
-          "type": "uint32",
-          "indexed": true,
-          "internalType": "uint32"
-        },
-        {
-          "name": "winner",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "reason",
-          "type": "string",
+          "name": "newGasLimit",
+          "type": "uint128",
           "indexed": false,
-          "internalType": "string"
+          "internalType": "uint128"
         }
       ],
       "anonymous": false
@@ -1381,8 +1825,14 @@
     },
     {
       "type": "event",
-      "name": "HubNotificationFailed",
+      "name": "JackpotPayoutFailed",
       "inputs": [
+        {
+          "name": "creatorCoin",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
         {
           "name": "winner",
           "type": "address",
@@ -1390,10 +1840,10 @@
           "internalType": "address"
         },
         {
-          "name": "reason",
-          "type": "string",
+          "name": "shares",
+          "type": "uint256",
           "indexed": false,
-          "internalType": "string"
+          "internalType": "uint256"
         }
       ],
       "anonymous": false
@@ -1579,19 +2029,6 @@
     },
     {
       "type": "event",
-      "name": "MinVaultWeightUpdated",
-      "inputs": [
-        {
-          "name": "minWeightBps",
-          "type": "uint256",
-          "indexed": false,
-          "internalType": "uint256"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
       "name": "MultiTokenJackpotWon",
       "inputs": [
         {
@@ -1608,6 +2045,38 @@
         },
         {
           "name": "numVaultsPaid",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "OracleDeviationGuardUpdated",
+      "inputs": [
+        {
+          "name": "maxDeviationBps",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "deviationWindow",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "OracleMaxStalenessUpdated",
+      "inputs": [
+        {
+          "name": "maxStaleness",
           "type": "uint256",
           "indexed": false,
           "internalType": "uint256"
@@ -1662,6 +2131,230 @@
           "type": "bytes32",
           "indexed": false,
           "internalType": "bytes32"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "PendingVrfResultProcessed",
+      "inputs": [
+        {
+          "name": "requestId",
+          "type": "uint256",
+          "indexed": true,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "RemoteLotteryEntryReceived",
+      "inputs": [
+        {
+          "name": "srcEid",
+          "type": "uint32",
+          "indexed": true,
+          "internalType": "uint32"
+        },
+        {
+          "name": "buyer",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "tokenIn",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "sourceChainId",
+          "type": "uint32",
+          "indexed": false,
+          "internalType": "uint32"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "RemoteOFTAuthorized",
+      "inputs": [
+        {
+          "name": "srcEid",
+          "type": "uint32",
+          "indexed": true,
+          "internalType": "uint32"
+        },
+        {
+          "name": "sender",
+          "type": "bytes32",
+          "indexed": false,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "authorized",
+          "type": "bool",
+          "indexed": false,
+          "internalType": "bool"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "SponsoredVrfMinSwapUpdated",
+      "inputs": [
+        {
+          "name": "minSwapAmountUSD",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "SponsorshipPolicyUpdated",
+      "inputs": [
+        {
+          "name": "context",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "enabled",
+          "type": "bool",
+          "indexed": false,
+          "internalType": "bool"
+        },
+        {
+          "name": "maxFeePerMessage",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "budgetPerEpoch",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "epochDuration",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "SponsorshipRateLimitsUpdated",
+      "inputs": [
+        {
+          "name": "vrfMaxPerBuyerPerEpoch",
+          "type": "uint32",
+          "indexed": false,
+          "internalType": "uint32"
+        },
+        {
+          "name": "vrfMaxPerOriginPerEpoch",
+          "type": "uint32",
+          "indexed": false,
+          "internalType": "uint32"
+        },
+        {
+          "name": "callbackMaxPerBuyerPerEpoch",
+          "type": "uint32",
+          "indexed": false,
+          "internalType": "uint32"
+        },
+        {
+          "name": "callbackMaxPerOriginPerEpoch",
+          "type": "uint32",
+          "indexed": false,
+          "internalType": "uint32"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "SponsorshipSkipped",
+      "inputs": [
+        {
+          "name": "context",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "reason",
+          "type": "uint8",
+          "indexed": false,
+          "internalType": "enum CreatorLotteryManager.SponsorshipSkipReason"
+        },
+        {
+          "name": "feeNative",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "valueHint",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "SponsorshipSpendRecorded",
+      "inputs": [
+        {
+          "name": "context",
+          "type": "bytes32",
+          "indexed": true,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "amount",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "spentInEpoch",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "budgetPerEpoch",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
+        },
+        {
+          "name": "epochStart",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
         }
       ],
       "anonymous": false
@@ -1745,20 +2438,26 @@
     },
     {
       "type": "event",
-      "name": "VaultGaugeVotingUpdated",
+      "name": "VrfResultDeferred",
       "inputs": [
         {
-          "name": "vaultGaugeVoting",
-          "type": "address",
+          "name": "requestId",
+          "type": "uint256",
           "indexed": true,
-          "internalType": "address"
+          "internalType": "uint256"
+        },
+        {
+          "name": "randomWord",
+          "type": "uint256",
+          "indexed": false,
+          "internalType": "uint256"
         }
       ],
       "anonymous": false
     },
     {
       "type": "event",
-      "name": "WinnerBroadcast",
+      "name": "WinnerCallbackSent",
       "inputs": [
         {
           "name": "dstEid",
@@ -1767,60 +2466,10 @@
           "internalType": "uint32"
         },
         {
-          "name": "creatorCoin",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
           "name": "winner",
           "type": "address",
           "indexed": true,
           "internalType": "address"
-        },
-        {
-          "name": "payoutBps",
-          "type": "uint16",
-          "indexed": false,
-          "internalType": "uint16"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "WinnerNotifiedToHub",
-      "inputs": [
-        {
-          "name": "creatorCoin",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "winner",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "payoutBps",
-          "type": "uint16",
-          "indexed": false,
-          "internalType": "uint16"
-        }
-      ],
-      "anonymous": false
-    },
-    {
-      "type": "event",
-      "name": "WinnerReceivedFromRemote",
-      "inputs": [
-        {
-          "name": "srcEid",
-          "type": "uint32",
-          "indexed": true,
-          "internalType": "uint32"
         },
         {
           "name": "creatorCoin",
@@ -1829,28 +2478,27 @@
           "internalType": "address"
         },
         {
-          "name": "winner",
-          "type": "address",
-          "indexed": true,
-          "internalType": "address"
-        },
-        {
-          "name": "payoutBps",
-          "type": "uint16",
+          "name": "totalSharesPaid",
+          "type": "uint256",
           "indexed": false,
-          "internalType": "uint16"
+          "internalType": "uint256"
         }
       ],
       "anonymous": false
     },
     {
       "type": "error",
-      "name": "CreatorCoinNotRegistered",
+      "name": "CallerFeeMismatch",
       "inputs": [
         {
-          "name": "token",
-          "type": "address",
-          "internalType": "address"
+          "name": "provided",
+          "type": "uint256",
+          "internalType": "uint256"
+        },
+        {
+          "name": "required",
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ]
     },
@@ -1908,28 +2556,6 @@
     },
     {
       "type": "error",
-      "name": "NoGaugeConfigured",
-      "inputs": [
-        {
-          "name": "token",
-          "type": "address",
-          "internalType": "address"
-        }
-      ]
-    },
-    {
-      "type": "error",
-      "name": "NoOracleConfigured",
-      "inputs": [
-        {
-          "name": "token",
-          "type": "address",
-          "internalType": "address"
-        }
-      ]
-    },
-    {
-      "type": "error",
       "name": "NoPeer",
       "inputs": [
         {
@@ -1941,12 +2567,12 @@
     },
     {
       "type": "error",
-      "name": "NoVaultConfigured",
+      "name": "NoPendingVrfResult",
       "inputs": [
         {
-          "name": "token",
-          "type": "address",
-          "internalType": "address"
+          "name": "requestId",
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ]
     },
@@ -2052,5 +2678,8 @@
       "name": "ZeroAddress",
       "inputs": []
     }
+  ],
+  "notes": [
+    "v1.8.2 broadcast uses the trimmed runtime that stays within the EIP-170 contract size limit."
   ]
 }

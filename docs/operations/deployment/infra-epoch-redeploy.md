@@ -19,7 +19,7 @@ This path assumes legacy per-creator scripts are retired and `/deploy` is the ca
 - `PRIVATE_KEY`
 - `BASE_RPC_URL`
 - `ETHERSCAN_API_KEY` (or `BASESCAN_API_KEY`)
-- `DEPLOYMENT_EPOCH_TAG` (recommended, example: `v1.8.1`)
+- `DEPLOYMENT_EPOCH_TAG` (recommended, example: `v1.8.2`)
 
 Optional:
 
@@ -28,24 +28,25 @@ Optional:
 
 ## 1) Choose Epoch Tag
 
-Pick an immutable epoch token (example: `v1.8.1`) and keep it in release notes.
+Pick an immutable epoch token (example: `v1.8.2`) and keep it in release notes.
 
 ```bash
-export DEPLOYMENT_EPOCH_TAG="v1.8.1"
+export DEPLOYMENT_EPOCH_TAG="v1.8.2"
 ```
 
-Deployment scripts derive salts from this tag automatically unless raw `INFRA_*_SALT` values are provided.
-For the vanity epoch, the wrapper scripts also auto-generate and pin `INFRA_VANITY_MANIFEST_PATH` unless you provide one explicitly.
+Deployment scripts derive `base-release:*` salt tags from this epoch automatically unless raw `INFRA_*_SALT` values are provided.
 
-## 2) Deploy Core Infra (Registry, factories, shared services)
+## 2) Deploy Core Infra (Registry, factory, shared services)
 
-If you need a fresh registry epoch:
+The canonical full-release path is:
 
 ```bash
-./script/deploy.sh infrastructure
+./script/deploy-base-full-release.sh
 ```
 
-Capture outputs (new registry/factory/shared service addresses) before moving on.
+This broadcasts the fresh shared/global layer, hands those addresses into the deterministic v2 deployment pass, and seeds the bytecode store automatically.
+
+If you need the lower-level shared/global deployment only, `./script/deploy.sh infrastructure` remains available for direct operator use.
 
 ## 3) Deploy Deterministic Phase Infra + Seed Bytecode Store
 
@@ -101,7 +102,7 @@ Repeat for:
 Record the release hash snapshot after regenerating deploy bytecode:
 
 - `deployments/base/v1.7.1-bytecode-manifest.json`
-- `deployments/base/v1.8.1-vanity-manifest.json`
+- `deployments/base/v1.8.2-bytecode-manifest.json`
 
 ## 6) App/API Cutover
 
@@ -116,6 +117,7 @@ Update environment/config to the new epoch addresses:
   - `DEPLOYMENT_BATCHER`
   - `CREATOR_LOTTERY_MANAGER`
   - `LOTTERY_MANAGER`
+  - `SOLANA_BRIDGE_ADAPTER`
 - frontend env:
   - `VITE_REGISTRY`
   - `VITE_UNIVERSAL_BYTECODE_STORE`

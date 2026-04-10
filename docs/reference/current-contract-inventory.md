@@ -5,69 +5,83 @@ sidebar_position: 5
 
 # Current Contract Inventory (Base)
 
-Generated on: 2026-04-07  
-Scope: `v1.8.1` vanity-epoch planning materials and current canonical Base defaults.
+Generated on: 2026-04-10  
+Scope: `v1.8.2` full-redeploy release packet and current canonical Base defaults.
 
 ## Sources
 
-1. Fresh epoch deterministic outputs (`INFRA_*_SALT_TAG` set to `...:v1.8.1`)
-2. Frontend defaults: `frontend/src/config/contracts.defaults.ts`
-3. Active manifests: `deployments/base/contracts/**/*.json`
-4. Vanity planning catalog and manifest:
-   - `deployments/base/shared-global-vanity-targets.json`
-   - `deployments/base/v1.8.1-vanity-manifest.json`
-5. Archived prior snapshot: `deployments/base/archive/2026-01-addresses.json`
+1. Release packet: `docs/operations/deployment/releases/v1.8.2-mainnet.md`
+2. Bytecode / codeId manifest: `deployments/base/v1.8.2-bytecode-manifest.json`
+3. Frontend defaults: `frontend/src/config/contracts.defaults.ts`
+4. Live deployment snapshots: `deployments/base/contracts/**/*.json`
+5. Onchain `DeploymentBatcher` wiring checks against the live Base deployment
 
-## Planned v1.8.1 Vanity Infra Targets
+## Canonical Base Infrastructure
 
 | Contract / Field | Address |
 |---|---|
-| `registry` | `0x888506B92181c57A2fD06516FFFb6F375b7A4626` |
-| `bytecodeStore` | `0x58071d59d2f5E61A80b3f8770B6564289acD4626` |
-| `create2DeployerFromStore` | `0x1c1596090B0e0Bb35b2F7cd77e865FbeE3654626` |
-| `deploymentBatcher` | `0xaE81C19c2A2E964e65cCacE89A6eb2309d6E4626` |
-| `deploymentBatcherPhase3Helper` | `0x625992eAdA5942192b029c2a0DF5cBECc65509FB` |
-| `creatorOVaultCoreModule` | `0x9379761d3680401f4d412048B3Ff6FE05dE04626` |
-| `creatorOVaultStrategiesModule` | `0x8fd50C3695749F95801E8c867E264100c2C54626` |
-| `creatorOVaultAdminModule` | `0x6De6c3F10291e87fAEB7590CE01E400571434626` |
-| `vaultActivationBatcher` | `0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB` |
-| `lotteryManager` | `0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3` |
-| `solanaBridgeAdapter` | `0x2414b595c4f18532A5836B6e2E6d536832c572e8` |
+| `registry` | `0x79d0d68904BbB50361C9721CbDD17276E046771D` |
+| `creatorOVaultFactory` | `0xb66aA49d94569a8589f380D53e8a3f1F60165000` |
+| `vaultActivationBatcher` | `0x8b63912cD2490D1Ab0796c57Cc5909fF0059CECd` |
+| `lotteryManager` | `0xA137BEef789B80c76187E1b6DEef60fC7db6d280` |
+| `vrfConsumer` | `0x22ae936027Fe0c348758634bF8694E00D96338ac` |
+| `solanaBridgeAdapter` | `0x1B3E713852dEC5d983AD11BD1567eed0723ceA9b` |
+| `bytecodeStore` | `0xc8050cfeDA4CCd04079f37f1D95cD54279156E46` |
+| `create2DeployerFromStore` | `0x95700DA39462f97b0E874ED7e05BBF76413d7Ac1` |
+| `creatorOVaultCoreModule` | `0xf2367B030992e5661503bb9Bc7e712cf66799bC7` |
+| `creatorOVaultStrategiesModule` | `0x897837200b1f4F8D6bec9b00d56Ed0189f55832b` |
+| `creatorOVaultAdminModule` | `0x940C8Fc97295AA4D9D2C5FcB26571BB4a98bbC19` |
+| `deploymentBatcher` | `0x721420F190cc4525bb8Adc72D4c66eEB806AFC37` |
+| `deploymentBatcherPhase3Helper` | `0x42612DA05Bd72d9B58f0Fa63161dDd8a3FEFd568` |
+| `deploymentBatcherUniV4Helper` | `0x5Ed8A640abF700e4c3A627Ad7cc8A8bdDEe5F34f` |
 | `permit2` | `0x000000000022D473030F116dDEE9F6B43aC78BA3` |
 | `usdc` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
 
-Planning disposition for this epoch:
-- Phase-1 vanity targets are precomputed in `deployments/base/v1.8.1-vanity-manifest.json`
-- Constructor-derived helpers are tracked for deterministic drift but are not suffix-enforced
-- Historical `v1.7.1` release evidence remains preserved in its dedicated release packet/checklist pages
-
-## Frontend/API Defaults
+## Frontend / API Defaults
 
 From `frontend/src/config/contracts.defaults.ts`:
 
 | Key | Address |
 |---|---|
-| `registry` | `0x888506B92181c57A2fD06516FFFb6F375b7A4626` |
-| `creatorVaultBatcher` | `0x14435cc4A8D307b4d3979148E5AB71Af1ed19088` |
-| `creatorVaultBatcherAutoHandoff` | `0x14435cc4A8D307b4d3979148E5AB71Af1ed19088` |
-| `universalBytecodeStore` | `0x6A578022609cdb65C614FF28912C49FC1EC97071` |
-| `universalCreate2DeployerFromStore` | `0x5ea71D4d03dEe596E93B5e6BEddA6F96BBF9d36a` |
+| `registry` | `0x79d0d68904BbB50361C9721CbDD17276E046771D` |
+| `lotteryManager` | `0xA137BEef789B80c76187E1b6DEef60fC7db6d280` |
+| `vrfConsumer` | `0x22ae936027Fe0c348758634bF8694E00D96338ac` |
+| `solanaBridgeAdapter` | `0x1B3E713852dEC5d983AD11BD1567eed0723ceA9b` |
+| `universalBytecodeStore` | `0xc8050cfeDA4CCd04079f37f1D95cD54279156E46` |
+| `universalCreate2DeployerFromStore` | `0x95700DA39462f97b0E874ED7e05BBF76413d7Ac1` |
+| `vaultActivationBatcher` | `0x8b63912cD2490D1Ab0796c57Cc5909fF0059CECd` |
+| `creatorVaultBatcher` | `0x721420F190cc4525bb8Adc72D4c66eEB806AFC37` |
+| `creatorVaultBatcherAutoHandoff` | `0x721420F190cc4525bb8Adc72D4c66eEB806AFC37` |
 
-## Active Manifests
+## Active Deployment Snapshots
 
-Current live deployment manifests remain in `deployments/base/contracts/**/*.json`.
-The planned vanity-epoch manifest lives in:
+The live Base deployment snapshots are stored in `deployments/base/contracts/**/*.json`.
 
-- `deployments/base/v1.8.1-vanity-manifest.json`
-- `deployments/base/v1.8.1-bytecode-manifest.json`
+Current snapshot set:
 
-The previous `2026-01` address set is archived in:
+- `deployments/base/contracts/core/CreatorRegistry.json`
+- `deployments/base/contracts/factories/CreatorOVaultFactory.json`
+- `deployments/base/contracts/services/lottery/CreatorLotteryManager.json`
+- `deployments/base/contracts/services/lottery/vrf/CreatorVRFConsumerV2_5.json`
+- `deployments/base/contracts/services/bridge/SolanaBridgeAdapter.json`
+- `deployments/base/contracts/helpers/batchers/VaultActivationBatcher.json`
+- `deployments/base/contracts/helpers/infra/UniversalBytecodeStore.json`
+- `deployments/base/contracts/factories/UniversalCreate2DeployerFromStore.json`
+- `deployments/base/contracts/helpers/batchers/DeploymentBatcher.json`
+- `deployments/base/contracts/helpers/batchers/DeploymentBatcherPhase3Helper.json`
 
-- `deployments/base/archive/2026-01-addresses.json`
+Live batcher child addresses that are read directly from `DeploymentBatcher` are also recorded in the release packet:
+
+- `DeploymentBatcherPhase3Helper=0x42612DA05Bd72d9B58f0Fa63161dDd8a3FEFd568`
+- `DeploymentBatcherUniV4Helper=0x5Ed8A640abF700e4c3A627Ad7cc8A8bdDEe5F34f`
 
 ## Bytecode / CodeId Evidence
 
-Historical release bytecode manifest:
+Primary release manifest:
+
+- `deployments/base/v1.8.2-bytecode-manifest.json`
+
+Historical reference manifest:
 
 - `deployments/base/v1.7.1-bytecode-manifest.json`
 
@@ -75,7 +89,7 @@ For each deployment contract this includes:
 
 - `creationBytecodeHash`
 - `codeId` (`keccak256(creationCode)`)
-- bytecode size in bytes
+- `creationBytecodeBytes`
 
 ## Canonical Ajna Strategy Inventory
 
@@ -85,18 +99,15 @@ The canonical phase-3 Ajna sleeve remains:
 2. `AjnaERC4626Vault`
 3. `AjnaVaultAuth`
 
-Deploy/codeId manifests must include all three entries.
+The active bytecode manifest must include all three entries.
 
-## Cutover Checklist
+## Operator Checks
 
-Before broadcasting the planned `v1.8.1` vanity epoch:
-
-1. Regenerate `deployments/base/v1.8.1-vanity-manifest.json` from `tools/vanity-salt-grinder`.
-2. Regenerate `deployments/base/v1.8.1-bytecode-manifest.json` from `script/generate_bytecode_manifest.sh`.
-3. Export the raw `INFRA_*_SALT` values or pass `INFRA_VANITY_MANIFEST_PATH` into the deploy script.
-4. Keep `frontend/src/config/contracts.defaults.ts` and env examples aligned with the final onchain cutover values after broadcast.
-
-Operator packet:
-
-- `docs/operations/deployment/releases/v1.8.1-mainnet.md`
-- `docs/operations/deployment/releases/v1.8.1-pre-broadcast-checklist.md`
+1. Run `bash test/v182-full-redeploy-guard.sh`.
+2. Run `forge test --match-contract RegistryDefaultScriptsTest`.
+3. Run `forge test --match-contract SeedCreatorRegistryConfigTest`.
+4. Confirm `DeploymentBatcher` wiring onchain:
+   - `cast call 0x721420F190cc4525bb8Adc72D4c66eEB806AFC37 "bytecodeStore()(address)"`
+   - `cast call 0x721420F190cc4525bb8Adc72D4c66eEB806AFC37 "create2Deployer()(address)"`
+   - `cast call 0x721420F190cc4525bb8Adc72D4c66eEB806AFC37 "phase3Helper()(address)"`
+   - `cast call 0x721420F190cc4525bb8Adc72D4c66eEB806AFC37 "uniV4Helper()(address)"`

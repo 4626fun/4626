@@ -2,7 +2,6 @@
 pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
-import {stdJson} from "forge-std/StdJson.sol";
 
 import "../contracts/helpers/batchers/DeploymentBatcher.sol";
 import "../contracts/helpers/infra/UniversalBytecodeStoreV2.sol";
@@ -11,7 +10,7 @@ import {CreatorOVaultAdminModule} from "../contracts/vault/modules/CreatorOVault
 import {CreatorOVaultCoreModule} from "../contracts/vault/modules/CreatorOVaultCoreModule.sol";
 import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorOVaultStrategiesModule.sol";
 
-/// @notice Deploys the phased 4626 deployment batcher (Phases 1–3) on Base mainnet.
+/// @notice Deploys the deterministic phased deployment batcher (Phases 1-3) on Base mainnet.
 ///
 /// Why:
 /// - The legacy one-tx deploy+launch flow no longer fits in a single Base tx due to code-deposit gas limits.
@@ -52,33 +51,33 @@ import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorO
 ///   INFRA_VAULT_ADMIN_MODULE_SALT or INFRA_VAULT_ADMIN_MODULE_SALT_TAG
 ///   INFRA_DEPLOYMENT_BATCHER_SALT or INFRA_DEPLOYMENT_BATCHER_SALT_TAG
 contract DeployBaseMainnetDeployer is Script {
-    using stdJson for string;
-
     // EIP-2470 universal CREATE2 factory.
     address constant CREATE2_FACTORY_ADDR = 0x4e59b44847b379578588920cA78FbF26c0B4956C;
 
     // Default salt tags. Scripts may override with:
     // - raw bytes32: INFRA_*_SALT
     // - string tag (hashed with keccak256): INFRA_*_SALT_TAG
-    string constant DEFAULT_STORE_SALT_TAG = "4626:UniversalBytecodeStore:v1.8.1";
-    string constant DEFAULT_DEPLOYER_FROM_STORE_SALT_TAG = "4626:UniversalCreate2DeployerFromStore:v1.8.1";
+    // - shared epoch: DEPLOYMENT_EPOCH_TAG
+    string constant DEFAULT_DEPLOYMENT_EPOCH_TAG = "v1.8.2";
+    string constant STORE_SALT_TAG_PREFIX = "base-release:UniversalBytecodeStore:";
+    string constant DEPLOYER_FROM_STORE_SALT_TAG_PREFIX = "base-release:UniversalCreate2DeployerFromStore:";
 
     // CreatorOVault module salts (shared logic contracts; no constructor args).
-    string constant DEFAULT_VAULT_CORE_MODULE_SALT_TAG = "4626:CreatorOVaultCoreModule:v1.8.1";
-    string constant DEFAULT_VAULT_STRATEGIES_MODULE_SALT_TAG = "4626:CreatorOVaultStrategiesModule:v1.8.1";
-    string constant DEFAULT_VAULT_ADMIN_MODULE_SALT_TAG = "4626:CreatorOVaultAdminModule:v1.8.1";
+    string constant VAULT_CORE_MODULE_SALT_TAG_PREFIX = "base-release:CreatorOVaultCoreModule:";
+    string constant VAULT_STRATEGIES_MODULE_SALT_TAG_PREFIX = "base-release:CreatorOVaultStrategiesModule:";
+    string constant VAULT_ADMIN_MODULE_SALT_TAG_PREFIX = "base-release:CreatorOVaultAdminModule:";
 
     // DeploymentBatcher salt (constructor args are chain-specific ⇒ address is chain-specific).
-    string constant DEFAULT_DEPLOYMENT_BATCHER_SALT_TAG = "4626:DeploymentBatcher:v1.8.1";
+    string constant DEPLOYMENT_BATCHER_SALT_TAG_PREFIX = "base-release:DeploymentBatcher:";
 
-    // Defaults (Base mainnet) — can be overridden via env.
-    address constant DEFAULT_REGISTRY = 0x888506B92181c57A2fD06516FFFb6F375b7A4626;
+    // Defaults (Base mainnet v1.8.2 full redeploy) — can be overridden via env.
+    address constant DEFAULT_REGISTRY = 0x79d0d68904BbB50361C9721CbDD17276E046771D;
     address constant DEFAULT_PROTOCOL_TREASURY = 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3;
     address constant DEFAULT_POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
     address constant DEFAULT_TAX_HOOK = 0xca975B9dAF772C71161f3648437c3616E5Be0088;
     address constant DEFAULT_CHAINLINK_ETH_USD = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
-    address constant DEFAULT_VAULT_ACTIVATION_BATCHER = 0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB;
-    address constant DEFAULT_LOTTERY_MANAGER = 0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3;
+    address constant DEFAULT_VAULT_ACTIVATION_BATCHER = 0x8b63912cD2490D1Ab0796c57Cc5909fF0059CECd;
+    address constant DEFAULT_LOTTERY_MANAGER = 0xA137BEef789B80c76187E1b6DEef60fC7db6d280;
     address constant DEFAULT_PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
     address constant DEFAULT_USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
     address constant DEFAULT_UNISWAP_V3_FACTORY = 0x33128a8fC17869897dcE68Ed026d694621f6FDfD;
@@ -122,95 +121,22 @@ contract DeployBaseMainnetDeployer is Script {
         address deploymentBatcher;
     }
 
-    error VanityManifestEpochMismatch(string expectedEpoch, string actualEpoch);
-    error VanityManifestSuffixMismatch(string expectedSuffix, string actualSuffix);
-    error VanityManifestSaltMismatch(string key, bytes32 expected, bytes32 actual);
-    error VanityManifestAddressMismatch(string key, address expected, address actual);
-    error VanityManifestInputMismatch(string key, address expected, address actual);
-    error VanitySuffixMissing(string key, address predicted);
-
     function _create2(address deployer, bytes32 salt, bytes32 initCodeHash) internal pure returns (address) {
         return address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), deployer, salt, initCodeHash)))));
     }
 
-    function _saltFromEnv(string memory rawKey, string memory tagKey, string memory defaultTag)
+    function _expectedEpochTag() internal view returns (string memory) {
+        return vm.envOr("DEPLOYMENT_EPOCH_TAG", DEFAULT_DEPLOYMENT_EPOCH_TAG);
+    }
+
+    function _saltFromEnvOrEpoch(string memory rawKey, string memory tagKey, string memory defaultTagPrefix)
         internal
         returns (bytes32)
     {
         bytes32 raw = vm.envOr(rawKey, bytes32(0));
         if (raw != bytes32(0)) return raw;
-        string memory tag = vm.envOr(tagKey, defaultTag);
+        string memory tag = vm.envOr(tagKey, string.concat(defaultTagPrefix, _expectedEpochTag()));
         return keccak256(bytes(tag));
-    }
-
-    function _assertSuffix4626(string memory key, address predicted) internal pure {
-        if (uint160(predicted) & 0xffff != 0x4626) revert VanitySuffixMissing(key, predicted);
-    }
-
-    function _readManifestIfConfigured(
-        Config memory cfg,
-        SaltConfig memory salts,
-        PredictedAddresses memory predicted
-    ) internal view {
-        string memory manifestPath = vm.envOr("INFRA_VANITY_MANIFEST_PATH", string(""));
-        if (bytes(manifestPath).length == 0) return;
-
-        string memory json = vm.readFile(manifestPath);
-        string memory manifestEpoch = vm.parseJsonString(json, ".epochTag");
-        string memory manifestSuffix = vm.parseJsonString(json, ".vanitySuffix");
-
-        if (keccak256(bytes(manifestEpoch)) != keccak256(bytes("v1.8.1"))) {
-            revert VanityManifestEpochMismatch("v1.8.1", manifestEpoch);
-        }
-        if (keccak256(bytes(manifestSuffix)) != keccak256(bytes("4626"))) {
-            revert VanityManifestSuffixMismatch("4626", manifestSuffix);
-        }
-
-        _assertManifestInput(json, ".inputs.registry", "registry", cfg.registry);
-        _assertManifestInput(json, ".inputs.protocolTreasury", "protocolTreasury", cfg.protocolTreasury);
-        _assertManifestInput(json, ".inputs.poolManager", "poolManager", cfg.poolManager);
-        _assertManifestInput(json, ".inputs.taxHook", "taxHook", cfg.taxHook);
-        _assertManifestInput(json, ".inputs.chainlinkEthUsd", "chainlinkEthUsd", cfg.chainlinkEthUsd);
-        _assertManifestInput(
-            json, ".inputs.vaultActivationBatcher", "vaultActivationBatcher", cfg.vaultActivationBatcher
-        );
-        _assertManifestInput(json, ".inputs.lotteryManager", "lotteryManager", cfg.lotteryManager);
-        _assertManifestInput(json, ".inputs.permit2", "permit2", cfg.permit2);
-        _assertManifestInput(json, ".inputs.usdc", "usdc", cfg.usdc);
-        _assertManifestInput(json, ".inputs.uniswapV3Factory", "uniswapV3Factory", cfg.uniswapV3Factory);
-        _assertManifestInput(json, ".inputs.uniswapRouter", "uniswapRouter", cfg.uniswapRouter);
-        _assertManifestInput(json, ".inputs.ajnaFactory", "ajnaFactory", cfg.ajnaFactory);
-
-        _assertManifestPhase1(json, "UniversalBytecodeStoreV2", salts.store, predicted.store);
-        _assertManifestPhase1(json, "UniversalCreate2DeployerFromStore", salts.deployerFromStore, predicted.deployerFromStore);
-        _assertManifestPhase1(json, "CreatorOVaultCoreModule", salts.vaultCoreModule, predicted.vaultCoreModule);
-        _assertManifestPhase1(
-            json, "CreatorOVaultStrategiesModule", salts.vaultStrategiesModule, predicted.vaultStrategiesModule
-        );
-        _assertManifestPhase1(json, "CreatorOVaultAdminModule", salts.vaultAdminModule, predicted.vaultAdminModule);
-        _assertManifestPhase1(json, "DeploymentBatcher", salts.deploymentBatcher, predicted.deploymentBatcher);
-    }
-
-    function _assertManifestInput(string memory json, string memory keyPath, string memory key, address actual)
-        internal
-        pure
-    {
-        address expected = json.readAddress(keyPath);
-        if (expected != actual) revert VanityManifestInputMismatch(key, expected, actual);
-    }
-
-    function _assertManifestPhase1(string memory json, string memory entryName, bytes32 actualSalt, address actualAddress)
-        internal
-        pure
-    {
-        string memory saltPath = string.concat(".phase1.", entryName, ".rawSalt");
-        bytes32 expectedSalt = json.readBytes32(saltPath);
-        if (expectedSalt != actualSalt) revert VanityManifestSaltMismatch(entryName, expectedSalt, actualSalt);
-
-        string memory addressPath = string.concat(".phase1.", entryName, ".predictedAddress");
-        address expectedAddress = json.readAddress(addressPath);
-        if (expectedAddress != actualAddress) revert VanityManifestAddressMismatch(entryName, expectedAddress, actualAddress);
-        _assertSuffix4626(entryName, actualAddress);
     }
 
     function run() external {
@@ -237,29 +163,29 @@ contract DeployBaseMainnetDeployer is Script {
         bool configureSolana = vm.envOr("CONFIGURE_SOLANA", uint256(0)) == 1;
         bool configureOvaultRuntime = vm.envOr("CONFIGURE_OVAULT_RUNTIME", uint256(0)) == 1;
         SaltConfig memory salts;
-        salts.store = _saltFromEnv("INFRA_STORE_SALT", "INFRA_STORE_SALT_TAG", DEFAULT_STORE_SALT_TAG);
-        salts.deployerFromStore = _saltFromEnv(
+        salts.store = _saltFromEnvOrEpoch("INFRA_STORE_SALT", "INFRA_STORE_SALT_TAG", STORE_SALT_TAG_PREFIX);
+        salts.deployerFromStore = _saltFromEnvOrEpoch(
             "INFRA_DEPLOYER_FROM_STORE_SALT",
             "INFRA_DEPLOYER_FROM_STORE_SALT_TAG",
-            DEFAULT_DEPLOYER_FROM_STORE_SALT_TAG
+            DEPLOYER_FROM_STORE_SALT_TAG_PREFIX
         );
-        salts.vaultCoreModule = _saltFromEnv(
-            "INFRA_VAULT_CORE_MODULE_SALT", "INFRA_VAULT_CORE_MODULE_SALT_TAG", DEFAULT_VAULT_CORE_MODULE_SALT_TAG
+        salts.vaultCoreModule = _saltFromEnvOrEpoch(
+            "INFRA_VAULT_CORE_MODULE_SALT", "INFRA_VAULT_CORE_MODULE_SALT_TAG", VAULT_CORE_MODULE_SALT_TAG_PREFIX
         );
-        salts.vaultStrategiesModule = _saltFromEnv(
+        salts.vaultStrategiesModule = _saltFromEnvOrEpoch(
             "INFRA_VAULT_STRATEGIES_MODULE_SALT",
             "INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG",
-            DEFAULT_VAULT_STRATEGIES_MODULE_SALT_TAG
+            VAULT_STRATEGIES_MODULE_SALT_TAG_PREFIX
         );
-        salts.vaultAdminModule = _saltFromEnv(
+        salts.vaultAdminModule = _saltFromEnvOrEpoch(
             "INFRA_VAULT_ADMIN_MODULE_SALT",
             "INFRA_VAULT_ADMIN_MODULE_SALT_TAG",
-            DEFAULT_VAULT_ADMIN_MODULE_SALT_TAG
+            VAULT_ADMIN_MODULE_SALT_TAG_PREFIX
         );
-        salts.deploymentBatcher = _saltFromEnv(
+        salts.deploymentBatcher = _saltFromEnvOrEpoch(
             "INFRA_DEPLOYMENT_BATCHER_SALT",
             "INFRA_DEPLOYMENT_BATCHER_SALT_TAG",
-            DEFAULT_DEPLOYMENT_BATCHER_SALT_TAG
+            DEPLOYMENT_BATCHER_SALT_TAG_PREFIX
         );
 
         PredictedAddresses memory predicted;
@@ -329,8 +255,6 @@ contract DeployBaseMainnetDeployer is Script {
         predicted.deploymentBatcher = deployerAddr;
         console2.log("DeploymentBatcher (predicted):", deployerAddr);
 
-        _readManifestIfConfigured(cfg, salts, predicted);
-
         vm.startBroadcast(pk);
 
         // Deploy v2 store (if missing).
@@ -380,6 +304,12 @@ contract DeployBaseMainnetDeployer is Script {
         require(deployer.vaultStrategiesModule() == strategiesModuleAddr, "Deployer strategies module mismatch");
         require(deployer.vaultAdminModule() == adminModuleAddr, "Deployer admin module mismatch");
         console2.log("DeploymentBatcher:", address(deployer));
+        console2.log(string.concat("HANDOFF:UNIVERSAL_BYTECODE_STORE=", vm.toString(storeAddr)));
+        console2.log(string.concat("HANDOFF:UNIVERSAL_CREATE2_DEPLOYER=", vm.toString(create2DeployerAddr)));
+        console2.log(string.concat("HANDOFF:UNIVERSAL_CREATE2_FROM_STORE=", vm.toString(create2DeployerAddr)));
+        console2.log(string.concat("HANDOFF:DEPLOYMENT_BATCHER=", vm.toString(address(deployer))));
+        console2.log(string.concat("HANDOFF:CREATOR_VAULT_BATCHER=", vm.toString(address(deployer))));
+        console2.log(string.concat("HANDOFF:CREATOR_VAULT_BATCHER_AUTO_HANDOFF=", vm.toString(address(deployer))));
 
         // Optional: configure the 20% Solana allocation path on the batcher.
         if (configureSolana) {

@@ -2,9 +2,12 @@
 
 This directory tracks committed deployment artifacts and ABI snapshots used by tooling and operational docs.
 
-## Current Scope
+## Current Canonical Release
 
-As of April 9, 2026, this folder contains Base mainnet deployment artifacts only.
+- Base mainnet shared/global plus deterministic infra are live on `v1.8.2`.
+- Release packet: `docs/operations/deployment/releases/v1.8.2-mainnet.md`
+- Bytecode / codeId manifest: `deployments/base/v1.8.2-bytecode-manifest.json`
+- Live Base deployment snapshots: `deployments/base/contracts/**/*.json`
 
 ## Directory Map
 

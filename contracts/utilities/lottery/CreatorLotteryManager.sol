@@ -130,6 +130,10 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     uint256 internal constant DEFAULT_VRF_SPONSOR_BUDGET = 0.25 ether;
     uint256 internal constant DEFAULT_CALLBACK_SPONSOR_MAX_FEE = 0.01 ether;
     uint256 internal constant DEFAULT_CALLBACK_SPONSOR_BUDGET = 0.1 ether;
+    bytes32 internal constant VRF_REQUEST_CONTEXT =
+        0xd84f4bdfe2e4cf43345263bca820ebe0fd153da9fd7f53871b6103ba604a4430;
+    bytes32 internal constant WINNER_CALLBACK_CONTEXT =
+        0x197005c8271d0fbeff8e5770b1fa02e04e4ba94e019fc8ea71c55fd52eb21205;
 
     // Safety defaults: sponsorship is opt-in and bounded.
     uint256 internal constant DEFAULT_SPONSORED_VRF_MIN_SWAP_USD = 10_000_000; // $10 (6 decimals)
@@ -349,10 +353,6 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     error Unauthorized();
     error InvalidAmount();
     error CallerFeeMismatch(uint256 provided, uint256 required);
-    error CreatorCoinNotRegistered(address token);
-    error NoOracleConfigured(address token);
-    error NoVaultConfigured(address token);
-    error NoGaugeConfigured(address token);
     error NoPendingVrfResult(uint256 requestId);
 
     // ================================
@@ -957,10 +957,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
                         _syncSponsoredCountByBuyer(vrfSponsoredCountByBuyer, vrfBuyerEpochStart, buyer, epochStart);
                     if (buyerCount >= vrfMaxSponsoredPerBuyerPerEpoch) {
                         emit SponsorshipSkipped(
-                            _sponsorshipContext("VRF_REQUEST"),
-                            SponsorshipSkipReason.RATE_LIMITED,
-                            nativeFee,
-                            swapValueUSD
+                            VRF_REQUEST_CONTEXT, SponsorshipSkipReason.RATE_LIMITED, nativeFee, swapValueUSD
                         );
                         return 0;
                     }
@@ -974,18 +971,13 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
                     );
                     if (originCount >= vrfMaxSponsoredPerOriginPerEpoch) {
                         emit SponsorshipSkipped(
-                            _sponsorshipContext("VRF_REQUEST"),
-                            SponsorshipSkipReason.RATE_LIMITED,
-                            nativeFee,
-                            swapValueUSD
+                            VRF_REQUEST_CONTEXT, SponsorshipSkipReason.RATE_LIMITED, nativeFee, swapValueUSD
                         );
                         return 0;
                     }
                 }
 
-                if (!_consumeSponsorship(
-                        vrfSponsorshipPolicy, _sponsorshipContext("VRF_REQUEST"), nativeFee, swapValueUSD, true
-                    )) {
+                if (!_consumeSponsorship(vrfSponsorshipPolicy, VRF_REQUEST_CONTEXT, nativeFee, swapValueUSD, true)) {
                     return 0;
                 }
             }
@@ -1025,7 +1017,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
                 } else if (nativeFee > 0) {
                     _rollbackSponsoredSpend(vrfSponsorshipPolicy, nativeFee);
                     emit SponsorshipSkipped(
-                        _sponsorshipContext("VRF_REQUEST"), SponsorshipSkipReason.SEND_FAILED, nativeFee, swapValueUSD
+                        VRF_REQUEST_CONTEXT, SponsorshipSkipReason.SEND_FAILED, nativeFee, swapValueUSD
                     );
                 }
                 return 0;
@@ -1061,7 +1053,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
                 );
                 if (buyerCount >= callbackMaxSponsoredPerBuyerPerEpoch) {
                     emit SponsorshipSkipped(
-                        _sponsorshipContext("WINNER_CALLBACK"), SponsorshipSkipReason.RATE_LIMITED, nativeFee, 0
+                        WINNER_CALLBACK_CONTEXT, SponsorshipSkipReason.RATE_LIMITED, nativeFee, 0
                     );
                     return;
                 }
@@ -1074,16 +1066,14 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
                 );
                 if (originCount >= callbackMaxSponsoredPerOriginPerEpoch) {
                     emit SponsorshipSkipped(
-                        _sponsorshipContext("WINNER_CALLBACK"), SponsorshipSkipReason.RATE_LIMITED, nativeFee, 0
+                        WINNER_CALLBACK_CONTEXT, SponsorshipSkipReason.RATE_LIMITED, nativeFee, 0
                     );
                     return;
                 }
             }
         }
 
-        if (!_consumeSponsorship(
-                callbackSponsorshipPolicy, _sponsorshipContext("WINNER_CALLBACK"), nativeFee, 0, false
-            )) return;
+        if (!_consumeSponsorship(callbackSponsorshipPolicy, WINNER_CALLBACK_CONTEXT, nativeFee, 0, false)) return;
 
         _lzSend(dstEid, payload, options, fee, payable(address(this)));
 
@@ -1106,10 +1096,6 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
 
         emit WinnerCallbackSent(dstEid, winner, creatorCoin, totalSharesPaid);
         // If insufficient gas, silently skip — payout already happened on hub
-    }
-
-    function _sponsorshipContext(string memory label) internal pure returns (bytes32) {
-        return keccak256(bytes(label));
     }
 
     /// @dev Override LayerZero default behavior to support contract-sponsored messaging fees.
@@ -1226,19 +1212,6 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         }
 
         return OptionsBuilder.newOptions().addExecutorLzReceiveOption(callbackGasLimit, DEFAULT_MSG_VALUE);
-    }
-
-    /**
-     * @notice Quote the fee for a winner callback message
-     */
-    function quoteWinnerCallback(uint32 dstEid, address winner, address creatorCoin, uint256 totalSharesPaid)
-        external
-        view
-        returns (MessagingFee memory fee)
-    {
-        bytes memory payload = abi.encode(MSG_TYPE_WINNER_CALLBACK, winner, creatorCoin, totalSharesPaid);
-        bytes memory options = _buildOptions(dstEid);
-        return _quote(dstEid, payload, options, false);
     }
 
     /**
@@ -1359,9 +1332,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
             vrfSponsorshipPolicy.epochStart = block.timestamp;
         }
 
-        emit SponsorshipPolicyUpdated(
-            _sponsorshipContext("VRF_REQUEST"), enabled, maxFeePerMessage, budgetPerEpoch, epochDuration
-        );
+        emit SponsorshipPolicyUpdated(VRF_REQUEST_CONTEXT, enabled, maxFeePerMessage, budgetPerEpoch, epochDuration);
     }
 
     function setCallbackSponsorshipPolicy(
@@ -1381,7 +1352,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         }
 
         emit SponsorshipPolicyUpdated(
-            _sponsorshipContext("WINNER_CALLBACK"), enabled, maxFeePerMessage, budgetPerEpoch, epochDuration
+            WINNER_CALLBACK_CONTEXT, enabled, maxFeePerMessage, budgetPerEpoch, epochDuration
         );
     }
 
@@ -1547,13 +1518,6 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         }
 
         return (stats.entries, stats.winners, stats.rewardsPaid, jackpotBalance);
-    }
-
-    /**
-     * @notice Get remote lottery entry statistics
-     */
-    function getRemoteLotteryStats() external view returns (uint256) {
-        return totalRemoteLotteryEntries;
     }
 
     // ================================

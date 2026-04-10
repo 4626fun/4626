@@ -7,6 +7,8 @@
 # Usage:
 #   ./script/deploy.sh infrastructure    - Deploy all core contracts
 #   ./script/deploy.sh infra-v2          - Deploy phased infra + seed bytecode store
+#   ./script/deploy.sh release           - Canonical Base v1.8.2 full release rollout
+#   ./script/deploy.sh full-release      - Same as release
 #
 # Environment:
 #   PRIVATE_KEY         - Deployer private key
@@ -17,6 +19,9 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 
 set -e
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "$ROOT_DIR"
 
 # Colors
 RED='\033[0;31m'
@@ -50,10 +55,13 @@ print_usage() {
     echo -e "${YELLOW}Usage:${NC}"
     echo "  ./script/deploy.sh infrastructure         Deploy all core contracts"
     echo "  ./script/deploy.sh infra-v2               Deploy v2 infra and seed bytecode store"
+    echo "  ./script/deploy.sh release                Deploy fresh shared/global + deterministic v2 infra"
+    echo "  ./script/deploy.sh full-release           Same as release"
     echo ""
     echo -e "${YELLOW}Examples:${NC}"
     echo "  ./script/deploy.sh infrastructure"
     echo "  ./script/deploy.sh infra-v2"
+    echo "  ./script/deploy.sh release"
     echo ""
     echo -e "${YELLOW}Environment Variables:${NC}"
     echo "  PRIVATE_KEY         - Your deployer private key"
@@ -102,91 +110,12 @@ deploy_infrastructure() {
 
 # Deploy v2 bytecode store + deployer + DeploymentBatcher, then seed store
 deploy_infra_v2() {
-    if [ -z "$BASE_RPC_URL" ]; then
-        echo -e "${RED}Error: BASE_RPC_URL environment variable not set${NC}"
-        exit 1
-    fi
+    bash "$ROOT_DIR/script/deploy-infra-v2.sh"
+}
 
-    if [ -z "${DEPLOYMENT_EPOCH_TAG:-}" ]; then
-        export DEPLOYMENT_EPOCH_TAG="v1.8.1"
-    fi
-
-    if [ -n "${DEPLOYMENT_EPOCH_TAG:-}" ]; then
-        : "${INFRA_STORE_SALT_TAG:=4626:UniversalBytecodeStore:${DEPLOYMENT_EPOCH_TAG}}"
-        : "${INFRA_DEPLOYER_FROM_STORE_SALT_TAG:=4626:UniversalCreate2DeployerFromStore:${DEPLOYMENT_EPOCH_TAG}}"
-        : "${INFRA_VAULT_CORE_MODULE_SALT_TAG:=4626:CreatorOVaultCoreModule:${DEPLOYMENT_EPOCH_TAG}}"
-        : "${INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG:=4626:CreatorOVaultStrategiesModule:${DEPLOYMENT_EPOCH_TAG}}"
-        : "${INFRA_VAULT_ADMIN_MODULE_SALT_TAG:=4626:CreatorOVaultAdminModule:${DEPLOYMENT_EPOCH_TAG}}"
-        : "${INFRA_DEPLOYMENT_BATCHER_SALT_TAG:=4626:DeploymentBatcher:${DEPLOYMENT_EPOCH_TAG}}"
-        export INFRA_STORE_SALT_TAG
-        export INFRA_DEPLOYER_FROM_STORE_SALT_TAG
-        export INFRA_VAULT_CORE_MODULE_SALT_TAG
-        export INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG
-        export INFRA_VAULT_ADMIN_MODULE_SALT_TAG
-        export INFRA_DEPLOYMENT_BATCHER_SALT_TAG
-    fi
-
-    : "${INFRA_VANITY_MANIFEST_PATH:=${ROOT_DIR}/deployments/base/${DEPLOYMENT_EPOCH_TAG}-vanity-manifest.json}"
-    export INFRA_VANITY_MANIFEST_PATH
-
-    if [ ! -f "${INFRA_VANITY_MANIFEST_PATH}" ]; then
-        echo -e "${GREEN}Generating vanity manifest...${NC}"
-        cargo run --manifest-path "${ROOT_DIR}/tools/vanity-salt-grinder/Cargo.toml" -- \
-            --epoch-tag "${DEPLOYMENT_EPOCH_TAG}" \
-            --out "deployments/base/${DEPLOYMENT_EPOCH_TAG}-vanity-manifest.json"
-    fi
-
-    echo -e "${GREEN}Deploying v2 bytecode store + deployer...${NC}"
-    echo ""
-    echo -e "${YELLOW}Infra Salt Configuration:${NC}"
-    echo "  DEPLOYMENT_EPOCH_TAG=${DEPLOYMENT_EPOCH_TAG:-[not set]}"
-    echo "  INFRA_VANITY_MANIFEST_PATH=${INFRA_VANITY_MANIFEST_PATH}"
-    echo "  INFRA_STORE_SALT=${INFRA_STORE_SALT:-[auto by tag/default]}"
-    echo "  INFRA_STORE_SALT_TAG=${INFRA_STORE_SALT_TAG:-4626:UniversalBytecodeStore:v1.8.1 (default)}"
-    echo "  INFRA_DEPLOYER_FROM_STORE_SALT=${INFRA_DEPLOYER_FROM_STORE_SALT:-[auto by tag/default]}"
-    echo "  INFRA_DEPLOYER_FROM_STORE_SALT_TAG=${INFRA_DEPLOYER_FROM_STORE_SALT_TAG:-4626:UniversalCreate2DeployerFromStore:v1.8.1 (default)}"
-    echo "  INFRA_VAULT_CORE_MODULE_SALT=${INFRA_VAULT_CORE_MODULE_SALT:-[auto by tag/default]}"
-    echo "  INFRA_VAULT_CORE_MODULE_SALT_TAG=${INFRA_VAULT_CORE_MODULE_SALT_TAG:-4626:CreatorOVaultCoreModule:v1.8.1 (default)}"
-    echo "  INFRA_VAULT_STRATEGIES_MODULE_SALT=${INFRA_VAULT_STRATEGIES_MODULE_SALT:-[auto by tag/default]}"
-    echo "  INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG=${INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG:-4626:CreatorOVaultStrategiesModule:v1.8.1 (default)}"
-    echo "  INFRA_VAULT_ADMIN_MODULE_SALT=${INFRA_VAULT_ADMIN_MODULE_SALT:-[auto by tag/default]}"
-    echo "  INFRA_VAULT_ADMIN_MODULE_SALT_TAG=${INFRA_VAULT_ADMIN_MODULE_SALT_TAG:-4626:CreatorOVaultAdminModule:v1.8.1 (default)}"
-    echo "  INFRA_DEPLOYMENT_BATCHER_SALT=${INFRA_DEPLOYMENT_BATCHER_SALT:-[auto by tag/default]}"
-    echo "  INFRA_DEPLOYMENT_BATCHER_SALT_TAG=${INFRA_DEPLOYMENT_BATCHER_SALT_TAG:-4626:DeploymentBatcher:v1.8.1 (default)}"
-    echo ""
-
-    forge script script/DeployBaseMainnetDeployer.s.sol:DeployBaseMainnetDeployer \
-        --rpc-url "$BASE_RPC_URL" \
-        --broadcast \
-        --verify
-
-    if [ -n "${SOLANA_BRIDGE_ADAPTER:-}" ] && [ -n "${SOLANA_DESTINATION:-}" ]; then
-        echo ""
-        echo -e "${GREEN}Configuring Solana routing on deployment batcher (DeploymentBatcher)...${NC}"
-        forge script script/ConfigureDeploymentBatcherSolana.s.sol:ConfigureDeploymentBatcherSolana \
-            --rpc-url "$BASE_RPC_URL" \
-            --broadcast
-    else
-        echo ""
-        echo -e "${YELLOW}Skipping Solana config (set SOLANA_BRIDGE_ADAPTER + SOLANA_DESTINATION to enable).${NC}"
-    fi
-
-    echo ""
-    echo -e "${GREEN}Seeding v2 bytecode store (idempotent)...${NC}"
-    forge script script/SeedUniversalBytecodeStore.s.sol:SeedUniversalBytecodeStore \
-        --rpc-url "$BASE_RPC_URL" \
-        --broadcast
-
-    echo ""
-    echo -e "${GREEN}✓ v2 infra deployed successfully!${NC}"
-    echo ""
-    echo -e "${YELLOW}Next Steps:${NC}"
-    echo "1. Update frontend defaults with new addresses:"
-    echo "   - frontend/src/config/contracts.defaults.ts"
-    echo "   - universalBytecodeStore"
-    echo "   - universalCreate2DeployerFromStore"
-    echo "   - creatorVaultBatcher"
-    echo "2. If Solana is enabled, ensure adapter is authorized on LotteryManager"
+# Canonical Base release wrapper
+deploy_base_full_release() {
+    bash "$ROOT_DIR/script/deploy-base-full-release.sh"
 }
 
 # Main
@@ -204,6 +133,10 @@ main() {
         "infra-v2"|"deployer-v2"|"v2")
             check_prereqs
             deploy_infra_v2
+            ;;
+        "release"|"base-release"|"full-release")
+            check_prereqs
+            deploy_base_full_release
             ;;
         "help"|"-h"|"--help"|"")
             print_usage

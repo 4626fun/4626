@@ -50,8 +50,8 @@ contract DeployTier1Upgrade is Script {
     //                    EXISTING DEPLOYED CONTRACTS
     // ═══════════════════════════════════════════════════════════════════
 
-    /// @notice Existing CreatorRegistry on Base (compatible with new LotteryManager)
-    address constant REGISTRY = 0x888506B92181c57A2fD06516FFFb6F375b7A4626;
+    /// @notice Existing CreatorRegistry on Base (canonical v1.8.2 registry)
+    address constant REGISTRY = 0x79d0d68904BbB50361C9721CbDD17276E046771D;
 
     /// @notice Existing VRF Consumer on Base (unchanged, just needs configuration)
     address constant VRF_CONSUMER = 0x0265236984DE964CB0422BaeFbDb2de7C9d590F5;

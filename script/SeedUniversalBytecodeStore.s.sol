@@ -16,8 +16,8 @@ import "../contracts/helpers/infra/UniversalBytecodeStore.sol";
  *  UNIVERSAL_BYTECODE_STORE (optional; defaults to Base mainnet store)
  */
 contract SeedUniversalBytecodeStore is Script {
-    // Base mainnet: live v1.7.1 chunked store until the planned v1.8.1 vanity cutover lands.
-    address constant DEFAULT_BYTECODE_STORE = 0x6A578022609cdb65C614FF28912C49FC1EC97071;
+    // Base mainnet: canonical v1.8.2 chunked store for the full redeploy release.
+    address constant DEFAULT_BYTECODE_STORE = 0xc8050cfeDA4CCd04079f37f1D95cD54279156E46;
     uint256 constant MAX_SSTORE2_BYTES = 24_575; // EIP-170 runtime limit (24,576) minus STOP prefix.
 
     function _shouldProcess(uint256 index, uint256 offset, uint256 limit) internal pure returns (bool) {

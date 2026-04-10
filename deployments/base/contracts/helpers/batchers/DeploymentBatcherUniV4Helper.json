@@ -1,0 +1,252 @@
+{
+  "contractName": "DeploymentBatcherUniV4Helper",
+  "network": "Base",
+  "chainId": 8453,
+  "address": "0x5Ed8A640abF700e4c3A627Ad7cc8A8bdDEe5F34f",
+  "deployedBy": "0x721420F190cc4525bb8Adc72D4c66eEB806AFC37",
+  "deployedAt": "2026-04-10T09:29:07Z",
+  "deploymentTx": "0xbeeda2bf4601efd1d5bf6bd49954eea1c8b5f6d90d053540782a143130cf74aa",
+  "abi": [
+    {
+      "type": "constructor",
+      "inputs": [
+        {
+          "name": "_create2Deployer",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_poolManager",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_permit2",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "batcher",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "create2Deployer",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "contract IUniversalCreate2DeployerFromStore"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "deployUniV4Strategies",
+      "inputs": [
+        {
+          "name": "params",
+          "type": "tuple",
+          "internalType": "struct DeploymentBatcher.UniV4DeployParams",
+          "components": [
+            {
+              "name": "creatorToken",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "pairedToken",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "vault",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "owner",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "version",
+              "type": "string",
+              "internalType": "string"
+            },
+            {
+              "name": "positionManager",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "fee",
+              "type": "uint24",
+              "internalType": "uint24"
+            },
+            {
+              "name": "tickSpacing",
+              "type": "int24",
+              "internalType": "int24"
+            },
+            {
+              "name": "creatorIsCurrency0",
+              "type": "bool",
+              "internalType": "bool"
+            },
+            {
+              "name": "poolHook",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "registryOwner",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "hooksToApprove",
+              "type": "address[]",
+              "internalType": "address[]"
+            }
+          ]
+        },
+        {
+          "name": "codeIds",
+          "type": "tuple",
+          "internalType": "struct DeploymentBatcher.UniV4CodeIds",
+          "components": [
+            {
+              "name": "approvedV4HooksRegistry",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "fullRangeStrategy",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "concentratedStrategy",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "limitOrderStrategy",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "creatorLPManager",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            }
+          ]
+        },
+        {
+          "name": "baseSalt",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "out",
+          "type": "tuple",
+          "internalType": "struct DeploymentBatcher.UniV4DeploymentResult",
+          "components": [
+            {
+              "name": "hookRegistry",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "fullRangeStrategy",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "concentratedStrategy",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "limitOrderStrategy",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "creatorLPManager",
+              "type": "address",
+              "internalType": "address"
+            }
+          ]
+        }
+      ],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "permit2",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "poolManager",
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "error",
+      "name": "InvalidPoolCurrencies",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "InvalidTickSpacing",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "NotBatcher",
+      "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ZeroAddress",
+      "inputs": []
+    }
+  ],
+  "notes": [
+    "Created inside the DeploymentBatcher constructor during the v1.8.2 deployment transaction."
+  ]
+}

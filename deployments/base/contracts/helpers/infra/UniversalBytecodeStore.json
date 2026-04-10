@@ -1,11 +1,55 @@
 {
-  "contractName": "UniversalBytecodeStore",
+  "contractName": "UniversalBytecodeStoreV2",
   "network": "Base",
   "chainId": 8453,
-  "address": "0x6A578022609cdb65C614FF28912C49FC1EC97071",
+  "address": "0xc8050cfeDA4CCd04079f37f1D95cD54279156E46",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-04-01T08:43:05Z",
+  "deployedAt": "2026-04-10T09:29:05Z",
+  "deploymentTx": "0xaee44125b7b008ec451d34d601b87c2d815fd8bdd082bc02334423acf77a9ec5",
   "abi": [
+    {
+      "type": "function",
+      "name": "chunkCount",
+      "inputs": [
+        {
+          "name": "codeId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "chunkPointerAt",
+      "inputs": [
+        {
+          "name": "codeId",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        },
+        {
+          "name": "index",
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
     {
       "type": "function",
       "name": "get",
@@ -40,6 +84,25 @@
           "name": "",
           "type": "address",
           "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "sizes",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "stateMutability": "view"

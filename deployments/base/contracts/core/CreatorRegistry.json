@@ -2,9 +2,10 @@
   "contractName": "CreatorRegistry",
   "network": "Base",
   "chainId": 8453,
-  "address": "0x888506B92181c57A2fD06516FFFb6F375b7A4626",
+  "address": "0x79d0d68904BbB50361C9721CbDD17276E046771D",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-04-01T00:00:00Z",
+  "deployedAt": "2026-04-10T09:11:53Z",
+  "deploymentTx": "0xff023c63f224face88410bb877bf023219f5750d5dd71545ec6f8fe9a34677bd",
   "abi": [
     {
       "type": "constructor",
@@ -58,6 +59,25 @@
           "name": "",
           "type": "bool",
           "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "canonicalWalletToToken",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
         }
       ],
       "stateMutability": "view"
@@ -164,8 +184,8 @@
       "inputs": [
         {
           "name": "",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "outputs": [
@@ -202,8 +222,8 @@
       "inputs": [
         {
           "name": "",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "outputs": [
@@ -230,12 +250,79 @@
     },
     {
       "type": "function",
+      "name": "getAllRemoteOFTPeers",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "eids",
+          "type": "uint32[]",
+          "internalType": "uint32[]"
+        },
+        {
+          "name": "ofts",
+          "type": "address[]",
+          "internalType": "address[]"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getAllRemoteOFTPeersBytes32",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "eids",
+          "type": "uint32[]",
+          "internalType": "uint32[]"
+        },
+        {
+          "name": "peers",
+          "type": "bytes32[]",
+          "internalType": "bytes32[]"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getCanonicalWallet",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "getChainConfig",
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "outputs": [
@@ -246,8 +333,8 @@
           "components": [
             {
               "name": "chainId",
-              "type": "uint16",
-              "internalType": "uint16"
+              "type": "uint256",
+              "internalType": "uint256"
             },
             {
               "name": "chainName",
@@ -380,6 +467,11 @@
               "internalType": "address"
             },
             {
+              "name": "canonicalWallet",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
               "name": "pool",
               "type": "address",
               "internalType": "address"
@@ -391,8 +483,8 @@
             },
             {
               "name": "primaryChainId",
-              "type": "uint16",
-              "internalType": "uint16"
+              "type": "uint256",
+              "internalType": "uint256"
             },
             {
               "name": "isActive",
@@ -429,8 +521,8 @@
       "outputs": [
         {
           "name": "",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "stateMutability": "view"
@@ -441,8 +533,8 @@
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "outputs": [
@@ -536,8 +628,8 @@
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "outputs": [
@@ -555,8 +647,8 @@
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "outputs": [
@@ -593,8 +685,8 @@
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "outputs": [
@@ -612,8 +704,8 @@
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "outputs": [
@@ -631,8 +723,8 @@
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "outputs": [
@@ -703,6 +795,57 @@
     },
     {
       "type": "function",
+      "name": "getOmnichainVaultMesh",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "tuple",
+          "internalType": "struct ICreatorRegistry.OmnichainVaultMeshConfig",
+          "components": [
+            {
+              "name": "solanaEid",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "hubComposer",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "assetMeshToken",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "shareMeshToken",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "solanaAssetMint",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "enabled",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ]
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "getOracleForToken",
       "inputs": [
         {
@@ -726,8 +869,8 @@
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "outputs": [
@@ -745,8 +888,8 @@
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "outputs": [
@@ -764,8 +907,8 @@
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "outputs": [
@@ -773,6 +916,92 @@
           "name": "",
           "type": "address",
           "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getRemoteOFTChains",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32[]",
+          "internalType": "uint32[]"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getRemoteOFTChainsBytes32",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "uint32[]",
+          "internalType": "uint32[]"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getRemoteOFTPeer",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_chainEid",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getRemoteOFTPeerBytes32",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_chainEid",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
         }
       ],
       "stateMutability": "view"
@@ -798,13 +1027,32 @@
     },
     {
       "type": "function",
+      "name": "getSolanaAssetMint",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "getSupportedChains",
       "inputs": [],
       "outputs": [
         {
           "name": "",
-          "type": "uint16[]",
-          "internalType": "uint16[]"
+          "type": "uint256[]",
+          "internalType": "uint256[]"
         }
       ],
       "stateMutability": "view"
@@ -815,8 +1063,65 @@
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getTokenForCanonicalWallet",
+      "inputs": [
+        {
+          "name": "_wallet",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getTokenForRemoteOFT",
+      "inputs": [
+        {
+          "name": "_remoteOFT",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "getTokenForRemoteOFTBytes32",
+      "inputs": [
+        {
+          "name": "_remoteOFT",
+          "type": "bytes32",
+          "internalType": "bytes32"
         }
       ],
       "outputs": [
@@ -891,8 +1196,8 @@
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "outputs": [
@@ -943,8 +1248,8 @@
       "outputs": [
         {
           "name": "",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "stateMutability": "view"
@@ -955,8 +1260,8 @@
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "outputs": [
@@ -1021,6 +1326,44 @@
     },
     {
       "type": "function",
+      "name": "isRegisteredVault",
+      "inputs": [
+        {
+          "name": "_vault",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "isSolanaDepositEligible",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bool",
+          "internalType": "bool"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
       "name": "layerZeroCommonEndpoint",
       "inputs": [],
       "outputs": [
@@ -1038,8 +1381,8 @@
       "inputs": [
         {
           "name": "",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "outputs": [
@@ -1057,8 +1400,8 @@
       "inputs": [
         {
           "name": "",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "outputs": [
@@ -1076,8 +1419,8 @@
       "inputs": [
         {
           "name": "",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ],
       "outputs": [
@@ -1172,8 +1515,8 @@
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         },
         {
           "name": "_chainName",
@@ -1234,6 +1577,128 @@
     },
     {
       "type": "function",
+      "name": "remoteOFTBytes32ToToken",
+      "inputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "remoteOFTPeers",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "remoteOFTPeersBytes32",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "remoteOFTToToken",
+      "inputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [
+        {
+          "name": "",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "stateMutability": "view"
+    },
+    {
+      "type": "function",
+      "name": "removeRemoteOFTPeer",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_chainEid",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "removeRemoteOFTPeerBytes32",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_chainEid",
+          "type": "uint32",
+          "internalType": "uint32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
       "name": "renounceOwnership",
       "inputs": [],
       "outputs": [],
@@ -1252,6 +1717,24 @@
           "name": "_authorized",
           "type": "bool",
           "internalType": "bool"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setCanonicalWallet",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_wallet",
+          "type": "address",
+          "internalType": "address"
         }
       ],
       "outputs": [],
@@ -1281,8 +1764,8 @@
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         },
         {
           "name": "_isActive",
@@ -1390,24 +1873,6 @@
     },
     {
       "type": "function",
-      "name": "setVault",
-      "inputs": [
-        {
-          "name": "_token",
-          "type": "address",
-          "internalType": "address"
-        },
-        {
-          "name": "_vault",
-          "type": "address",
-          "internalType": "address"
-        }
-      ],
-      "outputs": [],
-      "stateMutability": "nonpayable"
-    },
-    {
-      "type": "function",
       "name": "setCreatorWrapper",
       "inputs": [
         {
@@ -1473,8 +1938,8 @@
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         },
         {
           "name": "_poolManager",
@@ -1506,8 +1971,8 @@
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         },
         {
           "name": "_reserve",
@@ -1524,8 +1989,8 @@
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         },
         {
           "name": "_controller",
@@ -1542,8 +2007,8 @@
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         },
         {
           "name": "_eid",
@@ -1560,8 +2025,8 @@
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         },
         {
           "name": "_endpoint",
@@ -1578,8 +2043,8 @@
       "inputs": [
         {
           "name": "_chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         },
         {
           "name": "_manager",
@@ -1643,6 +2108,120 @@
           "name": "_useCustomOApp",
           "type": "bool",
           "internalType": "bool"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setOmnichainVaultMesh",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_cfg",
+          "type": "tuple",
+          "internalType": "struct ICreatorRegistry.OmnichainVaultMeshConfig",
+          "components": [
+            {
+              "name": "solanaEid",
+              "type": "uint32",
+              "internalType": "uint32"
+            },
+            {
+              "name": "hubComposer",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "assetMeshToken",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "shareMeshToken",
+              "type": "address",
+              "internalType": "address"
+            },
+            {
+              "name": "solanaAssetMint",
+              "type": "bytes32",
+              "internalType": "bytes32"
+            },
+            {
+              "name": "enabled",
+              "type": "bool",
+              "internalType": "bool"
+            }
+          ]
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setRemoteOFTPeer",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_chainEid",
+          "type": "uint32",
+          "internalType": "uint32"
+        },
+        {
+          "name": "_remoteOFT",
+          "type": "address",
+          "internalType": "address"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setRemoteOFTPeerBytes32",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_chainEid",
+          "type": "uint32",
+          "internalType": "uint32"
+        },
+        {
+          "name": "_remoteOFT",
+          "type": "bytes32",
+          "internalType": "bytes32"
+        }
+      ],
+      "outputs": [],
+      "stateMutability": "nonpayable"
+    },
+    {
+      "type": "function",
+      "name": "setVault",
+      "inputs": [
+        {
+          "name": "_token",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "_vault",
+          "type": "address",
+          "internalType": "address"
         }
       ],
       "outputs": [],
@@ -1720,13 +2299,32 @@
     },
     {
       "type": "event",
+      "name": "CanonicalWalletSet",
+      "inputs": [
+        {
+          "name": "token",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "wallet",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
       "name": "ChainIdToEidUpdated",
       "inputs": [
         {
           "name": "chainId",
-          "type": "uint16",
+          "type": "uint256",
           "indexed": true,
-          "internalType": "uint16"
+          "internalType": "uint256"
         },
         {
           "name": "eid",
@@ -1743,9 +2341,9 @@
       "inputs": [
         {
           "name": "chainId",
-          "type": "uint16",
+          "type": "uint256",
           "indexed": true,
-          "internalType": "uint16"
+          "internalType": "uint256"
         },
         {
           "name": "chainName",
@@ -1762,9 +2360,9 @@
       "inputs": [
         {
           "name": "chainId",
-          "type": "uint16",
+          "type": "uint256",
           "indexed": true,
-          "internalType": "uint16"
+          "internalType": "uint256"
         },
         {
           "name": "isActive",
@@ -1781,9 +2379,9 @@
       "inputs": [
         {
           "name": "chainId",
-          "type": "uint16",
+          "type": "uint256",
           "indexed": true,
-          "internalType": "uint16"
+          "internalType": "uint256"
         }
       ],
       "anonymous": false
@@ -1875,9 +2473,9 @@
       "inputs": [
         {
           "name": "chainId",
-          "type": "uint16",
+          "type": "uint256",
           "indexed": true,
-          "internalType": "uint16"
+          "internalType": "uint256"
         }
       ],
       "anonymous": false
@@ -1888,9 +2486,9 @@
       "inputs": [
         {
           "name": "chainId",
-          "type": "uint16",
+          "type": "uint256",
           "indexed": true,
-          "internalType": "uint16"
+          "internalType": "uint256"
         },
         {
           "name": "contractType",
@@ -1932,9 +2530,9 @@
       "inputs": [
         {
           "name": "chainId",
-          "type": "uint16",
+          "type": "uint256",
           "indexed": false,
-          "internalType": "uint16"
+          "internalType": "uint256"
         },
         {
           "name": "eid",
@@ -1951,9 +2549,9 @@
       "inputs": [
         {
           "name": "chainId",
-          "type": "uint16",
+          "type": "uint256",
           "indexed": true,
-          "internalType": "uint16"
+          "internalType": "uint256"
         },
         {
           "name": "endpoint",
@@ -1970,9 +2568,58 @@
       "inputs": [
         {
           "name": "chainId",
-          "type": "uint16",
+          "type": "uint256",
           "indexed": true,
-          "internalType": "uint16"
+          "internalType": "uint256"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "OmnichainVaultMeshConfigured",
+      "inputs": [
+        {
+          "name": "creatorCoin",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "solanaEid",
+          "type": "uint32",
+          "indexed": true,
+          "internalType": "uint32"
+        },
+        {
+          "name": "hubComposer",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        },
+        {
+          "name": "assetMeshToken",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        },
+        {
+          "name": "shareMeshToken",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        },
+        {
+          "name": "solanaAssetMint",
+          "type": "bytes32",
+          "indexed": false,
+          "internalType": "bytes32"
+        },
+        {
+          "name": "enabled",
+          "type": "bool",
+          "indexed": false,
+          "internalType": "bool"
         }
       ],
       "anonymous": false
@@ -1997,13 +2644,117 @@
       "anonymous": false
     },
     {
+      "type": "event",
+      "name": "RemoteOFTPeerBytes32Removed",
+      "inputs": [
+        {
+          "name": "creatorCoin",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "chainEid",
+          "type": "uint32",
+          "indexed": true,
+          "internalType": "uint32"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "RemoteOFTPeerBytes32Set",
+      "inputs": [
+        {
+          "name": "creatorCoin",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "chainEid",
+          "type": "uint32",
+          "indexed": true,
+          "internalType": "uint32"
+        },
+        {
+          "name": "remoteOFT",
+          "type": "bytes32",
+          "indexed": false,
+          "internalType": "bytes32"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "RemoteOFTPeerRemoved",
+      "inputs": [
+        {
+          "name": "creatorCoin",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "chainEid",
+          "type": "uint32",
+          "indexed": true,
+          "internalType": "uint32"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "event",
+      "name": "RemoteOFTPeerSet",
+      "inputs": [
+        {
+          "name": "creatorCoin",
+          "type": "address",
+          "indexed": true,
+          "internalType": "address"
+        },
+        {
+          "name": "chainEid",
+          "type": "uint32",
+          "indexed": true,
+          "internalType": "uint32"
+        },
+        {
+          "name": "remoteOFT",
+          "type": "address",
+          "indexed": false,
+          "internalType": "address"
+        }
+      ],
+      "anonymous": false
+    },
+    {
+      "type": "error",
+      "name": "CanonicalWalletAlreadyInUse",
+      "inputs": [
+        {
+          "name": "wallet",
+          "type": "address",
+          "internalType": "address"
+        },
+        {
+          "name": "token",
+          "type": "address",
+          "internalType": "address"
+        }
+      ]
+    },
+    {
       "type": "error",
       "name": "ChainAlreadyRegistered",
       "inputs": [
         {
           "name": "chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ]
     },
@@ -2013,8 +2764,8 @@
       "inputs": [
         {
           "name": "chainId",
-          "type": "uint16",
-          "internalType": "uint16"
+          "type": "uint256",
+          "internalType": "uint256"
         }
       ]
     },
@@ -2081,6 +2832,14 @@
       "type": "error",
       "name": "ZeroAddress",
       "inputs": []
+    },
+    {
+      "type": "error",
+      "name": "ZeroBytes32",
+      "inputs": []
     }
+  ],
+  "notes": [
+    "Fresh shared/global broadcast for the v1.8.2 full redeploy."
   ]
 }

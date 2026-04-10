@@ -49,71 +49,67 @@ Production override safety:
 - leave `ALLOW_API_CONTRACT_OVERRIDES` unset (or `0`)
 - production then uses repo defaults from `frontend/src/config/contracts.defaults.ts`
 
-### Split Phase-1 rollout (Base mainnet + Vercel)
+### Canonical Base rollout (`v1.8.2`)
 
-Current canonical Base defaults (live `v1.7.1`, planned vanity `v1.8.1`):
-- Deployment batcher (`DeploymentBatcher`, split Phase-1): live `0x14435cc4A8D307b4d3979148E5AB71Af1ed19088`, planned `0xaE81C19c2A2E964e65cCacE89A6eb2309d6E4626`
-- Deployment batcher auto-handoff alias: live `0x14435cc4A8D307b4d3979148E5AB71Af1ed19088`, planned `0xaE81C19c2A2E964e65cCacE89A6eb2309d6E4626`
-- Creator lottery manager: `0x3F7AfD93824Ab25F73Bdca59aFDaB560F865b0C3`
-- `UniversalBytecodeStoreV2`: live `0x6A578022609cdb65C614FF28912C49FC1EC97071`, planned `0x58071d59d2f5E61A80b3f8770B6564289acD4626`
-- `UniversalCreate2DeployerFromStoreV2`: live `0x5ea71D4d03dEe596E93B5e6BEddA6F96BBF9d36a`, planned `0x1c1596090B0e0Bb35b2F7cd77e865FbeE3654626`
+Current canonical Base defaults:
+- Registry: `0x79d0d68904BbB50361C9721CbDD17276E046771D`
+- Deployment batcher: `0x721420F190cc4525bb8Adc72D4c66eEB806AFC37`
+- Deployment batcher auto-handoff alias: `0x721420F190cc4525bb8Adc72D4c66eEB806AFC37`
+- Creator lottery manager: `0xA137BEef789B80c76187E1b6DEef60fC7db6d280`
+- Creator VRF consumer: `0x22ae936027Fe0c348758634bF8694E00D96338ac`
+- `UniversalBytecodeStoreV2`: `0xc8050cfeDA4CCd04079f37f1D95cD54279156E46`
+- `UniversalCreate2DeployerFromStore`: `0x95700DA39462f97b0E874ED7e05BBF76413d7Ac1`
+- `VaultActivationBatcher`: `0x8b63912cD2490D1Ab0796c57Cc5909fF0059CECd`
+- `SolanaBridgeAdapter`: `0x1B3E713852dEC5d983AD11BD1567eed0723ceA9b`
 
 Mainnet deploy order:
 
-1. Deploy/re-verify infra + phased deployer:
+1. Run the full release wrapper:
 
 ```bash
 export PRIVATE_KEY=...
 export BASE_RPC_URL=https://mainnet.base.org
 export ETHERSCAN_API_KEY=...
 
-forge script script/DeployBaseMainnetDeployer.s.sol:DeployBaseMainnetDeployer \
-  --rpc-url "$BASE_RPC_URL" \
-  --broadcast \
-  --verify
+./script/deploy-base-full-release.sh
 ```
 
-2. Seed bytecode store:
+This broadcasts the fresh shared/global contracts, hands their addresses into the deterministic v2 infra deployment, and seeds the bytecode store automatically.
 
-```bash
-export PRIVATE_KEY=...
-export BASE_RPC_URL=https://mainnet.base.org
-export UNIVERSAL_BYTECODE_STORE=0x6A578022609cdb65C614FF28912C49FC1EC97071
+If the shared/global layer is already live and you only need the deterministic v2 pass, run `./script/deploy-infra-v2.sh` instead.
 
-forge script script/SeedUniversalBytecodeStore.s.sol:SeedUniversalBytecodeStore \
-  --rpc-url "$BASE_RPC_URL" \
-  --broadcast
-```
-
-If you use `./script/deploy.sh infra-v2` or `./script/deploy-infra-v2.sh`, this seed step now runs automatically.
-
-3. Onchain sanity checks:
+2. Onchain sanity checks:
 
 ```bash
 export BASE_RPC_URL=https://mainnet.base.org
-export NEW_BATCHER=0x14435cc4A8D307b4d3979148E5AB71Af1ed19088
+export NEW_BATCHER=0x721420F190cc4525bb8Adc72D4c66eEB806AFC37
 
 # infra wiring
 cast call "$NEW_BATCHER" "bytecodeStore()(address)" --rpc-url "$BASE_RPC_URL"
 cast call "$NEW_BATCHER" "create2Deployer()(address)" --rpc-url "$BASE_RPC_URL"
+cast call "$NEW_BATCHER" "vaultCoreModule()(address)" --rpc-url "$BASE_RPC_URL"
+cast call "$NEW_BATCHER" "vaultStrategiesModule()(address)" --rpc-url "$BASE_RPC_URL"
+cast call "$NEW_BATCHER" "vaultAdminModule()(address)" --rpc-url "$BASE_RPC_URL"
+cast call "$NEW_BATCHER" "phase3Helper()(address)" --rpc-url "$BASE_RPC_URL"
+cast call "$NEW_BATCHER" "uniV4Helper()(address)" --rpc-url "$BASE_RPC_URL"
 
 # split Phase-1 selectors in runtime bytecode
 cast code "$NEW_BATCHER" --rpc-url "$BASE_RPC_URL" | tr 'A-F' 'a-f' | rg "4154f24e|3bc09a8b"
 
 # v2 store surface
-cast call 0x6A578022609cdb65C614FF28912C49FC1EC97071 \
+cast call 0xc8050cfeDA4CCd04079f37f1D95cD54279156E46 \
   "chunkCount(bytes32)(uint256)" \
   0x0000000000000000000000000000000000000000000000000000000000000000 \
   --rpc-url "$BASE_RPC_URL"
 ```
 
-4. Optional Solana bridge config (used by `SolanaStrategy` in Phase 3):
+3. Optional Solana bridge config (used by `SolanaStrategy` in Phase 3):
 
 ```bash
 export PRIVATE_KEY=... # must be protocolTreasury for setSolanaConfig
 export BASE_RPC_URL=https://mainnet.base.org
-export DEPLOYMENT_BATCHER=0x14435cc4A8D307b4d3979148E5AB71Af1ed19088
-export SOLANA_BRIDGE_ADAPTER=0x2414b595c4f18532A5836B6e2E6d536832c572e8
+export DEPLOYMENT_BATCHER=0x721420F190cc4525bb8Adc72D4c66eEB806AFC37
+export SOLANA_BRIDGE_ADAPTER=0x1B3E713852dEC5d983AD11BD1567eed0723ceA9b
 export SOLANA_DESTINATION=0x<32-byte-solana-pubkey>
 export SET_BATCHER_SOLANA_CONFIG=1
 
