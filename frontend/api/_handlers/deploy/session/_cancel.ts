@@ -8,7 +8,7 @@ import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinba
 
 import {
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   logger,
@@ -23,7 +23,7 @@ import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
 import { validateSponsoredSmartWalletCalls } from '../../_paymaster.js'
-import { normalizeDeploySessionId } from './_sessionAccess.js'
+import { DeploySessionAccessError, loadAuthorizedDeploySession, normalizeDeploySessionId } from './_sessionAccess.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -153,21 +153,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Too many cancel attempts' } satisfies ApiEnvelope<null>)
   }
 
-  const body = await readJsonBody<CancelRequest>(req, { maxBytes: 8_192 })
+  const body = ((await readBoundedJsonObjectBody(req, { maxBytes: 8_192 })) ?? {}) as CancelRequest
   const sessionId = normalizeDeploySessionId(body?.sessionId)
   if (!sessionId) return res.status(400).json({ success: false, error: 'Missing or invalid sessionId' } satisfies ApiEnvelope<null>)
 
-  const rec = await getDeploySessionById(sessionId)
-  if (!rec) return res.status(404).json({ success: false, error: 'Not found' } satisfies ApiEnvelope<null>)
+  let rec!: NonNullable<Awaited<ReturnType<typeof getDeploySessionById>>>
+  let sessionAddress!: Address
+  try {
+    const access = await loadAuthorizedDeploySession({
+      req,
+      sessionId,
+      getDeploySessionById,
+    })
+    rec = access.rec
+    sessionAddress = access.sessionAddress
+  } catch (error) {
+    if (error instanceof DeploySessionAccessError) {
+      return res.status(error.status).json({ success: false, error: error.message } satisfies ApiEnvelope<null>)
+    }
+    throw error
+  }
 
   // Check if already in terminal state
   if (['cancelled', 'completed'].includes(rec.step)) {
     return res.status(200).json({ success: true, data: { id: rec.id, step: rec.step } } satisfies ApiEnvelope<any>)
-  }
-
-  const sessionAddress = getAddress(auth.address)
-  if (sessionAddress.toLowerCase() !== rec.sessionAddress.toLowerCase()) {
-    return res.status(403).json({ success: false, error: 'Forbidden' } satisfies ApiEnvelope<null>)
   }
 
   try {

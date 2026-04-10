@@ -5,7 +5,7 @@ export type ParsedTelegramVaultDeployIntent =
   | { kind: 'usage'; text: string }
   | { kind: 'request'; token: 'akita'; version: string }
 
-const DEFAULT_VERSION = 'v1.8.2'
+const DEFAULT_VERSION = 'v1.8.3'
 const VERSION_PATTERN = /^v\d+\.\d+\.\d+$/i
 
 export function formatVaultDeployUsageText(reason?: string): string {
@@ -15,7 +15,7 @@ export function formatVaultDeployUsageText(reason?: string): string {
     reason ? `- ${reason}` : '- usage:',
     '- `/vaultdeploy`',
     '- `/vaultdeploy akita`',
-    '- `/vaultdeploy akita v1.8.2`',
+    '- `/vaultdeploy akita v1.8.3`',
     '',
     'Notes:',
     '- currently scoped to the AKITA vault deployment template',
@@ -45,7 +45,7 @@ export function parseTelegramVaultDeployIntent(rawText: string): ParsedTelegramV
     return { kind: 'request', token: 'akita', version: DEFAULT_VERSION }
   }
   if (!VERSION_PATTERN.test(versionRaw)) {
-    return { kind: 'usage', text: formatVaultDeployUsageText('Version must look like v1.8.2') }
+    return { kind: 'usage', text: formatVaultDeployUsageText('Version must look like v1.8.3') }
   }
   return {
     kind: 'request',

@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   getDb,
@@ -59,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Too many canonical wallet updates' } satisfies ApiEnvelope<never>)
   }
 
-  const body = await readJsonBody<Body>(req, { maxBytes: 8_192 })
+  const body = (await readBoundedJsonObjectBody(req, { maxBytes: 8_192 })) as Body | null
   const requestedWallet = typeof body?.wallet === 'string' ? body.wallet.trim() : ''
   if (!isValidSolanaAddress(requestedWallet)) {
     return res.status(400).json({ success: false, error: 'Invalid Solana wallet address' } satisfies ApiEnvelope<never>)

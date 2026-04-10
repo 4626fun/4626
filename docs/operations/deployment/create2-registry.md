@@ -5,22 +5,24 @@ sidebar_position: 4
 
 # CREATE2 Registry
 
-Deterministic deployment inventory for the live `v1.8.2` Base infra epoch.
+Deterministic deployment inventory for the next `v1.8.3` Base infra epoch.
 
 ## Overview
 
 4626 infra resets rely on deterministic salt tags and CREATE2 so the v2 deployment layer stays reproducible across reruns.
 
-For `v1.8.2` the recommended tags are:
+For `v1.8.3` the recommended tags are:
 
-- `INFRA_STORE_SALT_TAG=base-release:UniversalBytecodeStore:v1.8.2`
-- `INFRA_DEPLOYER_FROM_STORE_SALT_TAG=base-release:UniversalCreate2DeployerFromStore:v1.8.2`
-- `INFRA_VAULT_CORE_MODULE_SALT_TAG=base-release:CreatorOVaultCoreModule:v1.8.2`
-- `INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG=base-release:CreatorOVaultStrategiesModule:v1.8.2`
-- `INFRA_VAULT_ADMIN_MODULE_SALT_TAG=base-release:CreatorOVaultAdminModule:v1.8.2`
-- `INFRA_DEPLOYMENT_BATCHER_SALT_TAG=base-release:DeploymentBatcher:v1.8.2`
+- `INFRA_STORE_SALT_TAG=base-release:UniversalBytecodeStore:v1.8.3`
+- `INFRA_DEPLOYER_FROM_STORE_SALT_TAG=base-release:UniversalCreate2DeployerFromStore:v1.8.3`
+- `INFRA_VAULT_CORE_MODULE_SALT_TAG=base-release:CreatorOVaultCoreModule:v1.8.3`
+- `INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG=base-release:CreatorOVaultStrategiesModule:v1.8.3`
+- `INFRA_VAULT_ADMIN_MODULE_SALT_TAG=base-release:CreatorOVaultAdminModule:v1.8.3`
+- `INFRA_DEPLOYMENT_BATCHER_SALT_TAG=base-release:DeploymentBatcher:v1.8.3`
 
-## v1.8.2 Live Target Addresses
+Current live addresses still remain on the prior Base epoch until the `v1.8.3` broadcast completes.
+
+## Current Live Base Addresses
 
 | Contract | Address |
 |---|---|
@@ -40,14 +42,14 @@ For `v1.8.2` the recommended tags are:
 Deterministic v2-only rerun:
 
 ```bash
-export DEPLOYMENT_EPOCH_TAG=v1.8.2
+export DEPLOYMENT_EPOCH_TAG=v1.8.3
 ./script/deploy-infra-v2.sh
 ```
 
 Full shared/global plus deterministic release:
 
 ```bash
-export DEPLOYMENT_EPOCH_TAG=v1.8.2
+export DEPLOYMENT_EPOCH_TAG=v1.8.3
 ./script/deploy-base-full-release.sh
 ```
 
@@ -63,6 +65,6 @@ export DEPLOYMENT_EPOCH_TAG=v1.8.2
   - `cast call 0x721420F190cc4525bb8Adc72D4c66eEB806AFC37 "phase3Helper()(address)"`
   - `cast call 0x721420F190cc4525bb8Adc72D4c66eEB806AFC37 "uniV4Helper()(address)"`
 - Confirm bytecode / codeId inventory:
-  - `deployments/base/v1.8.2-bytecode-manifest.json`
+  - `deployments/base/v1.8.3-bytecode-manifest.json`
 - Confirm release packet:
-  - `docs/operations/deployment/releases/v1.8.2-mainnet.md`
+  - `docs/operations/deployment/releases/v1.8.3-mainnet.md`

@@ -7,7 +7,7 @@
 # Usage:
 #   ./script/deploy.sh infrastructure    - Deploy all core contracts
 #   ./script/deploy.sh infra-v2          - Deploy phased infra + seed bytecode store
-#   ./script/deploy.sh release           - Canonical Base v1.8.2 full release rollout
+#   ./script/deploy.sh release           - Canonical Base v1.8.3 full release rollout
 #   ./script/deploy.sh full-release      - Same as release
 #
 # Environment:

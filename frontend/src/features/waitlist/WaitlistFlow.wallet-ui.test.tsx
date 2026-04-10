@@ -20,6 +20,7 @@ const collisionStateRef = vi.hoisted(() => ({
 }))
 
 vi.mock('framer-motion', () => ({
+  AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   motion: new Proxy(
     {},
     {

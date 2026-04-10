@@ -4,10 +4,10 @@ This directory tracks committed deployment artifacts and ABI snapshots used by t
 
 ## Current Canonical Release
 
-- Base mainnet shared/global plus deterministic infra are live on `v1.8.2`.
-- Release packet: `docs/operations/deployment/releases/v1.8.2-mainnet.md`
-- Bytecode / codeId manifest: `deployments/base/v1.8.2-bytecode-manifest.json`
-- Live Base deployment snapshots: `deployments/base/contracts/**/*.json`
+- Base mainnet release target / deploy namespace is now `v1.8.3`.
+- Release packet: `docs/operations/deployment/releases/v1.8.3-mainnet.md`
+- Bytecode / codeId manifest: `deployments/base/v1.8.3-bytecode-manifest.json`
+- Live Base deployment snapshots under `deployments/base/contracts/**/*.json` still reflect the current onchain Base epoch until the `v1.8.3` broadcast completes.
 
 ## Directory Map
 
@@ -15,6 +15,8 @@ This directory tracks committed deployment artifacts and ABI snapshots used by t
 deployments/
 └── base/
     ├── v1.7.1-bytecode-manifest.json
+    ├── v1.8.2-bytecode-manifest.json
+    ├── v1.8.3-bytecode-manifest.json
     ├── archive/
     │   └── 2026-01-addresses.json
     └── contracts/

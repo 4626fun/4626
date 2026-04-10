@@ -32,6 +32,7 @@ vi.mock('../../packages/server-core/src/index.js', () => ({
   handleOptions: vi.fn(() => false),
   setCors: vi.fn(),
   setNoStore: vi.fn(),
+  readBoundedJsonObjectBody: readJsonBodyMock,
   readJsonBody: readJsonBodyMock,
   getDb: getDbMock,
   isDbConfigured: isDbConfiguredMock,

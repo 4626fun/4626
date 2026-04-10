@@ -22,6 +22,7 @@ const {
 
 vi.mock('../../server/auth/_shared.js', () => ({
   handleOptions: vi.fn(() => false),
+  readBoundedJsonObjectBody: readJsonBodyMock,
   readJsonBody: readJsonBodyMock,
   setCors: vi.fn(),
   setNoStore: vi.fn(),

@@ -72,7 +72,7 @@ if [ -z "${ETHERSCAN_API_KEY:-}" ]; then
   echo "Warning: ETHERSCAN_API_KEY (or BASESCAN_API_KEY) not set; --verify may fail."
 fi
 
-: "${DEPLOYMENT_EPOCH_TAG:=v1.8.2}"
+: "${DEPLOYMENT_EPOCH_TAG:=v1.8.3}"
 : "${BASE_SHARED_GLOBAL_OUTPUT_PATH:=${ROOT_DIR}/tmp/base-${DEPLOYMENT_EPOCH_TAG}-shared-global.json}"
 HANDOFF_ENV_PATH="${BASE_RELEASE_HANDOFF_ENV_PATH:-$(mktemp "${TMPDIR:-/tmp}/4626-base-full-release-${DEPLOYMENT_EPOCH_TAG}-XXXXXX.env")}"
 LOG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/4626-base-full-release-logs-XXXXXX")"

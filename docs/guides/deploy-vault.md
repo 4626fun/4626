@@ -49,9 +49,9 @@ Production override safety:
 - leave `ALLOW_API_CONTRACT_OVERRIDES` unset (or `0`)
 - production then uses repo defaults from `frontend/src/config/contracts.defaults.ts`
 
-### Canonical Base rollout (`v1.8.2`)
+### Canonical Base rollout target (`v1.8.3`)
 
-Current canonical Base defaults:
+Current live Base defaults remain on the prior infra epoch until `v1.8.3` broadcasts:
 - Registry: `0x79d0d68904BbB50361C9721CbDD17276E046771D`
 - Deployment batcher: `0x721420F190cc4525bb8Adc72D4c66eEB806AFC37`
 - Deployment batcher auto-handoff alias: `0x721420F190cc4525bb8Adc72D4c66eEB806AFC37`

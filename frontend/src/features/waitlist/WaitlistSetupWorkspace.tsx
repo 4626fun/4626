@@ -52,12 +52,12 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
               id="waitlist-enter-app-hint"
               role="status"
               aria-live="polite"
-              className="mt-3 rounded-xl bg-brand-primary/10 px-3 py-3 ring-1 ring-brand-primary/25"
+              className="bv-subpanel mt-3 px-4 py-3 ring-1 ring-brand-primary/20"
             >
-              <p className="text-[11px] uppercase tracking-[0.15em] text-brand-200">
+              <p className="bv-kicker text-brand-300">
                 {canEnterApp ? 'Finish setup first' : 'App access pending'}
               </p>
-              <p className="mt-1 text-sm text-zinc-200">
+              <p className="mt-1 text-sm text-zinc-300">
                 {canEnterApp
                   ? 'Complete all three setup steps above to unlock Enter App.'
                   : 'Your setup is saved. Stay on this page while approval catches up.'}

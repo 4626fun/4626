@@ -15,4 +15,16 @@ describe('status protocol report chain selection', () => {
     expect(res.body?.success).toBe(true)
     expect(res.body?.data?.chainId).toBe(8453)
   })
+
+  it('rejects non-GET methods', async () => {
+    const mod = await import('../_handlers/status/_protocolReport.ts')
+    const handler = mod.default
+
+    const req = createMockReq({ method: 'POST' })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(405)
+    expect(res.body?.success).toBe(false)
+  })
 })

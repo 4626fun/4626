@@ -38,6 +38,7 @@ vi.mock('../../server/auth/_shared.js', async () => {
   const actual = await vi.importActual<typeof import('../../server/auth/_shared.js')>('../../server/auth/_shared.js')
   return {
     ...actual,
+    readBoundedJsonObjectBody: readJsonBodyMock,
     readJsonBody: readJsonBodyMock,
   }
 })

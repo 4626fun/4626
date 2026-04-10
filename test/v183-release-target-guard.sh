@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-PACKET="$ROOT_DIR/docs/operations/deployment/releases/v1.8.2-mainnet.md"
+PACKET="$ROOT_DIR/docs/operations/deployment/releases/v1.8.3-mainnet.md"
 ADDRESSES_DOC="$ROOT_DIR/docs/reference/addresses.md"
 INVENTORY_DOC="$ROOT_DIR/docs/reference/current-contract-inventory.md"
 DEFAULTS="$ROOT_DIR/frontend/src/config/contracts.defaults.ts"
@@ -19,24 +19,26 @@ SEED_STORE="$ROOT_DIR/script/SeedUniversalBytecodeStore.s.sol"
 SOLANA_ADAPTER="$ROOT_DIR/script/DeploySolanaBridgeAdapter.s.sol"
 
 test -f "$PACKET"
-rg '^# v1\.8\.2 Mainnet Release Packet$' "$PACKET" >/dev/null
-rg 'deployments/base/v1\.8\.2-bytecode-manifest\.json' "$PACKET" >/dev/null
-rg '0x79d0d68904BbB50361C9721CbDD17276E046771D' "$PACKET" >/dev/null
-rg '0x721420F190cc4525bb8Adc72D4c66eEB806AFC37' "$PACKET" >/dev/null
-rg '0xc8050cfeDA4CCd04079f37f1D95cD54279156E46' "$PACKET" >/dev/null
+rg '^# v1\.8\.3 Mainnet Release Packet$' "$PACKET" >/dev/null
+rg 'deployments/base/v1\.8\.3-bytecode-manifest\.json' "$PACKET" >/dev/null
+rg 'Release target: `v1\.8\.3`' "$PACKET" >/dev/null
+rg 'Current live Base infra remains on the prior epoch until a fresh `v1\.8\.3` broadcast lands\.' "$PACKET" >/dev/null
 if rg 'retained shared|planned vanity|v1\.8\.1-vanity-manifest|shared-global-vanity-targets|\.{3}4626' "$PACKET" >/dev/null; then
-  echo "v1.8.2 full-release packet still contains retained-shared or vanity-era assumptions" >&2
+  echo "v1.8.3 release packet still contains retained-shared or vanity-era assumptions" >&2
   exit 1
 fi
 
 rg '0x79d0d68904BbB50361C9721CbDD17276E046771D' "$ADDRESSES_DOC" >/dev/null
 rg '0x721420F190cc4525bb8Adc72D4c66eEB806AFC37' "$ADDRESSES_DOC" >/dev/null
+rg 'pending `v1\.8\.3` cutover' "$ADDRESSES_DOC" >/dev/null
 if rg 'planned vanity|v1\.8\.1|0x888506B92181c57A2fD06516FFFb6F375b7A4626' "$ADDRESSES_DOC" >/dev/null; then
   echo "addresses reference still points at the pre-v1.8.2 shared/global epoch" >&2
   exit 1
 fi
 
-rg 'Scope: `v1\.8\.2` full-redeploy release packet and current canonical Base defaults\.' "$INVENTORY_DOC" >/dev/null
+rg 'canonical `v1\.8\.3` release target and manifest' "$INVENTORY_DOC" >/dev/null
+rg 'docs/operations/deployment/releases/v1\.8\.3-mainnet\.md' "$INVENTORY_DOC" >/dev/null
+rg 'deployments/base/v1\.8\.3-bytecode-manifest\.json' "$INVENTORY_DOC" >/dev/null
 rg '0x79d0d68904BbB50361C9721CbDD17276E046771D' "$INVENTORY_DOC" >/dev/null
 rg '0x721420F190cc4525bb8Adc72D4c66eEB806AFC37' "$INVENTORY_DOC" >/dev/null
 if rg 'vanity|retained|v1\.8\.1' "$INVENTORY_DOC" >/dev/null; then
@@ -54,11 +56,11 @@ rg "vaultActivationBatcher: addr\('8b63912cD2490D1Ab0796c57Cc5909fF0059CECd'\),"
 rg "creatorVaultBatcher: addr\('721420F190cc4525bb8Adc72D4c66eEB806AFC37'\)," "$DEFAULTS" >/dev/null
 rg "creatorVaultBatcherAutoHandoff: addr\('721420F190cc4525bb8Adc72D4c66eEB806AFC37'\)," "$DEFAULTS" >/dev/null
 
-rg "DEFAULT_DEPLOYMENT_VERSION = 'v1\.8\.2'" "$DEPLOY_PAGE" >/dev/null
-rg "\?\? 'v1\.8\.2'" "$TRACKER" >/dev/null
-rg "return v.length > 0 \? v : 'v1\.8\.2'" "$TRACKER" >/dev/null
-rg "const DEFAULT_VERSION = 'v1\.8\.2'" "$TELEGRAM_PARSER" >/dev/null
-rg 'v1\.8\.2-dryrun' "$DRYRUN_ENV" >/dev/null
+rg "DEFAULT_DEPLOYMENT_VERSION = 'v1\.8\.3'" "$DEPLOY_PAGE" >/dev/null
+rg "\?\? 'v1\.8\.3'" "$TRACKER" >/dev/null
+rg "return v.length > 0 \? v : 'v1\.8\.3'" "$TRACKER" >/dev/null
+rg "const DEFAULT_VERSION = 'v1\.8\.3'" "$TELEGRAM_PARSER" >/dev/null
+rg 'v1\.8\.3-dryrun' "$DRYRUN_ENV" >/dev/null
 
 rg '^CREATOR_REGISTRY=0x79d0d68904BbB50361C9721CbDD17276E046771D$' "$ROOT_ENV" >/dev/null
 rg '^CREATOR_FACTORY=0xb66aA49d94569a8589f380D53e8a3f1F60165000$' "$ROOT_ENV" >/dev/null
@@ -75,7 +77,7 @@ if rg '0x888506B92181c57A2fD06516FFFb6F375b7A4626|0x3F7AfD93824Ab25F73Bdca59aFDa
   exit 1
 fi
 
-rg '^VITE_DEPLOYMENT_VERSION=v1\.8\.2$' "$FRONTEND_ENV" >/dev/null
+rg '^VITE_DEPLOYMENT_VERSION=v1\.8\.3$' "$FRONTEND_ENV" >/dev/null
 rg '^VITE_REGISTRY=0x79d0d68904BbB50361C9721CbDD17276E046771D$' "$FRONTEND_ENV" >/dev/null
 rg '^VITE_LOTTERY_MANAGER=0xA137BEef789B80c76187E1b6DEef60fC7db6d280$' "$FRONTEND_ENV" >/dev/null
 rg '^VITE_VRF_CONSUMER=0x22ae936027Fe0c348758634bF8694E00D96338ac$' "$FRONTEND_ENV" >/dev/null
@@ -99,4 +101,4 @@ rg 'DEFAULT_BYTECODE_STORE = 0xc8050cfeDA4CCd04079f37f1D95cD54279156E46;' "$SEED
 rg 'DEFAULT_CREATOR_REGISTRY = 0x79d0d68904BbB50361C9721CbDD17276E046771D;' "$SOLANA_ADAPTER" >/dev/null
 rg 'DEFAULT_LOTTERY_MANAGER = 0xA137BEef789B80c76187E1b6DEef60fC7db6d280;' "$SOLANA_ADAPTER" >/dev/null
 
-echo "v1.8.2 full redeploy guard passed"
+echo "v1.8.3 release target guard passed"

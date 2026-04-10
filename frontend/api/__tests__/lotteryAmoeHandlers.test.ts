@@ -40,6 +40,7 @@ vi.mock('../../server/_lib/canonicalWalletResolver.js', () => ({
 
 vi.mock('../../server/auth/_shared.js', () => ({
   handleOptions: vi.fn(() => false),
+  readBoundedJsonObjectBody: vi.fn(async (req: any) => req.body ?? null),
   readJsonBody: vi.fn(async (req: any) => req.body ?? null),
 }))
 

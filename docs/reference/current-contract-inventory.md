@@ -6,15 +6,15 @@ sidebar_position: 5
 # Current Contract Inventory (Base)
 
 Generated on: 2026-04-10  
-Scope: `v1.8.2` full-redeploy release packet and current canonical Base defaults.
+Scope: current live Base infra addresses plus the canonical `v1.8.3` release target and manifest.
 
 ## Sources
 
-1. Release packet: `docs/operations/deployment/releases/v1.8.2-mainnet.md`
-2. Bytecode / codeId manifest: `deployments/base/v1.8.2-bytecode-manifest.json`
+1. Release packet: `docs/operations/deployment/releases/v1.8.3-mainnet.md`
+2. Bytecode / codeId manifest: `deployments/base/v1.8.3-bytecode-manifest.json`
 3. Frontend defaults: `frontend/src/config/contracts.defaults.ts`
 4. Live deployment snapshots: `deployments/base/contracts/**/*.json`
-5. Onchain `DeploymentBatcher` wiring checks against the live Base deployment
+5. Onchain `DeploymentBatcher` wiring checks against the current live Base deployment
 
 ## Canonical Base Infrastructure
 
@@ -79,10 +79,11 @@ Live batcher child addresses that are read directly from `DeploymentBatcher` are
 
 Primary release manifest:
 
-- `deployments/base/v1.8.2-bytecode-manifest.json`
+- `deployments/base/v1.8.3-bytecode-manifest.json`
 
 Historical reference manifest:
 
+- `deployments/base/v1.8.2-bytecode-manifest.json`
 - `deployments/base/v1.7.1-bytecode-manifest.json`
 
 For each deployment contract this includes:
@@ -103,7 +104,7 @@ The active bytecode manifest must include all three entries.
 
 ## Operator Checks
 
-1. Run `bash test/v182-full-redeploy-guard.sh`.
+1. Run `bash test/v183-release-target-guard.sh`.
 2. Run `forge test --match-contract RegistryDefaultScriptsTest`.
 3. Run `forge test --match-contract SeedCreatorRegistryConfigTest`.
 4. Confirm `DeploymentBatcher` wiring onchain:

@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   getDb,
@@ -59,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Too many processor requests' } satisfies ApiEnvelope<never>)
   }
 
-  const body = await readJsonBody<Body>(req, { maxBytes: 8_192 })
+  const body = (await readBoundedJsonObjectBody(req, { maxBytes: 8_192 })) as Body | null
   const db = await getDb()
   if (!db) {
     return res.status(503).json({ success: false, error: 'Service unavailable' } satisfies ApiEnvelope<never>)

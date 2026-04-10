@@ -231,59 +231,76 @@ function WaitlistAuthStep(props: {
   return (
     <motion.div
       key="step-auth"
-      initial={{ opacity: 0, y: 8 }}
+      initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
-      exit={{ opacity: 0, y: -6 }}
-      transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
-      className="space-y-6"
+      exit={{ opacity: 0, y: -8 }}
+      transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+      className="relative flex min-h-[340px] items-center justify-center py-8 sm:py-12"
     >
-      <div className="space-y-2">
-        <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Early access</p>
-        <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-[2rem]">{authUi.title}</h2>
-        <p className="text-sm leading-relaxed text-zinc-300">{authUi.subtitle}</p>
-        <p className="text-xs text-zinc-500">No wallet connection is required yet.</p>
+      {/* ambient glow behind the card */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 flex items-center justify-center"
+      >
+        <div className="h-72 w-72 rounded-full bg-brand-primary/20 blur-[90px]" />
       </div>
 
-      <button
-        type="button"
-        disabled={buttonsDisabled}
-        onClick={() => void onContinueAuth()}
-        className="btn-accent btn-no-icon inline-flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-medium disabled:opacity-50"
-      >
-        {busy ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin" />
-            {authUi.busyLabel}
-          </>
-        ) : !privyReady ? (
-          <>
-            <Loader2 className="w-4 h-4 animate-spin opacity-60" />
-            Loading secure sign-in...
-          </>
-        ) : (
-          authUi.ctaLabel
-        )}
-      </button>
-
-      {error ? (
-        <div
-          role="alert"
-          aria-live="polite"
-          className="space-y-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"
-        >
-          <div>{error}</div>
-          {recoveryRequired ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void onRecoverAccount()}
-              className="inline-flex items-center rounded-lg border border-rose-300/35 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-100 transition hover:bg-rose-500/20 disabled:opacity-60"
-            >
-              Try existing account sign-in
-            </button>
-          ) : null}
+      <div className="glass-card relative z-10 w-full max-w-sm space-y-7 px-8 py-9">
+        {/* header */}
+        <div className="space-y-3">
+          <p className="bv-kicker">Early access</p>
+          <h2 className="text-4xl font-light tracking-tight text-white">
+            {authUi.title}
+          </h2>
+          <p className="text-sm leading-relaxed text-zinc-400">{authUi.subtitle}</p>
         </div>
-      ) : null}
+
+        {/* CTA */}
+        <div className="space-y-3">
+          <button
+            type="button"
+            disabled={buttonsDisabled}
+            onClick={() => void onContinueAuth()}
+            className="btn-accent btn-no-icon inline-flex w-full items-center justify-center gap-2 py-4 text-[15px] disabled:opacity-50"
+          >
+            {busy ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                {authUi.busyLabel}
+              </>
+            ) : !privyReady ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin opacity-60" />
+                Loading secure sign-in…
+              </>
+            ) : (
+              authUi.ctaLabel
+            )}
+          </button>
+          <p className="bv-kicker text-center">No wallet required at this step</p>
+        </div>
+
+        {/* error */}
+        {error ? (
+          <div
+            role="alert"
+            aria-live="polite"
+            className="space-y-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"
+          >
+            <div>{error}</div>
+            {recoveryRequired ? (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void onRecoverAccount()}
+                className="inline-flex items-center rounded-lg border border-rose-300/35 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-100 transition hover:bg-rose-500/20 disabled:opacity-60"
+              >
+                Try existing account sign-in
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
     </motion.div>
   )
 }
@@ -330,8 +347,6 @@ export function WaitlistFlow(props: {
   const privyClientStatusRef = useRef(privyClientStatus)
 
   const wrapClass = 'mx-auto w-full max-w-5xl'
-  const innerClass =
-    'overflow-hidden rounded-3xl bg-[linear-gradient(180deg,rgba(255,255,255,0.04)_0%,rgba(255,255,255,0.01)_100%)] p-4 sm:p-6 space-y-4 sm:space-y-5'
   const activeReferralCode = useMemo(() => readStoredWaitlistReferralCode(), [])
   const enterAppUrl = useMemo(() => buildAppEntryUrl(getAppBaseUrl()), [])
   const accountsUrl = useMemo(() => buildAppEntryUrl(getAppBaseUrl(), '/accounts'), [])
@@ -993,37 +1008,37 @@ export function WaitlistFlow(props: {
 
   return (
     <section id={sectionId} className={wrapClass}>
-      <div className={innerClass}>
-        <AnimatePresence mode="wait" initial={false}>
-          {step === 'auth' ? (
-            <WaitlistAuthStep
-              key="auth"
-              authUi={authUi}
-              busy={busy}
-              privyClientStatus={privyClientStatus}
-              error={error}
-              recoveryRequired={recoveryRequired}
-              onContinueAuth={onContinueAuth}
-              onRecoverAccount={onRecoverAccount}
+      <AnimatePresence mode="wait" initial={false}>
+        {step === 'auth' ? (
+          <WaitlistAuthStep
+            key="auth"
+            authUi={authUi}
+            busy={busy}
+            privyClientStatus={privyClientStatus}
+            error={error}
+            recoveryRequired={recoveryRequired}
+            onContinueAuth={onContinueAuth}
+            onRecoverAccount={onRecoverAccount}
+          />
+        ) : step === 'done' && account ? (
+          <motion.div
+            key="done"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+            className="bv-panel overflow-hidden p-4 sm:p-6"
+          >
+            <WaitlistSetupWorkspace
+              initialAccount={account}
+              canEnterApp={canEnterApp}
+              completionBusy={completionBusy}
+              onEnterApp={onEnterApp}
+              onOpenAccounts={onOpenAccounts}
             />
-          ) : step === 'done' && account ? (
-            <motion.div
-              key="done"
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-            >
-              <WaitlistSetupWorkspace
-                initialAccount={account}
-                canEnterApp={canEnterApp}
-                completionBusy={completionBusy}
-                onEnterApp={onEnterApp}
-                onOpenAccounts={onOpenAccounts}
-              />
-            </motion.div>
-          ) : null}
-        </AnimatePresence>
-      </div>
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
     </section>
   )
 }

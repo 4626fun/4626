@@ -100,8 +100,10 @@ contract DeployInfrastructure is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
-        string memory outputPath =
-            vm.envOr("BASE_SHARED_GLOBAL_OUTPUT_PATH", string("./tmp/base-v1.8.2-shared-global.json"));
+        string memory releaseTag = vm.envOr("DEPLOYMENT_EPOCH_TAG", string("v1.8.3"));
+        string memory outputPath = vm.envOr(
+            "BASE_SHARED_GLOBAL_OUTPUT_PATH", string.concat("./tmp/base-", releaseTag, "-shared-global.json")
+        );
 
         _printHeader(deployer);
 
@@ -220,7 +222,7 @@ contract DeployInfrastructure is Script {
         //                         SUMMARY
         // ═══════════════════════════════════════════════════════════════
 
-        _writeSharedGlobalArtifact(outputPath);
+        _writeSharedGlobalArtifact(outputPath, releaseTag);
         _printSummary();
     }
 
@@ -385,9 +387,9 @@ contract DeployInfrastructure is Script {
         console.log(string.concat("HANDOFF:SOLANA_BRIDGE_ADAPTER=", vm.toString(address(solanaBridgeAdapter))));
     }
 
-    function _writeSharedGlobalArtifact(string memory outputPath) internal {
+    function _writeSharedGlobalArtifact(string memory outputPath, string memory releaseTag) internal {
         string memory artifactKey = "baseSharedGlobal";
-        vm.serializeString(artifactKey, "releaseTag", "v1.8.2");
+        vm.serializeString(artifactKey, "releaseTag", releaseTag);
         vm.serializeUint(artifactKey, "chainId", block.chainid);
         vm.serializeAddress(artifactKey, "creatorRegistry", address(registry));
         vm.serializeAddress(artifactKey, "creatorVaultFactory", address(vaultFactory));

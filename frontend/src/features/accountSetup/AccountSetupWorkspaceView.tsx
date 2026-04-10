@@ -69,27 +69,39 @@ export function AccountSetupWorkspaceView(props: {
     const walletStatus = walletStepComplete ? 'completed' : activeStep === 2 ? 'current' : 'upcoming'
     const signingStatus = signingStepComplete ? 'completed' : activeStep === 3 ? 'current' : 'upcoming'
 
+    // card style per step state
     const cardClassForStatus = (status: 'completed' | 'current' | 'upcoming') => {
-      if (status === 'current') return 'bg-white/[0.05] ring-1 ring-brand-primary/35 shadow-[0_8px_30px_rgba(0,82,255,0.15)] p-5'
-      if (status === 'completed') return 'bg-emerald-500/[0.06] ring-1 ring-emerald-400/25 p-4'
-      return 'bg-white/[0.02] ring-1 ring-white/10 opacity-85 p-4'
+      if (status === 'current')
+        return 'bv-panel shadow-[0_0_40px_rgba(0,82,255,0.18)] ring-1 ring-brand-primary/40 p-5'
+      if (status === 'completed')
+        return 'bv-subpanel ring-1 ring-emerald-400/25 shadow-[0_0_20px_rgba(16,185,129,0.08)] p-4'
+      return 'bv-subpanel opacity-80 p-4'
     }
 
-    const stepToneClass = (status: 'completed' | 'current' | 'upcoming') => {
-      if (status === 'current') return 'text-brand-200'
-      if (status === 'completed') return 'text-emerald-200'
-      return 'text-zinc-500'
+    // kicker color per step state
+    const kickerToneClass = (status: 'completed' | 'current' | 'upcoming') => {
+      if (status === 'current') return 'text-brand-300'
+      if (status === 'completed') return 'text-emerald-400'
+      return 'text-zinc-600'
+    }
+
+    // status badge per step state
+    const badgeClass = (status: 'completed' | 'current' | 'upcoming') => {
+      if (status === 'completed') return 'bv-chip !border-emerald-400/30 !bg-emerald-500/10 !text-emerald-300'
+      if (status === 'current') return 'bv-chip !border-brand-primary/30 !bg-brand-primary/10 !text-brand-200'
+      return 'bv-chip'
     }
 
     const primarySigningLabel = connectedOwnerReady ? 'Approve signing access' : 'Connect owner wallet'
 
     return (
-      <div className="mx-auto w-full max-w-[760px] space-y-4">
+      <div className="mx-auto w-full max-w-[720px] space-y-5">
+        {/* system messages */}
         {error ? (
           <div
             role="alert"
             aria-live="assertive"
-            className="rounded-xl bg-rose-500/10 px-4 py-3 text-sm text-rose-200 ring-1 ring-rose-500/30"
+            className="bv-subpanel px-4 py-3 text-sm text-rose-300 ring-1 ring-rose-500/30"
           >
             {error}
           </div>
@@ -98,36 +110,42 @@ export function AccountSetupWorkspaceView(props: {
           <div
             role="status"
             aria-live="polite"
-            className="rounded-xl bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200 ring-1 ring-emerald-500/30"
+            className="bv-subpanel px-4 py-3 text-sm text-emerald-300 ring-1 ring-emerald-500/30"
           >
             {notice}
           </div>
         ) : null}
 
-        <div className="space-y-1.5 text-center">
-          <h2 className="text-3xl font-semibold tracking-tight text-white">Finish Setup</h2>
-          <p className="text-sm text-zinc-300">Complete these 3 steps to activate your wallet</p>
+        {/* page header */}
+        <div className="space-y-1 text-center">
+          <p className="bv-kicker">3-step setup</p>
+          <h2 className="text-4xl font-light tracking-tight text-white">Finish Setup</h2>
+          <p className="text-sm text-zinc-400">Complete these 3 steps to activate your wallet</p>
         </div>
 
-        <div className="space-y-2 rounded-2xl bg-white/[0.02] px-4 py-3 ring-1 ring-white/10">
-          <div className="flex items-center justify-between text-[11px] uppercase tracking-[0.16em]">
-            <span className="text-zinc-500">3-step setup</span>
-            <span className="text-zinc-300">Step {activeStep} of 3</span>
+        {/* progress bar — inline, no wrapper container */}
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between">
+            <span className="bv-kicker">Progress</span>
+            <span className="bv-kicker text-zinc-300">Step {activeStep} of 3</span>
           </div>
-          <div className="h-1.5 overflow-hidden rounded-full bg-white/10">
+          <div className="h-1 overflow-hidden rounded-full bg-white/8">
             <div
-              className="h-full rounded-full bg-[linear-gradient(90deg,#1d4ed8_0%,#3b82f6_100%)] transition-all duration-500"
-              style={{ width: `${Math.max(progressPct, activeStep === 1 ? 20 : 0)}%` }}
+              className="h-full rounded-full bg-[linear-gradient(90deg,#1d4ed8_0%,#60a5fa_100%)] transition-all duration-500"
+              style={{ width: `${Math.max(progressPct, activeStep === 1 ? 18 : 0)}%` }}
             />
           </div>
         </div>
 
+        {/* step cards */}
         <div className="space-y-2.5">
+
+          {/* Step 1 — Zora */}
           <section className={`rounded-2xl transition-all duration-300 ${cardClassForStatus(zoraStatus)}`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className={zoraStatus === 'completed' ? 'space-y-1' : 'space-y-1.5'}>
-                <p className={`text-[11px] uppercase tracking-[0.18em] ${stepToneClass(zoraStatus)}`}>Step 1</p>
-                <div className="flex items-center gap-2">
+              <div className={zoraStatus === 'completed' ? 'space-y-1' : 'space-y-2'}>
+                <p className={`bv-kicker ${kickerToneClass(zoraStatus)}`}>Step 1</p>
+                <div className="flex items-center gap-2.5">
                   <img
                     src="/brands/zora-token.svg"
                     alt=""
@@ -136,16 +154,14 @@ export function AccountSetupWorkspaceView(props: {
                   />
                   <h3 className="text-lg font-medium text-white">Link your Zora identity</h3>
                 </div>
-                <p className={`text-sm text-zinc-300 ${zoraStatus === 'completed' ? 'line-clamp-1' : ''}`}>
+                <p className={`text-sm text-zinc-400 ${zoraStatus === 'completed' ? 'line-clamp-1' : ''}`}>
                   Connect your Zora account so we can verify your creator identity.
                 </p>
               </div>
-              <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${
-                zoraStepComplete ? 'bg-emerald-500/15 text-emerald-200' : zoraStatus === 'current' ? 'bg-brand-primary/15 text-brand-200' : 'bg-white/5 text-zinc-400'
-              }`}>
-                {zoraStepComplete ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
+              <span className={badgeClass(zoraStatus)}>
+                {zoraStepComplete ? <CheckCircle2 className="h-3 w-3" /> : null}
                 {zoraStepComplete ? 'Connected' : zoraStatus === 'current' ? 'Current' : 'Upcoming'}
-              </div>
+              </span>
             </div>
             {zoraStatus === 'current' ? (
               <div className="mt-4">
@@ -161,28 +177,27 @@ export function AccountSetupWorkspaceView(props: {
             ) : null}
           </section>
 
+          {/* Step 2 — Coinbase Smart Wallet */}
           <section className={`rounded-2xl transition-all duration-300 ${cardClassForStatus(walletStatus)}`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className={walletStatus === 'completed' ? 'space-y-1' : 'space-y-1.5'}>
-                <p className={`text-[11px] uppercase tracking-[0.18em] ${stepToneClass(walletStatus)}`}>Step 2</p>
-                <div className="flex items-center gap-2">
+              <div className={walletStatus === 'completed' ? 'space-y-1' : 'space-y-2'}>
+                <p className={`bv-kicker ${kickerToneClass(walletStatus)}`}>Step 2</p>
+                <div className="flex items-center gap-2.5">
                   <WalletProviderIcon provider="coinbase" size={24} />
                   <h3 className="text-lg font-medium text-white">Detect your Coinbase Smart Wallet</h3>
                 </div>
-                <p className={`text-sm text-zinc-300 ${walletStatus === 'completed' ? 'line-clamp-1' : ''}`}>
+                <p className={`text-sm text-zinc-400 ${walletStatus === 'completed' ? 'line-clamp-1' : ''}`}>
                   Confirm the wallet connected to your account.
                 </p>
               </div>
-              <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${
-                walletStepComplete ? 'bg-emerald-500/15 text-emerald-200' : walletStatus === 'current' ? 'bg-brand-primary/15 text-brand-200' : 'bg-white/5 text-zinc-400'
-              }`}>
-                {walletStepComplete ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
+              <span className={badgeClass(walletStatus)}>
+                {walletStepComplete ? <CheckCircle2 className="h-3 w-3" /> : null}
                 {walletStepComplete ? 'Wallet detected' : walletStatus === 'current' ? 'Current' : 'Upcoming'}
-              </div>
+              </span>
             </div>
 
             {walletStepComplete || walletStatus === 'current' ? (
-              <div className="mt-3 inline-flex items-center gap-2 rounded-lg bg-black/30 px-3 py-2 text-xs text-zinc-300 ring-1 ring-white/10">
+              <div className="mt-3 inline-flex items-center gap-2 rounded-lg bg-black/30 px-3 py-2 text-xs text-zinc-300 ring-1 ring-white/8">
                 <WalletProviderIcon provider="coinbase" size={14} />
                 <span className="text-zinc-500">Wallet</span>
                 <span className="font-mono text-zinc-100">{shortValue(canonicalCswAddress)}</span>
@@ -208,21 +223,20 @@ export function AccountSetupWorkspaceView(props: {
             ) : null}
           </section>
 
+          {/* Step 3 — Enable signing */}
           <section className={`rounded-2xl transition-all duration-300 ${cardClassForStatus(signingStatus)}`}>
             <div className="flex flex-wrap items-start justify-between gap-3">
-              <div className={signingStatus === 'completed' ? 'space-y-1' : 'space-y-1.5'}>
-                <p className={`text-[11px] uppercase tracking-[0.18em] ${stepToneClass(signingStatus)}`}>Step 3</p>
+              <div className={signingStatus === 'completed' ? 'space-y-1' : 'space-y-2'}>
+                <p className={`bv-kicker ${kickerToneClass(signingStatus)}`}>Step 3</p>
                 <h3 className="text-lg font-medium text-white">Enable 4626 signing</h3>
-                <p className={`text-sm text-zinc-300 ${signingStatus === 'completed' ? 'line-clamp-1' : ''}`}>
+                <p className={`text-sm text-zinc-400 ${signingStatus === 'completed' ? 'line-clamp-1' : ''}`}>
                   Connect an owner wallet and approve signing access.
                 </p>
               </div>
-              <div className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs ${
-                signingStepComplete ? 'bg-emerald-500/15 text-emerald-200' : signingStatus === 'current' ? 'bg-brand-primary/15 text-brand-200' : 'bg-white/5 text-zinc-400'
-              }`}>
-                {signingStepComplete ? <CheckCircle2 className="h-3.5 w-3.5" /> : null}
+              <span className={badgeClass(signingStatus)}>
+                {signingStepComplete ? <CheckCircle2 className="h-3 w-3" /> : null}
                 {signingStepComplete ? 'Completed' : signingStatus === 'current' ? 'Current' : 'Upcoming'}
-              </div>
+              </span>
             </div>
 
             {signingStatus === 'current' ? (
@@ -239,7 +253,7 @@ export function AccountSetupWorkspaceView(props: {
                   type="button"
                   disabled={advancedBusy}
                   onClick={() => void retryOwnerCheck()}
-                  className="rounded-lg bg-white/5 px-3 py-2 text-xs text-zinc-300 transition hover:bg-white/10 hover:text-zinc-100"
+                  className="btn-secondary btn-no-icon inline-flex"
                 >
                   Retry
                 </button>
@@ -255,10 +269,10 @@ export function AccountSetupWorkspaceView(props: {
               <p className="mt-1 text-xs text-zinc-500">{connectedSignerDetail}</p>
             ) : null}
             {needsEmbeddedWallet && signingStatus === 'current' ? (
-              <p className="mt-2 text-xs text-amber-200">Embedded wallet provisioning is still settling. Retry in a moment.</p>
+              <p className="mt-2 text-xs text-amber-300">Embedded wallet provisioning is still settling. Retry in a moment.</p>
             ) : null}
             {inTelegramMiniApp && signingStatus === 'current' ? (
-              <p className="mt-2 text-xs text-amber-200">
+              <p className="mt-2 text-xs text-amber-300">
                 Owner signatures are more reliable in an external browser tab.
               </p>
             ) : null}
@@ -270,6 +284,7 @@ export function AccountSetupWorkspaceView(props: {
           </section>
         </div>
 
+        {/* Enter App / summary actions */}
         {summaryActions ? <div className="pt-1">{summaryActions}</div> : null}
       </div>
     )

@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../server/auth/_shared.js', () => ({
   handleOptions: mocks.handleOptions,
+  readBoundedJsonObjectBody: mocks.readJsonBody,
   readJsonBody: mocks.readJsonBody,
 }))
 

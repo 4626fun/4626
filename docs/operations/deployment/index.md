@@ -16,6 +16,7 @@ Guides for deploying 4626 infrastructure.
 | **[CCA Verification](/operations/deployment/cca-verification)** | Verify CCA deployment |
 | **[Solana OVault Canary Rollout](/operations/deployment/solana-ovault-canary-rollout)** | OVault preflight rollout + kill switch |
 | **[Infra Epoch Redeploy](/operations/deployment/infra-epoch-redeploy)** | Full registry/batcher/store redeploy |
+| **[v1.8.3 Mainnet Release Packet](/operations/deployment/releases/v1.8.3-mainnet)** | Canonical release target for the current bytecode epoch and cutover plan |
 | **[v1.8.1 Mainnet Release Packet](/operations/deployment/releases/v1.8.1-mainnet)** | Planned vanity-epoch addresses, salts, cutover, rollback |
 | **[v1.8.1 Pre-Broadcast Checklist](/operations/deployment/releases/v1.8.1-pre-broadcast-checklist)** | Operator checklist before broadcasting the vanity epoch |
 | **[v1.7.1 Mainnet Release Packet](/operations/deployment/releases/v1.7.1-mainnet)** | Canonical addresses, env cutover, verification, rollback |

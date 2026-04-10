@@ -8,7 +8,7 @@ import { createBundlerClient, createPaymasterClient, sendUserOperation, toCoinba
 
 import {
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   checkRateLimit,
@@ -2560,7 +2560,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Too many status checks' } satisfies ApiEnvelope<null>)
   }
 
-  const body = await readJsonBody<StatusRequest>(req, { maxBytes: 8_192 })
+  const body = ((await readBoundedJsonObjectBody(req, { maxBytes: 8_192 })) ?? {}) as StatusRequest
   const sessionId = normalizeDeploySessionId(body?.sessionId)
   if (!sessionId) return res.status(400).json({ success: false, error: 'Missing or invalid sessionId' } satisfies ApiEnvelope<null>)
 

@@ -58,6 +58,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
   handleOptions: vi.fn(() => false),
   setCors: vi.fn(),
   setNoStore: vi.fn(),
+  readBoundedJsonObjectBody: readJsonBodyMock,
   readJsonBody: readJsonBodyMock,
   readSessionFromRequest: readSessionFromRequestMock,
 }))
@@ -228,6 +229,16 @@ describe('deploy session optimistic concurrency', () => {
     expect(getDeploySessionByIdMock).not.toHaveBeenCalled()
   })
 
+  it('returns 429 when continue polling is rate limited', async () => {
+    checkRateLimitMock.mockReturnValueOnce({ allowed: false, resetAt: Date.now() + 15_000 })
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+    expect(res.statusCode).toBe(429)
+    expect(String(res.body?.error ?? '')).toContain('Too many continue attempts')
+    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
+  })
+
   it('returns 429 when status polling is rate limited', async () => {
     checkRateLimitMock.mockReturnValueOnce({ allowed: false, resetAt: Date.now() + 15_000 })
     const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
@@ -236,6 +247,91 @@ describe('deploy session optimistic concurrency', () => {
     expect(res.statusCode).toBe(429)
     expect(String(res.body?.error ?? '')).toContain('Too many status checks')
     expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
+  })
+
+  it('returns 429 when cancel is rate limited', async () => {
+    checkRateLimitMock.mockReturnValueOnce({ allowed: false, resetAt: Date.now() + 15_000 })
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await cancelHandler(req, res)
+    expect(res.statusCode).toBe(429)
+    expect(String(res.body?.error ?? '')).toContain('Too many cancel attempts')
+    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
+  })
+
+  it('returns 401 when continue auth is missing and does not touch storage', async () => {
+    readSessionFromRequestMock.mockReturnValueOnce(null as any)
+    readSiwaAgentFromRequestMock.mockReturnValueOnce(null as any)
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+    expect(res.statusCode).toBe(401)
+    expect(res.body?.error).toBe('Not authenticated')
+    expect(getDeploySessionByIdMock).not.toHaveBeenCalled()
+  })
+
+  it('returns 401 when cancel auth is missing and does not touch storage', async () => {
+    readSessionFromRequestMock.mockReturnValueOnce(null as any)
+    readSiwaAgentFromRequestMock.mockReturnValueOnce(null as any)
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await cancelHandler(req, res)
+    expect(res.statusCode).toBe(401)
+    expect(res.body?.error).toBe('Not authenticated')
+    expect(getDeploySessionByIdMock).not.toHaveBeenCalled()
+  })
+
+  it('returns 404 when continue session id does not exist', async () => {
+    getDeploySessionByIdMock.mockResolvedValueOnce(null)
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await continueHandler(req, res)
+    expect(res.statusCode).toBe(404)
+    expect(res.body?.error).toBe('Not found')
+    expect(sendUserOperationMock).not.toHaveBeenCalled()
+  })
+
+  it('returns 404 when cancel session id does not exist', async () => {
+    getDeploySessionByIdMock.mockResolvedValueOnce(null)
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await cancelHandler(req, res)
+    expect(res.statusCode).toBe(404)
+    expect(res.body?.error).toBe('Not found')
+    expect(sendUserOperationMock).not.toHaveBeenCalled()
+  })
+
+  it('returns 403 from status when deploy session belongs to a different principal', async () => {
+    readSessionFromRequestMock.mockReturnValueOnce({
+      address: '0x0000000000000000000000000000000000000001',
+    } as any)
+    getDeploySessionByIdMock.mockResolvedValueOnce({
+      ...makeDeploySession('created'),
+      sessionAddress: '0x0000000000000000000000000000000000000002',
+    })
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await statusHandler(req, res)
+    expect(res.statusCode).toBe(403)
+    expect(res.body?.error).toBe('Forbidden')
+    expect(transitionDeploySessionMock).not.toHaveBeenCalled()
+    expect(sendUserOperationMock).not.toHaveBeenCalled()
+  })
+
+  it('returns 403 from cancel when deploy session belongs to a different principal', async () => {
+    readSessionFromRequestMock.mockReturnValueOnce({
+      address: '0x0000000000000000000000000000000000000001',
+    } as any)
+    getDeploySessionByIdMock.mockResolvedValueOnce({
+      ...makeDeploySession('created'),
+      sessionAddress: '0x0000000000000000000000000000000000000002',
+    })
+    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+    const res = createMockRes()
+    await cancelHandler(req, res)
+    expect(res.statusCode).toBe(403)
+    expect(res.body?.error).toBe('Forbidden')
+    expect(sendUserOperationMock).not.toHaveBeenCalled()
   })
 
   it('returns 409 in status handler on stale transition conflict', async () => {

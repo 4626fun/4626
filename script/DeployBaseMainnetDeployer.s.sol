@@ -58,7 +58,7 @@ contract DeployBaseMainnetDeployer is Script {
     // - raw bytes32: INFRA_*_SALT
     // - string tag (hashed with keccak256): INFRA_*_SALT_TAG
     // - shared epoch: DEPLOYMENT_EPOCH_TAG
-    string constant DEFAULT_DEPLOYMENT_EPOCH_TAG = "v1.8.2";
+    string constant DEFAULT_DEPLOYMENT_EPOCH_TAG = "v1.8.3";
     string constant STORE_SALT_TAG_PREFIX = "base-release:UniversalBytecodeStore:";
     string constant DEPLOYER_FROM_STORE_SALT_TAG_PREFIX = "base-release:UniversalCreate2DeployerFromStore:";
 
@@ -70,7 +70,7 @@ contract DeployBaseMainnetDeployer is Script {
     // DeploymentBatcher salt (constructor args are chain-specific ⇒ address is chain-specific).
     string constant DEPLOYMENT_BATCHER_SALT_TAG_PREFIX = "base-release:DeploymentBatcher:";
 
-    // Defaults (Base mainnet v1.8.2 full redeploy) — can be overridden via env.
+    // Live Base mainnet fallback defaults — overridden by shared/global handoff during fresh epochs.
     address constant DEFAULT_REGISTRY = 0x79d0d68904BbB50361C9721CbDD17276E046771D;
     address constant DEFAULT_PROTOCOL_TREASURY = 0x7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3;
     address constant DEFAULT_POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;

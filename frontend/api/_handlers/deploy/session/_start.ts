@@ -5,7 +5,7 @@ import { base } from 'viem/chains'
 
 import {
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   checkRateLimit,
@@ -135,7 +135,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Too many start attempts' } satisfies ApiEnvelope<null>)
   }
 
-  const body = await readJsonBody<StartRequest>(req, { maxBytes: 512_000 })
+  const body = (await readBoundedJsonObjectBody(req, { maxBytes: 512_000 })) as StartRequest | null
   if (!body) {
     return res.status(400).json({ success: false, error: 'Invalid JSON body' } satisfies ApiEnvelope<null>)
   }

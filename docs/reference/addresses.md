@@ -9,7 +9,7 @@ Deployed contract addresses for 4626.
 
 ## Base (Hub Chain)
 
-### Canonical Infrastructure (`v1.8.2` full redeploy)
+### Current Live Infrastructure (pending `v1.8.3` cutover)
 
 | Contract | Address |
 |----------|---------|
@@ -29,7 +29,8 @@ Deployed contract addresses for 4626.
 | DeploymentBatcherUniV4Helper | `0x5Ed8A640abF700e4c3A627Ad7cc8A8bdDEe5F34f` |
 
 Notes:
-- Shared/global contracts were freshly broadcast for the `v1.8.2` release and handed off into the deterministic v2 batcher deployment.
+- Shared/global contracts were freshly broadcast for the current live Base infra epoch and handed off into the deterministic v2 batcher deployment.
+- The repo's next deployment namespace / bytecode target is `v1.8.3`; these addresses remain the current live Base values until that epoch is broadcast.
 - `DeploymentBatcherPhase3Helper` and `DeploymentBatcherUniV4Helper` are constructor-created by `DeploymentBatcher`.
 - `DeploymentBatcher` is forensically matched to the live CREATE2 deployment payload; explorer verification for that deployment path still mismatches.
 

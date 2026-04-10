@@ -15,7 +15,7 @@ const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as ContractAddress
 
 export const BASE_DEFAULTS = {
   // Shared infrastructure
-  // Canonical Base full redeploy defaults for release v1.8.2.
+  // Current live Base infra defaults (still sourced from the prior epoch until v1.8.3 broadcasts).
   registry: addr('79d0d68904BbB50361C9721CbDD17276E046771D'),
   lotteryManager: addr('A137BEef789B80c76187E1b6DEef60fC7db6d280'),
   vrfConsumer: addr('22ae936027Fe0c348758634bF8694E00D96338ac'),

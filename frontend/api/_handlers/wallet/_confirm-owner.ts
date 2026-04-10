@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   getDb,
@@ -75,7 +75,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Service unavailable' } satisfies ApiEnvelope<never>)
   }
 
-  const body = await readJsonBody<ConfirmBody>(req, { maxBytes: 8_192 })
+  const body = (await readBoundedJsonObjectBody(req, { maxBytes: 8_192 })) as ConfirmBody | null
   const ownerAddress = typeof body?.ownerAddress === 'string' ? body.ownerAddress : null
   const cswAddress = typeof body?.cswAddress === 'string' ? body.cswAddress : null
   const txHash = typeof body?.txHash === 'string' ? body.txHash.trim() : ''
