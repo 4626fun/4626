@@ -25,7 +25,7 @@ vi.mock('../../server/_lib/origin.js', () => ({
 }))
 
 vi.mock('../../server/_lib/rateLimit.js', () => ({
-  checkRateLimit: (...args: any[]) => checkRateLimitMock(...args),
+  checkRateLimit: checkRateLimitMock,
   getClientIp: vi.fn(() => '203.0.113.88'),
   rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
   RATE_LIMITS: {
