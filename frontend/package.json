@@ -33,6 +33,8 @@
     "guard:test-file-placement": "node scripts/check-test-file-placement.mjs",
     "guard:api-readjsonbody-maxbytes": "node scripts/check-readjsonbody-maxbytes.mjs",
     "guard:api-rate-limit-guards": "node scripts/check-guard-rate-limit.mjs",
+    "guard:api-429-retry-after": "node scripts/check-api-429-retry-after.mjs",
+    "guard:explore-no-aliases": "node scripts/check-explore-no-aliases.mjs",
     "guard:api-nonv1-hardening": "node scripts/check-nonv1-hardening.mjs",
     "capture:app-screens": "node scripts/capture-app-screenshots.mjs",
     "docs": "pnpm exec typedoc",
