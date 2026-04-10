@@ -15,6 +15,7 @@ import {
   getDb,
   isDbConfigured,
 } from '../../../../packages/server-core/src/index.js'
+import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../../server/_lib/rateLimit.js'
 
 
 import { ensureKeeprSchema } from '../../../../server/_lib/keeprSchema.js'
@@ -116,6 +117,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (!requireKeeprApiKey(req, res)) return
+
+  const limiter = checkRateLimit(
+    rateLimitKey('cre-keeper-solana-reconcile', getClientIp(req)),
+    RATE_LIMITS.creRuntimeTriggerWrite,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
+  }
 
   const body = (req.body ?? {}) as ReconcileBody
   const workflow = isNonEmptyString(body.workflow) ? body.workflow.trim() : ''

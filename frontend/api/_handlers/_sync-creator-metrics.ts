@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { runCreatorMetricsSync } from '../../server/_lib/creatorMetricsSync.js'
+import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../server/_lib/rateLimit.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -49,6 +50,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const providedSecret = readCronSecret(req)
   if (!providedSecret || providedSecret !== configuredSecret) {
     return res.status(401).json({ success: false, error: 'Unauthorized' })
+  }
+
+  const limiter = checkRateLimit(
+    rateLimitKey('sync-creator-metrics', getClientIp(req)),
+    RATE_LIMITS.adminAction,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' })
   }
 
   const forceFull = readBooleanQuery(req, 'forceFull')

@@ -14,6 +14,7 @@ import {
   extractDelegationFlags,
 } from '../../../server/_lib/canonicalCswDelegation.js'
 import { prepareAddOwnerTx } from '../../../server/_lib/coinbaseSmartWalletOwner.js'
+import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 
 type PrepareResponse =
   | { alreadyOwner: true }
@@ -53,6 +54,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+
+  const limiter = checkRateLimit(
+    rateLimitKey('wallet-prepare-add-privy-owner', getClientIp(req)),
+    RATE_LIMITS.cswLink,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
   const db = await getDb()

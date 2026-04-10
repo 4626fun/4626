@@ -32,6 +32,7 @@
     "guard:runtime-boundaries": "node scripts/check-runtime-boundaries.mjs",
     "guard:test-file-placement": "node scripts/check-test-file-placement.mjs",
     "guard:api-readjsonbody-maxbytes": "node scripts/check-readjsonbody-maxbytes.mjs",
+    "guard:api-rate-limit-guards": "node scripts/check-guard-rate-limit.mjs",
     "capture:app-screens": "node scripts/capture-app-screenshots.mjs",
     "docs": "pnpm exec typedoc",
     "test": "vitest run",

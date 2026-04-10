@@ -48,6 +48,10 @@ export const API_ENDPOINTS = {
     checkDelegation: '/api/uniswap/checkDelegation',
     plan: '/api/uniswap/plan',
   },
+  cdpSwap: {
+    price: '/api/cdp/swap/price',
+    execute: '/api/cdp/swap/execute',
+  },
   agent: {
     creative: '/api/agent/creative',
   },

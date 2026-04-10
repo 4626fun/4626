@@ -7,6 +7,10 @@ Required variables:
 - `UNISWAP_API_KEY` (or `UNISWAP_API`) — server-side API key used by `/api/uniswap/*` proxy handlers.
 - `UNISWAP_TRADE_API_BASE` (optional) — defaults to `https://trade.api.uniswap.org/v1`.
 - `VITE_CDP_PAYMASTER_URL` (optional) — used for canonical smart wallet execution path.
+- `VITE_SWAP_PROVIDER` (optional) — swap provider mode:
+  - `uniswap` (default): current behavior
+  - `cdp`: CDP-only quote + execute path
+  - `hybrid`: prefer CDP and fallback to Uniswap only on retryable provider errors
 
 ## Local run
 
@@ -31,6 +35,8 @@ pnpm dev
 - Account-context canonical lookup via `/api/waitlist/me` is deferred until a signer exists.
 - `ChatWidget` is lazy-activated; idle `/swap` should not mount `XmtpChatProvider`.
 - Auto-quote still runs on real input changes.
+- CDP/hybrid modes are canonical-CSW-only for execution in v1.
+- In hybrid mode, fallback to Uniswap is intentionally blocked for policy/auth failures (session mismatch, forbidden origin, chain mismatch, slippage, insufficient funds/gas, allowance issues).
 - Idle stale-quote refresh is intentionally disabled. If a quote expires while the user is reviewing or submitting, `useSwapExecution.ts` rebuilds the quote on demand before execution continues.
 
 These rules exist to keep `/swap` from looking like it is reloading itself because of session churn, provider boot noise, or background requote loops.

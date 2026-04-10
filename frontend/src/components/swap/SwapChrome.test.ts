@@ -81,6 +81,7 @@ describe('Swap chrome', () => {
         onConfirmUnverified: vi.fn(),
         executionMode: 'eoa',
         fallbackActive: false,
+        swapProviderLabel: 'Uniswap',
         needsUnverifiedConfirmation: false,
         unverifiedTokenLabel: null,
         onResetUnverified: vi.fn(),

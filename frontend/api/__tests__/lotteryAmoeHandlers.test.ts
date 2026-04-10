@@ -12,6 +12,9 @@ const getAmoeCreditSnapshotMock = vi.fn()
 const consumeAmoeCreditsForEntryMock = vi.fn()
 const claimDailyTwitterCheckinMock = vi.fn()
 const resolveAuthorizedWalletProfileMock = vi.fn()
+const checkRateLimitMock = vi.fn()
+const getClientIpMock = vi.fn()
+const rateLimitKeyMock = vi.fn()
 
 vi.mock('../../server/_lib/agentApiGuard.js', () => ({
   guardAgentApiRequest: guardMock,
@@ -19,6 +22,16 @@ vi.mock('../../server/_lib/agentApiGuard.js', () => ({
 
 vi.mock('../../server/_lib/contracts.js', () => ({
   getApiContracts: () => ({ lotteryManager: '0x77705A2f173dd52F28300447506Dc35086c34626' }),
+}))
+
+vi.mock('../../server/_lib/rateLimit.js', () => ({
+  checkRateLimit: checkRateLimitMock,
+  getClientIp: getClientIpMock,
+  rateLimitKey: rateLimitKeyMock,
+  RATE_LIMITS: {
+    lotteryRead: { windowMs: 60_000, maxRequests: 120 },
+    lotteryWrite: { windowMs: 60_000, maxRequests: 40 },
+  },
 }))
 
 vi.mock('../../server/_lib/canonicalWalletResolver.js', () => ({
@@ -58,6 +71,9 @@ describe('AMOE nonce handler', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     guardMock.mockResolvedValue({ ok: true, ip: '127.0.0.1' })
+    checkRateLimitMock.mockReturnValue({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })
+    getClientIpMock.mockReturnValue('127.0.0.1')
+    rateLimitKeyMock.mockImplementation((...parts: string[]) => parts.join(':'))
     resolveAuthorizedWalletProfileMock.mockResolvedValue(null)
     issueAmoeNonceMock.mockResolvedValue({
       nonce: '0x1111111111111111111111111111111111111111111111111111111111111111',
@@ -80,6 +96,22 @@ describe('AMOE nonce handler', () => {
     const res = createMockRes()
     await handler(req, res)
     expect(res.statusCode).toBe(400)
+  })
+
+  it('returns 429 when nonce endpoint rate limit is exceeded', async () => {
+    checkRateLimitMock.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeNonce')
+    const req = createMockReq({
+      method: 'GET',
+      query: {
+        wallet: '0x000000000000000000000000000000000000cAFe',
+        creatorCoin: '0x0000000000000000000000000000000000001001',
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(429)
+    expect(res.body?.error).toBe('Too many requests')
   })
 
   it('returns nonce payload for valid query params', async () => {
@@ -177,6 +209,7 @@ describe('AMOE credits handler', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     guardMock.mockResolvedValue({ ok: true, ip: '127.0.0.1' })
+    checkRateLimitMock.mockReturnValue({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })
     resolveAuthorizedWalletProfileMock.mockResolvedValue(null)
     getAmoeCreditSnapshotMock.mockResolvedValue({
       wallet: '0x000000000000000000000000000000000000cafe',
@@ -266,6 +299,7 @@ describe('AMOE submit handler', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     guardMock.mockResolvedValue({ ok: true, ip: '127.0.0.1' })
+    checkRateLimitMock.mockReturnValue({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })
     verifyAmoeEntryProofMock.mockResolvedValue({
       wallet: '0x000000000000000000000000000000000000cafe',
       creatorCoin: '0x0000000000000000000000000000000000001001',
@@ -318,6 +352,23 @@ describe('AMOE submit handler', () => {
     expect(createAmoeAttestationMock).toHaveBeenCalledTimes(1)
   })
 
+  it('returns 429 when submit endpoint rate limit is exceeded', async () => {
+    checkRateLimitMock.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+    const { default: handler } = await import('../_handlers/v1/lottery/_amoeSubmit')
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        creatorCoin: '0x0000000000000000000000000000000000001001',
+        message: 'amoe-message',
+        signature: '0x1234',
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(429)
+    expect(res.body?.error).toBe('Too many requests')
+  })
+
   it('returns 402 when credits are insufficient', async () => {
     consumeAmoeCreditsForEntryMock.mockRejectedValue(new Error('insufficient_amoe_credits'))
 
@@ -341,6 +392,7 @@ describe('AMOE submit handler', () => {
 describe('AMOE daily Twitter checkin handler', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    checkRateLimitMock.mockReturnValue({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })
     guardMock.mockResolvedValue({
       ok: true,
       ip: '127.0.0.1',

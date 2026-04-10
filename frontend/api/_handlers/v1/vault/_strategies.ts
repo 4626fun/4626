@@ -3,6 +3,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   handleOptions,
   guardAgentApiRequest,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 
 
@@ -139,6 +143,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/vault/strategies', kind: 'read' })
   if (!g.ok) return
+
+  const limiter = checkRateLimit(
+    rateLimitKey('v1-vault-strategies', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
+    RATE_LIMITS.vaultRead,
+  )
+  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
 
   const vault = getVaultParam(req)
   if (!vault) return res.status(400).json({ success: false, error: 'vault is required' })
@@ -358,4 +368,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ success: false, error: e?.message || 'Failed to load strategies' })
   }
 }
-

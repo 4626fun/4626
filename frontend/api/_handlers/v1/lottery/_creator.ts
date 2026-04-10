@@ -4,6 +4,10 @@ import {
   handleOptions,
   getApiContracts,
   guardAgentApiRequest,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 
 
@@ -64,6 +68,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/lottery/creator', kind: 'read' })
   if (!g.ok) return
 
+  const limiter = checkRateLimit(
+    rateLimitKey('v1-lottery-creator', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
+    RATE_LIMITS.lotteryRead,
+  )
+  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+
   const creatorCoin = getCreatorCoinParam(req)
   if (!creatorCoin) return res.status(400).json({ success: false, error: 'creatorCoin is required' })
   if (!isAddressLike(creatorCoin)) return res.status(400).json({ success: false, error: 'Invalid creatorCoin address' })
@@ -113,4 +123,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ success: false, error: e?.message || 'Failed to read creator lottery stats' })
   }
 }
-

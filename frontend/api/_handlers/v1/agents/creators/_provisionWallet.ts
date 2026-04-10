@@ -14,6 +14,10 @@ import {
   handleOptions,
   readJsonBody,
   guardAgentApiRequest,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from '../../../../../packages/server-core/src/index.js'
 
 
@@ -41,12 +45,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/agents/creators/provision-wallet', kind: 'build' })
   if (!g.ok) return
 
+  const limiter = checkRateLimit(
+    rateLimitKey('v1-agents-creators-provision-wallet', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
+    RATE_LIMITS.agentsWrite,
+  )
+  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+
   const principalAddress = g.auth?.address ? String(g.auth.address).toLowerCase() : ''
   if (!principalAddress) {
     return res.status(401).json({ success: false, error: 'Authentication required (session or SIWA receipt)' })
   }
 
-  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
+  const body = (await readJsonBody(req, { maxBytes: 16_384 })) ?? {}
   // The creator address defaults to the signed-in address.
   const requestedAddress = body.creatorAddress?.trim().toLowerCase() || principalAddress
   const canonicalForPrincipal = await resolveCanonicalSmartWalletAddress(principalAddress)

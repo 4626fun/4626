@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { evaluateCanonicalSubmitSession, resolveCanonicalSubmitSession } from './useSwapExecution'
+import { requiresCanonicalExecutionForSwapMode } from '@/lib/swap/providerConfig'
 
 describe('evaluateCanonicalSubmitSession', () => {
   it('blocks canonical submit while session state is still hydrating', () => {
@@ -204,5 +205,13 @@ describe('resolveCanonicalSubmitSession', () => {
       message: 'Your restored 4626 session does not match the canonical owner signer. Restore your account connection and try again.',
       shouldAttemptRefresh: true,
     })
+  })
+})
+
+describe('CDP canonical mode policy helpers', () => {
+  it('requires canonical execution for cdp and hybrid swap modes', () => {
+    expect(requiresCanonicalExecutionForSwapMode('uniswap')).toBe(false)
+    expect(requiresCanonicalExecutionForSwapMode('cdp')).toBe(true)
+    expect(requiresCanonicalExecutionForSwapMode('hybrid')).toBe(true)
   })
 })

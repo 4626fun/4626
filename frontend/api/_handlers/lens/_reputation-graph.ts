@@ -19,6 +19,7 @@ import {
   setNoStore,
   readRequestPrincipal,
 } from '../../../packages/server-core/src/index.js'
+import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 
 import { buildReputationGraph } from '../../../server/_lib/reputationGraph.js'
 import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
@@ -66,6 +67,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: false,
       error: 'Method not allowed. Use GET or POST /api/lens/reputation-graph.',
     } satisfies ApiEnvelope<never>)
+  }
+
+  const limiter = checkRateLimit(
+    rateLimitKey('lens-reputation-graph', req.method.toLowerCase(), getClientIp(req)),
+    req.method === 'GET' ? RATE_LIMITS.specRead : RATE_LIMITS.agentsWrite,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
   const body = req.method === 'POST' ? (await readJsonBody(req, { maxBytes: 512_000 })) ?? {} : {}

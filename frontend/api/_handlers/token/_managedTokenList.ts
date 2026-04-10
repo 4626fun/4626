@@ -2,6 +2,13 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import type { Address, PublicClient } from 'viem'
 import { createPublicClient, getAddress, http, isAddress } from 'viem'
 
+import {
+  checkRateLimit,
+  getClientIp,
+  RATE_LIMITS,
+  rateLimitKey,
+  readJsonBody,
+} from '../../../packages/server-core/src/index.js'
 import { setPublicCors, setCache, DEFAULT_CHAIN_ID, getNumberQuery, getStringQuery, handleOptions, requireServerKey } from '../../../server/zora/_shared.js'
 import { blobHeadOrNull, blobPutBytes, fetchBytes } from '../../../server/_lib/blob.js'
 
@@ -163,6 +170,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (req.method === 'POST') {
+    const limiter = checkRateLimit(rateLimitKey('token:managed-list:post', getClientIp(req)), RATE_LIMITS.adminAction)
+    if (!limiter.allowed) {
+      res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+      return res.status(429).json({ error: 'Rate limit exceeded' })
+    }
+
     const serverKey = requireServerKey()
     if (!serverKey) return res.status(500).json({ error: 'Server API key missing' })
 
@@ -171,7 +184,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const provided = typeof req.headers['x-zora-server-key'] === 'string' ? req.headers['x-zora-server-key'] : null
     if (!provided || provided !== serverKey) return res.status(401).json({ error: 'Unauthorized' })
 
-    const shareOftRaw = (req.body as any)?.shareOft
+    const body = (await readJsonBody<{ shareOft?: unknown }>(req, { maxBytes: 16_384 }).catch(() => null))
+      ?? ((req.body as { shareOft?: unknown } | null) ?? {})
+    const shareOftRaw = body.shareOft
     if (!shareOftRaw || typeof shareOftRaw !== 'string' || !isAddress(shareOftRaw)) {
       return res.status(400).json({ error: 'Invalid shareOft' })
     }
@@ -183,4 +198,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   return res.status(405).json({ error: 'Method not allowed' })
 }
-

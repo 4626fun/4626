@@ -4,12 +4,21 @@ import { applyEnv, createMockReq, createMockRes } from './helpers'
 
 const mocks = vi.hoisted(() => ({
   guardAgentApiRequest: vi.fn(async () => ({ ok: true, ip: '127.0.0.1', auth: null })),
+  checkRateLimit: vi.fn(() => ({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })),
+  getClientIp: vi.fn(() => '127.0.0.1'),
+  rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
   getCanonicalOrigin: vi.fn(() => 'https://4626.fun'),
   getErc8004PublicOrigin: vi.fn(() => 'https://4626.fun'),
 }))
 
 vi.mock('../../packages/server-core/src/index.js', () => ({
   guardAgentApiRequest: mocks.guardAgentApiRequest,
+  checkRateLimit: mocks.checkRateLimit,
+  getClientIp: mocks.getClientIp,
+  rateLimitKey: mocks.rateLimitKey,
+  RATE_LIMITS: {
+    agentsRead: { windowMs: 60_000, maxRequests: 120 },
+  },
 }))
 
 vi.mock('../../server/_lib/origin.js', () => ({

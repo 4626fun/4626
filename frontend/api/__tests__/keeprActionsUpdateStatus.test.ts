@@ -10,9 +10,16 @@ const { ensureKeeprSchemaMock, getDbMock, normalizeKeeprActionStatusForWorkspace
 
 vi.mock('../../packages/server-core/src/index.js', () => ({
   handleOptions: () => false,
+  readJsonBody: async (req: any) => req.body,
   setCors: () => undefined,
   setNoStore: () => undefined,
   getDb: getDbMock,
+  getClientIp: () => '127.0.0.1',
+  rateLimitKey: (...parts: string[]) => parts.join(':'),
+  checkRateLimit: () => ({ allowed: true, remaining: 100, resetAt: Date.now() + 60_000 }),
+  RATE_LIMITS: {
+    creRuntimeDecisionsWrite: { windowMs: 60_000, maxRequests: 60 },
+  },
   requireKeeprApiKey: (req: any, res: any, opts?: { missingSecretError?: string }) => {
     const expected = String(process.env.KEEPR_API_KEY ?? '').trim()
     if (!expected) {

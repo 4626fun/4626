@@ -301,6 +301,8 @@ function localApiRoutesPlugin(): Plugin {
         '/api/uniswap/swap7702': () => import('./api/_handlers/uniswap/_swap7702'),
         '/api/uniswap/plan': () => import('./api/_handlers/uniswap/_plan'),
         '/api/uniswap/liquidity': () => import('./api/_handlers/uniswap/_liquidity'),
+        '/api/cdp/swap/price': () => import('./api/_handlers/cdp/swap/_price'),
+        '/api/cdp/swap/execute': () => import('./api/_handlers/cdp/swap/_execute'),
         '/api/agent/creative': () => import('./api/_handlers/agent/_creative'),
         '/api/lens/share-token-metadata': () => import('./api/_handlers/lens/_share-token-metadata'),
         '/api/lens/agent-registration': () => import('./api/_handlers/lens/_agent-registration'),

@@ -66,6 +66,7 @@ describe('assertValidSwapTransaction', () => {
 describe('buildSwap', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllEnvs()
   })
 
   it('requires signature and permitData to be provided together', async () => {
@@ -103,11 +104,58 @@ describe('buildSwap', () => {
       }),
     ).rejects.toThrow('Invalid swap transaction: missing call data')
   })
+
+  it('executes cdp swap when quote metadata marks cdp provider', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input)
+        if (url.includes('/cdp/swap/execute')) {
+          return {
+            ok: true,
+            status: 200,
+            headers: { get: () => 'application/json' },
+            json: async () => ({
+              success: true,
+              data: {
+                transaction: { ...VALID_TX },
+              },
+            }),
+          }
+        }
+        return {
+          ok: false,
+          status: 404,
+          headers: { get: () => 'application/json' },
+          json: async () => ({ success: false, error: 'unexpected route' }),
+        }
+      }),
+    )
+
+    const result = await buildSwap({
+      quote: {
+        _provider: 'cdp',
+        _cdpParams: {
+          network: 'base',
+          fromToken: '0x0000000000000000000000000000000000000003',
+          toToken: '0x0000000000000000000000000000000000000004',
+          fromAmount: '1000',
+          taker: '0x0000000000000000000000000000000000000002',
+          slippageBps: 100,
+        },
+      },
+      includeGasInfo: false,
+      refreshGasPrice: false,
+      simulateTransaction: false,
+    })
+    expect(result.swap.to).toBe(VALID_TX.to)
+  })
 })
 
 describe('fetchTradeQuote', () => {
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllEnvs()
   })
 
   it('rejects non-integer amount values', async () => {
@@ -259,6 +307,51 @@ describe('fetchTradeQuote', () => {
         ;(globalThis as any).window = originalWindow
       }
     }
+  })
+
+  it('uses cdp->uniswap fallback in hybrid mode for retryable cdp errors', async () => {
+    vi.stubEnv('VITE_SWAP_PROVIDER', 'hybrid')
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 503,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: false, error: 'network timeout' }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: true, data: { ...quoteResponse('CLASSIC'), requestId: 'rq_hybrid' } }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const result = await fetchTradeQuote(quoteRequest('5100'))
+    expect(result.provider).toBe('uniswap')
+    expect(result.fallbackUsed).toBe(true)
+    expect(result.preferredProvider).toBe('cdp')
+
+    const calledUrls = fetchMock.mock.calls.map(([url]) => String(url))
+    expect(calledUrls[0]).toContain('/cdp/swap/price')
+    expect(calledUrls[1]).toContain('/uniswap/quote')
+  })
+
+  it('does not fallback for cdp auth errors in hybrid mode', async () => {
+    vi.stubEnv('VITE_SWAP_PROVIDER', 'hybrid')
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 401,
+        headers: { get: () => 'application/json' },
+        json: async () => ({ success: false, error: 'not authenticated' }),
+      })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await expect(fetchTradeQuote(quoteRequest('5200'))).rejects.toThrow('not authenticated')
+    const calledUrls = fetchMock.mock.calls.map(([url]) => String(url))
+    expect(calledUrls).toEqual(['/__api/cdp/swap/price'])
   })
 })
 

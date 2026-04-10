@@ -125,6 +125,8 @@ export const RATE_LIMITS = {
   chatTelemetry: { windowMs: 60_000, maxRequests: 180 },
   // Workspace action mutations: 40 per minute per principal
   workspaceActions: { windowMs: 60_000, maxRequests: 40 },
+  // Workspace read endpoints: 120 per minute per principal
+  workspaceRead: { windowMs: 60_000, maxRequests: 120 },
   // Creator quickstart onboarding: 20 per minute per principal
   creatorQuickstart: { windowMs: 60_000, maxRequests: 20 },
   // CRE runtime ingest reads: 120 per minute per client IP
@@ -141,8 +143,50 @@ export const RATE_LIMITS = {
   buildAuctionSubmitBid: { windowMs: 60_000, maxRequests: 80 },
   // Gauge vote calldata build endpoint: 80 per minute per principal
   buildGaugeVote: { windowMs: 60_000, maxRequests: 80 },
+  // Auction read endpoints: 120 per minute per principal
+  auctionRead: { windowMs: 60_000, maxRequests: 120 },
+  // Gauge read endpoints: 120 per minute per principal
+  gaugeRead: { windowMs: 60_000, maxRequests: 120 },
+  // Vault read endpoints: 120 per minute per principal
+  vaultRead: { windowMs: 60_000, maxRequests: 120 },
+  // ve4626 read endpoints: 120 per minute per principal
+  ve4626Read: { windowMs: 60_000, maxRequests: 120 },
+  // Lottery read endpoints: 120 per minute per principal
+  lotteryRead: { windowMs: 60_000, maxRequests: 120 },
+  // Lottery write endpoints: 40 per minute per principal
+  lotteryWrite: { windowMs: 60_000, maxRequests: 40 },
+  // Agent and directory read endpoints: 120 per minute per principal
+  agentsRead: { windowMs: 60_000, maxRequests: 120 },
+  // Agent creator mutation endpoints: 30 per minute per principal
+  agentsWrite: { windowMs: 60_000, maxRequests: 30 },
+  // Charm strategy read endpoints: 120 per minute per principal
+  charmRead: { windowMs: 60_000, maxRequests: 120 },
+  // Explore read endpoints: 120 per minute per principal
+  exploreRead: { windowMs: 60_000, maxRequests: 120 },
+  // Spec/discovery read endpoints: 120 per minute per principal
+  specRead: { windowMs: 60_000, maxRequests: 120 },
+  // Auth read endpoints (nonce/me): 180 per minute per client IP
+  authRead: { windowMs: 60_000, maxRequests: 180 },
+  // Auth write endpoints (verify/logout): 120 per minute per client IP
+  authWrite: { windowMs: 60_000, maxRequests: 120 },
+  // Privy auth verification endpoint: 80 per minute per client IP
+  authPrivy: { windowMs: 60_000, maxRequests: 80 },
+  // SIWA agent auth endpoints: 80 per minute per client IP
+  authAgentWrite: { windowMs: 60_000, maxRequests: 80 },
+  // Telegram link flow writes/session issuance: 60 per minute per client IP
+  telegramLinkWrite: { windowMs: 60_000, maxRequests: 60 },
+  // Telegram link readiness/status reads: 120 per minute per client IP
+  telegramLinkRead: { windowMs: 60_000, maxRequests: 120 },
+  // Telegram internal/admin operations: 30 per minute per client IP
+  telegramAdminWrite: { windowMs: 60_000, maxRequests: 30 },
+  // Telegram webhook ingest (high-throughput): 1200 per minute per client IP
+  telegramWebhookIngest: { windowMs: 60_000, maxRequests: 1200 },
+  // Paymaster JSON-RPC endpoint: 120 requests per minute per client IP
+  paymasterRpc: { windowMs: 60_000, maxRequests: 120 },
   // ve4626 lock/increase/extend calldata build endpoints: 80 per minute per principal
   buildVe4626Calldata: { windowMs: 60_000, maxRequests: 80 },
+  // Charm calldata build endpoints: 80 per minute per principal
+  buildCharmCalldata: { windowMs: 60_000, maxRequests: 80 },
   // General API: 60 per minute per IP
   general: { windowMs: 60_000, maxRequests: 60 },
 } as const

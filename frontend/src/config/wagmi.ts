@@ -58,6 +58,17 @@ const ENABLE_INJECTED_CONNECTOR =
   !['0', 'false', 'no', 'off'].includes(String(import.meta.env.VITE_ENABLE_INJECTED_CONNECTOR ?? '1').toLowerCase())
 const RPC_PROXY_PREFIX = '/api/rpc?chain='
 
+function isWaitlistAuthPath(pathname: string): boolean {
+  const path = String(pathname || '').trim().toLowerCase()
+  if (!path) return false
+  return (
+    path === '/waitlist' ||
+    path.startsWith('/waitlist/') ||
+    path.startsWith('/r/') ||
+    path.startsWith('/telegram/')
+  )
+}
+
 function uniqueNonEmptyStrings(values: Array<string | undefined | null>): string[] {
   const out: string[] = []
   const seen = new Set<string>()
@@ -160,12 +171,29 @@ const POLYGON_READ_RPC_URLS = uniqueNonEmptyStrings(
 )
 
 function buildConnectors() {
-  const baseConnectors = [
+  const onWaitlistAuthPath = IS_BROWSER && isWaitlistAuthPath(window.location.pathname)
+  const baseConnectors: any[] = [
     coinbaseWallet({
       appName: 'Creator Vaults',
       preference: 'smartWalletOnly',
     }),
-    metaMask(),
+  ]
+
+  // Waitlist/email auth routes should avoid eager injected-provider discovery.
+  // This keeps extension collision noise out of OTP-first onboarding.
+  if (onWaitlistAuthPath) {
+    return baseConnectors as any
+  }
+
+  // Keep waitlist/email-auth surfaces extension-light to avoid injected-provider
+  // races and analytics retry noise before users opt into wallet linking.
+  baseConnectors.push(
+    metaMask({
+      enableAnalytics: false,
+    }),
+  )
+
+  baseConnectors.push(
     injected({
       target: {
         id: 'rabby',
@@ -176,7 +204,7 @@ function buildConnectors() {
       },
       shimDisconnect: true,
     }),
-  ] as const
+  )
 
   // Some wallet extensions install a getter-only `window.ethereum`, which causes
   // other extensions to throw during provider injection. Avoid injected connector

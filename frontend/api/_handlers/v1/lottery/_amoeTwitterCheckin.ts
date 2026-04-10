@@ -4,6 +4,8 @@ import {
   handleOptions,
   guardAgentApiRequest,
   getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
   rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 
@@ -30,6 +32,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/lottery/amoe/twitter-checkin', kind: 'write' })
   if (!g.ok) return
+
+  const limiter = checkRateLimit(
+    rateLimitKey('v1-lottery-amoe-twitter-checkin', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
+    RATE_LIMITS.lotteryWrite,
+  )
+  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
 
   const wallet = g.auth?.address
   if (!wallet) {

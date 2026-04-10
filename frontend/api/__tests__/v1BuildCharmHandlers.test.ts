@@ -19,6 +19,9 @@ const mocks = vi.hoisted(() => ({
   handleOptions: vi.fn(() => false),
   readJsonBody: vi.fn(async (req: any) => req.body ?? null),
   guardAgentApiRequest: vi.fn(async (_ctx?: any) => ({ ok: true, ip: '127.0.0.1', auth: null })),
+  checkRateLimit: vi.fn(() => ({ allowed: true, remaining: 79, resetAt: Date.now() + 60_000 })),
+  getClientIp: vi.fn(() => '127.0.0.1'),
+  rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
   isOfficialCharmVault: vi.fn(async () => true),
   officialCharmVaultError: vi.fn((vault: string) => `not_official_charm_vault:${vault}`),
 }))
@@ -30,6 +33,15 @@ vi.mock('../../server/auth/_shared.js', () => ({
 
 vi.mock('../../server/_lib/agentApiGuard.js', () => ({
   guardAgentApiRequest: mocks.guardAgentApiRequest,
+}))
+
+vi.mock('../../server/_lib/rateLimit.js', () => ({
+  checkRateLimit: mocks.checkRateLimit,
+  getClientIp: mocks.getClientIp,
+  rateLimitKey: mocks.rateLimitKey,
+  RATE_LIMITS: {
+    buildCharmCalldata: { windowMs: 60_000, maxRequests: 80 },
+  },
 }))
 
 vi.mock('../../server/_lib/charmVaults.js', () => ({
@@ -79,8 +91,18 @@ describe('v1 build Charm handlers', () => {
     mocks.handleOptions.mockReturnValue(false)
     mocks.readJsonBody.mockImplementation(async (req: any) => req.body ?? null)
     mocks.guardAgentApiRequest.mockResolvedValue({ ok: true, ip: '127.0.0.1', auth: null })
+    mocks.checkRateLimit.mockReturnValue({ allowed: true, remaining: 79, resetAt: Date.now() + 60_000 })
     mocks.isOfficialCharmVault.mockResolvedValue(true)
     mocks.officialCharmVaultError.mockImplementation((vault: string) => `not_official_charm_vault:${vault}`)
+  })
+
+  it('returns 429 when Charm build rate limit is exceeded', async () => {
+    mocks.checkRateLimit.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+    const req = createMockReq({ method: 'POST', body: { strategy: STRATEGY, charmVault: ADDRESS_A } })
+    const res = createMockRes()
+    await setCharmVaultHandler(req, res)
+    expect(res.statusCode).toBe(429)
+    expect(res.body?.error).toBe('Too many requests')
   })
 
   it('returns 405 for non-POST requests', async () => {

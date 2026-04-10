@@ -11,6 +11,7 @@ import {
   isDbConfigured,
   getSessionAddress,
 } from '../../../packages/server-core/src/index.js'
+import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 
 
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../server/_lib/supabaseAdmin.js'
@@ -45,6 +46,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   // Normalize to lowercase for case-insensitive matching
   const sessionAddress = sessionAddressRaw.toLowerCase()
+
+  const limiter = checkRateLimit(
+    rateLimitKey('creator-access-request', sessionAddress, getClientIp(req)),
+    RATE_LIMITS.creatorQuickstart,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
+  }
 
   if (isSupabaseAdminConfigured()) {
     try {
@@ -174,5 +184,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies RequestAccessResponse,
   } satisfies ApiEnvelope<RequestAccessResponse>)
 }
-
 

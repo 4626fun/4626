@@ -3,6 +3,7 @@ import type { Address } from 'viem'
 
 import { checkSharesEligibility } from '../../../server/_lib/keeprGating.js'
 import { getDb } from '../../../packages/server-core/src/index.js'
+import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 import {
   ensureTelegramTradingSchema,
   listHolderRoomMembersNeedingRecheck,
@@ -153,6 +154,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store')
   if (req.method !== 'GET' && req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
+  }
+
+  const limiter = checkRateLimit(
+    rateLimitKey('telegram-holder-recheck', getClientIp(req)),
+    RATE_LIMITS.telegramAdminWrite,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' })
   }
 
   const configuredSecret = asTrimmed(process.env.TELEGRAM_HOLDER_RECHECK_SECRET ?? '')

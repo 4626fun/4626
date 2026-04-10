@@ -3,6 +3,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   handleOptions,
   guardAgentApiRequest,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from '../../../../../packages/server-core/src/index.js'
 
 
@@ -469,6 +473,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/agents/identity/verification', kind: 'read' })
   if (!g.ok) return
+
+  const limiter = checkRateLimit(
+    rateLimitKey('v1-agents-identity-verification', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
+    RATE_LIMITS.agentsRead,
+  )
+  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
 
   try {
     const data = await buildAgentVerificationData(req)

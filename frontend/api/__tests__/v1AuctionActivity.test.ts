@@ -10,6 +10,9 @@ const AUCTION_TOKEN = '0x3333333333333333333333333333333333333333'
 const mocks = vi.hoisted(() => ({
   handleOptions: vi.fn(() => false),
   guardAgentApiRequest: vi.fn(async (_ctx?: any) => ({ ok: true, ip: '127.0.0.1', auth: null })),
+  checkRateLimit: vi.fn(() => ({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })),
+  getClientIp: vi.fn(() => '127.0.0.1'),
+  rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
   readContract: vi.fn(),
   getLogs: vi.fn(),
   getBlockNumber: vi.fn(async () => 15_000_000n),
@@ -21,6 +24,15 @@ vi.mock('../../server/auth/_shared.js', () => ({
 
 vi.mock('../../server/_lib/agentApiGuard.js', () => ({
   guardAgentApiRequest: mocks.guardAgentApiRequest,
+}))
+
+vi.mock('../../server/_lib/rateLimit.js', () => ({
+  checkRateLimit: mocks.checkRateLimit,
+  getClientIp: mocks.getClientIp,
+  rateLimitKey: mocks.rateLimitKey,
+  RATE_LIMITS: {
+    auctionRead: { windowMs: 60_000, maxRequests: 120 },
+  },
 }))
 
 vi.mock('viem/chains', () => ({
@@ -44,6 +56,7 @@ describe('v1 auction activity handler', () => {
     vi.clearAllMocks()
     mocks.handleOptions.mockReturnValue(false)
     mocks.guardAgentApiRequest.mockResolvedValue({ ok: true, ip: '127.0.0.1', auth: null })
+    mocks.checkRateLimit.mockReturnValue({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })
     mocks.getBlockNumber.mockResolvedValue(15_000_000n)
 
     mocks.readContract.mockImplementation(async ({ functionName }: { functionName: string }) => {
@@ -83,6 +96,20 @@ describe('v1 auction activity handler', () => {
 
     await expect(getV1ApiHandler('auction/activity')).resolves.toBeTypeOf('function')
     await expect(getV1ApiHandler(`auction/${CCA_STRATEGY}/activity`)).resolves.toBeTypeOf('function')
+  })
+
+  it('returns 429 when auction activity rate limit is exceeded', async () => {
+    mocks.checkRateLimit.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+    const mod = await import('../_handlers/v1/auction/_activity.ts')
+    const handler = mod.default
+    const req = createMockReq({
+      method: 'GET',
+      query: { ccaStrategy: CCA_STRATEGY, limit: '3' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(429)
+    expect(res.body?.error).toBe('Too many requests')
   })
 
   it('returns normalized live auction activity for a strategy', async () => {

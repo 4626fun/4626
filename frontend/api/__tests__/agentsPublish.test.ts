@@ -8,6 +8,7 @@ const resolveAgentRegistrationKeyMock = vi.fn((payload: any, suffix: string) => 
 const readRequestPrincipalMock = vi.fn()
 const getCanonicalOriginMock = vi.fn((_: unknown) => 'https://4626.fun')
 const getErc8004PublicOriginMock = vi.fn((_: unknown) => 'https://4626.fun')
+const checkRateLimitMock = vi.fn(() => ({ allowed: true, remaining: 10, resetAt: Date.now() + 60_000 }))
 
 vi.mock('../../server/_lib/agentRegistration.js', () => ({
   buildAgentRegistration: (origin: string) => buildAgentRegistrationMock(origin),
@@ -21,6 +22,15 @@ vi.mock('../../server/_lib/agentRegistrationPublisher.js', () => ({
 vi.mock('../../server/_lib/origin.js', () => ({
   getCanonicalOrigin: (req: any) => getCanonicalOriginMock(req),
   getErc8004PublicOrigin: (req: any) => getErc8004PublicOriginMock(req),
+}))
+
+vi.mock('../../server/_lib/rateLimit.js', () => ({
+  checkRateLimit: (...args: any[]) => checkRateLimitMock(...args),
+  getClientIp: vi.fn(() => '203.0.113.88'),
+  rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
+  RATE_LIMITS: {
+    agentsWrite: { windowMs: 60_000, maxRequests: 30 },
+  },
 }))
 
 vi.mock('../../packages/server-core/src/index.js', async () => {
@@ -41,6 +51,8 @@ describe('v1/agents/publish', () => {
     readRequestPrincipalMock.mockReset()
     getCanonicalOriginMock.mockReset()
     getErc8004PublicOriginMock.mockReset()
+    checkRateLimitMock.mockReset()
+    checkRateLimitMock.mockReturnValue({ allowed: true, remaining: 10, resetAt: Date.now() + 60_000 })
     getCanonicalOriginMock.mockReturnValue('https://4626.fun')
     getErc8004PublicOriginMock.mockReturnValue('https://4626.fun')
     readRequestPrincipalMock.mockReturnValue({ type: 'session', address: '0x1111111111111111111111111111111111111111' })
@@ -170,5 +182,21 @@ describe('v1/agents/publish', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body.data.uriPolicy.mirrorUrl).toBe('https://4626.fun/.well-known/agent-registration.json')
     expect(res.body.data.uriPolicy.domainVerificationUrl).toBe('https://4626.fun/.well-known/erc8004.json')
+  })
+
+  it('returns 429 when publish requests exceed the endpoint rate limit', async () => {
+    checkRateLimitMock.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+
+    const { default: handler } = await import('../_handlers/v1/agents/_publish.ts')
+    const req = createMockReq({ method: 'POST', body: { storeOnGrove: true }, url: '/api/v1/agents/publish' })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(429)
+    expect(res.body).toMatchObject({
+      success: false,
+      error: 'Rate limit exceeded',
+    })
   })
 })

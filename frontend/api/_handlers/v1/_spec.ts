@@ -3,6 +3,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   handleOptions,
   guardAgentApiRequest,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
 
 
@@ -38,6 +42,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/spec.json', kind: 'read' })
   if (!g.ok) return
+
+  const limiter = checkRateLimit(
+    rateLimitKey('v1-spec-json', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
+    RATE_LIMITS.specRead,
+  )
+  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
 
   const spec: OpenApiSpec = {
     openapi: '3.0.3',

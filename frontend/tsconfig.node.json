@@ -24,6 +24,7 @@
     "server/twitter/**/*.ts",
     "server/zora/**/*.ts",
     "server/uniswap/**/*.ts",
+    "server/cdp/**/*.ts",
     "server/keepr/**/*.ts",
     "server/ai/**/*.ts",
     "server/agent/**/*.ts",

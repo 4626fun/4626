@@ -18,6 +18,7 @@ import {
   type AccountLinkProvider,
   verifyPrivyForAccounts,
 } from '../../../server/_lib/accountsIdentity.js'
+import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 
 type UnlinkBody = {
   provider?: AccountLinkProvider
@@ -44,6 +45,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+
+  const limiter = checkRateLimit(
+    rateLimitKey('accounts-unlink', getClientIp(req)),
+    RATE_LIMITS.cswLink,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
   const db = await getDb()
@@ -85,4 +95,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(status).json({ success: false, error: message } satisfies ApiEnvelope<never>)
   }
 }
-

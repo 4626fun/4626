@@ -7,6 +7,10 @@ import {
   setCors,
   setNoStore,
   getSessionAddress,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
+  RATE_LIMITS,
 } from '../../../../packages/server-core/src/index.js'
 
 import {
@@ -95,6 +99,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!['GET', 'POST', 'DELETE'].includes(req.method ?? '')) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+  const limiter = checkRateLimit(rateLimitKey('keepr:vault:automation', getClientIp(req)), RATE_LIMITS.workspaceActions)
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
   try {

@@ -4,6 +4,10 @@ import {
   handleOptions,
   getApiContracts,
   guardAgentApiRequest,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 
 
@@ -47,6 +51,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/gauge/vaults', kind: 'read' })
   if (!g.ok) return
+
+  const limiter = checkRateLimit(
+    rateLimitKey('v1-gauge-vaults', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
+    RATE_LIMITS.gaugeRead,
+  )
+  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
 
   const contracts = getApiContracts()
   const gauge = contracts.vaultGaugeVoting
@@ -111,4 +121,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ success: false, error: e?.message || 'Failed to read gauge vaults' })
   }
 }
-

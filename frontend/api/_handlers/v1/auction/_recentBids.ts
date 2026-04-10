@@ -3,6 +3,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   handleOptions,
   guardAgentApiRequest,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 
 
@@ -70,6 +74,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/auction/recentBids', kind: 'logs' })
   if (!g.ok) return
 
+  const limiter = checkRateLimit(
+    rateLimitKey('v1-auction-recent-bids', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
+    RATE_LIMITS.auctionRead,
+  )
+  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+
   const auction = (getStringQuery(req, 'auction') || getStringQuery(req, 'address') || '').trim()
   if (!auction) return res.status(400).json({ success: false, error: 'auction is required' })
   if (!isAddressLike(auction)) return res.status(400).json({ success: false, error: 'Invalid auction address' })
@@ -134,4 +144,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ success: false, error: e?.message || 'Failed to read bid logs' })
   }
 }
-

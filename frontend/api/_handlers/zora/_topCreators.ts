@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { getNumberQuery, getStringQuery, handleOptions, isAddressLike, setCache, setCors } from '../../../server/zora/_shared.js'
+import { checkRateLimit, getClientIp, rateLimitKey, RATE_LIMITS } from '../../../packages/server-core/src/index.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -56,6 +57,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+  const limiter = checkRateLimit(rateLimitKey('zora:top-creators', getClientIp(req)), RATE_LIMITS.exploreRead)
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
   const count = Math.min(Math.max(getNumberQuery(req, 'count') ?? DEFAULT_LIMIT, 1), MAX_LIMIT)
@@ -150,5 +156,4 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(status).json({ success: false, error: e?.message || 'Failed to fetch creators' } satisfies ApiEnvelope<never>)
   }
 }
-
 

@@ -5,6 +5,10 @@ import {
   handleOptions,
   readJsonBody,
   guardAgentApiRequest,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from '../../../../../../packages/server-core/src/index.js'
 
 
@@ -50,7 +54,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/build/charm/vault/rebalance', kind: 'build' })
   if (!g.ok) return
 
-  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? ({} as any)
+  const limiter = checkRateLimit(
+    rateLimitKey('v1-build-charm-vault-rebalance', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
+    RATE_LIMITS.buildCharmCalldata,
+  )
+  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+
+  const body = (await readJsonBody(req, { maxBytes: 16_384 })) ?? ({} as any)
   try {
     if (hasRemovedLegacyInputs(body as Record<string, unknown>)) {
       throw new Error('Legacy rebalance params were removed. Use { vault } only.')
@@ -82,4 +92,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: e?.message || 'Invalid params' })
   }
 }
-

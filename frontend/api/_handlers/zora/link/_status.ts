@@ -2,6 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../../packages/server-core/src/index.js'
 import { extractZoraCrossAppAccounts, verifyPrivyForAccounts } from '../../../../server/_lib/accountsIdentity.js'
+import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../../server/_lib/rateLimit.js'
 
 type ZoraLinkStatusResponse = {
   zoraLinked: boolean
@@ -15,6 +16,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+
+  const limiter = checkRateLimit(
+    rateLimitKey('zora-link-status', getClientIp(req)),
+    RATE_LIMITS.cswLink,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
   try {
@@ -31,4 +41,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(status).json({ success: false, error: message } satisfies ApiEnvelope<never>)
   }
 }
-

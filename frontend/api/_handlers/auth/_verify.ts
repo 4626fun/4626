@@ -25,6 +25,7 @@ import { isCswOwner } from '../../../server/_lib/cswOwner.js'
 import { getTrustedRequestOrigins, isAddressLike, normalizeOrigin } from '../../../server/_lib/trust.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { upsertProfileByWallet } from '../../../server/_lib/profileSync.js'
+import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 
 
 type VerifyBody = { message?: string; signature?: string; nonceToken?: string; cswAddress?: string }
@@ -50,6 +51,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+
+  const limiter = checkRateLimit(
+    rateLimitKey('auth-verify', getClientIp(req)),
+    RATE_LIMITS.authWrite,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
   const body = await readJsonBody<VerifyBody>(req, { maxBytes: 16_384 })

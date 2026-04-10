@@ -962,6 +962,8 @@ export function Swap() {
     quoteCooldownActive,
     quoteCooldownUntil,
     approvalRequired,
+    fallbackActive,
+    swapProviderLabel,
     diagnosticsEnabled,
     txDebug,
     canary7702Eligible,
@@ -1373,7 +1375,8 @@ export function Swap() {
               }}
               onConfirmUnverified={confirmUnverifiedSelection}
               executionMode={executionMode}
-              fallbackActive={false}
+              fallbackActive={fallbackActive}
+              swapProviderLabel={swapProviderLabel}
               needsUnverifiedConfirmation={unverifiedSelectionMode}
               unverifiedTokenLabel={unverifiedTokenLabel}
             />

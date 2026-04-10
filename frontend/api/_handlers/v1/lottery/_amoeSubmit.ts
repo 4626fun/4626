@@ -6,6 +6,8 @@ import {
   guardAgentApiRequest,
   getApiContracts,
   getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
   rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 
@@ -232,6 +234,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/lottery/amoe/submit', kind: 'read' })
   if (!g.ok) return
+
+  const limiter = checkRateLimit(
+    rateLimitKey('v1-lottery-amoe-submit', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
+    RATE_LIMITS.lotteryWrite,
+  )
+  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
 
   const body = (await readJsonBody(req, { maxBytes: 16_384 })) ?? {}
   const creatorCoinRaw = typeof body.creatorCoin === 'string' ? body.creatorCoin.trim() : ''

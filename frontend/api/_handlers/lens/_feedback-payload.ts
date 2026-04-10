@@ -26,6 +26,7 @@ import {
   setNoStore,
   readRequestPrincipal,
 } from '../../../packages/server-core/src/index.js'
+import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 
 import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
 import { getIdentityRegistryAddress } from '../../../server/_lib/erc8004.js'
@@ -76,6 +77,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (handleOptions(req, res)) return
 
   if (req.method === 'GET') {
+    const limiter = checkRateLimit(
+      rateLimitKey('lens-feedback-payload', 'get', getClientIp(req)),
+      RATE_LIMITS.specRead,
+    )
+    if (!limiter.allowed) {
+      res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+      return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
+    }
     return res.status(200).json({
       success: true,
       data: buildFeedbackPayloadDiscovery(),
@@ -87,6 +96,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: false,
       error: 'Method not allowed. Use POST /api/lens/feedback-payload with JSON body { agentId, value, valueDecimals }.',
     } satisfies ApiEnvelope<never>)
+  }
+
+  const limiter = checkRateLimit(
+    rateLimitKey('lens-feedback-payload', 'post', getClientIp(req)),
+    RATE_LIMITS.agentsWrite,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
   const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}

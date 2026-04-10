@@ -48,19 +48,25 @@ type SwapCardProps = {
   onConfirmUnverified: () => void
   executionMode: 'canonical' | 'eoa'
   fallbackActive: boolean
+  swapProviderLabel: 'Uniswap' | 'CDP'
   needsUnverifiedConfirmation: boolean
   unverifiedTokenLabel?: string | null
   onResetUnverified: () => void
 }
 
 export function SwapCard(props: SwapCardProps) {
+  const showUniswapBranding = props.swapProviderLabel === 'Uniswap'
   return (
     <div className="bv-panel border-0 vault-hover-lift p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="text-sm text-vault-subtext space-y-1">
           <div className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] text-vault-subtext" style={{ background: 'rgb(var(--vault-card-raised) / 0.62)' }}>
             <span>Powered by</span>
-            <img src="/protocols/uniswap.svg" alt="Uniswap" className="h-3.5 w-auto" loading="lazy" />
+            {showUniswapBranding ? (
+              <img src="/protocols/uniswap.svg" alt="Uniswap" className="h-3.5 w-auto" loading="lazy" />
+            ) : (
+              <span className="font-semibold text-vault-text">{props.swapProviderLabel}</span>
+            )}
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -163,7 +169,7 @@ export function SwapCard(props: SwapCardProps) {
         routeSummary={props.routeSummary}
         slippagePct={props.slippagePct}
         onSetSlippagePct={props.onSetSlippagePct}
-        aggregator={props.routeSummary ? 'Uniswap' : undefined}
+        aggregator={props.routeSummary ? props.swapProviderLabel : undefined}
         gasEstimateLabel={props.gasEstimateLabel}
         priceImpactLabel={props.priceImpactLabel}
         lpFeeUsd={props.lpFeeUsd ?? null}

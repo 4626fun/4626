@@ -3,6 +3,10 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   handleOptions,
   guardAgentApiRequest,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from '../../../../../packages/server-core/src/index.js'
 
 
@@ -57,6 +61,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/agents/creators', kind: 'read' })
   if (!g.ok) return
 
+  const limiter = checkRateLimit(
+    rateLimitKey('v1-agents-creators-list', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
+    RATE_LIMITS.agentsRead,
+  )
+  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+
   const limitRaw = typeof req.query?.limit === 'string' ? req.query.limit : ''
   const listedRaw = typeof req.query?.listed === 'string' ? req.query.listed : 'true'
   const cursorRaw = typeof req.query?.cursor === 'string' ? req.query.cursor : ''
@@ -107,4 +117,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(code).json({ success: false, error: msg })
   }
 }
-

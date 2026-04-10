@@ -1,6 +1,12 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { guardAgentApiRequest } from '../../packages/server-core/src/index.js'
+import {
+  guardAgentApiRequest,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
+} from '../../packages/server-core/src/index.js'
 import {
   buildPublicAgentRegistrationUrl,
   buildPublicDomainVerificationUrl,
@@ -100,6 +106,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'agents', kind: 'read' })
   if (!g.ok) return
 
+  const limiter = checkRateLimit(
+    rateLimitKey('agents-directory', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
+    RATE_LIMITS.agentsRead,
+  )
+  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+
   const agentAddress = resolveAgentAddress()
 
   const agents = agentAddress
@@ -137,4 +149,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (erc8004) payload.erc8004 = erc8004
   return res.status(200).json(payload)
 }
-

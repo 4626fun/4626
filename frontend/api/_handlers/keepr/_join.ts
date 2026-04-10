@@ -7,6 +7,10 @@ import {
   setCors,
   setNoStore,
   getDb,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
+  RATE_LIMITS,
 } from '../../../packages/server-core/src/index.js'
 
 import { checkSharesEligibility, getKeeprBaseRpcUrls } from '../../../server/_lib/keeprGating.js'
@@ -93,6 +97,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+  const limiter = checkRateLimit(rateLimitKey('keepr:join', getClientIp(req)), RATE_LIMITS.creatorQuickstart)
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
   const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}

@@ -12,6 +12,7 @@ describe('root api route family prefixes', () => {
   it('dispatches merged thin family routes through the root catch-all map', async () => {
     const uniswapHandler = vi.fn()
     const imageHandler = vi.fn()
+    const cdpHandler = vi.fn()
     const telegramHandler = vi.fn()
     const keeprHandler = vi.fn()
     const tokenImageHandler = vi.fn()
@@ -26,6 +27,11 @@ describe('root api route family prefixes', () => {
     vi.doMock('../_handlers/_routes.image.js', () => ({
       imageRouteLoaders: {
         external: async () => ({ default: imageHandler }),
+      },
+    }))
+    vi.doMock('../_handlers/_routes.cdp.js', () => ({
+      cdpRouteLoaders: {
+        'swap/price': async () => ({ default: cdpHandler }),
       },
     }))
     vi.doMock('../_handlers/_routes.telegram.js', () => ({
@@ -51,6 +57,7 @@ describe('root api route family prefixes', () => {
     const { getApiHandler } = await import('../_handlers/_routes.ts')
 
     expect(await getApiHandler('uniswap/quote')).toBe(uniswapHandler)
+    expect(await getApiHandler('cdp/swap/price')).toBe(cdpHandler)
     expect(await getApiHandler('image/external')).toBe(imageHandler)
     expect(await getApiHandler('telegram/miniapp/session')).toBe(telegramHandler)
     expect(await getApiHandler('keepr/nonce')).toBe(keeprHandler)

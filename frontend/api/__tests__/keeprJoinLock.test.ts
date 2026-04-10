@@ -35,6 +35,12 @@ vi.mock('../../packages/server-core/src/index.js', () => ({
   setCors: setCorsMock,
   setNoStore: setNoStoreMock,
   getDb: vi.fn(async () => null),
+  getClientIp: vi.fn(() => '127.0.0.1'),
+  rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
+  checkRateLimit: vi.fn(() => ({ allowed: true, remaining: 100, resetAt: Date.now() + 60_000 })),
+  RATE_LIMITS: {
+    creatorQuickstart: { windowMs: 60_000, maxRequests: 20 },
+  },
 }))
 
 vi.mock('../../server/_lib/keeprGating.js', () => ({

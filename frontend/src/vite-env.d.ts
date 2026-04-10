@@ -3,6 +3,7 @@
 interface ImportMetaEnv {
   readonly VITE_BASE_RPC?: string
   readonly VITE_CDP_PAYMASTER_URL?: string
+  readonly VITE_SWAP_PROVIDER?: string
   readonly VITE_PUBLIC_SITE_MODE?: string
   readonly VITE_PRIVY_APP_ID?: string
   readonly VITE_PRIVY_CLIENT_ID?: string

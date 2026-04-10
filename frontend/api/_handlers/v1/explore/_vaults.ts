@@ -6,6 +6,10 @@ import {
   guardAgentApiRequest,
   handleOptions,
   isDbConfigured,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 
 import { ensureCreatorMetricsSchema } from '../../../../server/_lib/creatorMetricsSync.js'
@@ -123,6 +127,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/explore/vaults', kind: 'read' })
   if (!g.ok) return
+
+  const limiter = checkRateLimit(
+    rateLimitKey('v1-explore-vaults', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
+    RATE_LIMITS.exploreRead,
+  )
+  if (!limiter.allowed) {
+    return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
+  }
 
   if (!isDbConfigured()) {
     return res.status(503).json({

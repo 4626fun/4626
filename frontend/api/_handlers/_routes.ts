@@ -1,5 +1,6 @@
 import type { ApiHandler, ApiRouteLoaders } from './_routeLoader.js'
 import { authRouteLoaders } from './_routes.auth.js'
+import { cdpRouteLoaders } from './_routes.cdp.js'
 import { creRouteLoaders } from './_routes.cre.js'
 import { deployRouteLoaders } from './_routes.deploy.js'
 import { imageRouteLoaders } from './_routes.image.js'
@@ -90,6 +91,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'admin/waitlist/delete': () => import('./admin/waitlist/_delete.js'),
 
   ...prefixRouteLoaders('auth', authRouteLoaders),
+  ...prefixRouteLoaders('cdp', cdpRouteLoaders),
   ...prefixRouteLoaders('cre', creRouteLoaders),
   ...prefixRouteLoaders('deploy', deployRouteLoaders),
   ...prefixRouteLoaders('image', imageRouteLoaders),

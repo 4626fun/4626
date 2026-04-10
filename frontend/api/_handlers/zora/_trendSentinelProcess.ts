@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions, setCors } from '../../../server/zora/_shared.js'
+import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 import { runTrendLaunchSentinelProcess } from '../../../server/zora/trendLaunchSentinel.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -62,6 +63,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
   }
 
+  const limiter = checkRateLimit(
+    rateLimitKey('zora-trend-sentinel-process', getClientIp(req)),
+    RATE_LIMITS.adminAction,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' })
+  }
+
   const secret = String(process.env.TREND_SENTINEL_SECRET ?? '').trim()
   const provided = readBearerToken(req)
   if (!secret || provided !== secret) {
@@ -90,4 +100,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
   }
 }
-

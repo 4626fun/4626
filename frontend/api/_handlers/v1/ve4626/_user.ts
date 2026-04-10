@@ -4,6 +4,10 @@ import {
   handleOptions,
   getApiContracts,
   guardAgentApiRequest,
+  getClientIp,
+  RATE_LIMITS,
+  checkRateLimit,
+  rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 
 
@@ -74,6 +78,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const g = await guardAgentApiRequest({ req, res, endpoint: 'v1/ve4626/user', kind: 'read' })
   if (!g.ok) return
 
+  const limiter = checkRateLimit(
+    rateLimitKey('v1-ve4626-user', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
+    RATE_LIMITS.ve4626Read,
+  )
+  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+
   const user = getUserParam(req)
   if (!user) return res.status(400).json({ success: false, error: 'user is required' })
   if (!isAddressLike(user)) return res.status(400).json({ success: false, error: 'Invalid user address' })
@@ -121,4 +131,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(500).json({ success: false, error: e?.message || 'Failed to read ve4626 state' })
   }
 }
-

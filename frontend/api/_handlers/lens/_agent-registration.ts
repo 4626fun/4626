@@ -7,6 +7,7 @@ import {
   setNoStore,
   readRequestPrincipal,
 } from '../../../packages/server-core/src/index.js'
+import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 
 import { buildAgentPublishStatus, type AgentPublishData } from '../../../server/_lib/erc8004OperatorStatus.js'
 
@@ -28,6 +29,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+
+  const limiter = checkRateLimit(
+    rateLimitKey('lens-agent-registration', req.method.toLowerCase(), getClientIp(req)),
+    req.method === 'GET' ? RATE_LIMITS.agentsRead : RATE_LIMITS.agentsWrite,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
   const body = req.method === 'POST' ? (await readJsonBody(req, { maxBytes: 512_000 })) ?? {} : {}

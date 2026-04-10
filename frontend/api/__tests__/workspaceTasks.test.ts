@@ -9,6 +9,9 @@ const mocks = vi.hoisted(() => ({
   setNoStore: vi.fn(),
   handleOptions: vi.fn(() => false),
   guardAgentApiRequest: vi.fn(async () => ({ ok: true, ip: '127.0.0.1', auth: null })),
+  checkRateLimit: vi.fn(() => ({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })),
+  getClientIp: vi.fn(() => '127.0.0.1'),
+  rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
   requireWorkspacePermission: vi.fn(),
   resolveWorkspaceTasks: vi.fn(),
 }))
@@ -21,6 +24,15 @@ vi.mock('../../server/auth/_shared.js', () => ({
 
 vi.mock('../../server/_lib/agentApiGuard.js', () => ({
   guardAgentApiRequest: mocks.guardAgentApiRequest,
+}))
+
+vi.mock('../../server/_lib/rateLimit.js', () => ({
+  checkRateLimit: mocks.checkRateLimit,
+  getClientIp: mocks.getClientIp,
+  rateLimitKey: mocks.rateLimitKey,
+  RATE_LIMITS: {
+    workspaceRead: { windowMs: 60_000, maxRequests: 120 },
+  },
 }))
 
 vi.mock('../../server/_lib/workspace/auth.js', () => ({
@@ -36,6 +48,7 @@ describe('workspace tasks handler', () => {
     vi.clearAllMocks()
     mocks.handleOptions.mockReturnValue(false)
     mocks.guardAgentApiRequest.mockResolvedValue({ ok: true, ip: '127.0.0.1', auth: null })
+    mocks.checkRateLimit.mockReturnValue({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })
     mocks.requireWorkspacePermission.mockResolvedValue({
       ok: true,
       role: 'OPERATOR',
@@ -90,5 +103,18 @@ describe('workspace tasks handler', () => {
     expect(res.statusCode).toBe(200)
     expect(res.body?.data?.actorRole).toBe('OPERATOR')
     expect(res.body?.data?.tasks?.[0]?.id).toBe(12)
+  })
+
+  it('returns 429 when workspace tasks rate limit is exceeded', async () => {
+    const mod = await import('../_handlers/v1/workspace/_tasks.ts')
+    mocks.checkRateLimit.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+    const req = createMockReq({
+      method: 'GET',
+      query: { vault: VAULT },
+    })
+    const res = createMockRes()
+    await mod.default(req, res)
+    expect(res.statusCode).toBe(429)
+    expect(res.body?.error).toBe('Too many requests')
   })
 })

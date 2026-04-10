@@ -7,6 +7,7 @@ import {
   setNoStore,
   readRequestPrincipal,
 } from '../../../../packages/server-core/src/index.js'
+import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../../server/_lib/rateLimit.js'
 
 import { buildAgentPublishStatus, type AgentPublishData } from '../../../../server/_lib/erc8004OperatorStatus.js'
 
@@ -28,12 +29,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
+  const limiter = checkRateLimit(
+    rateLimitKey('v1-agents-publish', getClientIp(req)),
+    RATE_LIMITS.agentsWrite,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
+  }
+
   const principal = readRequestPrincipal(req)
   if (!principal) {
     return res.status(401).json({ success: false, error: 'Authentication required' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
+  const body = (await readJsonBody(req, { maxBytes: 16_384 })) ?? {}
   const storeOnGrove = body.storeOnGrove !== false
 
   try {

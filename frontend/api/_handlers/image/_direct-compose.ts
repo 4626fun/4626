@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import sharp from 'sharp'
 
+import { checkRateLimit, getClientIp, rateLimitKey, RATE_LIMITS } from '../../../packages/server-core/src/index.js'
 import { downloadImageStorageObject } from '../../../server/_lib/imageStorage.js'
 import { extractForegroundFromSubjectImageBytes } from '../../../server/_lib/imageForegroundExtraction.js'
 import { composeLockedFrameImage } from '../../../server/_lib/imageCompositor.js'
@@ -9,7 +10,7 @@ import {
   getImageGenerationProject,
   updateImageGenerationProject,
 } from '../../../server/_lib/imageProjects.js'
-import { parseRequiredString, prepareImageApiAuthenticated, readBody } from './_shared.js'
+import { getImageApiActor, parseRequiredString, prepareImageApiAuthenticated, readBody } from './_shared.js'
 
 type Body = { projectId?: string }
 
@@ -29,6 +30,13 @@ async function detectForegroundTopBound(fgBytes: Uint8Array, threshold = 16): Pr
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (prepareImageApiAuthenticated(req, res)) return
   if (req.method !== 'POST') return res.status(405).json({ success: false, error: 'Method not allowed' })
+  const actor = getImageApiActor(req)
+  if (!actor) return res.status(401).json({ success: false, error: 'Sign in required' })
+  const limiter = checkRateLimit(rateLimitKey('image:direct-compose', getClientIp(req)), RATE_LIMITS.agentCreative)
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' })
+  }
 
   const body = await readBody<Body>(req)
   const projectId = parseRequiredString(body.projectId)
@@ -36,6 +44,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const project = await getImageGenerationProject(projectId)
   if (!project) return res.status(404).json({ success: false, error: 'Project not found' })
+  if (String(project.ownerAddress ?? '').toLowerCase() !== actor.toLowerCase()) {
+    return res.status(403).json({ success: false, error: 'Not authorized for this project' })
+  }
 
   const assets = (project.assets as any[]) ?? []
   const frameAsset = assets.find((a) => a.role === 'frame') ?? null

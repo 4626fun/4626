@@ -37,6 +37,11 @@ import {
   type TradeQuoteResponse,
   type TransactionRequest,
 } from '@/lib/uniswap/tradingApi'
+import {
+  getSwapProviderLabel,
+  requiresCanonicalExecutionForSwapMode,
+  resolveSwapProviderSelection,
+} from '@/lib/swap/providerConfig'
 import type { AccountCapabilities, SignerType } from '@/wallet/accountContext'
 
 const QUOTE_TTL_MS = 30_000
@@ -264,6 +269,12 @@ function hasApprovalTransaction(value: unknown): boolean {
   return typeof tx.to === 'string' && tx.to.length > 0 && typeof tx.data === 'string' && tx.data.length > 0
 }
 
+function isCdpProviderQuote(value: TradeQuoteResponse | null | undefined): boolean {
+  return String((value as any)?.provider ?? '')
+    .trim()
+    .toLowerCase() === 'cdp'
+}
+
 export function useSwapExecution(params: {
   address: string | undefined
   walletClient: unknown
@@ -313,6 +324,8 @@ export function useSwapExecution(params: {
   const [permitSignatureRequired, setPermitSignatureRequired] = useState(false)
   const [permitSignaturePending, setPermitSignaturePending] = useState(false)
   const [permitSignatureReady, setPermitSignatureReady] = useState(false)
+  const [fallbackActive, setFallbackActive] = useState(false)
+  const [swapProvider, setSwapProvider] = useState<'uniswap' | 'cdp'>('uniswap')
   const [txState, setTxState] = useState<TxLifecycleState>('idle')
   const [txHash, setTxHash] = useState<string | null>(null)
   const [diagnosticsBusy, setDiagnosticsBusy] = useState(false)
@@ -369,6 +382,11 @@ export function useSwapExecution(params: {
     return getErrorDetails(value, fallback).message
   }, [getErrorDetails])
   const quoteCooldownActive = Boolean(quoteCooldownUntil && quoteCooldownUntil > Date.now())
+  const swapProviderSelection = useMemo(() => resolveSwapProviderSelection(), [])
+  const cdpCanonicalOnlyMode = useMemo(
+    () => requiresCanonicalExecutionForSwapMode(swapProviderSelection.mode),
+    [swapProviderSelection.mode],
+  )
   const resetQuoteFailureTracker = useCallback(() => {
     quoteFailureTrackerRef.current = {
       count: 0,
@@ -582,6 +600,9 @@ export function useSwapExecution(params: {
   }, [swapDebugEnabled])
 
   const assertCanonicalSwapExecutionContext = useCallback(() => {
+    if (cdpCanonicalOnlyMode && params.executionMode !== 'canonical') {
+      throw new Error('CDP swaps currently require canonical smart-wallet execution mode.')
+    }
     if (!canonicalPolicyApplies) return
     if (params.executionMode !== 'canonical') {
       throw new Error('Canonical CSW policy requires canonical execution mode.')
@@ -599,6 +620,7 @@ export function useSwapExecution(params: {
       throw new Error('Canonical CSW policy blocked non-canonical smart-wallet signer usage.')
     }
   }, [
+    cdpCanonicalOnlyMode,
     canonicalPolicyApplies,
     params.executionMode,
     params.canonicalAddress,
@@ -651,6 +673,11 @@ export function useSwapExecution(params: {
       !tokensEquivalent &&
       Number(params.amountInUnits) > 0 &&
       Boolean(params.executionAddress) &&
+      (!cdpCanonicalOnlyMode ||
+        (params.executionMode === 'canonical' &&
+          isTargetCanonicalCsw(params.executionAddress ?? null) &&
+          isTargetCanonicalCsw(params.canonicalAddress ?? null) &&
+          isAllowedCanonicalSigner(params.signerAddress ?? null))) &&
       (!canonicalPolicyApplies ||
         (params.executionMode === 'canonical' &&
           isTargetCanonicalCsw(params.executionAddress ?? null) &&
@@ -665,6 +692,7 @@ export function useSwapExecution(params: {
       params.canonicalAddress,
       params.signerAddress,
       tokensEquivalent,
+      cdpCanonicalOnlyMode,
       canonicalPolicyApplies,
     ],
   )
@@ -754,6 +782,11 @@ export function useSwapExecution(params: {
 
   const syncPermitRequirement = useCallback((nextQuote: TradeQuoteResponse | null | undefined) => {
     const requiresPermit = Boolean(pickPermitData(nextQuote))
+    const providerRaw = typeof (nextQuote as any)?.provider === 'string' ? String((nextQuote as any).provider).trim().toLowerCase() : ''
+    const provider = providerRaw === 'cdp' ? 'cdp' : 'uniswap'
+    const fallback = Boolean((nextQuote as any)?.fallbackUsed)
+    setSwapProvider(provider)
+    setFallbackActive(fallback)
     setPermitSignatureRequired(requiresPermit)
     setPermitSignaturePending(false)
     setPermitSignatureReady(false)
@@ -826,6 +859,8 @@ export function useSwapExecution(params: {
     setPermitSignatureRequired(false)
     setPermitSignaturePending(false)
     setPermitSignatureReady(false)
+    setFallbackActive(false)
+    setSwapProvider('uniswap')
     setDiagnosticsResult(null)
     setStatus('')
     setError('')
@@ -877,7 +912,10 @@ export function useSwapExecution(params: {
         walletModeKey: params.executionMode,
       })
       if (runId !== quoteRunRef.current) return
-      if (!guardRoutingPolicy(data.routing)) return
+      const isCdpQuote = String((data as any).provider ?? '')
+        .trim()
+        .toLowerCase() === 'cdp'
+      if (!isCdpQuote && !guardRoutingPolicy(data.routing)) return
       setQuote(data)
       setQuoteUpdatedAt(Date.now())
       syncPermitRequirement(data)
@@ -926,6 +964,12 @@ export function useSwapExecution(params: {
 
   const handleCheckApproval = useCallback(async () => {
     if (!params.executionAddress || !isReady) return
+    if (isCdpProviderQuote(quote)) {
+      setError('')
+      setApprovalData({ approval: null, cancel: null })
+      setStatus('No token approval required for CDP swap path')
+      return
+    }
     // Native ETH does not require ERC20 approvals (Permit2/allowance).
     // Uniswap Trading API will embed the amount in `tx.value` for native input.
     if (params.tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS) {
@@ -979,6 +1023,7 @@ export function useSwapExecution(params: {
       setBusy(null)
     }
   }, [
+    quote,
     params.executionAddress,
     params.executionMode,
     params.tokenIn,
@@ -1048,10 +1093,26 @@ export function useSwapExecution(params: {
         }))
       }
 
-      const approvalPromise =
-        params.tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS
-          ? Promise.resolve({ approval: null, cancel: null } as any)
-          : checkTradeApproval({
+      const nextQuote = await fetchTradeQuote({
+        tokenIn: params.tokenIn,
+        tokenOut: params.tokenOut,
+        tokenInChainId: swapChainId,
+        tokenOutChainId: swapChainId,
+        type: 'EXACT_INPUT',
+        amount,
+        swapper: params.executionAddress,
+        slippageTolerance: params.parsedSlippage,
+        routingPreference: 'BEST_PRICE',
+        permitAmount: 'EXACT',
+        walletModeKey: params.executionMode,
+      })
+      if (runId !== quoteRunRef.current) return
+      const isCdpQuote = isCdpProviderQuote(nextQuote)
+      if (!isCdpQuote && !guardRoutingPolicy(nextQuote.routing)) return
+      const nextApproval =
+        params.tokenIn.trim().toLowerCase() === NATIVE_TOKEN_ADDRESS || isCdpQuote
+          ? ({ approval: null, cancel: null } as any)
+          : await checkTradeApproval({
               walletAddress: params.executionAddress,
               token: params.tokenIn,
               amount,
@@ -1060,25 +1121,7 @@ export function useSwapExecution(params: {
               tokenOutChainId: swapChainId,
               includeGasInfo: true,
             })
-
-      const [nextQuote, nextApproval] = await Promise.all([
-        fetchTradeQuote({
-          tokenIn: params.tokenIn,
-          tokenOut: params.tokenOut,
-          tokenInChainId: swapChainId,
-          tokenOutChainId: swapChainId,
-          type: 'EXACT_INPUT',
-          amount,
-          swapper: params.executionAddress,
-          slippageTolerance: params.parsedSlippage,
-          routingPreference: 'BEST_PRICE',
-          permitAmount: 'EXACT',
-          walletModeKey: params.executionMode,
-        }),
-        approvalPromise,
-      ])
       if (runId !== quoteRunRef.current) return
-      if (!guardRoutingPolicy(nextQuote.routing)) return
       setQuote(nextQuote)
       setQuoteUpdatedAt(Date.now())
       syncPermitRequirement(nextQuote)
@@ -1561,6 +1604,9 @@ export function useSwapExecution(params: {
     quoteUpdatedAt,
     txState,
     txHash,
+    fallbackActive,
+    swapProvider,
+    swapProviderLabel: getSwapProviderLabel(swapProvider),
     isReady,
     canonicalSubmitSession,
     approvalRequired,

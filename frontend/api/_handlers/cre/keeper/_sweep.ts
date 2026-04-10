@@ -34,6 +34,7 @@
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { type ApiEnvelope, handleOptions, requireKeeprApiKey, setCors, setNoStore } from '../../../../packages/server-core/src/index.js'
+import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../../server/_lib/rateLimit.js'
 import { createPublicClient, createWalletClient, http, type Abi, zeroAddress } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
@@ -206,6 +207,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   if (!requireKeeprApiKey(req, res)) return
+
+  const limiter = checkRateLimit(
+    rateLimitKey('cre-keeper-sweep', getClientIp(req)),
+    RATE_LIMITS.creRuntimeTriggerWrite,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
+  }
 
   const { ccaStrategyAddress, enforceInvariants, invariants } = req.body as {
     ccaStrategyAddress?: string

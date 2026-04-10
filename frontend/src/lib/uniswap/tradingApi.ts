@@ -4,6 +4,8 @@ import { apiFetch } from '@/lib/apiBase'
 import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/apiEnvelope'
 import { API_ENDPOINTS } from '@/lib/apiEndpoints'
 import { APP_ORIGIN, MARKETING_ORIGIN } from '@/lib/host'
+import { buildCdpPriceRequest, executeCdpSwap, fetchCdpSwapPrice } from '@/lib/swap/cdpApi'
+import { resolveSwapProviderSelection, shouldFallbackToUniswap, type SwapProvider } from '@/lib/swap/providerConfig'
 
 const DEFAULT_RETRIES = 1
 const RETRY_BASE_DELAY_MS = 500
@@ -31,9 +33,20 @@ export type TradeQuoteRequest = QuoteRequest & {
   // Local-only: forwarded to our Vercel handler, which decides whether to set `x-chained-actions-enabled`.
   xChainedActionsEnabled?: boolean
   chainedActionsEnabled?: boolean
+  providerOverride?: 'uniswap' | 'cdp'
 }
 
 export type TradeQuoteResponse = QuoteResponse & Record<string, unknown>
+
+type CdpExecuteParams = {
+  network: string
+  fromToken: string
+  toToken: string
+  fromAmount: string
+  taker?: string
+  slippageBps?: number
+  account?: string
+}
 
 // OpenAPI currently types approval/cancel as always-present transactions, but the
 // endpoint can return `null` when no approval/cancel is required.
@@ -162,6 +175,134 @@ async function patch<T>(path: string, body: Record<string, unknown>): Promise<T>
   return json.data as T
 }
 
+function attachProviderMetadata(
+  quote: TradeQuoteResponse,
+  provider: SwapProvider,
+  options?: { fallbackUsed?: boolean; preferredProvider?: SwapProvider },
+): TradeQuoteResponse {
+  return {
+    ...quote,
+    provider,
+    fallbackUsed: Boolean(options?.fallbackUsed),
+    preferredProvider: options?.preferredProvider ?? provider,
+    quote: isPlainObject((quote as any).quote)
+      ? {
+          ...(quote as any).quote,
+          _provider: provider,
+          _fallbackUsed: Boolean(options?.fallbackUsed),
+          _preferredProvider: options?.preferredProvider ?? provider,
+        }
+      : (quote as any).quote,
+  } as TradeQuoteResponse
+}
+
+function buildCdpExecuteParamsFromQuote(body: BuildSwapParams): CdpExecuteParams | null {
+  const quote = isPlainObject(body.quote) ? body.quote : null
+  if (!quote) return null
+  const provider = typeof quote._provider === 'string' ? quote._provider.trim().toLowerCase() : ''
+  if (provider !== 'cdp') return null
+  const params = isPlainObject(quote._cdpParams) ? quote._cdpParams : null
+  if (!params) return null
+  const network = typeof params.network === 'string' ? params.network.trim() : ''
+  const fromToken = typeof params.fromToken === 'string' ? params.fromToken.trim() : ''
+  const toToken = typeof params.toToken === 'string' ? params.toToken.trim() : ''
+  const fromAmount = typeof params.fromAmount === 'string' ? params.fromAmount.trim() : ''
+  if (!network || !fromToken || !toToken || !fromAmount) return null
+  return {
+    network,
+    fromToken,
+    toToken,
+    fromAmount,
+    taker: typeof params.taker === 'string' && params.taker.trim() ? params.taker.trim() : undefined,
+    account: typeof params.account === 'string' && params.account.trim() ? params.account.trim() : undefined,
+    slippageBps: Number.isFinite(Number(params.slippageBps)) ? Number(params.slippageBps) : undefined,
+  }
+}
+
+function extractCdpSwapTransaction(payload: Record<string, unknown>): TransactionRequest | null {
+  const transaction =
+    (isPlainObject(payload.transaction) && payload.transaction) ||
+    (isPlainObject(payload.swap) && isPlainObject((payload.swap as Record<string, unknown>).transaction)
+      ? ((payload.swap as Record<string, unknown>).transaction as Record<string, unknown>)
+      : null) ||
+    (isPlainObject(payload.quote) && isPlainObject((payload.quote as Record<string, unknown>).transaction)
+      ? ((payload.quote as Record<string, unknown>).transaction as Record<string, unknown>)
+      : null)
+  if (!transaction) return null
+  const to = typeof transaction.to === 'string' ? transaction.to : ''
+  const data = typeof transaction.data === 'string' ? transaction.data : ''
+  const from = typeof transaction.from === 'string' ? transaction.from : ''
+  if (!to || !data) return null
+  return {
+    to,
+    from,
+    data,
+    value: typeof transaction.value === 'string' && transaction.value.trim() ? transaction.value : '0',
+    chainId: (Number.isFinite(Number(transaction.chainId)) && Number(transaction.chainId) > 0
+      ? Number(transaction.chainId)
+      : 8453) as TransactionRequest['chainId'],
+    gasLimit: typeof transaction.gasLimit === 'string' ? transaction.gasLimit : undefined,
+    maxFeePerGas: typeof transaction.maxFeePerGas === 'string' ? transaction.maxFeePerGas : undefined,
+    maxPriorityFeePerGas:
+      typeof transaction.maxPriorityFeePerGas === 'string' ? transaction.maxPriorityFeePerGas : undefined,
+    gasPrice: typeof transaction.gasPrice === 'string' ? transaction.gasPrice : undefined,
+  }
+}
+
+async function fetchTradeQuoteFromUniswap(body: TradeQuoteRequest): Promise<TradeQuoteResponse> {
+  const { walletModeKey: _wm, providerOverride: _providerOverride, ...upstreamBody } = body
+  return await post<TradeQuoteResponse>(API_ENDPOINTS.uniswap.quote, upstreamBody)
+}
+
+async function fetchTradeQuoteFromCdp(body: TradeQuoteRequest): Promise<TradeQuoteResponse> {
+  const sameChain = Number(body.tokenInChainId) === Number(body.tokenOutChainId)
+  if (!sameChain) {
+    throw new Error('CDP swaps currently support same-network pairs only.')
+  }
+  const cdpRequest = buildCdpPriceRequest({
+    chainId: Number(body.tokenInChainId),
+    tokenIn: body.tokenIn,
+    tokenOut: body.tokenOut,
+    amount: String(body.amount),
+    swapper: body.swapper,
+    slippageTolerance: Number(body.slippageTolerance ?? 1),
+  })
+  const raw = await fetchCdpSwapPrice(cdpRequest)
+  const liquidityAvailable =
+    typeof raw.liquidityAvailable === 'boolean' ? raw.liquidityAvailable : Boolean(raw.toAmount)
+  const quote = {
+    requestId:
+      typeof raw.requestId === 'string' && raw.requestId.trim().length > 0
+        ? raw.requestId
+        : `cdp-${Date.now()}`,
+    routing: 'CLASSIC',
+    quote: {
+      input: {
+        amount: cdpRequest.fromAmount,
+        token: cdpRequest.fromToken,
+      },
+      output: {
+        amount: typeof raw.toAmount === 'string' ? raw.toAmount : '',
+        token: cdpRequest.toToken,
+      },
+      minToAmount: typeof raw.minToAmount === 'string' ? raw.minToAmount : undefined,
+      totalNetworkFee: typeof raw.totalNetworkFee === 'string' ? raw.totalNetworkFee : undefined,
+      fees: isPlainObject(raw.fees) ? raw.fees : undefined,
+      issues: isPlainObject(raw.issues) ? raw.issues : undefined,
+      _provider: 'cdp',
+      _cdpParams: cdpRequest,
+    },
+    liquidityAvailable,
+    toAmount: typeof raw.toAmount === 'string' ? raw.toAmount : undefined,
+    minToAmount: typeof raw.minToAmount === 'string' ? raw.minToAmount : undefined,
+    totalNetworkFee: typeof raw.totalNetworkFee === 'string' ? raw.totalNetworkFee : undefined,
+    fees: isPlainObject(raw.fees) ? raw.fees : undefined,
+    issues: isPlainObject(raw.issues) ? raw.issues : undefined,
+    permitData: null,
+  } as unknown as TradeQuoteResponse
+  return quote
+}
+
 export type ProtocolSwapRouting = Extract<Routing, 'CLASSIC' | 'WRAP' | 'UNWRAP' | 'BRIDGE'>
 export type UniswapXRouting = Extract<Routing, 'DUTCH_LIMIT' | 'DUTCH_V2' | 'DUTCH_V3' | 'LIMIT_ORDER' | 'PRIORITY'>
 
@@ -250,15 +391,41 @@ export function toPermitSignPayload(permitData: Record<string, unknown>): Permit
 export async function fetchTradeQuote(body: TradeQuoteRequest): Promise<TradeQuoteResponse> {
   const normalizedAmount = normalizeAmountString(body.amount)
   const normalizedBody = normalizedAmount === body.amount ? body : { ...body, amount: normalizedAmount }
-  const key = JSON.stringify(normalizedBody)
+  const providerSelection = resolveSwapProviderSelection()
+  const forcedProvider =
+    body.providerOverride === 'cdp' || body.providerOverride === 'uniswap' ? body.providerOverride : null
+  const effectivePrimary = forcedProvider ?? providerSelection.primary
+  const effectiveFallback =
+    forcedProvider === 'uniswap' || forcedProvider === 'cdp' ? null : providerSelection.fallback
+  const key = JSON.stringify({
+    providerMode: forcedProvider ? `forced-${forcedProvider}` : providerSelection.mode,
+    body: normalizedBody,
+  })
   const cached = quoteCache.get(key)
   if (cached && Date.now() - cached.at < QUOTE_CACHE_TTL_MS) return cached.data
 
   const pending = quoteInFlight.get(key)
   if (pending) return pending
 
-  const { walletModeKey: _wm, ...upstreamBody } = normalizedBody
-  const request = post<TradeQuoteResponse>(API_ENDPOINTS.uniswap.quote, upstreamBody)
+  const request = (async () => {
+    if (effectivePrimary === 'uniswap') {
+      const quote = await fetchTradeQuoteFromUniswap(normalizedBody)
+      return attachProviderMetadata(quote, 'uniswap')
+    }
+    try {
+      const cdpQuote = await fetchTradeQuoteFromCdp(normalizedBody)
+      return attachProviderMetadata(cdpQuote, 'cdp')
+    } catch (error) {
+      if (effectiveFallback !== 'uniswap' || !shouldFallbackToUniswap(error)) {
+        throw error
+      }
+      const fallbackQuote = await fetchTradeQuoteFromUniswap(normalizedBody)
+      return attachProviderMetadata(fallbackQuote, 'uniswap', {
+        fallbackUsed: true,
+        preferredProvider: 'cdp',
+      })
+    }
+  })()
     .then((data) => {
       quoteCache.set(key, { at: Date.now(), data })
       quoteInFlight.delete(key)
@@ -274,6 +441,10 @@ export async function fetchTradeQuote(body: TradeQuoteRequest): Promise<TradeQuo
 }
 
 export async function checkTradeApproval(body: ApprovalRequest): Promise<TradeApprovalResponse> {
+  const providerSelection = resolveSwapProviderSelection()
+  if (providerSelection.mode === 'cdp') {
+    return { approval: null, cancel: null } as TradeApprovalResponse
+  }
   const rawAmount = typeof (body as any).amount === 'string' ? ((body as any).amount as string) : ''
   return post<TradeApprovalResponse>(API_ENDPOINTS.uniswap.checkApproval, {
     ...(body as Record<string, unknown>),
@@ -292,6 +463,17 @@ export async function buildSwap(body: BuildSwapParams): Promise<CreateSwapRespon
   const hasPermitData = typeof body.permitData === 'object' && body.permitData !== null
   if (hasSignature !== hasPermitData) {
     throw new Error('Permit2 signature and permitData must be provided together.')
+  }
+
+  const cdpParams = buildCdpExecuteParamsFromQuote(body)
+  if (cdpParams) {
+    const response = await executeCdpSwap(cdpParams)
+    const tx = extractCdpSwapTransaction(response)
+    if (!tx) {
+      throw new Error('CDP swap response did not include executable transaction payload.')
+    }
+    assertValidSwapTransaction(tx)
+    return { swap: tx } as CreateSwapResponse
   }
 
   const response = await post<CreateSwapResponse>(API_ENDPOINTS.uniswap.swap, body)

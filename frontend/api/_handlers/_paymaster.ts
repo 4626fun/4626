@@ -27,6 +27,7 @@ import {
   setNoStore,
   readRequestPrincipalAddress,
 } from '../../packages/server-core/src/index.js'
+import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../server/_lib/rateLimit.js'
 
 
 import { DEPLOY_BYTECODE } from '../../shared/deploy/bytecode.generated.js'
@@ -2866,6 +2867,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') {
     // Keep JSON-RPC clients happy (avoid transport-level failure masking).
     return res.status(200).json(jsonRpcError(null, -32600, 'Method not allowed'))
+  }
+
+  const limiter = checkRateLimit(
+    rateLimitKey('paymaster-rpc', getClientIp(req)),
+    RATE_LIMITS.paymasterRpc,
+  )
+  if (!limiter.allowed) {
+    return res.status(200).json(jsonRpcError(null, -32005, 'Rate limit exceeded'))
   }
 
   const cdpEndpoint = getCdpEndpoint()

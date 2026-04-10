@@ -16,6 +16,7 @@ import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { classifyLinkedAccounts, type ClassifiedLinkedAccounts } from '../../../server/_lib/walletMapping.js'
 import { syncUserWallets } from '../../../server/_lib/walletSync.js'
 import { isIdentityRecoveryRequiredError } from '../../../server/_lib/identityRecovery.js'
+import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 
 import { PrivyClient } from '@privy-io/server-auth'
 
@@ -171,6 +172,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+
+  const limiter = checkRateLimit(
+    rateLimitKey('auth-privy', getClientIp(req)),
+    RATE_LIMITS.authPrivy,
+  )
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
   const auth = getPrivyServerAuth()

@@ -177,6 +177,22 @@ describe('v1 build phase 1 handlers', () => {
     expect(res.body?.error).toBe('Too many requests')
   })
 
+  it('returns 429 for resetVotes and unlock when rate limit is exceeded', async () => {
+    mocks.checkRateLimit.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+    const resetReq = createMockReq({ method: 'POST', body: {} })
+    const resetRes = createMockRes()
+    await gaugeResetVotesHandler(resetReq, resetRes)
+    expect(resetRes.statusCode).toBe(429)
+    expect(resetRes.body?.error).toBe('Too many requests')
+
+    mocks.checkRateLimit.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+    const unlockReq = createMockReq({ method: 'POST', body: {} })
+    const unlockRes = createMockRes()
+    await veUnlockHandler(unlockReq, unlockRes)
+    expect(unlockRes.statusCode).toBe(429)
+    expect(unlockRes.body?.error).toBe('Too many requests')
+  })
+
   it('returns 405 for non-POST requests', async () => {
     const req = createMockReq({ method: 'GET' })
     const res = createMockRes()
