@@ -2183,31 +2183,3 @@ function CompactSummaryRow(props: { label: string; value: string; title?: string
     </div>
   )
 }
-
-function SuccessAccountSummary(props: { email: string; canonicalCswAddress: string | null }) {
-  return (
-    <div className="rounded-[18px] border border-white/[0.06] bg-white/[0.025] p-3">
-      <div className="text-[9px] font-medium uppercase tracking-[0.2em] text-[#666666]">Connected Account</div>
-      <div className="mt-2.5 space-y-2">
-        <CompactSummaryRow label="Canonical Email" value={props.email} />
-        <CompactSummaryRow
-          label="Canonical CSW"
-          value={props.canonicalCswAddress ? shortAddress(props.canonicalCswAddress) : 'Pending wallet setup'}
-          title={props.canonicalCswAddress ?? 'Canonical Coinbase Smart Wallet not set yet.'}
-          mono
-        />
-      </div>
-    </div>
-  )
-}
-
-function CompactSummaryRow(props: { label: string; value: string; title?: string; mono?: boolean }) {
-  return (
-    <div className="rounded-[15px] border border-white/[0.06] bg-white/[0.03] px-3 py-2.5" title={props.title}>
-      <div className="text-[9px] font-medium uppercase tracking-[0.16em] text-[#666666]">{props.label}</div>
-      <div className={`mt-1 min-w-0 truncate text-[13px] text-[#EDEDED] ${props.mono ? 'font-mono' : 'font-medium'}`}>
-        {props.value}
-      </div>
-    </div>
-  )
-}
