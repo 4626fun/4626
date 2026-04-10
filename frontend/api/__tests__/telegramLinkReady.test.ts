@@ -9,12 +9,16 @@ const {
   verifyPrivyForAccountsMock,
   ensureAccountsIdentitySchemaMock,
   syncEmailIdentityMock,
+  ensureTelegramTradingSchemaMock,
+  readTelegramMiniAppSessionMock,
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   dbSqlMock: vi.fn(),
   verifyPrivyForAccountsMock: vi.fn(),
   ensureAccountsIdentitySchemaMock: vi.fn(),
   syncEmailIdentityMock: vi.fn(),
+  ensureTelegramTradingSchemaMock: vi.fn(),
+  readTelegramMiniAppSessionMock: vi.fn(),
 }))
 
 vi.mock('../../server/_lib/postgres.js', () => ({
@@ -27,6 +31,11 @@ vi.mock('../../server/_lib/accountsIdentity.js', () => ({
   syncEmailIdentity: syncEmailIdentityMock,
 }))
 
+vi.mock('../../server/_lib/telegramTrading.js', () => ({
+  ensureTelegramTradingSchema: ensureTelegramTradingSchemaMock,
+  readTelegramMiniAppSession: readTelegramMiniAppSessionMock,
+}))
+
 describe('POST /api/telegram/link/ready', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -37,6 +46,13 @@ describe('POST /api/telegram/link/ready', () => {
     })
     ensureAccountsIdentitySchemaMock.mockResolvedValue(undefined)
     syncEmailIdentityMock.mockResolvedValue(undefined)
+    ensureTelegramTradingSchemaMock.mockResolvedValue(undefined)
+    readTelegramMiniAppSessionMock.mockResolvedValue({
+      ok: true,
+      session: {
+        telegramUserId: '42',
+      },
+    })
     dbSqlMock.mockResolvedValue({
       rows: [
         {
@@ -54,6 +70,7 @@ describe('POST /api/telegram/link/ready', () => {
       headers: { authorization: 'Bearer privy-token' },
       body: {
         email: ' USER@EXAMPLE.COM ',
+        sessionToken: 'mini-session-token',
       },
     })
     const res = createMockRes()
@@ -89,6 +106,7 @@ describe('POST /api/telegram/link/ready', () => {
       headers: { authorization: 'Bearer privy-token' },
       body: {
         email: 'user@example.com',
+        sessionToken: 'mini-session-token',
       },
     })
     const res = createMockRes()
@@ -118,6 +136,7 @@ describe('POST /api/telegram/link/ready', () => {
       headers: { authorization: 'Bearer privy-token' },
       body: {
         email: 'user@example.com',
+        sessionToken: 'mini-session-token',
       },
     })
     const res = createMockRes()
@@ -129,5 +148,62 @@ describe('POST /api/telegram/link/ready', () => {
       ready: false,
       account: null,
     })
+  })
+
+  it('rejects oversized request bodies', async () => {
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer privy-token' },
+      body: {
+        email: 'x'.repeat(20_000),
+        sessionToken: 'mini-session-token',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(413)
+    expect(String(res.body?.error ?? '')).toContain('Request body too large')
+    expect(verifyPrivyForAccountsMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects stale Telegram mini app sessions', async () => {
+    readTelegramMiniAppSessionMock.mockResolvedValueOnce({
+      ok: false,
+      reason: 'expired',
+    })
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer privy-token' },
+      body: {
+        email: 'user@example.com',
+        sessionToken: 'mini-session-token',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(409)
+    expect(res.body?.code).toBe('EXPIRED_TELEGRAM_SESSION')
+  })
+
+  it('returns unauthorized when Privy auth fails', async () => {
+    verifyPrivyForAccountsMock.mockRejectedValueOnce(new Error('Unauthorized'))
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer invalid' },
+      body: {
+        email: 'user@example.com',
+        sessionToken: 'mini-session-token',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(401)
+    expect(res.body?.success).toBe(false)
   })
 })

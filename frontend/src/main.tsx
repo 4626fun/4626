@@ -109,7 +109,8 @@ function shouldSuppressWalletNoise(args: unknown[]): boolean {
   return (
     joined.includes('failed to add embedded wallet connector: wallet proxy not initialized') ||
     joined.includes('cannot set property ethereum of #<window> which has only a getter') ||
-    joined.includes('embedded1193provider.request() called with args')
+    joined.includes('embedded1193provider.request() called with args') ||
+    joined.includes('eth_accounts for privy')
   )
 }
 
@@ -174,13 +175,25 @@ function isViteOutdatedOptimizeDepError(message: string, source: string): boolea
   return msg.includes('/node_modules/.vite/deps/') || src.includes('/node_modules/.vite/deps/')
 }
 
+function isLoopbackHostname(hostname: string): boolean {
+  const host = String(hostname || '').trim().toLowerCase()
+  return host === 'localhost' || host === '127.0.0.1' || host === '::1' || host === '[::1]'
+}
+
 function tryRecoverFromViteOptimizeDepError(message: string, source: string): boolean {
   if (!import.meta.env.DEV || typeof window === 'undefined') return false
   if (!isViteOutdatedOptimizeDepError(message, source)) return false
+
+  // Local dev often has extension-driven module noise; auto-reload here can feel
+  // like a hard refresh loop. Keep recovery manual on loopback origins.
+  if (isLoopbackHostname(window.location.hostname)) return false
+
   const path = String(window.location.pathname || '').toLowerCase()
   // Auto reload can feel like a refresh loop on auth-heavy routes.
   // Keep waitlist/telegram flows stable and let users retry in-place.
-  if (path === '/waitlist' || path.startsWith('/telegram/')) return false
+  if (path === '/waitlist' || path.startsWith('/waitlist/') || path.startsWith('/r/') || path.startsWith('/telegram/')) {
+    return false
+  }
   try {
     const last = Number(window.sessionStorage.getItem(VITE_OPTIMIZE_DEP_RECOVERY_KEY) ?? '0')
     const now = Date.now()

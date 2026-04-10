@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/zora/\_topCreators.ts:53](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/_topCreators.ts#L53)
+Defined in: [api/\_handlers/zora/\_topCreators.ts:54](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/_topCreators.ts#L54)
 
 #### Parameters
 

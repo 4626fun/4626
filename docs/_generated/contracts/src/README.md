@@ -200,8 +200,7 @@ flowchart LR
   Arb["Arbitrum\n(42161 / 30110)"]
   BSC["BSC\n(56 / 30102)"]
   Avax["Avalanche\n(43114 / 30106)"]
-  Monad["Monad\n(143 / 30390)"]
-  Solana["Solana\n(101 / 30168)"]
+  Monad["Monad\n(10143 / 30390)"]
   Sonic["Sonic\n(146 / 30332)"]
   Hyper["HyperEVM\n(999 / 30275)"]
 
@@ -210,14 +209,13 @@ flowchart LR
   Base <--> |OFT messaging| BSC
   Base <--> |OFT messaging| Avax
   Base <--> |OFT messaging| Monad
-  Base <--> |OFT messaging| Solana
   Base <--> |OFT messaging| Sonic
   Base <--> |OFT messaging| Hyper
 
   classDef hub fill:#DCFCE7,stroke:#16A34A,stroke-width:2.5px,color:#14532D;
   classDef satellite fill:#DBEAFE,stroke:#2563EB,stroke-width:2px,color:#1E3A8A;
   class Base hub;
-  class Eth,Arb,BSC,Avax,Monad,Solana,Sonic,Hyper satellite;
+  class Eth,Arb,BSC,Avax,Monad,Sonic,Hyper satellite;
 ```
 
 ## Core Protocol Components
@@ -244,8 +242,7 @@ Source of truth: `docs/reference/chains.md`.
 | Arbitrum  | 42161    | 30110                 | Configured |
 | BSC       | 56       | 30102                 | Configured |
 | Avalanche | 43114    | 30106                 | Configured |
-| Monad     | 143      | 30390                 | Configured |
-| Solana    | 101      | 30168                 | Configured |
+| Monad     | 10143    | 30390                 | Configured |
 | Sonic     | 146      | 30332                 | Configured |
 | HyperEVM  | 999      | 30275                 | Configured |
 
@@ -315,7 +312,7 @@ pnpm -C apps/docs-site start
 | Frontend       | `pnpm -C frontend test`<br/>`pnpm -C frontend typecheck`<br/>`pnpm -C frontend lint` |
 | CRE            | `npm --prefix cre test`<br/>`npm --prefix cre run typecheck`                         |
 | Contracts      | `forge build`<br/>`forge test -vvv`                                                  |
-| Security sweep | `pnpm security:local` — Forge tests, CRE workflow checks, frontend lint/typecheck/test, optional Semgrep (Docker) + gitleaks + audit printouts ([`docs/audits/README.md`](../../../audits/README.md)) |
+| Security sweep | `pnpm security:local` — Forge tests, CRE workflow checks, frontend lint/typecheck/test, optional Semgrep (Docker) + gitleaks + audit printouts ([`docs/audits/README.md`](docs/audits/README.md)) |
 | Frontend build | `pnpm -C frontend build`                                                             |
 | Docs build     | `pnpm -C apps/docs-site build`                                                       |
 
@@ -326,7 +323,7 @@ This repo ships a small repo-native agent layer for Cursor/Codex-style use. It d
 - Authority order: `AGENTS.md` -> scoped `.cursor/rules/*.mdc` -> relevant repo skill -> verification selector.
 - Bundled skills live under `script/agent-runtime/skills/`.
 - Verification selector CLI: `pnpm agent:verify-change -- <paths...>`.
-- Operator docs: [`docs/agent-workflow.md`](../../../agent-workflow.md), skill index: [`docs/agent-skills.md`](../../../agent-skills.md).
+- Operator docs: [`docs/agent-workflow.md`](docs/agent-workflow.md), skill index: [`docs/agent-skills.md`](docs/agent-skills.md).
 
 ## XMTP Agent Runtime
 
@@ -454,7 +451,7 @@ For complete env references, see `frontend/README.md` and `cre/README.md`.
 - Wallet/account invariants are documented in `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
 - Deploy/session ownership + creator access checks are enforced server-side before phased execution.
 - CRE automation uses an HTTP bridge pattern; write execution happens through audited API surfaces.
-- CI: `.github/workflows/security-scanning.yml` (secret scan, dependency reports, Semgrep on API/server lib, Slither report-only); `.github/workflows/dependency-review.yml` (PR dependency review, high+ in runtime **and** dev deps). Enable Dependency graph + optional branch protection: [`docs/audits/github-supply-chain-setup.md`](../../../audits/github-supply-chain-setup.md). Audit index: [`docs/audits/README.md`](../../../audits/README.md). Trust-boundary rules: [`AGENTS.md`](../../../../AGENTS.md).
+- CI: `.github/workflows/security-scanning.yml` (secret scan, dependency reports, Semgrep on API/server lib, Slither report-only); `.github/workflows/dependency-review.yml` (PR dependency review, high+ in runtime **and** dev deps). Enable Dependency graph + optional branch protection: [`docs/audits/github-supply-chain-setup.md`](docs/audits/github-supply-chain-setup.md). Audit index: [`docs/audits/README.md`](docs/audits/README.md). Trust-boundary rules: [`AGENTS.md`](AGENTS.md).
 
 ## Documentation Map
 

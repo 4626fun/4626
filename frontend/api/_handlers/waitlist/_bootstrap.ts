@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   getDb,
@@ -47,6 +47,7 @@ type WaitlistBootstrapResponse =
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const CREATOR_COIN_REFERRAL_LOOKUP_TIMEOUT_MS = 1_500
+const BOOTSTRAP_BODY_MAX_BYTES = 16_384
 
 function normalizeEmail(value: unknown): string | null {
   const email = typeof value === 'string' ? value.trim().toLowerCase() : ''
@@ -58,6 +59,11 @@ function normalizeReferralCodeOrNull(value: unknown): string | null {
   if (typeof value !== 'string') return null
   const normalized = normalizeReferralCode(value)
   return normalized || null
+}
+
+function parseBootstrapBody(input: unknown): BootstrapBody {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
+  return input as BootstrapBody
 }
 
 function isPrivyUserIdUniqueViolation(error: unknown): boolean {
@@ -378,7 +384,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody(req, { maxBytes: 512_000 }).catch(() => null)) ?? (req.body as BootstrapBody | null) ?? {}
+  let parsedBody: BootstrapBody | null = null
+  try {
+    parsedBody = await readBoundedJsonObjectBody<BootstrapBody>(req, { maxBytes: BOOTSTRAP_BODY_MAX_BYTES })
+  } catch {
+    return res.status(413).json({ success: false, error: 'Request body too large' } satisfies ApiEnvelope<never>)
+  }
+  const body = parseBootstrapBody(parsedBody ?? {})
+  if (Object.prototype.hasOwnProperty.call(body, 'email') && body.email != null && typeof body.email !== 'string') {
+    return res.status(400).json({ success: false, error: 'Invalid email' } satisfies ApiEnvelope<never>)
+  }
+  if (Object.prototype.hasOwnProperty.call(body, 'referralCode') && body.referralCode != null && typeof body.referralCode !== 'string') {
+    return res.status(400).json({ success: false, error: 'Invalid referral code' } satisfies ApiEnvelope<never>)
+  }
   const email = normalizeEmail(body?.email)
   const referralCode = normalizeReferralCodeOrNull(body?.referralCode)
   const token = readPrivyToken(req)

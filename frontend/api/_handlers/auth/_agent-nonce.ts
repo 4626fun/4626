@@ -7,7 +7,7 @@ import { base } from 'viem/chains'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   getDb,
@@ -40,6 +40,13 @@ type AgentNonceResponse = {
   agentId: number
   agentRegistry: string
   ownerAddress: string
+}
+
+const AGENT_NONCE_BODY_MAX_BYTES = 16_384
+
+function asObjectBody(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
+  return input as Record<string, unknown>
 }
 
 const COINBASE_SMART_WALLET_OWNER_CHECK_ABI = [
@@ -89,7 +96,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
+  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: AGENT_NONCE_BODY_MAX_BYTES })) as AgentNonceBody
   const agentId = parseAgentId(body.agentId)
   if (agentId === null) {
     return res.status(400).json({ success: false, error: 'agentId is required (non-negative integer)' } satisfies ApiEnvelope<never>)

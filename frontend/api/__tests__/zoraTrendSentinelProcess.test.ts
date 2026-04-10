@@ -30,6 +30,21 @@ describe('POST /api/zora/trendSentinelProcess', () => {
 
     expect(res.statusCode).toBe(401)
     expect(res.body?.success).toBe(false)
+    expect(String(res.getHeader('cache-control') ?? '')).toBe('no-store')
+  })
+
+  it('rejects oversized request payloads', async () => {
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer test-secret' },
+      body: 'x'.repeat(20_000),
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(413)
+    expect(String(res.body?.error ?? '')).toContain('Request body too large')
   })
 
   it('runs sentinel when authorized', async () => {
@@ -54,4 +69,3 @@ describe('POST /api/zora/trendSentinelProcess', () => {
     expect(runTrendLaunchSentinelProcessMock).toHaveBeenCalledTimes(1)
   })
 })
-

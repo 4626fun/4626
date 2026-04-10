@@ -63,6 +63,21 @@ describe('POST /api/v1/chat/telemetry', () => {
     expect(trackChatCommandCenterEventMock).not.toHaveBeenCalled()
   })
 
+  it('rejects payloads with invalid event format', async () => {
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        event: 'chat command sent',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(trackChatCommandCenterEventMock).not.toHaveBeenCalled()
+  })
+
   it('accepts telemetry payload and forwards structured fields', async () => {
     const req = createMockReq({
       method: 'POST',
@@ -129,5 +144,53 @@ describe('POST /api/v1/chat/telemetry', () => {
         },
       },
     })
+  })
+
+  it('sanitizes oversized telemetry metadata', async () => {
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        event: 'chat_command_sent',
+        conversationId: 'c'.repeat(256),
+        source: 's'.repeat(128),
+        items: Array.from({ length: 25 }, (_, i) => i),
+        nested: {
+          child: {
+            grandchild: {
+              depth4: {
+                depth5: 'too-deep',
+              },
+            },
+          },
+        },
+        veryLong: 'x'.repeat(1024),
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(trackChatCommandCenterEventMock).toHaveBeenCalledWith({
+      event: 'chat_command_sent',
+      conversationId: 'c'.repeat(128),
+      conversationType: null,
+      commandId: null,
+      source: 's'.repeat(64),
+      payload: expect.objectContaining({
+        items: expect.any(Array),
+        nested: {
+          child: {
+            grandchild: {
+              depth4: '[max-depth]',
+            },
+          },
+        },
+        veryLong: 'x'.repeat(512),
+      }),
+    })
+    const tracked = trackChatCommandCenterEventMock.mock.calls[0]?.[0] as { payload?: Record<string, unknown> } | undefined
+    expect(Array.isArray(tracked?.payload?.items)).toBe(true)
+    expect((tracked?.payload?.items as unknown[]).length).toBe(20)
   })
 })

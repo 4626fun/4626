@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/deploy/\_smartWalletOwners.ts:63](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/_smartWalletOwners.ts#L63)
+Defined in: [api/\_handlers/deploy/\_smartWalletOwners.ts:67](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/_smartWalletOwners.ts#L67)
 
 #### Parameters
 

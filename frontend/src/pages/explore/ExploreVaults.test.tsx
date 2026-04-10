@@ -68,8 +68,8 @@ describe('ExploreVaults', () => {
     })
   })
 
-  it('normalizes legacy and unsupported params before querying vault endpoint', async () => {
-    searchParamsState.value = new URLSearchParams('sort=priceChange&time=1m')
+  it('normalizes unsupported params before querying vault endpoint', async () => {
+    searchParamsState.value = new URLSearchParams('sort=unsupported&time=1m')
     let capturedOptions: any = null
     useInfiniteQueryMock.mockImplementation((options: any) => {
       capturedOptions = options
@@ -86,17 +86,17 @@ describe('ExploreVaults', () => {
 
     renderToStaticMarkup(React.createElement(ExploreVaults))
 
-    expect(capturedOptions?.queryKey).toEqual(['explore', 'vaults', 'fees24h', '1d', ''])
+    expect(capturedOptions?.queryKey).toEqual(['explore', 'vaults', 'volume', '1d', ''])
     expect(subnavPropsMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        currentSort: 'fees24h',
+        currentSort: 'volume',
         currentTimeFilter: '1d',
       }),
     )
 
     await capturedOptions.queryFn({ pageParam: undefined })
     const [requestUrl] = apiFetchMock.mock.calls[0] as [string, unknown]
-    expect(requestUrl).toContain('sort=fees24h')
+    expect(requestUrl).toContain('sort=volume')
     expect(requestUrl).toContain('time=1d')
   })
 })

@@ -468,6 +468,7 @@ function makeDbPath(): (inboxId: string) => string {
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  res.setHeader('Cache-Control', 'no-store')
   if (req.method !== 'POST' && req.method !== 'GET') {
     return res.status(405).json({ success: false, error: 'Use POST' } satisfies ApiEnvelope<never>)
   }

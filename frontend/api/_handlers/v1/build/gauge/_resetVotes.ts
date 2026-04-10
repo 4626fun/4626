@@ -14,7 +14,7 @@ import {
 
 
 import type { BuildTxResponse } from '../_types.js'
-import { BASE_CHAIN_ID, setBuildCors } from '../_phase1Shared.js'
+import { BASE_CHAIN_ID, setBuildCors, setRateLimitRetryAfter } from '../_phase1Shared.js'
 
 const GAUGE_ABI = [
   { type: 'function', name: 'resetVotes', stateMutability: 'nonpayable', inputs: [], outputs: [] },
@@ -35,7 +35,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     rateLimitKey('v1-build-gauge-reset-votes', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
     RATE_LIMITS.buildGaugeVote,
   )
-  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+  if (!limiter.allowed) {
+    setRateLimitRetryAfter(res, limiter.resetAt)
+    return res.status(429).json({ success: false, error: 'Too many requests' })
+  }
 
   const gauge = getApiContracts().vaultGaugeVoting
   if (!gauge) {

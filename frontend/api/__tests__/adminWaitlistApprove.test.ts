@@ -5,6 +5,7 @@ import { createMockReq, createMockRes } from './helpers'
 
 const {
   readJsonBodyMock,
+  readBoundedJsonObjectBodyMock,
   getDbMock,
   getSessionAddressMock,
   isAdminAddressMock,
@@ -13,6 +14,7 @@ const {
   logAdminActionMock,
 } = vi.hoisted(() => ({
   readJsonBodyMock: vi.fn(async (req: { body?: unknown }) => req.body ?? {}),
+  readBoundedJsonObjectBodyMock: vi.fn(async (req: { body?: unknown }) => req.body ?? {}),
   getDbMock: vi.fn(),
   getSessionAddressMock: vi.fn(() => '0x00000000000000000000000000000000000000aa'),
   isAdminAddressMock: vi.fn(() => true),
@@ -24,6 +26,7 @@ const {
 vi.mock('../../packages/server-core/src/index.js', () => ({
   handleOptions: vi.fn(() => false),
   readJsonBody: readJsonBodyMock,
+  readBoundedJsonObjectBody: readBoundedJsonObjectBodyMock,
   setCors: vi.fn(),
   setNoStore: vi.fn(),
   getDb: getDbMock,
@@ -54,6 +57,7 @@ describe('POST /api/admin/waitlist/approve', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     readJsonBodyMock.mockImplementation(async (req: { body?: unknown }) => req.body ?? {})
+    readBoundedJsonObjectBodyMock.mockImplementation(async (req: { body?: unknown }) => req.body ?? {})
     getSessionAddressMock.mockReturnValue('0x00000000000000000000000000000000000000aa')
     isAdminAddressMock.mockReturnValue(true)
     checkRateLimitMock.mockReturnValue({ allowed: true, remaining: 99, resetAt: Date.now() + 60_000 })
@@ -127,7 +131,24 @@ describe('POST /api/admin/waitlist/approve', () => {
 
     expect(res.statusCode).toBe(429)
     expect(res.body).toEqual({ success: false, error: 'Too many requests' })
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
     expect(readJsonBodyMock).not.toHaveBeenCalled()
     expect(getDbMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects non-object bodies', async () => {
+    getDbMock.mockResolvedValue({ query: vi.fn(), sql: vi.fn() })
+    readJsonBodyMock.mockResolvedValueOnce(['bad'])
+
+    const req = createMockReq({
+      method: 'POST',
+      body: ['bad'],
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body?.error).toBe('Missing id')
   })
 })

@@ -3,7 +3,7 @@ import { encodeFunctionData, type Address } from 'viem'
 
 import {
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   guardAgentApiRequest,
   getClientIp,
   RATE_LIMITS,
@@ -14,7 +14,7 @@ import {
 
 import type { BuildTxResponse } from '../_types.js'
 import { AJNA_ERC20_POOL_ABI } from './_abi.js'
-import { assertBucketIndex, assertNonNegative, assertPositive, requireAddress, setBuildCors, toBigIntStrict } from './_shared.js'
+import { assertBucketIndex, assertNonNegative, assertPositive, requireAddress, setBuildCors, setRateLimitRetryAfter, toBigIntStrict } from './_shared.js'
 
 type Body = {
   pool: Address
@@ -36,9 +36,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     rateLimitKey('v1-build-ajna-borrow', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
     RATE_LIMITS.buildAjnaCalldata,
   )
-  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+  if (!limiter.allowed) {
+    setRateLimitRetryAfter(res, limiter.resetAt)
+    return res.status(429).json({ success: false, error: 'Too many requests' })
+  }
 
-  const body = (await readJsonBody(req, { maxBytes: 16_384 })) ?? ({} as Body)
+  const body = (await readBoundedJsonObjectBody(req, { maxBytes: 16_384 })) ?? ({} as Body)
   try {
     const pool = requireAddress(body.pool, 'pool')
     const borrower = requireAddress(body.borrower, 'borrower')

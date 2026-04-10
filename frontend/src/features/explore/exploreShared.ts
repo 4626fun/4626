@@ -34,10 +34,8 @@ type ExploreSearchParamSetter = (nextInit: URLSearchParams, navigateOpts?: { rep
 type ExploreSubnavParamsOptions<TSort extends string, TTime extends string> = {
   sortValues: readonly TSort[]
   defaultSort: TSort
-  sortAliases?: Readonly<Record<string, TSort>>
   timeValues: readonly TTime[]
   defaultTime: TTime
-  timeAliases?: Readonly<Record<string, TTime>>
   searchParamKey?: string
   debugScope?: string
 }
@@ -148,11 +146,9 @@ export function normalizeExploreOption<TValue extends string>(
   value: string | null | undefined,
   allowed: readonly TValue[],
   fallback: TValue,
-  aliases?: Readonly<Record<string, TValue>>,
 ): TValue {
   if (!value) return fallback
-  const mapped = aliases?.[value] ?? value
-  if (allowed.includes(mapped as TValue)) return mapped as TValue
+  if (allowed.includes(value as TValue)) return value as TValue
   return fallback
 }
 
@@ -205,13 +201,11 @@ export function useExploreSubnavParams<TSort extends string, TTime extends strin
     rawSort,
     options.sortValues,
     options.defaultSort,
-    options.sortAliases,
   )
   const currentTimeFilter = normalizeExploreOption(
     rawTime,
     options.timeValues,
     options.defaultTime,
-    options.timeAliases,
   )
   const normalizedSearchQuery = rawSearch?.trim() ?? ''
 
@@ -243,10 +237,10 @@ export function useExploreSubnavParams<TSort extends string, TTime extends strin
 
   const handleSortChange = useCallback(
     (sort: string) => {
-      const normalizedSort = normalizeExploreOption(sort, options.sortValues, options.defaultSort, options.sortAliases)
+      const normalizedSort = normalizeExploreOption(sort, options.sortValues, options.defaultSort)
       setExploreSearchParam(searchParams, setSearchParams, 'sort', normalizedSort)
     },
-    [options.defaultSort, options.sortAliases, options.sortValues, searchParams, setSearchParams],
+    [options.defaultSort, options.sortValues, searchParams, setSearchParams],
   )
 
   const handleTimeFilterChange = useCallback(
@@ -255,11 +249,10 @@ export function useExploreSubnavParams<TSort extends string, TTime extends strin
         timeFilter,
         options.timeValues,
         options.defaultTime,
-        options.timeAliases,
       )
       setExploreSearchParam(searchParams, setSearchParams, 'time', normalizedTime)
     },
-    [options.defaultTime, options.timeAliases, options.timeValues, searchParams, setSearchParams],
+    [options.defaultTime, options.timeValues, searchParams, setSearchParams],
   )
 
   const handleSearchChange = useCallback(

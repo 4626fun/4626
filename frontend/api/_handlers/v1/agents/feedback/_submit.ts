@@ -24,7 +24,7 @@ import { encodeFunctionData, keccak256, toHex, type Hex } from 'viem'
 
 import {
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   guardAgentApiRequest,
@@ -57,6 +57,44 @@ type SubmitRequest = {
 }
 
 const ZERO_BYTES32 = '0x0000000000000000000000000000000000000000000000000000000000000000' as Hex
+const MAX_TAG_LENGTH = 64
+const MAX_ENDPOINT_LENGTH = 320
+const MAX_URI_LENGTH = 500
+
+function asObjectBody(input: unknown): SubmitRequest {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
+  return input as SubmitRequest
+}
+
+function parseNonNegativeBigInt(value: unknown, field: string, opts: { allowZero?: boolean } = {}): bigint {
+  const raw = String(value ?? '').trim()
+  if (!/^\d+$/.test(raw)) throw new Error(`${field} must be a non-negative integer`)
+  const parsed = BigInt(raw)
+  if (!opts.allowZero && parsed <= 0n) throw new Error(`${field} must be > 0`)
+  return parsed
+}
+
+function parseValueDecimals(value: unknown): number {
+  const raw = String(value ?? '').trim()
+  if (!/^\d+$/.test(raw)) throw new Error('valueDecimals must be 0-18')
+  const parsed = Number(raw)
+  if (!Number.isInteger(parsed) || parsed < 0 || parsed > 18) throw new Error('valueDecimals must be 0-18')
+  return parsed
+}
+
+function boundedString(value: unknown, field: string, maxLength: number): string {
+  const out = typeof value === 'string' ? value.trim() : ''
+  if (out.length > maxLength) throw new Error(`${field} exceeds max length ${maxLength}`)
+  return out
+}
+
+function parseOptionalHash(value: unknown, field: string): Hex | null {
+  if (value == null || value === '') return null
+  if (typeof value !== 'string' || !/^0x[a-fA-F0-9]{64}$/.test(value)) {
+    throw new Error(`${field} must be a 32-byte hex string`)
+  }
+  return value as Hex
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -75,28 +113,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     RATE_LIMITS.agentFeedbackSubmit,
   )
   if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Too many requests' })
   }
 
-  const body = (await readJsonBody(req, { maxBytes: 32_768 })) ?? {}
+  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: 32_768 }))
   const action = String(body.action ?? '').trim().toLowerCase()
   const registry = getReputationRegistryAddress()
 
   try {
     if (action === 'give') {
-      const agentId = BigInt(String(body.agentId ?? ''))
-      const value = BigInt(String(body.value ?? '0'))
-      const valueDecimals = Number(body.valueDecimals ?? 0)
-      if (valueDecimals > 18) throw new Error('valueDecimals must be 0-18')
-
-      const tag1 = String(body.tag1 ?? '')
-      const tag2 = String(body.tag2 ?? '')
-      const endpoint = String(body.endpoint ?? '')
-      const feedbackURI = String(body.feedbackURI ?? '')
+      const agentId = parseNonNegativeBigInt(body.agentId, 'agentId', { allowZero: true })
+      const value = parseNonNegativeBigInt(body.value ?? '0', 'value', { allowZero: true })
+      const valueDecimals = parseValueDecimals(body.valueDecimals ?? 0)
+      const tag1 = boundedString(body.tag1, 'tag1', MAX_TAG_LENGTH)
+      const tag2 = boundedString(body.tag2, 'tag2', MAX_TAG_LENGTH)
+      const endpoint = boundedString(body.endpoint, 'endpoint', MAX_ENDPOINT_LENGTH)
+      const feedbackURI = boundedString(body.feedbackURI, 'feedbackURI', MAX_URI_LENGTH)
 
       let feedbackHash: Hex = ZERO_BYTES32
-      if (body.feedbackHash && /^0x[a-fA-F0-9]{64}$/.test(body.feedbackHash)) {
-        feedbackHash = body.feedbackHash as Hex
+      const explicitFeedbackHash = parseOptionalHash(body.feedbackHash, 'feedbackHash')
+      if (explicitFeedbackHash) {
+        feedbackHash = explicitFeedbackHash
       } else if (feedbackURI) {
         // Auto-hash the URI for integrity verification
         feedbackHash = keccak256(toHex(feedbackURI))
@@ -129,9 +167,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (action === 'revoke') {
-      const agentId = BigInt(String(body.agentId ?? ''))
-      const feedbackIndex = BigInt(String(body.feedbackIndex ?? ''))
-      if (feedbackIndex <= 0n) throw new Error('feedbackIndex must be > 0')
+      const agentId = parseNonNegativeBigInt(body.agentId, 'agentId', { allowZero: true })
+      const feedbackIndex = parseNonNegativeBigInt(body.feedbackIndex, 'feedbackIndex')
 
       const calldata = encodeFunctionData({
         abi: REPUTATION_REGISTRY_ABI,
@@ -151,17 +188,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     if (action === 'respond') {
-      const agentId = BigInt(String(body.agentId ?? ''))
-      const clientAddress = String(body.clientAddress ?? '').trim()
+      const agentId = parseNonNegativeBigInt(body.agentId, 'agentId', { allowZero: true })
+      const clientAddress = boundedString(body.clientAddress, 'clientAddress', 42)
       if (!/^0x[a-fA-F0-9]{40}$/.test(clientAddress)) throw new Error('clientAddress is required')
-      const feedbackIndex = BigInt(String(body.feedbackIndex ?? ''))
-      if (feedbackIndex <= 0n) throw new Error('feedbackIndex must be > 0')
-      const responseURI = String(body.responseURI ?? '').trim()
+      const feedbackIndex = parseNonNegativeBigInt(body.feedbackIndex, 'feedbackIndex')
+      const responseURI = boundedString(body.responseURI, 'responseURI', MAX_URI_LENGTH)
       if (!responseURI) throw new Error('responseURI is required')
 
       let responseHash: Hex = ZERO_BYTES32
-      if (body.responseHash && /^0x[a-fA-F0-9]{64}$/.test(body.responseHash)) {
-        responseHash = body.responseHash as Hex
+      const explicitResponseHash = parseOptionalHash(body.responseHash, 'responseHash')
+      if (explicitResponseHash) {
+        responseHash = explicitResponseHash
       } else {
         responseHash = keccak256(toHex(responseURI))
       }

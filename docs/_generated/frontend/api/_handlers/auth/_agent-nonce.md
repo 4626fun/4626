@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/auth/\_agent-nonce.ts:73](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/auth/_agent-nonce.ts#L73)
+Defined in: [api/\_handlers/auth/\_agent-nonce.ts:81](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/auth/_agent-nonce.ts#L81)
 
 #### Parameters
 

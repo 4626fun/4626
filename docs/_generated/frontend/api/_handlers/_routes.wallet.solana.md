@@ -10,17 +10,17 @@
 
 ### walletSolanaRouteLoaders
 
-> `const` **walletSolanaRouteLoaders**: `Record`\<`string`, () => `Promise`\<`ApiHandlerModule`\>\>
+> `const` **walletSolanaRouteLoaders**: [`ApiRouteLoaders`](_routeLoader.md#apirouteloaders)
 
-Defined in: [api/\_handlers/\_routes.wallet.solana.ts:6](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.wallet.solana.ts#L6)
+Defined in: [api/\_handlers/\_routes.wallet.solana.ts:4](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.wallet.solana.ts#L4)
 
 ## Functions
 
 ### getWalletSolanaApiHandler()
 
-> **getWalletSolanaApiHandler**(`subpath`): `Promise`\<`ApiHandler` \| `null`\>
+> **getWalletSolanaApiHandler**(`subpath`): `Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routes.wallet.solana.ts:12](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.wallet.solana.ts#L12)
+Defined in: [api/\_handlers/\_routes.wallet.solana.ts:10](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.wallet.solana.ts#L10)
 
 #### Parameters
 
@@ -30,4 +30,4 @@ Defined in: [api/\_handlers/\_routes.wallet.solana.ts:12](https://github.com/wen
 
 #### Returns
 
-`Promise`\<`ApiHandler` \| `null`\>
+`Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>

@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/lens/\_reputation-graph.ts:59](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/lens/_reputation-graph.ts#L59)
+Defined in: [api/\_handlers/lens/\_reputation-graph.ts:67](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/lens/_reputation-graph.ts#L67)
 
 #### Parameters
 

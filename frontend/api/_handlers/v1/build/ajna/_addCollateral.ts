@@ -8,7 +8,7 @@ import { encodeFunctionData, type Address } from 'viem'
 
 import {
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   guardAgentApiRequest,
   getClientIp,
   RATE_LIMITS,
@@ -19,7 +19,7 @@ import {
 
 import type { BuildTxResponse } from '../_types.js'
 import { AJNA_ERC20_POOL_ABI } from './_abi.js'
-import { assertBucketIndex, assertPositive, requireAddress, setBuildCors, toBigIntStrict } from './_shared.js'
+import { assertBucketIndex, assertPositive, requireAddress, setBuildCors, setRateLimitRetryAfter, toBigIntStrict } from './_shared.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setBuildCors(res)
@@ -33,9 +33,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     rateLimitKey('v1-build-ajna-add-collateral', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
     RATE_LIMITS.buildAjnaCalldata,
   )
-  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+  if (!limiter.allowed) {
+    setRateLimitRetryAfter(res, limiter.resetAt)
+    return res.status(429).json({ success: false, error: 'Too many requests' })
+  }
 
-  const body = (await readJsonBody(req, { maxBytes: 16_384 })) ?? ({} as any)
+  const body = (await readBoundedJsonObjectBody(req, { maxBytes: 16_384 })) ?? ({} as any)
 
   try {
     const pool = requireAddress(body.pool, 'pool')

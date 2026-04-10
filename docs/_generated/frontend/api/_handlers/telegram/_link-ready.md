@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/telegram/\_link-ready.ts:43](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/_link-ready.ts#L43)
+Defined in: [api/\_handlers/telegram/\_link-ready.ts:55](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/_link-ready.ts#L55)
 
 #### Parameters
 

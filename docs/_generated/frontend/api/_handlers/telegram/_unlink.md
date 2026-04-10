@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/telegram/\_unlink.ts:23](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/_unlink.ts#L23)
+Defined in: [api/\_handlers/telegram/\_unlink.ts:25](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/_unlink.ts#L25)
 
 #### Parameters
 

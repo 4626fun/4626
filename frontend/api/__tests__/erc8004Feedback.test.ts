@@ -100,6 +100,7 @@ describe('v1/agents/feedback/submit', () => {
     await handler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Too many requests')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 405 for GET', async () => {
@@ -149,6 +150,17 @@ describe('v1/agents/feedback/submit', () => {
     expect(res.body.data.args.feedbackHash).not.toBe(
       '0x0000000000000000000000000000000000000000000000000000000000000000',
     )
+  })
+
+  it('rejects invalid explicit feedbackHash input', async () => {
+    const req = createMockReq({
+      method: 'POST',
+      body: { action: 'give', agentId: 1, value: 4, valueDecimals: 0, feedbackURI: 'lens://abc123', feedbackHash: '0xdeadbeef' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(400)
+    expect(res.body.error).toContain('feedbackHash')
   })
 
   it('builds revokeFeedback calldata', async () => {
@@ -224,6 +236,7 @@ describe('v1/agents/feedback (read)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     guardMock.mockResolvedValue({ ok: true, ip: '127.0.0.1' })
+    checkRateLimitMock.mockReturnValue({ allowed: true, remaining: 39, resetAt: Date.now() + 60_000 })
   })
 
   it('returns 405 for POST', async () => {
@@ -252,6 +265,24 @@ describe('v1/agents/feedback (read)', () => {
     await mod.default(req, res)
     expect(res.statusCode).toBe(400)
     expect(res.body.error).toContain('agentId')
+  })
+
+  it('returns 400 for invalid mode', async () => {
+    const mod = await import('../_handlers/v1/agents/feedback/_read.ts')
+    const req = createMockReq({ method: 'GET', query: { agentId: '1', mode: 'invalid' } })
+    const res = createMockRes()
+    await mod.default(req, res)
+    expect(res.statusCode).toBe(400)
+    expect(res.body.error).toContain('mode must be one of')
+  })
+
+  it('returns 400 when client query is not a valid address', async () => {
+    const mod = await import('../_handlers/v1/agents/feedback/_read.ts')
+    const req = createMockReq({ method: 'GET', query: { agentId: '1', client: 'not-an-address' } })
+    const res = createMockRes()
+    await mod.default(req, res)
+    expect(res.statusCode).toBe(400)
+    expect(res.body.error).toContain('client must be a valid address')
   })
 })
 

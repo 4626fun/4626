@@ -103,6 +103,7 @@ describe('v1 build Charm handlers', () => {
     await setCharmVaultHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Too many requests')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 405 for non-POST requests', async () => {
@@ -293,6 +294,15 @@ describe('v1 build Charm handlers', () => {
     await setParametersHandler(badFeeReq, badFeeRes)
     expect(badFeeRes.statusCode).toBe(400)
     expect(String(badFeeRes.body?.error ?? '')).toContain('swapPoolFee must be between 0 and 1000000')
+
+    const nonObjectBodyReq = createMockReq({
+      method: 'POST',
+      body: ['strategy', STRATEGY],
+    })
+    const nonObjectBodyRes = createMockRes()
+    await setParametersHandler(nonObjectBodyReq, nonObjectBodyRes)
+    expect(nonObjectBodyRes.statusCode).toBe(400)
+    expect(String(nonObjectBodyRes.body?.error ?? '')).toContain('strategy is required')
   })
 
   it('builds no-arg strategy actions and emergency withdraw actions', async () => {

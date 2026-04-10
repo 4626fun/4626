@@ -79,6 +79,36 @@ describe('/api/rpc proxy rate-limit contract', () => {
     expect(fetchMock).toHaveBeenCalledTimes(120)
   })
 
+  it('returns 503 when in-flight concurrency limit is exceeded', async () => {
+    const restoreEnv = applyEnv({
+      RPC_PROXY_MAX_IN_FLIGHT: '10',
+    })
+    const fetchMock = vi.fn().mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      return okRpcResponse()
+    })
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
+
+    try {
+      const handler = await loadHandler()
+      const inFlight = Array.from({ length: 10 }, () => handler(createRpcReq(), createMockRes()))
+      const blockedRes = createMockRes()
+      await handler(createRpcReq(), blockedRes)
+      await Promise.all(inFlight)
+
+      expect(blockedRes.statusCode).toBe(503)
+      expect(blockedRes.body).toEqual({
+        success: false,
+        error: 'RPC proxy is busy, retry shortly',
+        code: 'rpc_proxy_busy',
+      })
+      expect(blockedRes.getHeader('retry-after')).toBe('1')
+      expect(fetchMock).toHaveBeenCalledTimes(10)
+    } finally {
+      restoreEnv()
+    }
+  })
+
   it('returns upstream 429 with upstream code and retry-after header', async () => {
     const fetchMock = vi.fn().mockImplementation(
       () =>

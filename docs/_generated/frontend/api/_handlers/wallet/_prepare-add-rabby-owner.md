@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/wallet/\_prepare-add-rabby-owner.ts:71](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/wallet/_prepare-add-rabby-owner.ts#L71)
+Defined in: [api/\_handlers/wallet/\_prepare-add-rabby-owner.ts:72](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/wallet/_prepare-add-rabby-owner.ts#L72)
 
 #### Parameters
 

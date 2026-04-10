@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/zora/link/\_status.ts:11](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/link/_status.ts#L11)
+Defined in: [api/\_handlers/zora/link/\_status.ts:12](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/link/_status.ts#L12)
 
 #### Parameters
 

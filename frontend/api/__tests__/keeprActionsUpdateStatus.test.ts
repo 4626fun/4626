@@ -11,6 +11,7 @@ const { ensureKeeprSchemaMock, getDbMock, normalizeKeeprActionStatusForWorkspace
 vi.mock('../../packages/server-core/src/index.js', () => ({
   handleOptions: () => false,
   readJsonBody: async (req: any) => req.body,
+  readBoundedJsonObjectBody: async (req: any) => (typeof req.body === 'object' && req.body !== null ? req.body : null),
   setCors: () => undefined,
   setNoStore: () => undefined,
   getDb: getDbMock,

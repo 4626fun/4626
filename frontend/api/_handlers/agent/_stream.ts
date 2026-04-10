@@ -6,6 +6,7 @@ import {
   createCorrelationId,
   logger,
   handleOptions,
+  readJsonBody,
   readSessionFromRequest,
   setCors,
   setNoStore,
@@ -19,6 +20,7 @@ import {
 
 const STREAM_MESSAGE_MAX_CHARS = 4_000
 const STREAM_CONTEXT_MAX_CHARS = 4_000
+const STREAM_BODY_MAX_BYTES = 16_384
 const STREAM_RATE_LIMIT = { windowMs: 60_000, maxRequests: 24 } as const
 const STREAM_IP_RATE_LIMIT = { windowMs: 60_000, maxRequests: 36 } as const
 
@@ -62,10 +64,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' })
   }
 
+  let postBody: Record<string, unknown> | null = null
+  if (req.method === 'POST') {
+    const contentLengthHeader = req.headers['content-length']
+    const contentLengthRaw = Array.isArray(contentLengthHeader)
+      ? contentLengthHeader[0]
+      : contentLengthHeader
+    const contentLength = Number(contentLengthRaw)
+    if (Number.isFinite(contentLength) && contentLength > STREAM_BODY_MAX_BYTES) {
+      return res.status(413).json({ success: false, error: 'Request body is too large' })
+    }
+
+    const parsed = await readJsonBody<unknown>(req, { maxBytes: STREAM_BODY_MAX_BYTES })
+    if (
+      parsed !== null &&
+      (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
+    ) {
+      return res.status(400).json({ success: false, error: 'Invalid JSON body' })
+    }
+    if (parsed !== null) {
+      postBody = parsed as Record<string, unknown>
+    } else if (
+      (typeof req.body === 'string' && req.body.trim().length > 0) ||
+      Array.isArray(req.body)
+    ) {
+      return res.status(400).json({ success: false, error: 'Invalid JSON body' })
+    }
+  }
+
   const queryMessage = firstQueryValue(req.query.message as any).trim()
   const bodyMessage =
-    req.body && typeof req.body === 'object' && typeof (req.body as any).message === 'string'
-      ? String((req.body as any).message).trim()
+    postBody && typeof postBody.message === 'string'
+      ? String(postBody.message).trim()
       : ''
   const message = bodyMessage || queryMessage
   if (!message) {
@@ -77,8 +107,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const queryContext = firstQueryValue(req.query.context as any).trim()
   const bodyContext =
-    req.body && typeof req.body === 'object' && typeof (req.body as any).context === 'string'
-      ? String((req.body as any).context).trim()
+    postBody && typeof postBody.context === 'string'
+      ? String(postBody.context).trim()
       : ''
   const vaultContextRaw = bodyContext || queryContext
   if (vaultContextRaw.length > STREAM_CONTEXT_MAX_CHARS) {
@@ -150,4 +180,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     res.end()
   }
 }
-

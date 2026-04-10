@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/agents/access-proof/\_request.ts:29](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/access-proof/_request.ts#L29)
+Defined in: [api/\_handlers/v1/agents/access-proof/\_request.ts:42](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/access-proof/_request.ts#L42)
 
 #### Parameters
 

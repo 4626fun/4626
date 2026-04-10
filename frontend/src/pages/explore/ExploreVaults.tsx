@@ -121,7 +121,6 @@ export function ExploreVaults() {
     useExploreSubnavParams({
     sortValues: VAULT_SORT_VALUES,
     defaultSort: 'volume',
-    sortAliases: { priceChange: 'fees24h' },
     timeValues: VAULT_TIME_FILTER_VALUES,
     defaultTime: '1d',
     debugScope: 'explore-vaults',

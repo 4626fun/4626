@@ -310,6 +310,22 @@ describe('portfolio /api/portfolio/me', () => {
     expect(res.body?.data?.profile?.profileFields?.avatar_lens_uri?.source).toBe('manual')
   })
 
+  it('rejects unsafe URL schemes on PATCH', async () => {
+    getDbMock.mockResolvedValue(createPortfolioDb('manual'))
+    const token = makeSessionToken({ address: '0x00000000000000000000000000000000000000bb' })
+    const req = createMockReq({
+      method: 'PATCH',
+      headers: { cookie: `cv_auth_session=${encodeURIComponent(token)}` },
+      body: { website: 'javascript:alert(1)' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body?.error).toBe('website must be an http(s) URL')
+  })
+
   it('rejects patching externally sourced Lens URI fields', async () => {
     getDbMock.mockResolvedValue(
       createPortfolioDb('manual', {

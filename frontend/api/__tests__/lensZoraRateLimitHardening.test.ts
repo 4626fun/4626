@@ -39,6 +39,7 @@ describe('lens/zora endpoint rate-limit hardening', () => {
     await lensAgentRegistrationHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 429 for GET /lens/feedback-payload when limited', async () => {
@@ -47,6 +48,7 @@ describe('lens/zora endpoint rate-limit hardening', () => {
     await lensFeedbackPayloadHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 429 for POST /lens/reputation-graph when limited', async () => {
@@ -55,6 +57,7 @@ describe('lens/zora endpoint rate-limit hardening', () => {
     await lensReputationGraphHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 429 for /zora/refresh when limited', async () => {

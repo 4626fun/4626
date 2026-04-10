@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/auth/\_nonce.ts:37](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/auth/_nonce.ts#L37)
+Defined in: [api/\_handlers/auth/\_nonce.ts:38](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/auth/_nonce.ts#L38)
 
 #### Parameters
 

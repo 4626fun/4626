@@ -2,48 +2,69 @@ import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
 import { AccountSetupWorkspaceView } from '@/features/accountSetup/AccountSetupWorkspaceView'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
+import { WalletProviders } from '@/web3/Web3Providers'
 
-export function WaitlistSetupWorkspace(props: {
+type WaitlistSetupWorkspaceProps = {
   initialAccount: AccountSetupMe
   canEnterApp: boolean
   completionBusy: boolean
   onEnterApp: () => void | Promise<void>
   onOpenAccounts: () => void | Promise<void>
-}) {
-  const { initialAccount, canEnterApp, completionBusy, onEnterApp, onOpenAccounts } = props
+}
+
+export function WaitlistSetupWorkspace(props: WaitlistSetupWorkspaceProps) {
+  return (
+    <WalletProviders>
+      <WaitlistSetupWorkspaceContent {...props} />
+    </WalletProviders>
+  )
+}
+
+function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
+  const { initialAccount, canEnterApp, completionBusy, onEnterApp } = props
   const controller = useAccountSetupController({
     initialData: { me: initialAccount, zoraStatus: null },
     zoraReturnPath: '/waitlist',
   })
+  const signingStepComplete = /4626 signing is enabled|already enabled/i.test(controller.notice ?? '')
+  const setupComplete =
+    controller.zoraLinked && Boolean(controller.canonicalCswAddress) && signingStepComplete
+  const canEnterNow = canEnterApp && setupComplete
 
   return (
     <AccountSetupWorkspaceView
       context="waitlist"
       controller={controller}
       summaryActions={
-        <>
-          {canEnterApp ? (
-            <button
-              type="button"
-              onClick={() => void onEnterApp()}
-              disabled={completionBusy}
-              className="btn-accent btn-no-icon inline-flex disabled:opacity-60"
-            >
-              {completionBusy ? 'Entering App...' : `${SHARE_SYMBOL_PREFIX} Enter App`}
-            </button>
-          ) : (
-            <div className="text-xs text-zinc-500">
-              App access is still pending. Keep setup on this page while approval catches up.
-            </div>
-          )}
+        <div className="w-full">
           <button
             type="button"
-            onClick={() => void onOpenAccounts()}
-            className="rounded-lg border border-white/15 px-3 py-2 text-xs text-zinc-300 hover:border-white/30"
+            onClick={() => void onEnterApp()}
+            disabled={completionBusy || !canEnterNow}
+            className="btn-accent btn-no-icon inline-flex w-full items-center justify-center sm:w-auto disabled:opacity-50 disabled:grayscale"
+            aria-disabled={completionBusy || !canEnterNow}
+            aria-describedby={!canEnterNow ? 'waitlist-enter-app-hint' : undefined}
           >
-            Advanced account settings
+            {completionBusy ? 'Entering App...' : `${SHARE_SYMBOL_PREFIX} Enter App`}
           </button>
-        </>
+          {!canEnterNow ? (
+            <div
+              id="waitlist-enter-app-hint"
+              role="status"
+              aria-live="polite"
+              className="mt-3 rounded-xl bg-brand-primary/10 px-3 py-3 ring-1 ring-brand-primary/25"
+            >
+              <p className="text-[11px] uppercase tracking-[0.15em] text-brand-200">
+                {canEnterApp ? 'Finish setup first' : 'App access pending'}
+              </p>
+              <p className="mt-1 text-sm text-zinc-200">
+                {canEnterApp
+                  ? 'Complete all three setup steps above to unlock Enter App.'
+                  : 'Your setup is saved. Stay on this page while approval catches up.'}
+              </p>
+            </div>
+          ) : null}
+        </div>
       }
     />
   )

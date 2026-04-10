@@ -22,7 +22,7 @@ App-only paths that should always run on v1.4626.fun.
 
 > **isAppOnlyPath**(`pathname`): `boolean`
 
-Defined in: [src/lib/appOnlyPaths.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/appOnlyPaths.ts#L25)
+Defined in: [src/lib/appOnlyPaths.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/appOnlyPaths.ts#L19)
 
 #### Parameters
 

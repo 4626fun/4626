@@ -98,6 +98,7 @@ describe('solana/deploy endpoint hardening', () => {
 
     expect(res.statusCode).toBe(429)
     expect(String(res.body?.error ?? '')).toContain('Too many canonical wallet updates')
+    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
   it('rate-limits solana sweep enqueue requests', async () => {
@@ -109,6 +110,7 @@ describe('solana/deploy endpoint hardening', () => {
 
     expect(res.statusCode).toBe(429)
     expect(String(res.body?.error ?? '')).toContain('Too many sweep requests')
+    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
   it('rate-limits solana sweep processor trigger', async () => {
@@ -125,6 +127,7 @@ describe('solana/deploy endpoint hardening', () => {
 
     expect(res.statusCode).toBe(429)
     expect(String(res.body?.error ?? '')).toContain('Too many processor requests')
+    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
   it('rate-limits smart-wallet owner read endpoints', async () => {

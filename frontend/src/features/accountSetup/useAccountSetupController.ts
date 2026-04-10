@@ -416,10 +416,10 @@ export function useAccountSetupController(params: {
     setNotice(null)
     connectWallet({
       walletList: [
-        'metamask',
         'coinbase_wallet',
-        'detected_ethereum_wallets',
         prefersWalletConnectQr ? 'wallet_connect_qr' : 'wallet_connect',
+        'detected_ethereum_wallets',
+        'metamask',
       ],
       walletChainType: 'ethereum-only',
       description: 'Connect one of the current owners of your Coinbase Smart Wallet on Base to approve the 4626 owner install.',

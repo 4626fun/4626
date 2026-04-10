@@ -7,6 +7,7 @@ import {
   RATE_LIMITS,
   checkRateLimit,
   rateLimitKey,
+  isAdminAddress,
 } from '../../../../../packages/server-core/src/index.js'
 
 
@@ -25,6 +26,10 @@ function setCache(res: VercelResponse, seconds: number = 60) {
 function setPrivateNoStore(res: VercelResponse) {
   res.setHeader('Cache-Control', 'private, no-store')
   res.setHeader('Vary', 'Authorization, Cookie')
+}
+
+function setRetryAfterHeader(res: VercelResponse, resetAt: number) {
+  res.setHeader('Retry-After', String(Math.max(1, Math.ceil((resetAt - Date.now()) / 1000))))
 }
 
 function clampInt(n: number, min: number, max: number): number {
@@ -65,7 +70,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     rateLimitKey('v1-agents-creators-list', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
     RATE_LIMITS.agentsRead,
   )
-  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+  if (!limiter.allowed) {
+    setRetryAfterHeader(res, limiter.resetAt)
+    return res.status(429).json({ success: false, error: 'Too many requests' })
+  }
 
   const limitRaw = typeof req.query?.limit === 'string' ? req.query.limit : ''
   const listedRaw = typeof req.query?.listed === 'string' ? req.query.listed : 'true'
@@ -74,8 +82,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const limit = clampInt(Number(limitRaw || '50'), 1, 200)
   const includeUnlistedRequested = listedRaw.toLowerCase() === 'false' || listedRaw === '0'
-  if (includeUnlistedRequested && !g.auth) {
-    return res.status(403).json({ success: false, error: 'Authentication required for unlisted creator queries' })
+  const requesterAddress =
+    typeof g.auth?.address === 'string' ? g.auth.address.toLowerCase() : ''
+  if (includeUnlistedRequested && !requesterAddress) {
+    return res
+      .status(403)
+      .json({ success: false, error: 'Authentication required for unlisted creator queries' })
+  }
+  if (includeUnlistedRequested && !isAdminAddress(requesterAddress)) {
+    return res
+      .status(403)
+      .json({ success: false, error: 'Admin scope required for unlisted creator queries' })
   }
   const listedOnly = !includeUnlistedRequested
   const cursor = parseCursor(cursorRaw)

@@ -3,7 +3,7 @@ import { encodeFunctionData, isAddress, type Address } from 'viem'
 
 import {
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   getApiContracts,
   guardAgentApiRequest,
   getClientIp,
@@ -15,7 +15,7 @@ import {
 
 
 import type { BuildTxResponse } from '../_types.js'
-import { BASE_CHAIN_ID, assertUint256, setBuildCors, toBigIntStrict } from '../_phase1Shared.js'
+import { BASE_CHAIN_ID, assertUint256, setBuildCors, setRateLimitRetryAfter, toBigIntStrict } from '../_phase1Shared.js'
 
 type Body = {
   vaults: Address[]
@@ -41,7 +41,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     rateLimitKey('v1-build-gauge-vote', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
     RATE_LIMITS.buildGaugeVote,
   )
-  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+  if (!limiter.allowed) {
+    setRateLimitRetryAfter(res, limiter.resetAt)
+    return res.status(429).json({ success: false, error: 'Too many requests' })
+  }
 
   const gauge = getApiContracts().vaultGaugeVoting
   if (!gauge) {
@@ -49,7 +52,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const body = (await readJsonBody(req, { maxBytes: 16_384 })) ?? ({} as Body)
+    const body = (await readBoundedJsonObjectBody(req, { maxBytes: 16_384 })) ?? ({} as Body)
     const vaultsIn = Array.isArray(body.vaults) ? body.vaults : []
     const weightsIn = Array.isArray(body.weights) ? body.weights : []
 

@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import {
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   readRequestPrincipal,
@@ -43,7 +43,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Authentication required' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody(req, { maxBytes: 16_384 })) ?? {}
+  const body = (await readBoundedJsonObjectBody(req, { maxBytes: 16_384 })) ?? {}
   const storeOnGrove = body.storeOnGrove !== false
 
   try {

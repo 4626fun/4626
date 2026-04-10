@@ -10,17 +10,17 @@
 
 ### imageRouteLoaders
 
-> `const` **imageRouteLoaders**: `Record`\<`string`, () => `Promise`\<`ApiHandlerModule`\>\>
+> `const` **imageRouteLoaders**: [`ApiRouteLoaders`](_routeLoader.md#apirouteloaders)
 
-Defined in: [api/\_handlers/\_routes.image.ts:6](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.image.ts#L6)
+Defined in: [api/\_handlers/\_routes.image.ts:4](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.image.ts#L4)
 
 ## Functions
 
 ### getImageApiHandler()
 
-> **getImageApiHandler**(`subpath`): `Promise`\<`ApiHandler` \| `null`\>
+> **getImageApiHandler**(`subpath`): `Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routes.image.ts:20](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.image.ts#L20)
+Defined in: [api/\_handlers/\_routes.image.ts:18](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.image.ts#L18)
 
 #### Parameters
 
@@ -30,4 +30,4 @@ Defined in: [api/\_handlers/\_routes.image.ts:20](https://github.com/wenakita/46
 
 #### Returns
 
-`Promise`\<`ApiHandler` \| `null`\>
+`Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>

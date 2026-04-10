@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/onboarding/\_bootstrap.ts:53](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/onboarding/_bootstrap.ts#L53)
+Defined in: [api/\_handlers/onboarding/\_bootstrap.ts:57](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/onboarding/_bootstrap.ts#L57)
 
 #### Parameters
 

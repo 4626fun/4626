@@ -20,6 +20,11 @@ type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 const MAX_CHAIN_IDS = 5
 const SUPPORTED_CHAIN_IDS = new Set<number>([1, 10, 137, 8453, 42161])
 
+function setRetryAfterHeader(res: VercelResponse, resetAt: number) {
+  const retryAfterSeconds = Math.max(1, Math.ceil((resetAt - Date.now()) / 1000))
+  res.setHeader('Retry-After', String(retryAfterSeconds))
+}
+
 function buildWalletIntelligenceDiscovery() {
   return {
     endpoint: '/api/v1/agents/wallet-intelligence',
@@ -110,6 +115,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     RATE_LIMITS.agentsRead,
   )
   if (!limiter.allowed) {
+    setRetryAfterHeader(res, limiter.resetAt)
     return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
   }
 

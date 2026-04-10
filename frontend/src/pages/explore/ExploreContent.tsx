@@ -39,7 +39,6 @@ export function ExploreContent() {
     useExploreSubnavParams({
     sortValues: CONTENT_SORT_VALUES,
     defaultSort: 'volume',
-    sortAliases: { fees24h: 'priceChange' },
     timeValues: CONTENT_TIME_FILTER_VALUES,
     defaultTime: '1d',
     debugScope: 'explore-content',

@@ -97,6 +97,9 @@ jobs:
       - name: Guard mutating API body-size caps
         run: pnpm --dir frontend guard:api-readjsonbody-maxbytes
 
+      - name: Guard non-v1 429 retry headers and req.body fallback bypasses
+        run: pnpm --dir frontend guard:api-nonv1-hardening
+
       - name: Guard new test file placement
         run: pnpm --dir frontend guard:test-file-placement
 

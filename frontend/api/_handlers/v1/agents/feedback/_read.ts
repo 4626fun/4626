@@ -49,6 +49,25 @@ function setCache(res: VercelResponse, seconds: number = 30) {
   res.setHeader('Cache-Control', `public, s-maxage=${seconds}, stale-while-revalidate=${seconds * 5}`)
 }
 
+const ALLOWED_MODES = new Set(['summary', 'all', 'single', 'indexed'])
+const MAX_TAG_LENGTH = 64
+
+function normalizePositiveInt(value: unknown, fallback: number, opts: { min: number; max: number }): number {
+  const raw = String(value ?? '').trim()
+  if (!raw) return fallback
+  if (!/^\d+$/.test(raw)) return fallback
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || !Number.isInteger(parsed)) return fallback
+  if (parsed < opts.min) return opts.min
+  if (parsed > opts.max) return opts.max
+  return parsed
+}
+
+function boundedQueryString(value: unknown, maxLength: number): string {
+  const out = String(value ?? '').trim()
+  return out.length > maxLength ? out.slice(0, maxLength) : out
+}
+
 function buildFeedbackDiscovery() {
   return {
     endpoint: '/api/v1/agents/feedback',
@@ -104,7 +123,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     rateLimitKey('v1-agents-feedback-read', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
     RATE_LIMITS.agentsRead,
   )
-  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Too many requests' })
+  }
 
   if (!/^\d+$/.test(agentIdRaw)) {
     return res.status(400).json({
@@ -114,12 +136,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   const agentId = BigInt(agentIdRaw)
 
-  const mode = String(req.query.mode ?? 'summary').trim().toLowerCase()
-  const tag1 = String(req.query.tag1 ?? '').trim()
-  const tag2 = String(req.query.tag2 ?? '').trim()
+  const mode = boundedQueryString(req.query.mode ?? 'summary', 16).toLowerCase()
+  if (!ALLOWED_MODES.has(mode)) {
+    return res.status(400).json({ success: false, error: 'mode must be one of summary|all|single|indexed' })
+  }
+  const tag1 = boundedQueryString(req.query.tag1, MAX_TAG_LENGTH)
+  const tag2 = boundedQueryString(req.query.tag2, MAX_TAG_LENGTH)
   const includeRevoked = String(req.query.includeRevoked ?? '').trim() === 'true'
 
   const clientRaw = String(req.query.client ?? '').trim()
+  if (clientRaw && !isAddress(clientRaw)) {
+    return res.status(400).json({ success: false, error: 'client must be a valid address' })
+  }
   const clientAddress = clientRaw && isAddress(clientRaw) ? getAddress(clientRaw) : null
 
   const registry = getReputationRegistryAddress()
@@ -128,8 +156,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     // ── Indexed mode: query Supabase instead of on-chain ──
     if (mode === 'indexed') {
-      const limit = Math.min(Number(req.query.limit ?? 50), 200)
-      const offset = Number(req.query.offset ?? 0)
+      const limit = normalizePositiveInt(req.query.limit, 50, { min: 1, max: 200 })
+      const offset = normalizePositiveInt(req.query.offset, 0, { min: 0, max: 10_000 })
       const orderBy = String(req.query.orderBy ?? 'created_at') as 'created_at' | 'value'
       const order = String(req.query.order ?? 'desc') as 'asc' | 'desc'
 

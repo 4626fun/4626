@@ -24,6 +24,12 @@ function setCache(res: VercelResponse, seconds: number = 60) {
   res.setHeader('Cache-Control', `public, s-maxage=${seconds}, stale-while-revalidate=${seconds * 2}`)
 }
 
+const RPC_RATE_LIMIT_RETRY_AFTER_SECONDS = 5
+
+function setRpcRateLimitHeaders(res: VercelResponse, retryAfterSeconds: number = RPC_RATE_LIMIT_RETRY_AFTER_SECONDS) {
+  res.setHeader('Retry-After', String(Math.max(1, Math.floor(retryAfterSeconds))))
+}
+
 function getReadRpcUrl(): string {
   const read = process.env.BASE_READ_RPC_URL
   if (read && read.length > 0) return read
@@ -298,6 +304,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       { address: vaultAddress, abi: erc20Abi, functionName: 'symbol' },
     ])
     if (any429(vaultBasics)) {
+      setRpcRateLimitHeaders(res)
       return res.status(429).json({ success: false, error: 'Rate limited by RPC' })
     }
 
@@ -342,6 +349,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         { address: gaugeAddress, abi: GAUGE_VIEW_ABI, functionName: 'protocolTreasury' },
       ])
       if (any429(gaugeRes)) {
+        setRpcRateLimitHeaders(res)
         return res.status(429).json({ success: false, error: 'Rate limited by RPC' })
       }
       shareOFTAddress = pickResult<`0x${string}`>(gaugeRes[0])
@@ -378,6 +386,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const shareRes = await safeMulticall(client, shareCalls)
       if (any429(shareRes)) {
+        setRpcRateLimitHeaders(res)
         return res.status(429).json({ success: false, error: 'Rate limited by RPC' })
       }
       shareOwner = pickResult<`0x${string}`>(shareRes[0])
@@ -401,6 +410,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         { address: wrapperAddress, abi: WRAPPER_VIEW_ABI, functionName: 'shareOFT' },
       ])
       if (any429(wrapRes)) {
+        setRpcRateLimitHeaders(res)
         return res.status(429).json({ success: false, error: 'Rate limited by RPC' })
       }
       wrapperOwner = pickResult<`0x${string}`>(wrapRes[0])
@@ -422,6 +432,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     extraCalls.push({ address: vaultAddress, abi: VAULT_VIEW_ABI, functionName: 'getStrategies' })
     const extraRes = await safeMulticall(client, extraCalls)
     if (any429(extraRes)) {
+      setRpcRateLimitHeaders(res)
       return res.status(429).json({ success: false, error: 'Rate limited by RPC' })
     }
     if (addrOk(wrapperAddress)) {
@@ -1015,6 +1026,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   } catch (e: any) {
     const msg = errorToMessage(e)
     const status = isRateLimitError(msg) ? 429 : 500
+    if (status === 429) setRpcRateLimitHeaders(res)
     return res.status(status).json({ success: false, error: msg || 'Failed to build vault report' })
   }
 }

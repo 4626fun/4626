@@ -8,6 +8,7 @@ import { createMockReq, createMockRes } from './helpers'
 const mocks = vi.hoisted(() => ({
   handleOptions: vi.fn(() => false),
   readJsonBody: vi.fn(async (req: any) => req.body ?? null),
+  readBoundedJsonObjectBody: vi.fn(async (req: any) => req.body ?? null),
   checkRateLimit: vi.fn(() => ({ allowed: true, remaining: 59, resetAt: Date.now() + 60_000 })),
   getClientIp: vi.fn(() => '127.0.0.1'),
   rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
@@ -51,6 +52,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('../../server/auth/_shared.js', () => ({
   handleOptions: mocks.handleOptions,
   readJsonBody: mocks.readJsonBody,
+  readBoundedJsonObjectBody: mocks.readBoundedJsonObjectBody,
   setCors: vi.fn(),
   setNoStore: vi.fn(),
 }))
@@ -81,6 +83,7 @@ describe('CRE runtime bridge handlers', () => {
     vi.clearAllMocks()
     mocks.handleOptions.mockReturnValue(false)
     mocks.readJsonBody.mockImplementation(async (req: any) => req.body ?? null)
+    mocks.readBoundedJsonObjectBody.mockImplementation(async (req: any) => req.body ?? null)
     mocks.checkRateLimit.mockReturnValue({ allowed: true, remaining: 59, resetAt: Date.now() + 60_000 })
     mocks.authenticateRuntimeRequest.mockResolvedValue({ ok: true, correlationId: 'corr-test' })
   })

@@ -4,7 +4,6 @@ import { getPrivyAppId, getPrivyClientId, isPrivyClientEnabled } from '@/lib/fla
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth'
 import { base } from 'viem/chains'
 import { createPrivyAppearance } from './clientAppearance'
-import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 
 type PrivyClientStatus = 'disabled' | 'loading' | 'ready'
 export const ZORA_PRIVY_APP_ID = 'clpgf04wn04hnkw0fv1m11mnb'
@@ -81,7 +80,6 @@ export function PrivyClientProvider(props: {
   const appId = enabled ? getPrivyAppId() : null
   const clientId = enabled ? getPrivyClientId() : null
   const hasRuntimeConfig = Boolean(enabled && appId)
-  const providerCollision = detectEthereumProviderCollision()
   const [runtimeStatus, setRuntimeStatus] = useState<PrivyClientStatus>('loading')
   const handleRuntimeStatus = useCallback((next: PrivyClientStatus) => {
     setRuntimeStatus((prev) => (prev === next ? prev : next))
@@ -103,16 +101,16 @@ export function PrivyClientProvider(props: {
   const externalWallets = useMemo(
     () => ({
       // Some extension stacks expose a getter-only `window.ethereum`, and EIP-6963
-      // provider discovery can trigger extension-side assignment crashes on waitlist/email-only
-      // surfaces. Keep those quiet there, but allow external wallet flows on app/account surfaces.
-      ...(mode === 'waitlist-email-only' ? { disableAllExternalWallets: true as const } : null),
+      // provider discovery can trigger extension-side assignment crashes. Keep waitlist
+      // auth email-first, but do not disable connectors entirely because Step 3 owner
+      // install requires external wallet connection on this page.
       walletConnect: { enabled: true },
       crossApp: {
         providerAppIds: [ZORA_PRIVY_APP_ID],
       },
       solana: { connectors: solanaConnectors },
     }),
-    [mode, solanaConnectors],
+    [solanaConnectors],
   )
 
   if (!hasRuntimeConfig || !appId) {
@@ -121,7 +119,8 @@ export function PrivyClientProvider(props: {
 
   const appearance = createPrivyAppearance({
     showWalletLoginFirst,
-    walletCollisionDetected: mode === 'waitlist-email-only' || providerCollision.shouldDisableInjectedConnector,
+    // Waitlist stays email-first and should avoid wallet enumeration side-effects.
+    walletCollisionDetected: mode === 'waitlist-email-only',
   })
   // Keep generic web login methods aligned with the canonical account model:
   // verified email first, wallet-native Base second. Zora uses cross-app auth.

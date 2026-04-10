@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/\_agents.ts:92](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_agents.ts#L92)
+Defined in: [api/\_handlers/\_agents.ts:98](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_agents.ts#L98)
 
 GET /api/agents
 

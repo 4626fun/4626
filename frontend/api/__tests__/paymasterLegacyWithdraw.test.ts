@@ -11,6 +11,8 @@ const sessionAddress = getAddress('0x1111111111111111111111111111111111111111')
 const sender = getAddress('0x3333333333333333333333333333333333333333')
 const creatorToken = getAddress('0x4444444444444444444444444444444444444444')
 const legacyVault = getAddress('0x5555555555555555555555555555555555555555')
+const legacyWrapper = getAddress('0x6666666666666666666666666666666666666666')
+const legacyShareOFT = getAddress('0x7777777777777777777777777777777777777777')
 
 const creatorVaultBatcher = getAddress('0xB87CBb646dD14F520078F11196f79BF815F18c84')
 const vaultActivationBatcher = getAddress('0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB')
@@ -186,6 +188,35 @@ describe('paymaster legacy withdraw provenance', () => {
     }
   }
 
+  function buildLegacyUnwrapUserOp() {
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const legacyUnwrapCallData = '0xde0e9a3e' as `0x${string}`
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'execute',
+      args: [legacyWrapper, 0n, legacyUnwrapCallData],
+    })
+
+    return {
+      sender,
+      callData,
+      initCode: '0x',
+    }
+  }
+
   it('allows legacy withdraw flow when vault provenance matches a Phase1Deployed event', async () => {
     const body = {
       jsonrpc: '2.0',
@@ -234,6 +265,94 @@ describe('paymaster legacy withdraw provenance', () => {
     const errMsg = String(responseBody?.error?.message ?? '')
     expect(errMsg).toMatch(/request denied/i)
     expect(errMsg).toMatch(/legacy_vault_provenance_mismatch/i)
+    expect((globalThis.fetch as any).mock.calls.length).toBe(0)
+  })
+
+  it('denies legacy unwrap flow when wrapper creator token mismatches vault asset', async () => {
+    const wrongCreatorToken = getAddress('0x8888888888888888888888888888888888888888')
+    mockReadContract.mockImplementation((opts: { address?: Address; functionName?: string }) => {
+      if (opts.functionName === 'isOwnerAddress') return Promise.resolve(true)
+      if (opts.functionName === 'entryPoint') return Promise.resolve(ENTRYPOINT_V06)
+      if (opts.functionName === 'implementation') return Promise.resolve(CSW_IMPLEMENTATION)
+      if (opts.functionName === 'asset') return Promise.resolve(creatorToken)
+      if (opts.functionName === 'store') return Promise.resolve(bytecodeStore)
+      if (opts.address === legacyWrapper && opts.functionName === 'vault') return Promise.resolve(legacyVault)
+      if (opts.address === legacyWrapper && opts.functionName === 'shareOFT') return Promise.resolve(legacyShareOFT)
+      if (opts.address === legacyWrapper && opts.functionName === 'creatorCoin') return Promise.resolve(wrongCreatorToken)
+      if (opts.address === legacyWrapper && opts.functionName === 'owner') return Promise.resolve(creatorVaultBatcher)
+      if (opts.address === legacyShareOFT && opts.functionName === 'vault') return Promise.resolve(legacyVault)
+      if (opts.address === legacyShareOFT && opts.functionName === 'owner') return Promise.resolve(creatorVaultBatcher)
+      return Promise.resolve(null)
+    })
+    mockGetLogs.mockResolvedValue([
+      { args: { vault: legacyVault, wrapper: legacyWrapper, shareOFT: legacyShareOFT } },
+    ])
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [buildLegacyUnwrapUserOp(), ENTRYPOINT_V06, 8453],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    expect(res.statusCode).toBe(200)
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).toMatch(/request denied/i)
+    expect(errMsg).toMatch(/legacy_wrapper_creator_token_mismatch/i)
+    expect((globalThis.fetch as any).mock.calls.length).toBe(0)
+  })
+
+  it('denies legacy unwrap flow when share OFT owner is not the batcher', async () => {
+    const unexpectedOwner = getAddress('0x9999999999999999999999999999999999999999')
+    mockReadContract.mockImplementation((opts: { address?: Address; functionName?: string }) => {
+      if (opts.functionName === 'isOwnerAddress') return Promise.resolve(true)
+      if (opts.functionName === 'entryPoint') return Promise.resolve(ENTRYPOINT_V06)
+      if (opts.functionName === 'implementation') return Promise.resolve(CSW_IMPLEMENTATION)
+      if (opts.functionName === 'asset') return Promise.resolve(creatorToken)
+      if (opts.functionName === 'store') return Promise.resolve(bytecodeStore)
+      if (opts.address === legacyWrapper && opts.functionName === 'vault') return Promise.resolve(legacyVault)
+      if (opts.address === legacyWrapper && opts.functionName === 'shareOFT') return Promise.resolve(legacyShareOFT)
+      if (opts.address === legacyWrapper && opts.functionName === 'creatorCoin') return Promise.resolve(creatorToken)
+      if (opts.address === legacyWrapper && opts.functionName === 'owner') return Promise.resolve(creatorVaultBatcher)
+      if (opts.address === legacyShareOFT && opts.functionName === 'vault') return Promise.resolve(legacyVault)
+      if (opts.address === legacyShareOFT && opts.functionName === 'owner') return Promise.resolve(unexpectedOwner)
+      return Promise.resolve(null)
+    })
+    mockGetLogs.mockResolvedValue([
+      { args: { vault: legacyVault, wrapper: legacyWrapper, shareOFT: legacyShareOFT } },
+    ])
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [buildLegacyUnwrapUserOp(), ENTRYPOINT_V06, 8453],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    expect(res.statusCode).toBe(200)
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).toMatch(/request denied/i)
+    expect(errMsg).toMatch(/legacy_shareoft_owner_mismatch/i)
     expect((globalThis.fetch as any).mock.calls.length).toBe(0)
   })
 })

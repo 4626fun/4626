@@ -6,6 +6,7 @@ import { createMockReq, createMockRes } from './helpers'
 const {
   handleOptionsMock,
   readJsonBodyMock,
+  readBoundedJsonObjectBodyMock,
   setCorsMock,
   setNoStoreMock,
   checkSharesEligibilityMock,
@@ -18,6 +19,7 @@ const {
 } = vi.hoisted(() => ({
   handleOptionsMock: vi.fn(() => false),
   readJsonBodyMock: vi.fn(async (req: any) => req.body),
+  readBoundedJsonObjectBodyMock: vi.fn(async (req: any) => req.body),
   setCorsMock: vi.fn(),
   setNoStoreMock: vi.fn(),
   checkSharesEligibilityMock: vi.fn(),
@@ -32,6 +34,7 @@ const {
 vi.mock('../../packages/server-core/src/index.js', () => ({
   handleOptions: handleOptionsMock,
   readJsonBody: readJsonBodyMock,
+  readBoundedJsonObjectBody: readBoundedJsonObjectBodyMock,
   setCors: setCorsMock,
   setNoStore: setNoStoreMock,
   getDb: vi.fn(async () => null),

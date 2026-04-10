@@ -10,6 +10,9 @@ const {
   setCorsMock,
   setNoStoreMock,
   guardAgentApiRequestMock,
+  checkRateLimitMock,
+  getClientIpMock,
+  rateLimitKeyMock,
   verifyAgentRoomAccessTokenMock,
 } = vi.hoisted(() => ({
   handleOptionsMock: vi.fn(() => false),
@@ -17,6 +20,9 @@ const {
   setCorsMock: vi.fn(),
   setNoStoreMock: vi.fn(),
   guardAgentApiRequestMock: vi.fn(async () => ({ ok: true, ip: '127.0.0.1', auth: null })),
+  checkRateLimitMock: vi.fn(() => ({ allowed: true, remaining: 39, resetAt: Date.now() + 60_000 })),
+  getClientIpMock: vi.fn(() => '127.0.0.1'),
+  rateLimitKeyMock: vi.fn((...parts: string[]) => parts.join(':')),
   verifyAgentRoomAccessTokenMock: vi.fn(),
 }))
 
@@ -31,6 +37,15 @@ vi.mock('../../server/_lib/agentApiGuard.js', () => ({
   guardAgentApiRequest: guardAgentApiRequestMock,
 }))
 
+vi.mock('../../server/_lib/rateLimit.js', () => ({
+  checkRateLimit: checkRateLimitMock,
+  getClientIp: getClientIpMock,
+  rateLimitKey: rateLimitKeyMock,
+  RATE_LIMITS: {
+    agentAccessJoin: { windowMs: 60_000, maxRequests: 40 },
+  },
+}))
+
 vi.mock('../../server/_lib/agentAccessProof.js', () => ({
   verifyAgentRoomAccessToken: verifyAgentRoomAccessTokenMock,
 }))
@@ -38,6 +53,17 @@ vi.mock('../../server/_lib/agentAccessProof.js', () => ({
 describe('agent access join handlers', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    checkRateLimitMock.mockReturnValue({ allowed: true, remaining: 39, resetAt: Date.now() + 60_000 })
+  })
+
+  it('returns 429 with retry-after when join rate limit is exceeded', async () => {
+    checkRateLimitMock.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+    const req = createMockReq({ method: 'POST' })
+    const res = createMockRes()
+    await xmtpJoinHandler(req as any, res as any)
+    expect(res.statusCode).toBe(429)
+    expect(res.body?.error).toBe('Too many requests')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns XMTP join instructions for valid xmtp tokens', async () => {

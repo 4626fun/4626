@@ -8,7 +8,7 @@ import {
   setCors,
   setNoStore,
   getDb,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   checkRateLimit,
   getClientIp,
   rateLimitKey,
@@ -44,6 +44,7 @@ type UpdateResponse = {
 
 const VALID_STATUSES = new Set(['executing', 'executed', 'failed', 'retry'])
 const MAX_ATTEMPTS = 5
+const UPDATE_STATUS_MAX_BODY_BYTES = 16_384
 
 async function syncJoinRequestStatus(params: {
   db: Awaited<ReturnType<typeof getDb>>
@@ -127,8 +128,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!requireKeeprApiKey(req, res, { missingSecretError: 'Server misconfigured' })) return
 
   try {
-    const body = (await readJsonBody<UpdateBody>(req, { maxBytes: 16_384 }).catch(() => null))
-      ?? ((typeof req.body === 'object' && req.body !== null ? req.body : {}) as Partial<UpdateBody>)
+    const body: Partial<UpdateBody> = (await readBoundedJsonObjectBody<UpdateBody>(req, {
+      maxBytes: UPDATE_STATUS_MAX_BODY_BYTES,
+    })) ?? {}
 
     const id = Number(body.id)
     if (!Number.isFinite(id) || id <= 0) {

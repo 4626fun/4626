@@ -10,17 +10,17 @@
 
 ### creRouteLoaders
 
-> `const` **creRouteLoaders**: `Record`\<`string`, () => `Promise`\<`ApiHandlerModule`\>\>
+> `const` **creRouteLoaders**: [`ApiRouteLoaders`](_routeLoader.md#apirouteloaders)
 
-Defined in: [api/\_handlers/\_routes.cre.ts:6](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.cre.ts#L6)
+Defined in: [api/\_handlers/\_routes.cre.ts:4](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.cre.ts#L4)
 
 ## Functions
 
 ### getCreApiHandler()
 
-> **getCreApiHandler**(`subpath`): `Promise`\<`ApiHandler` \| `null`\>
+> **getCreApiHandler**(`subpath`): `Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routes.cre.ts:20](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.cre.ts#L20)
+Defined in: [api/\_handlers/\_routes.cre.ts:18](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.cre.ts#L18)
 
 #### Parameters
 
@@ -30,4 +30,4 @@ Defined in: [api/\_handlers/\_routes.cre.ts:20](https://github.com/wenakita/4626
 
 #### Returns
 
-`Promise`\<`ApiHandler` \| `null`\>
+`Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>

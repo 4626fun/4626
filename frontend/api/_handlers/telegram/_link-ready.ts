@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   getDb,
@@ -16,10 +16,13 @@ import {
   verifyPrivyForAccounts,
 } from '../../../server/_lib/accountsIdentity.js'
 import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
+import { ensureTelegramTradingSchema, readTelegramMiniAppSession } from '../../../server/_lib/telegramTrading.js'
 
 type LinkReadyBody = {
   email?: string
+  sessionToken?: string
 }
+const LINK_READY_MAX_BODY_BYTES = 16_384
 
 type TelegramLinkReadyAccount = {
   privyUserId: string
@@ -41,6 +44,14 @@ function asTrimmed(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+function withCode<T>(payload: ApiEnvelope<T>, code: string) {
+  return { ...payload, code }
+}
+
+function isUnauthorizedMessage(message: string): boolean {
+  return /token|unauthorized|forbidden|privy/i.test(message)
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -59,10 +70,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<LinkReadyBody>(req, { maxBytes: 16_384 }).catch(() => null)) ?? (req.body as LinkReadyBody | null) ?? {}
+  let body: LinkReadyBody
+  try {
+    body = (await readBoundedJsonObjectBody<LinkReadyBody>(req, { maxBytes: LINK_READY_MAX_BODY_BYTES })) ?? {}
+  } catch {
+    return res.status(413).json({ success: false, error: 'Request body too large' } satisfies ApiEnvelope<never>)
+  }
   const expectedEmail = normalizeEmail(body.email)
+  const sessionToken = asTrimmed(body.sessionToken)
   if (!expectedEmail) {
     return res.status(400).json({ success: false, error: 'email is required' } satisfies ApiEnvelope<never>)
+  }
+  if (!sessionToken) {
+    return res
+      .status(400)
+      .json(withCode({ success: false, error: 'sessionToken is required' } satisfies ApiEnvelope<never>, 'INVALID_TELEGRAM_CONTEXT'))
   }
 
   const db = await getDb()
@@ -72,7 +94,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   try {
     const context = await verifyPrivyForAccounts(req)
+    await ensureTelegramTradingSchema(db as any)
     await ensureAccountsIdentitySchema(db as any)
+    const sessionResult = await readTelegramMiniAppSession({
+      db: db as any,
+      sessionToken,
+    })
+    if (!sessionResult.ok) {
+      const code = sessionResult.reason === 'expired' || sessionResult.reason === 'revoked' ? 'EXPIRED_TELEGRAM_SESSION' : 'INVALID_TELEGRAM_CONTEXT'
+      const status = sessionResult.reason === 'invalid' ? 400 : 409
+      return res.status(status).json(
+        withCode(
+          {
+            success: false,
+            error:
+              sessionResult.reason === 'expired'
+                ? 'Telegram session expired. Reopen the Mini App from Telegram and verify again.'
+                : sessionResult.reason === 'revoked'
+                  ? 'Telegram session was revoked. Reopen the Mini App from Telegram and verify again.'
+                  : 'Telegram session proof is invalid.',
+          } satisfies ApiEnvelope<never>,
+          code,
+        ),
+      )
+    }
+
     await syncEmailIdentity({
       db: db as any,
       privyUserId: context.privyUserId,
@@ -113,7 +159,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<LinkReadyResponse>)
   } catch (error: any) {
     const message = typeof error?.message === 'string' ? error.message : 'Failed to resolve Telegram link readiness'
-    const status = /token|unauthorized|forbidden|privy/i.test(message) ? 401 : 500
+    const status = isUnauthorizedMessage(message) ? 401 : 500
     return res.status(status).json({ success: false, error: message } satisfies ApiEnvelope<never>)
   }
 }

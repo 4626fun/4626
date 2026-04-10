@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/wallet/\_confirm-owner.ts:54](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/wallet/_confirm-owner.ts#L54)
+Defined in: [api/\_handlers/wallet/\_confirm-owner.ts:55](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/wallet/_confirm-owner.ts#L55)
 
 #### Parameters
 

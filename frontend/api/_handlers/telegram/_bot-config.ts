@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, readJsonBody, setCors, setNoStore } from '../../../packages/server-core/src/index.js'
+import { type ApiEnvelope, handleOptions, readBoundedJsonObjectBody, setCors, setNoStore } from '../../../packages/server-core/src/index.js'
 import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 import {
   resolveTelegramBotToken,
@@ -27,6 +27,7 @@ type BotConfigBody = {
   chatId?: string | number
   dropPendingUpdates?: boolean
 }
+const BOT_CONFIG_MAX_BODY_BYTES = 32_768
 
 function resolveMiniAppUrl(body: BotConfigBody, configured: string): string {
   const bodyUrl = normalizeTelegramMiniAppBaseUrl(body.miniAppUrl ?? '')
@@ -78,7 +79,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Unauthorized' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<BotConfigBody>(req, { maxBytes: 32_768 }).catch(() => null)) ?? (req.body as BotConfigBody | null) ?? {}
+  let body: BotConfigBody
+  try {
+    body = (await readBoundedJsonObjectBody<BotConfigBody>(req, { maxBytes: BOT_CONFIG_MAX_BODY_BYTES })) ?? {}
+  } catch {
+    return res.status(413).json({ success: false, error: 'Request body too large' } satisfies ApiEnvelope<never>)
+  }
   const config = getTelegramWebhookConfig()
   const botToken = resolveTelegramBotToken()
   if (!botToken) {

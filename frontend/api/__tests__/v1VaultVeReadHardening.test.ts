@@ -57,6 +57,7 @@ describe('v1 vault and ve4626 read hardening', () => {
     await reportMod.default(reportReq, reportRes)
     expect(reportRes.statusCode).toBe(429)
     expect(reportRes.body?.error).toBe('Too many requests')
+    expect(Number(reportRes.getHeader('retry-after'))).toBeGreaterThan(0)
 
     mocks.checkRateLimit.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
     const strategiesMod = await import('../_handlers/v1/vault/_strategies.ts')
@@ -65,6 +66,7 @@ describe('v1 vault and ve4626 read hardening', () => {
     await strategiesMod.default(strategiesReq, strategiesRes)
     expect(strategiesRes.statusCode).toBe(429)
     expect(strategiesRes.body?.error).toBe('Too many requests')
+    expect(Number(strategiesRes.getHeader('retry-after'))).toBeGreaterThan(0)
 
     mocks.checkRateLimit.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
     const veUserMod = await import('../_handlers/v1/ve4626/_user.ts')
@@ -73,5 +75,6 @@ describe('v1 vault and ve4626 read hardening', () => {
     await veUserMod.default(veUserReq, veUserRes)
     expect(veUserRes.statusCode).toBe(429)
     expect(veUserRes.body?.error).toBe('Too many requests')
+    expect(Number(veUserRes.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 })

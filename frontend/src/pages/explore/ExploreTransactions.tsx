@@ -243,7 +243,6 @@ export function ExploreTransactions() {
     useExploreSubnavParams({
       sortValues: TRANSACTIONS_SORT_VALUES,
       defaultSort: 'new',
-    sortAliases: { fees24h: 'priceChange' },
     timeValues: TRANSACTIONS_TIME_FILTER_VALUES,
     defaultTime: '1d',
     debugScope: 'explore-transactions',

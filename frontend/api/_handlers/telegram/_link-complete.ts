@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   getDb,
@@ -23,11 +23,9 @@ import {
   verifyPrivyForAccounts,
 } from '../../../server/_lib/accountsIdentity.js'
 import {
-  claimTelegramLinkStartToken,
+  claimAndConsumeTelegramLinkStartToken,
   ensureTelegramTradingSchema,
-  finalizeTelegramLinkStartTokenConsumption,
   getTelegramLinkByUserId,
-  readTelegramLinkStartTokenClaim,
   readTelegramLinkStartTokenStatus,
   readTelegramMiniAppSession,
   runTelegramMergePreflight,
@@ -39,6 +37,7 @@ type LinkCompleteBody = {
   linkToken?: string | null
   flowId?: string | null
 }
+const LINK_COMPLETE_MAX_BODY_BYTES = 16_384
 
 type LinkCompleteResponse = {
   link: NonNullable<Awaited<ReturnType<typeof upsertTelegramUserLink>>>
@@ -80,7 +79,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Database unavailable' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<LinkCompleteBody>(req, { maxBytes: 16_384 }).catch(() => null)) ?? (req.body as LinkCompleteBody | null) ?? {}
+  let body: LinkCompleteBody
+  try {
+    body = (await readBoundedJsonObjectBody<LinkCompleteBody>(req, { maxBytes: LINK_COMPLETE_MAX_BODY_BYTES })) ?? {}
+  } catch {
+    return res.status(413).json({ success: false, error: 'Request body too large' } satisfies ApiEnvelope<never>)
+  }
   const sessionToken = asTrimmed(body.sessionToken)
   const linkToken = asTrimmed(body.linkToken ?? '')
   const flowId = asTrimmed(body.flowId ?? '')
@@ -176,7 +180,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sameUserExistingLink =
       existingLink?.privyUserId?.toLowerCase() === context.privyUserId.toLowerCase()
 
-    let shouldConsumeLinkToken = false
     if (linkToken) {
       const tokenStatus = readTelegramLinkStartTokenStatus(linkToken)
       if (!tokenStatus.ok) {
@@ -245,19 +248,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .json(withCode({ success: false, error: 'Telegram launch token does not match the active Telegram chat.' } satisfies ApiEnvelope<never>, 'INVALID_TELEGRAM_CONTEXT'))
       }
 
-      const claim = await claimTelegramLinkStartToken({
+      const claim = await claimAndConsumeTelegramLinkStartToken({
         db: db as any,
         token: linkToken,
         privyUserId: context.privyUserId,
       })
       if (claim.ok) {
-        shouldConsumeLinkToken = true
         await trackTelegramLinkEvent({
           event: 'telegram_link_token_claim_result',
           source: 'telegram-link-complete',
           flowId,
           phase: 'bind_telegram.complete_backend',
-          status: 'claimed',
+          status: 'consumed',
           telegramUserId: session.telegramUserId,
           privyUserId: context.privyUserId,
           chatId: session.chatId,
@@ -266,11 +268,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           },
         })
       } else if (claim.reason === 'consumed') {
-        const claimState = await readTelegramLinkStartTokenClaim({
-          db: db as any,
-          token: linkToken,
-        })
-        if (!sameUserExistingLink || claimState?.privyUserId?.toLowerCase() !== context.privyUserId.toLowerCase() || !claimState?.consumedAt) {
+        if (
+          !sameUserExistingLink ||
+          claim.existingPrivyUserId?.toLowerCase() !== context.privyUserId.toLowerCase() ||
+          !claim.consumedAt
+        ) {
           await trackTelegramLinkEvent({
             event: 'telegram_link_token_claim_result',
             source: 'telegram-link-complete',
@@ -405,40 +407,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw new Error('telegram_link_upsert_failed')
     }
 
-    if (linkToken && shouldConsumeLinkToken) {
-      const consumeState = await finalizeTelegramLinkStartTokenConsumption({
-        db: db as any,
-        token: linkToken,
-        privyUserId: context.privyUserId,
-      })
-      if (consumeState !== 'consumed') {
-        await trackTelegramLinkEvent({
-          event: 'telegram_link_token_consume_result',
-          source: 'telegram-link-complete',
-          flowId,
-          phase: 'bind_telegram.complete_backend',
-          status: 'failed',
-          telegramUserId: session.telegramUserId,
-          privyUserId: context.privyUserId,
-          chatId: session.chatId,
-          payload: {
-            consumeState,
-          },
-        })
-        throw new Error('telegram_link_token_consume_failed')
-      }
-      await trackTelegramLinkEvent({
-        event: 'telegram_link_token_consume_result',
-        source: 'telegram-link-complete',
-        flowId,
-        phase: 'bind_telegram.complete_backend',
-        status: 'consumed',
-        telegramUserId: session.telegramUserId,
-        privyUserId: context.privyUserId,
-        chatId: session.chatId,
-      })
-    }
-
     const account = await buildAccountsMePayload({
       db: db as any,
       privyUserId: context.privyUserId,
@@ -507,12 +475,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       withCode(
         {
           success: false,
-          error:
-            message === 'telegram_link_token_consume_failed'
-              ? 'Telegram link completed, but the single-use link token could not be finalized.'
-              : message,
+          error: message,
         } satisfies ApiEnvelope<never>,
-        message === 'telegram_link_token_consume_failed' ? 'BIND_TELEGRAM_FAILED' : 'UNKNOWN',
+        'UNKNOWN',
       ),
     )
   }

@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/admin/waitlist/\_delete.ts:32](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/waitlist/_delete.ts#L32)
+Defined in: [api/\_handlers/admin/waitlist/\_delete.ts:42](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/waitlist/_delete.ts#L42)
 
 DELETE a waitlist profile by id.
 

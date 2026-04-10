@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   requireKeeprApiKey,
   requireOptionalHeaderEnvAuth,
   setCors,
@@ -43,6 +43,8 @@ type EnqueueResponse = {
   trustZone: string
 }
 
+const KEEPR_ENQUEUE_BODY_MAX_BYTES = 65_536
+
 const AJNA_AUTOMATION_SCOPE = 'ajna_min_bucket_only'
 const AJNA_ACTION_TYPES = new Set([
   'strategy.ajna.rebucket',
@@ -52,6 +54,11 @@ const AJNA_ACTION_TYPES = new Set([
 
 function isAddressLike(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
+}
+
+function asObjectBody(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
+  return input as Record<string, unknown>
 }
 
 function isAjnaRebucketAction(actionType: string | null): boolean {
@@ -95,7 +102,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!requireKeeprApiKey(req, res, { missingSecretError: 'Server misconfigured' })) return
 
-  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
+  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: KEEPR_ENQUEUE_BODY_MAX_BYTES })) as EnqueueBody
   const vaultAddressRaw = typeof body.vaultAddress === 'string' ? body.vaultAddress.trim().toLowerCase() : ''
   const groupId = typeof body.groupId === 'string' ? body.groupId.trim() : ''
   const actionType = typeof body.actionType === 'string' ? body.actionType.trim() : null

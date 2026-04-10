@@ -21,7 +21,7 @@ import { keccak256, toHex } from 'viem'
 
 import {
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   readRequestPrincipal,
@@ -39,6 +39,13 @@ type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
 type FeedbackPayloadRequest = Partial<FeedbackPayload> & {
   store?: boolean
+}
+
+const FEEDBACK_PAYLOAD_BODY_MAX_BYTES = 65_536
+
+function asObjectBody(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
+  return input as Record<string, unknown>
 }
 
 function buildFeedbackPayloadDiscovery() {
@@ -107,7 +114,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
+  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: FEEDBACK_PAYLOAD_BODY_MAX_BYTES })) as FeedbackPayloadRequest
 
   // Validate required fields
   const agentId = Number(body.agentId ?? -1)

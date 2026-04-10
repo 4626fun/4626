@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/image/\_associate-vault.ts:21](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_associate-vault.ts#L21)
+Defined in: [api/\_handlers/image/\_associate-vault.ts:22](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_associate-vault.ts#L22)
 
 #### Parameters
 

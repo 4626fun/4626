@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/agents/telegram/\_join.ts:23](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/telegram/_join.ts#L23)
+Defined in: [api/\_handlers/v1/agents/telegram/\_join.ts:36](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/telegram/_join.ts#L36)
 
 #### Parameters
 

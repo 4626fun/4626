@@ -98,10 +98,22 @@ describe('v1/agents/access-proof/request', () => {
 
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Too many requests')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('rejects malformed request body payloads', async () => {
     readJsonBodyMock.mockResolvedValueOnce({ bad: true })
+
+    const req = createMockReq({ method: 'POST' })
+    const res = createMockRes()
+    await handler(req as any, res as any)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body?.success).toBe(false)
+  })
+
+  it('rejects non-object request body payloads', async () => {
+    readJsonBodyMock.mockResolvedValueOnce(['bad'])
 
     const req = createMockReq({ method: 'POST' })
     const res = createMockRes()

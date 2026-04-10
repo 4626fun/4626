@@ -78,8 +78,14 @@ const RPC_RATE_LIMIT_MAX_REQUESTS = clampInteger(
 const RPC_RATE_LIMIT_MAX_REQUESTS_PER_IP = clampInteger(
   process.env.RPC_PROXY_RATE_LIMIT_MAX_REQUESTS_PER_IP,
   process.env.NODE_ENV === 'development' ? 360 : 180,
- 60,
- 5_000,
+  60,
+  5_000,
+)
+const RPC_MAX_IN_FLIGHT = clampInteger(
+  process.env.RPC_PROXY_MAX_IN_FLIGHT,
+  process.env.NODE_ENV === 'development' ? 160 : 100,
+  10,
+  2_000,
 )
 const RPC_TELEMETRY_ENABLED = !['0', 'false', 'no', 'off'].includes(
   String(process.env.RPC_PROXY_TELEMETRY ?? '1').trim().toLowerCase(),
@@ -107,6 +113,7 @@ type RpcRequestOutcome =
   | 'ok'
   | 'method_not_allowed'
   | 'unauthenticated'
+  | 'local_concurrency_limited'
   | 'local_rate_limited'
   | 'invalid_body'
   | 'missing_method'
@@ -528,6 +535,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
+    if (telemetry.inFlightAtStart > RPC_MAX_IN_FLIGHT) {
+      logger.warn('[rpc-proxy][local-guard] in-flight concurrency limit exceeded', {
+        inFlight: telemetry.inFlightAtStart,
+        maxInFlight: RPC_MAX_IN_FLIGHT,
+      })
+      res.setHeader('Retry-After', '1')
+      finalizeTelemetry(503, 'local_concurrency_limited')
+      return res.status(503).json({
+        success: false,
+        error: 'RPC proxy is busy, retry shortly',
+        code: 'rpc_proxy_busy',
+      })
+    }
+
     if (req.method !== 'POST') {
       finalizeTelemetry(405, 'method_not_allowed')
       return res.status(405).json({ success: false, error: 'Method not allowed' })

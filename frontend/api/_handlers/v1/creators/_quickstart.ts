@@ -18,7 +18,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   getDb,
@@ -82,6 +82,11 @@ type QuickstartResult = {
 
 type QuickstartRequestBody = {
   enableAutomation?: boolean
+}
+
+function setRetryAfterHeader(res: VercelResponse, resetAt: number) {
+  const retryAfterSeconds = Math.max(1, Math.ceil((resetAt - Date.now()) / 1000))
+  res.setHeader('Retry-After', String(retryAfterSeconds))
 }
 
 // ---------------------------------------------------------------------------
@@ -194,7 +199,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody(req, { maxBytes: 8_192 })) ?? {}
+  const body = (await readBoundedJsonObjectBody(req, { maxBytes: 8_192 })) ?? {}
   const enableAutomation = body.enableAutomation === true
 
   // Require authenticated session or SIWA
@@ -211,6 +216,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     RATE_LIMITS.creatorQuickstart,
   )
   if (!quickstartRate.allowed) {
+    setRetryAfterHeader(res, quickstartRate.resetAt)
     return res.status(429).json({
       success: false,
       error: 'Too many requests',

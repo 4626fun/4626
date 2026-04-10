@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/agents/\_publish.ts:36](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/_publish.ts#L36)
+Defined in: [api/\_handlers/v1/agents/\_publish.ts:23](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/_publish.ts#L23)
 
 #### Parameters
 

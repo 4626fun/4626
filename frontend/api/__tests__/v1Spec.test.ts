@@ -5,6 +5,9 @@ import { createMockReq, createMockRes } from './helpers'
 const mocks = vi.hoisted(() => ({
   handleOptions: vi.fn(() => false),
   guardAgentApiRequest: vi.fn(async () => ({ ok: true, ip: '127.0.0.1', auth: null })),
+  checkRateLimit: vi.fn(() => ({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })),
+  getClientIp: vi.fn(() => '127.0.0.1'),
+  rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
   getCanonicalOrigin: vi.fn(() => 'https://api.4626.fun'),
 }))
 
@@ -16,6 +19,15 @@ vi.mock('../../server/_lib/agentApiGuard.js', () => ({
   guardAgentApiRequest: mocks.guardAgentApiRequest,
 }))
 
+vi.mock('../../server/_lib/rateLimit.js', () => ({
+  checkRateLimit: mocks.checkRateLimit,
+  getClientIp: mocks.getClientIp,
+  rateLimitKey: mocks.rateLimitKey,
+  RATE_LIMITS: {
+    specRead: { windowMs: 60_000, maxRequests: 120 },
+  },
+}))
+
 vi.mock('../../server/_lib/origin.js', () => ({
   getCanonicalOrigin: mocks.getCanonicalOrigin,
 }))
@@ -25,6 +37,7 @@ describe('v1 spec endpoint', () => {
     vi.clearAllMocks()
     mocks.handleOptions.mockReturnValue(false)
     mocks.guardAgentApiRequest.mockResolvedValue({ ok: true, ip: '127.0.0.1', auth: null })
+    mocks.checkRateLimit.mockReturnValue({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })
     mocks.getCanonicalOrigin.mockReturnValue('https://api.4626.fun')
   })
 
@@ -68,5 +81,19 @@ describe('v1 spec endpoint', () => {
     expect(body?.paths?.['/lens/reputation-graph']?.post).toBeTruthy()
     expect(body?.paths?.['/lens/feedback-payload']?.get).toBeTruthy()
     expect(body?.paths?.['/lens/feedback-payload']?.post).toBeTruthy()
+  })
+
+  it('returns 429 with retry-after when spec read rate limit is exceeded', async () => {
+    mocks.checkRateLimit.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+    const mod = await import('../_handlers/v1/_spec.ts')
+    const handler = mod.default
+    const req = createMockReq({ method: 'GET', headers: { host: 'v1.4626.fun' } })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(429)
+    expect(res.body?.error).toBe('Too many requests')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 })

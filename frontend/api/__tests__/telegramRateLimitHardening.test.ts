@@ -35,6 +35,7 @@ describe('telegram endpoint rate-limit hardening', () => {
     await linkCompleteHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 429 for /telegram/link-ready when limited', async () => {
@@ -43,6 +44,7 @@ describe('telegram endpoint rate-limit hardening', () => {
     await linkReadyHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 429 for /telegram/miniapp-session when limited', async () => {
@@ -51,6 +53,7 @@ describe('telegram endpoint rate-limit hardening', () => {
     await miniAppSessionHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 429 for /telegram/unlink when limited', async () => {
@@ -59,6 +62,7 @@ describe('telegram endpoint rate-limit hardening', () => {
     await unlinkHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 429 for /telegram/bot-config when limited', async () => {
@@ -67,6 +71,7 @@ describe('telegram endpoint rate-limit hardening', () => {
     await botConfigHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 429 for /telegram/holder-recheck when limited', async () => {
@@ -75,5 +80,6 @@ describe('telegram endpoint rate-limit hardening', () => {
     await holderRecheckHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 })

@@ -9,6 +9,9 @@ const {
   setCorsMock,
   setNoStoreMock,
   guardAgentApiRequestMock,
+  checkRateLimitMock,
+  getClientIpMock,
+  rateLimitKeyMock,
   verifyAgentAccessProofSubmissionMock,
   issueAgentRoomAccessTokenMock,
   resolveMembershipForRoomMock,
@@ -18,6 +21,9 @@ const {
   setCorsMock: vi.fn(),
   setNoStoreMock: vi.fn(),
   guardAgentApiRequestMock: vi.fn(async () => ({ ok: true, ip: '127.0.0.1', auth: null })),
+  checkRateLimitMock: vi.fn(() => ({ allowed: true, remaining: 39, resetAt: Date.now() + 60_000 })),
+  getClientIpMock: vi.fn(() => '127.0.0.1'),
+  rateLimitKeyMock: vi.fn((...parts: string[]) => parts.join(':')),
   verifyAgentAccessProofSubmissionMock: vi.fn(),
   issueAgentRoomAccessTokenMock: vi.fn(),
   resolveMembershipForRoomMock: vi.fn(),
@@ -32,6 +38,15 @@ vi.mock('../../server/auth/_shared.js', () => ({
 
 vi.mock('../../server/_lib/agentApiGuard.js', () => ({
   guardAgentApiRequest: guardAgentApiRequestMock,
+}))
+
+vi.mock('../../server/_lib/rateLimit.js', () => ({
+  checkRateLimit: checkRateLimitMock,
+  getClientIp: getClientIpMock,
+  rateLimitKey: rateLimitKeyMock,
+  RATE_LIMITS: {
+    agentAccessProofVerify: { windowMs: 60_000, maxRequests: 40 },
+  },
 }))
 
 vi.mock('../../server/_lib/agentAccessProof.js', () => ({
@@ -64,6 +79,7 @@ const VALID_BODY = {
 describe('v1/agents/access-proof/verify', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    checkRateLimitMock.mockReturnValue({ allowed: true, remaining: 39, resetAt: Date.now() + 60_000 })
     readJsonBodyMock.mockResolvedValue(VALID_BODY)
     verifyAgentAccessProofSubmissionMock.mockResolvedValue({
       wallet: '0x5b674196812451b7cec024fe9d22d2c0b172fa75',
@@ -106,6 +122,16 @@ describe('v1/agents/access-proof/verify', () => {
     await handler(req as any, res as any)
     expect(res.statusCode).toBe(400)
     expect(res.body?.success).toBe(false)
+  })
+
+  it('returns 429 when verify rate limit is exceeded', async () => {
+    checkRateLimitMock.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+    const req = createMockReq({ method: 'POST' })
+    const res = createMockRes()
+    await handler(req as any, res as any)
+    expect(res.statusCode).toBe(429)
+    expect(res.body?.error).toBe('Too many requests')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('maps nonce replay failures to 401', async () => {

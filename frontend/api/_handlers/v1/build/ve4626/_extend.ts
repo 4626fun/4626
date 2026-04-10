@@ -3,7 +3,7 @@ import { encodeFunctionData } from 'viem'
 
 import {
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   getApiContracts,
   guardAgentApiRequest,
   getClientIp,
@@ -15,7 +15,7 @@ import {
 
 
 import type { BuildTxResponse } from '../_types.js'
-import { BASE_CHAIN_ID, VE_MAX_LOCK_DURATION, nowUnixSeconds, setBuildCors, toBigIntStrict } from '../_phase1Shared.js'
+import { BASE_CHAIN_ID, VE_MAX_LOCK_DURATION, nowUnixSeconds, setBuildCors, setRateLimitRetryAfter, toBigIntStrict } from '../_phase1Shared.js'
 
 type Body = { newEnd: string | bigint }
 
@@ -38,13 +38,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     rateLimitKey('v1-build-ve4626-extend', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
     RATE_LIMITS.buildVe4626Calldata,
   )
-  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+  if (!limiter.allowed) {
+    setRateLimitRetryAfter(res, limiter.resetAt)
+    return res.status(429).json({ success: false, error: 'Too many requests' })
+  }
 
   const ve = getApiContracts().ve4626
   if (!ve) return res.status(503).json({ success: false, error: 've4626 not configured' })
 
   try {
-    const body = (await readJsonBody(req, { maxBytes: 8_192 })) ?? ({} as Body)
+    const body = (await readBoundedJsonObjectBody(req, { maxBytes: 8_192 })) ?? ({} as Body)
     const newEnd = toBigIntStrict((body as any).newEnd, 'newEnd')
     const now = nowUnixSeconds()
     if (newEnd <= now) {

@@ -3,7 +3,7 @@ import { encodeFunctionData, type Address } from 'viem'
 
 import {
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   getApiContracts,
   guardAgentApiRequest,
   getClientIp,
@@ -22,6 +22,7 @@ import {
   assertUint256,
   requireAddress,
   setBuildCors,
+  setRateLimitRetryAfter,
   toBigIntStrict,
 } from '../_phase1Shared.js'
 
@@ -50,13 +51,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     rateLimitKey('v1-build-ve4626-lock', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
     RATE_LIMITS.buildVe4626Calldata,
   )
-  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+  if (!limiter.allowed) {
+    setRateLimitRetryAfter(res, limiter.resetAt)
+    return res.status(429).json({ success: false, error: 'Too many requests' })
+  }
 
   const ve = getApiContracts().ve4626
   if (!ve) return res.status(503).json({ success: false, error: 've4626 not configured' })
 
   try {
-    const body = (await readJsonBody(req, { maxBytes: 8_192 })) ?? ({} as Body)
+    const body = (await readBoundedJsonObjectBody(req, { maxBytes: 8_192 })) ?? ({} as Body)
     const token = requireAddress(body.token, 'token')
     const amount = toBigIntStrict(body.amount, 'amount')
     const duration = toBigIntStrict(body.durationSec, 'durationSec')

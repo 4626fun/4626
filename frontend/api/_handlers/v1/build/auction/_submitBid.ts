@@ -3,7 +3,7 @@ import { encodeFunctionData, type Address, type Hex } from 'viem'
 
 import {
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   guardAgentApiRequest,
   getClientIp,
   RATE_LIMITS,
@@ -20,6 +20,7 @@ import {
   parseOptionalHex,
   requireAddress,
   setBuildCors,
+  setRateLimitRetryAfter,
   toBigIntStrict,
 } from '../_phase1Shared.js'
 
@@ -61,10 +62,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     rateLimitKey('v1-build-auction-submit-bid', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
     RATE_LIMITS.buildAuctionSubmitBid,
   )
-  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+  if (!limiter.allowed) {
+    setRateLimitRetryAfter(res, limiter.resetAt)
+    return res.status(429).json({ success: false, error: 'Too many requests' })
+  }
 
   try {
-    const body = (await readJsonBody(req, { maxBytes: 65_536 })) ?? ({} as Body)
+    const body = (await readBoundedJsonObjectBody(req, { maxBytes: 65_536 })) ?? ({} as Body)
     const auction = requireAddress(body.auction, 'auction')
     const owner = requireAddress(body.owner, 'owner')
     const maxPriceQ96 = toBigIntStrict(body.maxPriceQ96, 'maxPriceQ96')

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLogin, usePrivy } from '@privy-io/react-auth'
-import { motion } from 'framer-motion'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Loader2 } from 'lucide-react'
 
 import { apiFetch } from '@/lib/apiBase'
@@ -16,8 +16,6 @@ import { getAppBaseUrl } from '@/lib/host'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import type { ApiEnvelope, OnboardingBootstrapResponse } from '@/lib/wallet/onboardingWallet'
-import { StepIndicator } from '@/components/ui/StepIndicator'
-import type { StepStatus } from '@/components/ui/StepIndicator'
 
 import {
   mergeCanonicalWaitlistAccount,
@@ -235,19 +233,22 @@ function WaitlistAuthStep(props: {
       key="step-auth"
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
-      className="space-y-5"
+      exit={{ opacity: 0, y: -6 }}
+      transition={{ duration: 0.18, ease: [0.4, 0, 0.2, 1] }}
+      className="space-y-6"
     >
-      <div className="space-y-1">
-        <h2 className="text-2xl font-semibold tracking-tight text-white">{authUi.title}</h2>
-        <p className="text-sm text-zinc-400">{authUi.subtitle}</p>
+      <div className="space-y-2">
+        <p className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Early access</p>
+        <h2 className="text-2xl font-semibold tracking-tight text-white sm:text-[2rem]">{authUi.title}</h2>
+        <p className="text-sm leading-relaxed text-zinc-300">{authUi.subtitle}</p>
+        <p className="text-xs text-zinc-500">No wallet connection is required yet.</p>
       </div>
 
       <button
         type="button"
         disabled={buttonsDisabled}
         onClick={() => void onContinueAuth()}
-        className="btn-accent btn-no-icon w-full py-3 rounded-xl text-sm font-medium inline-flex items-center justify-center gap-2 disabled:opacity-50"
+        className="btn-accent btn-no-icon inline-flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 text-sm font-medium disabled:opacity-50"
       >
         {busy ? (
           <>
@@ -257,7 +258,7 @@ function WaitlistAuthStep(props: {
         ) : !privyReady ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin opacity-60" />
-            Loading sign-in...
+            Loading secure sign-in...
           </>
         ) : (
           authUi.ctaLabel
@@ -265,7 +266,11 @@ function WaitlistAuthStep(props: {
       </button>
 
       {error ? (
-        <div className="space-y-3 rounded-xl border border-rose-500/30 bg-rose-500/10 px-3 py-2 text-sm text-rose-200">
+        <div
+          role="alert"
+          aria-live="polite"
+          className="space-y-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"
+        >
           <div>{error}</div>
           {recoveryRequired ? (
             <button
@@ -324,8 +329,9 @@ export function WaitlistFlow(props: {
   const privyAuthedRef = useRef(privyAuthed)
   const privyClientStatusRef = useRef(privyClientStatus)
 
-  const wrapClass = 'mx-auto w-full max-w-4xl'
-  const innerClass = 'card rounded-2xl border border-white/10 bg-black/50 p-6 sm:p-8 space-y-6'
+  const wrapClass = 'mx-auto w-full max-w-5xl'
+  const innerClass =
+    'overflow-hidden rounded-3xl bg-[linear-gradient(180deg,rgba(255,255,255,0.04)_0%,rgba(255,255,255,0.01)_100%)] p-4 sm:p-6 space-y-4 sm:space-y-5'
   const activeReferralCode = useMemo(() => readStoredWaitlistReferralCode(), [])
   const enterAppUrl = useMemo(() => buildAppEntryUrl(getAppBaseUrl()), [])
   const accountsUrl = useMemo(() => buildAppEntryUrl(getAppBaseUrl(), '/accounts'), [])
@@ -985,39 +991,38 @@ export function WaitlistFlow(props: {
     disableAggressiveSessionReset,
   ])
 
-  const indicatorSteps = [
-    { label: 'Sign in', status: (step === 'auth' ? 'active' : 'complete') as StepStatus },
-    { label: 'Finish setup', status: (step === 'auth' ? 'pending' : 'complete') as StepStatus },
-  ]
-
   return (
     <section id={sectionId} className={wrapClass}>
       <div className={innerClass}>
-        <StepIndicator steps={indicatorSteps} />
-
-        {step === 'auth' ? (
-          <WaitlistAuthStep
-            authUi={authUi}
-            busy={busy}
-            privyClientStatus={privyClientStatus}
-            error={error}
-            recoveryRequired={recoveryRequired}
-            onContinueAuth={onContinueAuth}
-            onRecoverAccount={onRecoverAccount}
-          />
-        ) : null}
-
-        {step === 'done' ? (
-          account ? (
-            <WaitlistSetupWorkspace
-              initialAccount={account}
-              canEnterApp={canEnterApp}
-              completionBusy={completionBusy}
-              onEnterApp={onEnterApp}
-              onOpenAccounts={onOpenAccounts}
+        <AnimatePresence mode="wait" initial={false}>
+          {step === 'auth' ? (
+            <WaitlistAuthStep
+              key="auth"
+              authUi={authUi}
+              busy={busy}
+              privyClientStatus={privyClientStatus}
+              error={error}
+              recoveryRequired={recoveryRequired}
+              onContinueAuth={onContinueAuth}
+              onRecoverAccount={onRecoverAccount}
             />
-          ) : null
-        ) : null}
+          ) : step === 'done' && account ? (
+            <motion.div
+              key="done"
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.2, ease: [0.4, 0, 0.2, 1] }}
+            >
+              <WaitlistSetupWorkspace
+                initialAccount={account}
+                canEnterApp={canEnterApp}
+                completionBusy={completionBusy}
+                onEnterApp={onEnterApp}
+                onOpenAccounts={onOpenAccounts}
+              />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
       </div>
     </section>
   )

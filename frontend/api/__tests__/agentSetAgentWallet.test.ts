@@ -75,6 +75,7 @@ describe('v1/agents/identity/set-agent-wallet', () => {
 
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Too many requests')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('rejects invalid agent ids', async () => {
@@ -103,5 +104,16 @@ describe('v1/agents/identity/set-agent-wallet', () => {
     expect(res.body?.success).toBe(true)
     expect(res.body?.data?.typedData?.primaryType).toBe('AgentWalletSet')
     expect(res.body?.data?.typedData?.message?.agentId).toBe('123')
+  })
+
+  it('rejects non-object payloads without crashing', async () => {
+    readJsonBodyMock.mockResolvedValueOnce(['bad'])
+
+    const req = createMockReq({ method: 'POST' })
+    const res = createMockRes()
+    await handler(req as any, res as any)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body?.error).toContain('agentId')
   })
 })

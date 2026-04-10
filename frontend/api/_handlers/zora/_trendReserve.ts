@@ -26,8 +26,18 @@ function isAuthorizedAdmin(req: VercelRequest): { ok: boolean; actorAddress: str
 }
 
 function readBody(req: VercelRequest): Record<string, unknown> {
-  if (req.body && typeof req.body === 'object' && !Array.isArray(req.body)) return req.body as Record<string, unknown>
+  const TREND_RESERVE_MAX_BODY_BYTES = 16_384
+  if (req.body && typeof req.body === 'object' && !Array.isArray(req.body)) {
+    const estimated = Buffer.byteLength(JSON.stringify(req.body), 'utf8')
+    if (estimated > TREND_RESERVE_MAX_BODY_BYTES) {
+      throw new Error('body_too_large')
+    }
+    return req.body as Record<string, unknown>
+  }
   if (typeof req.body === 'string' && req.body.trim()) {
+    if (Buffer.byteLength(req.body, 'utf8') > TREND_RESERVE_MAX_BODY_BYTES) {
+      throw new Error('body_too_large')
+    }
     try {
       const parsed = JSON.parse(req.body)
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed
@@ -47,6 +57,7 @@ function readBoolean(v: unknown, fallback: boolean): boolean {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
+  res.setHeader('Cache-Control', 'no-store')
   if (handleOptions(req, res)) return
 
   if (req.method !== 'POST') {
@@ -67,7 +78,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(403).json({ success: false, error: 'Admin authorization required' })
   }
 
-  const body = readBody(req)
+  let body: Record<string, unknown>
+  try {
+    body = readBody(req)
+  } catch {
+    return res.status(413).json({ success: false, error: 'Request body too large' })
+  }
   const ticker = String(body.ticker ?? '').trim()
   const creatorTokenRaw = String(body.creatorToken ?? '').trim()
   const groupId = String(body.groupId ?? 'api').trim() || 'api'

@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/auction/\_status.ts:150](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/auction/_status.ts#L150)
+Defined in: [api/\_handlers/v1/auction/\_status.ts:154](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/auction/_status.ts#L154)
 
 #### Parameters
 

@@ -78,7 +78,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     rateLimitKey('v1-auction-recent-bids', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
     RATE_LIMITS.auctionRead,
   )
-  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Too many requests' })
+  }
 
   const auction = (getStringQuery(req, 'auction') || getStringQuery(req, 'address') || '').trim()
   if (!auction) return res.status(400).json({ success: false, error: 'auction is required' })

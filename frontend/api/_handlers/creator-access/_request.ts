@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   ensureCreatorAccessSchema,
@@ -19,6 +19,21 @@ import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../server/_li
 
 type RequestBody = {
   coin?: string
+}
+const REQUEST_BODY_MAX_BYTES = 16_384
+
+function parseRequestBody(input: unknown): RequestBody {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
+  return input as RequestBody
+}
+
+function parseCoin(value: unknown): { ok: true; value: `0x${string}` | null } | { ok: false } {
+  if (value == null) return { ok: true, value: null }
+  if (typeof value !== 'string') return { ok: false }
+  const trimmed = value.trim()
+  if (!trimmed) return { ok: true, value: null }
+  if (!isAddressLike(trimmed)) return { ok: false }
+  return { ok: true, value: trimmed.toLowerCase() as `0x${string}` }
 }
 
 type RequestAccessResponse = {
@@ -56,6 +71,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
+  const body = parseRequestBody(await readBoundedJsonObjectBody(req, { maxBytes: REQUEST_BODY_MAX_BYTES }))
+  const parsedCoin = parseCoin(body.coin)
+  if (!parsedCoin.ok) {
+    return res.status(400).json({ success: false, error: 'Invalid coin address' } satisfies ApiEnvelope<never>)
+  }
+  const coin = parsedCoin.value
+
   if (isSupabaseAdminConfigured()) {
     try {
       const supabase = getSupabaseAdmin()
@@ -75,9 +97,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } satisfies ApiEnvelope<RequestAccessResponse>)
       }
 
-      const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
-      const coinRaw = typeof body?.coin === 'string' ? body.coin.trim() : ''
-      const coin = isAddressLike(coinRaw) ? (coinRaw.toLowerCase() as `0x${string}`) : null
       const now = new Date().toISOString()
 
       // Prefer "one pending request per wallet". If table constraint isn't present yet,
@@ -156,10 +175,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<RequestAccessResponse>)
   }
 
-  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
-  const coinRaw = typeof body?.coin === 'string' ? body.coin.trim() : ''
-  const coin = isAddressLike(coinRaw) ? (coinRaw.toLowerCase() as `0x${string}`) : null
-
   // Create (or update) a pending request.
   const inserted = await db.query(
     `INSERT INTO access_requests (wallet_address, coin_address, status)
@@ -184,4 +199,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies RequestAccessResponse,
   } satisfies ApiEnvelope<RequestAccessResponse>)
 }
-

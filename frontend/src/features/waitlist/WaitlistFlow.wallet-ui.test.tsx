@@ -10,6 +10,15 @@ import { apiFetch } from '@/lib/apiBase'
 import { WaitlistFlow } from './WaitlistFlow'
 import { WaitlistSetupWorkspace } from './WaitlistSetupWorkspace'
 
+const collisionStateRef = vi.hoisted(() => ({
+  current: {
+    hasMultipleInjectedProviders: false,
+    lockedEthereumProviderGlobal: false,
+    persistedCollisionSignal: false,
+    shouldDisableInjectedConnector: false,
+  },
+}))
+
 vi.mock('framer-motion', () => ({
   motion: new Proxy(
     {},
@@ -29,12 +38,6 @@ vi.mock('framer-motion', () => ({
 }))
 
 let mockPrivyAuthenticated = true
-let mockProviderCollisionState = {
-  hasMultipleInjectedProviders: false,
-  lockedEthereumProviderGlobal: false,
-  persistedCollisionSignal: false,
-  shouldDisableInjectedConnector: false,
-}
 const mockGetAccessToken = vi.fn<() => Promise<string | null>>(async () => 'privy-token-default')
 const mockPrivyLogout = vi.fn(async () => undefined)
 const mockLinkEmail = vi.fn(async () => undefined)
@@ -70,12 +73,17 @@ vi.mock('@privy-io/react-auth', () => ({
   useWallets: () => ({ wallets: mockPrivyHookState.wallets }),
 }))
 
-vi.mock('wagmi', () => ({
-  useAccount: () => ({ chainId: 8453, address: '0x1111111111111111111111111111111111111111' }),
-  usePublicClient: () => mockWagmiPublicClient,
-  useSwitchChain: () => mockWagmiSwitchChain,
-  useWalletClient: () => mockWagmiWalletClientState,
-}))
+vi.mock('wagmi', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('wagmi')>()
+  return {
+    ...actual,
+    useAccount: () => ({ chainId: 8453, address: '0x1111111111111111111111111111111111111111' }),
+    usePublicClient: () => mockWagmiPublicClient,
+    useSwitchChain: () => mockWagmiSwitchChain,
+    useWalletClient: () => mockWagmiWalletClientState,
+    WagmiProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  }
+})
 
 vi.mock('@/lib/apiBase', () => ({
   apiFetch: vi.fn(),
@@ -113,7 +121,7 @@ vi.mock('@/hooks/siweAuthCrossApp', () => ({
 }))
 
 vi.mock('@/lib/wallet/providerCollision', () => ({
-  detectEthereumProviderCollision: () => mockProviderCollisionState,
+  detectEthereumProviderCollision: () => collisionStateRef.current,
 }))
 
 vi.mock('@/components/ui/StepIndicator', () => ({
@@ -136,7 +144,7 @@ const WAITLIST_ACCOUNT = {
   linkedMethods: { email: ['waitlisted@example.com'] },
   accountSignals: {
     linked: true,
-    canonicalCswAddress: null,
+    canonicalCswAddress: '0x1111111111111111111111111111111111111111',
     creatorCoin: null,
     zoraHandle: null,
     lastResolvedAt: null,
@@ -158,7 +166,7 @@ const WAITLIST_BOOTSTRAP_PAYLOAD = {
 describe('WaitlistFlow simplified completion UI', () => {
   beforeEach(() => {
     mockPrivyAuthenticated = true
-    mockProviderCollisionState = {
+    collisionStateRef.current = {
       hasMultipleInjectedProviders: false,
       lockedEthereumProviderGlobal: false,
       persistedCollisionSignal: false,
@@ -197,8 +205,8 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/finish setup here/i)).toBeTruthy()
-    expect(screen.getByRole('button', { name: /advanced account settings/i })).toBeTruthy()
+    expect(await screen.findByText(/^finish setup$/i)).toBeTruthy()
+    expect(screen.getByText(/step 3 of 3/i)).toBeTruthy()
     expect(screen.queryByText(/climb the waitlist/i)).toBeNull()
     expect(screen.queryByText(/waitlist leaderboard/i)).toBeNull()
     expect(
@@ -222,15 +230,14 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     expect(await screen.findByText(/link your zora identity/i)).toBeTruthy()
     expect(screen.getByText(/detect your coinbase smart wallet/i)).toBeTruthy()
-    expect(screen.getByText(/enable 4626 signing on that wallet/i)).toBeTruthy()
-    expect(screen.getByText(/^points$/i)).toBeTruthy()
-    expect(screen.getByText(/^tier$/i)).toBeTruthy()
-    expect(screen.getByRole('link', { name: /open zora/i })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /refresh zora signals/i })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /advanced account settings/i })).toBeTruthy()
+    expect(screen.getByText(/enable 4626 signing/i)).toBeTruthy()
+    expect(screen.getAllByText(/connected/i).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/wallet detected/i).length).toBeGreaterThan(0)
+    expect(screen.getByRole('button', { name: /approve signing access|connect owner wallet/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^retry$/i })).toBeTruthy()
   })
 
-  it('shows the advanced account settings escape hatch from the waitlist workspace', async () => {
+  it('keeps waitlist workspace focused and hides advanced settings action', async () => {
     const openAccounts = vi.fn()
 
     render(
@@ -245,9 +252,27 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    fireEvent.click(await screen.findByRole('button', { name: /advanced account settings/i }))
+    expect(await screen.findByText(/app access pending/i)).toBeTruthy()
+    expect(screen.queryByRole('button', { name: /advanced account settings/i })).toBeNull()
+    expect(openAccounts).toHaveBeenCalledTimes(0)
+  })
 
-    expect(openAccounts).toHaveBeenCalledTimes(1)
+  it('keeps enter app disabled until setup steps are complete', async () => {
+    render(
+      <MemoryRouter>
+        <WaitlistSetupWorkspace
+          initialAccount={WAITLIST_ACCOUNT as any}
+          canEnterApp
+          completionBusy={false}
+          onEnterApp={vi.fn()}
+          onOpenAccounts={vi.fn()}
+        />
+      </MemoryRouter>,
+    )
+
+    const enterAppButton = await screen.findByRole('button', { name: /enter app/i })
+    expect((enterAppButton as HTMLButtonElement).disabled).toBe(true)
+    expect(screen.getByText(/finish setup first/i)).toBeTruthy()
   })
 
   it('shows manual existing-account recovery when bootstrap returns recovery-required', async () => {
@@ -387,7 +412,7 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/finish setup here/i, undefined, { timeout: 7_000 })).toBeTruthy()
+    expect(await screen.findByText(/^finish setup$/i, undefined, { timeout: 7_000 })).toBeTruthy()
     // Scheduler keeps retries bounded while still allowing completion.
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     expect(bootstrapCalls).toBeLessThanOrEqual(3)
@@ -438,7 +463,7 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
 
-    expect(await screen.findByText(/finish setup here/i, undefined, { timeout: 9_000 })).toBeTruthy()
+    expect(await screen.findByText(/^finish setup$/i, undefined, { timeout: 9_000 })).toBeTruthy()
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     expect(bootstrapCalls).toBeLessThanOrEqual(2)
     expect(screen.queryByText(/sign-in session is still finalizing/i)).toBeNull()
@@ -489,7 +514,7 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
 
-    expect(await screen.findByText(/finish setup here/i, undefined, { timeout: 10_000 })).toBeTruthy()
+    expect(await screen.findByText(/^finish setup$/i, undefined, { timeout: 10_000 })).toBeTruthy()
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
   })
 
@@ -572,7 +597,7 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /continue/i }))
 
-    expect(await screen.findByText(/finish setup here/i, undefined, { timeout: 9_000 })).toBeTruthy()
+    expect(await screen.findByText(/^finish setup$/i, undefined, { timeout: 9_000 })).toBeTruthy()
     expect(mockLogin).toHaveBeenCalledTimes(1)
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
   })
@@ -676,7 +701,7 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/finish setup here/i, undefined, { timeout: 9_000 })).toBeTruthy()
+    expect(await screen.findByText(/^finish setup$/i, undefined, { timeout: 9_000 })).toBeTruthy()
     // No token means no bootstrap burst; once token hydrates we should only need one tokened bootstrap.
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     expect(bootstrapCalls).toBeLessThanOrEqual(2)
@@ -733,7 +758,7 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/finish setup here/i, undefined, { timeout: 9_000 })).toBeTruthy()
+    expect(await screen.findByText(/^finish setup$/i, undefined, { timeout: 9_000 })).toBeTruthy()
     // first requiresPrivyAuth + one cooldown-respected retry to recover
     expect(bootstrapCalls).toBeGreaterThanOrEqual(2)
     expect(bootstrapCalls).toBeLessThanOrEqual(3)
@@ -833,7 +858,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     mockGetAccessToken
       .mockResolvedValueOnce(null)
       .mockResolvedValue('privy-token-after-login')
-    mockProviderCollisionState = {
+    collisionStateRef.current = {
       hasMultipleInjectedProviders: false,
       lockedEthereumProviderGlobal: false,
       persistedCollisionSignal: true,

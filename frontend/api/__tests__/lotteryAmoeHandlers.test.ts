@@ -112,6 +112,7 @@ describe('AMOE nonce handler', () => {
     await handler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Too many requests')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns nonce payload for valid query params', async () => {
@@ -367,6 +368,7 @@ describe('AMOE submit handler', () => {
     await handler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Too many requests')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 402 when credits are insufficient', async () => {

@@ -14,7 +14,7 @@ import {
 
 
 import type { BuildTxResponse } from '../_types.js'
-import { BASE_CHAIN_ID, setBuildCors } from '../_phase1Shared.js'
+import { BASE_CHAIN_ID, setBuildCors, setRateLimitRetryAfter } from '../_phase1Shared.js'
 
 const VE_ABI = [
   { type: 'function', name: 'unlock', stateMutability: 'nonpayable', inputs: [], outputs: [{ type: 'uint256' }] },
@@ -35,7 +35,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     rateLimitKey('v1-build-ve4626-unlock', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
     RATE_LIMITS.buildVe4626Calldata,
   )
-  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+  if (!limiter.allowed) {
+    setRateLimitRetryAfter(res, limiter.resetAt)
+    return res.status(429).json({ success: false, error: 'Too many requests' })
+  }
 
   const ve = getApiContracts().ve4626
   if (!ve) return res.status(503).json({ success: false, error: 've4626 not configured' })

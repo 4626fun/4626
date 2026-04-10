@@ -14,7 +14,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import {
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   readRequestPrincipal,
@@ -40,6 +40,13 @@ type ReputationGraphRequest = {
   tag2?: string
   includeRevoked?: boolean
   store?: boolean
+}
+
+const LENS_REPUTATION_GRAPH_BODY_MAX_BYTES = 16_384
+
+function asObjectBody(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
+  return input as Record<string, unknown>
 }
 
 function buildReputationGraphDiscovery() {
@@ -78,7 +85,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
-  const body = req.method === 'POST' ? (await readJsonBody(req, { maxBytes: 512_000 })) ?? {} : {}
+  const body = req.method === 'POST'
+    ? (asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: LENS_REPUTATION_GRAPH_BODY_MAX_BYTES })) as ReputationGraphRequest)
+    : ({} as ReputationGraphRequest)
   const agentIdRaw = String(body.agentId ?? req.query.agentId ?? '').trim()
 
   if (req.method === 'GET' && !agentIdRaw) {

@@ -54,6 +54,7 @@ describe('v1 lottery read hardening', () => {
     await creatorMod.default(creatorReq, creatorRes)
     expect(creatorRes.statusCode).toBe(429)
     expect(creatorRes.body?.error).toBe('Too many requests')
+    expect(Number(creatorRes.getHeader('retry-after'))).toBeGreaterThan(0)
 
     mocks.checkRateLimit.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
     const globalMod = await import('../_handlers/v1/lottery/_global.ts')
@@ -62,6 +63,7 @@ describe('v1 lottery read hardening', () => {
     await globalMod.default(globalReq, globalRes)
     expect(globalRes.statusCode).toBe(429)
     expect(globalRes.body?.error).toBe('Too many requests')
+    expect(Number(globalRes.getHeader('retry-after'))).toBeGreaterThan(0)
 
     mocks.checkRateLimit.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
     const winnersMod = await import('../_handlers/v1/lottery/_recentWinners.ts')
@@ -70,5 +72,6 @@ describe('v1 lottery read hardening', () => {
     await winnersMod.default(winnersReq, winnersRes)
     expect(winnersRes.statusCode).toBe(429)
     expect(winnersRes.body?.error).toBe('Too many requests')
+    expect(Number(winnersRes.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 })

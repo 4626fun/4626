@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/image/\_direct-compose.ts:29](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_direct-compose.ts#L29)
+Defined in: [api/\_handlers/image/\_direct-compose.ts:30](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/image/_direct-compose.ts#L30)
 
 #### Parameters
 

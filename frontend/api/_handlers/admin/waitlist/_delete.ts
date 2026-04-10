@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   getDb,
@@ -23,6 +23,13 @@ import { logAdminAction } from '../../../../server/_lib/adminAudit.js'
 
 
 type Body = { id?: number; note?: string | null }
+
+const WAITLIST_DELETE_BODY_MAX_BYTES = 16_384
+
+function asObjectBody(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
+  return input as Record<string, unknown>
+}
 
 /**
  * DELETE a waitlist profile by id.
@@ -49,10 +56,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     RATE_LIMITS.adminAction,
   )
   if (!rate.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
+  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: WAITLIST_DELETE_BODY_MAX_BYTES })) as Body
   const id = typeof body.id === 'number' ? Math.floor(body.id) : NaN
   if (!Number.isFinite(id) || id <= 0) {
     return res.status(400).json({ success: false, error: 'Missing id' } satisfies ApiEnvelope<never>)

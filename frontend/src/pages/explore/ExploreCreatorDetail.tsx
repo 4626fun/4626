@@ -227,7 +227,7 @@ function ResourceLinks({ tokenAddress }: { tokenAddress: string }) {
     {
       name: 'Zora',
       href: `https://zora.co/coin/base:${tokenAddress}`,
-      iconUrl: 'https://green-decisive-crane-434.mypinata.cloud/ipfs/bafkreiby3cnzgdxvaadcgl2z2wos34hfqqoynyzgh3uxm2qxl2qka6cllq',
+      iconUrl: '/brands/zora-token.svg',
     },
     {
       name: 'Dexscreener',

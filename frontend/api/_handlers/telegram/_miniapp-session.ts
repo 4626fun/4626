@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   getDb,
@@ -27,6 +27,7 @@ type MiniAppSessionBody = {
   initData?: string
   flowId?: string | null
 }
+const MINIAPP_SESSION_MAX_BODY_BYTES = 16_384
 
 type MiniAppSessionData = {
   sessionToken: string
@@ -62,7 +63,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Telegram bot is not configured' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<MiniAppSessionBody>(req, { maxBytes: 16_384 }).catch(() => null)) ?? (req.body as MiniAppSessionBody | null) ?? {}
+  let body: MiniAppSessionBody
+  try {
+    body = (await readBoundedJsonObjectBody<MiniAppSessionBody>(req, { maxBytes: MINIAPP_SESSION_MAX_BODY_BYTES })) ?? {}
+  } catch {
+    return res.status(413).json({ success: false, error: 'Request body too large' } satisfies ApiEnvelope<never>)
+  }
   const initData = asTrimmed(body.initData ?? '')
   const flowId = asTrimmed(body.flowId ?? '')
   const verified = verifyTelegramMiniAppInitData({

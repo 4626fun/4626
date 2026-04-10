@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   requireKeeprApiKey,
   requireOptionalHeaderEnvAuth,
   setCors,
@@ -42,8 +42,15 @@ type ExecuteResponse = {
   details?: Record<string, unknown>
 }
 
+const KEEPR_EXECUTE_BODY_MAX_BYTES = 65_536
+
 function isAddressLike(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
+}
+
+function asObjectBody(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
+  return input as Record<string, unknown>
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -62,7 +69,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (!requireKeeprApiKey(req, res, { missingSecretError: 'Server misconfigured' })) return
 
-  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
+  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: KEEPR_EXECUTE_BODY_MAX_BYTES })) as ExecuteBody
 
   const id = Number(body.id)
   const vaultAddress = typeof body.vaultAddress === 'string' ? body.vaultAddress.trim().toLowerCase() : ''

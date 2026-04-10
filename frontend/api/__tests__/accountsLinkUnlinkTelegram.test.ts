@@ -118,4 +118,40 @@ describe('accounts link/unlink telegram provider', () => {
     expect(res.statusCode).toBe(409)
     expect(res.body?.error).toBe('Email is not verified in Privy yet.')
   })
+
+  it('rejects oversized link value payloads', async () => {
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-privy-token': 'test-token' },
+      body: {
+        provider: 'telegram',
+        value: 'x'.repeat(257),
+      },
+    })
+    const res = createMockRes()
+
+    await linkHandler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body?.error).toBe('Invalid link value')
+    expect(recordProviderLinkMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects oversized unlink value payloads', async () => {
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-privy-token': 'test-token' },
+      body: {
+        provider: 'telegram',
+        value: 'x'.repeat(257),
+      },
+    })
+    const res = createMockRes()
+
+    await unlinkHandler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body?.error).toBe('Invalid unlink value')
+    expect(recordProviderUnlinkMock).not.toHaveBeenCalled()
+  })
 })

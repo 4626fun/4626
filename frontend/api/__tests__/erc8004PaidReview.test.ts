@@ -143,6 +143,21 @@ describe('v1/agents/feedback/review', () => {
 
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Too many requests')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
+  })
+
+  it('returns 400 when registrationUrl uses a non-http scheme', async () => {
+    const mod = await import('../_handlers/v1/agents/feedback/_review.ts')
+    const req = createMockReq({
+      method: 'POST',
+      body: { agentId: 2205, registrationUrl: 'javascript:alert(1)' },
+    })
+    const res = createMockRes()
+
+    await mod.default(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body?.error).toBe('registrationUrl must be an http(s) URL.')
   })
 
   it('returns 402 when no payment header has been provided', async () => {

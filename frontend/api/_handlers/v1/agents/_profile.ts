@@ -39,6 +39,10 @@ function setCache(res: VercelResponse, seconds: number = 30) {
   res.setHeader('Cache-Control', `public, s-maxage=${seconds}, stale-while-revalidate=${seconds * 5}`)
 }
 
+function setRetryAfterHeader(res: VercelResponse, resetAt: number) {
+  res.setHeader('Retry-After', String(Math.max(1, Math.ceil((resetAt - Date.now()) / 1000))))
+}
+
 function buildProfileDiscovery() {
   return {
     endpoint: '/api/v1/agents/profile',
@@ -98,7 +102,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     rateLimitKey('v1-agents-profile', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
     RATE_LIMITS.agentsRead,
   )
-  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+  if (!limiter.allowed) {
+    setRetryAfterHeader(res, limiter.resetAt)
+    return res.status(429).json({ success: false, error: 'Too many requests' })
+  }
 
   if (!/^\d+$/.test(agentIdRaw)) {
     return res.status(400).json({

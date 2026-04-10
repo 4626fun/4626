@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from "@vercel/node"
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   logger,
@@ -73,13 +73,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     RATE_LIMITS.creRuntimeTriggerWrite,
   )
   if (!limiter.allowed) {
+    res.setHeader("Retry-After", String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(429).json({
       success: false,
       error: "Too many requests",
     } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody(req, { maxBytes: 65_536 })) ?? {}
+  const body: Partial<TriggerBody> = (await readBoundedJsonObjectBody<TriggerBody>(req, { maxBytes: 65_536 })) ?? {}
   const auth = await authenticateRuntimeRequest(req, body, {
     allowUnsignedWhenHmacConfigured: true,
   })

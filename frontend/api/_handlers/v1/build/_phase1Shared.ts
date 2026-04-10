@@ -17,6 +17,11 @@ export function setBuildCors(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 }
 
+export function setRateLimitRetryAfter(res: VercelResponse, resetAt: number) {
+  const retryAfterSeconds = Math.max(1, Math.ceil((resetAt - Date.now()) / 1000))
+  res.setHeader('Retry-After', String(retryAfterSeconds))
+}
+
 export function toBigIntStrict(v: unknown, label: string): bigint {
   try {
     if (typeof v === 'bigint') return v

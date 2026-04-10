@@ -112,8 +112,8 @@ describe('ExploreTrends', () => {
     })
   })
 
-  it('normalizes legacy sort=fees24h to TRENDING_TRENDS', async () => {
-    searchParamsState.value = new URLSearchParams('sort=fees24h')
+  it('normalizes unsupported sort to default TOP_VOLUME_TRENDS_24H', async () => {
+    searchParamsState.value = new URLSearchParams('sort=unsupported')
     useQueryMock.mockReturnValue({
       data: null,
       isLoading: false,
@@ -141,10 +141,10 @@ describe('ExploreTrends', () => {
 
     renderToStaticMarkup(React.createElement(ExploreTrends))
 
-    expect(capturedOptions?.queryKey).toEqual(['explore', 'trends', 'TRENDING_TRENDS'])
+    expect(capturedOptions?.queryKey).toEqual(['explore', 'trends', 'TOP_VOLUME_TRENDS_24H'])
     await capturedOptions.queryFn({ pageParam: undefined })
     expect(fetchZoraExploreMock).toHaveBeenCalledWith({
-      list: 'TRENDING_TRENDS',
+      list: 'TOP_VOLUME_TRENDS_24H',
       count: 20,
       after: undefined,
     })

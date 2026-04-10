@@ -26,6 +26,7 @@ vi.mock('../../server/_lib/creatorXmtpAgents.js', () => ({
 describe('v1/agents/creators list privacy', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    delete process.env.CREATOR_ACCESS_ADMIN_ADDRESSES
     guardAgentApiRequestMock.mockResolvedValue({ ok: true, ip: '127.0.0.1', auth: null })
     listCreatorXmtpAgentsMock.mockResolvedValue({ rows: [], nextCursor: null })
   })
@@ -44,7 +45,27 @@ describe('v1/agents/creators list privacy', () => {
     expect(listCreatorXmtpAgentsMock).not.toHaveBeenCalled()
   })
 
-  it('allows authenticated listed=false requests and passes listedOnly=false', async () => {
+  it('rejects non-admin listed=false requests', async () => {
+    guardAgentApiRequestMock.mockResolvedValue({
+      ok: true,
+      ip: '127.0.0.1',
+      auth: { type: 'session', address: '0x0000000000000000000000000000000000000001' } as any,
+    })
+    const req = createMockReq({
+      method: 'GET',
+      query: { listed: 'false', limit: '10' },
+    })
+    const res = createMockRes()
+
+    await handler(req as any, res as any)
+
+    expect(res.statusCode).toBe(403)
+    expect(String(res.body?.error ?? '')).toContain('Admin scope required')
+    expect(listCreatorXmtpAgentsMock).not.toHaveBeenCalled()
+  })
+
+  it('allows admin listed=false requests and passes listedOnly=false', async () => {
+    process.env.CREATOR_ACCESS_ADMIN_ADDRESSES = '0x0000000000000000000000000000000000000001'
     guardAgentApiRequestMock.mockResolvedValue({
       ok: true,
       ip: '127.0.0.1',

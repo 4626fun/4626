@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/explore/\_vaults.ts:117](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/explore/_vaults.ts#L117)
+Defined in: [api/\_handlers/v1/explore/\_vaults.ts:121](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/explore/_vaults.ts#L121)
 
 #### Parameters
 

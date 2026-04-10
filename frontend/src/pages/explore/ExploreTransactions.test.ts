@@ -107,13 +107,13 @@ describe('ExploreTransactions', () => {
     })
   })
 
-  it('normalizes legacy sort=fees24h to priceChange for subnav state', () => {
-    searchParamsState.value = new URLSearchParams('sort=fees24h')
+  it('normalizes unsupported sort to default sort for subnav state', () => {
+    searchParamsState.value = new URLSearchParams('sort=unsupported')
     renderToStaticMarkup(React.createElement(ExploreTransactions))
 
     expect(subnavPropsMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        currentSort: 'priceChange',
+        currentSort: 'new',
       }),
     )
   })

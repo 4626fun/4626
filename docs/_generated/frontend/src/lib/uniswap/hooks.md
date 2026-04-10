@@ -12,7 +12,7 @@
 
 > **PoolHistoryData** = `object`
 
-Defined in: [src/lib/uniswap/hooks.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L3)
+Defined in: [src/lib/uniswap/hooks.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L5)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/uniswap/hooks.ts:3](https://github.com/wenakita/4626/blob/m
 
 > **dataPoints**: `object`[]
 
-Defined in: [src/lib/uniswap/hooks.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L11)
+Defined in: [src/lib/uniswap/hooks.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L13)
 
 ###### close?
 
@@ -58,43 +58,43 @@ Defined in: [src/lib/uniswap/hooks.ts:11](https://github.com/wenakita/4626/blob/
 
 > **feesUSD**: `number`
 
-Defined in: [src/lib/uniswap/hooks.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L8)
+Defined in: [src/lib/uniswap/hooks.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L10)
 
 ##### poolId
 
 > **poolId**: `string` \| `null`
 
-Defined in: [src/lib/uniswap/hooks.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L6)
+Defined in: [src/lib/uniswap/hooks.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L8)
 
 ##### priceChangePercent
 
 > **priceChangePercent**: `number`
 
-Defined in: [src/lib/uniswap/hooks.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L10)
+Defined in: [src/lib/uniswap/hooks.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L12)
 
 ##### timeframe
 
 > **timeframe**: `string`
 
-Defined in: [src/lib/uniswap/hooks.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L5)
+Defined in: [src/lib/uniswap/hooks.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L7)
 
 ##### tokenAddress
 
 > **tokenAddress**: `string`
 
-Defined in: [src/lib/uniswap/hooks.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L4)
+Defined in: [src/lib/uniswap/hooks.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L6)
 
 ##### tvlUSD
 
 > **tvlUSD**: `number`
 
-Defined in: [src/lib/uniswap/hooks.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L9)
+Defined in: [src/lib/uniswap/hooks.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L11)
 
 ##### volumeUSD
 
 > **volumeUSD**: `number`
 
-Defined in: [src/lib/uniswap/hooks.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L7)
+Defined in: [src/lib/uniswap/hooks.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L9)
 
 ## Functions
 
@@ -102,7 +102,7 @@ Defined in: [src/lib/uniswap/hooks.ts:7](https://github.com/wenakita/4626/blob/m
 
 > **usePoolHistory**(`tokenAddress`, `timeframe`, `options?`): `UseQueryResult`\<[`PoolHistoryData`](#poolhistorydata) \| `null`, `Error`\>
 
-Defined in: [src/lib/uniswap/hooks.ts:58](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L58)
+Defined in: [src/lib/uniswap/hooks.ts:93](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L93)
 
 Hook to fetch historical pool data for a token
 
@@ -136,13 +136,13 @@ Query options (enabled, etc.)
 
 ### useUniswapServiceStatus()
 
-> **useUniswapServiceStatus**(): `UseQueryResult`\<\{ `available`: `boolean`; `reason`: `string`; \} \| \{ `available`: `boolean`; `reason`: `null`; \}, `Error`\>
+> **useUniswapServiceStatus**(): `UseQueryResult`\<\{ `available`: `boolean`; `reason`: `null`; \} \| \{ `available`: `boolean`; `reason`: `string`; \}, `Error`\>
 
-Defined in: [src/lib/uniswap/hooks.ts:77](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L77)
+Defined in: [src/lib/uniswap/hooks.ts:112](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/hooks.ts#L112)
 
 Check if Uniswap data service is available
 This can be used to conditionally enable timeframe filters
 
 #### Returns
 
-`UseQueryResult`\<\{ `available`: `boolean`; `reason`: `string`; \} \| \{ `available`: `boolean`; `reason`: `null`; \}, `Error`\>
+`UseQueryResult`\<\{ `available`: `boolean`; `reason`: `null`; \} \| \{ `available`: `boolean`; `reason`: `string`; \}, `Error`\>

@@ -37,6 +37,7 @@ describe('auth endpoint rate-limit hardening', () => {
     await nonceHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 429 for /auth/verify when limited', async () => {
@@ -45,6 +46,7 @@ describe('auth endpoint rate-limit hardening', () => {
     await verifyHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 429 for /auth/privy when limited', async () => {
@@ -53,6 +55,7 @@ describe('auth endpoint rate-limit hardening', () => {
     await privyHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 429 for /auth/logout when limited', async () => {
@@ -61,6 +64,7 @@ describe('auth endpoint rate-limit hardening', () => {
     await logoutHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 429 for /auth/me when limited', async () => {
@@ -69,6 +73,7 @@ describe('auth endpoint rate-limit hardening', () => {
     await meHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 429 for /auth/agent-nonce when limited', async () => {
@@ -77,6 +82,7 @@ describe('auth endpoint rate-limit hardening', () => {
     await agentNonceHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 429 for /auth/agent-verify when limited', async () => {
@@ -85,5 +91,6 @@ describe('auth endpoint rate-limit hardening', () => {
     await agentVerifyHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 })

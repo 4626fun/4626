@@ -280,7 +280,6 @@ export function ExploreCreators() {
     useExploreSubnavParams({
     sortValues: CREATORS_SORT_VALUES,
     defaultSort: 'volume',
-    sortAliases: { fees24h: 'priceChange' },
     timeValues: CREATORS_TIME_FILTER_VALUES,
     defaultTime: '1d',
     debugScope: 'explore-creators',

@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/lottery/\_recentWinners.ts:66](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_recentWinners.ts#L66)
+Defined in: [api/\_handlers/v1/lottery/\_recentWinners.ts:70](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/lottery/_recentWinners.ts#L70)
 
 #### Parameters
 

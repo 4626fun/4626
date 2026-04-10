@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/workspace/\_settings.ts:15](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/workspace/_settings.ts#L15)
+Defined in: [api/\_handlers/v1/workspace/\_settings.ts:19](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/workspace/_settings.ts#L19)
 
 #### Parameters
 

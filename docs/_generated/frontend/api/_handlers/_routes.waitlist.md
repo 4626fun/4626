@@ -10,17 +10,17 @@
 
 ### waitlistRouteLoaders
 
-> `const` **waitlistRouteLoaders**: `Record`\<`string`, () => `Promise`\<`ApiHandlerModule`\>\>
+> `const` **waitlistRouteLoaders**: [`ApiRouteLoaders`](_routeLoader.md#apirouteloaders)
 
-Defined in: [api/\_handlers/\_routes.waitlist.ts:6](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.waitlist.ts#L6)
+Defined in: [api/\_handlers/\_routes.waitlist.ts:4](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.waitlist.ts#L4)
 
 ## Functions
 
 ### getWaitlistApiHandler()
 
-> **getWaitlistApiHandler**(`subpath`): `Promise`\<`ApiHandler` \| `null`\>
+> **getWaitlistApiHandler**(`subpath`): `Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routes.waitlist.ts:26](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.waitlist.ts#L26)
+Defined in: [api/\_handlers/\_routes.waitlist.ts:11](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.waitlist.ts#L11)
 
 #### Parameters
 
@@ -30,4 +30,4 @@ Defined in: [api/\_handlers/\_routes.waitlist.ts:26](https://github.com/wenakita
 
 #### Returns
 
-`Promise`\<`ApiHandler` \| `null`\>
+`Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>

@@ -79,4 +79,18 @@ describe('/api/agents directory hints', () => {
     expect(res.body.byo.agentUriService).toBe('https://4626.fun/api/lens/agent-registration')
     expect(res.body.erc8004.registrationUrl).toBe('https://4626.fun/.well-known/agent-registration.json')
   })
+
+  it('returns 429 with retry-after when directory read rate limit is exceeded', async () => {
+    mocks.checkRateLimit.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
+
+    const { default: handler } = await import('../_handlers/_agents.ts')
+    const req = createMockReq({ method: 'GET', url: '/api/agents' })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(429)
+    expect(res.body?.error).toBe('Too many requests')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
+  })
 })

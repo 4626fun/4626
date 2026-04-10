@@ -382,6 +382,32 @@ describe('POST /api/waitlist/bootstrap', () => {
     })
   })
 
+  it('rejects non-string email payloads', async () => {
+    const req = createMockReq({
+      method: 'POST',
+      body: { email: { bad: true } as unknown as string },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body?.error).toBe('Invalid email')
+  })
+
+  it('rejects non-string referral code payloads', async () => {
+    const req = createMockReq({
+      method: 'POST',
+      body: { referralCode: 42 as unknown as string },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body?.error).toBe('Invalid referral code')
+  })
+
   it('does not upsert a canonical account email until Privy email is verified', async () => {
     verifyPrivyForAccountsMock.mockResolvedValueOnce({
       privyUserId: 'did:privy:test-user',

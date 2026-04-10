@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   getSessionAddress,
@@ -33,6 +33,7 @@ type AutomationBody = {
 type PersistedIdentity = NonNullable<Awaited<ReturnType<typeof resolvePersistedWalletIdentity>>>
 
 const DEFAULT_AUTOMATION_SCOPE = 'ajna_min_bucket_only'
+const KEEPR_AUTOMATION_BODY_MAX_BYTES = 16_384
 
 function isAddressLike(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
@@ -42,6 +43,11 @@ function normalizeAddress(value: unknown): `0x${string}` | null {
   if (typeof value !== 'string') return null
   const normalized = value.trim().toLowerCase()
   return isAddressLike(normalized) ? (normalized as `0x${string}`) : null
+}
+
+function asObjectBody(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
+  return input as Record<string, unknown>
 }
 
 function firstQueryValue(value: unknown): string | null {
@@ -122,7 +128,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return respondOk(res, row)
     }
 
-    const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
+    const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: KEEPR_AUTOMATION_BODY_MAX_BYTES })) as AutomationBody
 
     if (req.method === 'DELETE') {
       const vaultAddress =

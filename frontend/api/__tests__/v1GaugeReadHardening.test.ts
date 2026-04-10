@@ -53,6 +53,7 @@ describe('v1 gauge read hardening', () => {
     await epochMod.default(epochReq, epochRes)
     expect(epochRes.statusCode).toBe(429)
     expect(epochRes.body?.error).toBe('Too many requests')
+    expect(Number(epochRes.getHeader('retry-after'))).toBeGreaterThan(0)
 
     mocks.checkRateLimit.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
     const userMod = await import('../_handlers/v1/gauge/_user.ts')
@@ -61,6 +62,7 @@ describe('v1 gauge read hardening', () => {
     await userMod.default(userReq, userRes)
     expect(userRes.statusCode).toBe(429)
     expect(userRes.body?.error).toBe('Too many requests')
+    expect(Number(userRes.getHeader('retry-after'))).toBeGreaterThan(0)
 
     mocks.checkRateLimit.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
     const vaultsMod = await import('../_handlers/v1/gauge/_vaults.ts')
@@ -69,5 +71,6 @@ describe('v1 gauge read hardening', () => {
     await vaultsMod.default(vaultsReq, vaultsRes)
     expect(vaultsRes.statusCode).toBe(429)
     expect(vaultsRes.body?.error).toBe('Too many requests')
+    expect(Number(vaultsRes.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 })

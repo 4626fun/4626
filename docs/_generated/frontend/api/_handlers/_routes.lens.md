@@ -10,17 +10,17 @@
 
 ### lensRouteLoaders
 
-> `const` **lensRouteLoaders**: `Record`\<`string`, () => `Promise`\<`ApiHandlerModule`\>\>
+> `const` **lensRouteLoaders**: [`ApiRouteLoaders`](_routeLoader.md#apirouteloaders)
 
-Defined in: [api/\_handlers/\_routes.lens.ts:6](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.lens.ts#L6)
+Defined in: [api/\_handlers/\_routes.lens.ts:4](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.lens.ts#L4)
 
 ## Functions
 
 ### getLensApiHandler()
 
-> **getLensApiHandler**(`subpath`): `Promise`\<`ApiHandler` \| `null`\>
+> **getLensApiHandler**(`subpath`): `Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routes.lens.ts:15](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.lens.ts#L15)
+Defined in: [api/\_handlers/\_routes.lens.ts:11](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.lens.ts#L11)
 
 #### Parameters
 
@@ -30,4 +30,4 @@ Defined in: [api/\_handlers/\_routes.lens.ts:15](https://github.com/wenakita/462
 
 #### Returns
 
-`Promise`\<`ApiHandler` \| `null`\>
+`Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>

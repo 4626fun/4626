@@ -5,7 +5,7 @@ import { base } from 'viem/chains'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   getSessionAddress,
@@ -47,8 +47,15 @@ type UpsertResponse = {
   configHash: string
 }
 
+const KEEPR_UPSERT_BODY_MAX_BYTES = 65_536
+
 function isAddressLike(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
+}
+
+function asObjectBody(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
+  return input as Record<string, unknown>
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -70,7 +77,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Sign in required' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
+  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: KEEPR_UPSERT_BODY_MAX_BYTES })) as UpsertBody
   const config = body?.config
   if (!config || typeof config !== 'object') {
     return res.status(400).json({ success: false, error: 'Missing config' } satisfies ApiEnvelope<never>)

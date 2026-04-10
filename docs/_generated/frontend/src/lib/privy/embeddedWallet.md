@@ -8,11 +8,29 @@
 
 ## Functions
 
+### extractPrivyWalletsFromUser()
+
+> **extractPrivyWalletsFromUser**(`user`): `Record`\<`string`, `unknown`\>[]
+
+Defined in: [src/lib/privy/embeddedWallet.ts:62](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/embeddedWallet.ts#L62)
+
+#### Parameters
+
+##### user
+
+`unknown`
+
+#### Returns
+
+`Record`\<`string`, `unknown`\>[]
+
+***
+
 ### pickPrivyEmbeddedEoaAddressFromUser()
 
 > **pickPrivyEmbeddedEoaAddressFromUser**(`user`): `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/privy/embeddedWallet.ts:42](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/embeddedWallet.ts#L42)
+Defined in: [src/lib/privy/embeddedWallet.ts:122](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/embeddedWallet.ts#L122)
 
 #### Parameters
 
@@ -30,7 +48,7 @@ Defined in: [src/lib/privy/embeddedWallet.ts:42](https://github.com/wenakita/462
 
 > **pickPrivyEmbeddedEoaAddressFromWallets**(`wallets`): `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/privy/embeddedWallet.ts:32](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/embeddedWallet.ts#L32)
+Defined in: [src/lib/privy/embeddedWallet.ts:112](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/embeddedWallet.ts#L112)
 
 #### Parameters
 
@@ -48,7 +66,7 @@ Defined in: [src/lib/privy/embeddedWallet.ts:32](https://github.com/wenakita/462
 
 > **useEnsurePrivyEmbeddedWallet**(): `object`
 
-Defined in: [src/lib/privy/embeddedWallet.ts:118](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/embeddedWallet.ts#L118)
+Defined in: [src/lib/privy/embeddedWallet.ts:157](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/embeddedWallet.ts#L157)
 
 #### Returns
 

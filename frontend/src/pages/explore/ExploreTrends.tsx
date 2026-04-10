@@ -40,7 +40,6 @@ export function ExploreTrends() {
     useExploreSubnavParams({
     sortValues: TRENDS_SORT_VALUES,
     defaultSort: 'volume',
-    sortAliases: { fees24h: 'priceChange' },
     timeValues: TRENDS_TIME_FILTER_VALUES,
     defaultTime: '1d',
     debugScope: 'explore-trends',

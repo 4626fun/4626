@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   ensureCreatorAccessSchema,
@@ -33,6 +33,13 @@ type DenyResponse = {
   denied: true
 }
 
+const DENY_BODY_MAX_BYTES = 16_384
+
+function asObjectBody(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
+  return input as Record<string, unknown>
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -54,10 +61,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     RATE_LIMITS.adminAction,
   )
   if (!rate.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
   }
 
-  const body = await readJsonBody(req, { maxBytes: 512_000 })
+  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: DENY_BODY_MAX_BYTES }))
   const requestId = typeof body?.requestId === 'number' && Number.isFinite(body.requestId) ? Math.floor(body.requestId) : NaN
   const note = typeof body?.note === 'string' ? body.note.slice(0, 4000) : null
   if (!Number.isFinite(requestId) || requestId <= 0) {
@@ -151,4 +159,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     data: { requestId, denied: true } satisfies DenyResponse,
   } satisfies ApiEnvelope<DenyResponse>)
 }
-

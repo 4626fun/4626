@@ -10,17 +10,17 @@
 
 ### deployRouteLoaders
 
-> `const` **deployRouteLoaders**: `Record`\<`string`, () => `Promise`\<`ApiHandlerModule`\>\>
+> `const` **deployRouteLoaders**: [`ApiRouteLoaders`](_routeLoader.md#apirouteloaders)
 
-Defined in: [api/\_handlers/\_routes.deploy.ts:6](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.deploy.ts#L6)
+Defined in: [api/\_handlers/\_routes.deploy.ts:4](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.deploy.ts#L4)
 
 ## Functions
 
 ### getDeployApiHandler()
 
-> **getDeployApiHandler**(`subpath`): `Promise`\<`ApiHandler` \| `null`\>
+> **getDeployApiHandler**(`subpath`): `Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routes.deploy.ts:12](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.deploy.ts#L12)
+Defined in: [api/\_handlers/\_routes.deploy.ts:10](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.deploy.ts#L10)
 
 #### Parameters
 
@@ -30,4 +30,4 @@ Defined in: [api/\_handlers/\_routes.deploy.ts:12](https://github.com/wenakita/4
 
 #### Returns
 
-`Promise`\<`ApiHandler` \| `null`\>
+`Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>

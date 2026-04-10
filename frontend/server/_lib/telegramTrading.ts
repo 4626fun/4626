@@ -180,6 +180,19 @@ export type TelegramLinkStartTokenClaimResult =
       reason: 'invalid' | 'expired' | 'consumed' | 'claimed_by_other_user'
     }
 
+export type TelegramLinkStartTokenClaimAndConsumeResult =
+  | {
+      ok: true
+      payload: TelegramLinkStartTokenPayload
+      state: 'consumed'
+    }
+  | {
+      ok: false
+      reason: 'invalid' | 'expired' | 'consumed' | 'claimed_by_other_user'
+      existingPrivyUserId?: string
+      consumedAt?: string | null
+    }
+
 export type TelegramLinkStartTokenClaim = {
   telegramUserId: string
   chatId: string
@@ -574,6 +587,90 @@ export async function claimTelegramLinkStartToken(params: {
     return { ok: false, reason: 'claimed_by_other_user' }
   }
   return { ok: true, payload, state: 'reused' }
+}
+
+export async function claimAndConsumeTelegramLinkStartToken(params: {
+  db: Db
+  token: string
+  privyUserId: string
+}): Promise<TelegramLinkStartTokenClaimAndConsumeResult> {
+  const token = asTrimmed(params.token)
+  const privyUserId = asTrimmed(params.privyUserId)
+  if (!token || !privyUserId) return { ok: false, reason: 'invalid' }
+  const tokenStatus = readTelegramLinkStartTokenStatus(token)
+  if (!tokenStatus.ok) return tokenStatus
+  const payload = tokenStatus.payload
+  const tokenHash = hashTelegramLinkStartToken(token)
+
+  await params.db.sql`
+    DELETE FROM telegram_link_start_token_claims
+    WHERE expires_at <= NOW();
+  `
+
+  const insertedConsumed = await params.db.sql`
+    INSERT INTO telegram_link_start_token_claims (
+      token_hash,
+      telegram_user_id,
+      chat_id,
+      privy_user_id,
+      expires_at,
+      consumed_at
+    )
+    VALUES (
+      ${tokenHash},
+      ${payload.telegramUserId},
+      ${payload.chatId},
+      ${privyUserId},
+      ${payload.expiresAt},
+      NOW()
+    )
+    ON CONFLICT (token_hash) DO NOTHING
+    RETURNING token_hash;
+  `
+  if (insertedConsumed.rows?.[0]?.token_hash) {
+    return { ok: true, payload, state: 'consumed' }
+  }
+
+  const existing = await params.db.sql`
+    SELECT privy_user_id, expires_at, consumed_at
+    FROM telegram_link_start_token_claims
+    WHERE token_hash = ${tokenHash}
+    LIMIT 1;
+  `
+  const row = existing.rows?.[0]
+  if (!row) return { ok: false, reason: 'invalid' }
+
+  const existingPrivyUserId = asTrimmed(row.privy_user_id)
+  const expiresAtMs = Date.parse(String(row.expires_at ?? ''))
+  if (Number.isFinite(expiresAtMs) && expiresAtMs <= Date.now()) {
+    return { ok: false, reason: 'expired', existingPrivyUserId }
+  }
+  if (existingPrivyUserId.toLowerCase() !== privyUserId.toLowerCase()) {
+    return { ok: false, reason: 'claimed_by_other_user', existingPrivyUserId }
+  }
+  if (row.consumed_at) {
+    return {
+      ok: false,
+      reason: 'consumed',
+      existingPrivyUserId,
+      consumedAt: toIso(row.consumed_at),
+    }
+  }
+
+  const consumeLegacyClaim = await params.db.sql`
+    UPDATE telegram_link_start_token_claims
+    SET consumed_at = NOW()
+    WHERE token_hash = ${tokenHash}
+      AND privy_user_id = ${privyUserId}
+      AND consumed_at IS NULL
+      AND expires_at > NOW()
+    RETURNING consumed_at;
+  `
+  if (consumeLegacyClaim.rows?.[0]?.consumed_at) {
+    return { ok: true, payload, state: 'consumed' }
+  }
+
+  return { ok: false, reason: 'invalid', existingPrivyUserId }
 }
 
 export async function consumeTelegramLinkStartToken(params: {

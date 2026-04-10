@@ -20,7 +20,7 @@ Defined in: [src/lib/host.ts:1](https://github.com/wenakita/4626/blob/main/front
 
 > `const` **APP\_ORIGIN**: `string`
 
-Defined in: [src/lib/host.ts:53](https://github.com/wenakita/4626/blob/main/frontend/src/lib/host.ts#L53)
+Defined in: [src/lib/host.ts:62](https://github.com/wenakita/4626/blob/main/frontend/src/lib/host.ts#L62)
 
 Canonical app domain origin (post-acceptance).
 
@@ -30,7 +30,7 @@ Canonical app domain origin (post-acceptance).
 
 > `const` **MARKETING\_ORIGIN**: `string`
 
-Defined in: [src/lib/host.ts:49](https://github.com/wenakita/4626/blob/main/frontend/src/lib/host.ts#L49)
+Defined in: [src/lib/host.ts:58](https://github.com/wenakita/4626/blob/main/frontend/src/lib/host.ts#L58)
 
 Canonical marketing/waitlist domain origin.
 
@@ -40,7 +40,7 @@ Canonical marketing/waitlist domain origin.
 
 > `const` **WAITLIST\_REFERRAL\_BASE\_URL**: `string`
 
-Defined in: [src/lib/host.ts:60](https://github.com/wenakita/4626/blob/main/frontend/src/lib/host.ts#L60)
+Defined in: [src/lib/host.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/lib/host.ts#L69)
 
 Optional explicit base URL for waitlist referral links.
 When set, waitlist share links are built from this origin instead of MARKETING_ORIGIN.
@@ -51,7 +51,7 @@ When set, waitlist share links are built from this origin instead of MARKETING_O
 
 > **getAppBaseUrl**(): `string`
 
-Defined in: [src/lib/host.ts:97](https://github.com/wenakita/4626/blob/main/frontend/src/lib/host.ts#L97)
+Defined in: [src/lib/host.ts:106](https://github.com/wenakita/4626/blob/main/frontend/src/lib/host.ts#L106)
 
 Base URL for the app (explore, deploy, vault, admin).
 
@@ -68,7 +68,7 @@ When on app domain, returns current origin.
 
 > **getHostMode**(): [`HostMode`](#hostmode)
 
-Defined in: [src/lib/host.ts:83](https://github.com/wenakita/4626/blob/main/frontend/src/lib/host.ts#L83)
+Defined in: [src/lib/host.ts:92](https://github.com/wenakita/4626/blob/main/frontend/src/lib/host.ts#L92)
 
 Host mode detection.
 
@@ -85,7 +85,7 @@ Host mode detection.
 
 > **getMarketingBaseUrl**(): `string`
 
-Defined in: [src/lib/host.ts:109](https://github.com/wenakita/4626/blob/main/frontend/src/lib/host.ts#L109)
+Defined in: [src/lib/host.ts:118](https://github.com/wenakita/4626/blob/main/frontend/src/lib/host.ts#L118)
 
 Base URL for the marketing/waitlist site.
 
@@ -102,13 +102,31 @@ When on app domain, returns 4626.fun.
 
 > **getWaitlistReferralBaseUrl**(): `string`
 
-Defined in: [src/lib/host.ts:118](https://github.com/wenakita/4626/blob/main/frontend/src/lib/host.ts#L118)
+Defined in: [src/lib/host.ts:127](https://github.com/wenakita/4626/blob/main/frontend/src/lib/host.ts#L127)
 
 Base URL used for user-facing waitlist referral links.
 
 #### Returns
 
 `string`
+
+***
+
+### isCurrentWindowUrl()
+
+> **isCurrentWindowUrl**(`target`): `boolean`
+
+Defined in: [src/lib/host.ts:40](https://github.com/wenakita/4626/blob/main/frontend/src/lib/host.ts#L40)
+
+#### Parameters
+
+##### target
+
+`string`
+
+#### Returns
+
+`boolean`
 
 ***
 

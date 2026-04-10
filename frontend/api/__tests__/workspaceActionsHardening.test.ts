@@ -58,6 +58,7 @@ describe('POST /api/v1/workspace/actions hardening', () => {
 
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Too many requests')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('uses tightened body cap and returns 400 when action is missing', async () => {

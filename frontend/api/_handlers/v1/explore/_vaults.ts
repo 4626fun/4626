@@ -49,7 +49,6 @@ const VALID_SORTS: Record<string, ExploreVaultSort> = {
   volume: 'volume',
   marketCap: 'marketCap',
   fees24h: 'fees24h',
-  priceChange: 'fees24h',
   new: 'new',
 }
 
@@ -133,6 +132,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     RATE_LIMITS.exploreRead,
   )
   if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
   }
 

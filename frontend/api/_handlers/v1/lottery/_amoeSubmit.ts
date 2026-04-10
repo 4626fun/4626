@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import {
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   guardAgentApiRequest,
   getApiContracts,
   getClientIp,
@@ -239,9 +239,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     rateLimitKey('v1-lottery-amoe-submit', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
     RATE_LIMITS.lotteryWrite,
   )
-  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+  if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
+    return res.status(429).json({ success: false, error: 'Too many requests' })
+  }
 
-  const body = (await readJsonBody(req, { maxBytes: 16_384 })) ?? {}
+  const body = (await readBoundedJsonObjectBody(req, { maxBytes: 16_384 })) ?? {}
   const creatorCoinRaw = typeof body.creatorCoin === 'string' ? body.creatorCoin.trim() : ''
   const message = typeof body.message === 'string' ? body.message : ''
   const signatureRaw = typeof body.signature === 'string' ? body.signature.trim() : ''

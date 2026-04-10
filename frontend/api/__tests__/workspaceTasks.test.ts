@@ -116,5 +116,6 @@ describe('workspace tasks handler', () => {
     await mod.default(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Too many requests')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 })

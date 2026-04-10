@@ -14,9 +14,7 @@ const {
   recordProviderLinkMock,
   readTelegramMiniAppSessionMock,
   readTelegramLinkStartTokenStatusMock,
-  claimTelegramLinkStartTokenMock,
-  readTelegramLinkStartTokenClaimMock,
-  finalizeTelegramLinkStartTokenConsumptionMock,
+  claimAndConsumeTelegramLinkStartTokenMock,
   getTelegramLinkByUserIdMock,
   runTelegramMergePreflightMock,
   upsertTelegramUserLinkMock,
@@ -33,9 +31,7 @@ const {
   recordProviderLinkMock: vi.fn(),
   readTelegramMiniAppSessionMock: vi.fn(),
   readTelegramLinkStartTokenStatusMock: vi.fn(),
-  claimTelegramLinkStartTokenMock: vi.fn(),
-  readTelegramLinkStartTokenClaimMock: vi.fn(),
-  finalizeTelegramLinkStartTokenConsumptionMock: vi.fn(),
+  claimAndConsumeTelegramLinkStartTokenMock: vi.fn(),
   getTelegramLinkByUserIdMock: vi.fn(),
   runTelegramMergePreflightMock: vi.fn(),
   upsertTelegramUserLinkMock: vi.fn(),
@@ -70,9 +66,7 @@ vi.mock('../../server/_lib/telegramTrading.js', () => ({
   ensureTelegramTradingSchema: ensureTelegramTradingSchemaMock,
   readTelegramMiniAppSession: readTelegramMiniAppSessionMock,
   readTelegramLinkStartTokenStatus: readTelegramLinkStartTokenStatusMock,
-  claimTelegramLinkStartToken: claimTelegramLinkStartTokenMock,
-  readTelegramLinkStartTokenClaim: readTelegramLinkStartTokenClaimMock,
-  finalizeTelegramLinkStartTokenConsumption: finalizeTelegramLinkStartTokenConsumptionMock,
+  claimAndConsumeTelegramLinkStartToken: claimAndConsumeTelegramLinkStartTokenMock,
   getTelegramLinkByUserId: getTelegramLinkByUserIdMock,
   runTelegramMergePreflight: runTelegramMergePreflightMock,
   upsertTelegramUserLink: upsertTelegramUserLinkMock,
@@ -145,7 +139,7 @@ describe('POST /api/telegram/link/complete', () => {
         expiresAt: '2099-01-01T00:00:00.000Z',
       },
     })
-    claimTelegramLinkStartTokenMock.mockResolvedValue({
+    claimAndConsumeTelegramLinkStartTokenMock.mockResolvedValue({
       ok: true,
       payload: {
         telegramUserId: '42',
@@ -153,10 +147,8 @@ describe('POST /api/telegram/link/complete', () => {
         issuedAt: '2026-03-23T00:00:00.000Z',
         expiresAt: '2099-01-01T00:00:00.000Z',
       },
-      state: 'claimed',
+      state: 'consumed',
     })
-    readTelegramLinkStartTokenClaimMock.mockResolvedValue(null)
-    finalizeTelegramLinkStartTokenConsumptionMock.mockResolvedValue('consumed')
     getTelegramLinkByUserIdMock.mockResolvedValue(null)
     runTelegramMergePreflightMock.mockResolvedValue({ ok: true })
     upsertTelegramUserLinkMock.mockResolvedValue({
@@ -197,17 +189,11 @@ describe('POST /api/telegram/link/complete', () => {
         value: '42',
       }),
     )
-    expect(finalizeTelegramLinkStartTokenConsumptionMock).toHaveBeenCalledTimes(1)
+    expect(claimAndConsumeTelegramLinkStartTokenMock).toHaveBeenCalledTimes(1)
     expect(res.body?.data?.link?.telegramUserId).toBe('42')
     expect(trackTelegramLinkEventMock).toHaveBeenCalledWith(
       expect.objectContaining({
         event: 'telegram_link_token_claim_result',
-        status: 'claimed',
-      }),
-    )
-    expect(trackTelegramLinkEventMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        event: 'telegram_link_token_consume_result',
         status: 'consumed',
       }),
     )
@@ -236,17 +222,11 @@ describe('POST /api/telegram/link/complete', () => {
       lastFailureReason: null,
       unlinkRequestedAt: null,
     })
-    claimTelegramLinkStartTokenMock.mockResolvedValueOnce({
+    claimAndConsumeTelegramLinkStartTokenMock.mockResolvedValueOnce({
       ok: false,
       reason: 'consumed',
-    })
-    readTelegramLinkStartTokenClaimMock.mockResolvedValueOnce({
-      telegramUserId: '42',
-      chatId: '-100123',
-      privyUserId: 'did:privy:user-1',
-      expiresAt: '2099-01-01T00:00:00.000Z',
+      existingPrivyUserId: 'did:privy:user-1',
       consumedAt: '2026-03-23T00:01:00.000Z',
-      createdAt: '2026-03-23T00:00:00.000Z',
     })
 
     const req = createMockReq({
@@ -263,12 +243,12 @@ describe('POST /api/telegram/link/complete', () => {
 
     expect(res.statusCode).toBe(200)
     expect(upsertTelegramUserLinkMock).toHaveBeenCalledTimes(1)
-    expect(finalizeTelegramLinkStartTokenConsumptionMock).not.toHaveBeenCalled()
+    expect(claimAndConsumeTelegramLinkStartTokenMock).toHaveBeenCalledTimes(1)
   })
 
   it('rejects cross-user token claims', async () => {
     const { default: handler } = await import('../_handlers/telegram/_link-complete.ts')
-    claimTelegramLinkStartTokenMock.mockResolvedValueOnce({
+    claimAndConsumeTelegramLinkStartTokenMock.mockResolvedValueOnce({
       ok: false,
       reason: 'claimed_by_other_user',
     })
@@ -334,5 +314,23 @@ describe('POST /api/telegram/link/complete', () => {
 
     expect(res.statusCode).toBe(409)
     expect(res.body?.code).toBe('RECOVERY_REQUIRED')
+  })
+
+  it('rejects oversized request payloads', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_link-complete.ts')
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer privy-token' },
+      body: {
+        sessionToken: 'x'.repeat(20_000),
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(413)
+    expect(String(res.body?.error ?? '')).toContain('Request body too large')
+    expect(verifyPrivyForAccountsMock).not.toHaveBeenCalled()
   })
 })

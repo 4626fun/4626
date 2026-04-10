@@ -24,6 +24,11 @@ import {
   requireServerKey,
   setPublicCors,
 } from '../../../server/zora/_shared.js'
+import {
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
+} from '../../../packages/server-core/src/index.js'
 
 import { blobHeadOrNull, blobPutBytes, fetchBytes, sha256Hex } from '../../../server/_lib/blob.js'
 import { resolveCreatorTokenArtwork, type CreatorTokenArtwork } from '../../../server/_lib/creatorTokenArtwork.js'
@@ -38,6 +43,8 @@ const MAX_SOURCE_IMAGE_BYTES = 12 * 1024 * 1024
 const MAX_SOURCE_IMAGE_PIXELS = 16_000_000
 const MAX_SOURCE_IMAGE_DIMENSION = 8192
 const SOURCE_FETCH_TIMEOUT_MS = 8_000
+const TOKEN_IMAGE_IP_RATE_LIMIT = { windowMs: 60_000, maxRequests: 180 } as const
+const TOKEN_IMAGE_IP_ADDRESS_RATE_LIMIT = { windowMs: 60_000, maxRequests: 60 } as const
 
 ensureFontconfig()
 
@@ -275,6 +282,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const address = getStringQuery(req, 'address')
   if (!address || !isAddress(address)) {
     return res.status(400).json({ error: 'Invalid token address' })
+  }
+  const addressLc = address.toLowerCase()
+  const clientIp = getClientIp(req as any) || 'unknown'
+  const ipRate = checkRateLimit(
+    rateLimitKey('token-image-ip', clientIp),
+    TOKEN_IMAGE_IP_RATE_LIMIT,
+  )
+  const ipAddressRate = checkRateLimit(
+    rateLimitKey('token-image-ip-address', clientIp, addressLc),
+    TOKEN_IMAGE_IP_ADDRESS_RATE_LIMIT,
+  )
+  const rateRemaining = Math.min(ipRate.remaining, ipAddressRate.remaining)
+  const rateResetAt = Math.min(ipRate.resetAt, ipAddressRate.resetAt)
+  res.setHeader('X-RateLimit-Limit', String(TOKEN_IMAGE_IP_RATE_LIMIT.maxRequests))
+  res.setHeader('X-RateLimit-Remaining', String(Math.max(0, rateRemaining)))
+  res.setHeader('X-RateLimit-Reset', String(Math.floor(rateResetAt / 1000)))
+  if (!ipRate.allowed || !ipAddressRate.allowed) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((rateResetAt - Date.now()) / 1000))
+    res.setHeader('Retry-After', String(retryAfterSeconds))
+    return res.status(429).json({ error: 'Rate limit exceeded' })
   }
 
   const chainId = getNumberQuery(req, 'chain') ?? DEFAULT_CHAIN_ID

@@ -18,7 +18,6 @@ function UrlStateHarness() {
     useExploreSubnavParams({
       sortValues: ['volume', 'marketCap', 'priceChange', 'new'] as const,
       defaultSort: 'volume',
-      sortAliases: { fees24h: 'priceChange' },
       timeValues: ['1d', '1w', '1y'] as const,
       defaultTime: '1d',
     })
@@ -41,17 +40,17 @@ function UrlStateHarness() {
 }
 
 describe('Explore URL state integration', () => {
-  it('canonicalizes legacy/invalid params on mount', async () => {
+  it('canonicalizes unsupported/invalid params on mount', async () => {
     const router = createMemoryRouter(
       [{ path: '/explore/content', element: <UrlStateHarness /> }],
       {
-        initialEntries: ['/explore/content?sort=fees24h&time=invalid&q=%20%20coin%20%20'],
+        initialEntries: ['/explore/content?sort=unsupported&time=invalid&q=%20%20coin%20%20'],
       },
     )
     render(<RouterProvider router={router} />)
 
     await waitFor(() => {
-      expect(screen.getByTestId('location').textContent).toBe('/explore/content?sort=priceChange&time=1d&q=coin')
+      expect(screen.getByTestId('location').textContent).toBe('/explore/content?sort=volume&time=1d&q=coin')
     })
   })
 

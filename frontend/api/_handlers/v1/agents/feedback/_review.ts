@@ -4,7 +4,7 @@ import { encodeFunctionData, keccak256, toHex } from 'viem'
 
 import {
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   guardAgentApiRequest,
@@ -32,6 +32,41 @@ type ReviewRequest = {
   registrationUrl?: string
   endpoint?: string
   capability?: string
+}
+const MAX_REGISTRATION_URL_LENGTH = 1_024
+const MAX_ENDPOINT_LENGTH = 1_024
+const MAX_CAPABILITY_LENGTH = 128
+
+function asObjectBody(input: unknown): ReviewRequest {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
+  return input as ReviewRequest
+}
+
+function parseNonNegativeInt(value: unknown, field: string): number {
+  const raw = String(value ?? '').trim()
+  if (!/^\d+$/.test(raw)) {
+    throw new Error(`${field} is required (non-negative integer).`)
+  }
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed < 0 || !Number.isInteger(parsed)) {
+    throw new Error(`${field} is required (non-negative integer).`)
+  }
+  return parsed
+}
+
+function normalizeOptionalString(value: unknown, maxLength: number): string | undefined {
+  const trimmed = typeof value === 'string' ? value.trim() : ''
+  if (!trimmed) return undefined
+  return trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const parsed = new URL(value)
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:'
+  } catch {
+    return false
+  }
 }
 
 const REVIEW_OUTPUT_SCHEMA = {
@@ -70,16 +105,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     RATE_LIMITS.agentFeedbackReview,
   )
   if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody(req, { maxBytes: 65_536 })) ?? {}
-  const agentId = Number(body.agentId ?? -1)
-  if (!Number.isFinite(agentId) || agentId < 0 || Math.floor(agentId) !== agentId) {
+  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: 65_536 }))
+  let agentId = -1
+  try {
+    agentId = parseNonNegativeInt(body.agentId, 'agentId')
+  } catch {
     return res.status(400).json({
       success: false,
       error: 'agentId is required (non-negative integer).',
     } satisfies ApiEnvelope<never>)
+  }
+  const registrationUrl = normalizeOptionalString(body.registrationUrl, MAX_REGISTRATION_URL_LENGTH)
+  const endpoint = normalizeOptionalString(body.endpoint, MAX_ENDPOINT_LENGTH)
+  const capability = normalizeOptionalString(body.capability, MAX_CAPABILITY_LENGTH)
+  if (registrationUrl && !isHttpUrl(registrationUrl)) {
+    return res.status(400).json({ success: false, error: 'registrationUrl must be an http(s) URL.' } satisfies ApiEnvelope<never>)
+  }
+  if (endpoint && !isHttpUrl(endpoint)) {
+    return res.status(400).json({ success: false, error: 'endpoint must be an http(s) URL.' } satisfies ApiEnvelope<never>)
   }
 
   const paymentGate = await evaluateX402Payment(req, {
@@ -114,8 +161,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const review = await buildErc8004TechnicalReview({
       agentId,
-      registrationUrl: typeof body.registrationUrl === 'string' ? body.registrationUrl.trim() : undefined,
-      endpoint: typeof body.endpoint === 'string' ? body.endpoint.trim() : undefined,
+      registrationUrl,
+      endpoint,
     })
 
     const chainId = review.identity.chainId
@@ -160,7 +207,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         chainId: paymentGate.network === 'base' ? 8453 : 84532,
         timestamp: review.generatedAt,
       },
-      capability: typeof body.capability === 'string' ? body.capability.trim() || undefined : undefined,
+      capability,
       endpoint: review.endpoint.finalUrl ?? review.endpoint.url ?? undefined,
     }
 

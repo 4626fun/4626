@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   getDb,
@@ -37,6 +37,22 @@ const ALLOWED_PROVIDERS = new Set<AccountLinkProvider>([
   'email',
   'zora_cross_app',
 ])
+const UNLINK_VALUE_MAX_LENGTH = 256
+const UNLINK_BODY_MAX_BYTES = 16_384
+
+function asObjectBody(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
+  return input as Record<string, unknown>
+}
+
+function normalizeUnlinkValue(value: unknown): { ok: true; value: string | null } | { ok: false } {
+  if (value == null) return { ok: true, value: null }
+  if (typeof value !== 'string') return { ok: false }
+  const trimmed = value.trim()
+  if (!trimmed) return { ok: true, value: null }
+  if (trimmed.length > UNLINK_VALUE_MAX_LENGTH) return { ok: false }
+  return { ok: true, value: trimmed }
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -61,10 +77,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Database unavailable' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody(req, { maxBytes: 512_000 }).catch(() => null)) ?? (req.body as UnlinkBody | null) ?? {}
+  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: UNLINK_BODY_MAX_BYTES })) as UnlinkBody
   const provider = body.provider
   if (!provider || !ALLOWED_PROVIDERS.has(provider)) {
     return res.status(400).json({ success: false, error: 'Invalid provider' } satisfies ApiEnvelope<never>)
+  }
+  const normalizedValue = normalizeUnlinkValue(body.value)
+  if (!normalizedValue.ok) {
+    return res.status(400).json({ success: false, error: 'Invalid unlink value' } satisfies ApiEnvelope<never>)
   }
 
   try {
@@ -80,7 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       db: db as any,
       privyUserId: context.privyUserId,
       provider,
-      value: typeof body.value === 'string' ? body.value : null,
+      value: normalizedValue.value,
     })
 
     const data = await buildAccountsMePayload({

@@ -2187,13 +2187,133 @@ async function validateInnerCalls(params: {
           }
 
           if (!legacyVault) return null
+          const legacyVaultAddress = getAddress(legacyVault)
+          const [vaultCode, wrapperCode, shareCode, vestingCode] = (await Promise.all([
+            client.getBytecode({ address: legacyVaultAddress }),
+            legacyWrapper ? client.getBytecode({ address: legacyWrapper }) : Promise.resolve(undefined),
+            legacyShareOFT ? client.getBytecode({ address: legacyShareOFT }) : Promise.resolve(undefined),
+            legacyVesting ? client.getBytecode({ address: legacyVesting }) : Promise.resolve(undefined),
+          ])) as [Hex | undefined, Hex | undefined, Hex | undefined, Hex | undefined]
+          if (!vaultCode || vaultCode === '0x') throw new Error('legacy_vault_not_deployed')
+          if (legacyWrapper && (!wrapperCode || wrapperCode === '0x')) {
+            throw new Error('legacy_wrapper_not_deployed')
+          }
+          if (legacyShareOFT && (!shareCode || shareCode === '0x')) {
+            throw new Error('legacy_shareoft_not_deployed')
+          }
+          if (legacyVesting && (!vestingCode || vestingCode === '0x')) {
+            throw new Error('legacy_vesting_not_deployed')
+          }
           const asset = (await client.readContract({
-            address: legacyVault,
+            address: legacyVaultAddress,
             abi: ERC4626_ASSET_ABI,
             functionName: 'asset',
           }).catch(() => null)) as Address | null
           if (!asset || !isAddress(asset)) throw new Error('legacy_vault_asset_not_found')
           const creatorToken = getAddress(asset)
+          if (legacyWrapper || legacyShareOFT) {
+            const [
+              wrapperVault,
+              wrapperShare,
+              wrapperCreatorCoin,
+              wrapperOwner,
+              shareVault,
+              shareOwner,
+            ] = (await Promise.all([
+              legacyWrapper
+                ? client
+                    .readContract({
+                      address: legacyWrapper,
+                      abi: WRAPPER_VIEW_ABI,
+                      functionName: 'vault',
+                    })
+                    .catch(() => null)
+                : Promise.resolve(null),
+              legacyWrapper
+                ? client
+                    .readContract({
+                      address: legacyWrapper,
+                      abi: WRAPPER_VIEW_ABI,
+                      functionName: 'shareOFT',
+                    })
+                    .catch(() => null)
+                : Promise.resolve(null),
+              legacyWrapper
+                ? client
+                    .readContract({
+                      address: legacyWrapper,
+                      abi: WRAPPER_VIEW_ABI,
+                      functionName: 'creatorCoin',
+                    })
+                    .catch(() => null)
+                : Promise.resolve(null),
+              legacyWrapper
+                ? client
+                    .readContract({
+                      address: legacyWrapper,
+                      abi: WRAPPER_VIEW_ABI,
+                      functionName: 'owner',
+                    })
+                    .catch(() => null)
+                : Promise.resolve(null),
+              legacyShareOFT
+                ? client
+                    .readContract({
+                      address: legacyShareOFT,
+                      abi: SHARE_OFT_VIEW_ABI,
+                      functionName: 'vault',
+                    })
+                    .catch(() => null)
+                : Promise.resolve(null),
+              legacyShareOFT
+                ? client
+                    .readContract({
+                      address: legacyShareOFT,
+                      abi: SHARE_OFT_VIEW_ABI,
+                      functionName: 'owner',
+                    })
+                    .catch(() => null)
+                : Promise.resolve(null),
+            ])) as [
+              Address | null,
+              Address | null,
+              Address | null,
+              Address | null,
+              Address | null,
+              Address | null,
+            ]
+
+            if (legacyWrapper) {
+              if (!wrapperVault || getAddress(wrapperVault) !== legacyVaultAddress) {
+                throw new Error('legacy_wrapper_vault_mismatch')
+              }
+              if (!wrapperCreatorCoin || getAddress(wrapperCreatorCoin) !== creatorToken) {
+                throw new Error('legacy_wrapper_creator_token_mismatch')
+              }
+              if (wrapperOwner && getAddress(wrapperOwner) !== creatorVaultBatcher) {
+                throw new Error('legacy_wrapper_owner_mismatch')
+              }
+              if (!wrapperShare || !isAddress(wrapperShare)) {
+                throw new Error('legacy_wrapper_shareoft_missing')
+              }
+              const wrapperShareAddress = getAddress(wrapperShare)
+              if (legacyShareOFT && wrapperShareAddress !== getAddress(legacyShareOFT)) {
+                throw new Error('legacy_wrapper_shareoft_mismatch')
+              }
+              if (!legacyShareOFT) {
+                legacyShareOFT = wrapperShareAddress
+              }
+            }
+
+            if (legacyShareOFT) {
+              if (!shareVault || getAddress(shareVault) !== legacyVaultAddress) {
+                throw new Error('legacy_shareoft_vault_mismatch')
+              }
+              if (shareOwner && getAddress(shareOwner) !== creatorVaultBatcher) {
+                throw new Error('legacy_shareoft_owner_mismatch')
+              }
+            }
+          }
           const phase1Logs = await client
             .getLogs({
               address: creatorVaultBatcher,

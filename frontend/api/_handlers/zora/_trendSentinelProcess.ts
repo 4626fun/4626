@@ -24,8 +24,18 @@ function readBearerToken(req: VercelRequest): string {
 }
 
 function parseBody(req: VercelRequest): Body {
-  if (req.body && typeof req.body === 'object' && !Array.isArray(req.body)) return req.body as Body
+  const TREND_SENTINEL_MAX_BODY_BYTES = 16_384
+  if (req.body && typeof req.body === 'object' && !Array.isArray(req.body)) {
+    const estimated = Buffer.byteLength(JSON.stringify(req.body), 'utf8')
+    if (estimated > TREND_SENTINEL_MAX_BODY_BYTES) {
+      throw new Error('body_too_large')
+    }
+    return req.body as Body
+  }
   if (typeof req.body === 'string' && req.body.trim()) {
+    if (Buffer.byteLength(req.body, 'utf8') > TREND_SENTINEL_MAX_BODY_BYTES) {
+      throw new Error('body_too_large')
+    }
     try {
       const parsed = JSON.parse(req.body) as Body
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed
@@ -57,6 +67,7 @@ function parseTickers(value: unknown): string[] | undefined {
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
+  res.setHeader('Cache-Control', 'no-store')
   if (handleOptions(req, res)) return
 
   if (req.method !== 'POST') {
@@ -78,7 +89,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Unauthorized' })
   }
 
-  const body = parseBody(req)
+  let body: Body
+  try {
+    body = parseBody(req)
+  } catch {
+    return res.status(413).json({ success: false, error: 'Request body too large' })
+  }
   try {
     const data = await runTrendLaunchSentinelProcess({
       overrides: {

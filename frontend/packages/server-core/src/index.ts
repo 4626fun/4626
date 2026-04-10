@@ -14,6 +14,7 @@ export {
   makeSessionToken,
   parseCookies,
   parseSiweMessage,
+  readBoundedJsonObjectBody,
   readJsonBody,
   readNonceToken,
   readSessionFromRequest,

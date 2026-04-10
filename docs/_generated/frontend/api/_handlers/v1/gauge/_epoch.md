@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/gauge/\_epoch.ts:41](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/gauge/_epoch.ts#L41)
+Defined in: [api/\_handlers/v1/gauge/\_epoch.ts:45](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/gauge/_epoch.ts#L45)
 
 #### Parameters
 

@@ -21,26 +21,26 @@ export function canEnterAppFromAccountState(params: { appAccessStatus: string | 
 
 export function deriveWaitlistAuthUi(): WaitlistEmailUi {
   return {
-    title: 'Get early access',
-    subtitle: 'Use one quick sign-in to save your spot. We handle account setup in the background.',
+    title: 'Start with email',
+    subtitle: 'Use one secure sign-in to save your spot. We guide the rest step by step.',
     ctaLabel: 'Continue',
-    busyLabel: 'Setting up your account…',
+    busyLabel: 'Preparing your account…',
   }
 }
 
 export function deriveWaitlistDoneUi(canEnterApp: boolean): WaitlistDoneUi {
   if (canEnterApp) {
     return {
-      title: 'Access approved',
-      subtitle: 'Your account is ready and app access is live. Enter the app now, or open Accounts to manage identities and points.',
+      title: 'You are approved',
+      subtitle: 'Your setup is complete and access is live. Enter the app now, or open Accounts for advanced controls.',
       primaryLabel: `${SHARE_SYMBOL_PREFIX} Enter App`,
       secondaryLabel: 'Open Accounts',
     }
   }
 
   return {
-    title: 'Account ready',
-    subtitle: 'Your account is set up. App access is still pending. Open Accounts to manage identities and points while you wait.',
+    title: 'Setup complete',
+    subtitle: 'Your account is ready. App access is still pending. Open Accounts for advanced controls while approval catches up.',
     primaryLabel: `${SHARE_SYMBOL_PREFIX} Open Accounts`,
     secondaryLabel: null,
   }

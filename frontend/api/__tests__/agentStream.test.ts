@@ -145,6 +145,43 @@ describe('agent stream handler', () => {
     expect(streamResponseMock).not.toHaveBeenCalled()
   })
 
+  it('returns 413 when post body exceeds max bytes', async () => {
+    const mod = await import('../_handlers/agent/_stream.ts')
+    const handler = mod.default
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'content-length': '17000' },
+      url: '/api/agent/stream',
+      body: { message: 'hi' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(413)
+    expect(res.body).toEqual({ success: false, error: 'Request body is too large' })
+    expect(streamResponseMock).not.toHaveBeenCalled()
+  })
+
+  it('returns 400 for invalid post JSON body', async () => {
+    const mod = await import('../_handlers/agent/_stream.ts')
+    const handler = mod.default
+
+    const req = createMockReq({
+      method: 'POST',
+      url: '/api/agent/stream',
+      body: ['not-an-object'],
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(res.body).toEqual({ success: false, error: 'Invalid JSON body' })
+    expect(streamResponseMock).not.toHaveBeenCalled()
+  })
+
   it('returns 429 when stream rate limit is exceeded', async () => {
     checkRateLimitMock
       .mockReturnValueOnce({
@@ -206,4 +243,3 @@ describe('agent stream handler', () => {
     expect(payload).toContain('stream_failed')
   })
 })
-

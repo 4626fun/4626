@@ -3,7 +3,7 @@ import { z } from 'zod'
 
 import {
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   guardAgentApiRequest,
@@ -23,6 +23,15 @@ const joinBodySchema = z
     accessToken: z.string().min(16),
   })
   .strict()
+
+function asObjectBody(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
+  return input as Record<string, unknown>
+}
+
+function setRetryAfterHeader(res: VercelResponse, resetAt: number) {
+  res.setHeader('Retry-After', String(Math.max(1, Math.ceil((resetAt - Date.now()) / 1000))))
+}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -46,10 +55,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     RATE_LIMITS.agentAccessJoin,
   )
   if (!limiter.allowed) {
+    setRetryAfterHeader(res, limiter.resetAt)
     return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
   }
 
-  const rawBody = (await readJsonBody<Record<string, unknown>>(req, { maxBytes: 8_192 })) ?? {}
+  const rawBody = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: 8_192 }))
   const parsedBody = joinBodySchema.safeParse(rawBody)
   if (!parsedBody.success) {
     return res.status(400).json({

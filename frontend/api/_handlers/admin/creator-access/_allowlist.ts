@@ -57,6 +57,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     RATE_LIMITS.adminAction,
   )
   if (!rate.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
   }
 

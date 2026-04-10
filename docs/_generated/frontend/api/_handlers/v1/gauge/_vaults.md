@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/gauge/\_vaults.ts:40](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/gauge/_vaults.ts#L40)
+Defined in: [api/\_handlers/v1/gauge/\_vaults.ts:44](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/gauge/_vaults.ts#L44)
 
 #### Parameters
 

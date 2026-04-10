@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   getDb,
@@ -52,6 +52,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     maxRequests: 20,
   })
   if (!limit.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limit.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
   }
 
@@ -60,7 +61,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Auth service unavailable' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<HandoffCreateBody>(req, { maxBytes: HANDOFF_CREATE_MAX_BODY_BYTES }).catch(() => null)) ?? (req.body as HandoffCreateBody | null) ?? {}
+  let body: HandoffCreateBody
+  try {
+    body = (await readBoundedJsonObjectBody<HandoffCreateBody>(req, {
+      maxBytes: HANDOFF_CREATE_MAX_BODY_BYTES,
+    })) ?? {}
+  } catch {
+    return res.status(413).json({ success: false, error: 'Request body too large' } satisfies ApiEnvelope<never>)
+  }
   const privyToken = typeof body.privyToken === 'string' && body.privyToken.trim() ? body.privyToken.trim() : null
 
   try {

@@ -7,7 +7,7 @@ import {
   getClientIp,
   RATE_LIMITS,
   rateLimitKey,
-  readJsonBody,
+  readBoundedJsonObjectBody,
 } from '../../../packages/server-core/src/index.js'
 import { setPublicCors, setCache, DEFAULT_CHAIN_ID, getNumberQuery, getStringQuery, handleOptions, requireServerKey } from '../../../server/zora/_shared.js'
 import { blobHeadOrNull, blobPutBytes, fetchBytes } from '../../../server/_lib/blob.js'
@@ -18,6 +18,7 @@ type TokenListVersion = { major: number; minor: number; patch: number }
 
 const TOKEN_LIST_VERSION: TokenListVersion = { major: 1, minor: 0, patch: 0 }
 const TOKEN_LIST_NAME = '4626 Managed ShareOFT Token List'
+const MANAGED_TOKEN_LIST_MAX_BODY_BYTES = 16_384
 
 function normalizeHost(value: string | undefined): string {
   const raw = String(value ?? '').trim()
@@ -184,8 +185,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const provided = typeof req.headers['x-zora-server-key'] === 'string' ? req.headers['x-zora-server-key'] : null
     if (!provided || provided !== serverKey) return res.status(401).json({ error: 'Unauthorized' })
 
-    const body = (await readJsonBody<{ shareOft?: unknown }>(req, { maxBytes: 16_384 }).catch(() => null))
-      ?? ((req.body as { shareOft?: unknown } | null) ?? {})
+    let body: { shareOft?: unknown }
+    try {
+      body = (await readBoundedJsonObjectBody<{ shareOft?: unknown }>(req, {
+        maxBytes: MANAGED_TOKEN_LIST_MAX_BODY_BYTES,
+      })) ?? {}
+    } catch {
+      return res.status(413).json({ error: 'Request body too large' })
+    }
     const shareOftRaw = body.shareOft
     if (!shareOftRaw || typeof shareOftRaw !== 'string' || !isAddress(shareOftRaw)) {
       return res.status(400).json({ error: 'Invalid shareOft' })

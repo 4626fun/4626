@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `null` \| `undefined`\>
 
-Defined in: [api/\_handlers/deploy/session/\_continue.ts:539](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/session/_continue.ts#L539)
+Defined in: [api/\_handlers/deploy/session/\_continue.ts:543](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/session/_continue.ts#L543)
 
 #### Parameters
 

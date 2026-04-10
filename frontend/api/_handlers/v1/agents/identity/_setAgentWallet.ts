@@ -27,7 +27,7 @@ import { encodeFunctionData, getAddress, isAddress, type Address, type Hex } fro
 
 import {
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   guardAgentApiRequest,
@@ -64,6 +64,15 @@ const AGENT_WALLET_SET_TYPES = {
   ],
 } as const
 
+function asObjectBody(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
+  return input as Record<string, unknown>
+}
+
+function setRetryAfterHeader(res: VercelResponse, resetAt: number) {
+  res.setHeader('Retry-After', String(Math.max(1, Math.ceil((resetAt - Date.now()) / 1000))))
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   if (handleOptions(req, res)) return
@@ -78,10 +87,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     RATE_LIMITS.agentIdentitySetWallet,
   )
   if (!limiter.allowed) {
+    setRetryAfterHeader(res, limiter.resetAt)
     return res.status(429).json({ success: false, error: 'Too many requests' })
   }
 
-  const body = await readJsonBody<Record<string, unknown>>(req, { maxBytes: 8_192 })
+  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: 8_192 }))
   const action = String(body?.action ?? 'prepare').trim().toLowerCase()
   const agentIdRaw = String(body?.agentId ?? '').trim()
   const newWalletRaw = String(body?.newWallet ?? '').trim()

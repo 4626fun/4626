@@ -9,10 +9,10 @@ import {
 describe('deriveWaitlistAuthUi', () => {
   it('uses sign-in copy that supports both existing and new accounts', () => {
     expect(deriveWaitlistAuthUi()).toEqual({
-      title: 'Get early access',
-      subtitle: 'Use one quick sign-in to save your spot. We handle account setup in the background.',
+      title: 'Start with email',
+      subtitle: 'Use one secure sign-in to save your spot. We guide the rest step by step.',
       ctaLabel: 'Continue',
-      busyLabel: 'Setting up your account…',
+      busyLabel: 'Preparing your account…',
     })
   })
 })
@@ -31,8 +31,8 @@ describe('canEnterAppFromAccountState', () => {
 describe('deriveWaitlistDoneUi', () => {
   it('points accepted users toward app entry first', () => {
     expect(deriveWaitlistDoneUi(true)).toEqual({
-      title: 'Access approved',
-      subtitle: 'Your account is ready and app access is live. Enter the app now, or open Accounts to manage identities and points.',
+      title: 'You are approved',
+      subtitle: 'Your setup is complete and access is live. Enter the app now, or open Accounts for advanced controls.',
       primaryLabel: '■ Enter App',
       secondaryLabel: 'Open Accounts',
     })
@@ -40,8 +40,8 @@ describe('deriveWaitlistDoneUi', () => {
 
   it('points unaccepted users toward accounts while they wait for approval', () => {
     expect(deriveWaitlistDoneUi(false)).toEqual({
-      title: 'Account ready',
-      subtitle: 'Your account is set up. App access is still pending. Open Accounts to manage identities and points while you wait.',
+      title: 'Setup complete',
+      subtitle: 'Your account is ready. App access is still pending. Open Accounts for advanced controls while approval catches up.',
       primaryLabel: '■ Open Accounts',
       secondaryLabel: null,
     })

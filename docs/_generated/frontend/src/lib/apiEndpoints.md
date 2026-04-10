@@ -16,6 +16,14 @@ Defined in: [src/lib/apiEndpoints.ts:1](https://github.com/wenakita/4626/blob/ma
 
 #### Type Declaration
 
+##### agent
+
+> `readonly` **agent**: `object`
+
+###### agent.creative
+
+> `readonly` **creative**: `"/api/agent/creative"` = `'/api/agent/creative'`
+
 ##### auth
 
 > `readonly` **auth**: `object`
@@ -23,6 +31,18 @@ Defined in: [src/lib/apiEndpoints.ts:1](https://github.com/wenakita/4626/blob/ma
 ###### auth.admin
 
 > `readonly` **admin**: `"/api/auth/admin"` = `'/api/auth/admin'`
+
+##### cdpSwap
+
+> `readonly` **cdpSwap**: `object`
+
+###### cdpSwap.execute
+
+> `readonly` **execute**: `"/api/cdp/swap/execute"` = `'/api/cdp/swap/execute'`
+
+###### cdpSwap.price
+
+> `readonly` **price**: `"/api/cdp/swap/price"` = `'/api/cdp/swap/price'`
 
 ##### creator
 

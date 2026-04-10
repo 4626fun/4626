@@ -10,17 +10,17 @@
 
 ### keeprRouteLoaders
 
-> `const` **keeprRouteLoaders**: `Record`\<`string`, () => `Promise`\<`ApiHandlerModule`\>\>
+> `const` **keeprRouteLoaders**: [`ApiRouteLoaders`](_routeLoader.md#apirouteloaders)
 
-Defined in: [api/\_handlers/\_routes.keepr.ts:6](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.keepr.ts#L6)
+Defined in: [api/\_handlers/\_routes.keepr.ts:4](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.keepr.ts#L4)
 
 ## Functions
 
 ### getKeeprApiHandler()
 
-> **getKeeprApiHandler**(`subpath`): `Promise`\<`ApiHandler` \| `null`\>
+> **getKeeprApiHandler**(`subpath`): `Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routes.keepr.ts:17](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.keepr.ts#L17)
+Defined in: [api/\_handlers/\_routes.keepr.ts:15](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.keepr.ts#L15)
 
 #### Parameters
 
@@ -30,4 +30,4 @@ Defined in: [api/\_handlers/\_routes.keepr.ts:17](https://github.com/wenakita/46
 
 #### Returns
 
-`Promise`\<`ApiHandler` \| `null`\>
+`Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>

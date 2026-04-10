@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   getDb,
@@ -20,6 +20,7 @@ type UnlinkBody = {
   telegramUserId?: string | number
   reason?: string
 }
+const TELEGRAM_UNLINK_MAX_BODY_BYTES = 8_192
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -42,7 +43,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Unauthorized' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody<UnlinkBody>(req, { maxBytes: 8_192 }).catch(() => null)) ?? (req.body as UnlinkBody | null) ?? {}
+  let body: UnlinkBody
+  try {
+    body = (await readBoundedJsonObjectBody<UnlinkBody>(req, { maxBytes: TELEGRAM_UNLINK_MAX_BODY_BYTES })) ?? {}
+  } catch {
+    return res.status(413).json({ success: false, error: 'Request body too large' } satisfies ApiEnvelope<never>)
+  }
   const telegramUserId = readTelegramUserId(body.telegramUserId)
   if (!telegramUserId) {
     return res.status(400).json({ success: false, error: 'telegramUserId is required' } satisfies ApiEnvelope<never>)

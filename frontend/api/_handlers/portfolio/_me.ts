@@ -5,7 +5,8 @@ import {
   checkRateLimit,
   getClientIp,
   handleOptions,
-  readJsonBody,
+  RATE_LIMITS,
+  readBoundedJsonObjectBody,
   rateLimitKey,
   setCors,
   setNoStore,
@@ -165,6 +166,16 @@ function normalizeManualText(value: unknown, maxLen: number): string | null {
   const text = value.trim()
   if (!text) return null
   return text.slice(0, maxLen)
+}
+
+function hasDisallowedUrlScheme(value: string): boolean {
+  const trimmed = value.trim()
+  if (!trimmed) return false
+  if (trimmed.startsWith('//')) return true
+  const schemeMatch = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(trimmed)
+  if (!schemeMatch) return false
+  const scheme = schemeMatch[1].toLowerCase()
+  return scheme !== 'http' && scheme !== 'https'
 }
 
 function readProfileFields(raw: unknown): ProfileFieldsMap {
@@ -481,13 +492,25 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!principalAddress) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<never>)
   }
+  const patchLimiter = checkRateLimit(
+    rateLimitKey('portfolio-self-patch', principalAddress.toLowerCase(), getClientIp(req)),
+    RATE_LIMITS.cswLink,
+  )
+  res.setHeader('X-RateLimit-Limit', String(RATE_LIMITS.cswLink.maxRequests))
+  res.setHeader('X-RateLimit-Remaining', String(Math.max(0, patchLimiter.remaining)))
+  res.setHeader('X-RateLimit-Reset', String(Math.floor(patchLimiter.resetAt / 1000)))
+  if (!patchLimiter.allowed) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((patchLimiter.resetAt - Date.now()) / 1000))
+    res.setHeader('Retry-After', String(retryAfterSeconds))
+    return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
+  }
 
   const profileRow = await resolveProfileRow(db as any, 'self', principalAddress)
   if (!profileRow) {
     return res.status(404).json({ success: false, error: 'Profile not found' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (await readJsonBody(req, { maxBytes: 512_000 })) ?? {}
+  const body: Partial<PatchBody> = (await readBoundedJsonObjectBody<PatchBody>(req, { maxBytes: 65_536 })) ?? {}
   const hasDisplayName = Object.prototype.hasOwnProperty.call(body, 'displayName')
   const hasBio = Object.prototype.hasOwnProperty.call(body, 'bio')
   const hasWebsite = Object.prototype.hasOwnProperty.call(body, 'website')
@@ -536,6 +559,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
   if (hasBannerLensUri && bannerLensUri && !bannerLensUri.startsWith('lens://')) {
     return res.status(400).json({ success: false, error: 'bannerLensUri must start with lens://' } satisfies ApiEnvelope<never>)
+  }
+  if (hasWebsite && website && hasDisallowedUrlScheme(website)) {
+    return res.status(400).json({ success: false, error: 'website must be an http(s) URL' } satisfies ApiEnvelope<never>)
+  }
+  if (hasAvatarUrl && avatarUrl && hasDisallowedUrlScheme(avatarUrl)) {
+    return res.status(400).json({ success: false, error: 'avatarUrl must be an http(s) URL' } satisfies ApiEnvelope<never>)
+  }
+  if (hasBannerUrl && bannerUrl && hasDisallowedUrlScheme(bannerUrl)) {
+    return res.status(400).json({ success: false, error: 'bannerUrl must be an http(s) URL' } satisfies ApiEnvelope<never>)
   }
 
   const nowIso = new Date().toISOString()

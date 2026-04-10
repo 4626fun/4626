@@ -33,6 +33,7 @@ describe('accounts/wallet endpoint rate-limit hardening', () => {
     await accountsLinkHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 429 for /accounts/unlink when limited', async () => {
@@ -41,6 +42,7 @@ describe('accounts/wallet endpoint rate-limit hardening', () => {
     await accountsUnlinkHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 429 for /wallet/sync when limited', async () => {
@@ -49,6 +51,7 @@ describe('accounts/wallet endpoint rate-limit hardening', () => {
     await walletSyncHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 429 for /wallet/prepare-add-privy-owner when limited', async () => {
@@ -57,6 +60,7 @@ describe('accounts/wallet endpoint rate-limit hardening', () => {
     await walletPrepareAddPrivyOwnerHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 429 for /wallet/prepare-add-rabby-owner when limited', async () => {
@@ -71,6 +75,7 @@ describe('accounts/wallet endpoint rate-limit hardening', () => {
     await walletPrepareAddRabbyOwnerHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns 429 for /wallet/confirm-owner when limited', async () => {
@@ -79,5 +84,6 @@ describe('accounts/wallet endpoint rate-limit hardening', () => {
     await walletConfirmOwnerHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 })

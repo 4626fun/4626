@@ -4872,12 +4872,23 @@ function DeployVaultBatcher({
         const isLikelyPaymasterOrSponsorshipFailure = (error: unknown): boolean => {
           const msg = error instanceof Error ? error.message : String(error ?? '')
           const lc = msg.toLowerCase()
+          const paymasterPolicyMarkers = [
+            'request denied',
+            'paymaster rejected this request',
+            'requested resource not available',
+            'resource not available',
+            'sponsored userop exceeds paymaster total gas cap',
+            'missing_primary_call',
+            'called_address_not_allowed',
+            'token_selector_not_allowed',
+            'batcher_selector_not_allowed',
+            'activation_selector_not_allowed',
+            'permit2_selector_not_allowed',
+            'create2_deploy_not_allowed',
+            'transfer_ownership_not_allowed',
+          ]
           const isPaymasterPolicyDenial =
-            lc.includes('request denied -') ||
-            lc.includes('paymaster rejected this request') ||
-            lc.includes('requested resource not available') ||
-            lc.includes('resource not available') ||
-            lc.includes('sponsored userop exceeds paymaster total gas cap') ||
+            paymasterPolicyMarkers.some((marker) => lc.includes(marker)) ||
             (lc.includes('total gas used by the user operation') && lc.includes('allowed limit')) ||
             (lc.includes('total gas used') && lc.includes('allowed limit'))
           return (
@@ -4892,12 +4903,23 @@ function DeployVaultBatcher({
         const isPaymasterPolicyDenial = (error: unknown): boolean => {
           const msg = error instanceof Error ? error.message : String(error ?? '')
           const lc = msg.toLowerCase()
+          const paymasterPolicyMarkers = [
+            'request denied',
+            'paymaster rejected this request',
+            'requested resource not available',
+            'resource not available',
+            'sponsored userop exceeds paymaster total gas cap',
+            'missing_primary_call',
+            'called_address_not_allowed',
+            'token_selector_not_allowed',
+            'batcher_selector_not_allowed',
+            'activation_selector_not_allowed',
+            'permit2_selector_not_allowed',
+            'create2_deploy_not_allowed',
+            'transfer_ownership_not_allowed',
+          ]
           return (
-            lc.includes('request denied -') ||
-            lc.includes('paymaster rejected this request') ||
-            lc.includes('requested resource not available') ||
-            lc.includes('resource not available') ||
-            lc.includes('sponsored userop exceeds paymaster total gas cap') ||
+            paymasterPolicyMarkers.some((marker) => lc.includes(marker)) ||
             (lc.includes('total gas used by the user operation') && lc.includes('allowed limit')) ||
             (lc.includes('total gas used') && lc.includes('allowed limit'))
           )

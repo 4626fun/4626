@@ -34,6 +34,11 @@ export function setBuildCors(res: { setHeader: (k: string, v: string) => void })
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
 }
 
+export function setRateLimitRetryAfter(res: { setHeader: (k: string, v: string) => void }, resetAt: number) {
+  const retryAfterSeconds = Math.max(1, Math.ceil((resetAt - Date.now()) / 1000))
+  res.setHeader('Retry-After', String(retryAfterSeconds))
+}
+
 export function assertPositive(value: bigint, label: string) {
   if (value <= 0n) throw new Error(`${label} must be > 0`)
 }
@@ -57,4 +62,3 @@ export function assertMinBucketIndex(value: bigint, label: string) {
 export function assertBps(value: bigint, label: string) {
   if (value < 0n || value > MAX_BPS) throw new Error(`${label} must be between 0 and ${MAX_BPS.toString()}`)
 }
-

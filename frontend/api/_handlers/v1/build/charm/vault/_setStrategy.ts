@@ -3,7 +3,7 @@ import { encodeFunctionData, type Address } from 'viem'
 
 import {
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   guardAgentApiRequest,
   getClientIp,
   RATE_LIMITS,
@@ -15,7 +15,13 @@ import {
 import { isOfficialCharmVault, officialCharmVaultError } from '../../../../../../server/_lib/charmVaults.js'
 import type { BuildTxResponse } from '../../_types.js'
 import { CHARM_ALPHA_VAULT_ABI } from './_abi.js'
-import { requireAddress, setPublicCors } from '../_shared.js'
+import {
+  CHARM_BUILD_BODY_MAX_BYTES,
+  parseObjectBody,
+  requireAddress,
+  setPublicCors,
+  setRateLimitRetryAfter,
+} from '../_shared.js'
 
 type SetMode = 'delegate' | 'manager'
 
@@ -37,16 +43,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     rateLimitKey('v1-build-charm-vault-set-strategy', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
     RATE_LIMITS.buildCharmCalldata,
   )
-  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+  if (!limiter.allowed) {
+    setRateLimitRetryAfter(res, limiter.resetAt)
+    return res.status(429).json({ success: false, error: 'Too many requests' })
+  }
 
-  const body = (await readJsonBody(req, { maxBytes: 16_384 })) ?? ({} as any)
+  const body = parseObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: CHARM_BUILD_BODY_MAX_BYTES }))
   try {
     const vault = requireAddress(body.vault, 'vault')
     const strategy = requireAddress(body.strategy, 'strategy')
-    const mode: SetMode = body.mode ?? 'delegate'
-    if (mode !== 'delegate' && mode !== 'manager') {
+    const modeRaw = typeof body.mode === 'string' ? body.mode : 'delegate'
+    if (modeRaw !== 'delegate' && modeRaw !== 'manager') {
       throw new Error('mode must be one of: delegate, manager')
     }
+    const mode: SetMode = modeRaw
     const isOfficialVault = await isOfficialCharmVault({ charmVaultAddress: vault })
     if (!isOfficialVault) throw new Error(officialCharmVaultError(vault))
 

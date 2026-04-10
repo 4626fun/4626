@@ -398,6 +398,28 @@ export async function readJsonBody<T = any>(req: VercelRequest, opts: { maxBytes
   }
 }
 
+export async function readBoundedJsonObjectBody<T extends Record<string, unknown> = Record<string, unknown>>(
+  req: VercelRequest,
+  opts: { maxBytes?: number } = {},
+): Promise<T | null> {
+  const maxBytes = typeof opts.maxBytes === 'number' && Number.isFinite(opts.maxBytes) ? Math.max(1, Math.floor(opts.maxBytes)) : 1_000_000
+  const preParsed: unknown = (req as any).body
+  if (preParsed != null) {
+    if (typeof preParsed !== 'object' || Array.isArray(preParsed)) return null
+    try {
+      const estimated = Buffer.byteLength(JSON.stringify(preParsed), 'utf8')
+      if (estimated > maxBytes) throw new Error('body_too_large')
+    } catch {
+      throw new Error('body_too_large')
+    }
+    return preParsed as T
+  }
+
+  const parsed = await readJsonBody<T>(req, { maxBytes }).catch(() => null)
+  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed
+  return null
+}
+
 export function makeNonce(): string {
   return randomBytes(16).toString('hex')
 }

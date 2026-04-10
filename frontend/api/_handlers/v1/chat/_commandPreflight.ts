@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   readSessionFromRequest,
   setCors,
   setNoStore,
@@ -31,8 +31,18 @@ type PreflightData = {
   walletMatch?: boolean | null
 }
 
+const MAX_CONVERSATION_ID_LENGTH = 128
+const MAX_COMMAND_LENGTH = 4_096
+
 function isAddressLike(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
+}
+
+function asBoundedTrimmed(value: unknown, maxLength: number): string {
+  if (typeof value !== 'string') return ''
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  return trimmed.length > maxLength ? trimmed.slice(0, maxLength) : trimmed
 }
 
 function roleForWallet(params: { wallet: string; owner: string; admins: string[] }): KeeprRole {
@@ -60,13 +70,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     RATE_LIMITS.chatCommandPreflight,
   )
   if (!limiter.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((limiter.resetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
   }
 
-  const body = await readJsonBody(req, { maxBytes: 16_384 })
-  const conversationId = String(body?.conversationId ?? '').trim()
-  const senderWallet = String(body?.senderWallet ?? '').trim().toLowerCase()
-  const command = String(body?.command ?? '').trim()
+  const rawBody = await readBoundedJsonObjectBody(req, { maxBytes: 16_384 })
+  const body = rawBody && typeof rawBody === 'object' && !Array.isArray(rawBody)
+    ? (rawBody as PreflightBody)
+    : {}
+  const conversationId = asBoundedTrimmed(body.conversationId, MAX_CONVERSATION_ID_LENGTH)
+  const senderWallet = asBoundedTrimmed(body.senderWallet, 42).toLowerCase()
+  const command = asBoundedTrimmed(body.command, MAX_COMMAND_LENGTH)
 
   const isCreWrite = isCreWriteCommandText(command)
   if (!isCreWrite) {

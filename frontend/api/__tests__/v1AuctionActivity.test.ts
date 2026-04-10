@@ -110,6 +110,7 @@ describe('v1 auction activity handler', () => {
     await handler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Too many requests')
+    expect(Number(res.getHeader('retry-after'))).toBeGreaterThan(0)
   })
 
   it('returns normalized live auction activity for a strategy', async () => {

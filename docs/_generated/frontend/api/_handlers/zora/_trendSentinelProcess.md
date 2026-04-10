@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/zora/\_trendSentinelProcess.ts:57](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/_trendSentinelProcess.ts#L57)
+Defined in: [api/\_handlers/zora/\_trendSentinelProcess.ts:68](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/_trendSentinelProcess.ts#L68)
 
 #### Parameters
 

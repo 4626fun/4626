@@ -12,7 +12,7 @@
 
 > **ApprovalRequest** = [`components`](generated/tradeApi.md#components)\[`"schemas"`\]\[`"ApprovalRequest"`\]
 
-Defined in: [src/lib/uniswap/tradingApi.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L18)
+Defined in: [src/lib/uniswap/tradingApi.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L20)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:18](https://github.com/wenakita/4626/
 
 > **ApprovalResponse** = [`components`](generated/tradeApi.md#components)\[`"schemas"`\]\[`"ApprovalResponse"`\]
 
-Defined in: [src/lib/uniswap/tradingApi.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L19)
+Defined in: [src/lib/uniswap/tradingApi.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L21)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:19](https://github.com/wenakita/4626/
 
 > **BuildSwapParams** = `Omit`\<[`CreateSwapRequest`](#createswaprequest), `"quote"` \| `"permitData"`\> & `object`
 
-Defined in: [src/lib/uniswap/tradingApi.ts:285](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L285)
+Defined in: [src/lib/uniswap/tradingApi.ts:456](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L456)
 
 #### Type Declaration
 
@@ -46,7 +46,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:285](https://github.com/wenakita/4626
 
 > **CreateOrderParams** = `Omit`\<[`OrderRequest`](#orderrequest), `"quote"`\> & `object`
 
-Defined in: [src/lib/uniswap/tradingApi.ts:302](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L302)
+Defined in: [src/lib/uniswap/tradingApi.ts:484](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L484)
 
 #### Type Declaration
 
@@ -60,7 +60,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:302](https://github.com/wenakita/4626
 
 > **CreateSwapRequest** = [`components`](generated/tradeApi.md#components)\[`"schemas"`\]\[`"CreateSwapRequest"`\]
 
-Defined in: [src/lib/uniswap/tradingApi.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L21)
+Defined in: [src/lib/uniswap/tradingApi.ts:23](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L23)
 
 ***
 
@@ -68,7 +68,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:21](https://github.com/wenakita/4626/
 
 > **CreateSwapResponse** = [`components`](generated/tradeApi.md#components)\[`"schemas"`\]\[`"CreateSwapResponse"`\]
 
-Defined in: [src/lib/uniswap/tradingApi.ts:22](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L22)
+Defined in: [src/lib/uniswap/tradingApi.ts:24](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L24)
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:22](https://github.com/wenakita/4626/
 
 > **OrderRequest** = [`components`](generated/tradeApi.md#components)\[`"schemas"`\]\[`"OrderRequest"`\]
 
-Defined in: [src/lib/uniswap/tradingApi.ts:23](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L23)
+Defined in: [src/lib/uniswap/tradingApi.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L25)
 
 ***
 
@@ -84,7 +84,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:23](https://github.com/wenakita/4626/
 
 > **OrderResponse** = [`components`](generated/tradeApi.md#components)\[`"schemas"`\]\[`"OrderResponse"`\]
 
-Defined in: [src/lib/uniswap/tradingApi.ts:24](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L24)
+Defined in: [src/lib/uniswap/tradingApi.ts:26](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L26)
 
 ***
 
@@ -92,7 +92,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:24](https://github.com/wenakita/4626/
 
 > **PermitSignPayload** = `object`
 
-Defined in: [src/lib/uniswap/tradingApi.ts:46](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L46)
+Defined in: [src/lib/uniswap/tradingApi.ts:59](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L59)
 
 #### Properties
 
@@ -100,25 +100,25 @@ Defined in: [src/lib/uniswap/tradingApi.ts:46](https://github.com/wenakita/4626/
 
 > **domain**: `Record`\<`string`, `unknown`\>
 
-Defined in: [src/lib/uniswap/tradingApi.ts:47](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L47)
+Defined in: [src/lib/uniswap/tradingApi.ts:60](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L60)
 
 ##### message
 
 > **message**: `Record`\<`string`, `unknown`\>
 
-Defined in: [src/lib/uniswap/tradingApi.ts:50](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L50)
+Defined in: [src/lib/uniswap/tradingApi.ts:63](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L63)
 
 ##### primaryType
 
 > **primaryType**: `string`
 
-Defined in: [src/lib/uniswap/tradingApi.ts:49](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L49)
+Defined in: [src/lib/uniswap/tradingApi.ts:62](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L62)
 
 ##### types
 
 > **types**: `Record`\<`string`, `unknown`\>
 
-Defined in: [src/lib/uniswap/tradingApi.ts:48](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L48)
+Defined in: [src/lib/uniswap/tradingApi.ts:61](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L61)
 
 ***
 
@@ -126,7 +126,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:48](https://github.com/wenakita/4626/
 
 > **ProtocolSwapRouting** = `Extract`\<[`Routing`](#routing), `"CLASSIC"` \| `"WRAP"` \| `"UNWRAP"` \| `"BRIDGE"`\>
 
-Defined in: [src/lib/uniswap/tradingApi.ts:165](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L165)
+Defined in: [src/lib/uniswap/tradingApi.ts:306](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L306)
 
 ***
 
@@ -134,7 +134,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:165](https://github.com/wenakita/4626
 
 > **QuoteRequest** = [`components`](generated/tradeApi.md#components)\[`"schemas"`\]\[`"QuoteRequest"`\]
 
-Defined in: [src/lib/uniswap/tradingApi.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L16)
+Defined in: [src/lib/uniswap/tradingApi.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L18)
 
 ***
 
@@ -142,7 +142,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:16](https://github.com/wenakita/4626/
 
 > **QuoteResponse** = [`components`](generated/tradeApi.md#components)\[`"schemas"`\]\[`"QuoteResponse"`\]
 
-Defined in: [src/lib/uniswap/tradingApi.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L17)
+Defined in: [src/lib/uniswap/tradingApi.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L19)
 
 ***
 
@@ -150,7 +150,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:17](https://github.com/wenakita/4626/
 
 > **Routing** = [`components`](generated/tradeApi.md#components)\[`"schemas"`\]\[`"Routing"`\]
 
-Defined in: [src/lib/uniswap/tradingApi.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L15)
+Defined in: [src/lib/uniswap/tradingApi.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L17)
 
 ***
 
@@ -158,7 +158,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:15](https://github.com/wenakita/4626/
 
 > **TradeApprovalResponse** = `Omit`\<[`ApprovalResponse`](#approvalresponse), `"approval"` \| `"cancel"`\> & `object` & `Record`\<`string`, `unknown`\>
 
-Defined in: [src/lib/uniswap/tradingApi.ts:40](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L40)
+Defined in: [src/lib/uniswap/tradingApi.ts:53](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L53)
 
 #### Type Declaration
 
@@ -176,13 +176,17 @@ Defined in: [src/lib/uniswap/tradingApi.ts:40](https://github.com/wenakita/4626/
 
 > **TradeQuoteRequest** = [`QuoteRequest`](#quoterequest) & `object`
 
-Defined in: [src/lib/uniswap/tradingApi.ts:28](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L28)
+Defined in: [src/lib/uniswap/tradingApi.ts:30](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L30)
 
 #### Type Declaration
 
 ##### chainedActionsEnabled?
 
 > `optional` **chainedActionsEnabled**: `boolean`
+
+##### providerOverride?
+
+> `optional` **providerOverride**: `"uniswap"` \| `"cdp"`
 
 ##### walletModeKey?
 
@@ -198,7 +202,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:28](https://github.com/wenakita/4626/
 
 > **TradeQuoteResponse** = [`QuoteResponse`](#quoteresponse) & `Record`\<`string`, `unknown`\>
 
-Defined in: [src/lib/uniswap/tradingApi.ts:36](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L36)
+Defined in: [src/lib/uniswap/tradingApi.ts:39](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L39)
 
 ***
 
@@ -206,7 +210,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:36](https://github.com/wenakita/4626/
 
 > **TransactionRequest** = [`components`](generated/tradeApi.md#components)\[`"schemas"`\]\[`"TransactionRequest"`\]
 
-Defined in: [src/lib/uniswap/tradingApi.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L20)
+Defined in: [src/lib/uniswap/tradingApi.ts:22](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L22)
 
 ***
 
@@ -214,7 +218,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:20](https://github.com/wenakita/4626/
 
 > **UniswapXRouting** = `Extract`\<[`Routing`](#routing), `"DUTCH_LIMIT"` \| `"DUTCH_V2"` \| `"DUTCH_V3"` \| `"LIMIT_ORDER"` \| `"PRIORITY"`\>
 
-Defined in: [src/lib/uniswap/tradingApi.ts:166](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L166)
+Defined in: [src/lib/uniswap/tradingApi.ts:307](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L307)
 
 ***
 
@@ -222,7 +226,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:166](https://github.com/wenakita/4626
 
 > **UserOpCall** = `object`
 
-Defined in: [src/lib/uniswap/tradingApi.ts:45](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L45)
+Defined in: [src/lib/uniswap/tradingApi.ts:58](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L58)
 
 #### Properties
 
@@ -230,19 +234,19 @@ Defined in: [src/lib/uniswap/tradingApi.ts:45](https://github.com/wenakita/4626/
 
 > `optional` **data**: `` `0x${string}` ``
 
-Defined in: [src/lib/uniswap/tradingApi.ts:45](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L45)
+Defined in: [src/lib/uniswap/tradingApi.ts:58](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L58)
 
 ##### to
 
 > **to**: `` `0x${string}` ``
 
-Defined in: [src/lib/uniswap/tradingApi.ts:45](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L45)
+Defined in: [src/lib/uniswap/tradingApi.ts:58](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L58)
 
 ##### value?
 
 > `optional` **value**: `bigint`
 
-Defined in: [src/lib/uniswap/tradingApi.ts:45](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L45)
+Defined in: [src/lib/uniswap/tradingApi.ts:58](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L58)
 
 ***
 
@@ -250,7 +254,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:45](https://github.com/wenakita/4626/
 
 > **WalletCheckDelegationRequestBody** = [`components`](generated/tradeApi.md#components)\[`"schemas"`\]\[`"WalletCheckDelegationRequestBody"`\]
 
-Defined in: [src/lib/uniswap/tradingApi.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L25)
+Defined in: [src/lib/uniswap/tradingApi.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L27)
 
 ***
 
@@ -258,7 +262,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:25](https://github.com/wenakita/4626/
 
 > **WalletCheckDelegationResponseBody** = [`components`](generated/tradeApi.md#components)\[`"schemas"`\]\[`"WalletCheckDelegationResponseBody"`\]
 
-Defined in: [src/lib/uniswap/tradingApi.ts:26](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L26)
+Defined in: [src/lib/uniswap/tradingApi.ts:28](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L28)
 
 ## Functions
 
@@ -266,7 +270,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:26](https://github.com/wenakita/4626/
 
 > **assertValidSwapTransaction**(`tx`): `void`
 
-Defined in: [src/lib/uniswap/tradingApi.ts:312](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L312)
+Defined in: [src/lib/uniswap/tradingApi.ts:494](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L494)
 
 #### Parameters
 
@@ -326,7 +330,7 @@ The quantity of ETH tokens approved for spending by the transaction, denominated
 
 > **buildSwap**(`body`): `Promise`\<\{ `gasFee?`: `string`; `requestId`: `string`; `swap`: \{ `chainId`: `1` \| `10` \| `56` \| `130` \| `137` \| `143` \| `196` \| `324` \| `480` \| `1301` \| `1868` \| `8453` \| `10143` \| `42161` \| `42220` \| `43114` \| `81457` \| `84532` \| `7777777` \| `11155111`; `data`: `string`; `from`: `string`; `gasLimit?`: `string`; `gasPrice?`: `string`; `maxFeePerGas?`: `string`; `maxPriorityFeePerGas?`: `string`; `to`: `string`; `value`: `string`; \}; \}\>
 
-Defined in: [src/lib/uniswap/tradingApi.ts:290](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L290)
+Defined in: [src/lib/uniswap/tradingApi.ts:461](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L461)
 
 #### Parameters
 
@@ -344,7 +348,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:290](https://github.com/wenakita/4626
 
 > **buildSwap5792**(`body`): `Promise`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/lib/uniswap/tradingApi.ts:330](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L330)
+Defined in: [src/lib/uniswap/tradingApi.ts:512](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L512)
 
 #### Parameters
 
@@ -362,7 +366,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:330](https://github.com/wenakita/4626
 
 > **buildSwap7702**(`body`): `Promise`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/lib/uniswap/tradingApi.ts:346](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L346)
+Defined in: [src/lib/uniswap/tradingApi.ts:528](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L528)
 
 #### Parameters
 
@@ -380,7 +384,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:346](https://github.com/wenakita/4626
 
 > **checkTradeApproval**(`body`): `Promise`\<[`TradeApprovalResponse`](#tradeapprovalresponse)\>
 
-Defined in: [src/lib/uniswap/tradingApi.ts:276](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L276)
+Defined in: [src/lib/uniswap/tradingApi.ts:443](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L443)
 
 #### Parameters
 
@@ -428,7 +432,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:276](https://github.com/wenakita/4626
 
 > **createCrossChainPlan**(`body`): `Promise`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/lib/uniswap/tradingApi.ts:356](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L356)
+Defined in: [src/lib/uniswap/tradingApi.ts:538](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L538)
 
 #### Parameters
 
@@ -446,7 +450,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:356](https://github.com/wenakita/4626
 
 > **createOrder**(`body`): `Promise`\<\{ `orderId`: `string`; `orderStatus`: `"error"` \| `"open"` \| `"expired"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`; `requestId`: `string`; \}\>
 
-Defined in: [src/lib/uniswap/tradingApi.ts:306](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L306)
+Defined in: [src/lib/uniswap/tradingApi.ts:488](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L488)
 
 #### Parameters
 
@@ -464,7 +468,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:306](https://github.com/wenakita/4626
 
 > **fetchDelegationStatus**(`body`): `Promise`\<`object` & `Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/lib/uniswap/tradingApi.ts:350](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L350)
+Defined in: [src/lib/uniswap/tradingApi.ts:532](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L532)
 
 #### Parameters
 
@@ -496,7 +500,7 @@ Array of wallet addresses to check delegation status for.
 
 > **fetchTradeQuote**(`body`): `Promise`\<[`TradeQuoteResponse`](#tradequoteresponse)\>
 
-Defined in: [src/lib/uniswap/tradingApi.ts:250](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L250)
+Defined in: [src/lib/uniswap/tradingApi.ts:391](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L391)
 
 #### Parameters
 
@@ -514,7 +518,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:250](https://github.com/wenakita/4626
 
 > **getCrossChainPlan**(`planId`): `Promise`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/lib/uniswap/tradingApi.ts:360](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L360)
+Defined in: [src/lib/uniswap/tradingApi.ts:542](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L542)
 
 #### Parameters
 
@@ -532,7 +536,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:360](https://github.com/wenakita/4626
 
 > **isProtocolSwapRouting**(`routing`): `routing is ProtocolSwapRouting`
 
-Defined in: [src/lib/uniswap/tradingApi.ts:168](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L168)
+Defined in: [src/lib/uniswap/tradingApi.ts:309](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L309)
 
 #### Parameters
 
@@ -550,7 +554,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:168](https://github.com/wenakita/4626
 
 > **isUniswapXRouting**(`routing`): `routing is UniswapXRouting`
 
-Defined in: [src/lib/uniswap/tradingApi.ts:173](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L173)
+Defined in: [src/lib/uniswap/tradingApi.ts:314](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L314)
 
 #### Parameters
 
@@ -568,7 +572,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:173](https://github.com/wenakita/4626
 
 > **pickOrderQuote**(`quote`): `Record`\<`string`, `unknown`\> \| `null`
 
-Defined in: [src/lib/uniswap/tradingApi.ts:203](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L203)
+Defined in: [src/lib/uniswap/tradingApi.ts:344](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L344)
 
 #### Parameters
 
@@ -586,7 +590,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:203](https://github.com/wenakita/4626
 
 > **pickPermitData**(`quote`): `Record`\<`string`, `unknown`\> \| `null`
 
-Defined in: [src/lib/uniswap/tradingApi.ts:209](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L209)
+Defined in: [src/lib/uniswap/tradingApi.ts:350](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L350)
 
 #### Parameters
 
@@ -604,7 +608,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:209](https://github.com/wenakita/4626
 
 > **pickQuote**(`quote`): `Record`\<`string`, `unknown`\> \| `null`
 
-Defined in: [src/lib/uniswap/tradingApi.ts:178](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L178)
+Defined in: [src/lib/uniswap/tradingApi.ts:319](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L319)
 
 #### Parameters
 
@@ -622,7 +626,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:178](https://github.com/wenakita/4626
 
 > **pickSwapQuote**(`quote`): `Record`\<`string`, `unknown`\> \| `null`
 
-Defined in: [src/lib/uniswap/tradingApi.ts:196](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L196)
+Defined in: [src/lib/uniswap/tradingApi.ts:337](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L337)
 
 #### Parameters
 
@@ -640,7 +644,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:196](https://github.com/wenakita/4626
 
 > **toPermitSignPayload**(`permitData`): [`PermitSignPayload`](#permitsignpayload) \| `null`
 
-Defined in: [src/lib/uniswap/tradingApi.ts:225](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L225)
+Defined in: [src/lib/uniswap/tradingApi.ts:366](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L366)
 
 #### Parameters
 
@@ -658,7 +662,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:225](https://github.com/wenakita/4626
 
 > **toUserOpCallsFrom5792**(`batch`): [`UserOpCall`](#useropcall)[]
 
-Defined in: [src/lib/uniswap/tradingApi.ts:334](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L334)
+Defined in: [src/lib/uniswap/tradingApi.ts:516](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L516)
 
 #### Parameters
 
@@ -676,7 +680,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:334](https://github.com/wenakita/4626
 
 > **updateCrossChainPlan**(`planId`, `body`): `Promise`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/lib/uniswap/tradingApi.ts:364](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L364)
+Defined in: [src/lib/uniswap/tradingApi.ts:546](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L546)
 
 #### Parameters
 

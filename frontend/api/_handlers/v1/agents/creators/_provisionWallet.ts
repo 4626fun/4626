@@ -12,7 +12,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import {
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   guardAgentApiRequest,
   getClientIp,
   RATE_LIMITS,
@@ -28,6 +28,15 @@ function setPublicCors(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS')
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-SIWA-Receipt')
+}
+
+function setRetryAfterHeader(res: VercelResponse, resetAt: number) {
+  res.setHeader('Retry-After', String(Math.max(1, Math.ceil((resetAt - Date.now()) / 1000))))
+}
+
+function asObjectBody(input: unknown): Record<string, unknown> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
+  return input as Record<string, unknown>
 }
 
 type RequestBody = {
@@ -49,14 +58,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     rateLimitKey('v1-agents-creators-provision-wallet', g.auth?.address?.toLowerCase() ?? 'anon', getClientIp(req)),
     RATE_LIMITS.agentsWrite,
   )
-  if (!limiter.allowed) return res.status(429).json({ success: false, error: 'Too many requests' })
+  if (!limiter.allowed) {
+    setRetryAfterHeader(res, limiter.resetAt)
+    return res.status(429).json({ success: false, error: 'Too many requests' })
+  }
 
   const principalAddress = g.auth?.address ? String(g.auth.address).toLowerCase() : ''
   if (!principalAddress) {
     return res.status(401).json({ success: false, error: 'Authentication required (session or SIWA receipt)' })
   }
 
-  const body = (await readJsonBody(req, { maxBytes: 16_384 })) ?? {}
+  const body = asObjectBody(await readBoundedJsonObjectBody(req, { maxBytes: 16_384 })) as RequestBody
   // The creator address defaults to the signed-in address.
   const requestedAddress = body.creatorAddress?.trim().toLowerCase() || principalAddress
   const canonicalForPrincipal = await resolveCanonicalSmartWalletAddress(principalAddress)

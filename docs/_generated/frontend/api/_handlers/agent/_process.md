@@ -12,7 +12,7 @@
 
 > `const` **DEFAULT\_CHECKPOINT\_WINDOW\_MS**: `120000` = `120_000`
 
-Defined in: [api/\_handlers/agent/\_process.ts:54](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L54)
+Defined in: [api/\_handlers/agent/\_process.ts:57](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L57)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/agent/\_process.ts:54](https://github.com/wenakita/4
 
 > `const` **MAX\_MESSAGES\_PER\_CONVERSATION**: `50` = `50`
 
-Defined in: [api/\_handlers/agent/\_process.ts:53](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L53)
+Defined in: [api/\_handlers/agent/\_process.ts:56](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L56)
 
 ## Functions
 
@@ -28,7 +28,7 @@ Defined in: [api/\_handlers/agent/\_process.ts:53](https://github.com/wenakita/4
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse`\>
 
-Defined in: [api/\_handlers/agent/\_process.ts:466](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L466)
+Defined in: [api/\_handlers/agent/\_process.ts:470](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L470)
 
 #### Parameters
 
@@ -50,7 +50,7 @@ Defined in: [api/\_handlers/agent/\_process.ts:466](https://github.com/wenakita/
 
 > **getCheckpointMs**(`lastProcessedAt`, `nowMs`): `number`
 
-Defined in: [api/\_handlers/agent/\_process.ts:161](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L161)
+Defined in: [api/\_handlers/agent/\_process.ts:164](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L164)
 
 #### Parameters
 
@@ -72,7 +72,7 @@ Defined in: [api/\_handlers/agent/\_process.ts:161](https://github.com/wenakita/
 
 > **getEthereumAddressFromInboxState**(`state`): `string` \| `null`
 
-Defined in: [api/\_handlers/agent/\_process.ts:189](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L189)
+Defined in: [api/\_handlers/agent/\_process.ts:192](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L192)
 
 #### Parameters
 
@@ -90,7 +90,7 @@ Defined in: [api/\_handlers/agent/\_process.ts:189](https://github.com/wenakita/
 
 > **getInitialConversationCheckpointMs**(`lastProcessedAt`, `nowMs`): `number`
 
-Defined in: [api/\_handlers/agent/\_process.ts:169](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L169)
+Defined in: [api/\_handlers/agent/\_process.ts:172](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L172)
 
 #### Parameters
 
@@ -112,7 +112,7 @@ Defined in: [api/\_handlers/agent/\_process.ts:169](https://github.com/wenakita/
 
 > **getMessageQueryOptions**(`lastProcessedMs`): `object`
 
-Defined in: [api/\_handlers/agent/\_process.ts:175](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L175)
+Defined in: [api/\_handlers/agent/\_process.ts:178](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L178)
 
 #### Parameters
 
@@ -142,7 +142,7 @@ Defined in: [api/\_handlers/agent/\_process.ts:175](https://github.com/wenakita/
 
 > **isAgentProcessServerlessRuntime**(`env`): `boolean`
 
-Defined in: [api/\_handlers/agent/\_process.ts:109](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L109)
+Defined in: [api/\_handlers/agent/\_process.ts:112](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L112)
 
 #### Parameters
 
@@ -160,7 +160,7 @@ Defined in: [api/\_handlers/agent/\_process.ts:109](https://github.com/wenakita/
 
 > **isAuthorized**(`req`): `boolean`
 
-Defined in: [api/\_handlers/agent/\_process.ts:440](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L440)
+Defined in: [api/\_handlers/agent/\_process.ts:443](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L443)
 
 #### Parameters
 
@@ -178,7 +178,7 @@ Defined in: [api/\_handlers/agent/\_process.ts:440](https://github.com/wenakita/
 
 > **mergeCheckpointMs**(`previousMs`, `candidateMs`): `number`
 
-Defined in: [api/\_handlers/agent/\_process.ts:201](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L201)
+Defined in: [api/\_handlers/agent/\_process.ts:204](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L204)
 
 #### Parameters
 
@@ -200,7 +200,7 @@ Defined in: [api/\_handlers/agent/\_process.ts:201](https://github.com/wenakita/
 
 > **parseConversationCheckpointRows**(`rows`): `Map`\<`string`, `number`\>
 
-Defined in: [api/\_handlers/agent/\_process.ts:277](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L277)
+Defined in: [api/\_handlers/agent/\_process.ts:280](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L280)
 
 #### Parameters
 
@@ -218,7 +218,7 @@ Defined in: [api/\_handlers/agent/\_process.ts:277](https://github.com/wenakita/
 
 > **readAgentProcessRequirePersistentDb**(`raw`): `boolean`
 
-Defined in: [api/\_handlers/agent/\_process.ts:103](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L103)
+Defined in: [api/\_handlers/agent/\_process.ts:106](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L106)
 
 #### Parameters
 
@@ -236,7 +236,7 @@ Defined in: [api/\_handlers/agent/\_process.ts:103](https://github.com/wenakita/
 
 > **readCronSecretFromHeaders**(`req`): `string`
 
-Defined in: [api/\_handlers/agent/\_process.ts:429](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L429)
+Defined in: [api/\_handlers/agent/\_process.ts:432](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L432)
 
 #### Parameters
 
@@ -254,7 +254,7 @@ Defined in: [api/\_handlers/agent/\_process.ts:429](https://github.com/wenakita/
 
 > **readStrictUnsupportedRetryEnabled**(`raw`): `boolean`
 
-Defined in: [api/\_handlers/agent/\_process.ts:97](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L97)
+Defined in: [api/\_handlers/agent/\_process.ts:100](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L100)
 
 #### Parameters
 
@@ -272,7 +272,7 @@ Defined in: [api/\_handlers/agent/\_process.ts:97](https://github.com/wenakita/4
 
 > **resolveAgentProcessXmtpPersistenceError**(`input`): `string` \| `null`
 
-Defined in: [api/\_handlers/agent/\_process.ts:119](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L119)
+Defined in: [api/\_handlers/agent/\_process.ts:122](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L122)
 
 #### Parameters
 
@@ -312,7 +312,7 @@ Defined in: [api/\_handlers/agent/\_process.ts:119](https://github.com/wenakita/
 
 > **resolveFallbackCommandReply**(`params`): `object`
 
-Defined in: [api/\_handlers/agent/\_process.ts:247](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L247)
+Defined in: [api/\_handlers/agent/\_process.ts:250](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L250)
 
 #### Parameters
 
@@ -344,7 +344,7 @@ Defined in: [api/\_handlers/agent/\_process.ts:247](https://github.com/wenakita/
 
 > **shouldDeferFallbackCommand**(`params`): `boolean`
 
-Defined in: [api/\_handlers/agent/\_process.ts:270](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L270)
+Defined in: [api/\_handlers/agent/\_process.ts:273](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_process.ts#L273)
 
 #### Parameters
 

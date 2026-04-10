@@ -69,6 +69,20 @@ describe('POST /api/zora/trendReserve', () => {
 
     expect(res.statusCode).toBe(400)
     expect(res.body?.error).toMatch(/Invalid creatorToken/i)
+    expect(String(res.getHeader('cache-control') ?? '')).toBe('no-store')
+  })
+
+  it('rejects oversized request payloads', async () => {
+    const req = createMockReq({
+      method: 'POST',
+      body: 'x'.repeat(20_000),
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(413)
+    expect(String(res.body?.error ?? '')).toContain('Request body too large')
   })
 
   it('short-circuits when preflight shows deployed trend', async () => {
@@ -134,4 +148,3 @@ describe('POST /api/zora/trendReserve', () => {
     expect(markTrendOpDeployedMock).toHaveBeenCalledTimes(1)
   })
 })
-

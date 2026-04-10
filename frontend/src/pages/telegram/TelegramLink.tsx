@@ -1084,6 +1084,7 @@ export function TelegramLink() {
               },
               body: JSON.stringify({
                 email: expectedEmail,
+                sessionToken: state.proof.sessionToken,
               }),
             }),
             TELEGRAM_LINK_READY_REQUEST_TIMEOUT_MS,
