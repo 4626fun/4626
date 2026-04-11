@@ -3,7 +3,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   checkRateLimit,
@@ -64,7 +64,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Too many owner checks' } satisfies ApiEnvelope<never>)
   }
 
-  const body = await readJsonBody<RequestBody>(req, { maxBytes: 8_192 })
+  const body = (await readBoundedJsonObjectBody(req, { maxBytes: 8_192 })) as RequestBody | null
   const smartWallet = typeof body?.smartWallet === 'string' ? body.smartWallet.trim() : ''
   const ownerAddress = typeof body?.ownerAddress === 'string' ? body.ownerAddress.trim() : ''
 

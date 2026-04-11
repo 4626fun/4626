@@ -48,7 +48,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
   const principalAddress = readRequestPrincipalAddress(req, { lowercase: true })
-  if (!principalAddress || !isServerAdminAddress(principalAddress)) {
+  if (!principalAddress) {
+    return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<never>)
+  }
+  if (!isServerAdminAddress(principalAddress)) {
     return res.status(403).json({ success: false, error: 'Admin access required' } satisfies ApiEnvelope<never>)
   }
 

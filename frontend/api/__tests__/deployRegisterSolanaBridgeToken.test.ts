@@ -47,6 +47,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
   handleOptions: vi.fn(() => false),
   setCors: vi.fn(),
   setNoStore: vi.fn(),
+  readBoundedJsonObjectBody: vi.fn(async (req: any) => req.body ?? null),
   readJsonBody: vi.fn(async (req: any) => req.body ?? null),
 }))
 
@@ -151,6 +152,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
 
     expect(res.statusCode).toBe(429)
     expect(String(res.body?.error ?? '')).toContain('Rate limit exceeded')
+    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
   it('allows internal secret auth when deploy session auth is unavailable', async () => {

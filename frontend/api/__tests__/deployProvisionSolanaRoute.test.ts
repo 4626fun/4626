@@ -7,6 +7,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
   handleOptions: vi.fn(() => false),
   setCors: vi.fn(),
   setNoStore: vi.fn(),
+  readBoundedJsonObjectBody: vi.fn(async (req: any) => req.body ?? null),
   readJsonBody: vi.fn(async (req: any) => req.body ?? null),
 }))
 
@@ -80,4 +81,3 @@ describe('deploy provisionSolanaRoute handler', () => {
     }
   })
 })
-

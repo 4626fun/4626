@@ -10,7 +10,7 @@ import { base } from 'viem/chains'
 import {
   type ApiEnvelope,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   setCors,
   setNoStore,
   logger,
@@ -982,9 +982,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
-  const body = await readJsonBody<RegisterSolanaBridgeTokenRequest>(req, {
+  const body = (await readBoundedJsonObjectBody(req, {
     maxBytes: REGISTER_SOLANA_BRIDGE_TOKEN_MAX_BODY_BYTES,
-  })
+  })) as RegisterSolanaBridgeTokenRequest | null
   if (!body) {
     return res.status(400).json({
       success: false,

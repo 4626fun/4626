@@ -57,6 +57,7 @@ describe('ops endpoint rate-limit hardening', () => {
     await syncCreatorMetricsHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
   it('returns 429 for /creator-access/request when limited', async () => {
@@ -69,6 +70,7 @@ describe('ops endpoint rate-limit hardening', () => {
     await creatorAccessRequestHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
   it('returns 429 for /cre/keeper/aiAssess when limited', async () => {
@@ -81,6 +83,7 @@ describe('ops endpoint rate-limit hardening', () => {
     await creKeeperAiAssessHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
   it('returns 429 for /cre/keeper/alert when limited', async () => {
@@ -93,6 +96,7 @@ describe('ops endpoint rate-limit hardening', () => {
     await creKeeperAlertHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
   it('returns 429 for /cre/keeper/mark-settled when limited', async () => {
@@ -105,6 +109,7 @@ describe('ops endpoint rate-limit hardening', () => {
     await creKeeperMarkSettledHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
   it('returns 429 for /cre/keeper/report when limited', async () => {
@@ -117,6 +122,7 @@ describe('ops endpoint rate-limit hardening', () => {
     await creKeeperReportHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
   it('returns 429 for /cre/keeper/solana/reconcile when limited', async () => {
@@ -129,6 +135,7 @@ describe('ops endpoint rate-limit hardening', () => {
     await creKeeperSolanaReconcileHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
   it('returns 429 for /cre/keeper/sweep when limited', async () => {
@@ -141,6 +148,7 @@ describe('ops endpoint rate-limit hardening', () => {
     await creKeeperSweepHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
   it('returns 429 for /cre/keeper/tend when limited', async () => {
@@ -153,5 +161,6 @@ describe('ops endpoint rate-limit hardening', () => {
     await creKeeperTendHandler(req, res)
     expect(res.statusCode).toBe(429)
     expect(res.body?.error).toBe('Rate limit exceeded')
+    expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 })

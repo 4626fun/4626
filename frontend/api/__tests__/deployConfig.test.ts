@@ -76,6 +76,28 @@ describe('deploy config handler', () => {
     expect(res.body?.error).toContain('Method not allowed')
   })
 
+  it('returns 401 when no authenticated principal is present', async () => {
+    readRequestPrincipalAddressMock.mockReturnValueOnce('')
+    const req = createMockReq({ method: 'GET' })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(401)
+    expect(String(res.body?.error ?? '')).toContain('Not authenticated')
+  })
+
+  it('returns 403 for authenticated non-admin callers', async () => {
+    isServerAdminAddressMock.mockReturnValueOnce(false)
+    const req = createMockReq({ method: 'GET' })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(403)
+    expect(String(res.body?.error ?? '')).toContain('Admin access required')
+  })
+
   it('returns resolved public deploy config', async () => {
     process.env.ALLOW_API_CONTRACT_OVERRIDES = '1'
     process.env.VITE_DEPLOY_USE_SERVER_CONTINUE = 'false'
