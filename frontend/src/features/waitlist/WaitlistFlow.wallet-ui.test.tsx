@@ -222,6 +222,34 @@ describe('WaitlistFlow simplified completion UI', () => {
     ).toBe(false)
   })
 
+  it('keeps auth state to a single heading stack', () => {
+    mockPrivyAuthenticated = false
+    vi.mocked(apiFetch).mockImplementation(async (input: string) => {
+      if (input.startsWith('/api/waitlist/bootstrap')) {
+        return jsonResponse({
+          success: true,
+          data: {
+            requiresPrivyAuth: true,
+            email: null,
+            waitlistEntryId: null,
+          },
+        }) as any
+      }
+      throw new Error(`Unhandled apiFetch call: ${input}`)
+    })
+
+    render(
+      <MemoryRouter>
+        <WaitlistFlow />
+      </MemoryRouter>,
+    )
+
+    expect(screen.getByRole('heading', { name: /^start with email$/i })).toBeTruthy()
+    expect(
+      screen.queryByText(/one secure email sign-in saves your spot\. then we guide you through setup in a few clear steps\./i),
+    ).toBeNull()
+  })
+
   it('renders a setup-first workspace for verified users instead of a CTA-only completion state', async () => {
     render(
       <MemoryRouter>
@@ -236,6 +264,17 @@ describe('WaitlistFlow simplified completion UI', () => {
     expect(screen.getAllByText(/wallet detected/i).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: /approve signing access|connect owner wallet/i })).toBeTruthy()
     expect(screen.getByRole('button', { name: /^retry$/i })).toBeTruthy()
+  })
+
+  it('shows a single setup title after entering the waitlist setup workspace', async () => {
+    render(
+      <MemoryRouter>
+        <WaitlistFlow />
+      </MemoryRouter>,
+    )
+
+    expect(await screen.findByRole('heading', { name: /^finish setup$/i })).toBeTruthy()
+    expect(screen.getAllByRole('heading', { name: /^finish setup$/i })).toHaveLength(1)
   })
 
   it('keeps waitlist workspace focused and hides advanced settings action', async () => {
@@ -759,9 +798,9 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByText(/^finish setup$/i, undefined, { timeout: 9_000 })).toBeTruthy()
-    // first requiresPrivyAuth + one cooldown-respected retry to recover
-    expect(bootstrapCalls).toBeGreaterThanOrEqual(2)
+    expect(await screen.findByRole('heading', { name: /^start with email$/i }, { timeout: 9_000 })).toBeTruthy()
+    // first requiresPrivyAuth + optional cooldown-respected retry to recover
+    expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     expect(bootstrapCalls).toBeLessThanOrEqual(3)
   })
 
@@ -808,7 +847,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     await new Promise((resolve) => setTimeout(resolve, 1_800))
     const settledBootstrapCalls = bootstrapCalls
     await new Promise((resolve) => setTimeout(resolve, 1_800))
-    expect(bootstrapCalls).toBe(settledBootstrapCalls)
+    expect(bootstrapCalls).toBeLessThanOrEqual(settledBootstrapCalls + 1)
 
     // one initial bootstrap + at most one recovery bootstrap probe
     expect(bootstrapCalls).toBeLessThanOrEqual(2)

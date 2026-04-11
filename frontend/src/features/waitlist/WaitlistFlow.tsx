@@ -159,6 +159,28 @@ const FINALIZING_BACKGROUND_RETRY_MAX_ATTEMPTS = 5
 const PRIVY_LOGOUT_SETTLE_ATTEMPTS = 10
 const PRIVY_LOGOUT_SETTLE_DELAY_MS = 150
 
+function WaitlistStageHeader(props: { step: WaitlistStep }) {
+  const { step } = props
+  if (step !== 'done') return null
+
+  const eyebrow = '3-step setup'
+  const title = 'Finish Setup'
+  const body = 'Complete these 3 steps to activate your wallet.'
+
+  return (
+    <motion.header
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+      className="text-center space-y-3"
+    >
+      <p className="text-sm sm:text-base uppercase tracking-[0.18em] text-zinc-400">{eyebrow}</p>
+      {title ? <h2 className="text-4xl font-light tracking-tight text-white">{title}</h2> : null}
+      <p className="mx-auto max-w-2xl text-[14px] text-zinc-500 font-light leading-relaxed">{body}</p>
+    </motion.header>
+  )
+}
+
 function isTelegramMiniAppRuntime(): boolean {
   if (typeof window === 'undefined') return false
   const maybeTelegram = (window as any)?.Telegram?.WebApp
@@ -1009,6 +1031,7 @@ export function WaitlistFlow(props: {
 
   return (
     <section id={sectionId} className={wrapClass}>
+      <WaitlistStageHeader step={step} />
       <AnimatePresence mode="wait" initial={false}>
         {step === 'auth' ? (
           <WaitlistAuthStep

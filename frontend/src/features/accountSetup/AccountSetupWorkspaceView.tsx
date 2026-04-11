@@ -11,8 +11,9 @@ export function AccountSetupWorkspaceView(props: {
   context: 'accounts' | 'waitlist'
   controller: AccountSetupWorkspaceController
   summaryActions?: ReactNode
+  hideWaitlistHeader?: boolean
 }) {
-  const { context, controller, summaryActions } = props
+  const { context, controller, summaryActions, hideWaitlistHeader = false } = props
   const {
     advancedBusy,
     baseAppUrl,
@@ -109,12 +110,13 @@ export function AccountSetupWorkspaceView(props: {
           </div>
         ) : null}
 
-        {/* page header */}
-        <div className="space-y-1 text-center">
-          <p className="bv-kicker">3-step setup</p>
-          <h2 className="text-4xl font-light tracking-tight text-white">Finish Setup</h2>
-          <p className="text-sm text-zinc-500">Complete these 3 steps to activate your wallet</p>
-        </div>
+        {!hideWaitlistHeader ? (
+          <div className="space-y-1 text-center">
+            <p className="bv-kicker">3-step setup</p>
+            <h2 className="text-4xl font-light tracking-tight text-white">Finish Setup</h2>
+            <p className="text-sm text-zinc-500">Complete these 3 steps to activate your wallet</p>
+          </div>
+        ) : null}
 
         {/* progress bar — bare, no container */}
         <div className="space-y-1.5">
