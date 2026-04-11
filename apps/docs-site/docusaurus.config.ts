@@ -3,6 +3,8 @@ import type {Config} from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 import {redirects} from './redirects';
 
+const enableGitLastUpdate = process.env.DOCS_USE_GIT_LAST_UPDATE === '1';
+
 const config: Config = {
   title: '4626.fun Docs',
   tagline: 'Documentation for the 4626 protocol',
@@ -48,7 +50,8 @@ const config: Config = {
         docs: {
           sidebarPath: './sidebars.ts',
           routeBasePath: '/',
-          showLastUpdateTime: true,
+          // Prefer synced frontmatter `last_updated`; Git metadata is optional.
+          showLastUpdateTime: enableGitLastUpdate,
           showLastUpdateAuthor: false,
           // Keep generated API docs with leading-underscore filenames visible.
           exclude: ['**/*.test.{js,jsx,ts,tsx,md,mdx}', '**/__tests__/**'],
