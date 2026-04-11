@@ -120,6 +120,36 @@ function mapVaultRow(row: any): KeeprVaultRow {
   }
 }
 
+function parseTelegramGroupIdMapFromEnv(): Record<string, string> {
+  const raw = typeof process.env.TELEGRAM_GROUP_ID_MAP_JSON === 'string' ? process.env.TELEGRAM_GROUP_ID_MAP_JSON.trim() : ''
+  if (!raw) return {}
+  try {
+    const parsed = JSON.parse(raw)
+    if (!isObject(parsed)) return {}
+    const out: Record<string, string> = {}
+    for (const [key, value] of Object.entries(parsed)) {
+      const normalizedKey = String(key ?? '').trim()
+      const normalizedValue = typeof value === 'string' ? value.trim() : ''
+      if (!normalizedKey || !normalizedValue) continue
+      out[normalizedKey] = normalizedValue
+    }
+    return out
+  } catch {
+    return {}
+  }
+}
+
+function deriveTelegramChatId(groupId: string): string | null {
+  const normalized = String(groupId ?? '').trim()
+  if (!normalized) return null
+  if (normalized.startsWith('telegram:')) {
+    const chatId = normalized.slice('telegram:'.length).trim()
+    return chatId || null
+  }
+  if (/^-?\d+$/.test(normalized)) return normalized
+  return null
+}
+
 export async function upsertKeeprVault(params: { config: KeeprConfigV1; actorWallet?: string | null }): Promise<KeeprVaultRow> {
   const db = await getDb()
   if (!db) throw new Error('db_not_configured')
@@ -236,9 +266,30 @@ export async function getKeeprVaultByGroupId(groupId: string): Promise<KeeprVaul
   const db = await getDb()
   if (!db) return null
   await ensureKeeprSchema()
-  const res = await db.sql`SELECT * FROM keepr_vaults WHERE group_id = ${String(groupId)} LIMIT 1;`
-  const row = (res.rows?.[0] ?? null) as any
-  return row ? mapVaultRow(row) : null
+  const normalizedGroupId = String(groupId)
+
+  const direct = await db.sql`SELECT * FROM keepr_vaults WHERE group_id = ${normalizedGroupId} LIMIT 1;`
+  const directRow = (direct.rows?.[0] ?? null) as any
+  if (directRow) return mapVaultRow(directRow)
+
+  const candidates = new Set<string>()
+  const telegramChatId = deriveTelegramChatId(normalizedGroupId)
+  if (telegramChatId) {
+    const map = parseTelegramGroupIdMapFromEnv()
+    const mapped = map[telegramChatId]
+    if (mapped && mapped !== normalizedGroupId) candidates.add(mapped)
+    if (normalizedGroupId.startsWith('telegram:')) candidates.add(telegramChatId)
+    else candidates.add(`telegram:${telegramChatId}`)
+  }
+
+  for (const candidate of candidates) {
+    if (!candidate || candidate === normalizedGroupId) continue
+    const res = await db.sql`SELECT * FROM keepr_vaults WHERE group_id = ${candidate} LIMIT 1;`
+    const row = (res.rows?.[0] ?? null) as any
+    if (row) return mapVaultRow(row)
+  }
+
+  return null
 }
 
 export async function enqueueKeeprAction(params: {
