@@ -35,7 +35,6 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
     <AccountSetupWorkspaceView
       context="waitlist"
       controller={controller}
-      hideWaitlistHeader
       summaryActions={
         <div className="w-full">
           <button
