@@ -31,6 +31,15 @@ const docsSensitivePrefixes = [
   'contracts/',
 ];
 
+const contractDocsPrefixes = [
+  'contracts/',
+  'src/',
+];
+
+const contractDocsExactMatches = new Set([
+  'foundry.toml',
+]);
+
 const manualDocsPrefixes = [
   'docs/',
   'frontend/docs/',
@@ -111,6 +120,9 @@ const result = {
   manualDocsTouched,
   generatedDocsTouched,
   docsToolingTouched,
+  contractDocsSensitive: changedFiles.some((path) =>
+    contractDocsExactMatches.has(path)
+    || contractDocsPrefixes.some((prefix) => path.startsWith(prefix))),
   changedFiles,
   docsSensitiveFiles,
   recommendedRefreshCommand: 'pnpm docs:refresh',
@@ -123,6 +135,7 @@ if (outputGithub && process.env.GITHUB_OUTPUT) {
     `manual_docs_touched=${String(result.manualDocsTouched)}`,
     `generated_docs_touched=${String(result.generatedDocsTouched)}`,
     `docs_tooling_touched=${String(result.docsToolingTouched)}`,
+    `contract_docs_sensitive=${String(result.contractDocsSensitive)}`,
     `changed_count=${String(result.changedCount)}`,
   ].join('\n') + '\n');
 }
@@ -142,6 +155,7 @@ if (result.docsSensitive) {
   console.log(`[docs] Manual docs touched: ${result.manualDocsTouched ? 'yes' : 'no'}`);
   console.log(`[docs] Generated docs touched: ${result.generatedDocsTouched ? 'yes' : 'no'}`);
   console.log(`[docs] Docs tooling touched: ${result.docsToolingTouched ? 'yes' : 'no'}`);
+  console.log(`[docs] Contract docs sensitive: ${result.contractDocsSensitive ? 'yes' : 'no'}`);
   console.log(`[docs] Run: ${result.recommendedRefreshCommand}`);
   console.log(`[docs] Validate: ${result.recommendedStrictBuildCommand}`);
 }

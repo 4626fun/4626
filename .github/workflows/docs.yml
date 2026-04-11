@@ -93,14 +93,19 @@ jobs:
         run: pnpm --dir apps/docs-site install --frozen-lockfile
 
       - name: Install Foundry
-        if: steps.detect.outputs.docs_sensitive == 'true'
+        if: steps.detect.outputs.docs_sensitive == 'true' && steps.detect.outputs.contract_docs_sensitive == 'true'
         uses: foundry-rs/foundry-toolchain@v1
         with:
           version: nightly
 
       - name: Regenerate docs
         if: steps.detect.outputs.docs_sensitive == 'true'
-        run: pnpm docs:check
+        run: |
+          if [ "${{ steps.detect.outputs.contract_docs_sensitive }}" = "true" ]; then
+            pnpm docs:check
+          else
+            pnpm docs:check -- --skip-contract-docs
+          fi
 
       - name: Summarize docs audit
         if: always()
@@ -111,3 +116,4 @@ jobs:
           echo "- Manual docs touched: ${{ steps.detect.outputs.manual_docs_touched || 'false' }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Generated docs touched: ${{ steps.detect.outputs.generated_docs_touched || 'false' }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Docs tooling touched: ${{ steps.detect.outputs.docs_tooling_touched || 'false' }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Contract docs sensitive: ${{ steps.detect.outputs.contract_docs_sensitive || 'false' }}" >> "$GITHUB_STEP_SUMMARY"

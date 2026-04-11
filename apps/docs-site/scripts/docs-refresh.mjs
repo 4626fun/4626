@@ -7,6 +7,7 @@ import path from 'node:path';
 const args = new Set(process.argv.slice(2));
 const shouldCheck = args.has('--check');
 const shouldBuildStrict = args.has('--strict');
+const skipContractDocs = args.has('--skip-contract-docs');
 const syncCommand = shouldCheck ? 'sync-docs:strict' : 'sync-docs';
 const postprocessCommand = shouldCheck ? 'api:postprocess:strict' : 'api:postprocess';
 const repoRoot = process.cwd();
@@ -41,6 +42,33 @@ function runCapture(command, commandArgs, label) {
     process.exit(result.status ?? 1);
   }
   console.log(`[docs] ${label} OK`);
+}
+
+function verifyGeneratedTargetsCommitted(targets) {
+  console.log('\n[docs] Verify generated docs are committed');
+  const diffCheck = spawnSync(
+    'git',
+    ['--no-pager', 'diff', '--quiet', '--exit-code', '--', ...targets],
+    {
+      stdio: 'inherit',
+      cwd: process.cwd(),
+      env: process.env,
+    },
+  );
+  if (diffCheck.status !== 0) {
+    console.log('[docs] Generated docs drift detected (name-status):');
+    spawnSync(
+      'git',
+      ['--no-pager', 'diff', '--name-status', '--', ...targets],
+      {
+        stdio: 'inherit',
+        cwd: process.cwd(),
+        env: process.env,
+      },
+    );
+    process.exit(diffCheck.status ?? 1);
+  }
+  console.log('[docs] Verify generated docs are committed OK');
 }
 
 async function walkMarkdownFiles(dir) {
@@ -83,18 +111,20 @@ async function normalizeGeneratedSourceLinks(dir) {
 }
 
 run('pnpm', ['-C', 'frontend', 'docs'], 'Generate frontend API docs');
-run('forge', ['doc'], 'Generate contract API docs');
+if (!skipContractDocs) {
+  run('forge', ['doc'], 'Generate contract API docs');
+} else {
+  console.log('\n[docs] Skip contract API docs (frontend/docs-site only)');
+}
 await normalizeGeneratedSourceLinks('docs/_generated/frontend');
-await normalizeGeneratedSourceLinks('docs/_generated/contracts');
+if (!skipContractDocs) {
+  await normalizeGeneratedSourceLinks('docs/_generated/contracts');
+}
 run('pnpm', ['-C', 'apps/docs-site', syncCommand], 'Sync docs site sources');
 run('pnpm', ['-C', 'apps/docs-site', postprocessCommand], 'Postprocess docs site API output');
 
 if (shouldCheck) {
-  runCapture(
-    'git',
-    ['--no-pager', 'diff', '--quiet', '--exit-code', '--', ...generatedTargets],
-    'Verify generated docs are committed',
-  );
+  verifyGeneratedTargetsCommitted(generatedTargets);
 }
 
 if (shouldBuildStrict) {
