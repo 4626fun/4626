@@ -6,7 +6,7 @@ import {
   createCorrelationId,
   logger,
   handleOptions,
-  readJsonBody,
+  readBoundedJsonObjectBody,
   readSessionFromRequest,
   setCors,
   setNoStore,
@@ -75,15 +75,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(413).json({ success: false, error: 'Request body is too large' })
     }
 
-    const parsed = await readJsonBody<unknown>(req, { maxBytes: STREAM_BODY_MAX_BYTES })
-    if (
-      parsed !== null &&
-      (!parsed || typeof parsed !== 'object' || Array.isArray(parsed))
-    ) {
-      return res.status(400).json({ success: false, error: 'Invalid JSON body' })
+    let parsed: Record<string, unknown> | null = null
+    try {
+      parsed = await readBoundedJsonObjectBody(req, { maxBytes: STREAM_BODY_MAX_BYTES })
+    } catch {
+      return res.status(413).json({ success: false, error: 'Request body is too large' })
     }
     if (parsed !== null) {
-      postBody = parsed as Record<string, unknown>
+      postBody = parsed
     } else if (
       (typeof req.body === 'string' && req.body.trim().length > 0) ||
       Array.isArray(req.body)

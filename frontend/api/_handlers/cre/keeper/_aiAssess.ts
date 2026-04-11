@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, requireKeeprApiKey, setCors, setNoStore } from '../../../../packages/server-core/src/index.js'
+import { type ApiEnvelope, handleOptions, readBoundedJsonObjectBody, requireKeeprApiKey, setCors, setNoStore } from '../../../../packages/server-core/src/index.js'
 import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../../server/_lib/rateLimit.js'
 import { getElizaLlmService } from '../../../../server/agent/eliza/llm.js'
 import { prepareRemoteAiJsonPayload } from '../../../../server/_lib/agentControl/remoteAi.js'
@@ -145,10 +145,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (req.body ?? {}) as RequestBody
-  const vaultAddress = typeof body.vaultAddress === 'string' ? body.vaultAddress.trim() : ''
-  const checksRun = Number(body.checksRun)
-  const alerts = Array.isArray(body.alerts) ? body.alerts : []
+  const body = (await readBoundedJsonObjectBody(req, { maxBytes: 16_384 })) as RequestBody | null
+  const vaultAddress = typeof body?.vaultAddress === 'string' ? body.vaultAddress.trim() : ''
+  const checksRun = Number(body?.checksRun)
+  const alerts = Array.isArray(body?.alerts) ? body.alerts : []
   const validAlerts = alerts.filter((alert): alert is AlertInput => {
     return (
       alert &&

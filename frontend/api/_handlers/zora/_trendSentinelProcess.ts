@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { handleOptions, setCors } from '../../../server/zora/_shared.js'
+import { readBoundedJsonObjectBody } from '../../../packages/server-core/src/index.js'
 import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 import { runTrendLaunchSentinelProcess } from '../../../server/zora/trendLaunchSentinel.js'
 
@@ -23,25 +24,13 @@ function readBearerToken(req: VercelRequest): string {
   return header.slice('bearer '.length).trim()
 }
 
-function parseBody(req: VercelRequest): Body {
+async function parseBody(req: VercelRequest): Promise<Body> {
   const TREND_SENTINEL_MAX_BODY_BYTES = 16_384
-  if (req.body && typeof req.body === 'object' && !Array.isArray(req.body)) {
-    const estimated = Buffer.byteLength(JSON.stringify(req.body), 'utf8')
-    if (estimated > TREND_SENTINEL_MAX_BODY_BYTES) {
-      throw new Error('body_too_large')
-    }
-    return req.body as Body
+  try {
+    return (await readBoundedJsonObjectBody(req, { maxBytes: TREND_SENTINEL_MAX_BODY_BYTES })) ?? {}
+  } catch {
+    throw new Error('body_too_large')
   }
-  if (typeof req.body === 'string' && req.body.trim()) {
-    if (Buffer.byteLength(req.body, 'utf8') > TREND_SENTINEL_MAX_BODY_BYTES) {
-      throw new Error('body_too_large')
-    }
-    try {
-      const parsed = JSON.parse(req.body) as Body
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed
-    } catch {}
-  }
-  return {}
 }
 
 function parseNumber(value: unknown): number | undefined {
@@ -91,7 +80,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let body: Body
   try {
-    body = parseBody(req)
+    body = await parseBody(req)
   } catch {
     return res.status(413).json({ success: false, error: 'Request body too large' })
   }

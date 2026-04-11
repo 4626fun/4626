@@ -12,6 +12,17 @@ vi.mock('../../server/zora/_shared.js', () => ({
   setCors: vi.fn(),
 }))
 
+vi.mock('../../packages/server-core/src/index.js', () => ({
+  readBoundedJsonObjectBody: vi.fn(async (req: any, opts?: { maxBytes?: number }) => {
+    const body = req.body
+    if (typeof body === 'string') {
+      if (typeof opts?.maxBytes === 'number' && body.length > opts.maxBytes) throw new Error('body_too_large')
+      return null
+    }
+    return body ?? null
+  }),
+}))
+
 vi.mock('../../server/zora/trendLaunchSentinel.js', () => ({
   runTrendLaunchSentinelProcess: runTrendLaunchSentinelProcessMock,
 }))

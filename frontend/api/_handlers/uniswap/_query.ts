@@ -8,6 +8,7 @@ import {
   getClientIp,
   rateLimitKey,
   logger,
+  readBoundedJsonObjectBody,
   readRequestPrincipalAddress,
 } from '../../../packages/server-core/src/index.js'
 
@@ -227,7 +228,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   try {
-    const body = req.body as GraphQLRequest
+    const body = (await readBoundedJsonObjectBody(req, { maxBytes: 16_384 })) as GraphQLRequest | null
     const requestedOperation =
       typeof body?.operation === 'string' && body.operation.trim()
         ? body.operation.trim()

@@ -33,7 +33,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { type ApiEnvelope, handleOptions, requireKeeprApiKey, setCors, setNoStore } from '../../../../packages/server-core/src/index.js'
+import { type ApiEnvelope, handleOptions, readBoundedJsonObjectBody, requireKeeprApiKey, setCors, setNoStore } from '../../../../packages/server-core/src/index.js'
 import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../../server/_lib/rateLimit.js'
 import { createPublicClient, createWalletClient, http, type Abi, zeroAddress } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
@@ -217,7 +217,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
-  const { ccaStrategyAddress, enforceInvariants, invariants } = req.body as {
+  const body = (await readBoundedJsonObjectBody(req, { maxBytes: 16_384 })) as {
     ccaStrategyAddress?: string
     enforceInvariants?: boolean
     invariants?: {
@@ -228,7 +228,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       payoutRouterAddress?: string
       payoutRecipientMode?: PayoutRecipientMode
     }
-  }
+  } | null
+  const { ccaStrategyAddress, enforceInvariants, invariants } = body ?? {}
   if (!ccaStrategyAddress || !ccaStrategyAddress.startsWith('0x') || ccaStrategyAddress.length !== 42) {
     return res.status(400).json({ success: false, error: 'Invalid ccaStrategyAddress' } satisfies ApiEnvelope<never>)
   }

@@ -22,7 +22,7 @@ Local sweep: `pnpm security:local` at repo root ([scripts/security-audit-local.s
 
 | Severity | Package | Notes |
 |----------|---------|--------|
-| Low | **elliptic** | Via `@eth-optimism`/ethers v5 under LayerZero messagelib. **No patched release** on npm for GHSA-848j; custom patch mitigates a separate signing issue. Tracking + time-boxed risk acceptance: [Issue #227](https://github.com/wenakita/4626/issues/227). In GitHub **Dependabot**, you can **dismiss** with reason *“No fixed version; tracked in repo patch + triage doc + issue #227.”* |
+| Low | **elliptic** | Via LayerZero V2 tooling (`@layerzerolabs/oapp-evm` → `ethers@5` → `@ethersproject/signing-key`). **No patched release** on npm for GHSA-848j; custom patch mitigates a separate signing issue. **Risk acceptance**: LZ V2 bridge compatibility requires current tooling; production services do **not** execute the ethers v5 / hardhat JS toolchain. Tracking + time-boxed risk acceptance: [Issue #227](https://github.com/wenakita/4626/issues/227). In GitHub **Dependabot**, you can **dismiss** with reason *“No fixed version; LZ V2 tooling; runtime does not execute ethers v5.”* |
 
 ---
 

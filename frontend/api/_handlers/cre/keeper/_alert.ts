@@ -16,7 +16,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { type ApiEnvelope, handleOptions, requireKeeprApiKey, setCors, setNoStore } from '../../../../packages/server-core/src/index.js'
+import { type ApiEnvelope, handleOptions, readBoundedJsonObjectBody, requireKeeprApiKey, setCors, setNoStore } from '../../../../packages/server-core/src/index.js'
 import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../../server/_lib/rateLimit.js'
 
 type AlertSeverity = 'info' | 'warning' | 'critical'
@@ -49,7 +49,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
-  const body = req.body as AlertPayload | undefined
+  const body = (await readBoundedJsonObjectBody(req, { maxBytes: 8_192 })) as AlertPayload | null
   if (!body?.alertType || !body?.severity || !body?.message) {
     return res.status(400).json({
       success: false,

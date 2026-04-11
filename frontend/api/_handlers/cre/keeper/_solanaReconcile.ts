@@ -9,6 +9,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
+  readBoundedJsonObjectBody,
   requireKeeprApiKey,
   setCors,
   setNoStore,
@@ -127,12 +128,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
-  const body = (req.body ?? {}) as ReconcileBody
-  const workflow = isNonEmptyString(body.workflow) ? body.workflow.trim() : ''
-  const action = isNonEmptyString(body.action) ? normalizeSolanaAction(body.action) : ''
-  const checkpointKey = isNonEmptyString(body.checkpointKey) ? body.checkpointKey.trim() : ''
+  const body = (await readBoundedJsonObjectBody(req, { maxBytes: 8_192 })) as ReconcileBody | null
+  const workflow = isNonEmptyString(body?.workflow) ? body.workflow.trim() : ''
+  const action = isNonEmptyString(body?.action) ? normalizeSolanaAction(body.action) : ''
+  const checkpointKey = isNonEmptyString(body?.checkpointKey) ? body.checkpointKey.trim() : ''
   const payload =
-    body.payload && typeof body.payload === 'object' && !Array.isArray(body.payload)
+    body?.payload && typeof body.payload === 'object' && !Array.isArray(body.payload)
       ? body.payload
       : {}
 

@@ -28,11 +28,16 @@ vi.mock('../../server/zora/_shared.js', () => ({
   setCors: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/requestPrincipal.js', () => ({
+vi.mock('../../packages/server-core/src/index.js', () => ({
+  readBoundedJsonObjectBody: vi.fn(async (req: any, opts?: { maxBytes?: number }) => {
+    const body = req.body
+    if (typeof body === 'string') {
+      if (typeof opts?.maxBytes === 'number' && body.length > opts.maxBytes) throw new Error('body_too_large')
+      return null
+    }
+    return body ?? null
+  }),
   readRequestPrincipal: readRequestPrincipalMock,
-}))
-
-vi.mock('../../server/_lib/session.js', () => ({
   isAdminAddress: isAdminAddressMock,
 }))
 

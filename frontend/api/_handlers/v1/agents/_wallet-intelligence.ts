@@ -9,6 +9,7 @@ import {
   RATE_LIMITS,
   checkRateLimit,
   rateLimitKey,
+  readBoundedJsonObjectBody,
 } from '../../../../packages/server-core/src/index.js'
 
 
@@ -128,6 +129,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let includeEns: boolean | undefined
   let includeLens: boolean | undefined
   let includeLabels: boolean | undefined
+  let postBody: Record<string, unknown> | null = null
 
   if (req.method === 'GET') {
     const q = req.query
@@ -141,16 +143,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     includeLabels = typeof q.labels === 'string' ? q.labels !== 'false' : undefined
   } else {
     // POST body
-    let body: Record<string, unknown> = {}
-    try {
-      if (typeof req.body === 'object' && req.body !== null) {
-        body = req.body as Record<string, unknown>
-      } else if (typeof req.body === 'string') {
-        body = JSON.parse(req.body)
-      }
-    } catch {
-      // ignore parse errors
-    }
+    postBody = (await readBoundedJsonObjectBody(req, { maxBytes: 16_384 })) as Record<string, unknown> | null
+    const body = postBody ?? {}
     address = typeof body.address === 'string' ? body.address.trim() : undefined
     hops = typeof body.hops === 'number' ? body.hops : undefined
     chainIds = Array.isArray(body.chainIds) ? body.chainIds.filter((n): n is number => typeof n === 'number') : undefined
@@ -177,7 +171,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const effectiveHops = hops ?? 3
   const effectiveChainIds = chainIds ?? [8453, 1]
   const noCache = (req.method === 'GET' && req.query.noCache === 'true') ||
-    (req.method === 'POST' && (req.body as any)?.noCache === true)
+    (req.method === 'POST' && postBody?.noCache === true)
 
   try {
     // ── Cache read (Supabase) ──

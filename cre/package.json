@@ -60,7 +60,7 @@
     "vitest": "^3.2.4"
   },
   "overrides": {
-    "axios": "1.13.5",
+    "axios": "1.15.0",
     "bigint-buffer": "file:./vendor/bigint-buffer",
     "bn.js": "5.2.3",
     "cross-fetch": "3.2.0",
@@ -72,7 +72,7 @@
   },
   "pnpm": {
     "overrides": {
-      "axios": "1.13.5",
+      "axios": "1.15.0",
       "bigint-buffer": "file:./vendor/bigint-buffer",
       "bn.js": "5.2.3",
       "cross-fetch": "3.2.0",

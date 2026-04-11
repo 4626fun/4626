@@ -3,6 +3,7 @@ import { isAddress } from 'viem'
 
 import { handleOptions, setCors } from '../../../server/zora/_shared.js'
 import {
+  readBoundedJsonObjectBody,
   readRequestPrincipal,
   isAdminAddress,
 } from '../../../packages/server-core/src/index.js'
@@ -25,25 +26,13 @@ function isAuthorizedAdmin(req: VercelRequest): { ok: boolean; actorAddress: str
   return { ok: true, actorAddress }
 }
 
-function readBody(req: VercelRequest): Record<string, unknown> {
+async function readBody(req: VercelRequest): Promise<Record<string, unknown>> {
   const TREND_RESERVE_MAX_BODY_BYTES = 16_384
-  if (req.body && typeof req.body === 'object' && !Array.isArray(req.body)) {
-    const estimated = Buffer.byteLength(JSON.stringify(req.body), 'utf8')
-    if (estimated > TREND_RESERVE_MAX_BODY_BYTES) {
-      throw new Error('body_too_large')
-    }
-    return req.body as Record<string, unknown>
+  try {
+    return (await readBoundedJsonObjectBody(req, { maxBytes: TREND_RESERVE_MAX_BODY_BYTES })) ?? {}
+  } catch {
+    throw new Error('body_too_large')
   }
-  if (typeof req.body === 'string' && req.body.trim()) {
-    if (Buffer.byteLength(req.body, 'utf8') > TREND_RESERVE_MAX_BODY_BYTES) {
-      throw new Error('body_too_large')
-    }
-    try {
-      const parsed = JSON.parse(req.body)
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) return parsed
-    } catch {}
-  }
-  return {}
 }
 
 function readBoolean(v: unknown, fallback: boolean): boolean {
@@ -80,7 +69,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let body: Record<string, unknown>
   try {
-    body = readBody(req)
+    body = await readBody(req)
   } catch {
     return res.status(413).json({ success: false, error: 'Request body too large' })
   }

@@ -19,6 +19,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import {
   type ApiEnvelope,
   handleOptions,
+  readBoundedJsonObjectBody,
   requireKeeprApiKey,
   setCors,
   setNoStore,
@@ -50,12 +51,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' } satisfies ApiEnvelope<never>)
   }
 
-  const { vaultAddress, graduatedAt, settledAt, settlementStage } = req.body as {
+  const body = (await readBoundedJsonObjectBody(req, { maxBytes: 8_192 })) as {
     vaultAddress?: string
     graduatedAt?: string
     settledAt?: string
     settlementStage?: string
-  }
+  } | null
+  const vaultAddress = typeof body?.vaultAddress === 'string' ? body.vaultAddress.trim() : ''
+  const graduatedAt = typeof body?.graduatedAt === 'string' ? body.graduatedAt.trim() : ''
+  const settledAt = typeof body?.settledAt === 'string' ? body.settledAt.trim() : ''
+  const settlementStage = typeof body?.settlementStage === 'string' ? body.settlementStage.trim() : ''
 
   if (!vaultAddress || !vaultAddress.startsWith('0x') || vaultAddress.length !== 42) {
     return res.status(400).json({ success: false, error: 'Invalid vaultAddress' } satisfies ApiEnvelope<never>)
