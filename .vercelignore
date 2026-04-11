@@ -62,7 +62,9 @@ target
 
 # This project deploys from `frontend/`. Exclude unrelated monorepo workspaces
 # and source trees when the Vercel CLI is pointed at the repo root.
-/apps
+/apps/*
+!/apps/docs-site
+!/apps/docs-site/**
 /contracts
 /cre
 /design
