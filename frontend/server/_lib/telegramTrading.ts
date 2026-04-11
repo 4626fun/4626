@@ -37,6 +37,7 @@ export type TelegramPortfolioSummary = {
 export type TelegramScopedVault = {
   vaultAddress: string
   creatorCoinAddress: string
+  shareTokenAddress: string | null
   chainId: number
   groupId: string
   isSettled: boolean
@@ -1903,7 +1904,7 @@ export async function listTelegramScopedVaults(params: {
   )
 
   const result = await params.db.sql`
-    SELECT vault_address, creator_coin_address, chain_id, group_id, settled_at, config_json
+    SELECT vault_address, creator_coin_address, share_token_address, chain_id, group_id, settled_at, config_json
     FROM keepr_vaults
     ORDER BY created_at DESC
     LIMIT 100;
@@ -1919,6 +1920,7 @@ export async function listTelegramScopedVaults(params: {
     return {
       vaultAddress: String(row.vault_address).toLowerCase(),
       creatorCoinAddress: String(row.creator_coin_address).toLowerCase(),
+      shareTokenAddress: normalizeAddress(row.share_token_address) || null,
       chainId: Number(row.chain_id),
       groupId: String(row.group_id),
       isSettled: Boolean(row.settled_at),

@@ -302,6 +302,7 @@ describe('telegram webhook handler', () => {
       {
         vaultAddress: '0x1111111111111111111111111111111111111111',
         creatorCoinAddress: AKITA_TOKEN_ADDRESS,
+        shareTokenAddress: '0x9999999999999999999999999999999999999999',
         chainId: 8453,
         groupId: 'xmtp-group-1',
         isSettled: false,
@@ -1990,6 +1991,7 @@ describe('telegram webhook handler', () => {
       {
         vaultAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
         creatorCoinAddress: AKITA_TOKEN_ADDRESS,
+        shareTokenAddress: '0x1111111111111111111111111111111111111111',
         chainId: 8453,
         groupId: 'g1',
         isSettled: false,
@@ -1998,6 +2000,7 @@ describe('telegram webhook handler', () => {
       {
         vaultAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
         creatorCoinAddress: '0x2222222222222222222222222222222222222222',
+        shareTokenAddress: '0x2222222222222222222222222222222222222222',
         chainId: 8453,
         groupId: 'g2',
         isSettled: false,
@@ -2006,6 +2009,7 @@ describe('telegram webhook handler', () => {
       {
         vaultAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
         creatorCoinAddress: '0x4444444444444444444444444444444444444444',
+        shareTokenAddress: '0x4444444444444444444444444444444444444444',
         chainId: 8453,
         groupId: 'g3',
         isSettled: false,
@@ -5294,6 +5298,7 @@ describe('telegram webhook handler', () => {
       {
         vaultAddress: '0x1111111111111111111111111111111111111111',
         creatorCoinAddress: AKITA_TOKEN_ADDRESS,
+        shareTokenAddress: '0x9999999999999999999999999999999999999999',
         chainId: 8453,
         groupId: 'xmtp-group-1',
         isSettled: false,
@@ -5302,6 +5307,7 @@ describe('telegram webhook handler', () => {
       {
         vaultAddress: '0x2222222222222222222222222222222222222222',
         creatorCoinAddress: '0x4444444444444444444444444444444444444444',
+        shareTokenAddress: '0x8888888888888888888888888888888888888888',
         chainId: 8453,
         groupId: 'xmtp-group-2',
         isSettled: false,

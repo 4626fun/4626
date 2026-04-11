@@ -2379,6 +2379,7 @@ function mapKeeprVaultRowToScopedVault(vault: Awaited<ReturnType<typeof getKeepr
   return {
     vaultAddress: vault.vaultAddress,
     creatorCoinAddress: vault.creatorCoinAddress,
+    shareTokenAddress: vault.shareTokenAddress ?? null,
     chainId: vault.chainId,
     groupId: vault.groupId,
     isSettled: false,
@@ -3980,9 +3981,19 @@ async function executeTelegramNativeCommand(params: {
       }
     }
 
-    const shareToken = isAddressLike(target.creatorCoinAddress)
-      ? target.creatorCoinAddress.toLowerCase()
-      : target.vaultAddress.toLowerCase()
+    const shareToken = isAddressLike(target.shareTokenAddress ?? '')
+      ? target.shareTokenAddress!.toLowerCase()
+      : ''
+    if (!shareToken) {
+      return {
+        text: [
+          'Join Room',
+          '',
+          '- vault share token is not configured',
+          '- ask the creator/admin to set the share token address for this vault',
+        ].join('\n'),
+      }
+    }
     const eligibility = await checkSharesEligibility({
       wallet: canonicalSenderWallet as Address,
       shareToken: shareToken as Address,
