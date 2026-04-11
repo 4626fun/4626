@@ -24,6 +24,9 @@ const {
   clientReadContractMock,
   getTrustedRequestOriginsMock,
   normalizeOriginMock,
+  checkRateLimitMock,
+  getClientIpMock,
+  rateLimitKeyMock,
 } = vi.hoisted(() => ({
   verifySIWAMock: vi.fn(),
   readJsonBodyMock: vi.fn(async (req: any) => req.body ?? {}),
@@ -40,6 +43,9 @@ const {
   clientReadContractMock: vi.fn(),
   getTrustedRequestOriginsMock: vi.fn(),
   normalizeOriginMock: vi.fn(),
+  checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
+  getClientIpMock: vi.fn(() => '127.0.0.1'),
+  rateLimitKeyMock: vi.fn((scope: string, ip: string) => `${scope}:${ip}`),
 }))
 
 vi.mock('@buildersgarden/siwa', () => ({
@@ -62,6 +68,12 @@ vi.mock('../../packages/server-core/src/index.js', () => ({
   setCors: vi.fn(),
   setNoStore: vi.fn(),
   getDb: getDbMock,
+  RATE_LIMITS: {
+    authAgentWrite: { limit: 10, windowMs: 60_000 },
+  },
+  checkRateLimit: checkRateLimitMock,
+  getClientIp: getClientIpMock,
+  rateLimitKey: rateLimitKeyMock,
 }))
 
 vi.mock('../../server/auth/_siwa.js', () => ({

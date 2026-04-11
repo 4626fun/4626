@@ -12,6 +12,9 @@ const {
   markTrendOpFailedMock,
   preflightTrendTickerMock,
   reserveTrendTickerMock,
+  checkRateLimitMock,
+  getClientIpMock,
+  rateLimitKeyMock,
 } = vi.hoisted(() => ({
   readRequestPrincipalMock: vi.fn(),
   isAdminAddressMock: vi.fn(),
@@ -21,6 +24,9 @@ const {
   markTrendOpFailedMock: vi.fn(),
   preflightTrendTickerMock: vi.fn(),
   reserveTrendTickerMock: vi.fn(),
+  checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
+  getClientIpMock: vi.fn(() => '127.0.0.1'),
+  rateLimitKeyMock: vi.fn((scope: string, ip: string) => `${scope}:${ip}`),
 }))
 
 vi.mock('../../server/zora/_shared.js', () => ({
@@ -39,6 +45,12 @@ vi.mock('../../packages/server-core/src/index.js', () => ({
   }),
   readRequestPrincipal: readRequestPrincipalMock,
   isAdminAddress: isAdminAddressMock,
+  RATE_LIMITS: {
+    adminAction: { limit: 10, windowMs: 60_000 },
+  },
+  checkRateLimit: checkRateLimitMock,
+  getClientIp: getClientIpMock,
+  rateLimitKey: rateLimitKeyMock,
 }))
 
 vi.mock('../../server/_lib/zoraTrendOpsStore.js', () => ({
