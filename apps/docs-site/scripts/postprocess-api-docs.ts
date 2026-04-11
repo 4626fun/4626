@@ -14,6 +14,7 @@
  *   pnpm api:postprocess --strict  (fail on unresolved links)
  */
 
+import { existsSync } from 'fs';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
@@ -132,13 +133,25 @@ async function createDirectoryIndex(dir: string, apiRootDir: string): Promise<vo
   if (await pathExists(indexPath) || await pathExists(readmePath)) {
     return;
   }
+
+  // Avoid index route collisions like ".../deploy/" vs ".../deploy/Deploy".
+  const dirName = path.basename(dir).toLowerCase();
+  const existingEntries = await fs.readdir(dir, { withFileTypes: true });
+  const hasSiblingDocMatchingDir = existingEntries.some((entry) => {
+    if (!entry.isFile() || !entry.name.endsWith('.md')) return false;
+    const basename = entry.name.replace(/\.md$/, '').toLowerCase();
+    return basename !== 'index' && basename === dirName;
+  });
+  if (hasSiblingDocMatchingDir) {
+    return;
+  }
   
-  const dirName = path.basename(dir);
-  const title = toTitleCase(dirName);
+  const dirNameForTitle = path.basename(dir);
+  const title = toTitleCase(dirNameForTitle);
   const relPath = path.relative(apiRootDir, dir);
   
   // Get children
-  const entries = await fs.readdir(dir, { withFileTypes: true });
+  const entries = existingEntries;
   const subdirs = entries.filter(e => e.isDirectory()).map(e => e.name).sort();
   const files = entries.filter(e => e.isFile() && e.name.endsWith('.md') && e.name !== 'index.md').map(e => e.name).sort();
   
@@ -157,7 +170,21 @@ Auto-generated API documentation for \`${relPath || 'contracts'}\`.
   if (subdirs.length > 0) {
     content += `## Subdirectories\n\n`;
     for (const subdir of subdirs) {
-      content += `- [${toTitleCase(subdir)}](./${subdir}/)\n`;
+      const subdirPath = path.join(dir, subdir);
+      let subdirTarget = `./${subdir}/`;
+      const subdirHasIndex = await pathExists(path.join(subdirPath, 'index.md')) || await pathExists(path.join(subdirPath, 'README.md'));
+      if (!subdirHasIndex) {
+        const subEntries = await fs.readdir(subdirPath, { withFileTypes: true });
+        const matchingDoc = subEntries.find((entry) => {
+          if (!entry.isFile() || !entry.name.endsWith('.md')) return false;
+          const basename = entry.name.replace(/\.md$/, '');
+          return basename.toLowerCase() === subdir.toLowerCase() && basename.toLowerCase() !== 'index';
+        });
+        if (matchingDoc) {
+          subdirTarget = `./${subdir}/${matchingDoc.name.replace(/\.md$/, '')}`;
+        }
+      }
+      content += `- [${toTitleCase(subdir)}](${subdirTarget})\n`;
     }
     content += '\n';
   }
@@ -217,6 +244,66 @@ async function removeDuplicateIndexIfReadmeExists(dir: string): Promise<void> {
   const indexPath = path.join(dir, 'index.md');
   const readmePath = path.join(dir, 'README.md');
   if (await pathExists(indexPath) && await pathExists(readmePath)) {
+    await fs.rm(indexPath, { force: true });
+    stats.duplicateIndexesRemoved++;
+  }
+}
+
+function docTargetExists(absolutePath: string): boolean {
+  return (
+    existsSync(absolutePath) ||
+    existsSync(`${absolutePath}.md`) ||
+    existsSync(path.join(absolutePath, 'index.md'))
+  );
+}
+
+async function ensureDistinctSlugForSameNameDoc(filePath: string): Promise<void> {
+  const basename = path.basename(filePath, '.md');
+  const parent = path.basename(path.dirname(filePath));
+  const parentEntries = await fs.readdir(path.dirname(filePath), { withFileTypes: true });
+  const hasChildDirWithSameName = parentEntries.some((entry) => {
+    return entry.isDirectory() && entry.name.toLowerCase() === basename.toLowerCase();
+  });
+
+  if (basename.toLowerCase() !== parent.toLowerCase() && !hasChildDirWithSameName) {
+    return;
+  }
+
+  let content = await fs.readFile(filePath, 'utf-8');
+  if (!content.startsWith('---\n')) {
+    return;
+  }
+  const frontmatterEnd = content.indexOf('\n---\n', 4);
+  if (frontmatterEnd < 0) {
+    return;
+  }
+
+  const frontmatter = content.slice(0, frontmatterEnd + 5);
+  if (/^slug:\s+/m.test(frontmatter)) {
+    return;
+  }
+
+  const injected = content.replace('\n---\n', `\nslug: ./${basename}\n---\n`);
+  if (injected !== content) {
+    await fs.writeFile(filePath, injected);
+  }
+}
+
+async function removeConflictingIndexIfSiblingMatchesDirectory(dir: string): Promise<void> {
+  const indexPath = path.join(dir, 'index.md');
+  if (!await pathExists(indexPath)) {
+    return;
+  }
+
+  const dirName = path.basename(dir).toLowerCase();
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  const hasSiblingDocMatchingDir = entries.some((entry) => {
+    if (!entry.isFile() || !entry.name.endsWith('.md')) return false;
+    const basename = entry.name.replace(/\.md$/, '').toLowerCase();
+    return basename !== 'index' && basename === dirName;
+  });
+
+  if (hasSiblingDocMatchingDir) {
     await fs.rm(indexPath, { force: true });
     stats.duplicateIndexesRemoved++;
   }
@@ -328,6 +415,68 @@ async function fixLinksInFile(filePath: string, apiRoot: (typeof API_ROOTS)[numb
   // pages (e.g. accountContext/types from src/wallet/accountContext.md). For a
   // page already at /.../accountContext, that creates /.../accountContext/accountContext/types.
   if (apiRoot.key === 'frontend') {
+    // If a module doc name collides with a sibling directory name (e.g.
+    // src/App.md and src/app/), Docusaurus routes that page at /.../app/.
+    // Bare sibling links like "lib/foo" then resolve under /.../app/lib/foo.
+    // In this specific collision shape, rewrite bare sibling-dir links to ../.
+    const parentEntries = await fs.readdir(path.dirname(filePath), { withFileTypes: true });
+    const siblingDirs = new Set(
+      parentEntries.filter((entry) => entry.isDirectory()).map((entry) => entry.name.toLowerCase()),
+    );
+    const basenameLower = path.basename(filePath, '.md').toLowerCase();
+    const hasSelfDirCollision = siblingDirs.has(basenameLower);
+    if (hasSelfDirCollision) {
+      content = content.replace(/\]\(\.\/([^)#]+)(#[^)]+)?\)/g, (match, linkPath, hashPart) => {
+        const target = String(linkPath);
+        const firstSegment = target.split('/')[0].toLowerCase();
+        if (!siblingDirs.has(firstSegment)) {
+          return match;
+        }
+        fileRewrites++;
+        return `](${target}${hashPart ?? ''})`;
+      });
+
+      content = content.replace(/\]\(\.\.\/([^)#]+)(#[^)]+)?\)/g, (match, linkPath, hashPart) => {
+        const target = String(linkPath);
+        const firstSegment = target.split('/')[0].toLowerCase();
+        if (!siblingDirs.has(firstSegment)) {
+          return match;
+        }
+        fileRewrites++;
+        return `](${target}${hashPart ?? ''})`;
+      });
+    }
+
+    // Some TypeDoc links incorrectly jump one directory up (../foo) even when
+    // the intended target lives beside the current file (./foo).
+    if (!hasSelfDirCollision) {
+      content = content.replace(/\]\((\.\.\/[^)#]+)(#[^)]+)?\)/g, (match, badPath, hashPart) => {
+        const badAbsolute = path.resolve(path.dirname(filePath), String(badPath));
+        if (docTargetExists(badAbsolute)) {
+          return match;
+        }
+        const fixedPath = `./${String(badPath).slice(3)}`;
+        const fixedAbsolute = path.resolve(path.dirname(filePath), fixedPath);
+        if (!docTargetExists(fixedAbsolute)) {
+          return match;
+        }
+        fileRewrites++;
+        return `](${fixedPath}${hashPart ?? ''})`;
+      });
+    }
+
+    const relFromFrontendRoot = path.relative(apiRoot.dir, filePath).split(path.sep).join('/');
+    if (relFromFrontendRoot === 'src/App.md') {
+      content = content.replace(/\]\((?:\.\/|\.\.\/)?app\/([^)#]+)(#[^)]+)?\)/g, (_m, suffix, hashPart) => {
+        fileRewrites++;
+        return `](/api/frontend/src/app/${suffix}${hashPart ?? ''})`;
+      });
+      content = content.replace(/\]\((?:\.\/|\.\.\/)?lib\/([^)#]+)(#[^)]+)?\)/g, (_m, suffix, hashPart) => {
+        fileRewrites++;
+        return `](/api/frontend/src/lib/${suffix}${hashPart ?? ''})`;
+      });
+    }
+
     const currentBase = path.basename(filePath, '.md');
     const repeatedPrefix = `${currentBase}/`;
     const relFileFromRoot = path.relative(apiRoot.dir, filePath).split(path.sep).join('/');
@@ -435,6 +584,7 @@ async function postprocess(): Promise<void> {
 
     for (const dir of directories) {
       await removeDuplicateIndexIfReadmeExists(dir);
+      await removeConflictingIndexIfSiblingMatchesDirectory(dir);
       await createDirectoryIndex(dir, apiRoot.dir);
     }
   }
@@ -463,6 +613,7 @@ async function postprocess(): Promise<void> {
     const rootFiles = await getAllMarkdownFiles(apiRoot.dir);
 
     for (const file of rootFiles) {
+      await ensureDistinctSlugForSameNameDoc(file);
       await fixLinksInFile(file, apiRoot);
     }
   }

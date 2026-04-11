@@ -350,16 +350,6 @@ const sidebars: SidebarsConfig = {
       ],
     },
 
-    // Plans
-    {
-      type: 'category',
-      label: 'Plans',
-      collapsed: true,
-      items: [
-        'plans/onboarding-optimization-nikita-bier',
-      ],
-    },
-
     // API Reference (auto-generated)
     {
       type: 'category',

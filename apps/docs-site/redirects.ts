@@ -46,10 +46,6 @@ export const redirects: ClientRedirect[] = [
   },
   { from: '/solana-spoke-article', to: '/integrations/solana-spoke-article' },
 
-  {
-    from: '/onboarding-optimization-nikita-bier',
-    to: '/plans/onboarding-optimization-nikita-bier',
-  },
   { from: '/security-scan-overview', to: '/security' },
 
   { from: '/ajna-erc4626-cre-adversarial-audit', to: '/audits/ajna/adversarial-audit' },

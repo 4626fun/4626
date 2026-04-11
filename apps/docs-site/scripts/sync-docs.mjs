@@ -39,7 +39,7 @@ const SOURCES = {
   manual: {
     dir: path.join(REPO_ROOT, 'docs'),
     destPrefix: '',
-    exclude: ['_generated/**', '_archive/**', 'archive/**', 'drafts/**', '_drafts/**'],
+    exclude: ['_generated/**', '_archive/**', 'archive/**', 'drafts/**', '_drafts/**', 'plans/**'],
     label: 'Manual docs',
   },
   contracts: {
@@ -134,6 +134,8 @@ const GIT_DATE_PATHS = [
 ];
 
 let gitLastUpdatedByPath = new Map();
+const GITHUB_BLOB_BASE = 'https://github.com/wenakita/4626/blob/main';
+const GITHUB_TREE_BASE = 'https://github.com/wenakita/4626/tree/main';
 
 function normalizeRelPath(filePath) {
   return filePath.split(path.sep).join('/');
@@ -249,10 +251,62 @@ function fixGeneratedLinks(content, sourceType) {
   return fixed;
 }
 
+function docsRouteFromRepoPath(repoPath) {
+  const normalized = normalizeRelPath(repoPath)
+    .replace(/^docs\//, '')
+    .replace(/\.mdx?$/, '')
+    .replace(/\/README$/i, '');
+  if (!normalized || normalized.toLowerCase() === 'index') return '/';
+  return `/${normalized}`;
+}
+
+function maybeRewriteRepoLink(rawTarget, sourcePath) {
+  const [targetPath, hash = ''] = String(rawTarget).split('#', 2);
+  if (
+    !targetPath ||
+    targetPath.startsWith('http') ||
+    targetPath.startsWith('mailto:') ||
+    targetPath.startsWith('#') ||
+    targetPath.startsWith('/')
+  ) {
+    return null;
+  }
+
+  const resolved = path.resolve(path.dirname(sourcePath), targetPath);
+  if (!isPathInside(REPO_ROOT, resolved)) {
+    return null;
+  }
+
+  const repoRel = normalizeRelPath(path.relative(REPO_ROOT, resolved));
+
+  if (repoRel.startsWith('docs/')) {
+    return `${docsRouteFromRepoPath(repoRel)}${hash ? `#${hash}` : ''}`;
+  }
+
+  if (repoRel.startsWith('frontend/docs/')) {
+    const frontendDocPath = repoRel
+      .replace(/^frontend\//, '')
+      .replace(/\.mdx?$/, '')
+      .replace(/\/README$/i, '');
+    return `/frontend/${frontendDocPath}${hash ? `#${hash}` : ''}`;
+  }
+
+  const isLikelyFile = path.extname(repoRel) !== '';
+  const base = isLikelyFile ? GITHUB_BLOB_BASE : GITHUB_TREE_BASE;
+  return `${base}/${repoRel}${hash ? `#${hash}` : ''}`;
+}
+
+function rewriteRepoRelativeLinks(content, sourcePath) {
+  return content.replace(/\]\(([^)]+)\)/g, (match, target) => {
+    const rewritten = maybeRewriteRepoLink(target, sourcePath);
+    return rewritten ? `](${rewritten})` : match;
+  });
+}
+
 /**
  * Normalize frontmatter for a markdown file
  */
-function normalizeFrontmatter(content, relativePath, sidebarPosition, sourceType, sourceMetadata) {
+function normalizeFrontmatter(content, relativePath, sidebarPosition, sourceType, sourceMetadata, sourcePath) {
   const parsed = matter(content);
   const filename = path.basename(relativePath);
   
@@ -286,7 +340,13 @@ function normalizeFrontmatter(content, relativePath, sidebarPosition, sourceType
   }
   
   // Fix broken links in generated docs
-  const fixedContent = fixGeneratedLinks(parsed.content, sourceType);
+  let fixedContent = fixGeneratedLinks(parsed.content, sourceType);
+
+  // For docs copied from repo sources, rewrite filesystem-relative links to
+  // either docs-site routes or GitHub blob/tree URLs.
+  if (!['contracts', 'frontend'].includes(sourceType)) {
+    fixedContent = rewriteRepoRelativeLinks(fixedContent, sourcePath);
+  }
   
   return matter.stringify(fixedContent, parsed.data);
 }
@@ -436,7 +496,7 @@ async function processSource(sourceKey, options = {}) {
       };
       
       // Normalize frontmatter
-      const processed = normalizeFrontmatter(content, file, position, sourceKey, sourceMetadata);
+      const processed = normalizeFrontmatter(content, file, position, sourceKey, sourceMetadata, sourcePath);
       
       // Create destination directory
       await fs.mkdir(path.dirname(destPath), { recursive: true });
