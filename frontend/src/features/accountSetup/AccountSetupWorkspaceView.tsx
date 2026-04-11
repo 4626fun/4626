@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useState } from 'react'
-import { CheckCircle2, ExternalLink } from 'lucide-react'
+import { CheckCircle2, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
 
 import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { shortValue } from './shared'
@@ -18,7 +18,7 @@ export function AccountSetupWorkspaceView(props: {
   const { context, controller, summaryActions } = props
   // openStep: null = auto (first incomplete), 1/2/3 = manually opened
   const [openStep, setOpenStep] = useState<1 | 2 | 3 | null>(null)
-  const [showStep1b, setShowStep1b] = useState(false)
+  const [showStep1b, setShowStep1b] = useState(true)
   const {
     advancedBusy,
     baseAppUrl,
@@ -181,9 +181,10 @@ export function AccountSetupWorkspaceView(props: {
                           setOpenStep(1)
                           setShowStep1b((prev) => !prev)
                         }}
-                        className="mt-1 inline-flex items-center rounded-md border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-zinc-500 hover:bg-white/[0.04] hover:text-zinc-300"
+                        className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-brand-primary/25 bg-brand-primary/10 px-2 py-0.5 text-[11px] font-medium text-brand-300 hover:bg-brand-primary/15"
                       >
-                        {showStep1b ? 'Hide 1b' : 'Show 1b'}
+                        {showStep1b ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                        Step 1b
                       </button>
                     </div>
                   </div>
