@@ -29,10 +29,10 @@ interface ILotteryManagerAdmin {
  */
 contract DeploySolanaBridgeAdapter is Script {
     // Base mainnet CreatorRegistry (see deployments/base/contracts/core/CreatorRegistry.json)
-    address constant DEFAULT_CREATOR_REGISTRY = 0x79d0d68904BbB50361C9721CbDD17276E046771D;
+    address constant DEFAULT_CREATOR_REGISTRY = 0x9D86e8FAfA39527c4FE13AAa8FBD2B424f9f65Fb;
 
     // Base mainnet CreatorLotteryManager (hub)
-    address constant DEFAULT_LOTTERY_MANAGER = 0xA137BEef789B80c76187E1b6DEef60fC7db6d280;
+    address constant DEFAULT_LOTTERY_MANAGER = 0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357;
 
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");

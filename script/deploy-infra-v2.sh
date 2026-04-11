@@ -319,6 +319,7 @@ main() {
   if [ "$deployer_status" -ne 0 ]; then
     if is_known_deployment_batcher_verify_mismatch "$deployer_log"; then
       echo "Continuing despite known DeploymentBatcher verification mismatch after successful onchain deployment."
+      echo "Forensic verification: scripts/ops/verify-deployment-batcher-forensic.sh --tx <deployment-tx> --batcher <deployment-batcher-address>"
     else
       exit "$deployer_status"
     fi

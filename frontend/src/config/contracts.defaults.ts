@@ -15,28 +15,28 @@ const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as ContractAddress
 
 export const BASE_DEFAULTS = {
   // Shared infrastructure
-  // Current live Base infra defaults (still sourced from the prior epoch until v1.8.3 broadcasts).
-  registry: addr('79d0d68904BbB50361C9721CbDD17276E046771D'),
-  lotteryManager: addr('A137BEef789B80c76187E1b6DEef60fC7db6d280'),
-  vrfConsumer: addr('22ae936027Fe0c348758634bF8694E00D96338ac'),
+  // Current live Base infra defaults from the canonical v1.8.3 broadcast (2026-04-11).
+  registry: addr('9D86e8FAfA39527c4FE13AAa8FBD2B424f9f65Fb'),
+  lotteryManager: addr('d593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357'),
+  vrfConsumer: addr('dd25Ed1b3D258Ccc6D306a9a325Af1A7F96C7F47'),
   payoutRouterFactory: addr('9C53cEaA15AdDB436c89A1F929fF12ED2BD26ea9'),
 
   // Base↔Solana bridge integration
-  solanaBridgeAdapter: addr('1B3E713852dEC5d983AD11BD1567eed0723ceA9b'),
+  solanaBridgeAdapter: addr('90F578A4e23c1cB8DDFE63fd496ED7F4474f2b00'),
 
   // CREATE2 infra
   create2Factory: addr('4e59b44847b379578588920cA78FbF26c0B4956C'),
   create2Deployer: addr('aBf645362104F34D9C3FE48440bE7c99aaDE58E7'),
   // Phase-2 v2 bytecode store (chunked) + deterministic CREATE2 deployer-from-store.
-  universalBytecodeStore: addr('c8050cfeDA4CCd04079f37f1D95cD54279156E46'),
-  universalCreate2DeployerFromStore: addr('95700DA39462f97b0E874ED7e05BBF76413d7Ac1'),
+  universalBytecodeStore: addr('A009B1Bf8cB711c115d832AEb392156BA6A4112e'),
+  universalCreate2DeployerFromStore: addr('Fd2657b6f1905C3F0494942F618a68963CF792Ec'),
 
   // AA helpers
-  vaultActivationBatcher: addr('8b63912cD2490D1Ab0796c57Cc5909fF0059CECd'),
+  vaultActivationBatcher: addr('7Cc0050842433968cc7A0884d192b61FD0b46F63'),
   // v2 deployment batcher (deterministic, deployed via CREATE2 factory).
-  creatorVaultBatcher: addr('721420F190cc4525bb8Adc72D4c66eEB806AFC37'),
+  creatorVaultBatcher: addr('cDbEeB764df9878ebAFbf101cc818370f703bC4F'),
   // Optional alias used by env-based rollout/cutover logic.
-  creatorVaultBatcherAutoHandoff: addr('721420F190cc4525bb8Adc72D4c66eEB806AFC37'),
+  creatorVaultBatcherAutoHandoff: addr('cDbEeB764df9878ebAFbf101cc818370f703bC4F'),
 
   // Treasury
   protocolTreasury: addr('7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3'),

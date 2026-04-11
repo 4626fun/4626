@@ -7,7 +7,7 @@ This directory tracks committed deployment artifacts and ABI snapshots used by t
 - Base mainnet release target / deploy namespace is now `v1.8.3`.
 - Release packet: `docs/operations/deployment/releases/v1.8.3-mainnet.md`
 - Bytecode / codeId manifest: `deployments/base/v1.8.3-bytecode-manifest.json`
-- Live Base deployment snapshots under `deployments/base/contracts/**/*.json` still reflect the current onchain Base epoch until the `v1.8.3` broadcast completes.
+- Live Base deployment snapshots under `deployments/base/contracts/**/*.json` now reflect the canonical onchain `v1.8.3` Base epoch broadcast on `2026-04-11`.
 
 ## Directory Map
 

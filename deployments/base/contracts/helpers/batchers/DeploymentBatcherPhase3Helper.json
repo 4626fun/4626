@@ -2,10 +2,10 @@
   "contractName": "DeploymentBatcherPhase3Helper",
   "network": "Base",
   "chainId": 8453,
-  "address": "0x42612DA05Bd72d9B58f0Fa63161dDd8a3FEFd568",
-  "deployedBy": "0x721420F190cc4525bb8Adc72D4c66eEB806AFC37",
-  "deployedAt": "2026-04-10T09:29:07Z",
-  "deploymentTx": "0xbeeda2bf4601efd1d5bf6bd49954eea1c8b5f6d90d053540782a143130cf74aa",
+  "address": "0xF185Cb60E108E324f67e75cf8106B8e9950c16ed",
+  "deployedBy": "0xcDbEeB764df9878ebAFbf101cc818370f703bC4F",
+  "deployedAt": "2026-04-11T03:38:51Z",
+  "deploymentTx": "0xc1a1f6f9a5e57cfef6cbeb1b339a56b765f0cbbe81aaace9c77cd0d32cc18f0b",
   "abi": [
     {
       "type": "constructor",
@@ -409,6 +409,6 @@
     }
   ],
   "notes": [
-    "Created inside the DeploymentBatcher constructor during the v1.8.2 deployment transaction."
+    "Created inside the DeploymentBatcher constructor during the live v1.8.3 deployment transaction."
   ]
 }

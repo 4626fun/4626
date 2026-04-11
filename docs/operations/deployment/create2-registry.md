@@ -5,13 +5,13 @@ sidebar_position: 4
 
 # CREATE2 Registry
 
-Deterministic deployment inventory for the next `v1.8.3` Base infra epoch.
+Deterministic deployment inventory for the canonical live `v1.8.3` Base infra epoch.
 
 ## Overview
 
 4626 infra resets rely on deterministic salt tags and CREATE2 so the v2 deployment layer stays reproducible across reruns.
 
-For `v1.8.3` the recommended tags are:
+The live `v1.8.3` deployment used these tags:
 
 - `INFRA_STORE_SALT_TAG=base-release:UniversalBytecodeStore:v1.8.3`
 - `INFRA_DEPLOYER_FROM_STORE_SALT_TAG=base-release:UniversalCreate2DeployerFromStore:v1.8.3`
@@ -20,20 +20,20 @@ For `v1.8.3` the recommended tags are:
 - `INFRA_VAULT_ADMIN_MODULE_SALT_TAG=base-release:CreatorOVaultAdminModule:v1.8.3`
 - `INFRA_DEPLOYMENT_BATCHER_SALT_TAG=base-release:DeploymentBatcher:v1.8.3`
 
-Current live addresses still remain on the prior Base epoch until the `v1.8.3` broadcast completes.
+These are the current live Base CREATE2 addresses from the `2026-04-11` `v1.8.3` broadcast.
 
 ## Current Live Base Addresses
 
 | Contract | Address |
 |---|---|
-| `UniversalBytecodeStoreV2` | `0xc8050cfeDA4CCd04079f37f1D95cD54279156E46` |
-| `UniversalCreate2DeployerFromStore` | `0x95700DA39462f97b0E874ED7e05BBF76413d7Ac1` |
-| `CreatorOVaultCoreModule` | `0xf2367B030992e5661503bb9Bc7e712cf66799bC7` |
-| `CreatorOVaultStrategiesModule` | `0x897837200b1f4F8D6bec9b00d56Ed0189f55832b` |
-| `CreatorOVaultAdminModule` | `0x940C8Fc97295AA4D9D2C5FcB26571BB4a98bbC19` |
-| `DeploymentBatcher` | `0x721420F190cc4525bb8Adc72D4c66eEB806AFC37` |
-| `DeploymentBatcherPhase3Helper` | `0x42612DA05Bd72d9B58f0Fa63161dDd8a3FEFd568` |
-| `DeploymentBatcherUniV4Helper` | `0x5Ed8A640abF700e4c3A627Ad7cc8A8bdDEe5F34f` |
+| `UniversalBytecodeStoreV2` | `0xA009B1Bf8cB711c115d832AEb392156BA6A4112e` |
+| `UniversalCreate2DeployerFromStore` | `0xFd2657b6f1905C3F0494942F618a68963CF792Ec` |
+| `CreatorOVaultCoreModule` | `0xeD728378f969f8e94a19fC081172D1e67B80412e` |
+| `CreatorOVaultStrategiesModule` | `0x0f1A26b93AD56BBbC5e0486A920621944FF6ABd6` |
+| `CreatorOVaultAdminModule` | `0xFC40e9768eeaAE634CBD2A72DA0CF809d3c908e0` |
+| `DeploymentBatcher` | `0xcDbEeB764df9878ebAFbf101cc818370f703bC4F` |
+| `DeploymentBatcherPhase3Helper` | `0xF185Cb60E108E324f67e75cf8106B8e9950c16ed` |
+| `DeploymentBatcherUniV4Helper` | `0xfe1C5eaa76942208298f510c820e7E8328f6d031` |
 
 `DeploymentBatcherPhase3Helper` and `DeploymentBatcherUniV4Helper` are created inside the `DeploymentBatcher` constructor during the same deployment transaction.
 
@@ -56,14 +56,14 @@ export DEPLOYMENT_EPOCH_TAG=v1.8.3
 ## Verification
 
 - Confirm bytecode store + deployer wiring from the live batcher:
-  - `cast call 0x721420F190cc4525bb8Adc72D4c66eEB806AFC37 "bytecodeStore()(address)"`
-  - `cast call 0x721420F190cc4525bb8Adc72D4c66eEB806AFC37 "create2Deployer()(address)"`
+  - `cast call 0xcDbEeB764df9878ebAFbf101cc818370f703bC4F "bytecodeStore()(address)"`
+  - `cast call 0xcDbEeB764df9878ebAFbf101cc818370f703bC4F "create2Deployer()(address)"`
 - Confirm module / helper children from the live batcher:
-  - `cast call 0x721420F190cc4525bb8Adc72D4c66eEB806AFC37 "vaultCoreModule()(address)"`
-  - `cast call 0x721420F190cc4525bb8Adc72D4c66eEB806AFC37 "vaultStrategiesModule()(address)"`
-  - `cast call 0x721420F190cc4525bb8Adc72D4c66eEB806AFC37 "vaultAdminModule()(address)"`
-  - `cast call 0x721420F190cc4525bb8Adc72D4c66eEB806AFC37 "phase3Helper()(address)"`
-  - `cast call 0x721420F190cc4525bb8Adc72D4c66eEB806AFC37 "uniV4Helper()(address)"`
+  - `cast call 0xcDbEeB764df9878ebAFbf101cc818370f703bC4F "vaultCoreModule()(address)"`
+  - `cast call 0xcDbEeB764df9878ebAFbf101cc818370f703bC4F "vaultStrategiesModule()(address)"`
+  - `cast call 0xcDbEeB764df9878ebAFbf101cc818370f703bC4F "vaultAdminModule()(address)"`
+  - `cast call 0xcDbEeB764df9878ebAFbf101cc818370f703bC4F "phase3Helper()(address)"`
+  - `cast call 0xcDbEeB764df9878ebAFbf101cc818370f703bC4F "uniV4Helper()(address)"`
 - Confirm bytecode / codeId inventory:
   - `deployments/base/v1.8.3-bytecode-manifest.json`
 - Confirm release packet:

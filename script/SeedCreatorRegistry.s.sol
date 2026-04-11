@@ -33,7 +33,7 @@ contract SeedCreatorRegistry is Script {
     //                    DEPLOYED REGISTRY
     // ═══════════════════════════════════════════════════════════════════
 
-    address internal constant DEFAULT_REGISTRY = 0x79d0d68904BbB50361C9721CbDD17276E046771D;
+    address internal constant DEFAULT_REGISTRY = 0x9D86e8FAfA39527c4FE13AAa8FBD2B424f9f65Fb;
 
     // ═══════════════════════════════════════════════════════════════════
     //                    CHAIN CONSTANTS
@@ -89,10 +89,10 @@ contract SeedCreatorRegistry is Script {
     // ═══════════════════════════════════════════════════════════════════
 
     address constant CHAINLINK_ETH_USD = 0x71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70;
-    address constant CREATOR_FACTORY = 0xb66aA49d94569a8589f380D53e8a3f1F60165000;
-    address constant LOTTERY_MANAGER = 0xA137BEef789B80c76187E1b6DEef60fC7db6d280;
-    address constant VAULT_BATCHER = 0x721420F190cc4525bb8Adc72D4c66eEB806AFC37;
-    address constant VAULT_ACT_BATCHER = 0x8b63912cD2490D1Ab0796c57Cc5909fF0059CECd;
+    address constant CREATOR_FACTORY = 0xC7E919899Fd4C0C4f6f4269a63046107f85848bB;
+    address constant LOTTERY_MANAGER = 0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357;
+    address constant VAULT_BATCHER = 0xcDbEeB764df9878ebAFbf101cc818370f703bC4F;
+    address constant VAULT_ACT_BATCHER = 0x7Cc0050842433968cc7A0884d192b61FD0b46F63;
 
     // ═══════════════════════════════════════════════════════════════════
     //                              MAIN

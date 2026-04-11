@@ -2,10 +2,10 @@
   "contractName": "CreatorOVaultFactory",
   "network": "Base",
   "chainId": 8453,
-  "address": "0xb66aA49d94569a8589f380D53e8a3f1F60165000",
+  "address": "0xC7E919899Fd4C0C4f6f4269a63046107f85848bB",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-04-10T09:11:53Z",
-  "deploymentTx": "0xc54562461fc8d87d75e9db4937b8e8bc0bf6a13ca1a8cb6f61878f1ba69baa6f",
+  "deployedAt": "2026-04-11T03:38:33Z",
+  "deploymentTx": "0x9a4549d128d1538f00002fc94f9ee034b198259933eef5d633b828b79b5f2b72",
   "abi": [
     {
       "type": "constructor",
