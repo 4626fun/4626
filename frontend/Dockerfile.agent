@@ -52,6 +52,7 @@ COPY --from=deps /app/package.json ./package.json
 # Copy server + config source (agent code + shared _lib)
 COPY frontend/server ./server
 COPY frontend/src/config ./src/config
+COPY frontend/src/lib ./src/lib
 COPY frontend/src/wallet ./src/wallet
 COPY frontend/tsconfig.json frontend/tsconfig.node.json ./
 
