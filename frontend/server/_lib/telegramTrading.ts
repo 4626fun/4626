@@ -2609,7 +2609,7 @@ export async function listHolderRoomMembersNeedingRecheck(params: {
       m.last_eligible_at,
       m.grace_until,
       m.last_checked_at,
-      COALESCE(NULLIF(LOWER(k.creator_coin_address), ''), p.vault_address) AS share_token_address
+      NULLIF(LOWER(k.share_token_address), '') AS share_token_address
     FROM telegram_holder_room_members m
     INNER JOIN telegram_holder_room_policies p
       ON p.room_chat_id = m.room_chat_id
@@ -2625,7 +2625,7 @@ export async function listHolderRoomMembersNeedingRecheck(params: {
     chatId: asTrimmed(row.chat_id),
     vaultAddress: normalizeAddress(row.vault_address),
     roomChatId: asTrimmed(row.room_chat_id),
-    shareTokenAddress: normalizeAddress(row.share_token_address) || normalizeAddress(row.vault_address),
+    shareTokenAddress: normalizeAddress(row.share_token_address),
     minSharesRaw: normalizeRawAmount(row.min_shares_raw) || '1',
     graceHours: parseGraceHours(row.grace_hours, 24),
     enabled: Boolean(row.enabled),
