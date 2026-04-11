@@ -76,9 +76,13 @@ export function AccountSetupWorkspaceView(props: {
       if (resolvedOpen > 1) setOpenStep((resolvedOpen - 1) as 1 | 2 | 3)
     }
 
+    const toggleStep = (n: 1 | 2 | 3) => {
+      setOpenStep(openStep === n ? null : n)
+    }
+
     // Shared classes
-    const stepBase = 'border-b border-white/[0.06] last:border-0 transition-colors duration-150'
-    const doneRow = `${stepBase} bg-[#0a0a0b] hover:bg-[#111318] cursor-pointer`
+    const stepBase = 'border-b border-white/[0.06] last:border-0 transition-colors duration-150 cursor-pointer'
+    const doneRow = `${stepBase} bg-[#0a0a0b] hover:bg-[#111318]`
     const activeRow = `${stepBase} bg-[#1b2030] border-l-2 border-l-brand-primary`
     const badgeDone = 'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/[0.12] text-[11px] font-bold text-emerald-400'
     const badgeActive = 'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-brand-primary/22 bg-brand-primary/[0.14] text-[11px] font-bold text-brand-200'
@@ -93,257 +97,260 @@ export function AccountSetupWorkspaceView(props: {
       return 'upcoming'
     }
 
+    const allDone = zoraStepComplete && walletStepComplete && signingStepComplete
+
+    const copyAddress = useCallback((addr: string) => {
+      void navigator.clipboard.writeText(addr)
+    }, [])
+
     return (
-      <div className="mx-auto w-full max-w-[640px]">
+      <div className="mx-auto w-full max-w-[640px] space-y-5">
         {/* System messages */}
         {error ? (
-          <div role="alert" aria-live="assertive" className="mb-4 rounded-xl border border-rose-500/20 bg-rose-500/[0.08] px-4 py-3 text-sm text-rose-300">
+          <div role="alert" aria-live="assertive" className="rounded-xl border border-rose-500/20 bg-rose-500/[0.08] px-4 py-3 text-sm text-rose-300">
             {error}
           </div>
         ) : null}
         {notice ? (
-          <div role="status" aria-live="polite" className="mb-4 rounded-xl border border-emerald-500/20 bg-emerald-500/[0.08] px-4 py-3 text-sm text-emerald-300">
+          <div role="status" aria-live="polite" className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.08] px-4 py-3 text-sm text-emerald-300">
             {notice}
           </div>
         ) : null}
 
-        {/* Console shell */}
-        <div className="overflow-hidden rounded-[18px] border border-white/[0.06] bg-[#16161a]">
-
-          {/* Toolbar */}
-          <div className="flex items-center justify-between border-b border-white/[0.06] bg-[#1e1e24] px-4 py-3">
-            <div className="flex items-center gap-3">
-              <div className="flex gap-1.5">
-                <span className="h-[10px] w-[10px] rounded-full bg-[#ff5f57]" />
-                <span className="h-[10px] w-[10px] rounded-full bg-[#febc2e]" />
-                <span className="h-[10px] w-[10px] rounded-full bg-[#28c840]" />
-              </div>
-              <span className="text-[11px] uppercase tracking-[0.16em] text-zinc-400">4626 · setup</span>
-            </div>
-            <div className="inline-flex items-center gap-1.5 rounded-full border border-brand-primary/22 bg-brand-primary/[0.14] px-3 py-[5px] text-[11px] uppercase tracking-[0.13em] text-brand-300">
-              <span className="h-[6px] w-[6px] rounded-full bg-emerald-400 shadow-[0_0_6px_theme(colors.emerald.400)]" />
-              step {activeStep} active
-            </div>
-          </div>
-
-          {/* Body */}
-          <div className="p-4">
-            {/* Section heading */}
-            <div className="mb-4">
-              <p className="text-[11px] uppercase tracking-[0.16em] text-zinc-600">Account readiness</p>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-white">Finish setup</h2>
-              <p className="mt-1.5 max-w-md text-sm leading-relaxed text-zinc-400">
-                Completed steps stay visible above. Click any row to review or redo it.
-              </p>
-            </div>
-
-            {/* Accordion steps */}
-            <div className="overflow-hidden rounded-[13px] border border-white/[0.06]">
-
-              {/* ── Step 1 — Zora ── */}
-              {(() => {
-                const s = stepStatus(1)
-                const isOpen = s === 'active'
-                return (
-                  <div
-                    className={s === 'done' ? doneRow : s === 'active' ? activeRow : stepBase}
-                    onClick={s === 'done' ? () => setOpenStep(1) : undefined}
-                  >
-                    <div className="flex items-center justify-between gap-3 px-4 py-3.5">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className={s === 'done' ? badgeDone : s === 'active' ? badgeActive : 'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[11px] font-bold text-zinc-600'}>
-                          {s === 'done' ? <CheckCircle2 className="h-3.5 w-3.5" /> : '1'}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <img src="/brands/zora-token.svg" alt="" aria-hidden="true" className="h-4 w-4 shrink-0 rounded-full object-cover" />
-                            <p className="truncate text-sm font-semibold text-white">Link your Zora identity</p>
-                          </div>
-                          {s === 'done' && me.accountSignals.zoraHandle ? (
-                            <p className="mt-0.5 text-xs text-zinc-500">Connected · @{me.accountSignals.zoraHandle}</p>
-                          ) : null}
-                        </div>
-                      </div>
-                      <span className={s === 'done' ? pillDone : s === 'active' ? pillActive : pillUpcoming}>
-                        {s === 'done' ? 'Done' : s === 'active' ? 'Open' : 'Upcoming'}
-                      </span>
-                    </div>
-                    {isOpen ? (
-                      <div className="px-4 pb-4 pl-[52px]">
-                        <p className="text-sm leading-relaxed text-zinc-400">
-                          Connect your Zora account so we can verify your creator identity.
-                        </p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            disabled={busyProvider === 'zora_cross_app'}
-                            onClick={() => void onLinkZora()}
-                            className="inline-flex h-[38px] items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white shadow-[0_4px_16px_rgba(0,82,255,0.28)] hover:bg-brand-hover disabled:opacity-50"
-                          >
-                            {busyProvider === 'zora_cross_app' ? 'Connecting…' : 'Connect Zora'}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={busyProvider === 'zora_cross_app'}
-                            onClick={() => void onRefreshZora()}
-                            className="inline-flex h-[38px] items-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-zinc-400 hover:bg-white/[0.04] disabled:opacity-50"
-                          >
-                            Already linked? Refresh
-                          </button>
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                )
-              })()}
-
-              {/* ── Step 2 — Wallet ── */}
-              {(() => {
-                const s = stepStatus(2)
-                const isOpen = s === 'active'
-                return (
-                  <div
-                    className={s === 'done' ? doneRow : s === 'active' ? activeRow : stepBase}
-                    onClick={s === 'done' ? () => setOpenStep(2) : undefined}
-                  >
-                    <div className="flex items-center justify-between gap-3 px-4 py-3.5">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className={s === 'done' ? badgeDone : s === 'active' ? badgeActive : 'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[11px] font-bold text-zinc-600'}>
-                          {s === 'done' ? <CheckCircle2 className="h-3.5 w-3.5" /> : '2'}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <WalletProviderIcon provider="coinbase" size={16} />
-                            <p className="truncate text-sm font-semibold text-white">Detect your Coinbase Smart Wallet</p>
-                          </div>
-                          {canonicalCswAddress ? (
-                            <p className="mt-0.5 font-mono text-xs text-zinc-500">
-                              {shortValue(canonicalCswAddress)}
-                            </p>
-                          ) : null}
-                        </div>
-                      </div>
-                      <span className={s === 'done' ? pillDone : s === 'active' ? pillActive : pillUpcoming}>
-                        {s === 'done' ? 'Done' : s === 'active' ? 'Open' : 'Upcoming'}
-                      </span>
-                    </div>
-                    {isOpen ? (
-                      <div className="px-4 pb-4 pl-[52px]">
-                        <p className="text-sm leading-relaxed text-zinc-400">
-                          Confirm the wallet connected to your account.
-                        </p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            disabled={busyProvider === 'zora_cross_app'}
-                            onClick={() => void onRefreshZora()}
-                            className="inline-flex h-[38px] items-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-zinc-400 hover:bg-white/[0.04] disabled:opacity-50"
-                          >
-                            {busyProvider === 'zora_cross_app' ? 'Checking…' : 'Retry detection'}
-                          </button>
-                          {needsBaseAppSetup && baseAppUrl ? (
-                            <a href={baseAppUrl} target="_blank" rel="noreferrer" className="inline-flex h-[38px] items-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-zinc-400 hover:bg-white/[0.04]">
-                              Open Base app
-                            </a>
-                          ) : null}
-                          {resolvedOpen > 1 ? (
-                            <button type="button" onClick={goToPrev} className="inline-flex h-[38px] items-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-zinc-500 hover:bg-white/[0.04]">
-                              Previous step
-                            </button>
-                          ) : null}
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                )
-              })()}
-
-              {/* ── Step 3 — Signing ── */}
-              {(() => {
-                const s = stepStatus(3)
-                const isOpen = s === 'active'
-                return (
-                  <div
-                    className={s === 'done' ? doneRow : s === 'active' ? activeRow : stepBase}
-                    onClick={s === 'done' ? () => setOpenStep(3) : undefined}
-                  >
-                    <div className="flex items-center justify-between gap-3 px-4 py-3.5">
-                      <div className="flex min-w-0 items-center gap-3">
-                        <div className={s === 'done' ? badgeDone : s === 'active' ? badgeActive : 'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[11px] font-bold text-zinc-600'}>
-                          {s === 'done' ? <CheckCircle2 className="h-3.5 w-3.5" /> : '3'}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-semibold text-white">Enable 4626 signing</p>
-                          {s === 'done' ? (
-                            <p className="mt-0.5 text-xs text-zinc-500">Signing access approved</p>
-                          ) : null}
-                        </div>
-                      </div>
-                      <span className={s === 'done' ? pillDone : s === 'active' ? pillActive : pillUpcoming}>
-                        {s === 'done' ? 'Done' : s === 'active' ? 'Open' : 'Upcoming'}
-                      </span>
-                    </div>
-                    {isOpen ? (
-                      <div className="px-4 pb-4 pl-[52px]">
-                        <p className="text-sm leading-relaxed text-zinc-400">
-                          Connect an owner wallet and approve 4626 signing access.
-                          Once complete, the app unlocks immediately.
-                        </p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <button
-                            type="button"
-                            disabled={advancedBusy || needsEmbeddedWallet}
-                            onClick={() => (connectedOwnerReady ? void onEnable4626Signing() : connectOwnerWallet())}
-                            className="inline-flex h-[38px] items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white shadow-[0_4px_16px_rgba(0,82,255,0.28)] hover:bg-brand-hover disabled:opacity-50"
-                          >
-                            {advancedBusy ? 'Working…' : primarySigningLabel}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={advancedBusy}
-                            onClick={() => void retryOwnerCheck()}
-                            className="inline-flex h-[38px] items-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-zinc-400 hover:bg-white/[0.04] disabled:opacity-50"
-                          >
-                            Retry
-                          </button>
-                          {resolvedOpen > 1 ? (
-                            <button type="button" onClick={goToPrev} className="inline-flex h-[38px] items-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-zinc-500 hover:bg-white/[0.04]">
-                              Previous step
-                            </button>
-                          ) : null}
-                        </div>
-                        {connectedSignerLabel ? (
-                          <p className="mt-3 text-xs text-zinc-500">
-                            Connected signer: <span className="font-mono text-zinc-300">{connectedSignerLabel}</span>
-                          </p>
-                        ) : null}
-                        {connectedSignerDetail ? (
-                          <p className="mt-1 text-xs text-zinc-500">{connectedSignerDetail}</p>
-                        ) : null}
-                        {needsEmbeddedWallet ? (
-                          <p className="mt-2 text-xs text-amber-300">Embedded wallet is still settling. Retry in a moment.</p>
-                        ) : null}
-                        {inTelegramMiniApp ? (
-                          <p className="mt-2 text-xs text-amber-300">Owner signatures are more reliable in an external browser tab.</p>
-                        ) : null}
-                        {providerCollision.shouldDisableInjectedConnector ? (
-                          <p className="mt-2 text-xs text-zinc-500">Wallet collision detected — Coinbase/Base is the most reliable option here.</p>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                )
-              })()}
-            </div>
-
-            {/* Enter App */}
-            {summaryActions ? (
-              <div className="mt-4 rounded-[13px] border border-white/[0.06] bg-[#1e1e24] p-4">
-                {summaryActions}
-              </div>
-            ) : null}
-          </div>
+        {/* Heading — single line */}
+        <div>
+          <h2 className="text-2xl font-semibold tracking-tight text-white">Activate your account</h2>
+          <p className="mt-1 text-sm text-zinc-500">Step {activeStep} of 3</p>
         </div>
+
+        {/* Accordion steps */}
+        <div className="overflow-hidden rounded-[13px] border border-white/[0.06]">
+
+          {/* ── Step 1 — Zora ── */}
+          {(() => {
+            const s = stepStatus(1)
+            const isOpen = s === 'active'
+            return (
+              <div
+                className={s === 'done' ? doneRow : s === 'active' ? activeRow : stepBase}
+                onClick={() => toggleStep(1)}
+              >
+                <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className={s === 'done' ? badgeDone : s === 'active' ? badgeActive : 'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[11px] font-bold text-zinc-600'}>
+                      {s === 'done' ? <CheckCircle2 className="h-3.5 w-3.5" /> : '1'}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <img src="/brands/zora-token.svg" alt="" aria-hidden="true" className="h-4 w-4 shrink-0 rounded-full object-cover" />
+                        <p className="truncate text-sm font-semibold text-white">Link your Zora identity</p>
+                      </div>
+                      {s === 'done' && me.accountSignals.zoraHandle ? (
+                        <a
+                          href={`${ZORA_PROFILE_BASE}@${me.accountSignals.zoraHandle}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="mt-0.5 inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+                        >
+                          @{me.accountSignals.zoraHandle}
+                          <ExternalLink className="h-3 w-3" />
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+                  <span className={s === 'done' ? pillDone : s === 'active' ? pillActive : pillUpcoming}>
+                    {s === 'done' ? 'Done' : s === 'active' ? 'Open' : 'Upcoming'}
+                  </span>
+                </div>
+                {isOpen ? (
+                  <div className="px-4 pb-4 pl-[52px]">
+                    <p className="text-sm leading-relaxed text-zinc-400">
+                      Connect your Zora account so we can verify your creator identity.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={busyProvider === 'zora_cross_app'}
+                        onClick={() => void onLinkZora()}
+                        className="inline-flex h-[38px] items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white shadow-[0_4px_16px_rgba(0,82,255,0.28)] hover:bg-brand-hover disabled:opacity-50"
+                      >
+                        {busyProvider === 'zora_cross_app' ? 'Connecting…' : 'Connect Zora'}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyProvider === 'zora_cross_app'}
+                        onClick={() => void onRefreshZora()}
+                        className="inline-flex h-[38px] items-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-zinc-400 hover:bg-white/[0.04] disabled:opacity-50"
+                      >
+                        Already linked? Refresh
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )
+          })()}
+
+          {/* ── Step 2 — Wallet ── */}
+          {(() => {
+            const s = stepStatus(2)
+            const isOpen = s === 'active'
+            const addr = canonicalCswAddress
+            return (
+              <div
+                className={s === 'done' ? doneRow : s === 'active' ? activeRow : stepBase}
+                onClick={() => toggleStep(2)}
+              >
+                <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className={s === 'done' ? badgeDone : s === 'active' ? badgeActive : 'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[11px] font-bold text-zinc-600'}>
+                      {s === 'done' ? <CheckCircle2 className="h-3.5 w-3.5" /> : '2'}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <WalletProviderIcon provider="coinbase" size={16} />
+                        <p className="truncate text-sm font-semibold text-white">Detect your Coinbase Smart Wallet</p>
+                      </div>
+                      {addr ? (
+                        <div className="mt-0.5 flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => copyAddress(addr)}
+                            title="Copy address"
+                            className="font-mono text-xs text-zinc-500 hover:text-zinc-300 transition-colors truncate"
+                          >
+                            {addr}
+                          </button>
+                          <a
+                            href={`${BASESCAN_BASE}${addr}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            title="View on Basescan"
+                            className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                  <span className={s === 'done' ? pillDone : s === 'active' ? pillActive : pillUpcoming}>
+                    {s === 'done' ? 'Done' : s === 'active' ? 'Open' : 'Upcoming'}
+                  </span>
+                </div>
+                {isOpen ? (
+                  <div className="px-4 pb-4 pl-[52px]">
+                    <p className="text-sm leading-relaxed text-zinc-400">
+                      Confirm the wallet connected to your account.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={busyProvider === 'zora_cross_app'}
+                        onClick={() => void onRefreshZora()}
+                        className="inline-flex h-[38px] items-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-zinc-400 hover:bg-white/[0.04] disabled:opacity-50"
+                      >
+                        {busyProvider === 'zora_cross_app' ? 'Checking…' : 'Retry detection'}
+                      </button>
+                      {needsBaseAppSetup && baseAppUrl ? (
+                        <a href={baseAppUrl} target="_blank" rel="noreferrer" className="inline-flex h-[38px] items-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-zinc-400 hover:bg-white/[0.04]">
+                          Open Base app
+                        </a>
+                      ) : null}
+                      {resolvedOpen > 1 ? (
+                        <button type="button" onClick={goToPrev} className="inline-flex h-[38px] items-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-zinc-500 hover:bg-white/[0.04]">
+                          Previous step
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                ) : null}
+              </div>
+            )
+          })()}
+
+          {/* ── Step 3 — Signing ── */}
+          {(() => {
+            const s = stepStatus(3)
+            const isOpen = s === 'active'
+            return (
+              <div
+                className={s === 'done' ? doneRow : s === 'active' ? activeRow : stepBase}
+                onClick={() => toggleStep(3)}
+              >
+                <div className="flex items-center justify-between gap-3 px-4 py-3.5">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className={s === 'done' ? badgeDone : s === 'active' ? badgeActive : 'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[11px] font-bold text-zinc-600'}>
+                      {s === 'done' ? <CheckCircle2 className="h-3.5 w-3.5" /> : '3'}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-white">Enable 4626 signing</p>
+                      {s === 'done' ? (
+                        <p className="mt-0.5 text-xs text-zinc-500">Signing access approved</p>
+                      ) : null}
+                    </div>
+                  </div>
+                  <span className={s === 'done' ? pillDone : s === 'active' ? pillActive : pillUpcoming}>
+                    {s === 'done' ? 'Done' : s === 'active' ? 'Open' : 'Upcoming'}
+                  </span>
+                </div>
+                {isOpen ? (
+                  <div className="px-4 pb-4 pl-[52px]">
+                    <p className="text-sm leading-relaxed text-zinc-400">
+                      Connect an owner wallet and approve 4626 signing access.
+                      Once complete, the app unlocks immediately.
+                    </p>
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={advancedBusy || needsEmbeddedWallet}
+                        onClick={() => (connectedOwnerReady ? void onEnable4626Signing() : connectOwnerWallet())}
+                        className="inline-flex h-[38px] items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white shadow-[0_4px_16px_rgba(0,82,255,0.28)] hover:bg-brand-hover disabled:opacity-50"
+                      >
+                        {advancedBusy ? 'Working…' : primarySigningLabel}
+                      </button>
+                      <button
+                        type="button"
+                        disabled={advancedBusy}
+                        onClick={() => void retryOwnerCheck()}
+                        className="inline-flex h-[38px] items-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-zinc-400 hover:bg-white/[0.04] disabled:opacity-50"
+                      >
+                        Retry
+                      </button>
+                      {resolvedOpen > 1 ? (
+                        <button type="button" onClick={goToPrev} className="inline-flex h-[38px] items-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-zinc-500 hover:bg-white/[0.04]">
+                          Previous step
+                        </button>
+                      ) : null}
+                    </div>
+                    {connectedSignerLabel ? (
+                      <p className="mt-3 text-xs text-zinc-500">
+                        Connected signer: <span className="font-mono text-zinc-300">{connectedSignerLabel}</span>
+                      </p>
+                    ) : null}
+                    {connectedSignerDetail ? (
+                      <p className="mt-1 text-xs text-zinc-500">{connectedSignerDetail}</p>
+                    ) : null}
+                    {needsEmbeddedWallet ? (
+                      <p className="mt-2 text-xs text-amber-300">Embedded wallet is still settling. Retry in a moment.</p>
+                    ) : null}
+                    {inTelegramMiniApp ? (
+                      <p className="mt-2 text-xs text-amber-300">Owner signatures are more reliable in an external browser tab.</p>
+                    ) : null}
+                    {providerCollision.shouldDisableInjectedConnector ? (
+                      <p className="mt-2 text-xs text-zinc-500">Wallet collision detected — Coinbase/Base is the most reliable option here.</p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
+            )
+          })()}
+        </div>
+
+        {/* Enter App — only after all 3 steps */}
+        {allDone && summaryActions ? (
+          <div className="pt-1">{summaryActions}</div>
+        ) : null}
       </div>
     )
   }
