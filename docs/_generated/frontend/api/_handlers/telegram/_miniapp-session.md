@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/telegram/\_miniapp-session.ts:42](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/_miniapp-session.ts#L42)
+Defined in: [api/\_handlers/telegram/\_miniapp-session.ts:45](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/_miniapp-session.ts#L45)
 
 #### Parameters
 

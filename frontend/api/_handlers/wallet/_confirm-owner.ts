@@ -7,11 +7,14 @@ import {
   setCors,
   setNoStore,
   getDb,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
 
 
 import { confirmOwnerState, extractDelegationFlags } from '../../../server/_lib/canonicalCswDelegation.js'
-import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 
 type ConfirmBody = {
   cswAddress?: string

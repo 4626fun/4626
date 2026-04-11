@@ -7,11 +7,14 @@ import {
   setCors,
   setNoStore,
   getDb,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
 
 
 import { trackTelegramLinkEvent } from '../../../server/_lib/telegramLinkTelemetry.js'
-import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 import {
   claimTelegramMiniAppReplayNonce,
   createTelegramMiniAppSession,

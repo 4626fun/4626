@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/cre/keeper/\_aiAssess.ts:128](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/cre/keeper/_aiAssess.ts#L128)
+Defined in: [api/\_handlers/cre/keeper/\_aiAssess.ts:138](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/cre/keeper/_aiAssess.ts#L138)
 
 #### Parameters
 

@@ -1,8 +1,18 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, clearCookie, COOKIE_NONCE, COOKIE_SESSION, handleOptions, setCors, setNoStore } from '../../../packages/server-core/src/index.js'
-import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
-
+import {
+  type ApiEnvelope,
+  clearCookie,
+  COOKIE_NONCE,
+  COOKIE_SESSION,
+  handleOptions,
+  setCors,
+  setNoStore,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
+} from '../../../packages/server-core/src/index.js'
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)

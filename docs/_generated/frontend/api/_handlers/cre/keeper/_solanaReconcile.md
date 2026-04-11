@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/cre/keeper/\_solanaReconcile.ts:110](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/cre/keeper/_solanaReconcile.ts#L110)
+Defined in: [api/\_handlers/cre/keeper/\_solanaReconcile.ts:114](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/cre/keeper/_solanaReconcile.ts#L114)
 
 #### Parameters
 

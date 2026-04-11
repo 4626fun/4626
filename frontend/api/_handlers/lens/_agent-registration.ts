@@ -6,8 +6,11 @@ import {
   setCors,
   setNoStore,
   readRequestPrincipal,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
-import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 
 import { buildAgentPublishStatus, type AgentPublishData } from '../../../server/_lib/erc8004OperatorStatus.js'
 

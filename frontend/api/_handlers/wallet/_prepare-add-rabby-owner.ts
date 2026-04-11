@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getAddress } from 'viem'
+import {
+  getAddress } from 'viem'
 
 import {
   type ApiEnvelope,
@@ -8,6 +9,10 @@ import {
   setCors,
   setNoStore,
   getDb,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
 
 
@@ -17,7 +22,6 @@ import {
   extractDelegationFlags,
 } from '../../../server/_lib/canonicalCswDelegation.js'
 import { prepareAddOwnerTx } from '../../../server/_lib/coinbaseSmartWalletOwner.js'
-import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 
 type PrepareRabbyBody = {
   rabbyAddress?: string

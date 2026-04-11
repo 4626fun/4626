@@ -8,14 +8,13 @@ import {
   getDb,
   readRequestPrincipalAddress,
   resolveAuthorizedRequestPrincipal,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
-
-
-
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { syncUserWallets } from '../../../server/_lib/walletSync.js'
-import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
-
 import { PrivyClient } from '@privy-io/server-auth'
 
 declare const process: { env: Record<string, string | undefined> }

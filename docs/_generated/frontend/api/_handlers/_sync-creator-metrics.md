@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse`\>
 
-Defined in: [api/\_handlers/\_sync-creator-metrics.ts:35](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_sync-creator-metrics.ts#L35)
+Defined in: [api/\_handlers/\_sync-creator-metrics.ts:34](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_sync-creator-metrics.ts#L34)
 
 #### Parameters
 

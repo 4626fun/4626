@@ -99,6 +99,21 @@ uint256 internal constant DEFAULT_CALLBACK_SPONSOR_BUDGET = 0.1 ether
 ```
 
 
+### VRF_REQUEST_CONTEXT
+
+```solidity
+bytes32 internal constant VRF_REQUEST_CONTEXT = 0xd84f4bdfe2e4cf43345263bca820ebe0fd153da9fd7f53871b6103ba604a4430
+```
+
+
+### WINNER_CALLBACK_CONTEXT
+
+```solidity
+bytes32 internal constant WINNER_CALLBACK_CONTEXT =
+    0x197005c8271d0fbeff8e5770b1fa02e04e4ba94e019fc8ea71c55fd52eb21205
+```
+
+
 ### DEFAULT_SPONSORED_VRF_MIN_SWAP_USD
 
 ```solidity
@@ -715,13 +730,6 @@ Target: the remote CreatorShareOFT that sent the lottery entry
 function _sendWinnerCallback(uint32 dstEid, address winner, address creatorCoin, uint256 totalSharesPaid) internal;
 ```
 
-### _sponsorshipContext
-
-
-```solidity
-function _sponsorshipContext(string memory label) internal pure returns (bytes32);
-```
-
 ### _payNative
 
 Override LayerZero default behavior to support contract-sponsored messaging fees.
@@ -801,18 +809,6 @@ function _syncSponsoredCountByOrigin(
 
 ```solidity
 function _buildOptions(uint32 dstEid) internal view returns (bytes memory);
-```
-
-### quoteWinnerCallback
-
-Quote the fee for a winner callback message
-
-
-```solidity
-function quoteWinnerCallback(uint32 dstEid, address winner, address creatorCoin, uint256 totalSharesPaid)
-    external
-    view
-    returns (MessagingFee memory fee);
 ```
 
 ### _payoutLocalJackpot
@@ -1058,15 +1054,6 @@ function getCreatorLotteryStats(address creatorCoin)
     returns (uint256 entries, uint256 winners, uint256 rewardsPaid, uint256 jackpotBalance);
 ```
 
-### getRemoteLotteryStats
-
-Get remote lottery entry statistics
-
-
-```solidity
-function getRemoteLotteryStats() external view returns (uint256);
-```
-
 ### emergencyWithdraw
 
 
@@ -1293,30 +1280,6 @@ error InvalidAmount();
 
 ```solidity
 error CallerFeeMismatch(uint256 provided, uint256 required);
-```
-
-### CreatorCoinNotRegistered
-
-```solidity
-error CreatorCoinNotRegistered(address token);
-```
-
-### NoOracleConfigured
-
-```solidity
-error NoOracleConfigured(address token);
-```
-
-### NoVaultConfigured
-
-```solidity
-error NoVaultConfigured(address token);
-```
-
-### NoGaugeConfigured
-
-```solidity
-error NoGaugeConfigured(address token);
 ```
 
 ### NoPendingVrfResult

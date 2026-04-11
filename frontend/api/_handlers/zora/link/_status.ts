@@ -1,8 +1,16 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { type ApiEnvelope, handleOptions, setCors, setNoStore } from '../../../../packages/server-core/src/index.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  setCors,
+  setNoStore,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
+} from '../../../../packages/server-core/src/index.js'
 import { extractZoraCrossAppAccounts, verifyPrivyForAccounts } from '../../../../server/_lib/accountsIdentity.js'
-import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../../server/_lib/rateLimit.js'
 
 type ZoraLinkStatusResponse = {
   zoraLinked: boolean

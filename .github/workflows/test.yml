@@ -76,9 +76,6 @@ jobs:
       - name: Install frontend dependencies
         run: pnpm --dir frontend install --frozen-lockfile
 
-      - name: Guard deprecated api/server shim imports
-        run: pnpm --dir frontend guard:api-server-shims
-
       - name: Guard server-core boundary for API runtime
         run: pnpm --dir frontend guard:server-core-boundary
 

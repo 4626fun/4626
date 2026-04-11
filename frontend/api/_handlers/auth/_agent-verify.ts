@@ -1,7 +1,10 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { SIWAErrorCode, verifySIWA } from '@buildersgarden/siwa'
-import { createPublicClient, http } from 'viem'
+import {
+  SIWAErrorCode,
+  verifySIWA } from '@buildersgarden/siwa'
+import { createPublicClient,
+  http } from 'viem'
 import { base } from 'viem/chains'
 
 import {
@@ -11,8 +14,11 @@ import {
   setCors,
   setNoStore,
   getDb,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
-
 import {
   consumeSiwaNonce,
   createSiwaReceiptToken,
@@ -23,7 +29,6 @@ import {
 } from '../../../server/auth/_siwa.js'
 import { resolveCanonicalSmartWalletAddress } from '../../../server/_lib/canonicalWalletResolver.js'
 import { getIdentityRegistryAddress } from '../../../server/_lib/erc8004.js'
-import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 import { getTrustedRequestOrigins, normalizeOrigin } from '../../../server/_lib/trust.js'
 
 

@@ -15,8 +15,11 @@ import {
   setNoStore,
   getDb,
   isDbConfigured,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
-import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../../server/_lib/rateLimit.js'
 
 
 import { ensureKeeprSchema } from '../../../../server/_lib/keeprSchema.js'

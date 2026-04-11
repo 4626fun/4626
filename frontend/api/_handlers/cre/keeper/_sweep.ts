@@ -33,8 +33,18 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { type ApiEnvelope, handleOptions, readBoundedJsonObjectBody, requireKeeprApiKey, setCors, setNoStore } from '../../../../packages/server-core/src/index.js'
-import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../../server/_lib/rateLimit.js'
+import {
+  type ApiEnvelope,
+  handleOptions,
+  readBoundedJsonObjectBody,
+  requireKeeprApiKey,
+  setCors,
+  setNoStore,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
+} from '../../../../packages/server-core/src/index.js'
 import { createPublicClient, createWalletClient, http, type Abi, zeroAddress } from 'viem'
 import { privateKeyToAccount } from 'viem/accounts'
 import { base } from 'viem/chains'

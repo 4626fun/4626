@@ -18,7 +18,7 @@ For EVM chains, the registry key matches the native `chainId`. For non-EVM chain
 | **Arbitrum** | 42161 | 30110 | Configured | [Arbiscan](https://arbiscan.io) |
 | **BSC** | 56 | 30102 | Configured | [BscScan](https://bscscan.com) |
 | **Avalanche** | 43114 | 30106 | Configured | [SnowTrace](https://snowtrace.io) |
-| **Monad** | 143 | 30390 | Configured | [MonadExplorer](https://monadexplorer.com) |
+| **Monad** | 10143 | 30390 | Configured | [MonadExplorer](https://monadexplorer.com) |
 | **Solana** | 101 | 30168 | Configured (non-EVM registry key) | [Solana Explorer](https://explorer.solana.com) |
 | **Sonic** | 146 | 30332 | Configured | [SonicScan](https://sonicscan.org) |
 | **HyperEVM** | 999 | 30275 | Configured | [Hyperliquid](https://hyperliquid.xyz) |

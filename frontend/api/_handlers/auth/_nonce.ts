@@ -12,12 +12,12 @@ import {
   setNoStore,
   storeNonce,
   getDb,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
-
 import { getCanonicalOrigin } from '../../../server/_lib/origin.js'
-import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
-
-
 type NonceResponse = {
   nonce: string
   nonceToken: string

@@ -7,11 +7,14 @@ import {
   setCors,
   setNoStore,
   getDb,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
 
 
 import { isIdentityRecoveryRequiredError } from '../../../server/_lib/identityRecovery.js'
-import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 import {
   buildAccountsMePayload,
   ensureAccountsIdentitySchema,

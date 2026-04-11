@@ -18,8 +18,11 @@ import {
   setCors,
   setNoStore,
   readRequestPrincipal,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
-import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 
 import { buildReputationGraph } from '../../../server/_lib/reputationGraph.js'
 import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'

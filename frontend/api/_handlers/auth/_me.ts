@@ -6,10 +6,11 @@ import {
   setCors,
   setNoStore,
   readRequestPrincipalAddress,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
-import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
-
-
 type MeResponse = { address: string } | null
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

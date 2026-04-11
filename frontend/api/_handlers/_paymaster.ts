@@ -13,7 +13,7 @@ import {
   toBytes,
   type Address,
   type Hex,
-} from 'viem'
+  } from 'viem'
 
 import {
   getApiContracts,
@@ -26,8 +26,11 @@ import {
   setCors,
   setNoStore,
   readRequestPrincipalAddress,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
 } from '../../packages/server-core/src/index.js'
-import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../server/_lib/rateLimit.js'
 
 
 import { DEPLOY_BYTECODE } from '../../shared/deploy/bytecode.generated.js'

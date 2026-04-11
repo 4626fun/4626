@@ -200,7 +200,7 @@ flowchart LR
   Arb["Arbitrum\n(42161 / 30110)"]
   BSC["BSC\n(56 / 30102)"]
   Avax["Avalanche\n(43114 / 30106)"]
-  Monad["Monad\n(143 / 30390)"]
+  Monad["Monad\n(10143 / 30390)"]
   Solana["Solana\n(101 / 30168)"]
   Sonic["Sonic\n(146 / 30332)"]
   Hyper["HyperEVM\n(999 / 30275)"]
@@ -237,17 +237,17 @@ flowchart LR
 
 Source of truth: `docs/reference/chains.md`.
 
-| Network   | Chain ID | LayerZero Endpoint ID | Status     |
-| --------- | -------- | --------------------- | ---------- |
-| Base      | 8453     | 30184                 | Hub chain  |
-| Ethereum  | 1        | 30101                 | Configured |
-| Arbitrum  | 42161    | 30110                 | Configured |
-| BSC       | 56       | 30102                 | Configured |
-| Avalanche | 43114    | 30106                 | Configured |
-| Monad     | 143      | 30390                 | Configured |
-| Solana    | 101      | 30168                 | Configured |
-| Sonic     | 146      | 30332                 | Configured |
-| HyperEVM  | 999      | 30275                 | Configured |
+| Network   | Registry Key / Chain ID | LayerZero Endpoint ID | Status                         |
+| --------- | ----------------------- | --------------------- | ------------------------------ |
+| Base      | 8453                    | 30184                 | Hub chain                      |
+| Ethereum  | 1                       | 30101                 | Configured                     |
+| Arbitrum  | 42161                   | 30110                 | Configured                     |
+| BSC       | 56                      | 30102                 | Configured                     |
+| Avalanche | 43114                   | 30106                 | Configured                     |
+| Monad     | 10143                   | 30390                 | Configured                     |
+| Solana    | 101                     | 30168                 | Configured (non-EVM registry key) |
+| Sonic     | 146                     | 30332                 | Configured                     |
+| HyperEVM  | 999                     | 30275                 | Configured                     |
 
 ## Quick Start (Local Development)
 

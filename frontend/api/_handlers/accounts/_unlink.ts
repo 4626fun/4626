@@ -7,6 +7,10 @@ import {
   setCors,
   setNoStore,
   getDb,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
 
 
@@ -18,7 +22,6 @@ import {
   type AccountLinkProvider,
   verifyPrivyForAccounts,
 } from '../../../server/_lib/accountsIdentity.js'
-import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 
 type UnlinkBody = {
   provider?: AccountLinkProvider

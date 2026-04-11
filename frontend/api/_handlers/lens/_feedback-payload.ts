@@ -17,7 +17,9 @@
  */
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { keccak256, toHex } from 'viem'
+import {
+  keccak256,
+  toHex } from 'viem'
 
 import {
   handleOptions,
@@ -25,8 +27,11 @@ import {
   setCors,
   setNoStore,
   readRequestPrincipal,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
-import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
 
 import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
 import { getIdentityRegistryAddress } from '../../../server/_lib/erc8004.js'

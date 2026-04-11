@@ -6,16 +6,16 @@ import {
   setCors,
   setNoStore,
   getDb,
+  RATE_LIMITS,
+  checkRateLimit,
+  getClientIp,
+  rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
-
-
 import {
   bootstrapCanonicalDelegationState,
   extractDelegationFlags,
 } from '../../../server/_lib/canonicalCswDelegation.js'
 import { prepareAddOwnerTx } from '../../../server/_lib/coinbaseSmartWalletOwner.js'
-import { checkRateLimit, getClientIp, RATE_LIMITS, rateLimitKey } from '../../../server/_lib/rateLimit.js'
-
 type PrepareResponse =
   | { alreadyOwner: true }
   | {
