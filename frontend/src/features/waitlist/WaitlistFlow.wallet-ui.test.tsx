@@ -207,7 +207,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     )
 
     expect(await screen.findByText(/activate your account/i)).toBeTruthy()
-    expect(screen.getByText(/step 2 of 3/i)).toBeTruthy()
+    expect(screen.getByText(/step 2 of 2/i)).toBeTruthy()
     expect(screen.queryByText(/climb the waitlist/i)).toBeNull()
     expect(screen.queryByText(/waitlist leaderboard/i)).toBeNull()
     expect(
@@ -258,7 +258,6 @@ describe('WaitlistFlow simplified completion UI', () => {
     )
 
     expect(await screen.findByText(/link your zora identity/i)).toBeTruthy()
-    expect(screen.getByText(/detect your coinbase smart wallet/i)).toBeTruthy()
     expect(screen.getByText(/enable 4626 signing/i)).toBeTruthy()
     // Completed steps render a "Done" pill
     expect(screen.getAllByText(/^done$/i).length).toBeGreaterThan(0)
