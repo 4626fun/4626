@@ -51,6 +51,9 @@ export function AccountSetupWorkspaceView(props: {
     zoraHandoffUrl,
     zoraLinked,
   } = controller
+  const copyAddress = useCallback((addr: string) => {
+    void navigator.clipboard.writeText(addr)
+  }, [])
 
   if (loading && !me) {
     return (
@@ -98,10 +101,6 @@ export function AccountSetupWorkspaceView(props: {
     }
 
     const allDone = zoraStepComplete && walletStepComplete && signingStepComplete
-
-    const copyAddress = useCallback((addr: string) => {
-      void navigator.clipboard.writeText(addr)
-    }, [])
 
     return (
       <div className="mx-auto w-full max-w-[640px] space-y-5">
@@ -158,9 +157,24 @@ export function AccountSetupWorkspaceView(props: {
                       ) : null}
                     </div>
                   </div>
-                  <span className={s === 'done' ? pillDone : s === 'active' ? pillActive : pillUpcoming}>
-                    {s === 'done' ? 'Done' : s === 'active' ? 'Open' : 'Upcoming'}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    {s === 'done' ? (
+                      <button
+                        type="button"
+                        disabled={busyProvider === 'zora_cross_app'}
+                        onClick={(event) => {
+                          event.stopPropagation()
+                          void onLinkZora()
+                        }}
+                        className="inline-flex h-[30px] items-center rounded-md border border-white/10 bg-transparent px-2.5 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200 disabled:opacity-50"
+                      >
+                        {busyProvider === 'zora_cross_app' ? 'Switching…' : 'Reselect'}
+                      </button>
+                    ) : null}
+                    <span className={s === 'done' ? pillDone : s === 'active' ? pillActive : pillUpcoming}>
+                      {s === 'done' ? 'Done' : s === 'active' ? 'Open' : 'Upcoming'}
+                    </span>
+                  </div>
                 </div>
                 {isOpen ? (
                   <div className="px-4 pb-4 pl-[52px]">
