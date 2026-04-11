@@ -407,100 +407,78 @@
     background: radial-gradient(circle, rgba(0, 82, 255, 0.4) 0%, rgba(0, 82, 255, 0.12) 46%, transparent 80%);
   }
 
-  .app-loading-glow-secondary {
-    right: -9rem;
-    bottom: -10rem;
-    height: 22rem;
-    width: 22rem;
-    background: radial-gradient(circle, rgba(56, 189, 248, 0.2) 0%, rgba(56, 189, 248, 0.08) 50%, transparent 82%);
-    animation-delay: -2.2s;
+  .app-loading-pill {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 1rem;
+    overflow: hidden;
+    border-radius: 9999px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    padding: 0.95rem 1.25rem 0.95rem 1rem;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0.015)),
+      rgba(0, 0, 0, 0.82);
+    box-shadow:
+      0 24px 60px -28px rgba(0, 0, 0, 0.82),
+      0 14px 34px -26px rgba(255, 255, 255, 0.16),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    backdrop-filter: blur(18px);
   }
 
-  .app-loading-grid-mask {
+  .app-loading-pill::before {
+    content: '';
     position: absolute;
     inset: 0;
     pointer-events: none;
-    opacity: 0.24;
-    background-image:
-      linear-gradient(to right, rgba(255, 255, 255, 0.035) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-    background-size: 30px 30px;
-    mask-image: radial-gradient(circle at center, black 16%, transparent 72%);
-  }
-
-  .app-loading-panel {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 1.4rem;
-    border-radius: 1.5rem;
-    border: 1px solid rgb(255 255 255 / 0.09);
     background:
-      linear-gradient(165deg, rgb(12 14 18 / 0.88), rgb(9 11 14 / 0.72));
+      linear-gradient(90deg, rgba(130, 175, 255, 0.12) 0%, rgba(255, 255, 255, 0.02) 38%, transparent 62%);
+    opacity: 0.78;
+  }
+
+  .app-loading-pill__scanner {
+    position: absolute;
+    left: 0.9rem;
+    top: 50%;
+    height: calc(100% - 1.25rem);
+    width: 2.4rem;
+    transform: translateY(-50%);
+    border-radius: 0.9rem;
+    background:
+      linear-gradient(90deg, rgba(188, 223, 255, 0.24) 0%, rgba(188, 223, 255, 0.08) 55%, transparent 100%);
+    filter: blur(10px);
+    opacity: 0.9;
+    animation: app-loading-scanner-sweep 2.5s ease-in-out infinite;
+  }
+
+  .app-loading-pill__title {
+    margin: 0;
+    color: rgba(244, 246, 255, 0.96);
+    font-size: 1rem;
+    font-weight: 500;
+    letter-spacing: -0.03em;
+  }
+
+  .app-loading-pill__subtitle {
+    margin: 0.12rem 0 0;
+    color: rgba(161, 170, 193, 0.85);
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.02em;
+  }
+
+  .pixel-wave-loader__cell {
+    border-radius: max(2px, 0.15em);
+    background: currentColor;
+    opacity: 0.14;
     box-shadow:
-      0 22px 56px -26px rgba(0, 0, 0, 0.82),
-      inset 0 1px 0 rgba(255, 255, 255, 0.04);
-    padding: 2.1rem 1.5rem 1.65rem;
-    animation: app-loading-panel-pulse 2.8s ease-in-out infinite;
-  }
-
-  .app-loading-orb {
-    position: relative;
-    height: 3.8rem;
-    width: 3.8rem;
-  }
-
-  .app-loading-orb-ring {
-    position: absolute;
-    inset: 0;
-    border-radius: 9999px;
-    border: 1px solid rgba(255, 255, 255, 0.14);
-  }
-
-  .app-loading-orb-ring-outer {
-    border-top-color: rgba(0, 82, 255, 0.75);
-    border-right-color: rgba(0, 82, 255, 0.28);
-    border-bottom-color: rgba(255, 255, 255, 0.08);
-    border-left-color: rgba(255, 255, 255, 0.08);
-    animation: app-loading-spin 2.1s linear infinite;
-  }
-
-  .app-loading-orb-ring-inner {
-    inset: 0.42rem;
-    border-color: rgba(148, 163, 184, 0.42);
-    border-bottom-color: transparent;
-    animation: app-loading-spin 2.6s linear infinite reverse;
-  }
-
-  .app-loading-orb-core {
-    position: absolute;
-    inset: 1.26rem;
-    border-radius: 9999px;
-    background: rgba(0, 82, 255, 0.9);
-    box-shadow:
-      0 0 18px rgba(0, 82, 255, 0.5),
-      0 0 40px rgba(0, 82, 255, 0.25);
-    animation: app-loading-core-breathe 1.9s ease-in-out infinite;
-  }
-
-  .app-loading-progress {
-    position: relative;
-    width: 100%;
-    max-width: 15rem;
-    height: 0.2rem;
-    overflow: hidden;
-    border-radius: 9999px;
-    background: rgba(255, 255, 255, 0.08);
-  }
-
-  .app-loading-progress-bar {
-    position: absolute;
-    inset: 0;
-    width: 42%;
-    border-radius: 9999px;
-    background: linear-gradient(90deg, rgba(0, 82, 255, 0.25), rgba(0, 82, 255, 0.95), rgba(0, 82, 255, 0.25));
-    animation: app-loading-progress-sweep 1.7s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+      0 0 0 1px rgba(255, 255, 255, 0.03),
+      0 0 18px color-mix(in srgb, currentColor 55%, transparent);
+    animation-name: pixel-wave-loader-cell;
+    animation-timing-function: cubic-bezier(0.33, 0, 0.2, 1);
+    animation-iteration-count: infinite;
+    animation-fill-mode: both;
+    will-change: opacity, transform, box-shadow;
   }
 }
 
@@ -561,40 +539,37 @@
   }
 }
 
-@keyframes app-loading-panel-pulse {
+@keyframes app-loading-scanner-sweep {
   0%,
   100% {
-    opacity: 0.88;
+    opacity: 0.62;
+    transform: translateY(-50%) translateX(-4px) scaleX(0.94);
   }
   50% {
-    opacity: 1;
+    opacity: 0.98;
+    transform: translateY(-50%) translateX(8px) scaleX(1.06);
   }
 }
 
-@keyframes app-loading-spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes app-loading-core-breathe {
+@keyframes pixel-wave-loader-cell {
   0%,
   100% {
-    opacity: 0.5;
-    transform: scale(0.84);
+    opacity: 0.14;
+    transform: scale(0.92);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.03),
+      0 0 8px color-mix(in srgb, currentColor 20%, transparent);
   }
-  50% {
+  38% {
+    opacity: 0.28;
+    transform: scale(0.96);
+  }
+  58% {
     opacity: 1;
     transform: scale(1);
-  }
-}
-
-@keyframes app-loading-progress-sweep {
-  0% {
-    transform: translateX(-130%);
-  }
-  100% {
-    transform: translateX(340%);
+    box-shadow:
+      0 0 0 1px rgba(255, 255, 255, 0.08),
+      0 0 22px color-mix(in srgb, currentColor 65%, transparent);
   }
 }
 
@@ -680,6 +655,22 @@ body {
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
+  }
+
+  .pixel-wave-loader__cell {
+    animation: none !important;
+    opacity: 0.35;
+    transform: none;
+  }
+
+  [data-pixel-wave-loader='true'] [data-pixel-wave-cell='true']:nth-child(5) {
+    opacity: 1;
+  }
+
+  .app-loading-pill__scanner {
+    animation: none !important;
+    opacity: 0.56;
+    transform: translateY(-50%);
   }
 }
 
