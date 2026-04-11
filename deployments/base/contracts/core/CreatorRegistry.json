@@ -2,10 +2,10 @@
   "contractName": "CreatorRegistry",
   "network": "Base",
   "chainId": 8453,
-  "address": "0x79d0d68904BbB50361C9721CbDD17276E046771D",
+  "address": "0x9D86e8FAfA39527c4FE13AAa8FBD2B424f9f65Fb",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-04-10T09:11:53Z",
-  "deploymentTx": "0xff023c63f224face88410bb877bf023219f5750d5dd71545ec6f8fe9a34677bd",
+  "deployedAt": "2026-04-11T03:38:33Z",
+  "deploymentTx": "0x6edd4308a5c2070b68d0faf556f2e2585c9b9a86d6e5c05343337060d1129224",
   "abi": [
     {
       "type": "constructor",
@@ -2840,6 +2840,6 @@
     }
   ],
   "notes": [
-    "Fresh shared/global broadcast for the v1.8.2 full redeploy."
+    "Fresh shared/global broadcast for the live v1.8.3 full release."
   ]
 }

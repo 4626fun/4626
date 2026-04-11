@@ -51,22 +51,22 @@ contract DeployTier1Upgrade is Script {
     // ═══════════════════════════════════════════════════════════════════
 
     /// @notice Existing CreatorRegistry on Base (current live registry)
-    address constant REGISTRY = 0x79d0d68904BbB50361C9721CbDD17276E046771D;
+    address constant REGISTRY = 0x9D86e8FAfA39527c4FE13AAa8FBD2B424f9f65Fb;
 
     /// @notice Existing VRF Consumer on Base (unchanged, just needs configuration)
-    address constant VRF_CONSUMER = 0x0265236984DE964CB0422BaeFbDb2de7C9d590F5;
+    address constant VRF_CONSUMER = 0xdd25Ed1b3D258Ccc6D306a9a325Af1A7F96C7F47;
 
     /// @notice Existing SolanaBridgeAdapter on Base
-    address constant SOLANA_BRIDGE_ADAPTER = 0x648A01f6e125A46c4695CA70D0EB455f053d36A2;
+    address constant SOLANA_BRIDGE_ADAPTER = 0x90F578A4e23c1cB8DDFE63fd496ED7F4474f2b00;
 
     /// @notice Canonical Permit2 on Base
     address constant PERMIT2 = 0x000000000022D473030F116dDEE9F6B43aC78BA3;
 
     /// @notice Old LotteryManager being replaced
-    address constant OLD_LOTTERY_MANAGER = 0xA02A858E67c98320dCFB218831B645692E8f3483;
+    address constant OLD_LOTTERY_MANAGER = 0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357;
 
     /// @notice Old VaultActivationBatcher being replaced
-    address constant OLD_BATCHER = 0x4b67e3a4284090e5191c27B8F24248eC82DF055D;
+    address constant OLD_BATCHER = 0x7Cc0050842433968cc7A0884d192b61FD0b46F63;
 
     // ═══════════════════════════════════════════════════════════════════
     //                         BASE CONFIG

@@ -9,28 +9,28 @@ Deployed contract addresses for 4626.
 
 ## Base (Hub Chain)
 
-### Current Live Infrastructure (pending `v1.8.3` cutover)
+### Current Live Infrastructure (`v1.8.3`)
 
 | Contract | Address |
 |----------|---------|
-| CreatorRegistry | `0x79d0d68904BbB50361C9721CbDD17276E046771D` |
-| CreatorOVaultFactory | `0xb66aA49d94569a8589f380D53e8a3f1F60165000` |
-| VaultActivationBatcher | `0x8b63912cD2490D1Ab0796c57Cc5909fF0059CECd` |
-| CreatorLotteryManager | `0xA137BEef789B80c76187E1b6DEef60fC7db6d280` |
-| CreatorVRFConsumerV2_5 | `0x22ae936027Fe0c348758634bF8694E00D96338ac` |
-| SolanaBridgeAdapter | `0x1B3E713852dEC5d983AD11BD1567eed0723ceA9b` |
-| UniversalBytecodeStoreV2 | `0xc8050cfeDA4CCd04079f37f1D95cD54279156E46` |
-| UniversalCreate2DeployerFromStore | `0x95700DA39462f97b0E874ED7e05BBF76413d7Ac1` |
-| CreatorOVaultCoreModule | `0xf2367B030992e5661503bb9Bc7e712cf66799bC7` |
-| CreatorOVaultStrategiesModule | `0x897837200b1f4F8D6bec9b00d56Ed0189f55832b` |
-| CreatorOVaultAdminModule | `0x940C8Fc97295AA4D9D2C5FcB26571BB4a98bbC19` |
-| DeploymentBatcher | `0x721420F190cc4525bb8Adc72D4c66eEB806AFC37` |
-| DeploymentBatcherPhase3Helper | `0x42612DA05Bd72d9B58f0Fa63161dDd8a3FEFd568` |
-| DeploymentBatcherUniV4Helper | `0x5Ed8A640abF700e4c3A627Ad7cc8A8bdDEe5F34f` |
+| CreatorRegistry | `0x9D86e8FAfA39527c4FE13AAa8FBD2B424f9f65Fb` |
+| CreatorOVaultFactory | `0xC7E919899Fd4C0C4f6f4269a63046107f85848bB` |
+| VaultActivationBatcher | `0x7Cc0050842433968cc7A0884d192b61FD0b46F63` |
+| CreatorLotteryManager | `0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357` |
+| CreatorVRFConsumerV2_5 | `0xdd25Ed1b3D258Ccc6D306a9a325Af1A7F96C7F47` |
+| SolanaBridgeAdapter | `0x90F578A4e23c1cB8DDFE63fd496ED7F4474f2b00` |
+| UniversalBytecodeStoreV2 | `0xA009B1Bf8cB711c115d832AEb392156BA6A4112e` |
+| UniversalCreate2DeployerFromStore | `0xFd2657b6f1905C3F0494942F618a68963CF792Ec` |
+| CreatorOVaultCoreModule | `0xeD728378f969f8e94a19fC081172D1e67B80412e` |
+| CreatorOVaultStrategiesModule | `0x0f1A26b93AD56BBbC5e0486A920621944FF6ABd6` |
+| CreatorOVaultAdminModule | `0xFC40e9768eeaAE634CBD2A72DA0CF809d3c908e0` |
+| DeploymentBatcher | `0xcDbEeB764df9878ebAFbf101cc818370f703bC4F` |
+| DeploymentBatcherPhase3Helper | `0xF185Cb60E108E324f67e75cf8106B8e9950c16ed` |
+| DeploymentBatcherUniV4Helper | `0xfe1C5eaa76942208298f510c820e7E8328f6d031` |
 
 Notes:
 - Shared/global contracts were freshly broadcast for the current live Base infra epoch and handed off into the deterministic v2 batcher deployment.
-- The repo's next deployment namespace / bytecode target is `v1.8.3`; these addresses remain the current live Base values until that epoch is broadcast.
+- The repo's canonical deployment namespace / bytecode target is `v1.8.3`, and these addresses are the live Base values from that release.
 - `DeploymentBatcherPhase3Helper` and `DeploymentBatcherUniV4Helper` are constructor-created by `DeploymentBatcher`.
 - `DeploymentBatcher` is forensically matched to the live CREATE2 deployment payload; explorer verification for that deployment path still mismatches.
 

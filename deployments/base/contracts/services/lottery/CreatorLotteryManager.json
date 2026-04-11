@@ -2,10 +2,10 @@
   "contractName": "CreatorLotteryManager",
   "network": "Base",
   "chainId": 8453,
-  "address": "0xA137BEef789B80c76187E1b6DEef60fC7db6d280",
+  "address": "0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357",
   "deployedBy": "0xB05Cf01231cF2fF99499682E64D3780d57c80FdD",
-  "deployedAt": "2026-04-10T09:11:53Z",
-  "deploymentTx": "0x246db47d63c1885c94fc4b0836241952c0a994802633a63626ed6d792fd10ae1",
+  "deployedAt": "2026-04-11T03:38:33Z",
+  "deploymentTx": "0xe226c9fd94caa94a0d83ce19d61c8830b410f21c24cbbe177e0bad8c605d449d",
   "abi": [
     {
       "type": "constructor",
@@ -2680,6 +2680,6 @@
     }
   ],
   "notes": [
-    "v1.8.2 broadcast uses the trimmed runtime that stays within the EIP-170 contract size limit."
+    "v1.8.3 broadcast uses the trimmed runtime that stays within the EIP-170 contract size limit."
   ]
 }
