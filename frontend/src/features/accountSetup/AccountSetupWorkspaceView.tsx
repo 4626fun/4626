@@ -101,6 +101,11 @@ export function AccountSetupWorkspaceView(props: {
     }
 
     const allDone = zoraStepComplete && walletStepComplete && signingStepComplete
+    const rawZoraHandle = me.accountSignals.zoraHandle?.trim() ?? ''
+    const normalizedZoraHandle = rawZoraHandle
+      ? (rawZoraHandle.startsWith('@') || rawZoraHandle.startsWith('$') ? rawZoraHandle : `@${rawZoraHandle}`)
+      : null
+    const zoraProfileUrl = normalizedZoraHandle ? `${ZORA_PROFILE_BASE}${normalizedZoraHandle}` : null
 
     return (
       <div className="mx-auto w-full max-w-[640px] space-y-5">
@@ -119,13 +124,15 @@ export function AccountSetupWorkspaceView(props: {
         {/* Heading — single line */}
         <div>
           <h2 className="text-2xl font-semibold tracking-tight text-white">Activate your account</h2>
-          <p className="mt-1 text-sm text-zinc-500">Step {activeStep} of 3</p>
+          <p className="mt-1 text-sm text-zinc-500">
+            {activeStep === 1 ? 'Step 1 of 3' : activeStep === 2 ? 'Step 1b of 3' : 'Step 2 of 3'}
+          </p>
         </div>
 
         {/* Accordion steps */}
         <div className="overflow-hidden rounded-[13px] border border-white/[0.06]">
 
-          {/* ── Step 1 — Zora ── */}
+          {/* ── Step 1 — Zora + wallet sync (1b) ── */}
           {(() => {
             const s = stepStatus(1)
             const isOpen = s === 'active'
@@ -143,18 +150,28 @@ export function AccountSetupWorkspaceView(props: {
                       <div className="flex items-center gap-2">
                         <img src="/brands/zora-token.svg" alt="" aria-hidden="true" className="h-4 w-4 shrink-0 rounded-full object-cover" />
                         <p className="truncate text-sm font-semibold text-white">Link your Zora identity</p>
+                        <span className="inline-flex items-center rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-zinc-500">
+                          Manual
+                        </span>
                       </div>
-                      {s === 'done' && me.accountSignals.zoraHandle ? (
+                      {s === 'done' && normalizedZoraHandle && zoraProfileUrl ? (
                         <a
-                          href={`${ZORA_PROFILE_BASE}@${me.accountSignals.zoraHandle}`}
+                          href={zoraProfileUrl}
                           target="_blank"
                           rel="noreferrer"
                           className="mt-0.5 inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
                         >
-                          @{me.accountSignals.zoraHandle}
+                          {normalizedZoraHandle}
                           <ExternalLink className="h-3 w-3" />
                         </a>
                       ) : null}
+                      <div className="mt-1.5 flex items-center gap-2 text-[11px] text-zinc-500">
+                        <span className="text-zinc-600">1b</span>
+                        <span className="rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-zinc-500">
+                          Auto
+                        </span>
+                        <span className="truncate">Wallet sync from backend</span>
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -205,7 +222,7 @@ export function AccountSetupWorkspaceView(props: {
             )
           })()}
 
-          {/* ── Step 2 — Wallet ── */}
+          {/* ── Step 1b — Wallet sync status ── */}
           {(() => {
             const s = stepStatus(2)
             const isOpen = s === 'active'
@@ -223,7 +240,10 @@ export function AccountSetupWorkspaceView(props: {
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <WalletProviderIcon provider="coinbase" size={16} />
-                        <p className="truncate text-sm font-semibold text-white">Detect your Coinbase Smart Wallet</p>
+                        <p className="truncate text-sm font-semibold text-white">Step 1b · Detect your Coinbase Smart Wallet</p>
+                        <span className="inline-flex items-center rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-zinc-500">
+                          Auto
+                        </span>
                       </div>
                       {addr ? (
                         <div className="mt-0.5 flex items-center gap-2">
@@ -257,6 +277,27 @@ export function AccountSetupWorkspaceView(props: {
                     <p className="text-sm leading-relaxed text-zinc-400">
                       Confirm the wallet connected to your account.
                     </p>
+                    {addr ? (
+                      <div className="mt-3 flex flex-wrap items-center gap-2 rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+                        <button
+                          type="button"
+                          onClick={() => copyAddress(addr)}
+                          title="Copy address"
+                          className="font-mono text-xs text-zinc-400 hover:text-zinc-200 transition-colors break-all text-left"
+                        >
+                          {addr}
+                        </button>
+                        <a
+                          href={`${BASESCAN_BASE}${addr}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          title="View on Basescan"
+                          className="shrink-0 text-zinc-500 hover:text-zinc-200 transition-colors"
+                        >
+                          <ExternalLink className="h-3.5 w-3.5" />
+                        </a>
+                      </div>
+                    ) : null}
                     <div className="mt-3 flex flex-wrap gap-2">
                       <button
                         type="button"

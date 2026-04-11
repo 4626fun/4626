@@ -207,7 +207,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     )
 
     expect(await screen.findByText(/activate your account/i)).toBeTruthy()
-    expect(screen.getByText(/step 3 of 3/i)).toBeTruthy()
+    expect(screen.getByText(/step 2 of 3/i)).toBeTruthy()
     expect(screen.queryByText(/climb the waitlist/i)).toBeNull()
     expect(screen.queryByText(/waitlist leaderboard/i)).toBeNull()
     expect(
