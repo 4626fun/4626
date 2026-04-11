@@ -172,3 +172,7 @@ docs/security/scan-overview.md
 docs/audits/token-image/breakout-report.md
 docs/audits/token-image/deep-research-report*.md
 frontend/docs/deep-research-report.md
+
+# Local brainstorm drafts (keep canonical checked-in file only)
+.superpowers/brainstorm/*.html
+!.superpowers/brainstorm/setup-flow-options.html
