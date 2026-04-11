@@ -8,6 +8,15 @@ let mockAppOrigin = 'https://v1.4626.fun'
 let mockMarketingOrigin = 'https://4626.fun'
 let mockHostMode: 'app' | 'marketing' = 'app'
 
+vi.mock('@privy-io/react-auth', () => ({
+  usePrivy: () => ({ ready: true, authenticated: false, getAccessToken: async () => null }),
+}))
+
+vi.mock('@/features/waitlist/waitlistHandoff', () => ({
+  bridgePrivySession: async () => null,
+  createAuthHandoffCode: async () => '',
+}))
+
 vi.mock('@/lib/host', async () => {
   const actual = await vi.importActual<typeof import('@/lib/host')>('@/lib/host')
   return {

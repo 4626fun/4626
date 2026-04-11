@@ -245,14 +245,15 @@ function WaitlistAuthStep(props: {
         <div className="h-72 w-72 rounded-full bg-brand-primary/20 blur-[90px]" />
       </div>
 
-      <div className="glass-card relative z-10 w-full max-w-sm space-y-7 px-8 py-9">
+      {/* open layout — no card border, glow does the work */}
+      <div className="relative z-10 w-full max-w-sm space-y-8 text-center">
         {/* header */}
         <div className="space-y-3">
           <p className="bv-kicker">Early access</p>
-          <h2 className="text-4xl font-light tracking-tight text-white">
+          <h2 className="text-[2.6rem] font-light leading-tight tracking-tight text-white">
             {authUi.title}
           </h2>
-          <p className="text-sm leading-relaxed text-zinc-400">{authUi.subtitle}</p>
+          <p className="mx-auto max-w-xs text-sm leading-relaxed text-zinc-400">{authUi.subtitle}</p>
         </div>
 
         {/* CTA */}
@@ -277,7 +278,7 @@ function WaitlistAuthStep(props: {
               authUi.ctaLabel
             )}
           </button>
-          <p className="bv-kicker text-center">No wallet required at this step</p>
+          <p className="bv-kicker">No wallet required at this step</p>
         </div>
 
         {/* error */}
@@ -285,7 +286,7 @@ function WaitlistAuthStep(props: {
           <div
             role="alert"
             aria-live="polite"
-            className="space-y-3 rounded-2xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"
+            className="space-y-3 rounded-xl border border-rose-500/20 bg-rose-500/8 px-4 py-3 text-left text-sm text-rose-300"
           >
             <div>{error}</div>
             {recoveryRequired ? (
@@ -293,7 +294,7 @@ function WaitlistAuthStep(props: {
                 type="button"
                 disabled={busy}
                 onClick={() => void onRecoverAccount()}
-                className="inline-flex items-center rounded-lg border border-rose-300/35 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-100 transition hover:bg-rose-500/20 disabled:opacity-60"
+                className="inline-flex items-center rounded-lg border border-rose-300/25 bg-rose-500/10 px-3 py-1.5 text-xs font-medium text-rose-200 transition hover:bg-rose-500/20 disabled:opacity-60"
               >
                 Try existing account sign-in
               </button>

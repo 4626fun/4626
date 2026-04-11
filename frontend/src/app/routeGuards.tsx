@@ -1,4 +1,5 @@
-import { useEffect, type ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
+import { usePrivy } from '@privy-io/react-auth'
 import { useLocation } from 'react-router-dom'
 
 import { AppLoadingState } from '@/components/layout/AppLoadingState'
@@ -6,6 +7,7 @@ import { Layout } from '@/components/layout/Layout'
 import { isAppOnlyPath } from '@/lib/appOnlyPaths'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
 import { APP_ORIGIN, MARKETING_ORIGIN, getHostMode, isCurrentWindowUrl, type HostMode } from '@/lib/host'
+import { bridgePrivySession, createAuthHandoffCode } from '@/features/waitlist/waitlistHandoff'
 import { AccountContextProvider } from '@/wallet/accountContext'
 
 import {
@@ -15,11 +17,56 @@ import {
   SmartWalletsRouteProvider,
 } from './lazyRoutes'
 
+const HANDOFF_QUERY_KEY = 'cv_handoff'
+
+/** Plain cross-origin redirect without session transfer (used for marketing↔app direction swaps). */
 function ReplaceOnMount(props: { to: string }) {
   useEffect(() => {
     if (typeof window === 'undefined') return
     window.location.replace(props.to)
   }, [props.to])
+
+  return <AppLoadingState />
+}
+
+/**
+ * Cross-origin redirect that carries a cv_handoff session code for authenticated users.
+ * Waits for Privy to be ready, creates a one-time handoff code, then redirects so the
+ * destination can restore the session without a second sign-in.
+ */
+function HandoffOnMount(props: { to: string }) {
+  const { ready, authenticated, getAccessToken } = usePrivy()
+  const fired = useRef(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    if (!ready) return
+    if (fired.current) return
+    fired.current = true
+
+    void (async () => {
+      let target = props.to
+
+      if (authenticated) {
+        try {
+          const privyToken = await getAccessToken().catch(() => null)
+          if (privyToken) {
+            const sessionToken = await bridgePrivySession(privyToken)
+            const handoffCode = await createAuthHandoffCode({ privyToken, sessionToken })
+            if (handoffCode) {
+              const parsed = new URL(target)
+              parsed.searchParams.set(HANDOFF_QUERY_KEY, handoffCode)
+              target = parsed.toString()
+            }
+          }
+        } catch {
+          // Fall back to redirect without handoff on any error.
+        }
+      }
+
+      window.location.replace(target)
+    })()
+  }, [props.to, ready, authenticated, getAccessToken])
 
   return <AppLoadingState />
 }
@@ -33,7 +80,7 @@ export function HostGuard() {
   if (!isAppOnlyPath(pathname)) return null
   const target = `${APP_ORIGIN}${pathname}${search}${hash}`
   if (isCurrentWindowUrl(target)) return null
-  return <ReplaceOnMount to={target} />
+  return <HandoffOnMount to={target} />
 }
 
 /** Restrict route content to marketing domain; app host redirects cross-origin. */
