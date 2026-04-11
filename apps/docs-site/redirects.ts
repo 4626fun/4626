@@ -42,7 +42,7 @@ export const redirects: ClientRedirect[] = [
   { from: '/lens-grove', to: '/integrations/lens-grove' },
   {
     from: '/farcaster-close-gap-phases',
-    to: '/integrations/farcaster-close-gap-phases',
+    to: '/integrations',
   },
   { from: '/solana-spoke-article', to: '/integrations/solana-spoke-article' },
 
@@ -50,7 +50,7 @@ export const redirects: ClientRedirect[] = [
     from: '/onboarding-optimization-nikita-bier',
     to: '/plans/onboarding-optimization-nikita-bier',
   },
-  { from: '/security-scan-overview', to: '/security/scan-overview' },
+  { from: '/security-scan-overview', to: '/security' },
 
   { from: '/ajna-erc4626-cre-adversarial-audit', to: '/audits/ajna/adversarial-audit' },
   { from: '/ajna-erc4626-cre-executive-brief', to: '/audits/ajna/executive-brief' },
@@ -64,23 +64,22 @@ export const redirects: ClientRedirect[] = [
     to: '/audits/charm/executive-brief',
   },
   { from: '/charm-alpha-vaults-v2-4626fun-master-qa', to: '/audits/charm/master-qa' },
-  { from: '/codex-security-findings', to: '/audits/codex/security-findings' },
+  { from: '/codex-security-findings', to: '/audits/codex/security-second-pass-review' },
   {
     from: '/codex-security-second-pass-review',
     to: '/audits/codex/security-second-pass-review',
   },
-  { from: '/breakout-report', to: '/audits/token-image/breakout-report' },
+  { from: '/breakout-report', to: '/audits/token-image' },
   {
     from: '/deep-research-report',
-    to: '/audits/token-image/deep-research-report',
+    to: '/audits/token-image',
   },
   {
     from: ['/deep-research-report-1', '/deep-research-report-(1)'],
-    to: '/audits/token-image/deep-research-report-1',
+    to: '/audits/token-image',
   },
   {
     from: ['/deep-research-report-2', '/deep-research-report-(2)'],
-    to: '/audits/token-image/deep-research-report-2',
+    to: '/audits/token-image',
   },
 ];
-

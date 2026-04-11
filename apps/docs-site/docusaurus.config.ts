@@ -75,8 +75,15 @@ const config: Config = {
           label: 'Docs',
         },
         {
-          href: 'https://github.com/4626',
+          to: '/operations/deployment/releases',
+          label: 'Change Log',
+          position: 'right',
+        },
+        {
+          href: 'https://github.com/wenakita/4626',
           label: 'GitHub',
+          'aria-label': 'GitHub repository',
+          className: 'header-github-link',
           position: 'right',
         },
       ],

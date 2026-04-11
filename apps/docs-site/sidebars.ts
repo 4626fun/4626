@@ -159,7 +159,6 @@ const sidebars: SidebarsConfig = {
         'integrations/oft',
         'integrations/lens',
         'integrations/lens-grove',
-        'integrations/farcaster-close-gap-phases',
         'integrations/solana-integration',
         'integrations/solana-spoke-article',
       ],
@@ -185,9 +184,15 @@ const sidebars: SidebarsConfig = {
             {
               type: 'category',
               label: 'Releases',
+              link: { type: 'doc', id: 'operations/deployment/releases/index' },
               items: [
+                'operations/deployment/releases/v1.8.3-mainnet',
+                'operations/deployment/releases/v1.8.2-mainnet',
+                'operations/deployment/releases/v1.8.1-mainnet',
+                'operations/deployment/releases/v1.8.1-pre-broadcast-checklist',
                 'operations/deployment/releases/v1.7.1-mainnet',
                 'operations/deployment/releases/v1.7.1-post-broadcast-checklist',
+                'operations/deployment/releases/cleanup-2026-04-09',
               ],
             },
             {
@@ -257,7 +262,9 @@ const sidebars: SidebarsConfig = {
       collapsed: true,
       link: { type: 'doc', id: 'security/index' },
       items: [
-        'security/scan-overview',
+        'security/agent-security-model',
+        'security/agent-security-migration',
+        'security/payout-router-ownership-hardening-2026-03',
       ],
     },
 
@@ -291,17 +298,14 @@ const sidebars: SidebarsConfig = {
           label: 'Codex',
           items: [
             'audits/codex/security-second-pass-review',
-            'audits/codex/security-findings',
+            'audits/codex/remediation-2026-04-02',
           ],
         },
         {
           type: 'category',
           label: 'Token Image',
           items: [
-            'audits/token-image/deep-research-report',
-            'audits/token-image/deep-research-report-1',
-            'audits/token-image/deep-research-report-2',
-            'audits/token-image/breakout-report',
+            'audits/token-image/index',
           ],
         },
       ],

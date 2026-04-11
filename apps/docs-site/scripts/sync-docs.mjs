@@ -22,7 +22,9 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 // Configuration
-const REPO_ROOT = path.resolve(__dirname, '../../..');
+const REPO_ROOT = process.env.DOCS_REPO_ROOT
+  ? path.resolve(process.env.DOCS_REPO_ROOT)
+  : path.resolve(__dirname, '../../..');
 const DEST_DIR = path.resolve(__dirname, '../docs');
 const STATIC_DIR = path.resolve(__dirname, '../static');
 const BRAND_SOURCE = path.join(REPO_ROOT, 'frontend/public/brand');
@@ -272,7 +274,8 @@ async function getSourceFiles(sourceDir, excludePatterns) {
 /**
  * Process files from a single source
  */
-async function processSource(sourceKey) {
+async function processSource(sourceKey, options = {}) {
+  const { missingManualAsWarning = false } = options;
   const source = SOURCES[sourceKey];
   
   // Check if source exists
@@ -281,8 +284,13 @@ async function processSource(sourceKey) {
       stats.warnings.push(`${source.label}: Source directory not found (run generation first)`);
       console.log(`   ⚠️  ${source.label}: Not found (skipping)`);
     } else {
-      stats.errors.push(`${source.label}: Source directory not found`);
-      console.error(`   ✗ ${source.label}: Not found`);
+      if (missingManualAsWarning) {
+        stats.warnings.push(`${source.label}: Source directory not found (using bundled docs snapshot)`);
+        console.log(`   ⚠️  ${source.label}: Not found (using bundled docs snapshot)`);
+      } else {
+        stats.errors.push(`${source.label}: Source directory not found`);
+        console.error(`   ✗ ${source.label}: Not found`);
+      }
     }
     return;
   }
@@ -480,13 +488,21 @@ async function sync() {
   console.log('📚 Multi-Source Documentation Sync');
   console.log('════════════════════════════════════════════════════════════');
   
-  // Clean destination
-  console.log('\n🗑️  Cleaning destination...');
-  await cleanDestination();
+  const manualSourceAvailable = await sourceExists(SOURCES.manual.dir);
+  const bundledSnapshotAvailable = await sourceExists(path.join(DEST_DIR, 'index.md'));
+  const preserveBundledSnapshot = !manualSourceAvailable && bundledSnapshotAvailable;
+
+  // Clean destination unless we are in an isolated build that only has docs-site.
+  if (preserveBundledSnapshot) {
+    console.log('\n📦 Preserving bundled docs snapshot (repo-root docs unavailable in this build context).');
+  } else {
+    console.log('\n🗑️  Cleaning destination...');
+    await cleanDestination();
+  }
   
   // Process each source
   for (const sourceKey of Object.keys(SOURCES)) {
-    await processSource(sourceKey);
+    await processSource(sourceKey, { missingManualAsWarning: preserveBundledSnapshot });
   }
   
   // Create API index pages
