@@ -3,6 +3,7 @@
 
 import { createPublicClient, http, type Address } from 'viem'
 import { base } from 'viem/chains'
+import { getBrowserBaseReadRpcUrl } from './baseReadRpcPolicy'
 import { logger } from './logger'
 
 const CREATOR_COIN_DEBUG = import.meta.env.DEV && import.meta.env.VITE_DEBUG_LOGS === 'true'
@@ -13,14 +14,9 @@ const BASE_RPC_RAW =
   (import.meta.env.VITE_BASE_RPC as string | undefined)?.trim() ||
   ''
 
-function isCorsRestrictedRpc(url: string): boolean {
-  // Alchemy browser CORS is opt-in; avoid hard failures by default.
-  return /(^|\/\/)base-mainnet\.g\.alchemy\.com/i.test(url) || /\.g\.alchemy\.com\//i.test(url)
-}
-
 function getBaseRpcUrl(): string {
-  if (IS_BROWSER) return '/api/rpc?chain=base'
-  if (BASE_RPC_RAW && !isCorsRestrictedRpc(BASE_RPC_RAW)) return BASE_RPC_RAW
+  if (IS_BROWSER) return getBrowserBaseReadRpcUrl(BASE_RPC_RAW)
+  if (BASE_RPC_RAW) return BASE_RPC_RAW
   return 'https://base-mainnet.public.blastapi.io'
 }
 

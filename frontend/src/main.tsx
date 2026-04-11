@@ -278,16 +278,8 @@ if (typeof window !== 'undefined') {
       ['1', 'true', 'yes'].includes(String(import.meta.env.VITE_PRIVY_DISABLE_ANALYTICS ?? '').trim().toLowerCase())
     let privyPasswordlessCooldownUntilMs = 0
     let privyPasswordlessInFlight: Promise<Response> | null = null
-    const needsRpcRewrite = true
-    if ((debugEnabled || needsRpcRewrite) && !(window as any).__cvFetchPatched) {
+    if (debugEnabled && !(window as any).__cvFetchPatched) {
       const originalFetch = window.fetch.bind(window)
-      const alchemyBaseRpc = /(^|\/\/)base-mainnet\.g\.alchemy\.com/i
-      const directBaseRpc =
-        /(^|\/\/)(mainnet\.base\.org|base\.llamarpc\.com|base-mainnet\.public\.blastapi\.io|base\.meowrpc\.com)/i
-      // CDP RPC URLs are server-side oriented and often fail in browsers (CORS/405).
-      // Always proxy them through our same-origin JSON-RPC relay.
-      const coinbaseDeveloperBaseRpc = /^https:\/\/api\.developer\.coinbase\.com\/rpc\/v1\/base\//i
-      const safeBaseRpc = '/api/rpc?chain=base'
       window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
         const method = normalizeFetchMethod(init?.method ?? (input instanceof Request ? input.method : undefined))
@@ -325,13 +317,6 @@ if (typeof window !== 'undefined') {
 
           privyPasswordlessInFlight = request
           return request.then((response) => response.clone())
-        }
-        if (alchemyBaseRpc.test(url) || coinbaseDeveloperBaseRpc.test(url) || directBaseRpc.test(url)) {
-          if (input instanceof Request) {
-            const rewritten = new Request(safeBaseRpc, input)
-            return originalFetch(rewritten, init)
-          }
-          return originalFetch(safeBaseRpc, init)
         }
         return originalFetch(input, init)
       }

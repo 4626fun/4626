@@ -2,6 +2,7 @@ import { http, createConfig, fallback } from 'wagmi'
 import { base, mainnet, arbitrum, optimism, polygon } from 'wagmi/chains'
 import { coinbaseWallet, injected, metaMask } from 'wagmi/connectors'
 import { DATA_SUFFIX, warnGlobalWagmiDataSuffixBehavior } from '@/lib/baseBuilderCodes'
+import { BASE_RPC_PROXY_PATH, isBrowserRestrictedBaseRpc } from '@/lib/baseReadRpcPolicy'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 
 /**
@@ -36,20 +37,12 @@ function isValidRpcUrl(url: string): boolean {
 }
 
 
-function isCorsRestrictedRpc(url: string): boolean {
-  // Alchemy browser CORS is opt-in; avoid hard failures by default.
-  if ((/(^|\/\/)base-mainnet\.g\.alchemy\.com/i.test(url) || /\.g\.alchemy\.com\//i.test(url))) return true
-  // CDP RPC URLs are not meant for direct browser fetch (often CORS/405).
-  if (/^https:\/\/api\.developer\.coinbase\.com\/rpc\/v1\/base\//i.test(url)) return true
-  return false
-}
-
 const BASE_RPC_URL = (() => {
   if (!isValidRpcUrl(BASE_RPC_URL_RAW)) return ''
-  if (IS_BROWSER && isCorsRestrictedRpc(BASE_RPC_URL_RAW)) return ''
+  if (IS_BROWSER && isBrowserRestrictedBaseRpc(BASE_RPC_URL_RAW)) return ''
   return BASE_RPC_URL_RAW
 })()
-const BASE_RPC_PROXY = IS_BROWSER ? '/api/rpc?chain=base' : ''
+const BASE_RPC_PROXY = IS_BROWSER ? BASE_RPC_PROXY_PATH : ''
 const MAINNET_RPC_PROXY = IS_BROWSER ? '/api/rpc?chain=mainnet' : ''
 const ARBITRUM_RPC_PROXY = IS_BROWSER ? '/api/rpc?chain=arbitrum' : ''
 const OPTIMISM_RPC_PROXY = IS_BROWSER ? '/api/rpc?chain=optimism' : ''
@@ -137,7 +130,7 @@ const BASE_READ_RPC_URLS = uniqueNonEmptyStrings(
         ]),
   ].filter((url) => {
     if (!url) return false
-    return !(IS_BROWSER && isCorsRestrictedRpc(url))
+    return !(IS_BROWSER && isBrowserRestrictedBaseRpc(url))
   }),
 )
 

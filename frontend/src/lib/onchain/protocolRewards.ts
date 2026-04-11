@@ -1,6 +1,7 @@
 import { Address, createPublicClient, http } from 'viem'
 import { base } from 'viem/chains'
 import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/apiEnvelope'
+import { getBrowserBaseReadRpcUrl } from '@/lib/baseReadRpcPolicy'
 
 const PROTOCOL_REWARDS_ADDRESS = `0x${'7777777F279eba3d3Ad8F4E708545291A6fDBA8B'}` as Address
 
@@ -10,11 +11,6 @@ const BASE_RPC_RAW =
   ''
 
 const IS_BROWSER = typeof window !== 'undefined'
-
-function isCorsRestrictedRpc(url: string): boolean {
-  // Alchemy browser CORS is opt-in; avoid hard failures by default.
-  return /(^|\/\/)base-mainnet\.g\.alchemy\.com/i.test(url) || /\.g\.alchemy\.com\//i.test(url)
-}
 
 const protocolRewardsAbi = [
   {
@@ -27,11 +23,8 @@ const protocolRewardsAbi = [
 ] as const
 
 function getBaseRpcUrl(): string {
-  // Avoid CORS-restricted RPCs in the browser. Prefer the same-origin proxy when needed.
-  if (IS_BROWSER) {
-    if (BASE_RPC_RAW && !isCorsRestrictedRpc(BASE_RPC_RAW)) return BASE_RPC_RAW
-    return '/api/rpc?chain=base'
-  }
+  // Browser reads should stay on explicitly browser-safe RPCs or use our proxy.
+  if (IS_BROWSER) return getBrowserBaseReadRpcUrl(BASE_RPC_RAW)
   if (BASE_RPC_RAW) return BASE_RPC_RAW
   return 'https://base-mainnet.public.blastapi.io'
 }

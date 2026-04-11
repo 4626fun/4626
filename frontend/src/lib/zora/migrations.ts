@@ -8,6 +8,7 @@
 import { createPublicClient, http } from 'viem'
 import { decodeAbiParameters, isAddress, parseAbiParameters } from 'viem'
 import { base } from 'viem/chains'
+import { getBrowserBaseReadRpcUrl } from '@/lib/baseReadRpcPolicy'
 
 // LiquidityMigrated event signature
 // event LiquidityMigrated(PoolKey oldPoolKey, bytes32 indexed oldPoolKeyHash, PoolKey newPoolKey, bytes32 indexed newPoolKeyHash)
@@ -86,11 +87,6 @@ const VERIFY_MIGRATION_IMPLEMENTATION = (() => {
   return true
 })()
 
-function isCorsRestrictedRpc(url: string): boolean {
-  // Alchemy browser CORS is opt-in; avoid hard failures by default.
-  return /(^|\/\/)base-mainnet\.g\.alchemy\.com/i.test(url) || /\.g\.alchemy\.com\//i.test(url)
-}
-
 function normalizeRpcUrl(url: string): string | null {
   const s = String(url || '').trim()
   if (!s) return null
@@ -101,10 +97,7 @@ function normalizeRpcUrl(url: string): string | null {
 
 function getBaseRpcUrl(): string {
   const normalized = normalizeRpcUrl(BASE_RPC_RAW)
-  if (IS_BROWSER) {
-    if (normalized && !isCorsRestrictedRpc(normalized)) return normalized
-    return '/api/rpc?chain=base'
-  }
+  if (IS_BROWSER) return getBrowserBaseReadRpcUrl(normalized ?? '')
   if (normalized) return normalized
   return 'https://base-mainnet.public.blastapi.io'
 }
