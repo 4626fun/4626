@@ -6,28 +6,6 @@
 
 # api/\_handlers/telegram/webhook/constants
 
-## Type Aliases
-
-### TelegramBotMenuCommand
-
-> **TelegramBotMenuCommand** = `object`
-
-Defined in: [server/commands/registry.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L3)
-
-#### Properties
-
-##### command
-
-> **command**: `string`
-
-Defined in: [server/commands/registry.ts:4](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L4)
-
-##### description
-
-> **description**: `string`
-
-Defined in: [server/commands/registry.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/commands/registry.ts#L5)
-
 ## Variables
 
 ### CCA\_AUCTION\_ABI
@@ -80,7 +58,7 @@ Defined in: [api/\_handlers/telegram/webhook/constants.ts:56](https://github.com
 
 ### TELEGRAM\_ADMIN\_BOT\_COMMANDS
 
-> `const` **TELEGRAM\_ADMIN\_BOT\_COMMANDS**: [`TelegramBotMenuCommand`](#telegrambotmenucommand)[]
+> `const` **TELEGRAM\_ADMIN\_BOT\_COMMANDS**: [`TelegramBotMenuCommand`](../../../../server/commands/registry.md#telegrambotmenucommand)[]
 
 Defined in: [api/\_handlers/telegram/webhook/constants.ts:52](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L52)
 
@@ -122,7 +100,7 @@ Defined in: [api/\_handlers/telegram/webhook/constants.ts:21](https://github.com
 
 ### TELEGRAM\_GROUP\_BOT\_COMMANDS
 
-> `const` **TELEGRAM\_GROUP\_BOT\_COMMANDS**: [`TelegramBotMenuCommand`](#telegrambotmenucommand)[]
+> `const` **TELEGRAM\_GROUP\_BOT\_COMMANDS**: [`TelegramBotMenuCommand`](../../../../server/commands/registry.md#telegrambotmenucommand)[]
 
 Defined in: [api/\_handlers/telegram/webhook/constants.ts:50](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L50)
 
@@ -138,7 +116,7 @@ Defined in: [api/\_handlers/telegram/webhook/constants.ts:15](https://github.com
 
 ### TELEGRAM\_PRIVATE\_BOT\_COMMANDS
 
-> `const` **TELEGRAM\_PRIVATE\_BOT\_COMMANDS**: [`TelegramBotMenuCommand`](#telegrambotmenucommand)[]
+> `const` **TELEGRAM\_PRIVATE\_BOT\_COMMANDS**: [`TelegramBotMenuCommand`](../../../../server/commands/registry.md#telegrambotmenucommand)[]
 
 Defined in: [api/\_handlers/telegram/webhook/constants.ts:48](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L48)
 
@@ -165,3 +143,9 @@ Defined in: [api/\_handlers/telegram/webhook/constants.ts:113](https://github.co
 > `const` **ZERO\_ADDRESS**: `"0x0000000000000000000000000000000000000000"`
 
 Defined in: [api/\_handlers/telegram/webhook/constants.ts:11](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/constants.ts#L11)
+
+## References
+
+### TelegramBotMenuCommand
+
+Re-exports [TelegramBotMenuCommand](../../../../server/commands/registry.md#telegrambotmenucommand)

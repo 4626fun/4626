@@ -45,14 +45,14 @@ Adopt **CRE-centric orchestration with deterministic guardrails**:
 
 ## Go/No-Go Assessment
 
-- Smart contract safety: 7/10
-- Accounting integrity: 6/10
-- Redemption fairness: 4/10
-- Liveness robustness: 4/10
-- Oracle/data robustness: 5/10
-- Operator risk: 4/10
-- CRE suitability: 6/10
-- Overall deployability: 5/10
+- Smart contract safety: 7/10 (core invariants are generally sound)
+- Accounting integrity: 6/10 (healthy baseline with stress-path caveats)
+- Redemption fairness: 4/10 (buffer bottlenecks can create unequal exits)
+- Liveness robustness: 4/10 (operations are still heavily offchain-dependent)
+- Oracle/data robustness: 5/10 (policy hardening is still required)
+- Operator risk: 4/10 (signer and process centralization remain material)
+- CRE suitability: 6/10 (good control-plane direction, not fully proven)
+- Overall deployability: 5/10 (pilot-ready, not scale-ready)
 
 **Recommendation:** pilot deployment only (strict TVL cap), no broad-scale deployment until liveness and operator-risk controls are hardened.
 
@@ -64,4 +64,3 @@ Adopt **CRE-centric orchestration with deterministic guardrails**:
 4. Hardened signer custody and governance controls (multisig/timelock/HSM or MPC).
 5. Proven reliability under replay/outage/duplication chaos tests.
 6. User-facing disclosure of realizable-now liquidity vs accounting value.
-

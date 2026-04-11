@@ -5,10 +5,14 @@ on:
     branches: [main, master]
     paths:
       - 'docs/**'
+      - 'README.md'
+      - 'SECURITY.md'
+      - 'deployments/**'
       - 'frontend/docs/**'
       - 'frontend/src/**'
       - 'frontend/api/**'
       - 'frontend/server/**'
+      - 'script/agent-runtime/skills/**'
       - 'frontend/packages/server-core/**'
       - 'frontend/package.json'
       - 'frontend/typedoc.json'
@@ -25,10 +29,14 @@ on:
     branches: [main, master]
     paths:
       - 'docs/**'
+      - 'README.md'
+      - 'SECURITY.md'
+      - 'deployments/**'
       - 'frontend/docs/**'
       - 'frontend/src/**'
       - 'frontend/api/**'
       - 'frontend/server/**'
+      - 'script/agent-runtime/skills/**'
       - 'frontend/packages/server-core/**'
       - 'frontend/package.json'
       - 'frontend/typedoc.json'
@@ -80,6 +88,16 @@ jobs:
         if: steps.detect.outputs.docs_sensitive == 'true'
         run: node apps/docs-site/scripts/check-doc-links.mjs
 
+      - name: Verify docs source coverage
+        if: steps.detect.outputs.docs_sensitive == 'true'
+        run: node apps/docs-site/scripts/check-docs-source-coverage.mjs
+
+      - name: Audit docs hygiene (staleness gate)
+        if: steps.detect.outputs.docs_sensitive == 'true'
+        run: |
+          node apps/docs-site/scripts/audit-docs-hygiene.mjs --json > /tmp/docs-hygiene.json
+          node -e "const fs=require('node:fs'); const r=JSON.parse(fs.readFileSync('/tmp/docs-hygiene.json','utf8')); console.log('[docs] duplicate paragraph groups:', r.duplicateParagraphGroupCount); console.log('[docs] stale files:', r.staleFileCount); if (r.staleFileCount > 0) process.exit(1);"
+
       - name: Install root dependencies
         if: steps.detect.outputs.docs_sensitive == 'true'
         run: pnpm install --frozen-lockfile
@@ -117,3 +135,6 @@ jobs:
           echo "- Generated docs touched: ${{ steps.detect.outputs.generated_docs_touched || 'false' }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Docs tooling touched: ${{ steps.detect.outputs.docs_tooling_touched || 'false' }}" >> "$GITHUB_STEP_SUMMARY"
           echo "- Contract docs sensitive: ${{ steps.detect.outputs.contract_docs_sensitive || 'false' }}" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f /tmp/docs-hygiene.json ]; then
+            node -e "const fs=require('node:fs'); const r=JSON.parse(fs.readFileSync('/tmp/docs-hygiene.json','utf8')); console.log('- Duplicate paragraph groups: ' + r.duplicateParagraphGroupCount); console.log('- Stale docs (> ' + r.staleThresholdDays + 'd): ' + r.staleFileCount);" >> "$GITHUB_STEP_SUMMARY"
+          fi

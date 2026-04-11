@@ -10,7 +10,7 @@
 
 ### WorkspaceAccessContext
 
-> **WorkspaceAccessContext** = `Awaited`\<`ReturnType`\<*typeof* `requireWorkspacePermission`\>\> *extends* infer TResult ? `TResult` *extends* `object` ? `TResult` : `never` : `never`
+> **WorkspaceAccessContext** = `Awaited`\<`ReturnType`\<*typeof* [`requireWorkspacePermission`](../../../../server/_lib/workspace/auth.md#requireworkspacepermission)\>\> *extends* infer TResult ? `TResult` *extends* `object` ? `TResult` : `never` : `never`
 
 Defined in: [api/\_handlers/v1/workspace/\_shared.ts:6](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/workspace/_shared.ts#L6)
 
@@ -98,7 +98,7 @@ Defined in: [api/\_handlers/v1/workspace/\_shared.ts:25](https://github.com/wena
 
 ### requireWorkspaceAccess()
 
-> **requireWorkspaceAccess**(`params`): `Promise`\<\{ `context`: \{ \}; `ok`: `true`; \} \| \{ `error`: `string`; `ok`: `false`; `status`: `number`; \}\>
+> **requireWorkspaceAccess**(`params`): `Promise`\<\{ `context`: \{ `activeOwnerWalletAddress`: `` `0x${string}` `` \| `null`; `canonicalSmartWalletAddress`: `` `0x${string}` `` \| `null`; `ok`: `true`; `principalAddress`: `` `0x${string}` ``; `profileId`: `number` \| `null`; `role`: [`WorkspaceRole`](../../../../server/_lib/workspace/auth.md#workspacerole); `signerRole`: `"canonical_smart_wallet"` \| `"active_owner_wallet"` \| `null`; `vault`: [`KeeprVaultRow`](../../../../server/_lib/keeprRegistry.md#keeprvaultrow); \}; `ok`: `true`; \} \| \{ `error`: `string`; `ok`: `false`; `status`: `number`; \}\>
 
 Defined in: [api/\_handlers/v1/workspace/\_shared.ts:41](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/workspace/_shared.ts#L41)
 
@@ -108,7 +108,7 @@ Defined in: [api/\_handlers/v1/workspace/\_shared.ts:41](https://github.com/wena
 
 ###### permission
 
-`WorkspacePermission`
+[`WorkspacePermission`](../../../../server/_lib/workspace/auth.md#workspacepermission)
 
 ###### req
 
@@ -120,4 +120,4 @@ Defined in: [api/\_handlers/v1/workspace/\_shared.ts:41](https://github.com/wena
 
 #### Returns
 
-`Promise`\<\{ `context`: \{ \}; `ok`: `true`; \} \| \{ `error`: `string`; `ok`: `false`; `status`: `number`; \}\>
+`Promise`\<\{ `context`: \{ `activeOwnerWalletAddress`: `` `0x${string}` `` \| `null`; `canonicalSmartWalletAddress`: `` `0x${string}` `` \| `null`; `ok`: `true`; `principalAddress`: `` `0x${string}` ``; `profileId`: `number` \| `null`; `role`: [`WorkspaceRole`](../../../../server/_lib/workspace/auth.md#workspacerole); `signerRole`: `"canonical_smart_wallet"` \| `"active_owner_wallet"` \| `null`; `vault`: [`KeeprVaultRow`](../../../../server/_lib/keeprRegistry.md#keeprvaultrow); \}; `ok`: `true`; \} \| \{ `error`: `string`; `ok`: `false`; `status`: `number`; \}\>

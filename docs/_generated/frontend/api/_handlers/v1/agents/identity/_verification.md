@@ -60,7 +60,7 @@ Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:174](https://gi
 
 ##### endpoint
 
-> **endpoint**: `Awaited`\<`ReturnType`\<*typeof* `probeEndpoint`\>\>
+> **endpoint**: `Awaited`\<`ReturnType`\<*typeof* [`probeEndpoint`](../../../../../server/_lib/erc8004Review.md#probeendpoint)\>\>
 
 Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:179](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L179)
 
@@ -106,7 +106,7 @@ Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:180](https://gi
 
 ##### onchainRegistration
 
-> **onchainRegistration**: `RegistrationProbe`
+> **onchainRegistration**: [`RegistrationProbe`](../../../../../server/_lib/erc8004Review.md#registrationprobe)
 
 Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:178](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L178)
 

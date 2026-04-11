@@ -134,7 +134,7 @@ Defined in: [api/\_handlers/token/\_image.ts:2703](https://github.com/wenakita/4
 
 ###### renderPreset?
 
-`"standard"` \| `"hero"` \| `"pixel"`
+`"hero"` \| `"standard"` \| `"pixel"`
 
 ###### signatureText?
 
@@ -162,7 +162,7 @@ Defined in: [api/\_handlers/token/\_image.ts:2703](https://github.com/wenakita/4
 
 ##### resolveCreatorTokenArtwork()
 
-> **resolveCreatorTokenArtwork**: (`coinData`) => `CreatorTokenArtwork` \| `null`
+> **resolveCreatorTokenArtwork**: (`coinData`) => [`CreatorTokenArtwork`](../../../server/_lib/creatorTokenArtwork.md#creatortokenartwork) \| `null`
 
 ###### Parameters
 
@@ -172,7 +172,7 @@ Defined in: [api/\_handlers/token/\_image.ts:2703](https://github.com/wenakita/4
 
 ###### Returns
 
-`CreatorTokenArtwork` \| `null`
+[`CreatorTokenArtwork`](../../../server/_lib/creatorTokenArtwork.md#creatortokenartwork) \| `null`
 
 ##### resolveHeroCutoutLoadPolicy()
 

@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useState } from 'react'
-import { CheckCircle2, ChevronDown, ChevronRight, ExternalLink } from 'lucide-react'
+import { CheckCircle2, ExternalLink } from 'lucide-react'
 
 import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { shortValue } from './shared'
@@ -18,7 +18,6 @@ export function AccountSetupWorkspaceView(props: {
   const { context, controller, summaryActions } = props
   // openStep: null = auto (first incomplete), 1/2/3 = manually opened
   const [openStep, setOpenStep] = useState<1 | 2 | 3 | null>(null)
-  const [showStep1b, setShowStep1b] = useState(true)
   const {
     advancedBusy,
     baseAppUrl,
@@ -69,12 +68,12 @@ export function AccountSetupWorkspaceView(props: {
   const zoraStepComplete = zoraLinked
   const walletStepComplete = Boolean(canonicalCswAddress)
   const signingStepComplete = /4626 signing is enabled|already enabled/i.test(notice ?? '')
-  const activeStep = !zoraStepComplete ? 1 : !walletStepComplete ? 2 : 3
 
   if (context === 'waitlist') {
     const stepOneComplete = zoraStepComplete && walletStepComplete
     // Which top-level step is expanded: null = auto
-    const resolvedOpen: 1 | 2 = openStep ?? (stepOneComplete ? 2 : 1)
+    const resolvedOpen: 1 | 2 =
+      openStep === 1 || openStep === 2 ? openStep : stepOneComplete ? 2 : 1
     const primarySigningLabel = connectedOwnerReady ? 'Approve signing access' : 'Connect owner wallet'
 
     const goToPrev = () => {
@@ -126,21 +125,13 @@ export function AccountSetupWorkspaceView(props: {
         {/* Heading — single line */}
         <div>
           <h2 className="text-2xl font-semibold tracking-tight text-white">Activate your account</h2>
-          <p className="mt-1 text-sm text-zinc-500">
-            {!zoraStepComplete
-              ? 'Step 1 of 2'
-              : !walletStepComplete
-                ? 'Step 1b of 2'
-                : !signingStepComplete
-                  ? 'Step 2 of 2'
-                  : 'Completed'}
-          </p>
+          <p className="mt-1 text-sm text-zinc-500">{stepTwoStatus === 'done' ? 'Completed' : `Step ${resolvedOpen} of 2`}</p>
         </div>
 
         {/* Accordion steps */}
         <div className="overflow-hidden rounded-[13px] border border-white/[0.06]">
 
-          {/* ── Step 1 — Zora + wallet sync (1b) ── */}
+          {/* ── Step 1 — Zora + wallet sync ── */}
           {(() => {
             const s = stepOneStatus
             const isOpen = s === 'active'
@@ -174,18 +165,34 @@ export function AccountSetupWorkspaceView(props: {
                           <ExternalLink className="h-3 w-3" />
                         </a>
                       ) : null}
-                      <button
-                        type="button"
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          setOpenStep(1)
-                          setShowStep1b((prev) => !prev)
-                        }}
-                        className="mt-1.5 inline-flex items-center gap-1 rounded-md border border-brand-primary/25 bg-brand-primary/10 px-2 py-0.5 text-[11px] font-medium text-brand-300 hover:bg-brand-primary/15"
-                      >
-                        {showStep1b ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                        Step 1b
-                      </button>
+                      {addr ? (
+                        <div className="mt-1 flex items-start gap-2">
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation()
+                              copyAddress(addr)
+                            }}
+                            title="Copy address"
+                            className="font-mono text-xs text-zinc-400 hover:text-zinc-200 transition-colors break-all text-left"
+                          >
+                            {addr}
+                          </button>
+                          <a
+                            href={`${BASESCAN_BASE}${addr}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            title="View on Basescan"
+                            onClick={(event) => event.stopPropagation()}
+                            className="shrink-0 text-zinc-500 hover:text-zinc-200 transition-colors"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                          </a>
+                        </div>
+                      ) : null}
+                      <div className="mt-1 text-xs text-zinc-300">
+                        Wallet detection
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
@@ -227,12 +234,11 @@ export function AccountSetupWorkspaceView(props: {
                         Already linked? Refresh
                       </button>
                     </div>
-                    {showStep1b ? (
-                      <div
-                        className="mt-3 rounded-md border border-white/10 bg-black/20 px-3 py-2"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        <div className="text-xs text-zinc-400">Step 1b</div>
+                    <div
+                      className="mt-3 rounded-md border border-white/10 bg-black/20 px-3 py-2"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <div className="text-xs text-zinc-300">Wallet detection</div>
                       <div className="mt-2 flex items-center gap-2 text-[11px] text-zinc-400">
                         <WalletProviderIcon provider="coinbase" size={12} />
                         <span className="truncate">Detect your Coinbase Smart Wallet</span>
@@ -280,7 +286,6 @@ export function AccountSetupWorkspaceView(props: {
                         ) : null}
                       </div>
                     </div>
-                    ) : null}
                   </div>
                 ) : null}
               </div>

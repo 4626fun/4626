@@ -50,7 +50,7 @@ Defined in: [api/\_handlers/telegram/webhook/parsers/trade.ts:4](https://github.
 
 ### parseTradeCallbackData()
 
-> **parseTradeCallbackData**(`rawData`): \{ `kind`: `"decline"` \| `"accept"`; `token`: `string`; \} \| \{ `actionType`: `"buy"` \| `"sell"` \| `"bid"`; `kind`: `"edit"`; \} \| `null`
+> **parseTradeCallbackData**(`rawData`): \{ `kind`: `"accept"` \| `"decline"`; `token`: `string`; \} \| \{ `actionType`: `"buy"` \| `"sell"` \| `"bid"`; `kind`: `"edit"`; \} \| `null`
 
 Defined in: [api/\_handlers/telegram/webhook/parsers/trade.ts:110](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/trade.ts#L110)
 
@@ -62,7 +62,7 @@ Defined in: [api/\_handlers/telegram/webhook/parsers/trade.ts:110](https://githu
 
 #### Returns
 
-\{ `kind`: `"decline"` \| `"accept"`; `token`: `string`; \} \| \{ `actionType`: `"buy"` \| `"sell"` \| `"bid"`; `kind`: `"edit"`; \} \| `null`
+\{ `kind`: `"accept"` \| `"decline"`; `token`: `string`; \} \| \{ `actionType`: `"buy"` \| `"sell"` \| `"bid"`; `kind`: `"edit"`; \} \| `null`
 
 ***
 

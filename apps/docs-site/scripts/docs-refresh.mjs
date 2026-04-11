@@ -116,6 +116,10 @@ if (!skipContractDocs) {
 } else {
   console.log('\n[docs] Skip contract API docs (frontend/docs-site only)');
 }
+if (shouldCheck) {
+  run('node', ['apps/docs-site/scripts/check-docs-source-coverage.mjs'], 'Verify docs source coverage');
+  run('node', ['apps/docs-site/scripts/audit-docs-hygiene.mjs', '--strict-stale'], 'Audit docs hygiene (staleness gate)');
+}
 await normalizeGeneratedSourceLinks('docs/_generated/frontend');
 if (!skipContractDocs) {
   await normalizeGeneratedSourceLinks('docs/_generated/contracts');

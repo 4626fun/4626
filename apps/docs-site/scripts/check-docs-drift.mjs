@@ -8,6 +8,9 @@ const outputJson = args.has('--json');
 const outputGithub = args.has('--github-output');
 
 const exactMatches = new Set([
+  'README.md',
+  'SECURITY.md',
+  'deployments/README.md',
   'foundry.toml',
   'package.json',
   'frontend/package.json',
@@ -20,10 +23,12 @@ const exactMatches = new Set([
 
 const docsSensitivePrefixes = [
   'docs/',
+  'deployments/',
   'frontend/docs/',
   'frontend/src/',
   'frontend/api/',
   'frontend/server/',
+  'script/agent-runtime/skills/',
   'apps/docs-site/',
   '.github/workflows/',
   'cre/',
@@ -42,9 +47,16 @@ const contractDocsExactMatches = new Set([
 
 const manualDocsPrefixes = [
   'docs/',
+  'deployments/',
+  'script/agent-runtime/skills/',
   'frontend/docs/',
   'cre/',
 ];
+
+const manualDocsExactMatches = new Set([
+  'README.md',
+  'SECURITY.md',
+]);
 
 const generatedDocsPrefixes = [
   'docs/_generated/',
@@ -102,7 +114,7 @@ function matches(path, prefixes, exact = exactMatches) {
 }
 
 function isManualDoc(path) {
-  return manualDocsPrefixes.some((prefix) => path.startsWith(prefix))
+  return (manualDocsExactMatches.has(path) || manualDocsPrefixes.some((prefix) => path.startsWith(prefix)))
     && !generatedDocsPrefixes.some((prefix) => path.startsWith(prefix));
 }
 

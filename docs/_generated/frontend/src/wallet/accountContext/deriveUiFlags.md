@@ -20,7 +20,7 @@ Defined in: [src/wallet/accountContext/deriveUiFlags.ts:3](https://github.com/we
 
 ###### activeAccountType
 
-`"EOA"` \| `"SMART_WALLET"` \| `"UNKNOWN"`
+`"UNKNOWN"` \| `"EOA"` \| `"SMART_WALLET"`
 
 ###### canUseSmartWalletMode
 

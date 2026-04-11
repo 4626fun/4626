@@ -1,12 +1,9 @@
 {
   "$schema": "https://typedoc.org/schema.json",
   "entryPoints": [
-    "src/lib",
-    "src/config",
-    "src/wallet",
-    "src/types",
+    "src",
     "api",
-    "server/auth"
+    "server"
   ],
   "entryPointStrategy": "expand",
   "tsconfig": "./tsconfig.docs.json",
@@ -60,20 +57,8 @@
     "**/*.test.ts",
     "**/*.test.tsx",
     "**/__tests__/**",
-    "src/components/**",
-    "src/hooks/**",
-    "src/pages/**",
-    "src/App.tsx",
     "src/main.tsx",
-    "src/ProtectedApp.tsx",
-    "src/RootRouter.tsx",
-    "src/web3/**",
-    "src/vite-env.d.ts",
-    "server/_lib/**",
-    "server/agent/**",
-    "server/keepr/**",
-    "server/uniswap/**",
-    "server/zora/**"
+    "src/vite-env.d.ts"
   ],
   "blockTags": [
     "@defaultValue",

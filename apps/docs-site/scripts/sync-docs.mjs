@@ -1,12 +1,15 @@
 /**
  * Docs Sync Script - Multi-Source Pipeline
  * 
- * Merges documentation from five sources:
+ * Merges documentation from multiple first-party sources:
  * 1. docs/              - Manual documentation (source of truth)
  * 2. docs/_generated/   - Auto-generated API docs (forge doc, typedoc)
  * 3. cre/               - CRE automation workflows (README + docs)
  * 4. frontend/docs/     - Frontend design docs & guides
  * 5. frontend/README.md - Frontend overview
+ * 6. repo root docs      - Root README/security/deployment docs
+ * 7. agent-runtime skills - Internal automation skills docs
+ * 8. service readmes     - Runtime/provisioner operational READMEs
  * 
  * Output: apps/docs-site/docs/ (never edit directly)
  */
@@ -14,6 +17,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
+import { execFileSync } from 'node:child_process';
 import fg from 'fast-glob';
 import matter from 'gray-matter';
 
@@ -72,6 +76,27 @@ const SOURCES = {
     ],
     label: 'Frontend docs',
   },
+  rootMeta: {
+    dir: REPO_ROOT,
+    destPrefix: 'reference/repo',
+    include: ['README.md', 'SECURITY.md', 'deployments/README.md'],
+    exclude: [],
+    label: 'Repository docs',
+  },
+  runtimeSkills: {
+    dir: path.join(REPO_ROOT, 'script/agent-runtime/skills'),
+    destPrefix: 'operations/agent-runtime/skills',
+    include: ['**/SKILL.md'],
+    exclude: [],
+    label: 'Agent runtime skills',
+  },
+  serviceReadmes: {
+    dir: path.join(REPO_ROOT, 'frontend/server'),
+    destPrefix: 'operations/services',
+    include: ['agent/eliza/README.md', 'solana-provisioner/README.md'],
+    exclude: [],
+    label: 'Service READMEs',
+  },
 };
 
 const STRICT_MODE = process.argv.includes('--strict');
@@ -88,8 +113,65 @@ const stats = {
     frontend: 0,
     cre: 0,
     frontendDocs: 0,
+    rootMeta: 0,
+    runtimeSkills: 0,
+    serviceReadmes: 0,
   },
 };
+
+const GIT_DATE_PATHS = [
+  'docs',
+  'frontend/docs',
+  'cre',
+  'script/agent-runtime/skills',
+  'README.md',
+  'SECURITY.md',
+  'deployments/README.md',
+  'frontend/server/agent/eliza/README.md',
+  'frontend/server/solana-provisioner/README.md',
+  'docs/_generated/contracts',
+  'docs/_generated/frontend',
+];
+
+let gitLastUpdatedByPath = new Map();
+
+function normalizeRelPath(filePath) {
+  return filePath.split(path.sep).join('/');
+}
+
+function buildGitLastUpdatedIndex() {
+  const map = new Map();
+  try {
+    const output = execFileSync(
+      'git',
+      ['log', '--format=__COMMIT__%cs', '--name-only', '--', ...GIT_DATE_PATHS],
+      {
+        cwd: REPO_ROOT,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+        maxBuffer: 50 * 1024 * 1024,
+      },
+    );
+
+    let currentDate = null;
+    for (const line of output.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      if (trimmed.startsWith('__COMMIT__')) {
+        currentDate = trimmed.replace('__COMMIT__', '');
+        continue;
+      }
+      if (!currentDate) continue;
+      const rel = normalizeRelPath(trimmed);
+      if (!map.has(rel)) {
+        map.set(rel, currentDate);
+      }
+    }
+  } catch {
+    // No-op: keep empty map when git metadata is unavailable.
+  }
+  return map;
+}
 
 /**
  * Returns true when targetPath stays inside baseDir.
@@ -170,7 +252,7 @@ function fixGeneratedLinks(content, sourceType) {
 /**
  * Normalize frontmatter for a markdown file
  */
-function normalizeFrontmatter(content, relativePath, sidebarPosition, sourceType) {
+function normalizeFrontmatter(content, relativePath, sidebarPosition, sourceType, sourceMetadata) {
   const parsed = matter(content);
   const filename = path.basename(relativePath);
   
@@ -184,6 +266,10 @@ function normalizeFrontmatter(content, relativePath, sidebarPosition, sourceType
   if (parsed.data.sidebar_position === undefined) {
     parsed.data.sidebar_position = sidebarPosition;
   }
+
+  if (sourceMetadata?.lastUpdated) {
+    parsed.data.last_updated = sourceMetadata.lastUpdated;
+  }
   
   // Add source label for API docs
   if (sourceType === 'contracts' || sourceType === 'frontend') {
@@ -191,8 +277,12 @@ function normalizeFrontmatter(content, relativePath, sidebarPosition, sourceType
   }
 
   // Mark workspace-sourced docs
-  if (sourceType === 'cre' || sourceType === 'frontendDocs') {
-    parsed.data.synced_from = sourceType === 'cre' ? 'cre/' : 'frontend/';
+  if (sourceType === 'cre' || sourceType === 'frontendDocs' || sourceType === 'rootMeta' || sourceType === 'runtimeSkills' || sourceType === 'serviceReadmes') {
+    if (sourceType === 'cre') parsed.data.synced_from = 'cre/';
+    if (sourceType === 'frontendDocs') parsed.data.synced_from = 'frontend/';
+    if (sourceType === 'rootMeta') parsed.data.synced_from = 'repo-root';
+    if (sourceType === 'runtimeSkills') parsed.data.synced_from = 'script/agent-runtime/skills/';
+    if (sourceType === 'serviceReadmes') parsed.data.synced_from = 'frontend/server/';
   }
   
   // Fix broken links in generated docs
@@ -236,6 +326,16 @@ const RENAME_MAP = {
   frontendDocs: {
     'README.md': 'overview.md',
   },
+  rootMeta: {
+    'README.md': 'index.md',
+    'SECURITY.md': 'security.md',
+  },
+  runtimeSkills: {
+    'SKILL.md': 'index.md',
+  },
+  serviceReadmes: {
+    'README.md': 'index.md',
+  },
 };
 
 /**
@@ -257,8 +357,8 @@ function applyRename(file, sourceKey) {
 /**
  * Get all markdown files from a source
  */
-async function getSourceFiles(sourceDir, excludePatterns) {
-  const files = await fg(['**/*.md', '**/*.mdx'], {
+async function getSourceFiles(sourceDir, includePatterns, excludePatterns) {
+  const files = await fg(includePatterns && includePatterns.length > 0 ? includePatterns : ['**/*.md', '**/*.mdx'], {
     cwd: sourceDir,
     ignore: [
       ...excludePatterns,
@@ -295,7 +395,7 @@ async function processSource(sourceKey, options = {}) {
     return;
   }
   
-  const files = await getSourceFiles(source.dir, source.exclude);
+  const files = await getSourceFiles(source.dir, source.include, source.exclude);
   
   if (files.length === 0) {
     stats.warnings.push(`${source.label}: No markdown files found`);
@@ -330,9 +430,13 @@ async function processSource(sourceKey, options = {}) {
       const dir = path.dirname(file);
       const filesInDir = filesByDir.get(dir);
       const position = filesInDir.indexOf(file) + 1;
+      const relSourcePath = normalizeRelPath(path.relative(REPO_ROOT, sourcePath));
+      const sourceMetadata = {
+        lastUpdated: gitLastUpdatedByPath.get(relSourcePath) ?? null,
+      };
       
       // Normalize frontmatter
-      const processed = normalizeFrontmatter(content, file, position, sourceKey);
+      const processed = normalizeFrontmatter(content, file, position, sourceKey, sourceMetadata);
       
       // Create destination directory
       await fs.mkdir(path.dirname(destPath), { recursive: true });
@@ -487,6 +591,8 @@ async function sync() {
   console.log('\n════════════════════════════════════════════════════════════');
   console.log('📚 Multi-Source Documentation Sync');
   console.log('════════════════════════════════════════════════════════════');
+
+  gitLastUpdatedByPath = buildGitLastUpdatedIndex();
   
   const manualSourceAvailable = await sourceExists(SOURCES.manual.dir);
   const bundledSnapshotAvailable = await sourceExists(path.join(DEST_DIR, 'index.md'));
@@ -520,6 +626,9 @@ async function sync() {
   console.log(`   Frontend API:    ${stats.bySource.frontend}`);
   console.log(`   CRE workflows:   ${stats.bySource.cre}`);
   console.log(`   Frontend docs:   ${stats.bySource.frontendDocs}`);
+  console.log(`   Repository docs: ${stats.bySource.rootMeta}`);
+  console.log(`   Runtime skills:  ${stats.bySource.runtimeSkills}`);
+  console.log(`   Service READMEs: ${stats.bySource.serviceReadmes}`);
   console.log(`   ─────────────────────────`);
   console.log(`   Total copied:    ${stats.copied}`);
   console.log(`   Errors:          ${stats.errors.length}`);
