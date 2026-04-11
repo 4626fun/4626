@@ -53,6 +53,7 @@
     "solana-mint:mine": "tsx scripts/mine-solana-mint-vanity.ts",
     "csw:link-owner": "tsx scripts/link-canonical-csw-owner.ts",
     "csw:owner-link:backfill": "tsx scripts/csw-owner-link-backfill.ts",
+    "holders:telegram-map": "tsx scripts/export-share-token-telegram-map.ts",
     "ajna:admin:backfill:safe": "tsx scripts/ops/ajna-admin-backfill-safe.ts",
     "batcher:solana:config:safe": "tsx scripts/ops/propose-batcher-solana-config-safe.ts",
     "privy:user:migrate": "tsx scripts/migrate-privy-user.ts",

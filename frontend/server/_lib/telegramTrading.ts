@@ -88,6 +88,8 @@ export type TelegramHolderRoomRecheckRow = {
   vaultAddress: string
   roomChatId: string
   shareTokenAddress: string
+  ownerVerified: boolean
+  linkStatus: string | null
   minSharesRaw: string
   graceHours: number
   enabled: boolean
@@ -2611,10 +2613,15 @@ export async function listHolderRoomMembersNeedingRecheck(params: {
       m.last_eligible_at,
       m.grace_until,
       m.last_checked_at,
+      COALESCE(l.owner_verified, false) AS owner_verified,
+      NULLIF(l.link_status, '') AS link_status,
       NULLIF(LOWER(k.share_token_address), '') AS share_token_address
     FROM telegram_holder_room_members m
     INNER JOIN telegram_holder_room_policies p
       ON p.room_chat_id = m.room_chat_id
+    LEFT JOIN telegram_user_links l
+      ON l.telegram_user_id = m.telegram_user_id
+      AND LOWER(COALESCE(l.canonical_csw_address, '')) = LOWER(COALESCE(m.canonical_csw_address, ''))
     LEFT JOIN keepr_vaults k
       ON LOWER(k.vault_address) = p.vault_address
     WHERE p.enabled = true
@@ -2628,6 +2635,8 @@ export async function listHolderRoomMembersNeedingRecheck(params: {
     vaultAddress: normalizeAddress(row.vault_address),
     roomChatId: asTrimmed(row.room_chat_id),
     shareTokenAddress: normalizeAddress(row.share_token_address),
+    ownerVerified: row.owner_verified === true,
+    linkStatus: asTrimmed(row.link_status) || null,
     minSharesRaw: normalizeRawAmount(row.min_shares_raw) || '1',
     graceHours: parseGraceHours(row.grace_hours, 24),
     enabled: Boolean(row.enabled),

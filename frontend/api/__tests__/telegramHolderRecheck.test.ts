@@ -76,6 +76,8 @@ describe('telegram holder recheck endpoint', () => {
         enabled: true,
         telegramUserId: '99',
         canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        ownerVerified: true,
+        linkStatus: 'active',
         status: 'active',
         lastEligibleAt: null,
         graceUntil: null,
@@ -112,6 +114,49 @@ describe('telegram holder recheck endpoint', () => {
     expect(res.body?.data?.graced).toBe(1)
   })
 
+  it('removes holder-room member when Telegram link is no longer owner-verified', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_holder-recheck.ts')
+    listHolderRoomMembersNeedingRecheckMock.mockResolvedValueOnce([
+      {
+        chatId: '-100123',
+        vaultAddress: '0x1111111111111111111111111111111111111111',
+        roomChatId: '-100555',
+        shareTokenAddress: '0x2222222222222222222222222222222222222222',
+        minSharesRaw: '1000',
+        graceHours: 24,
+        enabled: true,
+        telegramUserId: '99',
+        canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        ownerVerified: false,
+        linkStatus: 'active',
+        status: 'active',
+        lastEligibleAt: '2026-03-12T00:00:00.000Z',
+        graceUntil: null,
+        lastCheckedAt: '2026-03-12T01:00:00.000Z',
+      },
+    ])
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-holder-secret': 'holder-secret' },
+      body: {},
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(checkSharesEligibilityMock).not.toHaveBeenCalled()
+    expect(upsertHolderRoomMemberMock).toHaveBeenCalledTimes(1)
+    const call = upsertHolderRoomMemberMock.mock.calls[0]?.[0] as any
+    expect(call?.status).toBe('removed')
+    expect(typeof call?.removedAt).toBe('string')
+    expect((fetch as any).mock.calls.length).toBe(2)
+    expect(String((fetch as any).mock.calls[0][0])).toContain('/banChatMember')
+    expect(String((fetch as any).mock.calls[1][0])).toContain('/sendMessage')
+    expect(res.body?.data?.removed).toBe(1)
+  })
+
   it('second ineligible check after grace removes member from room', async () => {
     const { default: handler } = await import('../_handlers/telegram/_holder-recheck.ts')
     listHolderRoomMembersNeedingRecheckMock.mockResolvedValueOnce([
@@ -125,6 +170,8 @@ describe('telegram holder recheck endpoint', () => {
         enabled: true,
         telegramUserId: '99',
         canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        ownerVerified: true,
+        linkStatus: 'active',
         status: 'grace',
         lastEligibleAt: '2026-03-12T00:00:00.000Z',
         graceUntil: '2026-03-12T01:00:00.000Z',
@@ -175,6 +222,8 @@ describe('telegram holder recheck endpoint', () => {
         enabled: true,
         telegramUserId: '99',
         canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        ownerVerified: true,
+        linkStatus: 'active',
         status: 'grace',
         lastEligibleAt: '2026-03-12T00:00:00.000Z',
         graceUntil: '2026-03-12T01:00:00.000Z',
@@ -231,6 +280,8 @@ describe('telegram holder recheck endpoint', () => {
         enabled: true,
         telegramUserId: '99',
         canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        ownerVerified: true,
+        linkStatus: 'active',
         status: 'grace',
         lastEligibleAt: '2026-03-12T00:00:00.000Z',
         graceUntil: '2026-03-14T01:00:00.000Z',
@@ -279,6 +330,8 @@ describe('telegram holder recheck endpoint', () => {
         enabled: true,
         telegramUserId: '99',
         canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        ownerVerified: true,
+        linkStatus: 'active',
         status: 'grace',
         lastEligibleAt: '2026-03-12T00:00:00.000Z',
         graceUntil: '2026-03-12T01:00:00.000Z',
@@ -334,6 +387,8 @@ describe('telegram holder recheck endpoint', () => {
         enabled: true,
         telegramUserId: '99',
         canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        ownerVerified: true,
+        linkStatus: 'active',
         status: 'active',
         lastEligibleAt: '2026-03-12T00:00:00.000Z',
         graceUntil: null,
@@ -368,4 +423,3 @@ describe('telegram holder recheck endpoint', () => {
     expect(res.body?.data?.skipped).toBe(1)
   })
 })
-

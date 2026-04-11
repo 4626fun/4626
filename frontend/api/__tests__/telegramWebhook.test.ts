@@ -3585,6 +3585,92 @@ describe('telegram webhook handler', () => {
     expect(String(payload.text ?? '').toLowerCase()).toContain('link required')
   })
 
+  it('blocks /join when link exists but status is not active', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    getTelegramLinkByUserIdMock.mockResolvedValueOnce({
+      telegramUserId: '99',
+      telegramUsername: 'akita',
+      profileId: 7,
+      privyUserId: 'did:privy:7',
+      canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ownerVerified: true,
+      linkStatus: 'revoked',
+      linkedAt: '2026-03-13T00:00:00.000Z',
+      lastVerifiedAt: '2026-03-13T00:00:00.000Z',
+      revokedAt: '2026-03-14T00:00:00.000Z',
+      failureCount: 0,
+      lastFailureReason: null,
+      unlinkRequestedAt: null,
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 13_1_1,
+        message: {
+          message_id: 17,
+          text: '/join 0x1111111111111111111111111111111111111111',
+          chat: { id: -100123 },
+          from: { id: 99 },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(getHolderRoomPolicyByVaultMock).not.toHaveBeenCalled()
+    expect(checkSharesEligibilityMock).not.toHaveBeenCalled()
+    expect(upsertHolderRoomMemberMock).not.toHaveBeenCalled()
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '').toLowerCase()).toContain('link required')
+  })
+
+  it('blocks /eligibility when owner verification is incomplete', async () => {
+    const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
+    getTelegramLinkByUserIdMock.mockResolvedValueOnce({
+      telegramUserId: '99',
+      telegramUsername: 'akita',
+      profileId: 7,
+      privyUserId: 'did:privy:7',
+      canonicalCswAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      ownerVerified: false,
+      linkStatus: 'active',
+      linkedAt: '2026-03-13T00:00:00.000Z',
+      lastVerifiedAt: '2026-03-13T00:00:00.000Z',
+      revokedAt: null,
+      failureCount: 0,
+      lastFailureReason: null,
+      unlinkRequestedAt: null,
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
+      body: {
+        update_id: 13_1_2,
+        message: {
+          message_id: 17,
+          text: '/eligibility 0x1111111111111111111111111111111111111111',
+          chat: { id: -100123 },
+          from: { id: 99 },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(getHolderRoomPolicyByVaultMock).not.toHaveBeenCalled()
+    expect(checkSharesEligibilityMock).not.toHaveBeenCalled()
+    expect(upsertHolderRoomMemberMock).not.toHaveBeenCalled()
+    const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
+    expect(String(payload.text ?? '').toLowerCase()).toContain('wallet setup pending')
+  })
+
   it('blocks /join when holder threshold is not met', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
     getTelegramLinkByUserIdMock.mockResolvedValue({

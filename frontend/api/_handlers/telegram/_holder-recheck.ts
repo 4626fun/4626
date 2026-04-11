@@ -155,6 +155,15 @@ function buildRemovalText(row: TelegramHolderRoomRecheckRow): string {
   ].join('\n')
 }
 
+function buildLinkRevokedText(row: TelegramHolderRoomRecheckRow): string {
+  return [
+    'Holder room access removed',
+    '',
+    `Member removed from holder room for vault ${row.vaultAddress} because Telegram link is no longer active/verified.`,
+    'Relink your wallet in 4626, then rejoin with /join.',
+  ].join('\n')
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store')
   if (req.method !== 'GET' && req.method !== 'POST') {
@@ -211,12 +220,65 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const nowMs = Date.now()
     const nowIso = new Date(nowMs).toISOString()
     const walletRaw = asTrimmed(row.canonicalCswAddress).toLowerCase()
-    const shareToken = asTrimmed(row.shareTokenAddress).toLowerCase()
-    if (!isAddressLike(walletRaw) || !isAddressLike(shareToken)) {
+    if (!isAddressLike(walletRaw)) {
       skipped += 1
       continue
     }
     const wallet: Address = walletRaw
+
+    const linkIsActive = asTrimmed(row.linkStatus).toLowerCase() === 'active'
+    if (!linkIsActive || row.ownerVerified !== true) {
+      const removalResult = await removeHolderRoomMember({
+        botToken: config.botToken,
+        roomChatId: row.roomChatId,
+        telegramUserId: row.telegramUserId,
+      })
+      if (!removalResult.ok) {
+        await upsertHolderRoomMember({
+          db: db as any,
+          roomChatId: row.roomChatId,
+          telegramUserId: row.telegramUserId,
+          canonicalCswAddress: wallet,
+          status: row.status,
+          lastEligibleAt: row.lastEligibleAt,
+          graceUntil: row.graceUntil,
+          lastCheckedAt: nowIso,
+          removedAt: null,
+        })
+        errors += 1
+        continue
+      }
+
+      await upsertHolderRoomMember({
+        db: db as any,
+        roomChatId: row.roomChatId,
+        telegramUserId: row.telegramUserId,
+        canonicalCswAddress: wallet,
+        status: 'removed',
+        lastEligibleAt: row.lastEligibleAt,
+        graceUntil: row.graceUntil,
+        lastCheckedAt: nowIso,
+        removedAt: nowIso,
+      })
+
+      const noticeResult = await sendHolderRoomWarning({
+        botToken: config.botToken,
+        roomChatId: row.roomChatId,
+        text: buildLinkRevokedText(row),
+      })
+      if (!noticeResult.ok) {
+        errors += 1
+      }
+
+      removed += 1
+      continue
+    }
+
+    const shareToken = asTrimmed(row.shareTokenAddress).toLowerCase()
+    if (!isAddressLike(shareToken)) {
+      skipped += 1
+      continue
+    }
 
     const minShares = toPositiveBigIntOrDefault(row.minSharesRaw, 1n)
     const eligibility = await checkSharesEligibility({
