@@ -324,6 +324,7 @@
 - [src/lib/baseAppInvite](src/lib/baseAppInvite.md)
 - [src/lib/baseBuilderCodes](src/lib/baseBuilderCodes.md)
 - [src/lib/basename-api](src/lib/basename-api.md)
+- [src/lib/baseReadRpcPolicy](src/lib/baseReadRpcPolicy.md)
 - [src/lib/cca/marketFloor](src/lib/cca/marketFloor.md)
 - [src/lib/cca/q96](src/lib/cca/q96.md)
 - [src/lib/creator-coin-resolver](src/lib/creator-coin-resolver.md)

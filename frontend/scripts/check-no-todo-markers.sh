@@ -13,11 +13,6 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-if ! command -v rg >/dev/null 2>&1; then
-  echo "check-no-todo-markers.sh: ripgrep (rg) is required" >&2
-  exit 2
-fi
-
 PATHS=(frontend/src frontend/api frontend/server contracts programs cre docs apps/docs-site .cursor)
 EXISTING=()
 for p in "${PATHS[@]}"; do
@@ -29,12 +24,22 @@ GLOBS=(--glob '!**/node_modules/**' --glob '!**/.git/**')
 
 # PCRE2: line-start comment styles, inline markers, markdown "To do" headings (case-insensitive).
 # Do not use (?x): in PCRE2 extended mode, # starts a comment and would break # headings / # line comments.
-PATTERN='(?mi)(^\s*//+\s*(TODO|FIXME)\b|^\s*#\s*(TODO|FIXME)\b|^\s*\*\s*(TODO|FIXME)\b|^\s*/\*\s*(TODO|FIXME)\b|TODO:|FIXME:|^#{1,6}\s+to\s+do\b)'
+PATTERN_RG='(?mi)(^\s*//+\s*(TODO|FIXME)\b|^\s*#\s*(TODO|FIXME)\b|^\s*\*\s*(TODO|FIXME)\b|^\s*/\*\s*(TODO|FIXME)\b|TODO:|FIXME:|^#{1,6}\s+to\s+do\b)'
+PATTERN_GREP='(^[[:space:]]*//+[[:space:]]*(TODO|FIXME)\b|^[[:space:]]*#[[:space:]]*(TODO|FIXME)\b|^[[:space:]]*\*[[:space:]]*(TODO|FIXME)\b|^[[:space:]]*/\*[[:space:]]*(TODO|FIXME)\b|TODO:|FIXME:|^#{1,6}[[:space:]]+to[[:space:]]+do\b)'
 
-set +e
-OUT=$(rg --pcre2 -n -i --color never "$PATTERN" "${EXISTING[@]}" "${GLOBS[@]}" 2>/dev/null)
-CODE=$?
-set -e
+if command -v rg >/dev/null 2>&1; then
+  set +e
+  OUT=$(rg --pcre2 -n -i --color never "$PATTERN_RG" "${EXISTING[@]}" "${GLOBS[@]}" 2>/dev/null)
+  CODE=$?
+  set -e
+else
+  set +e
+  OUT=$(grep -RInE -i --binary-files=without-match \
+    --exclude-dir=node_modules --exclude-dir=.git \
+    "$PATTERN_GREP" "${EXISTING[@]}" 2>/dev/null)
+  CODE=$?
+  set -e
+fi
 
 if [[ "$CODE" -eq 0 ]]; then
   echo "Forbidden TODO/FIXME-style markers in first-party paths:" >&2
@@ -43,7 +48,7 @@ if [[ "$CODE" -eq 0 ]]; then
 fi
 
 if [[ "$CODE" -ne 1 ]]; then
-  echo "check-no-todo-markers.sh: rg exited with code $CODE" >&2
+  echo "check-no-todo-markers.sh: scan command exited with code $CODE" >&2
   exit "$CODE"
 fi
 
