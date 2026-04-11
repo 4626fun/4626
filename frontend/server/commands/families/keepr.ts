@@ -695,6 +695,7 @@ export function formatVaultStatus(v: KeeprVaultRow): string {
     '',
     `• configured: yes`,
     `• vaultAddress: <code>${escapeTelegramHtml(v.vaultAddress)}</code>`,
+    `• shareTokenAddress: <code>${escapeTelegramHtml(String(v.shareTokenAddress ?? 'n/a'))}</code>`,
     `• chainId: <code>${escapeTelegramHtml(String(v.chainId))}</code>`,
     `• groupId: <code>${escapeTelegramHtml(v.groupId)}</code>`,
     `• lensGroupAddress: <code>${escapeTelegramHtml(String(v.lensGroupAddress ?? 'n/a'))}</code>`,
