@@ -39,6 +39,13 @@
     height: 100%;
     overflow: hidden;
   }
+
+  /* Base in-app browser: reduce accidental pull-to-refresh on downward gestures at top. */
+  html.baseapp-scroll-lock,
+  body.baseapp-scroll-lock,
+  body.baseapp-scroll-lock #root {
+    overscroll-behavior-y: none;
+  }
   
   /* Cinematic Typography */
   .headline {

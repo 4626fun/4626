@@ -14,9 +14,33 @@ describe('AppLoadingState', () => {
     expect(heading).toBeTruthy()
     expect(loader).toBeTruthy()
     expect((loader as HTMLElement).compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    expect(screen.getByRole('status').textContent).toMatch(/loading your account session/i)
+    expect(screen.getByRole('status').textContent).toMatch(/loading page content/i)
     expect(loader?.style.color).toBe('rgb(var(--brand-primary))')
     expect(container.querySelector('.app-loading-glow')).toBeNull()
     expect(container.querySelector('.app-loading-pill')).toBeNull()
+    expect(container.firstElementChild?.getAttribute('data-loading-intent')).toBe('page')
+    expect(container.firstElementChild?.getAttribute('data-loading-pattern')).toBe('calm-sweep')
+  })
+
+  it('applies session intent copy and pattern metadata', () => {
+    const { container } = render(<AppLoadingState intent="session" />)
+    const heading = screen.getByRole('heading', { name: /syncing session/i })
+    const status = screen.getByRole('status')
+
+    expect(heading).toBeTruthy()
+    expect(status.textContent).toMatch(/syncing your account session/i)
+    expect(container.firstElementChild?.getAttribute('data-loading-intent')).toBe('session')
+    expect(container.firstElementChild?.getAttribute('data-loading-pattern')).toBe('session-diagonal')
+  })
+
+  it('allows headline and status overrides without changing intent metadata', () => {
+    const { container } = render(
+      <AppLoadingState intent="deploy" labelOverride="Finalizing..." srStatusOverride="Finalizing deployment." />,
+    )
+
+    expect(screen.getByRole('heading', { name: /finalizing/i })).toBeTruthy()
+    expect(screen.getByRole('status').textContent).toMatch(/finalizing deployment/i)
+    expect(container.firstElementChild?.getAttribute('data-loading-intent')).toBe('deploy')
+    expect(container.firstElementChild?.getAttribute('data-loading-pattern')).toBe('staged-pulse')
   })
 })

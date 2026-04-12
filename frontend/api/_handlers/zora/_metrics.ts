@@ -36,9 +36,20 @@ type MetricsResponse = {
   }>
 }
 
-const METRICS_CACHE_TTL_MS = 60 * 1000
-const STALE_REFRESH_BACKOFF_MS = 60 * 1000
-const STALE_REFRESH_ERROR_LOG_THROTTLE_MS = 60 * 1000
+const METRICS_CACHE_TTL_MS = parsePositiveInt(process.env.ZORA_METRICS_CACHE_TTL_MS, 5 * 60 * 1000)
+const STALE_REFRESH_BACKOFF_MS = parsePositiveInt(process.env.ZORA_METRICS_REFRESH_BACKOFF_MS, 60 * 1000)
+const STALE_REFRESH_TIMEOUT_BACKOFF_MS = parsePositiveInt(
+  process.env.ZORA_METRICS_REFRESH_TIMEOUT_BACKOFF_MS,
+  5 * 60 * 1000,
+)
+const STALE_REFRESH_ERROR_LOG_THROTTLE_MS = parsePositiveInt(
+  process.env.ZORA_METRICS_REFRESH_ERROR_LOG_THROTTLE_MS,
+  60 * 1000,
+)
+const SNAPSHOT_WRITE_MIN_INTERVAL_SECONDS = parsePositiveInt(
+  process.env.ZORA_METRICS_SNAPSHOT_MIN_UPDATE_SECONDS,
+  10 * 60,
+)
 
 let metricsCache: { payload: MetricsResponse; cachedAt: number } | null = null
 let refreshPromise: Promise<MetricsResponse> | null = null
@@ -48,6 +59,19 @@ let lastRefreshErrorLoggedAtMs = 0
 
 function parseScope(v: string | null): MetricsScope {
   return v === 'creators' ? 'creators' : 'creators'
+}
+
+function parsePositiveInt(value: string | undefined, fallback: number): number {
+  const n = Number(String(value ?? '').trim())
+  if (!Number.isFinite(n) || n <= 0) return fallback
+  return Math.floor(n)
+}
+
+function isPoolAcquireTimeoutError(err: unknown): boolean {
+  const code = String((err as any)?.code ?? '').trim().toUpperCase()
+  if (code === 'ETIMEDOUT') return true
+  const msg = String((err as any)?.message ?? err ?? '').toLowerCase()
+  return msg.includes('timeout exceeded when trying to connect') || msg.includes('timeout acquiring a client')
 }
 
 function toNumber(v: unknown): number | null {
@@ -117,7 +141,10 @@ function shouldLogRefreshError(signature: string, now: number): boolean {
 
 function noteRefreshFailure(err: unknown): void {
   const now = Date.now()
-  staleRefreshBlockedUntilMs = now + STALE_REFRESH_BACKOFF_MS
+  const backoffMs = isPoolAcquireTimeoutError(err)
+    ? STALE_REFRESH_TIMEOUT_BACKOFF_MS
+    : STALE_REFRESH_BACKOFF_MS
+  staleRefreshBlockedUntilMs = now + backoffMs
   const signature = errorSignature(err)
   if (shouldLogRefreshError(signature, now)) {
     console.error('[zora/metrics] background refresh failed', err)
@@ -231,7 +258,13 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
       creator_coins_market_cap_usd = EXCLUDED.creator_coins_market_cap_usd,
       creator_coins_volume_24h_usd = EXCLUDED.creator_coins_volume_24h_usd,
       creator_coins_fees_24h_usd = EXCLUDED.creator_coins_fees_24h_usd,
-      updated_at = NOW();
+      updated_at = NOW()
+    WHERE
+      creator_metrics_daily_snapshots.creators_total IS DISTINCT FROM EXCLUDED.creators_total
+      OR creator_metrics_daily_snapshots.creator_coins_market_cap_usd IS DISTINCT FROM EXCLUDED.creator_coins_market_cap_usd
+      OR creator_metrics_daily_snapshots.creator_coins_volume_24h_usd IS DISTINCT FROM EXCLUDED.creator_coins_volume_24h_usd
+      OR creator_metrics_daily_snapshots.creator_coins_fees_24h_usd IS DISTINCT FROM EXCLUDED.creator_coins_fees_24h_usd
+      OR creator_metrics_daily_snapshots.updated_at < NOW() - make_interval(secs => ${SNAPSHOT_WRITE_MIN_INTERVAL_SECONDS});
   `
 
   const historyResult = await db.sql`
@@ -243,56 +276,57 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
   const snapshotHistory30d = mapHistoryRows(
     Array.isArray((historyResult as any)?.rows) ? (historyResult as any).rows : [],
   )
-
-  // Bootstrap a non-flat, programmatic 30-day trend when daily snapshots are sparse.
-  // This uses creator coin creation dates + current market-cap state to derive a
-  // cumulative day-by-day series until enough canonical daily snapshots exist.
-  const derivedHistoryResult = await db.sql`
-    WITH bounds AS (
-      SELECT (CURRENT_DATE - INTERVAL '29 days')::date AS start_day
-    ),
-    days AS (
-      SELECT generate_series((SELECT start_day FROM bounds), CURRENT_DATE, INTERVAL '1 day')::date AS day
-    ),
-    base AS (
-      SELECT COALESCE(SUM(market_cap_usd), 0)::NUMERIC AS base_market_cap
-      FROM creator_coins
-      WHERE chain_id = 8453
-        AND market_cap_usd IS NOT NULL
-        AND (created_at IS NULL OR created_at::date < (SELECT start_day FROM bounds))
-    ),
-    by_day AS (
-      SELECT created_at::date AS day, COALESCE(SUM(market_cap_usd), 0)::NUMERIC AS day_market_cap
-      FROM creator_coins
-      WHERE chain_id = 8453
-        AND market_cap_usd IS NOT NULL
-        AND created_at::date >= (SELECT start_day FROM bounds)
-      GROUP BY created_at::date
-    ),
-    series AS (
-      SELECT
-        d.day,
-        (
-          (SELECT base_market_cap FROM base)
-          + COALESCE(
-              SUM(COALESCE(b.day_market_cap, 0)) OVER (
-                ORDER BY d.day
-                ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-              ),
-              0
-            )
-        )::NUMERIC AS creator_coins_market_cap_usd
-      FROM days d
-      LEFT JOIN by_day b ON b.day = d.day
+  let history30d = snapshotHistory30d
+  if (!hasMeaningfulHistory(snapshotHistory30d)) {
+    // Bootstrap a non-flat, programmatic 30-day trend when daily snapshots are sparse.
+    // This uses creator coin creation dates + current market-cap state to derive a
+    // cumulative day-by-day series until enough canonical daily snapshots exist.
+    const derivedHistoryResult = await db.sql`
+      WITH bounds AS (
+        SELECT (CURRENT_DATE - INTERVAL '29 days')::date AS start_day
+      ),
+      days AS (
+        SELECT generate_series((SELECT start_day FROM bounds), CURRENT_DATE, INTERVAL '1 day')::date AS day
+      ),
+      base AS (
+        SELECT COALESCE(SUM(market_cap_usd), 0)::NUMERIC AS base_market_cap
+        FROM creator_coins
+        WHERE chain_id = 8453
+          AND market_cap_usd IS NOT NULL
+          AND (created_at IS NULL OR created_at::date < (SELECT start_day FROM bounds))
+      ),
+      by_day AS (
+        SELECT created_at::date AS day, COALESCE(SUM(market_cap_usd), 0)::NUMERIC AS day_market_cap
+        FROM creator_coins
+        WHERE chain_id = 8453
+          AND market_cap_usd IS NOT NULL
+          AND created_at::date >= (SELECT start_day FROM bounds)
+        GROUP BY created_at::date
+      ),
+      series AS (
+        SELECT
+          d.day,
+          (
+            (SELECT base_market_cap FROM base)
+            + COALESCE(
+                SUM(COALESCE(b.day_market_cap, 0)) OVER (
+                  ORDER BY d.day
+                  ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                ),
+                0
+              )
+          )::NUMERIC AS creator_coins_market_cap_usd
+        FROM days d
+        LEFT JOIN by_day b ON b.day = d.day
+      )
+      SELECT day::text AS day, creator_coins_market_cap_usd
+      FROM series
+      ORDER BY day ASC;
+    `
+    history30d = mapHistoryRows(
+      Array.isArray((derivedHistoryResult as any)?.rows) ? (derivedHistoryResult as any).rows : [],
     )
-    SELECT day::text AS day, creator_coins_market_cap_usd
-    FROM series
-    ORDER BY day ASC;
-  `
-  const derivedHistory30d = mapHistoryRows(
-    Array.isArray((derivedHistoryResult as any)?.rows) ? (derivedHistoryResult as any).rows : [],
-  )
-  const history30d = hasMeaningfulHistory(snapshotHistory30d) ? snapshotHistory30d : derivedHistory30d
+  }
 
   return {
     scope,

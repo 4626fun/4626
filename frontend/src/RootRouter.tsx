@@ -4,6 +4,7 @@ import { Toaster } from 'sonner'
 import { APP_ORIGIN, getHostMode, isCurrentWindowUrl } from '@/lib/host'
 import { isAppOnlyPath } from '@/lib/appOnlyPaths'
 import { AppLoadingState } from '@/components/layout/AppLoadingState'
+import { getLoadingIntentFromPath } from '@/components/layout/appLoadingIntents'
 import { Layout } from '@/components/layout/Layout'
 
 function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof TModule>(
@@ -17,7 +18,9 @@ function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof T
 }
 
 function LazyRouteBoundary(props: { children: ReactNode }) {
-  return <Suspense fallback={<AppLoadingState />}>{props.children}</Suspense>
+  const location = useLocation()
+  const intent = getLoadingIntentFromPath(location.pathname)
+  return <Suspense fallback={<AppLoadingState intent={intent} />}>{props.children}</Suspense>
 }
 
 const Home = lazyNamed(() => import('./pages/Home'), 'Home')
@@ -52,7 +55,7 @@ function StandaloneDocumentRedirect(props: { htmlPath: '/telegram-link.html' }) 
     window.location.replace(`${props.htmlPath}${location.search}${location.hash}`)
   }, [location.hash, location.search, props.htmlPath])
 
-  return <AppLoadingState />
+  return <AppLoadingState intent="redirect" />
 }
 
 function AppHostRedirect(props: { target: string }) {
@@ -62,7 +65,7 @@ function AppHostRedirect(props: { target: string }) {
     window.location.replace(props.target)
   }, [props.target])
 
-  return <AppLoadingState />
+  return <AppLoadingState intent="redirect" />
 }
 
 function MarketingLayout() {

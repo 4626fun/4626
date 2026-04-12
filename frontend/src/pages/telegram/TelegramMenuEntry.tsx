@@ -13,7 +13,7 @@ export function TelegramMenuEntryRoute() {
   }
 
   if (entryStatus === 'checking') {
-    return <AppLoadingState />
+    return <AppLoadingState intent="session" />
   }
 
   return <Navigate to="/" replace />

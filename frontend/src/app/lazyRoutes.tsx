@@ -1,7 +1,8 @@
 import { Suspense, lazy, type ComponentType, type LazyExoticComponent, type ReactNode } from 'react'
-import { Outlet } from 'react-router-dom'
+import { Outlet, useLocation } from 'react-router-dom'
 
 import { AppLoadingState } from '@/components/layout/AppLoadingState'
+import { getLoadingIntentFromPath } from '@/components/layout/appLoadingIntents'
 
 export function lazyNamed<TModule extends Record<string, unknown>, TKey extends keyof TModule>(
   loader: () => Promise<TModule>,
@@ -81,7 +82,9 @@ export const LazyRequireAccepted = lazyNamed(() => import('./accessRuntime'), 'R
 export const LazyRequireAdmin = lazyNamed(() => import('./accessRuntime'), 'RequireAdmin')
 
 export function LazyRouteBoundary(props: { children: ReactNode }) {
-  return <Suspense fallback={<AppLoadingState />}>{props.children}</Suspense>
+  const location = useLocation()
+  const intent = getLoadingIntentFromPath(location.pathname)
+  return <Suspense fallback={<AppLoadingState intent={intent} />}>{props.children}</Suspense>
 }
 
 export type LazyRouteComponent = ComponentType<any> | LazyExoticComponent<ComponentType<any>>

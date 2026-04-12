@@ -174,14 +174,22 @@ describe('GET /api/zora/metrics', () => {
       await new Promise((resolve) => setTimeout(resolve, 0))
       expect(failingSql).toHaveBeenCalledTimes(1)
 
-      // Within backoff window, stale responses should not trigger another DB retry.
-      nowSpy.mockReturnValue(baseNow + 5 * 60 * 1000 + 10_000)
+      // Within timeout-specific backoff window, stale responses should not trigger another DB retry.
+      nowSpy.mockReturnValue(baseNow + 7 * 60 * 1000)
       const staleRes2 = createMockRes()
       await handler(req, staleRes2)
       expect(staleRes2.statusCode).toBe(200)
       await new Promise((resolve) => setTimeout(resolve, 0))
       expect(failingSql).toHaveBeenCalledTimes(1)
-      expect(errorSpy).toHaveBeenCalledTimes(1)
+
+      // After timeout backoff elapses, the next stale request should attempt refresh again.
+      nowSpy.mockReturnValue(baseNow + 10 * 60 * 1000 + 2)
+      const staleRes3 = createMockRes()
+      await handler(req, staleRes3)
+      expect(staleRes3.statusCode).toBe(200)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      expect(failingSql).toHaveBeenCalledTimes(2)
+      expect(errorSpy).toHaveBeenCalledTimes(2)
     } finally {
       nowSpy.mockRestore()
       errorSpy.mockRestore()

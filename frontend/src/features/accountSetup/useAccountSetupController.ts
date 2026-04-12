@@ -11,6 +11,7 @@ import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { extractPrivyWalletsFromUser, useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import { isUnauthorizedCrossAppLinkError, performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
 import { isTelegramMiniAppContext, readPrivyTelegramLaunchParams } from '@/lib/telegramWebApp'
+import { useSiweAuth } from '@/hooks/useSiweAuth'
 import {
   type ApiEnvelope,
   type OwnerDelegationFlags,
@@ -173,6 +174,7 @@ export function useAccountSetupController(params: {
   const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossApp()
   const { connectWallet } = useSafeConnectWallet()
   const { wallet: activePrivyWallet } = useSafeActiveWallet()
+  const siwe = useSiweAuth()
   const publicClient = usePublicClient()
   const { data: walletClient } = useWalletClient()
   const { address: connectedAddress, chainId } = useAccount()
@@ -230,9 +232,22 @@ export function useAccountSetupController(params: {
         .sort((a: any, b: any) => Number(b?.connectedAt ?? 0) - Number(a?.connectedAt ?? 0))[0] ?? null
     )
   }, [activePrivyWallet, privyWallets])
-  const ownerSignerAddress = activeExternalOwnerWallet?.address ?? connectedAddress ?? null
+  const activeExternalOwnerWalletMatchesConnectedAddress = useMemo(() => {
+    if (!activeExternalOwnerWallet?.address || !connectedAddress) return false
+    return activeExternalOwnerWallet.address.toLowerCase() === connectedAddress.toLowerCase()
+  }, [activeExternalOwnerWallet?.address, connectedAddress])
+  const ownerSignerAddress = connectedAddress ?? activeExternalOwnerWallet?.address ?? null
+  const shouldUsePrivyExternalOwnerWallet = Boolean(
+    activeExternalOwnerWallet &&
+      ownerSignerAddress &&
+      (!connectedAddress || activeExternalOwnerWalletMatchesConnectedAddress),
+  )
   const ownerSignerChainId =
-    parseChainId(activeExternalOwnerWallet?.chainId) ?? (typeof chainId === 'number' ? chainId : null)
+    typeof chainId === 'number'
+      ? chainId
+      : !connectedAddress || activeExternalOwnerWalletMatchesConnectedAddress
+        ? parseChainId(activeExternalOwnerWallet?.chainId)
+        : null
   const connectedCanonicalWalletSelected = Boolean(
     canonicalCswAddress &&
       ownerSignerAddress &&
@@ -250,6 +265,19 @@ export function useAccountSetupController(params: {
     },
     [getAccessToken],
   )
+
+  const ensurePaymasterSession = useCallback(async (): Promise<boolean> => {
+    if (siwe.isSignedIn) return true
+    if (typeof siwe.signInWithPrivyToken !== 'function') return false
+    try {
+      const token = await getAccessToken()
+      if (!token) return false
+      const bridged = await siwe.signInWithPrivyToken(token)
+      return Boolean(bridged)
+    } catch {
+      return false
+    }
+  }, [getAccessToken, siwe])
 
   const loadMe = useCallback(
     async (options?: { showSpinner?: boolean }) => {
@@ -736,7 +764,7 @@ export function useAccountSetupController(params: {
       let effectiveChainId = chainId
       let effectiveSwitchChain = switchChainAsync
 
-      if (activeExternalOwnerWallet && ownerSignerAddress) {
+      if (shouldUsePrivyExternalOwnerWallet) {
         const provider = await getPrivyEthereumProvider(activeExternalOwnerWallet)
         if (!provider?.request) {
           throw new Error('Connected owner wallet signer is unavailable. Reconnect the wallet and retry.')
@@ -760,9 +788,26 @@ export function useAccountSetupController(params: {
         switchChainAsync: effectiveSwitchChain,
         authHeaders,
         ownerAddress,
+        signerAddress: ownerSignerAddress,
+        executionMode: connectedCanonicalWalletSelected ? 'canonicalSmartWallet' : 'ownerDirect',
+        canonicalSmartWalletAddress: canonicalCswAddress,
+        publicClient,
+        ensurePaymasterSession,
       })
     },
-    [activeExternalOwnerWallet, authHeaders, chainId, ownerSignerAddress, switchChainAsync, walletClient],
+    [
+      activeExternalOwnerWallet,
+      authHeaders,
+      canonicalCswAddress,
+      chainId,
+      connectedCanonicalWalletSelected,
+      ensurePaymasterSession,
+      ownerSignerAddress,
+      publicClient,
+      shouldUsePrivyExternalOwnerWallet,
+      switchChainAsync,
+      walletClient,
+    ],
   )
 
   const onEnable4626Signing = useCallback(async () => {
@@ -939,8 +984,15 @@ export function useAccountSetupController(params: {
     [params.zoraReturnPath],
   )
   const connectedOwnerReady = connectedOwnerState.value === true
-  const signerClientReady = Boolean(walletClient?.account && typeof walletClient?.sendTransaction === 'function')
-  const privySignerClientReady = Boolean(activeExternalOwnerWallet && ownerSignerAddress)
+  const signerClientReady = Boolean(
+    walletClient?.account &&
+      (typeof walletClient?.sendTransaction === 'function' || typeof (walletClient as any)?.request === 'function'),
+  )
+  const privySignerClientReady = Boolean(
+    activeExternalOwnerWallet &&
+      ownerSignerAddress &&
+      (!connectedAddress || activeExternalOwnerWalletMatchesConnectedAddress),
+  )
   const ownerApprovalReady = connectedOwnerReady && (signerClientReady || privySignerClientReady) && !needsEmbeddedWallet
   const ownerAuthorityState = useMemo(
     () =>
@@ -956,7 +1008,7 @@ export function useAccountSetupController(params: {
   const connectedSignerDetail = ownerApprovalReady
     ? ownerAuthorityState.detail
     : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
-      ? 'Wallet connection is still finishing. Wait for the signer session to hydrate before approving the Base transaction.'
+      ? 'Wallet connection is still finishing. Wait for the signer session to hydrate before submitting the Base smart-wallet approval.'
       : ownerAuthorityState.detail
   const readableCswOwners = useMemo(
     () => cswOwnersState.owners.filter((owner) => owner.ownerAddress),
@@ -986,14 +1038,24 @@ export function useAccountSetupController(params: {
       {
         title: 'Approve on Base',
         description: ownerApprovalReady
-          ? '4626 can now add its embedded owner through one Base transaction.'
+          ? connectedCanonicalWalletSelected
+            ? '4626 can now submit one Base smart-wallet approval to add its embedded owner.'
+            : '4626 can now add its embedded owner through one Base owner transaction.'
           : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
             ? 'Wait for the signer client to finish hydrating, then approve.'
             : 'Approval unlocks after a current owner is connected and verified.',
         state: ownerApprovalReady ? 'complete' : connectedOwnerReady ? 'active' : 'blocked',
       },
     ],
-    [connectedOwnerReady, ownerApprovalReady, ownerAuthorityState.hint, ownerSignerAddress, privySignerClientReady, signerClientReady],
+    [
+      connectedCanonicalWalletSelected,
+      connectedOwnerReady,
+      ownerApprovalReady,
+      ownerAuthorityState.hint,
+      ownerSignerAddress,
+      privySignerClientReady,
+      signerClientReady,
+    ],
   )
   const ownerPrimaryCtaLabel = ownerApprovalReady
     ? 'Approve 4626 on this wallet'

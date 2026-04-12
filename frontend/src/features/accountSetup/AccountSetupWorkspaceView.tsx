@@ -331,7 +331,7 @@ export function AccountSetupWorkspaceView(props: {
                 {isOpen ? (
                   <div className="px-4 pb-4 pl-[52px]">
                     <p className="text-sm leading-relaxed text-zinc-400">
-                      Connect an owner wallet and approve 4626 signing access.
+                      Connect a current owner wallet and approve 4626 signing access.
                       Once complete, the app unlocks immediately.
                     </p>
                     <div className="mt-3 flex flex-wrap gap-2">
@@ -729,7 +729,7 @@ export function AccountSetupWorkspaceView(props: {
                   )}
                   <span className="max-w-xl text-xs leading-relaxed text-zinc-500">
                     {connectedOwnerReady
-                      ? 'Server prepares the transaction. A current CSW owner signs on Base, then 4626 refreshes your account automatically.'
+                      ? 'Server prepares the transaction. If the canonical CSW is selected, 4626 submits one Base smart-wallet approval; otherwise a current owner signs on Base directly. The account refreshes automatically after confirmation.'
                       : 'Connect a current CSW owner first, then approve 4626 signing.'}
                   </span>
                 </div>
