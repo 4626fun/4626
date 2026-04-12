@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLogin, usePrivy } from '@privy-io/react-auth'
 import { AnimatePresence, motion } from 'framer-motion'
 
+import { Logo } from '@/components/brand/Logo'
+import { OrbBorder } from '@/components/brand/OrbBorder'
+import { TextScramble } from '@/components/brand/TextScramble'
 import { apiFetch } from '@/lib/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
@@ -244,36 +247,60 @@ function WaitlistAuthStep(props: {
       ? 'Current round full. Next approvals unlock the next batch.'
       : `Only ${spotsRemaining.toLocaleString()} spots remaining!`
 
+  const stagger = (i: number) => ({
+    initial: { opacity: 0, y: 18 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.55, delay: i * 0.12, ease: [0.25, 1, 0.5, 1] },
+  })
+
   return (
     <motion.div
       key="step-auth"
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
       exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
-      className="relative flex min-h-[340px] items-center justify-center py-8 sm:py-12"
+      transition={{ duration: 0.35, ease: [0.25, 1, 0.5, 1] }}
+      className="relative flex min-h-[420px] items-center justify-center py-10 sm:py-16"
     >
-      {/* ambient glow behind the card */}
+      {/* film grain overlay */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 flex items-center justify-center"
-      >
-        <div className="h-72 w-72 rounded-full bg-brand-primary/20 blur-[90px]" />
-      </div>
+        className="pointer-events-none absolute inset-0 opacity-[0.035] mix-blend-overlay"
+        style={{
+          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+          backgroundSize: '128px 128px',
+        }}
+      />
 
-      {/* open layout — no card border, glow does the work */}
-      <div className="relative z-10 w-full max-w-sm space-y-7 text-center">
-        {/* header */}
-        <div className="space-y-4">
+      {/* ambient glow */}
+      <motion.div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 flex items-center justify-center"
+        animate={{ opacity: [0.14, 0.24, 0.14], scale: [1, 1.06, 1] }}
+        transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
+      >
+        <div className="h-80 w-80 rounded-full bg-brand-primary/25 blur-[100px]" />
+      </motion.div>
+
+      <div className="relative z-10 w-full max-w-sm space-y-8 text-center">
+        {/* logo orb */}
+        <motion.div {...stagger(0)} className="mx-auto flex w-16 h-16 items-center justify-center">
+          <OrbBorder intensity="low" shape="round">
+            <Logo showText={false} width={32} height={32} forceHover />
+          </OrbBorder>
+        </motion.div>
+
+        {/* headline with text scramble */}
+        <motion.div {...stagger(1)} className="space-y-3">
           <p className="bv-kicker">Secure onboarding</p>
           <h2 className="text-[2.6rem] font-light leading-tight tracking-tight text-white">
-            {authUi.title}
+            <TextScramble text={authUi.title} trigger speed={0.6} complexity="simple" />
           </h2>
           <p className="mx-auto max-w-xs text-sm leading-relaxed text-zinc-400">{progressLabel}</p>
-        </div>
+        </motion.div>
 
         {/* CTA */}
-        <div className="space-y-3">
+        <motion.div {...stagger(2)} className="space-y-3">
           <button
             type="button"
             disabled={buttonsDisabled}
@@ -289,11 +316,12 @@ function WaitlistAuthStep(props: {
             )}
           </button>
           <p className="bv-kicker">{urgencyLabel}</p>
-        </div>
+        </motion.div>
 
         {/* error */}
         {error ? (
-          <div
+          <motion.div
+            {...stagger(3)}
             role="alert"
             aria-live="polite"
             className="space-y-3 rounded-xl border border-rose-500/20 bg-rose-500/8 px-4 py-3 text-left text-sm text-rose-300"
@@ -309,7 +337,7 @@ function WaitlistAuthStep(props: {
                 Try existing account sign-in
               </button>
             ) : null}
-          </div>
+          </motion.div>
         ) : null}
       </div>
     </motion.div>
