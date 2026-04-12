@@ -115,6 +115,31 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
+  it('retries canonical user-op once when paymaster proxy returns an internal error', async () => {
+    sendCoinbaseSmartWalletUserOperationMock
+      .mockRejectedValueOnce(new Error('Paymaster rejected this request: paymaster proxy internal error'))
+      .mockResolvedValueOnce({ transactionHash: TX_HASH })
+
+    const result = await sendPreparedOwnerTx({
+      txRequest: TX_REQUEST,
+      walletClient: {
+        account: CANONICAL_CSW,
+        sendTransaction: vi.fn(async () => TX_HASH),
+        request: vi.fn(),
+      },
+      chainId: 8453,
+      authHeaders: async () => ({ Authorization: 'Bearer test' }),
+      signerAddress: CANONICAL_CSW,
+      executionMode: 'canonicalSmartWallet',
+      canonicalSmartWalletAddress: CANONICAL_CSW,
+      publicClient: {},
+      ensurePaymasterSession: async () => true,
+    })
+
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(2)
+    expect(result.txHash).toBe(TX_HASH)
+  })
+
   it('fails early when the paymaster session cannot be established for canonical execution', async () => {
     await expect(
       sendPreparedOwnerTx({
@@ -161,6 +186,32 @@ describe('sendPreparedOwnerTx', () => {
       }),
     ).rejects.toThrow(
       'Wallet could not generate the Coinbase Smart Wallet approval. Retry from the same Base/Zora smart wallet, and reconnect it if the sponsor session has gone stale.',
+    )
+  })
+
+  it('normalizes paymaster proxy internal errors into a user-actionable message', async () => {
+    sendCoinbaseSmartWalletUserOperationMock.mockRejectedValue(
+      new Error('Paymaster rejected this request: paymaster proxy internal error (CDP: Request Arguments...)'),
+    )
+
+    await expect(
+      sendPreparedOwnerTx({
+        txRequest: TX_REQUEST,
+        walletClient: {
+          account: CANONICAL_CSW,
+          sendTransaction: vi.fn(async () => TX_HASH),
+          request: vi.fn(),
+        },
+        chainId: 8453,
+        authHeaders: async () => ({ Authorization: 'Bearer test' }),
+        signerAddress: CANONICAL_CSW,
+        executionMode: 'canonicalSmartWallet',
+        canonicalSmartWalletAddress: CANONICAL_CSW,
+        publicClient: {},
+        ensurePaymasterSession: async () => true,
+      }),
+    ).rejects.toThrow(
+      '4626 could not initialize Base gas sponsorship. Retry in a few seconds. If it persists, use Not you? Switch and reconnect the same Base wallet.',
     )
   })
 

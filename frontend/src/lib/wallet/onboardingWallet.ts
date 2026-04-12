@@ -102,6 +102,16 @@ export function normalizeOwnerApprovalError(error: unknown): Error {
   if (error instanceof Error) {
     const message = String(error.message || '').trim()
     const lower = message.toLowerCase()
+    if (lower.includes('paymaster proxy internal error')) {
+      return new Error(
+        '4626 could not initialize Base gas sponsorship. Retry in a few seconds. If it persists, use Not you? Switch and reconnect the same Base wallet.',
+      )
+    }
+    if (lower.includes('paymaster rejected this request')) {
+      return new Error(
+        'Gas sponsorship was rejected for this approval. Retry in Base app after reconnecting the same wallet session.',
+      )
+    }
     if (
       (lower.includes('error generating transaction') && lower.includes('enough funds')) ||
       lower.includes('insufficient funds')
@@ -187,15 +197,30 @@ export async function sendPreparedOwnerTx(params: {
       }
       const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
       const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-      const result = await sendCoinbaseSmartWalletUserOperation({
-        publicClient: publicClient as any,
-        walletClient: walletClient as any,
-        bundlerUrl,
-        smartWallet: canonicalSmartWalletAddress as `0x${string}`,
-        ownerAddress: signerAddress as `0x${string}`,
-        calls: [{ to: txRequest.to, data: txRequest.data, value: 0n }],
-        version: '1',
-      })
+      const runUserOp = async () =>
+        await sendCoinbaseSmartWalletUserOperation({
+          publicClient: publicClient as any,
+          walletClient: walletClient as any,
+          bundlerUrl,
+          smartWallet: canonicalSmartWalletAddress as `0x${string}`,
+          ownerAddress: signerAddress as `0x${string}`,
+          calls: [{ to: txRequest.to, data: txRequest.data, value: 0n }],
+          version: '1',
+        })
+
+      let result: Awaited<ReturnType<typeof sendCoinbaseSmartWalletUserOperation>>
+      try {
+        result = await runUserOp()
+      } catch (firstError) {
+        const firstMessage =
+          firstError instanceof Error ? firstError.message.toLowerCase() : String(firstError ?? '').toLowerCase()
+        const shouldRetryOnce =
+          firstMessage.includes('paymaster proxy internal error') ||
+          firstMessage.includes('request denied - no_session') ||
+          firstMessage.includes('request denied - not authenticated')
+        if (!shouldRetryOnce) throw firstError
+        result = await runUserOp()
+      }
       txHash = result.transactionHash
     } else {
       if (!walletClient.account || typeof walletClient.sendTransaction !== 'function') {

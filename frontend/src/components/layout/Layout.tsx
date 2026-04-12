@@ -142,7 +142,8 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
     setHideMobileNavForBaseApp(isBaseInAppContext())
   }, [])
 
-  const hideMobileNav = isMobileChatOverlayActive || hideMobileNavForBaseApp
+  const hideMobileNavForMarketingHost = hostMode === 'marketing'
+  const hideMobileNav = isMobileChatOverlayActive || hideMobileNavForBaseApp || hideMobileNavForMarketingHost
 
   useEffect(() => {
     if (typeof document === 'undefined') return
