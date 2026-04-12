@@ -6,6 +6,7 @@ export const waitlistRouteLoaders: ApiRouteLoaders = {
   'leaderboard': () => import('./waitlist/_leaderboard.js'),
   'me': () => import('./waitlist/_me.js'),
   'position': () => import('./waitlist/_position.js'),
+  'stats': () => import('./waitlist/_stats.js'),
 }
 
 export function getWaitlistApiHandler(subpath: string) {

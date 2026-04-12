@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLogin, usePrivy } from '@privy-io/react-auth'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Loader2 } from 'lucide-react'
 
 import { apiFetch } from '@/lib/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
@@ -61,6 +60,12 @@ type WaitlistBootstrapResponse =
   | ({
       requiresPrivyAuth: false
     } & AccountsSummary)
+
+type WaitlistStatsData = {
+  signedUpCount: number
+  capacity: number
+  spotsRemaining: number
+}
 
 const HANDOFF_QUERY_KEY = 'cv_handoff'
 const FLOW_TIMEOUT_MS = 20_000
@@ -209,6 +214,7 @@ function useWaitlistAttemptState() {
 
 function WaitlistAuthStep(props: {
   authUi: WaitlistEmailUi
+  waitlistStats: WaitlistStatsData | null
   busy: boolean
   privyClientStatus: 'disabled' | 'loading' | 'ready'
   error: string | null
@@ -218,6 +224,7 @@ function WaitlistAuthStep(props: {
 }) {
   const {
     authUi,
+    waitlistStats,
     busy,
     privyClientStatus,
     error,
@@ -228,6 +235,14 @@ function WaitlistAuthStep(props: {
 
   const privyReady = privyClientStatus === 'ready'
   const buttonsDisabled = busy || !privyReady
+  const signedUpCount = Math.max(0, Number(waitlistStats?.signedUpCount ?? 0))
+  const capacity = Math.max(0, Number(waitlistStats?.capacity ?? 0))
+  const spotsRemaining = Math.max(0, Number(waitlistStats?.spotsRemaining ?? 0))
+  const progressLabel = `Waitlist progress ${signedUpCount.toLocaleString()} / ${capacity.toLocaleString()}`
+  const urgencyLabel =
+    spotsRemaining <= 0
+      ? 'Current round full. Next approvals unlock the next batch.'
+      : `Only ${spotsRemaining.toLocaleString()} spots remaining!`
 
   return (
     <motion.div
@@ -247,14 +262,14 @@ function WaitlistAuthStep(props: {
       </div>
 
       {/* open layout — no card border, glow does the work */}
-      <div className="relative z-10 w-full max-w-sm space-y-8 text-center">
+      <div className="relative z-10 w-full max-w-sm space-y-7 text-center">
         {/* header */}
-        <div className="space-y-3">
+        <div className="space-y-4">
           <p className="bv-kicker">Secure onboarding</p>
           <h2 className="text-[2.6rem] font-light leading-tight tracking-tight text-white">
             {authUi.title}
           </h2>
-          <p className="mx-auto max-w-xs text-sm leading-relaxed text-zinc-400">{authUi.subtitle}</p>
+          <p className="mx-auto max-w-xs text-sm leading-relaxed text-zinc-400">{progressLabel}</p>
         </div>
 
         {/* CTA */}
@@ -266,17 +281,14 @@ function WaitlistAuthStep(props: {
             className="btn-accent btn-no-icon inline-flex w-full items-center justify-center gap-2 rounded-xl border border-brand-primary/45 bg-linear-to-r from-brand-primary to-brand-hover py-3.5 text-[14px] font-medium text-white shadow-[0_16px_36px_-18px_rgba(0,82,255,0.92)] transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_20px_40px_-16px_rgba(0,82,255,0.95)] disabled:translate-y-0 disabled:opacity-50"
           >
             {busy ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                {authUi.busyLabel}
-              </>
+              <LoadingInline intent="session" size="sm" labelOverride={authUi.busyLabel} />
             ) : !privyReady ? (
               <LoadingInline intent="session" size="sm" labelOverride="Loading secure sign-in..." />
             ) : (
               authUi.ctaLabel
             )}
           </button>
-          <p className="bv-kicker">Email address required</p>
+          <p className="bv-kicker">{urgencyLabel}</p>
         </div>
 
         {/* error */}
@@ -333,6 +345,7 @@ export function WaitlistFlow(props: {
   } = useWaitlistAttemptState()
   const [completionBusy, setCompletionBusy] = useState(false)
   const [account, setAccount] = useState<AccountsSummary | null>(null)
+  const [waitlistStats, setWaitlistStats] = useState<WaitlistStatsData | null>(null)
 
   const authBootstrapAutoAttemptedRef = useRef(false)
   const finalizingAutoRetryCountRef = useRef(0)
@@ -385,6 +398,20 @@ export function WaitlistFlow(props: {
 
   const resetResolvedAccountState = useCallback(() => {
     setAccount(null)
+  }, [])
+
+  const fetchWaitlistStats = useCallback(async () => {
+    try {
+      const response = await apiFetch('/api/waitlist/stats', {
+        method: 'GET',
+        headers: { Accept: 'application/json' },
+      })
+      const payload = (await response.json().catch(() => null)) as ApiEnvelope<WaitlistStatsData> | null
+      if (!response.ok || !payload?.success || !payload.data) return
+      setWaitlistStats(payload.data)
+    } catch {
+      // Keep the last known value if stats refresh fails.
+    }
   }, [])
 
   const runBootstrap = useCallback(
@@ -899,6 +926,14 @@ export function WaitlistFlow(props: {
   ])
 
   useEffect(() => {
+    void fetchWaitlistStats()
+    const intervalId = window.setInterval(() => {
+      void fetchWaitlistStats()
+    }, 30_000)
+    return () => window.clearInterval(intervalId)
+  }, [fetchWaitlistStats])
+
+  useEffect(() => {
     if (typeof window === 'undefined') return
     if (step !== 'auth') return
     if (!busy) return
@@ -1012,6 +1047,7 @@ export function WaitlistFlow(props: {
           <WaitlistAuthStep
             key="auth"
             authUi={authUi}
+            waitlistStats={waitlistStats}
             busy={busy}
             privyClientStatus={privyClientStatus}
             error={error}

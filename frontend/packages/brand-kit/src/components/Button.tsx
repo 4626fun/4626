@@ -4,6 +4,13 @@ function cn(...classes: Array<string | undefined | null | false>): string {
   return classes.filter(Boolean).join(' ')
 }
 
+// Clockwise orbit delay sequence for a 3×3 grid (index order 0..8):
+//   step:  0  1  2   (top row, left → right)
+//          7  4  3   (mid row, left = last, right = 4th)
+//          6  5  4   (bot row, right → left)
+// Each cell's opacity cycles via pixel-wave-loader-cell; only the timing differs.
+const ORBIT_CW_DELAYS = [0, 110, 220, 770, 440, 330, 660, 550, 440] as const
+
 function Spinner(props: { size?: 'sm' | 'md'; className?: string }) {
   const { size = 'md', className } = props
   const cellClass = size === 'sm' ? 'h-1 w-1' : 'h-1.5 w-1.5'
@@ -11,17 +18,21 @@ function Spinner(props: { size?: 'sm' | 'md'; className?: string }) {
     <span
       aria-label="Loading"
       role="status"
-      className={cn(
-        'inline-grid grid-cols-3 gap-[2px] text-brand-primary animate-spin [animation-duration:1.1s]',
-        className,
-      )}
+      className={cn('inline-grid grid-cols-3 gap-[2px] text-brand-primary', className)}
     >
       {Array.from({ length: 9 }).map((_, index) => (
         <span
-          // Repeat a compact staggered pulse so button loading mirrors app wave-style loaders.
           key={index}
-          className={cn('rounded-[1px] bg-current animate-pulse', cellClass)}
-          style={{ animationDelay: `${(index % 3) * 90}ms` }}
+          className={cn('rounded-[1px] bg-current', cellClass)}
+          style={{
+            animationName: 'pixel-wave-loader-cell-bright',
+            animationTimingFunction: 'ease-in-out',
+            animationIterationCount: 'infinite',
+            animationFillMode: 'both',
+            animationDuration: '1100ms',
+            animationDelay: `${ORBIT_CW_DELAYS[index] ?? 0}ms`,
+            opacity: 0.18,
+          }}
         />
       ))}
     </span>

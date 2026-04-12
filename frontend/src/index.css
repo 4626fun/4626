@@ -447,6 +447,23 @@
   }
 }
 
+@keyframes pixel-wave-loader-cell-bright {
+  0%,
+  24%,
+  100% {
+    opacity: 0.18;
+  }
+  42% {
+    opacity: 0.34;
+  }
+  56% {
+    opacity: 1;
+  }
+  72% {
+    opacity: 0.26;
+  }
+}
+
 .animate-fade-in-up {
   animation: fadeInUp 0.8s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }

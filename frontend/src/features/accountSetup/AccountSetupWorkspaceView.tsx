@@ -99,8 +99,8 @@ export function AccountSetupWorkspaceView(props: {
 
     // Shared classes
     const stepBase = 'border-b border-white/[0.06] last:border-0 transition-colors duration-150 cursor-pointer'
-    const doneRow = `${stepBase} bg-[#0a0a0b] hover:bg-[#111318]`
-    const activeRow = `${stepBase} bg-[#1b2030] border-l-2 border-l-brand-primary`
+    const doneRow = `${stepBase} bg-white/[0.015] hover:bg-white/[0.03]`
+    const activeRow = `${stepBase} bg-brand-primary/[0.12] border-l-2 border-l-brand-primary/70`
     const badgeDone = 'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/[0.12] text-[11px] font-bold text-emerald-400'
     const badgeActive = 'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-brand-primary/22 bg-brand-primary/[0.14] text-[11px] font-bold text-brand-200'
 
@@ -134,7 +134,7 @@ export function AccountSetupWorkspaceView(props: {
         </div>
 
         {/* Accordion steps */}
-        <div className="overflow-hidden rounded-[13px]">
+        <div className="mx-auto w-full max-w-[560px] overflow-hidden rounded-[13px]">
 
           {/* ── Step 1 — Zora + wallet sync ── */}
           {(() => {
@@ -196,14 +196,6 @@ export function AccountSetupWorkspaceView(props: {
                             <ExternalLink className="h-2.5 w-2.5" />
                           </a>
                         ) : null}
-                        <button
-                          type="button"
-                          disabled={busyProvider === 'zora_cross_app'}
-                          onClick={(e) => { e.stopPropagation(); void onLinkZora() }}
-                          className="ml-0.5 shrink-0 text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors disabled:opacity-40"
-                        >
-                          {busyProvider === 'zora_cross_app' ? 'switching…' : 'reselect'}
-                        </button>
                       </div>
                     ) : null}
                   </div>
@@ -336,14 +328,16 @@ export function AccountSetupWorkspaceView(props: {
                         type="button"
                         disabled={advancedBusy}
                         onClick={() => void retryOwnerCheck()}
-                        className="inline-flex h-9 items-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-zinc-400 hover:bg-white/[0.04] disabled:opacity-50"
+                        className="inline-flex h-9 items-center text-xs font-medium text-rose-900/80 transition-colors hover:text-rose-700 disabled:opacity-50"
                       >
-                        Retry
+                        {advancedBusy ? 'Resetting...' : 'Reset'}
                       </button>
                     </div>
 
                     {/* Contextual status — only rendered when relevant */}
-                    {connectedSignerLabel ? (
+                    {!connectedOwnerReady && (!connectedSignerLabel || /no wallet connected/i.test(connectedSignerLabel)) ? (
+                      <p className="text-xs text-zinc-500">Signer not detected, please connect wallet.</p>
+                    ) : connectedSignerLabel ? (
                       <p className="text-xs text-zinc-500">
                         Connected signer: <span className="font-mono text-zinc-300">{connectedSignerLabel}</span>
                         {connectedSignerDetail ? <span className="ml-1 text-zinc-600">— {connectedSignerDetail}</span> : null}
