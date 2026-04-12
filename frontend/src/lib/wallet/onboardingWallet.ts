@@ -137,6 +137,33 @@ export function normalizeOwnerApprovalError(error: unknown): Error {
   return new Error('Failed to submit the owner approval transaction.')
 }
 
+function isRetryablePaymasterSessionError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('paymaster proxy internal error') ||
+    lower.includes('request denied - no_session') ||
+    lower.includes('request denied - not authenticated')
+  )
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function resolveWalletClientAccountAddress(walletClient: {
+  account?: unknown
+}): string | null {
+  const account = walletClient.account as any
+  if (!account) return null
+  if (typeof account === 'string') return account
+  if (typeof account?.address === 'string') return account.address
+  return null
+}
+
+const CONFIRM_OWNER_RETRY_DELAY_MS = import.meta.env.MODE === 'test' ? 5 : 1_500
+const CONFIRM_OWNER_MAX_ATTEMPTS = 6
+
 export async function sendPreparedOwnerTx(params: {
   txRequest: PreparedOwnerTxRequest
   walletClient:
@@ -177,7 +204,7 @@ export async function sendPreparedOwnerTx(params: {
     await switchChainAsync({ chainId: base.id })
   }
 
-  let txHash: `0x${string}`
+  let txHash: `0x${string}` | null = null
   try {
     if (executionMode === 'canonicalSmartWallet') {
       if (!canonicalSmartWalletAddress || !signerAddress) {
@@ -212,16 +239,35 @@ export async function sendPreparedOwnerTx(params: {
       try {
         result = await runUserOp()
       } catch (firstError) {
-        const firstMessage =
-          firstError instanceof Error ? firstError.message.toLowerCase() : String(firstError ?? '').toLowerCase()
-        const shouldRetryOnce =
-          firstMessage.includes('paymaster proxy internal error') ||
-          firstMessage.includes('request denied - no_session') ||
-          firstMessage.includes('request denied - not authenticated')
-        if (!shouldRetryOnce) throw firstError
-        result = await runUserOp()
+        if (!isRetryablePaymasterSessionError(firstError)) throw firstError
+        if (typeof ensurePaymasterSession === 'function') {
+          await ensurePaymasterSession().catch(() => false)
+        }
+        await delay(300)
+        try {
+          result = await runUserOp()
+        } catch (secondError) {
+          if (!isRetryablePaymasterSessionError(secondError)) throw secondError
+          if (!walletClient.account || typeof walletClient.sendTransaction !== 'function') throw secondError
+          const fallbackAccount = resolveWalletClientAccountAddress(walletClient)
+          const signerLc = signerAddress.toLowerCase()
+          if (!fallbackAccount || fallbackAccount.toLowerCase() !== signerLc) {
+            throw new Error(
+              'Connected wallet changed during approval. Reconnect the same canonical wallet and retry.',
+            )
+          }
+          // Last resort: let the connected wallet execute natively (without our paymaster proxy path).
+          txHash = await walletClient.sendTransaction({
+            account: walletClient.account,
+            chain: base,
+            to: txRequest.to,
+            data: txRequest.data,
+            value: 0n,
+          })
+          result = null as any
+        }
       }
-      txHash = result.transactionHash
+      if (result) txHash = result.transactionHash
     } else {
       if (!walletClient.account || typeof walletClient.sendTransaction !== 'function') {
         throw new Error('Connect an owner wallet to send this transaction.')
@@ -237,19 +283,39 @@ export async function sendPreparedOwnerTx(params: {
   } catch (error) {
     throw normalizeOwnerApprovalError(error)
   }
+  if (!txHash) {
+    throw new Error('Failed to submit the owner approval transaction.')
+  }
 
   const headers = await authHeaders()
-  const confirmRes = await apiFetch('/api/wallet/confirm-owner', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({
-      txHash,
-      ownerAddress: ownerAddress ?? null,
-    }),
-  })
-  const confirmPayload = (await confirmRes.json().catch(() => null)) as ApiEnvelope<ConfirmOwnerResponse> | null
-  if (!confirmRes.ok || !confirmPayload?.success || !confirmPayload.data?.isOwner) {
-    throw new Error(readApiError(confirmPayload, 'Owner status is not confirmed yet.'))
+  let lastPayload: ApiEnvelope<ConfirmOwnerResponse> | null = null
+  let lastMessage = 'Owner status is not confirmed yet. Please retry in a moment.'
+  for (let attempt = 0; attempt < CONFIRM_OWNER_MAX_ATTEMPTS; attempt += 1) {
+    const confirmRes = await apiFetch('/api/wallet/confirm-owner', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        txHash,
+        ownerAddress: ownerAddress ?? null,
+      }),
+    })
+    const confirmPayload = (await confirmRes.json().catch(() => null)) as ApiEnvelope<ConfirmOwnerResponse> | null
+    lastPayload = confirmPayload
+
+    if (confirmRes.ok && confirmPayload?.success && confirmPayload.data?.isOwner) {
+      return confirmPayload.data
+    }
+
+    lastMessage = readApiError(confirmPayload, 'Owner status is not confirmed yet.')
+    const canRetry =
+      attempt + 1 < CONFIRM_OWNER_MAX_ATTEMPTS &&
+      (
+        (confirmRes.ok && confirmPayload?.success && confirmPayload?.data?.isOwner === false) ||
+        String(lastMessage).toLowerCase().includes('not confirmed')
+      )
+    if (!canRetry) break
+    await delay(CONFIRM_OWNER_RETRY_DELAY_MS)
   }
-  return confirmPayload.data
+
+  throw buildOwnerDelegationError(lastPayload, lastMessage)
 }

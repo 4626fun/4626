@@ -140,6 +140,103 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
+  it('falls back to native wallet sendTransaction when paymaster session errors persist', async () => {
+    sendCoinbaseSmartWalletUserOperationMock
+      .mockRejectedValueOnce(new Error('request denied - no_session'))
+      .mockRejectedValueOnce(new Error('Paymaster rejected this request: paymaster proxy internal error'))
+    const sendTransaction = vi.fn(async () => TX_HASH)
+
+    const result = await sendPreparedOwnerTx({
+      txRequest: TX_REQUEST,
+      walletClient: {
+        account: CANONICAL_CSW,
+        sendTransaction,
+        request: vi.fn(),
+      },
+      chainId: 8453,
+      authHeaders: async () => ({ Authorization: 'Bearer test' }),
+      signerAddress: CANONICAL_CSW,
+      executionMode: 'canonicalSmartWallet',
+      canonicalSmartWalletAddress: CANONICAL_CSW,
+      publicClient: {},
+      ensurePaymasterSession: async () => true,
+    })
+
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(2)
+    expect(sendTransaction).toHaveBeenCalledTimes(1)
+    expect(result.txHash).toBe(TX_HASH)
+  })
+
+  it('does not use native fallback when canonical wallet account no longer matches signer', async () => {
+    sendCoinbaseSmartWalletUserOperationMock
+      .mockRejectedValueOnce(new Error('request denied - no_session'))
+      .mockRejectedValueOnce(new Error('Paymaster rejected this request: paymaster proxy internal error'))
+    const sendTransaction = vi.fn(async () => TX_HASH)
+
+    await expect(
+      sendPreparedOwnerTx({
+        txRequest: TX_REQUEST,
+        walletClient: {
+          account: OWNER_EOA,
+          sendTransaction,
+          request: vi.fn(),
+        },
+        chainId: 8453,
+        authHeaders: async () => ({ Authorization: 'Bearer test' }),
+        signerAddress: CANONICAL_CSW,
+        executionMode: 'canonicalSmartWallet',
+        canonicalSmartWalletAddress: CANONICAL_CSW,
+        publicClient: {},
+        ensurePaymasterSession: async () => true,
+      }),
+    ).rejects.toThrow('Connected wallet changed during approval. Reconnect the same canonical wallet and retry.')
+
+    expect(sendTransaction).not.toHaveBeenCalled()
+  })
+
+  it('retries owner confirmation when tx is submitted but owner state is not yet indexed', async () => {
+    const sendTransaction = vi.fn(async () => TX_HASH)
+    apiFetchMock
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          success: true,
+          data: {
+            isOwner: false,
+            canonicalCswAddress: CANONICAL_CSW,
+            ownerAddress: OWNER_EOA,
+            txHash: TX_HASH,
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          success: true,
+          data: {
+            isOwner: true,
+            canonicalCswAddress: CANONICAL_CSW,
+            ownerAddress: OWNER_EOA,
+            txHash: TX_HASH,
+          },
+        }),
+      )
+
+    const result = await sendPreparedOwnerTx({
+      txRequest: TX_REQUEST,
+      walletClient: {
+        account: OWNER_EOA,
+        sendTransaction,
+      },
+      chainId: 8453,
+      authHeaders: async () => ({ Authorization: 'Bearer test' }),
+      ownerAddress: OWNER_EOA,
+      signerAddress: OWNER_EOA,
+      executionMode: 'ownerDirect',
+    })
+
+    expect(apiFetchMock).toHaveBeenCalledTimes(2)
+    expect(result.isOwner).toBe(true)
+  })
+
   it('fails early when the paymaster session cannot be established for canonical execution', async () => {
     await expect(
       sendPreparedOwnerTx({
@@ -199,7 +296,6 @@ describe('sendPreparedOwnerTx', () => {
         txRequest: TX_REQUEST,
         walletClient: {
           account: CANONICAL_CSW,
-          sendTransaction: vi.fn(async () => TX_HASH),
           request: vi.fn(),
         },
         chainId: 8453,
