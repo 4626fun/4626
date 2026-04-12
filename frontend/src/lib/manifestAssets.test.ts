@@ -90,7 +90,7 @@ describe('public manifest assets', () => {
     expect(appHtml).toContain(`<meta name="twitter:image" content="${APP_SOCIAL_IMAGE_URL}" />`)
     expect(appHtml).toContain(`"imageUrl":"${MINIAPP_HERO_URL}"`)
     expect(appHtml).toContain(`"splashImageUrl":"${MINIAPP_SPLASH_URL}"`)
-    expect(appHtml).not.toContain('https://v1.4626.fun/app-hero.png')
+    expect(appHtml).not.toContain('https://app.4626.fun/app-hero.png')
     expect((appHtml.match(/<meta property="og:image"/g) ?? [])).toHaveLength(1)
     expect((appHtml.match(/<meta name="twitter:image"/g) ?? [])).toHaveLength(1)
 

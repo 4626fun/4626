@@ -48,7 +48,7 @@ describe('Uniswap proxy forwards x-erc20eth-enabled header', () => {
     const req = createMockReq({
       method: 'POST',
       headers: {
-        origin: 'https://v1.4626.fun',
+        origin: 'https://app.4626.fun',
         'x-forwarded-for': '10.1.1.1',
         // The client sends this to our proxy; the proxy should forward upstream.
         'x-erc20eth-enabled': 'true',
@@ -89,7 +89,7 @@ describe('Uniswap proxy forwards x-erc20eth-enabled header', () => {
     const req = createMockReq({
       method: 'POST',
       headers: {
-        origin: 'https://v1.4626.fun',
+        origin: 'https://app.4626.fun',
         'x-forwarded-for': '10.1.1.2',
         'x-erc20eth-enabled': 'true',
       },

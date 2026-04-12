@@ -4,7 +4,7 @@ import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-let mockAppOrigin = 'https://v1.4626.fun'
+let mockAppOrigin = 'https://app.4626.fun'
 let mockMarketingOrigin = 'https://4626.fun'
 let mockHostMode: 'app' | 'marketing' = 'app'
 
@@ -35,7 +35,7 @@ import { HostGuard } from './routeGuards'
 
 describe('HostGuard', () => {
   beforeEach(() => {
-    mockAppOrigin = 'https://v1.4626.fun'
+    mockAppOrigin = 'https://app.4626.fun'
     mockMarketingOrigin = 'https://4626.fun'
     mockHostMode = 'app'
     window.history.replaceState({}, '', 'http://localhost:3000/')

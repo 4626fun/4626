@@ -71,7 +71,7 @@ describe('GET /api/social-preview', () => {
     const req = createMockReq({
       method: 'GET',
       headers: {
-        host: 'v1.4626.fun',
+        host: 'app.4626.fun',
         'x-forwarded-proto': 'https',
       },
       query: {
@@ -91,7 +91,7 @@ describe('GET /api/social-preview', () => {
     expect(html).toContain('AKITA Creator Coin (AKITA) - Creator on 4626')
     expect(html).toContain('/api/token/image?address=0x50f88fe97f72cd3e75b9eb4f747f59bceba80d59')
     expect(html).toContain('tokenKind=creator')
-    expect(html).toContain('https://v1.4626.fun/explore/creators/base/0x50f88fe97f72cd3e75b9eb4f747f59bceba80d59')
+    expect(html).toContain('https://app.4626.fun/explore/creators/base/0x50f88fe97f72cd3e75b9eb4f747f59bceba80d59')
     expect(sdkSetApiKeyMock).toHaveBeenCalledWith('test-zora-key')
     expect(sdkGetCoinMock).toHaveBeenCalled()
   })
@@ -113,7 +113,7 @@ describe('GET /api/social-preview', () => {
     const req = createMockReq({
       method: 'GET',
       headers: {
-        host: 'v1.4626.fun',
+        host: 'app.4626.fun',
         'x-forwarded-proto': 'https',
       },
       query: {
@@ -132,7 +132,7 @@ describe('GET /api/social-preview', () => {
     expect(html).toContain('Top Trends on Base - 4626')
     expect(html).toContain('Live 7d market cap trends on Base. Leading now: TREND.')
     expect(html).toContain('/api/token/image?address=0x1111111111111111111111111111111111111111')
-    expect(html).toContain('https://v1.4626.fun/explore/trends?sort=marketCap&amp;time=1w')
+    expect(html).toContain('https://app.4626.fun/explore/trends?sort=marketCap&amp;time=1w')
     expect(sdkGetMostValuableTrendsMock).toHaveBeenCalled()
   })
 
@@ -159,7 +159,7 @@ describe('GET /api/social-preview', () => {
     const req = createMockReq({
       method: 'GET',
       headers: {
-        host: 'v1.4626.fun',
+        host: 'app.4626.fun',
         'x-forwarded-proto': 'https',
       },
       query: {
@@ -177,7 +177,7 @@ describe('GET /api/social-preview', () => {
     expect(html).toContain('AKITA Vault - 4626')
     expect(html).toContain('/api/token/image?address=0x5555555555555555555555555555555555555555')
     expect(html).toContain('tokenKind=share')
-    expect(html).toContain('https://v1.4626.fun/vault/0x2222222222222222222222222222222222222222')
+    expect(html).toContain('https://app.4626.fun/vault/0x2222222222222222222222222222222222222222')
     expect(createPublicClientMock).toHaveBeenCalled()
   })
 })

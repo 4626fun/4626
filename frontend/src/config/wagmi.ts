@@ -225,6 +225,10 @@ warnGlobalWagmiDataSuffixBehavior(DATA_SUFFIX)
 export const wagmiConfig = createConfig({
   chains: [base, mainnet, arbitrum, optimism, polygon],
   connectors: buildConnectors(),
+  // Avoid eager EIP-6963 provider discovery on page load.
+  // Some extension stacks respond to `requestProvider` by racing to assign
+  // `window.ethereum`, which can throw when another extension already owns it.
+  multiInjectedProviderDiscovery: false,
   ...(DATA_SUFFIX ? { dataSuffix: DATA_SUFFIX } : {}),
   transports: {
     [base.id]: BASE_READ_RPC_URLS.length > 0 ? fallback(BASE_READ_RPC_URLS.map(buildReadTransport)) : http(),

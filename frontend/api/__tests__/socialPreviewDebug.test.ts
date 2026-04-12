@@ -50,7 +50,7 @@ describe('GET /api/social-preview-debug', () => {
     const req = createMockReq({
       method: 'GET',
       headers: {
-        host: 'v1.4626.fun',
+        host: 'app.4626.fun',
         'x-forwarded-proto': 'https',
       },
       query: {
@@ -76,7 +76,7 @@ describe('GET /api/social-preview-debug', () => {
     const req = createMockReq({
       method: 'GET',
       headers: {
-        host: 'v1.4626.fun',
+        host: 'app.4626.fun',
       },
       query: {
         path: '/explore/trends',
@@ -97,7 +97,7 @@ describe('GET /api/social-preview-debug', () => {
     const req = createMockReq({
       method: 'GET',
       headers: {
-        host: 'v1.4626.fun',
+        host: 'app.4626.fun',
       },
       query: {},
       url: '/api/social-preview-debug',

@@ -8,12 +8,12 @@ describe('appEntry helpers', () => {
   })
 
   it('builds a full app-entry URL from an origin', () => {
-    expect(buildAppEntryUrl('https://v1.4626.fun')).toBe('https://v1.4626.fun/swap')
+    expect(buildAppEntryUrl('https://app.4626.fun')).toBe('https://app.4626.fun/swap')
   })
 
   it('preserves an explicit app destination directly', () => {
     expect(buildAppEntryPath('/accounts')).toBe('/accounts')
-    expect(buildAppEntryUrl('https://v1.4626.fun', '/accounts')).toBe('https://v1.4626.fun/accounts')
+    expect(buildAppEntryUrl('https://app.4626.fun', '/accounts')).toBe('https://app.4626.fun/accounts')
   })
 
   it('accepts safe internal paths for next routing', () => {

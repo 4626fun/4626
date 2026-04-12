@@ -179,7 +179,7 @@ describe('telegram endpoint handlers', () => {
     vi.clearAllMocks()
     restoreEnv = applyEnv({
       TELEGRAM_LINK_API_SECRET: TELEGRAM_LINK_SECRET,
-      TELEGRAM_MINI_APP_URL: 'https://v1.4626.fun',
+      TELEGRAM_MINI_APP_URL: 'https://app.4626.fun',
       TELEGRAM_BOT_TOKEN: 'test-bot-token',
       TELEGRAM_FUNNEL_METRICS_ENABLED: 'true',
       TELEGRAM_MINIAPP_SESSION_ENABLED: 'true',
@@ -805,7 +805,7 @@ describe('telegram endpoint handlers', () => {
     expect(setTelegramMyCommandsMock).toHaveBeenCalledTimes(3)
     expect(setTelegramChatMenuButtonMock).toHaveBeenCalledTimes(1)
     expect(res.body?.success).toBe(true)
-    expect(res.body?.data?.miniAppUrl).toBe('https://4626.fun/telegram/link')
+    expect(res.body?.data?.miniAppUrl).toBe('https://app.4626.fun/telegram/link')
     expect(setTelegramChatMenuButtonMock).toHaveBeenCalledWith(
       expect.objectContaining({
         menuButton: { type: 'commands' },
@@ -836,7 +836,7 @@ describe('telegram endpoint handlers', () => {
       body: {
         menuMode: 'web_app',
         menuText: 'Open 4626 v2',
-        miniAppUrl: 'https://v1.4626.fun',
+        miniAppUrl: 'https://app.4626.fun',
       },
     })
     const res = createMockRes()
@@ -845,13 +845,13 @@ describe('telegram endpoint handlers', () => {
 
     expect(res.statusCode).toBe(200)
     expect(res.body?.data?.menuText).toBe('Connect')
-    expect(res.body?.data?.miniAppUrl).toBe('https://4626.fun/telegram/link')
+    expect(res.body?.data?.miniAppUrl).toBe('https://app.4626.fun/telegram/link')
     expect(setTelegramChatMenuButtonMock).toHaveBeenCalledWith(
       expect.objectContaining({
         menuButton: {
           type: 'web_app',
           text: 'Connect',
-          web_app: { url: 'https://4626.fun/telegram/link' },
+          web_app: { url: 'https://app.4626.fun/telegram/link' },
         },
       }),
     )

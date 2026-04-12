@@ -72,7 +72,7 @@ export function resolveShareTokenMetadataUrls(params: {
   imagePngUrl: string
   imageSvgUrl: string
 } {
-  const appHostValue = normalizeHost(params.appHost) || 'v1.4626.fun'
+  const appHostValue = normalizeHost(params.appHost) || 'app.4626.fun'
   // Prefer explicit API host when configured; otherwise keep metadata links on the app host.
   // This avoids emitting broken api.4626.fun links when API_HOST is unset or unavailable.
   const apiHostValue = normalizeHost(params.apiHost) || appHostValue
@@ -278,7 +278,7 @@ export async function buildShareTokenMetadata({
       imagePng: imagePngUrl,
       imageSvg: imageSvgUrl,
       twitter: 'https://x.com/4626fun',
-      website: 'https://v1.4626.fun',
+      website: 'https://app.4626.fun',
       isOFT: true,
       supportedChains: [8453, 1, 42161, 56, 43114],
     },

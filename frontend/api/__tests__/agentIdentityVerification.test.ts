@@ -358,7 +358,7 @@ describe('v1/agents/identity/verification', () => {
     installFetch({
       domainProof: {
         ...canonicalDomainProof,
-        domain: 'v1.4626.fun',
+        domain: 'app.4626.fun',
       },
     })
 

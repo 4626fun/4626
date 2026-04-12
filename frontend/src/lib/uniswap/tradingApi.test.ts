@@ -209,7 +209,7 @@ describe('fetchTradeQuote', () => {
 
   it('falls back to marketing origin when app origin returns 404', async () => {
     const originalWindow = (globalThis as any).window
-    ;(globalThis as any).window = { location: { origin: 'https://v1.4626.fun' } }
+    ;(globalThis as any).window = { location: { origin: 'https://app.4626.fun' } }
 
     const fetchMock = vi
       .fn()
@@ -237,8 +237,8 @@ describe('fetchTradeQuote', () => {
       const result = await fetchTradeQuote(quoteRequest('791357'))
       expect(result.requestId).toBe('rq_cross_origin')
       const calledUrls = fetchMock.mock.calls.map(([url]) => String(url))
-      expect(calledUrls[0]).toBe('https://v1.4626.fun/__api/uniswap/quote')
-      expect(calledUrls[1]).toBe('https://v1.4626.fun/api/uniswap/quote')
+      expect(calledUrls[0]).toBe('https://app.4626.fun/__api/uniswap/quote')
+      expect(calledUrls[1]).toBe('https://app.4626.fun/api/uniswap/quote')
       expect(calledUrls[2]).toBe(`${new URL(MARKETING_ORIGIN).origin}/__api/uniswap/quote`)
     } finally {
       if (originalWindow === undefined) {
@@ -284,7 +284,7 @@ describe('fetchTradeQuote', () => {
 
   it('does not retry cross-origin on meaningful json 404 errors', async () => {
     const originalWindow = (globalThis as any).window
-    ;(globalThis as any).window = { location: { origin: 'https://v1.4626.fun' } }
+    ;(globalThis as any).window = { location: { origin: 'https://app.4626.fun' } }
 
     const fetchMock = vi
       .fn()
@@ -299,7 +299,7 @@ describe('fetchTradeQuote', () => {
     try {
       await expect(fetchTradeQuote(quoteRequest('791359'))).rejects.toThrow('Insufficient token balance')
       const calledUrls = fetchMock.mock.calls.map(([url]) => String(url))
-      expect(calledUrls).toEqual(['https://v1.4626.fun/__api/uniswap/quote'])
+      expect(calledUrls).toEqual(['https://app.4626.fun/__api/uniswap/quote'])
     } finally {
       if (originalWindow === undefined) {
         delete (globalThis as any).window

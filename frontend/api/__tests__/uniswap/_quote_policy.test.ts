@@ -39,7 +39,7 @@ describe('/api/uniswap/quote policy guards', () => {
     const handler = await loadQuoteHandler()
     const req = createMockReq({
       method: 'POST',
-      headers: { origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.9' },
+      headers: { origin: 'https://app.4626.fun', 'x-forwarded-for': '10.1.1.9' },
       body: {
         tokenIn: '0x0000000000000000000000000000000000000001',
         tokenOut: '0x0000000000000000000000000000000000000002',
@@ -79,7 +79,7 @@ describe('/api/uniswap/quote policy guards', () => {
     const handler = await loadQuoteHandler()
     const req = createMockReq({
       method: 'POST',
-      headers: { origin: 'https://v1.4626.fun', 'x-forwarded-for': '10.1.1.10' },
+      headers: { origin: 'https://app.4626.fun', 'x-forwarded-for': '10.1.1.10' },
       body: {
         tokenIn: '0x0000000000000000000000000000000000000001',
         tokenOut: '0x0000000000000000000000000000000000000002',

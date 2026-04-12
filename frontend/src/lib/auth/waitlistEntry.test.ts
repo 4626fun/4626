@@ -28,7 +28,7 @@ describe('waitlistEntry', () => {
 
   it('builds waitlist entry URLs against the provided base origin', () => {
     expect(buildWaitlistEntryUrl('https://4626.fun')).toBe('https://4626.fun/waitlist')
-    expect(buildWaitlistEntryUrl('https://v1.4626.fun/')).toBe('https://v1.4626.fun/waitlist')
+    expect(buildWaitlistEntryUrl('https://app.4626.fun/')).toBe('https://app.4626.fun/waitlist')
   })
 
   it('builds the canonical marketing waitlist path and URL', () => {

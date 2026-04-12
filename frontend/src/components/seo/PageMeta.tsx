@@ -16,7 +16,7 @@ import { PAGE_META } from '@/lib/pageMetaContent'
 import { SITE_APP_NAME, SITE_DESCRIPTION, SITE_IMAGE_ALT } from '@/lib/siteMeta'
 
 function getPageOrigin(): string {
-  if (typeof window === 'undefined') return 'https://v1.4626.fun'
+  if (typeof window === 'undefined') return 'https://app.4626.fun'
   return window.location.origin
 }
 

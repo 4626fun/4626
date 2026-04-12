@@ -29,7 +29,7 @@ pnpm dev
 ## Local deploy dry-run
 
 Use this when you want `/deploy` to hit a local Base fork for the new dry-run flow.
-This flow is local-fork-only, and `https://v1.4626.fun` does not expose the dry-run action.
+This flow is local-fork-only, and `https://app.4626.fun` does not expose the dry-run action.
 
 ```bash
 cd frontend
@@ -234,7 +234,7 @@ This app uses a **wagmi-first** Builder Codes integration (ERC-8021 suffix) so a
 
 For Base Build registration and ownership verification:
 
-- Use **App URL** `https://v1.4626.fun`
+- Use **App URL** `https://app.4626.fun`
 - Do not use `https://4626.fun` for Base Build; that host is the marketing origin
 - The app homepage advertises ownership via `<meta name="base:app_id" content="695a49dc4d3a403912ed8ca5" />`
 - Production verification should confirm the live app homepage returns app-origin metadata, not marketing-origin metadata

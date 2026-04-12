@@ -116,8 +116,8 @@ describe('agent SIWA verification', () => {
     vi.clearAllMocks()
 
     parseSiwaMessageSafeMock.mockReturnValue({
-      domain: 'v1.4626.fun',
-      uri: 'https://v1.4626.fun',
+      domain: 'app.4626.fun',
+      uri: 'https://app.4626.fun',
       address: CANONICAL_CSW,
       agentId: 2205,
       agentRegistry: AGENT_REGISTRY,
@@ -149,7 +149,7 @@ describe('agent SIWA verification', () => {
     createPublicClientMock.mockReturnValue({
       readContract: clientReadContractMock,
     })
-    getTrustedRequestOriginsMock.mockReturnValue(new Set(['https://v1.4626.fun']))
+    getTrustedRequestOriginsMock.mockReturnValue(new Set(['https://app.4626.fun']))
     normalizeOriginMock.mockImplementation((value: string) => String(value || '').trim().toLowerCase())
     resolveCanonicalSmartWalletAddressMock.mockResolvedValue(CANONICAL_CSW)
   })

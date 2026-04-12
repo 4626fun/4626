@@ -60,7 +60,7 @@ export const MARKETING_ORIGIN =
 
 /** Canonical app domain origin (post-acceptance). */
 export const APP_ORIGIN =
-  resolveConfiguredOrigin((import.meta.env.VITE_APP_ORIGIN as string)?.trim() || 'https://v1.4626.fun')
+  resolveConfiguredOrigin((import.meta.env.VITE_APP_ORIGIN as string)?.trim() || 'https://app.4626.fun')
 
 /**
  * Optional explicit base URL for waitlist referral links.
@@ -87,7 +87,7 @@ function hostModeOverride(): HostMode | null {
  * Host mode detection.
  *
  * - 4626.fun (or www.4626.fun) = marketing (waitlist landing)
- * - v1.4626.fun (or localhost) = app
+ * - app.4626.fun (or localhost) = app
  */
 export function getHostMode(): HostMode {
   if (typeof window === 'undefined') return 'app'
@@ -100,7 +100,7 @@ export function getHostMode(): HostMode {
 /**
  * Base URL for the app (explore, deploy, vault, admin).
  *
- * When on marketing domain, returns v1.4626.fun so links point to the app.
+ * When on marketing domain, returns app.4626.fun so links point to the app.
  * When on app domain, returns current origin.
  */
 export function getAppBaseUrl(): string {

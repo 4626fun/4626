@@ -41,7 +41,7 @@ describe('x-erc20eth-enabled header forwarding (swap7702)', () => {
       method: 'POST',
       headers: {
         ...withAuthHeader({
-          origin: 'https://v1.4626.fun',
+          origin: 'https://app.4626.fun',
           'x-forwarded-for': '10.1.1.3',
           'x-erc20eth-enabled': 'true',
         }),

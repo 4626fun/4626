@@ -108,7 +108,7 @@ describe('token image AI override lookup', () => {
     const req = createMockReq({
       method: 'GET',
       query: { address: SHARE_OFT, format: 'svg' },
-      headers: { host: 'v1.4626.fun' },
+      headers: { host: 'app.4626.fun' },
     })
     const res = createMockRes()
 
@@ -148,7 +148,7 @@ describe('token image AI override lookup', () => {
     const req = createMockReq({
       method: 'GET',
       query: { address: SHARE_OFT, format: 'svg', tokenKind: 'creator' },
-      headers: { host: 'v1.4626.fun' },
+      headers: { host: 'app.4626.fun' },
     })
     const res = createMockRes()
 

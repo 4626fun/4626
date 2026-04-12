@@ -94,7 +94,7 @@ vi.mock('@/lib/host', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/host')>()
   return {
     ...actual,
-    getAppBaseUrl: () => 'https://v1.4626.fun',
+    getAppBaseUrl: () => 'https://app.4626.fun',
     getMarketingBaseUrl: () => 'https://4626.fun',
     getWaitlistReferralBaseUrl: () => 'https://4626.fun',
   }

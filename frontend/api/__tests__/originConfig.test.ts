@@ -13,13 +13,13 @@ describe('origin resolution', () => {
 
   it('uses APP_ORIGIN when configured', () => {
     restoreEnv = applyEnv({
-      APP_ORIGIN: 'https://v1.4626.fun',
+      APP_ORIGIN: 'https://app.4626.fun',
       VERCEL_URL: undefined,
       NODE_ENV: 'production',
       CORS_ALLOWED_ORIGINS: undefined,
     })
 
-    expect(getCanonicalOrigin()).toBe('https://v1.4626.fun')
+    expect(getCanonicalOrigin()).toBe('https://app.4626.fun')
   })
 
   it('falls back to VERCEL_URL when APP_ORIGIN is unset', () => {

@@ -343,11 +343,11 @@ describe('telegram webhook parsers', () => {
       inlineResultCap: 8,
       growthMode: true,
       enablePmHandoff: true,
-      linkButtonUrl: 'https://v1.4626.fun/telegram/link',
+      linkButtonUrl: 'https://app.4626.fun/telegram/link',
     })
     expect(unlinked.button).toEqual({
       text: 'Connect wallet',
-      web_app: { url: 'https://v1.4626.fun/telegram/link' },
+      web_app: { url: 'https://app.4626.fun/telegram/link' },
     })
     expect(unlinked.switchPmParameter).toMatch(/^inline_link_/)
 

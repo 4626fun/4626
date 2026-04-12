@@ -86,7 +86,7 @@ vi.mock('../../server/_lib/rateLimit.js', () => ({
 }))
 
 vi.mock('../../server/_lib/origin.js', () => ({
-  getCanonicalOrigin: vi.fn(() => 'https://v1.4626.fun'),
+  getCanonicalOrigin: vi.fn(() => 'https://app.4626.fun'),
 }))
 
 vi.mock('../../server/_lib/privyWalletApi.js', () => ({
@@ -1457,7 +1457,7 @@ describe('deploy session optimistic concurrency', () => {
       expect(payload.expectedSolanaAmount).toBe('1500000000000000000000000')
       expect(payload.assetMintOrigin).toBe('existing')
       expect(payload.enforceCompatibility).toBe(true)
-      expect(String(url).startsWith('https://v1.4626.fun/')).toBe(true)
+      expect(String(url).startsWith('https://app.4626.fun/')).toBe(true)
     } finally {
       ;(globalThis as any).fetch = originalFetch
     }
@@ -1530,7 +1530,7 @@ describe('deploy session optimistic concurrency', () => {
       expect(res.statusCode).toBe(200)
       expect(fetchMock).toHaveBeenCalled()
       const [url] = (fetchMock.mock.calls as any[])[0] as [string]
-      expect(String(url)).toContain('https://v1.4626.fun/api/deploy/registerSolanaBridgeToken')
+      expect(String(url)).toContain('https://app.4626.fun/api/deploy/registerSolanaBridgeToken')
       expect(String(url)).not.toContain('attacker.example')
     } finally {
       ;(globalThis as any).fetch = originalFetch

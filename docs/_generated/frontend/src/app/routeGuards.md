@@ -56,7 +56,7 @@ Defined in: [src/app/routeGuards.tsx:129](https://github.com/wenakita/4626/blob/
 
 Defined in: [src/app/routeGuards.tsx:75](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeGuards.tsx#L75)
 
-Redirect from 4626.fun to v1.4626.fun when user hits app-only routes.
+Redirect from 4626.fun to app.4626.fun when user hits app-only routes.
 
 #### Returns
 

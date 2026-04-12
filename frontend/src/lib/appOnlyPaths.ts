@@ -1,4 +1,4 @@
-/** App-only paths that should always run on v1.4626.fun. */
+/** App-only paths that should always run on app.4626.fun. */
 export const APP_ONLY_PATHS = [
   '/explore',
   '/swap',

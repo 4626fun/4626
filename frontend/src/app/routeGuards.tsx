@@ -71,7 +71,7 @@ function HandoffOnMount(props: { to: string }) {
   return <AppLoadingState />
 }
 
-/** Redirect from 4626.fun to v1.4626.fun when user hits app-only routes. */
+/** Redirect from 4626.fun to app.4626.fun when user hits app-only routes. */
 export function HostGuard() {
   const location = useLocation()
   const mode = getHostMode()

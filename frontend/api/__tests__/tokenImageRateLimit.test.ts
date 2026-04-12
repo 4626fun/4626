@@ -69,7 +69,7 @@ describe('token image endpoint rate limiting', () => {
     const req = createMockReq({
       method: 'GET',
       query: { address: '0x7000000000000000000000000000000000000007' },
-      headers: { host: 'v1.4626.fun' },
+      headers: { host: 'app.4626.fun' },
     })
     const res = createMockRes()
 

@@ -4,7 +4,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-let mockAppOrigin = 'https://v1.4626.fun'
+let mockAppOrigin = 'https://app.4626.fun'
 let mockHostMode: 'app' | 'marketing' = 'app'
 
 vi.mock('@/lib/host', async () => {
@@ -38,7 +38,7 @@ let RootRouter: (typeof import('./RootRouter'))['RootRouter']
 describe('RootRouter', () => {
   beforeEach(async () => {
     vi.resetModules()
-    mockAppOrigin = 'https://v1.4626.fun'
+    mockAppOrigin = 'https://app.4626.fun'
     mockHostMode = 'app'
     ;({ RootRouter } = await import('./RootRouter'))
   })
