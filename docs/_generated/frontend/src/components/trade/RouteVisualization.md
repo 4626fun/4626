@@ -12,7 +12,7 @@
 
 > **RouteVisualization**(`props`): `Element`
 
-Defined in: [src/components/trade/RouteVisualization.tsx:33](https://github.com/wenakita/4626/blob/main/frontend/src/components/trade/RouteVisualization.tsx#L33)
+Defined in: [src/components/trade/RouteVisualization.tsx:33](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/components/trade/RouteVisualization.tsx#L33)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **WaitlistPointSource** = `"waitlist_signup"` \| `"csw_link"` \| `"referral_signup"` \| `"referral_csw_link"` \| `"referral_qualified"` \| `"social_base_app"` \| `"social_zora"` \| `"social_x"` \| `"social_discord"` \| `"social_telegram"` \| `"bonus_github"` \| `"bonus_tiktok"` \| `"bonus_instagram"` \| `"bonus_reddit"` \| `"agent_feedback"` \| `"agent_reputation"` \| `"lens_identity"` \| `"grove_proof"` \| `"task"`
 
-Defined in: [server/\_lib/waitlistPoints.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlistPoints.ts#L38)
+Defined in: [server/\_lib/waitlistPoints.ts:38](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/waitlistPoints.ts#L38)
 
 ## Variables
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/waitlistPoints.ts:38](https://github.com/wenakita/4626
 
 > `const` **WAITLIST\_POINTS**: `object`
 
-Defined in: [server/\_lib/waitlistPoints.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlistPoints.ts#L6)
+Defined in: [server/\_lib/waitlistPoints.ts:6](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/waitlistPoints.ts#L6)
 
 #### Type Declaration
 
@@ -102,7 +102,7 @@ Defined in: [server/\_lib/waitlistPoints.ts:6](https://github.com/wenakita/4626/
 
 > **awardWaitlistPoints**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/waitlistPoints.ts:148](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlistPoints.ts#L148)
+Defined in: [server/\_lib/waitlistPoints.ts:148](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/waitlistPoints.ts#L148)
 
 #### Parameters
 
@@ -138,7 +138,7 @@ Defined in: [server/\_lib/waitlistPoints.ts:148](https://github.com/wenakita/462
 
 > **ensureWaitlistPointsSchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/waitlistPoints.ts:85](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlistPoints.ts#L85)
+Defined in: [server/\_lib/waitlistPoints.ts:85](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/waitlistPoints.ts#L85)
 
 #### Parameters
 
@@ -156,7 +156,7 @@ Defined in: [server/\_lib/waitlistPoints.ts:85](https://github.com/wenakita/4626
 
 > **isWaitlistPointSource**(`value`): `value is WaitlistPointSource`
 
-Defined in: [server/\_lib/waitlistPoints.ts:81](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlistPoints.ts#L81)
+Defined in: [server/\_lib/waitlistPoints.ts:81](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/waitlistPoints.ts#L81)
 
 #### Parameters
 

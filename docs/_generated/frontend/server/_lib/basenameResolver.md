@@ -12,7 +12,7 @@
 
 > **basenameToHandle**(`name`): `string` \| `null`
 
-Defined in: [server/\_lib/basenameResolver.ts:120](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/basenameResolver.ts#L120)
+Defined in: [server/\_lib/basenameResolver.ts:120](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/basenameResolver.ts#L120)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [server/\_lib/basenameResolver.ts:120](https://github.com/wenakita/4
 
 > **getBasenameName**(`address`): `Promise`\<`string` \| `null`\>
 
-Defined in: [server/\_lib/basenameResolver.ts:76](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/basenameResolver.ts#L76)
+Defined in: [server/\_lib/basenameResolver.ts:76](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/basenameResolver.ts#L76)
 
 Resolve a wallet address to its Basename (e.g. "akita.base.eth") using
 ENSIP-19 reverse resolution on Ethereum mainnet.
@@ -53,7 +53,7 @@ Returns null when no Basename is configured or on lookup failure.
 
 > **resolveBasenameHandle**(`address`): `Promise`\<`string` \| `null`\>
 
-Defined in: [server/\_lib/basenameResolver.ts:155](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/basenameResolver.ts#L155)
+Defined in: [server/\_lib/basenameResolver.ts:155](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/basenameResolver.ts#L155)
 
 Resolve a "Basename handle" (e.g. "akita" from "akita.base.eth") for a wallet address.
 

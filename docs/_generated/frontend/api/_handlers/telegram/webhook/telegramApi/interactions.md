@@ -12,7 +12,7 @@
 
 > **answerTelegramCallbackQuery**(`params`): `Promise`\<`void`\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/interactions.ts:17](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/interactions.ts#L17)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/interactions.ts:17](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/telegram/webhook/telegramApi/interactions.ts#L17)
 
 #### Parameters
 
@@ -44,7 +44,7 @@ Defined in: [api/\_handlers/telegram/webhook/telegramApi/interactions.ts:17](htt
 
 > **answerTelegramPreCheckoutQuery**(`params`): `Promise`\<`void`\>
 
-Defined in: [api/\_handlers/telegram/webhook/telegramApi/interactions.ts:44](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/telegramApi/interactions.ts#L44)
+Defined in: [api/\_handlers/telegram/webhook/telegramApi/interactions.ts:44](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/telegram/webhook/telegramApi/interactions.ts#L44)
 
 #### Parameters
 

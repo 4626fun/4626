@@ -12,7 +12,7 @@
 
 > **ResolvedConversationalPrompt** = \{ `kind`: `"empty"`; \} \| \{ `kind`: `"prompt"`; `prompt`: `string`; \}
 
-Defined in: [server/agent/core/conversationalInput.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/agent/core/conversationalInput.ts#L22)
+Defined in: [server/agent/core/conversationalInput.ts:22](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/core/conversationalInput.ts#L22)
 
 ## Variables
 
@@ -20,7 +20,7 @@ Defined in: [server/agent/core/conversationalInput.ts:22](https://github.com/wen
 
 > `const` **EMPTY\_CONVERSATIONAL\_PROMPT\_RESPONSE**: `"Ask me anything about this vault or DeFi on Base."` = `'Ask me anything about this vault or DeFi on Base.'`
 
-Defined in: [server/agent/core/conversationalInput.ts:1](https://github.com/wenakita/4626/blob/main/frontend/server/agent/core/conversationalInput.ts#L1)
+Defined in: [server/agent/core/conversationalInput.ts:1](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/core/conversationalInput.ts#L1)
 
 ## Functions
 
@@ -28,7 +28,7 @@ Defined in: [server/agent/core/conversationalInput.ts:1](https://github.com/wena
 
 > **isConversationalAgentInput**(`text`): `boolean`
 
-Defined in: [server/agent/core/conversationalInput.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/agent/core/conversationalInput.ts#L8)
+Defined in: [server/agent/core/conversationalInput.ts:8](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/core/conversationalInput.ts#L8)
 
 #### Parameters
 
@@ -46,7 +46,7 @@ Defined in: [server/agent/core/conversationalInput.ts:8](https://github.com/wena
 
 > **isHandledConversationalSlashPrefix**(`text`): `boolean`
 
-Defined in: [server/agent/core/conversationalInput.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/agent/core/conversationalInput.ts#L3)
+Defined in: [server/agent/core/conversationalInput.ts:3](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/core/conversationalInput.ts#L3)
 
 #### Parameters
 
@@ -64,7 +64,7 @@ Defined in: [server/agent/core/conversationalInput.ts:3](https://github.com/wena
 
 > **normalizeConversationalPrompt**(`text`): `string`
 
-Defined in: [server/agent/core/conversationalInput.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/agent/core/conversationalInput.ts#L14)
+Defined in: [server/agent/core/conversationalInput.ts:14](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/core/conversationalInput.ts#L14)
 
 #### Parameters
 
@@ -82,7 +82,7 @@ Defined in: [server/agent/core/conversationalInput.ts:14](https://github.com/wen
 
 > **resolveConversationalPrompt**(`text`): [`ResolvedConversationalPrompt`](#resolvedconversationalprompt)
 
-Defined in: [server/agent/core/conversationalInput.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/agent/core/conversationalInput.ts#L26)
+Defined in: [server/agent/core/conversationalInput.ts:26](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/core/conversationalInput.ts#L26)
 
 #### Parameters
 

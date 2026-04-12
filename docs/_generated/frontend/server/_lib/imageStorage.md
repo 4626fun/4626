@@ -12,7 +12,7 @@
 
 > **downloadImageStorageObject**(`pathname`): `Promise`\<\{ `bytes`: `Uint8Array`; `contentType`: `string` \| `null`; \}\>
 
-Defined in: [server/\_lib/imageStorage.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/imageStorage.ts#L37)
+Defined in: [server/\_lib/imageStorage.ts:37](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/imageStorage.ts#L37)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [server/\_lib/imageStorage.ts:37](https://github.com/wenakita/4626/b
 
 > **getImageStorageBucket**(): `string`
 
-Defined in: [server/\_lib/imageStorage.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/imageStorage.ts#L7)
+Defined in: [server/\_lib/imageStorage.ts:7](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/imageStorage.ts#L7)
 
 #### Returns
 
@@ -42,7 +42,7 @@ Defined in: [server/\_lib/imageStorage.ts:7](https://github.com/wenakita/4626/bl
 
 > **uploadImageStorageObject**(`params`): `Promise`\<\{ `url`: `string`; \}\>
 
-Defined in: [server/\_lib/imageStorage.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/imageStorage.ts#L13)
+Defined in: [server/\_lib/imageStorage.ts:13](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/imageStorage.ts#L13)
 
 #### Parameters
 

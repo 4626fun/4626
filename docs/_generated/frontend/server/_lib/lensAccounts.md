@@ -12,7 +12,7 @@
 
 > **LensUser** = `object`
 
-Defined in: [server/\_lib/lensAccounts.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lensAccounts.ts#L26)
+Defined in: [server/\_lib/lensAccounts.ts:26](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/lensAccounts.ts#L26)
 
 #### Properties
 
@@ -20,37 +20,37 @@ Defined in: [server/\_lib/lensAccounts.ts:26](https://github.com/wenakita/4626/b
 
 > **accountAddress**: `string`
 
-Defined in: [server/\_lib/lensAccounts.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lensAccounts.ts#L31)
+Defined in: [server/\_lib/lensAccounts.ts:31](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/lensAccounts.ts#L31)
 
 ##### avatar
 
 > **avatar**: `string` \| `null`
 
-Defined in: [server/\_lib/lensAccounts.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lensAccounts.ts#L30)
+Defined in: [server/\_lib/lensAccounts.ts:30](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/lensAccounts.ts#L30)
 
 ##### displayName
 
 > **displayName**: `string`
 
-Defined in: [server/\_lib/lensAccounts.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lensAccounts.ts#L27)
+Defined in: [server/\_lib/lensAccounts.ts:27](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/lensAccounts.ts#L27)
 
 ##### handle
 
 > **handle**: `string` \| `null`
 
-Defined in: [server/\_lib/lensAccounts.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lensAccounts.ts#L28)
+Defined in: [server/\_lib/lensAccounts.ts:28](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/lensAccounts.ts#L28)
 
 ##### ownerAddress
 
 > **ownerAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/lensAccounts.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lensAccounts.ts#L32)
+Defined in: [server/\_lib/lensAccounts.ts:32](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/lensAccounts.ts#L32)
 
 ##### username
 
 > **username**: `string` \| `null`
 
-Defined in: [server/\_lib/lensAccounts.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lensAccounts.ts#L29)
+Defined in: [server/\_lib/lensAccounts.ts:29](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/lensAccounts.ts#L29)
 
 ## Functions
 
@@ -58,7 +58,7 @@ Defined in: [server/\_lib/lensAccounts.ts:29](https://github.com/wenakita/4626/b
 
 > **resolveLensUserByOwner**(`address`): `Promise`\<[`LensUser`](#lensuser) \| `null`\>
 
-Defined in: [server/\_lib/lensAccounts.ts:164](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lensAccounts.ts#L164)
+Defined in: [server/\_lib/lensAccounts.ts:164](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/lensAccounts.ts#L164)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **KeeprVaultAutomationRow** = `object`
 
-Defined in: [server/\_lib/keeprAutomation.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeprAutomation.ts#L6)
+Defined in: [server/\_lib/keeprAutomation.ts:6](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/keeprAutomation.ts#L6)
 
 #### Properties
 
@@ -20,79 +20,79 @@ Defined in: [server/\_lib/keeprAutomation.ts:6](https://github.com/wenakita/4626
 
 > **authorizationSource**: `string` \| `null`
 
-Defined in: [server/\_lib/keeprAutomation.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeprAutomation.ts#L12)
+Defined in: [server/\_lib/keeprAutomation.ts:12](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/keeprAutomation.ts#L12)
 
 ##### automationEnabled
 
 > **automationEnabled**: `boolean`
 
-Defined in: [server/\_lib/keeprAutomation.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeprAutomation.ts#L13)
+Defined in: [server/\_lib/keeprAutomation.ts:13](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/keeprAutomation.ts#L13)
 
 ##### automationScope
 
 > **automationScope**: `string` \| `null`
 
-Defined in: [server/\_lib/keeprAutomation.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeprAutomation.ts#L14)
+Defined in: [server/\_lib/keeprAutomation.ts:14](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/keeprAutomation.ts#L14)
 
 ##### canonicalCswAddress
 
 > **canonicalCswAddress**: `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/keeprAutomation.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeprAutomation.ts#L9)
+Defined in: [server/\_lib/keeprAutomation.ts:9](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/keeprAutomation.ts#L9)
 
 ##### createdAt
 
 > **createdAt**: `string` \| `null`
 
-Defined in: [server/\_lib/keeprAutomation.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeprAutomation.ts#L18)
+Defined in: [server/\_lib/keeprAutomation.ts:18](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/keeprAutomation.ts#L18)
 
 ##### embeddedEoaAddress
 
 > **embeddedEoaAddress**: `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/keeprAutomation.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeprAutomation.ts#L10)
+Defined in: [server/\_lib/keeprAutomation.ts:10](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/keeprAutomation.ts#L10)
 
 ##### lastOwnerCheckAt
 
 > **lastOwnerCheckAt**: `string` \| `null`
 
-Defined in: [server/\_lib/keeprAutomation.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeprAutomation.ts#L15)
+Defined in: [server/\_lib/keeprAutomation.ts:15](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/keeprAutomation.ts#L15)
 
 ##### metadata
 
 > **metadata**: `JsonMap`
 
-Defined in: [server/\_lib/keeprAutomation.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeprAutomation.ts#L17)
+Defined in: [server/\_lib/keeprAutomation.ts:17](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/keeprAutomation.ts#L17)
 
 ##### privyWalletId
 
 > **privyWalletId**: `string` \| `null`
 
-Defined in: [server/\_lib/keeprAutomation.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeprAutomation.ts#L11)
+Defined in: [server/\_lib/keeprAutomation.ts:11](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/keeprAutomation.ts#L11)
 
 ##### profileId
 
 > **profileId**: `number` \| `null`
 
-Defined in: [server/\_lib/keeprAutomation.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeprAutomation.ts#L8)
+Defined in: [server/\_lib/keeprAutomation.ts:8](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/keeprAutomation.ts#L8)
 
 ##### revokedAt
 
 > **revokedAt**: `string` \| `null`
 
-Defined in: [server/\_lib/keeprAutomation.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeprAutomation.ts#L16)
+Defined in: [server/\_lib/keeprAutomation.ts:16](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/keeprAutomation.ts#L16)
 
 ##### updatedAt
 
 > **updatedAt**: `string` \| `null`
 
-Defined in: [server/\_lib/keeprAutomation.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeprAutomation.ts#L19)
+Defined in: [server/\_lib/keeprAutomation.ts:19](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/keeprAutomation.ts#L19)
 
 ##### vaultAddress
 
 > **vaultAddress**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/keeprAutomation.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeprAutomation.ts#L7)
+Defined in: [server/\_lib/keeprAutomation.ts:7](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/keeprAutomation.ts#L7)
 
 ## Functions
 
@@ -100,7 +100,7 @@ Defined in: [server/\_lib/keeprAutomation.ts:7](https://github.com/wenakita/4626
 
 > **disableKeeprVaultAutomation**(`params`): `Promise`\<[`KeeprVaultAutomationRow`](#keeprvaultautomationrow) \| `null`\>
 
-Defined in: [server/\_lib/keeprAutomation.ts:227](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeprAutomation.ts#L227)
+Defined in: [server/\_lib/keeprAutomation.ts:227](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/keeprAutomation.ts#L227)
 
 #### Parameters
 
@@ -124,7 +124,7 @@ Defined in: [server/\_lib/keeprAutomation.ts:227](https://github.com/wenakita/46
 
 > **getKeeprVaultAutomationByVaultAddress**(`vaultAddress`): `Promise`\<[`KeeprVaultAutomationRow`](#keeprvaultautomationrow) \| `null`\>
 
-Defined in: [server/\_lib/keeprAutomation.ts:187](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeprAutomation.ts#L187)
+Defined in: [server/\_lib/keeprAutomation.ts:187](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/keeprAutomation.ts#L187)
 
 #### Parameters
 
@@ -142,7 +142,7 @@ Defined in: [server/\_lib/keeprAutomation.ts:187](https://github.com/wenakita/46
 
 > **listKeeprVaultAutomationByVaultAddresses**(`vaultAddresses`): `Promise`\<[`KeeprVaultAutomationRow`](#keeprvaultautomationrow)[]\>
 
-Defined in: [server/\_lib/keeprAutomation.ts:204](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeprAutomation.ts#L204)
+Defined in: [server/\_lib/keeprAutomation.ts:204](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/keeprAutomation.ts#L204)
 
 #### Parameters
 
@@ -160,7 +160,7 @@ readonly `` `0x${string}` ``[]
 
 > **upsertKeeprVaultAutomation**(`params`): `Promise`\<[`KeeprVaultAutomationRow`](#keeprvaultautomationrow)\>
 
-Defined in: [server/\_lib/keeprAutomation.ts:106](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeprAutomation.ts#L106)
+Defined in: [server/\_lib/keeprAutomation.ts:106](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/keeprAutomation.ts#L106)
 
 #### Parameters
 

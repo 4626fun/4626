@@ -12,7 +12,7 @@
 
 > **assertRemoteAiEndpoint**(`url`): `string`
 
-Defined in: [server/\_lib/agentControl/remoteAi.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/remoteAi.ts#L19)
+Defined in: [server/\_lib/agentControl/remoteAi.ts:19](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentControl/remoteAi.ts#L19)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [server/\_lib/agentControl/remoteAi.ts:19](https://github.com/wenaki
 
 > **fetchRemoteAi**(`url`, `init?`): `Promise`\<`Response`\>
 
-Defined in: [server/\_lib/agentControl/remoteAi.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/remoteAi.ts#L35)
+Defined in: [server/\_lib/agentControl/remoteAi.ts:35](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentControl/remoteAi.ts#L35)
 
 #### Parameters
 
@@ -52,7 +52,7 @@ Defined in: [server/\_lib/agentControl/remoteAi.ts:35](https://github.com/wenaki
 
 > **prepareRemoteAiJsonPayload**\<`T`\>(`payload`, `options`): `T`
 
-Defined in: [server/\_lib/agentControl/remoteAi.ts:54](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/remoteAi.ts#L54)
+Defined in: [server/\_lib/agentControl/remoteAi.ts:54](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentControl/remoteAi.ts#L54)
 
 #### Type Parameters
 
@@ -80,7 +80,7 @@ Defined in: [server/\_lib/agentControl/remoteAi.ts:54](https://github.com/wenaki
 
 > **prepareRemoteAiJsonString**(`payload`, `options`): `string`
 
-Defined in: [server/\_lib/agentControl/remoteAi.ts:64](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/remoteAi.ts#L64)
+Defined in: [server/\_lib/agentControl/remoteAi.ts:64](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentControl/remoteAi.ts#L64)
 
 #### Parameters
 
@@ -102,7 +102,7 @@ Defined in: [server/\_lib/agentControl/remoteAi.ts:64](https://github.com/wenaki
 
 > **prepareRemoteAiText**(`input`, `options`): `string`
 
-Defined in: [server/\_lib/agentControl/remoteAi.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/remoteAi.ts#L42)
+Defined in: [server/\_lib/agentControl/remoteAi.ts:42](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentControl/remoteAi.ts#L42)
 
 #### Parameters
 

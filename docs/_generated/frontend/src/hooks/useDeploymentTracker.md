@@ -10,7 +10,7 @@
 
 ### DeploymentRecord
 
-Defined in: [src/hooks/useDeploymentTracker.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useDeploymentTracker.ts#L8)
+Defined in: [src/hooks/useDeploymentTracker.ts:8](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/hooks/useDeploymentTracker.ts#L8)
 
 Deployment record stored in localStorage.
 Tracks a single deployment per owner address per deployment version.
@@ -21,7 +21,7 @@ Tracks a single deployment per owner address per deployment version.
 
 > **contracts**: `object`
 
-Defined in: [src/hooks/useDeploymentTracker.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useDeploymentTracker.ts#L18)
+Defined in: [src/hooks/useDeploymentTracker.ts:18](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/hooks/useDeploymentTracker.ts#L18)
 
 Deployed contract addresses
 
@@ -61,7 +61,7 @@ Deployed contract addresses
 
 > **creatorToken**: `` `0x${string}` ``
 
-Defined in: [src/hooks/useDeploymentTracker.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useDeploymentTracker.ts#L10)
+Defined in: [src/hooks/useDeploymentTracker.ts:10](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/hooks/useDeploymentTracker.ts#L10)
 
 The creator token (Zora coin) address deployed for
 
@@ -69,7 +69,7 @@ The creator token (Zora coin) address deployed for
 
 > **deployedAt**: `number`
 
-Defined in: [src/hooks/useDeploymentTracker.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useDeploymentTracker.ts#L16)
+Defined in: [src/hooks/useDeploymentTracker.ts:16](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/hooks/useDeploymentTracker.ts#L16)
 
 Unix timestamp (ms) when deployment completed
 
@@ -77,7 +77,7 @@ Unix timestamp (ms) when deployment completed
 
 > **owner**: `` `0x${string}` ``
 
-Defined in: [src/hooks/useDeploymentTracker.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useDeploymentTracker.ts#L12)
+Defined in: [src/hooks/useDeploymentTracker.ts:12](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/hooks/useDeploymentTracker.ts#L12)
 
 The owner address (canonical Coinbase Smart Wallet)
 
@@ -85,7 +85,7 @@ The owner address (canonical Coinbase Smart Wallet)
 
 > `optional` **txHashes**: `object`
 
-Defined in: [src/hooks/useDeploymentTracker.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useDeploymentTracker.ts#L29)
+Defined in: [src/hooks/useDeploymentTracker.ts:29](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/hooks/useDeploymentTracker.ts#L29)
 
 Transaction hashes for each phase
 
@@ -109,7 +109,7 @@ Transaction hashes for each phase
 
 > **version**: `string`
 
-Defined in: [src/hooks/useDeploymentTracker.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useDeploymentTracker.ts#L14)
+Defined in: [src/hooks/useDeploymentTracker.ts:14](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/hooks/useDeploymentTracker.ts#L14)
 
 Deployment version from VITE_DEPLOYMENT_VERSION
 
@@ -119,7 +119,7 @@ Deployment version from VITE_DEPLOYMENT_VERSION
 
 > **getDeploymentForOwnerVersion**(`owner`, `version`): [`DeploymentRecord`](#deploymentrecord) \| `null`
 
-Defined in: [src/hooks/useDeploymentTracker.ts:65](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useDeploymentTracker.ts#L65)
+Defined in: [src/hooks/useDeploymentTracker.ts:65](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/hooks/useDeploymentTracker.ts#L65)
 
 Retrieves deployment for a specific owner and version.
 
@@ -143,7 +143,7 @@ Retrieves deployment for a specific owner and version.
 
 > **getDeploymentsForOwner**(`owner`): [`DeploymentRecord`](#deploymentrecord)[]
 
-Defined in: [src/hooks/useDeploymentTracker.ts:50](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useDeploymentTracker.ts#L50)
+Defined in: [src/hooks/useDeploymentTracker.ts:50](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/hooks/useDeploymentTracker.ts#L50)
 
 Retrieves all deployments for a given owner across all versions.
 
@@ -163,7 +163,7 @@ Retrieves all deployments for a given owner across all versions.
 
 > **getDeploymentVersion**(): `string`
 
-Defined in: [src/hooks/useDeploymentTracker.ts:185](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useDeploymentTracker.ts#L185)
+Defined in: [src/hooks/useDeploymentTracker.ts:185](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/hooks/useDeploymentTracker.ts#L185)
 
 Utility to get the current deployment version from env.
 
@@ -177,7 +177,7 @@ Utility to get the current deployment version from env.
 
 > **useDeploymentTracker**(`owner`, `version`): `object`
 
-Defined in: [src/hooks/useDeploymentTracker.ts:125](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useDeploymentTracker.ts#L125)
+Defined in: [src/hooks/useDeploymentTracker.ts:125](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/hooks/useDeploymentTracker.ts#L125)
 
 Hook to track deployments per owner address per version.
 Enforces 1 deployment per owner per VITE_DEPLOYMENT_VERSION.

@@ -12,7 +12,7 @@
 
 > **StepStatus** = `"pending"` \| `"active"` \| `"complete"`
 
-Defined in: [src/components/ui/StepIndicator.tsx:4](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/StepIndicator.tsx#L4)
+Defined in: [src/components/ui/StepIndicator.tsx:4](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/components/ui/StepIndicator.tsx#L4)
 
 ## Variables
 
@@ -20,4 +20,4 @@ Defined in: [src/components/ui/StepIndicator.tsx:4](https://github.com/wenakita/
 
 > `const` **StepIndicator**: `NamedExoticComponent`\<`StepIndicatorProps`\>
 
-Defined in: [src/components/ui/StepIndicator.tsx:16](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/StepIndicator.tsx#L16)
+Defined in: [src/components/ui/StepIndicator.tsx:16](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/components/ui/StepIndicator.tsx#L16)

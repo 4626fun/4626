@@ -10,7 +10,7 @@
 
 ### components
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:518](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L518)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:518](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L518)
 
 #### Properties
 
@@ -18,13 +18,13 @@ Defined in: [src/lib/uniswap/generated/tradeApi.ts:518](https://github.com/wenak
 
 > **headers**: `never`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2318](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2318)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2318](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2318)
 
 ##### parameters
 
 > **parameters**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2289](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2289)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2289](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2289)
 
 ###### bridgeTokenInChainIdParam
 
@@ -134,19 +134,19 @@ The version of the Universal Router to use for the swap journey. *MUST* be consi
 
 > **pathItems**: `never`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2319](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2319)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2319](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2319)
 
 ##### requestBodies
 
 > **requestBodies**: `never`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2317](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2317)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2317](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2317)
 
 ##### responses
 
 > **responses**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:1891](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L1891)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:1891](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L1891)
 
 ###### ApprovalNotFound404
 
@@ -3466,7 +3466,7 @@ The quantity of ETH tokens approved for spending by the transaction, denominated
 
 > **schemas**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:519](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L519)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:519](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L519)
 
 ###### ~~additionalValidationContract~~
 
@@ -10474,7 +10474,7 @@ Wrap/Unwrap Quote
 
 ### operations
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2322](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2322)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2322](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2322)
 
 #### Properties
 
@@ -10482,7 +10482,7 @@ Defined in: [src/lib/uniswap/generated/tradeApi.ts:2322](https://github.com/wena
 
 > **aggregator\_quote**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2345](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2345)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2345](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2345)
 
 ###### parameters
 
@@ -10908,7 +10908,7 @@ Timeout
 
 > **check\_approval**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2323](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2323)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2323](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2323)
 
 ###### parameters
 
@@ -11308,7 +11308,7 @@ Timeout
 
 > **check\_approval\_lp**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2563](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2563)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2563](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2563)
 
 ###### parameters
 
@@ -12052,7 +12052,7 @@ Timeout
 
 > **claim\_lp\_fees**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2651](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2651)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2651](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2651)
 
 ###### parameters
 
@@ -12436,7 +12436,7 @@ Timeout
 
 > **claim\_lp\_rewards**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2695](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2695)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2695](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2695)
 
 ###### parameters
 
@@ -12776,7 +12776,7 @@ Timeout
 
 > **create\_lp\_position**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2585](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2585)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2585](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2585)
 
 ###### parameters
 
@@ -13232,7 +13232,7 @@ Timeout
 
 > **create\_plan**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2835](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2835)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2835](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2835)
 
 ###### parameters
 
@@ -13860,7 +13860,7 @@ Timeout
 
 > **create\_send**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2498](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2498)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2498](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2498)
 
 ###### parameters
 
@@ -14204,7 +14204,7 @@ Timeout
 
 > **create\_swap\_5792\_transaction**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2783](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2783)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2783](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2783)
 
 ###### parameters
 
@@ -14516,7 +14516,7 @@ Timeout
 
 > **create\_swap\_7702\_transaction**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2808](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2808)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2808](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2808)
 
 ###### parameters
 
@@ -14890,7 +14890,7 @@ Timeout
 
 > **create\_swap\_transaction**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2431](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2431)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2431](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2431)
 
 ###### parameters
 
@@ -15306,7 +15306,7 @@ Timeout
 
 > **decrease\_lp\_position**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2629](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2629)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2629](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2629)
 
 ###### parameters
 
@@ -15738,7 +15738,7 @@ Timeout
 
 > **get\_limit\_order\_quote**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2541](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2541)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2541](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2541)
 
 ###### parameters
 
@@ -16170,7 +16170,7 @@ Timeout
 
 > **get\_order**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2396](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2396)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2396](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2396)
 
 ###### parameters
 
@@ -16468,7 +16468,7 @@ Timeout
 
 > **get\_plan**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2857](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2857)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2857](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2857)
 
 ###### parameters
 
@@ -16954,7 +16954,7 @@ Timeout
 
 > **get\_swappable\_tokens**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2520](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2520)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2520](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2520)
 
 ###### parameters
 
@@ -17222,7 +17222,7 @@ Timeout
 
 > **get\_swaps**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2456](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2456)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2456](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2456)
 
 ###### parameters
 
@@ -17460,7 +17460,7 @@ Timeout
 
 > **increase\_lp\_position**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2607](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2607)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2607](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2607)
 
 ###### parameters
 
@@ -17912,7 +17912,7 @@ Timeout
 
 > **indicative\_quote**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2477](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2477)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2477](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2477)
 
 ###### parameters
 
@@ -18202,7 +18202,7 @@ Timeout
 
 > **migrate\_lp\_position**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2673](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2673)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2673](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2673)
 
 ###### parameters
 
@@ -18684,7 +18684,7 @@ Timeout
 
 > **pool\_info**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2717](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2717)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2717](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2717)
 
 ###### parameters
 
@@ -19020,7 +19020,7 @@ Timeout
 
 > **post\_order**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2372](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2372)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2372](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2372)
 
 ###### parameters
 
@@ -19288,7 +19288,7 @@ Timeout
 
 > **update\_plan**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2882](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2882)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2882](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2882)
 
 ###### parameters
 
@@ -19782,7 +19782,7 @@ Timeout
 
 > **wallet\_check\_delegation**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2761](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2761)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2761](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2761)
 
 ###### parameters
 
@@ -20074,7 +20074,7 @@ Timeout
 
 > **wallet\_encode\_7702**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2739](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2739)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2739](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2739)
 
 ###### parameters
 
@@ -20410,7 +20410,7 @@ Timeout
 
 ### paths
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L6)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:6](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L6)
 
 This file was auto-generated by openapi-typescript.
 Do not make direct changes to the file.
@@ -20421,7 +20421,7 @@ Do not make direct changes to the file.
 
 > **/check\_approval**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L7)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:7](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L7)
 
 ###### delete?
 
@@ -20881,7 +20881,7 @@ Timeout
 
 > **/indicative\_quote**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:141](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L141)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:141](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L141)
 
 ###### delete?
 
@@ -21233,7 +21233,7 @@ Timeout
 
 > **/limit\_order\_quote**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:204](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L204)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:204](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L204)
 
 ###### delete?
 
@@ -21723,7 +21723,7 @@ Timeout
 
 > **/lp/approve**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:224](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L224)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:224](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L224)
 
 ###### delete?
 
@@ -22527,7 +22527,7 @@ Timeout
 
 > **/lp/claim**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:310](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L310)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:310](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L310)
 
 ###### delete?
 
@@ -22969,7 +22969,7 @@ Timeout
 
 > **/lp/claim\_rewards**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:350](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L350)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:350](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L350)
 
 ###### delete?
 
@@ -23367,7 +23367,7 @@ Timeout
 
 > **/lp/create**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:246](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L246)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:246](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L246)
 
 ###### delete?
 
@@ -23885,7 +23885,7 @@ Timeout
 
 > **/lp/decrease**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:290](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L290)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:290](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L290)
 
 ###### delete?
 
@@ -24375,7 +24375,7 @@ Timeout
 
 > **/lp/increase**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:270](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L270)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:270](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L270)
 
 ###### delete?
 
@@ -24885,7 +24885,7 @@ Timeout
 
 > **/lp/migrate**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:330](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L330)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:330](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L330)
 
 ###### delete?
 
@@ -25425,7 +25425,7 @@ Timeout
 
 > **/lp/pool\_info**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:370](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L370)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:370](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L370)
 
 ###### delete?
 
@@ -25819,7 +25819,7 @@ Timeout
 
 > **/order**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:55](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L55)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:55](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L55)
 
 ###### delete?
 
@@ -26151,7 +26151,7 @@ Timeout
 
 > **/orders**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:81](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L81)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:81](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L81)
 
 ###### delete?
 
@@ -26507,7 +26507,7 @@ Timeout
 
 > **/plan**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:472](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L472)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:472](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L472)
 
 ###### delete?
 
@@ -27145,7 +27145,7 @@ Timeout
 
 > **/plan/\{planId\}**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:492](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L492)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:492](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L492)
 
 ###### delete?
 
@@ -28135,7 +28135,7 @@ Timeout
 
 > **/quote**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L29)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:29](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L29)
 
 ###### delete?
 
@@ -28625,7 +28625,7 @@ Timeout
 
 > **/send**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:164](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L164)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:164](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L164)
 
 ###### delete?
 
@@ -29027,7 +29027,7 @@ Timeout
 
 > **/swap**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:101](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L101)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:101](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L101)
 
 ###### delete?
 
@@ -29501,7 +29501,7 @@ Timeout
 
 > **/swap\_5792**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:430](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L430)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:430](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L430)
 
 ###### delete?
 
@@ -29871,7 +29871,7 @@ Timeout
 
 > **/swap\_7702**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:450](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L450)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:450](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L450)
 
 ###### delete?
 
@@ -30305,7 +30305,7 @@ Timeout
 
 > **/swappable\_tokens**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:184](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L184)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:184](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L184)
 
 ###### delete?
 
@@ -30631,7 +30631,7 @@ Timeout
 
 > **/swaps**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:121](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L121)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:121](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L121)
 
 ###### delete?
 
@@ -30927,7 +30927,7 @@ Timeout
 
 > **/wallet/check\_delegation**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:410](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L410)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:410](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L410)
 
 ###### delete?
 
@@ -31277,7 +31277,7 @@ Timeout
 
 > **/wallet/encode\_7702**: `object`
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:390](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L390)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:390](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L390)
 
 ###### delete?
 
@@ -31673,7 +31673,7 @@ Timeout
 
 > **$defs** = `Record`\<`string`, `never`\>
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:2321](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L2321)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:2321](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L2321)
 
 ***
 
@@ -31681,4 +31681,4 @@ Defined in: [src/lib/uniswap/generated/tradeApi.ts:2321](https://github.com/wena
 
 > **webhooks** = `Record`\<`string`, `never`\>
 
-Defined in: [src/lib/uniswap/generated/tradeApi.ts:517](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/generated/tradeApi.ts#L517)
+Defined in: [src/lib/uniswap/generated/tradeApi.ts:517](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/uniswap/generated/tradeApi.ts#L517)

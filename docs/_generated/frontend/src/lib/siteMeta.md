@@ -12,7 +12,7 @@
 
 > `const` **SITE\_APP\_NAME**: `string` = `sharedSiteMeta.siteAppName`
 
-Defined in: [src/lib/siteMeta.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/lib/siteMeta.ts#L3)
+Defined in: [src/lib/siteMeta.ts:3](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/siteMeta.ts#L3)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/siteMeta.ts:3](https://github.com/wenakita/4626/blob/main/f
 
 > `const` **SITE\_DESCRIPTION**: `string` = `sharedSiteMeta.siteDescription`
 
-Defined in: [src/lib/siteMeta.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/siteMeta.ts#L6)
+Defined in: [src/lib/siteMeta.ts:6](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/siteMeta.ts#L6)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/lib/siteMeta.ts:6](https://github.com/wenakita/4626/blob/main/f
 
 > `const` **SITE\_IMAGE\_ALT**: `string` = `sharedSiteMeta.siteImageAlt`
 
-Defined in: [src/lib/siteMeta.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/siteMeta.ts#L7)
+Defined in: [src/lib/siteMeta.ts:7](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/siteMeta.ts#L7)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/lib/siteMeta.ts:7](https://github.com/wenakita/4626/blob/main/f
 
 > `const` **SITE\_NAME**: `string` = `sharedSiteMeta.siteName`
 
-Defined in: [src/lib/siteMeta.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/lib/siteMeta.ts#L4)
+Defined in: [src/lib/siteMeta.ts:4](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/siteMeta.ts#L4)
 
 ***
 
@@ -44,7 +44,7 @@ Defined in: [src/lib/siteMeta.ts:4](https://github.com/wenakita/4626/blob/main/f
 
 > `const` **SITE\_TITLE**: `string` = `sharedSiteMeta.siteTitle`
 
-Defined in: [src/lib/siteMeta.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/siteMeta.ts#L5)
+Defined in: [src/lib/siteMeta.ts:5](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/siteMeta.ts#L5)
 
 ***
 
@@ -52,7 +52,7 @@ Defined in: [src/lib/siteMeta.ts:5](https://github.com/wenakita/4626/blob/main/f
 
 > `const` **TELEGRAM\_LINK\_DESCRIPTION**: `string` = `sharedSiteMeta.telegramLinkDescription`
 
-Defined in: [src/lib/siteMeta.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/siteMeta.ts#L9)
+Defined in: [src/lib/siteMeta.ts:9](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/siteMeta.ts#L9)
 
 ***
 
@@ -60,4 +60,4 @@ Defined in: [src/lib/siteMeta.ts:9](https://github.com/wenakita/4626/blob/main/f
 
 > `const` **TELEGRAM\_LINK\_TITLE**: `string` = `sharedSiteMeta.telegramLinkTitle`
 
-Defined in: [src/lib/siteMeta.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/siteMeta.ts#L8)
+Defined in: [src/lib/siteMeta.ts:8](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/siteMeta.ts#L8)

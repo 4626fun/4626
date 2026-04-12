@@ -12,7 +12,7 @@
 
 > **TrendPreflightResult** = `object`
 
-Defined in: [server/zora/trends.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trends.ts#L24)
+Defined in: [server/zora/trends.ts:24](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/zora/trends.ts#L24)
 
 #### Properties
 
@@ -20,31 +20,31 @@ Defined in: [server/zora/trends.ts:24](https://github.com/wenakita/4626/blob/mai
 
 > **deployed**: `boolean`
 
-Defined in: [server/zora/trends.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trends.ts#L28)
+Defined in: [server/zora/trends.ts:28](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/zora/trends.ts#L28)
 
 ##### deployedBytecode
 
 > **deployedBytecode**: `` `0x${string}` `` \| `null`
 
-Defined in: [server/zora/trends.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trends.ts#L29)
+Defined in: [server/zora/trends.ts:29](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/zora/trends.ts#L29)
 
 ##### predictedAddress
 
 > **predictedAddress**: `` `0x${string}` ``
 
-Defined in: [server/zora/trends.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trends.ts#L27)
+Defined in: [server/zora/trends.ts:27](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/zora/trends.ts#L27)
 
 ##### ticker
 
 > **ticker**: `string`
 
-Defined in: [server/zora/trends.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trends.ts#L25)
+Defined in: [server/zora/trends.ts:25](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/zora/trends.ts#L25)
 
 ##### tickerHash
 
 > **tickerHash**: `` `0x${string}` ``
 
-Defined in: [server/zora/trends.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trends.ts#L26)
+Defined in: [server/zora/trends.ts:26](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/zora/trends.ts#L26)
 
 ***
 
@@ -52,7 +52,7 @@ Defined in: [server/zora/trends.ts:26](https://github.com/wenakita/4626/blob/mai
 
 > **TrendReserveResult** = `object`
 
-Defined in: [server/zora/trends.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trends.ts#L32)
+Defined in: [server/zora/trends.ts:32](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/zora/trends.ts#L32)
 
 #### Properties
 
@@ -60,55 +60,55 @@ Defined in: [server/zora/trends.ts:32](https://github.com/wenakita/4626/blob/mai
 
 > **deployed**: `boolean`
 
-Defined in: [server/zora/trends.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trends.ts#L37)
+Defined in: [server/zora/trends.ts:37](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/zora/trends.ts#L37)
 
 ##### deployedAddress
 
 > **deployedAddress**: `` `0x${string}` ``
 
-Defined in: [server/zora/trends.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trends.ts#L36)
+Defined in: [server/zora/trends.ts:36](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/zora/trends.ts#L36)
 
 ##### predictedAddress
 
 > **predictedAddress**: `` `0x${string}` ``
 
-Defined in: [server/zora/trends.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trends.ts#L35)
+Defined in: [server/zora/trends.ts:35](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/zora/trends.ts#L35)
 
 ##### status
 
 > **status**: `"already_deployed"` \| `"submitted"` \| `"deployed"`
 
-Defined in: [server/zora/trends.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trends.ts#L41)
+Defined in: [server/zora/trends.ts:41](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/zora/trends.ts#L41)
 
 ##### ticker
 
 > **ticker**: `string`
 
-Defined in: [server/zora/trends.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trends.ts#L33)
+Defined in: [server/zora/trends.ts:33](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/zora/trends.ts#L33)
 
 ##### tickerHash
 
 > **tickerHash**: `` `0x${string}` ``
 
-Defined in: [server/zora/trends.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trends.ts#L34)
+Defined in: [server/zora/trends.ts:34](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/zora/trends.ts#L34)
 
 ##### txHash
 
 > **txHash**: `string` \| `null`
 
-Defined in: [server/zora/trends.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trends.ts#L38)
+Defined in: [server/zora/trends.ts:38](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/zora/trends.ts#L38)
 
 ##### walletAddress
 
 > **walletAddress**: `` `0x${string}` `` \| `null`
 
-Defined in: [server/zora/trends.ts:39](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trends.ts#L39)
+Defined in: [server/zora/trends.ts:39](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/zora/trends.ts#L39)
 
 ##### walletId
 
 > **walletId**: `string` \| `null`
 
-Defined in: [server/zora/trends.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trends.ts#L40)
+Defined in: [server/zora/trends.ts:40](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/zora/trends.ts#L40)
 
 ***
 
@@ -116,7 +116,7 @@ Defined in: [server/zora/trends.ts:40](https://github.com/wenakita/4626/blob/mai
 
 > **TrendValidationResult** = \{ `ok`: `true`; `ticker`: `string`; `tickerHash`: `` `0x${string}` ``; \} \| \{ `error`: `string`; `ok`: `false`; \}
 
-Defined in: [server/zora/trends.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trends.ts#L20)
+Defined in: [server/zora/trends.ts:20](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/zora/trends.ts#L20)
 
 ## Functions
 
@@ -124,7 +124,7 @@ Defined in: [server/zora/trends.ts:20](https://github.com/wenakita/4626/blob/mai
 
 > **normalizeTrendTicker**(`input`): `string` \| `null`
 
-Defined in: [server/zora/trends.ts:66](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trends.ts#L66)
+Defined in: [server/zora/trends.ts:66](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/zora/trends.ts#L66)
 
 #### Parameters
 
@@ -142,7 +142,7 @@ Defined in: [server/zora/trends.ts:66](https://github.com/wenakita/4626/blob/mai
 
 > **preflightTrendTicker**(`params`): `Promise`\<[`TrendPreflightResult`](#trendpreflightresult)\>
 
-Defined in: [server/zora/trends.ts:83](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trends.ts#L83)
+Defined in: [server/zora/trends.ts:83](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/zora/trends.ts#L83)
 
 #### Parameters
 
@@ -162,7 +162,7 @@ Defined in: [server/zora/trends.ts:83](https://github.com/wenakita/4626/blob/mai
 
 > **reserveTrendTicker**(`params`): `Promise`\<[`TrendReserveResult`](#trendreserveresult)\>
 
-Defined in: [server/zora/trends.ts:112](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trends.ts#L112)
+Defined in: [server/zora/trends.ts:112](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/zora/trends.ts#L112)
 
 #### Parameters
 
@@ -194,7 +194,7 @@ Defined in: [server/zora/trends.ts:112](https://github.com/wenakita/4626/blob/ma
 
 > **validateTrendTicker**(`input`): [`TrendValidationResult`](#trendvalidationresult)
 
-Defined in: [server/zora/trends.ts:74](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trends.ts#L74)
+Defined in: [server/zora/trends.ts:74](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/zora/trends.ts#L74)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **PathRouteDef** = `object`
 
-Defined in: [src/app/routeDefinitions.tsx:45](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L45)
+Defined in: [src/app/routeDefinitions.tsx:45](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/routeDefinitions.tsx#L45)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [src/app/routeDefinitions.tsx:45](https://github.com/wenakita/4626/b
 
 > **element**: `ReactNode`
 
-Defined in: [src/app/routeDefinitions.tsx:45](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L45)
+Defined in: [src/app/routeDefinitions.tsx:45](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/routeDefinitions.tsx#L45)
 
 ##### path
 
 > **path**: `string`
 
-Defined in: [src/app/routeDefinitions.tsx:45](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L45)
+Defined in: [src/app/routeDefinitions.tsx:45](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/routeDefinitions.tsx#L45)
 
 ## Variables
 
@@ -34,7 +34,7 @@ Defined in: [src/app/routeDefinitions.tsx:45](https://github.com/wenakita/4626/b
 
 > `const` **ACCOUNT\_ROUTES**: [`PathRouteDef`](#pathroutedef)[]
 
-Defined in: [src/app/routeDefinitions.tsx:67](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L67)
+Defined in: [src/app/routeDefinitions.tsx:67](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/routeDefinitions.tsx#L67)
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: [src/app/routeDefinitions.tsx:67](https://github.com/wenakita/4626/b
 
 > `const` **ADMIN\_CHILD\_ROUTES**: [`PathRouteDef`](#pathroutedef)[]
 
-Defined in: [src/app/routeDefinitions.tsx:136](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L136)
+Defined in: [src/app/routeDefinitions.tsx:136](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/routeDefinitions.tsx#L136)
 
 ***
 
@@ -50,7 +50,7 @@ Defined in: [src/app/routeDefinitions.tsx:136](https://github.com/wenakita/4626/
 
 > `const` **APP\_ACCEPTED\_ROUTES**: [`PathRouteDef`](#pathroutedef)[]
 
-Defined in: [src/app/routeDefinitions.tsx:94](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L94)
+Defined in: [src/app/routeDefinitions.tsx:94](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/routeDefinitions.tsx#L94)
 
 ***
 
@@ -58,7 +58,7 @@ Defined in: [src/app/routeDefinitions.tsx:94](https://github.com/wenakita/4626/b
 
 > `const` **EXPLORE\_ROUTES**: [`PathRouteDef`](#pathroutedef)[]
 
-Defined in: [src/app/routeDefinitions.tsx:71](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L71)
+Defined in: [src/app/routeDefinitions.tsx:71](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/routeDefinitions.tsx#L71)
 
 ***
 
@@ -66,7 +66,7 @@ Defined in: [src/app/routeDefinitions.tsx:71](https://github.com/wenakita/4626/b
 
 > `const` **MARKETING\_ONLY\_ROUTES**: [`PathRouteDef`](#pathroutedef)[]
 
-Defined in: [src/app/routeDefinitions.tsx:60](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L60)
+Defined in: [src/app/routeDefinitions.tsx:60](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/routeDefinitions.tsx#L60)
 
 ## Functions
 
@@ -74,7 +74,7 @@ Defined in: [src/app/routeDefinitions.tsx:60](https://github.com/wenakita/4626/b
 
 > **renderPathRoutes**(`routes`, `transformElement?`): `Element`[]
 
-Defined in: [src/app/routeDefinitions.tsx:47](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L47)
+Defined in: [src/app/routeDefinitions.tsx:47](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/routeDefinitions.tsx#L47)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **enqueueSolanaSweepJob**(`params`): `Promise`\<`SolanaSweepJobRow`\>
 
-Defined in: [server/\_lib/solanaSweepJobs.ts:126](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/solanaSweepJobs.ts#L126)
+Defined in: [server/\_lib/solanaSweepJobs.ts:126](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/solanaSweepJobs.ts#L126)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [server/\_lib/solanaSweepJobs.ts:126](https://github.com/wenakita/46
 
 > **ensureSolanaSweepJobsSchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/solanaSweepJobs.ts:87](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/solanaSweepJobs.ts#L87)
+Defined in: [server/\_lib/solanaSweepJobs.ts:87](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/solanaSweepJobs.ts#L87)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [server/\_lib/solanaSweepJobs.ts:87](https://github.com/wenakita/462
 
 > **processSolanaSweepJobs**(`params`): `Promise`\<\{ `blocked`: `number`; `failed`: `number`; `jobIds`: `number`[]; `processed`: `number`; `retried`: `number`; `succeeded`: `number`; \}\>
 
-Defined in: [server/\_lib/solanaSweepJobs.ts:248](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/solanaSweepJobs.ts#L248)
+Defined in: [server/\_lib/solanaSweepJobs.ts:248](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/solanaSweepJobs.ts#L248)
 
 #### Parameters
 

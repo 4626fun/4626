@@ -12,7 +12,7 @@
 
 > **getCanonicalAppOrigin**(`req?`): `string`
 
-Defined in: [server/\_lib/origin.ts:82](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/origin.ts#L82)
+Defined in: [server/\_lib/origin.ts:82](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/origin.ts#L82)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [server/\_lib/origin.ts:82](https://github.com/wenakita/4626/blob/ma
 
 > **getCanonicalOrigin**(`req?`): `string`
 
-Defined in: [server/\_lib/origin.ts:59](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/origin.ts#L59)
+Defined in: [server/\_lib/origin.ts:59](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/origin.ts#L59)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [server/\_lib/origin.ts:59](https://github.com/wenakita/4626/blob/ma
 
 > **getErc8004PublicOrigin**(`_req?`): `string`
 
-Defined in: [server/\_lib/origin.ts:86](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/origin.ts#L86)
+Defined in: [server/\_lib/origin.ts:86](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/origin.ts#L86)
 
 #### Parameters
 

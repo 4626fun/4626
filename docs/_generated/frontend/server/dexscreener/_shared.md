@@ -12,7 +12,7 @@
 
 > **getStringQuery**(`req`, `key`): `string` \| `null`
 
-Defined in: [server/dexscreener/\_shared.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/dexscreener/_shared.ts#L21)
+Defined in: [server/dexscreener/\_shared.ts:21](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/dexscreener/_shared.ts#L21)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [server/dexscreener/\_shared.ts:21](https://github.com/wenakita/4626
 
 > **handleOptions**(`req`, `res`): `boolean`
 
-Defined in: [server/dexscreener/\_shared.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/dexscreener/_shared.ts#L8)
+Defined in: [server/dexscreener/\_shared.ts:8](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/dexscreener/_shared.ts#L8)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [server/dexscreener/\_shared.ts:8](https://github.com/wenakita/4626/
 
 > **isAddressLike**(`value`): `boolean`
 
-Defined in: [server/dexscreener/\_shared.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/dexscreener/_shared.ts#L27)
+Defined in: [server/dexscreener/\_shared.ts:27](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/dexscreener/_shared.ts#L27)
 
 #### Parameters
 
@@ -74,7 +74,7 @@ Defined in: [server/dexscreener/\_shared.ts:27](https://github.com/wenakita/4626
 
 > **setCache**(`res`, `seconds`): `void`
 
-Defined in: [server/dexscreener/\_shared.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/dexscreener/_shared.ts#L17)
+Defined in: [server/dexscreener/\_shared.ts:17](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/dexscreener/_shared.ts#L17)
 
 #### Parameters
 
@@ -96,7 +96,7 @@ Defined in: [server/dexscreener/\_shared.ts:17](https://github.com/wenakita/4626
 
 > **setCors**(`req`, `res`): `void`
 
-Defined in: [server/dexscreener/\_shared.ts:4](https://github.com/wenakita/4626/blob/main/frontend/server/dexscreener/_shared.ts#L4)
+Defined in: [server/dexscreener/\_shared.ts:4](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/dexscreener/_shared.ts#L4)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **detectEthereumProviderCollision**(): `EthereumProviderCollisionState`
 
-Defined in: [src/lib/wallet/providerCollision.ts:58](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/providerCollision.ts#L58)
+Defined in: [src/lib/wallet/providerCollision.ts:58](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/wallet/providerCollision.ts#L58)
 
 #### Returns
 

@@ -12,7 +12,7 @@
 
 > **SwapTokenOption** = [`TokenOption`](../../lib/uniswap/swapUtils.md#tokenoption) & `object`
 
-Defined in: [src/components/swap/TokenSelectorModal.tsx:17](https://github.com/wenakita/4626/blob/main/frontend/src/components/swap/TokenSelectorModal.tsx#L17)
+Defined in: [src/components/swap/TokenSelectorModal.tsx:17](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/components/swap/TokenSelectorModal.tsx#L17)
 
 #### Type Declaration
 
@@ -30,7 +30,7 @@ Defined in: [src/components/swap/TokenSelectorModal.tsx:17](https://github.com/w
 
 > **TokenSelectorModal**(`__namedParameters`): `Element`
 
-Defined in: [src/components/swap/TokenSelectorModal.tsx:79](https://github.com/wenakita/4626/blob/main/frontend/src/components/swap/TokenSelectorModal.tsx#L79)
+Defined in: [src/components/swap/TokenSelectorModal.tsx:79](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/components/swap/TokenSelectorModal.tsx#L79)
 
 #### Parameters
 

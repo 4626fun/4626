@@ -12,7 +12,7 @@
 
 > `const` **DATA\_SUFFIX**: `` `0x${string}` `` \| `undefined`
 
-Defined in: [src/lib/baseBuilderCodes.ts:192](https://github.com/wenakita/4626/blob/main/frontend/src/lib/baseBuilderCodes.ts#L192)
+Defined in: [src/lib/baseBuilderCodes.ts:192](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/baseBuilderCodes.ts#L192)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/baseBuilderCodes.ts:192](https://github.com/wenakita/4626/b
 
 > `const` **ERC\_8021\_MARKER\_HEX**: `string` = `ERC_8021_REPEATING_MARKER_HEX`
 
-Defined in: [src/lib/baseBuilderCodes.ts:193](https://github.com/wenakita/4626/blob/main/frontend/src/lib/baseBuilderCodes.ts#L193)
+Defined in: [src/lib/baseBuilderCodes.ts:193](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/baseBuilderCodes.ts#L193)
 
 ## Functions
 
@@ -28,7 +28,7 @@ Defined in: [src/lib/baseBuilderCodes.ts:193](https://github.com/wenakita/4626/b
 
 > **appendBuilderSuffixToHex**(`data`, `options?`): `` `0x${string}` `` \| `undefined`
 
-Defined in: [src/lib/baseBuilderCodes.ts:152](https://github.com/wenakita/4626/blob/main/frontend/src/lib/baseBuilderCodes.ts#L152)
+Defined in: [src/lib/baseBuilderCodes.ts:152](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/baseBuilderCodes.ts#L152)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [src/lib/baseBuilderCodes.ts:152](https://github.com/wenakita/4626/b
 
 > **appendDataSuffixToHex**(`data`, `dataSuffix`): `` `0x${string}` ``
 
-Defined in: [src/lib/baseBuilderCodes.ts:143](https://github.com/wenakita/4626/blob/main/frontend/src/lib/baseBuilderCodes.ts#L143)
+Defined in: [src/lib/baseBuilderCodes.ts:143](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/baseBuilderCodes.ts#L143)
 
 #### Parameters
 
@@ -78,7 +78,7 @@ Defined in: [src/lib/baseBuilderCodes.ts:143](https://github.com/wenakita/4626/b
 
 > **hasErc8021RepeatingMarker**(`hexValue`): `boolean`
 
-Defined in: [src/lib/baseBuilderCodes.ts:165](https://github.com/wenakita/4626/blob/main/frontend/src/lib/baseBuilderCodes.ts#L165)
+Defined in: [src/lib/baseBuilderCodes.ts:165](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/baseBuilderCodes.ts#L165)
 
 #### Parameters
 
@@ -96,7 +96,7 @@ Defined in: [src/lib/baseBuilderCodes.ts:165](https://github.com/wenakita/4626/b
 
 > **isBaseChain**(`chainId`): `boolean`
 
-Defined in: [src/lib/baseBuilderCodes.ts:139](https://github.com/wenakita/4626/blob/main/frontend/src/lib/baseBuilderCodes.ts#L139)
+Defined in: [src/lib/baseBuilderCodes.ts:139](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/baseBuilderCodes.ts#L139)
 
 #### Parameters
 
@@ -114,7 +114,7 @@ Defined in: [src/lib/baseBuilderCodes.ts:139](https://github.com/wenakita/4626/b
 
 > **parseBuilderCodes**(`raw`): `string`[]
 
-Defined in: [src/lib/baseBuilderCodes.ts:102](https://github.com/wenakita/4626/blob/main/frontend/src/lib/baseBuilderCodes.ts#L102)
+Defined in: [src/lib/baseBuilderCodes.ts:102](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/baseBuilderCodes.ts#L102)
 
 #### Parameters
 
@@ -132,7 +132,7 @@ Defined in: [src/lib/baseBuilderCodes.ts:102](https://github.com/wenakita/4626/b
 
 > **payloadEndsWithDataSuffix**(`payload`, `dataSuffix`): `boolean`
 
-Defined in: [src/lib/baseBuilderCodes.ts:170](https://github.com/wenakita/4626/blob/main/frontend/src/lib/baseBuilderCodes.ts#L170)
+Defined in: [src/lib/baseBuilderCodes.ts:170](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/baseBuilderCodes.ts#L170)
 
 #### Parameters
 
@@ -154,7 +154,7 @@ Defined in: [src/lib/baseBuilderCodes.ts:170](https://github.com/wenakita/4626/b
 
 > **resolveBuilderCodes**(`envInput`): `string`[]
 
-Defined in: [src/lib/baseBuilderCodes.ts:109](https://github.com/wenakita/4626/blob/main/frontend/src/lib/baseBuilderCodes.ts#L109)
+Defined in: [src/lib/baseBuilderCodes.ts:109](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/baseBuilderCodes.ts#L109)
 
 #### Parameters
 
@@ -172,7 +172,7 @@ Defined in: [src/lib/baseBuilderCodes.ts:109](https://github.com/wenakita/4626/b
 
 > **resolveDataSuffix**(`envInput`): `` `0x${string}` `` \| `undefined`
 
-Defined in: [src/lib/baseBuilderCodes.ts:116](https://github.com/wenakita/4626/blob/main/frontend/src/lib/baseBuilderCodes.ts#L116)
+Defined in: [src/lib/baseBuilderCodes.ts:116](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/baseBuilderCodes.ts#L116)
 
 #### Parameters
 
@@ -190,7 +190,7 @@ Defined in: [src/lib/baseBuilderCodes.ts:116](https://github.com/wenakita/4626/b
 
 > **warnGlobalWagmiDataSuffixBehavior**(`dataSuffix`, `envInput`): `void`
 
-Defined in: [src/lib/baseBuilderCodes.ts:177](https://github.com/wenakita/4626/blob/main/frontend/src/lib/baseBuilderCodes.ts#L177)
+Defined in: [src/lib/baseBuilderCodes.ts:177](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/baseBuilderCodes.ts#L177)
 
 #### Parameters
 

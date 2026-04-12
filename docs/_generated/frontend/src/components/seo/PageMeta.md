@@ -12,7 +12,7 @@
 
 > `const` **META**: `object` = `PAGE_META`
 
-Defined in: [src/components/seo/PageMeta.tsx:149](https://github.com/wenakita/4626/blob/main/frontend/src/components/seo/PageMeta.tsx#L149)
+Defined in: [src/components/seo/PageMeta.tsx:149](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/components/seo/PageMeta.tsx#L149)
 
 Common page metadata presets
 
@@ -212,7 +212,7 @@ Common page metadata presets
 
 > **PageMeta**(`__namedParameters`): `null`
 
-Defined in: [src/components/seo/PageMeta.tsx:95](https://github.com/wenakita/4626/blob/main/frontend/src/components/seo/PageMeta.tsx#L95)
+Defined in: [src/components/seo/PageMeta.tsx:95](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/components/seo/PageMeta.tsx#L95)
 
 #### Parameters
 

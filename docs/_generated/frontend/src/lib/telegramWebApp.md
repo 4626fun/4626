@@ -12,7 +12,7 @@
 
 > **PrivyTelegramLaunchParams** = `object`
 
-Defined in: [src/lib/telegramWebApp.ts:311](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L311)
+Defined in: [src/lib/telegramWebApp.ts:311](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L311)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/telegramWebApp.ts:311](https://github.com/wenakita/4626/blo
 
 > `optional` **initDataRaw**: `string`
 
-Defined in: [src/lib/telegramWebApp.ts:312](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L312)
+Defined in: [src/lib/telegramWebApp.ts:312](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L312)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/lib/telegramWebApp.ts:312](https://github.com/wenakita/4626/blo
 
 > **TelegramInlineQueryChatType** = `"users"` \| `"bots"` \| `"groups"` \| `"channels"`
 
-Defined in: [src/lib/telegramWebApp.ts:33](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L33)
+Defined in: [src/lib/telegramWebApp.ts:33](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L33)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/lib/telegramWebApp.ts:33](https://github.com/wenakita/4626/blob
 
 > **TelegramMiniAppSession** = `object`
 
-Defined in: [src/lib/telegramWebApp.ts:83](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L83)
+Defined in: [src/lib/telegramWebApp.ts:83](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L83)
 
 #### Properties
 
@@ -44,49 +44,49 @@ Defined in: [src/lib/telegramWebApp.ts:83](https://github.com/wenakita/4626/blob
 
 > **chatId**: `string` \| `null`
 
-Defined in: [src/lib/telegramWebApp.ts:89](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L89)
+Defined in: [src/lib/telegramWebApp.ts:89](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L89)
 
 ##### chatInstance
 
 > **chatInstance**: `string` \| `null`
 
-Defined in: [src/lib/telegramWebApp.ts:91](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L91)
+Defined in: [src/lib/telegramWebApp.ts:91](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L91)
 
 ##### chatType
 
 > **chatType**: `string` \| `null`
 
-Defined in: [src/lib/telegramWebApp.ts:90](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L90)
+Defined in: [src/lib/telegramWebApp.ts:90](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L90)
 
 ##### expiresAt
 
 > **expiresAt**: `string`
 
-Defined in: [src/lib/telegramWebApp.ts:86](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L86)
+Defined in: [src/lib/telegramWebApp.ts:86](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L86)
 
 ##### initData
 
 > **initData**: `string`
 
-Defined in: [src/lib/telegramWebApp.ts:84](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L84)
+Defined in: [src/lib/telegramWebApp.ts:84](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L84)
 
 ##### sessionToken
 
 > **sessionToken**: `string`
 
-Defined in: [src/lib/telegramWebApp.ts:85](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L85)
+Defined in: [src/lib/telegramWebApp.ts:85](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L85)
 
 ##### telegramUserId
 
 > **telegramUserId**: `string`
 
-Defined in: [src/lib/telegramWebApp.ts:87](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L87)
+Defined in: [src/lib/telegramWebApp.ts:87](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L87)
 
 ##### telegramUsername
 
 > **telegramUsername**: `string` \| `null`
 
-Defined in: [src/lib/telegramWebApp.ts:88](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L88)
+Defined in: [src/lib/telegramWebApp.ts:88](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L88)
 
 ## Functions
 
@@ -94,7 +94,7 @@ Defined in: [src/lib/telegramWebApp.ts:88](https://github.com/wenakita/4626/blob
 
 > **clearTelegramMiniAppSession**(): `void`
 
-Defined in: [src/lib/telegramWebApp.ts:175](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L175)
+Defined in: [src/lib/telegramWebApp.ts:175](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L175)
 
 #### Returns
 
@@ -106,7 +106,7 @@ Defined in: [src/lib/telegramWebApp.ts:175](https://github.com/wenakita/4626/blo
 
 > **ensureTelegramMiniAppSession**(`params?`): `Promise`\<`EnsureTelegramMiniAppSessionResult`\>
 
-Defined in: [src/lib/telegramWebApp.ts:432](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L432)
+Defined in: [src/lib/telegramWebApp.ts:432](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L432)
 
 #### Parameters
 
@@ -134,7 +134,7 @@ Defined in: [src/lib/telegramWebApp.ts:432](https://github.com/wenakita/4626/blo
 
 > **hasTelegramMiniAppEntrypointContext**(): `boolean`
 
-Defined in: [src/lib/telegramWebApp.ts:285](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L285)
+Defined in: [src/lib/telegramWebApp.ts:285](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L285)
 
 #### Returns
 
@@ -146,7 +146,7 @@ Defined in: [src/lib/telegramWebApp.ts:285](https://github.com/wenakita/4626/blo
 
 > **isTelegramMiniAppContext**(): `boolean`
 
-Defined in: [src/lib/telegramWebApp.ts:251](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L251)
+Defined in: [src/lib/telegramWebApp.ts:251](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L251)
 
 #### Returns
 
@@ -158,7 +158,7 @@ Defined in: [src/lib/telegramWebApp.ts:251](https://github.com/wenakita/4626/blo
 
 > **loadTelegramWebApp**(): `Promise`\<`TelegramWebAppLike` \| `null`\>
 
-Defined in: [src/lib/telegramWebApp.ts:321](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L321)
+Defined in: [src/lib/telegramWebApp.ts:321](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L321)
 
 #### Returns
 
@@ -170,7 +170,7 @@ Defined in: [src/lib/telegramWebApp.ts:321](https://github.com/wenakita/4626/blo
 
 > **openTelegramExternalLink**(`url`): `boolean`
 
-Defined in: [src/lib/telegramWebApp.ts:255](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L255)
+Defined in: [src/lib/telegramWebApp.ts:255](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L255)
 
 #### Parameters
 
@@ -188,7 +188,7 @@ Defined in: [src/lib/telegramWebApp.ts:255](https://github.com/wenakita/4626/blo
 
 > **readPrivyTelegramLaunchParams**(): [`PrivyTelegramLaunchParams`](#privytelegramlaunchparams) \| `null`
 
-Defined in: [src/lib/telegramWebApp.ts:315](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L315)
+Defined in: [src/lib/telegramWebApp.ts:315](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L315)
 
 #### Returns
 
@@ -200,7 +200,7 @@ Defined in: [src/lib/telegramWebApp.ts:315](https://github.com/wenakita/4626/blo
 
 > **readTelegramMiniAppIdentityKey**(): `string`
 
-Defined in: [src/lib/telegramWebApp.ts:305](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L305)
+Defined in: [src/lib/telegramWebApp.ts:305](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L305)
 
 #### Returns
 
@@ -212,7 +212,7 @@ Defined in: [src/lib/telegramWebApp.ts:305](https://github.com/wenakita/4626/blo
 
 > **readTelegramMiniAppInitData**(): `string`
 
-Defined in: [src/lib/telegramWebApp.ts:247](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L247)
+Defined in: [src/lib/telegramWebApp.ts:247](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L247)
 
 #### Returns
 
@@ -224,7 +224,7 @@ Defined in: [src/lib/telegramWebApp.ts:247](https://github.com/wenakita/4626/blo
 
 > **readTelegramWebApp**(): `TelegramWebAppLike` \| `null`
 
-Defined in: [src/lib/telegramWebApp.ts:229](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L229)
+Defined in: [src/lib/telegramWebApp.ts:229](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L229)
 
 #### Returns
 
@@ -236,7 +236,7 @@ Defined in: [src/lib/telegramWebApp.ts:229](https://github.com/wenakita/4626/blo
 
 > **setupTelegramMiniAppUi**(`params?`): () => `void`
 
-Defined in: [src/lib/telegramWebApp.ts:389](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L389)
+Defined in: [src/lib/telegramWebApp.ts:389](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L389)
 
 #### Parameters
 
@@ -260,7 +260,7 @@ Defined in: [src/lib/telegramWebApp.ts:389](https://github.com/wenakita/4626/blo
 
 > **switchTelegramMiniAppInlineQuery**(`params?`): `boolean`
 
-Defined in: [src/lib/telegramWebApp.ts:233](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramWebApp.ts#L233)
+Defined in: [src/lib/telegramWebApp.ts:233](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramWebApp.ts#L233)
 
 #### Parameters
 

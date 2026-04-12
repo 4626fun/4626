@@ -12,7 +12,7 @@
 
 > **WorkspacePermission** = `"read"` \| `"strategy_manage"` \| `"tasks_manage"` \| `"settings_manage"` \| `"rooms_manage"` \| `"action_execute_low_risk"` \| `"action_execute_high_risk"`
 
-Defined in: [server/\_lib/workspace/auth.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/auth.ts#L8)
+Defined in: [server/\_lib/workspace/auth.ts:8](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/workspace/auth.ts#L8)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/workspace/auth.ts:8](https://github.com/wenakita/4626/
 
 > **WorkspaceRole** = `"OWNER"` \| `"ADMIN"` \| `"OPERATOR"` \| `"VIEWER"`
 
-Defined in: [server/\_lib/workspace/auth.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/auth.ts#L7)
+Defined in: [server/\_lib/workspace/auth.ts:7](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/workspace/auth.ts#L7)
 
 ## Functions
 
@@ -28,7 +28,7 @@ Defined in: [server/\_lib/workspace/auth.ts:7](https://github.com/wenakita/4626/
 
 > **requireWorkspacePermission**(`params`): `Promise`\<`PermissionResult`\>
 
-Defined in: [server/\_lib/workspace/auth.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/auth.ts#L94)
+Defined in: [server/\_lib/workspace/auth.ts:94](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/workspace/auth.ts#L94)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [server/\_lib/workspace/auth.ts:94](https://github.com/wenakita/4626
 
 > **roleCan**(`params`): `boolean`
 
-Defined in: [server/\_lib/workspace/auth.ts:75](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/auth.ts#L75)
+Defined in: [server/\_lib/workspace/auth.ts:75](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/workspace/auth.ts#L75)
 
 #### Parameters
 

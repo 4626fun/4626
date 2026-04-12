@@ -10,7 +10,7 @@
 
 ### ExternalFetchError
 
-Defined in: [server/\_lib/externalFetch.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/externalFetch.ts#L18)
+Defined in: [server/\_lib/externalFetch.ts:18](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/externalFetch.ts#L18)
 
 #### Extends
 
@@ -22,7 +22,7 @@ Defined in: [server/\_lib/externalFetch.ts:18](https://github.com/wenakita/4626/
 
 > **new ExternalFetchError**(`message`, `reason`, `statusCode`): [`ExternalFetchError`](#externalfetcherror)
 
-Defined in: [server/\_lib/externalFetch.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/externalFetch.ts#L22)
+Defined in: [server/\_lib/externalFetch.ts:22](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/externalFetch.ts#L22)
 
 ###### Parameters
 
@@ -52,13 +52,13 @@ Defined in: [server/\_lib/externalFetch.ts:22](https://github.com/wenakita/4626/
 
 > `readonly` **reason**: `RejectReason`
 
-Defined in: [server/\_lib/externalFetch.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/externalFetch.ts#L19)
+Defined in: [server/\_lib/externalFetch.ts:19](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/externalFetch.ts#L19)
 
 ##### statusCode
 
 > `readonly` **statusCode**: `number`
 
-Defined in: [server/\_lib/externalFetch.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/externalFetch.ts#L20)
+Defined in: [server/\_lib/externalFetch.ts:20](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/externalFetch.ts#L20)
 
 ## Functions
 
@@ -66,7 +66,7 @@ Defined in: [server/\_lib/externalFetch.ts:20](https://github.com/wenakita/4626/
 
 > **fetchExternalJson**\<`T`\>(`rawUrl`, `options`): `Promise`\<\{ `data`: `T`; `status`: `number`; \}\>
 
-Defined in: [server/\_lib/externalFetch.ts:102](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/externalFetch.ts#L102)
+Defined in: [server/\_lib/externalFetch.ts:102](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/externalFetch.ts#L102)
 
 #### Type Parameters
 

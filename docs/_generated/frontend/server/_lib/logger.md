@@ -12,7 +12,7 @@
 
 > `const` **logger**: `Logger`
 
-Defined in: [server/\_lib/logger.ts:96](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/logger.ts#L96)
+Defined in: [server/\_lib/logger.ts:96](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/logger.ts#L96)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/logger.ts:96](https://github.com/wenakita/4626/blob/ma
 
 > **createCorrelationId**(`prefix`): `string`
 
-Defined in: [server/\_lib/logger.ts:98](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/logger.ts#L98)
+Defined in: [server/\_lib/logger.ts:98](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/logger.ts#L98)
 
 #### Parameters
 
@@ -38,7 +38,7 @@ Defined in: [server/\_lib/logger.ts:98](https://github.com/wenakita/4626/blob/ma
 
 > **createCorrelationLogger**(`prefix`, `baseContext`): `object`
 
-Defined in: [server/\_lib/logger.ts:102](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/logger.ts#L102)
+Defined in: [server/\_lib/logger.ts:102](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/logger.ts#L102)
 
 #### Parameters
 

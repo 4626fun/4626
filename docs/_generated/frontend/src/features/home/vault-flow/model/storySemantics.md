@@ -12,7 +12,7 @@
 
 > **AllocationRepresentation** = `"cards"` \| `"payloads"` \| `"receivingSegments"` \| `"unifiedFace"`
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:59](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L59)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:59](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L59)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/features/home/vault-flow/model/storySemantics.ts:59](https://gi
 
 > **AudiencePrimary** = `"all"` \| `"creator"` \| `"participants"`
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:51](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L51)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:51](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L51)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/features/home/vault-flow/model/storySemantics.ts:51](https://gi
 
 > **BeatDefinition** = `object`
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:65](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L65)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:65](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L65)
 
 #### Properties
 
@@ -36,31 +36,31 @@ Defined in: [src/features/home/vault-flow/model/storySemantics.ts:65](https://gi
 
 > **audiencePrimary**: [`AudiencePrimary`](#audienceprimary)
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:67](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L67)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:67](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L67)
 
 ##### completion
 
 > **completion**: [`StoryMilestoneHard`](#storymilestonehard)
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:68](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L68)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:68](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L68)
 
 ##### completionTrigger
 
 > **completionTrigger**: [`MilestoneActivationTrigger`](#milestoneactivationtrigger)
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L69)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:69](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L69)
 
 ##### focus
 
 > **focus**: [`StoryFocus`](#storyfocus)
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:66](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L66)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:66](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L66)
 
 ##### requiresReEntryHint?
 
 > `optional` **requiresReEntryHint**: `true`
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:70](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L70)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:70](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L70)
 
 ***
 
@@ -68,7 +68,7 @@ Defined in: [src/features/home/vault-flow/model/storySemantics.ts:70](https://gi
 
 > **BeatWindow** = `object`
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:120](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L120)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:120](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L120)
 
 #### Properties
 
@@ -76,31 +76,31 @@ Defined in: [src/features/home/vault-flow/model/storySemantics.ts:120](https://g
 
 > **beat**: [`StoryBeatId`](#storybeatid)
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:121](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L121)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:121](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L121)
 
 ##### end
 
 > **end**: `number`
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:123](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L123)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:123](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L123)
 
 ##### holdEnd
 
 > **holdEnd**: `number`
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:125](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L125)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:125](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L125)
 
 ##### holdStart
 
 > **holdStart**: `number`
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:124](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L124)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:124](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L124)
 
 ##### start
 
 > **start**: `number`
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:122](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L122)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:122](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L122)
 
 ***
 
@@ -108,7 +108,7 @@ Defined in: [src/features/home/vault-flow/model/storySemantics.ts:122](https://g
 
 > **MilestoneActivationTrigger** = `"holdStart"` \| `"beatExit"`
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:57](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L57)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:57](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L57)
 
 ***
 
@@ -116,7 +116,7 @@ Defined in: [src/features/home/vault-flow/model/storySemantics.ts:57](https://gi
 
 > **StoryBeatId** = *typeof* [`STORY_BEAT_ORDER`](#story_beat_order)\[`number`\]
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L16)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:16](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L16)
 
 ***
 
@@ -124,7 +124,7 @@ Defined in: [src/features/home/vault-flow/model/storySemantics.ts:16](https://gi
 
 > **StoryFocus** = `"vault"` \| `"deposit"` \| `"distribution"` \| `"receivingFace"` \| `"strategies"`
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:44](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L44)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:44](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L44)
 
 ***
 
@@ -132,7 +132,7 @@ Defined in: [src/features/home/vault-flow/model/storySemantics.ts:44](https://gi
 
 > **StoryMilestoneHard** = *typeof* [`STORY_MILESTONES_HARD`](#story_milestones_hard)\[`number`\]
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:38](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L38)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:38](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L38)
 
 ***
 
@@ -140,7 +140,7 @@ Defined in: [src/features/home/vault-flow/model/storySemantics.ts:38](https://gi
 
 > **StoryMilestoneId** = [`StoryMilestoneHard`](#storymilestonehard) \| [`StoryMilestoneSoft`](#storymilestonesoft)
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:40](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L40)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:40](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L40)
 
 ***
 
@@ -148,7 +148,7 @@ Defined in: [src/features/home/vault-flow/model/storySemantics.ts:40](https://gi
 
 > **StoryMilestoneSoft** = *typeof* [`STORY_MILESTONES_SOFT`](#story_milestones_soft)\[`number`\]
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:39](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L39)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:39](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L39)
 
 ## Variables
 
@@ -156,7 +156,7 @@ Defined in: [src/features/home/vault-flow/model/storySemantics.ts:39](https://gi
 
 > `const` **BEAT\_DEFINITIONS**: `Record`\<[`StoryBeatId`](#storybeatid), [`BeatDefinition`](#beatdefinition)\>
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:75](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L75)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:75](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L75)
 
 ***
 
@@ -164,7 +164,7 @@ Defined in: [src/features/home/vault-flow/model/storySemantics.ts:75](https://gi
 
 > `const` **DESKTOP\_BEAT\_WINDOWS**: [`BeatWindow`](#beatwindow)[]
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:136](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L136)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:136](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L136)
 
 ***
 
@@ -172,7 +172,7 @@ Defined in: [src/features/home/vault-flow/model/storySemantics.ts:136](https://g
 
 > `const` **MOBILE\_BEAT\_WINDOWS**: [`BeatWindow`](#beatwindow)[]
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:147](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L147)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:147](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L147)
 
 ***
 
@@ -180,7 +180,7 @@ Defined in: [src/features/home/vault-flow/model/storySemantics.ts:147](https://g
 
 > `const` **REDUCED\_BEAT\_WINDOWS**: [`BeatWindow`](#beatwindow)[] = `DESKTOP_BEAT_WINDOWS`
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:157](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L157)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:157](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L157)
 
 ***
 
@@ -188,7 +188,7 @@ Defined in: [src/features/home/vault-flow/model/storySemantics.ts:157](https://g
 
 > `const` **STORY\_BEAT\_ORDER**: readonly \[`"creatorEstablishes"`, `"valueFlowsIn"`, `"participantDeposits"`, `"distributionMeaningful"`, `"deployStrategies"`, `"earningTogether"`\]
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L7)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:7](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L7)
 
 ***
 
@@ -196,7 +196,7 @@ Defined in: [src/features/home/vault-flow/model/storySemantics.ts:7](https://git
 
 > `const` **STORY\_MILESTONES\_HARD**: readonly \[`"vaultReady"`, `"valueSourceActive"`, `"mintConfirmed"`, `"allocationEncoded"`, `"deployComplete"`, `"loopActive"`\]
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L21)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:21](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L21)
 
 ***
 
@@ -204,7 +204,7 @@ Defined in: [src/features/home/vault-flow/model/storySemantics.ts:21](https://gi
 
 > `const` **STORY\_MILESTONES\_SOFT**: readonly \[`"distributionFullyVisible"`, `"receivingFaceVisible"`, `"valueFlowsVisible"`, `"reEntryHintVisible"`\]
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:31](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L31)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:31](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L31)
 
 ## Functions
 
@@ -212,7 +212,7 @@ Defined in: [src/features/home/vault-flow/model/storySemantics.ts:31](https://gi
 
 > **resolveBeatWindow**(`globalProgress`, `windows`): `object`
 
-Defined in: [src/features/home/vault-flow/model/storySemantics.ts:161](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/storySemantics.ts#L161)
+Defined in: [src/features/home/vault-flow/model/storySemantics.ts:161](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/storySemantics.ts#L161)
 
 #### Parameters
 

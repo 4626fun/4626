@@ -1,0 +1,7 @@
+{
+  "maxTotalWarnings": 232,
+  "maxMissingReferenceWarnings": 226,
+  "maxUnusedParamWarnings": 5,
+  "maxIntentionallyNotExportedEntries": 3,
+  "allowUnknownWarningClasses": false
+}

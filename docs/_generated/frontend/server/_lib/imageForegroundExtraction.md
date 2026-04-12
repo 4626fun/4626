@@ -12,7 +12,7 @@
 
 > **extractForegroundFromArtwork**(`artworkBytes`): `Promise`\<`Uint8Array`\<`ArrayBufferLike`\> \| `null`\>
 
-Defined in: [server/\_lib/imageForegroundExtraction.ts:98](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/imageForegroundExtraction.ts#L98)
+Defined in: [server/\_lib/imageForegroundExtraction.ts:98](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/imageForegroundExtraction.ts#L98)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [server/\_lib/imageForegroundExtraction.ts:98](https://github.com/we
 
 > **extractForegroundFromSubjectImageBytes**(`subjectImageBytes`): `Promise`\<`Uint8Array`\<`ArrayBufferLike`\> \| `null`\>
 
-Defined in: [server/\_lib/imageForegroundExtraction.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/imageForegroundExtraction.ts#L94)
+Defined in: [server/\_lib/imageForegroundExtraction.ts:94](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/imageForegroundExtraction.ts#L94)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **AgentSessionContext** = `object`
 
-Defined in: [server/agent/core/resolveIdentityContext.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/agent/core/resolveIdentityContext.ts#L5)
+Defined in: [server/agent/core/resolveIdentityContext.ts:5](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/core/resolveIdentityContext.ts#L5)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [server/agent/core/resolveIdentityContext.ts:5](https://github.com/w
 
 > **address**: `` `0x${string}` ``
 
-Defined in: [server/agent/core/resolveIdentityContext.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/agent/core/resolveIdentityContext.ts#L6)
+Defined in: [server/agent/core/resolveIdentityContext.ts:6](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/core/resolveIdentityContext.ts#L6)
 
 ##### isAdmin
 
 > **isAdmin**: `boolean`
 
-Defined in: [server/agent/core/resolveIdentityContext.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/agent/core/resolveIdentityContext.ts#L7)
+Defined in: [server/agent/core/resolveIdentityContext.ts:7](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/core/resolveIdentityContext.ts#L7)
 
 ##### source
 
 > **source**: [`AgentSessionSource`](#agentsessionsource)
 
-Defined in: [server/agent/core/resolveIdentityContext.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/agent/core/resolveIdentityContext.ts#L8)
+Defined in: [server/agent/core/resolveIdentityContext.ts:8](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/core/resolveIdentityContext.ts#L8)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [server/agent/core/resolveIdentityContext.ts:8](https://github.com/w
 
 > **AgentSessionSource** = `"xmtp"` \| `"telegram"`
 
-Defined in: [server/agent/core/resolveIdentityContext.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/agent/core/resolveIdentityContext.ts#L3)
+Defined in: [server/agent/core/resolveIdentityContext.ts:3](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/core/resolveIdentityContext.ts#L3)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [server/agent/core/resolveIdentityContext.ts:3](https://github.com/w
 
 > **TelegramIdentityContext** = `object`
 
-Defined in: [server/agent/core/resolveIdentityContext.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/agent/core/resolveIdentityContext.ts#L13)
+Defined in: [server/agent/core/resolveIdentityContext.ts:13](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/core/resolveIdentityContext.ts#L13)
 
 #### Properties
 
@@ -56,25 +56,25 @@ Defined in: [server/agent/core/resolveIdentityContext.ts:13](https://github.com/
 
 > **groupId**: `string`
 
-Defined in: [server/agent/core/resolveIdentityContext.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/agent/core/resolveIdentityContext.ts#L14)
+Defined in: [server/agent/core/resolveIdentityContext.ts:14](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/core/resolveIdentityContext.ts#L14)
 
 ##### senderWallet
 
 > **senderWallet**: `` `0x${string}` ``
 
-Defined in: [server/agent/core/resolveIdentityContext.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/agent/core/resolveIdentityContext.ts#L15)
+Defined in: [server/agent/core/resolveIdentityContext.ts:15](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/core/resolveIdentityContext.ts#L15)
 
 ##### senderWalletSource
 
 > **senderWalletSource**: [`TelegramSenderWalletSource`](#telegramsenderwalletsource)
 
-Defined in: [server/agent/core/resolveIdentityContext.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/agent/core/resolveIdentityContext.ts#L16)
+Defined in: [server/agent/core/resolveIdentityContext.ts:16](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/core/resolveIdentityContext.ts#L16)
 
 ##### session
 
 > **session**: [`AgentSessionContext`](#agentsessioncontext) \| `null`
 
-Defined in: [server/agent/core/resolveIdentityContext.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/agent/core/resolveIdentityContext.ts#L17)
+Defined in: [server/agent/core/resolveIdentityContext.ts:17](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/core/resolveIdentityContext.ts#L17)
 
 ***
 
@@ -82,7 +82,7 @@ Defined in: [server/agent/core/resolveIdentityContext.ts:17](https://github.com/
 
 > **TelegramSenderWalletSource** = `"user_map"` \| `"default"` \| `"zero"`
 
-Defined in: [server/agent/core/resolveIdentityContext.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/agent/core/resolveIdentityContext.ts#L11)
+Defined in: [server/agent/core/resolveIdentityContext.ts:11](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/core/resolveIdentityContext.ts#L11)
 
 ## Functions
 
@@ -90,7 +90,7 @@ Defined in: [server/agent/core/resolveIdentityContext.ts:11](https://github.com/
 
 > **buildAgentSessionContext**(`params`): [`AgentSessionContext`](#agentsessioncontext) \| `null`
 
-Defined in: [server/agent/core/resolveIdentityContext.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/agent/core/resolveIdentityContext.ts#L29)
+Defined in: [server/agent/core/resolveIdentityContext.ts:29](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/core/resolveIdentityContext.ts#L29)
 
 #### Parameters
 
@@ -118,7 +118,7 @@ Defined in: [server/agent/core/resolveIdentityContext.ts:29](https://github.com/
 
 > **resolveTelegramIdentityContext**(`params`): [`TelegramIdentityContext`](#telegramidentitycontext)
 
-Defined in: [server/agent/core/resolveIdentityContext.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/agent/core/resolveIdentityContext.ts#L43)
+Defined in: [server/agent/core/resolveIdentityContext.ts:43](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/core/resolveIdentityContext.ts#L43)
 
 #### Parameters
 

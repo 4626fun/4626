@@ -12,7 +12,7 @@
 
 > **createAgentWallet**(`params?`): `Promise`\<\{ `address`: `` `0x${string}` ``; `walletId`: `string`; \}\>
 
-Defined in: [server/\_lib/privyWalletApi.ts:171](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/privyWalletApi.ts#L171)
+Defined in: [server/\_lib/privyWalletApi.ts:171](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/privyWalletApi.ts#L171)
 
 #### Parameters
 
@@ -32,7 +32,7 @@ Defined in: [server/\_lib/privyWalletApi.ts:171](https://github.com/wenakita/462
 
 > **getWalletById**(`walletId`): `Promise`\<\{ `address`: `` `0x${string}` ``; `walletId`: `string`; \}\>
 
-Defined in: [server/\_lib/privyWalletApi.ts:193](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/privyWalletApi.ts#L193)
+Defined in: [server/\_lib/privyWalletApi.ts:193](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/privyWalletApi.ts#L193)
 
 #### Parameters
 
@@ -50,7 +50,7 @@ Defined in: [server/\_lib/privyWalletApi.ts:193](https://github.com/wenakita/462
 
 > **secp256k1SignHash**(`params`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [server/\_lib/privyWalletApi.ts:237](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/privyWalletApi.ts#L237)
+Defined in: [server/\_lib/privyWalletApi.ts:237](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/privyWalletApi.ts#L237)
 
 #### Parameters
 
@@ -78,7 +78,7 @@ Defined in: [server/\_lib/privyWalletApi.ts:237](https://github.com/wenakita/462
 
 > **walletRpc**\<`T`\>(`params`): `Promise`\<`T`\>
 
-Defined in: [server/\_lib/privyWalletApi.ts:202](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/privyWalletApi.ts#L202)
+Defined in: [server/\_lib/privyWalletApi.ts:202](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/privyWalletApi.ts#L202)
 
 #### Type Parameters
 

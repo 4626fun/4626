@@ -12,7 +12,7 @@
 
 > **runWithOwnedEmailCollisionAdoption**\<`T`\>(`params`): `Promise`\<`T`\>
 
-Defined in: [server/\_lib/emailCollisionAdoption.ts:145](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/emailCollisionAdoption.ts#L145)
+Defined in: [server/\_lib/emailCollisionAdoption.ts:145](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/emailCollisionAdoption.ts#L145)
 
 #### Type Parameters
 

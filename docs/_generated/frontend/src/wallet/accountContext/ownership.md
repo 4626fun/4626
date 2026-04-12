@@ -12,7 +12,7 @@
 
 > **OwnershipCheckResult** = `object`
 
-Defined in: [src/wallet/accountContext/ownership.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/accountContext/ownership.ts#L13)
+Defined in: [src/wallet/accountContext/ownership.ts:13](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/wallet/accountContext/ownership.ts#L13)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [src/wallet/accountContext/ownership.ts:13](https://github.com/wenak
 
 > **reason**: `"ok"` \| `"network_mismatch"` \| `"missing_params"` \| `"read_failed"`
 
-Defined in: [src/wallet/accountContext/ownership.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/accountContext/ownership.ts#L15)
+Defined in: [src/wallet/accountContext/ownership.ts:15](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/wallet/accountContext/ownership.ts#L15)
 
 ##### value
 
 > **value**: `boolean` \| `null`
 
-Defined in: [src/wallet/accountContext/ownership.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/accountContext/ownership.ts#L14)
+Defined in: [src/wallet/accountContext/ownership.ts:14](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/wallet/accountContext/ownership.ts#L14)
 
 ## Functions
 
@@ -34,7 +34,7 @@ Defined in: [src/wallet/accountContext/ownership.ts:14](https://github.com/wenak
 
 > **checkEoaOwnershipOfCsw**(`params`): `Promise`\<[`OwnershipCheckResult`](#ownershipcheckresult)\>
 
-Defined in: [src/wallet/accountContext/ownership.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/wallet/accountContext/ownership.ts#L18)
+Defined in: [src/wallet/accountContext/ownership.ts:18](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/wallet/accountContext/ownership.ts#L18)
 
 #### Parameters
 

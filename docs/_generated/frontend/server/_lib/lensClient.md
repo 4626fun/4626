@@ -12,7 +12,7 @@
 
 > **lensGql**\<`T`\>(`query`, `variables?`): `Promise`\<`T`\>
 
-Defined in: [server/\_lib/lensClient.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lensClient.ts#L13)
+Defined in: [server/\_lib/lensClient.ts:13](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/lensClient.ts#L13)
 
 Execute a typed GraphQL query against the Lens V3 API.
 

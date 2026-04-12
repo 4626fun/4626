@@ -12,7 +12,7 @@
 
 > **useExploreHorizontalTableSync**(`__namedParameters`): `object`
 
-Defined in: [src/components/explore/useExploreHorizontalTableSync.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/useExploreHorizontalTableSync.ts#L17)
+Defined in: [src/components/explore/useExploreHorizontalTableSync.ts:17](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/components/explore/useExploreHorizontalTableSync.ts#L17)
 
 #### Parameters
 

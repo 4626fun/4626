@@ -12,7 +12,7 @@
 
 > **EndpointProbe** = `object`
 
-Defined in: [server/\_lib/erc8004Review.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L41)
+Defined in: [server/\_lib/erc8004Review.ts:41](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L41)
 
 #### Properties
 
@@ -20,55 +20,55 @@ Defined in: [server/\_lib/erc8004Review.ts:41](https://github.com/wenakita/4626/
 
 > **checked**: `boolean`
 
-Defined in: [server/\_lib/erc8004Review.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L45)
+Defined in: [server/\_lib/erc8004Review.ts:45](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L45)
 
 ##### contentType
 
 > **contentType**: `string` \| `null`
 
-Defined in: [server/\_lib/erc8004Review.ts:49](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L49)
+Defined in: [server/\_lib/erc8004Review.ts:49](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L49)
 
 ##### error
 
 > **error**: `string` \| `null`
 
-Defined in: [server/\_lib/erc8004Review.ts:50](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L50)
+Defined in: [server/\_lib/erc8004Review.ts:50](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L50)
 
 ##### finalUrl
 
 > **finalUrl**: `string` \| `null`
 
-Defined in: [server/\_lib/erc8004Review.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L44)
+Defined in: [server/\_lib/erc8004Review.ts:44](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L44)
 
 ##### ok
 
 > **ok**: `boolean`
 
-Defined in: [server/\_lib/erc8004Review.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L46)
+Defined in: [server/\_lib/erc8004Review.ts:46](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L46)
 
 ##### responseTimeMs
 
 > **responseTimeMs**: `number` \| `null`
 
-Defined in: [server/\_lib/erc8004Review.ts:48](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L48)
+Defined in: [server/\_lib/erc8004Review.ts:48](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L48)
 
 ##### source
 
 > **source**: `"provided"` \| `"registration"` \| `"none"`
 
-Defined in: [server/\_lib/erc8004Review.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L42)
+Defined in: [server/\_lib/erc8004Review.ts:42](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L42)
 
 ##### status
 
 > **status**: `number` \| `null`
 
-Defined in: [server/\_lib/erc8004Review.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L47)
+Defined in: [server/\_lib/erc8004Review.ts:47](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L47)
 
 ##### url
 
 > **url**: `string` \| `null`
 
-Defined in: [server/\_lib/erc8004Review.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L43)
+Defined in: [server/\_lib/erc8004Review.ts:43](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L43)
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [server/\_lib/erc8004Review.ts:43](https://github.com/wenakita/4626/
 
 > **Erc8004TechnicalReview** = `object`
 
-Defined in: [server/\_lib/erc8004Review.ts:63](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L63)
+Defined in: [server/\_lib/erc8004Review.ts:63](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L63)
 
 #### Properties
 
@@ -84,13 +84,13 @@ Defined in: [server/\_lib/erc8004Review.ts:63](https://github.com/wenakita/4626/
 
 > **agentId**: `number`
 
-Defined in: [server/\_lib/erc8004Review.ts:64](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L64)
+Defined in: [server/\_lib/erc8004Review.ts:64](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L64)
 
 ##### checks
 
 > **checks**: `object`[]
 
-Defined in: [server/\_lib/erc8004Review.ts:83](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L83)
+Defined in: [server/\_lib/erc8004Review.ts:83](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L83)
 
 ###### detail
 
@@ -108,19 +108,19 @@ Defined in: [server/\_lib/erc8004Review.ts:83](https://github.com/wenakita/4626/
 
 > **endpoint**: [`EndpointProbe`](#endpointprobe)
 
-Defined in: [server/\_lib/erc8004Review.ts:75](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L75)
+Defined in: [server/\_lib/erc8004Review.ts:75](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L75)
 
 ##### generatedAt
 
 > **generatedAt**: `string`
 
-Defined in: [server/\_lib/erc8004Review.ts:95](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L95)
+Defined in: [server/\_lib/erc8004Review.ts:95](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L95)
 
 ##### identity
 
 > **identity**: [`IdentitySnapshot`](#identitysnapshot) & `object`
 
-Defined in: [server/\_lib/erc8004Review.ts:66](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L66)
+Defined in: [server/\_lib/erc8004Review.ts:66](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L66)
 
 ###### Type Declaration
 
@@ -148,19 +148,19 @@ Defined in: [server/\_lib/erc8004Review.ts:66](https://github.com/wenakita/4626/
 
 > **reasoning**: `string`
 
-Defined in: [server/\_lib/erc8004Review.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L94)
+Defined in: [server/\_lib/erc8004Review.ts:94](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L94)
 
 ##### registration
 
 > **registration**: [`RegistrationProbe`](#registrationprobe)
 
-Defined in: [server/\_lib/erc8004Review.ts:74](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L74)
+Defined in: [server/\_lib/erc8004Review.ts:74](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L74)
 
 ##### reputation
 
 > **reputation**: `object`
 
-Defined in: [server/\_lib/erc8004Review.ts:76](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L76)
+Defined in: [server/\_lib/erc8004Review.ts:76](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L76)
 
 ###### averageValue
 
@@ -186,13 +186,13 @@ Defined in: [server/\_lib/erc8004Review.ts:76](https://github.com/wenakita/4626/
 
 > **scanUrl**: `string`
 
-Defined in: [server/\_lib/erc8004Review.ts:65](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L65)
+Defined in: [server/\_lib/erc8004Review.ts:65](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L65)
 
 ##### score
 
 > **score**: `object`
 
-Defined in: [server/\_lib/erc8004Review.ts:88](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L88)
+Defined in: [server/\_lib/erc8004Review.ts:88](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L88)
 
 ###### label
 
@@ -214,7 +214,7 @@ Defined in: [server/\_lib/erc8004Review.ts:88](https://github.com/wenakita/4626/
 
 > **source**: `"erc8004.paid.review.v1"`
 
-Defined in: [server/\_lib/erc8004Review.ts:96](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L96)
+Defined in: [server/\_lib/erc8004Review.ts:96](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L96)
 
 ***
 
@@ -222,7 +222,7 @@ Defined in: [server/\_lib/erc8004Review.ts:96](https://github.com/wenakita/4626/
 
 > **IdentitySnapshot** = `object`
 
-Defined in: [server/\_lib/erc8004Review.ts:53](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L53)
+Defined in: [server/\_lib/erc8004Review.ts:53](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L53)
 
 #### Properties
 
@@ -230,43 +230,43 @@ Defined in: [server/\_lib/erc8004Review.ts:53](https://github.com/wenakita/4626/
 
 > **agentRegistered**: `boolean`
 
-Defined in: [server/\_lib/erc8004Review.ts:58](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L58)
+Defined in: [server/\_lib/erc8004Review.ts:58](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L58)
 
 ##### agentWallet
 
 > **agentWallet**: `string` \| `null`
 
-Defined in: [server/\_lib/erc8004Review.ts:55](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L55)
+Defined in: [server/\_lib/erc8004Review.ts:55](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L55)
 
 ##### chainId
 
 > **chainId**: `number`
 
-Defined in: [server/\_lib/erc8004Review.ts:60](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L60)
+Defined in: [server/\_lib/erc8004Review.ts:60](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L60)
 
 ##### ownerAddress
 
 > **ownerAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/erc8004Review.ts:54](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L54)
+Defined in: [server/\_lib/erc8004Review.ts:54](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L54)
 
 ##### registryAddress
 
 > **registryAddress**: `Address`
 
-Defined in: [server/\_lib/erc8004Review.ts:59](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L59)
+Defined in: [server/\_lib/erc8004Review.ts:59](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L59)
 
 ##### rpcErrorCount
 
 > **rpcErrorCount**: `number`
 
-Defined in: [server/\_lib/erc8004Review.ts:57](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L57)
+Defined in: [server/\_lib/erc8004Review.ts:57](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L57)
 
 ##### tokenUri
 
 > **tokenUri**: `string` \| `null`
 
-Defined in: [server/\_lib/erc8004Review.ts:56](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L56)
+Defined in: [server/\_lib/erc8004Review.ts:56](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L56)
 
 ***
 
@@ -274,7 +274,7 @@ Defined in: [server/\_lib/erc8004Review.ts:56](https://github.com/wenakita/4626/
 
 > **RegistrationProbe** = `object`
 
-Defined in: [server/\_lib/erc8004Review.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L27)
+Defined in: [server/\_lib/erc8004Review.ts:27](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L27)
 
 #### Properties
 
@@ -282,67 +282,67 @@ Defined in: [server/\_lib/erc8004Review.ts:27](https://github.com/wenakita/4626/
 
 > **active**: `boolean` \| `null`
 
-Defined in: [server/\_lib/erc8004Review.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L35)
+Defined in: [server/\_lib/erc8004Review.ts:35](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L35)
 
 ##### error
 
 > **error**: `string` \| `null`
 
-Defined in: [server/\_lib/erc8004Review.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L38)
+Defined in: [server/\_lib/erc8004Review.ts:38](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L38)
 
 ##### fetched
 
 > **fetched**: `boolean`
 
-Defined in: [server/\_lib/erc8004Review.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L31)
+Defined in: [server/\_lib/erc8004Review.ts:31](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L31)
 
 ##### finalUrl
 
 > **finalUrl**: `string` \| `null`
 
-Defined in: [server/\_lib/erc8004Review.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L30)
+Defined in: [server/\_lib/erc8004Review.ts:30](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L30)
 
 ##### name
 
 > **name**: `string` \| `null`
 
-Defined in: [server/\_lib/erc8004Review.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L33)
+Defined in: [server/\_lib/erc8004Review.ts:33](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L33)
 
 ##### payload
 
 > **payload**: [`RegistrationFile`](agentRegistration.md#registrationfile) \| `null`
 
-Defined in: [server/\_lib/erc8004Review.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L37)
+Defined in: [server/\_lib/erc8004Review.ts:37](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L37)
 
 ##### rawUrl
 
 > **rawUrl**: `string` \| `null`
 
-Defined in: [server/\_lib/erc8004Review.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L29)
+Defined in: [server/\_lib/erc8004Review.ts:29](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L29)
 
 ##### serviceCount
 
 > **serviceCount**: `number`
 
-Defined in: [server/\_lib/erc8004Review.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L34)
+Defined in: [server/\_lib/erc8004Review.ts:34](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L34)
 
 ##### source
 
 > **source**: `"provided"` \| `"onchain-token-uri"` \| `"none"`
 
-Defined in: [server/\_lib/erc8004Review.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L28)
+Defined in: [server/\_lib/erc8004Review.ts:28](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L28)
 
 ##### valid
 
 > **valid**: `boolean`
 
-Defined in: [server/\_lib/erc8004Review.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L32)
+Defined in: [server/\_lib/erc8004Review.ts:32](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L32)
 
 ##### x402Support
 
 > **x402Support**: `boolean` \| `null`
 
-Defined in: [server/\_lib/erc8004Review.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L36)
+Defined in: [server/\_lib/erc8004Review.ts:36](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L36)
 
 ## Functions
 
@@ -350,7 +350,7 @@ Defined in: [server/\_lib/erc8004Review.ts:36](https://github.com/wenakita/4626/
 
 > **buildErc8004TechnicalReview**(`params`): `Promise`\<[`Erc8004TechnicalReview`](#erc8004technicalreview)\>
 
-Defined in: [server/\_lib/erc8004Review.ts:677](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L677)
+Defined in: [server/\_lib/erc8004Review.ts:677](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L677)
 
 #### Parameters
 
@@ -378,7 +378,7 @@ Defined in: [server/\_lib/erc8004Review.ts:677](https://github.com/wenakita/4626
 
 > **extractCanonicalCsw**(`payload`): `string` \| `null`
 
-Defined in: [server/\_lib/erc8004Review.ts:133](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L133)
+Defined in: [server/\_lib/erc8004Review.ts:133](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L133)
 
 #### Parameters
 
@@ -396,7 +396,7 @@ Defined in: [server/\_lib/erc8004Review.ts:133](https://github.com/wenakita/4626
 
 > **fetchRegistrationPayload**(`rawUrl`): `Promise`\<\{ `error`: `string` \| `null`; `fetched`: `boolean`; `finalUrl`: `string` \| `null`; `payload`: [`RegistrationFile`](agentRegistration.md#registrationfile) \| `null`; \}\>
 
-Defined in: [server/\_lib/erc8004Review.ts:320](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L320)
+Defined in: [server/\_lib/erc8004Review.ts:320](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L320)
 
 #### Parameters
 
@@ -414,7 +414,7 @@ Defined in: [server/\_lib/erc8004Review.ts:320](https://github.com/wenakita/4626
 
 > **findEndpointFromRegistration**(`payload`): `string` \| `null`
 
-Defined in: [server/\_lib/erc8004Review.ts:489](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L489)
+Defined in: [server/\_lib/erc8004Review.ts:489](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L489)
 
 #### Parameters
 
@@ -432,7 +432,7 @@ Defined in: [server/\_lib/erc8004Review.ts:489](https://github.com/wenakita/4626
 
 > **probeEndpoint**(`rawUrl`): `Promise`\<[`EndpointProbe`](#endpointprobe)\>
 
-Defined in: [server/\_lib/erc8004Review.ts:390](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L390)
+Defined in: [server/\_lib/erc8004Review.ts:390](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L390)
 
 #### Parameters
 
@@ -450,7 +450,7 @@ Defined in: [server/\_lib/erc8004Review.ts:390](https://github.com/wenakita/4626
 
 > **readOnchainSnapshot**(`agentId`): `Promise`\<[`IdentitySnapshot`](#identitysnapshot)\>
 
-Defined in: [server/\_lib/erc8004Review.ts:504](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/erc8004Review.ts#L504)
+Defined in: [server/\_lib/erc8004Review.ts:504](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/erc8004Review.ts#L504)
 
 #### Parameters
 

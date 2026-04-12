@@ -12,7 +12,7 @@
 
 > **PreprovisionResult** = `object`
 
-Defined in: [server/\_lib/waitlistPreprovision.ts:93](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlistPreprovision.ts#L93)
+Defined in: [server/\_lib/waitlistPreprovision.ts:93](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/waitlistPreprovision.ts#L93)
 
 #### Properties
 
@@ -20,31 +20,31 @@ Defined in: [server/\_lib/waitlistPreprovision.ts:93](https://github.com/wenakit
 
 > **coinAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/waitlistPreprovision.ts:96](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlistPreprovision.ts#L96)
+Defined in: [server/\_lib/waitlistPreprovision.ts:96](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/waitlistPreprovision.ts#L96)
 
 ##### coinSymbol
 
 > **coinSymbol**: `string` \| `null`
 
-Defined in: [server/\_lib/waitlistPreprovision.ts:97](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlistPreprovision.ts#L97)
+Defined in: [server/\_lib/waitlistPreprovision.ts:97](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/waitlistPreprovision.ts#L97)
 
 ##### serverWalletAddress
 
 > **serverWalletAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/waitlistPreprovision.ts:95](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlistPreprovision.ts#L95)
+Defined in: [server/\_lib/waitlistPreprovision.ts:95](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/waitlistPreprovision.ts#L95)
 
 ##### serverWalletId
 
 > **serverWalletId**: `string` \| `null`
 
-Defined in: [server/\_lib/waitlistPreprovision.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlistPreprovision.ts#L94)
+Defined in: [server/\_lib/waitlistPreprovision.ts:94](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/waitlistPreprovision.ts#L94)
 
 ##### zoraHandle
 
 > **zoraHandle**: `string` \| `null`
 
-Defined in: [server/\_lib/waitlistPreprovision.ts:98](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlistPreprovision.ts#L98)
+Defined in: [server/\_lib/waitlistPreprovision.ts:98](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/waitlistPreprovision.ts#L98)
 
 ## Functions
 
@@ -52,7 +52,7 @@ Defined in: [server/\_lib/waitlistPreprovision.ts:98](https://github.com/wenakit
 
 > **preprovisionWaitlistUser**(`signupId`, `walletAddress`): `Promise`\<[`PreprovisionResult`](#preprovisionresult) \| `null`\>
 
-Defined in: [server/\_lib/waitlistPreprovision.ts:111](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/waitlistPreprovision.ts#L111)
+Defined in: [server/\_lib/waitlistPreprovision.ts:111](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/waitlistPreprovision.ts#L111)
 
 Pre-provision a waitlist user. This resolves identities and provisions
 a Privy server wallet, then stores the results on the `profiles` row.

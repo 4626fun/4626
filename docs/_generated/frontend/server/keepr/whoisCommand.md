@@ -12,7 +12,7 @@
 
 > **handleWhoisCommand**(`params`): `Promise`\<[`KeeprCommandResult`](../commands/types.md#keeprcommandresult)\>
 
-Defined in: [server/keepr/whoisCommand.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/keepr/whoisCommand.ts#L46)
+Defined in: [server/keepr/whoisCommand.ts:46](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/keepr/whoisCommand.ts#L46)
 
 #### Parameters
 

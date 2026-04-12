@@ -12,7 +12,7 @@
 
 > **WaitlistStep** = `"auth"` \| `"done"`
 
-Defined in: [src/features/waitlist/waitlistFlowState.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowState.ts#L1)
+Defined in: [src/features/waitlist/waitlistFlowState.ts:1](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/waitlist/waitlistFlowState.ts#L1)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [src/features/waitlist/waitlistFlowState.ts:1](https://github.com/we
 
 > **mergeCanonicalWaitlistAccount**\<`T`\>(`account`, `canonicalBootstrap`): `T`
 
-Defined in: [src/features/waitlist/waitlistFlowState.ts:34](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowState.ts#L34)
+Defined in: [src/features/waitlist/waitlistFlowState.ts:34](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/waitlist/waitlistFlowState.ts#L34)
 
 #### Type Parameters
 
@@ -48,7 +48,7 @@ Defined in: [src/features/waitlist/waitlistFlowState.ts:34](https://github.com/w
 
 > **resolveWaitlistStep**(`params`): [`WaitlistStep`](#waitliststep)
 
-Defined in: [src/features/waitlist/waitlistFlowState.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowState.ts#L13)
+Defined in: [src/features/waitlist/waitlistFlowState.ts:13](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/waitlist/waitlistFlowState.ts#L13)
 
 #### Parameters
 
@@ -76,7 +76,7 @@ Defined in: [src/features/waitlist/waitlistFlowState.ts:13](https://github.com/w
 
 > **shouldAutoBootstrapWaitlistSession**(`params`): `boolean`
 
-Defined in: [src/features/waitlist/waitlistFlowState.ts:23](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistFlowState.ts#L23)
+Defined in: [src/features/waitlist/waitlistFlowState.ts:23](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/waitlist/waitlistFlowState.ts#L23)
 
 #### Parameters
 

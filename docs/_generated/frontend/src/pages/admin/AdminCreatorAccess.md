@@ -12,7 +12,7 @@
 
 > **AdminCreatorAccess**(): `Element`
 
-Defined in: [src/pages/admin/AdminCreatorAccess.tsx:93](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AdminCreatorAccess.tsx#L93)
+Defined in: [src/pages/admin/AdminCreatorAccess.tsx:93](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/pages/admin/AdminCreatorAccess.tsx#L93)
 
 #### Returns
 

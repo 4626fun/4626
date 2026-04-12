@@ -12,7 +12,7 @@
 
 > **redactForRemoteAi**\<`T`\>(`payload`, `options`): `T`
 
-Defined in: [server/\_lib/agentControl/redaction.ts:139](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/redaction.ts#L139)
+Defined in: [server/\_lib/agentControl/redaction.ts:139](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentControl/redaction.ts#L139)
 
 #### Type Parameters
 
@@ -40,7 +40,7 @@ Defined in: [server/\_lib/agentControl/redaction.ts:139](https://github.com/wena
 
 > **redactTextForRemoteAi**(`input`, `options`): `string`
 
-Defined in: [server/\_lib/agentControl/redaction.ts:146](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/redaction.ts#L146)
+Defined in: [server/\_lib/agentControl/redaction.ts:146](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentControl/redaction.ts#L146)
 
 #### Parameters
 
@@ -62,7 +62,7 @@ Defined in: [server/\_lib/agentControl/redaction.ts:146](https://github.com/wena
 
 > **redactToJsonForRemoteAi**(`payload`, `options`): `string`
 
-Defined in: [server/\_lib/agentControl/redaction.ts:161](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/redaction.ts#L161)
+Defined in: [server/\_lib/agentControl/redaction.ts:161](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentControl/redaction.ts#L161)
 
 #### Parameters
 

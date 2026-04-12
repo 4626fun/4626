@@ -12,7 +12,7 @@
 
 > **getPrivyPasswordlessBackoffMs**(`response`): `number`
 
-Defined in: [src/lib/privy/passwordlessFetchGuard.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/passwordlessFetchGuard.ts#L25)
+Defined in: [src/lib/privy/passwordlessFetchGuard.ts:25](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/privy/passwordlessFetchGuard.ts#L25)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/lib/privy/passwordlessFetchGuard.ts:25](https://github.com/wena
 
 > **getPrivyPasswordlessFailureBackoffMs**(): `number`
 
-Defined in: [src/lib/privy/passwordlessFetchGuard.ts:61](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/passwordlessFetchGuard.ts#L61)
+Defined in: [src/lib/privy/passwordlessFetchGuard.ts:61](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/privy/passwordlessFetchGuard.ts#L61)
 
 #### Returns
 
@@ -42,7 +42,7 @@ Defined in: [src/lib/privy/passwordlessFetchGuard.ts:61](https://github.com/wena
 
 > **getPrivyPasswordlessInitUrl**(): `string`
 
-Defined in: [src/lib/privy/passwordlessFetchGuard.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/passwordlessFetchGuard.ts#L5)
+Defined in: [src/lib/privy/passwordlessFetchGuard.ts:5](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/privy/passwordlessFetchGuard.ts#L5)
 
 #### Returns
 
@@ -54,7 +54,7 @@ Defined in: [src/lib/privy/passwordlessFetchGuard.ts:5](https://github.com/wenak
 
 > **isPrivyPasswordlessFailure**(`error`): `boolean`
 
-Defined in: [src/lib/privy/passwordlessFetchGuard.ts:42](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/passwordlessFetchGuard.ts#L42)
+Defined in: [src/lib/privy/passwordlessFetchGuard.ts:42](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/privy/passwordlessFetchGuard.ts#L42)
 
 #### Parameters
 
@@ -72,7 +72,7 @@ Defined in: [src/lib/privy/passwordlessFetchGuard.ts:42](https://github.com/wena
 
 > **isPrivyPasswordlessInitRequest**(`url`, `method`): `boolean`
 
-Defined in: [src/lib/privy/passwordlessFetchGuard.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/passwordlessFetchGuard.ts#L16)
+Defined in: [src/lib/privy/passwordlessFetchGuard.ts:16](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/privy/passwordlessFetchGuard.ts#L16)
 
 #### Parameters
 
@@ -94,7 +94,7 @@ Defined in: [src/lib/privy/passwordlessFetchGuard.ts:16](https://github.com/wena
 
 > **normalizeFetchMethod**(`value`): `string`
 
-Defined in: [src/lib/privy/passwordlessFetchGuard.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/passwordlessFetchGuard.ts#L9)
+Defined in: [src/lib/privy/passwordlessFetchGuard.ts:9](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/privy/passwordlessFetchGuard.ts#L9)
 
 #### Parameters
 

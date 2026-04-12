@@ -12,7 +12,7 @@
 
 > `const` **BASE\_RPC\_PROXY\_PATH**: `"/api/rpc?chain=base"` = `'/api/rpc?chain=base'`
 
-Defined in: [src/lib/baseReadRpcPolicy.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/lib/baseReadRpcPolicy.ts#L1)
+Defined in: [src/lib/baseReadRpcPolicy.ts:1](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/baseReadRpcPolicy.ts#L1)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/baseReadRpcPolicy.ts:1](https://github.com/wenakita/4626/bl
 
 > **getBrowserBaseReadRpcUrl**(`url`): `string`
 
-Defined in: [src/lib/baseReadRpcPolicy.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/lib/baseReadRpcPolicy.ts#L15)
+Defined in: [src/lib/baseReadRpcPolicy.ts:15](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/baseReadRpcPolicy.ts#L15)
 
 #### Parameters
 
@@ -38,7 +38,7 @@ Defined in: [src/lib/baseReadRpcPolicy.ts:15](https://github.com/wenakita/4626/b
 
 > **isBrowserRestrictedBaseRpc**(`url`): `boolean`
 
-Defined in: [src/lib/baseReadRpcPolicy.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/baseReadRpcPolicy.ts#L7)
+Defined in: [src/lib/baseReadRpcPolicy.ts:7](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/baseReadRpcPolicy.ts#L7)
 
 #### Parameters
 

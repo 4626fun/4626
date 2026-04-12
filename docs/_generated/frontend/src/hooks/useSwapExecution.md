@@ -12,7 +12,7 @@
 
 > **evaluateCanonicalSubmitSession**(`input`): `CanonicalSubmitSessionResult`
 
-Defined in: [src/hooks/useSwapExecution.ts:185](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L185)
+Defined in: [src/hooks/useSwapExecution.ts:185](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/hooks/useSwapExecution.ts#L185)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/hooks/useSwapExecution.ts:185](https://github.com/wenakita/4626
 
 > **resolveCanonicalSubmitSession**(`input`, `ensureCanonicalSession?`): `Promise`\<`CanonicalSubmitSessionResult`\>
 
-Defined in: [src/hooks/useSwapExecution.ts:123](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L123)
+Defined in: [src/hooks/useSwapExecution.ts:123](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/hooks/useSwapExecution.ts#L123)
 
 #### Parameters
 
@@ -52,7 +52,7 @@ Defined in: [src/hooks/useSwapExecution.ts:123](https://github.com/wenakita/4626
 
 > **useSwapExecution**(`params`): `object`
 
-Defined in: [src/hooks/useSwapExecution.ts:278](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L278)
+Defined in: [src/hooks/useSwapExecution.ts:278](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/hooks/useSwapExecution.ts#L278)
 
 #### Parameters
 

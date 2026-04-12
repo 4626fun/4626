@@ -10,7 +10,7 @@
 
 ### ButtonProps
 
-Defined in: [packages/brand-kit/src/components/Button.tsx:23](https://github.com/wenakita/4626/blob/main/frontend/packages/brand-kit/src/components/Button.tsx#L23)
+Defined in: [packages/brand-kit/src/components/Button.tsx:23](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/packages/brand-kit/src/components/Button.tsx#L23)
 
 #### Extends
 
@@ -22,19 +22,19 @@ Defined in: [packages/brand-kit/src/components/Button.tsx:23](https://github.com
 
 > `optional` **loading**: `boolean`
 
-Defined in: [packages/brand-kit/src/components/Button.tsx:26](https://github.com/wenakita/4626/blob/main/frontend/packages/brand-kit/src/components/Button.tsx#L26)
+Defined in: [packages/brand-kit/src/components/Button.tsx:26](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/packages/brand-kit/src/components/Button.tsx#L26)
 
 ##### size?
 
 > `optional` **size**: `"sm"` \| `"md"` \| `"lg"`
 
-Defined in: [packages/brand-kit/src/components/Button.tsx:25](https://github.com/wenakita/4626/blob/main/frontend/packages/brand-kit/src/components/Button.tsx#L25)
+Defined in: [packages/brand-kit/src/components/Button.tsx:25](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/packages/brand-kit/src/components/Button.tsx#L25)
 
 ##### variant?
 
 > `optional` **variant**: `"primary"` \| `"secondary"` \| `"ghost"` \| `"destructive"`
 
-Defined in: [packages/brand-kit/src/components/Button.tsx:24](https://github.com/wenakita/4626/blob/main/frontend/packages/brand-kit/src/components/Button.tsx#L24)
+Defined in: [packages/brand-kit/src/components/Button.tsx:24](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/packages/brand-kit/src/components/Button.tsx#L24)
 
 ## Variables
 
@@ -42,4 +42,4 @@ Defined in: [packages/brand-kit/src/components/Button.tsx:24](https://github.com
 
 > `const` **Button**: `ForwardRefExoticComponent`\<[`ButtonProps`](#buttonprops) & `RefAttributes`\<`HTMLButtonElement`\>\>
 
-Defined in: [packages/brand-kit/src/components/Button.tsx:46](https://github.com/wenakita/4626/blob/main/frontend/packages/brand-kit/src/components/Button.tsx#L46)
+Defined in: [packages/brand-kit/src/components/Button.tsx:46](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/packages/brand-kit/src/components/Button.tsx#L46)
