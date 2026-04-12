@@ -118,15 +118,10 @@ export function AccountSetupWorkspaceView(props: {
 
     return (
       <div className="mx-auto w-full max-w-[640px] space-y-5">
-        {/* System messages */}
+        {/* Critical errors stay inline; notices are toasted */}
         {error ? (
           <div role="alert" aria-live="assertive" className="rounded-xl border border-rose-500/20 bg-rose-500/[0.08] px-4 py-3 text-sm text-rose-300">
             {error}
-          </div>
-        ) : null}
-        {notice ? (
-          <div role="status" aria-live="polite" className="rounded-xl border border-emerald-500/20 bg-emerald-500/[0.08] px-4 py-3 text-sm text-emerald-300">
-            {notice}
           </div>
         ) : null}
 
@@ -139,7 +134,7 @@ export function AccountSetupWorkspaceView(props: {
         </div>
 
         {/* Accordion steps */}
-        <div className="overflow-hidden rounded-[13px] border border-white/[0.06]">
+        <div className="overflow-hidden rounded-[13px]">
 
           {/* ── Step 1 — Zora + wallet sync ── */}
           {(() => {
@@ -183,10 +178,10 @@ export function AccountSetupWorkspaceView(props: {
                           <button
                             type="button"
                             onClick={(e) => { e.stopPropagation(); copyAddress(addr) }}
-                            title="Copy address"
-                            className="min-w-0 max-w-[140px] truncate font-mono text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors sm:max-w-[220px]"
+                            title={addr}
+                            className="shrink-0 font-mono text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors"
                           >
-                            {addr}
+                            {shortAddr(addr)}
                           </button>
                         ) : null}
                         {addr ? (
