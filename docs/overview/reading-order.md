@@ -9,6 +9,6 @@ This content has moved.
 
 ## Read this instead
 
-- [Reading Order](/compressions/reading-order)
+- [Compressions Overview](/compressions)
 
 Legacy URLs are kept working via redirects.

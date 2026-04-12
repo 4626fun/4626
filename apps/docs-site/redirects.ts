@@ -46,6 +46,15 @@ export const redirects: ClientRedirect[] = [
     from: '/superpowers/specs/2026-04-06-waitlist-allowlist-separation-design',
     to: '/developers',
   },
+  { from: '/audits/github-supply-chain-setup', to: '/audits' },
+  { from: '/audits/internal-monorepo-audit-2026-03-30', to: '/audits' },
+  { from: '/audits/npm-advisories-triage', to: '/audits' },
+  { from: '/audits/production-parity-checklist', to: '/audits' },
+  { from: '/compressions/reading-order', to: '/compressions' },
+  {
+    from: '/primitives/game-loop/lottery-amoe-test-matrix',
+    to: '/primitives/game-loop/lottery',
+  },
   { from: ['/zora/MONOREPO_ARCHITECTURE', '/zora/monorepo_architecture'], to: '/protocols' },
   { from: ['/zora/PROTOCOL_KNOWLEDGE', '/zora/protocol_knowledge'], to: '/protocols' },
 
