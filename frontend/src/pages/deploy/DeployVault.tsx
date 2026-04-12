@@ -1,6 +1,7 @@
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { motion } from 'framer-motion'
 import { useAccount, useChainId, usePublicClient, useReadContract, useSwitchChain, useWalletClient } from 'wagmi'
+import { debugLogsFlag } from '@/lib/featureFlags'
 import { base } from 'wagmi/chains'
 import type { Address, Hex } from 'viem'
 import {
@@ -168,7 +169,7 @@ const DEFAULT_DEPLOYMENT_VERSION = 'v1.8.3'
 const DEPLOYMENT_VERSION_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/
 
 function isDebugEnabled(): boolean {
-  if (import.meta.env.VITE_DEBUG_LOGS === 'true') return true
+  if (debugLogsFlag()) return true
   if (typeof window === 'undefined') return false
   try {
     return window.localStorage.getItem('cv:debug') === 'true'

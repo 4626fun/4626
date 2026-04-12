@@ -61,6 +61,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'deploy/smartWalletOwner': () => import('./deploy/_smartWalletOwner.js'),
   'deploy/smartWalletOwners': () => import('./deploy/_smartWalletOwners.js'),
 
+  'flags/discover': () => import('./flags/_discover.js'),
   'health': () => import('./_health.js'),
 
   'onchain/coinTradeRewardsBatch': () => import('./onchain/_coinTradeRewardsBatch.js'),

@@ -25,7 +25,7 @@ import { Input } from '@/components/ui/Input'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { AccountModeIndicator } from '@/components/ui/AccountModeIndicator'
-import { LoadingText } from '@/components/ui/LoadingState'
+import { LoadingInline, LoadingText } from '@/components/ui/LoadingState'
 import { AmoeEntryCard } from '@/components/lottery/AmoeEntryCard'
 import { apiFetch } from '@/lib/apiBase'
 import { fetchDebankTokenList, type DebankToken, type DebankTokenList } from '@/lib/debank/client'
@@ -640,8 +640,10 @@ export function Portfolio() {
           onClick={() => void walletSyncMutation.mutateAsync()}
           loading={walletSyncMutation.isPending}
         >
-          <RefreshCw className="h-3 w-3" />
-          {walletSyncMutation.isPending ? 'Refreshing...' : 'Refresh wallets'}
+          {!walletSyncMutation.isPending ? <RefreshCw className="h-3 w-3" /> : null}
+          {walletSyncMutation.isPending
+            ? <LoadingInline intent="processing" size="sm" labelOverride="Refreshing..." />
+            : 'Refresh wallets'}
         </Button>
       ) : null}
     </div>
@@ -688,8 +690,10 @@ export function Portfolio() {
                       onClick={() => void walletSyncMutation.mutateAsync()}
                       loading={walletSyncMutation.isPending}
                     >
-                      <RefreshCw className="h-3 w-3" />
-                      {walletSyncMutation.isPending ? 'Syncing...' : 'Sync wallets'}
+                      {!walletSyncMutation.isPending ? <RefreshCw className="h-3 w-3" /> : null}
+                      {walletSyncMutation.isPending
+                        ? <LoadingInline intent="processing" size="sm" labelOverride="Syncing..." />
+                        : 'Sync wallets'}
                     </Button>
                   ) : null}
                   <div className="rounded-full border border-white/10 bg-black/35 px-3 py-1.5 text-xs text-zinc-300">
@@ -700,7 +704,9 @@ export function Portfolio() {
 
               <div className="app-meta-value mt-3 flex flex-wrap items-center gap-2 text-zinc-500">
                 <span className="rounded-full border border-white/8 bg-white/5 px-2 py-1">
-                  Status: {portfolioQuery.isLoading ? 'Syncing...' : portfolioQuery.data ? 'Synced' : 'Not synced'}
+                  Status: {portfolioQuery.isLoading
+                    ? <LoadingInline intent="processing" size="sm" labelOverride="Syncing..." />
+                    : portfolioQuery.data ? 'Synced' : 'Not synced'}
                 </span>
                 <span className="rounded-full border border-white/8 bg-white/5 px-2 py-1">
                   Updated: {formatDateTime(profile?.updatedAt ?? null)}
@@ -984,7 +990,9 @@ export function Portfolio() {
                             disabled={!avatarUploadFile || lensUploadBusy !== null}
                             loading={lensUploadBusy === 'avatar'}
                           >
-                            {lensUploadBusy === 'avatar' ? 'Uploading...' : 'Upload to Lens Grove'}
+                            {lensUploadBusy === 'avatar'
+                              ? <LoadingInline intent="processing" size="sm" labelOverride="Uploading..." />
+                              : 'Upload to Lens Grove'}
                           </Button>
                         </div>
                         <div className="space-y-2 rounded-lg border border-zinc-800 bg-black/30 p-3">
@@ -1002,7 +1010,9 @@ export function Portfolio() {
                             disabled={!bannerUploadFile || lensUploadBusy !== null}
                             loading={lensUploadBusy === 'banner'}
                           >
-                            {lensUploadBusy === 'banner' ? 'Uploading...' : 'Upload to Lens Grove'}
+                            {lensUploadBusy === 'banner'
+                              ? <LoadingInline intent="processing" size="sm" labelOverride="Uploading..." />
+                              : 'Upload to Lens Grove'}
                           </Button>
                         </div>
                       </div>

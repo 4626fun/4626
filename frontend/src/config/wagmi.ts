@@ -3,6 +3,7 @@ import { base, mainnet, arbitrum, optimism, polygon } from 'wagmi/chains'
 import { coinbaseWallet, injected, metaMask } from 'wagmi/connectors'
 import { DATA_SUFFIX, warnGlobalWagmiDataSuffixBehavior } from '@/lib/baseBuilderCodes'
 import { BASE_RPC_PROXY_PATH, isBrowserRestrictedBaseRpc } from '@/lib/baseReadRpcPolicy'
+import { injectedConnectorFlag } from '@/lib/featureFlags'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 
 /**
@@ -47,8 +48,7 @@ const MAINNET_RPC_PROXY = IS_BROWSER ? '/api/rpc?chain=mainnet' : ''
 const ARBITRUM_RPC_PROXY = IS_BROWSER ? '/api/rpc?chain=arbitrum' : ''
 const OPTIMISM_RPC_PROXY = IS_BROWSER ? '/api/rpc?chain=optimism' : ''
 const POLYGON_RPC_PROXY = IS_BROWSER ? '/api/rpc?chain=polygon' : ''
-const ENABLE_INJECTED_CONNECTOR =
-  !['0', 'false', 'no', 'off'].includes(String(import.meta.env.VITE_ENABLE_INJECTED_CONNECTOR ?? '1').toLowerCase())
+const ENABLE_INJECTED_CONNECTOR = injectedConnectorFlag()
 const RPC_PROXY_PREFIX = '/api/rpc?chain='
 
 function isWaitlistAuthPath(pathname: string): boolean {

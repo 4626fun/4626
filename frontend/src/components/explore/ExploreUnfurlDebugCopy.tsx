@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 
+import { debugLogsFlag } from '@/lib/featureFlags'
 import { ExploreCopyButton } from '@/components/explore/ExploreUiPrimitives'
 
 const DEFAULT_SOCIAL_BOT_USER_AGENT = 'Twitterbot/1.0'
@@ -47,7 +48,7 @@ export function ExploreUnfurlDebugCopy({
   const previewPath = useMemo(() => normalizePreviewPath(sourcePath), [sourcePath])
   const tooltipText = `path=${previewPath} | userAgent=${userAgent}`
   const debugUrl = useMemo(() => buildDebugUrl(sourcePath, userAgent), [sourcePath, userAgent])
-  const showDebugControl = import.meta.env.DEV || import.meta.env.VITE_DEBUG_LOGS === 'true'
+  const showDebugControl = import.meta.env.DEV || debugLogsFlag()
 
   if (!showDebugControl || !debugUrl) return null
 

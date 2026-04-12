@@ -9,6 +9,7 @@ import { createPublicClient, http } from 'viem'
 import { decodeAbiParameters, isAddress, parseAbiParameters } from 'viem'
 import { base } from 'viem/chains'
 import { getBrowserBaseReadRpcUrl } from '@/lib/baseReadRpcPolicy'
+import { zoraMigrationVerifyImplFlag } from '@/lib/featureFlags'
 
 // LiquidityMigrated event signature
 // event LiquidityMigrated(PoolKey oldPoolKey, bytes32 indexed oldPoolKeyHash, PoolKey newPoolKey, bytes32 indexed newPoolKeyHash)
@@ -81,10 +82,7 @@ const VERIFY_MIGRATION_IMPLEMENTATION = (() => {
   // Secure by default across browser and server contexts.
   // Bytecode verification can be explicitly disabled only for emergency RPC cost control.
   if (!IS_BROWSER) return true
-  const raw = String(import.meta.env.VITE_ZORA_MIGRATION_VERIFY_IMPLEMENTATION ?? '').trim().toLowerCase()
-  if (!raw) return true
-  if (['0', 'false', 'no', 'off'].includes(raw)) return false
-  return true
+  return zoraMigrationVerifyImplFlag()
 })()
 
 function normalizeRpcUrl(url: string): string | null {

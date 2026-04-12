@@ -4,9 +4,10 @@
 import { createPublicClient, http, type Address } from 'viem'
 import { base } from 'viem/chains'
 import { getBrowserBaseReadRpcUrl } from './baseReadRpcPolicy'
+import { debugLogsFlag } from './featureFlags'
 import { logger } from './logger'
 
-const CREATOR_COIN_DEBUG = import.meta.env.DEV && import.meta.env.VITE_DEBUG_LOGS === 'true'
+const CREATOR_COIN_DEBUG = import.meta.env.DEV && debugLogsFlag()
 const ZERO_ADDRESS = `0x${'0000000000000000000000000000000000000000'}` as Address
 const IS_BROWSER = typeof window !== 'undefined'
 const BASE_RPC_RAW =

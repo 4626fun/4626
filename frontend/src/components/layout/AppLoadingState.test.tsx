@@ -19,7 +19,7 @@ describe('AppLoadingState', () => {
     expect(container.querySelector('.app-loading-glow')).toBeNull()
     expect(container.querySelector('.app-loading-pill')).toBeNull()
     expect(container.firstElementChild?.getAttribute('data-loading-intent')).toBe('page')
-    expect(container.firstElementChild?.getAttribute('data-loading-pattern')).toBe('calm-sweep')
+    expect(container.firstElementChild?.getAttribute('data-loading-pattern')).toBe('wave-lr-page')
   })
 
   it('applies session intent copy and pattern metadata', () => {
@@ -30,7 +30,7 @@ describe('AppLoadingState', () => {
     expect(heading).toBeTruthy()
     expect(status.textContent).toMatch(/syncing your account session/i)
     expect(container.firstElementChild?.getAttribute('data-loading-intent')).toBe('session')
-    expect(container.firstElementChild?.getAttribute('data-loading-pattern')).toBe('session-diagonal')
+    expect(container.firstElementChild?.getAttribute('data-loading-pattern')).toBe('orbit-session')
   })
 
   it('allows headline and status overrides without changing intent metadata', () => {
@@ -41,6 +41,6 @@ describe('AppLoadingState', () => {
     expect(screen.getByRole('heading', { name: /finalizing/i })).toBeTruthy()
     expect(screen.getByRole('status').textContent).toMatch(/finalizing deployment/i)
     expect(container.firstElementChild?.getAttribute('data-loading-intent')).toBe('deploy')
-    expect(container.firstElementChild?.getAttribute('data-loading-pattern')).toBe('staged-pulse')
+    expect(container.firstElementChild?.getAttribute('data-loading-pattern')).toBe('orbit-deploy')
   })
 })

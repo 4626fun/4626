@@ -250,7 +250,7 @@ function WaitlistAuthStep(props: {
       <div className="relative z-10 w-full max-w-sm space-y-8 text-center">
         {/* header */}
         <div className="space-y-3">
-          <p className="bv-kicker">Early access</p>
+          <p className="bv-kicker">Secure onboarding</p>
           <h2 className="text-[2.6rem] font-light leading-tight tracking-tight text-white">
             {authUi.title}
           </h2>
@@ -263,7 +263,7 @@ function WaitlistAuthStep(props: {
             type="button"
             disabled={buttonsDisabled}
             onClick={() => void onContinueAuth()}
-            className="btn-accent btn-no-icon inline-flex w-full items-center justify-center gap-2 py-4 text-[15px] disabled:opacity-50"
+            className="btn-accent btn-no-icon inline-flex w-full items-center justify-center gap-2 rounded-xl border border-brand-primary/45 bg-linear-to-r from-brand-primary to-brand-hover py-3.5 text-[14px] font-medium text-white shadow-[0_16px_36px_-18px_rgba(0,82,255,0.92)] transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_20px_40px_-16px_rgba(0,82,255,0.95)] disabled:translate-y-0 disabled:opacity-50"
           >
             {busy ? (
               <>
@@ -276,7 +276,7 @@ function WaitlistAuthStep(props: {
               authUi.ctaLabel
             )}
           </button>
-          <p className="bv-kicker">No wallet required at this step</p>
+          <p className="bv-kicker">Email address required</p>
         </div>
 
         {/* error */}

@@ -1,3 +1,4 @@
+import { swapProviderFlag } from '@/lib/featureFlags'
 import { normalizeUniswapError } from '@/lib/uniswap/error'
 
 export type SwapProvider = 'uniswap' | 'cdp'
@@ -20,7 +21,7 @@ function normalizeSwapProviderMode(raw: unknown): SwapProviderMode {
 }
 
 export function readSwapProviderMode(): SwapProviderMode {
-  return normalizeSwapProviderMode(import.meta.env.VITE_SWAP_PROVIDER)
+  return normalizeSwapProviderMode(swapProviderFlag())
 }
 
 export function resolveSwapProviderSelection(mode = readSwapProviderMode()): SwapProviderSelection {

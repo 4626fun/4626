@@ -7,7 +7,7 @@ const DEFAULT_GRID_SIZE = 3
 const DEFAULT_SIZE = 28
 const DEFAULT_COLOR = 'rgb(var(--brand-primary))'
 
-export type PixelWavePreset = 'wave-lr' | 'wave-rl' | 'wave-tb' | 'wave-bt' | 'wave-diag'
+export type PixelWavePreset = 'wave-lr' | 'wave-rl' | 'wave-tb' | 'wave-bt' | 'wave-diag' | 'wave-orbit-cw'
 
 export interface PixelWaveLoaderProps {
   name?: PixelWavePreset | (string & {})
@@ -51,6 +51,16 @@ function getGapValue(size: number | string | undefined, sizeValue: string, gridS
   return `clamp(1px, calc(${sizeValue} / ${Math.max(gridSize * 2.5, 6)}), 6px)`
 }
 
+// Clockwise ring order for a 3×3 grid (outer 8 cells in orbit; center echoes midpoint):
+//   step:  0  1  2
+//          7  4  3
+//          6  5  4
+const ORBIT_CW_3X3 = [
+  [0, 1, 2],
+  [7, 4, 3],
+  [6, 5, 4],
+] as const
+
 function getPresetOffset(name: string, row: number, column: number, gridSize: number) {
   switch (name) {
     case 'wave-rl':
@@ -61,6 +71,13 @@ function getPresetOffset(name: string, row: number, column: number, gridSize: nu
       return gridSize - row - 1
     case 'wave-diag':
       return row + column
+    case 'wave-orbit-cw': {
+      if (gridSize === 3) {
+        return (ORBIT_CW_3X3[row] ?? [])[column] ?? 0
+      }
+      // Larger grids: approximate outer ring clockwise as diagonal
+      return row + column
+    }
     case 'wave-lr':
     default:
       return column

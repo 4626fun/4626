@@ -15,6 +15,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
+import { xmtpDebugFlag } from '@/lib/featureFlags'
 import { APP_ORIGIN } from '@/lib/host'
 import { apiFetch } from '@/lib/apiBase'
 import type { ApiEnvelope } from '@/lib/apiEnvelope'
@@ -675,7 +676,7 @@ function isOpfsAccessHandleError(message: string): boolean {
 }
 
 function isXmtpVerboseLoggingEnabled(): boolean {
-  if (import.meta.env.VITE_XMTP_DEBUG === 'true') return true
+  if (xmtpDebugFlag()) return true
   if (typeof window === 'undefined') return false
   try {
     return window.localStorage.getItem('cv:debug:xmtp') === 'true'

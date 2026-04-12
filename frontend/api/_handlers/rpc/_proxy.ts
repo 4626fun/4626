@@ -71,13 +71,14 @@ const RPC_FORWARD_TIMEOUT_MS = 5_000
 const RPC_RATE_LIMIT_WINDOW_MS = 60_000
 const RPC_RATE_LIMIT_MAX_REQUESTS = clampInteger(
   process.env.RPC_PROXY_RATE_LIMIT_MAX_REQUESTS,
-  process.env.NODE_ENV === 'development' ? 240 : 120,
+  // Local/dev pages can legitimately burst many parallel reads; keep prod strict.
+  process.env.NODE_ENV === 'development' ? 1_200 : 120,
   60,
   2_000,
 )
 const RPC_RATE_LIMIT_MAX_REQUESTS_PER_IP = clampInteger(
   process.env.RPC_PROXY_RATE_LIMIT_MAX_REQUESTS_PER_IP,
-  process.env.NODE_ENV === 'development' ? 360 : 180,
+  process.env.NODE_ENV === 'development' ? 1_800 : 180,
   60,
   5_000,
 )
@@ -100,6 +101,7 @@ const RPC_TELEMETRY_MAX_METHOD_KEYS = 24
 const MAX_RPC_BATCH_SIZE = 100
 const rpcChainIdCache = new Map<string, { value: string | null; expiresAt: number }>()
 const rpcRateLimitState = new Map<string, { count: number; resetAt: number }>()
+const localRateLimitWarnState = new Map<string, number>()
 let rpcInFlightRequests = 0
 let rpcTelemetryWindow = createRpcTelemetryWindow(Date.now())
 
@@ -497,6 +499,41 @@ function buildIpRateLimitKey(ip: string, chain: RpcChain): string {
   return `ip:${ip.trim().toLowerCase()}:${chain}`
 }
 
+function maybeLogLocalRateLimitWarning(params: {
+  chain: RpcChain
+  principalAddress: string
+  clientIp: string
+  ipRateLimitEnforced: boolean
+  principalAllowed: boolean
+  ipAllowed: boolean
+  resetAt: number
+}) {
+  const scope = !params.principalAllowed
+    ? `principal:${params.principalAddress.trim().toLowerCase()}:${params.chain}`
+    : `ip:${params.clientIp.trim().toLowerCase()}:${params.chain}`
+  const now = Date.now()
+  const existingResetAt = localRateLimitWarnState.get(scope)
+  if (typeof existingResetAt === 'number' && existingResetAt === params.resetAt && existingResetAt > now) {
+    return
+  }
+  localRateLimitWarnState.set(scope, params.resetAt)
+  // Opportunistic cleanup to keep memory bounded.
+  if (localRateLimitWarnState.size > 2_000) {
+    for (const [key, expiresAt] of localRateLimitWarnState) {
+      if (expiresAt <= now) localRateLimitWarnState.delete(key)
+      if (localRateLimitWarnState.size <= 1_000) break
+    }
+  }
+  logger.warn('[rpc-proxy][local-guard] local rate limit exceeded', {
+    chain: params.chain,
+    principalAddress: params.principalAddress,
+    clientIp: params.clientIp,
+    ipRateLimitEnforced: params.ipRateLimitEnforced,
+    principalAllowed: params.principalAllowed,
+    ipAllowed: params.ipAllowed,
+  })
+}
+
 function sanitizeUpstreamRpcError(status: number, detail: string | null): string {
   const fallback =
     status === 429
@@ -587,13 +624,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       resetAt: rateLimitResetAt,
     })
     if (!principalRateLimit.allowed || !ipRateLimit.allowed) {
-      logger.warn('[rpc-proxy][local-guard] local rate limit exceeded', {
+      maybeLogLocalRateLimitWarning({
         chain,
         principalAddress,
         clientIp,
         ipRateLimitEnforced: hasClientIp,
         principalAllowed: principalRateLimit.allowed,
         ipAllowed: ipRateLimit.allowed,
+        resetAt: rateLimitResetAt,
       })
       res.setHeader('Retry-After', String(toRetryAfterSeconds(rateLimitResetAt)))
       finalizeTelemetry(429, 'local_rate_limited')

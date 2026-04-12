@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { erc20Abi, formatUnits, isAddress, parseUnits } from 'viem'
+import { debugLogsFlag } from '@/lib/featureFlags'
 
 import { CONTRACTS } from '@/config/contracts'
 import {
@@ -232,7 +233,7 @@ export function evaluateCanonicalSubmitSession(input: CanonicalSubmitSessionInpu
 }
 
 function isSwapDebugEnabled(): boolean {
-  if (import.meta.env.VITE_DEBUG_LOGS === 'true') return true
+  if (debugLogsFlag()) return true
   if (typeof window === 'undefined') return false
   try {
     return window.localStorage.getItem('cv:debug') === 'true'

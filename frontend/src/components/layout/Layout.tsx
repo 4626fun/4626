@@ -9,6 +9,7 @@ import {
 import { isPublicSiteMode } from '@/lib/flags'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
 import { AppLoadingState } from '@/components/layout/AppLoadingState'
+import { FlagToolbarBridge } from '@/components/flags/FlagToolbarBridge'
 
 const LazyVaultNavBar = lazy(async () => {
   const mod = await import('../brand/VaultNavBar')
@@ -285,6 +286,9 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
           <LazyChatWidget initiallyActivated />
         </Suspense>
       ) : null}
+
+      {/* Vercel Flags Explorer bridge — exposes flag state to the Toolbar */}
+      <FlagToolbarBridge />
 
       {/* Mobile Nav - Minimal */}
       <nav

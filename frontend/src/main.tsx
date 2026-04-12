@@ -4,6 +4,7 @@ import { BrowserRouter } from 'react-router-dom'
 
 import { RootRouter } from './RootRouter'
 import { ThemeProvider } from '@/lib/theme'
+import { privyAnalyticsFlag } from '@/lib/featureFlags'
 import {
   getPrivyPasswordlessBackoffMs,
   getPrivyPasswordlessFailureBackoffMs,
@@ -265,17 +266,12 @@ if (typeof window !== 'undefined') {
 
     const params = new URLSearchParams(window.location.search)
     const debugEnabled = params.get('debug') === '1' || window.localStorage.getItem('cv:debug') === 'true'
-    const analyticsExplicitlyEnabled = ['1', 'true', 'yes'].includes(
-      String(import.meta.env.VITE_PRIVY_ENABLE_ANALYTICS ?? '')
-        .trim()
-        .toLowerCase(),
-    )
+    const analyticsExplicitlyEnabled = privyAnalyticsFlag()
     const disablePrivyAnalytics =
       !analyticsExplicitlyEnabled ||
       debugEnabled ||
       params.get('privy_analytics') === '0' ||
-      window.localStorage.getItem('cv:privy:analytics') === 'off' ||
-      ['1', 'true', 'yes'].includes(String(import.meta.env.VITE_PRIVY_DISABLE_ANALYTICS ?? '').trim().toLowerCase())
+      window.localStorage.getItem('cv:privy:analytics') === 'off'
     let privyPasswordlessCooldownUntilMs = 0
     let privyPasswordlessInFlight: Promise<Response> | null = null
     if (debugEnabled && !(window as any).__cvFetchPatched) {

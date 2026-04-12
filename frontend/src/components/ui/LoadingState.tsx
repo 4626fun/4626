@@ -41,10 +41,20 @@ export function LoadingInline(props: LoadingInlineProps) {
   const config = getLoadingIntentConfig(intent)
   const label = labelOverride ?? config.headline
   const loaderSize = INLINE_SIZE_MAP[size]
+  const delays = useMemo(
+    () => config.pattern.baseDelays.map((d) => Math.max(0, d)),
+    [config.pattern.baseDelays],
+  )
 
   return (
     <span className={cn('inline-flex items-center gap-2 text-zinc-500', INLINE_TEXT_CLASS_MAP[size], className)} role="status" aria-live="polite">
-      <PixelWaveLoader name={config.pattern.preset} size={loaderSize} color="rgb(var(--brand-primary))" />
+      <PixelWaveLoader
+        name={config.pattern.preset}
+        size={loaderSize}
+        color="rgb(var(--brand-primary))"
+        delays={delays}
+        duration={config.pattern.baseDurationMs}
+      />
       {showLabel ? <span>{label}</span> : <span className="sr-only">{label}</span>}
     </span>
   )

@@ -1,99 +1,30 @@
-import { getHostMode, type HostMode } from '@/lib/host'
+/**
+ * Backward-compatible re-exports from the new feature flag registry.
+ *
+ * Consumers that already import from `@/lib/flags` continue to work unchanged.
+ * New code should import directly from `@/lib/featureFlags`.
+ */
+
+export {
+  isPrivyHostModeAllowed,
+  resolvePrivyAppId as getPrivyAppId,
+  resolvePrivyClientId as getPrivyClientId,
+} from './featureFlags'
+
+import {
+  privyEnabledFlag,
+  publicSiteModeFlag,
+  lensGroveFlag,
+} from './featureFlags'
 
 export function isPublicSiteMode(): boolean {
-  const v = String(import.meta.env.VITE_PUBLIC_SITE_MODE ?? '')
-    .trim()
-    .toLowerCase()
-  return v === '1' || v === 'true' || v === 'yes'
-}
-
-const DEFAULT_PRIVY_APP_ID = 'cmk411efm034jl50cs618o8cy'
-const DEFAULT_PRIVY_ALLOWED_ORIGINS = new Set<string>([
-  'https://4626.fun',
-  'https://app.4626.fun',
-  'http://localhost:5173',
-  'http://localhost:5174',
-])
-
-function isTruthyEnv(v: unknown): boolean {
-  const s = String(v ?? '')
-    .trim()
-    .toLowerCase()
-  return s === '1' || s === 'true' || s === 'yes'
-}
-
-function normalizeOrigin(raw: string): string {
-  const input = String(raw ?? '').trim()
-  if (!input) return ''
-  try {
-    return new URL(input).origin.toLowerCase()
-  } catch {
-    return ''
-  }
-}
-
-function getCurrentOrigin(): string | null {
-  if (typeof window === 'undefined') return null
-  return normalizeOrigin(window.location.origin)
-}
-
-function getPrivyAllowedOrigins(): Set<string> {
-  const raw = String(import.meta.env.VITE_PRIVY_ALLOWED_ORIGINS ?? '').trim()
-  if (!raw) return new Set(DEFAULT_PRIVY_ALLOWED_ORIGINS)
-  const list = raw
-    .split(/[\s,]+/g)
-    .map((v) => normalizeOrigin(v))
-    .filter(Boolean)
-  return new Set(list.length > 0 ? list : Array.from(DEFAULT_PRIVY_ALLOWED_ORIGINS))
-}
-
-function isLoopbackOrigin(origin: string): boolean {
-  try {
-    const hostname = new URL(origin).hostname.toLowerCase()
-    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]'
-  } catch {
-    return false
-  }
-}
-
-function isPrivyOriginAllowed(): boolean {
-  const origin = getCurrentOrigin()
-  if (!origin) return true
-  if (getPrivyAllowedOrigins().has(origin)) return true
-  // Local dev often runs multiple Vite ports in parallel (for isolated browser checks).
-  // Keep Privy available on loopback origins so auth hooks do not crash on those routes.
-  if (import.meta.env.DEV && isLoopbackOrigin(origin)) return true
-  return false
-}
-
-export function isPrivyHostModeAllowed(mode: HostMode): boolean {
-  return mode === 'marketing' || mode === 'app'
-}
-
-export function getPrivyAppId(): string | null {
-  const appId = String(import.meta.env.VITE_PRIVY_APP_ID ?? '').trim()
-  if (appId.length > 0) return appId
-  return DEFAULT_PRIVY_APP_ID
-}
-
-export function getPrivyClientId(): string | null {
-  const clientId = String(import.meta.env.VITE_PRIVY_CLIENT_ID ?? '').trim()
-  return clientId.length > 0 ? clientId : null
+  return publicSiteModeFlag()
 }
 
 export function isPrivyClientEnabled(): boolean {
-  // Explicit enable flag (so Privy can't break production unexpectedly).
-  if (!isTruthyEnv(import.meta.env.VITE_PRIVY_ENABLED)) return false
-  if (!getPrivyAppId()) return false
-  if (!isPrivyOriginAllowed()) return false
-  if (typeof window !== 'undefined' && !isPrivyHostModeAllowed(getHostMode())) return false
-  return true
+  return privyEnabledFlag()
 }
 
 export function isLensGroveEnabled(): boolean {
-  const raw = String(import.meta.env.VITE_ENABLE_LENS_GROVE ?? '')
-    .trim()
-    .toLowerCase()
-  if (!raw) return true
-  return raw === '1' || raw === 'true' || raw === 'yes'
+  return lensGroveFlag()
 }

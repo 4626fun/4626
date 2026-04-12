@@ -12,7 +12,7 @@ function Spinner(props: { size?: 'sm' | 'md'; className?: string }) {
       aria-label="Loading"
       role="status"
       className={cn(
-        'inline-grid grid-cols-3 gap-[2px] text-brand-primary',
+        'inline-grid grid-cols-3 gap-[2px] text-brand-primary animate-spin [animation-duration:1.1s]',
         className,
       )}
     >

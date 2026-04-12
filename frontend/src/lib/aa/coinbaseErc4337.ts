@@ -10,6 +10,7 @@ import {
   isAddress,
   toHex,
 } from 'viem'
+import { debugLogsFlag, useropTelemetryFlag } from '@/lib/featureFlags'
 import { toAccount } from 'viem/accounts'
 import {
   createBundlerClient,
@@ -278,7 +279,7 @@ export type WalletClientLike = {
 const SESSION_TOKEN_KEY = 'cv_siwe_session_token'
 
 function isDebugEnabled(): boolean {
-  if (import.meta.env.VITE_DEBUG_LOGS === 'true') return true
+  if (debugLogsFlag()) return true
   if (typeof window === 'undefined') return false
   try {
     return window.localStorage.getItem('cv:debug') === 'true'
@@ -307,7 +308,7 @@ let userOpTelemetryLastFlushAt = 0
 
 function isUserOpTelemetryEnabled(): boolean {
   if (typeof window === 'undefined') return false
-  if (import.meta.env.VITE_USEROP_TELEMETRY === 'true') return true
+  if (useropTelemetryFlag()) return true
   if (import.meta.env.PROD) return true
   try {
     return window.localStorage.getItem('cv:debug:userop-telemetry') === 'true'

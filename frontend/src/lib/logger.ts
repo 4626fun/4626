@@ -1,9 +1,11 @@
+import { debugLogsFlag } from '@/lib/featureFlags'
+
 type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 const LOG_LEVELS: Record<LogLevel, number> = { debug: 0, info: 1, warn: 2, error: 3 }
 
 function isDebugEnabled(): boolean {
-  if (import.meta.env.VITE_DEBUG_LOGS === 'true') return true
+  if (debugLogsFlag()) return true
   if (typeof window === 'undefined') return false
   try {
     return window.localStorage.getItem('cv:debug') === 'true'
