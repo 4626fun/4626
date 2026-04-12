@@ -79,7 +79,6 @@ const sidebars: SidebarsConfig = {
       link: { type: 'doc', id: 'developers/index' },
       items: [
         'frontend/index',
-        'frontend/creator-workspace-implementation-plan',
         'architecture/index',
         {
           type: 'category',
@@ -117,26 +116,15 @@ const sidebars: SidebarsConfig = {
         },
         {
           type: 'category',
-          label: 'System Model',
-          items: [
-            'compressions/index',
-            'compressions/deployment',
-            'compressions/geography',
-            'compressions/distribution',
-            'compressions/engagement',
-            'compressions/reading-order',
-            'primitives/index',
-            'primitives/account',
-            'primitives/market/index',
-            'primitives/market/vault',
-            'primitives/market/auction',
-            'primitives/game-loop/index',
-            'primitives/game-loop/lottery',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Contracts',
+              label: 'System Model',
+              items: [
+                'compressions/index',
+                'primitives/index',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'Contracts',
           link: { type: 'doc', id: 'contracts/index' },
           items: [
             {
@@ -206,15 +194,7 @@ const sidebars: SidebarsConfig = {
               type: 'category',
               label: 'Releases',
               link: { type: 'doc', id: 'operations/deployment/releases/index' },
-              items: [
-                'operations/deployment/releases/v1.8.3-mainnet',
-                'operations/deployment/releases/v1.8.2-mainnet',
-                'operations/deployment/releases/v1.8.1-mainnet',
-                'operations/deployment/releases/v1.8.1-pre-broadcast-checklist',
-                'operations/deployment/releases/v1.7.1-mainnet',
-                'operations/deployment/releases/v1.7.1-post-broadcast-checklist',
-                'operations/deployment/releases/cleanup-2026-04-09',
-              ],
+              items: ['operations/deployment/releases/v1.8.3-mainnet'],
             },
             {
               type: 'category',

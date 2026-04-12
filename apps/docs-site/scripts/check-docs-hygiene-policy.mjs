@@ -1,14 +1,17 @@
 #!/usr/bin/env node
 
 import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import fg from 'fast-glob';
 import matter from 'gray-matter';
 
 const ALLOWED_STATUS = new Set(['current', 'needs-review', 'archived']);
 const REQUIRED_FIELDS = ['audience', 'stage', 'owner', 'last_reviewed', 'status'];
 const DEFAULT_STALE_DAYS = Number.parseInt(process.env.DOCS_STALE_DAYS || '90', 10);
-const DOCS_SITE_ROOT = 'apps/docs-site/docs';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const DOCS_SITE_ROOT = resolve(__dirname, '..', 'docs');
 
 function normalizeAudience(value) {
   if (Array.isArray(value)) {

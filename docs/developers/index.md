@@ -1,217 +1,52 @@
 ---
-title: Developer Guide
-sidebar_position: 7
+title: Developers
+sidebar_position: 4
+slug: /developers
+last_updated: '2026-04-11'
 ---
 
-# Developer Guide
+# Developers
 
-This guide covers how to build on and contribute to 4626.
+This lane is for engineers building features, APIs, contracts, and integrations in the 4626 monorepo.
 
-## Developer Entry Points
+## Start Here
 
 - [Frontend Overview](/frontend)
-- [Reference](/reference)
+- [Architecture](/architecture)
+- [Reference Index](/reference)
 - [API Reference](/api)
-- [Protocol Integrator Lane](/protocols)
 
-## Project Structure
+## Core Surfaces
 
-```
-4626/
-  contracts/                      # Solidity contracts
-    core/                         # Platform core
-      CreatorRegistry.sol
-    vault/                        # ERC-4626 vaults
-      CreatorOVault.sol
-      CreatorOVaultWrapper.sol
-    services/messaging/           # LayerZero V2 OFT
-      CreatorShareOFT.sol
-    governance/                   # Tokenomics
-      CreatorGaugeController.sol
-      ve4626.sol
-      ve4626BoostManager.sol
-    services/lottery/             # Lottery system
-      CreatorLotteryManager.sol
-      vrf/                        # Chainlink VRF
-        CreatorVRFConsumerV2_5.sol
-    services/oracles/             # Price oracles
-      CreatorOracle.sol
-    vault/strategies/             # Yield strategies
-      BaseCreatorStrategy.sol
-      CCALaunchStrategy.sol
-      CreatorCharmStrategy.sol
-      ERC4626StrategyAdapter.sol
-      ajna4626/
-      SolanaStrategy.sol
-    factories/                    # Deployment factories
-      CreatorOVaultFactory.sol
-    helpers/                      # Batchers and infra helpers
-      batchers/
-      infra/
-      hooks/
-      routers/
-    interfaces/                   # All interfaces
-  frontend/                       # React frontend (Vite)
-    src/
-      components/                 # UI components
-      pages/                      # Page routes
-      lib/                        # Web3 utils
-      config/                     # Contract addresses
-    public/                       # Brand assets (logo, icons)
-  deployments/                    # Deployed contract addresses
-  script/                         # Foundry deploy scripts
-```
+- **Frontend app + API handlers**: `frontend/`
+- **Contracts + deploy scripts**: repo root Foundry workspace (`forge`)
+- **Automation/runtime services**: [Operators/SRE](/operators) lane
 
-## Development Commands
+## Standard Local Loops
 
 ```bash
-# Compile contracts
+# frontend
+pnpm -C frontend dev
+pnpm -C frontend lint
+pnpm -C frontend typecheck
+pnpm -C frontend test
+
+# contracts
 forge build
-
-# Run tests with verbosity
-forge test -vvv
-
-# Run specific test
-forge test --match-test testVaultDeposit -vvv
-
-# Deploy phased infra to Base (example)
-forge script script/DeployBaseMainnetDeployer.s.sol:DeployBaseMainnetDeployer \
-  --rpc-url $BASE_RPC_URL \
-  --broadcast \
-  --verify
-
-# Seed bytecode store after deployer rollout
-forge script script/SeedUniversalBytecodeStore.s.sol:SeedUniversalBytecodeStore \
-  --rpc-url $BASE_RPC_URL \
-  --broadcast
-
-# Start frontend dev server
-cd frontend && pnpm dev
+forge test
 ```
 
-## Repo Build Philosophy
+## Key References
 
-This repo is intentionally split into:
+- [Chains](/reference/chains)
+- [Current Contract Inventory](/reference/current-contract-inventory)
+- [ERC-4337 Debugging](/reference/erc4337-debugging)
+- [Account Context](/reference/account-context)
 
-- **Fast UI loop**: `frontend/` (Vite + React). Prefer `pnpm -C frontend dev` / `pnpm -C frontend build` for day-to-day changes.
-- **Heavy onchain loop**: Foundry contracts at repo root. Run `forge build` / `forge test` when you're changing Solidity.
+## Contribution Path
 
-For the Vercel API surface, avoid "hidden" dynamic imports: add endpoints by registering them in `frontend/api/_handlers/_routes.ts` so the bundler includes them.
+1. Work from `main` unless a task requires another base.
+2. Keep changes scoped, test locally, and keep docs in sync.
+3. Ship via PR or direct merge flow used by the repo owners.
 
-## Usage Examples
-
-### For Creators
-
-**Deploy a vault for your Creator Coin:**
-
-```solidity
-// Legacy onchain factory example (retired path).
-// Use the supported app deploy-session flow at app.4626.fun/deploy.
-(address vault, address wrapper, address shareOFT) = factory.deployVault(
-    0x5b67...75,                       // Your Creator Coin address
-    "TOKEN Vault",                     // Vault name
-    "▢TOKEN",                          // Vault symbol
-    "TOKEN Share",                     // OFT name
-    "■TOKEN",                          // OFT symbol
-    "base",                            // Chain prefix
-    msg.sender                         // Your address (revenue recipient)
-);
-```
-
-**Configure DEX pools for trading fee:**
-
-```solidity
-shareOFT.setAddressType(uniswapV4Pool, OperationType.SwapOnly);
-shareOFT.setGaugeController(gaugeControllerAddress);
-```
-
-**Add yield strategies:**
-
-```solidity
-vault.addStrategy(charmStrategy, 3000);  // 30%
-vault.addStrategy(ajnaStrategy, 3000);   // 30%
-vault.addStrategy(solanaStrategy, 3000); // 30%
-vault.setMinimumTotalIdle(1000e18);      // Keep 10% idle buffer
-```
-
-### For Users
-
-**Deposit Creator Coins:**
-
-```solidity
-IERC20(akitaToken).approve(vaultAddress, 1000e18);
-vault.deposit(1000e18, msg.sender); // Receive ▢AKITA vault shares
-```
-
-**Wrap for cross-chain:**
-
-```solidity
-wrapper.wrap(shareAmount); // Convert ▢AKITA -> ■AKITA
-```
-
-**Bridge to another chain:**
-
-```solidity
-SendParam memory sendParams = SendParam({
-    dstEid: 30110, // Arbitrum
-    to: addressToBytes32(msg.sender),
-    amountLD: 100e18,
-    minAmountLD: 99e18,
-    extraOptions: "",
-    composeMsg: "",
-    oftCmd: ""
-});
-
-shareOFT.send{value: fee}(sendParams, fee, msg.sender);
-```
-
-## Contributing
-
-We welcome contributions from the community:
-
-1. **Fork** the repository
-2. **Create** a feature branch (`git checkout -b feature/amazing-feature`)
-3. **Write tests** for new features (`forge test`)
-4. **Commit** changes (`git commit -m 'Add amazing feature'`)
-5. **Push** to branch (`git push origin feature/amazing-feature`)
-6. **Open** a Pull Request
-7. **Delete** the branch after merge and prune stale remote refs:
-
-```bash
-git checkout main
-git pull --ff-only
-git branch -d feature/amazing-feature
-git push origin --delete feature/amazing-feature
-git remote prune origin
-```
-
-### Branch Hygiene
-
-- Keep `main` as the default working base unless a task explicitly depends on another branch.
-- Use one short-lived branch per task or PR.
-- Delete branches only after they are fully merged into `main` or another intended base.
-- Keep unmerged backup or worktree branches until the underlying work is intentionally retired.
-- Periodically review merged branches with:
-
-```bash
-git branch --merged main
-git branch -r --merged origin/main
-```
-
-### Code Style
-
-- Follow existing Solidity style conventions
-- Use NatSpec comments for all public functions
-- Write comprehensive tests for new features
-- Keep gas efficiency in mind
-
-### Testing Requirements
-
-- All new features must have test coverage
-- Run full test suite before submitting PR: `forge test`
-- Edge cases should be explicitly tested
-
-## API Reference
-
-- [Contract API](/api/contracts) - Auto-generated from NatSpec comments
-- [Frontend API](/api/frontend) - Auto-generated from TSDoc comments
+For deployment/runbook responsibilities, use [Operators/SRE](/operators). For protocol integration specifics, use [Protocol Integrators](/protocols).
