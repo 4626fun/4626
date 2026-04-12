@@ -580,6 +580,7 @@
 - [src/components/ui/Button](src/components/ui/Button.md)
 - [src/components/ui/Input](src/components/ui/Input.md)
 - [src/components/ui/Modal](src/components/ui/Modal.md)
+- [src/components/ui/PixelWaveLoader](src/components/ui/PixelWaveLoader.md)
 - [src/components/ui/Skeleton](src/components/ui/Skeleton.md)
 - [src/components/ui/Spinner](src/components/ui/Spinner.md)
 - [src/components/ui/StepIndicator](src/components/ui/StepIndicator.md)

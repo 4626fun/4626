@@ -8,21 +8,30 @@ slug: /
 
 **A creator economy that behaves like a system.**
 
-4626 is the Base-native creator finance layer that turns Zora Creator Coins (Coinbase Creator Coins) into composable, onchain creator economies. The docs are organized around two ideas:
+4626 is the Base-native creator finance layer that turns Zora Creator Coins (Coinbase Creator Coins) into composable, onchain creator economies.
 
-- **Four compressions**: the system reduces distance across deployment, geography (multichain), distribution (launch), and engagement (game loop).
-- **Three primitives**: account, market, and game loop are the core boundaries you integrate and audit.
+## Choose Your Lane
 
-Start here:
+- **Users**: [/users](/users)
+- **Creators**: [/creators](/creators)
+- **Developers**: [/developers](/developers)
+- **Protocol Integrators**: [/protocols](/protocols)
+- **Operators/SRE**: [/operators](/operators)
 
-- **[Four Compressions](/compressions)** (recommended first read)
-- **[Three Primitives](/primitives)** (how the system fits together)
+## Architecture Lenses
 
-## Choose a Reading Path
+The architecture remains organized around two system lenses:
 
-- Product and narrative first: [Four Compressions](/compressions)
-- Integration and implementation first: [Three Primitives](/primitives)
-- Legacy map and redirects: [Overview](/overview)
+- **Four compressions**: deployment, geography (multichain), distribution (launch), and engagement (game loop).
+- **Three primitives**: account, market, and game loop.
+
+Start with:
+
+- [Users](/users) for product usage
+- [Creators](/creators) for launch and operations
+- [Developers](/developers) for implementation details
+- [Protocol Integrators](/protocols) for interop and APIs
+- [Operators/SRE](/operators) for deployment and runbooks
 
 ## What is 4626?
 
@@ -47,17 +56,14 @@ In one click, creators deploy institutional-grade **ERC-4626 vault** infrastruct
 
 ## Quick Links
 
-- [Getting Started](/getting-started) - Install and deploy
-- [Architecture](/architecture) - System architecture deep dive
-- [Agent Workflow](/agent-workflow) - Repo-native rules, skills, and verification flow
-- [Tokenomics](/tokenomics) - Fee structure and lottery mechanics
-- [Security](/security) - Threat surfaces and mitigations
-- [Roadmap](/roadmap) - Staged and deferred feature rollout posture
-- [Contracts](/contracts) - What's deployed onchain
-- [API Reference](/api) - Auto-generated contract and frontend documentation
-- [Lens Integration](/integrations/lens) - Lens + Grove Phase 1 guidance for this repo
-- [Terms of Service](/terms)
-- [Privacy Policy](/privacy)
+- [Users](/users) - product usage and troubleshooting
+- [Creators](/creators) - launch and creator workflows
+- [Developers](/developers) - build and contribute
+- [Protocol Integrators](/protocols) - interop and contract surfaces
+- [Operators/SRE](/operators) - deployment and reliability
+- [Security](/security) - threat surfaces and mitigations
+- [Audits](/audits) - external and internal security reviews
+- [API Reference](/api) - auto-generated contract and frontend docs
 
 ## Tech Stack
 

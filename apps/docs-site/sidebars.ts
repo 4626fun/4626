@@ -2,175 +2,196 @@ import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
 
 /**
  * Sidebar configuration for 4626 docs.
- * 
- * Structure follows reader intent:
- * - Overview: What is this?
- * - Concepts: Core mechanics
- * - Contracts: Technical deep dives
- * - Governance: ve(3,3) system
- * - Guides: How to do X
- * - Operations: Deployment & maintenance
- * - Reference: Lookup tables
- * - API: Auto-generated
+ *
+ * Primary navigation is persona-first:
+ * Users, Creators, Developers, Protocol Integrators, Operators/SRE.
+ * Security/Audits remain top-level trust surfaces and API stays standalone.
  */
 const sidebars: SidebarsConfig = {
   docs: [
-    // Landing
     {
       type: 'doc',
       id: 'index',
       label: 'Welcome',
     },
 
-    // Four Compressions
     {
       type: 'category',
-      label: 'Four Compressions',
+      label: 'Users',
       collapsed: false,
-      link: { type: 'doc', id: 'compressions/index' },
+      link: { type: 'doc', id: 'users/index' },
       items: [
-        'compressions/deployment',
-        'compressions/geography',
-        'compressions/distribution',
-        'compressions/engagement',
-        'compressions/reading-order',
+        'getting-started/index',
+        {
+          type: 'category',
+          label: 'Guides',
+          link: { type: 'doc', id: 'guides/index' },
+          items: [
+            'guides/launch-token',
+            'guides/deploy-vault',
+            'guides/activate-vault',
+            {
+              type: 'category',
+              label: 'Troubleshooting',
+              link: { type: 'doc', id: 'guides/troubleshooting/index' },
+              items: [
+                'guides/troubleshooting/compilation-status',
+                'guides/troubleshooting/delayed-completion',
+                'guides/troubleshooting/userop-signature-errors',
+              ],
+            },
+          ],
+        },
+        'legal/index',
       ],
     },
 
-    // Three Primitives
     {
       type: 'category',
-      label: 'Three Primitives',
-      collapsed: false,
-      link: { type: 'doc', id: 'primitives/index' },
-      items: [
-        'primitives/account',
-        {
-          type: 'category',
-          label: 'Market',
-          link: { type: 'doc', id: 'primitives/market/index' },
-          items: [
-            'primitives/market/vault',
-            'primitives/market/auction',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Game Loop',
-          link: { type: 'doc', id: 'primitives/game-loop/index' },
-          items: [
-            'primitives/game-loop/lottery',
-          ],
-        },
-      ],
-    },
-
-    // Contracts section
-    {
-      type: 'category',
-      label: "What's Deployed",
-      collapsed: false,
-      link: { type: 'doc', id: 'contracts/index' },
-      items: [
-        {
-          type: 'category',
-          label: 'Core',
-          link: { type: 'doc', id: 'contracts/core/index' },
-          items: [
-            'contracts/core/creator-registry',
-            'contracts/core/creator-ovault',
-            'contracts/core/creator-ovault-wrapper',
-            'contracts/core/creator-share-oft',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Governance',
-          link: { type: 'doc', id: 'contracts/governance/index' },
-          items: [
-            'contracts/governance/gauge-controller',
-            'contracts/governance/vault-gauge-voting',
-            'contracts/governance/ve4626',
-            'contracts/governance/voter-rewards-distributor',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Strategies',
-          link: { type: 'doc', id: 'contracts/strategies/index' },
-          items: [
-            'contracts/strategies/base-creator-strategy',
-            'contracts/strategies/cca-launch',
-          ],
-        },
-        {
-          type: 'category',
-          label: 'Utilities',
-          link: { type: 'doc', id: 'contracts/utilities/index' },
-          items: [
-            'contracts/utilities/lottery-manager',
-            'contracts/utilities/creator-oracle',
-          ],
-        },
-      ],
-    },
-
-    // Governance section (user-facing)
-    {
-      type: 'category',
-      label: 'Governance',
+      label: 'Creators',
       collapsed: true,
-      link: { type: 'doc', id: 'governance/index' },
-      items: [
-        'governance/ve33-progress',
-      ],
-    },
-
-    // Guides section
-    {
-      type: 'category',
-      label: 'Guides',
-      collapsed: true,
-      link: { type: 'doc', id: 'guides/index' },
+      link: { type: 'doc', id: 'creators/index' },
       items: [
         'guides/launch-token',
         'guides/deploy-vault',
         'guides/activate-vault',
+        'frontend/creator-workspace',
         {
           type: 'category',
-          label: 'Troubleshooting',
-          link: { type: 'doc', id: 'guides/troubleshooting/index' },
+          label: 'Featured Guidelines',
           items: [
-            'guides/troubleshooting/compilation-status',
-            'guides/troubleshooting/delayed-completion',
-            'guides/troubleshooting/userop-signature-errors',
+            'guides/featured-guidelines/featured-checklist',
+            'guides/featured-guidelines/product-guidelines',
+            'guides/featured-guidelines/design-guidelines',
+            'guides/featured-guidelines/technical-guidelines',
+            'guides/featured-guidelines/notification-guidelines',
           ],
         },
+        'governance/index',
+        'tokenomics/index',
       ],
     },
 
-    // Integrations section
     {
       type: 'category',
-      label: 'Integrations',
+      label: 'Developers',
       collapsed: true,
-      link: { type: 'doc', id: 'integrations/index' },
+      link: { type: 'doc', id: 'developers/index' },
       items: [
-        'integrations/oft',
-        'integrations/lens',
-        'integrations/lens-grove',
-        'integrations/solana-integration',
-        'integrations/solana-spoke-article',
+        'frontend/index',
+        'frontend/creator-workspace-implementation-plan',
+        'architecture/index',
+        {
+          type: 'category',
+          label: 'Reference',
+          link: { type: 'doc', id: 'reference/index' },
+          items: [
+            'reference/account-context',
+            'reference/chains',
+            'reference/erc4337-debugging',
+            'reference/current-contract-inventory',
+            'reference/diagram-style-guide',
+          ],
+        },
+        'api/index',
       ],
     },
 
-    // Operations section
     {
       type: 'category',
-      label: 'Operations',
+      label: 'Protocol Integrators',
       collapsed: true,
-      link: { type: 'doc', id: 'operations/index' },
+      link: { type: 'doc', id: 'protocols/index' },
       items: [
+        {
+          type: 'category',
+          label: 'Integrations',
+          link: { type: 'doc', id: 'integrations/index' },
+          items: [
+            'integrations/oft',
+            'integrations/lens',
+            'integrations/lens-grove',
+            'integrations/solana-integration',
+            'integrations/solana-spoke-article',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'System Model',
+          items: [
+            'compressions/index',
+            'compressions/deployment',
+            'compressions/geography',
+            'compressions/distribution',
+            'compressions/engagement',
+            'compressions/reading-order',
+            'primitives/index',
+            'primitives/account',
+            'primitives/market/index',
+            'primitives/market/vault',
+            'primitives/market/auction',
+            'primitives/game-loop/index',
+            'primitives/game-loop/lottery',
+          ],
+        },
+        {
+          type: 'category',
+          label: 'Contracts',
+          link: { type: 'doc', id: 'contracts/index' },
+          items: [
+            {
+              type: 'category',
+              label: 'Core',
+              link: { type: 'doc', id: 'contracts/core/index' },
+              items: [
+                'contracts/core/creator-registry',
+                'contracts/core/creator-ovault',
+                'contracts/core/creator-ovault-wrapper',
+                'contracts/core/creator-share-oft',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'Governance',
+              link: { type: 'doc', id: 'contracts/governance/index' },
+              items: [
+                'contracts/governance/gauge-controller',
+                'contracts/governance/vault-gauge-voting',
+                'contracts/governance/ve4626',
+                'contracts/governance/voter-rewards-distributor',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'Strategies',
+              link: { type: 'doc', id: 'contracts/strategies/index' },
+              items: [
+                'contracts/strategies/base-creator-strategy',
+                'contracts/strategies/cca-launch',
+              ],
+            },
+            {
+              type: 'category',
+              label: 'Utilities',
+              link: { type: 'doc', id: 'contracts/utilities/index' },
+              items: [
+                'contracts/utilities/lottery-manager',
+                'contracts/utilities/creator-oracle',
+              ],
+            },
+          ],
+        },
+        'api/index',
+      ],
+    },
+
+    {
+      type: 'category',
+      label: 'Operators/SRE',
+      collapsed: true,
+      link: { type: 'doc', id: 'operators/index' },
+      items: [
+        'operations/index',
         {
           type: 'category',
           label: 'Deployment',
@@ -236,53 +257,12 @@ const sidebars: SidebarsConfig = {
             },
           ],
         },
-        'operations/telegram-canonical-link-preservation',
         'operations/domain-setup',
         'operations/supabase-setup',
+        'operations/telegram-canonical-link-preservation',
       ],
     },
 
-    // Reference section
-    {
-      type: 'category',
-      label: 'Reference',
-      collapsed: true,
-      link: { type: 'doc', id: 'reference/index' },
-      items: [
-        'reference/addresses',
-        'reference/glossary',
-        'reference/chains',
-        'reference/current-contract-inventory',
-        'reference/diagram-style-guide',
-        'reference/erc4337-debugging',
-        'reference/coins-metadata',
-        'reference/token-image',
-        'reference/account-context',
-        {
-          type: 'category',
-          label: 'Repository',
-          items: [
-            'reference/repo/index',
-            'reference/repo/security',
-            'reference/repo/deployments/index',
-          ],
-        },
-      ],
-    },
-
-    // Frontend section
-    {
-      type: 'category',
-      label: 'Frontend',
-      collapsed: true,
-      link: { type: 'doc', id: 'frontend/index' },
-      items: [
-        'frontend/creator-workspace',
-        'frontend/creator-workspace-implementation-plan',
-      ],
-    },
-
-    // Security
     {
       type: 'category',
       label: 'Security',
@@ -295,7 +275,6 @@ const sidebars: SidebarsConfig = {
       ],
     },
 
-    // Audits
     {
       type: 'category',
       label: 'Audits',
@@ -338,7 +317,33 @@ const sidebars: SidebarsConfig = {
       ],
     },
 
-    // Legal
+    {
+      type: 'category',
+      label: 'Reference',
+      collapsed: true,
+      link: { type: 'doc', id: 'reference/index' },
+      items: [
+        'reference/addresses',
+        'reference/glossary',
+        'reference/chains',
+        'reference/current-contract-inventory',
+        'reference/diagram-style-guide',
+        'reference/erc4337-debugging',
+        'reference/coins-metadata',
+        'reference/token-image',
+        'reference/account-context',
+        {
+          type: 'category',
+          label: 'Repository',
+          items: [
+            'reference/repo/index',
+            'reference/repo/security',
+            'reference/repo/deployments/index',
+          ],
+        },
+      ],
+    },
+
     {
       type: 'category',
       label: 'Legal',
@@ -350,7 +355,6 @@ const sidebars: SidebarsConfig = {
       ],
     },
 
-    // API Reference (auto-generated)
     {
       type: 'category',
       label: 'API Reference',
@@ -361,26 +365,6 @@ const sidebars: SidebarsConfig = {
           type: 'autogenerated',
           dirName: 'api',
         },
-      ],
-    },
-
-    // Legacy sections (kept for old doc IDs + internal links; redirects handle navigation)
-    // Remove once the site no longer references these IDs.
-    {
-      type: 'category',
-      label: 'Legacy (Redirected)',
-      collapsed: true,
-      link: { type: 'doc', id: 'overview/index' },
-      items: [
-        'overview/introduction',
-        'overview/architecture',
-        'overview/token-model',
-        'overview/fee-flow',
-        'overview/reading-order',
-        'concepts/index',
-        'concepts/vault',
-        'concepts/auction',
-        'concepts/lottery',
       ],
     },
   ],

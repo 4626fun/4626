@@ -7,17 +7,14 @@ export function AppLoadingState() {
 
       <div className="relative z-10 flex h-full items-center justify-center px-6 py-16">
         <div className="app-loading-pill">
-          <div aria-hidden="true" className="app-loading-pill__scanner" />
           <PixelWaveLoader
             className="relative z-[1]"
-            color="rgba(214, 235, 255, 0.96)"
-            duration={620}
-            size={24}
+            color="rgba(230, 238, 250, 0.92)"
+            delays={[0, 150, 300, 0, 150, 300, 0, 150, 300]}
+            duration={1200}
+            size={18}
           />
-          <div className="relative z-[1] flex flex-col">
-            <h2 className="app-loading-pill__title">Preparing workspace</h2>
-            <p className="app-loading-pill__subtitle">Syncing your account session</p>
-          </div>
+          <h2 className="app-loading-pill__title relative z-[1]">Preparing workspace</h2>
         </div>
       </div>
 

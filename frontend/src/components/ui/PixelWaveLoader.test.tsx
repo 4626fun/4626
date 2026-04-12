@@ -24,6 +24,7 @@ describe('PixelWaveLoader', () => {
 
     expect(loader?.style.width).toBe('36px')
     expect(loader?.style.height).toBe('36px')
+    expect(cells[0]?.style.animationDuration).toBe('600ms')
     expect(cells.map((cell) => cell.style.animationDelay)).toEqual([
       '0ms',
       '100ms',

@@ -39,7 +39,7 @@ const SOURCES = {
   manual: {
     dir: path.join(REPO_ROOT, 'docs'),
     destPrefix: '',
-    exclude: ['_generated/**', '_archive/**', 'archive/**', 'drafts/**', '_drafts/**', 'plans/**'],
+    exclude: ['_generated/**', '_archive/**', 'archive/**', 'drafts/**', '_drafts/**', '_internal/**', 'plans/**'],
     label: 'Manual docs',
   },
   contracts: {
@@ -136,6 +136,8 @@ const GIT_DATE_PATHS = [
 let gitLastUpdatedByPath = new Map();
 const GITHUB_BLOB_BASE = 'https://github.com/wenakita/4626/blob/main';
 const GITHUB_TREE_BASE = 'https://github.com/wenakita/4626/tree/main';
+const MANUAL_ALLOWED_STATUS = new Set(['current', 'needs-review', 'archived']);
+const MANUAL_DEFAULT_OWNER = process.env.DOCS_DEFAULT_OWNER || 'docs-team';
 
 function normalizeRelPath(filePath) {
   return filePath.split(path.sep).join('/');
@@ -260,6 +262,72 @@ function docsRouteFromRepoPath(repoPath) {
   return `/${normalized}`;
 }
 
+function inferManualAudience(relativePath) {
+  const rel = normalizeRelPath(relativePath);
+  if (rel.startsWith('users/')) return ['users'];
+  if (rel.startsWith('creators/')) return ['creators'];
+  if (rel.startsWith('developers/')) return ['developers'];
+  if (rel.startsWith('protocols/')) return ['protocols'];
+  if (rel.startsWith('operators/')) return ['operators'];
+  if (rel.startsWith('guides/')) return ['users', 'creators'];
+  if (rel.startsWith('frontend/')) return ['developers', 'creators'];
+  if (rel.startsWith('integrations/')) return ['protocols', 'developers'];
+  if (rel.startsWith('contracts/')) return ['protocols', 'developers'];
+  if (rel.startsWith('operations/automation/')) return ['operators', 'developers'];
+  if (rel.startsWith('operations/deployment/')) return ['operators'];
+  if (rel.startsWith('operations/services/')) return ['operators'];
+  if (rel.startsWith('operations/')) return ['operators', 'developers'];
+  if (rel.startsWith('reference/')) return ['developers', 'protocols', 'operators'];
+  if (rel.startsWith('security/')) return ['developers', 'operators', 'protocols'];
+  if (rel.startsWith('audits/')) return ['developers', 'operators', 'protocols'];
+  if (rel.startsWith('legal/')) return ['users', 'creators', 'developers'];
+  return ['developers'];
+}
+
+function inferManualStage(relativePath) {
+  const rel = normalizeRelPath(relativePath);
+  if (rel.startsWith('operations/')) return 'operate';
+  if (rel.startsWith('security/') || rel.startsWith('audits/')) return 'assure';
+  if (rel.startsWith('integrations/') || rel.startsWith('contracts/')) return 'integrate';
+  return 'use';
+}
+
+function normalizeAudience(value, relativePath) {
+  if (Array.isArray(value)) {
+    const normalized = value
+      .map((entry) => String(entry || '').trim().toLowerCase())
+      .filter(Boolean);
+    if (normalized.length > 0) return normalized;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    return [value.trim().toLowerCase()];
+  }
+  return inferManualAudience(relativePath);
+}
+
+function normalizeStatus(value) {
+  const candidate = typeof value === 'string' ? value.trim().toLowerCase() : '';
+  return MANUAL_ALLOWED_STATUS.has(candidate) ? candidate : 'current';
+}
+
+function ensureManualMetadata(frontmatter, relativePath, sourceMetadata) {
+  frontmatter.synced_from = 'docs/';
+  frontmatter.audience = normalizeAudience(frontmatter.audience, relativePath);
+  if (!frontmatter.stage) {
+    frontmatter.stage = inferManualStage(relativePath);
+  }
+  if (!frontmatter.owner) {
+    frontmatter.owner = MANUAL_DEFAULT_OWNER;
+  }
+  const reviewDate =
+    frontmatter.last_reviewed ||
+    frontmatter.last_updated ||
+    sourceMetadata?.lastUpdated ||
+    new Date().toISOString().slice(0, 10);
+  frontmatter.last_reviewed = String(reviewDate).slice(0, 10);
+  frontmatter.status = normalizeStatus(frontmatter.status);
+}
+
 function maybeRewriteRepoLink(rawTarget, sourcePath) {
   const [targetPath, hash = ''] = String(rawTarget).split('#', 2);
   if (
@@ -331,7 +399,9 @@ function normalizeFrontmatter(content, relativePath, sidebarPosition, sourceType
   }
 
   // Mark workspace-sourced docs
-  if (sourceType === 'cre' || sourceType === 'frontendDocs' || sourceType === 'rootMeta' || sourceType === 'runtimeSkills' || sourceType === 'serviceReadmes') {
+  if (sourceType === 'manual') {
+    ensureManualMetadata(parsed.data, relativePath, sourceMetadata);
+  } else if (sourceType === 'cre' || sourceType === 'frontendDocs' || sourceType === 'rootMeta' || sourceType === 'runtimeSkills' || sourceType === 'serviceReadmes') {
     if (sourceType === 'cre') parsed.data.synced_from = 'cre/';
     if (sourceType === 'frontendDocs') parsed.data.synced_from = 'frontend/';
     if (sourceType === 'rootMeta') parsed.data.synced_from = 'repo-root';

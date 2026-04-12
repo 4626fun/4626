@@ -269,7 +269,15 @@ async function ensureDistinctSlugForSameNameDoc(filePath: string): Promise<void>
     return;
   }
 
-  let content = await fs.readFile(filePath, 'utf-8');
+  let content: string;
+  try {
+    content = await fs.readFile(filePath, 'utf-8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
   if (!content.startsWith('---\n')) {
     return;
   }
@@ -336,7 +344,15 @@ async function normalizeGeneratedReadmeTitle(readmePath: string): Promise<void> 
 }
 
 async function fixLinksInFile(filePath: string, apiRoot: (typeof API_ROOTS)[number]): Promise<void> {
-  let content = await fs.readFile(filePath, 'utf-8');
+  let content: string;
+  try {
+    content = await fs.readFile(filePath, 'utf-8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
   const originalContent = content;
   
   // Track link rewrites for this file
@@ -527,7 +543,15 @@ async function fixLinksInFile(filePath: string, apiRoot: (typeof API_ROOTS)[numb
  * Validate links in a markdown file
  */
 async function validateLinksInFile(filePath: string): Promise<void> {
-  const content = await fs.readFile(filePath, 'utf-8');
+  let content: string;
+  try {
+    content = await fs.readFile(filePath, 'utf-8');
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
   const fileDir = path.dirname(filePath);
   
   // Find all markdown links

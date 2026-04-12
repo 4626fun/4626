@@ -120,12 +120,22 @@ const lastUpdated = buildGitLastUpdatedIndex();
 
 const paragraphToFiles = new Map();
 const staleFiles = [];
+let evaluatedFiles = 0;
 
 const now = new Date();
 const staleCutoff = new Date(now.getTime() - DEFAULT_STALE_DAYS * 24 * 60 * 60 * 1000);
 
 for (const filePath of files) {
-  const raw = readFileSync(filePath, 'utf8');
+  let raw;
+  try {
+    raw = readFileSync(filePath, 'utf8');
+  } catch (error) {
+    if (error && error.code === 'ENOENT') {
+      continue;
+    }
+    throw error;
+  }
+  evaluatedFiles += 1;
   const text = stripCodeBlocks(stripFrontmatter(raw));
   const paragraphs = text
     .split(/\n\s*\n/g)
@@ -158,7 +168,7 @@ const duplicateParagraphs = [...paragraphToFiles.entries()]
 staleFiles.sort((a, b) => a.lastUpdated.localeCompare(b.lastUpdated));
 
 const result = {
-  evaluatedFiles: files.length,
+  evaluatedFiles,
   staleThresholdDays: DEFAULT_STALE_DAYS,
   duplicateParagraphGroupCount: duplicateParagraphs.length,
   staleFileCount: staleFiles.length,

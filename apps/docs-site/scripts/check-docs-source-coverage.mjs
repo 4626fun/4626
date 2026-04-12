@@ -23,8 +23,11 @@ const THIRD_PARTY_PREFIXES = [
 const EXPLICIT_OUT_OF_SCOPE = [
   // Internal agent/runtime skills, not public docs-site content.
   '.cursor/skills/**',
+  // Internal docs intentionally kept out of public docs.4626.fun.
+  'docs/_internal/**',
   // Repo/meta docs intentionally kept outside docs.4626.fun nav.
   'AGENTS.md',
+  'note.md',
   '.github/pull_request_template.md',
   'apps/docs-site/README.md',
   // Internal design and implementation readmes.
@@ -65,6 +68,7 @@ function isGeneratedOutput(filePath) {
 function isCoveredByManualSource(filePath) {
   if (!filePath.startsWith('docs/')) return false;
   if (filePath.startsWith('docs/_generated/')) return false;
+  if (filePath.startsWith('docs/_internal/')) return false;
   if (filePath.startsWith('docs/_archive/')) return false;
   if (filePath.startsWith('docs/archive/')) return false;
   if (filePath.startsWith('docs/drafts/')) return false;

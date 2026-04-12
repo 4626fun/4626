@@ -43,6 +43,14 @@ function normalizeSize(size: number | string | undefined) {
   return size ?? `${DEFAULT_SIZE}px`
 }
 
+function getGapValue(size: number | string | undefined, sizeValue: string, gridSize: number) {
+  if (typeof size === 'number') {
+    return `${Math.max(1, Math.round(size / Math.max(gridSize * 2, 1)))}px`
+  }
+
+  return `clamp(1px, calc(${sizeValue} / ${Math.max(gridSize * 2.5, 6)}), 6px)`
+}
+
 function getPresetOffset(name: string, row: number, column: number, gridSize: number) {
   switch (name) {
     case 'wave-rl':
@@ -102,7 +110,7 @@ export function PixelWaveLoader({
     width: sizeValue,
     height: sizeValue,
     color,
-    gap: `clamp(2px, calc(${sizeValue} / ${Math.max(gridSize * 2.5, 6)}), 8px)`,
+    gap: getGapValue(size, sizeValue, gridSize),
     gridTemplateColumns: `repeat(${gridSize}, minmax(0, 1fr))`,
     gridTemplateRows: `repeat(${gridSize}, minmax(0, 1fr))`,
   }
@@ -119,7 +127,8 @@ export function PixelWaveLoader({
           key={index}
           data-pixel-wave-cell="true"
           className="pixel-wave-loader__cell block h-full w-full"
-          // Every cell runs the same opacity loop. The staggered delay is what creates the scan.
+          // Every cell runs the same fade loop. The per-cell delay array is the
+          // entire sequencing mechanism, which keeps the motion simple and stable.
           style={{
             animationDuration: `${durationMs}ms`,
             animationDelay: `${delay}ms`,

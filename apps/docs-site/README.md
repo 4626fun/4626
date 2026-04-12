@@ -20,6 +20,7 @@ This site publishes curated documentation from multiple sources across the monor
 
 - **Code ≠ Docs** — Documentation describes code, it does not mirror it 1:1.
 - `docs/` is the primary manual source. `cre/` and `frontend/` contribute workspace-level docs (READMEs, design docs).
+- `docs/_internal/` and `docs/plans/` are intentionally excluded from public docs publishing.
 - Documentation describing contracts lives in `docs/contracts/`.
 - Documentation describing frontend lives in `docs/frontend/` (manual) + `frontend/docs/` (workspace).
 - Missing documentation for some code areas is allowed and intentional.
@@ -32,6 +33,7 @@ This site publishes curated documentation from multiple sources across the monor
 | Reads from | `docs/` (manual) + `docs/_generated/` (API) + `cre/` + `frontend/` |
 | Publishes | Markdown files to `docs-site/docs/` |
 | Normalizes | Adds frontmatter (title, sidebar_position) |
+| Enforces metadata | Manual docs get audience/stage/owner/last_reviewed/status |
 | Renames | `README.md` → `index.md` (cre) or `overview.md` (frontend) |
 | Fixes links | Transforms broken links in generated API docs |
 | Validates | Internal links (in strict mode) |
@@ -57,6 +59,7 @@ The postprocess script:
 Scripts:
 - `pnpm api:postprocess` - Run postprocessing
 - `pnpm api:postprocess:strict` - Fail on unresolved links
+- `pnpm check:hygiene-policy` - Enforce required manual-doc frontmatter + freshness + canonical topic uniqueness
 - `pnpm build:strict` - Full strict docs-site build pipeline
 - `pnpm bundle:strict` - Full strict docs-site bundle without minification (heavier, optional for local validation)
 

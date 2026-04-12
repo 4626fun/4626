@@ -5,6 +5,7 @@
     "check:no-todo-markers": "bash frontend/scripts/check-no-todo-markers.sh",
     "docs:check-links": "node apps/docs-site/scripts/check-doc-links.mjs",
     "docs:check-coverage": "node apps/docs-site/scripts/check-docs-source-coverage.mjs",
+    "docs:check-hygiene-policy": "node apps/docs-site/scripts/check-docs-hygiene-policy.mjs",
     "docs:audit-hygiene": "node apps/docs-site/scripts/audit-docs-hygiene.mjs",
     "docs:audit-hygiene:json": "node apps/docs-site/scripts/audit-docs-hygiene.mjs --json",
     "docs:audit-hygiene:strict-stale": "node apps/docs-site/scripts/audit-docs-hygiene.mjs --strict-stale",

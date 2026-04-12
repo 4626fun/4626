@@ -7,6 +7,13 @@ sidebar_position: 7
 
 This guide covers how to build on and contribute to 4626.
 
+## Developer Entry Points
+
+- [Frontend Overview](/frontend)
+- [Reference](/reference)
+- [API Reference](/api)
+- [Protocol Integrator Lane](/protocols)
+
 ## Project Structure
 
 ```

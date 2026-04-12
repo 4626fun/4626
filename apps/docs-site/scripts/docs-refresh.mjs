@@ -126,6 +126,9 @@ if (!skipContractDocs) {
 }
 run('pnpm', ['-C', 'apps/docs-site', syncCommand], 'Sync docs site sources');
 run('pnpm', ['-C', 'apps/docs-site', postprocessCommand], 'Postprocess docs site API output');
+if (shouldCheck) {
+  run('node', ['apps/docs-site/scripts/check-docs-hygiene-policy.mjs'], 'Verify docs hygiene policy');
+}
 
 if (shouldCheck) {
   verifyGeneratedTargetsCommitted(generatedTargets);

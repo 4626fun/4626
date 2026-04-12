@@ -245,4 +245,3 @@ Generated from `docs/operations/action-matrix.csv`.
 | `solana_process_entry`     | `LotteryManager.processLotteryEntryFromSolana()` | bridge relay authority          | automated | Solana entry relay write        | `cre/actions/keepr-solana-relay-entries.action.ts` |
 | `solana_receive_fee`       | `...receiveFeeFromSolana()`                      | bridge relay authority          | automated | Solana fee settlement write     | `cre/actions/keepr-solana-settle-fees.action.ts`   |
 
-
