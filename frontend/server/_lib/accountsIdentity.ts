@@ -729,17 +729,15 @@ export async function resolveAndPersistZoraSignals(params: {
 
   let canonical = existing.canonicalCswAddress
   let canonicalSource = existing.canonicalCswAddress ? 'persisted' : 'wallet_sync'
-  if (!canonical) {
-    try {
-      const resolved = await resolveCanonicalCsw({ db, privyUserId, privyUser })
-      const resolvedCanonical = normalizeEvmAddress(resolved.canonicalCswAddress)
-      if (resolvedCanonical) {
-        canonical = resolvedCanonical
-        canonicalSource = normalizeString(resolved.canonicalSource) ?? 'wallet_sync'
-      }
-    } catch {
-      // best-effort; keep nullable canonical
+  try {
+    const resolved = await resolveCanonicalCsw({ db, privyUserId, privyUser })
+    const resolvedCanonical = normalizeEvmAddress(resolved.canonicalCswAddress)
+    if (resolvedCanonical) {
+      canonical = resolvedCanonical
+      canonicalSource = normalizeString(resolved.canonicalSource) ?? 'wallet_sync'
     }
+  } catch {
+    // best-effort; keep existing canonical when live resolution is unavailable
   }
 
   const classification = classifyLinkedAccounts(privyUser)
@@ -790,7 +788,7 @@ export async function resolveAndPersistZoraSignals(params: {
     SET
       zora_linked = EXCLUDED.zora_linked,
       zora_handle = COALESCE(EXCLUDED.zora_handle, account_zora_signals.zora_handle),
-      canonical_csw_address = COALESCE(account_zora_signals.canonical_csw_address, EXCLUDED.canonical_csw_address),
+      canonical_csw_address = COALESCE(EXCLUDED.canonical_csw_address, account_zora_signals.canonical_csw_address),
       creator_coin_address = COALESCE(EXCLUDED.creator_coin_address, account_zora_signals.creator_coin_address),
       last_resolved_at = EXCLUDED.last_resolved_at,
       updated_at = NOW();

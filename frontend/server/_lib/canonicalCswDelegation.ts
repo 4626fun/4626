@@ -374,36 +374,39 @@ export async function resolveCanonicalCsw(params: {
   await ensureDelegationColumns(db)
 
   let profileId = await readProfileIdByPrivyUserId(db, privyUserId)
+  const persisted = profileId ? await readPersistedDelegationState(db, profileId) : null
 
-  // Existing persisted canonical must win to avoid canonical flip-flop.
-  if (profileId) {
-    const persisted = await readPersistedDelegationState(db, profileId)
-    if (persisted.canonicalCswAddress) {
+  let syncResult: Awaited<ReturnType<typeof syncUserWallets>> | null = null
+  try {
+    syncResult = await syncUserWallets(db, privyUser)
+    profileId = syncResult.profileId
+  } catch (error) {
+    if (persisted?.canonicalCswAddress && profileId) {
       return {
         profileId,
         canonicalCswAddress: persisted.canonicalCswAddress,
         canonicalSource: normalizeCanonicalSource(persisted.canonicalSource, 'wallet_sync'),
       }
     }
+    throw error
   }
 
-  const syncResult = await syncUserWallets(db, privyUser)
-  profileId = syncResult.profileId
-  const syncedCanonical = normalizeAddress(syncResult.canonicalSmartWallet?.address ?? null)
+  const syncedCanonical = normalizeAddress(syncResult?.canonicalSmartWallet?.address ?? null)
   const syncedCanonicalSource = syncedCanonical
-    ? syncResult.canonicalSmartWallet?.provider === 'coinbase_wallet'
+    ? syncResult?.canonicalSmartWallet?.provider === 'coinbase_wallet'
       ? 'base_account'
       : 'wallet_sync'
     : null
 
-  const canonical = syncedCanonical
+  const canonical = syncedCanonical ?? persisted?.canonicalCswAddress ?? null
   if (!canonical) {
     throw buildStructuredError('No canonical Coinbase Smart Wallet is linked to this account yet.', {
       needsBaseAppSetup: true,
       baseAppUrl: resolveBaseAppInviteUrl(),
     })
   }
-  const canonicalSource = syncedCanonicalSource ?? 'wallet_sync'
+  const canonicalSource =
+    syncedCanonicalSource ?? normalizeCanonicalSource(persisted?.canonicalSource, 'wallet_sync')
 
   await ensureCanonicalWalletRow({
     db,

@@ -291,3 +291,16 @@ Keeper bots in `cre/` relay data between Solana and Base. Install: `cd cre && np
 - `SOLANA_TWIN_TO_PUBKEY_MAPPING` — JSON: Base Twin contract → Solana pubkey
 
 **CRE has pre-existing TS errors** (4 errors in actions/utils); runtime is unaffected since `tsx` skips type checks.
+
+## Learned User Preferences
+
+- For waitlist and account-setup surfaces, stay on the product brand palette (blue primaries with dark charcoal or near-black backgrounds) rather than purple or ad hoc accent colors unless design explicitly calls for something else.
+- Prefer progressive disclosure in multi-step onboarding: emphasize the active step, collapse or quiet completed steps, and avoid duplicate titles or redundant headers on loading screens.
+- Nest optional substeps (for example extra channel binding) under the primary step with a compact expandable affordance instead of introducing separate numbered steps when the flow is still one phase.
+- Keep secondary actions such as Previous Step and Retry visually quieter than primary blue actions.
+- When Zora linking is the active context, prefer showing the Zora handle as the human-readable identity label over a truncated wallet address that does not match what the user expects for their canonical smart wallet.
+
+## Learned Workspace Facts
+
+- Isolated feature work often uses `git worktree add` under `/.worktrees/` at the repo root; that directory is gitignored via `.gitignore`.
+- `frontend/src/config/wagmi.ts` sets `multiInjectedProviderDiscovery: false` on `createConfig` to avoid eager EIP-6963 multi-provider discovery that can trigger extension `requestProvider` races against non-writable `window.ethereum` getters when several wallets are installed.

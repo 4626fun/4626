@@ -35,8 +35,19 @@ export const redirects: ClientRedirect[] = [
   },
   {
     from: '/creator-workspace-implementation-plan',
-    to: '/frontend/creator-workspace-implementation-plan',
+    to: '/frontend/creator-workspace',
   },
+  { from: '/frontend/creator-workspace-implementation-plan', to: '/frontend/creator-workspace' },
+  { from: '/agent-skills', to: '/operators' },
+  { from: '/agent-workflow', to: '/operators' },
+  { from: '/operations/deployment/base-build', to: '/operations/deployment' },
+  { from: '/operations/erc8004-agent-2205-discoverability', to: '/operations' },
+  {
+    from: '/superpowers/specs/2026-04-06-waitlist-allowlist-separation-design',
+    to: '/developers',
+  },
+  { from: ['/zora/MONOREPO_ARCHITECTURE', '/zora/monorepo_architecture'], to: '/protocols' },
+  { from: ['/zora/PROTOCOL_KNOWLEDGE', '/zora/protocol_knowledge'], to: '/protocols' },
 
   { from: '/lens', to: '/integrations/lens' },
   { from: '/lens-grove', to: '/integrations/lens-grove' },

@@ -25,8 +25,22 @@ function createMockDb(options: {
     csw_address?: string | null
     base_sub_account?: string | null
   }
+  persistedCanonicalAddress?: string | null
 } = {}) {
-  let canonicalRow: any = null
+  let canonicalRow: any =
+    options.persistedCanonicalAddress && /^0x[a-f0-9]{40}$/i.test(options.persistedCanonicalAddress)
+      ? {
+          profile_id: 11,
+          chain_id: 8453,
+          canonical_csw_address: String(options.persistedCanonicalAddress).toLowerCase(),
+          canonical_source: 'wallet_sync',
+          privy_embedded_eoa_address: null,
+          privy_is_owner: false,
+          last_checked_at: null,
+          address: String(options.persistedCanonicalAddress).toLowerCase(),
+          is_canonical_smart_wallet: true,
+        }
+      : null
   return {
     sql: vi.fn(async (strings: TemplateStringsArray, ...values: any[]) => {
       const text = normalizeSql(strings)
@@ -91,7 +105,7 @@ describe('resolveCanonicalCsw', () => {
     vi.clearAllMocks()
   })
 
-  it('persists canonical CSW and does not flip on subsequent calls', async () => {
+  it('refreshes a stale persisted canonical when the live session resolves a different canonical smart wallet', async () => {
     syncUserWalletsMock
       .mockResolvedValueOnce({
         profileId: 11,
@@ -117,7 +131,28 @@ describe('resolveCanonicalCsw', () => {
     })
 
     expect(first.canonicalCswAddress).toBe('0x00000000000000000000000000000000000000aa')
-    expect(second.canonicalCswAddress).toBe('0x00000000000000000000000000000000000000aa')
+    expect(second.canonicalCswAddress).toBe('0x00000000000000000000000000000000000000bb')
+    expect(syncUserWalletsMock).toHaveBeenCalledTimes(2)
+  })
+
+  it('keeps the persisted canonical when the live session omits a canonical smart wallet', async () => {
+    syncUserWalletsMock.mockResolvedValueOnce({
+      profileId: 11,
+      canonicalSmartWallet: null,
+    })
+
+    const db = createMockDb({
+      persistedCanonicalAddress: '0x00000000000000000000000000000000000000AA',
+    })
+    const privyUser = { id: 'did:privy:test-user', linkedAccounts: [] } as any
+
+    const resolved = await resolveCanonicalCsw({
+      db: db as any,
+      privyUserId: 'did:privy:test-user',
+      privyUser,
+    })
+
+    expect(resolved.canonicalCswAddress).toBe('0x00000000000000000000000000000000000000aa')
     expect(syncUserWalletsMock).toHaveBeenCalledTimes(1)
   })
 
