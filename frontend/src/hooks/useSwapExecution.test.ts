@@ -1,7 +1,48 @@
 import { describe, expect, it } from 'vitest'
 
-import { evaluateCanonicalSubmitSession, resolveCanonicalSubmitSession } from './useSwapExecution'
+import { evaluateCanonicalSubmitSession, evaluateSwapSessionGate, resolveCanonicalSubmitSession } from './useSwapExecution'
 import { requiresCanonicalExecutionForSwapMode } from '@/lib/swap/providerConfig'
+
+describe('evaluateSwapSessionGate', () => {
+  it('blocks quote requests while the 4626 session is still hydrating', () => {
+    expect(
+      evaluateSwapSessionGate({
+        sessionHydrated: false,
+        hasSession: false,
+      }),
+    ).toEqual({
+      ok: false,
+      code: 'session-hydrating',
+      message: 'Still restoring your 4626 session. Please wait a moment before requesting swap quotes.',
+    })
+  })
+
+  it('blocks quote requests when no 4626 session exists', () => {
+    expect(
+      evaluateSwapSessionGate({
+        sessionHydrated: true,
+        hasSession: false,
+      }),
+    ).toEqual({
+      ok: false,
+      code: 'session-missing',
+      message: 'Sign in to 4626 to request swap quotes and submit trades.',
+    })
+  })
+
+  it('allows quote requests when the session is ready', () => {
+    expect(
+      evaluateSwapSessionGate({
+        sessionHydrated: true,
+        hasSession: true,
+      }),
+    ).toEqual({
+      ok: true,
+      code: 'ok',
+      message: null,
+    })
+  })
+})
 
 describe('evaluateCanonicalSubmitSession', () => {
   it('blocks canonical submit while session state is still hydrating', () => {

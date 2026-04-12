@@ -110,6 +110,15 @@ type CanonicalSubmitSessionResult =
 
 type EnsureCanonicalSessionResult = boolean | string | null
 
+type SwapSessionGateInput = {
+  sessionHydrated?: boolean
+  hasSession?: boolean
+}
+
+type SwapSessionGateResult =
+  | { ok: true; code: 'ok'; message: null }
+  | { ok: false; code: 'session-hydrating' | 'session-missing'; message: string }
+
 function resolveExpectedSessionAddress(input: {
   expectedSessionAddress?: string | null | undefined
   executionAddress: string | null | undefined
@@ -151,6 +160,30 @@ export async function resolveCanonicalSubmitSession(
     code: 'ok',
     message: null,
     shouldAttemptRefresh: false,
+  }
+}
+
+export function evaluateSwapSessionGate(input: SwapSessionGateInput): SwapSessionGateResult {
+  if (!input.sessionHydrated) {
+    return {
+      ok: false,
+      code: 'session-hydrating',
+      message: 'Still restoring your 4626 session. Please wait a moment before requesting swap quotes.',
+    }
+  }
+
+  if (!input.hasSession) {
+    return {
+      ok: false,
+      code: 'session-missing',
+      message: 'Sign in to 4626 to request swap quotes and submit trades.',
+    }
+  }
+
+  return {
+    ok: true,
+    code: 'ok',
+    message: null,
   }
 }
 
@@ -387,6 +420,14 @@ export function useSwapExecution(params: {
   const cdpCanonicalOnlyMode = useMemo(
     () => requiresCanonicalExecutionForSwapMode(swapProviderSelection.mode),
     [swapProviderSelection.mode],
+  )
+  const swapSessionGate = useMemo(
+    () =>
+      evaluateSwapSessionGate({
+        sessionHydrated: params.sessionHydrated,
+        hasSession: params.hasSession,
+      }),
+    [params.hasSession, params.sessionHydrated],
   )
   const resetQuoteFailureTracker = useCallback(() => {
     quoteFailureTrackerRef.current = {
@@ -674,6 +715,7 @@ export function useSwapExecution(params: {
       !tokensEquivalent &&
       Number(params.amountInUnits) > 0 &&
       Boolean(params.executionAddress) &&
+      swapSessionGate.ok &&
       (!cdpCanonicalOnlyMode ||
         (params.executionMode === 'canonical' &&
           isTargetCanonicalCsw(params.executionAddress ?? null) &&
@@ -693,6 +735,7 @@ export function useSwapExecution(params: {
       params.canonicalAddress,
       params.signerAddress,
       tokensEquivalent,
+      swapSessionGate.ok,
       cdpCanonicalOnlyMode,
       canonicalPolicyApplies,
     ],
@@ -883,7 +926,16 @@ export function useSwapExecution(params: {
   }, [resetQuoteFailureTracker, swapDebugEnabled])
 
   const handleQuote = useCallback(async () => {
-    if (!params.address || !isReady || !params.executionAddress) return
+    if (!params.address || !params.executionAddress) return
+    if (!swapSessionGate.ok) {
+      if (swapSessionGate.code === 'session-hydrating') {
+        setStatus(swapSessionGate.message)
+      } else {
+        setError(swapSessionGate.message)
+      }
+      return
+    }
+    if (!isReady) return
     if (quoteCooldownUntil && quoteCooldownUntil > Date.now()) {
       setStatus('Auto-quote is paused briefly after repeated API failures.')
       return
@@ -961,10 +1013,20 @@ export function useSwapExecution(params: {
     registerQuoteHardFailure,
     resetQuoteFailureTracker,
     syncPermitRequirement,
+    swapSessionGate,
   ])
 
   const handleCheckApproval = useCallback(async () => {
-    if (!params.executionAddress || !isReady) return
+    if (!params.executionAddress) return
+    if (!swapSessionGate.ok) {
+      if (swapSessionGate.code === 'session-hydrating') {
+        setStatus(swapSessionGate.message)
+      } else {
+        setError(swapSessionGate.message)
+      }
+      return
+    }
+    if (!isReady) return
     if (isCdpProviderQuote(quote)) {
       setError('')
       setApprovalData({ approval: null, cancel: null })
@@ -1038,6 +1100,7 @@ export function useSwapExecution(params: {
     getErrorMessage,
     guardInputPolicy,
     swapDebugEnabled,
+    swapSessionGate,
   ])
 
   const handleBuildSwap = useCallback(async () => {
@@ -1070,7 +1133,16 @@ export function useSwapExecution(params: {
   }, [quote, approvalData, params.parsedDeadlineMinutes, getErrorMessage, signPermitIfRequired])
 
   const handleReviewTrade = useCallback(async () => {
-    if (!params.executionAddress || !params.executionReady || !isReady) return
+    if (!params.executionAddress || !params.executionReady) return
+    if (!swapSessionGate.ok) {
+      if (swapSessionGate.code === 'session-hydrating') {
+        setStatus(swapSessionGate.message)
+      } else {
+        setError(swapSessionGate.message)
+      }
+      return
+    }
+    if (!isReady) return
     const runId = ++quoteRunRef.current
     setBusy('review')
     setError('')
@@ -1201,6 +1273,7 @@ export function useSwapExecution(params: {
     params.executionAddress,
     params.executionReady,
     swapDebugEnabled,
+    swapSessionGate,
   ])
 
   const run7702DryRun = useCallback(

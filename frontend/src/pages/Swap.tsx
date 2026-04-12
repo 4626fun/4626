@@ -793,6 +793,29 @@ export function Swap() {
     executionMode === 'canonical' && canonicalSignerGate.code === 'privy-client-disabled'
   const showPrivyLoadingHint = executionMode === 'canonical' && canonicalSignerGate.code === 'privy-auth-loading'
   const canonicalSignInMethod = 'privy' as const
+  const swapSessionGuard = useMemo(() => {
+    if (!sessionHydrated) {
+      return {
+        ready: false,
+        title: 'Restoring 4626 session',
+        message: 'Loading your account session before requesting swap quotes.',
+      }
+    }
+
+    if (!hasSession) {
+      return {
+        ready: false,
+        title: 'Sign in required for swap',
+        message: 'Sign in to 4626 before requesting Uniswap quotes or submitting swaps.',
+      }
+    }
+
+    return {
+      ready: true,
+      title: null,
+      message: null,
+    }
+  }, [hasSession, sessionHydrated])
   const ensureCanonicalSession = useCallback(async (): Promise<string | null> => {
     if (executionMode !== 'canonical') return null
     if (!getAccessToken || typeof signInWithPrivyToken !== 'function') return null
@@ -1421,6 +1444,29 @@ export function Swap() {
         title="Swap"
         subtitle="1-Click Swaps on Base"
       />
+
+      {activePanel === 'swap' && !swapSessionGuard.ready ? (
+        <div data-screenshot-hide="true" className="mx-auto mt-4 max-w-4xl">
+          <Alert
+            variant={sessionHydrated ? 'warning' : 'info'}
+            title={swapSessionGuard.title ?? undefined}
+            action={
+              sessionHydrated
+                ? {
+                    label: authBusy ? 'Signing in...' : 'Sign in to 4626',
+                    onClick: () => {
+                      if (authBusy) return
+                      void signIn({ method: executionMode === 'canonical' ? canonicalSignInMethod : 'auto' })
+                    },
+                  }
+                : undefined
+            }
+          >
+            {swapSessionGuard.message}
+            {authError && sessionHydrated ? <div className="mt-2 text-rose-300">{authError}</div> : null}
+          </Alert>
+        </div>
+      ) : null}
 
       {activePanel === 'swap' && needsPrivyCanonicalAuth ? (
         <div data-screenshot-hide="true" className="mx-auto mt-4 max-w-4xl">
