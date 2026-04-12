@@ -151,18 +151,10 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
-function resolveWalletClientAccountAddress(walletClient: {
-  account?: unknown
-}): string | null {
-  const account = walletClient.account as any
-  if (!account) return null
-  if (typeof account === 'string') return account
-  if (typeof account?.address === 'string') return account.address
-  return null
-}
-
 const CONFIRM_OWNER_RETRY_DELAY_MS = import.meta.env.MODE === 'test' ? 5 : 1_500
 const CONFIRM_OWNER_MAX_ATTEMPTS = 6
+const PAYMASTER_SESSION_MAX_ATTEMPTS = 3
+const PAYMASTER_SESSION_RETRY_DELAY_MS = import.meta.env.MODE === 'test' ? 5 : 300
 
 export async function sendPreparedOwnerTx(params: {
   txRequest: PreparedOwnerTxRequest
@@ -235,39 +227,26 @@ export async function sendPreparedOwnerTx(params: {
           version: '1',
         })
 
-      let result: Awaited<ReturnType<typeof sendCoinbaseSmartWalletUserOperation>>
-      try {
-        result = await runUserOp()
-      } catch (firstError) {
-        if (!isRetryablePaymasterSessionError(firstError)) throw firstError
-        if (typeof ensurePaymasterSession === 'function') {
-          await ensurePaymasterSession().catch(() => false)
-        }
-        await delay(300)
+      let result: Awaited<ReturnType<typeof sendCoinbaseSmartWalletUserOperation>> | null = null
+      let lastRetryableError: unknown = null
+      for (let attempt = 0; attempt < PAYMASTER_SESSION_MAX_ATTEMPTS; attempt += 1) {
         try {
           result = await runUserOp()
-        } catch (secondError) {
-          if (!isRetryablePaymasterSessionError(secondError)) throw secondError
-          if (!walletClient.account || typeof walletClient.sendTransaction !== 'function') throw secondError
-          const fallbackAccount = resolveWalletClientAccountAddress(walletClient)
-          const signerLc = signerAddress.toLowerCase()
-          if (!fallbackAccount || fallbackAccount.toLowerCase() !== signerLc) {
-            throw new Error(
-              'Connected wallet changed during approval. Reconnect the same canonical wallet and retry.',
-            )
+          break
+        } catch (attemptError) {
+          if (!isRetryablePaymasterSessionError(attemptError)) throw attemptError
+          lastRetryableError = attemptError
+          if (typeof ensurePaymasterSession === 'function') {
+            await ensurePaymasterSession().catch(() => false)
           }
-          // Last resort: let the connected wallet execute natively (without our paymaster proxy path).
-          txHash = await walletClient.sendTransaction({
-            account: walletClient.account,
-            chain: base,
-            to: txRequest.to,
-            data: txRequest.data,
-            value: 0n,
-          })
-          result = null as any
+          const hasNextAttempt = attempt + 1 < PAYMASTER_SESSION_MAX_ATTEMPTS
+          if (hasNextAttempt) {
+            await delay(PAYMASTER_SESSION_RETRY_DELAY_MS * (attempt + 1))
+          }
         }
       }
-      if (result) txHash = result.transactionHash
+      if (!result) throw (lastRetryableError ?? new Error('Paymaster session retry exhausted.'))
+      txHash = result.transactionHash
     } else {
       if (!walletClient.account || typeof walletClient.sendTransaction !== 'function') {
         throw new Error('Connect an owner wallet to send this transaction.')

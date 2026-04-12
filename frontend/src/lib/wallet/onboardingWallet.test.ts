@@ -140,44 +140,17 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('falls back to native wallet sendTransaction when paymaster session errors persist', async () => {
-    sendCoinbaseSmartWalletUserOperationMock
-      .mockRejectedValueOnce(new Error('request denied - no_session'))
-      .mockRejectedValueOnce(new Error('Paymaster rejected this request: paymaster proxy internal error'))
-    const sendTransaction = vi.fn(async () => TX_HASH)
-
-    const result = await sendPreparedOwnerTx({
-      txRequest: TX_REQUEST,
-      walletClient: {
-        account: CANONICAL_CSW,
-        sendTransaction,
-        request: vi.fn(),
-      },
-      chainId: 8453,
-      authHeaders: async () => ({ Authorization: 'Bearer test' }),
-      signerAddress: CANONICAL_CSW,
-      executionMode: 'canonicalSmartWallet',
-      canonicalSmartWalletAddress: CANONICAL_CSW,
-      publicClient: {},
-      ensurePaymasterSession: async () => true,
-    })
-
-    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(2)
-    expect(sendTransaction).toHaveBeenCalledTimes(1)
-    expect(result.txHash).toBe(TX_HASH)
-  })
-
-  it('does not use native fallback when canonical wallet account no longer matches signer', async () => {
-    sendCoinbaseSmartWalletUserOperationMock
-      .mockRejectedValueOnce(new Error('request denied - no_session'))
-      .mockRejectedValueOnce(new Error('Paymaster rejected this request: paymaster proxy internal error'))
+  it('does not fall back to native sendTransaction when paymaster session errors persist', async () => {
+    sendCoinbaseSmartWalletUserOperationMock.mockRejectedValue(
+      new Error('Paymaster rejected this request: paymaster proxy internal error'),
+    )
     const sendTransaction = vi.fn(async () => TX_HASH)
 
     await expect(
       sendPreparedOwnerTx({
         txRequest: TX_REQUEST,
         walletClient: {
-          account: OWNER_EOA,
+          account: CANONICAL_CSW,
           sendTransaction,
           request: vi.fn(),
         },
@@ -189,8 +162,11 @@ describe('sendPreparedOwnerTx', () => {
         publicClient: {},
         ensurePaymasterSession: async () => true,
       }),
-    ).rejects.toThrow('Connected wallet changed during approval. Reconnect the same canonical wallet and retry.')
+    ).rejects.toThrow(
+      '4626 could not initialize Base gas sponsorship. Retry in a few seconds. If it persists, use Not you? Switch and reconnect the same Base wallet.',
+    )
 
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(3)
     expect(sendTransaction).not.toHaveBeenCalled()
   })
 
