@@ -260,7 +260,15 @@ function docTargetExists(absolutePath: string): boolean {
 async function ensureDistinctSlugForSameNameDoc(filePath: string): Promise<void> {
   const basename = path.basename(filePath, '.md');
   const parent = path.basename(path.dirname(filePath));
-  const parentEntries = await fs.readdir(path.dirname(filePath), { withFileTypes: true });
+  let parentEntries;
+  try {
+    parentEntries = await fs.readdir(path.dirname(filePath), { withFileTypes: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      return;
+    }
+    throw error;
+  }
   const hasChildDirWithSameName = parentEntries.some((entry) => {
     return entry.isDirectory() && entry.name.toLowerCase() === basename.toLowerCase();
   });
