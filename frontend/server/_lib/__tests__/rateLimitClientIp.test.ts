@@ -48,8 +48,8 @@ describe('getClientIp', () => {
     expect(getClientIp(req)).toBe('198.51.100.22')
   })
 
-  it('falls back to x-forwarded-for only outside production', () => {
-    process.env.NODE_ENV = 'development'
+  it('falls back to x-forwarded-for when stronger edge headers are absent', () => {
+    process.env.NODE_ENV = 'production'
     const req = {
       headers: {
         'x-forwarded-for': '198.51.100.77, 10.0.0.1',

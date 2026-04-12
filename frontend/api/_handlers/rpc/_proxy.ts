@@ -564,14 +564,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(401).json({ success: false, error: 'Authentication required' })
     }
     const clientIp = getClientIp(req)
+    const hasClientIp = clientIp.trim().toLowerCase() !== 'unknown'
     const principalRateLimit = consumeRateLimitBucket(
       buildRateLimitKey(principalAddress, chain),
       RPC_RATE_LIMIT_MAX_REQUESTS,
     )
-    const ipRateLimit = consumeRateLimitBucket(
-      buildIpRateLimitKey(clientIp, chain),
-      RPC_RATE_LIMIT_MAX_REQUESTS_PER_IP,
-    )
+    const ipRateLimit = hasClientIp
+      ? consumeRateLimitBucket(
+          buildIpRateLimitKey(clientIp, chain),
+          RPC_RATE_LIMIT_MAX_REQUESTS_PER_IP,
+        )
+      : {
+          allowed: true,
+          remaining: RPC_RATE_LIMIT_MAX_REQUESTS_PER_IP,
+          resetAt: principalRateLimit.resetAt,
+        }
     const rateLimitRemaining = Math.min(principalRateLimit.remaining, ipRateLimit.remaining)
     const rateLimitResetAt = Math.min(principalRateLimit.resetAt, ipRateLimit.resetAt)
     setRateLimitHeaders(res, {
@@ -584,6 +591,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         chain,
         principalAddress,
         clientIp,
+        ipRateLimitEnforced: hasClientIp,
         principalAllowed: principalRateLimit.allowed,
         ipAllowed: ipRateLimit.allowed,
       })

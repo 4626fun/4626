@@ -57,6 +57,18 @@ function isActiveLink(location: { pathname: string; search?: string; hash?: stri
   return prefixes.some((p) => (p === '/' ? pathname === '/' : pathname === p || pathname.startsWith(`${p}/`)))
 }
 
+function isBaseInAppBrowser(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent.toLowerCase()
+  return (
+    ua.includes('coinbase') ||
+    ua.includes('cbios') ||
+    ua.includes('cbandroid') ||
+    ua.includes('baseapp') ||
+    ua.includes(' base/')
+  )
+}
+
 export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) {
   const interactive = props.interactive ?? true
   const chatEnabled = props.chatEnabled ?? true
@@ -68,6 +80,7 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
       ? getCanonicalMarketingWaitlistPath()
       : buildCanonicalMarketingWaitlistUrl(getMarketingBaseUrl())
   const [isMobileChatOverlayActive, setIsMobileChatOverlayActive] = useState(false)
+  const [hideMobileNavForBaseApp, setHideMobileNavForBaseApp] = useState(false)
   const shouldOverlayMobileNav = location.pathname.startsWith('/explore')
   const isAdminRoute = location.pathname.startsWith('/admin')
   const showTopNavBar = true
@@ -94,6 +107,12 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
     window.addEventListener('vault-mobile-chat-overlay-change', handleOverlayChange as EventListener)
     return () => window.removeEventListener('vault-mobile-chat-overlay-change', handleOverlayChange as EventListener)
   }, [])
+
+  useEffect(() => {
+    setHideMobileNavForBaseApp(isBaseInAppBrowser())
+  }, [])
+
+  const hideMobileNav = isMobileChatOverlayActive || hideMobileNavForBaseApp
 
   useEffect(() => {
     if (typeof document === 'undefined') return
@@ -169,7 +188,7 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
       </a>
 
       {/* Main */}
-      <main id="main-content" className={`flex-1 ${shouldOverlayMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
+      <main id="main-content" className={`flex-1 ${shouldOverlayMobileNav || hideMobileNav ? 'pb-0' : 'pb-24'} md:pb-0`}>
         <Suspense fallback={<AppLoadingState />}>
           <Outlet />
         </Suspense>
@@ -186,7 +205,7 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
       <nav
         aria-label="Mobile navigation"
         className={`md:hidden fixed bottom-0 left-0 right-0 z-70 border-t border-white/8 bg-linear-to-t from-black/85 to-vault-bg/78 backdrop-blur-xl shadow-[0_-10px_30px_-18px_rgba(0,0,0,0.95)] ${
-          isMobileChatOverlayActive ? 'hidden' : ''
+          hideMobileNav ? 'hidden' : ''
         }`}
       >
         <div className="mx-auto flex max-w-[540px] items-center justify-center gap-1.5 overflow-x-auto scrollbar-hide py-2.5 px-2 sm:py-3 sm:px-4" role="list">

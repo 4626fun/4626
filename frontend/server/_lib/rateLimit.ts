@@ -213,11 +213,10 @@ export function getClientIp(req: { headers?: Record<string, any> }): string {
   const fromRealIp = extractFirstIp(firstHeaderValue(h['x-real-ip']))
   if (fromRealIp) return fromRealIp
 
-  const nodeEnv = String(process.env.NODE_ENV ?? '').trim().toLowerCase()
-  if (nodeEnv !== 'production') {
-    const fromForwarded = extractFirstIp(firstHeaderValue(h['x-forwarded-for']))
-    if (fromForwarded) return fromForwarded
-  }
+  // Some edge paths expose only x-forwarded-for in production.
+  // Use it as a fallback only when stronger edge headers are absent.
+  const fromForwarded = extractFirstIp(firstHeaderValue(h['x-forwarded-for']))
+  if (fromForwarded) return fromForwarded
 
   return 'unknown'
 }

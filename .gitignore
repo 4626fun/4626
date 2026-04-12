@@ -109,6 +109,7 @@ logs/
 /.playwright-mcp/
 /.tmp-ssh-venv/
 /.venv-paramiko/
+/.venv-skills/
 /agent-logs/
 
 # Local generated visual outputs
@@ -176,3 +177,16 @@ frontend/docs/deep-research-report.md
 # Local brainstorm drafts (keep canonical checked-in file only)
 .superpowers/brainstorm/*.html
 !.superpowers/brainstorm/setup-flow-options.html
+docs/perplexity/skills/index.md
+docs/perplexity/perplexity-skills/4626-master-context/SKILL.md
+docs/perplexity/skills/skills.agent-runtime-guardrails.md
+docs/perplexity/skills/skills.integrations.md
+docs/perplexity/skills/skills.master.md
+docs/perplexity/skills/skills.onchain-and-vaults.md
+docs/perplexity/skills/skills.product-and-frontend.md
+docs/perplexity/skills/skills.solana-and-cre.md
+docs/perplexity/perplexity-skills/4626-agent-runtime-guardrails/SKILL.md
+docs/perplexity/perplexity-skills/4626-integrations/SKILL.md
+docs/perplexity/perplexity-skills/4626-onchain-vaults/SKILL.md
+docs/perplexity/perplexity-skills/4626-product-frontend/SKILL.md
+docs/perplexity/perplexity-skills/4626-solana-cre/SKILL.md
