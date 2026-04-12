@@ -12,7 +12,7 @@
 
 > `const` **DEPLOY\_BYTECODE**: `object`
 
-Defined in: [src/deploy/bytecode.generated.ts:6](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/deploy/bytecode.generated.ts#L6)
+Defined in: [src/deploy/bytecode.generated.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/deploy/bytecode.generated.ts#L6)
 
 #### Type Declaration
 

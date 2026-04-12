@@ -12,7 +12,7 @@
 
 > **BootstrapDelegationState** = `object`
 
-Defined in: [server/\_lib/canonicalCswDelegation.ts:31](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalCswDelegation.ts#L31)
+Defined in: [server/\_lib/canonicalCswDelegation.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalCswDelegation.ts#L31)
 
 #### Properties
 
@@ -20,37 +20,37 @@ Defined in: [server/\_lib/canonicalCswDelegation.ts:31](https://github.com/wenak
 
 > **canonicalCswAddress**: `string`
 
-Defined in: [server/\_lib/canonicalCswDelegation.ts:35](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalCswDelegation.ts#L35)
+Defined in: [server/\_lib/canonicalCswDelegation.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalCswDelegation.ts#L35)
 
 ##### chainId
 
 > **chainId**: `8453`
 
-Defined in: [server/\_lib/canonicalCswDelegation.ts:32](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalCswDelegation.ts#L32)
+Defined in: [server/\_lib/canonicalCswDelegation.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalCswDelegation.ts#L32)
 
 ##### privyEmbeddedEoaAddress
 
 > **privyEmbeddedEoaAddress**: `string`
 
-Defined in: [server/\_lib/canonicalCswDelegation.ts:36](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalCswDelegation.ts#L36)
+Defined in: [server/\_lib/canonicalCswDelegation.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalCswDelegation.ts#L36)
 
 ##### privyIsOwner
 
 > **privyIsOwner**: `boolean`
 
-Defined in: [server/\_lib/canonicalCswDelegation.ts:37](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalCswDelegation.ts#L37)
+Defined in: [server/\_lib/canonicalCswDelegation.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalCswDelegation.ts#L37)
 
 ##### privyUserId
 
 > **privyUserId**: `string`
 
-Defined in: [server/\_lib/canonicalCswDelegation.ts:34](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalCswDelegation.ts#L34)
+Defined in: [server/\_lib/canonicalCswDelegation.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalCswDelegation.ts#L34)
 
 ##### profileId
 
 > **profileId**: `number`
 
-Defined in: [server/\_lib/canonicalCswDelegation.ts:33](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalCswDelegation.ts#L33)
+Defined in: [server/\_lib/canonicalCswDelegation.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalCswDelegation.ts#L33)
 
 ## Functions
 
@@ -58,7 +58,7 @@ Defined in: [server/\_lib/canonicalCswDelegation.ts:33](https://github.com/wenak
 
 > **bootstrapCanonicalDelegationState**(`params`): `Promise`\<[`BootstrapDelegationState`](#bootstrapdelegationstate)\>
 
-Defined in: [server/\_lib/canonicalCswDelegation.ts:502](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalCswDelegation.ts#L502)
+Defined in: [server/\_lib/canonicalCswDelegation.ts:502](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalCswDelegation.ts#L502)
 
 #### Parameters
 
@@ -82,7 +82,7 @@ Defined in: [server/\_lib/canonicalCswDelegation.ts:502](https://github.com/wena
 
 > **confirmOwnerState**(`params`): `Promise`\<\{ `canonicalCswAddress`: `string`; `isOwner`: `boolean`; `ownerAddress`: `string`; \}\>
 
-Defined in: [server/\_lib/canonicalCswDelegation.ts:565](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalCswDelegation.ts#L565)
+Defined in: [server/\_lib/canonicalCswDelegation.ts:565](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalCswDelegation.ts#L565)
 
 #### Parameters
 
@@ -114,7 +114,7 @@ Defined in: [server/\_lib/canonicalCswDelegation.ts:565](https://github.com/wena
 
 > **extractDelegationFlags**(`error`): `object`
 
-Defined in: [server/\_lib/canonicalCswDelegation.ts:634](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalCswDelegation.ts#L634)
+Defined in: [server/\_lib/canonicalCswDelegation.ts:634](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalCswDelegation.ts#L634)
 
 #### Parameters
 
@@ -144,7 +144,7 @@ Defined in: [server/\_lib/canonicalCswDelegation.ts:634](https://github.com/wena
 
 > **getPrivyEmbeddedEOA**(`params`): `Promise`\<`string`\>
 
-Defined in: [server/\_lib/canonicalCswDelegation.ts:449](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalCswDelegation.ts#L449)
+Defined in: [server/\_lib/canonicalCswDelegation.ts:449](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalCswDelegation.ts#L449)
 
 #### Parameters
 
@@ -172,7 +172,7 @@ Defined in: [server/\_lib/canonicalCswDelegation.ts:449](https://github.com/wena
 
 > **getPrivyUserIdFromRequest**(`req`): `Promise`\<`string`\>
 
-Defined in: [server/\_lib/canonicalCswDelegation.ts:347](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalCswDelegation.ts#L347)
+Defined in: [server/\_lib/canonicalCswDelegation.ts:347](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalCswDelegation.ts#L347)
 
 #### Parameters
 
@@ -190,7 +190,7 @@ Defined in: [server/\_lib/canonicalCswDelegation.ts:347](https://github.com/wena
 
 > **loadCanonicalDelegationState**(`params`): `Promise`\<`PersistedDelegationState` \| `null`\>
 
-Defined in: [server/\_lib/canonicalCswDelegation.ts:493](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalCswDelegation.ts#L493)
+Defined in: [server/\_lib/canonicalCswDelegation.ts:493](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalCswDelegation.ts#L493)
 
 #### Parameters
 
@@ -214,7 +214,7 @@ Defined in: [server/\_lib/canonicalCswDelegation.ts:493](https://github.com/wena
 
 > **resolveCanonicalCsw**(`params`): `Promise`\<\{ `canonicalCswAddress`: `string`; `canonicalSource`: `string`; `profileId`: `number`; \}\>
 
-Defined in: [server/\_lib/canonicalCswDelegation.ts:367](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalCswDelegation.ts#L367)
+Defined in: [server/\_lib/canonicalCswDelegation.ts:367](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalCswDelegation.ts#L367)
 
 #### Parameters
 
@@ -242,7 +242,7 @@ Defined in: [server/\_lib/canonicalCswDelegation.ts:367](https://github.com/wena
 
 > **resolveConfirmOwnerCanonicalCsw**(`params`): `string`
 
-Defined in: [server/\_lib/canonicalCswDelegation.ts:434](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalCswDelegation.ts#L434)
+Defined in: [server/\_lib/canonicalCswDelegation.ts:434](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalCswDelegation.ts#L434)
 
 #### Parameters
 
@@ -266,7 +266,7 @@ Defined in: [server/\_lib/canonicalCswDelegation.ts:434](https://github.com/wena
 
 > **verifyPrivyRequest**(`req`): `Promise`\<`PrivyRequestContext`\>
 
-Defined in: [server/\_lib/canonicalCswDelegation.ts:352](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalCswDelegation.ts#L352)
+Defined in: [server/\_lib/canonicalCswDelegation.ts:352](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalCswDelegation.ts#L352)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **AppQueryProvider**(`__namedParameters`): `Element`
 
-Defined in: [src/web3/Web3Providers.tsx:33](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/web3/Web3Providers.tsx#L33)
+Defined in: [src/web3/Web3Providers.tsx:33](https://github.com/wenakita/4626/blob/main/frontend/src/web3/Web3Providers.tsx#L33)
 
 #### Parameters
 
@@ -32,7 +32,7 @@ Defined in: [src/web3/Web3Providers.tsx:33](https://github.com/wenakita/4626/blo
 
 > **WalletProviders**(`__namedParameters`): `Element`
 
-Defined in: [src/web3/Web3Providers.tsx:41](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/web3/Web3Providers.tsx#L41)
+Defined in: [src/web3/Web3Providers.tsx:41](https://github.com/wenakita/4626/blob/main/frontend/src/web3/Web3Providers.tsx#L41)
 
 #### Parameters
 
@@ -52,7 +52,7 @@ Defined in: [src/web3/Web3Providers.tsx:41](https://github.com/wenakita/4626/blo
 
 > **Web3Providers**(`__namedParameters`): `Element`
 
-Defined in: [src/web3/Web3Providers.tsx:52](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/web3/Web3Providers.tsx#L52)
+Defined in: [src/web3/Web3Providers.tsx:52](https://github.com/wenakita/4626/blob/main/frontend/src/web3/Web3Providers.tsx#L52)
 
 Shared query + wallet stack for routes that need both.
 

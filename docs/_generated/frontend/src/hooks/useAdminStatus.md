@@ -12,7 +12,7 @@
 
 > **deriveAdminStatus**(`input`): `DeriveAdminStatusOutput`
 
-Defined in: [src/hooks/useAdminStatus.ts:33](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/hooks/useAdminStatus.ts#L33)
+Defined in: [src/hooks/useAdminStatus.ts:33](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useAdminStatus.ts#L33)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/hooks/useAdminStatus.ts:33](https://github.com/wenakita/4626/bl
 
 > **useAdminStatus**(`params?`): `object`
 
-Defined in: [src/hooks/useAdminStatus.ts:87](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/hooks/useAdminStatus.ts#L87)
+Defined in: [src/hooks/useAdminStatus.ts:87](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useAdminStatus.ts#L87)
 
 #### Parameters
 
@@ -76,7 +76,7 @@ Defined in: [src/hooks/useAdminStatus.ts:87](https://github.com/wenakita/4626/bl
 
 > **useAdminStatusFromSession**(`params`): `object`
 
-Defined in: [src/hooks/useAdminStatus.ts:79](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/hooks/useAdminStatus.ts#L79)
+Defined in: [src/hooks/useAdminStatus.ts:79](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useAdminStatus.ts#L79)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > `const` **AMOE\_CREDITS\_PER\_ENTRY**: `100` = `100`
 
-Defined in: [server/\_lib/lotteryAmoe.ts:10](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/lotteryAmoe.ts#L10)
+Defined in: [server/\_lib/lotteryAmoe.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lotteryAmoe.ts#L10)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/lotteryAmoe.ts:10](https://github.com/wenakita/4626/bl
 
 > `const` **AMOE\_DAILY\_TWITTER\_CREDIT**: `1` = `1`
 
-Defined in: [server/\_lib/lotteryAmoe.ts:11](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/lotteryAmoe.ts#L11)
+Defined in: [server/\_lib/lotteryAmoe.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lotteryAmoe.ts#L11)
 
 ## Functions
 
@@ -28,7 +28,7 @@ Defined in: [server/\_lib/lotteryAmoe.ts:11](https://github.com/wenakita/4626/bl
 
 > **buildAmoeEntryMessage**(`fields`): `string`
 
-Defined in: [server/\_lib/lotteryAmoe.ts:458](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/lotteryAmoe.ts#L458)
+Defined in: [server/\_lib/lotteryAmoe.ts:458](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lotteryAmoe.ts#L458)
 
 #### Parameters
 
@@ -46,7 +46,7 @@ Defined in: [server/\_lib/lotteryAmoe.ts:458](https://github.com/wenakita/4626/b
 
 > **claimDailyTwitterCheckin**(`params`): `Promise`\<\{ `awarded`: `boolean`; `awardedCredits`: `number`; `credits`: `number`; `creditsPerEntry`: `number`; `entriesAvailable`: `number`; `wallet`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/lotteryAmoe.ts:284](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/lotteryAmoe.ts#L284)
+Defined in: [server/\_lib/lotteryAmoe.ts:284](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lotteryAmoe.ts#L284)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [server/\_lib/lotteryAmoe.ts:284](https://github.com/wenakita/4626/b
 
 > **consumeAmoeCreditsForEntry**(`params`): `Promise`\<\{ `consumed`: `number`; `creditsPerEntry`: `number`; `creditsRemaining`: `number`; `entriesAvailable`: `number`; `wallet`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/lotteryAmoe.ts:345](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/lotteryAmoe.ts#L345)
+Defined in: [server/\_lib/lotteryAmoe.ts:345](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lotteryAmoe.ts#L345)
 
 #### Parameters
 
@@ -94,7 +94,7 @@ Defined in: [server/\_lib/lotteryAmoe.ts:345](https://github.com/wenakita/4626/b
 
 > **createAmoeAttestation**(`params`): `Promise`\<\{ `buyer`: `` `0x${string}` ``; `callData`: `` `0x${string}` ``; `creatorCoin`: `` `0x${string}` ``; `deadline`: `number`; `nonce`: `` `0x${string}` ``; `signature`: `` `0x${string}` ``; `to`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/lotteryAmoe.ts:697](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/lotteryAmoe.ts#L697)
+Defined in: [server/\_lib/lotteryAmoe.ts:697](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lotteryAmoe.ts#L697)
 
 #### Parameters
 
@@ -130,7 +130,7 @@ Defined in: [server/\_lib/lotteryAmoe.ts:697](https://github.com/wenakita/4626/b
 
 > **getAmoeCreditSnapshot**(`params`): `Promise`\<\{ `credits`: `number`; `creditsPerEntry`: `number`; `entriesAvailable`: `number`; `nextEntryAtCredits`: `number`; `wallet`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/lotteryAmoe.ts:265](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/lotteryAmoe.ts#L265)
+Defined in: [server/\_lib/lotteryAmoe.ts:265](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lotteryAmoe.ts#L265)
 
 #### Parameters
 
@@ -150,7 +150,7 @@ Defined in: [server/\_lib/lotteryAmoe.ts:265](https://github.com/wenakita/4626/b
 
 > **issueAmoeNonce**(`params`): `Promise`\<\{ `expiresAt`: `string`; `issuedAt`: `string`; `nonce`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/lotteryAmoe.ts:508](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/lotteryAmoe.ts#L508)
+Defined in: [server/\_lib/lotteryAmoe.ts:508](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lotteryAmoe.ts#L508)
 
 #### Parameters
 
@@ -174,7 +174,7 @@ Defined in: [server/\_lib/lotteryAmoe.ts:508](https://github.com/wenakita/4626/b
 
 > **verifyAmoeEntryProof**(`params`): `Promise`\<\{ `creatorCoin`: `` `0x${string}` ``; `expiresAt`: `string`; `nonce`: `` `0x${string}` ``; `wallet`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/lotteryAmoe.ts:658](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/lotteryAmoe.ts#L658)
+Defined in: [server/\_lib/lotteryAmoe.ts:658](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lotteryAmoe.ts#L658)
 
 #### Parameters
 

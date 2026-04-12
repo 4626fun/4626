@@ -12,7 +12,7 @@
 
 > **RegistrationFile** = `object`
 
-Defined in: [server/\_lib/agentRegistration.ts:19](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistration.ts#L19)
+Defined in: [server/\_lib/agentRegistration.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistration.ts#L19)
 
 #### Indexable
 
@@ -24,31 +24,31 @@ Defined in: [server/\_lib/agentRegistration.ts:19](https://github.com/wenakita/4
 
 > `optional` **active**: `boolean`
 
-Defined in: [server/\_lib/agentRegistration.ts:26](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistration.ts#L26)
+Defined in: [server/\_lib/agentRegistration.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistration.ts#L26)
 
 ##### description?
 
 > `optional` **description**: `string`
 
-Defined in: [server/\_lib/agentRegistration.ts:22](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistration.ts#L22)
+Defined in: [server/\_lib/agentRegistration.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistration.ts#L22)
 
 ##### image?
 
 > `optional` **image**: `string`
 
-Defined in: [server/\_lib/agentRegistration.ts:23](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistration.ts#L23)
+Defined in: [server/\_lib/agentRegistration.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistration.ts#L23)
 
 ##### name?
 
 > `optional` **name**: `string`
 
-Defined in: [server/\_lib/agentRegistration.ts:21](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistration.ts#L21)
+Defined in: [server/\_lib/agentRegistration.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistration.ts#L21)
 
 ##### registrations?
 
 > `optional` **registrations**: `object`[]
 
-Defined in: [server/\_lib/agentRegistration.ts:27](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistration.ts#L27)
+Defined in: [server/\_lib/agentRegistration.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistration.ts#L27)
 
 ###### agentId
 
@@ -62,31 +62,31 @@ Defined in: [server/\_lib/agentRegistration.ts:27](https://github.com/wenakita/4
 
 > `optional` **reputationRegistry**: `string`
 
-Defined in: [server/\_lib/agentRegistration.ts:28](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistration.ts#L28)
+Defined in: [server/\_lib/agentRegistration.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistration.ts#L28)
 
 ##### services?
 
 > `optional` **services**: [`RegistrationService`](#registrationservice)[]
 
-Defined in: [server/\_lib/agentRegistration.ts:24](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistration.ts#L24)
+Defined in: [server/\_lib/agentRegistration.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistration.ts#L24)
 
 ##### supportedTrust?
 
 > `optional` **supportedTrust**: `string`[]
 
-Defined in: [server/\_lib/agentRegistration.ts:29](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistration.ts#L29)
+Defined in: [server/\_lib/agentRegistration.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistration.ts#L29)
 
 ##### type?
 
 > `optional` **type**: `string`
 
-Defined in: [server/\_lib/agentRegistration.ts:20](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistration.ts#L20)
+Defined in: [server/\_lib/agentRegistration.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistration.ts#L20)
 
 ##### x402Support?
 
 > `optional` **x402Support**: `boolean`
 
-Defined in: [server/\_lib/agentRegistration.ts:25](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistration.ts#L25)
+Defined in: [server/\_lib/agentRegistration.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistration.ts#L25)
 
 ***
 
@@ -94,7 +94,7 @@ Defined in: [server/\_lib/agentRegistration.ts:25](https://github.com/wenakita/4
 
 > **RegistrationService** = `object`
 
-Defined in: [server/\_lib/agentRegistration.ts:12](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistration.ts#L12)
+Defined in: [server/\_lib/agentRegistration.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistration.ts#L12)
 
 #### Indexable
 
@@ -106,19 +106,19 @@ Defined in: [server/\_lib/agentRegistration.ts:12](https://github.com/wenakita/4
 
 > **endpoint**: `string`
 
-Defined in: [server/\_lib/agentRegistration.ts:14](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistration.ts#L14)
+Defined in: [server/\_lib/agentRegistration.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistration.ts#L14)
 
 ##### name
 
 > **name**: `string`
 
-Defined in: [server/\_lib/agentRegistration.ts:13](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistration.ts#L13)
+Defined in: [server/\_lib/agentRegistration.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistration.ts#L13)
 
 ##### version?
 
 > `optional` **version**: `string`
 
-Defined in: [server/\_lib/agentRegistration.ts:15](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistration.ts#L15)
+Defined in: [server/\_lib/agentRegistration.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistration.ts#L15)
 
 ## Variables
 
@@ -126,7 +126,7 @@ Defined in: [server/\_lib/agentRegistration.ts:15](https://github.com/wenakita/4
 
 > `const` **STRICT\_IMMUTABLE\_AGENT\_URI\_HINT**: `"Canonical onchain URI should stay strict immutable (data:, ipfs://, or ar://). Keep /.well-known/agent-registration.json as the public mirror and use HTTPS gateway URLs only as compatibility fallback links."` = `STRICT_IMMUTABLE_AGENT_URI_SUMMARY`
 
-Defined in: [server/\_lib/agentRegistration.ts:36](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistration.ts#L36)
+Defined in: [server/\_lib/agentRegistration.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistration.ts#L36)
 
 ## Functions
 
@@ -134,7 +134,7 @@ Defined in: [server/\_lib/agentRegistration.ts:36](https://github.com/wenakita/4
 
 > **buildAgentRegistration**(`origin`): `object`
 
-Defined in: [server/\_lib/agentRegistration.ts:278](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistration.ts#L278)
+Defined in: [server/\_lib/agentRegistration.ts:278](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistration.ts#L278)
 
 #### Parameters
 

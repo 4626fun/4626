@@ -12,7 +12,7 @@
 
 > **AdminOps**(): `Element`
 
-Defined in: [src/pages/admin/AdminOps.tsx:3698](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/pages/admin/AdminOps.tsx#L3698)
+Defined in: [src/pages/admin/AdminOps.tsx:3698](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AdminOps.tsx#L3698)
 
 #### Returns
 

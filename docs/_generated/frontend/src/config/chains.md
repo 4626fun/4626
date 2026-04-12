@@ -10,7 +10,7 @@
 
 ### ChainMeta
 
-Defined in: [src/config/chains.ts:7](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/config/chains.ts#L7)
+Defined in: [src/config/chains.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/config/chains.ts#L7)
 
 #### Properties
 
@@ -18,43 +18,43 @@ Defined in: [src/config/chains.ts:7](https://github.com/wenakita/4626/blob/7e620
 
 > **chain**: `Chain`
 
-Defined in: [src/config/chains.ts:11](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/config/chains.ts#L11)
+Defined in: [src/config/chains.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/config/chains.ts#L11)
 
 ##### color
 
 > **color**: `string`
 
-Defined in: [src/config/chains.ts:17](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/config/chains.ts#L17)
+Defined in: [src/config/chains.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/config/chains.ts#L17)
 
 ##### explorerUrl
 
 > **explorerUrl**: `string`
 
-Defined in: [src/config/chains.ts:14](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/config/chains.ts#L14)
+Defined in: [src/config/chains.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/config/chains.ts#L14)
 
 ##### id
 
 > **id**: [`SupportedChainId`](#supportedchainid)
 
-Defined in: [src/config/chains.ts:8](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/config/chains.ts#L8)
+Defined in: [src/config/chains.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/config/chains.ts#L8)
 
 ##### logoUrl
 
 > **logoUrl**: `string`
 
-Defined in: [src/config/chains.ts:13](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/config/chains.ts#L13)
+Defined in: [src/config/chains.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/config/chains.ts#L13)
 
 ##### name
 
 > **name**: `string`
 
-Defined in: [src/config/chains.ts:9](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/config/chains.ts#L9)
+Defined in: [src/config/chains.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/config/chains.ts#L9)
 
 ##### nativeCurrency
 
 > **nativeCurrency**: `object`
 
-Defined in: [src/config/chains.ts:12](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/config/chains.ts#L12)
+Defined in: [src/config/chains.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/config/chains.ts#L12)
 
 ###### decimals
 
@@ -72,19 +72,19 @@ Defined in: [src/config/chains.ts:12](https://github.com/wenakita/4626/blob/7e62
 
 > **shortName**: `string`
 
-Defined in: [src/config/chains.ts:10](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/config/chains.ts#L10)
+Defined in: [src/config/chains.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/config/chains.ts#L10)
 
 ##### usdc
 
 > **usdc**: `` `0x${string}` ``
 
-Defined in: [src/config/chains.ts:16](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/config/chains.ts#L16)
+Defined in: [src/config/chains.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/config/chains.ts#L16)
 
 ##### weth
 
 > **weth**: `` `0x${string}` ``
 
-Defined in: [src/config/chains.ts:15](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/config/chains.ts#L15)
+Defined in: [src/config/chains.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/config/chains.ts#L15)
 
 ## Type Aliases
 
@@ -92,7 +92,7 @@ Defined in: [src/config/chains.ts:15](https://github.com/wenakita/4626/blob/7e62
 
 > **SupportedChainId** = `1` \| `8453` \| `42161` \| `10` \| `137`
 
-Defined in: [src/config/chains.ts:4](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/config/chains.ts#L4)
+Defined in: [src/config/chains.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/config/chains.ts#L4)
 
 ## Variables
 
@@ -100,7 +100,7 @@ Defined in: [src/config/chains.ts:4](https://github.com/wenakita/4626/blob/7e620
 
 > `const` **CHAIN\_MAP**: `Map`\<[`SupportedChainId`](#supportedchainid), [`ChainMeta`](#chainmeta)\>
 
-Defined in: [src/config/chains.ts:83](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/config/chains.ts#L83)
+Defined in: [src/config/chains.ts:83](https://github.com/wenakita/4626/blob/main/frontend/src/config/chains.ts#L83)
 
 ***
 
@@ -108,7 +108,7 @@ Defined in: [src/config/chains.ts:83](https://github.com/wenakita/4626/blob/7e62
 
 > `const` **DEFAULT\_CHAIN\_ID**: [`SupportedChainId`](#supportedchainid) = `8453`
 
-Defined in: [src/config/chains.ts:89](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/config/chains.ts#L89)
+Defined in: [src/config/chains.ts:89](https://github.com/wenakita/4626/blob/main/frontend/src/config/chains.ts#L89)
 
 ***
 
@@ -116,7 +116,7 @@ Defined in: [src/config/chains.ts:89](https://github.com/wenakita/4626/blob/7e62
 
 > `const` **SUPPORTED\_CHAINS**: [`ChainMeta`](#chainmeta)[]
 
-Defined in: [src/config/chains.ts:20](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/config/chains.ts#L20)
+Defined in: [src/config/chains.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/config/chains.ts#L20)
 
 ## Functions
 
@@ -124,7 +124,7 @@ Defined in: [src/config/chains.ts:20](https://github.com/wenakita/4626/blob/7e62
 
 > **getChainMeta**(`chainId`): [`ChainMeta`](#chainmeta) \| `undefined`
 
-Defined in: [src/config/chains.ts:85](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/config/chains.ts#L85)
+Defined in: [src/config/chains.ts:85](https://github.com/wenakita/4626/blob/main/frontend/src/config/chains.ts#L85)
 
 #### Parameters
 

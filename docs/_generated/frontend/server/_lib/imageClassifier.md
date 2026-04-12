@@ -12,7 +12,7 @@
 
 > **ArtworkLayout** = `"cover"` \| `"contain"` \| `"coin"`
 
-Defined in: [server/\_lib/imageClassifier.ts:3](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/imageClassifier.ts#L3)
+Defined in: [server/\_lib/imageClassifier.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/imageClassifier.ts#L3)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/imageClassifier.ts:3](https://github.com/wenakita/4626
 
 > **classifyArtwork**(`imageBytes`): `Promise`\<[`ArtworkLayout`](#artworklayout)\>
 
-Defined in: [server/\_lib/imageClassifier.ts:23](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/imageClassifier.ts#L23)
+Defined in: [server/\_lib/imageClassifier.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/imageClassifier.ts#L23)
 
 Classifies source artwork into a layout strategy via transparency + shape analysis.
 

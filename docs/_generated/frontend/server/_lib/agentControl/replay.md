@@ -12,7 +12,7 @@
 
 > **ReplayGuard** = `object`
 
-Defined in: [server/\_lib/agentControl/replay.ts:3](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentControl/replay.ts#L3)
+Defined in: [server/\_lib/agentControl/replay.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/replay.ts#L3)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/agentControl/replay.ts:3](https://github.com/wenakita/
 
 > **isReplay**: (`replayKey`) => `boolean`
 
-Defined in: [server/\_lib/agentControl/replay.ts:4](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentControl/replay.ts#L4)
+Defined in: [server/\_lib/agentControl/replay.ts:4](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/replay.ts#L4)
 
 ###### Parameters
 
@@ -38,7 +38,7 @@ Defined in: [server/\_lib/agentControl/replay.ts:4](https://github.com/wenakita/
 
 > **createStaticReplayGuard**(`values`): [`ReplayGuard`](#replayguard)
 
-Defined in: [server/\_lib/agentControl/replay.ts:17](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentControl/replay.ts#L17)
+Defined in: [server/\_lib/agentControl/replay.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/replay.ts#L17)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [server/\_lib/agentControl/replay.ts:17](https://github.com/wenakita
 
 > **normalizeReplayKeys**(`values`): `string`[]
 
-Defined in: [server/\_lib/agentControl/replay.ts:7](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentControl/replay.ts#L7)
+Defined in: [server/\_lib/agentControl/replay.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/replay.ts#L7)
 
 #### Parameters
 

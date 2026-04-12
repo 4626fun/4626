@@ -12,7 +12,7 @@
 
 > **EmbeddingResult** = `object`
 
-Defined in: [server/agent/eliza/embeddings.ts:21](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/embeddings.ts#L21)
+Defined in: [server/agent/eliza/embeddings.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/embeddings.ts#L21)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [server/agent/eliza/embeddings.ts:21](https://github.com/wenakita/46
 
 > **attempts**: `EmbeddingAttempt`[]
 
-Defined in: [server/agent/eliza/embeddings.ts:24](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/embeddings.ts#L24)
+Defined in: [server/agent/eliza/embeddings.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/embeddings.ts#L24)
 
 ##### embedding
 
 > **embedding**: `number`[] \| `null`
 
-Defined in: [server/agent/eliza/embeddings.ts:22](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/embeddings.ts#L22)
+Defined in: [server/agent/eliza/embeddings.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/embeddings.ts#L22)
 
 ##### provider
 
 > **provider**: `string` \| `null`
 
-Defined in: [server/agent/eliza/embeddings.ts:23](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/embeddings.ts#L23)
+Defined in: [server/agent/eliza/embeddings.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/embeddings.ts#L23)
 
 ## Functions
 
@@ -40,7 +40,7 @@ Defined in: [server/agent/eliza/embeddings.ts:23](https://github.com/wenakita/46
 
 > **getElizaEmbeddingService**(): `ElizaEmbeddingService`
 
-Defined in: [server/agent/eliza/embeddings.ts:178](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/embeddings.ts#L178)
+Defined in: [server/agent/eliza/embeddings.ts:178](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/embeddings.ts#L178)
 
 #### Returns
 
@@ -52,7 +52,7 @@ Defined in: [server/agent/eliza/embeddings.ts:178](https://github.com/wenakita/4
 
 > **resetElizaEmbeddingServiceForTests**(): `void`
 
-Defined in: [server/agent/eliza/embeddings.ts:183](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/embeddings.ts#L183)
+Defined in: [server/agent/eliza/embeddings.ts:183](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/embeddings.ts#L183)
 
 #### Returns
 

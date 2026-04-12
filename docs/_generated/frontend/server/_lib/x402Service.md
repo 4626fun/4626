@@ -12,7 +12,7 @@
 
 > **X402PaymentGateResult** = \{ `network`: `X402Network`; `paymentRequirements`: `PaymentRequirements`; `priceUsd`: `number`; `status`: `"missing"`; \} \| \{ `invalidReason`: `string`; `network`: `X402Network`; `paymentRequirements`: `PaymentRequirements`; `priceUsd`: `number`; `settlement?`: `SettleResponse`; `status`: `"invalid"`; `verification?`: `VerifyResponse`; \} \| \{ `network`: `X402Network`; `payer`: `string` \| `null`; `paymentRequirements`: `PaymentRequirements`; `priceUsd`: `number`; `settlement`: `SettleResponse`; `status`: `"paid"`; `verification`: `VerifyResponse`; \}
 
-Defined in: [server/\_lib/x402Service.ts:51](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/x402Service.ts#L51)
+Defined in: [server/\_lib/x402Service.ts:51](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/x402Service.ts#L51)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/x402Service.ts:51](https://github.com/wenakita/4626/bl
 
 > **X402PaymentRequirementConfig** = `object`
 
-Defined in: [server/\_lib/x402Service.ts:41](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/x402Service.ts#L41)
+Defined in: [server/\_lib/x402Service.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/x402Service.ts#L41)
 
 #### Properties
 
@@ -28,43 +28,43 @@ Defined in: [server/\_lib/x402Service.ts:41](https://github.com/wenakita/4626/bl
 
 > **description**: `string`
 
-Defined in: [server/\_lib/x402Service.ts:44](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/x402Service.ts#L44)
+Defined in: [server/\_lib/x402Service.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/x402Service.ts#L44)
 
 ##### extra?
 
 > `optional` **extra**: `Record`\<`string`, `unknown`\>
 
-Defined in: [server/\_lib/x402Service.ts:47](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/x402Service.ts#L47)
+Defined in: [server/\_lib/x402Service.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/x402Service.ts#L47)
 
 ##### mimeType?
 
 > `optional` **mimeType**: `string`
 
-Defined in: [server/\_lib/x402Service.ts:45](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/x402Service.ts#L45)
+Defined in: [server/\_lib/x402Service.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/x402Service.ts#L45)
 
 ##### outputSchema?
 
 > `optional` **outputSchema**: `Record`\<`string`, `unknown`\>
 
-Defined in: [server/\_lib/x402Service.ts:46](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/x402Service.ts#L46)
+Defined in: [server/\_lib/x402Service.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/x402Service.ts#L46)
 
 ##### priceUsd?
 
 > `optional` **priceUsd**: `number` \| `string`
 
-Defined in: [server/\_lib/x402Service.ts:48](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/x402Service.ts#L48)
+Defined in: [server/\_lib/x402Service.ts:48](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/x402Service.ts#L48)
 
 ##### req
 
 > **req**: `VercelRequest`
 
-Defined in: [server/\_lib/x402Service.ts:42](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/x402Service.ts#L42)
+Defined in: [server/\_lib/x402Service.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/x402Service.ts#L42)
 
 ##### resourcePath
 
 > **resourcePath**: `string`
 
-Defined in: [server/\_lib/x402Service.ts:43](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/x402Service.ts#L43)
+Defined in: [server/\_lib/x402Service.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/x402Service.ts#L43)
 
 ## Functions
 
@@ -72,7 +72,7 @@ Defined in: [server/\_lib/x402Service.ts:43](https://github.com/wenakita/4626/bl
 
 > **buildX402PaymentRequirements**(`config`): `object`
 
-Defined in: [server/\_lib/x402Service.ts:198](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/x402Service.ts#L198)
+Defined in: [server/\_lib/x402Service.ts:198](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/x402Service.ts#L198)
 
 #### Parameters
 
@@ -102,7 +102,7 @@ Defined in: [server/\_lib/x402Service.ts:198](https://github.com/wenakita/4626/b
 
 > **evaluateX402Payment**(`req`, `config`): `Promise`\<[`X402PaymentGateResult`](#x402paymentgateresult)\>
 
-Defined in: [server/\_lib/x402Service.ts:227](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/x402Service.ts#L227)
+Defined in: [server/\_lib/x402Service.ts:227](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/x402Service.ts#L227)
 
 #### Parameters
 
@@ -124,7 +124,7 @@ Defined in: [server/\_lib/x402Service.ts:227](https://github.com/wenakita/4626/b
 
 > **sendPaymentRequiredResponse**(`req`, `res`, `params`): `VercelResponse`
 
-Defined in: [server/\_lib/x402Service.ts:292](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/x402Service.ts#L292)
+Defined in: [server/\_lib/x402Service.ts:292](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/x402Service.ts#L292)
 
 #### Parameters
 
@@ -164,7 +164,7 @@ Defined in: [server/\_lib/x402Service.ts:292](https://github.com/wenakita/4626/b
 
 > **setSettlementResponseHeaders**(`res`, `settlement`): `void`
 
-Defined in: [server/\_lib/x402Service.ts:285](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/x402Service.ts#L285)
+Defined in: [server/\_lib/x402Service.ts:285](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/x402Service.ts#L285)
 
 #### Parameters
 
@@ -184,7 +184,7 @@ Defined in: [server/\_lib/x402Service.ts:285](https://github.com/wenakita/4626/b
 
 > **setX402CorsHeaders**(`res`): `void`
 
-Defined in: [server/\_lib/x402Service.ts:193](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/x402Service.ts#L193)
+Defined in: [server/\_lib/x402Service.ts:193](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/x402Service.ts#L193)
 
 #### Parameters
 

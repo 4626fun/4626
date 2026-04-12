@@ -12,7 +12,7 @@
 
 > **extractPrivyVerifiedEmail**(`user`): `string` \| `null`
 
-Defined in: [server/\_lib/trust.ts:84](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/trust.ts#L84)
+Defined in: [server/\_lib/trust.ts:84](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/trust.ts#L84)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [server/\_lib/trust.ts:84](https://github.com/wenakita/4626/blob/7e6
 
 > **getTrustedRequestOrigins**(`req?`): `Set`\<`string`\>
 
-Defined in: [server/\_lib/trust.ts:134](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/trust.ts#L134)
+Defined in: [server/\_lib/trust.ts:134](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/trust.ts#L134)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [server/\_lib/trust.ts:134](https://github.com/wenakita/4626/blob/7e
 
 > **isAddressLike**(`value`): `` value is `0x${string}` ``
 
-Defined in: [server/\_lib/trust.ts:25](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/trust.ts#L25)
+Defined in: [server/\_lib/trust.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/trust.ts#L25)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [server/\_lib/trust.ts:25](https://github.com/wenakita/4626/blob/7e6
 
 > **isServerAdminAddress**(`address`): `boolean`
 
-Defined in: [server/\_lib/trust.ts:185](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/trust.ts#L185)
+Defined in: [server/\_lib/trust.ts:185](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/trust.ts#L185)
 
 #### Parameters
 
@@ -84,7 +84,7 @@ Defined in: [server/\_lib/trust.ts:185](https://github.com/wenakita/4626/blob/7e
 
 > **isTrustedRequestOrigin**(`req`, `origin`): `boolean`
 
-Defined in: [server/\_lib/trust.ts:164](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/trust.ts#L164)
+Defined in: [server/\_lib/trust.ts:164](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/trust.ts#L164)
 
 #### Parameters
 
@@ -106,7 +106,7 @@ Defined in: [server/\_lib/trust.ts:164](https://github.com/wenakita/4626/blob/7e
 
 > **normalizeAddress**(`value`): `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/trust.ts:29](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/trust.ts#L29)
+Defined in: [server/\_lib/trust.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/trust.ts#L29)
 
 #### Parameters
 
@@ -124,7 +124,7 @@ Defined in: [server/\_lib/trust.ts:29](https://github.com/wenakita/4626/blob/7e6
 
 > **normalizeEmail**(`value`): `string` \| `null`
 
-Defined in: [server/\_lib/trust.ts:35](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/trust.ts#L35)
+Defined in: [server/\_lib/trust.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/trust.ts#L35)
 
 #### Parameters
 
@@ -142,7 +142,7 @@ Defined in: [server/\_lib/trust.ts:35](https://github.com/wenakita/4626/blob/7e6
 
 > **normalizeOrigin**(`value`): `string` \| `null`
 
-Defined in: [server/\_lib/trust.ts:108](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/trust.ts#L108)
+Defined in: [server/\_lib/trust.ts:108](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/trust.ts#L108)
 
 #### Parameters
 
@@ -160,7 +160,7 @@ Defined in: [server/\_lib/trust.ts:108](https://github.com/wenakita/4626/blob/7e
 
 > **readServerAdminAddressSet**(): `Set`\<`string`\>
 
-Defined in: [server/\_lib/trust.ts:170](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/trust.ts#L170)
+Defined in: [server/\_lib/trust.ts:170](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/trust.ts#L170)
 
 #### Returns
 

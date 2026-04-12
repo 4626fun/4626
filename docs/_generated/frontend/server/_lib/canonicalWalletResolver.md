@@ -12,7 +12,7 @@
 
 > **PersistedWalletIdentity** = `object`
 
-Defined in: [server/\_lib/canonicalWalletResolver.ts:28](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalWalletResolver.ts#L28)
+Defined in: [server/\_lib/canonicalWalletResolver.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalWalletResolver.ts#L28)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [server/\_lib/canonicalWalletResolver.ts:28](https://github.com/wena
 
 > **canonicalSmartWallet**: `string` \| `null`
 
-Defined in: [server/\_lib/canonicalWalletResolver.ts:30](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalWalletResolver.ts#L30)
+Defined in: [server/\_lib/canonicalWalletResolver.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalWalletResolver.ts#L30)
 
 ##### embeddedEoa
 
 > **embeddedEoa**: `string` \| `null`
 
-Defined in: [server/\_lib/canonicalWalletResolver.ts:31](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalWalletResolver.ts#L31)
+Defined in: [server/\_lib/canonicalWalletResolver.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalWalletResolver.ts#L31)
 
 ##### privyUserId
 
 > **privyUserId**: `string` \| `null`
 
-Defined in: [server/\_lib/canonicalWalletResolver.ts:32](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalWalletResolver.ts#L32)
+Defined in: [server/\_lib/canonicalWalletResolver.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalWalletResolver.ts#L32)
 
 ##### profileId
 
 > **profileId**: `number`
 
-Defined in: [server/\_lib/canonicalWalletResolver.ts:29](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalWalletResolver.ts#L29)
+Defined in: [server/\_lib/canonicalWalletResolver.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalWalletResolver.ts#L29)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [server/\_lib/canonicalWalletResolver.ts:29](https://github.com/wena
 
 > **ProfileWalletAuthority** = `object`
 
-Defined in: [server/\_lib/canonicalWalletResolver.ts:35](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalWalletResolver.ts#L35)
+Defined in: [server/\_lib/canonicalWalletResolver.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalWalletResolver.ts#L35)
 
 #### Properties
 
@@ -54,19 +54,19 @@ Defined in: [server/\_lib/canonicalWalletResolver.ts:35](https://github.com/wena
 
 > **activeOwnerWalletAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/canonicalWalletResolver.ts:38](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalWalletResolver.ts#L38)
+Defined in: [server/\_lib/canonicalWalletResolver.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalWalletResolver.ts#L38)
 
 ##### canonicalSmartWalletAddress
 
 > **canonicalSmartWalletAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/canonicalWalletResolver.ts:37](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalWalletResolver.ts#L37)
+Defined in: [server/\_lib/canonicalWalletResolver.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalWalletResolver.ts#L37)
 
 ##### profileId
 
 > **profileId**: `number`
 
-Defined in: [server/\_lib/canonicalWalletResolver.ts:36](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalWalletResolver.ts#L36)
+Defined in: [server/\_lib/canonicalWalletResolver.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalWalletResolver.ts#L36)
 
 ## Functions
 
@@ -74,7 +74,7 @@ Defined in: [server/\_lib/canonicalWalletResolver.ts:36](https://github.com/wena
 
 > **isAuthorizedWalletForProfile**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/canonicalWalletResolver.ts:119](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalWalletResolver.ts#L119)
+Defined in: [server/\_lib/canonicalWalletResolver.ts:119](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalWalletResolver.ts#L119)
 
 #### Parameters
 
@@ -114,7 +114,7 @@ Defined in: [server/\_lib/canonicalWalletResolver.ts:119](https://github.com/wen
 
 > **readProfileWalletAuthority**(`params`): `Promise`\<[`ProfileWalletAuthority`](#profilewalletauthority) \| `null`\>
 
-Defined in: [server/\_lib/canonicalWalletResolver.ts:99](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalWalletResolver.ts#L99)
+Defined in: [server/\_lib/canonicalWalletResolver.ts:99](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalWalletResolver.ts#L99)
 
 #### Parameters
 
@@ -142,7 +142,7 @@ Defined in: [server/\_lib/canonicalWalletResolver.ts:99](https://github.com/wena
 
 > **resolveAuthorizedWalletProfile**(`address`): `Promise`\<[`ProfileWalletAuthority`](#profilewalletauthority) \| `null`\>
 
-Defined in: [server/\_lib/canonicalWalletResolver.ts:140](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalWalletResolver.ts#L140)
+Defined in: [server/\_lib/canonicalWalletResolver.ts:140](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalWalletResolver.ts#L140)
 
 #### Parameters
 
@@ -160,7 +160,7 @@ Defined in: [server/\_lib/canonicalWalletResolver.ts:140](https://github.com/wen
 
 > **resolveCanonicalSmartWalletAddress**(`address`): `Promise`\<`string` \| `null`\>
 
-Defined in: [server/\_lib/canonicalWalletResolver.ts:268](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalWalletResolver.ts#L268)
+Defined in: [server/\_lib/canonicalWalletResolver.ts:268](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalWalletResolver.ts#L268)
 
 #### Parameters
 
@@ -178,7 +178,7 @@ Defined in: [server/\_lib/canonicalWalletResolver.ts:268](https://github.com/wen
 
 > **resolvePersistedWalletIdentity**(`address`): `Promise`\<[`PersistedWalletIdentity`](#persistedwalletidentity) \| `null`\>
 
-Defined in: [server/\_lib/canonicalWalletResolver.ts:249](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/canonicalWalletResolver.ts#L249)
+Defined in: [server/\_lib/canonicalWalletResolver.ts:249](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/canonicalWalletResolver.ts#L249)
 
 #### Parameters
 

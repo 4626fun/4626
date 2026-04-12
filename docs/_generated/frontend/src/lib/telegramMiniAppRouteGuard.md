@@ -12,7 +12,7 @@
 
 > **getInitialTelegramMiniAppEntryResolution**(`search`): `"ready"` \| `"checking"`
 
-Defined in: [src/lib/telegramMiniAppRouteGuard.ts:21](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramMiniAppRouteGuard.ts#L21)
+Defined in: [src/lib/telegramMiniAppRouteGuard.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramMiniAppRouteGuard.ts#L21)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/lib/telegramMiniAppRouteGuard.ts:21](https://github.com/wenakit
 
 > **hasTelegramLinkEntryContext**(`search`): `boolean`
 
-Defined in: [src/lib/telegramMiniAppRouteGuard.ts:12](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramMiniAppRouteGuard.ts#L12)
+Defined in: [src/lib/telegramMiniAppRouteGuard.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramMiniAppRouteGuard.ts#L12)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/telegramMiniAppRouteGuard.ts:12](https://github.com/wenakit
 
 > **hasTelegramLinkQueryContext**(`search`): `boolean`
 
-Defined in: [src/lib/telegramMiniAppRouteGuard.ts:4](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramMiniAppRouteGuard.ts#L4)
+Defined in: [src/lib/telegramMiniAppRouteGuard.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramMiniAppRouteGuard.ts#L4)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [src/lib/telegramMiniAppRouteGuard.ts:4](https://github.com/wenakita
 
 > **resolveTelegramMiniAppEntryBootstrap**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [src/lib/telegramMiniAppRouteGuard.ts:25](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/telegramMiniAppRouteGuard.ts#L25)
+Defined in: [src/lib/telegramMiniAppRouteGuard.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegramMiniAppRouteGuard.ts#L25)
 
 #### Parameters
 

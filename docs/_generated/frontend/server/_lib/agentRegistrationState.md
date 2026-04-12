@@ -12,7 +12,7 @@
 
 > **AgentRegistrationStateRow** = `object`
 
-Defined in: [server/\_lib/agentRegistrationState.ts:8](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistrationState.ts#L8)
+Defined in: [server/\_lib/agentRegistrationState.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistrationState.ts#L8)
 
 #### Properties
 
@@ -20,37 +20,37 @@ Defined in: [server/\_lib/agentRegistrationState.ts:8](https://github.com/wenaki
 
 > **agentKey**: `string`
 
-Defined in: [server/\_lib/agentRegistrationState.ts:9](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistrationState.ts#L9)
+Defined in: [server/\_lib/agentRegistrationState.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistrationState.ts#L9)
 
 ##### gatewayUrl
 
 > **gatewayUrl**: `string` \| `null`
 
-Defined in: [server/\_lib/agentRegistrationState.ts:12](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistrationState.ts#L12)
+Defined in: [server/\_lib/agentRegistrationState.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistrationState.ts#L12)
 
 ##### lensUri
 
 > **lensUri**: `string`
 
-Defined in: [server/\_lib/agentRegistrationState.ts:11](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistrationState.ts#L11)
+Defined in: [server/\_lib/agentRegistrationState.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistrationState.ts#L11)
 
 ##### payloadHash
 
 > **payloadHash**: `string`
 
-Defined in: [server/\_lib/agentRegistrationState.ts:10](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistrationState.ts#L10)
+Defined in: [server/\_lib/agentRegistrationState.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistrationState.ts#L10)
 
 ##### storageKey
 
 > **storageKey**: `string` \| `null`
 
-Defined in: [server/\_lib/agentRegistrationState.ts:13](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistrationState.ts#L13)
+Defined in: [server/\_lib/agentRegistrationState.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistrationState.ts#L13)
 
 ##### updatedAt
 
 > **updatedAt**: `string`
 
-Defined in: [server/\_lib/agentRegistrationState.ts:14](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistrationState.ts#L14)
+Defined in: [server/\_lib/agentRegistrationState.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistrationState.ts#L14)
 
 ## Functions
 
@@ -58,7 +58,7 @@ Defined in: [server/\_lib/agentRegistrationState.ts:14](https://github.com/wenak
 
 > **ensureAgentRegistrationStateSchema**(): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/agentRegistrationState.ts:19](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistrationState.ts#L19)
+Defined in: [server/\_lib/agentRegistrationState.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistrationState.ts#L19)
 
 #### Returns
 
@@ -70,7 +70,7 @@ Defined in: [server/\_lib/agentRegistrationState.ts:19](https://github.com/wenak
 
 > **getAgentRegistrationState**(`agentKey`): `Promise`\<[`AgentRegistrationStateRow`](#agentregistrationstaterow) \| `null`\>
 
-Defined in: [server/\_lib/agentRegistrationState.ts:90](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistrationState.ts#L90)
+Defined in: [server/\_lib/agentRegistrationState.ts:90](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistrationState.ts#L90)
 
 #### Parameters
 
@@ -88,7 +88,7 @@ Defined in: [server/\_lib/agentRegistrationState.ts:90](https://github.com/wenak
 
 > **upsertAgentRegistrationState**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/agentRegistrationState.ts:118](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentRegistrationState.ts#L118)
+Defined in: [server/\_lib/agentRegistrationState.ts:118](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentRegistrationState.ts#L118)
 
 #### Parameters
 

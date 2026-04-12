@@ -12,7 +12,7 @@
 
 > **CreativeEnvelope** = `CreativeSuccessEnvelope` \| `MissingContextEnvelope`
 
-Defined in: [api/\_handlers/agent/\_creative.ts:139](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/agent/_creative.ts#L139)
+Defined in: [api/\_handlers/agent/\_creative.ts:139](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_creative.ts#L139)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/agent/\_creative.ts:139](https://github.com/wenakita
 
 > **CreativeMode** = `"referral_og"` \| `"share_page_copy"` \| `"quest_reward"` \| `"metadata_bundle"`
 
-Defined in: [api/\_handlers/agent/\_creative.ts:18](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/agent/_creative.ts#L18)
+Defined in: [api/\_handlers/agent/\_creative.ts:18](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_creative.ts#L18)
 
 ## Functions
 
@@ -28,7 +28,7 @@ Defined in: [api/\_handlers/agent/\_creative.ts:18](https://github.com/wenakita/
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/agent/\_creative.ts:724](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/agent/_creative.ts#L724)
+Defined in: [api/\_handlers/agent/\_creative.ts:724](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_creative.ts#L724)
 
 #### Parameters
 
@@ -50,7 +50,7 @@ Defined in: [api/\_handlers/agent/\_creative.ts:724](https://github.com/wenakita
 
 > **generateCreativeEnvelope**(`params`): `Promise`\<[`CreativeEnvelope`](#creativeenvelope)\>
 
-Defined in: [api/\_handlers/agent/\_creative.ts:683](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/agent/_creative.ts#L683)
+Defined in: [api/\_handlers/agent/\_creative.ts:683](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_creative.ts#L683)
 
 #### Parameters
 
@@ -82,7 +82,7 @@ Defined in: [api/\_handlers/agent/\_creative.ts:683](https://github.com/wenakita
 
 > **getCreativeContextValidationError**(`context`): `string` \| `null`
 
-Defined in: [api/\_handlers/agent/\_creative.ts:321](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/agent/_creative.ts#L321)
+Defined in: [api/\_handlers/agent/\_creative.ts:321](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/agent/_creative.ts#L321)
 
 #### Parameters
 

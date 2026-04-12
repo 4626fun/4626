@@ -12,7 +12,7 @@
 
 > **useZoraCoin**(`address?`): `UseQueryResult`\<[`ZoraCoin`](types.md#zoracoin) \| `null`, `Error`\>
 
-Defined in: [src/lib/zora/hooks.ts:15](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/zora/hooks.ts#L15)
+Defined in: [src/lib/zora/hooks.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/hooks.ts#L15)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/lib/zora/hooks.ts:15](https://github.com/wenakita/4626/blob/7e6
 
 > **useZoraExplore**(`list`, `params?`): `UseQueryResult`\<[`ZoraExploreList`](types.md#zoraexplorelist) \| `null`, `Error`\>
 
-Defined in: [src/lib/zora/hooks.ts:36](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/zora/hooks.ts#L36)
+Defined in: [src/lib/zora/hooks.ts:36](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/hooks.ts#L36)
 
 #### Parameters
 
@@ -62,7 +62,7 @@ Defined in: [src/lib/zora/hooks.ts:36](https://github.com/wenakita/4626/blob/7e6
 
 > **useZoraProfile**(`identifier?`): `UseQueryResult`\<[`ZoraProfile`](types.md#zoraprofile) \| `null`, `Error`\>
 
-Defined in: [src/lib/zora/hooks.ts:26](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/zora/hooks.ts#L26)
+Defined in: [src/lib/zora/hooks.ts:26](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/hooks.ts#L26)
 
 #### Parameters
 
@@ -80,7 +80,7 @@ Defined in: [src/lib/zora/hooks.ts:26](https://github.com/wenakita/4626/blob/7e6
 
 > **useZoraProfileCoins**(`identifier?`, `params?`): `UseQueryResult`\<[`ZoraProfile`](types.md#zoraprofile) \| `null`, `Error`\>
 
-Defined in: [src/lib/zora/hooks.ts:45](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/zora/hooks.ts#L45)
+Defined in: [src/lib/zora/hooks.ts:45](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/hooks.ts#L45)
 
 #### Parameters
 
@@ -108,7 +108,7 @@ Defined in: [src/lib/zora/hooks.ts:45](https://github.com/wenakita/4626/blob/7e6
 
 > **useZoraTopCreators**(`params?`): `UseQueryResult`\<[`ZoraExploreList`](types.md#zoraexplorelist) \| `null`, `Error`\>
 
-Defined in: [src/lib/zora/hooks.ts:60](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/zora/hooks.ts#L60)
+Defined in: [src/lib/zora/hooks.ts:60](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/hooks.ts#L60)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **PayoutRouterExternalSwapApprovals** = `object`
 
-Defined in: [server/\_lib/payoutRouterRuntime.ts:67](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/payoutRouterRuntime.ts#L67)
+Defined in: [server/\_lib/payoutRouterRuntime.ts:67](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payoutRouterRuntime.ts#L67)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [server/\_lib/payoutRouterRuntime.ts:67](https://github.com/wenakita
 
 > **spenders**: `Address`[]
 
-Defined in: [server/\_lib/payoutRouterRuntime.ts:69](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/payoutRouterRuntime.ts#L69)
+Defined in: [server/\_lib/payoutRouterRuntime.ts:69](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payoutRouterRuntime.ts#L69)
 
 ##### targets
 
 > **targets**: `Address`[]
 
-Defined in: [server/\_lib/payoutRouterRuntime.ts:68](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/payoutRouterRuntime.ts#L68)
+Defined in: [server/\_lib/payoutRouterRuntime.ts:68](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payoutRouterRuntime.ts#L68)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [server/\_lib/payoutRouterRuntime.ts:68](https://github.com/wenakita
 
 > **PayoutRouterFeeConfig** = `object`
 
-Defined in: [server/\_lib/payoutRouterRuntime.ts:62](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/payoutRouterRuntime.ts#L62)
+Defined in: [server/\_lib/payoutRouterRuntime.ts:62](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payoutRouterRuntime.ts#L62)
 
 #### Properties
 
@@ -42,13 +42,13 @@ Defined in: [server/\_lib/payoutRouterRuntime.ts:62](https://github.com/wenakita
 
 > **wethCreatorFee**: `number`
 
-Defined in: [server/\_lib/payoutRouterRuntime.ts:64](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/payoutRouterRuntime.ts#L64)
+Defined in: [server/\_lib/payoutRouterRuntime.ts:64](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payoutRouterRuntime.ts#L64)
 
 ##### zoraWethFee
 
 > **zoraWethFee**: `number`
 
-Defined in: [server/\_lib/payoutRouterRuntime.ts:63](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/payoutRouterRuntime.ts#L63)
+Defined in: [server/\_lib/payoutRouterRuntime.ts:63](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payoutRouterRuntime.ts#L63)
 
 ## Functions
 
@@ -56,7 +56,7 @@ Defined in: [server/\_lib/payoutRouterRuntime.ts:63](https://github.com/wenakita
 
 > **resolvePayoutRouterExternalSwapApprovals**(): [`PayoutRouterExternalSwapApprovals`](#payoutrouterexternalswapapprovals)
 
-Defined in: [server/\_lib/payoutRouterRuntime.ts:108](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/payoutRouterRuntime.ts#L108)
+Defined in: [server/\_lib/payoutRouterRuntime.ts:108](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payoutRouterRuntime.ts#L108)
 
 #### Returns
 
@@ -68,7 +68,7 @@ Defined in: [server/\_lib/payoutRouterRuntime.ts:108](https://github.com/wenakit
 
 > **resolvePayoutRouterFeeConfig**(): [`PayoutRouterFeeConfig`](#payoutrouterfeeconfig)
 
-Defined in: [server/\_lib/payoutRouterRuntime.ts:72](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/payoutRouterRuntime.ts#L72)
+Defined in: [server/\_lib/payoutRouterRuntime.ts:72](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payoutRouterRuntime.ts#L72)
 
 #### Returns
 
@@ -80,7 +80,7 @@ Defined in: [server/\_lib/payoutRouterRuntime.ts:72](https://github.com/wenakita
 
 > **resolvePayoutRouterKeeperAddress**(): `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/payoutRouterRuntime.ts:92](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/payoutRouterRuntime.ts#L92)
+Defined in: [server/\_lib/payoutRouterRuntime.ts:92](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payoutRouterRuntime.ts#L92)
 
 #### Returns
 
@@ -92,7 +92,7 @@ Defined in: [server/\_lib/payoutRouterRuntime.ts:92](https://github.com/wenakita
 
 > **resolvePayoutRouterZoraToken**(`fallback?`): `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/payoutRouterRuntime.ts:79](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/payoutRouterRuntime.ts#L79)
+Defined in: [server/\_lib/payoutRouterRuntime.ts:79](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/payoutRouterRuntime.ts#L79)
 
 #### Parameters
 

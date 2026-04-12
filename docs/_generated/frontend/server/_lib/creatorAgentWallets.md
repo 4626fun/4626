@@ -12,7 +12,7 @@
 
 > **ensureCreatorAgentWalletsSchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/creatorAgentWallets.ts:10](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/creatorAgentWallets.ts#L10)
+Defined in: [server/\_lib/creatorAgentWallets.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorAgentWallets.ts#L10)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [server/\_lib/creatorAgentWallets.ts:10](https://github.com/wenakita
 
 > **getOrCreateCreatorAgentWallet**(`params`): `Promise`\<\{ `address`: `` `0x${string}` ``; `walletId`: `string`; \}\>
 
-Defined in: [server/\_lib/creatorAgentWallets.ts:29](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/creatorAgentWallets.ts#L29)
+Defined in: [server/\_lib/creatorAgentWallets.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorAgentWallets.ts#L29)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **CreativeEnvelope** = [`CreativeSuccessEnvelope`](#creativesuccessenvelope) \| [`CreativeMissingContextEnvelope`](#creativemissingcontextenvelope)
 
-Defined in: [src/lib/agentCreative.ts:67](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L67)
+Defined in: [src/lib/agentCreative.ts:67](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L67)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/agentCreative.ts:67](https://github.com/wenakita/4626/blob/
 
 > **CreativeMissingContextEnvelope** = `object`
 
-Defined in: [src/lib/agentCreative.ts:59](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L59)
+Defined in: [src/lib/agentCreative.ts:59](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L59)
 
 #### Properties
 
@@ -28,31 +28,31 @@ Defined in: [src/lib/agentCreative.ts:59](https://github.com/wenakita/4626/blob/
 
 > **error**: `"missing_required_context"`
 
-Defined in: [src/lib/agentCreative.ts:63](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L63)
+Defined in: [src/lib/agentCreative.ts:63](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L63)
 
 ##### missing
 
 > **missing**: `string`[]
 
-Defined in: [src/lib/agentCreative.ts:64](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L64)
+Defined in: [src/lib/agentCreative.ts:64](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L64)
 
 ##### mode
 
 > **mode**: [`CreativeMode`](#creativemode) \| `"unknown"`
 
-Defined in: [src/lib/agentCreative.ts:61](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L61)
+Defined in: [src/lib/agentCreative.ts:61](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L61)
 
 ##### ok
 
 > **ok**: `false`
 
-Defined in: [src/lib/agentCreative.ts:60](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L60)
+Defined in: [src/lib/agentCreative.ts:60](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L60)
 
 ##### version
 
 > **version**: [`CreativeVersion`](#creativeversion)
 
-Defined in: [src/lib/agentCreative.ts:62](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L62)
+Defined in: [src/lib/agentCreative.ts:62](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L62)
 
 ***
 
@@ -60,7 +60,7 @@ Defined in: [src/lib/agentCreative.ts:62](https://github.com/wenakita/4626/blob/
 
 > **CreativeMode** = `"referral_og"` \| `"share_page_copy"` \| `"quest_reward"` \| `"metadata_bundle"`
 
-Defined in: [src/lib/agentCreative.ts:5](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L5)
+Defined in: [src/lib/agentCreative.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L5)
 
 ***
 
@@ -68,7 +68,7 @@ Defined in: [src/lib/agentCreative.ts:5](https://github.com/wenakita/4626/blob/7
 
 > **CreativeSuccessEnvelope**\<`M`\> = `object`
 
-Defined in: [src/lib/agentCreative.ts:51](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L51)
+Defined in: [src/lib/agentCreative.ts:51](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L51)
 
 #### Type Parameters
 
@@ -82,31 +82,31 @@ Defined in: [src/lib/agentCreative.ts:51](https://github.com/wenakita/4626/blob/
 
 > **mode**: `M`
 
-Defined in: [src/lib/agentCreative.ts:53](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L53)
+Defined in: [src/lib/agentCreative.ts:53](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L53)
 
 ##### ok
 
 > **ok**: `true`
 
-Defined in: [src/lib/agentCreative.ts:52](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L52)
+Defined in: [src/lib/agentCreative.ts:52](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L52)
 
 ##### result
 
 > **result**: `CreativeResultByMode`\[`M`\]
 
-Defined in: [src/lib/agentCreative.ts:56](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L56)
+Defined in: [src/lib/agentCreative.ts:56](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L56)
 
 ##### version
 
 > **version**: [`CreativeVersion`](#creativeversion)
 
-Defined in: [src/lib/agentCreative.ts:54](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L54)
+Defined in: [src/lib/agentCreative.ts:54](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L54)
 
 ##### voice
 
 > **voice**: [`CreativeVoice`](#creativevoice)
 
-Defined in: [src/lib/agentCreative.ts:55](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L55)
+Defined in: [src/lib/agentCreative.ts:55](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L55)
 
 ***
 
@@ -114,7 +114,7 @@ Defined in: [src/lib/agentCreative.ts:55](https://github.com/wenakita/4626/blob/
 
 > **CreativeVersion** = `"v1"`
 
-Defined in: [src/lib/agentCreative.ts:6](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L6)
+Defined in: [src/lib/agentCreative.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L6)
 
 ***
 
@@ -122,7 +122,7 @@ Defined in: [src/lib/agentCreative.ts:6](https://github.com/wenakita/4626/blob/7
 
 > **CreativeVoice** = `"premium_dark_crypto"`
 
-Defined in: [src/lib/agentCreative.ts:7](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L7)
+Defined in: [src/lib/agentCreative.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L7)
 
 ***
 
@@ -130,7 +130,7 @@ Defined in: [src/lib/agentCreative.ts:7](https://github.com/wenakita/4626/blob/7
 
 > **MetadataBundleEnvelope** = [`CreativeSuccessEnvelope`](#creativesuccessenvelope)\<`"metadata_bundle"`\>
 
-Defined in: [src/lib/agentCreative.ts:72](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L72)
+Defined in: [src/lib/agentCreative.ts:72](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L72)
 
 ***
 
@@ -138,7 +138,7 @@ Defined in: [src/lib/agentCreative.ts:72](https://github.com/wenakita/4626/blob/
 
 > **MetadataBundleResult** = `object`
 
-Defined in: [src/lib/agentCreative.ts:31](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L31)
+Defined in: [src/lib/agentCreative.ts:31](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L31)
 
 #### Properties
 
@@ -146,31 +146,31 @@ Defined in: [src/lib/agentCreative.ts:31](https://github.com/wenakita/4626/blob/
 
 > **alt**: `string`
 
-Defined in: [src/lib/agentCreative.ts:35](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L35)
+Defined in: [src/lib/agentCreative.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L35)
 
 ##### asset\_type
 
 > **asset\_type**: `"og"` \| `"share_card"`
 
-Defined in: [src/lib/agentCreative.ts:32](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L32)
+Defined in: [src/lib/agentCreative.ts:32](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L32)
 
 ##### description
 
 > **description**: `string`
 
-Defined in: [src/lib/agentCreative.ts:34](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L34)
+Defined in: [src/lib/agentCreative.ts:34](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L34)
 
 ##### filename\_hint
 
 > **filename\_hint**: `string`
 
-Defined in: [src/lib/agentCreative.ts:37](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L37)
+Defined in: [src/lib/agentCreative.ts:37](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L37)
 
 ##### pinata\_metadata
 
 > **pinata\_metadata**: `object`
 
-Defined in: [src/lib/agentCreative.ts:38](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L38)
+Defined in: [src/lib/agentCreative.ts:38](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L38)
 
 ###### keyvalues
 
@@ -184,13 +184,13 @@ Defined in: [src/lib/agentCreative.ts:38](https://github.com/wenakita/4626/blob/
 
 > **tags**: `string`[]
 
-Defined in: [src/lib/agentCreative.ts:36](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L36)
+Defined in: [src/lib/agentCreative.ts:36](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L36)
 
 ##### title
 
 > **title**: `string`
 
-Defined in: [src/lib/agentCreative.ts:33](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L33)
+Defined in: [src/lib/agentCreative.ts:33](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L33)
 
 ***
 
@@ -198,7 +198,7 @@ Defined in: [src/lib/agentCreative.ts:33](https://github.com/wenakita/4626/blob/
 
 > **QuestRewardEnvelope** = [`CreativeSuccessEnvelope`](#creativesuccessenvelope)\<`"quest_reward"`\>
 
-Defined in: [src/lib/agentCreative.ts:71](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L71)
+Defined in: [src/lib/agentCreative.ts:71](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L71)
 
 ***
 
@@ -206,7 +206,7 @@ Defined in: [src/lib/agentCreative.ts:71](https://github.com/wenakita/4626/blob/
 
 > **QuestRewardResult** = `object`
 
-Defined in: [src/lib/agentCreative.ts:24](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L24)
+Defined in: [src/lib/agentCreative.ts:24](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L24)
 
 #### Properties
 
@@ -214,25 +214,25 @@ Defined in: [src/lib/agentCreative.ts:24](https://github.com/wenakita/4626/blob/
 
 > **next\_step**: `string`
 
-Defined in: [src/lib/agentCreative.ts:28](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L28)
+Defined in: [src/lib/agentCreative.ts:28](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L28)
 
 ##### status
 
 > **status**: `"locked"` \| `"unlocked"` \| `"claimed"`
 
-Defined in: [src/lib/agentCreative.ts:26](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L26)
+Defined in: [src/lib/agentCreative.ts:26](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L26)
 
 ##### tier
 
 > **tier**: `"base"` \| `"supporter"` \| `"boosted"` \| `"premium"`
 
-Defined in: [src/lib/agentCreative.ts:25](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L25)
+Defined in: [src/lib/agentCreative.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L25)
 
 ##### unlock\_message
 
 > **unlock\_message**: `string`
 
-Defined in: [src/lib/agentCreative.ts:27](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L27)
+Defined in: [src/lib/agentCreative.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L27)
 
 ***
 
@@ -240,7 +240,7 @@ Defined in: [src/lib/agentCreative.ts:27](https://github.com/wenakita/4626/blob/
 
 > **ReferralOgEnvelope** = [`CreativeSuccessEnvelope`](#creativesuccessenvelope)\<`"referral_og"`\>
 
-Defined in: [src/lib/agentCreative.ts:69](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L69)
+Defined in: [src/lib/agentCreative.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L69)
 
 ***
 
@@ -248,7 +248,7 @@ Defined in: [src/lib/agentCreative.ts:69](https://github.com/wenakita/4626/blob/
 
 > **ReferralOgResult** = `object`
 
-Defined in: [src/lib/agentCreative.ts:9](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L9)
+Defined in: [src/lib/agentCreative.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L9)
 
 #### Properties
 
@@ -256,31 +256,31 @@ Defined in: [src/lib/agentCreative.ts:9](https://github.com/wenakita/4626/blob/7
 
 > **cta**: `string`
 
-Defined in: [src/lib/agentCreative.ts:12](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L12)
+Defined in: [src/lib/agentCreative.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L12)
 
 ##### headline
 
 > **headline**: `string`
 
-Defined in: [src/lib/agentCreative.ts:10](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L10)
+Defined in: [src/lib/agentCreative.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L10)
 
 ##### keywords
 
 > **keywords**: `string`[]
 
-Defined in: [src/lib/agentCreative.ts:14](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L14)
+Defined in: [src/lib/agentCreative.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L14)
 
 ##### subheadline
 
 > **subheadline**: `string`
 
-Defined in: [src/lib/agentCreative.ts:11](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L11)
+Defined in: [src/lib/agentCreative.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L11)
 
 ##### visual\_direction
 
 > **visual\_direction**: `string`[]
 
-Defined in: [src/lib/agentCreative.ts:13](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L13)
+Defined in: [src/lib/agentCreative.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L13)
 
 ***
 
@@ -288,7 +288,7 @@ Defined in: [src/lib/agentCreative.ts:13](https://github.com/wenakita/4626/blob/
 
 > **SharePageCopyEnvelope** = [`CreativeSuccessEnvelope`](#creativesuccessenvelope)\<`"share_page_copy"`\>
 
-Defined in: [src/lib/agentCreative.ts:70](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L70)
+Defined in: [src/lib/agentCreative.ts:70](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L70)
 
 ***
 
@@ -296,7 +296,7 @@ Defined in: [src/lib/agentCreative.ts:70](https://github.com/wenakita/4626/blob/
 
 > **SharePageCopyResult** = `object`
 
-Defined in: [src/lib/agentCreative.ts:17](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L17)
+Defined in: [src/lib/agentCreative.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L17)
 
 #### Properties
 
@@ -304,25 +304,25 @@ Defined in: [src/lib/agentCreative.ts:17](https://github.com/wenakita/4626/blob/
 
 > **body\_short**: `string`
 
-Defined in: [src/lib/agentCreative.ts:20](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L20)
+Defined in: [src/lib/agentCreative.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L20)
 
 ##### cta
 
 > **cta**: `string`
 
-Defined in: [src/lib/agentCreative.ts:21](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L21)
+Defined in: [src/lib/agentCreative.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L21)
 
 ##### subtitle
 
 > **subtitle**: `string`
 
-Defined in: [src/lib/agentCreative.ts:19](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L19)
+Defined in: [src/lib/agentCreative.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L19)
 
 ##### title
 
 > **title**: `string`
 
-Defined in: [src/lib/agentCreative.ts:18](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L18)
+Defined in: [src/lib/agentCreative.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L18)
 
 ## Functions
 
@@ -330,7 +330,7 @@ Defined in: [src/lib/agentCreative.ts:18](https://github.com/wenakita/4626/blob/
 
 > **generateAgentCreative**(`params`): `Promise`\<[`CreativeEnvelope`](#creativeenvelope)\>
 
-Defined in: [src/lib/agentCreative.ts:221](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L221)
+Defined in: [src/lib/agentCreative.ts:221](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L221)
 
 #### Parameters
 
@@ -354,7 +354,7 @@ Defined in: [src/lib/agentCreative.ts:221](https://github.com/wenakita/4626/blob
 
 > **isReferralOgEnvelope**(`envelope`): `envelope is ReferralOgEnvelope`
 
-Defined in: [src/lib/agentCreative.ts:241](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/agentCreative.ts#L241)
+Defined in: [src/lib/agentCreative.ts:241](https://github.com/wenakita/4626/blob/main/frontend/src/lib/agentCreative.ts#L241)
 
 #### Parameters
 

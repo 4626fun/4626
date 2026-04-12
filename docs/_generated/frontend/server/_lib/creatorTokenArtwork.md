@@ -12,7 +12,7 @@
 
 > **CreatorTokenArtwork** = `object`
 
-Defined in: [server/\_lib/creatorTokenArtwork.ts:1](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/creatorTokenArtwork.ts#L1)
+Defined in: [server/\_lib/creatorTokenArtwork.ts:1](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorTokenArtwork.ts#L1)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [server/\_lib/creatorTokenArtwork.ts:1](https://github.com/wenakita/
 
 > **artworkUrl**: `string`
 
-Defined in: [server/\_lib/creatorTokenArtwork.ts:2](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/creatorTokenArtwork.ts#L2)
+Defined in: [server/\_lib/creatorTokenArtwork.ts:2](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorTokenArtwork.ts#L2)
 
 ##### heroCutoutArtworkUrl?
 
 > `optional` **heroCutoutArtworkUrl**: `string`
 
-Defined in: [server/\_lib/creatorTokenArtwork.ts:3](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/creatorTokenArtwork.ts#L3)
+Defined in: [server/\_lib/creatorTokenArtwork.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorTokenArtwork.ts#L3)
 
 ## Functions
 
@@ -34,7 +34,7 @@ Defined in: [server/\_lib/creatorTokenArtwork.ts:3](https://github.com/wenakita/
 
 > **resolveCreatorTokenArtwork**(`coinData`): [`CreatorTokenArtwork`](#creatortokenartwork) \| `null`
 
-Defined in: [server/\_lib/creatorTokenArtwork.ts:60](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/creatorTokenArtwork.ts#L60)
+Defined in: [server/\_lib/creatorTokenArtwork.ts:60](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorTokenArtwork.ts#L60)
 
 #### Parameters
 

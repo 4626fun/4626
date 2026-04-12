@@ -10,7 +10,7 @@
 
 ### WelcomeConversationTracker
 
-Defined in: [server/agent/eliza/\_runtimePolicy.ts:40](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/_runtimePolicy.ts#L40)
+Defined in: [server/agent/eliza/\_runtimePolicy.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_runtimePolicy.ts#L40)
 
 #### Constructors
 
@@ -18,7 +18,7 @@ Defined in: [server/agent/eliza/\_runtimePolicy.ts:40](https://github.com/wenaki
 
 > **new WelcomeConversationTracker**(`input?`): [`WelcomeConversationTracker`](#welcomeconversationtracker)
 
-Defined in: [server/agent/eliza/\_runtimePolicy.ts:45](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/_runtimePolicy.ts#L45)
+Defined in: [server/agent/eliza/\_runtimePolicy.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_runtimePolicy.ts#L45)
 
 ###### Parameters
 
@@ -42,7 +42,7 @@ Defined in: [server/agent/eliza/\_runtimePolicy.ts:45](https://github.com/wenaki
 
 > **getDebugState**(): `object`
 
-Defined in: [server/agent/eliza/\_runtimePolicy.ts:76](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/_runtimePolicy.ts#L76)
+Defined in: [server/agent/eliza/\_runtimePolicy.ts:76](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_runtimePolicy.ts#L76)
 
 ###### Returns
 
@@ -60,7 +60,7 @@ Defined in: [server/agent/eliza/\_runtimePolicy.ts:76](https://github.com/wenaki
 
 > **has**(`conversationId`, `now`): `boolean`
 
-Defined in: [server/agent/eliza/\_runtimePolicy.ts:71](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/_runtimePolicy.ts#L71)
+Defined in: [server/agent/eliza/\_runtimePolicy.ts:71](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_runtimePolicy.ts#L71)
 
 ###### Parameters
 
@@ -80,7 +80,7 @@ Defined in: [server/agent/eliza/\_runtimePolicy.ts:71](https://github.com/wenaki
 
 > **markAndCheckFirstSeen**(`conversationId`, `now`): `boolean`
 
-Defined in: [server/agent/eliza/\_runtimePolicy.ts:62](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/_runtimePolicy.ts#L62)
+Defined in: [server/agent/eliza/\_runtimePolicy.ts:62](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_runtimePolicy.ts#L62)
 
 ###### Parameters
 
@@ -100,7 +100,7 @@ Defined in: [server/agent/eliza/\_runtimePolicy.ts:62](https://github.com/wenaki
 
 > **prune**(`now`): `void`
 
-Defined in: [server/agent/eliza/\_runtimePolicy.ts:50](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/_runtimePolicy.ts#L50)
+Defined in: [server/agent/eliza/\_runtimePolicy.ts:50](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_runtimePolicy.ts#L50)
 
 ###### Parameters
 
@@ -118,7 +118,7 @@ Defined in: [server/agent/eliza/\_runtimePolicy.ts:50](https://github.com/wenaki
 
 > **AgentConfigFingerprintInput** = `object`
 
-Defined in: [server/agent/eliza/\_runtimePolicy.ts:15](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/_runtimePolicy.ts#L15)
+Defined in: [server/agent/eliza/\_runtimePolicy.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_runtimePolicy.ts#L15)
 
 #### Properties
 
@@ -126,49 +126,49 @@ Defined in: [server/agent/eliza/\_runtimePolicy.ts:15](https://github.com/wenaki
 
 > **agentType**: `"eoa"` \| `"csw"`
 
-Defined in: [server/agent/eliza/\_runtimePolicy.ts:18](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/_runtimePolicy.ts#L18)
+Defined in: [server/agent/eliza/\_runtimePolicy.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_runtimePolicy.ts#L18)
 
 ##### creatorAddress
 
 > **creatorAddress**: `string`
 
-Defined in: [server/agent/eliza/\_runtimePolicy.ts:16](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/_runtimePolicy.ts#L16)
+Defined in: [server/agent/eliza/\_runtimePolicy.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_runtimePolicy.ts#L16)
 
 ##### cswAddress
 
 > **cswAddress**: `string` \| `null`
 
-Defined in: [server/agent/eliza/\_runtimePolicy.ts:20](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/_runtimePolicy.ts#L20)
+Defined in: [server/agent/eliza/\_runtimePolicy.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_runtimePolicy.ts#L20)
 
 ##### encryptedPrivateKeyB64
 
 > **encryptedPrivateKeyB64**: `string`
 
-Defined in: [server/agent/eliza/\_runtimePolicy.ts:21](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/_runtimePolicy.ts#L21)
+Defined in: [server/agent/eliza/\_runtimePolicy.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_runtimePolicy.ts#L21)
 
 ##### encryptedPrivateKeyIvB64
 
 > **encryptedPrivateKeyIvB64**: `string`
 
-Defined in: [server/agent/eliza/\_runtimePolicy.ts:22](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/_runtimePolicy.ts#L22)
+Defined in: [server/agent/eliza/\_runtimePolicy.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_runtimePolicy.ts#L22)
 
 ##### encryptedPrivateKeyTagB64
 
 > **encryptedPrivateKeyTagB64**: `string`
 
-Defined in: [server/agent/eliza/\_runtimePolicy.ts:23](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/_runtimePolicy.ts#L23)
+Defined in: [server/agent/eliza/\_runtimePolicy.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_runtimePolicy.ts#L23)
 
 ##### privyWalletId
 
 > **privyWalletId**: `string` \| `null`
 
-Defined in: [server/agent/eliza/\_runtimePolicy.ts:19](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/_runtimePolicy.ts#L19)
+Defined in: [server/agent/eliza/\_runtimePolicy.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_runtimePolicy.ts#L19)
 
 ##### xmtpAgentAddress
 
 > **xmtpAgentAddress**: `string`
 
-Defined in: [server/agent/eliza/\_runtimePolicy.ts:17](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/_runtimePolicy.ts#L17)
+Defined in: [server/agent/eliza/\_runtimePolicy.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_runtimePolicy.ts#L17)
 
 ## Functions
 
@@ -176,7 +176,7 @@ Defined in: [server/agent/eliza/\_runtimePolicy.ts:17](https://github.com/wenaki
 
 > **fingerprintAgentConfig**(`input`): `string`
 
-Defined in: [server/agent/eliza/\_runtimePolicy.ts:26](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/_runtimePolicy.ts#L26)
+Defined in: [server/agent/eliza/\_runtimePolicy.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_runtimePolicy.ts#L26)
 
 #### Parameters
 
@@ -194,7 +194,7 @@ Defined in: [server/agent/eliza/\_runtimePolicy.ts:26](https://github.com/wenaki
 
 > **getActionRetryBudget**(`actionName`, `defaultRetries`): `number`
 
-Defined in: [server/agent/eliza/\_runtimePolicy.ts:10](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/_runtimePolicy.ts#L10)
+Defined in: [server/agent/eliza/\_runtimePolicy.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_runtimePolicy.ts#L10)
 
 #### Parameters
 

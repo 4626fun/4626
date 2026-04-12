@@ -12,7 +12,7 @@
 
 > **Skeleton**(`__namedParameters`): `Element`
 
-Defined in: [src/components/ui/Skeleton.tsx:11](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/components/ui/Skeleton.tsx#L11)
+Defined in: [src/components/ui/Skeleton.tsx:11](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Skeleton.tsx#L11)
 
 Shimmer skeleton block. Respects `prefers-reduced-motion`.
 Use to replace content during loading to prevent layout shift.
@@ -33,7 +33,7 @@ Use to replace content during loading to prevent layout shift.
 
 > **SkeletonRows**(`__namedParameters`): `Element`
 
-Defined in: [src/components/ui/Skeleton.tsx:41](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/components/ui/Skeleton.tsx#L41)
+Defined in: [src/components/ui/Skeleton.tsx:41](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Skeleton.tsx#L41)
 
 Stack of skeleton rows for list/table loading states
 
@@ -59,7 +59,7 @@ Stack of skeleton rows for list/table loading states
 
 > **SkeletonText**(`__namedParameters`): `Element`
 
-Defined in: [src/components/ui/Skeleton.tsx:27](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/components/ui/Skeleton.tsx#L27)
+Defined in: [src/components/ui/Skeleton.tsx:27](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Skeleton.tsx#L27)
 
 Multi-line text skeleton — alias kept for backward compatibility
 

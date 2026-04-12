@@ -12,7 +12,7 @@
 
 > **CoinManage**(): `Element`
 
-Defined in: [src/pages/CoinManage.tsx:28](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/pages/CoinManage.tsx#L28)
+Defined in: [src/pages/CoinManage.tsx:28](https://github.com/wenakita/4626/blob/main/frontend/src/pages/CoinManage.tsx#L28)
 
 #### Returns
 

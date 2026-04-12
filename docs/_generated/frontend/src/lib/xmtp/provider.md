@@ -12,7 +12,7 @@
 
 > **ChatConversation** = `object`
 
-Defined in: [src/lib/xmtp/provider.tsx:55](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L55)
+Defined in: [src/lib/xmtp/provider.tsx:55](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L55)
 
 #### Properties
 
@@ -20,55 +20,55 @@ Defined in: [src/lib/xmtp/provider.tsx:55](https://github.com/wenakita/4626/blob
 
 > **id**: `string`
 
-Defined in: [src/lib/xmtp/provider.tsx:56](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L56)
+Defined in: [src/lib/xmtp/provider.tsx:56](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L56)
 
 ##### imageUrl?
 
 > `optional` **imageUrl**: `string`
 
-Defined in: [src/lib/xmtp/provider.tsx:59](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L59)
+Defined in: [src/lib/xmtp/provider.tsx:59](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L59)
 
 ##### lastMessageAt?
 
 > `optional` **lastMessageAt**: `Date`
 
-Defined in: [src/lib/xmtp/provider.tsx:63](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L63)
+Defined in: [src/lib/xmtp/provider.tsx:63](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L63)
 
 ##### lastMessageText?
 
 > `optional` **lastMessageText**: `string`
 
-Defined in: [src/lib/xmtp/provider.tsx:62](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L62)
+Defined in: [src/lib/xmtp/provider.tsx:62](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L62)
 
 ##### name
 
 > **name**: `string`
 
-Defined in: [src/lib/xmtp/provider.tsx:58](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L58)
+Defined in: [src/lib/xmtp/provider.tsx:58](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L58)
 
 ##### peerAddress?
 
 > `optional` **peerAddress**: `string`
 
-Defined in: [src/lib/xmtp/provider.tsx:61](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L61)
+Defined in: [src/lib/xmtp/provider.tsx:61](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L61)
 
 ##### peerInboxId?
 
 > `optional` **peerInboxId**: `string`
 
-Defined in: [src/lib/xmtp/provider.tsx:60](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L60)
+Defined in: [src/lib/xmtp/provider.tsx:60](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L60)
 
 ##### type
 
 > **type**: `"dm"` \| `"group"`
 
-Defined in: [src/lib/xmtp/provider.tsx:57](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L57)
+Defined in: [src/lib/xmtp/provider.tsx:57](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L57)
 
 ##### unreadCount
 
 > **unreadCount**: `number`
 
-Defined in: [src/lib/xmtp/provider.tsx:64](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L64)
+Defined in: [src/lib/xmtp/provider.tsx:64](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L64)
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [src/lib/xmtp/provider.tsx:64](https://github.com/wenakita/4626/blob
 
 > **ChatMessage** = `object`
 
-Defined in: [src/lib/xmtp/provider.tsx:67](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L67)
+Defined in: [src/lib/xmtp/provider.tsx:67](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L67)
 
 #### Properties
 
@@ -84,67 +84,67 @@ Defined in: [src/lib/xmtp/provider.tsx:67](https://github.com/wenakita/4626/blob
 
 > **content**: `string`
 
-Defined in: [src/lib/xmtp/provider.tsx:71](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L71)
+Defined in: [src/lib/xmtp/provider.tsx:71](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L71)
 
 ##### contentType
 
 > **contentType**: [`ChatMessageContentType`](#chatmessagecontenttype-1)
 
-Defined in: [src/lib/xmtp/provider.tsx:72](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L72)
+Defined in: [src/lib/xmtp/provider.tsx:72](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L72)
 
 ##### conversationId
 
 > **conversationId**: `string`
 
-Defined in: [src/lib/xmtp/provider.tsx:69](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L69)
+Defined in: [src/lib/xmtp/provider.tsx:69](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L69)
 
 ##### error
 
 > **error**: `string` \| `null`
 
-Defined in: [src/lib/xmtp/provider.tsx:76](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L76)
+Defined in: [src/lib/xmtp/provider.tsx:76](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L76)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [src/lib/xmtp/provider.tsx:68](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L68)
+Defined in: [src/lib/xmtp/provider.tsx:68](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L68)
 
 ##### isSelf
 
 > **isSelf**: `boolean`
 
-Defined in: [src/lib/xmtp/provider.tsx:78](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L78)
+Defined in: [src/lib/xmtp/provider.tsx:78](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L78)
 
 ##### replyToId?
 
 > `optional` **replyToId**: `string` \| `null`
 
-Defined in: [src/lib/xmtp/provider.tsx:74](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L74)
+Defined in: [src/lib/xmtp/provider.tsx:74](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L74)
 
 ##### richPreview?
 
 > `optional` **richPreview**: `string`
 
-Defined in: [src/lib/xmtp/provider.tsx:73](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L73)
+Defined in: [src/lib/xmtp/provider.tsx:73](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L73)
 
 ##### senderInboxId
 
 > **senderInboxId**: `string`
 
-Defined in: [src/lib/xmtp/provider.tsx:70](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L70)
+Defined in: [src/lib/xmtp/provider.tsx:70](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L70)
 
 ##### sentAt
 
 > **sentAt**: `Date`
 
-Defined in: [src/lib/xmtp/provider.tsx:77](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L77)
+Defined in: [src/lib/xmtp/provider.tsx:77](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L77)
 
 ##### status
 
 > **status**: [`ChatMessageStatus`](#chatmessagestatus-1)
 
-Defined in: [src/lib/xmtp/provider.tsx:75](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L75)
+Defined in: [src/lib/xmtp/provider.tsx:75](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L75)
 
 ***
 
@@ -152,7 +152,7 @@ Defined in: [src/lib/xmtp/provider.tsx:75](https://github.com/wenakita/4626/blob
 
 > **ChatMessageContentType** = `"text"` \| `"json"` \| `"code"`
 
-Defined in: [src/lib/xmtp/provider.tsx:53](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L53)
+Defined in: [src/lib/xmtp/provider.tsx:53](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L53)
 
 ***
 
@@ -160,7 +160,7 @@ Defined in: [src/lib/xmtp/provider.tsx:53](https://github.com/wenakita/4626/blob
 
 > **ChatMessageStatus** = `"sending"` \| `"sent"` \| `"failed"`
 
-Defined in: [src/lib/xmtp/provider.tsx:52](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L52)
+Defined in: [src/lib/xmtp/provider.tsx:52](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L52)
 
 ***
 
@@ -168,7 +168,7 @@ Defined in: [src/lib/xmtp/provider.tsx:52](https://github.com/wenakita/4626/blob
 
 > **SendChatMessageOptions** = `object`
 
-Defined in: [src/lib/xmtp/provider.tsx:81](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L81)
+Defined in: [src/lib/xmtp/provider.tsx:81](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L81)
 
 #### Properties
 
@@ -176,7 +176,7 @@ Defined in: [src/lib/xmtp/provider.tsx:81](https://github.com/wenakita/4626/blob
 
 > `optional` **replyToId**: `string` \| `null`
 
-Defined in: [src/lib/xmtp/provider.tsx:82](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L82)
+Defined in: [src/lib/xmtp/provider.tsx:82](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L82)
 
 ***
 
@@ -184,7 +184,7 @@ Defined in: [src/lib/xmtp/provider.tsx:82](https://github.com/wenakita/4626/blob
 
 > **StartDmFailureReason** = `"not_connected"` \| `"self_recipient"` \| `"recipient_not_registered"` \| `"canonical_recipient_not_registered"` \| `"environment_mismatch"` \| `"create_failed"`
 
-Defined in: [src/lib/xmtp/provider.tsx:92](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L92)
+Defined in: [src/lib/xmtp/provider.tsx:92](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L92)
 
 ***
 
@@ -192,7 +192,7 @@ Defined in: [src/lib/xmtp/provider.tsx:92](https://github.com/wenakita/4626/blob
 
 > **StartDmOptions** = `object`
 
-Defined in: [src/lib/xmtp/provider.tsx:85](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L85)
+Defined in: [src/lib/xmtp/provider.tsx:85](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L85)
 
 #### Properties
 
@@ -200,13 +200,13 @@ Defined in: [src/lib/xmtp/provider.tsx:85](https://github.com/wenakita/4626/blob
 
 > `optional` **imageUrl**: `string` \| `null`
 
-Defined in: [src/lib/xmtp/provider.tsx:87](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L87)
+Defined in: [src/lib/xmtp/provider.tsx:87](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L87)
 
 ##### inputAddress?
 
 > `optional` **inputAddress**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/xmtp/provider.tsx:89](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L89)
+Defined in: [src/lib/xmtp/provider.tsx:89](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L89)
 
 Address resolved from user input before canonical remapping.
 
@@ -214,7 +214,7 @@ Address resolved from user input before canonical remapping.
 
 > `optional` **nameHint**: `string` \| `null`
 
-Defined in: [src/lib/xmtp/provider.tsx:86](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L86)
+Defined in: [src/lib/xmtp/provider.tsx:86](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L86)
 
 ***
 
@@ -222,7 +222,7 @@ Defined in: [src/lib/xmtp/provider.tsx:86](https://github.com/wenakita/4626/blob
 
 > **StartDmResult** = \{ `conversationId`: `string`; `ok`: `true`; \} \| \{ `message`: `string`; `ok`: `false`; `reason`: [`StartDmFailureReason`](#startdmfailurereason); \}
 
-Defined in: [src/lib/xmtp/provider.tsx:100](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L100)
+Defined in: [src/lib/xmtp/provider.tsx:100](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L100)
 
 ***
 
@@ -230,7 +230,7 @@ Defined in: [src/lib/xmtp/provider.tsx:100](https://github.com/wenakita/4626/blo
 
 > **XmtpStatus** = `"idle"` \| `"signing"` \| `"connecting"` \| `"connected"` \| `"error"`
 
-Defined in: [src/lib/xmtp/provider.tsx:50](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L50)
+Defined in: [src/lib/xmtp/provider.tsx:50](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L50)
 
 ## Functions
 
@@ -238,7 +238,7 @@ Defined in: [src/lib/xmtp/provider.tsx:50](https://github.com/wenakita/4626/blob
 
 > **readStoredEncKeyHex**(`address`): `string` \| `null`
 
-Defined in: [src/lib/xmtp/provider.tsx:320](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L320)
+Defined in: [src/lib/xmtp/provider.tsx:320](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L320)
 
 #### Parameters
 
@@ -256,7 +256,7 @@ Defined in: [src/lib/xmtp/provider.tsx:320](https://github.com/wenakita/4626/blo
 
 > **requestXmtpAutoConnect**(): `void`
 
-Defined in: [src/lib/xmtp/provider.tsx:370](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L370)
+Defined in: [src/lib/xmtp/provider.tsx:370](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L370)
 
 Signal the XMTP provider to auto-connect after auth completes.
 Dispatches a custom event that the provider listens for.
@@ -271,7 +271,7 @@ Dispatches a custom event that the provider listens for.
 
 > **setAutoConnectEnabled**(`address`): `void`
 
-Defined in: [src/lib/xmtp/provider.tsx:357](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L357)
+Defined in: [src/lib/xmtp/provider.tsx:357](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L357)
 
 #### Parameters
 
@@ -289,7 +289,7 @@ Defined in: [src/lib/xmtp/provider.tsx:357](https://github.com/wenakita/4626/blo
 
 > **useXmtp**(): `XmtpContextValue`
 
-Defined in: [src/lib/xmtp/provider.tsx:270](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L270)
+Defined in: [src/lib/xmtp/provider.tsx:270](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L270)
 
 #### Returns
 
@@ -301,7 +301,7 @@ Defined in: [src/lib/xmtp/provider.tsx:270](https://github.com/wenakita/4626/blo
 
 > **writeStoredEncKeyHex**(`address`, `encKeyHex`): `void`
 
-Defined in: [src/lib/xmtp/provider.tsx:326](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L326)
+Defined in: [src/lib/xmtp/provider.tsx:326](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L326)
 
 #### Parameters
 
@@ -323,7 +323,7 @@ Defined in: [src/lib/xmtp/provider.tsx:326](https://github.com/wenakita/4626/blo
 
 > **XmtpChatProvider**(`__namedParameters`): `Element`
 
-Defined in: [src/lib/xmtp/provider.tsx:848](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/xmtp/provider.tsx#L848)
+Defined in: [src/lib/xmtp/provider.tsx:848](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/provider.tsx#L848)
 
 #### Parameters
 

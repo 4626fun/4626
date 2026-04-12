@@ -12,7 +12,7 @@
 
 > **CreatorRegistryBindingInput** = `object`
 
-Defined in: [server/\_lib/creatorRegistryVerification.ts:41](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/creatorRegistryVerification.ts#L41)
+Defined in: [server/\_lib/creatorRegistryVerification.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorRegistryVerification.ts#L41)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [server/\_lib/creatorRegistryVerification.ts:41](https://github.com/
 
 > **creatorCoinAddress**: `string`
 
-Defined in: [server/\_lib/creatorRegistryVerification.ts:42](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/creatorRegistryVerification.ts#L42)
+Defined in: [server/\_lib/creatorRegistryVerification.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorRegistryVerification.ts#L42)
 
 ##### shareTokenAddress?
 
 > `optional` **shareTokenAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/creatorRegistryVerification.ts:44](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/creatorRegistryVerification.ts#L44)
+Defined in: [server/\_lib/creatorRegistryVerification.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorRegistryVerification.ts#L44)
 
 ##### vaultAddress
 
 > **vaultAddress**: `string`
 
-Defined in: [server/\_lib/creatorRegistryVerification.ts:43](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/creatorRegistryVerification.ts#L43)
+Defined in: [server/\_lib/creatorRegistryVerification.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorRegistryVerification.ts#L43)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [server/\_lib/creatorRegistryVerification.ts:43](https://github.com/
 
 > **CreatorRegistryValidationResult** = \{ `ok`: `true`; \} \| \{ `ok`: `false`; `reason`: `CreatorRegistryValidationReason`; \}
 
-Defined in: [server/\_lib/creatorRegistryVerification.ts:37](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/creatorRegistryVerification.ts#L37)
+Defined in: [server/\_lib/creatorRegistryVerification.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorRegistryVerification.ts#L37)
 
 ## Functions
 
@@ -48,7 +48,7 @@ Defined in: [server/\_lib/creatorRegistryVerification.ts:37](https://github.com/
 
 > **validateCreatorRegistryBinding**(`input`): `Promise`\<[`CreatorRegistryValidationResult`](#creatorregistryvalidationresult)\>
 
-Defined in: [server/\_lib/creatorRegistryVerification.ts:76](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/creatorRegistryVerification.ts#L76)
+Defined in: [server/\_lib/creatorRegistryVerification.ts:76](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/creatorRegistryVerification.ts#L76)
 
 #### Parameters
 

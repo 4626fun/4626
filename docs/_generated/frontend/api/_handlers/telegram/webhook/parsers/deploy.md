@@ -12,7 +12,7 @@
 
 > **defaultDeployCurrency**(`coinType`): [`DeployCurrencyInput`](../types.md#deploycurrencyinput)
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/deploy.ts:16](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/telegram/webhook/parsers/deploy.ts#L16)
+Defined in: [api/\_handlers/telegram/webhook/parsers/deploy.ts:16](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/deploy.ts#L16)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [api/\_handlers/telegram/webhook/parsers/deploy.ts:16](https://githu
 
 > **formatDeployUsageText**(`reason?`): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/deploy.ts:21](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/telegram/webhook/parsers/deploy.ts#L21)
+Defined in: [api/\_handlers/telegram/webhook/parsers/deploy.ts:21](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/deploy.ts#L21)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [api/\_handlers/telegram/webhook/parsers/deploy.ts:21](https://githu
 
 > **isDeployCurrencyInput**(`raw`): `raw is DeployCurrencyInput`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/deploy.ts:5](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/telegram/webhook/parsers/deploy.ts#L5)
+Defined in: [api/\_handlers/telegram/webhook/parsers/deploy.ts:5](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/deploy.ts#L5)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [api/\_handlers/telegram/webhook/parsers/deploy.ts:5](https://github
 
 > **mapDeployCurrencyToCommandCurrency**(`input`): [`CommandCoinCurrency`](../types.md#commandcoincurrency)
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/deploy.ts:10](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/telegram/webhook/parsers/deploy.ts#L10)
+Defined in: [api/\_handlers/telegram/webhook/parsers/deploy.ts:10](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/deploy.ts#L10)
 
 #### Parameters
 
@@ -84,7 +84,7 @@ Defined in: [api/\_handlers/telegram/webhook/parsers/deploy.ts:10](https://githu
 
 > **parseDeployCallbackData**(`rawData`): \{ `deployType`: `"zora"` \| [`DeployWizardType`](../types.md#deploywizardtype); `kind`: `"type"`; \} \| \{ `kind`: `"confirm"` \| `"decline"`; `token`: `string`; \} \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/deploy.ts:106](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/telegram/webhook/parsers/deploy.ts#L106)
+Defined in: [api/\_handlers/telegram/webhook/parsers/deploy.ts:106](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/deploy.ts#L106)
 
 #### Parameters
 
@@ -102,7 +102,7 @@ Defined in: [api/\_handlers/telegram/webhook/parsers/deploy.ts:106](https://gith
 
 > **parseTelegramDeployIntent**(`rawText`): [`ParsedTelegramDeployIntent`](../types.md#parsedtelegramdeployintent) \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/deploy.ts:40](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/telegram/webhook/parsers/deploy.ts#L40)
+Defined in: [api/\_handlers/telegram/webhook/parsers/deploy.ts:40](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/deploy.ts#L40)
 
 #### Parameters
 

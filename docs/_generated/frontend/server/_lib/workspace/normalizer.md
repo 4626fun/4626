@@ -12,7 +12,7 @@
 
 > **normalizeKeeprActionStatusForWorkspace**(`params`): `Promise`\<\{ `created`: `boolean`; `vaultAddress?`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/workspace/normalizer.ts:221](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/workspace/normalizer.ts#L221)
+Defined in: [server/\_lib/workspace/normalizer.ts:221](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/normalizer.ts#L221)
 
 #### Parameters
 
@@ -40,7 +40,7 @@ Defined in: [server/\_lib/workspace/normalizer.ts:221](https://github.com/wenaki
 
 > **normalizeRuntimeDecisionForWorkspace**(`params`): `Promise`\<\{ `approvalId?`: `number`; `created`: `boolean`; `taskId?`: `number`; `vaultAddress?`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/workspace/normalizer.ts:124](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/workspace/normalizer.ts#L124)
+Defined in: [server/\_lib/workspace/normalizer.ts:124](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/normalizer.ts#L124)
 
 #### Parameters
 
@@ -68,7 +68,7 @@ Defined in: [server/\_lib/workspace/normalizer.ts:124](https://github.com/wenaki
 
 > **normalizeRuntimeRecordForWorkspace**(`params`): `Promise`\<\{ `alertId?`: `number`; `created`: `boolean`; `taskId?`: `number`; `vaultAddress?`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/workspace/normalizer.ts:48](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/workspace/normalizer.ts#L48)
+Defined in: [server/\_lib/workspace/normalizer.ts:48](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/normalizer.ts#L48)
 
 #### Parameters
 

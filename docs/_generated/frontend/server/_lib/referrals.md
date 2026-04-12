@@ -12,7 +12,7 @@
 
 > **dedupeReferralCodeCandidates**(`values`): `string`[]
 
-Defined in: [server/\_lib/referrals.ts:29](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/referrals.ts#L29)
+Defined in: [server/\_lib/referrals.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/referrals.ts#L29)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [server/\_lib/referrals.ts:29](https://github.com/wenakita/4626/blob
 
 > **ensureReferralsSchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/referrals.ts:68](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/referrals.ts#L68)
+Defined in: [server/\_lib/referrals.ts:68](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/referrals.ts#L68)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [server/\_lib/referrals.ts:68](https://github.com/wenakita/4626/blob
 
 > **getClientIp**(`req`): `string`
 
-Defined in: [server/\_lib/referrals.ts:41](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/referrals.ts#L41)
+Defined in: [server/\_lib/referrals.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/referrals.ts#L41)
 
 #### Parameters
 
@@ -68,7 +68,7 @@ Defined in: [server/\_lib/referrals.ts:41](https://github.com/wenakita/4626/blob
 
 > **getUserAgent**(`req`): `string`
 
-Defined in: [server/\_lib/referrals.ts:55](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/referrals.ts#L55)
+Defined in: [server/\_lib/referrals.ts:55](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/referrals.ts#L55)
 
 #### Parameters
 
@@ -88,7 +88,7 @@ Defined in: [server/\_lib/referrals.ts:55](https://github.com/wenakita/4626/blob
 
 > **hashForAttribution**(`value`): `string` \| `null`
 
-Defined in: [server/\_lib/referrals.ts:60](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/referrals.ts#L60)
+Defined in: [server/\_lib/referrals.ts:60](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/referrals.ts#L60)
 
 #### Parameters
 
@@ -106,7 +106,7 @@ Defined in: [server/\_lib/referrals.ts:60](https://github.com/wenakita/4626/blob
 
 > **normalizeReferralCode**(`input`): `string`
 
-Defined in: [server/\_lib/referrals.ts:10](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/referrals.ts#L10)
+Defined in: [server/\_lib/referrals.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/referrals.ts#L10)
 
 #### Parameters
 
@@ -124,7 +124,7 @@ Defined in: [server/\_lib/referrals.ts:10](https://github.com/wenakita/4626/blob
 
 > **referralCodeFromEmail**(`email`): `string` \| `null`
 
-Defined in: [server/\_lib/referrals.ts:21](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/referrals.ts#L21)
+Defined in: [server/\_lib/referrals.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/referrals.ts#L21)
 
 #### Parameters
 

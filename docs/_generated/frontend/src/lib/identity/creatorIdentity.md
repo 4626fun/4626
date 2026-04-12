@@ -12,7 +12,7 @@
 
 > **CreatorIdentityResolution** = `object`
 
-Defined in: [src/lib/identity/creatorIdentity.ts:14](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/identity/creatorIdentity.ts#L14)
+Defined in: [src/lib/identity/creatorIdentity.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/lib/identity/creatorIdentity.ts#L14)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/identity/creatorIdentity.ts:14](https://github.com/wenakita
 
 > **blockingReason**: `string` \| `null`
 
-Defined in: [src/lib/identity/creatorIdentity.ts:27](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/identity/creatorIdentity.ts#L27)
+Defined in: [src/lib/identity/creatorIdentity.ts:27](https://github.com/wenakita/4626/blob/main/frontend/src/lib/identity/creatorIdentity.ts#L27)
 
 Block irreversible actions when true; caller should present UI guidance.
 
@@ -28,7 +28,7 @@ Block irreversible actions when true; caller should present UI guidance.
 
 > **canonicalIdentity**: `object`
 
-Defined in: [src/lib/identity/creatorIdentity.ts:16](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/identity/creatorIdentity.ts#L16)
+Defined in: [src/lib/identity/creatorIdentity.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/lib/identity/creatorIdentity.ts#L16)
 
 Canonical creator identity wallet (the identity that must not fragment).
 
@@ -44,7 +44,7 @@ Canonical creator identity wallet (the identity that must not fragment).
 
 > **execution**: `object`
 
-Defined in: [src/lib/identity/creatorIdentity.ts:21](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/identity/creatorIdentity.ts#L21)
+Defined in: [src/lib/identity/creatorIdentity.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/lib/identity/creatorIdentity.ts#L21)
 
 Currently connected wallet/account (execution context for the current session).
 
@@ -56,7 +56,7 @@ Currently connected wallet/account (execution context for the current session).
 
 > **hasExistingCreatorCoinIdentity**: `boolean`
 
-Defined in: [src/lib/identity/creatorIdentity.ts:25](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/identity/creatorIdentity.ts#L25)
+Defined in: [src/lib/identity/creatorIdentity.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/identity/creatorIdentity.ts#L25)
 
 Whether we have an existing creator coin identity we should enforce.
 
@@ -64,7 +64,7 @@ Whether we have an existing creator coin identity we should enforce.
 
 > **warnings**: [`CreatorIdentityWarningCode`](#creatoridentitywarningcode)[]
 
-Defined in: [src/lib/identity/creatorIdentity.ts:29](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/identity/creatorIdentity.ts#L29)
+Defined in: [src/lib/identity/creatorIdentity.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/lib/identity/creatorIdentity.ts#L29)
 
 Non-blocking warnings to show in UI.
 
@@ -74,7 +74,7 @@ Non-blocking warnings to show in UI.
 
 > **CreatorIdentitySource** = `"zoraCoinCreatorAddress"` \| `"privySmartWallet"` \| `"connectedWallet"` \| `"unknown"`
 
-Defined in: [src/lib/identity/creatorIdentity.ts:5](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/identity/creatorIdentity.ts#L5)
+Defined in: [src/lib/identity/creatorIdentity.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/identity/creatorIdentity.ts#L5)
 
 ***
 
@@ -82,7 +82,7 @@ Defined in: [src/lib/identity/creatorIdentity.ts:5](https://github.com/wenakita/
 
 > **CreatorIdentityWarningCode** = `"CONNECTED_WALLET_MISMATCH"`
 
-Defined in: [src/lib/identity/creatorIdentity.ts:11](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/identity/creatorIdentity.ts#L11)
+Defined in: [src/lib/identity/creatorIdentity.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/lib/identity/creatorIdentity.ts#L11)
 
 ## Functions
 
@@ -90,7 +90,7 @@ Defined in: [src/lib/identity/creatorIdentity.ts:11](https://github.com/wenakita
 
 > **resolveCreatorIdentity**(`params`): [`CreatorIdentityResolution`](#creatoridentityresolution)
 
-Defined in: [src/lib/identity/creatorIdentity.ts:49](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/identity/creatorIdentity.ts#L49)
+Defined in: [src/lib/identity/creatorIdentity.ts:49](https://github.com/wenakita/4626/blob/main/frontend/src/lib/identity/creatorIdentity.ts#L49)
 
 Resolve canonical creator identity in a way that prevents fragmentation.
 

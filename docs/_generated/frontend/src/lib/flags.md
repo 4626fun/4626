@@ -12,7 +12,7 @@
 
 > **getPrivyAppId**(): `string` \| `null`
 
-Defined in: [src/lib/flags.ts:73](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/flags.ts#L73)
+Defined in: [src/lib/flags.ts:73](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags.ts#L73)
 
 #### Returns
 
@@ -24,7 +24,7 @@ Defined in: [src/lib/flags.ts:73](https://github.com/wenakita/4626/blob/7e6202c0
 
 > **getPrivyClientId**(): `string` \| `null`
 
-Defined in: [src/lib/flags.ts:79](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/flags.ts#L79)
+Defined in: [src/lib/flags.ts:79](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags.ts#L79)
 
 #### Returns
 
@@ -36,7 +36,7 @@ Defined in: [src/lib/flags.ts:79](https://github.com/wenakita/4626/blob/7e6202c0
 
 > **isLensGroveEnabled**(): `boolean`
 
-Defined in: [src/lib/flags.ts:93](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/flags.ts#L93)
+Defined in: [src/lib/flags.ts:93](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags.ts#L93)
 
 #### Returns
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/flags.ts:93](https://github.com/wenakita/4626/blob/7e6202c0
 
 > **isPrivyClientEnabled**(): `boolean`
 
-Defined in: [src/lib/flags.ts:84](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/flags.ts#L84)
+Defined in: [src/lib/flags.ts:84](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags.ts#L84)
 
 #### Returns
 
@@ -60,7 +60,7 @@ Defined in: [src/lib/flags.ts:84](https://github.com/wenakita/4626/blob/7e6202c0
 
 > **isPrivyHostModeAllowed**(`mode`): `boolean`
 
-Defined in: [src/lib/flags.ts:69](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/flags.ts#L69)
+Defined in: [src/lib/flags.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags.ts#L69)
 
 #### Parameters
 
@@ -78,7 +78,7 @@ Defined in: [src/lib/flags.ts:69](https://github.com/wenakita/4626/blob/7e6202c0
 
 > **isPublicSiteMode**(): `boolean`
 
-Defined in: [src/lib/flags.ts:3](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/flags.ts#L3)
+Defined in: [src/lib/flags.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags.ts#L3)
 
 #### Returns
 

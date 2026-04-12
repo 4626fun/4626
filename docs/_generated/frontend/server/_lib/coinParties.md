@@ -12,7 +12,7 @@
 
 > **isAddressLike**(`value`): `boolean`
 
-Defined in: [server/\_lib/coinParties.ts:3](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/coinParties.ts#L3)
+Defined in: [server/\_lib/coinParties.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/coinParties.ts#L3)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [server/\_lib/coinParties.ts:3](https://github.com/wenakita/4626/blo
 
 > **resolveCoinParties**(`coin`): `Promise`\<\{ `creator`: `` `0x${string}` `` \| `null`; `payoutRecipient`: `` `0x${string}` `` \| `null`; \}\>
 
-Defined in: [server/\_lib/coinParties.ts:38](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/coinParties.ts#L38)
+Defined in: [server/\_lib/coinParties.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/coinParties.ts#L38)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [server/\_lib/coinParties.ts:38](https://github.com/wenakita/4626/bl
 
 > **resolveCoinPartiesAndOwner**(`coin`): `Promise`\<\{ `creator`: `` `0x${string}` `` \| `null`; `owner`: `` `0x${string}` `` \| `null`; `payoutRecipient`: `` `0x${string}` `` \| `null`; \}\>
 
-Defined in: [server/\_lib/coinParties.ts:58](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/coinParties.ts#L58)
+Defined in: [server/\_lib/coinParties.ts:58](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/coinParties.ts#L58)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **AuthorizedRequestPrincipal** = [`RequestPrincipal`](#requestprincipal) & `object`
 
-Defined in: [server/\_lib/requestPrincipal.ts:12](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/requestPrincipal.ts#L12)
+Defined in: [server/\_lib/requestPrincipal.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/requestPrincipal.ts#L12)
 
 #### Type Declaration
 
@@ -42,7 +42,7 @@ Defined in: [server/\_lib/requestPrincipal.ts:12](https://github.com/wenakita/46
 
 > **RequestPrincipal** = `object`
 
-Defined in: [server/\_lib/requestPrincipal.ts:7](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/requestPrincipal.ts#L7)
+Defined in: [server/\_lib/requestPrincipal.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/requestPrincipal.ts#L7)
 
 #### Properties
 
@@ -50,13 +50,13 @@ Defined in: [server/\_lib/requestPrincipal.ts:7](https://github.com/wenakita/462
 
 > **address**: `string`
 
-Defined in: [server/\_lib/requestPrincipal.ts:9](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/requestPrincipal.ts#L9)
+Defined in: [server/\_lib/requestPrincipal.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/requestPrincipal.ts#L9)
 
 ##### source
 
 > **source**: `"session"` \| `"siwa"`
 
-Defined in: [server/\_lib/requestPrincipal.ts:8](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/requestPrincipal.ts#L8)
+Defined in: [server/\_lib/requestPrincipal.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/requestPrincipal.ts#L8)
 
 ## Functions
 
@@ -64,7 +64,7 @@ Defined in: [server/\_lib/requestPrincipal.ts:8](https://github.com/wenakita/462
 
 > **readRequestPrincipal**(`req`, `opts`): [`RequestPrincipal`](#requestprincipal) \| `null`
 
-Defined in: [server/\_lib/requestPrincipal.ts:24](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/requestPrincipal.ts#L24)
+Defined in: [server/\_lib/requestPrincipal.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/requestPrincipal.ts#L24)
 
 #### Parameters
 
@@ -86,7 +86,7 @@ Defined in: [server/\_lib/requestPrincipal.ts:24](https://github.com/wenakita/46
 
 > **readRequestPrincipalAddress**(`req`, `opts`): `string`
 
-Defined in: [server/\_lib/requestPrincipal.ts:46](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/requestPrincipal.ts#L46)
+Defined in: [server/\_lib/requestPrincipal.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/requestPrincipal.ts#L46)
 
 #### Parameters
 
@@ -108,7 +108,7 @@ Defined in: [server/\_lib/requestPrincipal.ts:46](https://github.com/wenakita/46
 
 > **resolveAuthorizedRequestPrincipal**(`req`, `opts`): `Promise`\<[`AuthorizedRequestPrincipal`](#authorizedrequestprincipal) \| `null`\>
 
-Defined in: [server/\_lib/requestPrincipal.ts:50](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/requestPrincipal.ts#L50)
+Defined in: [server/\_lib/requestPrincipal.ts:50](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/requestPrincipal.ts#L50)
 
 #### Parameters
 

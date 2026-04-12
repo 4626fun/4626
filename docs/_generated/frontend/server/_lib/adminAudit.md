@@ -12,7 +12,7 @@
 
 > **AdminAction** = `"waitlist_approve"` \| `"waitlist_deny"` \| `"waitlist_delete"` \| `"creator_approve"` \| `"creator_deny"` \| `"creator_revoke"` \| `"creator_restore"` \| `"note_update"`
 
-Defined in: [server/\_lib/adminAudit.ts:37](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/adminAudit.ts#L37)
+Defined in: [server/\_lib/adminAudit.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/adminAudit.ts#L37)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/adminAudit.ts:37](https://github.com/wenakita/4626/blo
 
 > **ensureAdminAuditSchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/adminAudit.ts:9](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/adminAudit.ts#L9)
+Defined in: [server/\_lib/adminAudit.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/adminAudit.ts#L9)
 
 #### Parameters
 
@@ -38,7 +38,7 @@ Defined in: [server/\_lib/adminAudit.ts:9](https://github.com/wenakita/4626/blob
 
 > **logAdminAction**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/adminAudit.ts:62](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/adminAudit.ts#L62)
+Defined in: [server/\_lib/adminAudit.ts:62](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/adminAudit.ts#L62)
 
 #### Parameters
 

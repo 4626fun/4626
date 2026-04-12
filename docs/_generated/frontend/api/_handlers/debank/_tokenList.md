@@ -12,7 +12,7 @@
 
 > **DebankToken** = `object`
 
-Defined in: [api/\_handlers/debank/\_tokenList.ts:38](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/debank/_tokenList.ts#L38)
+Defined in: [api/\_handlers/debank/\_tokenList.ts:38](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_tokenList.ts#L38)
 
 #### Properties
 
@@ -20,55 +20,55 @@ Defined in: [api/\_handlers/debank/\_tokenList.ts:38](https://github.com/wenakit
 
 > **amount**: `number`
 
-Defined in: [api/\_handlers/debank/\_tokenList.ts:45](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/debank/_tokenList.ts#L45)
+Defined in: [api/\_handlers/debank/\_tokenList.ts:45](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_tokenList.ts#L45)
 
 ##### chain?
 
 > `optional` **chain**: `string`
 
-Defined in: [api/\_handlers/debank/\_tokenList.ts:40](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/debank/_tokenList.ts#L40)
+Defined in: [api/\_handlers/debank/\_tokenList.ts:40](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_tokenList.ts#L40)
 
 ##### decimals?
 
 > `optional` **decimals**: `number`
 
-Defined in: [api/\_handlers/debank/\_tokenList.ts:43](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/debank/_tokenList.ts#L43)
+Defined in: [api/\_handlers/debank/\_tokenList.ts:43](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_tokenList.ts#L43)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [api/\_handlers/debank/\_tokenList.ts:39](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/debank/_tokenList.ts#L39)
+Defined in: [api/\_handlers/debank/\_tokenList.ts:39](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_tokenList.ts#L39)
 
 ##### logoUrl?
 
 > `optional` **logoUrl**: `string`
 
-Defined in: [api/\_handlers/debank/\_tokenList.ts:44](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/debank/_tokenList.ts#L44)
+Defined in: [api/\_handlers/debank/\_tokenList.ts:44](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_tokenList.ts#L44)
 
 ##### name?
 
 > `optional` **name**: `string`
 
-Defined in: [api/\_handlers/debank/\_tokenList.ts:41](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/debank/_tokenList.ts#L41)
+Defined in: [api/\_handlers/debank/\_tokenList.ts:41](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_tokenList.ts#L41)
 
 ##### price?
 
 > `optional` **price**: `number`
 
-Defined in: [api/\_handlers/debank/\_tokenList.ts:46](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/debank/_tokenList.ts#L46)
+Defined in: [api/\_handlers/debank/\_tokenList.ts:46](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_tokenList.ts#L46)
 
 ##### symbol?
 
 > `optional` **symbol**: `string`
 
-Defined in: [api/\_handlers/debank/\_tokenList.ts:42](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/debank/_tokenList.ts#L42)
+Defined in: [api/\_handlers/debank/\_tokenList.ts:42](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_tokenList.ts#L42)
 
 ##### usdValue
 
 > **usdValue**: `number`
 
-Defined in: [api/\_handlers/debank/\_tokenList.ts:47](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/debank/_tokenList.ts#L47)
+Defined in: [api/\_handlers/debank/\_tokenList.ts:47](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_tokenList.ts#L47)
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [api/\_handlers/debank/\_tokenList.ts:47](https://github.com/wenakit
 
 > **DebankTokenListResponse** = `object`
 
-Defined in: [api/\_handlers/debank/\_tokenList.ts:50](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/debank/_tokenList.ts#L50)
+Defined in: [api/\_handlers/debank/\_tokenList.ts:50](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_tokenList.ts#L50)
 
 #### Properties
 
@@ -84,25 +84,25 @@ Defined in: [api/\_handlers/debank/\_tokenList.ts:50](https://github.com/wenakit
 
 > **address**: `string`
 
-Defined in: [api/\_handlers/debank/\_tokenList.ts:52](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/debank/_tokenList.ts#L52)
+Defined in: [api/\_handlers/debank/\_tokenList.ts:52](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_tokenList.ts#L52)
 
 ##### asOf
 
 > **asOf**: `number`
 
-Defined in: [api/\_handlers/debank/\_tokenList.ts:51](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/debank/_tokenList.ts#L51)
+Defined in: [api/\_handlers/debank/\_tokenList.ts:51](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_tokenList.ts#L51)
 
 ##### chainId
 
 > **chainId**: `string`
 
-Defined in: [api/\_handlers/debank/\_tokenList.ts:53](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/debank/_tokenList.ts#L53)
+Defined in: [api/\_handlers/debank/\_tokenList.ts:53](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_tokenList.ts#L53)
 
 ##### tokens
 
 > **tokens**: [`DebankToken`](#debanktoken)[]
 
-Defined in: [api/\_handlers/debank/\_tokenList.ts:54](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/debank/_tokenList.ts#L54)
+Defined in: [api/\_handlers/debank/\_tokenList.ts:54](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_tokenList.ts#L54)
 
 ## Functions
 
@@ -110,7 +110,7 @@ Defined in: [api/\_handlers/debank/\_tokenList.ts:54](https://github.com/wenakit
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/debank/\_tokenList.ts:88](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/debank/_tokenList.ts#L88)
+Defined in: [api/\_handlers/debank/\_tokenList.ts:88](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/debank/_tokenList.ts#L88)
 
 #### Parameters
 

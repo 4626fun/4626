@@ -12,7 +12,7 @@
 
 > **RuntimeSessionContext** = [`AgentSessionContext`](../agent/core/resolveIdentityContext.md#agentsessioncontext)
 
-Defined in: [server/\_lib/session.ts:9](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/session.ts#L9)
+Defined in: [server/\_lib/session.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/session.ts#L9)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/session.ts:9](https://github.com/wenakita/4626/blob/7e
 
 > **buildRuntimeSessionContext**(`address`): [`AgentSessionContext`](../agent/core/resolveIdentityContext.md#agentsessioncontext) \| `null`
 
-Defined in: [server/\_lib/session.ts:22](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/session.ts#L22)
+Defined in: [server/\_lib/session.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/session.ts#L22)
 
 #### Parameters
 
@@ -38,7 +38,7 @@ Defined in: [server/\_lib/session.ts:22](https://github.com/wenakita/4626/blob/7
 
 > **getSessionAddress**(`req`): `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/session.ts:11](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/session.ts#L11)
+Defined in: [server/\_lib/session.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/session.ts#L11)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [server/\_lib/session.ts:11](https://github.com/wenakita/4626/blob/7
 
 > **isAdminAddress**(`address`): `boolean`
 
-Defined in: [server/\_lib/session.ts:18](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/session.ts#L18)
+Defined in: [server/\_lib/session.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/session.ts#L18)
 
 #### Parameters
 
@@ -74,7 +74,7 @@ Defined in: [server/\_lib/session.ts:18](https://github.com/wenakita/4626/blob/7
 
 > **isAdminEmail**(`email`): `boolean`
 
-Defined in: [server/\_lib/session.ts:33](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/session.ts#L33)
+Defined in: [server/\_lib/session.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/session.ts#L33)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **CharacterRuntimeConfig** = `object`
 
-Defined in: [server/agent/eliza/character.ts:157](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/character.ts#L157)
+Defined in: [server/agent/eliza/character.ts:157](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/character.ts#L157)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [server/agent/eliza/character.ts:157](https://github.com/wenakita/46
 
 > `optional` **preferredModel**: `string`
 
-Defined in: [server/agent/eliza/character.ts:159](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/character.ts#L159)
+Defined in: [server/agent/eliza/character.ts:159](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/character.ts#L159)
 
 ##### settings
 
 > **settings**: `Record`\<`string`, `string`\>
 
-Defined in: [server/agent/eliza/character.ts:160](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/character.ts#L160)
+Defined in: [server/agent/eliza/character.ts:160](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/character.ts#L160)
 
 ##### systemPrompt
 
 > **systemPrompt**: `string`
 
-Defined in: [server/agent/eliza/character.ts:158](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/character.ts#L158)
+Defined in: [server/agent/eliza/character.ts:158](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/character.ts#L158)
 
 ## Variables
 
@@ -40,7 +40,7 @@ Defined in: [server/agent/eliza/character.ts:158](https://github.com/wenakita/46
 
 > `const` **creatorVaultCharacter**: `object`
 
-Defined in: [server/agent/eliza/character.ts:9](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/character.ts#L9)
+Defined in: [server/agent/eliza/character.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/character.ts#L9)
 
 4626 Agent Character
 
@@ -148,7 +148,7 @@ via the admin UI (future: LLM personality config).
 
 > **resolveCharacterRuntimeConfig**(): [`CharacterRuntimeConfig`](#characterruntimeconfig)
 
-Defined in: [server/agent/eliza/character.ts:188](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/agent/eliza/character.ts#L188)
+Defined in: [server/agent/eliza/character.ts:188](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/character.ts#L188)
 
 Runtime-facing character projection used by the Eliza runtime bridge.
 This keeps prompt/model policy as first-class runtime input and allows

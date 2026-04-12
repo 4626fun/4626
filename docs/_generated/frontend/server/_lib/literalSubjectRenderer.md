@@ -12,7 +12,7 @@
 
 > **LiteralSubjectContentBox** = [`FixedContentBox`](imageContentBox.md#fixedcontentbox)
 
-Defined in: [server/\_lib/literalSubjectRenderer.ts:6](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/literalSubjectRenderer.ts#L6)
+Defined in: [server/\_lib/literalSubjectRenderer.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/literalSubjectRenderer.ts#L6)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/literalSubjectRenderer.ts:6](https://github.com/wenaki
 
 > **RenderLiteralSubjectLayerParams** = `object`
 
-Defined in: [server/\_lib/literalSubjectRenderer.ts:8](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/literalSubjectRenderer.ts#L8)
+Defined in: [server/\_lib/literalSubjectRenderer.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/literalSubjectRenderer.ts#L8)
 
 #### Properties
 
@@ -28,25 +28,25 @@ Defined in: [server/\_lib/literalSubjectRenderer.ts:8](https://github.com/wenaki
 
 > **height**: `number`
 
-Defined in: [server/\_lib/literalSubjectRenderer.ts:11](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/literalSubjectRenderer.ts#L11)
+Defined in: [server/\_lib/literalSubjectRenderer.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/literalSubjectRenderer.ts#L11)
 
 ##### layoutHint?
 
 > `optional` **layoutHint**: [`ArtworkLayout`](imageClassifier.md#artworklayout)
 
-Defined in: [server/\_lib/literalSubjectRenderer.ts:12](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/literalSubjectRenderer.ts#L12)
+Defined in: [server/\_lib/literalSubjectRenderer.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/literalSubjectRenderer.ts#L12)
 
 ##### subjectBytes
 
 > **subjectBytes**: `Uint8Array`
 
-Defined in: [server/\_lib/literalSubjectRenderer.ts:9](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/literalSubjectRenderer.ts#L9)
+Defined in: [server/\_lib/literalSubjectRenderer.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/literalSubjectRenderer.ts#L9)
 
 ##### width
 
 > **width**: `number`
 
-Defined in: [server/\_lib/literalSubjectRenderer.ts:10](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/literalSubjectRenderer.ts#L10)
+Defined in: [server/\_lib/literalSubjectRenderer.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/literalSubjectRenderer.ts#L10)
 
 ***
 
@@ -54,7 +54,7 @@ Defined in: [server/\_lib/literalSubjectRenderer.ts:10](https://github.com/wenak
 
 > **RenderLiteralSubjectLayerResult** = `object`
 
-Defined in: [server/\_lib/literalSubjectRenderer.ts:15](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/literalSubjectRenderer.ts#L15)
+Defined in: [server/\_lib/literalSubjectRenderer.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/literalSubjectRenderer.ts#L15)
 
 #### Properties
 
@@ -62,19 +62,19 @@ Defined in: [server/\_lib/literalSubjectRenderer.ts:15](https://github.com/wenak
 
 > **contentBox**: [`LiteralSubjectContentBox`](#literalsubjectcontentbox)
 
-Defined in: [server/\_lib/literalSubjectRenderer.ts:17](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/literalSubjectRenderer.ts#L17)
+Defined in: [server/\_lib/literalSubjectRenderer.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/literalSubjectRenderer.ts#L17)
 
 ##### interiorLayerBytes
 
 > **interiorLayerBytes**: `Uint8Array`
 
-Defined in: [server/\_lib/literalSubjectRenderer.ts:16](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/literalSubjectRenderer.ts#L16)
+Defined in: [server/\_lib/literalSubjectRenderer.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/literalSubjectRenderer.ts#L16)
 
 ##### layout
 
 > **layout**: [`ArtworkLayout`](imageClassifier.md#artworklayout)
 
-Defined in: [server/\_lib/literalSubjectRenderer.ts:18](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/literalSubjectRenderer.ts#L18)
+Defined in: [server/\_lib/literalSubjectRenderer.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/literalSubjectRenderer.ts#L18)
 
 ## Functions
 
@@ -82,7 +82,7 @@ Defined in: [server/\_lib/literalSubjectRenderer.ts:18](https://github.com/wenak
 
 > **renderLiteralSubjectLayer**(`params`): `Promise`\<[`RenderLiteralSubjectLayerResult`](#renderliteralsubjectlayerresult)\>
 
-Defined in: [server/\_lib/literalSubjectRenderer.ts:70](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/literalSubjectRenderer.ts#L70)
+Defined in: [server/\_lib/literalSubjectRenderer.ts:70](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/literalSubjectRenderer.ts#L70)
 
 #### Parameters
 

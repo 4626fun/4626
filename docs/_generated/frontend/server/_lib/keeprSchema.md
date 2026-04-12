@@ -12,7 +12,7 @@
 
 > **ensureKeeprSchema**(): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/keeprSchema.ts:6](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/keeprSchema.ts#L6)
+Defined in: [server/\_lib/keeprSchema.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keeprSchema.ts#L6)
 
 #### Returns
 

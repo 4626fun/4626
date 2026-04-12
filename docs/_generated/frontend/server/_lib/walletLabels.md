@@ -12,7 +12,7 @@
 
 > **WalletLabel** = `object`
 
-Defined in: [server/\_lib/walletLabels.ts:16](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/walletLabels.ts#L16)
+Defined in: [server/\_lib/walletLabels.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/walletLabels.ts#L16)
 
 Wallet entity labeling — multi-source resolution.
 
@@ -29,7 +29,7 @@ All sources degrade gracefully — if one fails, the next is tried.
 
 > **category**: `string`
 
-Defined in: [server/\_lib/walletLabels.ts:20](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/walletLabels.ts#L20)
+Defined in: [server/\_lib/walletLabels.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/walletLabels.ts#L20)
 
 Category (e.g. "exchange", "defi", "mixer", "bridge").
 
@@ -37,7 +37,7 @@ Category (e.g. "exchange", "defi", "mixer", "bridge").
 
 > **name**: `string`
 
-Defined in: [server/\_lib/walletLabels.ts:18](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/walletLabels.ts#L18)
+Defined in: [server/\_lib/walletLabels.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/walletLabels.ts#L18)
 
 Display name of the entity (e.g. "Coinbase").
 
@@ -45,7 +45,7 @@ Display name of the entity (e.g. "Coinbase").
 
 > **source**: `"etherscan"` \| `"known-address"` \| `"walletlabels"`
 
-Defined in: [server/\_lib/walletLabels.ts:24](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/walletLabels.ts#L24)
+Defined in: [server/\_lib/walletLabels.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/walletLabels.ts#L24)
 
 Source of the label.
 
@@ -53,7 +53,7 @@ Source of the label.
 
 > `optional` **subcategory**: `string`
 
-Defined in: [server/\_lib/walletLabels.ts:22](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/walletLabels.ts#L22)
+Defined in: [server/\_lib/walletLabels.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/walletLabels.ts#L22)
 
 Subcategory for finer granularity.
 
@@ -63,7 +63,7 @@ Subcategory for finer granularity.
 
 > **WalletLabelResult** = `object`
 
-Defined in: [server/\_lib/walletLabels.ts:27](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/walletLabels.ts#L27)
+Defined in: [server/\_lib/walletLabels.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/walletLabels.ts#L27)
 
 #### Properties
 
@@ -71,13 +71,13 @@ Defined in: [server/\_lib/walletLabels.ts:27](https://github.com/wenakita/4626/b
 
 > **address**: `string`
 
-Defined in: [server/\_lib/walletLabels.ts:28](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/walletLabels.ts#L28)
+Defined in: [server/\_lib/walletLabels.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/walletLabels.ts#L28)
 
 ##### isKnownEntity
 
 > **isKnownEntity**: `boolean`
 
-Defined in: [server/\_lib/walletLabels.ts:31](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/walletLabels.ts#L31)
+Defined in: [server/\_lib/walletLabels.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/walletLabels.ts#L31)
 
 Whether the address is associated with a known entity.
 
@@ -85,7 +85,7 @@ Whether the address is associated with a known entity.
 
 > **labels**: [`WalletLabel`](#walletlabel)[]
 
-Defined in: [server/\_lib/walletLabels.ts:29](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/walletLabels.ts#L29)
+Defined in: [server/\_lib/walletLabels.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/walletLabels.ts#L29)
 
 ## Functions
 
@@ -93,7 +93,7 @@ Defined in: [server/\_lib/walletLabels.ts:29](https://github.com/wenakita/4626/b
 
 > **getWalletLabelsBatch**(`addresses`, `chainId`): `Promise`\<`Record`\<`string`, [`WalletLabelResult`](#walletlabelresult)\>\>
 
-Defined in: [server/\_lib/walletLabels.ts:397](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/walletLabels.ts#L397)
+Defined in: [server/\_lib/walletLabels.ts:397](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/walletLabels.ts#L397)
 
 Resolve labels for multiple addresses in parallel.
 
@@ -117,7 +117,7 @@ Resolve labels for multiple addresses in parallel.
 
 > **getWalletLabelsForAddress**(`address`, `chainId`): `Promise`\<[`WalletLabelResult`](#walletlabelresult)\>
 
-Defined in: [server/\_lib/walletLabels.ts:345](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/walletLabels.ts#L345)
+Defined in: [server/\_lib/walletLabels.ts:345](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/walletLabels.ts#L345)
 
 Resolve labels for a single address using all available sources.
 

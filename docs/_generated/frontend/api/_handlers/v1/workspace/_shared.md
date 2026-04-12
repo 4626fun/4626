@@ -12,7 +12,7 @@
 
 > **WorkspaceAccessContext** = `Awaited`\<`ReturnType`\<*typeof* [`requireWorkspacePermission`](../../../../server/_lib/workspace/auth.md#requireworkspacepermission)\>\> *extends* infer TResult ? `TResult` *extends* `object` ? `TResult` : `never` : `never`
 
-Defined in: [api/\_handlers/v1/workspace/\_shared.ts:6](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/v1/workspace/_shared.ts#L6)
+Defined in: [api/\_handlers/v1/workspace/\_shared.ts:6](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/workspace/_shared.ts#L6)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/v1/workspace/\_shared.ts:6](https://github.com/wenak
 
 > **isAddressLike**(`value`): `` value is `0x${string}` ``
 
-Defined in: [api/\_handlers/v1/workspace/\_shared.ts:14](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/v1/workspace/_shared.ts#L14)
+Defined in: [api/\_handlers/v1/workspace/\_shared.ts:14](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/workspace/_shared.ts#L14)
 
 #### Parameters
 
@@ -38,7 +38,7 @@ Defined in: [api/\_handlers/v1/workspace/\_shared.ts:14](https://github.com/wena
 
 > **normalizeVaultAddressFromQuery**(`req`): `` `0x${string}` `` \| `null`
 
-Defined in: [api/\_handlers/v1/workspace/\_shared.ts:18](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/v1/workspace/_shared.ts#L18)
+Defined in: [api/\_handlers/v1/workspace/\_shared.ts:18](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/workspace/_shared.ts#L18)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [api/\_handlers/v1/workspace/\_shared.ts:18](https://github.com/wena
 
 > **readNumberQuery**(`req`, `key`): `number` \| `null`
 
-Defined in: [api/\_handlers/v1/workspace/\_shared.ts:34](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/v1/workspace/_shared.ts#L34)
+Defined in: [api/\_handlers/v1/workspace/\_shared.ts:34](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/workspace/_shared.ts#L34)
 
 #### Parameters
 
@@ -78,7 +78,7 @@ Defined in: [api/\_handlers/v1/workspace/\_shared.ts:34](https://github.com/wena
 
 > **readStringQuery**(`req`, `key`): `string` \| `null`
 
-Defined in: [api/\_handlers/v1/workspace/\_shared.ts:25](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/v1/workspace/_shared.ts#L25)
+Defined in: [api/\_handlers/v1/workspace/\_shared.ts:25](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/workspace/_shared.ts#L25)
 
 #### Parameters
 
@@ -100,7 +100,7 @@ Defined in: [api/\_handlers/v1/workspace/\_shared.ts:25](https://github.com/wena
 
 > **requireWorkspaceAccess**(`params`): `Promise`\<\{ `context`: \{ `activeOwnerWalletAddress`: `` `0x${string}` `` \| `null`; `canonicalSmartWalletAddress`: `` `0x${string}` `` \| `null`; `ok`: `true`; `principalAddress`: `` `0x${string}` ``; `profileId`: `number` \| `null`; `role`: [`WorkspaceRole`](../../../../server/_lib/workspace/auth.md#workspacerole); `signerRole`: `"canonical_smart_wallet"` \| `"active_owner_wallet"` \| `null`; `vault`: [`KeeprVaultRow`](../../../../server/_lib/keeprRegistry.md#keeprvaultrow); \}; `ok`: `true`; \} \| \{ `error`: `string`; `ok`: `false`; `status`: `number`; \}\>
 
-Defined in: [api/\_handlers/v1/workspace/\_shared.ts:41](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/_handlers/v1/workspace/_shared.ts#L41)
+Defined in: [api/\_handlers/v1/workspace/\_shared.ts:41](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/workspace/_shared.ts#L41)
 
 #### Parameters
 

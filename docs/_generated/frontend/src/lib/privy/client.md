@@ -12,7 +12,7 @@
 
 > `const` **ZORA\_PRIVY\_APP\_ID**: `"clpgf04wn04hnkw0fv1m11mnb"` = `'clpgf04wn04hnkw0fv1m11mnb'`
 
-Defined in: [src/lib/privy/client.tsx:9](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/privy/client.tsx#L9)
+Defined in: [src/lib/privy/client.tsx:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/client.tsx#L9)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/privy/client.tsx:9](https://github.com/wenakita/4626/blob/7
 
 > **PrivyClientProvider**(`props`): `Element`
 
-Defined in: [src/lib/privy/client.tsx:73](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/privy/client.tsx#L73)
+Defined in: [src/lib/privy/client.tsx:73](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/client.tsx#L73)
 
 Privy Client Provider
 
@@ -59,7 +59,7 @@ With Zora Global Wallet enabled:
 
 > **usePrivyClientStatus**(): `PrivyClientStatus`
 
-Defined in: [src/lib/privy/client.tsx:14](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/privy/client.tsx#L14)
+Defined in: [src/lib/privy/client.tsx:14](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/client.tsx#L14)
 
 #### Returns
 

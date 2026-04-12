@@ -12,7 +12,7 @@
 
 > **buildAgentAccessProofMessage**(`fields`): `string`
 
-Defined in: [server/\_lib/agentAccessProof.ts:381](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentAccessProof.ts#L381)
+Defined in: [server/\_lib/agentAccessProof.ts:381](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentAccessProof.ts#L381)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [server/\_lib/agentAccessProof.ts:381](https://github.com/wenakita/4
 
 > **issueAgentAccessProofRequest**(`params`): `Promise`\<\{ `chainId`: `number`; `expiresAt`: `string`; `issuedAt`: `string`; `message`: `string`; `nonce`: `string`; `roomKey`: `string`; `schema`: `"4626-agent-access-proof-request-v1"`; `shareToken`: `string`; `wallet`: `string`; \}\>
 
-Defined in: [server/\_lib/agentAccessProof.ts:403](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentAccessProof.ts#L403)
+Defined in: [server/\_lib/agentAccessProof.ts:403](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentAccessProof.ts#L403)
 
 #### Parameters
 
@@ -92,7 +92,7 @@ Defined in: [server/\_lib/agentAccessProof.ts:403](https://github.com/wenakita/4
 
 > **issueAgentRoomAccessToken**(`params`): `Promise`\<\{ `accessToken`: `string`; `capabilities?`: (`"join"` \| `"read"` \| `"write"` \| `"react"` \| `"view-members"`)[]; `chainId`: `number`; `expiresAt`: `string`; `issuedAt`: `string`; `jti?`: `string`; `roomKey`: `string`; `schema`: `"4626-agent-room-access-token-v1"`; `shareToken`: `string`; `sub`: `string`; `tokenType`: `"bearer"`; \}\>
 
-Defined in: [server/\_lib/agentAccessProof.ts:516](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentAccessProof.ts#L516)
+Defined in: [server/\_lib/agentAccessProof.ts:516](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentAccessProof.ts#L516)
 
 #### Parameters
 
@@ -132,7 +132,7 @@ Defined in: [server/\_lib/agentAccessProof.ts:516](https://github.com/wenakita/4
 
 > **verifyAgentAccessProofSubmission**(`params`): `Promise`\<\{ `chainId`: `number`; `recoveredSigner`: `` `0x${string}` `` \| `null`; `roomKey`: `string`; `shareToken`: `` `0x${string}` ``; `signer`: `` `0x${string}` ``; `wallet`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/agentAccessProof.ts:440](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentAccessProof.ts#L440)
+Defined in: [server/\_lib/agentAccessProof.ts:440](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentAccessProof.ts#L440)
 
 #### Parameters
 
@@ -204,7 +204,7 @@ Defined in: [server/\_lib/agentAccessProof.ts:440](https://github.com/wenakita/4
 
 > **verifyAgentRoomAccessToken**(`token`): `Promise`\<\{ `ok`: `true`; `token`: \{ `accessToken`: `string`; `capabilities?`: (`"join"` \| `"read"` \| `"write"` \| `"react"` \| `"view-members"`)[]; `chainId`: `number`; `expiresAt`: `string`; `issuedAt`: `string`; `jti?`: `string`; `roomKey`: `string`; `schema`: `"4626-agent-room-access-token-v1"`; `shareToken`: `string`; `sub`: `string`; `tokenType`: `"bearer"`; \}; \} \| \{ `error`: `string`; `ok`: `false`; \}\>
 
-Defined in: [server/\_lib/agentAccessProof.ts:547](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/_lib/agentAccessProof.ts#L547)
+Defined in: [server/\_lib/agentAccessProof.ts:547](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentAccessProof.ts#L547)
 
 #### Parameters
 

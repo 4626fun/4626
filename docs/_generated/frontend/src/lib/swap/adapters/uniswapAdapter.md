@@ -12,7 +12,7 @@
 
 > **UniswapPermitSigner** = (`args`) => `Promise`\<\{ `permitData?`: `Record`\<`string`, `unknown`\>; `signature?`: `string`; \}\>
 
-Defined in: [src/lib/swap/adapters/uniswapAdapter.ts:32](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/swap/adapters/uniswapAdapter.ts#L32)
+Defined in: [src/lib/swap/adapters/uniswapAdapter.ts:32](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/adapters/uniswapAdapter.ts#L32)
 
 #### Parameters
 
@@ -32,7 +32,7 @@ Defined in: [src/lib/swap/adapters/uniswapAdapter.ts:32](https://github.com/wena
 
 > **getUniswapPermitPayload**(`quote`): `Record`\<`string`, `unknown`\> \| `null`
 
-Defined in: [src/lib/swap/adapters/uniswapAdapter.ts:198](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/swap/adapters/uniswapAdapter.ts#L198)
+Defined in: [src/lib/swap/adapters/uniswapAdapter.ts:198](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/adapters/uniswapAdapter.ts#L198)
 
 #### Parameters
 
@@ -50,7 +50,7 @@ Defined in: [src/lib/swap/adapters/uniswapAdapter.ts:198](https://github.com/wen
 
 > **getUniswapPermitSignPayload**(`permitData`): [`PermitSignPayload`](../../uniswap/tradingApi.md#permitsignpayload) \| `null`
 
-Defined in: [src/lib/swap/adapters/uniswapAdapter.ts:202](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/swap/adapters/uniswapAdapter.ts#L202)
+Defined in: [src/lib/swap/adapters/uniswapAdapter.ts:202](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/adapters/uniswapAdapter.ts#L202)
 
 #### Parameters
 
@@ -68,7 +68,7 @@ Defined in: [src/lib/swap/adapters/uniswapAdapter.ts:202](https://github.com/wen
 
 > **normalizeUniswapExecutionTx**(`tx`, `signerAddress`, `chainId`): `object`
 
-Defined in: [src/lib/swap/adapters/uniswapAdapter.ts:206](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/swap/adapters/uniswapAdapter.ts#L206)
+Defined in: [src/lib/swap/adapters/uniswapAdapter.ts:206](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/adapters/uniswapAdapter.ts#L206)
 
 #### Parameters
 
@@ -136,7 +136,7 @@ The quantity of ETH tokens approved for spending by the transaction, denominated
 
 > **reviewUniswapSwap**(`params`): `Promise`\<[`SwapReviewResult`](../types.md#swapreviewresult)\>
 
-Defined in: [src/lib/swap/adapters/uniswapAdapter.ts:110](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/swap/adapters/uniswapAdapter.ts#L110)
+Defined in: [src/lib/swap/adapters/uniswapAdapter.ts:110](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/adapters/uniswapAdapter.ts#L110)
 
 #### Parameters
 
@@ -164,7 +164,7 @@ Defined in: [src/lib/swap/adapters/uniswapAdapter.ts:110](https://github.com/wen
 
 > **submitUniswapOrder**(`orderRequest`): `Promise`\<\{ `orderId`: `string`; `orderStatus`: `"error"` \| `"open"` \| `"expired"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`; `requestId`: `string`; \}\>
 
-Defined in: [src/lib/swap/adapters/uniswapAdapter.ts:186](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/swap/adapters/uniswapAdapter.ts#L186)
+Defined in: [src/lib/swap/adapters/uniswapAdapter.ts:186](https://github.com/wenakita/4626/blob/main/frontend/src/lib/swap/adapters/uniswapAdapter.ts#L186)
 
 #### Parameters
 

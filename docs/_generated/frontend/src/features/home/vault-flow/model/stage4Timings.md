@@ -12,7 +12,7 @@
 
 > **Stage4FanCardTiming** = `object`
 
-Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:4](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L4)
+Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L4)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:4](https://gith
 
 > **destination**: `Stage4Range2`
 
-Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:6](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L6)
+Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L6)
 
 ##### opacity
 
 > **opacity**: `Stage4Range2`
 
-Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:5](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L5)
+Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L5)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:5](https://gith
 
 > **VaultFlowStage4TimingPreset** = `object`
 
-Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:9](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L9)
+Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L9)
 
 #### Properties
 
@@ -42,31 +42,31 @@ Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:9](https://gith
 
 > **deployBlur**: `Stage4Range3`
 
-Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:12](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L12)
+Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L12)
 
 ##### deployOpacity
 
 > **deployOpacity**: `Stage4Range2`
 
-Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:11](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L11)
+Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L11)
 
 ##### deployTitle
 
 > **deployTitle**: `Stage4Range2`
 
-Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:13](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L13)
+Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L13)
 
 ##### deployZ
 
 > **deployZ**: `Stage4Range3`
 
-Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:10](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L10)
+Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L10)
 
 ##### fanCards
 
 > **fanCards**: \[[`Stage4FanCardTiming`](#stage4fancardtiming), [`Stage4FanCardTiming`](#stage4fancardtiming), [`Stage4FanCardTiming`](#stage4fancardtiming), [`Stage4FanCardTiming`](#stage4fancardtiming)\]
 
-Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:14](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L14)
+Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L14)
 
 ## Variables
 
@@ -74,7 +74,7 @@ Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:14](https://git
 
 > `const` **DESKTOP\_STAGE4\_TIMING**: [`VaultFlowStage4TimingPreset`](#vaultflowstage4timingpreset)
 
-Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:35](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L35)
+Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L35)
 
 ***
 
@@ -82,7 +82,7 @@ Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:35](https://git
 
 > `const` **MOBILE\_STAGE4\_TIMING**: [`VaultFlowStage4TimingPreset`](#vaultflowstage4timingpreset)
 
-Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:22](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L22)
+Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:22](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L22)
 
 ## Functions
 
@@ -90,7 +90,7 @@ Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:22](https://git
 
 > **getVaultFlowStage4TimingPreset**(`isDesktop`): [`VaultFlowStage4TimingPreset`](#vaultflowstage4timingpreset)
 
-Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:48](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L48)
+Defined in: [src/features/home/vault-flow/model/stage4Timings.ts:48](https://github.com/wenakita/4626/blob/main/frontend/src/features/home/vault-flow/model/stage4Timings.ts#L48)
 
 #### Parameters
 

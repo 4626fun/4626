@@ -12,7 +12,7 @@
 
 > **executeKeeprCommandFamily**(`params`): `Promise`\<[`KeeprCommandResult`](../types.md#keeprcommandresult)\>
 
-Defined in: [server/commands/families/keepr.ts:771](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/commands/families/keepr.ts#L771)
+Defined in: [server/commands/families/keepr.ts:771](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/keepr.ts#L771)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [server/commands/families/keepr.ts:771](https://github.com/wenakita/
 
 > **formatAssistantOnlyBlocked**(`command`): `string`
 
-Defined in: [server/commands/families/keepr.ts:672](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/commands/families/keepr.ts#L672)
+Defined in: [server/commands/families/keepr.ts:672](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/keepr.ts#L672)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [server/commands/families/keepr.ts:672](https://github.com/wenakita/
 
 > **formatGroupConnectGuidance**(`groupId`): `string`
 
-Defined in: [server/commands/families/keepr.ts:656](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/commands/families/keepr.ts#L656)
+Defined in: [server/commands/families/keepr.ts:656](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/keepr.ts#L656)
 
 #### Parameters
 
@@ -84,7 +84,7 @@ Defined in: [server/commands/families/keepr.ts:656](https://github.com/wenakita/
 
 > **formatKeeprHelp**(`rawTopic`, `options?`): `string`
 
-Defined in: [server/commands/families/keepr.ts:628](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/commands/families/keepr.ts#L628)
+Defined in: [server/commands/families/keepr.ts:628](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/keepr.ts#L628)
 
 #### Parameters
 
@@ -116,7 +116,7 @@ Defined in: [server/commands/families/keepr.ts:628](https://github.com/wenakita/
 
 > **formatVaultStatus**(`v`): `string`
 
-Defined in: [server/commands/families/keepr.ts:682](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/commands/families/keepr.ts#L682)
+Defined in: [server/commands/families/keepr.ts:682](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/keepr.ts#L682)
 
 #### Parameters
 
@@ -134,7 +134,7 @@ Defined in: [server/commands/families/keepr.ts:682](https://github.com/wenakita/
 
 > **looksLikeGroupConnectIntent**(`raw`): `boolean`
 
-Defined in: [server/commands/families/keepr.ts:646](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/commands/families/keepr.ts#L646)
+Defined in: [server/commands/families/keepr.ts:646](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/keepr.ts#L646)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **LazyRouteComponent** = `ComponentType`\<`any`\> \| `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:87](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L87)
+Defined in: [src/app/lazyRoutes.tsx:87](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L87)
 
 ## Variables
 
@@ -20,7 +20,7 @@ Defined in: [src/app/lazyRoutes.tsx:87](https://github.com/wenakita/4626/blob/7e
 
 > `const` **AccountsPage**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:161](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L161)
+Defined in: [src/app/lazyRoutes.tsx:161](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L161)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [src/app/lazyRoutes.tsx:161](https://github.com/wenakita/4626/blob/7
 
 > `const` **AdminAgentSetup**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:123](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L123)
+Defined in: [src/app/lazyRoutes.tsx:123](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L123)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [src/app/lazyRoutes.tsx:123](https://github.com/wenakita/4626/blob/7
 
 > `const` **AdminCreatorAccess**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:116](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L116)
+Defined in: [src/app/lazyRoutes.tsx:116](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L116)
 
 ***
 
@@ -44,7 +44,7 @@ Defined in: [src/app/lazyRoutes.tsx:116](https://github.com/wenakita/4626/blob/7
 
 > `const` **AdminDeployStrategies**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:119](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L119)
+Defined in: [src/app/lazyRoutes.tsx:119](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L119)
 
 ***
 
@@ -52,7 +52,7 @@ Defined in: [src/app/lazyRoutes.tsx:119](https://github.com/wenakita/4626/blob/7
 
 > `const` **AdminImageGeneration**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:124](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L124)
+Defined in: [src/app/lazyRoutes.tsx:124](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L124)
 
 ***
 
@@ -60,7 +60,7 @@ Defined in: [src/app/lazyRoutes.tsx:124](https://github.com/wenakita/4626/blob/7
 
 > `const` **AdminOps**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:118](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L118)
+Defined in: [src/app/lazyRoutes.tsx:118](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L118)
 
 ***
 
@@ -68,7 +68,7 @@ Defined in: [src/app/lazyRoutes.tsx:118](https://github.com/wenakita/4626/blob/7
 
 > `const` **AdminWaitlist**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:117](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L117)
+Defined in: [src/app/lazyRoutes.tsx:117](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L117)
 
 ***
 
@@ -76,7 +76,7 @@ Defined in: [src/app/lazyRoutes.tsx:117](https://github.com/wenakita/4626/blob/7
 
 > `const` **AgentDirectory**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:130](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L130)
+Defined in: [src/app/lazyRoutes.tsx:130](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L130)
 
 ***
 
@@ -84,7 +84,7 @@ Defined in: [src/app/lazyRoutes.tsx:130](https://github.com/wenakita/4626/blob/7
 
 > `const` **AgentRegister**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:131](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L131)
+Defined in: [src/app/lazyRoutes.tsx:131](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L131)
 
 ***
 
@@ -92,7 +92,7 @@ Defined in: [src/app/lazyRoutes.tsx:131](https://github.com/wenakita/4626/blob/7
 
 > `const` **AgentUriService**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:132](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L132)
+Defined in: [src/app/lazyRoutes.tsx:132](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L132)
 
 ***
 
@@ -100,7 +100,7 @@ Defined in: [src/app/lazyRoutes.tsx:132](https://github.com/wenakita/4626/blob/7
 
 > `const` **AuctionBid**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:105](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L105)
+Defined in: [src/app/lazyRoutes.tsx:105](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L105)
 
 ***
 
@@ -108,7 +108,7 @@ Defined in: [src/app/lazyRoutes.tsx:105](https://github.com/wenakita/4626/blob/7
 
 > `const` **AuctionDemo**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:129](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L129)
+Defined in: [src/app/lazyRoutes.tsx:129](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L129)
 
 ***
 
@@ -116,7 +116,7 @@ Defined in: [src/app/lazyRoutes.tsx:129](https://github.com/wenakita/4626/blob/7
 
 > `const` **CoinManage**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:110](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L110)
+Defined in: [src/app/lazyRoutes.tsx:110](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L110)
 
 ***
 
@@ -124,7 +124,7 @@ Defined in: [src/app/lazyRoutes.tsx:110](https://github.com/wenakita/4626/blob/7
 
 > `const` **CompleteAuction**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:104](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L104)
+Defined in: [src/app/lazyRoutes.tsx:104](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L104)
 
 ***
 
@@ -132,7 +132,7 @@ Defined in: [src/app/lazyRoutes.tsx:104](https://github.com/wenakita/4626/blob/7
 
 > `const` **CreatorEarnings**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:111](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L111)
+Defined in: [src/app/lazyRoutes.tsx:111](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L111)
 
 ***
 
@@ -140,7 +140,7 @@ Defined in: [src/app/lazyRoutes.tsx:111](https://github.com/wenakita/4626/blob/7
 
 > `const` **Deploy**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:106](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L106)
+Defined in: [src/app/lazyRoutes.tsx:106](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L106)
 
 ***
 
@@ -148,7 +148,7 @@ Defined in: [src/app/lazyRoutes.tsx:106](https://github.com/wenakita/4626/blob/7
 
 > `const` **DeployCoin**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:107](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L107)
+Defined in: [src/app/lazyRoutes.tsx:107](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L107)
 
 ***
 
@@ -156,7 +156,7 @@ Defined in: [src/app/lazyRoutes.tsx:107](https://github.com/wenakita/4626/blob/7
 
 > `const` **DeployVault**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:108](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L108)
+Defined in: [src/app/lazyRoutes.tsx:108](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L108)
 
 ***
 
@@ -164,7 +164,7 @@ Defined in: [src/app/lazyRoutes.tsx:108](https://github.com/wenakita/4626/blob/7
 
 > `const` **DistributeCcaLaunch**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:114](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L114)
+Defined in: [src/app/lazyRoutes.tsx:114](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L114)
 
 ***
 
@@ -172,7 +172,7 @@ Defined in: [src/app/lazyRoutes.tsx:114](https://github.com/wenakita/4626/blob/7
 
 > `const` **ExploreContent**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:134](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L134)
+Defined in: [src/app/lazyRoutes.tsx:134](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L134)
 
 ***
 
@@ -180,7 +180,7 @@ Defined in: [src/app/lazyRoutes.tsx:134](https://github.com/wenakita/4626/blob/7
 
 > `const` **ExploreContentDetail**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:142](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L142)
+Defined in: [src/app/lazyRoutes.tsx:142](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L142)
 
 ***
 
@@ -188,7 +188,7 @@ Defined in: [src/app/lazyRoutes.tsx:142](https://github.com/wenakita/4626/blob/7
 
 > `const` **ExploreContentPoolAlias**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:154](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L154)
+Defined in: [src/app/lazyRoutes.tsx:154](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L154)
 
 ***
 
@@ -196,7 +196,7 @@ Defined in: [src/app/lazyRoutes.tsx:154](https://github.com/wenakita/4626/blob/7
 
 > `const` **ExploreContentTransactions**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:150](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L150)
+Defined in: [src/app/lazyRoutes.tsx:150](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L150)
 
 ***
 
@@ -204,7 +204,7 @@ Defined in: [src/app/lazyRoutes.tsx:150](https://github.com/wenakita/4626/blob/7
 
 > `const` **ExploreCreatorDetail**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:138](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L138)
+Defined in: [src/app/lazyRoutes.tsx:138](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L138)
 
 ***
 
@@ -212,7 +212,7 @@ Defined in: [src/app/lazyRoutes.tsx:138](https://github.com/wenakita/4626/blob/7
 
 > `const` **ExploreCreators**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:133](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L133)
+Defined in: [src/app/lazyRoutes.tsx:133](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L133)
 
 ***
 
@@ -220,7 +220,7 @@ Defined in: [src/app/lazyRoutes.tsx:133](https://github.com/wenakita/4626/blob/7
 
 > `const` **ExploreCreatorTransactions**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:146](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L146)
+Defined in: [src/app/lazyRoutes.tsx:146](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L146)
 
 ***
 
@@ -228,7 +228,7 @@ Defined in: [src/app/lazyRoutes.tsx:146](https://github.com/wenakita/4626/blob/7
 
 > `const` **ExploreTransactions**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:137](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L137)
+Defined in: [src/app/lazyRoutes.tsx:137](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L137)
 
 ***
 
@@ -236,7 +236,7 @@ Defined in: [src/app/lazyRoutes.tsx:137](https://github.com/wenakita/4626/blob/7
 
 > `const` **ExploreTrends**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:136](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L136)
+Defined in: [src/app/lazyRoutes.tsx:136](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L136)
 
 ***
 
@@ -244,7 +244,7 @@ Defined in: [src/app/lazyRoutes.tsx:136](https://github.com/wenakita/4626/blob/7
 
 > `const` **ExploreVaults**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:135](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L135)
+Defined in: [src/app/lazyRoutes.tsx:135](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L135)
 
 ***
 
@@ -252,7 +252,7 @@ Defined in: [src/app/lazyRoutes.tsx:135](https://github.com/wenakita/4626/blob/7
 
 > `const` **Faq**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:112](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L112)
+Defined in: [src/app/lazyRoutes.tsx:112](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L112)
 
 ***
 
@@ -260,7 +260,7 @@ Defined in: [src/app/lazyRoutes.tsx:112](https://github.com/wenakita/4626/blob/7
 
 > `const` **FaqHowItWorks**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:113](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L113)
+Defined in: [src/app/lazyRoutes.tsx:113](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L113)
 
 ***
 
@@ -268,7 +268,7 @@ Defined in: [src/app/lazyRoutes.tsx:113](https://github.com/wenakita/4626/blob/7
 
 > `const` **GaugeVoting**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:128](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L128)
+Defined in: [src/app/lazyRoutes.tsx:128](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L128)
 
 ***
 
@@ -276,7 +276,7 @@ Defined in: [src/app/lazyRoutes.tsx:128](https://github.com/wenakita/4626/blob/7
 
 > `const` **LazyAccessBoundary**: `LazyExoticComponent`\<() => `Element`\>
 
-Defined in: [src/app/lazyRoutes.tsx:59](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L59)
+Defined in: [src/app/lazyRoutes.tsx:59](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L59)
 
 ***
 
@@ -284,7 +284,7 @@ Defined in: [src/app/lazyRoutes.tsx:59](https://github.com/wenakita/4626/blob/7e
 
 > `const` **LazyAuthWalletBoundary**: `LazyExoticComponent`\<() => `Element`\>
 
-Defined in: [src/app/lazyRoutes.tsx:25](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L25)
+Defined in: [src/app/lazyRoutes.tsx:25](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L25)
 
 ***
 
@@ -292,7 +292,7 @@ Defined in: [src/app/lazyRoutes.tsx:25](https://github.com/wenakita/4626/blob/7e
 
 > `const` **LazyPrivyBoundary**: `LazyExoticComponent`\<() => `Element`\>
 
-Defined in: [src/app/lazyRoutes.tsx:45](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L45)
+Defined in: [src/app/lazyRoutes.tsx:45](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L45)
 
 ***
 
@@ -300,7 +300,7 @@ Defined in: [src/app/lazyRoutes.tsx:45](https://github.com/wenakita/4626/blob/7e
 
 > `const` **LazyRequireAccepted**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:80](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L80)
+Defined in: [src/app/lazyRoutes.tsx:80](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L80)
 
 ***
 
@@ -308,7 +308,7 @@ Defined in: [src/app/lazyRoutes.tsx:80](https://github.com/wenakita/4626/blob/7e
 
 > `const` **LazyRequireAdmin**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:81](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L81)
+Defined in: [src/app/lazyRoutes.tsx:81](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L81)
 
 ***
 
@@ -316,7 +316,7 @@ Defined in: [src/app/lazyRoutes.tsx:81](https://github.com/wenakita/4626/blob/7e
 
 > `const` **LazyRequireSession**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:79](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L79)
+Defined in: [src/app/lazyRoutes.tsx:79](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L79)
 
 ***
 
@@ -324,7 +324,7 @@ Defined in: [src/app/lazyRoutes.tsx:79](https://github.com/wenakita/4626/blob/7e
 
 > `const` **Leaderboard**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:109](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L109)
+Defined in: [src/app/lazyRoutes.tsx:109](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L109)
 
 ***
 
@@ -332,7 +332,7 @@ Defined in: [src/app/lazyRoutes.tsx:109](https://github.com/wenakita/4626/blob/7
 
 > `const` **Portfolio**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:160](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L160)
+Defined in: [src/app/lazyRoutes.tsx:160](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L160)
 
 ***
 
@@ -340,7 +340,7 @@ Defined in: [src/app/lazyRoutes.tsx:160](https://github.com/wenakita/4626/blob/7
 
 > `const` **Positions**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:159](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L159)
+Defined in: [src/app/lazyRoutes.tsx:159](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L159)
 
 ***
 
@@ -348,7 +348,7 @@ Defined in: [src/app/lazyRoutes.tsx:159](https://github.com/wenakita/4626/blob/7
 
 > `const` **SmartWalletsRouteProvider**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:98](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L98)
+Defined in: [src/app/lazyRoutes.tsx:98](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L98)
 
 ***
 
@@ -356,7 +356,7 @@ Defined in: [src/app/lazyRoutes.tsx:98](https://github.com/wenakita/4626/blob/7e
 
 > `const` **Status**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:115](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L115)
+Defined in: [src/app/lazyRoutes.tsx:115](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L115)
 
 ***
 
@@ -364,7 +364,7 @@ Defined in: [src/app/lazyRoutes.tsx:115](https://github.com/wenakita/4626/blob/7
 
 > `const` **Swap**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:158](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L158)
+Defined in: [src/app/lazyRoutes.tsx:158](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L158)
 
 ***
 
@@ -372,7 +372,7 @@ Defined in: [src/app/lazyRoutes.tsx:158](https://github.com/wenakita/4626/blob/7
 
 > `const` **Vault**: `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:103](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L103)
+Defined in: [src/app/lazyRoutes.tsx:103](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L103)
 
 ## Functions
 
@@ -380,7 +380,7 @@ Defined in: [src/app/lazyRoutes.tsx:103](https://github.com/wenakita/4626/blob/7
 
 > **lazyDefault**\<`TModule`\>(`loader`): `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:16](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L16)
+Defined in: [src/app/lazyRoutes.tsx:16](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L16)
 
 #### Type Parameters
 
@@ -404,7 +404,7 @@ Defined in: [src/app/lazyRoutes.tsx:16](https://github.com/wenakita/4626/blob/7e
 
 > **LazyGuardedOutlet**(`props`): `Element`
 
-Defined in: [src/app/lazyRoutes.tsx:89](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L89)
+Defined in: [src/app/lazyRoutes.tsx:89](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L89)
 
 #### Parameters
 
@@ -424,7 +424,7 @@ Defined in: [src/app/lazyRoutes.tsx:89](https://github.com/wenakita/4626/blob/7e
 
 > **lazyNamed**\<`TModule`, `TKey`\>(`loader`, `exportName`): `LazyExoticComponent`\<`ComponentType`\<`any`\>\>
 
-Defined in: [src/app/lazyRoutes.tsx:6](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L6)
+Defined in: [src/app/lazyRoutes.tsx:6](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L6)
 
 #### Type Parameters
 
@@ -456,7 +456,7 @@ Defined in: [src/app/lazyRoutes.tsx:6](https://github.com/wenakita/4626/blob/7e6
 
 > **LazyRouteBoundary**(`props`): `Element`
 
-Defined in: [src/app/lazyRoutes.tsx:83](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/app/lazyRoutes.tsx#L83)
+Defined in: [src/app/lazyRoutes.tsx:83](https://github.com/wenakita/4626/blob/main/frontend/src/app/lazyRoutes.tsx#L83)
 
 #### Parameters
 

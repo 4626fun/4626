@@ -12,7 +12,7 @@
 
 > **validateSwapTransactionPayload**(`payload`): `string` \| `null`
 
-Defined in: [server/uniswap/swapPayloadValidation.ts:13](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/server/uniswap/swapPayloadValidation.ts#L13)
+Defined in: [server/uniswap/swapPayloadValidation.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/uniswap/swapPayloadValidation.ts#L13)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **isWorkspaceTab**(`value`): `value is WorkspaceTabId`
 
-Defined in: [src/features/vault/vaultWorkspaceQuery.ts:13](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/vault/vaultWorkspaceQuery.ts#L13)
+Defined in: [src/features/vault/vaultWorkspaceQuery.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/features/vault/vaultWorkspaceQuery.ts#L13)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/features/vault/vaultWorkspaceQuery.ts:13](https://github.com/we
 
 > **parseVaultWorkspaceQuery**(`searchParams`): `object`
 
-Defined in: [src/features/vault/vaultWorkspaceQuery.ts:17](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/vault/vaultWorkspaceQuery.ts#L17)
+Defined in: [src/features/vault/vaultWorkspaceQuery.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/features/vault/vaultWorkspaceQuery.ts#L17)
 
 #### Parameters
 
@@ -60,7 +60,7 @@ Defined in: [src/features/vault/vaultWorkspaceQuery.ts:17](https://github.com/we
 
 > **updateVaultWorkspaceQuery**(`params`): `URLSearchParams`
 
-Defined in: [src/features/vault/vaultWorkspaceQuery.ts:34](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/vault/vaultWorkspaceQuery.ts#L34)
+Defined in: [src/features/vault/vaultWorkspaceQuery.ts:34](https://github.com/wenakita/4626/blob/main/frontend/src/features/vault/vaultWorkspaceQuery.ts#L34)
 
 #### Parameters
 

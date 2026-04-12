@@ -12,7 +12,7 @@
 
 > **HandoffCreateResponse** = `object`
 
-Defined in: [src/features/waitlist/waitlistHandoff.ts:10](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/waitlist/waitlistHandoff.ts#L10)
+Defined in: [src/features/waitlist/waitlistHandoff.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistHandoff.ts#L10)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [src/features/waitlist/waitlistHandoff.ts:10](https://github.com/wen
 
 > **code**: `string`
 
-Defined in: [src/features/waitlist/waitlistHandoff.ts:11](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/waitlist/waitlistHandoff.ts#L11)
+Defined in: [src/features/waitlist/waitlistHandoff.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistHandoff.ts#L11)
 
 ##### expiresAt
 
 > **expiresAt**: `string`
 
-Defined in: [src/features/waitlist/waitlistHandoff.ts:12](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/waitlist/waitlistHandoff.ts#L12)
+Defined in: [src/features/waitlist/waitlistHandoff.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistHandoff.ts#L12)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [src/features/waitlist/waitlistHandoff.ts:12](https://github.com/wen
 
 > **PrivyAuthSessionResponse** = `object`
 
-Defined in: [src/features/waitlist/waitlistHandoff.ts:4](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/waitlist/waitlistHandoff.ts#L4)
+Defined in: [src/features/waitlist/waitlistHandoff.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistHandoff.ts#L4)
 
 #### Properties
 
@@ -42,19 +42,19 @@ Defined in: [src/features/waitlist/waitlistHandoff.ts:4](https://github.com/wena
 
 > **address**: `string`
 
-Defined in: [src/features/waitlist/waitlistHandoff.ts:5](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/waitlist/waitlistHandoff.ts#L5)
+Defined in: [src/features/waitlist/waitlistHandoff.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistHandoff.ts#L5)
 
 ##### privyUserId?
 
 > `optional` **privyUserId**: `string`
 
-Defined in: [src/features/waitlist/waitlistHandoff.ts:7](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/waitlist/waitlistHandoff.ts#L7)
+Defined in: [src/features/waitlist/waitlistHandoff.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistHandoff.ts#L7)
 
 ##### sessionToken
 
 > **sessionToken**: `string`
 
-Defined in: [src/features/waitlist/waitlistHandoff.ts:6](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/waitlist/waitlistHandoff.ts#L6)
+Defined in: [src/features/waitlist/waitlistHandoff.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistHandoff.ts#L6)
 
 ## Functions
 
@@ -62,7 +62,7 @@ Defined in: [src/features/waitlist/waitlistHandoff.ts:6](https://github.com/wena
 
 > **bridgePrivySession**(`privyToken`): `Promise`\<`string` \| `null`\>
 
-Defined in: [src/features/waitlist/waitlistHandoff.ts:21](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/waitlist/waitlistHandoff.ts#L21)
+Defined in: [src/features/waitlist/waitlistHandoff.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistHandoff.ts#L21)
 
 #### Parameters
 
@@ -80,7 +80,7 @@ Defined in: [src/features/waitlist/waitlistHandoff.ts:21](https://github.com/wen
 
 > **createAuthHandoffCode**(`params`): `Promise`\<`string`\>
 
-Defined in: [src/features/waitlist/waitlistHandoff.ts:41](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/features/waitlist/waitlistHandoff.ts#L41)
+Defined in: [src/features/waitlist/waitlistHandoff.ts:41](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistHandoff.ts#L41)
 
 #### Parameters
 

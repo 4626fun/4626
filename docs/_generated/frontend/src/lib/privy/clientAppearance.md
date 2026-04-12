@@ -12,7 +12,7 @@
 
 > **createPrivyAppearance**(`options?`): `object`
 
-Defined in: [src/lib/privy/clientAppearance.ts:6](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/src/lib/privy/clientAppearance.ts#L6)
+Defined in: [src/lib/privy/clientAppearance.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/privy/clientAppearance.ts#L6)
 
 #### Parameters
 

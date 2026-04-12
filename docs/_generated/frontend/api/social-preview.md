@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`void`\>
 
-Defined in: [api/social-preview.ts:5](https://github.com/wenakita/4626/blob/7e6202c0ac5749d4a679198595b6dbea9ce54e9b/frontend/api/social-preview.ts#L5)
+Defined in: [api/social-preview.ts:5](https://github.com/wenakita/4626/blob/main/frontend/api/social-preview.ts#L5)
 
 #### Parameters
 
