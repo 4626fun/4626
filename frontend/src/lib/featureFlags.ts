@@ -14,6 +14,8 @@
  * from env-backed to a remote provider only changes the definition here.
  */
 
+import { getRemoteFlag } from '@/lib/remoteFlags'
+
 export type { HostMode } from '@/lib/host'
 type HostMode = import('@/lib/host').HostMode
 
@@ -224,6 +226,9 @@ export const lensGroveFlag = defineFlag<boolean>({
   defaultValue: true,
   options: [{ value: false, label: 'Hidden' }, { value: true, label: 'Shown' }],
   decide() {
+    const remote = getRemoteFlag<boolean>('lens-grove')
+    if (remote !== undefined) return remote
+
     const raw = String(import.meta.env.VITE_ENABLE_LENS_GROVE ?? '').trim().toLowerCase()
     if (!raw) return true
     return isTruthyEnv(raw)

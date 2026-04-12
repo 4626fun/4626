@@ -216,6 +216,7 @@ function localApiRoutesPlugin(): Plugin {
         '/api/social-preview-debug': () => import('./api/social-preview-debug'),
         '/api/creator-allowlist': () => import('./api/_handlers/_creator-allowlist'),
         '/api/flags/discover': () => import('./api/_handlers/flags/_discover'),
+        '/api/flags/evaluate': () => import('./api/_handlers/flags/_evaluate'),
         '/api/waitlist/bootstrap': () => import('./api/_handlers/waitlist/_bootstrap'),
         '/api/waitlist/me': () => import('./api/_handlers/waitlist/_me'),
         '/api/waitlist/leaderboard': () => import('./api/_handlers/waitlist/_leaderboard'),
