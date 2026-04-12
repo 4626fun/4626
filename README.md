@@ -326,7 +326,7 @@ This repo ships a small repo-native agent layer for Cursor/Codex-style use. It d
 - Authority order: `AGENTS.md` -> scoped `.cursor/rules/*.mdc` -> relevant repo skill -> verification selector.
 - Bundled skills live under `script/agent-runtime/skills/`.
 - Verification selector CLI: `pnpm agent:verify-change -- <paths...>`.
-- Operator docs: [`docs/agent-workflow.md`](docs/agent-workflow.md), skill index: [`docs/agent-skills.md`](docs/agent-skills.md).
+- Operator docs: [`docs/operators/index.md`](/operators), runtime skills: `script/agent-runtime/skills/`.
 
 ## XMTP Agent Runtime
 
@@ -466,8 +466,8 @@ For complete env references, see `frontend/README.md` and `cre/README.md`.
 - Security docs: `docs/security/index.md`
 - Payout router + ownership hardening memo: `docs/security/payout-router-ownership-hardening-2026-03.md`
 - Internal audit / CI security index: `docs/audits/README.md`
-- Agent workflow: `docs/agent-workflow.md`
-- Repo skill index: `docs/agent-skills.md`
+- Operator lane: `/operators`
+- Runtime skills source: `script/agent-runtime/skills/`
 - Frontend guide: `frontend/README.md`
 - Swap integration/runtime notes: `frontend/docs/uniswap-integration-notes.md`
 - Account + onboarding architecture: `frontend/docs/account-auth-invariants.md`, `frontend/docs/waitlist-accounts-architecture.md`
