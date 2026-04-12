@@ -36,6 +36,18 @@ describe('getClientIp', () => {
     expect(getClientIp(req)).toBe('203.0.113.20')
   })
 
+  it('uses cf-connecting-ip in production when vercel header is missing', () => {
+    process.env.NODE_ENV = 'production'
+    const req = {
+      headers: {
+        'cf-connecting-ip': '198.51.100.22',
+        'x-real-ip': '203.0.113.20',
+        'x-forwarded-for': '198.51.100.77',
+      },
+    }
+    expect(getClientIp(req)).toBe('198.51.100.22')
+  })
+
   it('falls back to x-forwarded-for only outside production', () => {
     process.env.NODE_ENV = 'development'
     const req = {

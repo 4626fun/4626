@@ -36,6 +36,30 @@ type IdentityCacheEntry = Omit<IdentityResult, 'loading'>
 const identityCache = new Map<string, IdentityCacheEntry>()
 const pendingLookups = new Map<string, Promise<IdentityCacheEntry>>()
 const IS_BROWSER = typeof window !== 'undefined'
+const MAX_IDENTITY_LOOKUPS_IN_FLIGHT = 6
+let activeIdentityLookups = 0
+const identityLookupQueue: Array<() => void> = []
+
+function runIdentityLookupTask<T>(task: () => Promise<T>): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const launch = () => {
+      activeIdentityLookups += 1
+      task()
+        .then(resolve, reject)
+        .finally(() => {
+          activeIdentityLookups = Math.max(0, activeIdentityLookups - 1)
+          const next = identityLookupQueue.shift()
+          if (next) next()
+        })
+    }
+
+    if (activeIdentityLookups < MAX_IDENTITY_LOOKUPS_IN_FLIGHT) {
+      launch()
+      return
+    }
+    identityLookupQueue.push(launch)
+  })
+}
 
 function buildReadTransport(url: string) {
   if (url.startsWith('/api/rpc')) {
@@ -234,7 +258,7 @@ async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {
   const pending = pendingLookups.get(address.toLowerCase())
   if (pending) return pending
 
-  const promise = (async () => {
+  const promise = runIdentityLookupTask(async () => {
     const [lens, ensName, basenameProfile] = await Promise.all([
       fetchLensUser(address).catch(() => null),
       ensClient.getEnsName({ address: address as `0x${string}` }).catch(() => null),
@@ -317,7 +341,7 @@ async function resolveIdentity(address: string): Promise<IdentityCacheEntry> {
 
     identityCache.set(address.toLowerCase(), fallback)
     return fallback
-  })()
+  })
 
   pendingLookups.set(address.toLowerCase(), promise)
   promise.finally(() => pendingLookups.delete(address.toLowerCase()))

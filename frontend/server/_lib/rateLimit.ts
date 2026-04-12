@@ -207,6 +207,9 @@ export function getClientIp(req: { headers?: Record<string, any> }): string {
   const fromVercel = extractFirstIp(firstHeaderValue(h['x-vercel-forwarded-for']))
   if (fromVercel) return fromVercel
 
+  const fromCloudflare = extractFirstIp(firstHeaderValue(h['cf-connecting-ip']))
+  if (fromCloudflare) return fromCloudflare
+
   const fromRealIp = extractFirstIp(firstHeaderValue(h['x-real-ip']))
   if (fromRealIp) return fromRealIp
 
