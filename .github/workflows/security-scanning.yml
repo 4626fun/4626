@@ -167,3 +167,55 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           tail -80 "$RUNNER_TEMP/slither.txt" 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || echo "(no slither output)" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+  slither-launch-gate:
+    name: Slither launch branch gate (high impact)
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/heads/launch/')) ||
+      (github.event_name == 'pull_request' && startsWith(github.head_ref, 'launch/'))
+    env:
+      FOUNDRY_PROFILE: ci
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          submodules: recursive
+
+      - uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: nightly
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Slither
+        run: pip install slither-analyzer
+
+      - name: Forge build
+        run: forge build --sizes || true
+
+      - name: Run Slither (JSON)
+        run: slither . --fail-none --json "$RUNNER_TEMP/slither-launch.json"
+
+      - name: Fail launch branch on high-impact findings
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import sys
+          path = os.path.join(os.environ["RUNNER_TEMP"], "slither-launch.json")
+          with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+          detectors = ((data or {}).get("results") or {}).get("detectors") or []
+          highs = [d for d in detectors if str(d.get("impact", "")).lower() == "high"]
+          if highs:
+            print("High-impact Slither findings detected on launch branch:")
+            for d in highs:
+              check = d.get("check", "<unknown-check>")
+              impact = d.get("impact", "<impact>")
+              confidence = d.get("confidence", "<confidence>")
+              print(f"- {check} (impact={impact}, confidence={confidence})")
+            sys.exit(1)
+          print("No high-impact Slither findings detected.")
+          PY

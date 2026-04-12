@@ -15,7 +15,24 @@ import { alertCritical } from '../utils/alerts.js';
 
 const WORKFLOW_NAME = 'charm-rebalance-manager';
 
+function shouldRunDirectCharmRebalance(): boolean {
+  const mode = String(process.env.CHARM_REBALANCE_CANONICAL_MODE ?? 'queue').trim().toLowerCase();
+  return mode === 'direct';
+}
+
 export async function handler(): Promise<void> {
+  if (!shouldRunDirectCharmRebalance()) {
+    console.log(
+      JSON.stringify({
+        workflow: WORKFLOW_NAME,
+        timestamp: new Date().toISOString(),
+        skipped: true,
+        reason: 'canonical_queue_mode',
+      }),
+    );
+    return;
+  }
+
   try {
     const result = await executeCharmRebalanceManager();
 

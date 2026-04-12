@@ -84,7 +84,13 @@ An optional always-on listener complements cron for lower-latency strategy react
 |---------|------|------|
 | **Strategy Signal Listener** | Subscribes to oracle v3Pool `Swap` events, evaluates Ajna/Charm thresholds, enqueues deduped strategy actions | Continuous (WebSocket) |
 
-Cron Ajna/Charm workflows stay enabled as fallback heartbeat and recovery path.
+Cron Ajna workflows stay enabled as fallback heartbeat and recovery path.
+Charm direct rebalance writes are disabled by default in favor of a single canonical lane:
+
+- producer: `strategy-signal-listener`
+- executor: `keepr-action-queue`
+
+Set `CHARM_REBALANCE_CANONICAL_MODE=direct` only when intentionally overriding to direct writer mode.
 
 ## Problem This Solves
 
@@ -359,6 +365,7 @@ Canonical Ajna notes:
 Optional (Charm rebalance manager):
 - `CHARM_REBALANCE_VAULT_ADDRESS` / `CHARM_REBALANCE_ORACLE_ADDRESS` — explicit single-vault targeting for Charm workflow
 - `CHARM_REBALANCE_TWAP_DURATION`, `CHARM_REBALANCE_PRICE_CHANGE_TRIGGER_BPS`
+- `CHARM_REBALANCE_CANONICAL_MODE` — `queue` (default, canonical) or `direct` (explicit override)
 
 Optional (strategy signal listener):
 - `BASE_WS_RPC_URL` — Base WebSocket RPC for `Swap` subscriptions

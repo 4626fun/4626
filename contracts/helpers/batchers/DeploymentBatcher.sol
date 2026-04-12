@@ -37,6 +37,7 @@ contract DeploymentBatcherPhase3Helper {
     // Charm managerFee uses 1e6 precision (100% = 1_000_000).
     uint24 internal constant CHARM_MANAGER_FEE_PIPS = 160_000; // 16%
     uint24 internal constant CHARM_DEFAULT_PROTOCOL_FEE_PIPS = 10_000; // 1%
+    int24 internal constant CHARM_MIN_TICK_MOVE = 10;
     int24 internal constant CHARM_MAX_TWAP_DEVIATION = 500;
     uint32 internal constant CHARM_TWAP_DURATION = 300;
 
@@ -99,13 +100,13 @@ contract DeploymentBatcherPhase3Helper {
                 pool: v3Pool,
                 manager: protocolTreasury,
                 managerFee: CHARM_MANAGER_FEE_PIPS,
-                rebalanceDelegate: address(0),
+                rebalanceDelegate: protocolTreasury,
                 maxTotalSupply: type(uint256).max,
                 baseThreshold: 3000,
                 limitThreshold: 6000,
                 fullRangeWeight: 0,
                 period: 1800,
-                minTickMove: int24(0),
+                minTickMove: CHARM_MIN_TICK_MOVE,
                 maxTwapDeviation: CHARM_MAX_TWAP_DEVIATION,
                 twapDuration: CHARM_TWAP_DURATION,
                 name: params.charmVaultName,

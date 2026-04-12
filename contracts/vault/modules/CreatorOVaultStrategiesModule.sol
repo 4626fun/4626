@@ -175,38 +175,6 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
         coinBalance = afterBal;
     }
 
-    function _withdrawFromStrategyBestEffort(address strategy, uint256 amount) internal returns (uint256 withdrawn) {
-        if (amount == 0) return 0;
-
-        IERC20 coin = _creatorCoin();
-        uint256 beforeBal = coin.balanceOf(address(this));
-
-        try IStrategy(strategy).withdraw(amount) returns (uint256 reported) {
-            uint256 afterBal = coin.balanceOf(address(this));
-
-            if (afterBal < beforeBal) {
-                _syncCoinBalance();
-                emit StrategyWithdrawFailed(strategy, amount, bytes("NEGATIVE_BALANCE_DELTA"));
-                return 0;
-            }
-
-            uint256 received = afterBal - beforeBal;
-            coinBalance = afterBal;
-
-            if (received != reported) {
-                emit StrategyWithdrawFailed(
-                    strategy, amount, abi.encodeWithSelector(TransferAmountMismatch.selector, reported, received)
-                );
-            }
-
-            return received;
-        } catch (bytes memory err) {
-            _syncCoinBalance();
-            emit StrategyWithdrawFailed(strategy, amount, err);
-            return 0;
-        }
-    }
-
     function _getStrategyAssetsSafe(address strategy) internal view returns (uint256 assets) {
         try IStrategy(strategy).getTotalAssets() returns (uint256 reportedAssets) {
             assets = reportedAssets;
@@ -238,8 +206,7 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
                 emit UnrealisedLossAssessed(strategy, unrealizedLoss);
             }
 
-            uint256 withdrawn = _withdrawFromStrategyBestEffort(strategy, toWithdraw);
-            if (withdrawn == 0) continue;
+            uint256 withdrawn = _withdrawFromStrategyMeasured(strategy, toWithdraw);
 
             totalWithdrawn += withdrawn;
             remaining = remaining > withdrawn ? remaining - withdrawn : 0;

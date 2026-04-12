@@ -290,7 +290,7 @@ Keeper bots in `cre/` relay data between Solana and Base. Install: `cd cre && np
 - `SOLANA_CREATOR_COIN_TO_MINT_MAPPING` — JSON: Base creator coin → Solana mint
 - `SOLANA_TWIN_TO_PUBKEY_MAPPING` — JSON: Base Twin contract → Solana pubkey
 
-**CRE has pre-existing TS errors** (4 errors in actions/utils); runtime is unaffected since `tsx` skips type checks.
+**CRE TypeScript baseline is currently clean** (`pnpm -C cre typecheck` passes). Keep this as a no-regression launch gate.
 
 ## Learned User Preferences
 

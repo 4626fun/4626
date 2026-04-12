@@ -60,12 +60,22 @@ Server:
 - `PRIVY_WALLET_AUTHORIZATION_KEY`
 - `PRIVY_WALLET_OWNER_ID`
 
+Solana deploy-session preflight (server, required when Solana strategy is enabled):
+
+- `DEPLOY_SOLANA_REGISTRATION_SECRET`
+- `APP_ORIGIN` or `DEPLOY_SOLANA_REGISTRATION_ORIGINS` (for internal registration origin resolution)
+
 ## Verification checkpoints
 
 - `/api/deploy/session/status` advances through the expected phases.
+- Deploy-session progression covers `phase3_sent -> phase4_sent -> completed` with no Solana preflight error.
 - `/api/v1/token/<shareOFT>/image?chain=8453&format=png` returns a non-empty image.
 - The vault status page shows the expected strategy and wallet wiring.
 - The deploy-session flow does not rely on same-origin paymaster/proxy fallback in production.
+- Charm vaults are deployed with a non-zero `rebalanceDelegate` and validated TWAP/tick guard defaults.
+- CRE runs a single canonical Charm producer/executor lane (`strategy-signal-listener` -> `keepr-action-queue`) unless explicitly overridden.
+- CSW owner-index drift recovery steps are documented and tested (`docs/operations/deployment/csw-owner-index-drift-recovery.md`).
+- Solana registration and infra checks pass in API tests (`deployRegisterSolanaBridgeToken`, `deploySolanaInfraStatus`).
 
 ## Rollback
 

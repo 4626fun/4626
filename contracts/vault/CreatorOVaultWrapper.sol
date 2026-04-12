@@ -12,6 +12,10 @@ interface IShareOFT is IERC20 {
     function burn(address from, uint256 amount) external;
 }
 
+interface IQueueAwareVault {
+    function largeWithdrawalThreshold() external view returns (uint256);
+}
+
 /**
  * @title CreatorOVaultWrapper
  * @author 0xakita.eth - Think FriendTech, but for CreatorCoins, in ERC-4626 Omnichain Vaults
@@ -149,6 +153,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
     error SlippageExceeded();
     error AmountTooSmallToNormalize(); // < 1 normalized share after fees + user dust
     error UnauthorizedBeneficiaryOperator(address operator, address beneficiary);
+    error AsyncRedemptionRequired(uint256 assets, uint256 threshold);
 
     // ================================
     // CONSTRUCTOR
@@ -337,6 +342,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
 
         // 1-2. Unwrap: burn ShareOFT, get vault shares (internal)
         uint256 vaultShares = _unwrapInternal(amount, msg.sender, msg.sender);
+        _requireSynchronousRedemption(vaultShares);
 
         // 3. Redeem vault shares → Creator Coin (sent directly to user)
         creatorCoinOut = vault.redeem(vaultShares, msg.sender, address(this));
@@ -355,6 +361,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
 
         uint256 vaultShares = _unwrapInternal(amount, msg.sender, msg.sender);
+        _requireSynchronousRedemption(vaultShares);
         creatorCoinOut = vault.redeem(vaultShares, msg.sender, address(this));
 
         emit Withdrawn(msg.sender, amount, creatorCoinOut);
@@ -376,6 +383,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
 
         uint256 vaultShares = _unwrapInternal(amount, beneficiary, msg.sender);
+        _requireSynchronousRedemption(vaultShares);
         creatorCoinOut = vault.redeem(vaultShares, msg.sender, address(this));
         if (creatorCoinOut < minOut) revert SlippageExceeded();
 
@@ -722,6 +730,23 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         if (beneficiary == msg.sender) return;
         if (!isBeneficiaryOperator[msg.sender]) {
             revert UnauthorizedBeneficiaryOperator(msg.sender, beneficiary);
+        }
+    }
+
+    function _requireSynchronousRedemption(uint256 vaultShares) internal view {
+        (bool success, bytes memory data) = address(vault).staticcall(
+            abi.encodeWithSelector(IQueueAwareVault.largeWithdrawalThreshold.selector)
+        );
+        if (!success || data.length < 32) {
+            return;
+        }
+
+        uint256 threshold = abi.decode(data, (uint256));
+        if (threshold == 0) return;
+
+        uint256 previewAssets = vault.previewRedeem(vaultShares);
+        if (previewAssets >= threshold) {
+            revert AsyncRedemptionRequired(previewAssets, threshold);
         }
     }
 }

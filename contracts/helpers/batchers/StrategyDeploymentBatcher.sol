@@ -67,6 +67,7 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
     // Charm managerFee uses 1e6 precision (100% = 1_000_000).
     uint24 private constant CHARM_MANAGER_FEE_PIPS = 160_000; // 16%
     uint24 private constant CHARM_EXPECTED_PROTOCOL_FEE_PIPS = 10_000; // 1%
+    int24 private constant CHARM_MIN_TICK_MOVE = 10;
     int24 private constant CHARM_MAX_TWAP_DEVIATION = 500;
     uint32 private constant CHARM_TWAP_DURATION = 300;
 
@@ -167,13 +168,13 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
                 pool: result.v3Pool,
                 manager: owner, // manager (can call rebalance)
                 managerFee: CHARM_MANAGER_FEE_PIPS,
-                rebalanceDelegate: address(0),
+                rebalanceDelegate: owner,
                 maxTotalSupply: type(uint256).max, // maxTotalSupply (unlimited)
                 baseThreshold: 3000, // baseThreshold (ticks)
                 limitThreshold: 6000, // limitThreshold (ticks)
                 fullRangeWeight: 0, // fullRangeWeight (0 = no full range position)
                 period: 1800, // period (30 minutes between rebalances)
-                minTickMove: int24(0),
+                minTickMove: CHARM_MIN_TICK_MOVE,
                 maxTwapDeviation: CHARM_MAX_TWAP_DEVIATION,
                 twapDuration: CHARM_TWAP_DURATION,
                 name: vaultName,

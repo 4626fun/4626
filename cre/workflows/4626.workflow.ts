@@ -39,6 +39,11 @@ import { alertCritical } from '../utils/alerts.js';
 
 const WORKFLOW_NAME = '4626';
 
+function shouldRunDirectCharmRebalance(): boolean {
+  const mode = String(process.env.CHARM_REBALANCE_CANONICAL_MODE ?? 'queue').trim().toLowerCase();
+  return mode === 'direct';
+}
+
 export interface UnifiedResult {
   keeper: BatchKeeperResult | null;
   payoutRouter: BatchPayoutRouterHarvestResult | null;
@@ -109,18 +114,24 @@ export async function handler(): Promise<void> {
   }
 
   // ── 4. Charm Rebalance Manager (oracle price-move trigger) ───────────
-  try {
+  // Canonical default is event producer + queue executor to avoid dual-writer races.
+  if (shouldRunDirectCharmRebalance()) {
+    try {
+      console.log('═══ Charm Rebalance Manager ═══');
+      charmRebalanceResult = await executeCharmRebalanceManager();
+      console.log(
+        `  vaults=${charmRebalanceResult.totalVaults} strategies=${charmRebalanceResult.totalStrategies} ` +
+          `rebalanced=${charmRebalanceResult.rebalanced} skipped=${charmRebalanceResult.skipped} ` +
+          `errors=${charmRebalanceResult.errors}`,
+      );
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`  charm-rebalance-manager failed: ${msg}`);
+      errors.push(`charm-rebalance-manager: ${msg}`);
+    }
+  } else {
     console.log('═══ Charm Rebalance Manager ═══');
-    charmRebalanceResult = await executeCharmRebalanceManager();
-    console.log(
-      `  vaults=${charmRebalanceResult.totalVaults} strategies=${charmRebalanceResult.totalStrategies} ` +
-        `rebalanced=${charmRebalanceResult.rebalanced} skipped=${charmRebalanceResult.skipped} ` +
-        `errors=${charmRebalanceResult.errors}`,
-    );
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    console.error(`  charm-rebalance-manager failed: ${msg}`);
-    errors.push(`charm-rebalance-manager: ${msg}`);
+    console.log('  skipped: canonical queue mode enabled (set CHARM_REBALANCE_CANONICAL_MODE=direct to override)');
   }
 
   // ── 5. Auction Settlement (sweepCurrency + sweepUnsoldTokens) ────────

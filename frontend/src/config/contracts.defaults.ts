@@ -81,12 +81,13 @@ export const AKITA_DEFAULTS = {
 } as const
 
 export const ERC4626_DEFAULTS = {
-  // Placeholder: mirrors AKITA until a live protocol coin ($4626) stack is wired; avoids requiring env vars for defaults.
-  token: AKITA_DEFAULTS.token,
-  vault: AKITA_DEFAULTS.vault,
-  wrapper: AKITA_DEFAULTS.wrapper,
-  shareOFT: AKITA_DEFAULTS.shareOFT,
-  gaugeController: AKITA_DEFAULTS.gaugeController,
-  ccaStrategy: AKITA_DEFAULTS.ccaStrategy,
-  oracle: AKITA_DEFAULTS.oracle,
+  // Canonical protocol token defaults currently point to the live Base protocol stack.
+  // Keep explicit addresses here so this default set remains independent from AKITA aliases.
+  token: addr('5b674196812451b7cec024fe9d22d2c0b172fa75'),
+  vault: addr('A015954E2606d08967Aee3787456bB3A86a46A42'),
+  wrapper: addr('58Cd1E9248F89138208A601e95A531d3c0fa0c4f'),
+  shareOFT: addr('4df30fFfDA1D4A81bcf4DC778292Be8Ff9752a57'),
+  gaugeController: addr('B471B53cD0A30289Bc3a2dc3c6dd913288F8baA1'),
+  ccaStrategy: addr('00c7897e0554b34A477D9D144AcC613Cdc97046F'),
+  oracle: addr('8C044aeF10d05bcC53912869db89f6e1f37bC6fC'),
 } as const

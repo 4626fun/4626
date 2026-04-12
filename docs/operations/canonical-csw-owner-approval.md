@@ -138,6 +138,21 @@ Meaning:
 
 - prepared owner-install payload does not target the canonical CSW and should be treated as invalid
 
+### Owner-index drift
+
+Symptoms:
+
+- signer is an onchain owner but AA execution still fails
+- retries with the same owner index continue to fail
+
+Meaning:
+
+- runtime owner index is stale versus current canonical CSW owner ordering
+
+Action:
+
+- follow `docs/operations/deployment/csw-owner-index-drift-recovery.md`
+
 ## Support posture
 
 If this flow is failing in production, collect:
@@ -153,3 +168,4 @@ If this flow is failing in production, collect:
 - `frontend/docs/account-auth-invariants.md`
 - `frontend/docs/waitlist-accounts-architecture.md`
 - `docs/guides/troubleshooting/activate-account-signing.md`
+- `docs/operations/deployment/csw-owner-index-drift-recovery.md`

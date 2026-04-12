@@ -240,5 +240,30 @@ contract CreatorOVaultWrapperShareOFTValidationTest is Test {
         assertEq(coin.balanceOf(alice), coinOut);
         assertTrue(wrapper.verify());
     }
+
+    function test_withdraw_revertsForLargeExit_thatRequiresVaultQueue() public {
+        (MockCreatorCoin coin, CreatorOVault vault, CreatorOVaultWrapper wrapper) = _deploySystem();
+
+        GoodShareOFT share = new GoodShareOFT();
+        wrapper.setShareOFT(address(share));
+        share.setMinter(address(wrapper), true);
+
+        uint256 bootstrapAmount = vault.MINIMUM_FIRST_DEPOSIT();
+        coin.mint(alice, bootstrapAmount);
+
+        vm.startPrank(alice);
+        coin.approve(address(wrapper), type(uint256).max);
+        uint256 bootstrapShares = wrapper.deposit(bootstrapAmount);
+
+        vm.roll(block.number + 1);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CreatorOVaultWrapper.AsyncRedemptionRequired.selector, bootstrapAmount, vault.largeWithdrawalThreshold()
+            )
+        );
+        wrapper.withdraw(bootstrapShares);
+        vm.stopPrank();
+    }
 }
 

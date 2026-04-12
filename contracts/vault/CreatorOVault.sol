@@ -994,7 +994,10 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         if (paused) return 0;
         uint256 userShares = balanceOf(owner_);
         if (userShares == 0) return 0;
-        return previewRedeem(userShares);
+        uint256 assetsFromShares = previewRedeem(userShares);
+        if (largeWithdrawalThreshold == 0) return assetsFromShares;
+        uint256 maxSyncAssets = largeWithdrawalThreshold - 1;
+        return assetsFromShares > maxSyncAssets ? maxSyncAssets : assetsFromShares;
     }
 
     /**
@@ -1002,7 +1005,13 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      */
     function maxRedeem(address owner_) public view override returns (uint256) {
         if (paused) return 0;
-        return balanceOf(owner_);
+        uint256 userShares = balanceOf(owner_);
+        if (userShares == 0) return 0;
+        if (largeWithdrawalThreshold == 0) return userShares;
+
+        uint256 maxSyncAssets = largeWithdrawalThreshold - 1;
+        uint256 syncShares = previewWithdraw(maxSyncAssets);
+        return syncShares > userShares ? userShares : syncShares;
     }
 
     // =================================

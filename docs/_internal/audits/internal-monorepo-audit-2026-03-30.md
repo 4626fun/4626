@@ -111,3 +111,80 @@ Perform before high-stakes release or investor diligence:
 - **Protocol:** Defer to [system.md](./system.md) + §3 delta; no contradictions found in this automation-only pass.  
 - **App trust boundaries:** Mapped to concrete handlers; machine-auth and Telegram proof paths are test-backed.  
 - **Next hardening:** Follow [npm-advisories-triage.md](./npm-advisories-triage.md) for remaining dev transitive advisories; optionally make **Slither** or **pnpm audit** blocking after triage; execute production parity checklist (§5) against live deploy.
+
+---
+
+## 7. Launch-blocker remediation evidence (2026-04-12)
+
+Track C parity checks executed against current repo state:
+
+| Scope | Command / check | Result |
+|-------|------------------|--------|
+| Release target guard | `bash test/v183-release-target-guard.sh` | **Pass** (`v1.8.3 release target guard passed`) |
+| Deploy-session lifecycle | `pnpm -C frontend test --run api/__tests__/deploySession.test.ts` | **Pass** (68/68 tests) incl. `phase3_sent -> phase4_sent` progression and fail-closed Solana registration secret checks |
+| Solana registration + infra status | `pnpm -C frontend test --run api/__tests__/deployRegisterSolanaBridgeToken.test.ts api/__tests__/deploySolanaInfraStatus.test.ts` | **Pass** (33/33 tests) incl. registration auth, liveness/compatibility gates, and status health responses |
+| CRE TS parity | `pnpm -C cre typecheck` | **Pass** (0 TS errors in current tree) |
+
+### Environment parity checklist snapshot
+
+Critical launch vars are now explicitly tracked as:
+
+- **Frontend required (2):**
+  - `VITE_DEPLOY_USE_SERVER_CONTINUE=true`
+  - `VITE_CDP_PAYMASTER_URL=/api/paymaster`
+- **Server required (9):**
+  - `CDP_PAYMASTER_URL`
+  - `AUTH_SESSION_SECRET`
+  - `CANONICAL_ORIGIN`
+  - `DATABASE_URL`
+  - `DEPLOY_SESSION_TOKEN_HMAC_SECRET`
+  - `PRIVY_APP_ID`
+  - `PRIVY_APP_SECRET`
+  - `PRIVY_WALLET_AUTHORIZATION_KEY`
+  - `PRIVY_WALLET_OWNER_ID`
+
+### Contracts default parity
+
+- `frontend/src/config/contracts.defaults.ts` no longer keeps `ERC4626_DEFAULTS` as an indirect placeholder alias.
+- The protocol default stack is now explicitly encoded with canonical live addresses (same currently as the live protocol stack values), removing AKITA-coupling risk from future cutovers.
+
+---
+
+## 8. Hardening track evidence (2026-04-12)
+
+### CRE TypeScript baseline
+
+| Scope | Command | Result |
+|-------|---------|--------|
+| CRE TS health | `pnpm -C cre typecheck` | **Pass** (no TS errors) |
+
+This supersedes older notes about known CRE type errors in prior snapshots.
+
+### Slither blocking posture
+
+- `security-scanning.yml` keeps the existing report-only Slither job for broad visibility.
+- A new launch-branch gate now enforces **blocking** behavior on `launch/*`:
+  - job: `slither-launch-gate`
+  - condition: push/PR head branch starts with `launch/`
+  - fail condition: any Slither detector with `impact=High`
+
+This enables strict launch gating without destabilizing unrelated feature branches.
+
+### EIP-170 / deployment-surface verification
+
+`forge build --sizes` still returns non-zero because some artifacts exceed limits. Current relevant over-limit entries:
+
+| Artifact | Runtime margin | Initcode margin | Launch-surface disposition |
+|----------|----------------|-----------------|----------------------------|
+| `AjnaERC4626StrategyFactory` | `-1,734` | `22,816` | Not part of canonical `v1.8.3` deployed infrastructure surface |
+| `CCALaunchStrategy` | `-4,014` | `19,802` | Not part of canonical `v1.8.3` infra deployment surface |
+| `StrategyDeploymentBatcher` | `19,927` | `-5,919` | Legacy/admin helper, not the canonical `/deploy` production path |
+| `CreatorLotteryManagerHarness` | `-250` | `23,307` | Test-only harness |
+| `CreatorLotteryManagerPauseHarness` | `-168` | `23,389` | Test-only harness |
+
+Canonical deployed `v1.8.3` release surface remains the contracts listed in:
+
+- `docs/operations/deployment/releases/v1.8.3-mainnet.md`
+- `docs/reference/current-contract-inventory.md`
+
+and is guarded by `bash test/v183-release-target-guard.sh`.

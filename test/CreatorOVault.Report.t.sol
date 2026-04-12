@@ -201,6 +201,15 @@ contract CreatorOVaultReportTest is Test {
         assertEq(vault.totalLockedShares(), lockedBefore);
     }
 
+    function test_maxWithdraw_and_maxRedeem_reflectSyncThreshold() public {
+        uint256 threshold = vault.largeWithdrawalThreshold();
+        assertGt(threshold, 1);
+
+        uint256 expectedMaxWithdraw = threshold - 1;
+        assertEq(vault.maxWithdraw(alice), expectedMaxWithdraw);
+        assertEq(vault.maxRedeem(alice), vault.previewWithdraw(expectedMaxWithdraw));
+    }
+
     function test_report_profitLocksSharesAndSetsUnlockParams() public {
         uint256 locked = _lockProfit(PROFIT_ASSETS);
 

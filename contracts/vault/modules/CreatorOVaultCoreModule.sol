@@ -445,12 +445,21 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         if (paused) return 0;
         uint256 userShares = _balances[owner_];
         if (userShares == 0) return 0;
-        return IERC4626(address(this)).previewRedeem(userShares);
+        uint256 assetsFromShares = IERC4626(address(this)).previewRedeem(userShares);
+        if (largeWithdrawalThreshold == 0) return assetsFromShares;
+        uint256 maxSyncAssets = largeWithdrawalThreshold - 1;
+        return assetsFromShares > maxSyncAssets ? maxSyncAssets : assetsFromShares;
     }
 
     function maxRedeem(address owner_) external view onlyDelegateCall returns (uint256) {
         if (paused) return 0;
-        return _balances[owner_];
+        uint256 userShares = _balances[owner_];
+        if (userShares == 0) return 0;
+        if (largeWithdrawalThreshold == 0) return userShares;
+
+        uint256 maxSyncAssets = largeWithdrawalThreshold - 1;
+        uint256 syncShares = IERC4626(address(this)).previewWithdraw(maxSyncAssets);
+        return syncShares > userShares ? userShares : syncShares;
     }
 
     // =================================

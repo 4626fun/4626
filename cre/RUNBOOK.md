@@ -191,6 +191,10 @@ Workflow mapping file: `cre/cre-workflows/secrets.yaml`
 - **Log trigger not firing**
   - Verify watched addresses in `strategy-signal-listener/config.*.json`
   - Confirm chain selector in `project.yaml` and workflow `chainName` alignment
+- **Charm rebalance appears duplicated / racing**
+  - Verify `CHARM_REBALANCE_CANONICAL_MODE=queue` (default)
+  - In canonical mode, Charm actions should be produced by `strategy-signal-listener` and executed by `keepr-action-queue`
+  - Use `CHARM_REBALANCE_CANONICAL_MODE=direct` only for explicit emergency/manual override
 - **Solana reconcile path not executing**
   - Check `/api/cre/keeper/solana/reconcile` auth header (`Bearer KEEPR_API_KEY`)
   - Verify `SOLANA_ORCHESTRATOR_URL` is configured
