@@ -724,7 +724,7 @@ export function AccountSetupWorkspaceView(props: {
                 </div>
                 {!connectedOwnerReady ? (
                   <div className="mt-3 text-xs text-zinc-500">
-                    Privy will open a wallet modal with MetaMask, Coinbase Wallet, detected browser wallets like Rabby, and WalletConnect fallback.
+                    Privy will open a wallet modal with MetaMask, Coinbase Wallet, and detected browser wallets like Rabby.
                     {providerCollision.shouldDisableInjectedConnector
                       ? ' This browser still reports an injected-provider collision, so Coinbase/Base may be the most reliable option if a browser wallet fails to answer.'
                       : ''}

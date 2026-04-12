@@ -88,7 +88,7 @@ describe('AccountsPage', () => {
     expect(html).toContain('Approve on Base')
     expect(html).toContain('Owner approval required')
     expect(html).toContain('Connect owner wallet')
-    expect(html).toContain('MetaMask, Coinbase Wallet, detected browser wallets like Rabby, and WalletConnect fallback')
+    expect(html).toContain('MetaMask, Coinbase Wallet, and detected browser wallets like Rabby')
     expect(html).toContain('Connected signer')
     expect(html).toContain('0x111111...111111')
     expect(html).toContain('Advanced recovery')
