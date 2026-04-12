@@ -69,13 +69,11 @@ export function VaultNavBar(props: { interactive?: boolean }) {
       const active = isActiveLink(location, item)
       if (item.to === getCanonicalMarketingWaitlistPath()) {
         const className = `group relative inline-flex h-8 items-center justify-center rounded-lg border-0 px-3 outline-none transition-all duration-200 focus-visible:ring-1 focus-visible:ring-white/25 ${
-            active ? 'bg-white/[0.06]' : 'hover:bg-white/[0.04]'
+            ''
           }`
         const content = (
           <span
-            className={`relative z-10 text-[11px] font-medium tracking-[0.01em] transition-colors ${
-              active ? 'text-white' : 'text-zinc-500 group-hover:text-zinc-300'
-            }`}
+            className="relative z-10 text-[13px] font-medium tracking-[0.01em] text-zinc-300 transition-colors"
           >
             {item.label}
           </span>
@@ -109,13 +107,11 @@ export function VaultNavBar(props: { interactive?: boolean }) {
           to={item.to}
           aria-current={active ? 'page' : undefined}
           className={`group relative inline-flex h-8 items-center justify-center rounded-lg border-0 px-3 outline-none transition-all duration-200 focus-visible:ring-1 focus-visible:ring-white/25 ${
-            active ? 'bg-white/[0.06]' : 'hover:bg-white/[0.04]'
+            ''
           }`}
         >
           <span
-            className={`relative z-10 text-[11px] font-medium tracking-[0.01em] transition-colors ${
-              active ? 'text-white' : 'text-zinc-500 group-hover:text-zinc-300'
-            }`}
+            className="relative z-10 text-[13px] font-medium tracking-[0.01em] text-zinc-300 transition-colors"
           >
             {item.label}
           </span>
@@ -125,10 +121,9 @@ export function VaultNavBar(props: { interactive?: boolean }) {
 
   return (
     <header className="hidden md:block sticky top-0 left-0 right-0 z-50">
-      <div className="absolute inset-0 bg-vault-bg/74 backdrop-blur-xl shadow-[0_10px_34px_-12px_rgba(0,0,0,0.88)]" />
-      <div className="absolute bottom-0 left-0 right-0 h-px bg-white/8" />
+      <div className="absolute inset-0 bg-vault-bg/74 backdrop-blur-xl" />
 
-      <div className="relative max-w-[1400px] mx-auto h-14 px-4 md:px-6 lg:px-8 flex items-center gap-3">
+      <div className="relative h-14 w-full px-4 md:px-6 lg:px-8 flex items-center gap-3">
         <Link
           to={brandHref}
           className="flex items-center gap-2.5 group cursor-pointer shrink-0"
@@ -138,7 +133,7 @@ export function VaultNavBar(props: { interactive?: boolean }) {
           onBlur={() => setBrandHovered(false)}
         >
           <Logo showText={false} width={28} height={28} forceHover={brandHovered} />
-          <span className="text-[13px] tracking-[0.03em] text-white font-medium leading-none">
+          <span className="text-[15px] tracking-[0.03em] text-white font-medium leading-none">
             <TextScramble text="4626.fun" trigger={brandHovered} speed={0.75} complexity="simple" />
           </span>
         </Link>
