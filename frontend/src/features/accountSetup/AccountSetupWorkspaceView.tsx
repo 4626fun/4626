@@ -1,12 +1,19 @@
-import { type ReactNode, useCallback, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { CheckCircle2, ExternalLink } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
+import { LoadingText } from '@/components/ui/LoadingState'
 import { shortValue } from './shared'
 import type { useAccountSetupController } from './useAccountSetupController'
 
 const BASESCAN_BASE = 'https://basescan.org/address/'
 const ZORA_PROFILE_BASE = 'https://zora.co/'
+
+function shortAddr(addr: string): string {
+  if (addr.length <= 10) return addr
+  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
+}
 
 type AccountSetupWorkspaceController = ReturnType<typeof useAccountSetupController>
 
@@ -56,10 +63,19 @@ export function AccountSetupWorkspaceView(props: {
     void navigator.clipboard.writeText(addr)
   }, [])
 
+  // Fire notices as bottom-right toasts rather than inline banners
+  const shownNoticeRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (notice && notice !== shownNoticeRef.current) {
+      shownNoticeRef.current = notice
+      toast.success(notice, { position: 'bottom-right', duration: 6000 })
+    }
+  }, [notice])
+
   if (loading && !me) {
     return (
       <div className="card rounded-2xl border border-white/10 bg-black/40 p-6 text-sm text-zinc-400">
-        Loading account state...
+        <LoadingText intent="session" labelOverride="Loading account state..." />
       </div>
     )
   }
@@ -77,10 +93,6 @@ export function AccountSetupWorkspaceView(props: {
       openStep === 1 || openStep === 2 ? openStep : stepOneComplete ? 2 : 1
     const primarySigningLabel = connectedOwnerReady ? 'Approve signing access' : 'Connect owner wallet'
 
-    const goToPrev = () => {
-      if (resolvedOpen > 1) setOpenStep((resolvedOpen - 1) as 1 | 2 | 3)
-    }
-
     const toggleStep = (n: 1 | 2) => {
       setOpenStep(openStep === n ? null : n)
     }
@@ -91,16 +103,11 @@ export function AccountSetupWorkspaceView(props: {
     const activeRow = `${stepBase} bg-[#1b2030] border-l-2 border-l-brand-primary`
     const badgeDone = 'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-emerald-500/20 bg-emerald-500/[0.12] text-[11px] font-bold text-emerald-400'
     const badgeActive = 'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-brand-primary/22 bg-brand-primary/[0.14] text-[11px] font-bold text-brand-200'
-    const pillDone = 'inline-flex items-center gap-1 rounded-full border border-emerald-500/20 bg-emerald-500/[0.12] px-[10px] py-[5px] text-[11px] uppercase tracking-[0.12em] text-emerald-400'
-    const pillActive = 'inline-flex items-center rounded-full border border-brand-primary/22 bg-brand-primary/[0.14] px-[10px] py-[5px] text-[11px] uppercase tracking-[0.12em] text-brand-300'
-    const pillUpcoming = 'inline-flex items-center rounded-full border border-white/[0.06] px-[10px] py-[5px] text-[11px] uppercase tracking-[0.12em] text-zinc-600'
 
     const stepOneStatus: 'done' | 'active' | 'upcoming' =
       stepOneComplete ? 'done' : resolvedOpen === 1 ? 'active' : 'upcoming'
     const stepTwoStatus: 'done' | 'active' | 'upcoming' =
       signingStepComplete ? 'done' : stepOneComplete && resolvedOpen === 2 ? 'active' : 'upcoming'
-    const stepOneBStatus: 'done' | 'active' | 'upcoming' =
-      walletStepComplete ? 'done' : zoraStepComplete ? 'active' : 'upcoming'
 
     const allDone = zoraStepComplete && walletStepComplete && signingStepComplete
     const rawZoraHandle = me.accountSignals.zoraHandle?.trim() ?? ''
@@ -129,14 +136,6 @@ export function AccountSetupWorkspaceView(props: {
           <h2 className="text-2xl font-semibold tracking-tight text-white">Activate your account</h2>
           <p className="mt-1 text-sm text-zinc-500">{stepTwoStatus === 'done' ? 'Completed' : `Step ${resolvedOpen} of 2`}</p>
           </div>
-          <button
-            type="button"
-            onClick={() => void onSwitchAccount()}
-            disabled={busyProvider === 'email'}
-            className="inline-flex h-[30px] items-center rounded-md border border-white/10 bg-transparent px-2.5 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200 disabled:opacity-50"
-          >
-            {busyProvider === 'email' ? 'Switching…' : 'Not you? Switch'}
-          </button>
         </div>
 
         {/* Accordion steps */}
@@ -152,87 +151,79 @@ export function AccountSetupWorkspaceView(props: {
                 className={s === 'done' ? doneRow : s === 'active' ? activeRow : stepBase}
                 onClick={() => toggleStep(1)}
               >
-                <div className="flex items-center justify-between gap-3 px-4 py-3.5">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className={s === 'done' ? badgeDone : s === 'active' ? badgeActive : 'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[11px] font-bold text-zinc-600'}>
-                      {s === 'done' ? <CheckCircle2 className="h-3.5 w-3.5" /> : '1'}
+                <div className="flex items-center gap-3 px-4 py-3.5">
+                  {/* Number / check badge */}
+                  <div className={`shrink-0 ${s === 'done' ? badgeDone : s === 'active' ? badgeActive : 'flex h-[26px] w-[26px] items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[11px] font-bold text-zinc-600'}`}>
+                    {s === 'done' ? <CheckCircle2 className="h-3.5 w-3.5" /> : '1'}
+                  </div>
+
+                  {/* Title + meta */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <img src="/brands/zora-token.svg" alt="" aria-hidden="true" className="h-3.5 w-3.5 shrink-0 rounded-full object-cover opacity-80" />
+                      <span className="text-sm font-medium text-white">Link your Zora identity</span>
                     </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <img src="/brands/zora-token.svg" alt="" aria-hidden="true" className="h-4 w-4 shrink-0 rounded-full object-cover" />
-                        <p className="truncate text-sm font-semibold text-white">Link your Zora identity</p>
-                        <span className="inline-flex items-center rounded-full border border-white/10 px-2 py-0.5 text-[10px] uppercase tracking-[0.08em] text-zinc-500">
-                          Manual
-                        </span>
-                      </div>
-                      {s === 'done' && normalizedZoraHandle && zoraProfileUrl ? (
-                        <a
-                          href={zoraProfileUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="mt-0.5 inline-flex items-center gap-1 text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-                        >
-                          {normalizedZoraHandle}
-                          <ExternalLink className="h-3 w-3" />
-                        </a>
-                      ) : null}
-                      {addr ? (
-                        <div className="mt-1 flex items-start gap-2">
+
+                    {/* Identity line — only when done */}
+                    {s === 'done' && (normalizedZoraHandle || addr) ? (
+                      <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[11px] text-zinc-500">
+                        {normalizedZoraHandle && zoraProfileUrl ? (
+                          <a
+                            href={zoraProfileUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            onClick={(e) => e.stopPropagation()}
+                            className="shrink-0 hover:text-zinc-300 transition-colors"
+                          >
+                            {normalizedZoraHandle}
+                          </a>
+                        ) : null}
+                        {normalizedZoraHandle && addr ? <span className="text-zinc-700">·</span> : null}
+                        {addr ? (
                           <button
                             type="button"
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              copyAddress(addr)
-                            }}
+                            onClick={(e) => { e.stopPropagation(); copyAddress(addr) }}
                             title="Copy address"
-                            className="font-mono text-xs text-zinc-400 hover:text-zinc-200 transition-colors break-all text-left"
+                            className="min-w-0 max-w-[140px] truncate font-mono text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors sm:max-w-[220px]"
                           >
                             {addr}
                           </button>
+                        ) : null}
+                        {addr ? (
                           <a
                             href={`${BASESCAN_BASE}${addr}`}
                             target="_blank"
                             rel="noreferrer"
                             title="View on Basescan"
-                            onClick={(event) => event.stopPropagation()}
-                            className="shrink-0 text-zinc-500 hover:text-zinc-200 transition-colors"
+                            onClick={(e) => e.stopPropagation()}
+                            className="shrink-0 text-zinc-600 hover:text-zinc-400 transition-colors"
                           >
-                            <ExternalLink className="h-3 w-3" />
+                            <ExternalLink className="h-2.5 w-2.5" />
                           </a>
-                        </div>
-                      ) : null}
-                      <div className="mt-1 text-xs text-zinc-300">
-                        Wallet detection
+                        ) : null}
+                        <button
+                          type="button"
+                          disabled={busyProvider === 'zora_cross_app'}
+                          onClick={(e) => { e.stopPropagation(); void onLinkZora() }}
+                          className="ml-0.5 shrink-0 text-[10px] text-zinc-600 hover:text-zinc-400 transition-colors disabled:opacity-40"
+                        >
+                          {busyProvider === 'zora_cross_app' ? 'switching…' : 'reselect'}
+                        </button>
                       </div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    {s === 'done' ? (
-                      <button
-                        type="button"
-                        disabled={busyProvider === 'zora_cross_app'}
-                        onClick={(event) => {
-                          event.stopPropagation()
-                          void onLinkZora()
-                        }}
-                        className="inline-flex h-[30px] items-center rounded-md border border-white/10 bg-transparent px-2.5 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200 disabled:opacity-50"
-                      >
-                        {busyProvider === 'zora_cross_app' ? 'Switching…' : 'Reselect'}
-                      </button>
                     ) : null}
-                    <span className={s === 'done' ? pillDone : s === 'active' ? pillActive : pillUpcoming}>
-                      {s === 'done' ? 'Done' : s === 'active' ? 'Open' : 'Upcoming'}
-                    </span>
                   </div>
                 </div>
+
+                {/* Expanded body */}
                 {isOpen ? (
-                  <div className="px-4 pb-4 pl-[52px]">
-                    <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="space-y-3 px-4 pb-4 pl-[52px]">
+                    {/* Primary actions */}
+                    <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         disabled={busyProvider === 'zora_cross_app'}
                         onClick={() => void onLinkZora()}
-                        className="inline-flex h-[38px] items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white shadow-[0_4px_16px_rgba(0,82,255,0.28)] hover:bg-brand-hover disabled:opacity-50"
+                        className="inline-flex h-9 items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white shadow-[0_4px_16px_rgba(0,82,255,0.22)] hover:bg-brand-hover disabled:opacity-50"
                       >
                         {busyProvider === 'zora_cross_app' ? 'Connecting…' : 'Connect Zora'}
                       </button>
@@ -240,33 +231,29 @@ export function AccountSetupWorkspaceView(props: {
                         type="button"
                         disabled={busyProvider === 'zora_cross_app'}
                         onClick={() => void onRefreshZora()}
-                        className="inline-flex h-[38px] items-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-zinc-400 hover:bg-white/[0.04] disabled:opacity-50"
+                        className="inline-flex h-9 items-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-zinc-400 hover:bg-white/[0.04] disabled:opacity-50"
                       >
                         Already linked? Refresh
                       </button>
                     </div>
+
+                    {/* Wallet detection sub-section */}
                     <div
-                      className="mt-3 rounded-md border border-white/10 bg-black/20 px-3 py-2"
-                      onClick={(event) => event.stopPropagation()}
+                      className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5"
+                      onClick={(e) => e.stopPropagation()}
                     >
-                      <div className="text-xs text-zinc-300">Wallet detection</div>
-                      <div className="mt-2 flex items-center gap-2 text-[11px] text-zinc-400">
-                        <WalletProviderIcon provider="coinbase" size={12} />
-                        <span className="truncate">Detect your Coinbase Smart Wallet</span>
-                        <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[9px] uppercase tracking-[0.08em] text-zinc-500">
-                          Auto
-                        </span>
-                        <span className={stepOneBStatus === 'done' ? pillDone : stepOneBStatus === 'active' ? pillActive : pillUpcoming}>
-                          {stepOneBStatus === 'done' ? 'Done' : stepOneBStatus === 'active' ? 'Open' : 'Upcoming'}
-                        </span>
+                      <div className="flex items-center gap-2 text-[11px] text-zinc-500">
+                        <WalletProviderIcon provider="coinbase" size={11} />
+                        <span>Coinbase Smart Wallet detection</span>
+                        <span className="ml-auto rounded border border-white/10 px-1.5 py-px text-[9px] uppercase tracking-wide text-zinc-600">Auto</span>
                       </div>
                       {addr ? (
-                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <div className="mt-1.5 flex items-center gap-1.5">
                           <button
                             type="button"
                             onClick={() => copyAddress(addr)}
                             title="Copy address"
-                            className="font-mono text-xs text-zinc-500 hover:text-zinc-300 transition-colors break-all text-left"
+                            className="min-w-0 max-w-full truncate font-mono text-[11px] text-zinc-500 hover:text-zinc-300 transition-colors text-left"
                           >
                             {addr}
                           </button>
@@ -277,7 +264,7 @@ export function AccountSetupWorkspaceView(props: {
                             title="View on Basescan"
                             className="shrink-0 text-zinc-600 hover:text-zinc-300 transition-colors"
                           >
-                            <ExternalLink className="h-3 w-3" />
+                            <ExternalLink className="h-2.5 w-2.5" />
                           </a>
                         </div>
                       ) : null}
@@ -286,17 +273,32 @@ export function AccountSetupWorkspaceView(props: {
                           type="button"
                           disabled={busyProvider === 'zora_cross_app'}
                           onClick={() => void onRefreshZora()}
-                          className="inline-flex h-[34px] items-center rounded-md border border-white/10 bg-transparent px-3 text-xs font-medium text-zinc-400 hover:bg-white/[0.04] disabled:opacity-50"
+                          className="inline-flex h-8 items-center rounded-md border border-white/10 bg-transparent px-3 text-xs text-zinc-400 hover:bg-white/[0.04] disabled:opacity-50"
                         >
                           {busyProvider === 'zora_cross_app' ? 'Checking…' : 'Retry detection'}
                         </button>
                         {needsBaseAppSetup && baseAppUrl ? (
-                          <a href={baseAppUrl} target="_blank" rel="noreferrer" className="inline-flex h-[34px] items-center rounded-md border border-white/10 bg-transparent px-3 text-xs font-medium text-zinc-400 hover:bg-white/[0.04]">
+                          <a
+                            href={baseAppUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex h-8 items-center rounded-md border border-white/10 bg-transparent px-3 text-xs text-zinc-400 hover:bg-white/[0.04]"
+                          >
                             Open Base app
                           </a>
                         ) : null}
                       </div>
                     </div>
+
+                    {/* Switch account — last, least prominent */}
+                    <button
+                      type="button"
+                      onClick={() => void onSwitchAccount()}
+                      disabled={busyProvider === 'email'}
+                      className="text-[11px] text-zinc-600 hover:text-zinc-400 transition-colors disabled:opacity-40"
+                    >
+                      {busyProvider === 'email' ? 'Switching…' : 'Not this account? Switch'}
+                    </button>
                   </div>
                 ) : null}
               </div>
@@ -312,34 +314,26 @@ export function AccountSetupWorkspaceView(props: {
                 className={s === 'done' ? doneRow : s === 'active' ? activeRow : stepBase}
                 onClick={() => toggleStep(2)}
               >
-                <div className="flex items-center justify-between gap-3 px-4 py-3.5">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div className={s === 'done' ? badgeDone : s === 'active' ? badgeActive : 'flex h-[26px] w-[26px] shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[11px] font-bold text-zinc-600'}>
-                      {s === 'done' ? <CheckCircle2 className="h-3.5 w-3.5" /> : '2'}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-white">Enable 4626 signing</p>
-                      {s === 'done' ? (
-                        <p className="mt-0.5 text-xs text-zinc-500">Signing access approved</p>
-                      ) : null}
-                    </div>
+                <div className="flex items-center gap-3 px-4 py-3.5">
+                  <div className={`shrink-0 ${s === 'done' ? badgeDone : s === 'active' ? badgeActive : 'flex h-[26px] w-[26px] items-center justify-center rounded-full border border-white/10 bg-white/[0.04] text-[11px] font-bold text-zinc-600'}`}>
+                    {s === 'done' ? <CheckCircle2 className="h-3.5 w-3.5" /> : '2'}
                   </div>
-                  <span className={s === 'done' ? pillDone : s === 'active' ? pillActive : pillUpcoming}>
-                    {s === 'done' ? 'Done' : s === 'active' ? 'Open' : 'Upcoming'}
-                  </span>
+                  <div className="min-w-0 flex-1">
+                    <span className="text-sm font-medium text-white">Enable 4626 signing</span>
+                    {s === 'done' ? (
+                      <p className="mt-0.5 text-[11px] text-zinc-500">Signing access approved</p>
+                    ) : null}
+                  </div>
                 </div>
+
                 {isOpen ? (
-                  <div className="px-4 pb-4 pl-[52px]">
-                    <p className="text-sm leading-relaxed text-zinc-400">
-                      Connect a current owner wallet and approve 4626 signing access.
-                      Once complete, the app unlocks immediately.
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
+                  <div className="space-y-2.5 px-4 pb-4 pl-[52px]">
+                    <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         disabled={advancedBusy || needsEmbeddedWallet}
                         onClick={() => (connectedOwnerReady ? void onEnable4626Signing() : connectOwnerWallet())}
-                        className="inline-flex h-[38px] items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white shadow-[0_4px_16px_rgba(0,82,255,0.28)] hover:bg-brand-hover disabled:opacity-50"
+                        className="inline-flex h-9 items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white shadow-[0_4px_16px_rgba(0,82,255,0.22)] hover:bg-brand-hover disabled:opacity-50"
                       >
                         {advancedBusy ? 'Working…' : primarySigningLabel}
                       </button>
@@ -347,32 +341,27 @@ export function AccountSetupWorkspaceView(props: {
                         type="button"
                         disabled={advancedBusy}
                         onClick={() => void retryOwnerCheck()}
-                        className="inline-flex h-[38px] items-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-zinc-400 hover:bg-white/[0.04] disabled:opacity-50"
+                        className="inline-flex h-9 items-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-zinc-400 hover:bg-white/[0.04] disabled:opacity-50"
                       >
                         Retry
                       </button>
-                      {resolvedOpen > 1 ? (
-                        <button type="button" onClick={goToPrev} className="inline-flex h-[38px] items-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-zinc-500 hover:bg-white/[0.04]">
-                          Previous step
-                        </button>
-                      ) : null}
                     </div>
+
+                    {/* Contextual status — only rendered when relevant */}
                     {connectedSignerLabel ? (
-                      <p className="mt-3 text-xs text-zinc-500">
+                      <p className="text-xs text-zinc-500">
                         Connected signer: <span className="font-mono text-zinc-300">{connectedSignerLabel}</span>
+                        {connectedSignerDetail ? <span className="ml-1 text-zinc-600">— {connectedSignerDetail}</span> : null}
                       </p>
                     ) : null}
-                    {connectedSignerDetail ? (
-                      <p className="mt-1 text-xs text-zinc-500">{connectedSignerDetail}</p>
-                    ) : null}
                     {needsEmbeddedWallet ? (
-                      <p className="mt-2 text-xs text-amber-300">Embedded wallet is still settling. Retry in a moment.</p>
+                      <p className="text-xs text-amber-300/80">Embedded wallet is still settling. Retry in a moment.</p>
                     ) : null}
                     {inTelegramMiniApp ? (
-                      <p className="mt-2 text-xs text-amber-300">Owner signatures are more reliable in an external browser tab.</p>
+                      <p className="text-xs text-amber-300/80">Owner signatures are more reliable in an external browser tab.</p>
                     ) : null}
                     {providerCollision.shouldDisableInjectedConnector ? (
-                      <p className="mt-2 text-xs text-zinc-500">Wallet collision detected — Coinbase/Base is the most reliable option here.</p>
+                      <p className="text-xs text-zinc-600">Coinbase/Base is the most reliable option when a wallet collision is detected.</p>
                     ) : null}
                   </div>
                 ) : null}
@@ -652,7 +641,7 @@ export function AccountSetupWorkspaceView(props: {
                       Current owners
                     </summary>
                     {cswOwnersState.status === 'loading' ? (
-                      <div className="mt-2 text-xs text-zinc-500">Loading current CSW owners...</div>
+                      <LoadingText intent="processing" size="sm" className="mt-2" labelOverride="Loading current CSW owners..." />
                     ) : null}
                     {cswOwnersState.status === 'error' ? (
                       <div className="mt-2 text-xs text-rose-300">{cswOwnersState.error ?? 'Failed to load owner list.'}</div>

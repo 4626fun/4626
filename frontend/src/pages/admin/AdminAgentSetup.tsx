@@ -19,6 +19,7 @@ import { getAppBaseUrl } from '@/lib/host'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privyEmbeddedEoa'
 import { AgentOperatorStatus, type AgentOperatorStatusData } from './AgentOperatorStatus'
 import { AgentPublishStatus, type AgentPublishData } from './AgentPublishStatus'
+import { LoadingText } from '@/components/ui/LoadingState'
 
 export { AjnaAutomationOptInCard } from '@/components/deploy/DeploymentSuccess'
 export { pickPrivyEmbeddedEoaWallet } from '@/lib/privyEmbeddedEoa'
@@ -799,7 +800,7 @@ export function AdminAgentSetup() {
           <AgentOperatorStatus status={operatorStatusQuery.data} className="app-meta-value" />
         ) : null}
         {operatorStatusQuery.isLoading ? (
-          <div className="app-meta-value text-zinc-500">Loading ERC-8004 operator status…</div>
+          <LoadingText intent="processing" size="sm" className="app-meta-value text-zinc-500" labelOverride="Loading ERC-8004 operator status..." />
         ) : null}
         {operatorStatusQuery.error ? (
           <div className="app-meta-value text-red-300">
@@ -1014,7 +1015,7 @@ export function AdminAgentSetup() {
 
                   {serverWalletQuery.isLoading && (
                     <div className="flex items-center gap-2 text-xs text-zinc-400">
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" /> Provisioning Keepr signer...
+                      <LoadingText intent="processing" size="sm" labelOverride="Provisioning Keepr signer..." />
                     </div>
                   )}
 
@@ -1033,7 +1034,7 @@ export function AdminAgentSetup() {
 
                       {isOwnerQuery.isLoading ? (
                         <div className="flex items-center gap-2 text-xs text-zinc-400">
-                          <Loader2 className="w-3.5 h-3.5 animate-spin" /> Checking owner status...
+                          <LoadingText intent="processing" size="sm" labelOverride="Checking owner status..." />
                         </div>
                       ) : isServerWalletOwner ? (
                         <div className="space-y-2">

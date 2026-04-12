@@ -34,6 +34,7 @@ import { buildWaitlistEmailLoginOptions, buildWaitlistRecoveryLoginOptions } fro
 import { type WaitlistEmailUi, canEnterAppFromAccountState, deriveWaitlistAuthUi } from './waitlistFlowUi'
 import { bridgePrivySession, createAuthHandoffCode } from './waitlistHandoff'
 import { WaitlistSetupWorkspace } from './WaitlistSetupWorkspace'
+import { LoadingInline } from '@/components/ui/LoadingState'
 
 type AccountsSummary = {
   privyUserId: string
@@ -270,10 +271,7 @@ function WaitlistAuthStep(props: {
                 {authUi.busyLabel}
               </>
             ) : !privyReady ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin opacity-60" />
-                Loading secure sign-in…
-              </>
+              <LoadingInline intent="session" size="sm" labelOverride="Loading secure sign-in..." />
             ) : (
               authUi.ctaLabel
             )}

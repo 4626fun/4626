@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { CheckCircle2, Loader2, RefreshCw, XCircle } from 'lucide-react'
+import { CheckCircle2, RefreshCw, XCircle } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useAccount } from 'wagmi'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
 import type { ApiEnvelope } from '@/lib/apiEnvelope'
+import { LoadingInline } from '@/components/ui/LoadingState'
 
 type PendingRequest = {
   id: number
@@ -197,8 +198,7 @@ export function AdminCreatorAccess() {
 
         {listQuery.isLoading ? (
           <div className="px-5 py-8 flex items-center gap-2 text-sm text-zinc-400">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Loading…
+            <LoadingInline intent="processing" labelOverride="Loading..." />
           </div>
         ) : pendingCount === 0 ? (
           <div className="px-5 py-8 text-sm text-zinc-600">No pending requests.</div>
@@ -275,8 +275,7 @@ export function AdminCreatorAccess() {
 
         {allowlistListQuery.isLoading ? (
           <div className="px-5 py-8 flex items-center gap-2 text-sm text-zinc-400">
-            <Loader2 className="w-4 h-4 animate-spin" />
-            Loading…
+            <LoadingInline intent="processing" labelOverride="Loading..." />
           </div>
         ) : allowlisted.length === 0 ? (
           <div className="px-5 py-8 text-sm text-zinc-600">No allowlisted deploy wallets found.</div>

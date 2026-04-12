@@ -14,6 +14,7 @@ Common issues and solutions.
 | Compilation errors | [Compilation Status](/guides/troubleshooting/compilation-status) |
 | Slow transactions | [Delayed Completion](/guides/troubleshooting/delayed-completion) |
 | ERC-4337 errors | [UserOp Signature Errors](/guides/troubleshooting/userop-signature-errors) |
+| Account activation signing issues | [Activate Account Signing](/guides/troubleshooting/activate-account-signing) |
 
 ## Quick Fixes
 

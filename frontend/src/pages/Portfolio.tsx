@@ -25,6 +25,7 @@ import { Input } from '@/components/ui/Input'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { AccountModeIndicator } from '@/components/ui/AccountModeIndicator'
+import { LoadingText } from '@/components/ui/LoadingState'
 import { AmoeEntryCard } from '@/components/lottery/AmoeEntryCard'
 import { apiFetch } from '@/lib/apiBase'
 import { fetchDebankTokenList, type DebankToken, type DebankTokenList } from '@/lib/debank/client'
@@ -789,7 +790,7 @@ export function Portfolio() {
                       <span className="rounded-full border border-zinc-800 bg-zinc-900/50 px-2 py-0.5 text-[10px]">
                         Simulated trend
                       </span>
-                      {tokenDataLoading ? 'Loading...' : tokenListQuery.data ? 'Live balances' : '--'}
+                      {tokenDataLoading ? <LoadingText intent="processing" size="sm" labelOverride="Loading..." /> : tokenListQuery.data ? 'Live balances' : '--'}
                     </div>
                   </div>
                 </motion.div>

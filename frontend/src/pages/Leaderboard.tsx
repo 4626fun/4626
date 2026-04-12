@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Alert } from '@/components/ui/Alert'
+import { LoadingText } from '@/components/ui/LoadingState'
 import { apiFetch } from '@/lib/apiBase'
 import { API_ENDPOINTS } from '@/lib/apiEndpoints'
 import type { ApiEnvelope } from '@/lib/apiEnvelope'
@@ -139,7 +140,7 @@ export function Leaderboard() {
           <div className="rounded-full border border-brand-primary/30 bg-brand-primary/10 px-3 py-1 text-[12px] text-zinc-200">
             Total points
           </div>
-          <div className="text-[11px] text-zinc-700">{busy ? 'Loading…' : 'Hover any score for the breakdown'}</div>
+          <div className="text-[11px] text-zinc-700">{busy ? <LoadingText intent="processing" size="sm" labelOverride="Loading..." /> : 'Hover any score for the breakdown'}</div>
         </div>
 
         {error ? (

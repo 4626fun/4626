@@ -2,6 +2,7 @@ import { ChevronDown } from 'lucide-react'
 import { useMemo } from 'react'
 
 import { TokenAvatar } from '@/components/swap/TokenAvatar'
+import { LoadingText } from '@/components/ui/LoadingState'
 import { cn } from '@/lib/utils'
 import type { TokenDisplay } from '@/lib/uniswap/swapUtils'
 
@@ -118,7 +119,7 @@ export function TokenInput({
             size={28}
           />
           <span className="text-[13px] font-medium text-vault-text">
-            {tokenIdentityLoading ? 'Loading…' : token.symbol}
+            {tokenIdentityLoading ? <LoadingText intent="processing" size="sm" labelOverride="Loading..." /> : token.symbol}
           </span>
           <ChevronDown className="h-3.5 w-3.5 text-vault-subtext" />
         </button>
@@ -152,7 +153,7 @@ export function TokenInput({
       ) : null}
 
       <div className="mt-2 text-[10px] text-vault-muted">
-        {isLoadingToken ? <span className="inline-flex items-center gap-1">Resolving token metadata…</span> : null}
+        {isLoadingToken ? <LoadingText intent="processing" size="sm" labelOverride="Resolving token metadata..." /> : null}
       </div>
     </div>
   )

@@ -6,17 +6,25 @@ function cn(...classes: Array<string | undefined | null | false>): string {
 
 function Spinner(props: { size?: 'sm' | 'md'; className?: string }) {
   const { size = 'md', className } = props
-  const sizeClass = size === 'sm' ? 'w-4 h-4 border-2' : 'w-5 h-5 border-2'
+  const cellClass = size === 'sm' ? 'h-1 w-1' : 'h-1.5 w-1.5'
   return (
     <span
       aria-label="Loading"
       role="status"
       className={cn(
-        'inline-block rounded-full border-brand-primary/30 border-t-brand-primary animate-spin',
-        sizeClass,
+        'inline-grid grid-cols-3 gap-[2px] text-brand-primary',
         className,
       )}
-    />
+    >
+      {Array.from({ length: 9 }).map((_, index) => (
+        <span
+          // Repeat a compact staggered pulse so button loading mirrors app wave-style loaders.
+          key={index}
+          className={cn('rounded-[1px] bg-current animate-pulse', cellClass)}
+          style={{ animationDelay: `${(index % 3) * 90}ms` }}
+        />
+      ))}
+    </span>
   )
 }
 

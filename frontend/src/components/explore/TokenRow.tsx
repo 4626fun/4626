@@ -18,6 +18,7 @@ import {
 } from './rowFormatting'
 import { fetchCoinbaseSmartWalletOwners } from '@/lib/aa/coinbaseErc4337'
 import { useIdentity } from '@/hooks/useIdentity'
+import { LoadingText } from '@/components/ui/LoadingState'
 
 type TokenRowProps = {
   rank: number
@@ -323,7 +324,7 @@ export function TokenRow({
             {cswCandidates.length === 0 ? (
               <div className="text-zinc-500">No creator or payout address available.</div>
             ) : cswOwners.status === 'loading' ? (
-              <div className="text-zinc-500">Loading owners...</div>
+              <LoadingText intent="processing" size="sm" labelOverride="Loading owners..." />
             ) : cswOwners.owners.length > 0 ? (
               <div className="mt-1 flex flex-wrap gap-2">
                 {cswOwners.owners.map((owner) => (

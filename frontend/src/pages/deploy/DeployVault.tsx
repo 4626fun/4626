@@ -72,6 +72,7 @@ import {
   assertEntryPointV06,
 } from '@/lib/aa/coinbaseErc4337'
 import { PageMeta, META } from '@/components/seo/PageMeta'
+import { LoadingInline, LoadingText } from '@/components/ui/LoadingState'
 
 const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 50_000_000n
 const MIN_FIRST_DEPOSIT = DEFAULT_MIN_FIRST_DEPOSIT_TOKENS * 10n ** 18n
@@ -8162,7 +8163,7 @@ function DeployVaultMain() {
                 className="overflow-hidden"
               >
                 {symbolLoading || zoraLoading ? (
-                  <div className="text-sm text-zinc-600">Loading coin details…</div>
+                  <LoadingText intent="processing" labelOverride="Loading coin details..." />
                 ) : !zoraCoin ? (
                   <div className="text-sm text-red-400/80">
                     This token does not appear to be a Zora Coin. Creator Vaults can only be created for Zora{' '}
@@ -8367,7 +8368,9 @@ function DeployVaultMain() {
               <div className="label">Deploy</div>
               {/* Auth flow */}
               {!privyReady ? (
-                <div className="text-sm text-zinc-500 text-center py-4">Loading…</div>
+                <div className="text-sm text-zinc-500 text-center py-4">
+                  <LoadingInline intent="session" labelOverride="Loading..." />
+                </div>
               ) : !privyAuthenticated ? (
                 <button
                   type="button"
@@ -8410,7 +8413,7 @@ function DeployVaultMain() {
                   disabled
                   className="w-full py-4 bg-black/30 border border-zinc-900/60 rounded-lg text-zinc-600 text-sm cursor-not-allowed"
                 >
-                  Loading…
+                  <LoadingInline intent="processing" labelOverride="Loading..." />
                 </button>
               ) : tokenIsValid && zoraCoin && identityBlockingReason ? (
                 <div className="p-4 bg-linear-to-b from-amber-500/16 to-amber-500/8 border border-amber-500/25 rounded-lg space-y-2 backdrop-blur-sm">

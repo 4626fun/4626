@@ -6,11 +6,12 @@
  */
 
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { MessageSquare, ChevronDown, Plus, Loader2, Wifi, WifiOff, X } from 'lucide-react'
+import { MessageSquare, ChevronDown, Plus, Wifi, WifiOff, X } from 'lucide-react'
 import { useXmtp, type ChatConversation } from '@/lib/xmtp/provider'
 import { useIdentity } from '@/hooks/useIdentity'
 import { getAgentIdentity } from './agentIdentity'
 import { useAccountContext } from '@/wallet/accountContext'
+import { LoadingInline } from '@/components/ui/LoadingState'
 
 type Props = {
   expanded: boolean
@@ -316,10 +317,10 @@ export function ChatBar({ expanded, onToggle, onOpenChat, onNewDm, variant = 'de
           {/* Loading state */}
           {isLoading && (
             <div className="flex flex-col items-center gap-3 px-4 py-8">
-              <Loader2 className="w-6 h-6 text-brand-primary animate-spin" />
-              <div className="text-xs text-zinc-400">
-                {status === 'signing' ? 'Sign to enable messaging…' : 'Connecting to XMTP…'}
-              </div>
+              <LoadingInline
+                intent="session"
+                labelOverride={status === 'signing' ? 'Sign to enable messaging...' : 'Connecting to XMTP...'}
+              />
             </div>
           )}
 

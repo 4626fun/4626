@@ -18,6 +18,7 @@ import { useAccount } from 'wagmi'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/apiBase'
 import type { ApiEnvelope } from '@/lib/apiEnvelope'
+import { LoadingText } from '@/components/ui/LoadingState'
 
 type WaitlistListItem = {
   id: number
@@ -638,7 +639,7 @@ export function AdminWaitlist() {
         <div className={`rounded-xl border border-white/10 bg-black/30 overflow-hidden ${mobileShowDetail && selectedId ? 'hidden lg:block' : ''}`}>
           <div className="px-3 sm:px-4 py-2.5 sm:py-3 border-b border-white/10 text-[11px] sm:text-xs text-zinc-600 flex items-center justify-between">
             <span>Signups</span>
-            <span className="text-[10px] sm:text-[11px]">{listQuery.isFetching ? 'Loading...' : ''}</span>
+            <span className="text-[10px] sm:text-[11px]">{listQuery.isFetching ? <LoadingText intent="processing" size="sm" labelOverride="Loading..." /> : ''}</span>
           </div>
           <div className="max-h-[50vh] sm:max-h-[56vh] lg:max-h-[640px] overflow-auto divide-y divide-white/5">
             {items.length === 0 ? (
@@ -674,7 +675,9 @@ export function AdminWaitlist() {
           </div>
           <div className="p-3 sm:p-4 max-h-[70vh] sm:max-h-[60vh] lg:max-h-[600px] overflow-auto">
             {!detail ? (
-              <div className="text-[13px] sm:text-sm text-zinc-600">{selectedId ? 'Loading...' : 'Select a signup to view details.'}</div>
+              <div className="text-[13px] sm:text-sm text-zinc-600">
+                {selectedId ? <LoadingText intent="processing" size="sm" labelOverride="Loading..." /> : 'Select a signup to view details.'}
+              </div>
             ) : (
               <DetailPanel
                 detail={detail}

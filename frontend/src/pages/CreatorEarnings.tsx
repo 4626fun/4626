@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { useAccount } from 'wagmi'
-import { ArrowLeft, ArrowRight, Loader2 } from 'lucide-react'
+import { ArrowLeft, ArrowRight } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { formatEther, formatUnits, isAddress } from 'viem'
 import type { Address } from 'viem'
@@ -15,6 +15,7 @@ import {
   fetchProtocolRewardsWithdrawnFromApi,
 } from '@/lib/onchain/protocolRewards'
 import { fetchCoinTradeRewardsBatchFromApi } from '@/lib/onchain/coinTradeRewardsBatch'
+import { LoadingInline } from '@/components/ui/LoadingState'
 
 function shortAddress(addr: string): string {
   if (addr.length <= 12) return addr
@@ -178,7 +179,7 @@ export function CreatorEarnings() {
   }, [totalClaimableWei, totalWithdrawnWei])
 
   const totalClaimableEthDisplay = useMemo(() => {
-    if (protocolRewardsLoading) return 'Loading…'
+    if (protocolRewardsLoading) return 'Loading...'
     if (protocolRewardsError) return '—'
     if (totalClaimableWei === null) return '—'
 
@@ -188,7 +189,7 @@ export function CreatorEarnings() {
   }, [protocolRewardsLoading, protocolRewardsError, totalClaimableWei])
 
   const totalLifetimeEthDisplay = useMemo(() => {
-    if (withdrawnLoading) return 'Loading…'
+    if (withdrawnLoading) return 'Loading...'
     if (withdrawnError) return '—'
     if (totalLifetimeWei === null) return '—'
 
@@ -401,9 +402,8 @@ export function CreatorEarnings() {
                 Connect a wallet or enter a creator identifier above.
               </div>
             ) : isLoading ? (
-              <div className="card p-8 flex items-center gap-3 text-sm text-zinc-600">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Loading creator coins…
+              <div className="card p-8 text-sm text-zinc-600">
+                <LoadingInline intent="page" labelOverride="Loading creator coins..." />
               </div>
             ) : error ? (
               <div className="card p-8 text-sm text-zinc-600">
@@ -560,7 +560,7 @@ export function CreatorEarnings() {
                             : primaryCurrency && zoraCurrencyLabel
                               ? `${formatAmount(primaryCurrency.amount)} ${zoraCurrencyLabel}`
                               : isLoading
-                                ? 'Loading…'
+                                ? 'Loading...'
                                 : earningsNotReported
                                   ? 'Not available'
                                   : earningsEmptyArray

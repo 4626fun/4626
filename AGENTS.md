@@ -299,6 +299,8 @@ Keeper bots in `cre/` relay data between Solana and Base. Install: `cd cre && np
 - Nest optional substeps (for example extra channel binding) under the primary step with a compact expandable affordance instead of introducing separate numbered steps when the flow is still one phase.
 - Keep secondary actions such as Previous Step and Retry visually quieter than primary blue actions.
 - When Zora linking is the active context, prefer showing the Zora handle as the human-readable identity label over a truncated wallet address that does not match what the user expects for their canonical smart wallet.
+- For waitlist/onboarding UI, prefer cleaner card treatments with minimal framing; remove heavy outer borders when they add visual noise.
+- For exported skill/context documentation packs, prefer comprehensive self-contained writeups that assume the reader does not have direct repository access.
 
 ## Learned Workspace Facts
 

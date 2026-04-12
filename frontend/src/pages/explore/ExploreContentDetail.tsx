@@ -18,6 +18,7 @@ import { useQuery } from '@tanstack/react-query'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { ExploreCopyButton, ExploreStatRow } from '@/components/explore/ExploreUiPrimitives'
 import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugCopy'
+import { LoadingBlock, LoadingText } from '@/components/ui/LoadingState'
 import { fetchZoraCoin } from '@/lib/zora/client'
 import { usePoolHistory } from '@/lib/uniswap/hooks'
 import { getPoolSwaps, getPoolsByToken } from '@/lib/uniswap/client'
@@ -468,7 +469,7 @@ export function ExploreContentDetail() {
               </div>
 
               {loading || historyLoading ? (
-                <div className="h-[320px] rounded-xl bg-white/4 animate-pulse" />
+                <LoadingBlock intent="processing" minHeightClassName="h-[320px]" className="rounded-xl bg-white/4" />
               ) : (
                 <MetricBarsChart points={points} metric={selectedMetric} />
               )}
@@ -510,7 +511,7 @@ export function ExploreContentDetail() {
                     {swapsLoading ? (
                       <tr>
                         <td colSpan={6} className="px-4 py-8 text-center text-zinc-600">
-                          Loading swaps...
+                          <LoadingText intent="processing" labelOverride="Loading swaps..." />
                         </td>
                       </tr>
                     ) : activityRows.length === 0 ? (

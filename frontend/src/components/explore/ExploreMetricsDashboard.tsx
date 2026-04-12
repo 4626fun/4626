@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/apiBase'
 import { API_ENDPOINTS } from '@/lib/apiEndpoints'
 import type { ApiEnvelope } from '@/lib/apiEnvelope'
+import { LoadingText } from '@/components/ui/LoadingState'
 
 type ExploreMetricHistoryPoint = {
   date: string
@@ -125,7 +126,9 @@ export function ExploreMetricsDashboard({ className }: ExploreMetricsDashboardPr
         </div>
       </div>
 
-      <div className="app-meta-value text-right text-zinc-500/90">{statusLine}</div>
+      <div className="app-meta-value text-right text-zinc-500/90">
+        {!updatedAt ? <LoadingText intent="processing" size="sm" labelOverride="Loading canonical market totals..." /> : statusLine}
+      </div>
     </div>
   )
 }

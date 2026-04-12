@@ -259,8 +259,8 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     expect(await screen.findByText(/link your zora identity/i)).toBeTruthy()
     expect(screen.getByText(/enable 4626 signing/i)).toBeTruthy()
-    // Completed steps render a "Done" pill
-    expect(screen.getAllByText(/^done$/i).length).toBeGreaterThan(0)
+    // Completed steps render a completion status pill
+    expect(screen.getAllByText(/^complete$/i).length).toBeGreaterThan(0)
     expect(screen.getByRole('button', { name: /approve signing access|connect owner wallet/i })).toBeTruthy()
     expect(screen.getByRole('button', { name: /^retry$/i })).toBeTruthy()
   })

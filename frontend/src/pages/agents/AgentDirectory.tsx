@@ -8,12 +8,13 @@
 import { useCallback, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { MessageSquare, Bot, Loader2, ExternalLink, Users } from 'lucide-react'
+import { MessageSquare, Bot, ExternalLink, Users } from 'lucide-react'
 import { apiFetch } from '@/lib/apiBase'
 import { useIdentity } from '@/hooks/useIdentity'
 import { useXmtp } from '@/lib/xmtp/provider'
 import { PageMeta, META } from '@/components/seo/PageMeta'
 import { AgentVerificationCard } from '@/components/agents/AgentVerificationCard'
+import { LoadingInline } from '@/components/ui/LoadingState'
 
 type AgentRow = {
   creatorAddress: string
@@ -195,7 +196,7 @@ export function AgentDirectory() {
       {/* Loading */}
       {isLoading && (
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-6 h-6 text-zinc-500 animate-spin" />
+          <LoadingInline intent="page" labelOverride="Loading..." />
         </div>
       )}
 

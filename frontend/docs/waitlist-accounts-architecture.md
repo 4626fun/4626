@@ -40,6 +40,11 @@ Wallet invariants:
 - If the user does not yet have a CSW, route them to Base app referral flow, then resume owner-installation on return.
 - Wallet-dependent execution should stay gated until CSW owner confirmation succeeds.
 
+Owner-install references:
+
+- `docs/operations/canonical-csw-owner-approval.md`
+- `docs/guides/troubleshooting/activate-account-signing.md`
+
 Implementation posture:
 
 - Session restoration is handled centrally through `frontend/src/hooks/useSiweAuth.ts`.

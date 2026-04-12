@@ -6,6 +6,7 @@ import { getAddress, isAddress } from 'viem'
 
 import { ExploreSubnav } from '@/components/explore/ExploreSubnav'
 import { PageMeta } from '@/components/seo/PageMeta'
+import { LoadingText } from '@/components/ui/LoadingState'
 import { getPoolsByToken, getPoolSwaps } from '@/lib/uniswap/client'
 import type { UniswapPool } from '@/lib/uniswap/types'
 import { fetchZoraCoin } from '@/lib/zora/client'
@@ -298,7 +299,7 @@ export function ExploreContentTransactions() {
                   {poolsLoading || swapsLoading ? (
                     <tr>
                       <td colSpan={7} className="px-3 py-8 text-center text-zinc-600">
-                        Loading transactions...
+                        <LoadingText intent="processing" labelOverride="Loading transactions..." />
                       </td>
                     </tr>
                   ) : filteredRows.length === 0 ? (

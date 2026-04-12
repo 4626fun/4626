@@ -16,6 +16,7 @@ import {
   type ResolvedStatusFixContext,
   type VaultReportResponse,
 } from '@/features/status/statusShared'
+import { LoadingInline } from '@/components/ui/LoadingState'
 
 const LazyStatusFixPanel = lazy(async () => {
   const [statusFixPanelModule, web3Module] = await Promise.all([
@@ -346,10 +347,7 @@ export function Status() {
                 ) : (
                   <Suspense
                     fallback={
-                      <div className="flex items-center gap-2 text-xs text-zinc-500">
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Loading owner fixes…
-                      </div>
+                      <LoadingInline intent="processing" size="sm" className="text-xs text-zinc-500" labelOverride="Loading owner fixes..." />
                     }
                   >
                     <LazyStatusFixPanel
@@ -374,9 +372,7 @@ export function Status() {
           {/* Protocol checks */}
           <div className="mt-8 space-y-4">
             {protocolQuery.isFetching ? (
-              <div className="text-xs text-zinc-600 flex items-center gap-2">
-                <Loader2 className="w-4 h-4 animate-spin" /> Loading protocol checks…
-              </div>
+              <LoadingInline intent="processing" size="sm" className="text-xs text-zinc-600" labelOverride="Loading protocol checks..." />
             ) : null}
             {protocolQuery.error ? (
               <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-lg text-red-200 text-sm flex items-start gap-3">

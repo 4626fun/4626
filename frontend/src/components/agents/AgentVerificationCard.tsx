@@ -1,9 +1,10 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { AlertTriangle, ExternalLink, Loader2, ShieldCheck } from 'lucide-react'
+import { AlertTriangle, ExternalLink, ShieldCheck } from 'lucide-react'
 
 import { apiFetch } from '@/lib/apiBase'
 import type { ApiEnvelope } from '@/lib/apiEnvelope'
+import { LoadingInline } from '@/components/ui/LoadingState'
 
 type MirrorProbeData = {
   url: string
@@ -186,8 +187,7 @@ export function AgentVerificationCard() {
 
       {query.isLoading ? (
         <div className="flex items-center gap-2 text-xs text-zinc-400">
-          <Loader2 className="w-4 h-4 animate-spin" />
-          Loading verification…
+          <LoadingInline intent="session" size="sm" labelOverride="Loading verification..." />
         </div>
       ) : null}
 

@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query'
 
 import { ExploreCopyButton, ExploreStatRow } from '@/components/explore/ExploreUiPrimitives'
 import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugCopy'
+import { LoadingInline, LoadingText } from '@/components/ui/LoadingState'
 import { fetchZoraCoin } from '@/lib/zora/client'
 import { useZoraProfile, useZoraProfileCoins } from '@/lib/zora/hooks'
 import type { ZoraCoin, ZoraProfile } from '@/lib/zora/types'
@@ -601,7 +602,7 @@ export function ExploreCreatorDetail() {
                   </div>
                   {isLoading ? (
                     <div className="h-[400px] flex items-center justify-center">
-                      <div className="h-8 w-8 border-2 border-zinc-700 border-t-cyan-500 rounded-full animate-spin" />
+                      <LoadingInline intent="page" labelOverride="Loading..." />
                     </div>
                   ) : (
                     <DexscreenerChart tokenAddress={tokenAddress} />
@@ -642,7 +643,7 @@ export function ExploreCreatorDetail() {
                         {swapsLoading ? (
                           <tr>
                             <td colSpan={6} className="px-4 py-8 text-center text-zinc-600">
-                              Loading swaps...
+                              <LoadingText intent="processing" labelOverride="Loading swaps..." />
                             </td>
                           </tr>
                         ) : recentTransactions.length === 0 ? (
@@ -758,7 +759,7 @@ export function ExploreCreatorDetail() {
                 
                 {profileCoinsLoading ? (
                   <div className="p-8 flex items-center justify-center">
-                    <div className="h-8 w-8 border-2 border-zinc-700 border-t-cyan-500 rounded-full animate-spin" />
+                    <LoadingInline intent="processing" labelOverride="Loading..." />
                   </div>
                 ) : contentCoins.length === 0 ? (
                   <div className="p-8 text-center text-zinc-500">

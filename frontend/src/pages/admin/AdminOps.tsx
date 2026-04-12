@@ -32,6 +32,7 @@ import {
   toRegistrationDataUri,
 } from '@/lib/erc8004AgentUriPolicy'
 import { logger } from '@/lib/logger'
+import { LoadingText } from '@/components/ui/LoadingState'
 const CANONICAL_SMART_WALLET = '0xAb6d5C10b03300326CD7fAb7267Ae192842967b5'
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 const ERC8004_IDENTITY_REGISTRY = '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432'
@@ -1983,7 +1984,7 @@ function AgentFeedback() {
           <div className="rounded-xl border border-white/10 bg-black/30 p-5 space-y-3">
             <div className="text-sm text-zinc-300">Reputation summary</div>
             {clientsQuery.isLoading || summaryQuery.isLoading ? (
-              <div className="text-xs text-zinc-500">Loading…</div>
+              <LoadingText intent="processing" size="sm" className="text-xs text-zinc-500" labelOverride="Loading..." />
             ) : summaryData && summaryData.count > 0 ? (
               <div className="space-y-2">
                 <div className="flex items-baseline gap-3">
@@ -2025,7 +2026,7 @@ function AgentFeedback() {
               </button>
             </div>
             {showAllFeedback && allFeedbackQuery.isLoading ? (
-              <div className="text-xs text-zinc-500">Loading…</div>
+              <LoadingText intent="processing" size="sm" className="text-xs text-zinc-500" labelOverride="Loading..." />
             ) : showAllFeedback && allFeedback.length > 0 ? (
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {allFeedback.map((fb) => (

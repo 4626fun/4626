@@ -91,8 +91,8 @@ export const LOADING_INTENT_CONFIG: Record<LoadingIntent, LoadingIntentConfig> =
     pattern: REDIRECT_PATTERN,
   },
   deploy: {
-    headline: 'Deploying...',
-    srStatus: 'Deploying token and vault configuration.',
+    headline: 'Loading deploy page...',
+    srStatus: 'Loading deploy page content.',
     pattern: DEPLOY_PATTERN,
   },
   processing: {
