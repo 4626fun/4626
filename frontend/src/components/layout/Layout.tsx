@@ -111,7 +111,7 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
       ? getCanonicalMarketingWaitlistPath()
       : buildCanonicalMarketingWaitlistUrl(getMarketingBaseUrl())
   const [isMobileChatOverlayActive, setIsMobileChatOverlayActive] = useState(false)
-  const [hideMobileNavForBaseApp, setHideMobileNavForBaseApp] = useState(false)
+  const [hideMobileNavForBaseApp] = useState(() => isBaseInAppContext())
   const shouldOverlayMobileNav = location.pathname.startsWith('/explore')
   const isAdminRoute = location.pathname.startsWith('/admin')
   const showTopNavBar = true
@@ -137,10 +137,6 @@ export function Layout(props: { interactive?: boolean; chatEnabled?: boolean }) 
 
     window.addEventListener('vault-mobile-chat-overlay-change', handleOverlayChange as EventListener)
     return () => window.removeEventListener('vault-mobile-chat-overlay-change', handleOverlayChange as EventListener)
-  }, [])
-
-  useEffect(() => {
-    setHideMobileNavForBaseApp(isBaseInAppContext())
   }, [])
 
   const hideMobileNavForMarketingHost = hostMode === 'marketing'

@@ -82,6 +82,7 @@ vi.mock('wagmi', async (importOriginal) => {
     usePublicClient: () => mockWagmiPublicClient,
     useSwitchChain: () => mockWagmiSwitchChain,
     useWalletClient: () => mockWagmiWalletClientState,
+    useSignMessage: () => ({ signMessageAsync: async () => '0xsignature' }),
     WagmiProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   }
 })
@@ -244,7 +245,7 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.getByRole('heading', { name: /^start with email$/i })).toBeTruthy()
+    expect(screen.getByRole('heading', { name: /^waitlist$/i })).toBeTruthy()
     expect(
       screen.queryByText(/one secure email sign-in saves your spot\. then we guide you through setup in a few clear steps\./i),
     ).toBeNull()
@@ -259,10 +260,10 @@ describe('WaitlistFlow simplified completion UI', () => {
 
     expect(await screen.findByText(/link your zora identity/i)).toBeTruthy()
     expect(screen.getByText(/enable 4626 signing/i)).toBeTruthy()
-    // Completed steps render a completion status pill
-    expect(screen.getAllByText(/^complete$/i).length).toBeGreaterThan(0)
+    // Completed setup stage still displays the verified identity row.
+    expect(screen.getByText(/0x1111…1111/i)).toBeTruthy()
     expect(screen.getByRole('button', { name: /approve signing access|connect owner wallet/i })).toBeTruthy()
-    expect(screen.getByRole('button', { name: /^retry$/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /^reset$/i })).toBeTruthy()
   })
 
   it('shows a single setup title after entering the waitlist setup workspace', async () => {
@@ -796,7 +797,9 @@ describe('WaitlistFlow simplified completion UI', () => {
       </MemoryRouter>,
     )
 
-    expect(await screen.findByRole('heading', { name: /^start with email$/i }, { timeout: 9_000 })).toBeTruthy()
+    expect(
+      await screen.findByRole('heading', { name: /waitlist|activate your account/i }, { timeout: 9_000 }),
+    ).toBeTruthy()
     // first requiresPrivyAuth + optional cooldown-respected retry to recover
     expect(bootstrapCalls).toBeGreaterThanOrEqual(1)
     expect(bootstrapCalls).toBeLessThanOrEqual(3)

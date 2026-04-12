@@ -28,6 +28,7 @@ vi.mock('wagmi', () => ({
   usePublicClient: () => ({ readContract: async () => true }),
   useAccount: () => ({ chainId: 8453, address: '0x1111111111111111111111111111111111111111' }),
   useSwitchChain: () => ({ switchChainAsync: async () => {} }),
+  useSignMessage: () => ({ signMessageAsync: async () => '0xsignature' }),
 }))
 
 vi.mock('@/components/seo/PageMeta', () => ({
