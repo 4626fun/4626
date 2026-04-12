@@ -23,7 +23,9 @@ export function shortValue(value: string | null | undefined): string {
 }
 
 export function hasResolvedZoraSignals(data: ZoraResolveResponse | null | undefined): boolean {
-  return Boolean(data?.canonicalCswAddress || data?.creatorCoin?.address || data?.zoraHandle)
+  // "Resolved" for setup progression means canonical wallet detection is present.
+  // Handle/coin alone are useful identity hints but are not sufficient for wallet-ready state.
+  return Boolean(data?.canonicalCswAddress)
 }
 
 export function sleep(ms: number): Promise<void> {

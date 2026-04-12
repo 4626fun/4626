@@ -38,6 +38,7 @@ export function AccountSetupWorkspaceView(props: {
     onEnable4626Signing,
     onLinkZora,
     onRefreshZora,
+    onSwitchAccount,
     ownerApprovalReady,
     ownerAuthorityState,
     ownerChecklist,
@@ -123,9 +124,19 @@ export function AccountSetupWorkspaceView(props: {
         ) : null}
 
         {/* Heading — single line */}
-        <div>
+        <div className="flex items-start justify-between gap-3">
+          <div>
           <h2 className="text-2xl font-semibold tracking-tight text-white">Activate your account</h2>
           <p className="mt-1 text-sm text-zinc-500">{stepTwoStatus === 'done' ? 'Completed' : `Step ${resolvedOpen} of 2`}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void onSwitchAccount()}
+            disabled={busyProvider === 'email'}
+            className="inline-flex h-[30px] items-center rounded-md border border-white/10 bg-transparent px-2.5 text-[11px] font-medium uppercase tracking-[0.08em] text-zinc-400 hover:bg-white/[0.04] hover:text-zinc-200 disabled:opacity-50"
+          >
+            {busyProvider === 'email' ? 'Switching…' : 'Not you? Switch'}
+          </button>
         </div>
 
         {/* Accordion steps */}

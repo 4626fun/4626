@@ -626,6 +626,11 @@ export function useAccountSetupController(params: {
         await loadMe({ showSpinner: false })
         return
       }
+      if (existingSignals?.zoraHandle || existingSignals?.creatorCoin?.address) {
+        setNotice('Zora profile found, but wallet detection is still pending. Open Base app and retry detection.')
+        await loadMe({ showSpinner: false })
+        return
+      }
 
       const action = selectCrossAppAuthAction({
         privyAuthed,
@@ -702,6 +707,27 @@ export function useAccountSetupController(params: {
       setBusyProvider(null)
     }
   }, [authHeaders, loadMe])
+
+  const onSwitchAccount = useCallback(async () => {
+    setBusyProvider('email')
+    setError(null)
+    setNotice(null)
+    try {
+      await runWaitlistPrivyLogout({
+        logout: async () => {
+          await privy.logout().catch(() => null)
+        },
+        shouldLogout: true,
+      })
+      if (typeof window !== 'undefined') {
+        window.location.assign('/waitlist')
+      }
+    } catch (switchError: any) {
+      setError(typeof switchError?.message === 'string' ? switchError.message : 'Failed to switch account.')
+    } finally {
+      setBusyProvider(null)
+    }
+  }, [privy])
 
   const sendPreparedOwnerTx = useCallback(
     async (txRequest: { chainId: 8453; to: `0x${string}`; data: `0x${string}`; value: '0x0' }, ownerAddress?: string | null) => {
@@ -1026,6 +1052,7 @@ export function useAccountSetupController(params: {
     onLinkZora,
     onUnlinkProvider,
     onRefreshZora,
+    onSwitchAccount,
     onAddRabbyCoOwner,
     ownerApprovalReady,
     ownerAuthorityState,
