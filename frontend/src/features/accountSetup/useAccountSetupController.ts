@@ -23,6 +23,7 @@ import {
   shouldRefreshOwnerDelegationOnForeground,
 } from '@/lib/wallet/onboardingWallet'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
+import { ensureWalletAlignedPaymasterSession } from '@/lib/paymasterSession'
 import { buildZoraHandoffUrl } from '@/lib/zora/referrals'
 import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
 import { selectCrossAppAuthAction } from '@/features/waitlist/ownerInstallMapping'
@@ -267,17 +268,15 @@ export function useAccountSetupController(params: {
   )
 
   const ensurePaymasterSession = useCallback(async (): Promise<boolean> => {
-    if (siwe.isSignedIn) return true
-    if (typeof siwe.signInWithPrivyToken !== 'function') return false
-    try {
-      const token = await getAccessToken()
-      if (!token) return false
-      const bridged = await siwe.signInWithPrivyToken(token)
-      return Boolean(bridged)
-    } catch {
-      return false
-    }
-  }, [getAccessToken, siwe])
+    return await ensureWalletAlignedPaymasterSession({
+      hasMatchingSiweSession: siwe.isSignedIn,
+      preferWalletSession: Boolean(connectedAddress),
+      signIn: typeof siwe.signIn === 'function' ? siwe.signIn : null,
+      signInWithPrivyToken:
+        typeof siwe.signInWithPrivyToken === 'function' ? siwe.signInWithPrivyToken : null,
+      getPrivyAccessToken: getAccessToken,
+    })
+  }, [connectedAddress, getAccessToken, siwe])
 
   const loadMe = useCallback(
     async (options?: { showSpinner?: boolean }) => {

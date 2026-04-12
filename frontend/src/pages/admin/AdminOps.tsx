@@ -21,6 +21,7 @@ import { usePrivy, useWallets } from '@privy-io/react-auth'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { ensureWalletAlignedPaymasterSession } from '@/lib/paymasterSession'
 import { ConnectButton } from '@/components/account/ConnectButton'
 import { CONTRACTS } from '@/config/contracts'
 import { appendBuilderSuffixToHex } from '@/lib/baseBuilderCodes'
@@ -700,19 +701,16 @@ function usePaymasterSessionGuard() {
     typeof privyAny?.getAccessToken === 'function' ? privyAny.getAccessToken.bind(privyAny) : null
 
   const ensurePaymasterSession = async (): Promise<boolean> => {
-    if (siwe.isSignedIn) return true
-    if (privyReady && privyAuthenticated && getPrivyAccessToken) {
-      try {
-        const token = await getPrivyAccessToken()
-        if (token) {
-          const addr = await siwe.signInWithPrivyToken(token)
-          if (addr) return true
-        }
-      } catch {
-        // ignore
-      }
-    }
-    return false
+    return await ensureWalletAlignedPaymasterSession({
+      hasMatchingSiweSession: siwe.isSignedIn,
+      preferWalletSession: true,
+      signIn: typeof siwe.signIn === 'function' ? siwe.signIn : null,
+      signInWithPrivyToken:
+        privyReady && privyAuthenticated && typeof siwe.signInWithPrivyToken === 'function'
+          ? siwe.signInWithPrivyToken
+          : null,
+      getPrivyAccessToken: privyReady && privyAuthenticated ? getPrivyAccessToken : null,
+    })
   }
 
   return { ensurePaymasterSession }
