@@ -27,6 +27,7 @@ const knownTokenLogoSeedByChainAndAddress: Record<string, string> = {
   // ETH / WETH / USDC / USDT / ZORA on Base (common tokens in default swap flow)
   '8453:0x0000000000000000000000000000000000000000': 'https://assets.coingecko.com/coins/images/279/small/ethereum.png',
   '8453:0x4200000000000000000000000000000000000006': 'https://assets.coingecko.com/coins/images/2518/small/weth.png',
+  '8453:0x4200000000000000000000000000000000000777': 'https://zora.co/assets/favicon/apple-touch-icon.png',
   '8453:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913': 'https://assets.coingecko.com/coins/images/6319/small/usdc.png',
   '8453:0xfde4c96c8593536e31f229ea8f37b2ad2699bb2': 'https://assets.coingecko.com/coins/images/325/small/Tether.png',
   '8453:0xcbb7c0000ab88b473b1f5afd9ef808440eed33bf': 'https://assets.coingecko.com/coins/images/40143/small/cbbtc.webp',

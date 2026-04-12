@@ -159,6 +159,14 @@ function isSessionModeMaxClientsError(err: unknown): boolean {
   )
 }
 
+function isPoolAcquireTimeoutError(err: unknown): boolean {
+  const code = String((err as any)?.code ?? '').trim().toUpperCase()
+  if (code === 'ETIMEDOUT') return true
+  const msg = err instanceof Error ? err.message : String(err ?? '')
+  const lc = msg.toLowerCase()
+  return lc.includes('timeout exceeded when trying to connect') || lc.includes('timeout acquiring a client')
+}
+
 function getInitRetryWindowMs(): number {
   return parsePositiveInt(process.env.POSTGRES_INIT_RETRY_MS) ?? 10_000
 }
@@ -232,12 +240,15 @@ async function withSessionRetry<T>(
       return await fn()
     } catch (err) {
       lastErr = err
-      if (!isSessionModeMaxClientsError(err)) throw err
+      const sessionModeMaxClients = isSessionModeMaxClientsError(err)
+      const poolAcquireTimeout = isPoolAcquireTimeoutError(err)
+      if (!sessionModeMaxClients && !poolAcquireTimeout) throw err
       if (attempt < maxRetries) {
         const jitter = 0.5 + Math.random() * 0.5
         const delayMs = QUERY_RETRY_BASE_MS * Math.pow(2, attempt) * jitter
+        const reason = sessionModeMaxClients ? 'MaxClientsInSessionMode' : 'pool acquire timeout'
         console.warn(
-          `[postgres] MaxClientsInSessionMode on query; retrying (${attempt + 1}/${maxRetries}) after ${Math.round(delayMs)}ms`,
+          `[postgres] ${reason} on query; retrying (${attempt + 1}/${maxRetries}) after ${Math.round(delayMs)}ms`,
         )
         await sleep(delayMs)
       }

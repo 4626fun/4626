@@ -52,8 +52,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(503).json({ success: false, error: 'Database unavailable' } satisfies ApiEnvelope<never>)
   }
 
+  let context: Awaited<ReturnType<typeof verifyPrivyForAccounts>> | null = null
   try {
-    const context = await verifyPrivyForAccounts(req)
+    context = await verifyPrivyForAccounts(req)
     await ensureAccountsIdentitySchema(db as any)
     await syncEmailIdentity({
       db: db as any,
@@ -81,6 +82,30 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (code === 'ZORA_REFRESH_RATE_LIMITED') {
       const retryAfterSec = Number(error?.retryAfterSec ?? 60)
       res.setHeader('Retry-After', String(Math.max(1, Math.ceil(retryAfterSec))))
+
+      // If forced refresh is temporarily limited, fall back to the latest persisted signals
+      // so waitlist/account setup can keep moving with known-good state.
+      if (context) {
+        try {
+          const summary = await resolveAndPersistZoraSignals({
+            db: db as any,
+            privyUserId: context.privyUserId,
+            privyUser: context.privyUser,
+            forceRefresh: false,
+          })
+          const data: ZoraRefreshResponse = {
+            canonicalCswAddress: summary.canonicalCswAddress,
+            creatorCoin: summary.creatorCoin,
+            zoraHandle: summary.zoraHandle,
+            lastResolvedAt: summary.lastResolvedAt,
+          }
+          res.setHeader('X-Zora-Refresh-Limited', '1')
+          return res.status(200).json({ success: true, data } satisfies ApiEnvelope<ZoraRefreshResponse>)
+        } catch {
+          // If fallback also fails, return the original rate-limit error.
+        }
+      }
+
       return res.status(429).json({
         success: false,
         error: `Refresh is rate-limited. Try again in ${Math.max(1, Math.ceil(retryAfterSec))}s.`,

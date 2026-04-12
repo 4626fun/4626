@@ -157,36 +157,36 @@ async function computeCanonicalMetrics(scope: MetricsScope): Promise<MetricsResp
 
   await ensureCreatorMetricsSchema(db)
 
-  const [stateResult, totalsResult] = await Promise.all([
-    db.sql`
-      SELECT
-        backfill_complete,
-        sync_status,
-        sync_error,
-        sampled_creators,
-        last_sync_started_at,
-        last_sync_finished_at,
-        last_full_sync_at,
-        drift_estimate_total,
-        drift_pct
-      FROM creator_metrics_state
-      WHERE id = 1
-      LIMIT 1;
-    `,
-    db.sql`
-      SELECT
-        (SELECT COUNT(*)::BIGINT FROM creators) AS creators_total,
-        (
-          SELECT COUNT(DISTINCT creator_address)::BIGINT
-          FROM creator_coins
-          WHERE chain_id = 8453
-            AND created_at >= NOW() - INTERVAL '24 hours'
-        ) AS creators_new_24h,
-        (SELECT COALESCE(SUM(market_cap_usd), 0)::NUMERIC FROM creator_coins WHERE chain_id = 8453) AS market_cap_usd,
-        (SELECT COALESCE(SUM(volume_24h_usd), 0)::NUMERIC FROM creator_coins WHERE chain_id = 8453) AS volume_24h_usd,
-        (SELECT COALESCE(SUM(fees_24h_usd), 0)::NUMERIC FROM creator_coins WHERE chain_id = 8453) AS fees_24h_usd;
-    `,
-  ])
+  // Keep these reads sequential: serverless pools often run with max=1, and
+  // Promise.all can produce avoidable pool-acquire timeouts under load.
+  const stateResult = await db.sql`
+    SELECT
+      backfill_complete,
+      sync_status,
+      sync_error,
+      sampled_creators,
+      last_sync_started_at,
+      last_sync_finished_at,
+      last_full_sync_at,
+      drift_estimate_total,
+      drift_pct
+    FROM creator_metrics_state
+    WHERE id = 1
+    LIMIT 1;
+  `
+  const totalsResult = await db.sql`
+    SELECT
+      (SELECT COUNT(*)::BIGINT FROM creators) AS creators_total,
+      (
+        SELECT COUNT(DISTINCT creator_address)::BIGINT
+        FROM creator_coins
+        WHERE chain_id = 8453
+          AND created_at >= NOW() - INTERVAL '24 hours'
+      ) AS creators_new_24h,
+      (SELECT COALESCE(SUM(market_cap_usd), 0)::NUMERIC FROM creator_coins WHERE chain_id = 8453) AS market_cap_usd,
+      (SELECT COALESCE(SUM(volume_24h_usd), 0)::NUMERIC FROM creator_coins WHERE chain_id = 8453) AS volume_24h_usd,
+      (SELECT COALESCE(SUM(fees_24h_usd), 0)::NUMERIC FROM creator_coins WHERE chain_id = 8453) AS fees_24h_usd;
+  `
 
   const state = stateResult.rows?.[0] ?? {}
   const agg = totalsResult.rows?.[0] ?? {}
@@ -385,4 +385,3 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
   }
 }
-

@@ -28,6 +28,9 @@ const mocks = vi.hoisted(() => ({
   requireServerKeyMock: vi.fn(() => ''),
   createPublicClientMock: vi.fn(),
   getCompletedImageProjectForVaultMock: vi.fn(),
+  blobHeadOrNullMock: vi.fn(),
+  blobPutBytesMock: vi.fn(),
+  sha256HexMock: vi.fn(),
   fetchBytesMock: vi.fn(),
   sdkSetApiKeyMock: vi.fn(),
   sdkGetCoinMock: vi.fn(),
@@ -43,10 +46,10 @@ vi.mock('../../server/zora/_shared.js', () => ({
 }))
 
 vi.mock('../../server/_lib/blob.js', () => ({
-  blobHeadOrNull: vi.fn(),
-  blobPutBytes: vi.fn(),
+  blobHeadOrNull: mocks.blobHeadOrNullMock,
+  blobPutBytes: mocks.blobPutBytesMock,
   fetchBytes: mocks.fetchBytesMock,
-  sha256Hex: vi.fn(),
+  sha256Hex: mocks.sha256HexMock,
 }))
 
 vi.mock('../../server/_lib/imageProjects.js', () => ({
@@ -89,6 +92,11 @@ describe('token image AI override lookup', () => {
     mocks.requireServerKeyMock.mockReturnValue('')
     mocks.sdkSetApiKeyMock.mockReset()
     mocks.sdkGetCoinMock.mockReset()
+    mocks.blobHeadOrNullMock.mockResolvedValue(null)
+    mocks.blobPutBytesMock.mockResolvedValue({ url: 'https://blob.local/token.png' })
+    mocks.sha256HexMock.mockImplementation((value: unknown) =>
+      typeof value === 'string' && value.length > 0 ? `hash-${value.length}` : 'hash',
+    )
   })
 
   it('resolves generated override by vault address (not shareOFT address)', async () => {
@@ -157,5 +165,44 @@ describe('token image AI override lookup', () => {
     expect(mocks.getCompletedImageProjectForVaultMock).not.toHaveBeenCalled()
     expect(res.statusCode).toBe(200)
     expect(String(res.getHeader('content-type') ?? '')).toBe('image/svg+xml')
+  }, 30_000)
+
+  it('serves creator lookups from Zora artwork without writing framed blob cache', async () => {
+    const sourcePng = await createSourcePng()
+    mocks.getStringQueryMock.mockImplementation((_req: any, key: string) => {
+      if (key === 'address') return SHARE_OFT
+      if (key === 'tokenKind') return 'creator'
+      return null
+    })
+    mocks.requireServerKeyMock.mockReturnValue('zora_test_key')
+    mocks.sdkGetCoinMock.mockResolvedValue({
+      data: {
+        zora20Token: {
+          symbol: 'AKITA',
+          mediaContent: { originalUri: 'https://cdn.example/akita.png' },
+          creatorProfile: { handle: 'akita' },
+        },
+      },
+    })
+    mocks.fetchBytesMock.mockResolvedValue({
+      bytes: sourcePng,
+      contentType: 'image/png',
+    })
+
+    const mod = await import('../_handlers/token/_image.ts')
+    const handler = mod.default
+    const req = createMockReq({
+      method: 'GET',
+      query: { address: SHARE_OFT, tokenKind: 'creator' },
+      headers: { host: 'app.4626.fun' },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(String(res.getHeader('content-type') ?? '')).toBe('image/png')
+    expect(mocks.blobPutBytesMock).not.toHaveBeenCalled()
+    expect(mocks.getCompletedImageProjectForVaultMock).not.toHaveBeenCalled()
   }, 30_000)
 })

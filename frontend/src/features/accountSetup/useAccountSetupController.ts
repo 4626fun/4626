@@ -693,7 +693,8 @@ export function useAccountSetupController(params: {
       if (!response.ok || !payload?.success || !payload.data) {
         throw new Error(readApiError(payload, 'Failed to refresh Zora signals.'))
       }
-      setNotice('Zora signals refreshed.')
+      const refreshLimited = response.headers.get('X-Zora-Refresh-Limited') === '1'
+      setNotice(refreshLimited ? 'Zora refresh is rate-limited. Using your latest saved signals.' : 'Zora signals refreshed.')
       await loadMe({ showSpinner: false })
     } catch (refreshError: any) {
       setError(typeof refreshError?.message === 'string' ? refreshError.message : 'Failed to refresh Zora signals.')

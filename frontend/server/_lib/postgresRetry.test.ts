@@ -2,15 +2,30 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const SESSION_MODE_ERROR_MSG =
   'error: MaxClientsInSessionMode: max clients reached - in Session mode max clients are limited to pool_size'
+const POOL_ACQUIRE_TIMEOUT_ERROR_MSG = 'timeout exceeded when trying to connect'
 
 let queryCallCount = 0
-let queryBehavior: 'succeed' | 'session_error' | 'other_error' | 'fail_then_succeed' | 'self_signed_once' = 'succeed'
+let queryBehavior:
+  | 'succeed'
+  | 'session_error'
+  | 'other_error'
+  | 'fail_then_succeed'
+  | 'pool_timeout'
+  | 'pool_timeout_then_succeed'
+  | 'self_signed_once' = 'succeed'
 let failThenSucceedThreshold = 0
 const mockPoolEnd = vi.fn(async () => {})
 const mockPoolQuery = vi.fn(async () => {
   queryCallCount++
   if (queryBehavior === 'succeed') return { rows: [{ ok: 1 }] }
   if (queryBehavior === 'other_error') throw new Error('connection refused')
+  if (queryBehavior === 'pool_timeout') throw new Error(POOL_ACQUIRE_TIMEOUT_ERROR_MSG)
+  if (queryBehavior === 'pool_timeout_then_succeed') {
+    if (queryCallCount <= failThenSucceedThreshold) {
+      throw new Error(POOL_ACQUIRE_TIMEOUT_ERROR_MSG)
+    }
+    return { rows: [{ ok: 1 }] }
+  }
   if (queryBehavior === 'self_signed_once') {
     if (queryCallCount === 1) {
       const err = new Error('self-signed certificate in certificate chain') as any
@@ -96,6 +111,20 @@ describe('postgres session-mode retry', () => {
 
     queryCallCount = 0
     queryBehavior = 'fail_then_succeed'
+    failThenSucceedThreshold = 1
+
+    const result = await db!.sql`SELECT 42;`
+    expect(result.rows).toEqual([{ ok: 1 }])
+    expect(queryCallCount).toBe(2)
+  })
+
+  it('retries pool-acquire timeout errors and succeeds on subsequent attempt', async () => {
+    queryBehavior = 'succeed'
+    const db = await getDb()
+    expect(db).not.toBeNull()
+
+    queryCallCount = 0
+    queryBehavior = 'pool_timeout_then_succeed'
     failThenSucceedThreshold = 1
 
     const result = await db!.sql`SELECT 42;`

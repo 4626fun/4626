@@ -436,10 +436,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const artworkUrl = creatorTokenArtwork?.artworkUrl ?? null
     const heroCutoutArtworkUrl = creatorTokenArtwork?.heroCutoutArtworkUrl ?? null
 
+    const shouldPreferCreatorArtworkDirect =
+      requestedTokenKind === 'creator' ||
+      (requestedAddressIsCreatorCoin && requestedTokenKind !== 'share')
+    const shouldAttemptRawSourceImage = preferRawSourceImage || shouldPreferCreatorArtworkDirect
     const allowRawSourceImage =
-      preferRawSourceImage &&
-      (isLocalPreview || Boolean(preferredSourceBytes) || isTrustedRawArtworkUrl(artworkUrl))
-    if (preferRawSourceImage && !allowRawSourceImage) {
+      shouldAttemptRawSourceImage &&
+      (
+        isLocalPreview ||
+        Boolean(preferredSourceBytes) ||
+        Boolean(creatorTokenArtwork) ||
+        isTrustedRawArtworkUrl(artworkUrl)
+      )
+    if (shouldAttemptRawSourceImage && !allowRawSourceImage) {
       console.warn('[token/image] blocked raw style for untrusted artwork source')
     }
 
