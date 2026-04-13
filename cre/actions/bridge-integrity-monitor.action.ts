@@ -16,7 +16,11 @@ import { alertCritical, alertInfo, alertWarning } from '../utils/alerts.js';
 
 const WORKFLOW_NAME = 'bridge-integrity-monitor';
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as const;
+// FIX: LOW-07 — Log a warning when using the hardcoded default; prefer env override
 const DEFAULT_BASE_SOLANA_BRIDGE = '0x3eff766c76a1be2ce1acf2b69c78bcae257d5188' as const;
+if (!process.env.BASE_SOLANA_BRIDGE_ADDRESS) {
+  console.warn('[CRE] WARNING: BASE_SOLANA_BRIDGE_ADDRESS not set — using hardcoded default. Set this env var explicitly for production.');
+}
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
 const BYTES32_RE = /^0x[a-fA-F0-9]{64}$/;
 
@@ -692,8 +696,9 @@ export async function executeBridgeIntegrityMonitor(): Promise<BridgeIntegrityMo
     const infra = infraFetch.infra;
     checksRun += 1;
     if (infraFetch.mode === 'register-build-fallback') {
-      warningFindings.push(
-        'deploy/solanaInfraStatus is session-gated on this deployment; using registerSolanaBridgeToken build-only fallback with reduced liveness checks.',
+      // FIX: HGH-07 — Log CRITICAL alert (not just warning) when auth failure degrades monitor
+      criticalFindings.push(
+        'deploy/solanaInfraStatus auth failed (401/403) — degraded to registerSolanaBridgeToken build-only fallback with reduced liveness and allowlist checks.',
       );
     }
 

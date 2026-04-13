@@ -79,13 +79,19 @@ export function requireKeeprApiKey(
   })
 }
 
+// FIX: FINDING-06 — fail closed when the env var is absent instead of allowing
+// unauthenticated access. A misconfigured deployment should reject requests,
+// not silently bypass auth.
 export function requireOptionalHeaderEnvAuth(
   req: VercelRequest,
   res: VercelResponse,
   options: OptionalHeaderAuthOptions,
 ): boolean {
   const configuredSecret = String(process.env[options.envKey] ?? '').trim()
-  if (!configuredSecret) return true
+  if (!configuredSecret) {
+    res.status(500).json({ success: false, error: `Server misconfigured: ${options.envKey} is not set` } satisfies ApiEnvelope<never>)
+    return false
+  }
 
   const providedSecret = readHeaderValue(req, options.headerName)
   if (!providedSecret || !safeCompareSecret(providedSecret, configuredSecret)) {

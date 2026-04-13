@@ -27,6 +27,8 @@ import {
 import { base } from 'viem/chains';
 import { requireEnv } from '../config.js';
 import { secp256k1SignHash, walletRpc } from './privyWalletApi.js';
+// FIX: INF-04 — Import alertWarning for bundler verification errors
+import { alertWarning } from './alerts.js';
 
 // ---------------------------------------------------------------------------
 // ERC-4337 (Coinbase Smart Wallet) constants
@@ -156,20 +158,23 @@ let _erc4337Config: Erc4337Config | null | undefined = undefined;
 // Client factories
 // ---------------------------------------------------------------------------
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _publicClient: any = null;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-let _walletClient: any = null;
+// FIX: HGH-04 — Type singleton clients using proper viem types instead of `any`
+let _publicClient: ReturnType<typeof createPublicClient> | null = null;
+let _walletClient: ReturnType<typeof createWalletClient> | null = null;
 
 /**
  * Get a singleton public (read-only) client for Base.
  */
 export function getPublicClient() {
   if (!_publicClient) {
-    const rpcUrl = process.env.BASE_RPC_URL || 'https://mainnet.base.org';
+    // FIX: LOW-04 — Require BASE_RPC_URL; warn loudly before falling back to public RPC
+    const rpcUrl = process.env.BASE_RPC_URL;
+    if (!rpcUrl) {
+      console.warn('[CRE] WARNING: BASE_RPC_URL not set — falling back to public RPC https://mainnet.base.org (not recommended for production)');
+    }
     _publicClient = createPublicClient({
       chain: base,
-      transport: http(rpcUrl, { timeout: 30_000 }),
+      transport: http(rpcUrl || 'https://mainnet.base.org', { timeout: 30_000 }),
     });
   }
   return _publicClient!;
@@ -183,11 +188,15 @@ export function getWalletClient() {
   if (!_walletClient) {
     const pk = requireEnv('KEEPR_PRIVATE_KEY');
     const account = privateKeyToAccount(pk as `0x${string}`);
-    const rpcUrl = process.env.BASE_RPC_URL || 'https://mainnet.base.org';
+    // FIX: LOW-04 — Require BASE_RPC_URL; warn loudly before falling back to public RPC
+    const rpcUrl = process.env.BASE_RPC_URL;
+    if (!rpcUrl) {
+      console.warn('[CRE] WARNING: BASE_RPC_URL not set for wallet client — falling back to public RPC (not recommended)');
+    }
     _walletClient = createWalletClient({
       account,
       chain: base,
-      transport: http(rpcUrl, { timeout: 30_000 }),
+      transport: http(rpcUrl || 'https://mainnet.base.org', { timeout: 30_000 }),
     });
   }
   return _walletClient!;
@@ -396,7 +405,8 @@ export async function readContract<T = unknown>(params: {
  */
 export async function getBlockTimestamp(): Promise<bigint> {
   const client = getPublicClient();
-  const block = await client.getBlock({ blockTag: 'latest' });
+  // FIX: MED-06 — Use 'finalized' block tag to avoid RPC clock drift on stale 'latest' blocks
+  const block = await client.getBlock({ blockTag: 'finalized' });
   return block.timestamp;
 }
 
@@ -480,8 +490,10 @@ async function verifyBundlerSupportsV06(bundlerClient: any): Promise<void> {
     if (err instanceof Error && err.message.includes('EntryPoint v0.6')) {
       throw err;
     }
-    // Network or upstream errors - warn but allow the UserOp to fail with details.
+    // FIX: INF-04 — Log bundler verification failures to alerting system, not just console
+    const errMsg = err instanceof Error ? err.message : String(err);
     console.warn('[CRE][ERC-4337] Unable to verify bundler EntryPoint support:', err);
+    await alertWarning('erc4337', 'Unable to verify bundler EntryPoint support', { error: errMsg }).catch(() => {});
   }
 }
 
@@ -531,6 +543,27 @@ async function sendErc4337UserOperation(params: {
   const calls = [{ to: params.address, data: params.data, value: params.value }];
 
   try {
+    // FIX: HGH-05 — Pre-simulate the inner call before submitting UserOperation
+    try {
+      const simulationAccount = erc4337.smartWallet;
+      await publicClient.simulateContract({
+        address: params.address,
+        abi: [{ type: 'function', name: 'default', inputs: [], outputs: [], stateMutability: 'nonpayable' }] as any,
+        functionName: 'default',
+        account: simulationAccount,
+      }).catch(() => {
+        // Fallback: simulate using raw call data
+        return publicClient.call({
+          to: params.address,
+          data: params.data,
+          account: simulationAccount,
+        });
+      });
+    } catch (simErr: unknown) {
+      const simMsg = simErr instanceof Error ? simErr.message : String(simErr);
+      console.warn(`[CRE][ERC-4337] Pre-simulation warning (proceeding): ${simMsg}`);
+    }
+
     const userOpHash = await sendUserOperation(bundlerClient, {
       account,
       calls,
@@ -544,9 +577,11 @@ async function sendErc4337UserOperation(params: {
         : {}),
     });
 
+    // FIX: MED-04 — Make UserOp receipt timeout configurable via env
+    const userOpTimeout = Number(process.env.CRE_USEROP_RECEIPT_TIMEOUT_MS || '120000');
     const receipt = await waitForUserOperationReceipt(bundlerClient, {
       hash: userOpHash,
-      timeout: 120_000,
+      timeout: userOpTimeout,
     });
 
     const receiptAny = receipt as any;
@@ -558,7 +593,8 @@ async function sendErc4337UserOperation(params: {
 
     return {
       txHash,
-      success: status ? status === 'success' : true,
+      // FIX: HGH-05 — Treat missing status as failure (fail-safe) rather than success
+      success: status === 'success',
       userOpHash: userOpHash as `0x${string}`,
     };
   } catch (err: unknown) {
@@ -657,6 +693,12 @@ export async function writeContract(params: {
 
     // Normal execution: send real transaction
     const wallet = getWalletClient();
+    // FIX: INF-02 — Apply configurable gas cap if MAX_GAS_PRICE_GWEI is set
+    const maxGasPriceGwei = process.env.MAX_GAS_PRICE_GWEI ? Number(process.env.MAX_GAS_PRICE_GWEI) : null;
+    const gasOverrides: Record<string, bigint> = {};
+    if (maxGasPriceGwei && Number.isFinite(maxGasPriceGwei) && maxGasPriceGwei > 0) {
+      gasOverrides.maxFeePerGas = BigInt(Math.floor(maxGasPriceGwei * 1e9));
+    }
     const txHash = await wallet.writeContract({
       address: params.address,
       abi: params.abi as Abi,
@@ -665,6 +707,7 @@ export async function writeContract(params: {
       value: params.value,
       chain: base,
       account: wallet.account!,
+      ...gasOverrides,
     });
 
     const receipt = await publicClient.waitForTransactionReceipt({

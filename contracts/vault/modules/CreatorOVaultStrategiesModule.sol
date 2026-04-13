@@ -123,6 +123,42 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
         emit StrategyRemoved(strategy);
     }
 
+    // FIX: M-02 — force-remove a strategy even when withdrawal has shortfall
+    function forceRemoveStrategy(address strategy) external onlyDelegateCall {
+        if (!activeStrategies[strategy]) revert StrategyNotActive();
+
+        uint256 currentDebt = strategyDebt[strategy];
+        if (currentDebt > 0) {
+            // Best-effort withdrawal; ignore shortfall
+            IERC20 coin = _creatorCoin();
+            uint256 beforeBal = coin.balanceOf(address(this));
+            try IStrategy(strategy).withdraw(currentDebt) returns (uint256) {} catch {}
+            uint256 afterBal = coin.balanceOf(address(this));
+            coinBalance = afterBal;
+
+            // Zero out debt regardless of how much was recovered
+            totalDebt -= currentDebt;
+            strategyDebt[strategy] = 0;
+            emit DebtUpdated(strategy, currentDebt, 0);
+        }
+
+        activeStrategies[strategy] = false;
+        totalStrategyWeight -= strategyWeights[strategy];
+        strategyWeights[strategy] = 0;
+
+        uint256 length = strategyList.length;
+        for (uint256 i = 0; i < length; i++) {
+            if (strategyList[i] == strategy) {
+                strategyList[i] = strategyList[length - 1];
+                strategyList.pop();
+                break;
+            }
+        }
+
+        _removeFromQueue(strategy);
+        emit StrategyRemoved(strategy);
+    }
+
     function updateStrategyWeight(address strategy, uint256 newWeight) external onlyDelegateCall {
         if (!activeStrategies[strategy]) revert StrategyNotActive();
         if (newWeight > MAX_BPS) revert InvalidWeight();

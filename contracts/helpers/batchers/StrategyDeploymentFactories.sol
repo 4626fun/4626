@@ -88,8 +88,11 @@ contract AjnaERC4626StrategyFactory is IAjnaERC4626StrategyFactory {
             new AjnaERC4626Vault(ajnaPool, IERC20(underlyingToken), vaultName, vaultSymbol, authContract);
         ERC4626StrategyAdapter adapter = new ERC4626StrategyAdapter(creatorVault, address(innerVaultContract), address(this));
         adapter.setIdleBufferBps(0);
+        // FIX: F-28 — set swapper to adapter BEFORE transferring admin, since only admin can setSwapper
+        authContract.setSwapper(address(adapter));
         adapter.transferOwnership(owner);
-        authContract.setAdmin(owner);
+        // FIX: F-04 compatibility — use two-step admin transfer
+        authContract.transferAdmin(owner);
 
         auth = address(authContract);
         innerVault = address(innerVaultContract);

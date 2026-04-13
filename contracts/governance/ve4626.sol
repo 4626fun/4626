@@ -35,6 +35,7 @@ interface Ive4626 {
     error ZeroAmount();
     error InvalidLockDuration();
     error NoExistingLock();
+    error AlreadyLocked();
     error LockDurationTooShort();
     error LockExpired();
     error LockNotExpired();
@@ -50,6 +51,7 @@ interface Ive4626 {
     function extendLock(uint256 newEnd) external returns (uint256 newVotingPower);
     function increaseLock(uint256 amount) external returns (uint256 newVotingPower);
     function unlock() external returns (uint256 amount);
+    function burnExpiredLock(address user) external;
     function getLock(address user) external view returns (Lock memory);
     function votingPower(address user) external view returns (uint256);
     function getVotingPower(address user) external view returns (uint256);
@@ -130,7 +132,8 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
         if (amount == 0) revert ZeroAmount();
         if (duration < MIN_LOCK_DURATION) revert InvalidLockDuration();
         if (duration > MAX_LOCK_DURATION) revert InvalidLockDuration();
-        if (_locks[msg.sender].amount > 0) revert NoExistingLock(); // Must use increaseLock
+        // FIX: G-17 — use correct error for already-locked user
+        if (_locks[msg.sender].amount > 0) revert AlreadyLocked(); // Must use increaseLock
 
         uint256 lockEnd = block.timestamp + duration;
 
@@ -177,11 +180,15 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
         // Recalculate voting power
         newVotingPower = _calculateVotingPower(userLock.amount, newEnd);
 
-        // Adjust ve4626 balance
+        // FIX: G-22 — adjust ve4626 balance in both directions (mint or burn)
         if (newVotingPower > oldPower) {
             uint256 diff = newVotingPower - oldPower;
             _mint(msg.sender, diff);
             _totalVotingSupply += diff;
+        } else if (newVotingPower < oldPower) {
+            uint256 diff = oldPower - newVotingPower;
+            _burn(msg.sender, diff);
+            _totalVotingSupply -= diff;
         }
 
         // Notify boost manager
@@ -254,6 +261,27 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
         _notifyBoostManager(msg.sender);
 
         emit Unlocked(msg.sender, amount, tokenToReturn);
+    }
+
+    // FIX: G-01, G-02 — permissionless burn of expired locks to prevent ghost votes
+    // and deflate _totalVotingSupply when locks expire without unlock()
+    event ExpiredLockBurned(address indexed user, uint256 burnedBalance);
+
+    function burnExpiredLock(address user) external override nonReentrant {
+        Lock storage userLock = _locks[user];
+        if (userLock.amount == 0) revert NoExistingLock();
+        if (block.timestamp < userLock.end) revert LockNotExpired();
+
+        uint256 veBalance = balanceOf(user);
+        if (veBalance > 0) {
+            _burn(user, veBalance);
+            _totalVotingSupply -= veBalance;
+        }
+
+        // Notify boost manager
+        _notifyBoostManager(user);
+
+        emit ExpiredLockBurned(user, veBalance);
     }
 
     // ================================
@@ -369,6 +397,22 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
     // Required overrides
     function _update(address from, address to, uint256 value) internal override(ERC20, ERC20Votes) {
         super._update(from, to, value);
+    }
+
+    // FIX: G-07 — override getPastVotes to return time-decayed voting power
+    // instead of raw ERC20 balance checkpoints, preventing stale governance snapshots
+    function getPastVotes(address account, uint256 timepoint) public view override returns (uint256) {
+        Lock memory userLock = _locks[account];
+        if (userLock.amount == 0) return 0;
+        if (timepoint >= userLock.end) return 0;
+        uint256 duration = userLock.end - timepoint;
+        return (userLock.amount * duration) / MAX_LOCK_DURATION;
+    }
+
+    // FIX: G-07 — override getPastTotalSupply to return current _totalVotingSupply
+    // (prevents inflated quorum denominators from stale ERC20 total supply checkpoints)
+    function getPastTotalSupply(uint256 /* timepoint */) public view override returns (uint256) {
+        return _totalVotingSupply;
     }
 
     function nonces(address owner) public view override(ERC20Permit, Nonces) returns (uint256) {

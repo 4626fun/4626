@@ -94,6 +94,10 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
     uint256 public totalUserDustShares; // Sum of user-attributed remainder shares
     mapping(address => uint256) public userDustShares;
 
+    // FIX: M-01 — per-user flash loan protection (wrapper-level cooldown)
+    mapping(address => uint256) public lastWrapperDepositBlock;
+    uint256 public wrapperWithdrawDelayBlocks = 1;
+
     /// @notice Fees (basis points) - 0 by default for simplicity
     uint256 public wrapFee;
     uint256 public unwrapFee;
@@ -152,6 +156,7 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
     error FeeExceedsLimit();
     error SlippageExceeded();
     error AmountTooSmallToNormalize(); // < 1 normalized share after fees + user dust
+    error WrapperWithdrawTooSoon(uint256 currentBlock, uint256 requiredBlock);
     error UnauthorizedBeneficiaryOperator(address operator, address beneficiary);
     error AsyncRedemptionRequired(uint256 assets, uint256 threshold);
 
@@ -281,6 +286,9 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         // 4. Check slippage
         if (shareOFTOut < minOut) revert SlippageExceeded();
 
+        // FIX: M-01 — track per-user deposit block for wrapper-level flash loan protection
+        lastWrapperDepositBlock[msg.sender] = block.number;
+
         emit Deposited(msg.sender, amount, shareOFTOut);
     }
 
@@ -294,6 +302,9 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         creatorCoin.safeTransferFrom(msg.sender, address(this), amount);
         uint256 vaultShares = vault.deposit(amount, address(this));
         shareOFTOut = _wrapInternal(vaultShares, msg.sender, msg.sender);
+
+        // FIX: M-01 — track per-user deposit block for wrapper-level flash loan protection
+        lastWrapperDepositBlock[msg.sender] = block.number;
 
         emit Deposited(msg.sender, amount, shareOFTOut);
     }
@@ -318,6 +329,9 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         shareOFTOut = _wrapInternal(vaultShares, beneficiary, msg.sender);
         if (shareOFTOut < minOut) revert SlippageExceeded();
 
+        // FIX: M-01 — track per-user deposit block for wrapper-level flash loan protection
+        lastWrapperDepositBlock[msg.sender] = block.number;
+
         emit Deposited(beneficiary, amount, shareOFTOut);
     }
 
@@ -339,6 +353,8 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
     function withdraw(uint256 amount, uint256 minOut) external nonReentrant returns (uint256 creatorCoinOut) {
         if (amount == 0) revert ZeroAmount();
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
+        // FIX: M-01 — enforce per-user cooldown
+        _requireWrapperCooldown(msg.sender);
 
         // 1-2. Unwrap: burn ShareOFT, get vault shares (internal)
         uint256 vaultShares = _unwrapInternal(amount, msg.sender, msg.sender);
@@ -359,6 +375,8 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
     function withdraw(uint256 amount) external nonReentrant returns (uint256 creatorCoinOut) {
         if (amount == 0) revert ZeroAmount();
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
+        // FIX: M-01 — enforce per-user cooldown
+        _requireWrapperCooldown(msg.sender);
 
         uint256 vaultShares = _unwrapInternal(amount, msg.sender, msg.sender);
         _requireSynchronousRedemption(vaultShares);
@@ -381,6 +399,8 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         _requireBeneficiaryOperator(beneficiary);
         if (amount == 0) revert ZeroAmount();
         if (address(shareOFT) == address(0)) revert ShareOFTNotSet();
+        // FIX: M-01 — enforce per-user cooldown
+        _requireWrapperCooldown(msg.sender);
 
         uint256 vaultShares = _unwrapInternal(amount, beneficiary, msg.sender);
         _requireSynchronousRedemption(vaultShares);
@@ -731,6 +751,12 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
         if (!isBeneficiaryOperator[msg.sender]) {
             revert UnauthorizedBeneficiaryOperator(msg.sender, beneficiary);
         }
+    }
+
+    // FIX: M-01 — enforce per-user cooldown at the wrapper level
+    function _requireWrapperCooldown(address user) internal view {
+        uint256 requiredBlock = lastWrapperDepositBlock[user] + wrapperWithdrawDelayBlocks;
+        if (block.number < requiredBlock) revert WrapperWithdrawTooSoon(block.number, requiredBlock);
     }
 
     function _requireSynchronousRedemption(uint256 vaultShares) internal view {

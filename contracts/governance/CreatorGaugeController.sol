@@ -134,6 +134,10 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
     /// @notice Whether to use oracle for slippage (if false, uses 0 minimum)
     bool public useOracleSlippage = true;
 
+    // FIX: G-12 — fallback minimum output percentage when oracle is disabled/unavailable
+    // Expressed in bps (e.g., 9000 = 90% of input value assumed 1:1 as floor)
+    uint256 public fallbackMinOutputBps = 0;
+
     /// @notice VaultGaugeVoting for ve(3,3) probability direction
     IVaultGaugeVoting public vaultGaugeVoting;
 
@@ -286,6 +290,12 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
         if (_shareOFT == address(0)) revert ZeroAddress();
         if (_protocolTreasury == address(0)) revert ZeroAddress();
 
+        // FIX: G-24 — compile/deploy-time assertion that fee split constants sum to MAX_BPS
+        require(
+            burnShareBps + lotteryShareBps + creatorShareBps + protocolShareBps == MAX_BPS,
+            "BPS mismatch"
+        );
+
         shareOFT = IERC20(_shareOFT);
         creatorTreasury = _creatorTreasury;
         protocolTreasury = _protocolTreasury;
@@ -307,6 +317,8 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
         // Pull OFT tokens from sender
         shareOFT.safeTransferFrom(msg.sender, address(this), amount);
         pendingFees += amount;
+        // FIX: G-11 — track OFT balance
+        accountedOFTBalance += amount;
         totalFeesReceived += amount;
 
         emit FeesReceived(msg.sender, amount);
@@ -325,6 +337,8 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
 
         shareOFT.safeTransferFrom(msg.sender, address(this), amount);
         pendingFees += amount;
+        // FIX: G-11 — track OFT balance
+        accountedOFTBalance += amount;
         totalFeesReceived += amount;
 
         emit FeesReceived(msg.sender, amount);
@@ -338,17 +352,20 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
      *
      *      Permissionless — anyone can trigger this (keeper, owner, etc.)
      */
+    // FIX: G-11 — track explicitly how much OFT the contract expects to hold
+    uint256 public accountedOFTBalance;
+
     function receiveBridgedFees() external nonReentrant {
         uint256 balance = shareOFT.balanceOf(address(this));
 
-        // Unaccounted = balance minus what we already know about
-        // (pendingFees + jackpotReserve are held as vault shares or OFT,
-        //  but only pendingFees are in OFT form — jackpotReserve is vault shares)
-        uint256 accounted = pendingFees;
+        // FIX: G-11 — use explicit accounted OFT balance instead of just pendingFees
+        // This prevents jackpotReserve (vault shares) from being confused with OFT
+        uint256 accounted = accountedOFTBalance;
         if (balance <= accounted) return;
 
         uint256 bridgedAmount = balance - accounted;
         pendingFees += bridgedAmount;
+        accountedOFTBalance += bridgedAmount;
         totalFeesReceived += bridgedAmount;
 
         emit FeesReceived(address(0), bridgedAmount); // address(0) signals bridged origin
@@ -495,8 +512,11 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
      * @return minOut Minimum Creator Coin to receive (0 if oracle disabled/unavailable)
      */
     function _calculateMinOutput(uint256 wethAmount) internal view returns (uint256 minOut) {
-        // Skip oracle if disabled or not set
+        // FIX: G-12 — when oracle is disabled, use fallback minimum if configured
         if (!useOracleSlippage || address(oracle) == address(0)) {
+            if (fallbackMinOutputBps > 0) {
+                return (wethAmount * fallbackMinOutputBps) / MAX_BPS;
+            }
             return 0;
         }
 
@@ -567,12 +587,18 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
         _distribute();
     }
 
+    // FIX: G-19 — event for emergency force distributions (auditing/monitoring)
+    event ForceDistributed(uint256 amount, uint256 timestamp);
+
     /**
      * @notice Force distribution (owner only, bypasses time check)
+     * @dev EMERGENCY ONLY — bypasses distributionInterval. Should be behind timelock/multisig.
      */
     function forceDistribute() external nonReentrant onlyOwner {
         if (pendingFees == 0) revert NothingToDistribute();
+        uint256 amount = pendingFees;
         _distributeInternal();
+        emit ForceDistributed(amount, block.timestamp);
     }
 
     function _distribute() internal {
@@ -588,6 +614,8 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
 
         uint256 oftAmount = pendingFees;
         pendingFees = 0;
+        // FIX: G-11 — decrement OFT accounting when consumed
+        accountedOFTBalance -= oftAmount;
         lastDistribution = block.timestamp;
 
         // Step 1: Unwrap OFT → vault shares
@@ -810,6 +838,12 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
         oracleTwapDuration = _twapDuration;
         useOracleSlippage = _useOracle;
         emit OracleConfigUpdated(_twapDuration, _useOracle);
+    }
+
+    // FIX: G-12 — allow owner to set a fallback minimum output when oracle is unavailable
+    function setFallbackMinOutputBps(uint256 _bps) external onlyOwner {
+        require(_bps <= MAX_BPS, "Exceeds MAX_BPS");
+        fallbackMinOutputBps = _bps;
     }
 
     /**
@@ -1038,6 +1072,14 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
      */
     function emergencyWithdraw(address token, uint256 amount, address to) external onlyOwner {
         if (to == address(0)) revert ZeroAddress();
+        // FIX: G-15 — adjust jackpotReserve when withdrawing vault shares
+        if (token == address(vaultShares) && address(vaultShares) != address(0)) {
+            if (amount >= jackpotReserve) {
+                jackpotReserve = 0;
+            } else {
+                jackpotReserve -= amount;
+            }
+        }
         IERC20(token).safeTransfer(to, amount);
     }
 }

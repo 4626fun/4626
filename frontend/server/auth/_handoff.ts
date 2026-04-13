@@ -13,13 +13,22 @@ export function makeHandoffCode(): string {
   return randomBytes(32).toString('hex')
 }
 
+// FIX: FINDING-01 — fail hard when secrets are absent or too short;
+// the previous globalThis fallback produced ephemeral per-isolate keys on serverless,
+// causing handoff codes to fail validation across cold starts and regions.
+// FIX: FINDING-15 — prefer a dedicated AUTH_HANDOFF_SECRET for key separation;
+// falls back to AUTH_SESSION_SECRET for backward compatibility during migration.
 function getHandoffHashSecret(): string {
-  const env = process.env.AUTH_SESSION_SECRET
-  if (typeof env === 'string' && env.trim().length >= 16) return env.trim()
+  const handoffEnv = process.env.AUTH_HANDOFF_SECRET
+  if (typeof handoffEnv === 'string' && handoffEnv.trim().length >= 32) return handoffEnv.trim()
 
-  const g: any = globalThis as any
-  if (!g.__4626_handoff_secret) g.__4626_handoff_secret = randomBytes(32).toString('hex')
-  return String(g.__4626_handoff_secret)
+  const sessionEnv = process.env.AUTH_SESSION_SECRET
+  if (typeof sessionEnv === 'string' && sessionEnv.trim().length >= 32) return sessionEnv.trim()
+
+  throw new Error(
+    'AUTH_HANDOFF_SECRET (or AUTH_SESSION_SECRET) is missing or shorter than 32 characters. ' +
+    'Set a stable, high-entropy secret in the environment before accepting requests.',
+  )
 }
 
 function hashHandoffCode(code: string): string {

@@ -262,8 +262,35 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
     // VRF CONFIGURATION
     // ================================
 
+    // FIX: VRFC-01 — add timelock to VRF coordinator changes to prevent instant manipulation
+    address public pendingVrfCoordinator;
+    uint256 public vrfCoordinatorTimelockExpiry;
+    uint256 public constant VRF_COORDINATOR_TIMELOCK = 2 days;
+
+    event VRFCoordinatorChangeQueued(address indexed newCoordinator, uint256 effectiveAt);
+    event VRFCoordinatorChangeExecuted(address indexed newCoordinator);
+
+    function queueVRFCoordinatorChange(address _vrfCoordinator) external onlyOwner {
+        if (_vrfCoordinator == address(0)) revert ZeroAddress();
+        pendingVrfCoordinator = _vrfCoordinator;
+        vrfCoordinatorTimelockExpiry = block.timestamp + VRF_COORDINATOR_TIMELOCK;
+        emit VRFCoordinatorChangeQueued(_vrfCoordinator, vrfCoordinatorTimelockExpiry);
+    }
+
+    function executeVRFCoordinatorChange() external onlyOwner {
+        require(pendingVrfCoordinator != address(0), "No pending change");
+        require(block.timestamp >= vrfCoordinatorTimelockExpiry, "Timelock not expired");
+        vrfCoordinator = IVRFCoordinatorV2Plus(pendingVrfCoordinator);
+        emit VRFCoordinatorChangeExecuted(pendingVrfCoordinator);
+        pendingVrfCoordinator = address(0);
+        vrfCoordinatorTimelockExpiry = 0;
+    }
+
+    /// @dev Kept for initial setup only (when coordinator is zero)
     function setVRFCoordinator(address _vrfCoordinator) external onlyOwner {
         if (_vrfCoordinator == address(0)) revert ZeroAddress();
+        // FIX: VRFC-01 — only allow direct set when coordinator not yet configured
+        require(address(vrfCoordinator) == address(0), "Use timelock flow");
         vrfCoordinator = IVRFCoordinatorV2Plus(_vrfCoordinator);
         emit VRFConfigUpdated(subscriptionId, keyHash, callbackGasLimit, requestConfirmations);
     }
@@ -496,9 +523,17 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
         if (!pendingResponses[srcEid][sequence]) revert NotPendingResponse();
 
         (MessagingFee memory fee,) = _quoteResponseFee(request);
-        if (msg.value != fee.nativeFee) revert RelayFeeMismatch(msg.value, fee.nativeFee);
+        // FIX: VRFC-02/VRFC-04 — accept >= nativeFee and refund excess to avoid permanently locked responses
+        if (msg.value < fee.nativeFee) revert RelayFeeMismatch(msg.value, fee.nativeFee);
 
         _sendResponseToChain(request, fee);
+
+        // Refund excess ETH
+        uint256 excess = msg.value - fee.nativeFee;
+        if (excess > 0) {
+            (bool ok,) = payable(msg.sender).call{value: excess}("");
+            require(ok, "Refund failed");
+        }
         emit PendingResponseRelayed(sequence, requestId, msg.sender, fee.nativeFee);
     }
 
@@ -628,10 +663,11 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
             uint32 chainEid = priceReportingChains[i];
             ChainPriceData memory priceData = chainPrices[chainEid];
 
-            // Freshness is tied to the reported oracle timestamp (not receipt time).
+            // FIX: VRFC-03 — use lastUpdated (local receipt time) for staleness instead of
+            // remote-reported timestamp, which can be spoofed to appear fresh
             if (
-                priceData.creatorPriceUSD > 0 && priceData.timestamp > 0 && priceData.timestamp <= block.timestamp
-                    && block.timestamp - priceData.timestamp < PRICE_STALENESS
+                priceData.creatorPriceUSD > 0 && priceData.lastUpdated > 0
+                    && block.timestamp - priceData.lastUpdated < PRICE_STALENESS
             ) {
                 totalPrice += priceData.creatorPriceUSD;
                 validChains++;
@@ -660,7 +696,8 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
     }
 
     function setRateLimitDefaults(uint64 windowSeconds, uint64 maxRequestsPerWindow, bool enabled) external onlyOwner {
-        if (windowSeconds == 0) revert InvalidRateLimitConfig();
+        // FIX: VRFC-06 — enforce minimum window of 60 seconds to prevent effective bypass
+        if (windowSeconds < 60) revert InvalidRateLimitConfig();
         rateLimitWindowSeconds = windowSeconds;
         defaultMaxRequestsPerWindow = maxRequestsPerWindow;
         rateLimitingEnabled = enabled;
@@ -716,6 +753,22 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
     function setTwapPeriod(uint32 _period) external onlyOwner {
         require(_period > 0, "Invalid");
         twapPeriod = _period;
+    }
+
+    // FIX: VRFC-05 — add removal path for priceReportingChains to prevent unbounded growth
+    function removePriceReportingChain(uint32 chainEid) external onlyOwner {
+        if (!hasPriceReported[chainEid]) return;
+        hasPriceReported[chainEid] = false;
+        delete chainPrices[chainEid];
+
+        uint256 len = priceReportingChains.length;
+        for (uint256 i = 0; i < len; i++) {
+            if (priceReportingChains[i] == chainEid) {
+                priceReportingChains[i] = priceReportingChains[len - 1];
+                priceReportingChains.pop();
+                break;
+            }
+        }
     }
 
     function fundContract() external payable {

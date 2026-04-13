@@ -27,10 +27,17 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
     error VaultPaused();
     error InvalidQuoteToken();
     error BufferLiquidityInsufficient();
+    // FIX: F-08 — prevent unbounded _buckets array from causing gas DoS in totalAssets()
+    error MaxBucketsReached();
+
+    // FIX: F-08 — cap bucket count to bound gas cost of totalAssets() loop
+    uint256 public constant MAX_BUCKETS = 50;
 
     event BufferMovedToBucket(uint256 indexed bucketIndex, uint256 assets, uint256 bucketLp);
     event BucketMovedToBuffer(uint256 indexed bucketIndex, uint256 assets, uint256 bucketLp);
     event BucketMoved(uint256 indexed fromIndex, uint256 indexed toIndex, uint256 fromBucketLp, uint256 toBucketLp);
+    // FIX: F-27 — emit event on fee collection for off-chain transparency
+    event FeeCollected(address indexed recipient, uint256 amount);
 
     IAjnaPool public immutable AJNA_POOL;
     AjnaVaultAuth public immutable AUTH;
@@ -100,6 +107,10 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
         return super.previewDeposit(maxAssets - fee);
     }
 
+    /// @notice Returns the maximum assets withdrawable by `owner` from the idle buffer only.
+    /// @dev FIX: F-19 — ERC-4626 deviation: this intentionally understates available assets
+    /// because bucket LP positions require an on-chain Ajna pool interaction to liquidate.
+    /// Off-chain integrators should query bucket positions separately for total availability.
     function maxWithdraw(address owner) public view override returns (uint256) {
         if (AUTH.paused()) return 0;
 
@@ -108,6 +119,8 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
         return _netFromGross(grossAssetsFromBuffer, AUTH.tax());
     }
 
+    /// @notice Returns the maximum shares redeemable by `owner` backed by idle buffer only.
+    /// @dev FIX: F-19 — see maxWithdraw; same ERC-4626 deviation applies.
     function maxRedeem(address owner) public view override returns (uint256) {
         if (AUTH.paused()) return 0;
 
@@ -160,7 +173,8 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
         _bufferDeposit(netAssets);
         _mint(receiver, shares);
 
-        emit Deposit(msg.sender, receiver, netAssets, shares);
+        // FIX: F-03 — emit full `assets` (caller-supplied amount) per ERC-4626 spec, not `netAssets`
+        emit Deposit(msg.sender, receiver, assets, shares);
     }
 
     function mint(uint256 shares, address receiver)
@@ -184,7 +198,8 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
         _bufferDeposit(netAssets);
         _mint(receiver, shares);
 
-        emit Deposit(msg.sender, receiver, netAssets, shares);
+        // FIX: F-03 — emit full `assetsIn` (total transferred) per ERC-4626 spec, not `netAssets`
+        emit Deposit(msg.sender, receiver, assetsIn, shares);
     }
 
     function withdraw(uint256 assets, address receiver, address owner)
@@ -329,11 +344,16 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
 
     function _sendFee(uint256 fee) internal {
         if (fee == 0) return;
-        ASSET_TOKEN.safeTransfer(AUTH.admin(), fee);
+        address recipient = AUTH.admin();
+        ASSET_TOKEN.safeTransfer(recipient, fee);
+        // FIX: F-27 — emit fee collection event for off-chain auditing
+        emit FeeCollected(recipient, fee);
     }
 
     function _trackBucket(uint256 bucketIndex) internal {
         if (_bucketIndexes[bucketIndex] != 0) return;
+        // FIX: F-08 — enforce bucket cap to prevent unbounded totalAssets() loop
+        if (_buckets.length >= MAX_BUCKETS) revert MaxBucketsReached();
         _buckets.push(bucketIndex);
         _bucketIndexes[bucketIndex] = _buckets.length;
     }

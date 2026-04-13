@@ -33,16 +33,27 @@ export function loadKeeperKeypair(): Keypair {
 
   const index = Number(process.env.SOLANA_KEEPER_KEYPAIR_INDEX ?? '0');
   const safeIndex = Number.isFinite(index) && index >= 0 ? index : 0;
-  const selected = entries[Math.min(safeIndex, entries.length - 1)];
+  // FIX: INF-06 — Throw an error if index is out of bounds instead of silently clamping
+  if (safeIndex >= entries.length) {
+    throw new Error(
+      `SOLANA_KEEPER_KEYPAIR_INDEX=${safeIndex} exceeds available keypairs count (${entries.length})`
+    );
+  }
+  const selected = entries[safeIndex];
 
   return parseKeypair(selected);
 }
 
+// FIX: HGH-01 — Wrap parseKeypair in try-catch to prevent key material leaking in error messages
 export function parseKeypair(secretKeyStr: string): Keypair {
-  if (secretKeyStr.startsWith('[')) {
-    return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secretKeyStr)));
+  try {
+    if (secretKeyStr.startsWith('[')) {
+      return Keypair.fromSecretKey(Uint8Array.from(JSON.parse(secretKeyStr)));
+    }
+    return Keypair.fromSecretKey(bs58.decode(secretKeyStr));
+  } catch {
+    throw new Error('Failed to parse Solana keypair: invalid key format (key material redacted)');
   }
-  return Keypair.fromSecretKey(bs58.decode(secretKeyStr));
 }
 
 export function loadKeypairsFromEnv(envVar: string): Keypair[] {

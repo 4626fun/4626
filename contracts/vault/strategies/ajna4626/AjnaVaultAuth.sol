@@ -21,8 +21,12 @@ contract AjnaVaultAuth {
     error FeeTooHigh();
     error BufferRatioTooHigh();
     error InvalidMinBucketIndex();
+    // FIX: F-04 — two-step admin transfer errors
+    error NotPendingAdmin();
 
     event AdminSet(address indexed admin);
+    // FIX: F-04 — event for pending admin nomination
+    event AdminTransferStarted(address indexed currentAdmin, address indexed pendingAdmin);
     event SwapperSet(address indexed swapper);
     event KeeperSet(address indexed keeper, bool isKeeper);
     event Paused();
@@ -34,6 +38,8 @@ contract AjnaVaultAuth {
     event MinBucketIndexSet(uint256 minBucketIndex);
 
     address public admin;
+    // FIX: F-04 — two-step admin transfer to prevent permanent lockout
+    address public pendingAdmin;
     address public swapper;
     mapping(address => bool) public keepers;
     bool public paused;
@@ -73,13 +79,23 @@ contract AjnaVaultAuth {
         return account == admin || account == swapper;
     }
 
-    function setAdmin(address nextAdmin) external onlyAdmin {
+    // FIX: F-04 — two-step admin transfer: nominate then accept
+    function transferAdmin(address nextAdmin) external onlyAdmin {
         if (nextAdmin == address(0)) revert ZeroAddress();
-        admin = nextAdmin;
-        emit AdminSet(nextAdmin);
+        pendingAdmin = nextAdmin;
+        emit AdminTransferStarted(admin, nextAdmin);
+    }
+
+    function acceptAdmin() external {
+        if (msg.sender != pendingAdmin) revert NotPendingAdmin();
+        admin = pendingAdmin;
+        pendingAdmin = address(0);
+        emit AdminSet(admin);
     }
 
     function setSwapper(address nextSwapper) external onlyAdmin {
+        // FIX: F-09 — prevent setting swapper to zero which would lock withdraw/redeem
+        if (nextSwapper == address(0)) revert ZeroAddress();
         swapper = nextSwapper;
         emit SwapperSet(nextSwapper);
     }
@@ -128,7 +144,12 @@ contract AjnaVaultAuth {
         emit MinBucketIndexSet(nextMinBucketIndex);
     }
 
+    /// @notice Withdraw accumulated fee tokens to admin.
+    /// @dev FIX: F-20 — accepts any ERC-20 token to handle multi-token fee scenarios.
+    /// CAUTION: admin must ensure `token` is a fee token, not vault collateral.
+    /// Only callable by admin; tokens always sent to the current admin address.
     function retrieveFees(address token, uint256 amount) external onlyAdmin {
+        if (token == address(0)) revert ZeroAddress();
         IERC20(token).safeTransfer(admin, amount);
     }
 }

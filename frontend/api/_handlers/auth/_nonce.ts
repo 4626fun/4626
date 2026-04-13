@@ -54,7 +54,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const nonce = makeNonce()
-  const nonceToken = makeNonceToken({ nonce })
+  // FIX: FINDING-12 — bind nonce token to the requesting IP at creation time.
+  const nonceToken = makeNonceToken({ nonce, ip: getClientIp(req) })
   const issuedAt = new Date().toISOString()
   const uri = getNonceOrigin(req)
   if (!uri) {

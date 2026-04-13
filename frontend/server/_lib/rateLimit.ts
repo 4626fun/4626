@@ -1,6 +1,12 @@
 /**
  * Simple in-memory rate limiter for serverless functions.
  * Uses a sliding window approach with automatic cleanup.
+ *
+ * FIX: FINDING-11 — WARNING: this store does NOT persist across serverless invocations.
+ * Each cold start resets all counters, and concurrent lambda instances each maintain
+ * their own independent store. The effective rate limit is multiplied by the number of
+ * warm instances. For security-sensitive endpoints (auth-verify, auth-privy, deploy-create),
+ * migrate to a shared store (Redis, Upstash, Vercel KV) or delegate to a WAF/CDN layer.
  */
 
 type RateLimitEntry = {

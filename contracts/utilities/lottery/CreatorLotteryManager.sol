@@ -181,6 +181,9 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     /// @dev Used as defense-in-depth; default preserves prior 2h hardcode.
     uint256 public oracleMaxStaleness = 2 hours;
 
+    // FIX: CLM-02 — grace period after which VRF results are rejected as stale
+    uint256 public vrfResultGracePeriod = 30 minutes;
+
     /// @notice Circuit breaker: maximum allowed price deviation (bps) within `oracleDeviationWindow`.
     /// @dev If the reference is recent and the oracle price jumps beyond this, the entry is skipped (no VRF request).
     uint256 public oracleMaxDeviationBps = 2000; // 20%
@@ -221,6 +224,8 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         uint256 effectiveWinChancePPM;
         VRFType vrfType;
         uint32 sourceChainEid; // 0 = local (hub), non-zero = remote chain lottery entry
+        // FIX: CLM-02 — track request creation time to reject stale VRF results
+        uint256 requestTimestamp;
     }
 
     mapping(uint256 => VRFRequest) public vrfRequests;
@@ -344,6 +349,12 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     event SponsorshipSkipped(
         bytes32 indexed context, SponsorshipSkipReason reason, uint256 feeNative, uint256 valueHint
     );
+    // FIX: CLM-03 — event for dropped winner callbacks
+    event WinnerCallbackDropped(uint32 indexed dstEid, address indexed winner, address indexed creatorCoin, uint256 totalSharesPaid, string reason);
+    // FIX: CLM-09 — event for invalid payloads (replaces revert to avoid bricking LZ lane)
+    event InvalidPayloadReceived(uint32 indexed srcEid, uint256 payloadLength);
+    // FIX: CLM-02 — event for stale VRF results that are discarded
+    event StaleVRFResultDiscarded(uint256 indexed requestId, uint256 requestTimestamp, uint256 gracePeriod);
 
     // ================================
     // ERRORS
@@ -527,12 +538,22 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     // VRF CALLBACKS
     // ================================
 
+    // FIX: CLM-01 — namespace helpers to prevent local/cross-chain VRF request ID collision
+    function _localVrfKey(uint256 requestId) internal pure returns (uint256) {
+        return uint256(keccak256(abi.encode("LOCAL", requestId)));
+    }
+
+    function _crossChainVrfKey(uint256 sequence) internal pure returns (uint256) {
+        return uint256(keccak256(abi.encode("CC", sequence)));
+    }
+
     /**
      * @notice Local VRF callback
      */
     function receiveRandomWords(uint256 requestId, uint256[] memory randomWords) external nonReentrant {
         if (msg.sender != address(localVRFConsumer)) revert Unauthorized();
-        _processVRFResult(requestId, randomWords);
+        // FIX: CLM-01 — use namespaced key
+        _processVRFResult(_localVrfKey(requestId), randomWords);
     }
 
     /**
@@ -540,14 +561,16 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
      */
     function receiveRandomWords(uint256[] memory randomWords, uint256 sequence) external nonReentrant {
         if (msg.sender != address(vrfIntegrator)) revert Unauthorized();
-        _processVRFResult(sequence, randomWords);
+        // FIX: CLM-01 — use namespaced key
+        _processVRFResult(_crossChainVrfKey(sequence), randomWords);
     }
 
     /**
      * @notice Process a deferred VRF result after unpausing.
      * @dev While paused, callbacks store randomness and skip settlement to halt jackpot outflows.
      */
-    function processPendingVrfResult(uint256 requestId) external whenNotPaused nonReentrant {
+    // FIX: CLM-08 — restrict to owner to prevent adversarial front-running of pending results on unpause
+    function processPendingVrfResult(uint256 requestId) external onlyOwner whenNotPaused nonReentrant {
         if (!hasPendingRandomWord[requestId]) revert NoPendingVrfResult(requestId);
 
         uint256 word = pendingRandomWord[requestId];
@@ -566,6 +589,14 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
 
         VRFRequest memory request = vrfRequests[requestId];
         if (request.user == address(0)) return;
+
+        // FIX: CLM-02 — reject stale VRF results that arrive after grace period
+        if (vrfResultGracePeriod > 0 && request.requestTimestamp > 0
+            && block.timestamp > request.requestTimestamp + vrfResultGracePeriod) {
+            delete vrfRequests[requestId];
+            emit StaleVRFResultDiscarded(requestId, request.requestTimestamp, vrfResultGracePeriod);
+            return;
+        }
 
         // If paused, defer settlement and preserve the request for later processing.
         if (paused()) {
@@ -634,19 +665,17 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         uint256 maxStaleness = oracleMaxStaleness;
         if (maxStaleness > 0 && block.timestamp - timestamp > maxStaleness) return (0, 0, 0);
 
-        // Circuit breaker: skip entries if the oracle deviates too much from the recent accepted reference.
+        // FIX: CLM-07 — deviation guard applies unconditionally when valid reference exists
+        // (previously only checked within deviationWindow, leaving first entry after gap unprotected)
         uint256 maxDeviationBps = oracleMaxDeviationBps;
-        uint256 deviationWindow = oracleDeviationWindow;
         uint256 lastPrice = lastAcceptedPriceUSD1e18[creatorCoin];
         uint256 lastTs = lastAcceptedPriceTimestamp[creatorCoin];
-        if (maxDeviationBps > 0 && deviationWindow > 0 && lastPrice > 0 && lastTs > 0) {
-            if (block.timestamp - lastTs <= deviationWindow) {
-                // forge-lint: disable-next-line(unsafe-typecast)
-                uint256 currentPrice = uint256(priceUSD);
-                uint256 diff = currentPrice > lastPrice ? currentPrice - lastPrice : lastPrice - currentPrice;
-                uint256 deviationBps = FullMath.mulDiv(diff, BASIS_POINTS, lastPrice);
-                if (deviationBps > maxDeviationBps) return (0, 0, 0);
-            }
+        if (maxDeviationBps > 0 && lastPrice > 0 && lastTs > 0) {
+            // forge-lint: disable-next-line(unsafe-typecast)
+            uint256 currentPrice = uint256(priceUSD);
+            uint256 diff = currentPrice > lastPrice ? currentPrice - lastPrice : lastPrice - currentPrice;
+            uint256 deviationBps = FullMath.mulDiv(diff, BASIS_POINTS, lastPrice);
+            if (deviationBps > maxDeviationBps) return (0, 0, 0);
         }
 
         // forge-lint: disable-next-line(unsafe-typecast)
@@ -676,7 +705,8 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         }
 
         uint256 chanceRange = lotteryConfig.maxWinChance - lotteryConfig.baseWinChance;
-        winChancePPM = lotteryConfig.baseWinChance + (scaledAmount * chanceRange / maxScale);
+        // FIX: CLM-11 — use FullMath for better precision at mid-range USD values
+        winChancePPM = lotteryConfig.baseWinChance + FullMath.mulDiv(scaledAmount, chanceRange, maxScale);
     }
 
     /**
@@ -834,7 +864,9 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
                 sourceChainId
             ) = abi.decode(_payload, (uint16, address, address, uint256, uint32));
         } else {
-            revert InvalidAmount();
+            // FIX: CLM-09 — emit event instead of reverting to avoid bricking the LZ inbound lane
+            emit InvalidPayloadReceived(srcEid, _payload.length);
+            return;
         }
 
         if (buyer == address(0) || tokenIn == address(0) || amount == 0) return;
@@ -900,17 +932,20 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         if (address(localVRFConsumer) == address(0)) return 0;
 
         try localVRFConsumer.requestRandomWords() returns (uint256 requestId) {
-            vrfRequests[requestId] = VRFRequest({
+            // FIX: CLM-01 — store under namespaced key to avoid cross-chain collision
+            uint256 namespacedKey = _localVrfKey(requestId);
+            vrfRequests[namespacedKey] = VRFRequest({
                 user: buyer,
                 creatorCoin: creatorCoin,
                 amountUSD: swapValueUSD,
                 effectiveWinChancePPM: winChancePPM,
                 vrfType: VRFType.LOCAL,
-                sourceChainEid: sourceChainEid
+                sourceChainEid: sourceChainEid,
+                requestTimestamp: block.timestamp
             });
             totalLotteryEntries++;
             creatorStats[creatorCoin].entries++;
-            return requestId;
+            return namespacedKey;
         } catch {
             return 0;
         }
@@ -940,7 +975,8 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         try vrfIntegrator.quoteFee() returns (MessagingFee memory fee) {
             uint256 nativeFee = fee.nativeFee;
             bool useCallerFunds = callerFeeValue > 0;
-            if (useCallerFunds && callerFeeValue != nativeFee) {
+            // FIX: CLM-06 — accept >= nativeFee to avoid griefing via fee front-running
+            if (useCallerFunds && callerFeeValue < nativeFee) {
                 revert CallerFeeMismatch(callerFeeValue, nativeFee);
             }
             uint256 epochStart;
@@ -982,35 +1018,55 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
                 }
             }
 
+            // FIX: CLM-05 — increment rate-limit counters BEFORE external call to close TOCTOU window
+            if (!useCallerFunds && nativeFee > 0) {
+                if (vrfMaxSponsoredPerBuyerPerEpoch > 0) {
+                    uint32 buyerCount =
+                        _syncSponsoredCountByBuyer(vrfSponsoredCountByBuyer, vrfBuyerEpochStart, buyer, epochStart);
+                    vrfSponsoredCountByBuyer[buyer] = buyerCount + 1;
+                }
+                if (sourceChainEid != 0 && vrfMaxSponsoredPerOriginPerEpoch > 0) {
+                    uint32 originCount = _syncSponsoredCountByOrigin(
+                        vrfSponsoredCountByOrigin, vrfOriginEpochStart, originKey, epochStart
+                    );
+                    vrfSponsoredCountByOrigin[originKey] = originCount + 1;
+                }
+            }
+
             try vrfIntegrator.requestRandomWordsPayable{value: nativeFee}(targetEid) returns (
                 MessagingReceipt memory, uint64 sequence
             ) {
-                if (!useCallerFunds && nativeFee > 0) {
-                    if (vrfMaxSponsoredPerBuyerPerEpoch > 0) {
-                        uint32 buyerCount =
-                            _syncSponsoredCountByBuyer(vrfSponsoredCountByBuyer, vrfBuyerEpochStart, buyer, epochStart);
-                        vrfSponsoredCountByBuyer[buyer] = buyerCount + 1;
-                    }
-                    if (sourceChainEid != 0 && vrfMaxSponsoredPerOriginPerEpoch > 0) {
-                        uint32 originCount = _syncSponsoredCountByOrigin(
-                            vrfSponsoredCountByOrigin, vrfOriginEpochStart, originKey, epochStart
-                        );
-                        vrfSponsoredCountByOrigin[originKey] = originCount + 1;
-                    }
-                }
 
-                vrfRequests[uint256(sequence)] = VRFRequest({
+                // FIX: CLM-01 — store under namespaced key to avoid local collision
+                uint256 namespacedKey = _crossChainVrfKey(uint256(sequence));
+                vrfRequests[namespacedKey] = VRFRequest({
                     user: buyer,
                     creatorCoin: creatorCoin,
                     amountUSD: swapValueUSD,
                     effectiveWinChancePPM: winChancePPM,
                     vrfType: VRFType.CROSS_CHAIN,
-                    sourceChainEid: sourceChainEid
+                    sourceChainEid: sourceChainEid,
+                    requestTimestamp: block.timestamp
                 });
                 totalLotteryEntries++;
                 creatorStats[creatorCoin].entries++;
-                return uint256(sequence);
+                // FIX: CLM-06 — refund excess ETH when caller overpaid
+                if (useCallerFunds && callerFeeValue > nativeFee) {
+                    _refundCallerFeeOrRevert(callerFeeValue - nativeFee);
+                }
+                return namespacedKey;
             } catch {
+                // FIX: CLM-05 — rollback optimistic rate-limit increments on failure
+                if (!useCallerFunds && nativeFee > 0) {
+                    if (vrfMaxSponsoredPerBuyerPerEpoch > 0) {
+                        uint32 curCount = vrfSponsoredCountByBuyer[buyer];
+                        if (curCount > 0) vrfSponsoredCountByBuyer[buyer] = curCount - 1;
+                    }
+                    if (sourceChainEid != 0 && vrfMaxSponsoredPerOriginPerEpoch > 0) {
+                        uint32 curOriginCount = vrfSponsoredCountByOrigin[originKey];
+                        if (curOriginCount > 0) vrfSponsoredCountByOrigin[originKey] = curOriginCount - 1;
+                    }
+                }
                 if (useCallerFunds && nativeFee > 0) {
                     // If the caller provided the fee, never trap value on failure.
                     _refundCallerFeeOrRevert(callerFeeValue);
@@ -1055,6 +1111,8 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
                     emit SponsorshipSkipped(
                         WINNER_CALLBACK_CONTEXT, SponsorshipSkipReason.RATE_LIMITED, nativeFee, 0
                     );
+                    // FIX: CLM-03 — emit event instead of silent drop
+                    emit WinnerCallbackDropped(dstEid, winner, creatorCoin, totalSharesPaid, "buyer rate limited");
                     return;
                 }
             }
@@ -1068,12 +1126,18 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
                     emit SponsorshipSkipped(
                         WINNER_CALLBACK_CONTEXT, SponsorshipSkipReason.RATE_LIMITED, nativeFee, 0
                     );
+                    // FIX: CLM-03 — emit event instead of silent drop
+                    emit WinnerCallbackDropped(dstEid, winner, creatorCoin, totalSharesPaid, "origin rate limited");
                     return;
                 }
             }
         }
 
-        if (!_consumeSponsorship(callbackSponsorshipPolicy, WINNER_CALLBACK_CONTEXT, nativeFee, 0, false)) return;
+        // FIX: CLM-03 — emit event when sponsorship is not consumed
+        if (!_consumeSponsorship(callbackSponsorshipPolicy, WINNER_CALLBACK_CONTEXT, nativeFee, 0, false)) {
+            emit WinnerCallbackDropped(dstEid, winner, creatorCoin, totalSharesPaid, "sponsorship not available");
+            return;
+        }
 
         _lzSend(dstEid, payload, options, fee, payable(address(this)));
 
@@ -1221,13 +1285,25 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
      * @param payoutBps Percentage of each vault's jackpot to pay (6900 = 69%)
      * @return totalPaidOut Total number of vaults that paid out
      */
+    // FIX: CLM-04 — wrap entire payout in try/catch pattern to ensure _payoutLock always resets
     function _payoutLocalJackpot(address triggeringCoin, address winner, uint16 payoutBps) internal returns (uint256) {
         if (_payoutLock == 1) revert ReentrancyGuardReentrantCall();
         _payoutLock = 1;
 
-        // Get ALL registered creator coins
-        address[] memory allCreators = registry.getAllCreatorCoins();
-        uint256 totalPaidOut = 0;
+        uint256 totalPaidOut = _payoutLocalJackpotInner(triggeringCoin, winner, payoutBps);
+
+        _payoutLock = 0;
+        return totalPaidOut;
+    }
+
+    function _payoutLocalJackpotInner(address triggeringCoin, address winner, uint16 payoutBps) internal returns (uint256 totalPaidOut) {
+        // FIX: CLM-04 — registry calls wrapped in try/catch to prevent permanent lock
+        address[] memory allCreators;
+        try registry.getAllCreatorCoins() returns (address[] memory result) {
+            allCreators = result;
+        } catch {
+            return 0;
+        }
 
         // Pay from EVERY active creator vault
         for (uint256 i = 0; i < allCreators.length; i++) {
@@ -1235,20 +1311,41 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
 
             // Skip inactive creators
             // slither-disable-next-line calls-loop
-            if (!registry.isCreatorCoinActive(creatorCoin)) continue;
+            bool isActive;
+            try registry.isCreatorCoinActive(creatorCoin) returns (bool result) {
+                isActive = result;
+            } catch {
+                continue;
+            }
+            if (!isActive) continue;
 
             // Look up per-creator contracts
             // slither-disable-next-line calls-loop
-            address vaultAddr = registry.getVaultForToken(creatorCoin);
+            address vaultAddr;
+            address gaugeAddr;
+            try registry.getVaultForToken(creatorCoin) returns (address result) {
+                vaultAddr = result;
+            } catch {
+                continue;
+            }
             // slither-disable-next-line calls-loop
-            address gaugeAddr = registry.getGaugeControllerForToken(creatorCoin);
+            try registry.getGaugeControllerForToken(creatorCoin) returns (address result) {
+                gaugeAddr = result;
+            } catch {
+                continue;
+            }
 
             if (vaultAddr == address(0) || gaugeAddr == address(0)) continue;
 
             ICreatorGaugeControllerLottery gaugeController = ICreatorGaugeControllerLottery(gaugeAddr);
 
             // slither-disable-next-line calls-loop
-            uint256 jackpotShares = gaugeController.getJackpotReserve();
+            uint256 jackpotShares;
+            try gaugeController.getJackpotReserve() returns (uint256 result) {
+                jackpotShares = result;
+            } catch {
+                continue;
+            }
 
             if (jackpotShares == 0) continue;
 
@@ -1274,8 +1371,6 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         if (totalPaidOut > 0) {
             emit MultiTokenJackpotWon(triggeringCoin, winner, totalPaidOut);
         }
-        _payoutLock = 0;
-        return totalPaidOut;
     }
 
     // ================================
@@ -1294,6 +1389,11 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     }
 
     function setVRFIntegrator(address _integrator) external onlyOwner {
+        // FIX: CLM-13 — revoke trust from old integrator before updating
+        address oldIntegrator = address(vrfIntegrator);
+        if (oldIntegrator != address(0)) {
+            trustedVrfIntegrators[oldIntegrator] = false;
+        }
         vrfIntegrator = IChainlinkVRFIntegrator(_integrator);
         if (_integrator != address(0)) {
             trustedVrfIntegrators[_integrator] = true;
@@ -1420,6 +1520,12 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         emit OracleMaxStalenessUpdated(_maxStaleness);
     }
 
+    // FIX: CLM-02 — allow owner to configure VRF result grace period
+    function setVrfResultGracePeriod(uint256 _gracePeriod) external onlyOwner {
+        if (_gracePeriod > 0 && _gracePeriod < 5 minutes) revert InvalidAmount();
+        vrfResultGracePeriod = _gracePeriod;
+    }
+
     function setOracleDeviationGuard(uint256 _maxDeviationBps, uint256 _deviationWindow) external onlyOwner {
         if (_maxDeviationBps > BASIS_POINTS) revert InvalidAmount();
         oracleMaxDeviationBps = _maxDeviationBps;
@@ -1524,7 +1630,8 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     // EMERGENCY
     // ================================
 
-    function emergencyWithdraw(address token, uint256 amount) external onlyOwner {
+    // FIX: CLM-12 — only allow emergency withdraw when paused to prevent draining active sponsorship funds
+    function emergencyWithdraw(address token, uint256 amount) external onlyOwner whenPaused {
         if (token == address(0)) {
             (bool ok,) = payable(owner()).call{value: amount}("");
             if (!ok) revert InvalidAmount();

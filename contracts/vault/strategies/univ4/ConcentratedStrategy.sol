@@ -133,7 +133,8 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
     int24 public maxTwapDeviation = 100;
 
     /// @notice TWAP duration in seconds
-    uint32 public twapDuration = 60; // 1 minute
+    /// FIX: S-H05 — 60s TWAP is trivially manipulable; 900s is minimum safe window
+    uint32 public twapDuration = 900; // 15 minutes
 
     /// @notice Last rebalance timestamp
     uint256 public lastTimestamp;
@@ -749,6 +750,9 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         IPositionManager(positionManager).modifyLiquidities(abi.encode(actions, params), block.timestamp + 1);
     }
 
+    /// @dev FIX: S-H05 — BURN_POSITION min amounts are zero because V4 burn always
+    ///      returns the full position value at current pool price. Manipulation is
+    ///      guarded by the TWAP deviation check in checkCanRebalance() (now 900s window).
     function _posmBurn(uint256 tokenId) internal {
         bytes memory actions = new bytes(3);
         actions[0] = bytes1(uint8(Actions.BURN_POSITION));

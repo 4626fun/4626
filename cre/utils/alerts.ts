@@ -24,6 +24,14 @@ export interface AlertPayload {
  * Send an alert to the configured webhook. Falls back to console.log if
  * no webhook URL is configured.
  */
+// FIX: MED-07 — Allowlist of safe webhook URL prefixes to prevent SSRF
+const SAFE_WEBHOOK_PREFIXES = [
+  'https://hooks.slack.com/',
+  'https://events.pagerduty.com/',
+  'https://discord.com/api/webhooks/',
+  'https://discordapp.com/api/webhooks/',
+];
+
 export async function sendAlert(payload: AlertPayload): Promise<void> {
   const webhookUrl = process.env.ALERT_WEBHOOK_URL;
 
@@ -32,6 +40,19 @@ export async function sendAlert(payload: AlertPayload): Promise<void> {
   console.log(`${prefix} ${payload.title}`, JSON.stringify(payload.details));
 
   if (!webhookUrl) return;
+
+  // FIX: MED-07 — Validate webhook URL: must be HTTPS and optionally match allowlist
+  if (!webhookUrl.startsWith('https://')) {
+    console.error(`${prefix} ALERT_WEBHOOK_URL rejected: must use HTTPS`);
+    return;
+  }
+  if (process.env.ALERT_WEBHOOK_STRICT_ALLOWLIST === 'true') {
+    const isAllowed = SAFE_WEBHOOK_PREFIXES.some((p) => webhookUrl.startsWith(p));
+    if (!isAllowed) {
+      console.error(`${prefix} ALERT_WEBHOOK_URL rejected: not in allowlist`);
+      return;
+    }
+  }
 
   try {
     const response = await fetch(webhookUrl, {
@@ -69,14 +90,22 @@ export function alertCritical(workflow: string, title: string, details: Record<s
 // Formatting helpers
 // ---------------------------------------------------------------------------
 
+// FIX: LOW-03 — Use string-based bigint formatting to avoid Number() precision loss for large values
+function formatBigIntUnits(value: bigint, decimals: number): string {
+  const divisor = 10n ** BigInt(decimals);
+  const whole = value / divisor;
+  const remainder = value % divisor;
+  if (remainder === 0n) return whole.toString();
+  const fracStr = remainder.toString().padStart(decimals, '0').replace(/0+$/, '');
+  return `${whole}.${fracStr}`;
+}
+
 /** Format a bigint wei value as a human-readable ETH string. */
 export function formatEth(wei: bigint): string {
-  const eth = Number(wei) / 1e18;
-  return `${eth.toFixed(6)} ETH`;
+  return `${formatBigIntUnits(wei, 18)} ETH`;
 }
 
 /** Format a bigint token value (18 decimals) as a human-readable string. */
 export function formatTokens(raw: bigint, symbol = 'tokens'): string {
-  const amount = Number(raw) / 1e18;
-  return `${amount.toLocaleString('en-US', { maximumFractionDigits: 2 })} ${symbol}`;
+  return `${formatBigIntUnits(raw, 18)} ${symbol}`;
 }

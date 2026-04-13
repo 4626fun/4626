@@ -135,7 +135,7 @@ contract DeployInfrastructure is Script {
         // 3. VaultActivationBatcher (shared activation launcher)
         console.log("\n[3/6] Deploying VaultActivationBatcher...");
         address permit2 = vm.envOr("PERMIT2", address(0x000000000022D473030F116dDEE9F6B43aC78BA3));
-        vaultActivationBatcher = new VaultActivationBatcher(permit2);
+        vaultActivationBatcher = new VaultActivationBatcher(permit2, address(registry));
         console.log("       Address:", address(vaultActivationBatcher));
 
         // 4. CreatorLotteryManager (shared service)

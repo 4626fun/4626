@@ -107,7 +107,16 @@ async function main() {
     const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
     console.error(`\nFailed after ${elapsed}s`);
     console.error(err);
-    process.exit(1);
+    // FIX: LOW-01 — Differentiate retryable errors (exit 2) from fatal errors (exit 1)
+    const message = err instanceof Error ? err.message : String(err);
+    const isRetryable =
+      message.includes('ETIMEDOUT') ||
+      message.includes('ECONNREFUSED') ||
+      message.includes('rate limit') ||
+      message.includes('429') ||
+      message.includes('503') ||
+      message.includes('timeout');
+    process.exit(isRetryable ? 2 : 1);
   }
 }
 

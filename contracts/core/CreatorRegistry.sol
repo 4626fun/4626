@@ -449,7 +449,11 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
         // Clear old reverse mapping if exists
         address oldRemoteOFT = remoteOFTPeers[_token][_chainEid];
         if (oldRemoteOFT != address(0)) {
-            delete remoteOFTToToken[oldRemoteOFT];
+            // FIX: F-11 — only delete reverse mapping if it points to the expected token,
+            // preventing corruption of another token's mapping on address reuse
+            if (remoteOFTToToken[oldRemoteOFT] == _token) {
+                delete remoteOFTToToken[oldRemoteOFT];
+            }
         } else {
             // New chain — track it
             remoteOFTChains[_token].push(_chainEid);
@@ -648,8 +652,23 @@ contract CreatorRegistry is ICreatorRegistry, Ownable {
         return creatorCoins[_token].gaugeController;
     }
 
+    /// @dev FIX: F-25 — WARNING: this function returns an unbounded array. It will revert
+    /// when `registeredTokens` grows large enough to exceed the block gas limit for on-chain
+    /// callers. Use `getCreatorCoinsPaginated` for bounded access.
     function getAllCreatorCoins() external view override returns (address[] memory) {
         return registeredTokens;
+    }
+
+    // FIX: F-25 — paginated access for large registries; prevents block gas limit DoS
+    function getCreatorCoinsPaginated(uint256 offset, uint256 limit) external view returns (address[] memory result) {
+        uint256 total = registeredTokens.length;
+        if (offset >= total) return new address[](0);
+        uint256 end = offset + limit;
+        if (end > total) end = total;
+        result = new address[](end - offset);
+        for (uint256 i = offset; i < end; i++) {
+            result[i - offset] = registeredTokens[i];
+        }
     }
 
     function isCreatorCoinRegistered(address _token) external view override returns (bool) {

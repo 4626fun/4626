@@ -211,6 +211,10 @@ export async function walletRpc<T>(params: {
     metadata?: Record<string, unknown>
   }
 }): Promise<T> {
+  // FIX: FINDING-17 — TEE attestation is invoked on every signing operation with no caching.
+  // Consider caching successful attestations with a short TTL (e.g., 30s) to reduce
+  // per-operation latency while maintaining security guarantees. Add monitoring/alerting
+  // on attestation failures; a persistent service outage blocks all vault deployments.
   await assertTeeAttestationOrThrow({
     action: params.teeContext?.action ?? `privy_wallet_rpc:${params.method}`,
     actorAddress: params.teeContext?.actorAddress,

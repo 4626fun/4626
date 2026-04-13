@@ -11,6 +11,8 @@
  *   4. Call SolanaBridgeAdapter.receiveFeeFromSolana() on Base
  */
 
+// FIX: MED-01 — Replace require('crypto') with ES module import
+import * as crypto from 'node:crypto';
 import {
   requireEnv,
   CHAINS,
@@ -19,13 +21,16 @@ import {
 import { writeContract } from '../utils/onchain.js';
 import { alertInfo, alertWarning, alertCritical } from '../utils/alerts.js';
 import { loadKeeperKeypair, solanaPubkeyToBytes32 } from '../utils/solana.js';
+// FIX: HGH-02 — Import isAddress for shareOFT validation
+import { isAddress } from 'viem';
 
 const WORKFLOW_NAME = 'keepr-solana-settle-fees';
 
 // Minimum fee amount (in Solana token units) before settlement.
 const MIN_FEE_THRESHOLD = BigInt(1_000_000); // 0.001 tokens at 9 decimals
 
-const SETTLE_FEES_DISCRIMINATOR = require('crypto')
+// FIX: MED-01 — Use imported crypto module instead of require('crypto')
+const SETTLE_FEES_DISCRIMINATOR = crypto
   .createHash('sha256')
   .update('global:settle_fees')
   .digest()
@@ -65,7 +70,16 @@ export async function executeSolanaFeeSettlement(): Promise<FeeSettlementResult>
     const keeperKeypair = loadKeeperKeypair();
     const programPubkey = new PublicKey(CHAINS.solana.programId);
     const creatorMints = (process.env.SOLANA_CREATOR_MINTS ?? '').split(',').filter(Boolean);
-    const shareOFTMapping = JSON.parse(process.env.SOLANA_SHARE_OFT_MAPPING ?? '{}');
+    // FIX: HGH-02 — Validate each address in shareOFTMapping before use
+    const rawShareOFTMapping = JSON.parse(process.env.SOLANA_SHARE_OFT_MAPPING ?? '{}');
+    const shareOFTMapping: Record<string, `0x${string}`> = {};
+    for (const [key, value] of Object.entries(rawShareOFTMapping)) {
+      if (typeof value === 'string' && isAddress(value)) {
+        shareOFTMapping[key] = value as `0x${string}`;
+      } else {
+        await alertWarning(WORKFLOW_NAME, `Invalid shareOFT address in SOLANA_SHARE_OFT_MAPPING for key ${key} — skipping`);
+      }
+    }
 
     if (creatorMints.length === 0) {
       await alertInfo(WORKFLOW_NAME, 'No creator mints configured — skipping');
@@ -109,12 +123,25 @@ export async function executeSolanaFeeSettlement(): Promise<FeeSettlementResult>
       }
 
       if (allAccounts.length === 0 && process.env.SOLANA_FEE_ACCOUNTS) {
+        // FIX: MED-08 — Validate SOLANA_FEE_ACCOUNTS as valid Solana public keys before use
         const manualAccounts = process.env.SOLANA_FEE_ACCOUNTS
           .split(',')
           .map((a) => a.trim())
           .filter(Boolean);
 
-        allAccounts = manualAccounts.map((a) => ({ pubkey: new PublicKey(a) }));
+        const validatedAccounts: Array<{ pubkey: InstanceType<typeof PublicKey> }> = [];
+        for (const a of manualAccounts) {
+          try {
+            const pk = new PublicKey(a);
+            if (!PublicKey.isOnCurve(pk.toBytes())) {
+              await alertWarning(WORKFLOW_NAME, `SOLANA_FEE_ACCOUNTS entry not on curve: ${a}`);
+            }
+            validatedAccounts.push({ pubkey: pk });
+          } catch {
+            await alertWarning(WORKFLOW_NAME, `Invalid pubkey in SOLANA_FEE_ACCOUNTS: ${a} — skipping`);
+          }
+        }
+        allAccounts = validatedAccounts;
 
         await alertInfo(WORKFLOW_NAME, 'Using manually provided fee accounts', {
           count: allAccounts.length,
@@ -163,6 +190,15 @@ export async function executeSolanaFeeSettlement(): Promise<FeeSettlementResult>
         await alertWarning(WORKFLOW_NAME, `Failed to ensure ATA for ${mintStr}: ${msg}`);
       }
 
+      // FIX: CRT-02 — Record ATA balance BEFORE settlement to compute delta
+      let balanceBefore = BigInt(0);
+      try {
+        const beforeAccount = await getAccount(connection, keeperAta, 'confirmed', TOKEN_2022_PROGRAM_ID);
+        balanceBefore = BigInt(beforeAccount.amount.toString());
+      } catch {
+        // ATA may not exist yet; balance is 0
+      }
+
       const batchSize = 20;
       const batches = accountsWithFees.length > 0
         ? Array.from({ length: Math.ceil(accountsWithFees.length / batchSize) }, (_, i) =>
@@ -197,7 +233,9 @@ export async function executeSolanaFeeSettlement(): Promise<FeeSettlementResult>
       }
 
       const feeVaultAccount = await getAccount(connection, keeperAta, 'confirmed', TOKEN_2022_PROGRAM_ID);
-      const feeVaultAmount = BigInt(feeVaultAccount.amount.toString());
+      const feeVaultBalanceAfter = BigInt(feeVaultAccount.amount.toString());
+      // FIX: CRT-02 — Use only the delta from this settlement, not the entire ATA balance
+      const feeVaultAmount = feeVaultBalanceAfter - balanceBefore;
 
       if (feeVaultAmount < MIN_FEE_THRESHOLD) {
         await alertInfo(WORKFLOW_NAME, `Fee amount below threshold for ${mintStr}`, {

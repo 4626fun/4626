@@ -985,6 +985,36 @@ const RATE_LIMIT_WINDOW_MS = 60_000
 const RATE_LIMIT_MAX_REQUESTS = 50
 const rateLimitBuckets: Map<string, RateLimitBucket> = new Map()
 
+// FIX: FINDING-05 — per-sender UserOp sponsorship limit to prevent gas budget exhaustion.
+// Tracks sponsored UserOps per sender address within a sliding window.
+// In-memory Map with TTL; sufficient for single-instance rate limiting, complements
+// the per-IP rate limit above. For full distributed enforcement, use a shared store.
+type SponsorshipBucket = { count: number; resetAtMs: number }
+const SPONSORSHIP_WINDOW_MS = 3_600_000 // 1 hour
+const SPONSORSHIP_MAX_OPS_PER_SENDER = 20 // max 20 sponsored UserOps per sender per hour
+const sponsorshipBuckets: Map<string, SponsorshipBucket> = new Map()
+
+function checkSponsorshipLimit(sender: string): boolean {
+  const key = sender.toLowerCase()
+  const now = Date.now()
+  const bucket = sponsorshipBuckets.get(key)
+  if (!bucket || now >= bucket.resetAtMs) {
+    sponsorshipBuckets.set(key, { count: 1, resetAtMs: now + SPONSORSHIP_WINDOW_MS })
+    return true
+  }
+  if (bucket.count >= SPONSORSHIP_MAX_OPS_PER_SENDER) return false
+  bucket.count++
+  return true
+}
+
+// Periodically clean up expired sponsorship buckets to prevent memory leaks.
+setInterval(() => {
+  const now = Date.now()
+  for (const [key, bucket] of sponsorshipBuckets) {
+    if (now >= bucket.resetAtMs) sponsorshipBuckets.delete(key)
+  }
+}, 5 * 60_000)
+
 let _baseClient: any | null = null
 async function getBaseClient() {
   if (_baseClient) return _baseClient
@@ -3067,6 +3097,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
 
       const sender = getAddress(senderRaw)
+
+      // FIX: FINDING-05 — enforce per-sender hourly UserOp sponsorship limit.
+      if (!checkSponsorshipLimit(sender)) {
+        return res.status(200).json(jsonRpcError((r as any)?.id ?? null, -32005, 'Sponsorship limit exceeded for this sender'))
+      }
+
       const callSummary = summarizeSmartWalletCallData(callDataRaw as Hex)
       const requestContext: {
         method: string

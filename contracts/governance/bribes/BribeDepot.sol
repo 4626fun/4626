@@ -10,6 +10,8 @@ interface IVaultGaugeVotingForBribeDepot {
     function currentEpoch() external view returns (uint256);
     function getVaultWeightAtEpoch(uint256 epoch, address vault) external view returns (uint256);
     function getUserVoteWeightAtEpoch(uint256 epoch, address user, address vault) external view returns (uint256);
+    // FIX: G-14 — needed for vault whitelist validation
+    function canReceiveVotes(address vault) external view returns (bool);
 }
 
 /**
@@ -67,6 +69,8 @@ contract BribeDepot is Ownable, ReentrancyGuard {
     error EpochClosed();
     error RolloverNotAllowedYet();
     error NotZeroVoteEpoch();
+    // FIX: G-14 — error for bribes on non-whitelisted vault
+    error VaultNotWhitelisted();
 
     constructor(address _vault, address _gaugeVoting) Ownable(msg.sender) {
         if (_vault == address(0) || _gaugeVoting == address(0)) revert ZeroAddress();
@@ -82,6 +86,8 @@ contract BribeDepot is Ownable, ReentrancyGuard {
     function bribe(address token, uint256 amount) external nonReentrant {
         if (token == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
+        // FIX: G-14 — reject bribes for de-listed or non-whitelisted vaults
+        if (!gaugeVoting.canReceiveVotes(vault)) revert VaultNotWhitelisted();
 
         uint256 epoch = gaugeVoting.currentEpoch();
         uint256 beforeBal = IERC20(token).balanceOf(address(this));
@@ -134,6 +140,8 @@ contract BribeDepot is Ownable, ReentrancyGuard {
         uint256 current = gaugeVoting.currentEpoch();
         if (epoch >= current) revert EpochNotEnded();
         if (isClosed[epoch][token]) revert EpochClosed();
+        // FIX: G-21 — add minimum grace period (1 epoch) before zero-vote rollovers
+        if (epoch + 1 >= current) revert RolloverNotAllowedYet();
 
         // Only roll epochs with 0 votes for this vault (no eligible claimants).
         if (gaugeVoting.getVaultWeightAtEpoch(epoch, vault) != 0) revert NotZeroVoteEpoch();
@@ -175,6 +183,8 @@ contract BribeDepot is Ownable, ReentrancyGuard {
 
         rolled = totalAmount - alreadyClaimed;
         isClosed[epoch][token] = true;
+        // FIX: G-05 — zero out source epoch to prevent stale reads and double-counting
+        totalBribes[epoch][token] = 0;
 
         if (rolled > 0) {
             totalBribes[current][token] += rolled;

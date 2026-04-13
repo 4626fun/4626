@@ -46,7 +46,9 @@ export const CHARM_FACTORY_ADDRESS = '0x5B7B8b487D05F77977b7ABEec5F922925B9b2aFa
 /** Seconds between report() calls (24 hours) */
 export const REPORT_INTERVAL_SECONDS = 86_400;
 
-/** Seconds between oracle price staleness checks */
+// FIX: INF-05 — Document that this threshold should be enforced off-chain before triggering actions.
+// Callers should read isPriceFresh() from the oracle contract and skip if stale.
+/** Seconds between oracle price staleness checks — enforce off-chain before write actions */
 export const ORACLE_STALENESS_THRESHOLD = 1_800; // 30 min
 
 /** Price delta (bps) that triggers a cross-chain broadcast */
@@ -82,11 +84,12 @@ export const CHARM_REBALANCE_TWAP_DURATION = 1_800; // 30 min
 /** Minimum implied-price change before Charm rebalance attempts */
 export const CHARM_REBALANCE_PRICE_CHANGE_TRIGGER_BPS = 1_000; // 10%
 
+// FIX: LOW-02 — Use explicit integer literals instead of floating-point intermediate values
 /** VRF hub top-up target (2x minimumBalance = 0.01 ETH) */
-export const VRF_TOPUP_TARGET_WEI = BigInt(0.01e18);
+export const VRF_TOPUP_TARGET_WEI = BigInt('10000000000000000'); // 0.01 ETH
 
 /** VRF hub minimum balance before topping up */
-export const VRF_MIN_BALANCE_WEI = BigInt(0.005e18);
+export const VRF_MIN_BALANCE_WEI = BigInt('5000000000000000'); // 0.005 ETH
 
 // ---------------------------------------------------------------------------
 // ABI fragments — only the functions each workflow needs

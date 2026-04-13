@@ -159,13 +159,17 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
     int24 public maxTwapDeviation = 100;
 
     /// @notice TWAP duration in seconds
-    uint32 public twapDuration = 60;
+    /// FIX: S-H02 — 60s TWAP is trivially manipulable; 900s is minimum safe window
+    uint32 public twapDuration = 900;
 
     /// @notice Last rebalance timestamp
     uint256 public lastTimestamp;
 
     /// @notice Last tick at rebalance
     int24 public lastTick;
+
+    /// @notice FIX: S-H02 — max allowed value loss during rebalance (basis points)
+    uint256 public maxRebalanceSlippageBps = 500; // 5% default
 
     // =================================
     // STATE - FEES
@@ -223,6 +227,8 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
     error PoolAlreadyConfigured();
     error InvalidHook(address hook);
     error HookNotApproved(address hook);
+    // FIX: S-H02 — slippage protection for rebalance
+    error RebalanceSlippageExceeded(uint256 valueBefore, uint256 valueAfter);
 
     // =================================
     // MODIFIERS
@@ -449,6 +455,10 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
         // Check all rebalance guards
         checkCanRebalance();
 
+        // FIX: S-H02 — snapshot value before rebalance for slippage check
+        uint256 valueBefore0 = CREATOR_COIN.balanceOf(address(this));
+        uint256 valueBefore1 = PAIRED_TOKEN.balanceOf(address(this));
+
         // Withdraw all current liquidity
         _burnAndCollect(fullRangePosition);
         _burnAndCollect(basePosition);
@@ -512,6 +522,15 @@ contract CreatorLPManager is Ownable, ReentrancyGuard {
 
         lastTimestamp = block.timestamp;
         lastTick = tick;
+
+        // FIX: S-H02 — post-rebalance slippage check (token0 only as primary value measure)
+        uint256 valueAfter0 = CREATOR_COIN.balanceOf(address(this));
+        if (valueBefore0 > 0) {
+            uint256 maxLoss = (valueBefore0 * maxRebalanceSlippageBps) / 10_000;
+            if (valueAfter0 + maxLoss < valueBefore0) {
+                revert RebalanceSlippageExceeded(valueBefore0, valueAfter0);
+            }
+        }
 
         emit Rebalanced(tick, getBalance0(), getBalance1());
     }

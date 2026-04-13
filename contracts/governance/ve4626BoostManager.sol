@@ -44,7 +44,8 @@ interface ICreatorOracleCoverage {
 contract ve4626BoostManager is Ownable, ReentrancyGuard {
     uint256 public constant BOOST_PRECISION = 10_000;
     uint256 public constant MAX_VE_BOOST = 25_000;
-    uint256 public constant MIN_HOLDING_BLOCKS = 10;
+    // FIX: G-20 — increase from 10 blocks (~20s) to 1 epoch (~7 days on Base L2)
+    uint256 public constant MIN_HOLDING_BLOCKS = 302_400;
 
     Ive4626 public immutable ve4626;
 
@@ -52,6 +53,12 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
     uint256 public maxBoost = 25_000; // 2.5x
     uint256 public minVotingPower = 0.1 ether;
     bool public boostParametersLocked;
+
+    // FIX: G-13 — timelock for boost parameter updates instead of permanent lock
+    uint256 public constant BOOST_TIMELOCK_DURATION = 48 hours;
+    uint256 public pendingBaseBoost;
+    uint256 public pendingMaxBoost;
+    uint256 public boostTimelockExpiry;
 
     // Flash-loan protection
     mapping(address => uint256) public lastBalanceUpdateBlock;
@@ -64,6 +71,9 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
     error ZeroAddress();
     error InvalidBoostParameters();
     error BoostParametersAreLocked();
+    // FIX: G-13 — timelock errors
+    error TimelockNotExpired();
+    error NoPendingBoostUpdate();
 
     constructor(address _ve4626, address _owner) Ownable(_owner) {
         if (_ve4626 == address(0)) revert ZeroAddress();
@@ -131,14 +141,24 @@ contract ve4626BoostManager is Ownable, ReentrancyGuard {
         emit BalanceTrackingUpdated(user, block.number);
     }
 
+    // FIX: G-13 — replace permanent lock with 48h timelock for boost parameter updates
     function setBoostParameters(uint256 _baseBoost, uint256 _maxBoost) external onlyOwner {
-        if (boostParametersLocked) revert BoostParametersAreLocked();
         if (_baseBoost == 0 || _maxBoost <= _baseBoost || _maxBoost > MAX_VE_BOOST) revert InvalidBoostParameters();
 
-        baseBoost = _baseBoost;
-        maxBoost = _maxBoost;
-        boostParametersLocked = true;
-        emit BoostParametersUpdated(_baseBoost, _maxBoost);
+        pendingBaseBoost = _baseBoost;
+        pendingMaxBoost = _maxBoost;
+        boostTimelockExpiry = block.timestamp + BOOST_TIMELOCK_DURATION;
+    }
+
+    // FIX: G-13 — execute pending boost update after timelock expires
+    function executeBoostParameterUpdate() external onlyOwner {
+        if (boostTimelockExpiry == 0) revert NoPendingBoostUpdate();
+        if (block.timestamp < boostTimelockExpiry) revert TimelockNotExpired();
+
+        baseBoost = pendingBaseBoost;
+        maxBoost = pendingMaxBoost;
+        boostTimelockExpiry = 0;
+        emit BoostParametersUpdated(pendingBaseBoost, pendingMaxBoost);
     }
 
     function setMinVotingPower(uint256 _minPower) external onlyOwner {

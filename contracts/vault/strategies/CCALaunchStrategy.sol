@@ -614,15 +614,18 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
      */
     function sweepCurrency() external nonReentrant {
         if (currentAuction == address(0)) revert NoActiveAuction();
-        IContinuousClearingAuction auction = IContinuousClearingAuction(currentAuction);
+        // FIX: S-C01 — cache auction pointer before external calls (CEI ordering)
+        address auctionAddr = currentAuction;
+        IContinuousClearingAuction auction = IContinuousClearingAuction(auctionAddr);
         auction.checkpoint();
         if (!auction.isGraduated()) revert AuctionNotGraduated();
 
         uint256 raised = auction.currencyRaised();
         uint256 finalPrice = auction.clearingPrice();
 
-        auction.sweepCurrency();
+        // FIX: S-C01 — update state before external sweepCurrency call
         currentLaunch.currencySwept = true;
+        auction.sweepCurrency();
         _persistLifecycleSnapshot();
         _setPhase(LifecyclePhase.ClaimReady);
 
@@ -673,7 +676,9 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
             revert MigrationNotReady(currentLaunch.migrationBlock, block.number);
         }
 
-        IContinuousClearingAuction auction = IContinuousClearingAuction(currentAuction);
+        // FIX: S-C01 — cache auction pointer before external calls (CEI ordering)
+        address auctionAddr = currentAuction;
+        IContinuousClearingAuction auction = IContinuousClearingAuction(auctionAddr);
         auction.checkpoint();
         if (!auction.isGraduated()) revert AuctionNotGraduated();
 
@@ -729,6 +734,10 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         plan = plan.planTakePair(baseParams);
         bytes memory encodedPlan = plan.encode();
 
+        // FIX: S-C01 — update state before external positionManager calls (CEI ordering)
+        currentLaunch.migrated = true;
+        _persistLifecycleSnapshot();
+
         Currency.wrap(address(auctionToken)).transfer(address(positionManager), fullRangeTokenAmount);
         if (currency == address(0)) {
             positionManager.modifyLiquidities{value: fullRangeCurrencyAmount}(encodedPlan, block.timestamp);
@@ -737,12 +746,10 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
             positionManager.modifyLiquidities(encodedPlan, block.timestamp);
         }
 
-        currentLaunch.migrated = true;
-        _persistLifecycleSnapshot();
         _configureOracleV4Pool();
         _setPhase(LifecyclePhase.PoolLive);
 
-        emit Migrated(currentAuction, sqrtPriceX96, fullRangeTokenAmount, fullRangeCurrencyAmount);
+        emit Migrated(auctionAddr, sqrtPriceX96, fullRangeTokenAmount, fullRangeCurrencyAmount);
     }
 
     /**

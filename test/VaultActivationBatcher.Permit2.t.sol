@@ -164,6 +164,27 @@ contract MockCCAStrategy {
     }
 }
 
+contract MockRegistryLookup {
+    mapping(address => address) public vaults;
+    mapping(address => address) public wrappers;
+
+    function setVaultForToken(address token, address vault) external {
+        vaults[token] = vault;
+    }
+
+    function setWrapperForToken(address token, address wrapper) external {
+        wrappers[token] = wrapper;
+    }
+
+    function getVaultForToken(address token) external view returns (address) {
+        return vaults[token];
+    }
+
+    function getWrapperForToken(address token) external view returns (address) {
+        return wrappers[token];
+    }
+}
+
 contract VaultActivationBatcherPermit2Test is Test {
     uint256 internal constant OP_ACTIVATE = 1 << 2;
 
@@ -176,6 +197,7 @@ contract VaultActivationBatcherPermit2Test is Test {
     MockWrapper internal wrapper;
     MockCCAStrategy internal strategy;
     MockPermit2 internal permit2;
+    MockRegistryLookup internal registryLookup;
     VaultActivationBatcher internal batcher;
 
     function setUp() public {
@@ -185,7 +207,10 @@ contract VaultActivationBatcherPermit2Test is Test {
         wrapper = new MockWrapper(address(vault), address(shareToken));
         strategy = new MockCCAStrategy(address(shareToken));
         permit2 = new MockPermit2(address(creatorToken));
-        batcher = new VaultActivationBatcher(address(permit2));
+        registryLookup = new MockRegistryLookup();
+        registryLookup.setVaultForToken(address(creatorToken), address(vault));
+        registryLookup.setWrapperForToken(address(creatorToken), address(wrapper));
+        batcher = new VaultActivationBatcher(address(permit2), address(registryLookup));
 
         creatorToken.mint(identity, 1_000_000e18);
         creatorToken.mint(operator, 1_000_000e18);

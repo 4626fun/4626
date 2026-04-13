@@ -2,6 +2,9 @@
 pragma solidity ^0.8.20;
 
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+// FIX: F-14 — use Ownable2Step for transferable ownership instead of immutable protocolOwner
+import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
+import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "../../interfaces/uniswap/IUniswapV3Factory.sol";
 import "../../interfaces/uniswap/IUniswapV3Pool.sol";
 import {
@@ -49,7 +52,8 @@ interface ICharmVaultManager {
  * @notice Batches deployment and wiring of 4626 strategies.
  * @dev Used by AA deployment flows to create pools, vaults, and adapters.
  */
-contract StrategyDeploymentBatcher is ReentrancyGuard {
+// FIX: F-14 — Ownable2Step replaces immutable protocolOwner for transferable ownership
+contract StrategyDeploymentBatcher is ReentrancyGuard, Ownable2Step {
     // Base Network Constants
     address public constant V3_FACTORY = 0x33128a8fC17869897dcE68Ed026d694621f6FDfD;
     address public constant UNISWAP_ROUTER = 0x2626664c2603336E57B271c5C0b26F421741e481;
@@ -62,7 +66,6 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
     address public constant CHARM_FACTORY_GOVERNANCE_LEGACY = 0x94D85f9E8707fd8955D36173Ee48138E972609c6;
     address public immutable creatorCharmStrategyFactory;
     address public immutable ajnaStrategyFactory;
-    address public immutable protocolOwner;
     bytes4 private constant ADD_STRATEGY_SELECTOR = bytes4(keccak256("addStrategy(address,uint256)"));
     // Charm managerFee uses 1e6 precision (100% = 1_000_000).
     uint24 private constant CHARM_MANAGER_FEE_PIPS = 160_000; // 16%
@@ -77,18 +80,12 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
     error ZeroUnderlying();
     error ZeroQuote();
     error ZeroVault();
-    error NotProtocolOwner();
     error CharmFactoryGovernanceMismatch(address expected, address actual);
     error CharmFactoryProtocolFeeMismatch(uint256 expected, uint256 actual);
     error CharmVaultManagerMismatch(address expected, address actual);
 
-    modifier onlyProtocolOwner() {
-        if (msg.sender != protocolOwner) revert NotProtocolOwner();
-        _;
-    }
-
-    constructor() {
-        protocolOwner = msg.sender;
+    // FIX: F-14 — constructor passes msg.sender to Ownable; use onlyOwner instead of custom modifier
+    constructor() Ownable(msg.sender) {
         creatorCharmStrategyFactory = address(new CreatorCharmStrategyFactory());
         ajnaStrategyFactory = address(new AjnaERC4626StrategyFactory());
     }
@@ -134,7 +131,8 @@ contract StrategyDeploymentBatcher is ReentrancyGuard {
         address owner,
         string memory vaultName,
         string memory vaultSymbol
-    ) external nonReentrant onlyProtocolOwner returns (DeploymentResult memory result) {
+    // FIX: F-14 — use Ownable2Step's onlyOwner instead of immutable protocolOwner
+    ) external nonReentrant onlyOwner returns (DeploymentResult memory result) {
         if (owner == address(0)) revert InvalidOwnerAddress();
         if (bytes(vaultName).length == 0) revert InvalidVaultName();
         if (bytes(vaultSymbol).length == 0) revert InvalidVaultSymbol();

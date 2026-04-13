@@ -589,10 +589,10 @@ function isVercelDeploymentOrigin(origin: string): boolean {
   }
 }
 
-function checkDeploySessionSecretsReady(origin: string): { ok: boolean; error?: string } {
-  const isVercelEnv = Boolean(process.env.VERCEL) || Boolean(process.env.VERCEL_ENV)
-  if (!isVercelEnv || !isVercelDeploymentOrigin(origin)) return { ok: true }
-
+// FIX: FINDING-10 — check DEPLOY_SESSION_TOKEN_HMAC_SECRET unconditionally, not just
+// for Vercel origins. A missing secret on custom domains (e.g., app.4626.fun) would
+// cause signDeployToken() to throw at continue-time instead of failing early at creation.
+function checkDeploySessionSecretsReady(_origin: string): { ok: boolean; error?: string } {
   const missing: string[] = []
   if (!(process.env.DEPLOY_SESSION_TOKEN_HMAC_SECRET ?? '').trim()) {
     missing.push('DEPLOY_SESSION_TOKEN_HMAC_SECRET')
@@ -601,7 +601,7 @@ function checkDeploySessionSecretsReady(origin: string): { ok: boolean; error?: 
 
   return {
     ok: false,
-    error: `Deploy session signing is not configured for this Vercel deployment. Set ${missing.join(', ')}.`,
+    error: `Deploy session signing is not configured. Set ${missing.join(', ')}.`,
   }
 }
 

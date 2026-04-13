@@ -93,6 +93,9 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
     /// @notice Optional keeper (bot/operator) allowed to process swaps.
     address public keeper;
 
+    // FIX: PR-02 — configurable swap deadline buffer (default 15 minutes)
+    uint256 public swapDeadlineBuffer = 15 minutes;
+
     /// @notice tokenIn => Uniswap V3 encoded path ending in `creatorCoin`.
     /// @dev Path encoding: tokenIn (20) + fee (3) + tokenMid (20) [+ fee (3) + tokenOut (20) ...]
     mapping(address => bytes) public swapPathToCreator;
@@ -183,6 +186,9 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
     // RECEIVE
     // ================================
 
+    // FIX: PR-04 — documented: receive() is intentionally state-modifying (wraps ETH to WETH).
+    // Safe because WETH is an immutable trusted contract. No reentrancy guard needed here
+    // as WETH.deposit() does not call back into this contract.
     receive() external payable {
         // If ETH is sent, wrap to WETH and hold until processed.
         if (msg.value > 0) {
@@ -194,10 +200,24 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
     // ADMIN
     // ================================
 
+    // FIX: PR-05 — prevent setting keeper to address(0) accidentally; use removeKeeper() instead
     function setKeeper(address newKeeper) external onlyOwner {
+        if (newKeeper == address(0)) revert ZeroAddress();
         address old = keeper;
         keeper = newKeeper;
         emit KeeperUpdated(old, newKeeper);
+    }
+
+    function removeKeeper() external onlyOwner {
+        address old = keeper;
+        keeper = address(0);
+        emit KeeperUpdated(old, address(0));
+    }
+
+    // FIX: PR-02 — allow owner to configure swap deadline buffer
+    function setSwapDeadlineBuffer(uint256 _buffer) external onlyOwner {
+        require(_buffer >= 1 minutes && _buffer <= 1 hours, "Invalid buffer");
+        swapDeadlineBuffer = _buffer;
     }
 
     /**
@@ -324,6 +344,8 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
     /**
      * @notice Emergency withdraw any token (including payouts) to a safe address.
      * @dev Intended for safety; does not attempt to preserve PPS semantics.
+     * FIX: PR-06 — NOTE: This is an intentional admin override that bypasses enforceability.
+     * It can drain WETH/creatorCoin held for pending processing. Use only for genuine emergencies.
      */
     function emergencyWithdraw(address token, address to, uint256 amount) external onlyOwner nonReentrant {
         if (to == address(0)) revert ZeroAddress();
@@ -393,11 +415,12 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
             uint256 bal = inToken.balanceOf(address(this));
             if (bal < amountIn) revert ZeroAmount();
 
+            // FIX: PR-02 — use deadline with buffer to prevent stale mempool execution
             creatorOut = ISwapRouterV3(swapRouter).exactInput(
                 ISwapRouterV3.ExactInputParams({
                     path: path,
                     recipient: address(this),
-                    deadline: block.timestamp,
+                    deadline: block.timestamp + swapDeadlineBuffer,
                     amountIn: amountIn,
                     amountOutMinimum: minCreatorOut
                 })
@@ -419,6 +442,8 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
         if (tokenIn == address(0) || spender == address(0) || swapTarget == address(0)) revert ZeroAddress();
         if (tokenIn == address(creatorCoin)) revert InvalidPath(tokenIn);
         if (amountIn == 0) revert ZeroAmount();
+        // FIX: PR-01 — require minCreatorOut > 0 to prevent opaque calldata from draining without detection
+        if (minCreatorOut == 0) revert ZeroAmount();
         if (!approvedExternalSwapTargets[swapTarget]) revert ExternalSwapTargetNotApproved(swapTarget);
         if (!approvedExternalSwapSpenders[spender]) revert ExternalSwapSpenderNotApproved(spender);
 
@@ -436,7 +461,8 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
         if (!ok) _revertWithBytes(returnData);
 
         uint256 tokenInAfter = inToken.balanceOf(address(this));
-        if (tokenInAfter + amountIn < tokenInBefore) {
+        // FIX: PR-03 — rewrite to subtraction form to avoid potential addition overflow
+        if (tokenInBefore - tokenInAfter > amountIn) {
             revert ExternalSwapOverspent(tokenIn, tokenInBefore - tokenInAfter, amountIn);
         }
 

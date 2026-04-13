@@ -23,10 +23,35 @@ type RedeemBody = {
   code?: string
 }
 
+// FIX: FINDING-04 — global rate limit on handoff redeem to resist distributed brute-force.
+// In-memory Map with TTL; complements the per-IP limit below.
+const GLOBAL_HANDOFF_WINDOW_MS = 60_000
+const GLOBAL_HANDOFF_MAX_FAILED = 100
+let globalHandoffFailedCount = 0
+let globalHandoffWindowResetAt = Date.now() + GLOBAL_HANDOFF_WINDOW_MS
+
+function checkGlobalHandoffRateLimit(): boolean {
+  const now = Date.now()
+  if (now >= globalHandoffWindowResetAt) {
+    globalHandoffFailedCount = 0
+    globalHandoffWindowResetAt = now + GLOBAL_HANDOFF_WINDOW_MS
+  }
+  return globalHandoffFailedCount < GLOBAL_HANDOFF_MAX_FAILED
+}
+
+function recordGlobalHandoffFailure(): void {
+  const now = Date.now()
+  if (now >= globalHandoffWindowResetAt) {
+    globalHandoffFailedCount = 0
+    globalHandoffWindowResetAt = now + GLOBAL_HANDOFF_WINDOW_MS
+  }
+  globalHandoffFailedCount++
+}
+
+// FIX: FINDING-02 — removed sessionToken and privyToken from response body;
+// session is conveyed via HttpOnly cookie only, preventing XSS exfiltration.
 type HandoffRedeemResponse = {
   address: string
-  sessionToken: string
-  privyToken: string | null
 }
 const HANDOFF_REDEEM_MAX_BODY_BYTES = 8_192
 
@@ -41,6 +66,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   if (req.method !== 'POST') {
     return res.status(405).json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
+  }
+
+  // FIX: FINDING-04 — enforce both per-IP and global rate limits to resist distributed brute-force.
+  if (!checkGlobalHandoffRateLimit()) {
+    return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
   }
 
   const ip = getClientIp(req as any)
@@ -68,18 +98,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await ensureHandoffSchema(db as any)
     const consumed = await consumeHandoffCode(db as any, code)
     if (!consumed?.address) {
+      // FIX: FINDING-04 — record failed attempt for global rate limit tracking.
+      recordGlobalHandoffFailure()
       return res.status(400).json({ success: false, error: 'Invalid or expired handoff code' } satisfies ApiEnvelope<never>)
     }
 
     const sessionToken = makeSessionToken({ address: consumed.address })
     setCookie(req, res, COOKIE_SESSION, sessionToken, { httpOnly: true, maxAgeSeconds: 60 * 60 * 24 * 7 })
 
+    // FIX: FINDING-02 — do not return sessionToken or privyToken in response body;
+    // the session cookie is set above, and the Privy JWT should not be relayed to clients.
     return res.status(200).json({
       success: true,
       data: {
         address: consumed.address,
-        sessionToken,
-        privyToken: consumed.privyToken,
       } satisfies HandoffRedeemResponse,
     } satisfies ApiEnvelope<HandoffRedeemResponse>)
   } catch {
