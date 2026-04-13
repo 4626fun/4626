@@ -1701,6 +1701,12 @@ async function assertSessionOwnsSender(params: { sender: Address; sessionAddress
   const code = await client.getBytecode({ address: params.sender })
   if (code && code !== '0x') {
     await assertSenderCoinbaseSmartWalletProvenance({ client, sender: params.sender })
+    // Allow a session principal that is the sender smart wallet itself.
+    // This can happen when the user authenticated through a smart-wallet surface
+    // (e.g. Base app CSW) rather than an owner EOA session.
+    if (getAddress(params.sessionAddress) === getAddress(params.sender)) {
+      return
+    }
     const isOwner = await client.readContract({
       address: params.sender,
       abi: COINBASE_SMART_WALLET_OWNER_ABI,

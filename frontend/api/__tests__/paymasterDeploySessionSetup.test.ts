@@ -240,6 +240,78 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     expect(readJsonBodyMock).toHaveBeenCalledWith(req, { maxBytes: 512_000 })
   })
 
+  it('accepts sender-authenticated CSW session even when isOwnerAddress(session) is false', async () => {
+    readRequestPrincipalMock.mockReturnValue(sender)
+    mockReadContract.mockImplementation((opts: { functionName?: string }) => {
+      if (opts.functionName === 'isOwnerAddress') return Promise.resolve(false)
+      if (opts.functionName === 'store') return Promise.resolve('0x2C5Ff5bd3D6f4aF4742e37Df12E51b39F2C63e6c')
+      if (opts.functionName === 'entryPoint') return Promise.resolve(ENTRYPOINT_V06)
+      if (opts.functionName === 'implementation') return Promise.resolve(CSW_IMPLEMENTATION)
+      return Promise.resolve(null)
+    })
+
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+        outputs: [],
+      },
+    ] as const
+    const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
+      {
+        type: 'function',
+        name: 'addOwnerAddress',
+        stateMutability: 'nonpayable',
+        inputs: [{ name: 'owner', type: 'address' }],
+        outputs: [],
+      },
+    ] as const
+
+    const innerData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+      functionName: 'addOwnerAddress',
+      args: [sessionSigner],
+    })
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'execute',
+      args: [sender, 0n, innerData],
+    })
+
+    const userOp = {
+      sender,
+      callData,
+      initCode: '0x',
+    }
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [userOp, ENTRYPOINT_V06, 8453],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = responseBody?.error?.message ?? ''
+    expect(errMsg).not.toMatch(/request denied/i)
+    expect(errMsg).not.toMatch(/not_owner/i)
+  })
+
   it('rejects addOwnerAddress self-call when deploy session owner has contract bytecode', async () => {
     mockGetBytecode.mockImplementation(async ({ address }: { address: string }) => {
       if (String(address).toLowerCase() === sessionSigner.toLowerCase()) return '0x1234'
