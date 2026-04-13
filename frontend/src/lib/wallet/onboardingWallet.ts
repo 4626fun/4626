@@ -205,48 +205,64 @@ export async function sendPreparedOwnerTx(params: {
       if (txRequest.to.toLowerCase() !== canonicalSmartWalletAddress.toLowerCase()) {
         throw new Error('Prepared owner install target does not match the canonical Coinbase Smart Wallet.')
       }
-      if (!publicClient) {
-        throw new Error('Canonical wallet client is unavailable. Reload and retry.')
-      }
-      if (typeof ensurePaymasterSession === 'function') {
-        const sessionOk = await ensurePaymasterSession()
-        if (!sessionOk) {
-          throw new Error('Missing 4626 session token for paymaster request.')
-        }
-      }
-      const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-      const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-      const runUserOp = async () =>
-        await sendCoinbaseSmartWalletUserOperation({
-          publicClient: publicClient as any,
-          walletClient: walletClient as any,
-          bundlerUrl,
-          smartWallet: canonicalSmartWalletAddress as `0x${string}`,
-          ownerAddress: signerAddress as `0x${string}`,
-          calls: [{ to: txRequest.to, data: txRequest.data, value: 0n }],
-          version: '1',
-        })
+      const selfAuthenticatedCanonicalSession =
+        signerAddress.toLowerCase() === canonicalSmartWalletAddress.toLowerCase()
 
-      let result: Awaited<ReturnType<typeof sendCoinbaseSmartWalletUserOperation>> | null = null
-      let lastRetryableError: unknown = null
-      for (let attempt = 0; attempt < PAYMASTER_SESSION_MAX_ATTEMPTS; attempt += 1) {
-        try {
-          result = await runUserOp()
-          break
-        } catch (attemptError) {
-          if (!isRetryablePaymasterSessionError(attemptError)) throw attemptError
-          lastRetryableError = attemptError
-          if (typeof ensurePaymasterSession === 'function') {
-            await ensurePaymasterSession().catch(() => false)
-          }
-          const hasNextAttempt = attempt + 1 < PAYMASTER_SESSION_MAX_ATTEMPTS
-          if (hasNextAttempt) {
-            await delay(PAYMASTER_SESSION_RETRY_DELAY_MS * (attempt + 1))
+      if (selfAuthenticatedCanonicalSession) {
+        if (!walletClient.account || typeof walletClient.sendTransaction !== 'function') {
+          throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
+        }
+        txHash = await walletClient.sendTransaction({
+          account: walletClient.account,
+          chain: base,
+          to: txRequest.to,
+          data: txRequest.data,
+          value: 0n,
+        })
+      } else {
+        if (!publicClient) {
+          throw new Error('Canonical wallet client is unavailable. Reload and retry.')
+        }
+        if (typeof ensurePaymasterSession === 'function') {
+          const sessionOk = await ensurePaymasterSession()
+          if (!sessionOk) {
+            throw new Error('Missing 4626 session token for paymaster request.')
           }
         }
+        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+        const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+        const runUserOp = async () =>
+          await sendCoinbaseSmartWalletUserOperation({
+            publicClient: publicClient as any,
+            walletClient: walletClient as any,
+            bundlerUrl,
+            smartWallet: canonicalSmartWalletAddress as `0x${string}`,
+            ownerAddress: signerAddress as `0x${string}`,
+            calls: [{ to: txRequest.to, data: txRequest.data, value: 0n }],
+            version: '1',
+          })
+
+        let result: Awaited<ReturnType<typeof sendCoinbaseSmartWalletUserOperation>> | null = null
+        let lastRetryableError: unknown = null
+        for (let attempt = 0; attempt < PAYMASTER_SESSION_MAX_ATTEMPTS; attempt += 1) {
+          try {
+            result = await runUserOp()
+            break
+          } catch (attemptError) {
+            if (!isRetryablePaymasterSessionError(attemptError)) throw attemptError
+            lastRetryableError = attemptError
+            if (typeof ensurePaymasterSession === 'function') {
+              await ensurePaymasterSession().catch(() => false)
+            }
+            const hasNextAttempt = attempt + 1 < PAYMASTER_SESSION_MAX_ATTEMPTS
+            if (hasNextAttempt) {
+              await delay(PAYMASTER_SESSION_RETRY_DELAY_MS * (attempt + 1))
+            }
+          }
+        }
+        if (!result) throw (lastRetryableError ?? new Error('Paymaster session retry exhausted.'))
+        txHash = result.transactionHash
       }
-      if (!result) throw (lastRetryableError ?? new Error('Paymaster session retry exhausted.'))
-      txHash = result.transactionHash
     } else {
       if (!walletClient.account || typeof walletClient.sendTransaction !== 'function') {
         throw new Error('Connect an owner wallet to send this transaction.')
