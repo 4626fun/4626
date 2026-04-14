@@ -173,6 +173,7 @@ const PAYMASTER_SESSION_MAX_ATTEMPTS = 3
 const PAYMASTER_SESSION_RETRY_DELAY_MS = import.meta.env.MODE === 'test' ? 5 : 300
 const SEND_CALLS_STATUS_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 25 : 8_000
 const SEND_CALLS_STATUS_POLL_MS = import.meta.env.MODE === 'test' ? 5 : 500
+const PREFER_SPONSORED_CANONICAL_SELF_APPROVAL = true
 
 function isTxHash(value: unknown): value is `0x${string}` {
   return typeof value === 'string' && /^0x([a-fA-F0-9]{64})$/.test(value)
@@ -350,6 +351,9 @@ export async function sendPreparedOwnerTx(params: {
         if (!walletClient.account) {
           throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
         }
+        if (PREFER_SPONSORED_CANONICAL_SELF_APPROVAL) {
+          txHash = await runSponsoredCanonicalUserOp()
+        } else {
         const walletRequest =
           typeof walletClient.request === 'function'
             ? async (args: { method: string; params?: unknown[] }) => await walletClient.request!(args as any)
@@ -397,6 +401,7 @@ export async function sendPreparedOwnerTx(params: {
               value: 0n,
             })
           }
+        }
         }
       } else {
         txHash = await runSponsoredCanonicalUserOp()

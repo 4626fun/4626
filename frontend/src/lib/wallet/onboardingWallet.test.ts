@@ -76,7 +76,7 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('uses direct sendTransaction when canonical mode is self-authenticated by CSW session', async () => {
+  it('uses sponsored canonical user-op when canonical mode is self-authenticated by CSW session', async () => {
     const sendTransaction = vi.fn(async () => TX_HASH)
     const ensurePaymasterSession = vi.fn(async () => true)
     const request = vi
@@ -103,18 +103,14 @@ describe('sendPreparedOwnerTx', () => {
       ensurePaymasterSession,
     })
 
-    expect(ensurePaymasterSession).not.toHaveBeenCalled()
-    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
-    expect(request).toHaveBeenCalledWith(
-      expect.objectContaining({
-        method: 'wallet_sendCalls',
-      }),
-    )
+    expect(ensurePaymasterSession).toHaveBeenCalledTimes(1)
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
+    expect(request).not.toHaveBeenCalled()
     expect(sendTransaction).not.toHaveBeenCalled()
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('falls back to sendTransaction when wallet_sendCalls and sponsored canonical retry both fail', async () => {
+  it('does not fall back to sendTransaction when sponsored canonical self-approval fails', async () => {
     const sendTransaction = vi.fn(async () => TX_HASH)
     const ensurePaymasterSession = vi.fn(async () => true)
     const request = vi.fn(async () => {
@@ -124,26 +120,29 @@ describe('sendPreparedOwnerTx', () => {
       new Error('Paymaster rejected this request: request denied - not authenticated'),
     )
 
-    const result = await sendPreparedOwnerTx({
-      txRequest: TX_REQUEST,
-      walletClient: {
-        account: CANONICAL_CSW,
-        sendTransaction,
-        request,
-      },
-      chainId: 8453,
-      authHeaders: async () => ({ Authorization: 'Bearer test' }),
-      signerAddress: CANONICAL_CSW,
-      executionMode: 'canonicalSmartWallet',
-      canonicalSmartWalletAddress: CANONICAL_CSW,
-      publicClient: {},
-      ensurePaymasterSession,
-    })
-
+    await expect(
+      sendPreparedOwnerTx({
+        txRequest: TX_REQUEST,
+        walletClient: {
+          account: CANONICAL_CSW,
+          sendTransaction,
+          request,
+        },
+        chainId: 8453,
+        authHeaders: async () => ({ Authorization: 'Bearer test' }),
+        signerAddress: CANONICAL_CSW,
+        executionMode: 'canonicalSmartWallet',
+        canonicalSmartWalletAddress: CANONICAL_CSW,
+        publicClient: {},
+        ensurePaymasterSession,
+      }),
+    ).rejects.toThrow(
+      'Gas sponsorship was rejected for this approval (request denied - not authenticated). Retry in Base app after reconnecting the same wallet session.',
+    )
     expect(ensurePaymasterSession).toHaveBeenCalledTimes(4)
     expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(3)
-    expect(sendTransaction).toHaveBeenCalledTimes(1)
-    expect(result.txHash).toBe(TX_HASH)
+    expect(request).not.toHaveBeenCalled()
+    expect(sendTransaction).not.toHaveBeenCalled()
   })
 
   it('routes canonical CSW approval through paymaster user-op when signer is an owner EOA', async () => {
