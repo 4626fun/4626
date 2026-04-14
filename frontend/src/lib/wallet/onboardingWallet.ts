@@ -283,46 +283,7 @@ export async function sendPreparedOwnerTx(params: {
       if (txRequest.to.toLowerCase() !== canonicalSmartWalletAddress.toLowerCase()) {
         throw new Error('Prepared owner install target does not match the canonical Coinbase Smart Wallet.')
       }
-      const selfAuthenticatedCanonicalSession =
-        signerAddress.toLowerCase() === canonicalSmartWalletAddress.toLowerCase()
-
-      if (selfAuthenticatedCanonicalSession) {
-        if (!walletClient.account) {
-          throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
-        }
-        const walletRequest =
-          typeof walletClient.request === 'function'
-            ? async (args: { method: string; params?: unknown[] }) => await walletClient.request!(args as any)
-            : null
-
-        if (walletRequest) {
-          try {
-            txHash = await submitOwnerTxViaWalletSendCalls({
-              walletRequest,
-              chainId: txRequest.chainId,
-              sender: canonicalSmartWalletAddress as `0x${string}`,
-              to: txRequest.to,
-              data: txRequest.data,
-            })
-          } catch (sendCallsError) {
-            if (isUserRejectedWalletAction(sendCallsError)) throw sendCallsError
-            if (!isSendCallsUnsupportedError(sendCallsError)) throw sendCallsError
-          }
-        }
-
-        if (!txHash) {
-          if (typeof walletClient.sendTransaction !== 'function') {
-            throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
-          }
-          txHash = await walletClient.sendTransaction({
-            account: walletClient.account,
-            chain: base,
-            to: txRequest.to,
-            data: txRequest.data,
-            value: 0n,
-          })
-        }
-      } else {
+      const runSponsoredCanonicalUserOp = async () => {
         if (!publicClient) {
           throw new Error('Canonical wallet client is unavailable. Reload and retry.')
         }
@@ -364,7 +325,60 @@ export async function sendPreparedOwnerTx(params: {
           }
         }
         if (!result) throw (lastRetryableError ?? new Error('Paymaster session retry exhausted.'))
-        txHash = result.transactionHash
+        return result.transactionHash
+      }
+      const selfAuthenticatedCanonicalSession =
+        signerAddress.toLowerCase() === canonicalSmartWalletAddress.toLowerCase()
+
+      if (selfAuthenticatedCanonicalSession) {
+        if (!walletClient.account) {
+          throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
+        }
+        const walletRequest =
+          typeof walletClient.request === 'function'
+            ? async (args: { method: string; params?: unknown[] }) => await walletClient.request!(args as any)
+            : null
+
+        if (walletRequest) {
+          try {
+            txHash = await submitOwnerTxViaWalletSendCalls({
+              walletRequest,
+              chainId: txRequest.chainId,
+              sender: canonicalSmartWalletAddress as `0x${string}`,
+              to: txRequest.to,
+              data: txRequest.data,
+            })
+          } catch (sendCallsError) {
+            if (isUserRejectedWalletAction(sendCallsError)) throw sendCallsError
+            if (!isSendCallsUnsupportedError(sendCallsError)) {
+              const message = sendCallsError instanceof Error ? sendCallsError.message : String(sendCallsError ?? '')
+              const lower = message.toLowerCase()
+              const shouldRetrySponsored =
+                (lower.includes('error generating transaction') && lower.includes('enough funds')) ||
+                lower.includes('insufficient funds')
+              if (!shouldRetrySponsored) throw sendCallsError
+            }
+          }
+        }
+
+        if (!txHash) {
+          try {
+            txHash = await runSponsoredCanonicalUserOp()
+          } catch {
+            if (typeof walletClient.sendTransaction !== 'function') {
+              throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
+            }
+            txHash = await walletClient.sendTransaction({
+              account: walletClient.account,
+              chain: base,
+              to: txRequest.to,
+              data: txRequest.data,
+              value: 0n,
+            })
+          }
+        }
+      } else {
+        txHash = await runSponsoredCanonicalUserOp()
       }
     } else {
       if (!walletClient.account || typeof walletClient.sendTransaction !== 'function') {

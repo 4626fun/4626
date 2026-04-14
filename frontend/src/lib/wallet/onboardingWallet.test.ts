@@ -114,12 +114,15 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('falls back to sendTransaction when wallet_sendCalls is unsupported for self-authenticated canonical sessions', async () => {
+  it('falls back to sendTransaction when wallet_sendCalls and sponsored canonical retry both fail', async () => {
     const sendTransaction = vi.fn(async () => TX_HASH)
     const ensurePaymasterSession = vi.fn(async () => true)
     const request = vi.fn(async () => {
       throw new Error('Method not found')
     })
+    sendCoinbaseSmartWalletUserOperationMock.mockRejectedValue(
+      new Error('Paymaster rejected this request: request denied - not authenticated'),
+    )
 
     const result = await sendPreparedOwnerTx({
       txRequest: TX_REQUEST,
@@ -137,8 +140,8 @@ describe('sendPreparedOwnerTx', () => {
       ensurePaymasterSession,
     })
 
-    expect(ensurePaymasterSession).not.toHaveBeenCalled()
-    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+    expect(ensurePaymasterSession).toHaveBeenCalledTimes(4)
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(3)
     expect(sendTransaction).toHaveBeenCalledTimes(1)
     expect(result.txHash).toBe(TX_HASH)
   })
