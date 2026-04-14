@@ -18,12 +18,14 @@ export async function ensureWalletAlignedPaymasterSessionDetailed(
     return { ok: true, reason: null }
   }
 
+  let walletAttemptFailureReason: string | null = null
   if (params.preferWalletSession && typeof params.signIn === 'function') {
     try {
       const signed = await params.signIn()
       if (signed) return { ok: true, reason: null }
+      walletAttemptFailureReason = 'wallet_signin_did_not_return_address'
     } catch {
-      // Fall through to the Privy bridge only if available.
+      walletAttemptFailureReason = 'wallet_signin_failed'
     }
   }
 
@@ -33,7 +35,7 @@ export async function ensureWalletAlignedPaymasterSessionDetailed(
   ) {
     return {
       ok: false,
-      reason: 'no_privy_bridge_available',
+      reason: walletAttemptFailureReason ?? 'no_privy_bridge_available',
     }
   }
 

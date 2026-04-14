@@ -106,7 +106,7 @@ describe('ensureWalletAlignedPaymasterSessionDetailed', () => {
 
     expect(result).toEqual({
       ok: false,
-      reason: 'no_privy_bridge_available',
+      reason: 'wallet_signin_did_not_return_address',
     })
   })
 
@@ -121,6 +121,21 @@ describe('ensureWalletAlignedPaymasterSessionDetailed', () => {
     expect(result).toEqual({
       ok: false,
       reason: 'missing_privy_access_token',
+    })
+  })
+
+  it('returns a concrete reason when wallet sign-in path fails before Privy bridge', async () => {
+    const result = await ensureWalletAlignedPaymasterSessionDetailed({
+      hasMatchingSiweSession: false,
+      preferWalletSession: true,
+      signIn: async () => null,
+      signInWithPrivyToken: null,
+      getPrivyAccessToken: null,
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'wallet_signin_did_not_return_address',
     })
   })
 })
