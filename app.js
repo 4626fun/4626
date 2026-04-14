@@ -24,13 +24,13 @@ gsap.registerPlugin(ScrollTrigger);
   const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
   camera.position.z = 5;
 
-  const COUNT = 800;
+  const COUNT = 400;
   const positions = new Float32Array(COUNT * 3);
   const velocities = new Float32Array(COUNT * 3);
   for (let i = 0; i < COUNT; i++) {
-    positions[i * 3]     = (Math.random() - 0.5) * 20;
-    positions[i * 3 + 1] = (Math.random() - 0.5) * 20;
-    positions[i * 3 + 2] = (Math.random() - 0.5) * 10 - 2;
+    positions[i * 3]     = (Math.random() - 0.5) * 24;
+    positions[i * 3 + 1] = (Math.random() - 0.5) * 24;
+    positions[i * 3 + 2] = (Math.random() - 0.5) * 14 - 3;
     velocities[i * 3]     = (Math.random() - 0.5) * 0.001;
     velocities[i * 3 + 1] = (Math.random() - 0.5) * 0.001;
     velocities[i * 3 + 2] = (Math.random() - 0.5) * 0.0005;
@@ -39,11 +39,25 @@ gsap.registerPlugin(ScrollTrigger);
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
 
+  // Create a soft circle texture for particles
+  const particleCanvas = document.createElement('canvas');
+  particleCanvas.width = 32;
+  particleCanvas.height = 32;
+  const pCtx = particleCanvas.getContext('2d');
+  const gradient = pCtx.createRadialGradient(16, 16, 0, 16, 16, 16);
+  gradient.addColorStop(0, 'rgba(255,255,255,1)');
+  gradient.addColorStop(0.4, 'rgba(255,255,255,0.6)');
+  gradient.addColorStop(1, 'rgba(255,255,255,0)');
+  pCtx.fillStyle = gradient;
+  pCtx.fillRect(0, 0, 32, 32);
+  const particleTexture = new THREE.CanvasTexture(particleCanvas);
+
   const material = new THREE.PointsMaterial({
-    size: 1.8,
+    size: 0.08,
     color: 0x0052FF,
     transparent: true,
-    opacity: 0.12,
+    opacity: 0.4,
+    map: particleTexture,
     sizeAttenuation: true,
     blending: THREE.AdditiveBlending,
     depthWrite: false,
