@@ -1766,6 +1766,8 @@ body {
 
 /* ─── MOBILE ─── */
 @media (max-width: 768px) {
+
+  /* ── Hero ── */
   #ch-hero .scene-pin {
     flex-direction: column;
     padding: 0 1.5rem;
@@ -1783,42 +1785,138 @@ body {
   .hero-float-tokens { display: none; }
   .hero-scroll-cue { display: none; }
 
-  .side-label-left { left: 5%; }
-  .side-label-right { right: 5%; }
-  .top-label-left { left: 5%; }
-  .top-label-right { right: 5%; }
+  /* ── Chapter 2: Token Journey ── */
+
+  /* Side labels — hide on very small screens to prevent clipping */
+  .side-label-left,
+  .side-label-right {
+    font-size: 7px;
+    letter-spacing: 0.2em;
+  }
+  .side-label-left { left: 2%; }
+  .side-label-right { right: 2%; }
+  .top-label-left { left: 3%; font-size: 7px; letter-spacing: 0.15em; }
+  .top-label-right { right: 3%; font-size: 7px; letter-spacing: 0.15em; }
+
+  /* Token images — scale down */
+  .token-img-ring,
+  .share-img-ring {
+    width: 76px;
+    height: 76px;
+  }
+
+  /* Detail panels — stack vertically instead of side-by-side overlap */
+  .token-detail {
+    max-width: 160px;
+  }
+  .detail-section-label {
+    font-size: 8px;
+    letter-spacing: 0.2em;
+  }
+  .detail-amount {
+    font-size: clamp(0.875rem, 0.7rem + 0.6vw, 1.25rem);
+  }
+  .detail-desc {
+    font-size: 0.65rem;
+    max-width: 150px;
+  }
+
+  /* Deposit info */
+  .deposit-amount {
+    font-size: 1rem;
+  }
 
   /* Hide desktop allocation engine on mobile */
   .allocation-engine { display: none; }
 
+  /* Morph zone */
   .morph-zone {
-    width: 220px;
-    height: 220px;
+    width: 200px;
+    height: 200px;
   }
 
-  .vaults-grid { grid-template-columns: 1fr; }
+  /* Bottom copy */
+  .token-cross-copy,
+  .dual-copy p {
+    font-size: clamp(0.8rem, 0.7rem + 0.4vw, 1rem);
+    padding: 0 1.25rem;
+  }
+  .token-entry-cue,
+  .dual-entry {
+    font-size: 0.65rem;
+  }
 
-  .close-partners { gap: 1.25rem; }
+  /* ── Chapter 3: Accrue ── */
+  .accrue-container { padding: 0 1.25rem; }
+  .accrue-container-v2 { padding: 0 0.75rem; }
+  .accrue-ratio-display .ratio-accent {
+    font-size: clamp(2.75rem, 2rem + 3vw, 4.5rem);
+  }
+  .ratio-meta { gap: 0.4rem; }
+  .ratio-unit, .ratio-from { font-size: 8px; letter-spacing: 0.1em; }
+  .accrue-desc { font-size: 0.875rem; }
+  .clock-date { font-size: 0.8rem; letter-spacing: 0.15em; }
+
+  /* Yield curve */
+  .yield-curve-wrap { aspect-ratio: 4 / 3; }
+  .yc-axis-y { left: -2px; width: 32px; }
+  .yc-axis-y .yc-label { font-size: 7px; }
+  .yc-axis-x { left: 36px; }
+  .yc-axis-x .yc-label { font-size: 7px; }
+  .yc-callout-card { padding: 5px 8px; border-radius: 6px; }
+  .yc-callout-ratio { font-size: 11px; }
+  .yc-callout-apy { font-size: 7px; }
+  .yc-callout-day { font-size: 6px; }
+
+  /* Stats bar */
+  .accrue-stats {
+    border: 1px solid rgba(255, 255, 255, 0.04);
+    border-radius: 10px;
+    background: rgba(8, 12, 20, 0.4);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    margin: 0.5rem 0.5rem 0;
+  }
+  .accrue-stat { padding: 0.875rem 1rem; }
+  .accrue-stat-value { font-size: 1rem; }
+  .accrue-stat-label { font-size: 7px; letter-spacing: 0.15em; }
+  .accrue-stat-divider { height: 18px; }
+
+  /* ── Chapter 4: Vaults ── */
+  .vaults-container { padding: 0 1rem; }
+  .vaults-grid { grid-template-columns: 1fr; }
+  .vault-card { padding: 1.25rem; }
+  .vault-card-icon { width: 34px; height: 34px; }
+  .vault-card-name h3 { font-size: 0.9rem; }
+  .vcs-value { font-size: 1.1rem; }
+
+  /* ── Chapter 5: Close ── */
+  .close-partners {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 1rem 1.25rem;
+    padding: 0 1rem;
+    max-width: 320px;
+  }
   .partner-logo { height: 18px; }
 
-  /* Yield curve mobile */
-  .accrue-container-v2 { padding: 0 1rem; }
-  .accrue-ratio-display .ratio-accent { font-size: clamp(3rem, 2.5rem + 3vw, 5rem); }
-  .ratio-meta { gap: 0.5rem; }
-  .ratio-unit, .ratio-from { font-size: 9px; }
-  .yield-curve-wrap { aspect-ratio: 4 / 3; }
-  .yc-axis-y { left: -2px; width: 36px; }
-  .yc-axis-y .yc-label { font-size: 7px; }
-  .yc-axis-x { left: 40px; }
-  .yc-axis-x .yc-label { font-size: 7px; }
-  .yc-callout-card { padding: 6px 10px; border-radius: 8px; }
-  .yc-callout-ratio { font-size: 12px; }
-  .yc-callout-apy { font-size: 8px; }
-  .yc-callout-day { font-size: 6px; }
-  .accrue-stat { padding: 1rem 1.25rem; }
-  .accrue-stat-value { font-size: 1.1rem; }
-  .accrue-stat-label { font-size: 7px; }
-  .accrue-stat-divider { height: 20px; }
+  /* ── Footer ── */
+  .footer {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: center;
+    text-align: center;
+    padding: 2rem 1.5rem;
+  }
+  .footer-links {
+    gap: 1rem;
+  }
+  .footer-links a { font-size: 0.65rem; }
+
+  /* ── Nav — tighter on mobile ── */
+  .nav-link { font-size: 0.65rem; letter-spacing: 0.1em; }
+  .nav-btn { font-size: 0.6rem; padding: 0.5rem 0.75rem; letter-spacing: 0.12em; }
+  .brand-text { font-size: 0.95rem; }
 
 }
 

@@ -883,16 +883,21 @@ function multiMapSmooth(progress, stops, values) {
       // ════════════════════════════════════════════
       const vw = window.innerWidth;
       const vh = window.innerHeight;
-      // Center Y: middle of viewport minus half the icon ring height (96px / 2 = 48)
-      const centerY = vh / 2 - 48;
-      const centerX = vw / 2;
+      const isMobile = vw < 768;
       // Responsive multiplier: 1.0 at desktop (1600px), scales down on mobile
       const rm = Math.min(1, vw / 1200);
+      // Center Y: middle of viewport minus half the icon ring height
+      // Desktop: 96px rings → 48px offset, Mobile: 76px rings → 38px offset
+      const iconHalf = isMobile ? 38 : 48;
+      const centerY = vh / 2 - iconHalf;
+      const centerX = vw / 2;
 
       // ── Creator coin (AKITA) — SMOOTH CONTINUOUS MOTION ──
+      // On mobile, use wider spread multiplier so detail panels don't collide
+      const spread = isMobile ? Math.max(rm, 0.55) : rm;
       const coinOffsetX = multiMapSmooth(p,
         [0.018, 0.045, 0.055, 0.08,  0.12,  0.14,  0.165,  0.30,  0.51, 0.60],
-        [-340*rm, 0,    0,     0,     0,     180*rm, 220*rm, 220*rm, 220*rm, 20*rm]
+        [-340*rm, 0,    0,     0,     0,     180*spread, 220*spread, 220*spread, 220*spread, 20*rm]
       );
       const coinOp = multiMapSmooth(p,
         [0.018, 0.03,  0.055, 0.075, 0.12,  0.14,  0.26, 0.30],
@@ -928,7 +933,7 @@ function multiMapSmooth(progress, stops, values) {
       );
       const shareOffsetX = multiMapSmooth(p,
         [0.10, 0.14, 0.165, 0.30, 0.51, 0.60],
-        [0,    -140*rm, -220*rm, -220*rm, -220*rm, -50*rm]
+        [0,    -140*spread, -220*spread, -220*spread, -220*spread, -50*rm]
       );
       const shareScale = multiMapSmooth(p, [0.10, 0.14, 0.51, 0.60], [0.6, 1, 1, 0.42]);
       share.style.transform = `translate(${centerX + shareOffsetX}px, ${centerY}px) translate(-50%, 0) scale(${shareScale})`;
@@ -963,7 +968,8 @@ function multiMapSmooth(progress, stops, values) {
 
       // ── Camera zoom — smoother easing ──
       const cameraScale = multiMapSmooth(p, [0.50, 0.58, 0.62, 0.68], [1, 1.06, 1.06, 1]);
-      const panX = mapEased(p, 0.64, 0.86, 0, -400 * rm);
+      // On mobile, skip the panX that reveals the allocation engine (hidden on mobile)
+      const panX = isMobile ? 0 : mapEased(p, 0.64, 0.86, 0, -400 * rm);
       cameraWrapper.style.transform = `scale(${cameraScale}) translateX(${panX}px)`;
 
       // ── Deposit/allocation labels — smoothed ──
