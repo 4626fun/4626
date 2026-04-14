@@ -1,6 +1,6 @@
-/* app.js — 4626.fun Cinematic Scroll Experience v3
-   Enhanced Three.js dual-layer particles + GSAP ScrollTrigger choreography
-   Real token images, richer visual effects */
+/* app.js — 4626.fun Cinematic Scroll Experience v4
+   WebGL shader-driven particle morph + cinematic hero entrance
+   Enhanced Three.js particles + GSAP ScrollTrigger choreography */
 
 import * as THREE from 'three';
 
@@ -10,7 +10,7 @@ import * as THREE from 'three';
 gsap.registerPlugin(ScrollTrigger);
 
 // ────────────────────────────────────────────
-// 1. THREE.JS PARTICLE FIELD (dual-layer)
+// 1. THREE.JS PARTICLE FIELD (3-layer ambient)
 // ────────────────────────────────────────────
 (function initParticles() {
   const canvas = document.getElementById('three-canvas');
@@ -163,7 +163,204 @@ gsap.registerPlugin(ScrollTrigger);
 })();
 
 // ────────────────────────────────────────────
-// 2. SET SCENE HEIGHTS
+// 2. WEBGL PARTICLE MORPH SYSTEM
+// ────────────────────────────────────────────
+const MorphSystem = (function initMorph() {
+  const canvas = document.getElementById('morph-canvas');
+  if (!canvas) return null;
+
+  const PARTICLE_COUNT = 2000;
+  const SIZE = 320;
+
+  canvas.width = SIZE * Math.min(window.devicePixelRatio, 2);
+  canvas.height = SIZE * Math.min(window.devicePixelRatio, 2);
+
+  const gl = canvas.getContext('webgl2') || canvas.getContext('webgl');
+  if (!gl) return null;
+
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.clearColor(0, 0, 0, 0);
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE); // additive
+
+  // ── Shaders ──
+  const vertSrc = `
+    attribute vec2 aStartPos;
+    attribute vec2 aEndPos;
+    attribute float aRandom;
+    attribute float aDelay;
+    uniform float uProgress;
+    uniform float uTime;
+    uniform float uScale;
+    varying float vAlpha;
+    varying float vRandom;
+
+    void main() {
+      float delay = aDelay * 0.3;
+      float prog = clamp((uProgress - delay) / (1.0 - delay), 0.0, 1.0);
+      // Smooth step with cubic ease
+      prog = prog * prog * (3.0 - 2.0 * prog);
+
+      // Explode outward in the middle of the transition
+      float explode = sin(prog * 3.14159);
+      float noiseX = sin(aRandom * 47.3 + uTime * 2.0) * explode * 0.35;
+      float noiseY = cos(aRandom * 91.7 + uTime * 1.7) * explode * 0.35;
+      // Spiral component
+      float angle = aRandom * 6.28 + prog * 4.0;
+      float spiralR = explode * 0.2;
+      noiseX += cos(angle) * spiralR;
+      noiseY += sin(angle) * spiralR;
+
+      vec2 pos = mix(aStartPos, aEndPos, prog) + vec2(noiseX, noiseY);
+      gl_Position = vec4(pos * uScale, 0.0, 1.0);
+
+      // Particle size varies, pulses during explosion
+      float sizePulse = 1.0 + explode * 1.5;
+      gl_PointSize = (1.5 + aRandom * 2.0) * sizePulse;
+
+      // Fade at edges of transition
+      vAlpha = smoothstep(0.0, 0.08, prog) * smoothstep(1.0, 0.92, prog);
+      vAlpha *= 0.6 + aRandom * 0.4;
+      vAlpha *= (1.0 + explode * 0.5);
+      vRandom = aRandom;
+    }
+  `;
+
+  const fragSrc = `
+    precision mediump float;
+    varying float vAlpha;
+    varying float vRandom;
+    uniform float uProgress;
+
+    void main() {
+      float d = length(gl_PointCoord - 0.5) * 2.0;
+      if (d > 1.0) discard;
+      float alpha = (1.0 - d * d) * vAlpha;
+      // Color: transition from white/bright to blue
+      vec3 white = vec3(0.95, 0.95, 1.0);
+      vec3 blue = vec3(0.0, 0.322, 1.0);
+      vec3 brightBlue = vec3(0.231, 0.51, 1.0);
+      vec3 color = mix(white, mix(blue, brightBlue, vRandom), uProgress);
+      gl_FragColor = vec4(color, alpha);
+    }
+  `;
+
+  function compileShader(type, src) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
+      console.error('Shader error:', gl.getShaderInfoLog(s));
+      return null;
+    }
+    return s;
+  }
+
+  const vs = compileShader(gl.VERTEX_SHADER, vertSrc);
+  const fs = compileShader(gl.FRAGMENT_SHADER, fragSrc);
+  if (!vs || !fs) return null;
+
+  const program = gl.createProgram();
+  gl.attachShader(program, vs);
+  gl.attachShader(program, fs);
+  gl.linkProgram(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    console.error('Link error:', gl.getProgramInfoLog(program));
+    return null;
+  }
+  gl.useProgram(program);
+
+  const aStartPos = gl.getAttribLocation(program, 'aStartPos');
+  const aEndPos = gl.getAttribLocation(program, 'aEndPos');
+  const aRandom = gl.getAttribLocation(program, 'aRandom');
+  const aDelay = gl.getAttribLocation(program, 'aDelay');
+  const uProgress = gl.getUniformLocation(program, 'uProgress');
+  const uTime = gl.getUniformLocation(program, 'uTime');
+  const uScale = gl.getUniformLocation(program, 'uScale');
+
+  // ── Generate particle positions ──
+  // Source shape: circle (AKITA coin)
+  // Target shape: rounded square (■AKITA vault share)
+  const startPositions = new Float32Array(PARTICLE_COUNT * 2);
+  const endPositions = new Float32Array(PARTICLE_COUNT * 2);
+  const randoms = new Float32Array(PARTICLE_COUNT);
+  const delays = new Float32Array(PARTICLE_COUNT);
+
+  const RADIUS = 0.55;
+  const SQUARE_SIZE = 0.5;
+  const SQUARE_R = 0.08; // corner radius
+
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    // Circle: random point within disk
+    const angle = Math.random() * Math.PI * 2;
+    const r = Math.sqrt(Math.random()) * RADIUS;
+    startPositions[i * 2]     = Math.cos(angle) * r;
+    startPositions[i * 2 + 1] = Math.sin(angle) * r;
+
+    // Rounded square: sample random points inside
+    let sx, sy;
+    do {
+      sx = (Math.random() - 0.5) * 2 * SQUARE_SIZE;
+      sy = (Math.random() - 0.5) * 2 * SQUARE_SIZE;
+      // Check if inside rounded rect
+      const dx = Math.max(0, Math.abs(sx) - (SQUARE_SIZE - SQUARE_R));
+      const dy = Math.max(0, Math.abs(sy) - (SQUARE_SIZE - SQUARE_R));
+    } while (Math.sqrt(
+      Math.pow(Math.max(0, Math.abs(sx) - (SQUARE_SIZE - SQUARE_R)), 2) +
+      Math.pow(Math.max(0, Math.abs(sy) - (SQUARE_SIZE - SQUARE_R)), 2)
+    ) > SQUARE_R);
+
+    endPositions[i * 2]     = sx;
+    endPositions[i * 2 + 1] = sy;
+
+    randoms[i] = Math.random();
+    // Delay based on distance from center — center particles move first
+    const dist = Math.sqrt(startPositions[i*2]**2 + startPositions[i*2+1]**2);
+    delays[i] = dist / RADIUS * 0.5 + Math.random() * 0.2;
+  }
+
+  // ── Upload buffers ──
+  function createBuffer(data, attrib, size) {
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, data, gl.STATIC_DRAW);
+    gl.enableVertexAttribArray(attrib);
+    gl.vertexAttribPointer(attrib, size, gl.FLOAT, false, 0, 0);
+    return buf;
+  }
+
+  createBuffer(startPositions, aStartPos, 2);
+  createBuffer(endPositions, aEndPos, 2);
+  createBuffer(randoms, aRandom, 1);
+  createBuffer(delays, aDelay, 1);
+
+  let currentProgress = 0;
+  const startTime = performance.now();
+
+  function render() {
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(program);
+    gl.uniform1f(uProgress, currentProgress);
+    gl.uniform1f(uTime, (performance.now() - startTime) / 1000);
+    gl.uniform1f(uScale, 1.0);
+    gl.drawArrays(gl.POINTS, 0, PARTICLE_COUNT);
+  }
+
+  // Animation loop
+  function tick() {
+    requestAnimationFrame(tick);
+    render();
+  }
+  tick();
+
+  return {
+    setProgress(p) { currentProgress = Math.max(0, Math.min(1, p)); },
+    getProgress() { return currentProgress; }
+  };
+})();
+
+// ────────────────────────────────────────────
+// 3. SET SCENE HEIGHTS
 // ────────────────────────────────────────────
 document.querySelectorAll('.scroll-scene').forEach(scene => {
   const vh = parseInt(scene.dataset.height || '300', 10);
@@ -171,7 +368,7 @@ document.querySelectorAll('.scroll-scene').forEach(scene => {
 });
 
 // ────────────────────────────────────────────
-// 3. SCROLL PROGRESS BAR
+// 4. SCROLL PROGRESS BAR
 // ────────────────────────────────────────────
 const progressBar = document.getElementById('scroll-progress');
 window.addEventListener('scroll', () => {
@@ -181,7 +378,7 @@ window.addEventListener('scroll', () => {
 }, { passive: true });
 
 // ────────────────────────────────────────────
-// 4. NAV VISIBILITY
+// 5. NAV VISIBILITY
 // ────────────────────────────────────────────
 const nav = document.getElementById('main-nav');
 ScrollTrigger.create({
@@ -222,63 +419,126 @@ function multiMap(progress, stops, values) {
 }
 
 // ────────────────────────────────────────────
-// 5. CHAPTER 1: HERO (280vh)
+// 6. CHAPTER 1: HERO — CINEMATIC ENTRANCE (320vh)
 // ────────────────────────────────────────────
 (function chapterHero() {
   const section = document.getElementById('ch-hero');
-  const heroLine = document.getElementById('hero-line');
+  const streak = document.getElementById('hero-streak');
   const heroContent = document.getElementById('hero-content');
+  const heroLabel = document.getElementById('hero-label');
+  const headlineGlow = document.getElementById('hero-headline-glow');
   const heroFloats = document.getElementById('hero-floats');
+  const scrollCue = document.getElementById('hero-scroll-cue');
+  const heroChain = document.getElementById('hero-chain');
+  const heroCta = document.getElementById('hero-cta');
+  const chars = document.querySelectorAll('.hero-char');
+  const supportLines = document.querySelectorAll('.hero-support-line');
 
-  // Entrance animation
-  gsap.to(heroLine, {
-    opacity: 1,
-    duration: 1.4,
-    ease: 'power3.out',
-    delay: 0.2,
-  });
-  gsap.fromTo(heroLine, { scaleY: 0 }, {
-    scaleY: 1,
-    duration: 1.6,
-    ease: 'power3.out',
-    delay: 0.2,
-  });
-  gsap.to(heroContent, {
-    opacity: 1,
-    y: 0,
-    duration: 1.2,
-    ease: 'power3.out',
-    delay: 0.6,
-  });
-  if (heroFloats) {
-    gsap.to(heroFloats, {
+  // ── Cinematic entrance timeline ──
+  const entrance = gsap.timeline({ defaults: { ease: 'power3.out' } });
+
+  // 1. Blue streak grows from bottom
+  entrance.fromTo(streak, { scaleY: 0, opacity: 0 }, {
+    scaleY: 1, opacity: 1, duration: 1.4
+  }, 0);
+
+  // 2. Section label fades in
+  entrance.to(heroLabel, {
+    opacity: 1, y: 0, duration: 0.8
+  }, 0.4);
+
+  // 3. Character-by-character headline reveal with 3D rotation
+  chars.forEach((char, i) => {
+    const wordIndex = parseInt(char.closest('.hero-word').dataset.word);
+    const wordDelay = wordIndex * 0.22;
+    entrance.to(char, {
       opacity: 1,
-      duration: 2,
-      ease: 'power2.out',
-      delay: 1.2,
-    });
+      y: 0,
+      rotateX: 0,
+      duration: 0.6,
+      ease: 'power4.out',
+    }, 0.6 + wordDelay + i * 0.028);
+  });
+
+  // 4. Headline glow pulses in
+  entrance.to(headlineGlow, {
+    opacity: 1, duration: 1.8, ease: 'power2.out'
+  }, 1.0);
+
+  // 5. Support lines stagger in
+  supportLines.forEach((line, i) => {
+    entrance.to(line, {
+      opacity: 1, y: 0, duration: 0.7
+    }, 1.6 + i * 0.15);
+  });
+
+  // 6. Chain logo + CTA
+  entrance.to(heroChain, { opacity: 1, y: 0, duration: 0.7 }, 2.1);
+  entrance.to(heroCta, { opacity: 1, y: 0, duration: 0.7 }, 2.3);
+
+  // 7. Floating tokens fade in
+  if (heroFloats) {
+    entrance.to(heroFloats, { opacity: 1, duration: 2, ease: 'power2.out' }, 1.5);
   }
 
-  // Scroll-driven exit
+  // 8. Scroll cue appears last
+  if (scrollCue) {
+    entrance.to(scrollCue, { opacity: 1, duration: 1.2 }, 3.0);
+  }
+
+  // ── Parallax on mouse (floating tokens) ──
+  const layerBack = document.getElementById('hero-layer-back');
+  const layerMid = document.getElementById('hero-layer-mid');
+  const layerFront = document.getElementById('hero-layer-front');
+
+  document.addEventListener('mousemove', (e) => {
+    const x = (e.clientX / window.innerWidth - 0.5);
+    const y = (e.clientY / window.innerHeight - 0.5);
+    if (layerBack)  layerBack.style.transform  = `translate(${x * 8}px, ${y * 6}px)`;
+    if (layerMid)   layerMid.style.transform   = `translate(${x * 16}px, ${y * 12}px)`;
+    if (layerFront) layerFront.style.transform  = `translate(${x * 28}px, ${y * 20}px)`;
+  });
+
+  // ── Glow pulse animation ──
+  gsap.to(headlineGlow, {
+    scale: 1.15,
+    opacity: 0.6,
+    duration: 3,
+    ease: 'sine.inOut',
+    yoyo: true,
+    repeat: -1,
+    delay: 2,
+  });
+
+  // ── Scroll-driven exit ──
   ScrollTrigger.create({
     trigger: section,
     start: 'top top',
     end: 'bottom top',
     onUpdate: (self) => {
       const p = self.progress;
-      const textOp = multiMap(p, [0.45, 0.60], [1, 0]);
-      heroContent.style.opacity = textOp;
-      if (heroFloats) heroFloats.style.opacity = textOp * 0.15;
-      const lineScaleY = multiMap(p, [0.55, 0.78], [1, 0]);
-      const lineOp = multiMap(p, [0.74, 0.80], [1, 0]);
-      heroLine.style.transform = `scaleY(${lineScaleY})`;
-      heroLine.style.opacity = lineOp;
+
+      // Fade out content
+      const contentOp = multiMap(p, [0.40, 0.55], [1, 0]);
+      heroContent.style.opacity = contentOp;
+
+      // Floating tokens fade
+      if (heroFloats) heroFloats.style.opacity = contentOp * 0.7;
+
+      // Scroll cue disappears early
+      if (scrollCue) scrollCue.style.opacity = multiMap(p, [0.05, 0.12], [1, 0]);
+
+      // Streak shrinks and fades
+      const streakScaleY = multiMap(p, [0.50, 0.72], [1, 0]);
+      const streakOp = multiMap(p, [0.65, 0.75], [1, 0]);
+      streak.style.transform = `scaleY(${streakScaleY})`;
+      streak.style.opacity = streakOp;
     }
   });
 })();
 
 // ────────────────────────────────────────────
-// 6. CHAPTER 2: TOKEN JOURNEY (1800vh)
+// 7. CHAPTER 2: TOKEN JOURNEY (1800vh)
 // ────────────────────────────────────────────
 (function chapterTokenJourney() {
   const section = document.getElementById('ch-token');
@@ -300,6 +560,9 @@ function multiMap(progress, stops, values) {
   const share = document.getElementById('token-share');
   const shareLabel = document.getElementById('share-label');
   const shareDetail = document.getElementById('share-detail');
+
+  const morphZone = document.getElementById('morph-zone');
+  const morphLabel = document.getElementById('morph-label');
 
   const depositInfo = document.getElementById('deposit-info');
   const splitInfo = document.getElementById('split-info');
@@ -338,21 +601,39 @@ function multiMap(progress, stops, values) {
       tokenLineCoreEl.style.width = `${lineW}px`;
 
       // ── Creator coin (AKITA) — real image ──
-      const coinX = multiMap(p, [0.02, 0.165, 0.51, 0.60], [-340, 220, 220, 20]);
-      const coinOp = multiMap(p, [0.018, 0.03, 0.14, 0.19, 0.26, 0.30], [0, 1, 1, 0.4, 0.4, 1]);
+      // Phases: enter → morph zone (fade out coin) → detail → allocation
+      const coinX = multiMap(p, [0.02, 0.06, 0.08, 0.12, 0.165, 0.51, 0.60], [-340, 0, 0, 0, 220, 220, 20]);
+      const coinOp = multiMap(p, [0.018, 0.03, 0.06, 0.08, 0.12, 0.14, 0.19, 0.26, 0.30], [0, 1, 1, 0, 0, 1, 0.4, 0.4, 1]);
       const coinScale = multiMap(p, [0.11, 0.165, 0.26, 0.30], [1, 0.82, 0.82, 1]);
       coin.style.transform = `translateX(${coinX}px) scale(${coinScale})`;
       coin.style.opacity = coinOp;
 
+      // ── MORPH ZONE — WebGL particle transition ──
+      // p 0.06–0.12: morph zone is active (coin fades, particles morph, share emerges)
+      const morphActive = (p >= 0.055 && p <= 0.135);
+      const morphOp = multiMap(p, [0.055, 0.065, 0.125, 0.135], [0, 1, 1, 0]);
+
+      if (morphZone) {
+        morphZone.style.opacity = morphOp;
+        if (morphActive && MorphSystem) {
+          const morphProgress = mapRange(p, 0.06, 0.12, 0, 1);
+          MorphSystem.setProgress(Math.max(0, Math.min(1, morphProgress)));
+        }
+      }
+      if (morphLabel) {
+        morphLabel.style.opacity = multiMap(p, [0.07, 0.085, 0.11, 0.125], [0, 1, 1, 0]);
+      }
+
       // ── Vault share (■AKITA) — real image ──
-      const shareOp = multiMap(p, [0.032, 0.044, 0.51, 0.60, 0.64, 0.67], [0, 1, 1, 0.35, 0.35, 0]);
-      const shareX = multiMap(p, [0.032, 0.165, 0.51, 0.60], [0, -220, -220, -50]);
-      const shareScale = multiMap(p, [0.032, 0.059, 0.51, 0.60], [0.6, 1, 1, 0.42]);
+      // Appears after morph completes, then stays for detail + allocation phases
+      const shareOp = multiMap(p, [0.10, 0.13, 0.51, 0.60, 0.64, 0.67], [0, 1, 1, 0.35, 0.35, 0]);
+      const shareX = multiMap(p, [0.10, 0.165, 0.51, 0.60], [0, -220, -220, -50]);
+      const shareScale = multiMap(p, [0.10, 0.14, 0.51, 0.60], [0.6, 1, 1, 0.42]);
       share.style.transform = `translateX(${shareX}px) scale(${shareScale})`;
       share.style.opacity = shareOp;
 
       // ── Copy and labels ──
-      topCopy.style.opacity = multiMap(p, [0.02, 0.047, 0.082, 0.106], [0, 1, 1, 0]);
+      topCopy.style.opacity = multiMap(p, [0.02, 0.047, 0.055, 0.065], [0, 1, 1, 0]);
       crossCopy.style.opacity = multiMap(p, [0.14, 0.176, 0.224, 0.259], [0, 1, 1, 0]);
 
       const leftLabelOp = multiMap(p, [0.13, 0.159, 0.235, 0.271], [0, 1, 1, 0]);
@@ -417,7 +698,7 @@ function multiMap(progress, stops, values) {
 })();
 
 // ────────────────────────────────────────────
-// 7. CHAPTER 3: ACCRUE (650vh)
+// 8. CHAPTER 3: ACCRUE (650vh)
 // ────────────────────────────────────────────
 (function chapterAccrue() {
   const section = document.getElementById('ch-accrue');
@@ -500,7 +781,7 @@ function multiMap(progress, stops, values) {
 })();
 
 // ────────────────────────────────────────────
-// 8. CHAPTER 4: CREATOR VAULTS (500vh)
+// 9. CHAPTER 4: CREATOR VAULTS (500vh)
 // ────────────────────────────────────────────
 (function chapterVaults() {
   const section = document.getElementById('ch-vaults');
@@ -541,7 +822,7 @@ function multiMap(progress, stops, values) {
 })();
 
 // ────────────────────────────────────────────
-// 9. CHAPTER 5: CLOSE (280vh)
+// 10. CHAPTER 5: CLOSE (280vh)
 // ────────────────────────────────────────────
 (function chapterClose() {
   const section = document.getElementById('ch-close');

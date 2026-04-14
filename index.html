@@ -21,7 +21,7 @@
 </head>
 <body>
 
-  <!-- Three.js Canvas (persistent particle field) -->
+  <!-- Three.js Canvas (persistent particle field + morph system) -->
   <canvas id="three-canvas"></canvas>
 
   <!-- Ambient glow orbs (CSS-driven atmosphere) -->
@@ -49,35 +49,70 @@
        ═══════════════════════════════════════════════ -->
   <div class="scroll-container">
 
-    <!-- ╔═══ CHAPTER 1: HERO (280vh) ═══╗ -->
-    <section class="scroll-scene" id="ch-hero" data-height="280">
+    <!-- ╔═══ CHAPTER 1: HERO (320vh) ═══╗ -->
+    <section class="scroll-scene" id="ch-hero" data-height="320">
       <div class="scene-pin">
-        <!-- Blue vertical line -->
-        <div class="hero-line" id="hero-line">
-          <div class="hero-line-core"></div>
-          <div class="hero-line-glow"></div>
+        <!-- Cinematic blue streak -->
+        <div class="hero-streak" id="hero-streak">
+          <div class="hero-streak-core"></div>
+          <div class="hero-streak-bloom"></div>
         </div>
-        <!-- Text block -->
+
+        <!-- Hero headline container with stagger reveal -->
         <div class="hero-content" id="hero-content">
-          <div class="section-label">ERC-4626 Creator Vaults on Base</div>
-          <h1 class="hero-headline">DEPOSIT.<br>EARN<br>TOGETHER.</h1>
-          <div class="hero-support">
-            <p>Deposit a creator coin into a vault.</p>
-            <p>Receive vault shares. Fees shared pro rata.</p>
-            <p>Redeemable anytime.</p>
+          <div class="section-label hero-section-label" id="hero-label">ERC-4626 Creator Vaults on Base</div>
+
+          <h1 class="hero-headline" id="hero-headline">
+            <span class="hero-word" data-word="0">
+              <span class="hero-char">D</span><span class="hero-char">E</span><span class="hero-char">P</span><span class="hero-char">O</span><span class="hero-char">S</span><span class="hero-char">I</span><span class="hero-char">T</span><span class="hero-char hero-char-dot">.</span>
+            </span>
+            <br>
+            <span class="hero-word" data-word="1">
+              <span class="hero-char">E</span><span class="hero-char">A</span><span class="hero-char">R</span><span class="hero-char">N</span>
+            </span>
+            <br>
+            <span class="hero-word" data-word="2">
+              <span class="hero-char">T</span><span class="hero-char">O</span><span class="hero-char">G</span><span class="hero-char">E</span><span class="hero-char">T</span><span class="hero-char">H</span><span class="hero-char">E</span><span class="hero-char">R</span><span class="hero-char hero-char-dot">.</span>
+            </span>
+          </h1>
+
+          <!-- Animated glow pulse behind headline -->
+          <div class="hero-headline-glow" id="hero-headline-glow"></div>
+
+          <div class="hero-support" id="hero-support">
+            <p class="hero-support-line" data-line="0">Deposit a creator coin into a vault.</p>
+            <p class="hero-support-line" data-line="1">Receive vault shares. Fees shared pro rata.</p>
+            <p class="hero-support-line" data-line="2">Redeemable anytime.</p>
           </div>
-          <div class="hero-chain">
+          <div class="hero-chain" id="hero-chain">
             <img src="./assets/brand/Base_lockup_2color.svg" alt="Base" class="chain-logo">
           </div>
-          <div class="hero-cta">
+          <div class="hero-cta" id="hero-cta">
             <a href="#closing" class="cta-button">Launch App</a>
           </div>
         </div>
-        <!-- Hero floating tokens (decorative) -->
+
+        <!-- Hero floating tokens (parallax depth layers) -->
         <div class="hero-float-tokens" id="hero-floats">
-          <img src="./assets/tokens/source/akita.webp" alt="" class="hero-float hero-float-1">
-          <img src="./assets/tokens/source/jesse.webp" alt="" class="hero-float hero-float-2">
-          <img src="./assets/tokens/share/akita-512.png" alt="" class="hero-float hero-float-3">
+          <div class="hero-float-layer hero-float-layer-back" id="hero-layer-back">
+            <img src="./assets/tokens/strategy/ajna.png" alt="" class="hero-float hero-float-back-1">
+            <img src="./assets/tokens/strategy/charm.png" alt="" class="hero-float hero-float-back-2">
+            <img src="./assets/tokens/strategy/solana.png" alt="" class="hero-float hero-float-back-3">
+          </div>
+          <div class="hero-float-layer hero-float-layer-mid" id="hero-layer-mid">
+            <img src="./assets/tokens/source/jesse.webp" alt="" class="hero-float hero-float-mid-1">
+            <img src="./assets/tokens/source/gabrielhaines.webp" alt="" class="hero-float hero-float-mid-2">
+          </div>
+          <div class="hero-float-layer hero-float-layer-front" id="hero-layer-front">
+            <img src="./assets/tokens/source/akita.webp" alt="" class="hero-float hero-float-front-1">
+            <img src="./assets/tokens/share/akita-512.png" alt="" class="hero-float hero-float-front-2">
+          </div>
+        </div>
+
+        <!-- Scroll cue -->
+        <div class="hero-scroll-cue" id="hero-scroll-cue">
+          <div class="scroll-cue-line"></div>
+          <span class="scroll-cue-text">Scroll to explore</span>
         </div>
       </div>
     </section>
@@ -130,6 +165,15 @@
             <div class="idle-badge" id="idle-badge">
               <p class="idle-label">10% idle in vault</p>
               <p class="idle-amount">5,000,000</p>
+            </div>
+          </div>
+
+          <!-- MORPH ZONE: WebGL particle morph overlay (positioned between coin & share) -->
+          <div class="morph-zone" id="morph-zone">
+            <canvas id="morph-canvas"></canvas>
+            <div class="morph-label" id="morph-label">
+              <span class="morph-label-text">Minting vault shares</span>
+              <div class="morph-label-dots"><span>.</span><span>.</span><span>.</span></div>
             </div>
           </div>
 
