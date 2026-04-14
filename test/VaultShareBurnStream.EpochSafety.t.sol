@@ -34,6 +34,9 @@ contract VaultShareBurnStreamEpochSafetyTest is Test {
     function setUp() public {
         vault = new MockVaultSharesForBurnStream();
         stream = new VaultShareBurnStream(address(vault));
+        // BS-01: authorize test contract as queuer (only vault can do this)
+        vm.prank(address(vault));
+        stream.setAuthorizedQueuer(address(this), true);
     }
 
     function test_syncUnaccounted_doesNotRevert_andQueuesAllUnaccounted() external {

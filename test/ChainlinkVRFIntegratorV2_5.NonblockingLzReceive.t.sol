@@ -76,7 +76,7 @@ contract ChainlinkVRFIntegratorV2_5NonblockingLzReceiveTest is Test {
         integrator = new ChainlinkVRFIntegratorHarness(LZ_ENDPOINT, address(this), HUB_EID);
         integrator.setPeer(HUB_EID, HUB_PEER);
         integrator.setMockNativeFee(0.02 ether);
-        integrator.setRequestTimeout(10);
+        integrator.setRequestTimeout(60);
 
         provider = new MockRandomWordsCallback();
         // Requests (including payable) are permissioned to prevent hub VRF griefing.
@@ -97,42 +97,44 @@ contract ChainlinkVRFIntegratorV2_5NonblockingLzReceiveTest is Test {
         vm.prank(address(provider));
         (, uint64 seq) = integrator.requestRandomWordsPayable{value: 0.02 ether}();
 
-        vm.warp(block.timestamp + 11);
+        vm.warp(block.timestamp + 61);
 
         integrator.exposedLzReceive(_originFromHub(), _newFormatPayload(seq, 123), hex"");
 
-        (bool fulfilled, bool exists, address storedProvider, uint256 storedWord,, bool expired) = integrator
+        // VRF-02: late responses are discarded to prevent selective delivery attacks.
+        // The request is marked fulfilled but with exists=false and no stored word/callback.
+        (bool fulfilled, bool exists,,uint256 storedWord,, bool expired) = integrator
             .checkRequestStatus(seq);
-        assertTrue(exists);
-        assertTrue(fulfilled);
-        assertEq(storedProvider, address(provider));
-        assertEq(storedWord, 123);
+        assertFalse(exists, "late response should clear exists");
+        assertTrue(fulfilled, "late response should mark fulfilled");
+        assertEq(storedWord, 0, "late response should not store word");
         assertTrue(expired);
 
-        assertEq(provider.calls(), 1);
-        assertEq(provider.lastRequestId(), seq);
-        assertEq(provider.lastRandomWord(), 123);
+        // VRF-02: callback is NOT invoked for late responses
+        assertEq(provider.calls(), 0, "late response should not invoke callback");
     }
 
     function test_cleanupExpiredRequests_cannotBurnInFlightResponse() external {
         vm.prank(address(provider));
         (, uint64 seq) = integrator.requestRandomWordsPayable{value: 0.02 ether}();
 
-        vm.warp(block.timestamp + 11);
+        vm.warp(block.timestamp + 61);
 
         uint64[] memory ids = new uint64[](1);
         ids[0] = seq;
         vm.prank(address(0xBAD));
         integrator.cleanupExpiredRequests(ids);
 
+        // VRF-01: cleanupExpiredRequests marks the request as fulfilled + non-existent,
+        // so a subsequent lzReceive sees REQUEST_NOT_FOUND and ignores it.
         integrator.exposedLzReceive(_originFromHub(), _newFormatPayload(seq, 999), hex"");
 
-        (bool fulfilled, bool exists, address storedProvider, uint256 storedWord,,) = integrator.checkRequestStatus(seq);
-        assertTrue(exists);
-        assertTrue(fulfilled);
-        assertEq(storedProvider, address(provider));
-        assertEq(storedWord, 999);
-        assertEq(provider.calls(), 1);
+        (bool fulfilled, bool exists,,uint256 storedWord,,) = integrator.checkRequestStatus(seq);
+        assertFalse(exists, "cleanup should clear exists");
+        assertTrue(fulfilled, "cleanup should mark fulfilled");
+        assertEq(storedWord, 0, "cleaned-up request should not store word");
+        // Callback is not invoked because the request was already cleaned up
+        assertEq(provider.calls(), 0, "callback should not be invoked after cleanup");
     }
 
     function test_duplicateResponse_isIgnoredWithoutRevert() external {

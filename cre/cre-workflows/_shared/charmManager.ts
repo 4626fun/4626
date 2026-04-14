@@ -97,9 +97,17 @@ export function parseCharmManualPayload(payload: Uint8Array | undefined): CharmM
   try {
     return JSON.parse(raw) as CharmManualPayload
   } catch {
+    // FIX: MED-02 — Log a warning when base64 fallback parsing is used (potential injection vector)
     try {
-      return JSON.parse(Buffer.from(raw, "base64").toString("utf-8")) as CharmManualPayload
-    } catch {
+      console.warn('[CRE][charm] Manual payload was not valid JSON; attempting base64 decode fallback')
+      const decoded = JSON.parse(Buffer.from(raw, "base64").toString("utf-8")) as CharmManualPayload
+      // FIX: MED-02 — Validate vaultAddress/strategyAddress against format in forceEnqueue payloads
+      if (decoded.forceEnqueue && decoded.vaultAddress && !normalizeVaultAddress(decoded.vaultAddress)) {
+        throw new Error("invalid_vault_address_in_base64_payload")
+      }
+      return decoded
+    } catch (innerErr) {
+      if (innerErr instanceof Error && innerErr.message.includes('invalid_vault_address')) throw innerErr
       throw new Error("invalid_manual_payload")
     }
   }
@@ -326,7 +334,9 @@ export function evaluateAndEnqueueCharmActions(
   manual: CharmManualPayload = {},
 ): CharmWorkflowResult {
   const apiKey = runtime.getSecret({ id: "KEEPR_API_KEY" }).result().value
-  const canForceEnqueue = manual.forceEnqueue === true && manual.authToken === apiKey
+  // FIX: CRT-03 — Use separate FORCE_ENQUEUE_AUTH_TOKEN secret for manual override auth
+  const forceEnqueueToken = runtime.getSecret({ id: "FORCE_ENQUEUE_AUTH_TOKEN" }).result().value || apiKey
+  const canForceEnqueue = manual.forceEnqueue === true && manual.authToken === forceEnqueueToken
   const chainId = resolveChainId(runtime.config.chainName, runtime.config.chainId)
   const evmClient = createEvmClientForChain(runtime.config.chainName)
   const httpClient = new HTTPClient()
@@ -373,7 +383,17 @@ export function evaluateAndEnqueueCharmActions(
           )
           continue
         }
-        const forcedCharmVaultAddress = normalizeVaultAddress(manual.charmVaultAddress) ?? zeroAddress
+        // FIX: MED-05 — Reject invalid charmVaultAddress instead of silently falling back to zeroAddress
+        const forcedCharmVaultAddress = manual.charmVaultAddress !== undefined
+          ? normalizeVaultAddress(manual.charmVaultAddress)
+          : null
+        if (manual.charmVaultAddress !== undefined && forcedCharmVaultAddress === null) {
+          skippedActions += 1
+          runtime.log(
+            `Skipping forced Charm enqueue for ${vault.vaultAddress}: invalid charmVaultAddress in manual payload`,
+          )
+          continue
+        }
         const forcedReferenceTick = normalizeOptionalInteger(manual.referenceTick) ?? 0
 
         const strategies = readCharmStrategiesForVault(runtime, evmClient, vault.vaultAddress)
@@ -389,7 +409,7 @@ export function evaluateAndEnqueueCharmActions(
         }
 
         if (
-          forcedCharmVaultAddress !== zeroAddress &&
+          forcedCharmVaultAddress !== null &&
           forcedStrategy.charmVaultAddress.toLowerCase() !== forcedCharmVaultAddress
         ) {
           skippedActions += 1

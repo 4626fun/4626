@@ -37,6 +37,8 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
     // State variables
     uint64 public requestCounter;
     uint32 public defaultGasLimit = 690420;
+    // FIX: VRF-04 — deployment nonce prevents sequence collision on redeploy
+    uint64 public immutable deploymentNonce;
 
     /// @notice Hub chain EID for VRF requests (Base by default)
     uint32 public hubEid;
@@ -85,6 +87,8 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
 
     // Configuration
     uint256 public requestTimeout = 1 hours;
+    // FIX: VRF-05 — upper-bound for piggybacked price (1e18 * 1e8 = $100B at 1e18 scale)
+    int256 public maxAcceptablePrice = 100_000_000_000 * 1e18;
 
     /**
      * @notice Constructor
@@ -97,6 +101,9 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
         require(_owner != address(0), "Invalid owner");
         require(_hubEid != 0, "Invalid hub EID");
         hubEid = _hubEid;
+        // FIX: VRF-04 — use truncated block number as deployment nonce to avoid sequence reuse
+        deploymentNonce = uint64(block.number & 0xFFFF);
+        requestCounter = uint64(deploymentNonce) << 48; // shift nonce into upper bits
         authorizedSponsoredCallers[_owner] = true;
         emit SponsoredCallerAuthorizationUpdated(_owner, true);
     }
@@ -120,7 +127,9 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
             (sequence, randomWord, aggregatedPrice, priceTimestamp) =
                 abi.decode(_payload, (uint64, uint256, int256, uint256));
 
-            if (aggregatedPrice > 0) {
+            // FIX: VRF-05 — validate aggregated price has upper bound and timestamp is not future
+            if (aggregatedPrice > 0 && aggregatedPrice <= maxAcceptablePrice
+                && priceTimestamp <= block.timestamp) {
                 lastAggregatedPrice = aggregatedPrice;
                 lastPriceTimestamp = priceTimestamp;
                 emit AggregatedPriceReceived(aggregatedPrice, priceTimestamp);
@@ -151,10 +160,13 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
             return;
         }
 
-        // Treat lateness as informational only: accept late randomness so inbound ordered delivery
-        // never bricks and downstream protocols can still finalize.
-        if (block.timestamp > request.timestamp + requestTimeout) {
+        // FIX: VRF-02 — discard late VRF responses to prevent selective delivery attacks
+        if (requestTimeout > 0 && block.timestamp > request.timestamp + requestTimeout) {
             emit RandomWordsReceivedLate(sequence, provider, request.timestamp, block.timestamp);
+            request.fulfilled = true;
+            request.exists = false;
+            delete randomWordsProviders[sequence];
+            return;
         }
 
         request.fulfilled = true;
@@ -232,13 +244,14 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
 
     /**
      * @notice Request random words with caller-provided fee
+     * FIX: VRF-03 — targetEid parameter ignored (always routes to hubEid); kept for interface compat
      */
-    function requestRandomWordsPayable(uint32 targetEid)
+    function requestRandomWordsPayable(uint32 /* targetEid */)
         external
         payable
         returns (MessagingReceipt memory receipt, uint64 requestId)
     {
-        return _requestRandomWords(targetEid, true);
+        return _requestRandomWords(hubEid, true);
     }
 
     /**
@@ -307,13 +320,21 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
         hubEid = _hubEid;
     }
 
+    // FIX: VRF-06 — enforce minimum timeout to prevent disabling expiry mechanism
     function setRequestTimeout(uint256 _timeout) external onlyOwner {
+        require(_timeout >= 1 minutes, "Timeout too short");
         requestTimeout = _timeout;
     }
 
     function setPriceOracle(address _oracle) external onlyOwner {
         priceOracle = _oracle;
         emit PriceOracleSet(_oracle);
+    }
+
+    // FIX: VRF-05 — allow owner to configure max acceptable price
+    function setMaxAcceptablePrice(int256 _maxPrice) external onlyOwner {
+        require(_maxPrice > 0, "Price must be positive");
+        maxAcceptablePrice = _maxPrice;
     }
 
     function setSponsoredCallerAuthorization(address caller, bool authorized) external onlyOwner {
@@ -332,6 +353,9 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
 
             if (request.exists && !request.fulfilled && block.timestamp > request.timestamp + requestTimeout) {
                 address provider = request.provider;
+                // FIX: VRF-01 — mark request as fulfilled and non-existent to prevent late re-fulfillment
+                request.fulfilled = true;
+                request.exists = false;
                 delete randomWordsProviders[requestId];
                 emit RequestExpired(requestId, provider);
             }

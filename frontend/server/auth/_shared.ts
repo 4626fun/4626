@@ -286,10 +286,11 @@ export function enforceCookieSessionTrustedOrigin(req: VercelRequest, res: Verce
   const cookieToken = cookies[COOKIE_SESSION]
   const hasValidCookieSession = Boolean(readSessionToken(cookieToken))
 
-  // Only enforce trusted-origin checks for ambient cookie-authenticated writes.
-  // Explicit header-based auth is an intentional request and should not be
-  // downgraded into cookie-only CSRF handling.
-  if (!hasValidCookieSession || hasValidBearerSession || hasExplicitPrivyAuth || hasExplicitSiwaReceipt) return false
+  // FIX: FINDING-03 — enforce trusted-origin check for ALL authenticated state-changing
+  // requests, not just cookie-authenticated ones. The previous bypass for bearer/privy/siwa
+  // auth allowed cross-origin requests with a stolen token to skip CSRF protection entirely.
+  // Privy and SIWA tokens are first-party credentials that should still require trusted origin.
+  if (!hasValidCookieSession && !hasValidBearerSession && !hasExplicitPrivyAuth && !hasExplicitSiwaReceipt) return false
 
   const originHeader = typeof req.headers?.origin === 'string' ? req.headers.origin : ''
   const refererHeader = typeof req.headers?.referer === 'string' ? req.headers.referer : ''
@@ -364,7 +365,9 @@ export function setCookie(
   value: string,
   opts: { maxAgeSeconds?: number; httpOnly?: boolean } = {},
 ) {
-  const parts: string[] = [`${name}=${encodeURIComponent(value)}`, 'Path=/', 'SameSite=Lax']
+  // FIX: FINDING-16 — use SameSite=Strict for session cookies on production;
+  // Lax allows cross-site top-level navigations to carry the cookie.
+  const parts: string[] = [`${name}=${encodeURIComponent(value)}`, 'Path=/', 'SameSite=Strict']
   if (opts.httpOnly ?? true) parts.push('HttpOnly')
   if (typeof opts.maxAgeSeconds === 'number') parts.push(`Max-Age=${Math.max(0, Math.floor(opts.maxAgeSeconds))}`)
   if (isProbablyHttps(req)) parts.push('Secure')
@@ -443,13 +446,17 @@ function hmacSha256(secret: string, payload: string): Buffer {
   return createHmac('sha256', secret).update(payload).digest()
 }
 
+// FIX: FINDING-01 — fail hard when AUTH_SESSION_SECRET is absent or too short;
+// the previous globalThis fallback produced ephemeral per-isolate keys on serverless,
+// silently breaking sessions across cold starts and regions.
 function getSessionSecret(): string {
   const env = process.env.AUTH_SESSION_SECRET
-  if (typeof env === 'string' && env.trim().length >= 16) return env.trim()
+  if (typeof env === 'string' && env.trim().length >= 32) return env.trim()
 
-  const g: any = globalThis as any
-  if (!g.__4626_auth_secret) g.__4626_auth_secret = randomBytes(32).toString('hex')
-  return String(g.__4626_auth_secret)
+  throw new Error(
+    'AUTH_SESSION_SECRET is missing or shorter than 32 characters. ' +
+    'Set a stable, high-entropy secret in the environment before accepting requests.',
+  )
 }
 
 export function makeSessionToken(params: { address: string; now?: number }): string {
@@ -498,8 +505,11 @@ export function readSessionToken(token: string | null | undefined): { address: s
   return { address: address.toLowerCase() }
 }
 
+// FIX: FINDING-12 — bind nonce token to the requesting IP at creation time
+// and validate the IP at verify time, raising the bar for nonce token theft-and-replay.
 type NonceTokenPayload = {
   n: string
+  ip?: string
   iat: number
   exp: number
 }
@@ -508,10 +518,11 @@ type NonceTokenPayload = {
  * A signed nonce token used when cookies are blocked (embedded contexts).
  * This mirrors the cookie nonce but is passed back explicitly by the client.
  */
-export function makeNonceToken(params: { nonce: string; now?: number }): string {
+export function makeNonceToken(params: { nonce: string; ip?: string; now?: number }): string {
   const now = typeof params.now === 'number' ? params.now : Date.now()
   const payload: NonceTokenPayload = {
     n: params.nonce,
+    ip: params.ip,
     iat: now,
     exp: now + NONCE_TTL_SECONDS * 1000,
   }
@@ -520,7 +531,7 @@ export function makeNonceToken(params: { nonce: string; now?: number }): string 
   return `${payloadB64}.${sigB64}`
 }
 
-export function readNonceToken(token: string | null | undefined): { nonce: string } | null {
+export function readNonceToken(token: string | null | undefined, opts?: { ip?: string }): { nonce: string } | null {
   if (!token) return null
   const parts = token.split('.')
   if (parts.length !== 2) return null
@@ -550,6 +561,11 @@ export function readNonceToken(token: string | null | undefined): { nonce: strin
   const exp = typeof parsed?.exp === 'number' ? parsed.exp : 0
   if (!nonce) return null
   if (!exp || exp < Date.now()) return null
+
+  // FIX: FINDING-12 — validate the IP bound at creation time.
+  const boundIp = typeof parsed?.ip === 'string' ? parsed.ip : ''
+  if (boundIp && opts?.ip && boundIp !== opts.ip) return null
+
   return { nonce }
 }
 

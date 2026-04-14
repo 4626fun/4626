@@ -150,6 +150,9 @@ export async function insertDeploySession(params: {
 
   const payloadJson = params.payload ?? {}
 
+  // FIX: FINDING-14 — do not store plaintext deploy_token in DB; use token_hash for
+  // lookup and require the plaintext only from the caller via HTTP headers.
+  // A redacted placeholder satisfies the NOT NULL column constraint for backward compat.
   await db.sql`
     INSERT INTO deploys (
       id,
@@ -168,7 +171,7 @@ export async function insertDeploySession(params: {
       ${String(params.sessionAddress).toLowerCase()},
       ${String(params.smartWallet).toLowerCase()},
       ${String(params.sessionSigner).toLowerCase()},
-      ${params.deployToken},
+      ${'[redacted]'},
       ${null},
       ${payloadJson},
       ${'created'},

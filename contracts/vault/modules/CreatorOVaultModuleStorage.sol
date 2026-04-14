@@ -3,6 +3,9 @@ pragma solidity ^0.8.20;
 
 /// @notice Storage layout shared by CreatorOVault delegatecall modules.
 /// @dev MUST match CreatorOVault's storage layout exactly (including OZ bases).
+/// FIX: I-02 — Layout integrity is verified at deploy time via `setModulesOnce()` which checks
+/// `moduleStorageVersion()`. Upgrades MUST bump MODULE_STORAGE_VERSION if layout changes.
+/// Consider adopting ERC-7201 namespaced storage for structural collision immunity.
 abstract contract CreatorOVaultModuleStorage {
     // ---------------------------------------------------------------------
     // OpenZeppelin ERC20 storage (v5.4.0)

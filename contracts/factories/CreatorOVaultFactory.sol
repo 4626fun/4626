@@ -155,6 +155,10 @@ contract CreatorOVaultFactory is Ownable {
     ) external onlyAuthorizedDeployer {
         if (_creatorCoin == address(0)) revert ZeroAddress();
         if (deployments[_creatorCoin].exists) revert AlreadyDeployed();
+        // FIX: F-17 — verify core contracts have deployed code; prevent registering EOAs or empty addresses
+        require(_vault.code.length > 0, "vault has no code");
+        require(_wrapper.code.length > 0, "wrapper has no code");
+        require(_shareOFT.code.length > 0, "shareOFT has no code");
 
         DeploymentInfo memory info = DeploymentInfo({
             creatorCoin: _creatorCoin,

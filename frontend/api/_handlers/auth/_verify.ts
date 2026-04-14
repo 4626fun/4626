@@ -30,13 +30,15 @@ import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { upsertProfileByWallet } from '../../../server/_lib/profileSync.js'
 type VerifyBody = { message?: string; signature?: string; nonceToken?: string; cswAddress?: string }
 
+// FIX: FINDING-02/07 — removed sessionToken from response body;
+// session is conveyed via HttpOnly cookie only, preventing XSS exfiltration.
+// FIX: FINDING-13 — omit cswOwnership when verification fails.
 type VerifyResponse = {
   address: string
-  sessionToken: string
   cswOwnership?: {
     cswAddress: string
     ownerAddress: string
-    verified: boolean
+    verified: true
   } | null
 }
 
@@ -98,7 +100,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const cookieMatches = cookieNonce && cookieNonce === parsed.nonce
   if (!cookieMatches) {
     // Fallback for embedded contexts where cookies may be blocked: validate the signed nonce token.
-    const nonceToken = nonceTokenRaw ? readNonceToken(nonceTokenRaw) : null
+    // FIX: FINDING-12 — pass requesting IP to validate nonce token IP binding.
+    const nonceToken = nonceTokenRaw ? readNonceToken(nonceTokenRaw, { ip: getClientIp(req) }) : null
     if (!nonceToken || nonceToken.nonce !== parsed.nonce) {
       return res.status(400).json({ success: false, error: 'Nonce mismatch' } satisfies ApiEnvelope<never>)
     }
@@ -144,16 +147,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(401).json({ success: false, error: 'Signature invalid' } satisfies ApiEnvelope<never>)
   }
 
+  // FIX: FINDING-13 — only include cswOwnership when on-chain verification succeeds;
+  // returning verified:false exposes a confusing API contract that invites client bugs.
   let cswOwnership: VerifyResponse['cswOwnership'] = null
   if (cswAddressRaw) {
     const ownerVerified = await verifyCswOwnerOnBase({
       smartWallet: cswAddressRaw,
       ownerAddress: verified.address,
     })
-    cswOwnership = {
-      cswAddress: cswAddressRaw,
-      ownerAddress: verified.address,
-      verified: ownerVerified,
+    if (ownerVerified) {
+      cswOwnership = {
+        cswAddress: cswAddressRaw,
+        ownerAddress: verified.address,
+        verified: true,
+      }
     }
   }
 
@@ -174,8 +181,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // best-effort: auth should succeed even if DB is unavailable
   }
 
+  // FIX: FINDING-02/07 — do not return sessionToken in response body;
+  // the session cookie is set above via setCookie.
   return res.status(200).json({
     success: true,
-    data: { address: verified.address, sessionToken: token, cswOwnership } satisfies VerifyResponse,
+    data: { address: verified.address, cswOwnership } satisfies VerifyResponse,
   } satisfies ApiEnvelope<VerifyResponse>)
 }

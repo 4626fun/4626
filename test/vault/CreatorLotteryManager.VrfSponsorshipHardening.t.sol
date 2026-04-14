@@ -184,18 +184,20 @@ contract CreatorLotteryManagerVrfSponsorshipHardeningTest is Test {
         lotteryManager.processSwapLottery{value: 1}(buyer, shareOFT, SWAP_AMOUNT, 0);
     }
 
-    function test_processSwapLottery_revertsWhenCallerFeeNotExact() public {
+    function test_processSwapLottery_revertsWhenCallerFeeUnderpays_butAcceptsOverpayment() public {
         _configureCrossChain(address(integrator));
         uint256 nativeFee = integrator.nativeFee();
 
         bytes4 mismatchSelector = bytes4(keccak256("CallerFeeMismatch(uint256,uint256)"));
 
         vm.startPrank(authorizedSwap);
+        // CLM-06: underpayment still reverts
         vm.expectRevert(abi.encodeWithSelector(mismatchSelector, nativeFee - 1, nativeFee));
         lotteryManager.processSwapLottery{value: nativeFee - 1}(buyer, shareOFT, SWAP_AMOUNT, 0);
 
-        vm.expectRevert(abi.encodeWithSelector(mismatchSelector, nativeFee + 1, nativeFee));
-        lotteryManager.processSwapLottery{value: nativeFee + 1}(buyer, shareOFT, SWAP_AMOUNT, 0);
+        // CLM-06: overpayment is now accepted (excess refunded)
+        uint256 entryId = lotteryManager.processSwapLottery{value: nativeFee + 1}(buyer, shareOFT, SWAP_AMOUNT, 0);
+        assertGt(entryId, 0, "overpayment should succeed");
         vm.stopPrank();
     }
 

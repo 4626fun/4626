@@ -62,6 +62,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     error LargeWithdrawalMustBeQueued(uint256 amount, uint256 threshold);
     error WithdrawalNotUnlocked(uint256 currentBlock, uint256 unlockBlock);
     error NoQueuedWithdrawal();
+    error QueuedWithdrawalReceiverMismatch(address existing, address provided);
     error StrategyValuationNotReady(address strategy);
     error TransferAmountMismatch(uint256 expected, uint256 actual);
     error ModulesNotSet();
@@ -160,8 +161,8 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     // =================================
 
     function totalAssets() public view onlyDelegateCall returns (uint256) {
-        IERC20 coin = _creatorCoin();
-        uint256 total = coin.balanceOf(address(this));
+        // FIX: L-06 — use tracked coinBalance instead of live balanceOf to prevent donation attacks
+        uint256 total = coinBalance;
 
         uint256 len = strategyList.length;
         for (uint256 i; i < len; i++) {
@@ -290,6 +291,8 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     }
 
     function redeem(uint256 shares, address receiver, address owner_) external onlyDelegateCall returns (uint256 assets) {
+        // FIX: L-01 — enforce pause on redeem to align with maxWithdraw/maxRedeem returning 0
+        if (paused) revert Paused();
         if (shares == 0) revert ZeroShares();
         if (receiver == address(0)) revert ZeroAddress();
         _processProfitUnlock();
@@ -318,6 +321,8 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     }
 
     function withdraw(uint256 assets, address receiver, address owner_) external onlyDelegateCall returns (uint256 shares) {
+        // FIX: L-01 — enforce pause on withdraw to align with maxWithdraw/maxRedeem returning 0
+        if (paused) revert Paused();
         if (assets == 0) revert ZeroAmount();
         if (receiver == address(0)) revert ZeroAddress();
         _processProfitUnlock();
@@ -366,8 +371,15 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         uint256 unlockBlock = block.number + largeWithdrawalDelayBlocks;
 
         QueuedWithdrawal storage queued = queuedWithdrawals[msg.sender];
+        // FIX: H-03 — only set unlock time on first queue, not subsequent calls
+        if (queued.shares == 0) {
+            queued.unlockBlock = unlockBlock;
+        }
+        // FIX: L-07 — prevent silent receiver overwrite on subsequent queue calls
+        if (queued.shares > 0 && queued.receiver != receiver) {
+            revert QueuedWithdrawalReceiverMismatch(queued.receiver, receiver);
+        }
         queued.shares += shares;
-        queued.unlockBlock = unlockBlock;
         queued.receiver = receiver;
 
         emit WithdrawalQueued(msg.sender, shares, unlockBlock);
@@ -426,7 +438,9 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
 
         uint256 remainingShares = maxTotalSupply - currentSupply;
         uint256 supply = _totalSupply;
-        if (supply == 0) return remainingShares;
+        // FIX: M-05 — return asset-denominated value when supply is zero (ERC-4626 compliance)
+        // Vault uses _decimalsOffset() = 3, so shares = assets * 10^3
+        if (supply == 0) return remainingShares / 1000;
 
         return (remainingShares * totalAssets()) / supply;
     }
@@ -555,7 +569,8 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
     function pricePerShare() public view onlyDelegateCall returns (uint256) {
         uint256 supply = _totalSupply;
         if (supply == 0) return 1e18;
-        return (totalAssets() * 1e18) / supply;
+        // FIX: L-03 — align with ERC-4626 virtual shares offset (_decimalsOffset() = 3)
+        return ((totalAssets() + 1) * 1e18) / (supply + 1000);
     }
 
     // =================================
@@ -569,9 +584,9 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         uint256 currentTotalAssets = totalAssets();
         uint256 previousTotalAssets = totalAssetsAtLastReport;
 
-        // Bootstrap only on the very first report; a zero baseline after withdrawals
-        // should still process subsequent profit/loss instead of silently resetting.
-        if (previousTotalAssets == 0 && trustedPpsCheckpoint == 0) {
+        // FIX: I-03 — bootstrap only on the very first report, not after a full vault drain
+        // If supply > 0, shares exist from prior activity so this is not a true bootstrap
+        if (previousTotalAssets == 0 && trustedPpsCheckpoint == 0 && _totalSupply == 0) {
             lastReport = uint96(block.timestamp);
             totalAssetsAtLastReport = currentTotalAssets;
             trustedPpsCheckpoint = pricePerShare();
@@ -615,7 +630,13 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
 
             if (loss > 0 && totalLockedShares > 0) {
                 uint256 supply = _totalSupply;
-                uint256 lossShares = supply > 0 ? (loss * supply) / currentTotalAssets : 0;
+                // FIX: H-01 — prevent division by zero when total assets reach zero
+                uint256 lossShares;
+                if (currentTotalAssets == 0) {
+                    lossShares = totalLockedShares; // 100% loss: burn all locked shares
+                } else if (supply > 0) {
+                    lossShares = (loss * supply) / currentTotalAssets;
+                }
                 uint256 sharesToBurn = lossShares > totalLockedShares ? totalLockedShares : lossShares;
                 uint256 availableProfit = _availableProfitShares();
                 if (sharesToBurn > availableProfit) sharesToBurn = availableProfit;
@@ -638,6 +659,8 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         trustedPpsCheckpoint = pricePerShare();
     }
 
+    // FIX: I-04 — do not rebuild baseline from live totalAssets() when baseline is zero;
+    // simply add the inflow delta to prevent flash-loan-assisted baseline manipulation
     function _increaseReportBaselineForPrincipalInflow(uint256 assetsIn) internal {
         totalAssetsAtLastReport += assetsIn;
     }

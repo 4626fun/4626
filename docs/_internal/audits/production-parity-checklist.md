@@ -15,4 +15,4 @@ Use before a major release, investor diligence, or after large contract/API chan
 | 9 | **Git submodules** (`lib/*`) SHAs match the release build | `git submodule status` |
 |10 | **Submodule integrity** | Same as internal audit §2 |
 
-Cross-check economic/governance assumptions against [system.md](./system.md) and open items there.
+Cross-check economic/governance assumptions against [system.md](../../audits/system.md) and open items there.

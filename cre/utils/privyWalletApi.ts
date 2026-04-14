@@ -113,10 +113,11 @@ async function privyFetchJson<T>(params: {
   }
 }
 
+// FIX: HGH-06 — Type rpcParams properly instead of `any`
 export async function walletRpc<T>(params: {
   walletId: string
   method: string
-  rpcParams: any
+  rpcParams: Record<string, unknown>
   idempotencyKey?: string
 }): Promise<T> {
   const body = { method: params.method, params: params.rpcParams }
@@ -128,18 +129,27 @@ export async function walletRpc<T>(params: {
   })
 }
 
+// FIX: HGH-06 — Type Privy response structure explicitly
+interface PrivySignResponse {
+  data?: { signature?: string }
+}
+
 export async function secp256k1SignHash(params: {
   walletId: string
   hash: `0x${string}`
   idempotencyKey?: string
 }): Promise<`0x${string}`> {
-  const res = await walletRpc<any>({
+  const res = await walletRpc<PrivySignResponse>({
     walletId: params.walletId,
     method: 'secp256k1_sign',
     rpcParams: { hash: params.hash },
     idempotencyKey: params.idempotencyKey,
   })
-  const sig = String(res?.data?.signature ?? '').trim()
+  // FIX: HGH-06 — Distinguish "unexpected response shape" from "API error"
+  if (!res?.data) {
+    throw new Error('privy_secp256k1_sign_unexpected_response: missing data field in response')
+  }
+  const sig = String(res.data.signature ?? '').trim()
   if (!/^0x[0-9a-fA-F]+$/.test(sig)) throw new Error('privy_secp256k1_sign_invalid_signature')
   return sig as `0x${string}`
 }

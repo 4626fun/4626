@@ -57,6 +57,11 @@ export async function loadAuthorizedDeploySession(params: {
   if (sessionAddress.toLowerCase() !== rec.sessionAddress.toLowerCase()) {
     throw new DeploySessionAccessError(403, 'Forbidden')
   }
+  // FIX: FINDING-09 — the ownership check above relies on the 7-day session cookie HMAC.
+  // For higher assurance, deploy-critical continue/status operations should require
+  // a fresh proof of wallet ownership (re-validated Privy JWT or signed message)
+  // rather than solely trusting the long-lived session. The 45-min deploy TTL mitigates
+  // the window, but a stolen session cookie can still control active deploys.
 
   return { auth, sessionAddress, rec }
 }

@@ -129,7 +129,7 @@ contract DeployTier1Upgrade is Script {
 
         console.log("[2/2] Deploying VaultActivationBatcher (three-way split)...");
 
-        newBatcher = new VaultActivationBatcher(PERMIT2);
+        newBatcher = new VaultActivationBatcher(PERMIT2, REGISTRY);
 
         console.log("       Address:", address(newBatcher));
         console.log("");

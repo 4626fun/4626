@@ -127,8 +127,15 @@ contract BribesTest is Test {
     }
 
     function testClaimBribe_ProRataAfterEpochEnd() public {
+        uint256 genesis = voting.genesisEpochStart();
+
+        // Lock before genesis so locks are at least 1 epoch old when voting
+        vm.warp(genesis - WEEK);
+        _lock(alice, 100 ether, FOUR_YEARS);
+        _lock(bob, 100 ether, FOUR_YEARS);
+
         // Epoch 0: bribe current epoch
-        vm.warp(voting.genesisEpochStart() + 1);
+        vm.warp(genesis + 1);
         assertEq(voting.currentEpoch(), 0);
 
         uint256 amount = 1_000 ether;
@@ -138,9 +145,6 @@ contract BribesTest is Test {
         vm.stopPrank();
 
         // Epoch 0: both vote for vault1
-        _lock(alice, 100 ether, FOUR_YEARS);
-        _lock(bob, 100 ether, FOUR_YEARS);
-
         _voteSingle(alice, vault1);
         _voteSingle(bob, vault1);
 
@@ -163,8 +167,11 @@ contract BribesTest is Test {
         uint256 genesis = voting.genesisEpochStart();
 
         // Create an expiring lock that will end before epoch 0 finishes.
-        // lock at (genesis - 1 day) for 7 days => expires at (genesis + 6 days) < epoch end.
-        vm.warp(genesis - 1 days);
+        // lock at (genesis - WEEK) for WEEK => expires at genesis < epoch end (genesis + WEEK).
+        // G-09 satisfied: lock is exactly 1 epoch old at genesis + 1.
+        // G-03: votingPowerAt(epochEnd) = 0 because lock expires before epoch end,
+        // so NoVotingPower fires before LockExpiresBeforeEpochEnd.
+        vm.warp(genesis - WEEK);
         _lock(alice, 100 ether, WEEK);
         _lock(bob, 100 ether, FOUR_YEARS);
 
@@ -178,13 +185,13 @@ contract BribesTest is Test {
         depot.bribe(address(bribeToken), amount);
         vm.stopPrank();
 
-        // Alice cannot vote (lock would expire before epoch end)
+        // Alice cannot vote (lock expires before epoch end => votingPowerAt(epochEnd) = 0)
         vm.startPrank(alice);
         address[] memory vaults = new address[](1);
         uint256[] memory weights = new uint256[](1);
         vaults[0] = vault1;
         weights[0] = 100;
-        vm.expectRevert(VaultGaugeVoting.LockExpiresBeforeEpochEnd.selector);
+        vm.expectRevert(VaultGaugeVoting.NoVotingPower.selector);
         voting.vote(vaults, weights);
         vm.stopPrank();
 
@@ -207,8 +214,15 @@ contract BribesTest is Test {
     }
 
     function testClaimBribe_DuplicateVaultInputsStillPayCorrectProRata() public {
+        uint256 genesis = voting.genesisEpochStart();
+
+        // Lock before genesis so locks are at least 1 epoch old when voting
+        vm.warp(genesis - WEEK);
+        _lock(alice, 100 ether, FOUR_YEARS);
+        _lock(bob, 100 ether, FOUR_YEARS);
+
         // Epoch 0: bribe current epoch
-        vm.warp(voting.genesisEpochStart() + 1);
+        vm.warp(genesis + 1);
         assertEq(voting.currentEpoch(), 0);
 
         uint256 amount = 1_000 ether;
@@ -216,10 +230,6 @@ contract BribesTest is Test {
         bribeToken.approve(address(depot), amount);
         depot.bribe(address(bribeToken), amount);
         vm.stopPrank();
-
-        // Epoch 0: equal voting power
-        _lock(alice, 100 ether, FOUR_YEARS);
-        _lock(bob, 100 ether, FOUR_YEARS);
 
         // Alice votes with duplicate vault entries (should aggregate to 100% vault1)
         vm.startPrank(alice);
@@ -251,7 +261,13 @@ contract BribesTest is Test {
     }
 
     function testClaimBribe_RevertsIfEpochNotEnded() public {
-        vm.warp(voting.genesisEpochStart() + 1);
+        uint256 genesis = voting.genesisEpochStart();
+
+        // Lock before genesis so lock is at least 1 epoch old when voting
+        vm.warp(genesis - WEEK);
+        _lock(alice, 100 ether, FOUR_YEARS);
+
+        vm.warp(genesis + 1);
         assertEq(voting.currentEpoch(), 0);
 
         uint256 amount = 250 ether;
@@ -260,7 +276,6 @@ contract BribesTest is Test {
         depot.bribe(address(bribeToken), amount);
         vm.stopPrank();
 
-        _lock(alice, 100 ether, FOUR_YEARS);
         _voteSingle(alice, vault1);
 
         vm.prank(alice);
@@ -309,9 +324,15 @@ contract BribesTest is Test {
 
     function testClaim_FeeOnTransfer_DoesNotRevertAndNeverOverpaysRecordedTotal() public {
         FeeOnTransferERC20 fot = new FeeOnTransferERC20("FeeOnTransfer", "FOT");
+        uint256 genesis = voting.genesisEpochStart();
+
+        // Lock before genesis so locks are at least 1 epoch old when voting
+        vm.warp(genesis - WEEK);
+        _lock(alice, 100 ether, FOUR_YEARS);
+        _lock(bob, 100 ether, FOUR_YEARS);
 
         // Epoch 0: bribe
-        vm.warp(voting.genesisEpochStart() + 1);
+        vm.warp(genesis + 1);
         assertEq(voting.currentEpoch(), 0);
 
         uint256 amountIn = 100 ether;
@@ -327,8 +348,6 @@ contract BribesTest is Test {
         assertEq(fot.balanceOf(address(depot)), credited);
 
         // Epoch 0: both vote for vault1
-        _lock(alice, 100 ether, FOUR_YEARS);
-        _lock(bob, 100 ether, FOUR_YEARS);
         _voteSingle(alice, vault1);
         _voteSingle(bob, vault1);
 
@@ -348,8 +367,14 @@ contract BribesTest is Test {
     }
 
     function testRolloverZeroVoteEpoch_MovesPoolToCurrentEpoch() public {
+        uint256 genesis = voting.genesisEpochStart();
+
+        // Lock before genesis so lock is at least 1 epoch old when voting
+        vm.warp(genesis - WEEK);
+        _lock(alice, 100 ether, FOUR_YEARS);
+
         // Epoch 0: bribe, but no votes
-        vm.warp(voting.genesisEpochStart() + 1);
+        vm.warp(genesis + 1);
         assertEq(voting.currentEpoch(), 0);
 
         uint256 amount = 1_000 ether;
@@ -361,30 +386,36 @@ contract BribesTest is Test {
         assertEq(depot.totalBribes(0, address(bribeToken)), amount);
         assertEq(voting.getVaultWeightAtEpoch(0, vault1), 0);
 
-        // Move to epoch 1 and roll epoch 0 forward into epoch 1.
-        vm.warp(voting.genesisEpochStart() + WEEK + 1);
-        assertEq(voting.currentEpoch(), 1);
+        // Move to epoch 2 so rollover satisfies epoch + 1 < currentEpoch.
+        vm.warp(genesis + 2 * WEEK + 1);
+        assertEq(voting.currentEpoch(), 2);
 
         uint256 rolled = depot.rolloverZeroVoteEpoch(0, address(bribeToken));
         assertEq(rolled, amount);
         assertEq(depot.totalBribes(0, address(bribeToken)), 0);
-        assertEq(depot.totalBribes(1, address(bribeToken)), amount);
+        assertEq(depot.totalBribes(2, address(bribeToken)), amount);
 
-        // Vote in epoch 1 and claim after epoch 1 ends.
-        _lock(alice, 100 ether, FOUR_YEARS);
+        // Vote in epoch 2 and claim after epoch 2 ends.
         _voteSingle(alice, vault1);
 
-        vm.warp(voting.genesisEpochStart() + 2 * WEEK + 1);
-        assertEq(voting.currentEpoch(), 2);
+        vm.warp(genesis + 3 * WEEK + 1);
+        assertEq(voting.currentEpoch(), 3);
 
         vm.prank(alice);
-        uint256 claimed = depot.claim(1, address(bribeToken));
+        uint256 claimed = depot.claim(2, address(bribeToken));
         assertEq(claimed, amount);
     }
 
     function testRolloverExpiredEpoch_AfterGrace_MovesRemainder() public {
+        uint256 genesis = voting.genesisEpochStart();
+
+        // Lock before genesis so locks are at least 1 epoch old when voting
+        vm.warp(genesis - WEEK);
+        _lock(alice, 100 ether, FOUR_YEARS);
+        _lock(bob, 100 ether, FOUR_YEARS);
+
         // Epoch 0: bribe a tiny amount so integer division floors all claims to 0.
-        vm.warp(voting.genesisEpochStart() + 1);
+        vm.warp(genesis + 1);
         assertEq(voting.currentEpoch(), 0);
 
         uint256 amount = 1; // 1 wei
@@ -393,8 +424,6 @@ contract BribesTest is Test {
         depot.bribe(address(bribeToken), amount);
         vm.stopPrank();
 
-        _lock(alice, 100 ether, FOUR_YEARS);
-        _lock(bob, 100 ether, FOUR_YEARS);
         _voteSingle(alice, vault1);
         _voteSingle(bob, vault1);
 
@@ -427,8 +456,15 @@ contract BribesTest is Test {
     }
 
     function testClaim_RevertsAfterEpochTokenClosed() public {
+        uint256 genesis = voting.genesisEpochStart();
+
+        // Lock before genesis so locks are at least 1 epoch old when voting
+        vm.warp(genesis - WEEK);
+        _lock(alice, 100 ether, FOUR_YEARS);
+        _lock(bob, 100 ether, FOUR_YEARS);
+
         // Epoch 0: bribe + votes
-        vm.warp(voting.genesisEpochStart() + 1);
+        vm.warp(genesis + 1);
         assertEq(voting.currentEpoch(), 0);
 
         uint256 amount = 1_000 ether;
@@ -437,8 +473,6 @@ contract BribesTest is Test {
         depot.bribe(address(bribeToken), amount);
         vm.stopPrank();
 
-        _lock(alice, 100 ether, FOUR_YEARS);
-        _lock(bob, 100 ether, FOUR_YEARS);
         _voteSingle(alice, vault1);
         _voteSingle(bob, vault1);
 

@@ -55,6 +55,9 @@ contract BribesFactory {
 
         if (!IVaultGaugeVotingForBribesFactory(gaugeVoting).canReceiveVotes(vault)) revert VaultNotWhitelisted(vault);
 
+        // FIX: F-18 — salt is deterministic from vault address. This is intentional: addresses
+        // are predictable for off-chain pre-computation. Front-running is not feasible because
+        // Solidity's new{salt:} uses this factory's address as the CREATE2 deployer.
         bytes32 salt = bytes32(uint256(uint160(vault)));
         depot = address(new BribeDepot{salt: salt}(vault, gaugeVoting));
 

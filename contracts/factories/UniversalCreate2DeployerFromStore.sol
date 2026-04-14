@@ -11,18 +11,33 @@ import {UniversalBytecodeStore} from "../helpers/infra/UniversalBytecodeStore.so
  */
 contract UniversalCreate2DeployerFromStore {
     UniversalBytecodeStore public immutable store;
+    // FIX: F-13 — restrict deploy to authorized callers to prevent salt squatting
+    address public immutable owner;
+    mapping(address => bool) public authorizedDeployers;
 
     event Deployed(address indexed addr, bytes32 indexed salt, bytes32 indexed codeId, bytes32 initCodeHash);
+    event DeployerAuthorized(address indexed deployer, bool allowed);
 
     error CodeNotFound(bytes32 codeId);
     error DeployFailed();
+    error NotAuthorizedDeployer();
 
     constructor(address _store) {
         require(_store != address(0), "Zero store");
         store = UniversalBytecodeStore(_store);
+        owner = msg.sender;
+    }
+
+    // FIX: F-13 — deployer allowlist management
+    function setAuthorizedDeployer(address deployer, bool allowed) external {
+        require(msg.sender == owner, "Not owner");
+        authorizedDeployers[deployer] = allowed;
+        emit DeployerAuthorized(deployer, allowed);
     }
 
     function deploy(bytes32 salt, bytes32 codeId, bytes calldata constructorArgs) external returns (address addr) {
+        // FIX: F-13 — only owner or authorized deployers can deploy
+        if (msg.sender != owner && !authorizedDeployers[msg.sender]) revert NotAuthorizedDeployer();
         address pointer = store.pointers(codeId);
         if (pointer == address(0)) revert CodeNotFound(codeId);
 

@@ -209,6 +209,9 @@ contract CreatorOVaultWrapperTest is Test {
         assertEq(wrapper.userDustShares(alice), 1);
         assertEq(shareOFT.balanceOf(composer), 1);
 
+        // Advance past per-user wrapper cooldown (M-01 fix)
+        vm.roll(block.number + 1);
+
         vm.prank(composer);
         uint256 creatorOut = wrapper.withdrawFor(1, 0, alice);
         assertEq(creatorOut, 1_001);

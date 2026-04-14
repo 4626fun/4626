@@ -15,6 +15,8 @@ interface ICreatorOVaultWrapperComposer {
     function shareOFT() external view returns (address);
     function depositFor(uint256 amount, uint256 minOut, address beneficiary) external returns (uint256 shareOFTOut);
     function withdrawFor(uint256 amount, uint256 minOut, address beneficiary) external returns (uint256 creatorCoinOut);
+    // FIX: C-1 — expose operator check so configureCreatorMesh can verify
+    function isBeneficiaryOperator(address operator) external view returns (bool);
 }
 
 /**
@@ -97,10 +99,18 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
     error CreatorMeshShareTokenMismatch(address expected, address actual);
     error CreatorMeshSrcEidMismatch(uint32 expected, uint32 actual);
     error CreatorMeshPeerMismatch(bytes32 expected, bytes32 actual);
+    // FIX: C-1 — require composer is registered as beneficiary operator on wrapper
+    error ComposerNotBeneficiaryOperator(address composer, address wrapper);
+    // FIX: C-2 — require mesh configuration before allowing compose
+    error CreatorMeshNotConfigured(address creatorToken);
+    // FIX: L-7 — prevent receiver == address(this) locking shares in composer
+    error ReceiverIsComposer();
     error InsufficientComposerBalance(address token, uint256 available, uint256 requiredAmount);
     error InputSpendInvariantFailed(address token, uint256 beforeBalance, uint256 afterBalance, uint256 expectedSpend);
     error OutputMintInvariantFailed(address token, uint256 beforeBalance, uint256 afterBalance, uint256 expectedMint);
     error ResidualBalanceInvariantFailed(address token, uint256 beforeBalance, uint256 afterBalance);
+    // FIX: OZ-Critical — ETH rescue error
+    error ETHTransferFailed();
 
     constructor(address _registry, address _owner) Ownable(_owner) {
         if (_registry == address(0) || _owner == address(0)) revert ZeroAddress();
@@ -108,6 +118,15 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
         address resolvedEndpoint = ICreatorRegistry(_registry).getLayerZeroEndpoint(block.chainid);
         if (resolvedEndpoint == address(0)) revert ZeroAddress();
         endpoint = resolvedEndpoint;
+    }
+
+    /// @notice Rescue ETH trapped in the composer from payable lzCompose calls.
+    /// @dev lzCompose is payable per ILayerZeroComposer interface; ETH sent with compose
+    ///      messages accumulates here with no other withdrawal path.
+    function rescueETH(address payable to, uint256 amount) external onlyOwner {
+        if (to == address(0)) revert ZeroAddress();
+        (bool ok,) = to.call{value: amount}("");
+        if (!ok) revert ETHTransferFailed();
     }
 
     function setAllowedComposeSender(address sender, bool allowed) external onlyOwner {
@@ -129,6 +148,12 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
             creatorToken == address(0) || vault == address(0) || assetMeshToken == address(0) || shareMeshToken == address(0)
         ) {
             revert ZeroAddress();
+        }
+        // FIX: C-1 — verify composer is registered as beneficiary operator on the wrapper
+        // before allowing mesh configuration; prevents permanent compose DoS
+        address wrapper = registry.getWrapperForToken(creatorToken);
+        if (wrapper != address(0) && !ICreatorOVaultWrapperComposer(wrapper).isBeneficiaryOperator(address(this))) {
+            revert ComposerNotBeneficiaryOperator(address(this), wrapper);
         }
         creatorMeshes[creatorToken] = CreatorMesh({
             vault: vault,
@@ -198,6 +223,10 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
         if (creatorToken == address(0) || wrapper == address(0) || receiver == address(0) || sourceOft == address(0)) {
             revert ZeroAddress();
         }
+        // FIX: L-7 — prevent shares/assets from being locked in the composer
+        if (receiver == address(this)) revert ReceiverIsComposer();
+        // FIX: M-2 — reject zero minOut to prevent sandwich attacks on cross-chain deposits/redeems
+        if (minOut == 0) revert ZeroAmount();
         if (sourceOft != _from) revert SourceOftMismatch(sourceOft, _from);
 
         address shareOft = _validateCreatorBindings(creatorToken, wrapper);
@@ -328,11 +357,14 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
         bytes32 composeFrom
     ) internal view {
         CreatorMesh memory mesh = creatorMeshes[creatorToken];
-        // Backwards compatibility: if no explicit mesh config exists, keep legacy flow.
-        if (mesh.vault == address(0)) return;
+        // FIX: C-2 — require explicit mesh config; legacy bypass allowed unconfigured tokens
+        // to skip ALL security invariants (source EID, vault, peer validation)
+        if (mesh.vault == address(0)) revert CreatorMeshNotConfigured(creatorToken);
 
         if (mesh.paused) revert CreatorMeshPausedError(creatorToken);
-        if (mesh.solanaEid != 0 && srcEid != mesh.solanaEid) revert CreatorMeshSrcEidMismatch(mesh.solanaEid, srcEid);
+        // FIX: I-5 — always enforce source EID check; a misconfigured solanaEid=0 previously
+        // allowed messages from any source chain to be accepted
+        if (srcEid != mesh.solanaEid) revert CreatorMeshSrcEidMismatch(mesh.solanaEid, srcEid);
 
         address expectedVault = registry.getVaultForToken(creatorToken);
         if (expectedVault != mesh.vault) revert CreatorMeshVaultMismatch(mesh.vault, expectedVault);

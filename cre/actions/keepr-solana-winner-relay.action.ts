@@ -19,12 +19,16 @@
  *   - winner_record: PDA [b"winner_record", mint]
  */
 
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
+// FIX: MED-01 — Replace require('crypto') with ES module import
+import * as crypto from 'node:crypto';
 
 import { requireEnv, CHAINS } from '../config.js';
 import { getPublicClient } from '../utils/onchain.js';
 import { alertInfo, alertWarning, alertCritical } from '../utils/alerts.js';
 import { loadKeeperKeypair, sendConfirmedSolanaTransaction } from '../utils/solana.js';
+// FIX: HGH-03 — Import isAddress for log.args field validation
+import { isAddress } from 'viem';
 import {
   compareWinnerRelayCheckpoint,
   getWinnerRelayCheckpoint,
@@ -67,12 +71,20 @@ function normalizeLookupMap(value: unknown): Record<string, string> {
   );
 }
 
+// FIX: LOW-05 — Maximum file size for lookup map reads (1 MB)
+const MAX_LOOKUP_MAP_FILE_SIZE = 1_048_576;
+
 async function loadJsonLookupMap(params: {
   inlineEnvKey: string;
   fileEnvKey: string;
 }): Promise<Record<string, string>> {
   const filePath = String(process.env[params.fileEnvKey] ?? '').trim();
   if (filePath) {
+    // FIX: LOW-05 — Check file size before reading to prevent memory exhaustion
+    const fileStat = await stat(filePath);
+    if (fileStat.size > MAX_LOOKUP_MAP_FILE_SIZE) {
+      throw new Error(`Lookup map file ${filePath} exceeds max size (${fileStat.size} > ${MAX_LOOKUP_MAP_FILE_SIZE})`);
+    }
     const text = await readFile(filePath, 'utf8');
     return normalizeLookupMap(JSON.parse(text));
   }
@@ -180,7 +192,22 @@ export async function executeSolanaWinnerRelay(): Promise<WinnerRelayResult> {
       }
 
       result.eventsProcessed++;
-      const { winner, creatorCoin, sharesPaid } = log.args as any;
+      // FIX: HGH-03 — Validate log.args fields instead of using `as any` cast
+      const args = log.args as Record<string, unknown> | undefined;
+      const winner = String(args?.winner ?? '');
+      const creatorCoin = String(args?.creatorCoin ?? '');
+      const sharesPaid = args?.sharesPaid;
+      if (!isAddress(winner) || !isAddress(creatorCoin)) {
+        await alertWarning(WORKFLOW_NAME, 'Invalid event args — winner or creatorCoin not valid addresses', {
+          winner,
+          creatorCoin,
+        });
+        setWinnerRelayCheckpoint(state, blockNumber, logIndex);
+        await saveSolanaWinnerRelayState(stateFile, state);
+        checkpointBlock = blockNumber;
+        checkpointLogIndex = logIndex;
+        continue;
+      }
 
       // Resolve Solana mint from Base creatorCoin address
       const solanaMint = creatorCoinToMint[creatorCoin.toLowerCase()];
@@ -220,8 +247,7 @@ export async function executeSolanaWinnerRelay(): Promise<WinnerRelayResult> {
       );
 
       // Build record_winner instruction
-      // Discriminator: sha256("global:record_winner")[0..8]
-      const crypto = require('crypto');
+      // FIX: MED-01 — Use imported crypto module instead of require('crypto') inside loop
       const discriminator = crypto
         .createHash('sha256')
         .update('global:record_winner')

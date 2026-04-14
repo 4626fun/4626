@@ -41,6 +41,12 @@ interface IOperatorAuthorizableVault {
     function isAuthorizedOperator(address exec, uint256 perm) external view returns (bool);
 }
 
+// FIX: F-07 — registry interface for validating operator-supplied wrapper/vault
+interface ICreatorRegistryLookup {
+    function getVaultForToken(address token) external view returns (address);
+    function getWrapperForToken(address token) external view returns (address);
+}
+
 contract VaultActivationBatcher is ReentrancyGuard {
     using SafeERC20 for IERC20;
 
@@ -49,10 +55,13 @@ contract VaultActivationBatcher is ReentrancyGuard {
 
     /// @notice Permit2 contract used for signature-based transfers
     address public immutable permit2;
+    // FIX: F-07 — registry for validating operator-supplied wrapper/vault against canonical records
+    ICreatorRegistryLookup public immutable registry;
 
-    constructor(address _permit2) {
-        if (_permit2 == address(0)) revert ZeroAddress();
+    constructor(address _permit2, address _registry) {
+        if (_permit2 == address(0) || _registry == address(0)) revert ZeroAddress();
         permit2 = _permit2;
+        registry = ICreatorRegistryLookup(_registry);
     }
 
     // ================================
@@ -94,6 +103,9 @@ contract VaultActivationBatcher is ReentrancyGuard {
     error PermitTokenMismatch();
     error PermitAmountTooLow();
     error InvalidReserveRecipient(address expectedRecipient, address actualRecipient);
+    // FIX: F-07 — errors for registry validation of operator-supplied addresses
+    error VaultRegistryMismatch(address expected, address actual);
+    error WrapperRegistryMismatch(address expected, address actual);
 
     // ================================
     // INTERNAL SHARED LOGIC
@@ -291,6 +303,12 @@ contract VaultActivationBatcher is ReentrancyGuard {
             if (!IOperatorAuthorizableVault(vault).isAuthorizedOperator(msg.sender, OP_ACTIVATE)) {
                 revert NotAuthorizedOperator();
             }
+            // FIX: F-07 — validate operator-supplied vault and wrapper match the registry
+            // to prevent routing tokens through unintended contracts
+            address expectedVault = registry.getVaultForToken(creatorToken);
+            if (expectedVault != vault) revert VaultRegistryMismatch(expectedVault, vault);
+            address expectedWrapper = registry.getWrapperForToken(creatorToken);
+            if (expectedWrapper != wrapper) revert WrapperRegistryMismatch(expectedWrapper, wrapper);
         }
 
         if (permit.permitted.token != creatorToken) revert PermitTokenMismatch();
@@ -356,6 +374,11 @@ contract VaultActivationBatcher is ReentrancyGuard {
             if (!IOperatorAuthorizableVault(vault).isAuthorizedOperator(msg.sender, OP_ACTIVATE)) {
                 revert NotAuthorizedOperator();
             }
+            // FIX: F-07 — validate operator-supplied vault and wrapper match the registry
+            address expectedVault = registry.getVaultForToken(creatorToken);
+            if (expectedVault != vault) revert VaultRegistryMismatch(expectedVault, vault);
+            address expectedWrapper = registry.getWrapperForToken(creatorToken);
+            if (expectedWrapper != wrapper) revert WrapperRegistryMismatch(expectedWrapper, wrapper);
         }
         if (permit.permitted.token != creatorToken) revert PermitTokenMismatch();
         if (permit.permitted.amount < depositAmount) revert PermitAmountTooLow();

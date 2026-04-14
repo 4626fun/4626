@@ -40,12 +40,22 @@ contract VaultShareBurnStream is ReentrancyGuard {
     uint256 public activeEpochStart;
     uint256 public burnedActive;
 
+    // FIX: BS-01 — access control for queueShares
+    mapping(address => bool) public authorizedQueuers;
+
+    // FIX: BS-03 — track failed burn amounts for manual recovery
+    uint256 public failedBurnAccumulator;
+
     event SharesQueued(uint256 shares, uint256 indexed scheduledEpochStart);
     event StreamStarted(uint256 indexed epochStart, uint256 shares);
     event StreamDripped(
         uint256 indexed epochStart, uint256 burnedNow, uint256 burnedTotal, uint256 remaining, uint256 pps
     );
     event StreamCompleted(uint256 indexed epochStart, uint256 totalBurned, uint256 pps);
+    // FIX: BS-03 — event for burn failures
+    event BurnFailed(uint256 indexed epochStart, uint256 burnAttempted, uint256 failedTotal);
+    // FIX: BS-01 — event for queuer authorization
+    event QueuerAuthorizationUpdated(address indexed queuer, bool authorized);
 
     error ZeroAddress();
     error ZeroAmount();
@@ -54,11 +64,20 @@ contract VaultShareBurnStream is ReentrancyGuard {
     error NoActiveStream();
     error NoNewShares();
     error PendingEpochMismatch(uint256 pendingEpochStart, uint256 requiredEpochStart);
+    // FIX: BS-01 — unauthorized queuer error
+    error UnauthorizedQueuer();
 
     constructor(address _vault) {
         if (_vault == address(0)) revert ZeroAddress();
         vault = _vault;
         vaultShares = IERC20(_vault);
+    }
+
+    // FIX: BS-01 — vault itself can authorize queuers (since this contract has no owner)
+    function setAuthorizedQueuer(address queuer, bool authorized) external {
+        require(msg.sender == vault, "Only vault");
+        authorizedQueuers[queuer] = authorized;
+        emit QueuerAuthorizationUpdated(queuer, authorized);
     }
 
     // ================================
@@ -115,9 +134,14 @@ contract VaultShareBurnStream is ReentrancyGuard {
         if (pendingShares == 0) {
             pendingEpochStart = scheduled;
         } else if (pendingEpochStart != scheduled) {
-            // Never allow a pending bucket to span multiple epochs.
-            // If this triggers, call `checkpoint()` to advance state, or investigate misconfiguration.
-            revert PendingEpochMismatch(pendingEpochStart, scheduled);
+            // FIX: BS-02 — auto-advance stale pending bucket instead of reverting
+            // If no active stream, start the stale pending shares and re-queue
+            if (activeShares == 0 && block.timestamp >= pendingEpochStart) {
+                _startPendingInternal();
+                pendingEpochStart = scheduled;
+            } else {
+                revert PendingEpochMismatch(pendingEpochStart, scheduled);
+            }
         }
 
         pendingShares += shares;
@@ -135,7 +159,9 @@ contract VaultShareBurnStream is ReentrancyGuard {
      * @dev `shares` must correspond to NEW shares not yet accounted as pending/active.
      *      This lets routers call `queueShares(sharesMinted)` right after `vault.deposit(..., this)`.
      */
+    // FIX: BS-01 — restrict queueShares to authorized callers only
     function queueShares(uint256 shares) public nonReentrant {
+        if (!authorizedQueuers[msg.sender]) revert UnauthorizedQueuer();
         _queueSharesInternal(shares);
     }
 
@@ -213,14 +239,31 @@ contract VaultShareBurnStream is ReentrancyGuard {
         burnedNow = burnableTotal - burnedActive;
         burnedActive = burnableTotal;
 
-        // Burn shares held by this contract (requires vault to allow this stream).
-        ICreatorOVaultBurn(vault).burnSharesForPriceIncrease(burnedNow);
+        // FIX: BS-03 — wrap burn call in try/catch to prevent permanent stream lockup
+        try ICreatorOVaultBurn(vault).burnSharesForPriceIncrease(burnedNow) {
+            // success
+        } catch {
+            failedBurnAccumulator += burnedNow;
+            emit BurnFailed(activeEpochStart, burnedNow, failedBurnAccumulator);
+        }
 
         uint256 remaining = activeShares - burnedActive;
-        uint256 pps = ICreatorOVaultBurn(vault).pricePerShare();
+        uint256 pps;
+        try ICreatorOVaultBurn(vault).pricePerShare() returns (uint256 _pps) {
+            pps = _pps;
+        } catch {}
         emit StreamDripped(activeEpochStart, burnedNow, burnedActive, remaining, pps);
 
-        if (elapsed == EPOCH_DURATION && burnedActive == activeShares) {
+        // FIX: BS-04 — force-complete at epoch end regardless of rounding
+        if (elapsed >= EPOCH_DURATION) {
+            // Burn any remainder due to rounding
+            uint256 roundingRemainder = activeShares - burnedActive;
+            if (roundingRemainder > 0) {
+                try ICreatorOVaultBurn(vault).burnSharesForPriceIncrease(roundingRemainder) {} catch {
+                    failedBurnAccumulator += roundingRemainder;
+                }
+                burnedActive = activeShares;
+            }
             emit StreamCompleted(activeEpochStart, activeShares, pps);
             activeShares = 0;
             activeEpochStart = 0;

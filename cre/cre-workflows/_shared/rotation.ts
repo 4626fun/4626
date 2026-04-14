@@ -1,3 +1,6 @@
+// FIX: LOW-06 — Document that multiple CRE nodes within the same rotation window
+// will select the same vault subset. The queue server MUST use INSERT...ON CONFLICT IGNORE
+// (or equivalent atomic dedup) semantics to prevent duplicate enqueues from concurrent nodes.
 export function selectRotatingItems<T>(
   items: T[],
   params: {

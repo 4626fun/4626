@@ -67,11 +67,17 @@ contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
     /// @notice Vault => reward token (vault shares token). Set on first notification.
     mapping(address => address) public vaultRewardToken;
 
+    // FIX: G-10 — store reward token per (epoch, vault) so remapping doesn't break old claims
+    mapping(uint256 => mapping(address => address)) public epochRewardToken;
+
     /// @notice epoch => vault => total rewards (in vault share tokens)
     mapping(uint256 => mapping(address => uint256)) public epochVaultRewards;
 
     /// @notice epoch => vault => user => claimed?
     mapping(uint256 => mapping(address => mapping(address => bool))) public hasClaimed;
+
+    // FIX: G-18 — extended grace period for stale sweep (non-zero-vote epochs)
+    uint256 public staleSweepGraceEpochs = 26; // ~6 months
 
     // ================================
     // EVENTS
@@ -123,7 +129,7 @@ contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
 
     /**
      * @notice Owner recovery path for fixing an incorrect reward token mapping.
-     * @dev Intended for emergency repair if a vault was initialized with the wrong token.
+     * @dev FIX: G-10 — only affects future epochs; past epoch tokens are stored per-epoch.
      */
     function recoverVaultRewardToken(address vault, address token) external onlyOwner {
         if (vault == address(0) || token == address(0)) revert ZeroAddress();
@@ -160,8 +166,16 @@ contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
 
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
 
-        uint256 epoch = gaugeVoting.currentEpoch();
+        // FIX: G-04 — credit rewards to previous (finalized) epoch, not the live epoch
+        // This prevents informational asymmetry where large voters know which epoch is well-funded
+        uint256 current = gaugeVoting.currentEpoch();
+        uint256 epoch = current > 0 ? current - 1 : current;
         epochVaultRewards[epoch][vault] += amount;
+
+        // FIX: G-10 — record reward token per (epoch, vault) so claims use the correct token
+        if (epochRewardToken[epoch][vault] == address(0)) {
+            epochRewardToken[epoch][vault] = token;
+        }
 
         emit RewardsNotified(epoch, vault, token, amount);
     }
@@ -203,6 +217,34 @@ contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
         emit ZeroVoteEpochSwept(epoch, vault, token, amount, treasury);
     }
 
+    // FIX: G-18 — sweep path for unclaimed rewards in non-zero-vote epochs after extended grace
+    event StaleEpochSwept(uint256 indexed epoch, address indexed vault, address indexed token, uint256 amount);
+
+    function sweepStaleEpochRewards(address vault, uint256 epoch) external onlyOwner nonReentrant returns (uint256 amount) {
+        if (vault == address(0)) revert ZeroAddress();
+
+        address treasury = protocolTreasury;
+        if (treasury == address(0)) revert ProtocolTreasuryNotSet();
+
+        uint256 current = gaugeVoting.currentEpoch();
+        if (epoch + staleSweepGraceEpochs >= current) revert SweepNotAllowedYet();
+
+        amount = epochVaultRewards[epoch][vault];
+        if (amount == 0) return 0;
+
+        // FIX: G-10 — use per-epoch token
+        address token = epochRewardToken[epoch][vault];
+        if (token == address(0)) {
+            token = vaultRewardToken[vault];
+        }
+        if (token == address(0)) revert ZeroAddress();
+
+        epochVaultRewards[epoch][vault] = 0;
+        IERC20(token).safeTransfer(treasury, amount);
+
+        emit StaleEpochSwept(epoch, vault, token, amount);
+    }
+
     // ================================
     // CLAIM
     // ================================
@@ -241,7 +283,11 @@ contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
         if (epoch >= gaugeVoting.currentEpoch()) revert EpochNotEnded();
         if (hasClaimed[epoch][vault][user]) return 0;
 
-        address token = vaultRewardToken[vault];
+        // FIX: G-10 — use per-epoch token, fall back to global mapping for legacy epochs
+        address token = epochRewardToken[epoch][vault];
+        if (token == address(0)) {
+            token = vaultRewardToken[vault];
+        }
         if (token == address(0)) {
             hasClaimed[epoch][vault][user] = true;
             return 0;

@@ -120,7 +120,12 @@ contract VoterRewardsDistributorTest is Test {
     }
 
     function testRecoverVaultRewardToken_AllowsFutureNotifiesAndClaims() public {
-        vm.warp(voting.genesisEpochStart() + 1);
+        uint256 genesis = voting.genesisEpochStart();
+        // G-09: lock before genesis so lock is old enough when voting
+        vm.warp(genesis - WEEK);
+        _lock(alice, 100 ether, FOUR_YEARS);
+
+        vm.warp(genesis + 1);
         assertEq(voting.currentEpoch(), 0);
 
         MockERC20 badToken = new MockERC20("BadShares", "BAD");
@@ -135,19 +140,23 @@ contract VoterRewardsDistributorTest is Test {
         distributor.recoverVaultRewardToken(vault1, address(rewardToken));
         assertEq(distributor.vaultRewardToken(vault1), address(rewardToken));
 
-        _lock(alice, 100 ether, FOUR_YEARS);
         _voteSingle(alice, vault1);
 
+        // Epoch 1: Alice votes again
         vm.warp(voting.genesisEpochStart() + WEEK + 1);
         assertEq(voting.currentEpoch(), 1);
-
         _voteSingle(alice, vault1);
+
+        // Epoch 2: G-04 credits rewards to epoch 1 (current-1 = 2-1 = 1)
+        vm.warp(voting.genesisEpochStart() + 2 * WEEK + 1);
+        assertEq(voting.currentEpoch(), 2);
 
         rewardToken.approve(address(distributor), 100 ether);
         distributor.notifyRewards(vault1, address(rewardToken), 100 ether);
 
-        vm.warp(voting.genesisEpochStart() + 2 * WEEK + 1);
-        assertEq(voting.currentEpoch(), 2);
+        // Epoch 3: claim epoch 1
+        vm.warp(voting.genesisEpochStart() + 3 * WEEK + 1);
+        assertEq(voting.currentEpoch(), 3);
 
         vm.prank(alice);
         uint256 claimed = distributor.claim(vault1, 1);
@@ -172,13 +181,15 @@ contract VoterRewardsDistributorTest is Test {
     }
 
     function testNotifyAndClaim_EqualSplit() public {
-        // Warp to epoch 0 start
-        vm.warp(voting.genesisEpochStart() + 1);
-        assertEq(voting.currentEpoch(), 0);
-
-        // Equal locks
+        uint256 genesis = voting.genesisEpochStart();
+        // G-09: lock before genesis so lock is old enough when voting
+        vm.warp(genesis - WEEK);
         _lock(alice, 100 ether, FOUR_YEARS);
         _lock(bob, 100 ether, FOUR_YEARS);
+
+        // Warp to epoch 0 start
+        vm.warp(genesis + 1);
+        assertEq(voting.currentEpoch(), 0);
 
         // Both vote 100% for vault1
         _voteSingle(alice, vault1);
@@ -209,9 +220,10 @@ contract VoterRewardsDistributorTest is Test {
     function testExpiringLockCannotVoteOrClaimRewards() public {
         uint256 genesis = voting.genesisEpochStart();
 
-        // Create an expiring lock that will end before epoch 0 finishes.
-        // lock at (genesis - 1 day) for 7 days => expires at (genesis + 6 days) < epoch end.
-        vm.warp(genesis - 1 days);
+        // G-09: locks must be at least 1 epoch old when voting.
+        // Alice locks at (genesis - WEEK) for WEEK => expires at genesis => zero power at epoch end.
+        // Bob locks at (genesis - WEEK) for FOUR_YEARS => passes all checks.
+        vm.warp(genesis - WEEK);
         _lock(alice, 100 ether, WEEK);
         _lock(bob, 100 ether, FOUR_YEARS);
 
@@ -219,13 +231,13 @@ contract VoterRewardsDistributorTest is Test {
         vm.warp(genesis + 1);
         assertEq(voting.currentEpoch(), 0);
 
-        // Alice cannot vote (lock would expire before epoch end)
+        // Alice cannot vote: G-03 uses votingPowerAt(epochEnd) which is 0 (lock expired at genesis)
         vm.startPrank(alice);
         address[] memory vaults = new address[](1);
         uint256[] memory weights = new uint256[](1);
         vaults[0] = vault1;
         weights[0] = 100;
-        vm.expectRevert(VaultGaugeVoting.LockExpiresBeforeEpochEnd.selector);
+        vm.expectRevert(VaultGaugeVoting.NoVotingPower.selector);
         voting.vote(vaults, weights);
         vm.stopPrank();
 
@@ -254,13 +266,15 @@ contract VoterRewardsDistributorTest is Test {
     }
 
     function testNotifyAndClaim_DuplicateVaultInputsStillPayCorrectProRata() public {
-        // Warp to epoch 0 start
-        vm.warp(voting.genesisEpochStart() + 1);
-        assertEq(voting.currentEpoch(), 0);
-
-        // Equal locks
+        uint256 genesis = voting.genesisEpochStart();
+        // G-09: lock before genesis so lock is old enough when voting
+        vm.warp(genesis - WEEK);
         _lock(alice, 100 ether, FOUR_YEARS);
         _lock(bob, 100 ether, FOUR_YEARS);
+
+        // Warp to epoch 0 start
+        vm.warp(genesis + 1);
+        assertEq(voting.currentEpoch(), 0);
 
         // Alice votes with duplicate entries for the same vault.
         vm.startPrank(alice);
@@ -301,11 +315,14 @@ contract VoterRewardsDistributorTest is Test {
     }
 
     function testClaim_RequiresVote() public {
-        vm.warp(voting.genesisEpochStart() + 1);
-        assertEq(voting.currentEpoch(), 0);
-
+        uint256 genesis = voting.genesisEpochStart();
+        // G-09: lock before genesis so lock is old enough when voting
+        vm.warp(genesis - WEEK);
         _lock(alice, 100 ether, FOUR_YEARS);
         _lock(bob, 100 ether, FOUR_YEARS);
+
+        vm.warp(genesis + 1);
+        assertEq(voting.currentEpoch(), 0);
 
         // Only Alice votes
         _voteSingle(alice, vault1);
@@ -328,30 +345,36 @@ contract VoterRewardsDistributorTest is Test {
     }
 
     function testEpochIsolation() public {
-        // Epoch 0
-        vm.warp(voting.genesisEpochStart() + 1);
-        assertEq(voting.currentEpoch(), 0);
-
+        uint256 genesis = voting.genesisEpochStart();
+        // G-09: lock before genesis so lock is old enough when voting
+        vm.warp(genesis - WEEK);
         _lock(alice, 100 ether, FOUR_YEARS);
         _lock(bob, 100 ether, FOUR_YEARS);
 
+        // Epoch 0: Alice votes
+        vm.warp(genesis + 1);
+        assertEq(voting.currentEpoch(), 0);
         _voteSingle(alice, vault1);
 
+        // G-04: notifyRewards during epoch 0 credits epoch 0 (special case: current == 0)
         uint256 amount0 = 1_000 ether;
         rewardToken.approve(address(distributor), amount0);
         distributor.notifyRewards(vault1, address(rewardToken), amount0);
 
-        // Epoch 1
+        // Epoch 1: Bob votes
         vm.warp(voting.genesisEpochStart() + WEEK + 1);
         assertEq(voting.currentEpoch(), 1);
-
         _voteSingle(bob, vault1);
+
+        // Epoch 2: notify rewards — G-04 credits epoch 1 (current-1 = 2-1 = 1)
+        vm.warp(voting.genesisEpochStart() + 2 * WEEK + 1);
+        assertEq(voting.currentEpoch(), 2);
 
         uint256 amount1 = 2_000 ether;
         rewardToken.approve(address(distributor), amount1);
         distributor.notifyRewards(vault1, address(rewardToken), amount1);
 
-        // Claims for epoch 0 (epoch 0 ended; current epoch is 1)
+        // Claims for epoch 0 (epoch 0 ended; current epoch is 2)
         vm.prank(alice);
         uint256 alice0 = distributor.claim(vault1, 0);
         assertEq(alice0, amount0);
@@ -360,10 +383,7 @@ contract VoterRewardsDistributorTest is Test {
         uint256 bob0 = distributor.claim(vault1, 0);
         assertEq(bob0, 0);
 
-        // Claims for epoch 1 only after epoch 1 ends
-        vm.warp(voting.genesisEpochStart() + 2 * WEEK + 1);
-        assertEq(voting.currentEpoch(), 2);
-
+        // Claims for epoch 1 (epoch 1 ended; current epoch is 2)
         vm.prank(alice);
         uint256 alice1 = distributor.claim(vault1, 1);
         assertEq(alice1, 0);
@@ -393,11 +413,15 @@ contract VoterRewardsDistributorTest is Test {
     }
 
     function testClaim_RevertsIfEpochNotEnded() public {
+        uint256 genesis = voting.genesisEpochStart();
+        // G-09: lock before genesis so lock is old enough when voting
+        vm.warp(genesis - WEEK);
+        _lock(alice, 100 ether, FOUR_YEARS);
+
         // Epoch 0
-        vm.warp(voting.genesisEpochStart() + 1);
+        vm.warp(genesis + 1);
         assertEq(voting.currentEpoch(), 0);
 
-        _lock(alice, 100 ether, FOUR_YEARS);
         _voteSingle(alice, vault1);
 
         uint256 amount = 1_000 ether;
@@ -427,11 +451,15 @@ contract VoterRewardsDistributorTest is Test {
     }
 
     function testSweepZeroVoteEpoch_RevertsIfVotesExist() public {
+        uint256 genesis = voting.genesisEpochStart();
+        // G-09: lock before genesis so lock is old enough when voting
+        vm.warp(genesis - WEEK);
+        _lock(alice, 100 ether, FOUR_YEARS);
+
         // Epoch 0
-        vm.warp(voting.genesisEpochStart() + 1);
+        vm.warp(genesis + 1);
         assertEq(voting.currentEpoch(), 0);
 
-        _lock(alice, 100 ether, FOUR_YEARS);
         _voteSingle(alice, vault1);
 
         uint256 amount = 1_000 ether;

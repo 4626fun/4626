@@ -58,6 +58,10 @@ contract TaxHookConfigurator is Ownable {
     /// @notice Default fee: 6.9% = 690 basis points
     uint256 public constant DEFAULT_FEE_BPS = 690;
 
+    // FIX: F-12 — enforce a minimum fee floor to prevent owner from silently disabling fees
+    // via configureCreatorPool(_feeBps = 0). Use disableFees() for explicit opt-out.
+    uint256 public constant MIN_FEE_BPS = 1;
+
     // =================================
     // EVENTS
     // =================================
@@ -116,7 +120,12 @@ contract TaxHookConfigurator is Ownable {
      * @notice Update fee percentage
      */
     function updateFeeBps(bytes32 poolId, uint256 _newBuyFeeBps, uint256 _newSellFeeBps) external onlyOwner {
-        require(_newBuyFeeBps <= 1000 && _newSellFeeBps <= 1000, "Fee too high");
+        // FIX: F-12 — enforce minimum fee on both buy and sell; use disableFees() for opt-out
+        require(
+            _newBuyFeeBps >= MIN_FEE_BPS && _newBuyFeeBps <= 1000
+                && _newSellFeeBps >= MIN_FEE_BPS && _newSellFeeBps <= 1000,
+            "Fee out of range"
+        );
         require(ITaxHook(TAX_HOOK).canConfigure(poolId, address(this)), "Not authorized for pool");
         ITaxHook.TaxConfig memory config = ITaxHook(TAX_HOOK).getTaxConfig(poolId);
         config.buyTaxBps = _newBuyFeeBps;
@@ -147,7 +156,8 @@ contract TaxHookConfigurator is Ownable {
     ) internal returns (bytes32 poolId) {
         require(_shareOFT != address(0), "Invalid ShareOFT");
         require(_gaugeController != address(0), "Invalid GaugeController");
-        require(_feeBps <= 1000, "Fee too high (max 10%)");
+        // FIX: F-12 — enforce minimum fee to prevent silent fee disabling; use disableFees() instead
+        require(_feeBps >= MIN_FEE_BPS && _feeBps <= 1000, "Fee out of range");
 
         // Sort tokens (V4 requires currency0 < currency1)
         (address token0, address token1) = _shareOFT < WETH ? (_shareOFT, WETH) : (WETH, _shareOFT);

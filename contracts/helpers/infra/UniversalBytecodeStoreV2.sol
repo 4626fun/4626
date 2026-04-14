@@ -120,8 +120,10 @@ contract UniversalBytecodeStoreV2 {
             address ptr = chunkPointers[codeId][i];
             uint256 take = (i + 1 == n) ? (total - copied) : CHUNK_SIZE;
             // Chunk pointer runtime is: 0x00 (STOP) + chunk bytes.
+            // FIX: F-24 — use _SSTORE2V2.DATA_OFFSET instead of hardcoded 1
+            uint256 offset = _SSTORE2V2.DATA_OFFSET;
             assembly ("memory-safe") {
-                extcodecopy(ptr, add(add(creationCode, 0x20), copied), 1, take)
+                extcodecopy(ptr, add(add(creationCode, 0x20), copied), offset, take)
             }
             copied += take;
         }

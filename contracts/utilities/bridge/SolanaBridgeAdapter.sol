@@ -129,6 +129,9 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     /// @notice CreatorLotteryManager on Base (hub).
     address public lotteryManager;
 
+    // FIX: M-6 — configurable swap fee tier (was hardcoded to 3000)
+    uint24 public defaultSwapFeeTier = 3000;
+
     // ================================
     // EVENTS
     // ================================
@@ -223,6 +226,11 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
     function registerToken(address baseToken, bytes32 solanaMint, uint8 solanaDecimals) external onlyOwner {
         if (baseToken == address(0)) revert InvalidAddress();
         if (solanaMint == bytes32(0)) revert InvalidAddress();
+        // FIX: H-2 — prevent silent overwrite of existing bidirectional mappings;
+        // re-registration broke invariants (stale reverse mapping, decimal mismatch
+        // on in-flight transactions)
+        require(tokenToSolanaMint[baseToken] == bytes32(0), "Already registered");
+        require(solanaMintToToken[solanaMint] == address(0), "Mint already mapped");
 
         uint8 baseDecimals = IERC20Metadata(baseToken).decimals();
 
@@ -250,6 +258,8 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         returns (address wrappedToken)
     {
         if (solanaMint == bytes32(0)) revert InvalidAddress();
+        // FIX: H-2 — prevent overwriting existing mapping for this Solana mint
+        require(solanaMintToToken[solanaMint] == address(0), "Mint already mapped");
         wrappedToken = ICrossChainERC20Factory(TOKEN_FACTORY).deploy(solanaMint, name, symbol, decimals);
 
         solanaMintToToken[solanaMint] = wrappedToken;
@@ -274,8 +284,7 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
      * @param solanaDestination Destination address on Solana (as bytes32)
      */
     function bridgeToSolana(address token, uint256 amount, bytes32 solanaDestination) external payable nonReentrant {
-        IBaseSolanaBridge.Ix[] memory ixs = new IBaseSolanaBridge.Ix[](0);
-        _bridgeToSolana(token, amount, solanaDestination, ixs);
+        _bridgeToSolanaNoIxs(token, amount, solanaDestination);
     }
 
     /**
@@ -294,8 +303,8 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
             if (ixs[i].serializedAccounts.length == 0) revert InvalidIxPayload();
             if (ixs[i].data.length == 0) revert InvalidIxPayload();
         }
-        IBaseSolanaBridge.Ix[] memory copiedIxs = ixs;
-        _bridgeToSolana(token, amount, solanaDestination, copiedIxs);
+        // FIX: I-2 — pass calldata directly instead of copying to memory
+        _bridgeToSolana(token, amount, solanaDestination, ixs);
     }
 
     /**
@@ -508,11 +517,12 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         // Approve router
         IERC20(tokenIn).forceApprove(router, amountIn);
 
-        // Swap on Uniswap V4 — triggers lottery entry via the tax hook!
+        // FIX: M-6 — use configurable default fee tier instead of hardcoded 3000;
+        // tokens with no 0.3% pool would revert or get worse pricing
         IUniswapV4Router.ExactInputSingleParams memory params = IUniswapV4Router.ExactInputSingleParams({
             tokenIn: tokenIn,
             tokenOut: shareToken,
-            fee: 3000, // 0.3% fee tier
+            fee: defaultSwapFeeTier,
             recipient: recipient,
             amountIn: amountIn,
             amountOutMinimum: amountOutMin,
@@ -554,11 +564,11 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         IWETH(weth).deposit{value: msg.value}();
         IERC20(weth).forceApprove(router, msg.value);
 
-        // Swap WETH for share token — triggers lottery.
+        // FIX: M-6 — use configurable default fee tier
         IUniswapV4Router.ExactInputSingleParams memory params = IUniswapV4Router.ExactInputSingleParams({
             tokenIn: weth,
             tokenOut: shareToken,
-            fee: 3000,
+            fee: defaultSwapFeeTier,
             recipient: recipient,
             amountIn: msg.value,
             amountOutMinimum: amountOutMin,
@@ -579,6 +589,8 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         bytes32 buyerSolanaPubkey;
         address shareOFT;
         uint256 amountSolanaUnits;
+        // FIX: M-1 — Solana tx signature for deduplication
+        bytes32 solanaTxSig;
     }
 
     /**
@@ -615,11 +627,16 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         emit SolanaFeeReceived(msg.sender, shareOFT, gauge, amount);
     }
 
+    /// @notice Tracks processed Solana transaction signatures to prevent replay
+    // FIX: M-1 — add deduplication tracking for Solana lottery entries
+    mapping(bytes32 => bool) public processedSolanaTxs;
+
+    event LotteryEntryFailed(address indexed buyerTwin, address indexed shareOFT, uint256 amount, bytes reason);
+
     /**
      * @notice Process lottery entries from Solana spoke via keeper Twin.
      * @dev Called by the keeper's Twin to relay lottery entries to Base
      *      LotteryManager. Scales amounts from Solana decimals to Base decimals.
-     *
      * @param keeperPubkey Solana pubkey of the authorized entry keeper
      * @param entries Array of lottery entries from Solana
      */
@@ -633,6 +650,12 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
 
         for (uint256 i = 0; i < entries.length; i++) {
             LotteryEntry calldata entry = entries[i];
+            // FIX: M-1 — skip already-processed entries (deduplication via Solana tx signature)
+            if (entry.solanaTxSig == bytes32(0) || processedSolanaTxs[entry.solanaTxSig]) {
+                continue;
+            }
+            processedSolanaTxs[entry.solanaTxSig] = true;
+
             if (!isRegistered[entry.shareOFT]) {
                 continue;
             }
@@ -653,9 +676,15 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
             // Resolve buyer's Twin address on Base.
             address buyerTwin = IBaseSolanaBridge(BRIDGE).getPredictedTwinAddress(entry.buyerSolanaPubkey);
 
-            // Register lottery entry on Base.
-            // tokenIn MUST be the ShareOFT (not creatorCoin).
-            ICreatorLotteryManager(lotteryManager).processSwapLottery(buyerTwin, entry.shareOFT, amount18, 0);
+            // FIX: H-1 — wrap in try/catch so a single failing entry doesn't block the
+            // entire batch; previously a revert in processSwapLottery (e.g., requiring
+            // nonzero msg.value for VRF fee) would brick all entries
+            try ICreatorLotteryManager(lotteryManager).processSwapLottery(buyerTwin, entry.shareOFT, amount18, 0) {
+                // success
+            } catch (bytes memory reason) {
+                emit LotteryEntryFailed(buyerTwin, entry.shareOFT, amount18, reason);
+                continue;
+            }
 
             emit SolanaLotteryEntryRelayed(
                 msg.sender, entry.buyerSolanaPubkey, entry.shareOFT, entry.amountSolanaUnits, amount18, buyerTwin
@@ -755,6 +784,9 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
      * @notice Store Twin mapping for reference
      * @param solanaAddress Solana address
      * @param twinAddress Twin contract on Base
+     * @dev FIX: L-4 — this mapping is never used in auth paths (onlyTwin uses
+     *      bridge.getPredictedTwinAddress directly). Kept for off-chain reference
+     *      only; do NOT rely on it for security decisions.
      */
     function mapTwin(bytes32 solanaAddress, address twinAddress) external onlyOwner {
         solanaTwinMapping[solanaAddress] = twinAddress;
@@ -804,12 +836,34 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         return uint64(v);
     }
 
+    // FIX: I-2 — accept calldata to avoid unnecessary memory copy from bridgeToSolanaWithIxs
     function _bridgeToSolana(
         address token,
         uint256 amount,
         bytes32 solanaDestination,
-        IBaseSolanaBridge.Ix[] memory ixs
+        IBaseSolanaBridge.Ix[] calldata ixs
     ) internal {
+        (IBaseSolanaBridge.Transfer memory transfer) = _prepareBridgeTransfer(token, amount, solanaDestination);
+        IBaseSolanaBridge(BRIDGE).bridgeToken{value: msg.value}(transfer, ixs);
+        emit BridgeToSolana(msg.sender, solanaDestination, token, amount);
+    }
+
+    function _bridgeToSolanaNoIxs(
+        address token,
+        uint256 amount,
+        bytes32 solanaDestination
+    ) internal {
+        (IBaseSolanaBridge.Transfer memory transfer) = _prepareBridgeTransfer(token, amount, solanaDestination);
+        IBaseSolanaBridge.Ix[] memory emptyIxs = new IBaseSolanaBridge.Ix[](0);
+        IBaseSolanaBridge(BRIDGE).bridgeToken{value: msg.value}(transfer, emptyIxs);
+        emit BridgeToSolana(msg.sender, solanaDestination, token, amount);
+    }
+
+    function _prepareBridgeTransfer(
+        address token,
+        uint256 amount,
+        bytes32 solanaDestination
+    ) internal returns (IBaseSolanaBridge.Transfer memory transfer) {
         if (!isRegistered[token]) revert TokenNotRegistered();
         if (amount == 0) revert InvalidAmount();
         if (solanaDestination == bytes32(0)) revert InvalidAddress();
@@ -828,15 +882,12 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
 
         // NOTE: The Base↔Solana bridge expects `remoteAmount` in *remote* token units (uint64).
         // We convert Base token units → Solana token units *exactly* (reverting if rounding would be required).
-        IBaseSolanaBridge.Transfer memory transfer = IBaseSolanaBridge.Transfer({
+        transfer = IBaseSolanaBridge.Transfer({
             localToken: token,
             remoteToken: solanaMint,
             to: solanaDestination,
             remoteAmount: _toRemoteAmountExact(amount, baseDecimals, solanaDecimals)
         });
-
-        IBaseSolanaBridge(BRIDGE).bridgeToken{value: msg.value}(transfer, ixs);
-        emit BridgeToSolana(msg.sender, solanaDestination, token, amount);
     }
 
     // ================================
@@ -911,10 +962,21 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
         emit LotteryManagerSet(_lotteryManager);
     }
 
+    // FIX: M-6 — setter for swap fee tier
+    function setDefaultSwapFeeTier(uint24 _feeTier) external onlyOwner {
+        require(_feeTier > 0, "Invalid fee tier");
+        defaultSwapFeeTier = _feeTier;
+    }
+
     /**
      * @notice Emergency withdraw stuck tokens
      */
+    // FIX: L-1 — add event emission and destination validation for emergency withdrawals
+    event EmergencyWithdraw(address indexed token, uint256 amount, address indexed to);
+
     function emergencyWithdraw(address token, uint256 amount, address to) external onlyOwner {
+        if (to == address(0)) revert InvalidAddress();
         IERC20(token).safeTransfer(to, amount);
+        emit EmergencyWithdraw(token, amount, to);
     }
 }

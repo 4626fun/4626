@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 
 import {
   fetchRemoteFlags,
@@ -46,18 +46,20 @@ export function useRemoteFlags(): RemoteFlagValues | null {
  * completes or if the flag isn't Vercel-managed.
  */
 export function useRemoteFlag<T = unknown>(key: string): T | undefined {
-  const [value, setValue] = useState<T | undefined>(() => getRemoteFlag<T>(key))
+  // FIX: FINDING-lint — avoid setState in effect; use useSyncExternalStore
+  // for synchronous reads and subscribe for async updates
+  const snapshot = useSyncExternalStore(
+    subscribe,
+    () => getRemoteFlag<T>(key),
+    () => undefined,
+  )
 
   useEffect(() => {
-    const current = getRemoteFlag<T>(key)
-    if (current !== undefined) {
-      setValue(current)
-      return
+    // If not yet available, kick off a fetch and notify subscribers on resolve
+    if (snapshot === undefined) {
+      fetchRemoteFlags().then(() => notifyAll())
     }
-    fetchRemoteFlags().then(() => {
-      setValue(getRemoteFlag<T>(key))
-    })
-  }, [key])
+  }, [key, snapshot])
 
-  return value
+  return snapshot
 }

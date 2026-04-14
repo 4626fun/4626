@@ -370,6 +370,11 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      * @param _amount Amount to burn
      */
     function burn(address _from, uint256 _amount) external onlyVaultOrMinter {
+        // FIX: H-3 — require allowance when a minter burns from an arbitrary address;
+        // vault and owner are trusted and exempt, but minters must have approval
+        if (msg.sender != vault && msg.sender != owner()) {
+            _spendAllowance(_from, msg.sender, _amount);
+        }
         _burn(_from, _amount);
         emit SharesBurned(_from, _amount);
     }
@@ -490,13 +495,14 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         // Approve gauge controller to pull tokens
         _approve(address(this), _gaugeController, amount);
 
-        // Call receiveFees on gauge controller
+        // FIX: H-6 — remove fallback direct transfer that bypassed gauge accounting;
+        // accumulate fees locally on failure instead of breaking gauge bookkeeping
         try ICreatorGaugeController(_gaugeController).receiveFees(amount) {
             emit FeeCollected(_gaugeController, amount);
         } catch {
-            // If gauge controller call fails, transfer directly as fallback
-            _transfer(address(this), _gaugeController, amount);
-            emit FeeCollected(_gaugeController, amount);
+            // Accumulate instead of bypassing gauge accounting
+            pendingFees += amount;
+            emit FeesAccumulated(amount, pendingFees);
         }
     }
 
@@ -537,11 +543,14 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      * @return sendParam The SendParam to pass to flushFees()
      */
     function buildFlushSendParam() external view returns (SendParam memory sendParam) {
+        // FIX: M-4 — use _removeDust on minAmountLD to account for OFT shared-decimals
+        // trimming; previously minAmountLD == pendingFees could be unreachable after
+        // dust trimming, permanently blocking fee flushes
         sendParam = SendParam({
             dstEid: hubEid,
             to: bytes32(uint256(uint160(hubGaugeReceiver))),
             amountLD: pendingFees,
-            minAmountLD: pendingFees,
+            minAmountLD: _removeDust(pendingFees),
             extraOptions: OptionsBuilder.newOptions().addExecutorLzReceiveOption(DEFAULT_FLUSH_GAS_LIMIT, 0),
             composeMsg: "",
             oftCmd: ""
@@ -780,16 +789,22 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         bytes32 expectedSender = hubLotteryPeer;
         if (expectedSender == bytes32(0) || _origin.sender != expectedSender) return false;
 
+        // FIX: M-7 — tighten callback detection: standard OFT SEND is ~40 bytes,
+        // but SEND_AND_CALL with specific compose lengths could be exactly 128 bytes.
+        // We verify the ABI structure of all 4 words to ensure this cannot collide
+        // with any valid OFT packed payload (which uses bytes32 + uint64 layout).
         // ABI encoding of (uint16,address,address,uint256) is always 4 * 32 bytes.
         if (_message.length != 128) return false;
 
         uint256 word0;
         uint256 word1;
         uint256 word2;
+        uint256 word3;
         assembly {
             word0 := calldataload(_message.offset)
             word1 := calldataload(add(_message.offset, 0x20))
             word2 := calldataload(add(_message.offset, 0x40))
+            word3 := calldataload(add(_message.offset, 0x60))
         }
 
         // word0 is an ABI-encoded uint16 => upper 240 bits must be zero.
@@ -797,8 +812,12 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         if (uint16(word0) != MSG_TYPE_WINNER_CALLBACK) return false;
 
         // word1, word2 are ABI-encoded addresses => upper 96 bits must be zero.
+        // word3 is uint256 (totalSharesPaid) — must be non-zero for a valid winner callback
         if (word1 >> 160 != 0) return false;
         if (word2 >> 160 != 0) return false;
+        // FIX: M-7 — require non-zero totalSharesPaid to further disambiguate from
+        // OFT token transfers that happen to be 128 bytes
+        if (word3 == 0) return false;
 
         return true;
     }
@@ -833,6 +852,9 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      * @param _hubGaugeReceiver Address of GaugeController on hub (for fee bridging)
      */
     function setHubConfig(bool _isHub, uint32 _hubEid, address _hubGaugeReceiver) external onlyOwner {
+        // FIX: L-2 — prevent converting hub to remote on Base, which would strand
+        // pending fees and break fee routing
+        require(_isHub || block.chainid != 8453, "Hub cannot be set to remote on Base");
         isHub = _isHub;
         hubEid = _hubEid;
         hubGaugeReceiver = _hubGaugeReceiver;
@@ -845,6 +867,10 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
      * @param _hubLotteryPeer bytes32-encoded address of the hub LotteryManager
      */
     function setHubLotteryPeer(uint32 _hubEid, bytes32 _hubLotteryPeer) external onlyOwner {
+        // FIX: L-6 — require hubGaugeReceiver to be set before lottery peer;
+        // calling this before setHubConfig leaves hubGaugeReceiver=0 causing
+        // flushFees to revert with HubNotConfigured even though hubEid appears set
+        require(hubGaugeReceiver != address(0), "Call setHubConfig first");
         hubEid = _hubEid;
         hubLotteryPeer = _hubLotteryPeer;
         emit HubLotteryPeerSet(_hubEid, _hubLotteryPeer);
@@ -1183,6 +1209,16 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     // ================================
     // GAS FUNDING
     // ================================
+
+    // FIX: I-1 — add ETH withdrawal path for hub deployment; previously ETH from
+    // LZ refunds accumulated with no recovery mechanism
+    function withdrawETH(address payable to) external onlyOwner {
+        require(to != address(0), "Zero address");
+        uint256 bal = address(this).balance;
+        require(bal > 0, "No ETH");
+        (bool ok,) = to.call{value: bal}("");
+        require(ok, "ETH transfer failed");
+    }
 
     /**
      * @notice Accept native token transfers/refunds.

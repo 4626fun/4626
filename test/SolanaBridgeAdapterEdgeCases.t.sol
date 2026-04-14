@@ -223,7 +223,7 @@ contract SolanaBridgeAdapterEdgeCasesTest is Test {
 
         SolanaBridgeAdapter.LotteryEntry[] memory entries = new SolanaBridgeAdapter.LotteryEntry[](1);
         entries[0] = SolanaBridgeAdapter.LotteryEntry({
-            buyerSolanaPubkey: buyerPubkey, shareOFT: address(shareOFT), amountSolanaUnits: 1
+            buyerSolanaPubkey: buyerPubkey, shareOFT: address(shareOFT), amountSolanaUnits: 1, solanaTxSig: bytes32(0)
         });
 
         vm.prank(keeperTwin);
@@ -236,7 +236,7 @@ contract SolanaBridgeAdapterEdgeCasesTest is Test {
 
         SolanaBridgeAdapter.LotteryEntry[] memory entries = new SolanaBridgeAdapter.LotteryEntry[](1);
         entries[0] = SolanaBridgeAdapter.LotteryEntry({
-            buyerSolanaPubkey: buyerPubkey, shareOFT: address(shareOFT), amountSolanaUnits: 2
+            buyerSolanaPubkey: buyerPubkey, shareOFT: address(shareOFT), amountSolanaUnits: 2, solanaTxSig: bytes32(uint256(1))
         });
 
         vm.prank(keeperTwin);
@@ -255,7 +255,7 @@ contract SolanaBridgeAdapterEdgeCasesTest is Test {
 
         SolanaBridgeAdapter.LotteryEntry[] memory entries = new SolanaBridgeAdapter.LotteryEntry[](1);
         entries[0] = SolanaBridgeAdapter.LotteryEntry({
-            buyerSolanaPubkey: buyerPubkey, shareOFT: address(lowDecimals), amountSolanaUnits: 1
+            buyerSolanaPubkey: buyerPubkey, shareOFT: address(lowDecimals), amountSolanaUnits: 1, solanaTxSig: bytes32(0)
         });
 
         vm.prank(keeperTwin);
@@ -270,7 +270,7 @@ contract SolanaBridgeAdapterEdgeCasesTest is Test {
 
         SolanaBridgeAdapter.LotteryEntry[] memory entries = new SolanaBridgeAdapter.LotteryEntry[](1);
         entries[0] = SolanaBridgeAdapter.LotteryEntry({
-            buyerSolanaPubkey: buyerPubkey, shareOFT: address(unregistered), amountSolanaUnits: 10
+            buyerSolanaPubkey: buyerPubkey, shareOFT: address(unregistered), amountSolanaUnits: 10, solanaTxSig: bytes32(0)
         });
 
         vm.prank(keeperTwin);

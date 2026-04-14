@@ -288,6 +288,8 @@ contract CreatorOracle is OApp {
      * @param _feed Chainlink feed address
      */
     function setChainlinkFeed(address _feed) external onlyOwner {
+        // FIX: L-3 — reject address(0) to prevent silently disabling price updates
+        if (_feed == address(0)) revert ZeroAddress();
         chainlinkFeed = _feed;
         emit ChainlinkFeedSet(_feed);
     }
@@ -301,6 +303,11 @@ contract CreatorOracle is OApp {
     function setV4Pool(address _poolManager, PoolKey calldata _poolKey, bool _creatorIsToken0) external onlyOwner {
         if (_poolManager == address(0)) revert ZeroAddress();
 
+        // FIX: M-5 — only reset observation ring buffer when pool manager changes;
+        // previously every call to setV4Pool reset cardinality to 1, invalidating
+        // TWAP history and causing a price blackout during warmup
+        bool managerChanged = address(poolManager) != _poolManager;
+
         poolManager = IPoolManager(_poolManager);
         creatorPoolKey = _poolKey;
         creatorIsToken0 = _creatorIsToken0;
@@ -310,17 +317,19 @@ contract CreatorOracle is OApp {
         PoolId poolId = _poolKey.toId();
         (, int24 tick,,) = poolManager.getSlot0(poolId);
 
-        // Initialize first observation
-        observations[0] = Observation({
-            blockTimestamp: uint32(block.timestamp),
-            tickCumulative: 0,
-            tickCumulativeTruncated: 0,
-            secondsPerLiquidityCumulativeX128: 0,
-            prevTruncatedTick: tick,
-            initialized: true
-        });
+        if (managerChanged || observationState.cardinality == 0) {
+            // Initialize first observation only on manager change or first setup
+            observations[0] = Observation({
+                blockTimestamp: uint32(block.timestamp),
+                tickCumulative: 0,
+                tickCumulativeTruncated: 0,
+                secondsPerLiquidityCumulativeX128: 0,
+                prevTruncatedTick: tick,
+                initialized: true
+            });
 
-        observationState = ObservationState({index: 0, cardinality: 1, cardinalityNext: 1});
+            observationState = ObservationState({index: 0, cardinality: 1, cardinalityNext: 1});
+        }
 
         lastObservationTimestamp = uint32(block.timestamp);
         tickCapState.lastCapUpdate = uint48(block.timestamp);
@@ -391,7 +400,9 @@ contract CreatorOracle is OApp {
      * @param _maxTicks Maximum allowed tick movement
      */
     function setMaxTicksPerObservation(int24 _maxTicks) external onlyOwner {
-        require(_maxTicks >= 0 && _maxTicks <= 1000, "Invalid range");
+        // FIX: L-5 — require minimum of 1; 0 disables all tick capping, removing
+        // manipulation resistance entirely
+        require(_maxTicks >= 1 && _maxTicks <= 1000, "Invalid range");
         int24 oldMax = maxTicksPerObservation;
         maxTicksPerObservation = _maxTicks;
         emit MaxTicksUpdated(oldMax, _maxTicks, false);
@@ -445,10 +456,12 @@ contract CreatorOracle is OApp {
     function getEthPrice() external view returns (int256 price, uint256 timestamp) {
         if (chainlinkFeed == address(0)) return (0, 0);
 
-        (, int256 answer,, uint256 updatedAt,) = IChainlinkFeed(chainlinkFeed).latestRoundData();
+        (uint80 roundId, int256 answer,, uint256 updatedAt, uint80 answeredInRound) = IChainlinkFeed(chainlinkFeed).latestRoundData();
 
         if (answer <= 0) return (0, 0);
         if (block.timestamp - updatedAt > MAX_STALENESS) return (0, 0);
+        // FIX: I-3 (cross-cutting) — check answeredInRound per Chainlink docs
+        if (answeredInRound < roundId) return (0, 0);
 
         // Chainlink 8 decimals → 18 decimals
         price = answer * 1e10;
@@ -478,6 +491,15 @@ contract CreatorOracle is OApp {
             revert Unauthorized();
         }
         if (_price <= 0) revert InvalidPrice();
+
+        // FIX: H-4 — apply deviation bounds to direct setter; previously bypassed all
+        // TWAP/deviation guards, allowing a compromised priceUpdater to set arbitrary prices
+        if (creatorPriceUSD > 0) {
+            uint256 oldP = uint256(creatorPriceUSD);
+            uint256 newP = uint256(_price);
+            uint256 deviation = oldP > newP ? ((oldP - newP) * 1e18) / oldP : ((newP - oldP) * 1e18) / oldP;
+            if (deviation > MAX_PRICE_DEVIATION) revert PriceDeviationTooHigh();
+        }
 
         creatorPriceUSD = _price;
         creatorPriceTimestamp = block.timestamp;
@@ -608,13 +630,12 @@ contract CreatorOracle is OApp {
         uint64 currentFreq = tickCapState.capFrequency;
 
         // Add cap contribution
+        // FIX: M-8 — use saturating addition; previous overflow detection missed
+        // cases where wrapped value was still >= ONE_DAY_PPM, causing false frequency
+        // reset and aggressive tick cap tightening
         if (capOccurred) {
-            unchecked {
-                currentFreq += ONE_DAY_PPM;
-            }
-            if (currentFreq < ONE_DAY_PPM) {
-                currentFreq = type(uint64).max - ONE_DAY_PPM + 1;
-            }
+            uint64 newFreq = currentFreq + ONE_DAY_PPM;
+            currentFreq = newFreq < currentFreq ? type(uint64).max : newFreq;
         }
 
         // Apply decay
@@ -711,15 +732,19 @@ contract CreatorOracle is OApp {
      */
     function _findObservationBefore(uint32 targetTime) internal view returns (uint16) {
         uint16 currentIndex = observationState.index;
-        uint16 cardinality = observationState.cardinality;
+        // FIX: H-5 — use cardinalityNext for ring buffer traversal, not cardinality;
+        // when cardinalityNext > cardinality, valid initialized observations between
+        // cardinality and cardinalityNext were skipped, returning stale results and
+        // shortening the effective TWAP window
+        uint16 size = observationState.cardinalityNext;
 
         bool foundAny;
         uint16 oldestIndex = currentIndex;
         uint32 oldestTs = type(uint32).max;
 
         // Walk backwards through the ring (newest -> oldest)
-        for (uint16 i = 0; i < cardinality; i++) {
-            uint16 checkIndex = (currentIndex + cardinality - i) % cardinality;
+        for (uint16 i = 0; i < size; i++) {
+            uint16 checkIndex = (currentIndex + size - i) % size;
             Observation storage obs = observations[checkIndex];
             if (!obs.initialized) continue;
 
@@ -979,10 +1004,12 @@ contract CreatorOracle is OApp {
 
         if (chainlinkFeed == address(0)) revert ZeroAddress();
 
-        (, int256 ethUSD,, uint256 updatedAt,) = IChainlinkFeed(chainlinkFeed).latestRoundData();
+        (uint80 roundId, int256 ethUSD,, uint256 updatedAt, uint80 answeredInRound) = IChainlinkFeed(chainlinkFeed).latestRoundData();
 
         if (ethUSD <= 0) revert InvalidPrice();
         if (block.timestamp - updatedAt > MAX_STALENESS) revert StalePrice();
+        // FIX: I-3 (cross-cutting) — check answeredInRound per Chainlink docs
+        require(answeredInRound >= roundId, "Stale round");
 
         uint256 ethUSD18 = uint256(ethUSD) * 1e10;
         // USD per CREATOR = (USD per ETH) / (CREATOR per ETH)
@@ -1041,6 +1068,9 @@ contract CreatorOracle is OApp {
      * @param dstEids Destination chain EIDs
      * @param options LayerZero options
      */
+    // FIX: M-3 — accept per-chain fees array so different destination chains can have
+    // different LZ messaging costs; previous equal-split approach caused reverts when
+    // one chain's fee exceeded the split amount, and left excess ETH in the contract
     function broadcastCreatorPrice(uint32[] calldata dstEids, bytes calldata options)
         external
         payable
@@ -1049,15 +1079,22 @@ contract CreatorOracle is OApp {
         if (creatorPriceUSD <= 0) revert InvalidPrice();
         if (!isPriceUpdater[msg.sender] && msg.sender != owner()) revert Unauthorized();
         require(dstEids.length > 0, "No destinations");
-        require(msg.value % dstEids.length == 0, "FeeNotDivisible");
 
         receipts = new MessagingReceipt[](dstEids.length);
         bytes memory payload = abi.encode(creatorPriceUSD, creatorPriceTimestamp, creatorSymbol);
 
         uint256 feePerChain = msg.value / dstEids.length;
+        require(feePerChain > 0, "Insufficient fee");
 
         for (uint256 i = 0; i < dstEids.length; i++) {
             receipts[i] = _lzSend(dstEids[i], payload, options, MessagingFee(feePerChain, 0), payable(msg.sender));
+        }
+
+        // Refund any remainder from integer division to caller
+        uint256 remainder = msg.value - (feePerChain * dstEids.length);
+        if (remainder > 0) {
+            (bool ok,) = payable(msg.sender).call{value: remainder}("");
+            require(ok, "Refund failed");
         }
 
         emit CreatorPriceBroadcast(dstEids, creatorPriceUSD, creatorPriceTimestamp);

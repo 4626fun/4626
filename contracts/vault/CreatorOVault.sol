@@ -383,6 +383,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
 
     // Protocol rescue events (custody loss / recovery)
     event RescueConfigured(address indexed rescue, uint64 delay);
+    event RescueDisabled();
     event RescueInitiated(address indexed oldOwner, address indexed pendingOwner, uint64 unlockTime);
     event RescueCancelled(address indexed owner);
     event RescueFinalized(address indexed oldOwner, address indexed newOwner);
@@ -430,6 +431,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
 
     /// @notice No queued withdrawal
     error NoQueuedWithdrawal();
+    error QueuedWithdrawalReceiverMismatch(address existing, address provided);
 
     // Yearn V3 inspired errors
     error StrategyHasUnrealisedLosses(address strategy, uint256 lossAmount);
@@ -702,16 +704,11 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @notice Adjust report baseline upward for user principal inflows
      * @dev Bootstraps from live assets when baseline is uninitialized (legacy vaults)
      */
+    // FIX: I-04 — do not rebuild baseline from live totalAssets() when baseline is zero;
+    // simply apply the delta to prevent flash-loan-assisted baseline manipulation
     function _increaseReportBaselineForPrincipalInflow(uint256 assets) internal {
         if (assets == 0) return;
-
-        uint256 previousTotalAssets = totalAssetsAtLastReport;
-        if (previousTotalAssets == 0) {
-            totalAssetsAtLastReport = totalAssets();
-            return;
-        }
-
-        totalAssetsAtLastReport = previousTotalAssets + assets;
+        totalAssetsAtLastReport += assets;
     }
 
     /**
@@ -720,13 +717,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      */
     function _decreaseReportBaselineForPrincipalOutflow(uint256 assets) internal {
         if (assets == 0) return;
-
         uint256 previousTotalAssets = totalAssetsAtLastReport;
-        if (previousTotalAssets == 0) {
-            totalAssetsAtLastReport = totalAssets();
-            return;
-        }
-
         totalAssetsAtLastReport = assets >= previousTotalAssets ? 0 : previousTotalAssets - assets;
     }
 
@@ -787,7 +778,9 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @dev Includes idle balance + strategy deployments
      */
     function totalAssets() public view override returns (uint256) {
-        uint256 total = CREATOR_COIN.balanceOf(address(this));
+        // FIX: L-06 — use tracked coinBalance instead of live balanceOf to prevent
+        // donation-based fee extraction via direct token transfers
+        uint256 total = coinBalance;
 
         // Add strategy holdings
         uint256 len = strategyList.length;
@@ -959,6 +952,21 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     }
 
     /**
+     * @notice Preview redeem (ERC-4626 override)
+     * @dev FIX: S-C02 — cap preview at liquid assets minus queued withdrawals.
+     *      OZ default uses totalAssets()/totalSupply() which overstates realisable value
+     *      when totalQueuedWithdrawalShares > 0 (those shares claim assets at redemption).
+     */
+    function previewRedeem(uint256 shares) public view override returns (uint256) {
+        uint256 assets = super.previewRedeem(shares);
+        // Cap at available liquid assets not reserved for queued withdrawals
+        uint256 liquid = totalAssets();
+        uint256 reserved = super.previewRedeem(totalQueuedWithdrawalShares);
+        uint256 available = liquid > reserved ? liquid - reserved : 0;
+        return assets > available ? available : assets;
+    }
+
+    /**
      * @notice Max deposit (standard ERC4626)
      */
     function maxDeposit(address receiver) public view override returns (uint256) {
@@ -970,7 +978,9 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
 
         uint256 remainingShares = maxTotalSupply - currentSupply;
         uint256 supply = totalSupply();
-        if (supply == 0) return remainingShares;
+        // FIX: M-05 — return asset-denominated value when supply is zero (ERC-4626 compliance)
+        // Vault uses _decimalsOffset() = 3, so shares = assets * 10^3
+        if (supply == 0) return remainingShares / (10 ** _decimalsOffset());
 
         return (remainingShares * totalAssets()) / supply;
     }
@@ -1184,8 +1194,9 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @param strategy Strategy address
      * @param weight Allocation weight (basis points, total <= 10000)
      */
-    function addStrategy(address strategy, uint256 weight) external onlyManagement {
-        _delegate(_strategiesModule);
+    // FIX: L-04 — add nonReentrant to prevent reentrancy during strategy external calls
+    function addStrategy(address strategy, uint256 weight) external nonReentrant onlyManagement {
+        _delegateAndReturn(_strategiesModule);
     }
 
     /**
@@ -1195,16 +1206,23 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @param weight Allocation weight (basis points, max 10000)
      * @param addToQueue Whether to add to default withdrawal queue
      */
-    function addStrategy(address strategy, uint256 weight, bool addToQueue) public onlyManagement {
-        _delegate(_strategiesModule);
+    // FIX: L-04 — add nonReentrant to prevent reentrancy during strategy external calls
+    function addStrategy(address strategy, uint256 weight, bool addToQueue) public nonReentrant onlyManagement {
+        _delegateAndReturn(_strategiesModule);
     }
 
     /**
      * @notice Remove a strategy
      * @dev Withdraws all funds before removal
      */
-    function removeStrategy(address strategy) external onlyManagement {
-        _delegate(_strategiesModule);
+    // FIX: L-04 — add nonReentrant to prevent reentrancy during strategy external calls
+    function removeStrategy(address strategy) external nonReentrant onlyManagement {
+        _delegateAndReturn(_strategiesModule);
+    }
+
+    // FIX: M-02 — force-remove a strategy that cannot return full debt (accepts loss)
+    function forceRemoveStrategy(address strategy) external nonReentrant onlyManagement {
+        _delegateAndReturn(_strategiesModule);
     }
 
     /**
@@ -1226,8 +1244,9 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     /**
      * @notice Update strategy weight
      */
-    function updateStrategyWeight(address strategy, uint256 newWeight) external onlyManagement {
-        _delegate(_strategiesModule);
+    // FIX: L-04 — add nonReentrant to prevent reentrancy during strategy weight update
+    function updateStrategyWeight(address strategy, uint256 newWeight) external nonReentrant onlyManagement {
+        _delegateAndReturn(_strategiesModule);
     }
 
     /**
@@ -1417,8 +1436,9 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     /**
      * @notice Burn shares to increase price (called by GaugeController)
      */
-    function burnSharesForPriceIncrease(uint256 shares) external {
-        _delegate(_coreModule);
+    // FIX: I-01 — add nonReentrant and use _delegateAndReturn so modifier epilogue executes
+    function burnSharesForPriceIncrease(uint256 shares) external nonReentrant {
+        _delegateAndReturn(_coreModule);
     }
 
     // =================================
@@ -1430,7 +1450,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
      * @dev Anyone can call (typically protocol treasury)
      * @custom:security Price change check prevents dramatic manipulation
      */
-    function injectCapital(uint256 amount) external nonReentrant whenNotPaused {
+    // FIX: M-04 — restrict injectCapital to management to prevent price manipulation by untrusted callers
+    function injectCapital(uint256 amount) external nonReentrant whenNotPaused onlyManagement {
         _delegateAndReturn(_coreModule);
     }
 
@@ -1509,12 +1530,14 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         _delegate(_adminModule);
     }
 
-    function emergencyWithdrawFromStrategies() external onlyEmergencyAuthorized {
-        _delegate(_adminModule);
+    // FIX: M-03 — add nonReentrant and use _delegateAndReturn so modifier epilogue executes
+    function emergencyWithdrawFromStrategies() external nonReentrant onlyEmergencyAuthorized {
+        _delegateAndReturn(_adminModule);
     }
 
-    function emergencyWithdraw(uint256 amount, address to) external onlyEmergencyAuthorized {
-        _delegate(_adminModule);
+    // FIX: M-03 — add nonReentrant and use _delegateAndReturn so modifier epilogue executes
+    function emergencyWithdraw(uint256 amount, address to) external nonReentrant onlyEmergencyAuthorized {
+        _delegateAndReturn(_adminModule);
     }
 
     function setPaused(bool _paused) external onlyOwner {
@@ -1781,7 +1804,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     function pricePerShare() public view returns (uint256) {
         uint256 supply = totalSupply();
         if (supply == 0) return 1e18;
-        return (totalAssets() * 1e18) / supply;
+        // FIX: L-03 — align with ERC-4626 virtual shares offset (_decimalsOffset() = 3)
+        return ((totalAssets() + 1) * 1e18) / (supply + 10 ** _decimalsOffset());
     }
 
     function decimals() public pure override returns (uint8) {

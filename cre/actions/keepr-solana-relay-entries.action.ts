@@ -5,6 +5,8 @@
  * SolanaBridgeAdapter.processLotteryEntryFromSolana().
  */
 
+// FIX: MED-01 — Replace require('crypto') with ES module import
+import * as crypto from 'node:crypto';
 import {
   requireEnv,
   CHAINS,
@@ -13,6 +15,8 @@ import {
 import { writeContract } from '../utils/onchain.js';
 import { alertInfo, alertWarning, alertCritical } from '../utils/alerts.js';
 import { loadKeeperKeypair, solanaPubkeyToBytes32 } from '../utils/solana.js';
+// FIX: HGH-02 — Import isAddress for shareOFT validation
+import { isAddress } from 'viem';
 
 const WORKFLOW_NAME = 'keepr-solana-relay-entries';
 
@@ -28,7 +32,8 @@ const ENTRY_SIZE = 48;
 const MAX_PENDING_ENTRIES = 256;
 const EMERGENCY_RELAY_THRESHOLD = Math.floor(MAX_PENDING_ENTRIES * 0.8);
 
-const RELAY_ENTRIES_DISCRIMINATOR = require('crypto')
+// FIX: MED-01 — Use imported crypto module instead of require('crypto')
+const RELAY_ENTRIES_DISCRIMINATOR = crypto
   .createHash('sha256')
   .update('global:relay_entries')
   .digest()
@@ -55,7 +60,16 @@ export async function executeSolanaRelayEntries(): Promise<EntryRelayResult> {
     const programPubkey = new PublicKey(programId);
 
     const creatorMints = (process.env.SOLANA_CREATOR_MINTS ?? '').split(',').filter(Boolean);
-    const shareOFTMapping = JSON.parse(process.env.SOLANA_SHARE_OFT_MAPPING ?? '{}');
+    // FIX: HGH-02 — Validate each address in shareOFTMapping before use
+    const rawShareOFTMapping = JSON.parse(process.env.SOLANA_SHARE_OFT_MAPPING ?? '{}');
+    const shareOFTMapping: Record<string, `0x${string}`> = {};
+    for (const [key, value] of Object.entries(rawShareOFTMapping)) {
+      if (typeof value === 'string' && isAddress(value)) {
+        shareOFTMapping[key] = value as `0x${string}`;
+      } else {
+        await alertWarning(WORKFLOW_NAME, `Invalid shareOFT address in SOLANA_SHARE_OFT_MAPPING for key ${key} — skipping`);
+      }
+    }
 
     if (creatorMints.length === 0) {
       await alertInfo(WORKFLOW_NAME, 'No creator mints configured — skipping');
@@ -126,29 +140,7 @@ export async function executeSolanaRelayEntries(): Promise<EntryRelayResult> {
 
       await alertInfo(WORKFLOW_NAME, `Relaying ${count} pending entries for mint ${mintStr}`);
 
-      try {
-        const relayIx = {
-          programId: programPubkey,
-          keys: [
-            { pubkey: keeperKeypair.publicKey, isSigner: true, isWritable: false },
-            { pubkey: creatorConfigPda, isSigner: false, isWritable: false },
-            { pubkey: mint, isSigner: false, isWritable: false },
-            { pubkey: pendingEntriesPda, isSigner: false, isWritable: true },
-          ],
-          data: Buffer.from(RELAY_ENTRIES_DISCRIMINATOR),
-        };
-
-        const tx = new Transaction().add(relayIx);
-        const sig = await sendAndConfirmTransaction(connection, tx, [keeperKeypair], {
-          commitment: 'confirmed',
-        });
-
-        await alertInfo(WORKFLOW_NAME, `Relayed pending entries for ${mintStr}`, { sig });
-      } catch (relayErr: unknown) {
-        const msg = relayErr instanceof Error ? relayErr.message : String(relayErr);
-        await alertWarning(WORKFLOW_NAME, `relay_entries failed for ${mintStr}: ${msg}`);
-      }
-
+      // FIX: CRT-01 — Collect entries first, defer Solana flush until after Base write confirms
       result.entriesQueued += count;
     }
 
@@ -159,6 +151,7 @@ export async function executeSolanaRelayEntries(): Promise<EntryRelayResult> {
 
     const keeperBytes32 = solanaPubkeyToBytes32(keeperPubkey);
 
+    // FIX: CRT-01 — Submit Base write FIRST; only flush Solana PDA buffer after Base confirms
     const txResult = await writeContract({
       address: solanaBridgeAdapter,
       abi: SOLANA_BRIDGE_ADAPTER_ABI,
@@ -171,8 +164,45 @@ export async function executeSolanaRelayEntries(): Promise<EntryRelayResult> {
       await alertInfo(WORKFLOW_NAME, `Relayed ${allEntries.length} entries to Base`, {
         txHash: txResult.txHash,
       });
+
+      // FIX: CRT-01 — Now flush Solana PDA buffers only after Base write succeeded
+      for (const mintStr of creatorMints) {
+        const mint = new PublicKey(mintStr);
+        const [creatorConfigPda] = PublicKey.findProgramAddressSync(
+          [Buffer.from('creator_config'), mint.toBuffer()],
+          programPubkey,
+        );
+        const [pendingEntriesPda] = PublicKey.findProgramAddressSync(
+          [Buffer.from('pending_entries'), mint.toBuffer()],
+          programPubkey,
+        );
+
+        try {
+          const relayIx = {
+            programId: programPubkey,
+            keys: [
+              { pubkey: keeperKeypair.publicKey, isSigner: true, isWritable: false },
+              { pubkey: creatorConfigPda, isSigner: false, isWritable: false },
+              { pubkey: mint, isSigner: false, isWritable: false },
+              { pubkey: pendingEntriesPda, isSigner: false, isWritable: true },
+            ],
+            data: Buffer.from(RELAY_ENTRIES_DISCRIMINATOR),
+          };
+
+          const tx = new Transaction().add(relayIx);
+          const sig = await sendAndConfirmTransaction(connection, tx, [keeperKeypair], {
+            commitment: 'confirmed',
+          });
+
+          await alertInfo(WORKFLOW_NAME, `Flushed Solana PDA buffer for ${mintStr}`, { sig });
+        } catch (relayErr: unknown) {
+          const msg = relayErr instanceof Error ? relayErr.message : String(relayErr);
+          await alertWarning(WORKFLOW_NAME, `relay_entries flush failed for ${mintStr}: ${msg}`);
+        }
+      }
     } else {
-      await alertCritical(WORKFLOW_NAME, 'Failed to relay entries to Base', {
+      // FIX: CRT-01 — Base write failed; do NOT flush Solana buffers so entries are preserved for retry
+      await alertCritical(WORKFLOW_NAME, 'Failed to relay entries to Base — Solana buffers NOT flushed', {
         error: txResult.error,
       });
     }

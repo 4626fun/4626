@@ -42,6 +42,7 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
     event EmergencyWithdraw(address indexed to, uint256 amount);
 
     event RescueConfigured(address indexed rescue, uint64 delay);
+    event RescueDisabled();
     event RescueInitiated(address indexed oldOwner, address indexed newOwner, uint64 unlockTime);
     event RescueCancelled(address indexed oldOwner);
     event RescueFinalized(address indexed oldOwner, address indexed newOwner);
@@ -89,10 +90,16 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
             uint256 beforeBal = coin.balanceOf(address(this));
             try IStrategy(strategy).emergencyWithdraw() returns (uint256) {
                 uint256 afterBal = coin.balanceOf(address(this));
+                // FIX: L-02 — simplify balance tracking, remove redundant balanceOf call
+                coinBalance = afterBal;
+
+                // FIX: H-02 — update strategyDebt and totalDebt to prevent double-counting
                 if (afterBal >= beforeBal) {
-                    coinBalance = afterBal;
-                } else {
-                    coinBalance = coin.balanceOf(address(this));
+                    uint256 recovered = afterBal - beforeBal;
+                    uint256 debt = strategyDebt[strategy];
+                    uint256 reduction = recovered > debt ? debt : recovered;
+                    strategyDebt[strategy] -= reduction;
+                    totalDebt -= reduction;
                 }
             } catch {}
         }
@@ -170,7 +177,12 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
     function setProtocolRescue(address rescue) external onlyDelegateCall {
         if (pendingRescueOwner != address(0)) revert RescueAlreadyPending(pendingRescueOwner);
         protocolRescue = rescue;
-        emit RescueConfigured(rescue, rescueDelay);
+        // FIX: L-05 — emit distinct event when rescue mechanism is disabled
+        if (rescue == address(0)) {
+            emit RescueDisabled();
+        } else {
+            emit RescueConfigured(rescue, rescueDelay);
+        }
     }
 
     function setRescueDelay(uint64 delay) external onlyDelegateCall {
@@ -185,6 +197,8 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
     function initiateOwnershipRescue(address newOwner) external onlyDelegateCall {
         if (pendingRescueOwner != address(0)) revert RescueAlreadyPending(pendingRescueOwner);
         if (newOwner == address(0) || newOwner == _owner) revert InvalidRescueOwner(newOwner);
+        // FIX: M-06 — enforce minimum rescue delay at initiation time
+        if (rescueDelay < MIN_RESCUE_DELAY) revert RescueDelayOutOfBounds(rescueDelay, MIN_RESCUE_DELAY, MAX_RESCUE_DELAY);
 
         pendingRescueOwner = newOwner;
         uint64 unlockTime = uint64(block.timestamp) + rescueDelay;

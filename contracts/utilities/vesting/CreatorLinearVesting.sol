@@ -18,9 +18,20 @@ contract CreatorLinearVesting {
     uint64 public immutable durationSeconds;
 
     uint256 public released;
+    // FIX: CLV-01 — fixed allocation recorded at seed time, not live balance
+    uint256 public totalAllocation;
+    bool public seeded;
+
+    // FIX: CLV-03 — event for release tracking
+    event Released(address indexed beneficiary, address indexed to, uint256 amount);
+    event Seeded(uint256 totalAllocation);
 
     error ZeroAddress();
     error ZeroDuration();
+    // FIX: CLV-02 — error for unauthorized release-to
+    error NotBeneficiary();
+    error AlreadySeeded();
+    error NotSeeded();
 
     constructor(address token_, address beneficiary_, uint64 startTimestamp_, uint64 durationSeconds_) {
         if (token_ == address(0) || beneficiary_ == address(0)) revert ZeroAddress();
@@ -31,8 +42,19 @@ contract CreatorLinearVesting {
         durationSeconds = durationSeconds_;
     }
 
+    // FIX: CLV-01 — record total allocation from current balance (call once after funding)
+    function seed() external {
+        if (seeded) revert AlreadySeeded();
+        uint256 bal = token.balanceOf(address(this));
+        if (bal == 0) revert ZeroDuration();
+        totalAllocation = bal;
+        seeded = true;
+        emit Seeded(bal);
+    }
+
     function vestedAmount(uint64 timestamp) public view returns (uint256) {
-        uint256 total = token.balanceOf(address(this)) + released;
+        // FIX: CLV-01 — use fixed totalAllocation instead of live balance
+        uint256 total = seeded ? totalAllocation : token.balanceOf(address(this)) + released;
         if (timestamp <= startTimestamp) return 0;
 
         uint256 elapsed = uint256(timestamp - startTimestamp);
@@ -51,6 +73,20 @@ contract CreatorLinearVesting {
         if (amount == 0) return 0;
         released += amount;
         token.safeTransfer(beneficiary, amount);
+        // FIX: CLV-03 — emit event on release
+        emit Released(beneficiary, beneficiary, amount);
+    }
+
+    // FIX: CLV-02 — allow beneficiary to redirect tokens to a different address
+    function release(address to) external returns (uint256 amount) {
+        if (msg.sender != beneficiary) revert NotBeneficiary();
+        if (to == address(0)) revert ZeroAddress();
+        amount = releasable();
+        if (amount == 0) return 0;
+        released += amount;
+        token.safeTransfer(to, amount);
+        // FIX: CLV-03 — emit event on release
+        emit Released(beneficiary, to, amount);
     }
 }
 

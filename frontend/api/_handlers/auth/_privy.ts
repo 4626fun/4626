@@ -22,10 +22,10 @@ import { PrivyClient } from '@privy-io/server-auth'
 
 declare const process: { env: Record<string, string | undefined> }
 
+// FIX: FINDING-02 — removed sessionToken and privyUserId from response body;
+// session is conveyed via HttpOnly cookie only, preventing XSS exfiltration.
 type PrivyVerifyResponse = {
   address: string
-  sessionToken: string
-  privyUserId: string
 }
 
 function getPrivyServerAuth(): { appId: string; appSecret: string } | null {
@@ -156,6 +156,12 @@ async function resolvePersistedSessionAddress(db: any, privyUserId: string): Pro
 }
 
 
+// FIX: FINDING-19 — this module-level variable is process-scoped; in serverless,
+// each warm instance has its own counter and concurrent instances don't share state.
+// This means the throttle does not prevent duplicate syncs across instances.
+// For robust deduplication, move throttle to DB (e.g., a `last_synced_at` column
+// on the profile, updated atomically). syncUserWallets uses upsert so duplicates
+// are idempotent, making this a performance concern rather than a correctness bug.
 let lastPrivyAuthDbSyncAtMs = 0
 
 function getPrivyAuthDbSyncMinIntervalMs(): number {
@@ -262,9 +268,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const sessionToken = makeSessionToken({ address: sessionAddress })
     setCookie(req, res, COOKIE_SESSION, sessionToken, { httpOnly: true, maxAgeSeconds: 60 * 60 * 24 * 7 })
 
+    // FIX: FINDING-02 — do not return sessionToken or privyUserId in response body;
+    // the session cookie is set above, privyUserId is unnecessary client-side.
     return res.status(200).json({
       success: true,
-      data: { address: sessionAddress, sessionToken, privyUserId: claims.userId } satisfies PrivyVerifyResponse,
+      data: { address: sessionAddress } satisfies PrivyVerifyResponse,
     } satisfies ApiEnvelope<PrivyVerifyResponse>)
   } catch (e: unknown) {
     if (isIdentityRecoveryRequiredError(e)) {

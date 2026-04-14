@@ -713,6 +713,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return 0n
     }
 
+    // FIX: FINDING-20 — normalizeCalls silently drops malformed entries from the JSONB
+    // payload. If a DB migration corrupts data or a buggy client submits data that passes
+    // creation validation but encodes malformed ABIs, required calls may be silently skipped.
+    // Add a database-level payload shape constraint or a startup-time schema validator to
+    // catch corruption before the continue flow begins.
     const normalizeCalls = (raw: unknown): Array<{ to: Address; value: bigint; data: Hex }> => {
       if (!Array.isArray(raw)) return []
       const out: Array<{ to: Address; value: bigint; data: Hex }> = []
@@ -752,6 +757,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (hasPhase2Finalize && phase2FinalizeCalls.length === 0) throw new Error('phase2_finalize_calls_invalid')
     if (hasPhase3 && phase3Calls.length === 0) throw new Error('phase3_calls_invalid')
     if (hasPhase4 && phase4Calls.length === 0) throw new Error('phase4_calls_invalid')
+
+    // FIX: FINDING-08 — re-validate all calls from the DB payload against the paymaster
+    // selector allowlist. The payload was validated at session creation, but a gap in grant
+    // validation could allow broader calls than intended; defense-in-depth re-check here.
+    const allReconstructedCalls = [...phase1Calls, ...phase2CoreCalls, ...phase2FinalizeCalls, ...phase3Calls, ...phase4Calls]
+    if (allReconstructedCalls.length > 0) {
+      try {
+        await validateSponsoredSmartWalletCalls({
+          sender: getAddress(rec.smartWallet),
+          calls: allReconstructedCalls,
+          sessionAddress: getAddress(rec.sessionAddress),
+        })
+      } catch (validationErr) {
+        throw new Error(`payload_revalidation_failed: ${validationErr instanceof Error ? validationErr.message : 'unknown'}`)
+      }
+    }
+
     const solanaOvaultConfig = isPlainObject(payload.solanaOvault) ? payload.solanaOvault : {}
 
     const isInFlight = [

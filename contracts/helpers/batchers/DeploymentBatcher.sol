@@ -157,7 +157,14 @@ contract DeploymentBatcherPhase3Helper {
         IERC4626StrategyAdapterAdmin(out.ajnaStrategy).setIdleBufferBps(0);
         IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setSwapper(out.ajnaStrategy);
         IOwnableTransfer(out.ajnaStrategy).transferOwnership(protocolTreasury);
-        IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setAdmin(protocolTreasury);
+        // FIX: F-21 — verify this helper is still admin before transferring, to fail explicitly
+        // instead of silently leaving auth locked to this helper address
+        require(
+            IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).isAdmin(address(this)),
+            "Phase3Helper lost admin before transfer"
+        );
+        // FIX: F-04 compatibility — use two-step admin transfer
+        IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).transferAdmin(protocolTreasury);
 
         bytes32 solanaSalt = _saltFor(baseSalt, "solanaStrategy");
         bytes memory solanaArgs = abi.encode(
@@ -455,7 +462,9 @@ interface IAjnaVaultAuthConfigurator {
     function setMinBucketIndex(uint256 minBucketIndex) external;
     function setSwapper(address swapper) external;
     function setKeeper(address keeper, bool isKeeper) external;
-    function setAdmin(address admin) external;
+    // FIX: F-04/F-21 — updated to two-step admin transfer pattern
+    function transferAdmin(address admin) external;
+    function isAdmin(address account) external view returns (bool);
 }
 
 interface IERC4626StrategyAdapterAdmin {
@@ -701,6 +710,8 @@ contract DeploymentBatcher is ReentrancyGuard {
     error V3PoolMissing();
     error MissingInitialSqrtPriceX96();
     error AuctionAlreadyPending();
+    // FIX: F-02 — per-token guard prevents version-replay bricking
+    error AuctionAlreadyPendingForToken(address creatorToken, address owner);
     error NoPendingAuction();
     error AuctionShareOFTMismatch();
     error AuctionAmountMismatch();
@@ -710,6 +721,12 @@ contract DeploymentBatcher is ReentrancyGuard {
     error PermitTokenMismatch();
     error PermitAmountTooLow();
     error Phase1ShareOFTMissing();
+    // FIX: F-06 — cap symbol length to prevent gas griefing
+    error SymbolTooLong();
+    // FIX: F-15 — dedicated error for protocol treasury auth
+    error NotProtocolTreasury();
+    // FIX: F-26 — admin function to clear stuck Phase 1 state
+    error Phase1StateNotStuck();
     error InvalidCreatorTreasury(address provided);
     error InvalidPayoutRecipient();
     error CharmFactoryGovernanceMismatch(address expected, address actual);
@@ -741,6 +758,8 @@ contract DeploymentBatcher is ReentrancyGuard {
 
     /// @notice Pending auction allocations keyed by creator/owner/version salt.
     mapping(bytes32 => PendingAuction) public pendingAuctions;
+    // FIX: F-02 — per-token+owner pending auction guard (version-independent)
+    mapping(bytes32 => bool) public hasActivePendingAuction;
     /// @notice Split phase-1 state keyed by creator/owner/version salt.
     mapping(bytes32 => Phase1SplitState) public phase1SplitStates;
 
@@ -937,6 +956,8 @@ contract DeploymentBatcher is ReentrancyGuard {
         _requireOwner(params.owner);
         if (params.creatorToken == address(0) || params.owner == address(0)) revert ZeroAddress();
         _requirePhase1CodeIds(codeIds);
+        // FIX: F-06 — cap symbol length to prevent gas griefing in _toLower/_toUpper loops
+        if (bytes(params.shareSymbol).length > 32) revert SymbolTooLong();
 
         string memory shareSymbolLower = _toLower(params.shareSymbol);
         bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
@@ -1001,6 +1022,8 @@ contract DeploymentBatcher is ReentrancyGuard {
         _requireOwner(params.owner);
         if (params.creatorToken == address(0) || params.owner == address(0)) revert ZeroAddress();
         _requirePhase1CodeIds(codeIds);
+        // FIX: F-06 — cap symbol length to prevent gas griefing in _toLower/_toUpper loops
+        if (bytes(params.shareSymbol).length > 32) revert SymbolTooLong();
 
         string memory shareSymbolLower = _toLower(params.shareSymbol);
         string memory shareSymbolUpper = _toUpper(params.shareSymbol);
@@ -1039,9 +1062,14 @@ contract DeploymentBatcher is ReentrancyGuard {
         } catch {
             // If ShareOFT is already deployed at the deterministic address, reuse it
             // instead of permanently wedging phase-1 finalize.
-            address existingShareOFT = create2Deployer.computeAddress(state.shareOftSalt, shareOftInitCodeHash);
-            if (existingShareOFT.code.length == 0) revert Phase1ShareOFTMissing();
-            out.shareOFT = existingShareOFT;
+            // FIX: F-05 — verify the pre-deployed contract matches the expected initcode hash
+            // to prevent reuse of an unrelated/malicious contract at the same CREATE2 address.
+            address expectedAddr = create2Deployer.computeAddress(state.shareOftSalt, shareOftInitCodeHash);
+            if (expectedAddr.code.length == 0) revert Phase1ShareOFTMissing();
+            // Double-check: recompute from bytecodeStore to ensure codeId hasn't been swapped
+            bytes32 verifyHash = keccak256(bytes.concat(bytecodeStore.get(codeIds.shareOFT), shareOftArgs));
+            if (verifyHash != shareOftInitCodeHash) revert Phase1StateMismatch();
+            out.shareOFT = expectedAddr;
         }
 
         // Minimal wiring so Phase 2 can proceed without redeploying Phase 1 components.
@@ -1126,6 +1154,9 @@ contract DeploymentBatcher is ReentrancyGuard {
             );
 
         delete pendingAuctions[baseSalt];
+        // FIX: F-02 — clear version-independent guard so future deployments are not bricked
+        bytes32 tokenOwnerKey = keccak256(abi.encodePacked(params.creatorToken, params.owner));
+        hasActivePendingAuction[tokenOwnerKey] = false;
 
         emit AuctionLaunchedDeferred(
             params.creatorToken, params.owner, params.shareOFT, pending.ccaStrategy, pending.amount, auction
@@ -1145,6 +1176,16 @@ contract DeploymentBatcher is ReentrancyGuard {
         // Require phase-1 contracts to exist.
         if (params.vault.code.length == 0 || params.wrapper.code.length == 0 || params.shareOFT.code.length == 0) {
             revert Phase1Missing();
+        }
+
+        // FIX: F-01 — verify vault/wrapper/shareOFT were deployed by this batcher's Phase 1
+        {
+            bytes32 p2BaseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
+            Phase1SplitState storage p1state = phase1SplitStates[p2BaseSalt];
+            if (!p1state.finalized) revert Phase1Missing();
+            if (p1state.vault != params.vault || p1state.wrapper != params.wrapper || p1state.shareOFT != params.shareOFT) {
+                revert Phase1StateMismatch();
+            }
         }
 
         // Enforce protocol custody lane for treasury split in hardened deploy mode.
@@ -1229,6 +1270,15 @@ contract DeploymentBatcher is ReentrancyGuard {
 
         bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
 
+        // FIX: F-01 — verify vault/wrapper/shareOFT were deployed by this batcher's Phase 1
+        {
+            Phase1SplitState storage p1state = phase1SplitStates[baseSalt];
+            if (!p1state.finalized) revert Phase1Missing();
+            if (p1state.vault != params.vault || p1state.wrapper != params.wrapper || p1state.shareOFT != params.shareOFT) {
+                revert Phase1StateMismatch();
+            }
+        }
+
         out.gaugeController = params.gaugeController;
         out.ccaStrategy = params.ccaStrategy;
         out.oracle = params.oracle;
@@ -1248,6 +1298,12 @@ contract DeploymentBatcher is ReentrancyGuard {
         if (auctionAmount > 0) {
             PendingAuction storage pending = pendingAuctions[baseSalt];
             if (pending.amount != 0) revert AuctionAlreadyPending();
+            // FIX: F-02 — version-independent guard prevents replay bricking across re-deployments
+            bytes32 tokenOwnerKey = keccak256(abi.encodePacked(params.creatorToken, params.owner));
+            if (hasActivePendingAuction[tokenOwnerKey]) {
+                revert AuctionAlreadyPendingForToken(params.creatorToken, params.owner);
+            }
+            hasActivePendingAuction[tokenOwnerKey] = true;
             pendingAuctions[baseSalt] = PendingAuction({
                 shareOFT: params.shareOFT,
                 ccaStrategy: params.ccaStrategy,
@@ -1268,8 +1324,10 @@ contract DeploymentBatcher is ReentrancyGuard {
         if (vestingAmount > 0) {
             // Vest the creator’s ShareOFT allocation to reduce immediate sell pressure.
             // Default: linear over 365 days, no cliff, starting now.
+            // FIX: F-16 — use CREATE2 (salt) for deterministic, pre-verifiable vesting address
+            bytes32 vestingSalt = keccak256(abi.encodePacked(baseSalt, "vesting"));
             CreatorLinearVesting vesting =
-                new CreatorLinearVesting(params.shareOFT, params.owner, uint64(block.timestamp), uint64(365 days));
+                new CreatorLinearVesting{salt: vestingSalt}(params.shareOFT, params.owner, uint64(block.timestamp), uint64(365 days));
             IERC20(params.shareOFT).safeTransfer(address(vesting), vestingAmount);
             emit CreatorShareVestingDeployed(
                 params.shareOFT,
@@ -1411,8 +1469,8 @@ contract DeploymentBatcher is ReentrancyGuard {
      * @dev finalizePhase2 no longer bridges ShareOFT; Solana routing is handled separately.
      */
     function setSolanaConfig(address _adapter, bytes32 _destination) external {
-        // Only protocol treasury can configure Solana bridging.
-        if (msg.sender != protocolTreasury) revert NotOwner();
+        // FIX: F-15 — use dedicated error for protocol treasury auth (not generic NotOwner)
+        if (msg.sender != protocolTreasury) revert NotProtocolTreasury();
         solanaBridgeAdapter = _adapter;
         solanaDestination = _destination;
     }
@@ -1422,7 +1480,8 @@ contract DeploymentBatcher is ReentrancyGuard {
      * @dev Enabled configs require a non-zero composer and EID.
      */
     function setOVaultRuntimeConfig(address _hubComposer, uint32 _solanaEid, bool _enabled) external {
-        if (msg.sender != protocolTreasury) revert NotOwner();
+        // FIX: F-15 — use dedicated error for protocol treasury auth (not generic NotOwner)
+        if (msg.sender != protocolTreasury) revert NotProtocolTreasury();
         if (_enabled) {
             if (_hubComposer == address(0)) revert ZeroAddress();
             if (_solanaEid == 0) revert InvalidSolanaEid();
@@ -1432,6 +1491,19 @@ contract DeploymentBatcher is ReentrancyGuard {
 
     function getOVaultRuntimeConfig() external view returns (OVaultRuntimeConfig memory) {
         return ovaultRuntimeConfig;
+    }
+
+    // FIX: F-26 — admin function to clear stuck Phase 1 state so (creatorToken, owner, version)
+    // tuples are not permanently blocked by stale/abandoned deployments.
+    function resetPhase1State(bytes32 baseSalt) external {
+        if (msg.sender != protocolTreasury) revert NotProtocolTreasury();
+        Phase1SplitState storage state = phase1SplitStates[baseSalt];
+        // Only allow reset if Phase 1 was started but Phase 2 has not consumed it
+        // (i.e., pending auction for this salt must not exist).
+        if (state.vault == address(0)) revert Phase1StateNotStuck();
+        PendingAuction storage pending = pendingAuctions[baseSalt];
+        if (pending.amount != 0) revert AuctionAlreadyPending();
+        delete phase1SplitStates[baseSalt];
     }
 
     // ================================

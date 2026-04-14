@@ -38,6 +38,7 @@ interface ICharmVault {
     function baseLower() external view returns (int24);
     function baseUpper() external view returns (int24);
     function pool() external view returns (address);
+    function rebalance() external;
     function token0() external view returns (address);
     function token1() external view returns (address);
 }
@@ -947,7 +948,14 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
 
         if (address(charmVault) != address(0)) {
             uint256 ourShares = charmVault.balanceOf(address(this));
-            uint256 sharesToWithdraw = (ourShares * amount) / totalValue;
+            // FIX: S-M01 — use Charm vault's own getTotalAmounts for accurate share conversion
+            // instead of (ourShares * amount) / totalValue which conflates strategy-level
+            // and Charm-level accounting
+            (uint256 charm0, uint256 charm1) = charmVault.getTotalAmounts();
+            uint256 charmTotal = charm0 + charm1;
+            uint256 sharesToWithdraw = charmTotal > 0
+                ? (ourShares * amount) / charmTotal
+                : ourShares;
             if (sharesToWithdraw > ourShares) sharesToWithdraw = ourShares;
 
             if (sharesToWithdraw > 0) {
@@ -1197,9 +1205,17 @@ contract CreatorCharmStrategy is IStrategy, IStrategyValuation, ReentrancyGuard,
     function rebalance() external override {
         require(msg.sender == owner() || msg.sender == vault, "Only owner or vault");
 
-        // Charm strategy handles its own rebalancing
-        uint256 totalAssets = getTotalAssets();
-        emit StrategyRebalanced(totalAssets);
+        // FIX: S-H04 — trigger actual Charm vault rebalance with slippage post-check
+        uint256 totalBefore = getTotalAssets();
+        if (address(charmVault) != address(0)) {
+            charmVault.rebalance();
+        }
+        uint256 totalAfter = getTotalAssets();
+        // Enforce maximum slippage loss during rebalance
+        uint256 maxLoss = (totalBefore * depositSlippageBps) / 10000;
+        require(totalAfter + maxLoss >= totalBefore, "Rebalance slippage exceeded");
+
+        emit StrategyRebalanced(totalAfter);
     }
 
     // =================================

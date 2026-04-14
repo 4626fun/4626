@@ -106,9 +106,17 @@ export function parseAjnaManualPayload(payload: Uint8Array | undefined): AjnaMan
   try {
     return JSON.parse(raw) as AjnaManualPayload
   } catch {
+    // FIX: MED-02 — Log a warning when base64 fallback parsing is used (potential injection vector)
     try {
-      return JSON.parse(Buffer.from(raw, "base64").toString("utf-8")) as AjnaManualPayload
-    } catch {
+      console.warn('[CRE][ajna] Manual payload was not valid JSON; attempting base64 decode fallback')
+      const decoded = JSON.parse(Buffer.from(raw, "base64").toString("utf-8")) as AjnaManualPayload
+      // FIX: MED-02 — Validate vaultAddress/strategyAddress against format in forceEnqueue payloads
+      if (decoded.forceEnqueue && decoded.vaultAddress && !normalizeVaultAddress(decoded.vaultAddress)) {
+        throw new Error("invalid_vault_address_in_base64_payload")
+      }
+      return decoded
+    } catch (innerErr) {
+      if (innerErr instanceof Error && innerErr.message.includes('invalid_vault_address')) throw innerErr
       throw new Error("invalid_manual_payload")
     }
   }
@@ -428,7 +436,9 @@ export function evaluateAndEnqueueAjnaActions(
   manual: AjnaManualPayload = {},
 ): AjnaWorkflowResult {
   const apiKey = runtime.getSecret({ id: "KEEPR_API_KEY" }).result().value
-  const canForceEnqueue = manual.forceEnqueue === true && manual.authToken === apiKey
+  // FIX: CRT-03 — Use separate FORCE_ENQUEUE_AUTH_TOKEN secret for manual override auth
+  const forceEnqueueToken = runtime.getSecret({ id: "FORCE_ENQUEUE_AUTH_TOKEN" }).result().value || apiKey
+  const canForceEnqueue = manual.forceEnqueue === true && manual.authToken === forceEnqueueToken
   const chainId = resolveChainId(runtime.config.chainName, runtime.config.chainId)
   const evmClient = createEvmClientForChain(runtime.config.chainName)
   const httpClient = new HTTPClient()
@@ -535,7 +545,8 @@ export function evaluateAndEnqueueAjnaActions(
               vaultAddress: vault.vaultAddress,
               groupId: vault.groupId,
               actionType,
-              dedupeKey: `force:${strategyDedupeKey(vault.vaultAddress, forcedStrategy.authAddress, forcedTargetBucket)}`,
+              // FIX: MED-09 — Use strategyAddress (not authAddress) for force-enqueue dedupe key too
+              dedupeKey: `force:${strategyDedupeKey(vault.vaultAddress, forcedStrategyAddress, forcedTargetBucket)}`,
               action: actionPayload,
             }),
           consensusIdenticalAggregation(),
@@ -617,7 +628,8 @@ export function evaluateAndEnqueueAjnaActions(
                 vaultAddress: vault.vaultAddress,
                 groupId: vault.groupId,
                 actionType,
-              dedupeKey: strategyDedupeKey(vault.vaultAddress, strategy.authAddress, targetBucket),
+              // FIX: MED-09 — Use strategy.strategyAddress (not authAddress) for unique dedupe key
+              dedupeKey: strategyDedupeKey(vault.vaultAddress, strategy.strategyAddress, targetBucket),
                 action: actionPayload,
               }),
             consensusIdenticalAggregation(),

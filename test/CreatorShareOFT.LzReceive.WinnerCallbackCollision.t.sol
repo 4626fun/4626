@@ -63,6 +63,9 @@ contract CreatorShareOFTLzReceiveWinnerCallbackCollisionTest is Test {
         // Accept OFT messages from SRC_EID_OFT/SRC_PEER_OFT.
         shareOFT.setPeer(SRC_EID_OFT, SRC_PEER_OFT);
 
+        // FIX: L-6 requires setHubConfig before setHubLotteryPeer (hubGaugeReceiver must be non-zero)
+        shareOFT.setHubConfig(false, SRC_EID_HUB, address(0xFEED));
+
         // Configure hub lottery peer to a distinct sender so misclassification reverts InvalidCallback().
         shareOFT.setHubLotteryPeer(SRC_EID_HUB, HUB_LOTTERY_PEER);
         // Allow hub lottery peer messages for the positive control callback test.

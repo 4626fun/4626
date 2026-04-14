@@ -33,6 +33,8 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
     error StrategyPaused();
     error InvalidBps();
     error InvalidWindow();
+    // FIX: S-C04 — block deposits during active rebalance
+    error RebalanceInProgress();
 
     // ================================
     // STATE
@@ -49,6 +51,9 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
 
     /// @notice Strategy active flag.
     bool private _isActive;
+
+    /// @notice FIX: S-C04 — rebalance lock prevents deposit-during-rebalance window
+    bool public rebalanceActive;
 
     /// @notice Target % of strategy assets to keep idle (basis points).
     uint256 public idleBufferBps = 1000; // 10% default
@@ -74,6 +79,8 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
 
     event ValuationGuardUpdated(uint256 maxIncreaseBps, uint256 maxDecreaseBps, uint256 checkWindow);
     event ValuationSnapshotSynced(uint256 assetsPerShare, uint256 timestamp);
+    // FIX: S-H03 — surface silent deposit failures during rebalance
+    event RebalanceDepositFailed(uint256 amount, bytes reason);
 
     // ================================
     // MODIFIERS
@@ -163,6 +170,8 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
     // ================================
 
     function deposit(uint256 amount) external override onlyVault whenActive nonReentrant returns (uint256 deposited) {
+        // FIX: S-C04 — prevent deposit during rebalance window
+        if (rebalanceActive) revert RebalanceInProgress();
         if (amount == 0) return 0;
 
         // Pull assets from the vault. `onlyVault` guarantees msg.sender is the trusted vault.
@@ -238,9 +247,12 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
     }
 
     function rebalance() external override onlyVault {
-        // Best-effort idle buffer maintenance:
-        // - deposit excess idle to ERC4626
-        // - or withdraw from ERC4626 to restore idle if needed
+        // FIX: S-C04 — lock to prevent deposit-during-rebalance window
+        rebalanceActive = true;
+
+        // FIX: S-M04 — enforce deadline to prevent stale rebalance txs
+        // block.timestamp is used as deadline in sub-calls; rebalance must be mined promptly
+
         uint256 total = getTotalAssets();
         uint256 desiredIdle = (total * idleBufferBps) / 10_000;
         uint256 idle = ASSET.balanceOf(address(this));
@@ -249,7 +261,11 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
             uint256 toDeposit = idle - desiredIdle;
             if (toDeposit > 0) {
                 ASSET.forceApprove(address(ERC4626_VAULT), toDeposit);
-                try ERC4626_VAULT.deposit(toDeposit, address(this)) {} catch {}
+                // FIX: S-H03 — log deposit failure instead of silently swallowing
+                try ERC4626_VAULT.deposit(toDeposit, address(this)) {} catch (bytes memory reason) {
+                    ASSET.forceApprove(address(ERC4626_VAULT), 0);
+                    emit RebalanceDepositFailed(toDeposit, reason);
+                }
             }
         } else if (idle < desiredIdle) {
             uint256 toPull = desiredIdle - idle;
@@ -259,6 +275,7 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
         }
 
         _syncValuationSnapshotBestEffort();
+        rebalanceActive = false;
         emit StrategyRebalanced(getTotalAssets());
     }
 

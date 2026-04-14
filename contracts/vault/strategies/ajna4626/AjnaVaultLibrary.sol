@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {IAjnaPool} from "../../../interfaces/IAjnaPool.sol";
+import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**
  * @title AjnaVaultLibrary
@@ -27,7 +28,8 @@ library AjnaVaultLibrary {
         if (ratioBps == 0) return;
 
         uint256 remainingBufferAssets = currentBufferAssets - assetsLeavingBuffer;
-        uint256 minBufferAssets = (totalAssets * ratioBps) / 10_000;
+        // FIX: F-10 — use ceiling division so rounding never under-reports the minimum buffer
+        uint256 minBufferAssets = Math.ceilDiv(totalAssets * ratioBps, 10_000);
         if (remainingBufferAssets < minBufferAssets) revert BufferRatioViolated();
     }
 

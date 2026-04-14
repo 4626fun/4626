@@ -57,8 +57,11 @@ contract ChainlinkVRFIntegratorV2_5SecurityTest is Test {
         // Must pass the sponsored-caller gate to reach destination validation.
         vm.deal(owner, 1);
 
+        // VRF-03: targetEid parameter is intentionally ignored (always routes to hubEid).
+        // The first revert hit is "Hub peer not set" because hubEid peer is not configured,
+        // not "Invalid destination" (which would require dstEid != hubEid, but hubEid is always used).
         vm.prank(owner);
-        vm.expectRevert(bytes("Invalid destination"));
+        vm.expectRevert(bytes("Hub peer not set"));
         integrator.requestRandomWordsPayable{value: 1}(invalidEid);
     }
 
