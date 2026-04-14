@@ -144,6 +144,35 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
+  it('does not fall back to sendTransaction when wallet_sendCalls is user-rejected', async () => {
+    const sendTransaction = vi.fn(async () => TX_HASH)
+    const request = vi.fn(async () => {
+      throw new Error('User rejected the request.')
+    })
+
+    await expect(
+      sendPreparedOwnerTx({
+        txRequest: TX_REQUEST,
+        walletClient: {
+          account: CANONICAL_CSW,
+          sendTransaction,
+          request,
+        },
+        chainId: 8453,
+        authHeaders: async () => ({ Authorization: 'Bearer test' }),
+        signerAddress: CANONICAL_CSW,
+        executionMode: 'canonicalSmartWallet',
+        canonicalSmartWalletAddress: CANONICAL_CSW,
+        publicClient: {},
+        ensurePaymasterSession: async () => true,
+      }),
+    ).rejects.toThrow('User rejected the request.')
+
+    expect(request).toHaveBeenCalledTimes(1)
+    expect(sendTransaction).not.toHaveBeenCalled()
+    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+  })
+
   it('routes canonical CSW approval through paymaster user-op when signer is an owner EOA', async () => {
     const sendTransaction = vi.fn(async () => TX_HASH)
     const ensurePaymasterSession = vi.fn(async () => true)

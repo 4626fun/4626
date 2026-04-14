@@ -173,6 +173,12 @@ function isSendCallsUnsupportedError(error: unknown): boolean {
   )
 }
 
+function isUserRejectedWalletAction(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  return lower.includes('user rejected') || lower.includes('user denied') || lower.includes('rejected the request')
+}
+
 async function submitOwnerTxViaWalletSendCalls(params: {
   walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
   chainId: number
@@ -288,6 +294,7 @@ export async function sendPreparedOwnerTx(params: {
               data: txRequest.data,
             })
           } catch (sendCallsError) {
+            if (isUserRejectedWalletAction(sendCallsError)) throw sendCallsError
             if (!isSendCallsUnsupportedError(sendCallsError)) throw sendCallsError
           }
         }
