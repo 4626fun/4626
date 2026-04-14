@@ -126,7 +126,13 @@ export function AccountSetupWorkspaceView(props: {
     // Which top-level step is expanded: null = auto
     const resolvedOpen: 1 | 2 =
       openStep === 1 || openStep === 2 ? openStep : stepOneComplete ? 2 : 1
-    const primarySigningLabel = connectedOwnerReady ? 'Approve signing access' : 'Connect owner wallet'
+    const ownerWalletConnecting = busyProvider === 'owner_wallet'
+    const primarySigningLabel = connectedOwnerReady
+      ? 'Approve signing access'
+      : ownerWalletConnecting
+        ? 'Connecting wallet…'
+        : 'Connect owner wallet'
+    const primarySigningActionLabel = advancedBusy ? 'Working…' : primarySigningLabel
 
     const toggleStep = (n: 1 | 2) => {
       setOpenStep(openStep === n ? null : n)
@@ -358,11 +364,11 @@ export function AccountSetupWorkspaceView(props: {
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
-                        disabled={advancedBusy || needsEmbeddedWallet}
+                        disabled={advancedBusy || ownerWalletConnecting || needsEmbeddedWallet}
                         onClick={() => (connectedOwnerReady ? void onEnable4626Signing() : connectOwnerWallet())}
                         className="inline-flex h-9 items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white shadow-[0_4px_16px_rgba(0,82,255,0.22)] hover:bg-brand-hover disabled:opacity-50"
                       >
-                        {advancedBusy ? 'Working…' : primarySigningLabel}
+                        {primarySigningActionLabel}
                       </button>
                       <button
                         type="button"
@@ -743,7 +749,7 @@ export function AccountSetupWorkspaceView(props: {
                   ) : (
                     <button
                       type="button"
-                      disabled={advancedBusy}
+                      disabled={advancedBusy || busyProvider === 'owner_wallet'}
                       onClick={() => void retryOwnerCheck()}
                       className="rounded-lg bg-white/5 px-3 py-2 text-xs text-zinc-300 transition hover:bg-white/10 hover:text-zinc-100"
                     >

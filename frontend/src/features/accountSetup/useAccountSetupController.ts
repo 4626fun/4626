@@ -161,7 +161,7 @@ function useSafeActiveWallet() {
   try {
     return useActiveWallet() as any
   } catch {
-    return { wallet: undefined, setActiveWallet: () => {} } as any
+    return { wallet: undefined, setActiveWallet: async () => {} } as any
   }
 }
 
@@ -174,7 +174,7 @@ export function useAccountSetupController(params: {
   const { login } = useSafeLogin()
   const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossApp()
   const { connectWallet } = useSafeConnectWallet()
-  const { wallet: activePrivyWallet } = useSafeActiveWallet()
+  const { wallet: activePrivyWallet, setActiveWallet } = useSafeActiveWallet()
   const siwe = useSiweAuth()
   const publicClient = usePublicClient()
   const { data: walletClient } = useWalletClient()
@@ -449,20 +449,42 @@ export function useAccountSetupController(params: {
     }
   }, [canonicalCswAddress])
 
-  const connectOwnerWallet = useCallback(() => {
+  const connectOwnerWallet = useCallback(async () => {
     setError(null)
     setNotice(null)
-    connectWallet({
-      walletList: [
-        'coinbase_wallet',
-        prefersWalletConnectQr ? 'wallet_connect_qr' : 'wallet_connect',
-        'detected_ethereum_wallets',
-        'metamask',
-      ],
-      walletChainType: 'ethereum-only',
-      description: 'Connect one of the current owners of your Coinbase Smart Wallet on Base to approve the 4626 owner install.',
-    })
-  }, [connectWallet, prefersWalletConnectQr])
+    setBusyProvider('owner_wallet')
+    try {
+      const result = await Promise.resolve(
+        connectWallet({
+          walletList: [
+            'coinbase_wallet',
+            prefersWalletConnectQr ? 'wallet_connect_qr' : 'wallet_connect',
+            'detected_ethereum_wallets',
+            'metamask',
+          ],
+          walletChainType: 'ethereum-only',
+          description: 'Connect one of the current owners of your Coinbase Smart Wallet on Base to approve the 4626 owner install.',
+        }),
+      ).catch((connectError: unknown) => {
+        const message = connectError instanceof Error ? connectError.message : String(connectError ?? '')
+        if (message.toLowerCase().includes('user') && message.toLowerCase().includes('reject')) return null
+        throw connectError
+      })
+      const selectedWallet =
+        result && typeof result === 'object' && 'wallet' in (result as Record<string, unknown>)
+          ? ((result as { wallet?: unknown }).wallet ?? null)
+          : result ?? null
+      if (selectedWallet && typeof setActiveWallet === 'function') {
+        await Promise.resolve(setActiveWallet(selectedWallet)).catch(() => null)
+      }
+      await sleep(120)
+      await loadMe({ showSpinner: false })
+    } catch (connectError: any) {
+      setError(typeof connectError?.message === 'string' ? connectError.message : 'Failed to connect owner wallet.')
+    } finally {
+      setBusyProvider(null)
+    }
+  }, [connectWallet, loadMe, prefersWalletConnectQr, setActiveWallet])
 
   const callLinkEndpoint = useCallback(
     async (provider: string, value?: string | null) => {

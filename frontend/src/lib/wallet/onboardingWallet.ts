@@ -205,16 +205,6 @@ function isUserRejectedWalletAction(error: unknown): boolean {
   return lower.includes('user rejected') || lower.includes('user denied') || lower.includes('rejected the request')
 }
 
-function isValidationRevertedUserOpError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error ?? '')
-  const lower = message.toLowerCase()
-  return (
-    lower.includes('aa23') ||
-    (lower.includes('validateuserop') && lower.includes('revert')) ||
-    lower.includes('validation reverted')
-  )
-}
-
 async function submitOwnerTxViaWalletSendCalls(params: {
   walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
   chainId: number
@@ -367,33 +357,7 @@ export async function sendPreparedOwnerTx(params: {
           throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
         }
         if (PREFER_SPONSORED_CANONICAL_SELF_APPROVAL) {
-          try {
-            txHash = await runSponsoredCanonicalUserOp()
-          } catch (sponsoredError) {
-            if (!isValidationRevertedUserOpError(sponsoredError)) throw sponsoredError
-            const walletRequest =
-              typeof walletClient.request === 'function'
-                ? async (args: { method: string; params?: unknown[] }) => await walletClient.request!(args as any)
-                : null
-            if (walletRequest) {
-              txHash = await submitOwnerTxViaWalletSendCalls({
-                walletRequest,
-                chainId: txRequest.chainId,
-                sender: canonicalSmartWalletAddress as `0x${string}`,
-                to: txRequest.to,
-                data: txRequest.data,
-              })
-            } else {
-              if (typeof walletClient.sendTransaction !== 'function') throw sponsoredError
-              txHash = await walletClient.sendTransaction({
-                account: walletClient.account,
-                chain: base,
-                to: txRequest.to,
-                data: txRequest.data,
-                value: 0n,
-              })
-            }
-          }
+          txHash = await runSponsoredCanonicalUserOp()
         } else {
         const walletRequest =
           typeof walletClient.request === 'function'

@@ -688,6 +688,11 @@ function getErrorDiagnosticMessage(error: unknown): string {
   return deduped.join(' | ')
 }
 
+function isLikelyAA23ValidationRevert(message: string): boolean {
+  const lc = message.toLowerCase()
+  return lc.includes('aa23') || (lc.includes('validateuserop') && lc.includes('revert')) || lc.includes('validation reverted')
+}
+
 function getRpcErrorDetails(error: unknown): string | null {
   const err = error as any
   const details = typeof err?.details === 'string' ? err.details.trim() : ''
@@ -1854,7 +1859,8 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
           const signatureMismatch =
             probeMsg.includes('invalid signature') ||
             probeMsg.includes('signature check failed') ||
-            probeMsg.includes('userop signature verification failed')
+            probeMsg.includes('userop signature verification failed') ||
+            isLikelyAA23ValidationRevert(probeMsg)
           if (!signatureMismatch) throw probeErr
           lastSignatureMismatch = probeErr
           if (AA_DEBUG) {
