@@ -307,6 +307,79 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     expect(errMsg).toMatch(/contract_owner_not_allowed/i)
   })
 
+  it('accepts addOwnerAddress self-call for deploy_session_setup when principal equals sender', async () => {
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+        outputs: [],
+      },
+    ] as const
+    const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
+      {
+        type: 'function',
+        name: 'addOwnerAddress',
+        stateMutability: 'nonpayable',
+        inputs: [{ name: 'owner', type: 'address' }],
+        outputs: [],
+      },
+    ] as const
+
+    // No deploy-session row should be required in this path.
+    getActiveDeploySessionMock.mockResolvedValueOnce(null)
+    readRequestPrincipalMock.mockReturnValue(sender)
+
+    const embeddedOwner = getAddress('0x4444444444444444444444444444444444444444')
+    mockGetBytecode.mockImplementation(async ({ address }: { address: string }) => {
+      if (String(address).toLowerCase() === embeddedOwner.toLowerCase()) return '0x'
+      return '0x1234'
+    })
+
+    const innerData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+      functionName: 'addOwnerAddress',
+      args: [embeddedOwner],
+    })
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'execute',
+      args: [sender, 0n, innerData],
+    })
+
+    const userOp = {
+      sender,
+      callData,
+      initCode: '0x',
+    }
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [userOp, ENTRYPOINT_V06, 8453],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).not.toMatch(/request denied/i)
+    expect(errMsg).not.toMatch(/deploy_session_missing/i)
+  })
+
   it('rejects sponsored calls when sender provenance is not a Coinbase smart wallet implementation', async () => {
     const disallowedImplementation = getAddress('0x9999999999999999999999999999999999999997')
     mockReadContract.mockImplementation((opts: { address?: string; functionName?: string }) => {

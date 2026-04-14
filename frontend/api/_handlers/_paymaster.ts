@@ -2625,6 +2625,20 @@ async function validateInnerCalls(params: {
       const decodedSelf = decodeFunctionData({ abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI, data: c.data })
       const allowInactiveForCleanup = decodedSelf.functionName === 'removeOwnerAtIndex'
 
+      // Canonical owner-install (waitlist/account setup) can be self-authenticated by the CSW sender
+      // without an active deploy-session token, but only for addOwnerAddress.
+      if (
+        mode === 'deploy_session_setup' &&
+        decodedSelf.functionName === 'addOwnerAddress' &&
+        getAddress(params.sessionAddress) === getAddress(params.sender)
+      ) {
+        const ownerArg = getAddress(decodedSelf.args[0] as Address)
+        const client = await getBaseClient()
+        const ownerCode = await client.getBytecode({ address: ownerArg })
+        if (ownerCode && ownerCode !== '0x') throw new Error('contract_owner_not_allowed')
+        continue
+      }
+
       // Find the deploy session so we can bind the session owner address.
       const ds =
         params.deploySessionOwner && isAddress(params.deploySessionOwner)
