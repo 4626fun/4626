@@ -134,11 +134,12 @@ export function normalizeOwnerApprovalError(error: unknown): Error {
       )
     }
     if (
-      (lower.includes('error generating transaction') && lower.includes('enough funds')) ||
+      ((lower.includes('error generating transaction') || lower.includes('error generating message')) &&
+        lower.includes('enough funds')) ||
       lower.includes('insufficient funds')
     ) {
       return new Error(
-        'Wallet could not generate the Coinbase Smart Wallet approval. Retry from the same Base/Zora smart wallet, and reconnect it if the sponsor session has gone stale.',
+        'Wallet could not generate the Coinbase Smart Wallet signature/approval. Retry from the same Base/Zora smart wallet, and reconnect it if the sponsor session has gone stale.',
       )
     }
     if (lower.includes('missing 4626 session token')) {
@@ -305,6 +306,8 @@ export async function sendPreparedOwnerTx(params: {
       if (txRequest.to.toLowerCase() !== canonicalSmartWalletAddress.toLowerCase()) {
         throw new Error('Prepared owner install target does not match the canonical Coinbase Smart Wallet.')
       }
+      const selfAuthenticatedCanonicalSession =
+        signerAddress.toLowerCase() === canonicalSmartWalletAddress.toLowerCase()
       const runSponsoredCanonicalUserOp = async () => {
         if (!publicClient) {
           throw new Error('Canonical wallet client is unavailable. Reload and retry.')
@@ -326,6 +329,7 @@ export async function sendPreparedOwnerTx(params: {
             ownerAddress: signerAddress as `0x${string}`,
             calls: [{ to: txRequest.to, data: txRequest.data, value: 0n }],
             version: '1',
+            useTypedDataSigning: selfAuthenticatedCanonicalSession,
           })
 
         let result: Awaited<ReturnType<typeof sendCoinbaseSmartWalletUserOperation>> | null = null
@@ -349,9 +353,6 @@ export async function sendPreparedOwnerTx(params: {
         if (!result) throw (lastRetryableError ?? new Error('Paymaster session retry exhausted.'))
         return result.transactionHash
       }
-      const selfAuthenticatedCanonicalSession =
-        signerAddress.toLowerCase() === canonicalSmartWalletAddress.toLowerCase()
-
       if (selfAuthenticatedCanonicalSession) {
         if (!walletClient.account) {
           throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')

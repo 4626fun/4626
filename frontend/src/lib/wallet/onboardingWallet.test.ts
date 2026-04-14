@@ -105,6 +105,11 @@ describe('sendPreparedOwnerTx', () => {
 
     expect(ensurePaymasterSession).toHaveBeenCalledTimes(1)
     expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        useTypedDataSigning: true,
+      }),
+    )
     expect(request).not.toHaveBeenCalled()
     expect(sendTransaction).not.toHaveBeenCalled()
     expect(result.txHash).toBe(TX_HASH)
@@ -320,7 +325,7 @@ describe('sendPreparedOwnerTx', () => {
         ensurePaymasterSession: async () => true,
       }),
     ).rejects.toThrow(
-      'Wallet could not generate the Coinbase Smart Wallet approval. Retry from the same Base/Zora smart wallet, and reconnect it if the sponsor session has gone stale.',
+      'Wallet could not generate the Coinbase Smart Wallet signature/approval. Retry from the same Base/Zora smart wallet, and reconnect it if the sponsor session has gone stale.',
     )
   })
 
