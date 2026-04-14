@@ -785,15 +785,11 @@ function multiMapSmooth(progress, stops, values) {
   const strat0 = document.getElementById('strat-0');
   const strat1 = document.getElementById('strat-1');
   const strat2 = document.getElementById('strat-2');
-  const strat3 = document.getElementById('strat-3');
-  const strat4 = document.getElementById('strat-4');
   const downstream1 = document.getElementById('downstream-1');
-  const downstream4 = document.getElementById('downstream-4');
+  const downstream2 = document.getElementById('downstream-2');
   const branch0 = document.getElementById('branch-0');
   const branch1 = document.getElementById('branch-1');
   const branch2 = document.getElementById('branch-2');
-  const branch3 = document.getElementById('branch-3');
-  const branch4 = document.getElementById('branch-4');
   const feeLabel = document.getElementById('fee-label');
   const dualCopy = document.getElementById('dual-copy');
   const dualEntry = document.getElementById('dual-entry');
@@ -939,26 +935,20 @@ function multiMapSmooth(progress, stops, values) {
       flowLineFill.style.width = `${flowW}%`;
       engineBox.style.opacity = multiMapSmooth(p, [0.75, 0.79], [0, 1]);
 
-      // ── Branches — smoothed (5 strategies) ──
-      const b0Op = multiMapSmooth(p, [0.79, 0.82], [0, 1]);
-      const b1Op = multiMapSmooth(p, [0.82, 0.845], [0, 1]);
-      const b2Op = multiMapSmooth(p, [0.845, 0.87], [0, 1]);
-      const b3Op = multiMapSmooth(p, [0.87, 0.89], [0, 1]);
-      const b4Op = multiMapSmooth(p, [0.89, 0.91], [0, 1]);
+      // ── Branches — smoothed ──
+      const b0Op = multiMapSmooth(p, [0.79, 0.83], [0, 1]);
+      const b1Op = multiMapSmooth(p, [0.83, 0.865], [0, 1]);
+      const b2Op = multiMapSmooth(p, [0.875, 0.905], [0, 1]);
       branch0.style.opacity = b0Op;
       branch1.style.opacity = b1Op;
       branch2.style.opacity = b2Op;
-      branch3.style.opacity = b3Op;
-      branch4.style.opacity = b4Op;
       strat0.style.opacity = b0Op;
       strat1.style.opacity = b1Op;
       strat2.style.opacity = b2Op;
-      strat3.style.opacity = b3Op;
-      strat4.style.opacity = b4Op;
 
       // ── Downstreams ──
-      downstream1.style.opacity = multiMapSmooth(p, [0.84, 0.87], [0, 1]);
-      downstream4.style.opacity = multiMapSmooth(p, [0.905, 0.93], [0, 1]);
+      downstream1.style.opacity = multiMapSmooth(p, [0.855, 0.89], [0, 1]);
+      downstream2.style.opacity = multiMapSmooth(p, [0.895, 0.93], [0, 1]);
 
       // ── Fee label ──
       feeLabel.style.opacity = multiMapSmooth(p, [0.92, 0.95], [0, 1]);
