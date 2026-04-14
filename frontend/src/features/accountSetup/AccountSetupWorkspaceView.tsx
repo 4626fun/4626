@@ -27,6 +27,10 @@ function extractSponsorshipDiagnostic(errorMessage: string | null | undefined): 
   if (explicitReasonMatch?.[1]) {
     return explicitReasonMatch[1].trim()
   }
+  const bootstrapReasonMatch = message.match(/Paymaster session bootstrap failed:\s*([A-Za-z0-9_\-]+)/i)
+  if (bootstrapReasonMatch?.[1]) {
+    return `session_bootstrap:${bootstrapReasonMatch[1].trim()}`
+  }
 
   const deniedReasonMatch = message.match(/request denied - ([^.]+)/i)
   if (deniedReasonMatch?.[1]) {

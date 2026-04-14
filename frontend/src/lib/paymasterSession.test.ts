@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { ensureWalletAlignedPaymasterSession } from './paymasterSession'
+import { ensureWalletAlignedPaymasterSession, ensureWalletAlignedPaymasterSessionDetailed } from './paymasterSession'
 
 describe('ensureWalletAlignedPaymasterSession', () => {
   it('returns immediately when the current SIWE session already matches the connected wallet', async () => {
@@ -91,5 +91,36 @@ describe('ensureWalletAlignedPaymasterSession', () => {
 
     expect(ok).toBe(false)
     expect(signIn).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('ensureWalletAlignedPaymasterSessionDetailed', () => {
+  it('returns a concrete reason when Privy bridge is unavailable', async () => {
+    const result = await ensureWalletAlignedPaymasterSessionDetailed({
+      hasMatchingSiweSession: false,
+      preferWalletSession: true,
+      signIn: async () => null,
+      signInWithPrivyToken: null,
+      getPrivyAccessToken: null,
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'no_privy_bridge_available',
+    })
+  })
+
+  it('returns a concrete reason when Privy token cannot be read', async () => {
+    const result = await ensureWalletAlignedPaymasterSessionDetailed({
+      hasMatchingSiweSession: false,
+      preferWalletSession: false,
+      signInWithPrivyToken: async () => '0x1234',
+      getPrivyAccessToken: async () => null,
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'missing_privy_access_token',
+    })
   })
 })

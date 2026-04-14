@@ -23,7 +23,7 @@ import {
   shouldRefreshOwnerDelegationOnForeground,
 } from '@/lib/wallet/onboardingWallet'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
-import { ensureWalletAlignedPaymasterSession } from '@/lib/paymasterSession'
+import { ensureWalletAlignedPaymasterSessionDetailed } from '@/lib/paymasterSession'
 import { buildZoraHandoffUrl } from '@/lib/zora/referrals'
 import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
 import { selectCrossAppAuthAction } from '@/features/waitlist/ownerInstallMapping'
@@ -268,7 +268,7 @@ export function useAccountSetupController(params: {
   )
 
   const ensurePaymasterSession = useCallback(async (): Promise<boolean> => {
-    return await ensureWalletAlignedPaymasterSession({
+    const result = await ensureWalletAlignedPaymasterSessionDetailed({
       hasMatchingSiweSession: siwe.isSignedIn,
       preferWalletSession: Boolean(connectedAddress),
       signIn: typeof siwe.signIn === 'function' ? siwe.signIn : null,
@@ -276,6 +276,9 @@ export function useAccountSetupController(params: {
         typeof siwe.signInWithPrivyToken === 'function' ? siwe.signInWithPrivyToken : null,
       getPrivyAccessToken: getAccessToken,
     })
+    if (result.ok) return true
+    const reason = result.reason ?? 'unknown_session_bootstrap_failure'
+    throw new Error(`Paymaster session bootstrap failed: ${reason}`)
   }, [connectedAddress, getAccessToken, siwe])
 
   const loadMe = useCallback(

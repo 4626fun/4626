@@ -6,15 +6,22 @@ export type PaymasterSessionStrategyParams = {
   getPrivyAccessToken?: (() => Promise<string | null>) | null
 }
 
-export async function ensureWalletAlignedPaymasterSession(
+export type PaymasterSessionResult = {
+  ok: boolean
+  reason: string | null
+}
+
+export async function ensureWalletAlignedPaymasterSessionDetailed(
   params: PaymasterSessionStrategyParams,
-): Promise<boolean> {
-  if (params.hasMatchingSiweSession) return true
+): Promise<PaymasterSessionResult> {
+  if (params.hasMatchingSiweSession) {
+    return { ok: true, reason: null }
+  }
 
   if (params.preferWalletSession && typeof params.signIn === 'function') {
     try {
       const signed = await params.signIn()
-      if (signed) return true
+      if (signed) return { ok: true, reason: null }
     } catch {
       // Fall through to the Privy bridge only if available.
     }
@@ -24,15 +31,37 @@ export async function ensureWalletAlignedPaymasterSession(
     typeof params.getPrivyAccessToken !== 'function' ||
     typeof params.signInWithPrivyToken !== 'function'
   ) {
-    return false
+    return {
+      ok: false,
+      reason: 'no_privy_bridge_available',
+    }
   }
 
   try {
     const token = await params.getPrivyAccessToken()
-    if (!token) return false
+    if (!token) {
+      return {
+        ok: false,
+        reason: 'missing_privy_access_token',
+      }
+    }
     const bridged = await params.signInWithPrivyToken(token)
-    return Boolean(bridged)
+    if (bridged) return { ok: true, reason: null }
+    return {
+      ok: false,
+      reason: 'privy_bridge_did_not_return_address',
+    }
   } catch {
-    return false
+    return {
+      ok: false,
+      reason: 'privy_bridge_failed',
+    }
   }
+}
+
+export async function ensureWalletAlignedPaymasterSession(
+  params: PaymasterSessionStrategyParams,
+): Promise<boolean> {
+  const result = await ensureWalletAlignedPaymasterSessionDetailed(params)
+  return result.ok
 }
