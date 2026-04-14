@@ -153,19 +153,12 @@ body {
   color: var(--color-text);
 }
 .brand-dot {
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  background: var(--color-accent);
-  border-radius: 1px;
-  margin: 0 1px;
-  vertical-align: middle;
-  transition: all 0.4s var(--ease-cinematic);
+  color: var(--color-text-muted);
+  font-weight: 400;
+  margin: 0;
 }
 .brand:hover .brand-dot {
-  width: 7px;
-  height: 7px;
-  box-shadow: 0 0 12px var(--color-accent);
+  color: var(--color-accent);
 }
 .nav-right {
   display: flex;
