@@ -454,20 +454,15 @@ body {
   transform: translateY(12px);
 }
 .hero-partner-logo {
-  height: 20px;
-  opacity: 0.4;
+  height: 24px;
+  opacity: 0.5;
   transition: opacity 0.3s var(--ease-out);
-  filter: grayscale(0.3) brightness(1.4);
-}
-.hero-partner-logo:hover { opacity: 0.75; }
-.hero-partner-round {
-  height: 22px;
-  width: 22px;
-  border-radius: 50%;
+  filter: brightness(1.6);
+  mix-blend-mode: screen;
   object-fit: contain;
-  background: rgba(255,255,255,0.08);
-  padding: 2px;
+  border-radius: 4px;
 }
+.hero-partner-logo:hover { opacity: 0.85; }
 .hero-cta {
   margin-top: 3rem;
   opacity: 0;
@@ -1499,20 +1494,15 @@ body {
   opacity: 0;
 }
 .partner-logo {
-  height: 24px;
-  opacity: 0.4;
+  height: 28px;
+  opacity: 0.5;
   transition: opacity 0.3s var(--ease-out);
-  filter: grayscale(0.3) brightness(1.4);
-}
-.partner-logo:hover { opacity: 0.7; }
-.partner-logo-round {
-  height: 26px;
-  width: 26px;
-  border-radius: 50%;
+  filter: brightness(1.6);
+  mix-blend-mode: screen;
   object-fit: contain;
-  background: rgba(255,255,255,0.06);
-  padding: 2px;
+  border-radius: 4px;
 }
+.partner-logo:hover { opacity: 0.85; }
 .close-brand {
   opacity: 0;
 }
