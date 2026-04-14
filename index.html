@@ -8,7 +8,6 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%2306080D'/%3E%3Crect x='11' y='11' width='10' height='10' rx='1' fill='%230052FF'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="./base.css">
   <link rel="stylesheet" href="./style.css">
-  <!-- Three.js -->
   <script type="importmap">
   {
     "imports": {
@@ -17,264 +16,381 @@
     }
   }
   </script>
-  <!-- GSAP for SVG & scroll -->
   <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/ScrollTrigger.min.js"></script>
 </head>
 <body>
 
-  <!-- Three.js Canvas -->
+  <!-- Three.js Canvas (persistent particle field) -->
   <canvas id="three-canvas"></canvas>
 
-  <!-- Nav -->
+  <!-- Fixed Nav -->
   <nav class="nav" id="main-nav">
     <a href="#" class="brand" aria-label="4626.fun home">
       <span>4626</span>
       <span class="brand-dot"></span>
       <span>fun</span>
     </a>
-    <a href="#closing" class="btn">Enter App</a>
+    <a href="#closing" class="nav-btn">Enter App</a>
   </nav>
 
-  <!-- Page Content -->
-  <div class="page-wrapper">
+  <!-- ═══════════════════════════════════════════════
+       SCROLL CONTAINER — ~3500vh cinematic journey
+       ═══════════════════════════════════════════════ -->
+  <div class="scroll-container">
 
-    <!-- ═══════ HERO ═══════ -->
-    <section class="hero section" id="hero">
-      <div class="hero-label" id="hero-label">ERC-4626 Creator Vaults</div>
-      <h1 class="hero-headline" id="hero-headline">
-        DEPOSIT<span class="accent">.</span><br>EARN TOGETHER<span class="accent">.</span>
-      </h1>
-      <p class="hero-sub" id="hero-sub">
-        Creator coin vaults. Fees shared pro rata. Redeemable anytime.
-      </p>
-      <div class="hero-cta" id="hero-cta">
-        <a href="#mechanics" class="btn btn-primary">Explore Mechanics</a>
-      </div>
-      <div class="hero-scroll-cue" id="scroll-cue">
-        <span>Scroll</span>
-        <div class="scroll-line"></div>
-      </div>
-    </section>
-
-    <!-- ═══════ VAULT MECHANICS ═══════ -->
-    <section class="section" id="mechanics">
-      <div class="section-inner">
-        <div class="reveal">
-          <div class="section-label">How It Works</div>
-          <h2 class="section-headline">Vault Mechanics</h2>
-          <p class="section-desc">
-            ERC-4626 standardizes yield-bearing vaults. One interface for deposits, withdrawals, and yield — across every creator coin.
-          </p>
+    <!-- ╔═══ CHAPTER 1: HERO (250vh) ═══╗ -->
+    <section class="scroll-scene" id="ch-hero" data-height="250">
+      <div class="scene-pin">
+        <!-- Blue vertical line -->
+        <div class="hero-line" id="hero-line">
+          <div class="hero-line-core"></div>
+          <div class="hero-line-glow"></div>
         </div>
-        <div class="mechanics-grid">
-          <div class="mechanic-card reveal reveal-delay-1">
-            <div class="mechanic-number">01</div>
-            <h3 class="mechanic-title">Deposit</h3>
-            <p class="mechanic-desc">
-              Transfer a creator coin into the vault. The contract mints vault shares proportional to your deposit at the current exchange rate.
-            </p>
+        <!-- Text block on the right -->
+        <div class="hero-content" id="hero-content">
+          <div class="section-label">ERC-4626 Creator Vaults</div>
+          <h1 class="hero-headline">DEPOSIT.<br>EARN TOGETHER.</h1>
+          <div class="hero-support">
+            <p>Creator coin vaults.</p>
+            <p>Fees shared pro rata.</p>
+            <p>Redeemable anytime.</p>
           </div>
-          <div class="mechanic-card reveal reveal-delay-2">
-            <div class="mechanic-number">02</div>
-            <h3 class="mechanic-title">Earn</h3>
-            <p class="mechanic-desc">
-              Fees accrue to the vault over time. As the vault earns, the value of each share increases — your claim grows without any action.
-            </p>
-          </div>
-          <div class="mechanic-card reveal reveal-delay-3">
-            <div class="mechanic-number">03</div>
-            <h3 class="mechanic-title">Redeem</h3>
-            <p class="mechanic-desc">
-              Burn your vault shares to withdraw your proportional claim. Deposited asset plus accrued fees — redeemable anytime.
-            </p>
+          <div class="hero-cta">
+            <a href="#closing" class="cta-button">Launch App</a>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ═══════ CREATOR VAULTS ═══════ -->
-    <section class="section" id="vaults">
-      <div class="section-inner">
-        <div class="reveal" style="text-align: center;">
-          <div class="section-label">Creator Vaults</div>
-          <h2 class="section-headline">Deposit. Earn Together.</h2>
-          <p class="section-desc" style="margin: 0 auto;">Example creator vaults on Base.</p>
+    <!-- ╔═══ CHAPTER 2: TOKEN JOURNEY (1800vh) ═══╗ -->
+    <section class="scroll-scene" id="ch-token" data-height="1800">
+      <div class="scene-pin">
+        <!-- Central vertical line -->
+        <div class="token-line" id="token-line">
+          <div class="token-line-core"></div>
+          <div class="token-line-glow"></div>
         </div>
-        <div class="vaults-grid">
 
-          <div class="vault-card reveal reveal-delay-1">
-            <div class="vault-header">
-              <div class="vault-name">
-                <div class="vault-icon">A</div>
-                <h3 class="vault-title">Akita Vault</h3>
-              </div>
-              <span class="vault-symbol">AKITA</span>
+        <!-- Top copy -->
+        <p class="token-top-copy" id="token-top-copy">Deposit a creator coin into the vault.</p>
+
+        <!-- "You" / "Vault" side labels -->
+        <span class="side-label side-label-left" id="label-you">You</span>
+        <span class="side-label side-label-right" id="label-vault">Vault</span>
+
+        <!-- "Shares" / "Underlying" top labels -->
+        <span class="top-label top-label-left" id="label-shares">Shares</span>
+        <span class="top-label top-label-right" id="label-underlying">Underlying</span>
+
+        <!-- Camera wrapper (for zoom + pan) -->
+        <div class="camera-wrapper" id="camera-wrapper">
+          <!-- Creator coin (AKITA) -->
+          <div class="token-coin" id="token-coin">
+            <div class="token-icon" id="coin-icon">
+              <svg viewBox="0 0 96 96" width="96" height="96">
+                <circle cx="48" cy="48" r="47" fill="#0A0D14" stroke="#1A1D24" stroke-width="1"/>
+                <text x="48" y="56" text-anchor="middle" fill="#EDEDED" font-family="'Space Grotesk',sans-serif" font-size="28" font-weight="600">A</text>
+              </svg>
             </div>
-            <div class="vault-share">■AKITA</div>
-            <div class="vault-stats">
-              <div>
-                <div class="vault-stat-label">APY</div>
-                <div class="vault-stat-value" data-count="14.2">0.0%</div>
-              </div>
-              <div>
-                <div class="vault-stat-label">TVL</div>
-                <div class="vault-stat-value" data-count="1800">$0k</div>
-              </div>
+            <span class="token-label" id="coin-label">AKITA</span>
+            <!-- Right detail panel -->
+            <div class="token-detail" id="coin-detail">
+              <div class="detail-section-label" style="color: var(--color-text-muted);">Deposited<br>Asset</div>
+              <p class="detail-amount">12,500 AKITA</p>
+              <p class="detail-desc">Deposited in vault. Earning fees.</p>
+            </div>
+            <!-- Deposit data (appears later in journey) -->
+            <div class="deposit-info" id="deposit-info">
+              <p class="deposit-label">Initial Deposit</p>
+              <p class="deposit-amount">50,000,000</p>
+              <p class="deposit-unit">AKITA</p>
+            </div>
+            <div class="split-info" id="split-info">
+              <p class="split-deployed">90% deployed</p>
+            </div>
+            <div class="idle-badge" id="idle-badge">
+              <p class="idle-label">10% idle in vault</p>
+              <p class="idle-amount">5,000,000</p>
             </div>
           </div>
 
-          <div class="vault-card reveal reveal-delay-2">
-            <div class="vault-header">
-              <div class="vault-name">
-                <div class="vault-icon">J</div>
-                <h3 class="vault-title">Jesse Vault</h3>
-              </div>
-              <span class="vault-symbol">JESSE</span>
+          <!-- Vault share (■AKITA) -->
+          <div class="token-share" id="token-share">
+            <div class="share-icon" id="share-icon">
+              <svg viewBox="0 0 96 96" width="96" height="96">
+                <rect x="1" y="1" width="94" height="94" rx="8" fill="#0A0D14" stroke="#0052FF" stroke-width="1" stroke-opacity="0.4"/>
+                <text x="48" y="40" text-anchor="middle" fill="#0052FF" font-family="'Space Grotesk',sans-serif" font-size="22" font-weight="600">■</text>
+                <text x="48" y="64" text-anchor="middle" fill="#EDEDED" font-family="'Space Grotesk',sans-serif" font-size="18" font-weight="500">A</text>
+              </svg>
             </div>
-            <div class="vault-share">■JESSE</div>
-            <div class="vault-stats">
-              <div>
-                <div class="vault-stat-label">APY</div>
-                <div class="vault-stat-value" data-count="18.6">0.0%</div>
-              </div>
-              <div>
-                <div class="vault-stat-label">TVL</div>
-                <div class="vault-stat-value" data-count="3200">$0k</div>
-              </div>
+            <span class="token-label share-label" id="share-label">■AKITA</span>
+            <!-- Left detail panel -->
+            <div class="token-detail" id="share-detail">
+              <div class="detail-section-label" style="color: var(--color-accent);">Vault<br>Share</div>
+              <p class="detail-amount">12,500 ■AKITA</p>
+              <p class="detail-desc">Held by you. Redeemable anytime for your claim on the vault.</p>
             </div>
           </div>
 
-          <div class="vault-card reveal reveal-delay-3">
-            <div class="vault-header">
-              <div class="vault-name">
-                <div class="vault-icon">G</div>
-                <h3 class="vault-title">Gabriel Haines Vault</h3>
-              </div>
-              <span class="vault-symbol">GABRIEL</span>
+          <!-- ═══ Allocation Engine (revealed by panX) ═══ -->
+          <div class="allocation-engine" id="allocation-engine">
+            <!-- Flow line from coin to engine -->
+            <div class="flow-line" id="flow-line">
+              <div class="flow-line-fill" id="flow-line-fill"></div>
             </div>
-            <div class="vault-share">■GABRIELHAINES</div>
-            <div class="vault-stats">
-              <div>
-                <div class="vault-stat-label">APY</div>
-                <div class="vault-stat-value" data-count="9.4">0.0%</div>
-              </div>
-              <div>
-                <div class="vault-stat-label">TVL</div>
-                <div class="vault-stat-value" data-count="740">$0k</div>
+            <!-- Engine box -->
+            <div class="engine-box" id="engine-box">
+              <p class="engine-label">Allocation</p>
+              <p class="engine-label">Engine</p>
+              <p class="engine-sub">Routes by weight</p>
+            </div>
+            <!-- Branching SVG + Strategy cards -->
+            <div class="branches" id="branches">
+              <svg class="branch-svg" width="100" height="160" viewBox="0 0 100 160" fill="none">
+                <path class="branch-path" id="branch-0" d="M 0,80 C 40,80 60,20 100,20" stroke="#8A8F98" stroke-width="0.5" stroke-opacity="0.12"/>
+                <path class="branch-path" id="branch-1" d="M 0,80 C 50,80 50,80 100,80" stroke="#8A8F98" stroke-width="0.5" stroke-opacity="0.12"/>
+                <path class="branch-path" id="branch-2" d="M 0,80 C 40,80 60,140 100,140" stroke="#8A8F98" stroke-width="0.5" stroke-opacity="0.12"/>
+              </svg>
+              <div class="strategy-list">
+                <!-- Ajna -->
+                <div class="strategy-row" id="strat-0">
+                  <div class="strategy-card-inner">
+                    <div class="strat-icon">A</div>
+                    <div class="strat-info">
+                      <div class="strat-header">
+                        <span class="strat-name">Ajna</span>
+                        <span class="strat-pct">30%</span>
+                      </div>
+                      <p class="strat-amount">15,000,000</p>
+                      <p class="strat-role">Lending exposure</p>
+                    </div>
+                  </div>
+                </div>
+                <!-- Charm -->
+                <div class="strategy-row" id="strat-1">
+                  <div class="strategy-card-inner">
+                    <div class="strat-icon">C</div>
+                    <div class="strat-info">
+                      <div class="strat-header">
+                        <span class="strat-name">Charm</span>
+                        <span class="strat-pct">30%</span>
+                      </div>
+                      <p class="strat-amount">15,000,000</p>
+                      <p class="strat-role">Liquidity management</p>
+                    </div>
+                  </div>
+                  <div class="downstream" id="downstream-1">
+                    <div class="downstream-line"></div>
+                    <div class="downstream-box">Uniswap V3 Creator/USDC</div>
+                  </div>
+                </div>
+                <!-- Solana -->
+                <div class="strategy-row" id="strat-2">
+                  <div class="strategy-card-inner">
+                    <div class="strat-icon">S</div>
+                    <div class="strat-info">
+                      <div class="strat-header">
+                        <span class="strat-name">Solana</span>
+                        <span class="strat-pct">30%</span>
+                      </div>
+                      <p class="strat-amount">15,000,000</p>
+                      <p class="strat-role">Ecosystem allocation</p>
+                    </div>
+                  </div>
+                  <div class="downstream" id="downstream-2">
+                    <div class="downstream-line"></div>
+                    <div class="downstream-box">Meteora Alpha Vaults</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
+        </div>
 
-          <div class="vault-card reveal reveal-delay-4">
-            <div class="vault-header">
-              <div class="vault-name">
-                <div class="vault-icon">N</div>
-                <h3 class="vault-title">Nick Shirley Vault</h3>
+        <!-- Cross copy (bottom) -->
+        <p class="token-cross-copy" id="token-cross-copy">Receive a vault share. Fees are shared pro rata.</p>
+        <p class="token-entry-cue" id="token-entry-cue">1:1 at entry (demo)</p>
+
+        <!-- Dual copy (detail phase) -->
+        <div class="dual-copy" id="dual-copy">
+          <p>Deposit a creator coin. Receive a vault share.</p>
+          <p>Your vault share is a redeemable claim on the vault.</p>
+        </div>
+        <p class="dual-entry" id="dual-entry">At entry in this demo, 1 AKITA mints 1 ■AKITA.</p>
+
+        <!-- Fee label (allocation phase) -->
+        <p class="fee-label" id="fee-label">Fees flow back · pro rata</p>
+      </div>
+    </section>
+
+    <!-- ╔═══ CHAPTER 3: ACCRUE (650vh) ═══╗ -->
+    <section class="scroll-scene" id="ch-accrue" data-height="650">
+      <div class="scene-pin">
+        <div class="accrue-container">
+          <!-- Intro -->
+          <div class="accrue-intro" id="accrue-intro">
+            <div class="section-label">Accrue</div>
+            <p class="accrue-desc">Fees accrue to the vault over time.</p>
+          </div>
+          <!-- Clock / Date -->
+          <div class="accrue-clock" id="accrue-clock">
+            <p class="clock-launch">Vault Launch · AUG 10, 2025</p>
+            <p class="clock-date" id="clock-date">AUG 10, 2025</p>
+          </div>
+          <!-- Timeline bar -->
+          <div class="accrue-timeline" id="accrue-timeline">
+            <div class="timeline-track">
+              <div class="timeline-fill" id="timeline-fill"></div>
+              <div class="timeline-head" id="timeline-head"></div>
+              <!-- Milestones -->
+              <div class="milestone" data-days="30" style="left:12.35%">
+                <div class="milestone-dot" id="ms-30"></div>
+                <span class="milestone-label">30d</span>
               </div>
-              <span class="vault-symbol">NICK</span>
-            </div>
-            <div class="vault-share">■THENICKSHIRLEY</div>
-            <div class="vault-stats">
-              <div>
-                <div class="vault-stat-label">APY</div>
-                <div class="vault-stat-value" data-count="22.1">0.0%</div>
+              <div class="milestone" data-days="60" style="left:24.69%">
+                <div class="milestone-dot" id="ms-60"></div>
+                <span class="milestone-label">60d</span>
               </div>
-              <div>
-                <div class="vault-stat-label">TVL</div>
-                <div class="vault-stat-value" data-count="520">$0k</div>
+              <div class="milestone" data-days="90" style="left:37.04%">
+                <div class="milestone-dot" id="ms-90"></div>
+                <span class="milestone-label">90d</span>
+              </div>
+              <div class="milestone" data-days="180" style="left:74.07%">
+                <div class="milestone-dot" id="ms-180"></div>
+                <span class="milestone-label">180d</span>
               </div>
             </div>
           </div>
-
+          <!-- Stats grid -->
+          <div class="accrue-stats" id="accrue-stats">
+            <div class="accrue-stat">
+              <p class="accrue-stat-value" id="stat-days">0</p>
+              <p class="accrue-stat-label">Days Active</p>
+            </div>
+            <div class="accrue-stat">
+              <p class="accrue-stat-value" id="stat-ratio">1.000</p>
+              <p class="accrue-stat-label">Share Ratio</p>
+            </div>
+            <div class="accrue-stat">
+              <p class="accrue-stat-value accent" id="stat-apy">0.0%</p>
+              <p class="accrue-stat-label">APY</p>
+            </div>
+          </div>
+          <p class="accrue-equation" id="accrue-equation">1 ■AKITA = 1.000 AKITA</p>
         </div>
       </div>
     </section>
 
-    <!-- ═══════ ALLOCATION STRATEGY ═══════ -->
-    <section class="section" id="strategy">
-      <div class="section-inner">
-        <div class="reveal" style="text-align: center;">
-          <div class="section-label">Allocation Engine</div>
-          <h2 class="section-headline">Where Your Assets Work</h2>
-          <p class="section-desc" style="margin: 0 auto;">
-            Vault assets deploy across multiple strategies. 90% allocated, 10% idle reserve.
-          </p>
-        </div>
-        <div class="strategy-flow">
-          <div class="strategy-card reveal reveal-delay-1">
-            <div class="strategy-icon">A</div>
-            <div class="strategy-info">
-              <div class="strategy-name">Ajna</div>
-              <div class="strategy-role">Lending exposure</div>
+    <!-- ╔═══ CHAPTER 4: CREATOR VAULTS (500vh) ═══╗ -->
+    <section class="scroll-scene" id="ch-vaults" data-height="500">
+      <div class="scene-pin">
+        <div class="vaults-container">
+          <div class="vaults-header">
+            <div class="section-label">Creator Vaults</div>
+            <h2 class="vaults-headline">Deposit. Earn together.</h2>
+            <p class="vaults-sub">Example creator vaults on Base.</p>
+          </div>
+          <div class="vaults-grid" id="vaults-grid">
+            <!-- Akita -->
+            <div class="vault-card" id="vc-0">
+              <div class="vault-card-header">
+                <div class="vault-card-name">
+                  <div class="vault-card-icon">A</div>
+                  <h3>Akita Vault</h3>
+                </div>
+                <span class="vault-card-symbol">AKITA</span>
+              </div>
+              <div class="vault-card-share">■AKITA</div>
+              <div class="vault-card-stats">
+                <div><span class="vcs-label">APY</span><span class="vcs-value">14.2%</span></div>
+                <div><span class="vcs-label">TVL</span><span class="vcs-value">$1.8M</span></div>
+              </div>
             </div>
-            <div class="strategy-pct">30%</div>
-          </div>
-          <div class="strategy-card reveal reveal-delay-2">
-            <div class="strategy-icon">C</div>
-            <div class="strategy-info">
-              <div class="strategy-name">Charm</div>
-              <div class="strategy-role">Liquidity management → Uniswap V3</div>
+            <!-- Jesse -->
+            <div class="vault-card" id="vc-1">
+              <div class="vault-card-header">
+                <div class="vault-card-name">
+                  <div class="vault-card-icon">J</div>
+                  <h3>Jesse Vault</h3>
+                </div>
+                <span class="vault-card-symbol">JESSE</span>
+              </div>
+              <div class="vault-card-share">■JESSE</div>
+              <div class="vault-card-stats">
+                <div><span class="vcs-label">APY</span><span class="vcs-value">18.6%</span></div>
+                <div><span class="vcs-label">TVL</span><span class="vcs-value">$3.2M</span></div>
+              </div>
             </div>
-            <div class="strategy-pct">30%</div>
-          </div>
-          <div class="strategy-card reveal reveal-delay-3">
-            <div class="strategy-icon">S</div>
-            <div class="strategy-info">
-              <div class="strategy-name">Solana</div>
-              <div class="strategy-role">Ecosystem allocation → Meteora Alpha Vaults</div>
+            <!-- Gabriel Haines -->
+            <div class="vault-card" id="vc-2">
+              <div class="vault-card-header">
+                <div class="vault-card-name">
+                  <div class="vault-card-icon">G</div>
+                  <h3>Gabriel Haines Vault</h3>
+                </div>
+                <span class="vault-card-symbol">GABRIEL</span>
+              </div>
+              <div class="vault-card-share">■GABRIELHAINES</div>
+              <div class="vault-card-stats">
+                <div><span class="vcs-label">APY</span><span class="vcs-value">9.4%</span></div>
+                <div><span class="vcs-label">TVL</span><span class="vcs-value">$740K</span></div>
+              </div>
             </div>
-            <div class="strategy-pct">30%</div>
+            <!-- Nick Shirley -->
+            <div class="vault-card" id="vc-3">
+              <div class="vault-card-header">
+                <div class="vault-card-name">
+                  <div class="vault-card-icon">N</div>
+                  <h3>Nick Shirley Vault</h3>
+                </div>
+                <span class="vault-card-symbol">NICK</span>
+              </div>
+              <div class="vault-card-share">■THENICKSHIRLEY</div>
+              <div class="vault-card-stats">
+                <div><span class="vcs-label">APY</span><span class="vcs-value">22.1%</span></div>
+                <div><span class="vcs-label">TVL</span><span class="vcs-value">$520K</span></div>
+              </div>
+            </div>
           </div>
-        </div>
-        <div class="stats-row">
-          <div class="stat-cell reveal">
-            <div class="stat-value" data-count-int="243">0</div>
-            <div class="stat-label">Days Active</div>
+          <div class="vaults-cta" id="vaults-cta">
+            <a href="#closing" class="cta-button secondary">View All Vaults</a>
           </div>
-          <div class="stat-cell reveal reveal-delay-1">
-            <div class="stat-value" data-count-ratio="1.034">1.000</div>
-            <div class="stat-label">Share Ratio</div>
-          </div>
-          <div class="stat-cell reveal reveal-delay-2">
-            <div class="stat-value accent" data-count-apy="5.2">0.0%</div>
-            <div class="stat-label">APY</div>
-          </div>
+          <p class="vaults-disclaimer" id="vaults-disclaimer">For demonstration purposes only. Example vault shares shown here do not exist yet.</p>
         </div>
       </div>
     </section>
 
-    <!-- ═══════ CLOSING ═══════ -->
-    <section class="section closing" id="closing">
-      <div class="section-inner" style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 60vh;">
-        <div class="closing-brand reveal">
-          <span>4626</span>
-          <span class="brand-dot" style="width: 8px; height: 8px;"></span>
-          <span>fun</span>
+    <!-- ╔═══ CHAPTER 5: CLOSE (250vh) ═══╗ -->
+    <section class="scroll-scene" id="ch-close" data-height="250">
+      <div class="scene-pin">
+        <div class="close-container">
+          <div class="close-brand" id="close-brand">
+            <span>4626</span>
+            <div class="close-dot" id="close-dot"></div>
+            <span>fun</span>
+          </div>
+          <div class="close-line" id="close-line"></div>
+          <div class="close-cta" id="close-cta">
+            <a href="#" class="enter-vaults-btn" id="closing">Enter Vaults</a>
+          </div>
+          <p class="close-tag" id="close-tag">Earn together</p>
         </div>
-        <div class="closing-line reveal reveal-delay-1" id="closing-line"></div>
-        <div class="reveal reveal-delay-2" style="margin-top: var(--space-8);">
-          <a href="#" class="btn btn-primary" style="padding: var(--space-6) var(--space-16);">
-            Enter Vaults
-          </a>
-        </div>
-        <p class="closing-tag reveal reveal-delay-3">Earn together</p>
       </div>
     </section>
 
-    <!-- ═══════ FOOTER ═══════ -->
-    <footer class="footer">
-      <span>© 2026 4626.fun</span>
-      <div class="footer-links">
-        <a href="#" target="_blank" rel="noopener noreferrer">Docs</a>
-        <a href="#" target="_blank" rel="noopener noreferrer">GitHub</a>
-        <a href="#" target="_blank" rel="noopener noreferrer">Discord</a>
-      </div>
-    </footer>
+  </div><!-- end scroll-container -->
 
-  </div>
+  <!-- Footer -->
+  <footer class="footer">
+    <span>&copy; 2026 4626.fun</span>
+    <div class="footer-links">
+      <a href="#" target="_blank" rel="noopener noreferrer">Docs</a>
+      <a href="https://github.com/wenakita" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <a href="#" target="_blank" rel="noopener noreferrer">Discord</a>
+    </div>
+  </footer>
 
-  <!-- App Script -->
   <script type="module" src="./app.js"></script>
 </body>
 </html>
