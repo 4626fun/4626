@@ -76,20 +76,88 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('routes canonical CSW approval through the smart-wallet user-op path', async () => {
+  it('uses wallet_sendCalls for self-authenticated canonical CSW sessions when available', async () => {
     const sendTransaction = vi.fn(async () => TX_HASH)
     const ensurePaymasterSession = vi.fn(async () => true)
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce('0xcall-bundle-id')
+      .mockResolvedValueOnce({
+        status: 200,
+        receipts: [{ transactionHash: TX_HASH }],
+      })
 
     const result = await sendPreparedOwnerTx({
       txRequest: TX_REQUEST,
       walletClient: {
         account: CANONICAL_CSW,
         sendTransaction,
-        request: vi.fn(),
+        request,
       },
       chainId: 8453,
       authHeaders: async () => ({ Authorization: 'Bearer test' }),
       signerAddress: CANONICAL_CSW,
+      executionMode: 'canonicalSmartWallet',
+      canonicalSmartWalletAddress: CANONICAL_CSW,
+      publicClient: {},
+      ensurePaymasterSession,
+    })
+
+    expect(ensurePaymasterSession).not.toHaveBeenCalled()
+    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'wallet_sendCalls',
+      }),
+    )
+    expect(sendTransaction).not.toHaveBeenCalled()
+    expect(result.txHash).toBe(TX_HASH)
+  })
+
+  it('falls back to sendTransaction when wallet_sendCalls is unsupported for self-authenticated canonical sessions', async () => {
+    const sendTransaction = vi.fn(async () => TX_HASH)
+    const ensurePaymasterSession = vi.fn(async () => true)
+    const request = vi.fn(async () => {
+      throw new Error('Method not found')
+    })
+
+    const result = await sendPreparedOwnerTx({
+      txRequest: TX_REQUEST,
+      walletClient: {
+        account: CANONICAL_CSW,
+        sendTransaction,
+        request,
+      },
+      chainId: 8453,
+      authHeaders: async () => ({ Authorization: 'Bearer test' }),
+      signerAddress: CANONICAL_CSW,
+      executionMode: 'canonicalSmartWallet',
+      canonicalSmartWalletAddress: CANONICAL_CSW,
+      publicClient: {},
+      ensurePaymasterSession,
+    })
+
+    expect(ensurePaymasterSession).not.toHaveBeenCalled()
+    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+    expect(request).toHaveBeenCalledTimes(1)
+    expect(sendTransaction).toHaveBeenCalledTimes(1)
+    expect(result.txHash).toBe(TX_HASH)
+  })
+
+  it('routes canonical CSW approval through paymaster user-op when signer is an owner EOA', async () => {
+    const sendTransaction = vi.fn(async () => TX_HASH)
+    const ensurePaymasterSession = vi.fn(async () => true)
+
+    const result = await sendPreparedOwnerTx({
+      txRequest: TX_REQUEST,
+      walletClient: {
+        account: OWNER_EOA,
+        sendTransaction,
+        request: vi.fn(),
+      },
+      chainId: 8453,
+      authHeaders: async () => ({ Authorization: 'Bearer test' }),
+      signerAddress: OWNER_EOA,
       executionMode: 'canonicalSmartWallet',
       canonicalSmartWalletAddress: CANONICAL_CSW,
       publicClient: {},
@@ -101,14 +169,7 @@ describe('sendPreparedOwnerTx', () => {
     expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledWith(
       expect.objectContaining({
         smartWallet: CANONICAL_CSW,
-        ownerAddress: CANONICAL_CSW,
-        calls: [
-          expect.objectContaining({
-            to: CANONICAL_CSW,
-            data: TX_REQUEST.data,
-            value: 0n,
-          }),
-        ],
+        ownerAddress: OWNER_EOA,
       }),
     )
     expect(sendTransaction).not.toHaveBeenCalled()
@@ -123,13 +184,13 @@ describe('sendPreparedOwnerTx', () => {
     const result = await sendPreparedOwnerTx({
       txRequest: TX_REQUEST,
       walletClient: {
-        account: CANONICAL_CSW,
+        account: OWNER_EOA,
         sendTransaction: vi.fn(async () => TX_HASH),
         request: vi.fn(),
       },
       chainId: 8453,
       authHeaders: async () => ({ Authorization: 'Bearer test' }),
-      signerAddress: CANONICAL_CSW,
+      signerAddress: OWNER_EOA,
       executionMode: 'canonicalSmartWallet',
       canonicalSmartWalletAddress: CANONICAL_CSW,
       publicClient: {},
@@ -150,13 +211,13 @@ describe('sendPreparedOwnerTx', () => {
       sendPreparedOwnerTx({
         txRequest: TX_REQUEST,
         walletClient: {
-          account: CANONICAL_CSW,
+          account: OWNER_EOA,
           sendTransaction,
           request: vi.fn(),
         },
         chainId: 8453,
         authHeaders: async () => ({ Authorization: 'Bearer test' }),
-        signerAddress: CANONICAL_CSW,
+        signerAddress: OWNER_EOA,
         executionMode: 'canonicalSmartWallet',
         canonicalSmartWalletAddress: CANONICAL_CSW,
         publicClient: {},
@@ -218,13 +279,13 @@ describe('sendPreparedOwnerTx', () => {
       sendPreparedOwnerTx({
         txRequest: TX_REQUEST,
         walletClient: {
-          account: CANONICAL_CSW,
+          account: OWNER_EOA,
           sendTransaction: vi.fn(async () => TX_HASH),
           request: vi.fn(),
         },
         chainId: 8453,
         authHeaders: async () => ({ Authorization: 'Bearer test' }),
-        signerAddress: CANONICAL_CSW,
+        signerAddress: OWNER_EOA,
         executionMode: 'canonicalSmartWallet',
         canonicalSmartWalletAddress: CANONICAL_CSW,
         publicClient: {},
@@ -245,13 +306,13 @@ describe('sendPreparedOwnerTx', () => {
       sendPreparedOwnerTx({
         txRequest: TX_REQUEST,
         walletClient: {
-          account: CANONICAL_CSW,
+          account: OWNER_EOA,
           sendTransaction: vi.fn(async () => TX_HASH),
           request: vi.fn(),
         },
         chainId: 8453,
         authHeaders: async () => ({ Authorization: 'Bearer test' }),
-        signerAddress: CANONICAL_CSW,
+        signerAddress: OWNER_EOA,
         executionMode: 'canonicalSmartWallet',
         canonicalSmartWalletAddress: CANONICAL_CSW,
         publicClient: {},
@@ -271,12 +332,13 @@ describe('sendPreparedOwnerTx', () => {
       sendPreparedOwnerTx({
         txRequest: TX_REQUEST,
         walletClient: {
-          account: CANONICAL_CSW,
+          account: OWNER_EOA,
+          sendTransaction: vi.fn(async () => TX_HASH),
           request: vi.fn(),
         },
         chainId: 8453,
         authHeaders: async () => ({ Authorization: 'Bearer test' }),
-        signerAddress: CANONICAL_CSW,
+        signerAddress: OWNER_EOA,
         executionMode: 'canonicalSmartWallet',
         canonicalSmartWalletAddress: CANONICAL_CSW,
         publicClient: {},

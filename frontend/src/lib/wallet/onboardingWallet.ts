@@ -155,6 +155,71 @@ const CONFIRM_OWNER_RETRY_DELAY_MS = import.meta.env.MODE === 'test' ? 5 : 1_500
 const CONFIRM_OWNER_MAX_ATTEMPTS = 6
 const PAYMASTER_SESSION_MAX_ATTEMPTS = 3
 const PAYMASTER_SESSION_RETRY_DELAY_MS = import.meta.env.MODE === 'test' ? 5 : 300
+const SEND_CALLS_STATUS_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 25 : 8_000
+const SEND_CALLS_STATUS_POLL_MS = import.meta.env.MODE === 'test' ? 5 : 500
+
+function isTxHash(value: unknown): value is `0x${string}` {
+  return typeof value === 'string' && /^0x([a-fA-F0-9]{64})$/.test(value)
+}
+
+function isSendCallsUnsupportedError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('method not found') ||
+    lower.includes('unsupported') ||
+    lower.includes('does not support') ||
+    lower.includes('wallet_sendcalls')
+  )
+}
+
+async function submitOwnerTxViaWalletSendCalls(params: {
+  walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+  chainId: number
+  sender: `0x${string}`
+  to: `0x${string}`
+  data: `0x${string}`
+}): Promise<`0x${string}` | null> {
+  const callBundle = await params.walletRequest({
+    method: 'wallet_sendCalls',
+    params: [
+      {
+        chainId: `0x${params.chainId.toString(16)}`,
+        from: params.sender,
+        calls: [{ to: params.to, data: params.data, value: '0x0' }],
+        atomicRequired: false,
+        version: '2.0.0',
+      },
+    ],
+  })
+  const callsId =
+    typeof callBundle === 'string'
+      ? callBundle
+      : callBundle && typeof callBundle === 'object' && typeof (callBundle as { id?: unknown }).id === 'string'
+        ? String((callBundle as { id: string }).id)
+        : ''
+  if (!callsId) throw new Error('wallet_sendCalls returned no call bundle id')
+
+  const startedAt = Date.now()
+  while (Date.now() - startedAt < SEND_CALLS_STATUS_TIMEOUT_MS) {
+    const result = await params.walletRequest({ method: 'wallet_getCallsStatus', params: [callsId] })
+    const statusCode = Number((result as { status?: unknown } | null)?.status)
+    const receipts = Array.isArray((result as { receipts?: unknown[] } | null)?.receipts)
+      ? ((result as { receipts: unknown[] }).receipts ?? [])
+      : []
+    const receiptHash =
+      receipts
+        .map((receipt) => String((receipt as { transactionHash?: unknown } | null)?.transactionHash ?? ''))
+        .find((value) => isTxHash(value)) ?? null
+    if (Number.isFinite(statusCode)) {
+      if (statusCode >= 200 && statusCode < 300) return receiptHash
+      if (statusCode >= 300) throw new Error(`wallet_sendCalls failed with status ${statusCode}`)
+    }
+    await delay(SEND_CALLS_STATUS_POLL_MS)
+  }
+
+  return null
+}
 
 export async function sendPreparedOwnerTx(params: {
   txRequest: PreparedOwnerTxRequest
@@ -205,48 +270,84 @@ export async function sendPreparedOwnerTx(params: {
       if (txRequest.to.toLowerCase() !== canonicalSmartWalletAddress.toLowerCase()) {
         throw new Error('Prepared owner install target does not match the canonical Coinbase Smart Wallet.')
       }
-      if (!publicClient) {
-        throw new Error('Canonical wallet client is unavailable. Reload and retry.')
-      }
-      if (typeof ensurePaymasterSession === 'function') {
-        const sessionOk = await ensurePaymasterSession()
-        if (!sessionOk) {
-          throw new Error('Missing 4626 session token for paymaster request.')
-        }
-      }
-      const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-      const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-      const runUserOp = async () =>
-        await sendCoinbaseSmartWalletUserOperation({
-          publicClient: publicClient as any,
-          walletClient: walletClient as any,
-          bundlerUrl,
-          smartWallet: canonicalSmartWalletAddress as `0x${string}`,
-          ownerAddress: signerAddress as `0x${string}`,
-          calls: [{ to: txRequest.to, data: txRequest.data, value: 0n }],
-          version: '1',
-        })
+      const selfAuthenticatedCanonicalSession =
+        signerAddress.toLowerCase() === canonicalSmartWalletAddress.toLowerCase()
 
-      let result: Awaited<ReturnType<typeof sendCoinbaseSmartWalletUserOperation>> | null = null
-      let lastRetryableError: unknown = null
-      for (let attempt = 0; attempt < PAYMASTER_SESSION_MAX_ATTEMPTS; attempt += 1) {
-        try {
-          result = await runUserOp()
-          break
-        } catch (attemptError) {
-          if (!isRetryablePaymasterSessionError(attemptError)) throw attemptError
-          lastRetryableError = attemptError
-          if (typeof ensurePaymasterSession === 'function') {
-            await ensurePaymasterSession().catch(() => false)
-          }
-          const hasNextAttempt = attempt + 1 < PAYMASTER_SESSION_MAX_ATTEMPTS
-          if (hasNextAttempt) {
-            await delay(PAYMASTER_SESSION_RETRY_DELAY_MS * (attempt + 1))
+      if (selfAuthenticatedCanonicalSession) {
+        const requestFn =
+          typeof walletClient.request === 'function'
+            ? (walletClient.request as (args: { method: string; params?: unknown[] }) => Promise<unknown>)
+            : null
+        if (requestFn) {
+          try {
+            txHash = await submitOwnerTxViaWalletSendCalls({
+              walletRequest: requestFn,
+              chainId: base.id,
+              sender: canonicalSmartWalletAddress as `0x${string}`,
+              to: txRequest.to,
+              data: txRequest.data,
+            })
+          } catch (sendCallsError) {
+            if (!isSendCallsUnsupportedError(sendCallsError)) throw sendCallsError
           }
         }
+        if (txHash) {
+          // wallet_sendCalls completed (or accepted without immediate hash).
+        } else if (!walletClient.account || typeof walletClient.sendTransaction !== 'function') {
+          throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
+        } else {
+          txHash = await walletClient.sendTransaction({
+            account: walletClient.account,
+            chain: base,
+            to: txRequest.to,
+            data: txRequest.data,
+            value: 0n,
+          })
+        }
+      } else {
+        if (!publicClient) {
+          throw new Error('Canonical wallet client is unavailable. Reload and retry.')
+        }
+        if (typeof ensurePaymasterSession === 'function') {
+          const sessionOk = await ensurePaymasterSession()
+          if (!sessionOk) {
+            throw new Error('Missing 4626 session token for paymaster request.')
+          }
+        }
+        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+        const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+        const runUserOp = async () =>
+          await sendCoinbaseSmartWalletUserOperation({
+            publicClient: publicClient as any,
+            walletClient: walletClient as any,
+            bundlerUrl,
+            smartWallet: canonicalSmartWalletAddress as `0x${string}`,
+            ownerAddress: signerAddress as `0x${string}`,
+            calls: [{ to: txRequest.to, data: txRequest.data, value: 0n }],
+            version: '1',
+          })
+
+        let result: Awaited<ReturnType<typeof sendCoinbaseSmartWalletUserOperation>> | null = null
+        let lastRetryableError: unknown = null
+        for (let attempt = 0; attempt < PAYMASTER_SESSION_MAX_ATTEMPTS; attempt += 1) {
+          try {
+            result = await runUserOp()
+            break
+          } catch (attemptError) {
+            if (!isRetryablePaymasterSessionError(attemptError)) throw attemptError
+            lastRetryableError = attemptError
+            if (typeof ensurePaymasterSession === 'function') {
+              await ensurePaymasterSession().catch(() => false)
+            }
+            const hasNextAttempt = attempt + 1 < PAYMASTER_SESSION_MAX_ATTEMPTS
+            if (hasNextAttempt) {
+              await delay(PAYMASTER_SESSION_RETRY_DELAY_MS * (attempt + 1))
+            }
+          }
+        }
+        if (!result) throw (lastRetryableError ?? new Error('Paymaster session retry exhausted.'))
+        txHash = result.transactionHash
       }
-      if (!result) throw (lastRetryableError ?? new Error('Paymaster session retry exhausted.'))
-      txHash = result.transactionHash
     } else {
       if (!walletClient.account || typeof walletClient.sendTransaction !== 'function') {
         throw new Error('Connect an owner wallet to send this transaction.')
