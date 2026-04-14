@@ -1733,6 +1733,9 @@ async function assertSessionOwnsSender(params: { sender: Address; sessionAddress
   const code = await client.getBytecode({ address: params.sender })
   if (code && code !== '0x') {
     await assertSenderCoinbaseSmartWalletProvenance({ client, sender: params.sender })
+    // Self-authenticated CSW sessions (session principal equals sender CSW) are valid.
+    // In this case, isOwnerAddress(sender) may be false because CSW is not an owner of itself.
+    if (getAddress(params.sessionAddress) === getAddress(params.sender)) return
     const isOwner = await client.readContract({
       address: params.sender,
       abi: COINBASE_SMART_WALLET_OWNER_ABI,
