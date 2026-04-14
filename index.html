@@ -104,6 +104,7 @@
             <img src="./assets/brand/solana-mark.svg" alt="Solana" class="hero-partner-logo">
             <img src="./assets/brand/meteora-v2.svg" alt="Meteora" class="hero-partner-logo">
             <img src="./assets/brand/ajna-official.svg" alt="Ajna" class="hero-partner-logo">
+            <img src="./assets/brand/charm.png" alt="Charm" class="hero-partner-logo">
           </div>
           <div class="hero-cta" id="hero-cta">
             <a href="#closing" class="cta-button">Launch App</a>
@@ -323,78 +324,100 @@
     <!-- ╔═══ CHAPTER 3: ACCRUE (650vh) ═══╗ -->
     <section class="scroll-scene" id="ch-accrue" data-height="650">
       <div class="scene-pin">
-        <div class="accrue-container">
+        <div class="accrue-container accrue-container-v2">
           <!-- Intro -->
           <div class="accrue-intro" id="accrue-intro">
             <div class="section-label">Accrue</div>
-            <p class="accrue-desc">Fees accrue to the vault over time. Your share of the vault grows.</p>
+            <p class="accrue-desc">Fees flow into the vault. Your share grows.</p>
           </div>
           <!-- Central ratio display -->
           <div class="accrue-ratio-display" id="accrue-ratio-display">
-            <p class="accrue-ratio-big">1 ■AKITA = <span class="ratio-accent" id="ratio-value">1.000</span> AKITA</p>
-            <p class="accrue-ratio-label">Exchange rate</p>
-          </div>
-          <!-- Token pair display -->
-          <div class="accrue-pair" id="accrue-pair">
-            <div class="accrue-token">
-              <img src="./assets/tokens/share/akita-512.png" alt="■AKITA" class="accrue-token-img">
-              <span class="accrue-token-name">■AKITA</span>
-            </div>
-            <div class="accrue-arrow">
-              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5">
-                <path d="M5 12h14M12 5l7 7-7 7"/>
-              </svg>
-            </div>
-            <div class="accrue-token">
-              <img src="./assets/tokens/source/akita.webp" alt="AKITA" class="accrue-token-img">
-              <span class="accrue-token-name">AKITA</span>
+            <span class="ratio-accent" id="ratio-value">1.000</span>
+            <div class="ratio-meta">
+              <span class="ratio-unit">AKITA per share</span>
+              <span class="ratio-hairline"></span>
+              <span class="ratio-from">from 1.000</span>
             </div>
           </div>
+          <!-- Hidden pair for compat -->
+          <div class="accrue-pair" id="accrue-pair" style="display:none"></div>
           <!-- Clock / Date -->
           <div class="accrue-clock" id="accrue-clock">
-            <p class="clock-launch">Vault Launch · AUG 10, 2025</p>
             <p class="clock-date" id="clock-date">AUG 10, 2025</p>
           </div>
-          <!-- Timeline bar -->
-          <div class="accrue-timeline" id="accrue-timeline">
-            <div class="timeline-track">
-              <div class="timeline-fill" id="timeline-fill"></div>
-              <div class="timeline-head" id="timeline-head"></div>
-              <!-- Milestones -->
-              <div class="milestone" data-days="30" style="left:12.35%">
-                <div class="milestone-dot" id="ms-30"></div>
-                <span class="milestone-label">30d</span>
+
+          <!-- ═══ WebGL Yield Curve ═══ -->
+          <div class="yield-curve-wrap" id="yield-curve-wrap">
+            <canvas id="yield-curve-canvas"></canvas>
+            <!-- Y-axis labels -->
+            <div class="yc-axis yc-axis-y">
+              <span class="yc-label" data-val="1.000" style="bottom:0%">1.000</span>
+              <span class="yc-label" data-val="1.100" style="bottom:23.4%">1.100</span>
+              <span class="yc-label" data-val="1.200" style="bottom:46.8%">1.200</span>
+              <span class="yc-label" data-val="1.300" style="bottom:70.2%">1.300</span>
+              <span class="yc-label" data-val="1.427" style="bottom:100%">1.427</span>
+            </div>
+            <!-- X-axis labels -->
+            <div class="yc-axis yc-axis-x">
+              <span class="yc-label">Day 0</span>
+              <span class="yc-label">60</span>
+              <span class="yc-label">120</span>
+              <span class="yc-label">180</span>
+              <span class="yc-label">243</span>
+            </div>
+            <!-- Milestone callouts (ratio + APY populated by JS) -->
+            <div class="yc-callout" id="yc-ms-30" data-day="30">
+              <div class="yc-callout-pip"></div>
+              <div class="yc-callout-card">
+                <span class="yc-callout-day">Day 30</span>
+                <span class="yc-callout-ratio" id="yc-r-30"></span>
+                <span class="yc-callout-apy" id="yc-a-30"></span>
               </div>
-              <div class="milestone" data-days="60" style="left:24.69%">
-                <div class="milestone-dot" id="ms-60"></div>
-                <span class="milestone-label">60d</span>
+            </div>
+            <div class="yc-callout" id="yc-ms-90" data-day="90">
+              <div class="yc-callout-pip"></div>
+              <div class="yc-callout-card">
+                <span class="yc-callout-day">Day 90</span>
+                <span class="yc-callout-ratio" id="yc-r-90"></span>
+                <span class="yc-callout-apy" id="yc-a-90"></span>
               </div>
-              <div class="milestone" data-days="90" style="left:37.04%">
-                <div class="milestone-dot" id="ms-90"></div>
-                <span class="milestone-label">90d</span>
+            </div>
+            <div class="yc-callout" id="yc-ms-180" data-day="180">
+              <div class="yc-callout-pip"></div>
+              <div class="yc-callout-card">
+                <span class="yc-callout-day">Day 180</span>
+                <span class="yc-callout-ratio" id="yc-r-180"></span>
+                <span class="yc-callout-apy" id="yc-a-180"></span>
               </div>
-              <div class="milestone" data-days="180" style="left:74.07%">
-                <div class="milestone-dot" id="ms-180"></div>
-                <span class="milestone-label">180d</span>
+            </div>
+            <div class="yc-callout" id="yc-ms-243" data-day="243">
+              <div class="yc-callout-pip"></div>
+              <div class="yc-callout-card">
+                <span class="yc-callout-day">Day 243</span>
+                <span class="yc-callout-ratio" id="yc-r-243"></span>
+                <span class="yc-callout-apy" id="yc-a-243"></span>
               </div>
             </div>
           </div>
-          <!-- Stats grid -->
+
+          <!-- Stats row -->
           <div class="accrue-stats" id="accrue-stats">
             <div class="accrue-stat">
+              <p class="accrue-stat-label">Days</p>
               <p class="accrue-stat-value" id="stat-days">0</p>
-              <p class="accrue-stat-label">Days Active</p>
             </div>
+            <div class="accrue-stat-divider"></div>
             <div class="accrue-stat">
+              <p class="accrue-stat-label">Ratio</p>
               <p class="accrue-stat-value" id="stat-ratio">1.000</p>
-              <p class="accrue-stat-label">Share Ratio</p>
             </div>
+            <div class="accrue-stat-divider"></div>
             <div class="accrue-stat">
-              <p class="accrue-stat-value accent" id="stat-apy">0.0%</p>
               <p class="accrue-stat-label">APY</p>
+              <p class="accrue-stat-value accent" id="stat-apy">0.0%</p>
             </div>
           </div>
-          <p class="accrue-equation" id="accrue-equation">1 ■AKITA = 1.000 AKITA</p>
+          <p class="accrue-equation" id="accrue-equation" style="display:none"></p>
         </div>
       </div>
     </section>
@@ -504,6 +527,7 @@
             <img src="./assets/brand/solana-mark.svg" alt="Solana" class="partner-logo">
             <img src="./assets/brand/meteora-v2.svg" alt="Meteora" class="partner-logo">
             <img src="./assets/brand/ajna-official.svg" alt="Ajna" class="partner-logo">
+            <img src="./assets/brand/charm.png" alt="Charm" class="partner-logo">
           </div>
           <div class="close-brand" id="close-brand">
             <img src="./assets/brand/app-icon-7.jpg" alt="4626" class="close-logo">

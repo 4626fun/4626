@@ -226,23 +226,74 @@ if (audioToggle) {
   const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
   camera.position.z = 5;
 
-  // Soft circle texture
-  function makeCircleTexture(size) {
-    const c = document.createElement('canvas');
-    c.width = size;
-    c.height = size;
-    const ctx = c.getContext('2d');
-    const g = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
-    g.addColorStop(0, 'rgba(255,255,255,1)');
-    g.addColorStop(0.3, 'rgba(255,255,255,0.7)');
-    g.addColorStop(0.7, 'rgba(255,255,255,0.15)');
-    g.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = g;
-    ctx.fillRect(0, 0, size, size);
-    return new THREE.CanvasTexture(c);
-  }
+  // ── Cinematic DoF via per-particle ShaderMaterial ──
+  // Focus plane at z = camera (near), defocus increases with distance
+  const FOCAL_Z = -2;  // sharp zone center
+  const DOF_RANGE = 3;  // falloff distance
 
-  const tex = makeCircleTexture(64);
+  // Custom bokeh particle shader (used for all 3 layers)
+  function makeBokehMaterial(color, baseSize, baseOpacity, focusZ) {
+    return new THREE.ShaderMaterial({
+      uniforms: {
+        uColor: { value: new THREE.Color(color) },
+        uBaseSize: { value: baseSize },
+        uBaseOpacity: { value: baseOpacity },
+        uFocusZ: { value: focusZ },
+        uDofRange: { value: DOF_RANGE },
+        uMap: { value: null },
+        uPixelRatio: { value: Math.min(window.devicePixelRatio, 2) },
+      },
+      vertexShader: `
+        uniform float uBaseSize;
+        uniform float uBaseOpacity;
+        uniform float uFocusZ;
+        uniform float uDofRange;
+        uniform float uPixelRatio;
+        varying float vAlpha;
+        varying float vDoF;
+
+        void main() {
+          vec4 mvPos = modelViewMatrix * vec4(position, 1.0);
+
+          // Depth-of-field: distance from focus plane
+          float zDist = abs(position.z - uFocusZ);
+          vDoF = smoothstep(0.0, uDofRange, zDist);
+
+          // Defocused particles: larger (bokeh circles), dimmer
+          float dofScale = 1.0 + vDoF * 2.5;
+          float dofAlpha = mix(1.0, 0.35, vDoF);
+
+          gl_PointSize = uBaseSize * dofScale * uPixelRatio * (5.0 / -mvPos.z);
+          gl_Position = projectionMatrix * mvPos;
+
+          vAlpha = uBaseOpacity * dofAlpha;
+        }
+      `,
+      fragmentShader: `
+        precision mediump float;
+        uniform vec3 uColor;
+        varying float vAlpha;
+        varying float vDoF;
+
+        void main() {
+          float d = length(gl_PointCoord - 0.5) * 2.0;
+          if (d > 1.0) discard;
+
+          // Sharp: crisp dot. Defocused: soft gaussian bokeh disc
+          float sharpFalloff = 1.0 - d * d;
+          float softFalloff = exp(-d * d * 1.5);
+          float alpha = mix(sharpFalloff, softFalloff, vDoF) * vAlpha;
+
+          // Slight color shift for defocused particles (cooler tint)
+          vec3 col = mix(uColor, uColor * vec3(0.85, 0.92, 1.15), vDoF * 0.5);
+          gl_FragColor = vec4(col, alpha);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+  }
 
   // Layer 1: Main blue particles (foreground)
   const COUNT1 = 300;
@@ -258,16 +309,7 @@ if (audioToggle) {
   }
   const geo1 = new THREE.BufferGeometry();
   geo1.setAttribute('position', new THREE.BufferAttribute(pos1, 3));
-  const mat1 = new THREE.PointsMaterial({
-    size: 0.06,
-    color: 0x0052FF,
-    transparent: true,
-    opacity: 0.5,
-    map: tex,
-    sizeAttenuation: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
+  const mat1 = makeBokehMaterial(0x0052FF, 6, 0.5, FOCAL_Z);
   scene.add(new THREE.Points(geo1, mat1));
 
   // Layer 2: Dim white dust (depth)
@@ -284,16 +326,7 @@ if (audioToggle) {
   }
   const geo2 = new THREE.BufferGeometry();
   geo2.setAttribute('position', new THREE.BufferAttribute(pos2, 3));
-  const mat2 = new THREE.PointsMaterial({
-    size: 0.04,
-    color: 0xFFFFFF,
-    transparent: true,
-    opacity: 0.12,
-    map: tex,
-    sizeAttenuation: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
+  const mat2 = makeBokehMaterial(0xFFFFFF, 4, 0.12, FOCAL_Z);
   scene.add(new THREE.Points(geo2, mat2));
 
   // Layer 3: Sparse bright accent dots
@@ -310,16 +343,7 @@ if (audioToggle) {
   }
   const geo3 = new THREE.BufferGeometry();
   geo3.setAttribute('position', new THREE.BufferAttribute(pos3, 3));
-  const mat3 = new THREE.PointsMaterial({
-    size: 0.12,
-    color: 0x3B82FF,
-    transparent: true,
-    opacity: 0.35,
-    map: tex,
-    sizeAttenuation: true,
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-  });
+  const mat3 = makeBokehMaterial(0x3B82FF, 12, 0.35, FOCAL_Z);
   scene.add(new THREE.Points(geo3, mat3));
 
   let mouseX = 0, mouseY = 0;
@@ -361,6 +385,10 @@ if (audioToggle) {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+    // Update pixel ratio uniform on all bokeh materials
+    const pr = Math.min(window.devicePixelRatio, 2);
+    renderer.setPixelRatio(pr);
+    [mat1, mat2, mat3].forEach(m => { if (m.uniforms) m.uniforms.uPixelRatio.value = pr; });
   });
 })();
 
@@ -385,8 +413,9 @@ const MorphSystem = (function initMorph() {
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE); // additive
 
-  // ── Shaders ──
+  // ── Shaders (with cinematic DoF) ──
   const vertSrc = `
+    precision mediump float;
     attribute vec2 aStartPos;
     attribute vec2 aEndPos;
     attribute float aRandom;
@@ -396,18 +425,16 @@ const MorphSystem = (function initMorph() {
     uniform float uScale;
     varying float vAlpha;
     varying float vRandom;
+    varying float vDoF;  // 0 = sharp (foreground), 1 = fully defocused (background)
 
     void main() {
       float delay = aDelay * 0.3;
       float prog = clamp((uProgress - delay) / (1.0 - delay), 0.0, 1.0);
-      // Smooth step with cubic ease
       prog = prog * prog * (3.0 - 2.0 * prog);
 
-      // Explode outward in the middle of the transition
       float explode = sin(prog * 3.14159);
       float noiseX = sin(aRandom * 47.3 + uTime * 2.0) * explode * 0.35;
       float noiseY = cos(aRandom * 91.7 + uTime * 1.7) * explode * 0.35;
-      // Spiral component
       float angle = aRandom * 6.28 + prog * 4.0;
       float spiralR = explode * 0.2;
       noiseX += cos(angle) * spiralR;
@@ -416,14 +443,20 @@ const MorphSystem = (function initMorph() {
       vec2 pos = mix(aStartPos, aEndPos, prog) + vec2(noiseX, noiseY);
       gl_Position = vec4(pos * uScale, 0.0, 1.0);
 
-      // Particle size varies, pulses during explosion
-      float sizePulse = 1.0 + explode * 1.5;
-      gl_PointSize = (1.5 + aRandom * 2.0) * sizePulse;
+      // Depth-of-field: particles further from center are "background"
+      float dist = length(pos);
+      vDoF = smoothstep(0.15, 0.7, dist) * explode;
 
-      // Fade at edges of transition
+      // Foreground particles: sharp, smaller. Background: larger, softer.
+      float sizePulse = 1.0 + explode * 1.5;
+      float dofScale = 1.0 + vDoF * 1.8; // defocused particles grow larger (bokeh)
+      gl_PointSize = (1.5 + aRandom * 2.0) * sizePulse * dofScale;
+
       vAlpha = smoothstep(0.0, 0.08, prog) * smoothstep(1.0, 0.92, prog);
       vAlpha *= 0.6 + aRandom * 0.4;
       vAlpha *= (1.0 + explode * 0.5);
+      // Defocused particles are dimmer
+      vAlpha *= mix(1.0, 0.4, vDoF);
       vRandom = aRandom;
     }
   `;
@@ -432,13 +465,18 @@ const MorphSystem = (function initMorph() {
     precision mediump float;
     varying float vAlpha;
     varying float vRandom;
+    varying float vDoF;
     uniform float uProgress;
 
     void main() {
       float d = length(gl_PointCoord - 0.5) * 2.0;
       if (d > 1.0) discard;
-      float alpha = (1.0 - d * d) * vAlpha;
-      // Color: transition from white/bright to blue
+
+      // Sharp particles: crisp edges. Defocused: soft gaussian-like falloff
+      float sharpAlpha = (1.0 - d * d);
+      float softAlpha = exp(-d * d * 2.0);  // gaussian bokeh
+      float alpha = mix(sharpAlpha, softAlpha, vDoF) * vAlpha;
+
       vec3 white = vec3(0.95, 0.95, 1.0);
       vec3 blue = vec3(0.0, 0.322, 1.0);
       vec3 brightBlue = vec3(0.231, 0.51, 1.0);
@@ -965,7 +1003,7 @@ function multiMapSmooth(progress, stops, values) {
 })();
 
 // ────────────────────────────────────────────
-// 8. CHAPTER 3: ACCRUE (650vh) + milestone chimes
+// 8. CHAPTER 3: ACCRUE (650vh) + WebGL yield curve
 // ────────────────────────────────────────────
 (function chapterAccrue() {
   const section = document.getElementById('ch-accrue');
@@ -973,9 +1011,6 @@ function multiMapSmooth(progress, stops, values) {
   const pair = document.getElementById('accrue-pair');
   const clock = document.getElementById('accrue-clock');
   const clockDate = document.getElementById('clock-date');
-  const timeline = document.getElementById('accrue-timeline');
-  const timelineFill = document.getElementById('timeline-fill');
-  const timelineHead = document.getElementById('timeline-head');
   const stats = document.getElementById('accrue-stats');
   const statDays = document.getElementById('stat-days');
   const statRatio = document.getElementById('stat-ratio');
@@ -983,23 +1018,338 @@ function multiMapSmooth(progress, stops, values) {
   const equation = document.getElementById('accrue-equation');
   const ratioDisplay = document.getElementById('accrue-ratio-display');
   const ratioValue = document.getElementById('ratio-value');
+  const ycWrap = document.getElementById('yield-curve-wrap');
+  const ycCanvas = document.getElementById('yield-curve-canvas');
 
   const TOTAL_DAYS = 243;
-  const FINAL_RATIO = 1.034;
   const VAULT_LAUNCH = new Date(2025, 7, 10);
   const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
 
-  const milestones = [
-    { days: 30, el: document.getElementById('ms-30'), chimed: false, pitch: 1.0 },
-    { days: 60, el: document.getElementById('ms-60'), chimed: false, pitch: 1.12 },
-    { days: 90, el: document.getElementById('ms-90'), chimed: false, pitch: 1.25 },
-    { days: 180, el: document.getElementById('ms-180'), chimed: false, pitch: 1.5 },
+  // ── Organic variable-rate model ──
+  // Piecewise daily growth rates that create a believable yield curve:
+  //   Days 0-30:   aggressive early yield  (~82% annualized)
+  //   Days 30-75:  momentum builds          (~95% annualized)
+  //   Days 75-120: correction/cooldown      (~38% annualized)
+  //   Days 120-165: recovery phase           (~72% annualized)
+  //   Days 165-210: mature steady yield      (~54% annualized)
+  //   Days 210-243: late compression          (~41% annualized)
+  const RATE_SEGMENTS = [
+    { end:  30, apy: 0.82 },
+    { end:  75, apy: 0.95 },
+    { end: 120, apy: 0.38 },
+    { end: 165, apy: 0.72 },
+    { end: 210, apy: 0.54 },
+    { end: 243, apy: 0.41 },
   ];
 
+  // Pre-compute daily ratios with micro-noise for organic feel
+  const _dailyRatio = new Float64Array(TOTAL_DAYS + 1);
+  _dailyRatio[0] = 1.0;
+  // Seeded pseudo-random for deterministic noise
+  function seededRand(seed) {
+    let x = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
+    return x - Math.floor(x);
+  }
+  {
+    let seg = 0;
+    for (let d = 1; d <= TOTAL_DAYS; d++) {
+      while (seg < RATE_SEGMENTS.length - 1 && d > RATE_SEGMENTS[seg].end) seg++;
+      const baseDaily = Math.pow(1 + RATE_SEGMENTS[seg].apy, 1 / 365) - 1;
+      // Add ±12% noise to daily rate for organic texture
+      const noise = (seededRand(d) - 0.5) * 0.24 * baseDaily;
+      _dailyRatio[d] = _dailyRatio[d - 1] * (1 + baseDaily + noise);
+    }
+  }
+  const FINAL_RATIO = _dailyRatio[TOTAL_DAYS];
+
+  function ratioAtDay(d) {
+    const di = Math.floor(Math.max(0, Math.min(TOTAL_DAYS, d)));
+    const frac = d - di;
+    if (di >= TOTAL_DAYS) return _dailyRatio[TOTAL_DAYS];
+    return _dailyRatio[di] + frac * (_dailyRatio[di + 1] - _dailyRatio[di]);
+  }
+
+  // Instantaneous APY at a given day (annualized from recent 7-day window)
+  function apyAtDay(d) {
+    if (d < 7) return 0;
+    const r0 = ratioAtDay(d - 7);
+    const r1 = ratioAtDay(d);
+    return (Math.pow(r1 / r0, 365 / 7) - 1) * 100;
+  }
+
+  // Populate milestone callout labels
+  [30, 90, 180, 243].forEach(d => {
+    const rSpan = document.getElementById('yc-r-' + d);
+    const aSpan = document.getElementById('yc-a-' + d);
+    if (rSpan) rSpan.textContent = ratioAtDay(d).toFixed(3);
+    if (aSpan) aSpan.textContent = apyAtDay(d).toFixed(1) + '% APY';
+  });
+
+  // ── WebGL Yield Curve Renderer ──
+  const gl = ycCanvas.getContext('webgl', { alpha: true, antialias: true, premultipliedAlpha: false });
+  if (!gl) { console.warn('WebGL not supported for yield curve'); return; }
+
+  // Chart margins (normalized 0-1)
+  const ML = 0.08, MR = 0.06, MT = 0.08, MB = 0.14;
+
+  // Generate curve points (365 samples for smooth curve)
+  const SAMPLES = 365;
+  const curveVerts = [];
+  for (let i = 0; i <= SAMPLES; i++) {
+    const day = (i / SAMPLES) * TOTAL_DAYS;
+    const r = ratioAtDay(day);
+    // Map to chart space
+    const x = ML + (day / TOTAL_DAYS) * (1 - ML - MR);
+    const y = MB + ((r - 1.0) / (FINAL_RATIO - 1.0)) * (1 - MB - MT);
+    curveVerts.push(x, y);
+  }
+
+  // Grid lines (horizontal) — dynamic based on final ratio
+  const gridVerts = [];
+  const gridStepCount = 5;
+  const gridSteps = [];
+  for (let i = 0; i < gridStepCount; i++) {
+    gridSteps.push(1.0 + (FINAL_RATIO - 1.0) * (i / (gridStepCount - 1)));
+  }
+  gridSteps.forEach(r => {
+    const y = MB + ((r - 1.0) / (FINAL_RATIO - 1.0)) * (1 - MB - MT);
+    gridVerts.push(ML, y, 1 - MR, y);
+  });
+  // Vertical grid
+  [0, 60, 120, 180, TOTAL_DAYS].forEach(d => {
+    const x = ML + (d / TOTAL_DAYS) * (1 - ML - MR);
+    gridVerts.push(x, MB, x, 1 - MT);
+  });
+
+  // Shaders
+  function compileShader(src, type) {
+    const s = gl.createShader(type);
+    gl.shaderSource(s, src);
+    gl.compileShader(s);
+    return s;
+  }
+  function linkProgram(vs, fs) {
+    const p = gl.createProgram();
+    gl.attachShader(p, vs);
+    gl.attachShader(p, fs);
+    gl.linkProgram(p);
+    return p;
+  }
+
+  // Grid shader (simple)
+  const gridVS = `
+    attribute vec2 a_pos;
+    void main() {
+      gl_Position = vec4(a_pos * 2.0 - 1.0, 0.0, 1.0);
+    }`;
+  const gridFS = `
+    precision mediump float;
+    void main() {
+      gl_FragColor = vec4(1.0, 1.0, 1.0, 0.04);
+    }`;
+  const gridProg = linkProgram(
+    compileShader(gridVS, gl.VERTEX_SHADER),
+    compileShader(gridFS, gl.FRAGMENT_SHADER)
+  );
+  const gridPosLoc = gl.getAttribLocation(gridProg, 'a_pos');
+  const gridBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, gridBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(gridVerts), gl.STATIC_DRAW);
+
+  // Curve shader (glowing blue with bloom)
+  const curveVS = `
+    attribute vec2 a_pos;
+    varying vec2 v_uv;
+    void main() {
+      v_uv = a_pos;
+      gl_Position = vec4(a_pos * 2.0 - 1.0, 0.0, 1.0);
+    }`;
+  const curveFS = `
+    precision mediump float;
+    uniform float u_drawPct;
+    uniform float u_time;
+    varying vec2 v_uv;
+    void main() {
+      float glow = 0.85 + 0.15 * sin(u_time * 2.0 + v_uv.x * 12.0);
+      gl_FragColor = vec4(0.0, 0.32 * glow, 1.0 * glow, 1.0);
+    }`;
+  const curveProg = linkProgram(
+    compileShader(curveVS, gl.VERTEX_SHADER),
+    compileShader(curveFS, gl.FRAGMENT_SHADER)
+  );
+  const curvePosLoc = gl.getAttribLocation(curveProg, 'a_pos');
+  const uDrawPct = gl.getUniformLocation(curveProg, 'u_drawPct');
+  const uTime = gl.getUniformLocation(curveProg, 'u_time');
+  const curveBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, curveBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(curveVerts), gl.STATIC_DRAW);
+
+  // Glow pass shader (thicker, dimmer line for bloom)
+  const glowFS = `
+    precision mediump float;
+    uniform float u_time;
+    varying vec2 v_uv;
+    void main() {
+      float pulse = 0.7 + 0.3 * sin(u_time * 1.5 + v_uv.x * 8.0);
+      gl_FragColor = vec4(0.0, 0.2 * pulse, 0.8 * pulse, 0.35);
+    }`;
+  const glowProg = linkProgram(
+    compileShader(curveVS, gl.VERTEX_SHADER),
+    compileShader(glowFS, gl.FRAGMENT_SHADER)
+  );
+  const glowPosLoc = gl.getAttribLocation(glowProg, 'a_pos');
+  const uGlowTime = gl.getUniformLocation(glowProg, 'u_time');
+
+  // Fill shader (gradient under curve)
+  // Build fill geometry: for each curve point, add a bottom vertex
+  function buildFillVerts(count) {
+    const verts = [];
+    for (let i = 0; i <= count && i <= SAMPLES; i++) {
+      const x = curveVerts[i * 2];
+      const y = curveVerts[i * 2 + 1];
+      verts.push(x, y);         // top (on curve)
+      verts.push(x, MB);        // bottom (baseline)
+    }
+    return new Float32Array(verts);
+  }
+  const fillBuf = gl.createBuffer();
+  const fillVS = `
+    attribute vec2 a_pos;
+    varying vec2 v_uv;
+    void main() {
+      v_uv = a_pos;
+      gl_Position = vec4(a_pos * 2.0 - 1.0, 0.0, 1.0);
+    }`;
+  const fillFS = `
+    precision mediump float;
+    varying vec2 v_uv;
+    uniform float u_top;
+    void main() {
+      float h = (v_uv.y - ${MB.toFixed(4)}) / (u_top - ${MB.toFixed(4)});
+      float alpha = h * 0.12;
+      gl_FragColor = vec4(0.0, 0.2, 1.0, alpha);
+    }`;
+  const fillProg = linkProgram(
+    compileShader(fillVS, gl.VERTEX_SHADER),
+    compileShader(fillFS, gl.FRAGMENT_SHADER)
+  );
+  const fillPosLoc = gl.getAttribLocation(fillProg, 'a_pos');
+  const uFillTop = gl.getUniformLocation(fillProg, 'u_top');
+
+  // State
+  let drawProgress = 0; // 0-1 how much of curve is drawn
+  let animTime = 0;
+  let isActive = false;
+
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const rect = ycCanvas.getBoundingClientRect();
+    ycCanvas.width = rect.width * dpr;
+    ycCanvas.height = rect.height * dpr;
+    gl.viewport(0, 0, ycCanvas.width, ycCanvas.height);
+  }
+
+  function render() {
+    if (!isActive) return;
+    animTime += 0.016;
+
+    resize();
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+    // 1. Grid
+    gl.useProgram(gridProg);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gridBuf);
+    gl.enableVertexAttribArray(gridPosLoc);
+    gl.vertexAttribPointer(gridPosLoc, 2, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.LINES, 0, gridVerts.length / 2);
+
+    const drawCount = Math.floor(drawProgress * SAMPLES) + 1;
+
+    // 2. Fill under curve
+    if (drawCount > 1) {
+      const fv = buildFillVerts(drawCount);
+      gl.useProgram(fillProg);
+      gl.bindBuffer(gl.ARRAY_BUFFER, fillBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, fv, gl.DYNAMIC_DRAW);
+      gl.enableVertexAttribArray(fillPosLoc);
+      gl.vertexAttribPointer(fillPosLoc, 2, gl.FLOAT, false, 0, 0);
+      gl.uniform1f(uFillTop, curveVerts[drawCount * 2 + 1] || 1.0);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, fv.length / 2);
+    }
+
+    // 3. Glow pass (wide line)
+    gl.useProgram(glowProg);
+    gl.bindBuffer(gl.ARRAY_BUFFER, curveBuf);
+    gl.enableVertexAttribArray(glowPosLoc);
+    gl.vertexAttribPointer(glowPosLoc, 2, gl.FLOAT, false, 0, 0);
+    gl.uniform1f(uGlowTime, animTime);
+    gl.lineWidth(Math.min(4, gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE)[1]));
+    gl.drawArrays(gl.LINE_STRIP, 0, drawCount);
+
+    // 4. Main curve (thin bright line)
+    gl.useProgram(curveProg);
+    gl.bindBuffer(gl.ARRAY_BUFFER, curveBuf);
+    gl.enableVertexAttribArray(curvePosLoc);
+    gl.vertexAttribPointer(curvePosLoc, 2, gl.FLOAT, false, 0, 0);
+    gl.uniform1f(uDrawPct, drawProgress);
+    gl.uniform1f(uTime, animTime);
+    gl.lineWidth(Math.min(2, gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE)[1]));
+    gl.drawArrays(gl.LINE_STRIP, 0, drawCount);
+
+    requestAnimationFrame(render);
+  }
+
+  // ── Milestone callouts positioning ──
+  const calloutData = [
+    { day: 30,  el: document.getElementById('yc-ms-30'),  chimed: false, pitch: 1.0 },
+    { day: 90,  el: document.getElementById('yc-ms-90'),  chimed: false, pitch: 1.25 },
+    { day: 180, el: document.getElementById('yc-ms-180'), chimed: false, pitch: 1.5 },
+    { day: 243, el: document.getElementById('yc-ms-243'), chimed: false, pitch: 1.8 },
+  ];
+
+  function positionCallouts() {
+    const rect = ycCanvas.getBoundingClientRect();
+    const wrapRect = ycWrap.getBoundingClientRect();
+    calloutData.forEach(ms => {
+      const xNorm = ML + (ms.day / TOTAL_DAYS) * (1 - ML - MR);
+      const r = ratioAtDay(ms.day);
+      const yNorm = MB + ((r - 1.0) / (FINAL_RATIO - 1.0)) * (1 - MB - MT);
+      const px = rect.left - wrapRect.left + xNorm * rect.width;
+      const py = rect.top - wrapRect.top + (1 - yNorm) * rect.height;
+      // Cap the callout position so the card doesn't clip the right edge
+      const cappedPx = Math.min(px, wrapRect.width - 10);
+      ms.el.style.left = `${cappedPx}px`;
+      ms.el.style.bottom = `${wrapRect.height - py + 4}px`;
+      // Shift callout card alignment based on proximity to right edge
+      const card = ms.el.querySelector('.yc-callout-card');
+      if (card) {
+        const edgeSpace = wrapRect.width - cappedPx;
+        if (edgeSpace < 60) {
+          card.style.transform = 'translateX(-100%)';
+          card.style.marginLeft = '0';
+        } else if (edgeSpace < 140) {
+          card.style.transform = 'translateX(-85%)';
+          card.style.marginLeft = '30%';
+        } else {
+          card.style.transform = 'translateX(-50%)';
+          card.style.marginLeft = '50%';
+        }
+      }
+    });
+  }
+
+  // ── ScrollTrigger ──
   ScrollTrigger.create({
     trigger: section,
     start: 'top top',
     end: 'bottom top',
+    onEnter: () => { isActive = true; requestAnimationFrame(render); },
+    onLeave: () => { isActive = false; },
+    onEnterBack: () => { isActive = true; requestAnimationFrame(render); },
+    onLeaveBack: () => { isActive = false; },
     onUpdate: (self) => {
       const p = self.progress;
 
@@ -1013,11 +1363,16 @@ function multiMapSmooth(progress, stops, values) {
       if (ratioDisplay) ratioDisplay.style.opacity = multiMapSmooth(p, [0.08, 0.18], [0, 1]);
       if (pair) pair.style.opacity = multiMapSmooth(p, [0.10, 0.20], [0, 1]);
       clock.style.opacity = multiMapSmooth(p, [0.18, 0.26], [0, 1]);
-      timeline.style.opacity = multiMapSmooth(p, [0.26, 0.34], [0, 1]);
+      if (ycWrap) ycWrap.style.opacity = multiMapSmooth(p, [0.22, 0.32], [0, 1]);
       stats.style.opacity = multiMapSmooth(p, [0.38, 0.48], [0, 1]);
-      equation.style.opacity = multiMapSmooth(p, [0.38, 0.48], [0, 1]);
+      if (equation) equation.style.opacity = multiMapSmooth(p, [0.38, 0.48], [0, 1]);
 
-      const dayFloat = mapRange(p, 0.24, 0.74, 0, TOTAL_DAYS);
+      // Map scroll to curve draw progress
+      const curveP = mapRange(p, 0.28, 0.78, 0, 1);
+      drawProgress = Math.max(0, Math.min(1, curveP));
+
+      // Day + ratio from draw progress
+      const dayFloat = drawProgress * TOTAL_DAYS;
       const currentDay = Math.round(Math.max(0, Math.min(TOTAL_DAYS, dayFloat)));
 
       const date = new Date(VAULT_LAUNCH);
@@ -1025,36 +1380,30 @@ function multiMapSmooth(progress, stops, values) {
       const dateStr = `${MONTHS[date.getMonth()]} ${String(date.getDate()).padStart(2, '0')}, ${date.getFullYear()}`;
       clockDate.textContent = dateStr;
 
-      const ratio = mapRange(p, 0.30, 0.74, 1.0, FINAL_RATIO);
-      const clampedRatio = Math.max(1, Math.min(FINAL_RATIO, ratio));
+      const clampedRatio = ratioAtDay(currentDay);
 
-      let apy = 0;
-      if (currentDay > 7) {
-        apy = (Math.pow(clampedRatio, 365 / currentDay) - 1) * 100;
-      }
+      // Rolling 7-day APY for organic feel
+      let apy = apyAtDay(currentDay);
 
       statDays.textContent = currentDay;
       statRatio.textContent = clampedRatio.toFixed(3);
       statApy.textContent = `${apy.toFixed(1)}%`;
-      equation.textContent = `1 ■AKITA = ${clampedRatio.toFixed(3)} AKITA`;
+      if (equation) equation.textContent = `1 ■AKITA = ${clampedRatio.toFixed(3)} AKITA`;
       if (ratioValue) ratioValue.textContent = clampedRatio.toFixed(3);
 
-      const pct = (currentDay / TOTAL_DAYS) * 100;
-      timelineFill.style.width = `${pct}%`;
-      timelineHead.style.left = `${pct}%`;
-
-      milestones.forEach(ms => {
-        const wasReached = ms.el.classList.contains('reached');
-        if (currentDay >= ms.days) {
-          ms.el.classList.add('reached');
-          // Play chime on first reach
-          if (!wasReached && !ms.chimed) {
+      // Position + activate callouts
+      positionCallouts();
+      calloutData.forEach(ms => {
+        const wasActive = ms.el.classList.contains('active');
+        if (currentDay >= ms.day) {
+          ms.el.classList.add('active');
+          if (!wasActive && !ms.chimed) {
             AudioEngine.playChime(ms.pitch);
             ms.chimed = true;
           }
         } else {
-          ms.el.classList.remove('reached');
-          ms.chimed = false; // reset for scroll back
+          ms.el.classList.remove('active');
+          ms.chimed = false;
         }
       });
     }
