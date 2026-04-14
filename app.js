@@ -835,23 +835,29 @@ function multiMapSmooth(progress, stops, values) {
 
       // ════════════════════════════════════════════
       // TOKEN ALIGNMENT FIX — v5
-      // Both coin and share use translate(-50%, -50%) as base centering
-      // (they have CSS top:50% left:50% now)
-      // Then translateX shifts them horizontally. SAME Y offset for both.
+      // Both coin and share are positioned at top:0,left:0 in CSS.
+      // JS applies translate(X, Y) where Y = 50vh - 50px (half icon height)
+      // and X = 50vw + offset. This guarantees identical vertical center.
       // ════════════════════════════════════════════
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      // Center Y: middle of viewport minus half the icon ring height (96px / 2 = 48)
+      const centerY = vh / 2 - 48;
+      const centerX = vw / 2;
+      // Responsive multiplier: 1.0 at desktop (1600px), scales down on mobile
+      const rm = Math.min(1, vw / 1200);
 
       // ── Creator coin (AKITA) — SMOOTH CONTINUOUS MOTION ──
-      // One fluid arc: enter from left → center → drift right for morph → right side for detail → allocation position
-      const coinX = multiMapSmooth(p,
+      const coinOffsetX = multiMapSmooth(p,
         [0.018, 0.045, 0.055, 0.08,  0.12,  0.14,  0.165,  0.30,  0.51, 0.60],
-        [-340,   0,      0,     0,     0,     180,   220,    220,   220,  20]
+        [-340*rm, 0,    0,     0,     0,     180*rm, 220*rm, 220*rm, 220*rm, 20*rm]
       );
       const coinOp = multiMapSmooth(p,
         [0.018, 0.03,  0.055, 0.075, 0.12,  0.14,  0.26, 0.30],
         [0,     1,     1,     0,     0,     1,     0.4,  1]
       );
       const coinScale = multiMapSmooth(p, [0.11, 0.165, 0.26, 0.30], [1, 0.82, 0.82, 1]);
-      coin.style.transform = `translate(-50%, -50%) translateX(${coinX}px) scale(${coinScale})`;
+      coin.style.transform = `translate(${centerX + coinOffsetX}px, ${centerY}px) translate(-50%, 0) scale(${coinScale})`;
       coin.style.opacity = coinOp;
 
       // Toggle depositing class for enhanced glow
@@ -873,17 +879,17 @@ function multiMapSmooth(progress, stops, values) {
       }
 
       // ── Vault share (■AKITA) — ALIGNED with coin, smooth motion ──
-      // Emerges after morph, mirrors coin position on the opposite side, SAME Y
+      // Emerges after morph, mirrors coin position on the opposite side, SAME centerY
       const shareOp = multiMapSmooth(p,
         [0.10, 0.13, 0.51, 0.60, 0.64, 0.67],
         [0,    1,    1,    0.35, 0.35, 0]
       );
-      const shareX = multiMapSmooth(p,
+      const shareOffsetX = multiMapSmooth(p,
         [0.10, 0.14, 0.165, 0.30, 0.51, 0.60],
-        [0,    -140, -220,  -220, -220, -50]
+        [0,    -140*rm, -220*rm, -220*rm, -220*rm, -50*rm]
       );
       const shareScale = multiMapSmooth(p, [0.10, 0.14, 0.51, 0.60], [0.6, 1, 1, 0.42]);
-      share.style.transform = `translate(-50%, -50%) translateX(${shareX}px) scale(${shareScale})`;
+      share.style.transform = `translate(${centerX + shareOffsetX}px, ${centerY}px) translate(-50%, 0) scale(${shareScale})`;
       share.style.opacity = shareOp;
 
       // Toggle minted class for enhanced glow
@@ -915,7 +921,7 @@ function multiMapSmooth(progress, stops, values) {
 
       // ── Camera zoom — smoother easing ──
       const cameraScale = multiMapSmooth(p, [0.50, 0.58, 0.62, 0.68], [1, 1.06, 1.06, 1]);
-      const panX = mapEased(p, 0.64, 0.86, 0, -400);
+      const panX = mapEased(p, 0.64, 0.86, 0, -400 * rm);
       cameraWrapper.style.transform = `scale(${cameraScale}) translateX(${panX}px)`;
 
       // ── Deposit/allocation labels — smoothed ──

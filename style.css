@@ -623,12 +623,13 @@ body {
 /* ─── Token images ─── */
 .token-coin, .token-share {
   position: absolute;
-  top: 50%;
-  left: 50%;
+  top: 0;
+  left: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
   will-change: transform, opacity;
+  transform-origin: center top;
 }
 .token-coin { opacity: 0; }
 .token-share { opacity: 0; }
