@@ -39,9 +39,7 @@ pub mod creator_share_hook {
 
     /// Keeper-only: settle withheld fees via Token-2022 CPI.
     /// Fees are collected to a designated account for bridging to Base.
-    pub fn settle_fees<'info>(
-        ctx: Context<'_, '_, 'info, 'info, SettleFees<'info>>,
-    ) -> Result<()> {
+    pub fn settle_fees<'info>(ctx: Context<'info, SettleFees<'info>>) -> Result<()> {
         instructions::settle_fees::handler(ctx)
     }
 
@@ -90,7 +88,7 @@ pub mod creator_share_hook {
     /// instruction discriminator. This fallback intercepts that call,
     /// deserializes the accounts manually, and delegates to the hook handler.
     pub fn fallback<'info>(
-        program_id: &Pubkey,
+        program_id: &'info Pubkey,
         accounts: &'info [AccountInfo<'info>],
         data: &[u8],
     ) -> Result<()> {
@@ -114,28 +112,30 @@ pub mod creator_share_hook {
                 .map_err(|_| ProgramError::InvalidInstructionData)?,
         );
 
-        // Deserialize accounts using Anchor's try_accounts
-        let mut bumps = instructions::execute_hook::TransferHookBumps::default();
-        let mut remaining = accounts;
-        let mut reallocs = std::collections::BTreeSet::new();
-        let mut ctx_accounts = instructions::execute_hook::TransferHook::try_accounts(
-            program_id,
-            &mut remaining,
-            data,
-            &mut bumps,
-            &mut reallocs,
-        )?;
+        // Deserialize accounts using Anchor's try_accounts and run the handler
+        // inside a scope so mutable borrows end before account exit.
+        {
+            let mut bumps = instructions::execute_hook::TransferHookBumps::default();
+            let mut remaining = accounts;
+            let mut reallocs = std::collections::BTreeSet::new();
+            let mut ctx_accounts = instructions::execute_hook::TransferHook::try_accounts(
+                program_id,
+                &mut remaining,
+                data,
+                &mut bumps,
+                &mut reallocs,
+            )?;
 
-        let result = instructions::execute_hook::handler(
-            Context::new(program_id, &mut ctx_accounts, remaining, bumps),
-            amount,
-        );
+            let _ = remaining;
+            let _ = bumps;
+            instructions::execute_hook::process_transfer_hook(&mut ctx_accounts, amount)?;
 
-        // Serialize modified accounts back to their data buffers.
-        // This is critical — without this call, any writes to PendingEntries
-        // made inside the handler would not be persisted.
-        ctx_accounts.exit(program_id)?;
+            // Serialize modified accounts back to their data buffers.
+            // This is critical — without this call, writes to PendingEntries
+            // made inside the handler would not be persisted.
+            ctx_accounts.exit(program_id)?;
+        }
 
-        result
+        Ok(())
     }
 }

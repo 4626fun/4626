@@ -68,12 +68,12 @@ export function VaultNavBar(props: { interactive?: boolean }) {
     items.map((item) => {
       const active = isActiveLink(location, item)
       if (item.to === getCanonicalMarketingWaitlistPath()) {
-        const className = `group relative inline-flex h-8 items-center justify-center rounded-lg border-0 px-3 outline-none transition-all duration-200 focus-visible:ring-1 focus-visible:ring-white/25 ${
+        const className = `group relative inline-flex h-8 items-center justify-center rounded-lg border-0 px-3 outline-none transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] focus-visible:ring-1 focus-visible:ring-white/25 ${
             ''
           }`
         const content = (
           <span
-            className="relative z-10 text-[13px] font-medium tracking-[0.01em] text-zinc-300 transition-colors"
+            className="relative z-10 text-[13px] font-medium tracking-[0.01em] text-zinc-300 transition-colors duration-150 ease-[cubic-bezier(0.4,0,0.2,1)]"
           >
             {item.label}
           </span>
@@ -106,12 +106,12 @@ export function VaultNavBar(props: { interactive?: boolean }) {
           key={item.to}
           to={item.to}
           aria-current={active ? 'page' : undefined}
-          className={`group relative inline-flex h-8 items-center justify-center rounded-lg border-0 px-3 outline-none transition-all duration-200 focus-visible:ring-1 focus-visible:ring-white/25 ${
+          className={`group relative inline-flex h-8 items-center justify-center rounded-lg border-0 px-3 outline-none transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] focus-visible:ring-1 focus-visible:ring-white/25 ${
             ''
           }`}
         >
           <span
-            className="relative z-10 text-[13px] font-medium tracking-[0.01em] text-zinc-300 transition-colors"
+            className="relative z-10 text-[13px] font-medium tracking-[0.01em] text-zinc-300 transition-colors duration-150 ease-[cubic-bezier(0.4,0,0.2,1)]"
           >
             {item.label}
           </span>

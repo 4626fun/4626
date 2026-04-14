@@ -75,7 +75,7 @@ export function Logo({
           </defs>
 
           <g
-            className="relative transition-all duration-[1000ms] ease-[cubic-bezier(0.16,1,0.3,1)]"
+            className="relative transition-all duration-[600ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
             style={{
               transformOrigin: 'center',
               transform: isHovered ? 'rotate(180deg) scale(0.55)' : 'rotate(0deg) scale(1)',
@@ -90,7 +90,7 @@ export function Logo({
               fill={isHovered ? 'url(#base-gradient)' : 'transparent'}
               stroke={isHovered ? 'transparent' : 'url(#stroke-sheen)'}
               strokeWidth={1.5}
-              className="transition-all duration-[1000ms] ease-[cubic-bezier(0.16,1,0.3,1)]"
+              className="transition-all duration-[600ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
               style={{
                 filter: isHovered ? 'url(#soft-glow)' : 'none',
               }}
@@ -103,7 +103,7 @@ export function Logo({
               height="28"
               rx={14}
               fill="url(#sphere-shine)"
-              className="transition-opacity duration-[1000ms] ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-none"
+              className="transition-opacity duration-[600ms] ease-[cubic-bezier(0.4,0,0.2,1)] pointer-events-none"
               style={{
                 opacity: isHovered ? 1 : 0,
               }}
@@ -115,7 +115,7 @@ export function Logo({
               rx="6"
               ry="3"
               fill="white"
-              className="transition-all duration-[1000ms] ease-[cubic-bezier(0.16,1,0.3,1)] pointer-events-none blur-[2px]"
+              className="transition-all duration-[600ms] ease-[cubic-bezier(0.4,0,0.2,1)] pointer-events-none blur-[2px]"
               style={{
                 opacity: isHovered ? 0.3 : 0,
                 transform: isHovered ? 'translateY(0)' : 'translateY(4px)',

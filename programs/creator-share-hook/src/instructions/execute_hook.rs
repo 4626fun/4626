@@ -69,18 +69,22 @@ fn is_allowlisted_buy(config: &CreatorConfig, authority: &Pubkey, source_owner: 
     config.is_known_amm(authority) && authority == source_owner
 }
 
-pub fn handler(ctx: Context<TransferHook>, amount: u64) -> Result<()> {
-    let config = &ctx.accounts.creator_config;
+pub fn handler(mut ctx: Context<TransferHook>, amount: u64) -> Result<()> {
+    process_transfer_hook(&mut ctx.accounts, amount)
+}
+
+pub fn process_transfer_hook(accounts: &mut TransferHook, amount: u64) -> Result<()> {
+    let config = &accounts.creator_config;
 
     if !config.lottery_enabled {
         return Ok(());
     }
-    let authority = ctx.accounts.authority.key();
+    let authority = accounts.authority.key();
     if !config.is_known_amm(&authority) {
         return Ok(());
     }
 
-    let source_data = ctx.accounts.source_token_account.try_borrow_data()?;
+    let source_data = accounts.source_token_account.try_borrow_data()?;
 
     if source_data.len() < 64 {
         return Ok(());
@@ -92,7 +96,7 @@ pub fn handler(ctx: Context<TransferHook>, amount: u64) -> Result<()> {
         return Ok(());
     }
 
-    let dest_data = ctx.accounts.destination_token_account.try_borrow_data()?;
+    let dest_data = accounts.destination_token_account.try_borrow_data()?;
     if dest_data.len() < 64 {
         return Ok(());
     }
@@ -108,7 +112,7 @@ pub fn handler(ctx: Context<TransferHook>, amount: u64) -> Result<()> {
         slot: clock.slot,
     };
 
-    let mut pending = ctx.accounts.pending_entries.load_mut()?;
+    let mut pending = accounts.pending_entries.load_mut()?;
     let overflowed = pending.push(entry);
 
     if overflowed {

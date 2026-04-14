@@ -90,7 +90,7 @@ pub fn handler(ctx: Context<InitializeExtraAccountMetaList>) -> Result<()> {
 
     system_program::create_account(
         CpiContext::new_with_signer(
-            ctx.accounts.system_program.to_account_info(),
+            ctx.accounts.system_program.key(),
             system_program::CreateAccount {
                 from: ctx.accounts.payer.to_account_info(),
                 to: ctx.accounts.extra_account_meta_list.to_account_info(),

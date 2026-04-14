@@ -2,8 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLogin, usePrivy } from '@privy-io/react-auth'
 import { AnimatePresence, motion } from 'framer-motion'
 
-import { Logo } from '@/components/brand/Logo'
-import { OrbBorder } from '@/components/brand/OrbBorder'
+import { PulsingBasemark } from '@/components/brand/AnimatedBasemark'
 import { TextScramble } from '@/components/brand/TextScramble'
 import { apiFetch } from '@/lib/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
@@ -248,9 +247,9 @@ function WaitlistAuthStep(props: {
       : `Only ${spotsRemaining.toLocaleString()} spots remaining!`
 
   const stagger = (i: number) => ({
-    initial: { opacity: 0, y: 18 },
+    initial: { opacity: 0, y: 12 },
     animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.55, delay: i * 0.12, ease: [0.25, 1, 0.5, 1] },
+    transition: { duration: 0.22, delay: 0.1 + i * 0.06, ease: [0.4, 0, 0.2, 1] },
   })
 
   return (
@@ -258,41 +257,60 @@ function WaitlistAuthStep(props: {
       key="step-auth"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      exit={{ opacity: 0, y: -8 }}
-      transition={{ duration: 0.35, ease: [0.25, 1, 0.5, 1] }}
-      className="relative flex min-h-[420px] items-center justify-center py-10 sm:py-16"
+      exit={{ opacity: 0, y: -6 }}
+      transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+      className="relative flex min-h-[460px] items-center justify-center py-12 sm:py-20"
     >
+      {/* dot grid texture — Base brand pattern */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 opacity-[0.04]"
+        style={{
+          backgroundImage: 'radial-gradient(circle, rgba(255,255,255,0.5) 1px, transparent 1px)',
+          backgroundSize: '24px 24px',
+        }}
+      />
+
       {/* film grain overlay */}
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute inset-0 opacity-[0.035] mix-blend-overlay"
+        className="pointer-events-none absolute inset-0 opacity-[0.03] mix-blend-overlay"
         style={{
           backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
           backgroundSize: '128px 128px',
         }}
       />
 
-      {/* ambient glow */}
-      <motion.div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 flex items-center justify-center"
-        animate={{ opacity: [0.14, 0.24, 0.14], scale: [1, 1.06, 1] }}
-        transition={{ duration: 5, repeat: Infinity, ease: 'easeInOut' }}
-      >
-        <div className="h-80 w-80 rounded-full bg-brand-primary/25 blur-[100px]" />
-      </motion.div>
+      {/* dual ambient glow — Base Blue core + Cerulean halo */}
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <motion.div
+          animate={{ opacity: [0.18, 0.28, 0.18], scale: [1, 1.04, 1] }}
+          transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+          className="absolute h-64 w-64 rounded-full bg-[#0000FF]/20 blur-[80px]"
+        />
+        <motion.div
+          animate={{ opacity: [0.08, 0.15, 0.08], scale: [1, 1.08, 1] }}
+          transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+          className="absolute h-96 w-96 rounded-full bg-[#3C8AFF]/10 blur-[120px]"
+        />
+      </div>
 
       <div className="relative z-10 w-full max-w-sm space-y-8 text-center">
-        {/* logo orb */}
-        <motion.div {...stagger(0)} className="mx-auto flex w-16 h-16 items-center justify-center">
-          <OrbBorder intensity="low" shape="round">
-            <Logo showText={false} width={32} height={32} forceHover />
-          </OrbBorder>
+        {/* Square-led intro — Basemark assembles first, content follows */}
+        <motion.div
+          initial={{ opacity: 0, scale: 0.85 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.24, ease: [0.4, 0, 0.2, 1] }}
+          className="mx-auto flex h-14 w-14 items-center justify-center"
+        >
+          <PulsingBasemark size={48} color="#0052FF" />
         </motion.div>
 
-        {/* headline with text scramble */}
-        <motion.div {...stagger(1)} className="space-y-3">
-          <p className="bv-kicker">Secure onboarding</p>
+        {/* headline with text scramble decode */}
+        <motion.div {...stagger(0)} className="space-y-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#3C8AFF]/80">
+            Secure onboarding
+          </p>
           <h2 className="text-[2.6rem] font-light leading-tight tracking-tight text-white">
             <TextScramble text={authUi.title} trigger speed={0.6} complexity="simple" />
           </h2>
@@ -300,12 +318,12 @@ function WaitlistAuthStep(props: {
         </motion.div>
 
         {/* CTA */}
-        <motion.div {...stagger(2)} className="space-y-3">
+        <motion.div {...stagger(1)} className="space-y-3">
           <button
             type="button"
             disabled={buttonsDisabled}
             onClick={() => void onContinueAuth()}
-            className="btn-accent btn-no-icon inline-flex w-full items-center justify-center gap-2 rounded-xl border border-brand-primary/45 bg-linear-to-r from-brand-primary to-brand-hover py-3.5 text-[14px] font-medium text-white shadow-[0_16px_36px_-18px_rgba(0,82,255,0.92)] transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_20px_40px_-16px_rgba(0,82,255,0.95)] disabled:translate-y-0 disabled:opacity-50"
+            className="btn-accent btn-no-icon inline-flex w-full items-center justify-center gap-2 rounded-xl border border-brand-primary/45 bg-linear-to-r from-[#0052FF] to-[#0033CC] py-3.5 text-[14px] font-medium text-white shadow-[0_16px_36px_-18px_rgba(0,0,255,0.7)] transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_20px_40px_-16px_rgba(0,0,255,0.8)] disabled:translate-y-0 disabled:opacity-50"
           >
             {busy ? (
               <LoadingInline intent="session" size="sm" labelOverride={authUi.busyLabel} />
@@ -315,13 +333,15 @@ function WaitlistAuthStep(props: {
               authUi.ctaLabel
             )}
           </button>
-          <p className="bv-kicker">{urgencyLabel}</p>
+          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+            {urgencyLabel}
+          </p>
         </motion.div>
 
         {/* error */}
         {error ? (
           <motion.div
-            {...stagger(3)}
+            {...stagger(2)}
             role="alert"
             aria-live="polite"
             className="space-y-3 rounded-xl border border-rose-500/20 bg-rose-500/8 px-4 py-3 text-left text-sm text-rose-300"

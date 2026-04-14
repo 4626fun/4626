@@ -301,9 +301,14 @@ Keeper bots in `cre/` relay data between Solana and Base. Install: `cd cre && np
 - When Zora linking is the active context, prefer showing the Zora handle as the human-readable identity label over a truncated wallet address that does not match what the user expects for their canonical smart wallet.
 - For waitlist/onboarding UI, prefer cleaner card treatments with minimal framing; remove heavy outer borders when they add visual noise.
 - For exported skill/context documentation packs, prefer comprehensive self-contained writeups that assume the reader does not have direct repository access.
+- Loading and progress labels must match the actual action context — reserve action verbs (e.g., "Deploying...") for when the action is executing, not for page navigation or initial load.
+- For nav bars, prefer edge-to-edge layout over centered max-width, text-only links without hover backgrounds, and no visual separators between nav and content.
 
 ## Learned Workspace Facts
 
 - Isolated feature work often uses `git worktree add` under `/.worktrees/` at the repo root; that directory is gitignored via `.gitignore`.
 - `frontend/src/config/wagmi.ts` sets `multiInjectedProviderDiscovery: false` on `createConfig` to avoid eager EIP-6963 multi-provider discovery that can trigger extension `requestProvider` races against non-writable `window.ethereum` getters when several wallets are installed.
 - Perplexity-ready skill packages live under `docs/perplexity/perplexity-skills/` as one-folder-per-skill bundles with a `SKILL.md` entrypoint, and are commonly shared as `.zip` archives.
+- Feature flags are centralized in `frontend/src/lib/featureFlags.ts` using a typed `FeatureFlag<T>` registry (11 flags across 4 categories), with `FlagToolbarBridge` in Layout for Vercel Toolbar integration and `/api/flags/evaluate` + `/api/flags/discover` endpoints for Vercel Flags dashboard resolution.
+- `/api/uniswap/quote` and `/api/uniswap/swap` proxy endpoints require an authenticated 4626 session principal; `useSwapExecution` gates quote requests behind session hydration to avoid 401 errors.
+- `GET /api/waitlist/stats` serves live waitlist count data for urgency display; waitlist capacity uses configurable 100-slot tiers with dynamic "Only X spots remaining!" messaging.

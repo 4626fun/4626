@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { DURATION } from './motion'
+
 export type TextScrambleFont = 'sans' | 'mono' | 'doto'
 export type TextScrambleComplexity = 'simple' | 'complex'
 
@@ -8,18 +10,17 @@ export interface TextScrambleProps {
   className?: string
   font?: TextScrambleFont
   trigger?: boolean
+  /** Resolve speed multiplier (higher = faster). Default 1.0 */
   speed?: number
   complexity?: TextScrambleComplexity
 }
 
-// Geometric primitives for the technical aesthetic
 const SIMPLE_SYMBOLS = ['●', '■', '▲', '◆', '○', '□', '△', '◊', '⬡', '⬢', '✶', '✕', '✧', '✦', '✢']
 const COMPLEX_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#$%^&*()_+-=[]{}|;:,.<>?'
 
 type ScrambleChar = { char: string; style: React.CSSProperties }
 
 function rand(): number {
-  // Prefer CSPRNG in browsers; fall back to Math.random in non-browser contexts.
   if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
     const a = new Uint32Array(1)
     crypto.getRandomValues(a)
@@ -33,6 +34,13 @@ function randInt(maxExclusive: number): number {
   return Math.floor(rand() * m)
 }
 
+/**
+ * Base brand "tech scramble" — vertical glyph swaps that cascade
+ * left-to-right and resolve into the final message.
+ *
+ * Per spec: headlines & teasers only, Medium weight, sequences ≤800ms.
+ * Pair with a quick fade-in of supporting content.
+ */
 export function TextScramble({
   text,
   className = '',
@@ -48,18 +56,24 @@ export function TextScramble({
   const [output, setOutput] = useState<ScrambleChar[]>(baselineOutput)
   const frameRef = useRef<number>(0)
   const progressRef = useRef<number>(0)
+  const frameCountRef = useRef<number>(0)
 
   useEffect(() => {
     if (!trigger) return
 
     progressRef.current = 0
+    frameCountRef.current = 0
+
+    const charsPerFrame = speed * 0.55
+    const maxFrames = Math.ceil((text.length + 4) / charsPerFrame)
 
     const animate = () => {
-      // Resolve speed tuned for a snappy “system decode”
-      progressRef.current += speed * 0.5
+      progressRef.current += charsPerFrame
+      frameCountRef.current += 1
 
       const resolved = Math.floor(progressRef.current)
       const isComplex = complexity === 'complex'
+      const frame = frameCountRef.current
 
       const next = text.split('').map((char, index): ScrambleChar => {
         if (char === ' ') return { char: ' ', style: {} }
@@ -71,21 +85,24 @@ export function TextScramble({
           randomChar = COMPLEX_CHARS[randInt(COMPLEX_CHARS.length)]
         }
 
+        const yOffset = (frame % 2 === 0 ? -1 : 1) * (2 + rand() * 3)
+
         let style: React.CSSProperties = {
           opacity: 0.7,
           display: 'inline-block',
           width: '1ch',
           textAlign: 'center',
+          transform: `translateY(${yOffset}px)`,
+          transition: `transform ${DURATION.snap}s cubic-bezier(0.4, 0, 0.2, 1)`,
         }
 
         if (isComplex) {
-          const rotate = randInt(180) - 90
-          const scale = 0.8 + rand() * 0.4
+          const rotate = randInt(10) - 5
+          const scale = 0.9 + rand() * 0.2
           style = {
             ...style,
-            transform: `rotate(${rotate}deg) scale(${scale})`,
+            transform: `translateY(${yOffset}px) rotate(${rotate}deg) scale(${scale})`,
             color: rand() > 0.8 ? '#0052FF' : 'inherit',
-            filter: rand() > 0.9 ? 'blur(1px)' : 'none',
           }
         }
 
@@ -94,7 +111,7 @@ export function TextScramble({
 
       setOutput(next)
 
-      if (progressRef.current < text.length + 5) {
+      if (frameCountRef.current < maxFrames) {
         frameRef.current = requestAnimationFrame(animate)
       }
     }
@@ -109,11 +126,10 @@ export function TextScramble({
   return (
     <span className={`${fontClass} ${className} inline-flex whitespace-pre`}>
       {visible.map((item, i) => (
-        <span key={i} style={item.style} className="transition-colors duration-75">
+        <span key={i} style={item.style} className="transition-transform duration-150">
           {item.char}
         </span>
       ))}
     </span>
   )
 }
-
