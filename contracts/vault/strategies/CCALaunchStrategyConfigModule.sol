@@ -106,10 +106,14 @@ contract CCALaunchStrategyConfigModule is Ownable, ReentrancyGuard {
     );
     event BackingVaultUpdated(address indexed backingVault);
     event SimpleLaunchToggled(bool enabled);
+    event FundsSwept(address indexed auction, uint256 amount);
+    event TokensSwept(address indexed auction, uint256 amount);
 
     error ZeroAddress();
     error InvalidConfig();
     error EthTransferFailed();
+    error SweepNotAllowed(uint64 sweepBlock, uint256 currentBlock);
+    error NotOperator(address caller, address expected);
     error OnlyDelegateCall();
 
     constructor(
@@ -175,6 +179,35 @@ contract CCALaunchStrategyConfigModule is Ownable, ReentrancyGuard {
     function setSimpleLaunchEnabled(bool enabled) external onlyDelegateCall onlyOwner {
         simpleLaunchEnabled = enabled;
         emit SimpleLaunchToggled(enabled);
+    }
+
+    function sweepResidualAuctionToken() external onlyDelegateCall {
+        if (msg.sender != operator) revert NotOperator(msg.sender, operator);
+        if (block.number < lastSweepBlock) revert SweepNotAllowed(lastSweepBlock, block.number);
+
+        uint256 amount = auctionToken.balanceOf(address(this));
+        if (amount == 0) return;
+        auctionToken.safeTransfer(operator, amount);
+        emit TokensSwept(address(this), amount);
+    }
+
+    function sweepResidualCurrency() external onlyDelegateCall {
+        if (msg.sender != operator) revert NotOperator(msg.sender, operator);
+        if (block.number < lastSweepBlock) revert SweepNotAllowed(lastSweepBlock, block.number);
+
+        if (currency == address(0)) {
+            uint256 nativeAmount = address(this).balance;
+            if (nativeAmount == 0) return;
+            (bool ok,) = payable(operator).call{value: nativeAmount}("");
+            if (!ok) revert EthTransferFailed();
+            emit FundsSwept(address(this), nativeAmount);
+            return;
+        }
+
+        uint256 tokenAmount = IERC20(currency).balanceOf(address(this));
+        if (tokenAmount == 0) return;
+        IERC20(currency).safeTransfer(operator, tokenAmount);
+        emit FundsSwept(address(this), tokenAmount);
     }
 
     function setDefaultDuration(uint64 _duration) external onlyDelegateCall onlyOwner {

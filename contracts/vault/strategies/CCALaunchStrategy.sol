@@ -16,6 +16,7 @@ import {LiquidityAmounts} from "@uniswap/v4-periphery/src/libraries/LiquidityAmo
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {ICreatorOracle} from "../../interfaces/ICreatorOracle.sol";
 import {CCALaunchStrategyConfigModule} from "./CCALaunchStrategyConfigModule.sol";
+import {CCALaunchStrategyEncodingHelper} from "./CCALaunchStrategyEncodingHelper.sol";
 import {Plan, StrategyPlanner} from "liquidity-launcher/src/libraries/StrategyPlanner.sol";
 import {TokenPricing} from "liquidity-launcher/src/libraries/TokenPricing.sol";
 import {BasePositionParams, FullRangeParams} from "liquidity-launcher/src/types/PositionTypes.sol";
@@ -125,9 +126,6 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     uint24 public constant VESTING_SPLIT_MPS = 4_000_000;
     /// @notice LP reserve allocation: 20%
     uint24 public constant LP_RESERVE_SPLIT_MPS = 2_000_000;
-    /// @notice Unix epoch (1970-01-01 00:00 UTC) was a Thursday, so weekly boundaries align to Thursday 00:00 UTC.
-    uint256 internal constant THURSDAY_EPOCH_SECONDS = 7 days;
-
     enum LifecyclePhase {
         Idle,
         AuctionLive,
@@ -274,6 +272,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     /// @notice If false, `launchAuctionSimple` is disabled.
     bool public simpleLaunchEnabled;
     address private immutable _configModule;
+    CCALaunchStrategyEncodingHelper private immutable _encodingHelper;
 
     // ================================
     // EVENTS
@@ -339,6 +338,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     error ZeroAmount();
     error InvalidConfig();
     error Unauthorized();
+    error EthTransferFailed();
 
     // ================================
     // CONSTRUCTOR
@@ -376,6 +376,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         _configModule = address(
             new CCALaunchStrategyConfigModule(_auctionToken, _currency, _fundsRecipient, _tokensRecipient, _owner)
         );
+        _encodingHelper = new CCALaunchStrategyEncodingHelper();
     }
 
     // ================================
@@ -868,28 +869,14 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
      * @notice Sweep residual auction token balance after sweep window.
      */
     function sweepResidualAuctionToken() external nonReentrant {
-        _requireOperatorSweep();
-        uint256 amount = auctionToken.balanceOf(address(this));
-        if (amount == 0) return;
-        auctionToken.safeTransfer(operator, amount);
-        emit TokensSwept(address(this), amount);
+        _delegateConfig();
     }
 
     /**
      * @notice Sweep residual raised currency balance after sweep window.
      */
     function sweepResidualCurrency() external nonReentrant {
-        _requireOperatorSweep();
-        uint256 amount = _currencyBalance(address(this));
-        if (amount == 0) return;
-
-        if (currency == address(0)) {
-            (bool ok,) = payable(operator).call{value: amount}("");
-            require(ok, "ETH transfer failed");
-        } else {
-            IERC20(currency).safeTransfer(operator, amount);
-        }
-        emit FundsSwept(address(this), amount);
+        _delegateConfig();
     }
 
     // ================================
@@ -945,19 +932,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     }
 
     function _deriveScheduledStartBlock() internal view returns (uint64 startBlock) {
-        uint256 nextThursdayStartTimestamp = _nextThursdayStartTimestamp(block.timestamp);
-        uint256 deltaBlocks;
-        if (nextThursdayStartTimestamp > block.timestamp) {
-            deltaBlocks = Math.ceilDiv(nextThursdayStartTimestamp - block.timestamp, uint256(launchBlockTimeSeconds));
-        }
-        if (deltaBlocks == 0) deltaBlocks = 1;
-        startBlock = uint64(block.number + deltaBlocks);
-    }
-
-    function _nextThursdayStartTimestamp(uint256 currentTimestamp) internal pure returns (uint256) {
-        uint256 remainder = currentTimestamp % THURSDAY_EPOCH_SECONDS;
-        if (remainder == 0) return currentTimestamp;
-        return currentTimestamp + (THURSDAY_EPOCH_SECONDS - remainder);
+        return _encodingHelper.deriveScheduledStartBlock(block.number, block.timestamp, launchBlockTimeSeconds);
     }
 
     function _deriveLaunchPricing()
@@ -965,33 +940,9 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         view
         returns (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 creatorUsdPrice, uint256 ethUsdPrice)
     {
-        if (oracle == address(0)) revert LaunchOracleNotConfigured();
-        if (currency != address(0)) revert UnsupportedLaunchCurrency(currency);
-
-        (int256 creatorUsdSigned, uint256 creatorTimestamp) = ICreatorOracle(oracle).getCreatorPrice();
-        (int256 ethUsdSigned, uint256 ethTimestamp) = ICreatorOracle(oracle).getEthPrice();
-
-        if (creatorUsdSigned <= 0 || ethUsdSigned <= 0) {
-            revert LaunchOracleInvalidPrice(creatorUsdSigned, ethUsdSigned);
-        }
-
-        if (
-            creatorTimestamp == 0 || ethTimestamp == 0 || creatorTimestamp > block.timestamp
-                || ethTimestamp > block.timestamp || block.timestamp - creatorTimestamp > launchOracleMaxAge
-                || block.timestamp - ethTimestamp > launchOracleMaxAge
-        ) {
-            revert LaunchOracleStale(creatorTimestamp, ethTimestamp, launchOracleMaxAge, block.timestamp);
-        }
-
-        creatorUsdPrice = uint256(creatorUsdSigned);
-        ethUsdPrice = uint256(ethUsdSigned);
-
-        uint256 discountedCreatorUsd = Math.mulDiv(creatorUsdPrice, uint256(launchDiscountBps), BPS_DENOMINATOR);
-        uint256 rawFloorPriceQ96 = Math.mulDiv(discountedCreatorUsd, Q96, ethUsdPrice);
-
-        tickSpacingQ96 = _deriveLaunchTickSpacing(rawFloorPriceQ96);
-        floorPriceQ96 = (rawFloorPriceQ96 / tickSpacingQ96) * tickSpacingQ96;
-        if (floorPriceQ96 == 0) revert LaunchFloorTooLow(rawFloorPriceQ96, tickSpacingQ96);
+        return _encodingHelper.deriveLaunchPricing(
+            oracle, currency, launchOracleMaxAge, launchDiscountBps, launchTickSpacingBps, block.timestamp
+        );
     }
 
     function _deriveLaunchTickSpacing(uint256 floorPriceQ96) internal view returns (uint256 tickSpacingQ96) {
@@ -999,14 +950,36 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         if (tickSpacingQ96 < 2) tickSpacingQ96 = 2;
     }
 
+    function _encodeAuctionParams(
+        uint256 floorPrice,
+        uint256 tickSpacingQ96,
+        uint128 requiredRaise,
+        uint64 startBlock,
+        uint64 endBlock,
+        uint64 claimBlock,
+        bytes memory auctionSteps
+    ) internal view returns (bytes memory) {
+        return _encodingHelper.encodeAuctionParams(
+            currency,
+            tokensRecipient,
+            fundsRecipient,
+            floorPrice,
+            tickSpacingQ96,
+            requiredRaise,
+            startBlock,
+            endBlock,
+            claimBlock,
+            auctionSteps
+        );
+    }
+
+    function _createUniswapSafeDefaultSteps(uint64 duration) internal view returns (bytes memory) {
+        return _encodingHelper.createUniswapSafeDefaultSteps(duration);
+    }
+
     function _currencyBalance(address holder) internal view returns (uint256) {
         if (currency == address(0)) return holder.balance;
         return IERC20(currency).balanceOf(holder);
-    }
-
-    function _requireOperatorSweep() internal view {
-        if (msg.sender != operator) revert NotOperator(msg.sender, operator);
-        if (block.number < lastSweepBlock) revert SweepNotAllowed(lastSweepBlock, block.number);
     }
 
     function _buildPoolKey() internal view returns (PoolKey memory key) {
@@ -1019,118 +992,6 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
             tickSpacing: poolTickSpacing,
             hooks: IHooks(taxHook)
         });
-    }
-
-    /**
-     * @notice Encode auction parameters for CCA factory
-     */
-    function _encodeAuctionParams(
-        uint256 floorPrice,
-        uint256 tickSpacingQ96,
-        uint128 requiredRaise,
-        uint64 startBlock,
-        uint64 endBlock,
-        uint64 claimBlock,
-        bytes memory auctionSteps
-    ) internal view returns (bytes memory) {
-        // AuctionParameters struct encoding
-        return abi.encode(
-            currency, // currency (address(0) for ETH)
-            tokensRecipient, // tokensRecipient
-            fundsRecipient, // fundsRecipient
-            startBlock, // startBlock
-            endBlock, // endBlock
-            claimBlock, // claimBlock
-            tickSpacingQ96, // tickSpacing
-            address(0), // validationHook (none for now)
-            floorPrice, // floorPrice
-            requiredRaise, // requiredCurrencyRaised
-            auctionSteps // auctionStepsData
-        );
-    }
-
-    /**
-     * @notice Create linear auction steps (sell evenly over time)
-     * @param duration Total duration in blocks
-     */
-    function _createLinearSteps(uint64 duration) internal pure returns (bytes memory) {
-        // Single step: sell 100% of tokens evenly over duration
-        // mps = MPS (100% = 10,000,000 mps over entire duration)
-        uint24 mpsPerBlock = uint24(MPS / duration);
-
-        // Pack: HIGH 24 bits = mps, LOW 40 bits = blockDelta
-        // StepLib.parse() expects: mps = uint24(bytes3(data)), blockDelta = uint40(uint64(data))
-        bytes8 packed = bytes8((uint64(mpsPerBlock) << 40) | uint64(duration));
-
-        return abi.encodePacked(packed);
-    }
-
-    /**
-     * @notice Create accelerating auction steps (sell more towards end)
-     * @dev Rewards early participants more
-     */
-    function _createAcceleratingSteps(uint64 duration) internal pure returns (bytes memory) {
-        // Three phases: 20% in first half, 30% in third quarter, 50% in last quarter
-        uint64 phase1Duration = duration / 2;
-        uint64 phase2Duration = duration / 4;
-        uint64 phase3Duration = duration - phase1Duration - phase2Duration;
-
-        // Use uint256 for intermediate calculations to avoid overflow
-        uint256 mpsValue = uint256(MPS);
-
-        // Pack format: HIGH 24 bits = mps, LOW 40 bits = blockDelta
-        // StepLib.parse() expects: mps = uint24(bytes3(data)), blockDelta = uint40(uint64(data))
-
-        // Phase 1: 20% over 50% of time = slow
-        uint24 mps1 = uint24((mpsValue * 2000) / 10000 / phase1Duration); // 20% / phase1
-        bytes8 packed1 = bytes8((uint64(mps1) << 40) | uint64(phase1Duration));
-
-        // Phase 2: 30% over 25% of time = medium
-        uint24 mps2 = uint24((mpsValue * 3000) / 10000 / phase2Duration);
-        bytes8 packed2 = bytes8((uint64(mps2) << 40) | uint64(phase2Duration));
-
-        // Phase 3: 50% over 25% of time = fast
-        uint24 mps3 = uint24((mpsValue * 5000) / 10000 / phase3Duration);
-        bytes8 packed3 = bytes8((uint64(mps3) << 40) | uint64(phase3Duration));
-
-        return abi.encodePacked(packed1, packed2, packed3);
-    }
-
-    /**
-     * @notice Create a Uniswap-safe default schedule.
-     * @dev Uniswap recommends the final block sells a significant amount of tokens because
-     *      the final clearing price is used to initialize downstream liquidity.
-     *      We allocate 20% over the first half, 45% over the middle, and the remainder in the final block.
-     */
-    function _createUniswapSafeDefaultSteps(uint64 duration) internal pure returns (bytes memory) {
-        // For very short auctions, fall back to linear to avoid zero-length phases.
-        if (duration <= 2) return _createLinearSteps(duration);
-
-        // Reserve the final block for a large issuance.
-        uint64 lastBlock = 1;
-        uint64 phase1Blocks = duration / 2; // ~50%
-        uint64 phase2Blocks = duration - phase1Blocks - lastBlock;
-        if (phase1Blocks == 0 || phase2Blocks == 0) return _createLinearSteps(duration);
-
-        // Compute per-block issuance (mps) for phase 1 and 2 using floor division.
-        // Then allocate the exact remainder to the final block so total issuance = 100%.
-        uint24 phase1Total = 2_000_000; // 20% of 1e7
-        uint24 phase2Total = 4_500_000; // 45% of 1e7
-
-        uint24 mps1 = uint24(uint256(phase1Total) / uint256(phase1Blocks));
-        uint24 mps2 = uint24(uint256(phase2Total) / uint256(phase2Blocks));
-
-        uint256 issued1 = uint256(mps1) * uint256(phase1Blocks);
-        uint256 issued2 = uint256(mps2) * uint256(phase2Blocks);
-        uint24 mps3 = uint24(MPS - uint24(issued1 + issued2)); // remainder (includes rounding slack)
-
-        // Pack format: HIGH 24 bits = mps, LOW 40 bits = blockDelta
-        // StepLib.parse() expects: mps = uint24(bytes3(data)), blockDelta = uint40(uint64(data))
-        bytes8 packed1 = bytes8((uint64(mps1) << 40) | uint64(phase1Blocks));
-        bytes8 packed2 = bytes8((uint64(mps2) << 40) | uint64(phase2Blocks));
-        bytes8 packed3 = bytes8((uint64(mps3) << 40) | uint64(lastBlock));
-
-        return abi.encodePacked(packed1, packed2, packed3);
     }
 
     // ================================
