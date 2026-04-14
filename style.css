@@ -944,12 +944,14 @@ body {
   border-color: var(--color-border-accent);
 }
 .strat-icon-img {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
-  object-fit: cover;
+  object-fit: contain;
   flex-shrink: 0;
   box-shadow: 0 0 12px rgba(0, 0, 0, 0.4);
+  background: #111318;
+  padding: 4px;
 }
 .strat-info { flex: 1; }
 .strat-header {
