@@ -315,11 +315,13 @@ function animateCounters() {
   // APY/TVL vault cards
   document.querySelectorAll('[data-count]').forEach(el => {
     const target = parseFloat(el.dataset.count);
-    const isAPY = el.closest('.vault-stats')?.querySelector('.vault-stat-label')?.textContent === 'APY';
+    // Check the sibling label element — the label is a prior sibling in the same parent
+    const prevLabel = el.previousElementSibling;
+    const isTVL = prevLabel && prevLabel.textContent.trim() === 'TVL';
 
     ScrollTrigger.create({
       trigger: el,
-      start: 'top 85%',
+      start: 'top 90%',
       once: true,
       onEnter: () => {
         gsap.to({ val: 0 }, {
@@ -328,10 +330,14 @@ function animateCounters() {
           ease: 'power3.out',
           onUpdate: function() {
             const v = this.targets()[0].val;
-            if (isAPY || target < 100) {
-              el.textContent = v.toFixed(1) + '%';
+            if (isTVL) {
+              if (v >= 1000) {
+                el.textContent = '$' + (v / 1000).toFixed(1) + 'M';
+              } else {
+                el.textContent = '$' + Math.round(v) + 'k';
+              }
             } else {
-              el.textContent = '$' + (v / 1000).toFixed(1) + 'k';
+              el.textContent = v.toFixed(1) + '%';
             }
           }
         });
