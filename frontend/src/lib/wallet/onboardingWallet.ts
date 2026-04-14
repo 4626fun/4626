@@ -163,13 +163,17 @@ function isTxHash(value: unknown): value is `0x${string}` {
 }
 
 function isSendCallsUnsupportedError(error: unknown): boolean {
+  const code =
+    error && typeof error === 'object' && 'code' in error ? Number((error as { code?: unknown }).code) : Number.NaN
+  if (Number.isFinite(code) && (code === -32601 || code === 4200)) return true
+
   const message = error instanceof Error ? error.message : String(error ?? '')
   const lower = message.toLowerCase()
   return (
     lower.includes('method not found') ||
-    lower.includes('unsupported') ||
-    lower.includes('does not support') ||
-    lower.includes('wallet_sendcalls')
+    lower.includes('unsupported method') ||
+    lower.includes('method is not supported') ||
+    lower.includes('does not support')
   )
 }
 
@@ -185,7 +189,7 @@ async function submitOwnerTxViaWalletSendCalls(params: {
   sender: `0x${string}`
   to: `0x${string}`
   data: `0x${string}`
-}): Promise<`0x${string}` | null> {
+}): Promise<`0x${string}`> {
   const callBundle = await params.walletRequest({
     method: 'wallet_sendCalls',
     params: [
@@ -218,13 +222,16 @@ async function submitOwnerTxViaWalletSendCalls(params: {
         .map((receipt) => String((receipt as { transactionHash?: unknown } | null)?.transactionHash ?? ''))
         .find((value) => isTxHash(value)) ?? null
     if (Number.isFinite(statusCode)) {
-      if (statusCode >= 200 && statusCode < 300) return receiptHash
+      if (statusCode >= 200 && statusCode < 300) {
+        if (receiptHash) return receiptHash
+        throw new Error('wallet_sendCalls completed without a transaction hash yet. Retry confirmation shortly.')
+      }
       if (statusCode >= 300) throw new Error(`wallet_sendCalls failed with status ${statusCode}`)
     }
     await delay(SEND_CALLS_STATUS_POLL_MS)
   }
 
-  return null
+  throw new Error('wallet_sendCalls status is still pending. Wait a moment and retry confirmation.')
 }
 
 export async function sendPreparedOwnerTx(params: {
@@ -280,6 +287,7 @@ export async function sendPreparedOwnerTx(params: {
         signerAddress.toLowerCase() === canonicalSmartWalletAddress.toLowerCase()
 
       if (selfAuthenticatedCanonicalSession) {
+        let sendCallsUnsupported = false
         const requestFn =
           typeof walletClient.request === 'function'
             ? (walletClient.request as (args: { method: string; params?: unknown[] }) => Promise<unknown>)
@@ -296,13 +304,15 @@ export async function sendPreparedOwnerTx(params: {
           } catch (sendCallsError) {
             if (isUserRejectedWalletAction(sendCallsError)) throw sendCallsError
             if (!isSendCallsUnsupportedError(sendCallsError)) throw sendCallsError
+            sendCallsUnsupported = true
           }
-        }
-        if (txHash) {
-          // wallet_sendCalls completed (or accepted without immediate hash).
-        } else if (!walletClient.account || typeof walletClient.sendTransaction !== 'function') {
-          throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
         } else {
+          sendCallsUnsupported = true
+        }
+        if (!txHash && sendCallsUnsupported) {
+          if (!walletClient.account || typeof walletClient.sendTransaction !== 'function') {
+            throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
+          }
           txHash = await walletClient.sendTransaction({
             account: walletClient.account,
             chain: base,
@@ -310,6 +320,9 @@ export async function sendPreparedOwnerTx(params: {
             data: txRequest.data,
             value: 0n,
           })
+        }
+        if (!txHash && !sendCallsUnsupported && (!walletClient.account || typeof walletClient.sendTransaction !== 'function')) {
+          throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
         }
       } else {
         if (!publicClient) {
