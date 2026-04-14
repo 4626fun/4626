@@ -1,7 +1,7 @@
 import { Suspense, lazy } from 'react'
 
+import { AppLoadingState } from '@/components/layout/AppLoadingState'
 import { META, PageMeta } from '@/components/seo/PageMeta'
-import { LoadingBlock } from '@/components/ui/LoadingState'
 import { PrivyClientProvider } from '@/lib/privy/client'
 import { AppQueryProvider } from '@/web3/Web3Providers'
 
@@ -22,7 +22,7 @@ export function Waitlist() {
               <AppQueryProvider>
                 <Suspense
                   fallback={
-                    <LoadingBlock intent="session" className="card rounded-2xl border border-white/10 bg-black/50 p-6 sm:p-8" />
+                    <AppLoadingState intent="session" />
                   }
                 >
                   <LazyWaitlistFlow sectionId="waitlist-page" />

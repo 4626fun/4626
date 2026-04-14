@@ -118,5 +118,7 @@ export function getLoadingIntentConfig(intent: LoadingIntent): LoadingIntentConf
 }
 
 export function getLoadingIntentFromPath(pathname: string): LoadingIntent {
-  return pathname.startsWith('/deploy') ? 'deploy' : 'page'
+  if (pathname.startsWith('/deploy')) return 'deploy'
+  if (pathname === '/waitlist' || pathname.startsWith('/r/')) return 'session'
+  return 'page'
 }
