@@ -365,6 +365,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     error InvalidAmount();
     error CallerFeeMismatch(uint256 provided, uint256 required);
     error NoPendingVrfResult(uint256 requestId);
+    error ETHRefundFailed();
 
     // ================================
     // CONSTRUCTOR
@@ -1235,7 +1236,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         if (amount == 0) return;
         // Only used on the `processSwapLottery()` payable path, which is nonReentrant.
         (bool success,) = payable(msg.sender).call{value: amount}("");
-        require(success);
+        if (!success) revert ETHRefundFailed();
     }
 
     function _rateLimitOriginKey(uint32 eid, bytes32 sender) internal pure returns (bytes32) {

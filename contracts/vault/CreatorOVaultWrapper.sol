@@ -706,11 +706,14 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
 
     /**
      * @notice Emergency verify - check balances match accounting
-     * @dev With normalization + dust: actualLocked == totalLocked == (totalMinted * 1000 + dust)
+     * @dev Uses >= instead of == to tolerate rounding dust or direct vault-share
+     *      transfers (e.g. selfdestruct, coinbase) that can push the real balance
+     *      above the bookkeeping value.
      */
     function verify() external view returns (bool) {
         uint256 actualLocked = IERC20(address(vault)).balanceOf(address(this));
-        return actualLocked == totalLocked && totalLocked == _requiredLockedBacking();
+        uint256 requiredBacking = _requiredLockedBacking();
+        return actualLocked >= totalLocked && totalLocked >= requiredBacking;
     }
 
     // ================================

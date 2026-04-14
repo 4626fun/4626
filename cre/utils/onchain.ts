@@ -11,9 +11,12 @@ import {
   http,
   isAddress,
   type Abi,
+  type AbiEvent,
   type Address,
   type Hex,
+  type PublicClient,
   type SignableMessage,
+  type WalletClient,
 } from 'viem';
 import { privateKeyToAccount, toAccount } from 'viem/accounts';
 import {
@@ -159,8 +162,9 @@ let _erc4337Config: Erc4337Config | null | undefined = undefined;
 // ---------------------------------------------------------------------------
 
 // FIX: HGH-04 — Type singleton clients using proper viem types instead of `any`
-let _publicClient: ReturnType<typeof createPublicClient> | null = null;
-let _walletClient: ReturnType<typeof createWalletClient> | null = null;
+// Use broad PublicClient / WalletClient types to avoid chain-specific transaction union mismatches.
+let _publicClient: PublicClient | null = null;
+let _walletClient: WalletClient | null = null;
 
 /**
  * Get a singleton public (read-only) client for Base.
@@ -175,7 +179,7 @@ export function getPublicClient() {
     _publicClient = createPublicClient({
       chain: base,
       transport: http(rpcUrl || 'https://mainnet.base.org', { timeout: 30_000 }),
-    });
+    }) as PublicClient;
   }
   return _publicClient!;
 }
@@ -197,7 +201,7 @@ export function getWalletClient() {
       account,
       chain: base,
       transport: http(rpcUrl || 'https://mainnet.base.org', { timeout: 30_000 }),
-    });
+    }) as WalletClient;
   }
   return _walletClient!;
 }
@@ -749,7 +753,7 @@ export async function getLogs(params: {
   return client.getLogs({
     address: params.address,
     event: (params.abi as Abi).find(
-      (item: any) => item.type === 'event' && item.name === params.eventName,
+      (item): item is AbiEvent => item.type === 'event' && 'name' in item && item.name === params.eventName,
     ),
     fromBlock: params.fromBlock ?? currentBlock - 1000n,
     toBlock: params.toBlock ?? currentBlock,

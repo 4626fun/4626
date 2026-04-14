@@ -109,6 +109,8 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
     error InputSpendInvariantFailed(address token, uint256 beforeBalance, uint256 afterBalance, uint256 expectedSpend);
     error OutputMintInvariantFailed(address token, uint256 beforeBalance, uint256 afterBalance, uint256 expectedMint);
     error ResidualBalanceInvariantFailed(address token, uint256 beforeBalance, uint256 afterBalance);
+    // FIX: OZ-Critical — ETH rescue error
+    error ETHTransferFailed();
 
     constructor(address _registry, address _owner) Ownable(_owner) {
         if (_registry == address(0) || _owner == address(0)) revert ZeroAddress();
@@ -116,6 +118,15 @@ contract OVaultHubComposer is ILayerZeroComposer, ICreatorOVaultComposer, Ownabl
         address resolvedEndpoint = ICreatorRegistry(_registry).getLayerZeroEndpoint(block.chainid);
         if (resolvedEndpoint == address(0)) revert ZeroAddress();
         endpoint = resolvedEndpoint;
+    }
+
+    /// @notice Rescue ETH trapped in the composer from payable lzCompose calls.
+    /// @dev lzCompose is payable per ILayerZeroComposer interface; ETH sent with compose
+    ///      messages accumulates here with no other withdrawal path.
+    function rescueETH(address payable to, uint256 amount) external onlyOwner {
+        if (to == address(0)) revert ZeroAddress();
+        (bool ok,) = to.call{value: amount}("");
+        if (!ok) revert ETHTransferFailed();
     }
 
     function setAllowedComposeSender(address sender, bool allowed) external onlyOwner {
