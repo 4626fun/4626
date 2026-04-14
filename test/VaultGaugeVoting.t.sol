@@ -44,6 +44,10 @@ contract VaultGaugeVotingTest is Test {
     uint256 public constant FOUR_YEARS = 4 * 365 days;
 
     function setUp() public {
+        // Warp to a realistic timestamp so genesisEpochStart is large enough
+        // that tests using (genesis - 2*WEEK) do not underflow.
+        vm.warp(4 weeks);
+
         owner = address(this);
         alice = makeAddr("alice");
         bob = makeAddr("bob");
@@ -127,6 +131,9 @@ contract VaultGaugeVotingTest is Test {
     // ================================
 
     function testVoteRequiresVotingPower() public {
+        // Warp past genesis so VotingNotStarted (G-16) does not fire first
+        vm.warp(voting.genesisEpochStart() + 1);
+
         vm.startPrank(alice);
 
         // Alice has no veAKITA yet
@@ -144,10 +151,13 @@ contract VaultGaugeVotingTest is Test {
     function testVoteRevertsIfLockExpiresBeforeEpochEnd() public {
         uint256 genesis = voting.genesisEpochStart();
 
-        // Create a lock that will expire during the current epoch:
-        // lock at (genesis - 1 day) for 7 days => expires at (genesis + 6 days) < epoch end.
-        vm.warp(genesis - 1 days);
-        _lockTokens(alice, 100 ether, WEEK);
+        // Create a lock that will expire during the current epoch.
+        // Lock at (genesis - WEEK) for (WEEK + 5 days) => expires at (genesis + 5 days) < epoch end.
+        // Lock is 1 epoch old at vote time so G-09 (LockTooRecent) does not fire.
+        // G-03: votingPowerAt(epochEnd) = 0 because lock expires before epoch end,
+        // so NoVotingPower fires before LockExpiresBeforeEpochEnd can be reached.
+        vm.warp(genesis - WEEK);
+        _lockTokens(alice, 100 ether, WEEK + 5 days);
 
         // Vote early in epoch 0 while the lock is still active.
         vm.warp(genesis + 1);
@@ -159,7 +169,9 @@ contract VaultGaugeVotingTest is Test {
         vaults[0] = vault1;
         weights[0] = 100;
 
-        vm.expectRevert(VaultGaugeVoting.LockExpiresBeforeEpochEnd.selector);
+        // G-03: votingPowerAt(alice, epochEnd) returns 0 because lock expires before epoch end,
+        // so NoVotingPower fires before LockExpiresBeforeEpochEnd can be reached.
+        vm.expectRevert(VaultGaugeVoting.NoVotingPower.selector);
         voting.vote(vaults, weights);
 
         vm.stopPrank();
@@ -168,21 +180,30 @@ contract VaultGaugeVotingTest is Test {
     function testVoteSucceedsIfLockCoversEpochEnd() public {
         uint256 genesis = voting.genesisEpochStart();
 
-        // Lock at (genesis - 1 day) for 2 weeks => lock end is after epoch 0 end.
-        vm.warp(genesis - 1 days);
-        _lockTokens(alice, 100 ether, 2 * WEEK);
+        // Lock at (genesis - WEEK) for 3 weeks => lock end = genesis + 2*WEEK, after epoch 0 end.
+        // Lock is exactly 1 epoch old at genesis, satisfying G-09.
+        vm.warp(genesis - WEEK);
+        _lockTokens(alice, 100 ether, 3 * WEEK);
 
         vm.warp(genesis + 1);
         _vote(alice, vault1, 100);
 
-        uint256 alicePower = ve.getVotingPower(alice);
+        // G-03: contract uses votingPowerAt(alice, epochEnd) for projected power
+        uint256 epochEnd = voting.epochEndTime(voting.currentEpoch());
+        uint256 alicePower = ve.votingPowerAt(alice, epochEnd);
         assertEq(voting.getVaultWeight(vault1), alicePower);
         assertEq(voting.getTotalWeight(), alicePower);
     }
 
     function testVoteRequiresWhitelistedVault() public {
-        // Lock tokens for alice
+        uint256 genesis = voting.genesisEpochStart();
+
+        // Lock tokens early enough to satisfy G-09 (lock must be >= 1 epoch old)
+        vm.warp(genesis - WEEK);
         _lockTokens(alice, 100 ether, FOUR_YEARS);
+
+        // Warp past genesis so VotingNotStarted (G-16) does not fire
+        vm.warp(genesis + 1);
 
         vm.startPrank(alice);
 
@@ -198,11 +219,14 @@ contract VaultGaugeVotingTest is Test {
     }
 
     function testSingleVaultVote() public {
-        // Lock tokens
+        uint256 genesis = voting.genesisEpochStart();
+
+        // Lock tokens early enough to satisfy G-09
+        vm.warp(genesis - WEEK);
         _lockTokens(alice, 100 ether, FOUR_YEARS);
 
         // Warp to after genesis
-        vm.warp(voting.genesisEpochStart() + 1);
+        vm.warp(genesis + 1);
 
         vm.startPrank(alice);
 
@@ -215,17 +239,21 @@ contract VaultGaugeVotingTest is Test {
 
         vm.stopPrank();
 
-        // Check vault has all of alice's voting power
-        uint256 alicePower = ve.getVotingPower(alice);
+        // G-03: contract uses votingPowerAt(alice, epochEnd) for projected power
+        uint256 epochEnd = voting.epochEndTime(voting.currentEpoch());
+        uint256 alicePower = ve.votingPowerAt(alice, epochEnd);
         assertEq(voting.getVaultWeight(vault1), alicePower);
         assertEq(voting.getTotalWeight(), alicePower);
     }
 
     function testMultiVaultVote() public {
-        // Lock tokens
+        uint256 genesis = voting.genesisEpochStart();
+
+        // Lock tokens early enough to satisfy G-09
+        vm.warp(genesis - WEEK);
         _lockTokens(alice, 100 ether, FOUR_YEARS);
 
-        vm.warp(voting.genesisEpochStart() + 1);
+        vm.warp(genesis + 1);
 
         vm.startPrank(alice);
 
@@ -243,18 +271,28 @@ contract VaultGaugeVotingTest is Test {
 
         vm.stopPrank();
 
-        uint256 alicePower = ve.getVotingPower(alice);
+        // G-03: contract uses votingPowerAt(alice, epochEnd) for projected power
+        uint256 epochEnd = voting.epochEndTime(voting.currentEpoch());
+        uint256 alicePower = ve.votingPowerAt(alice, epochEnd);
 
-        // Check weights are proportional
-        assertEq(voting.getVaultWeight(vault1), alicePower / 2);
-        assertEq(voting.getVaultWeight(vault2), alicePower / 4);
-        assertEq(voting.getVaultWeight(vault3), alicePower / 4);
+        // Check weights are proportional (G-08: dust goes to first vault)
+        uint256 w1 = (alicePower * 50) / 100;
+        uint256 w2 = (alicePower * 25) / 100;
+        uint256 w3 = (alicePower * 25) / 100;
+        uint256 dust = alicePower - w1 - w2 - w3;
+        assertEq(voting.getVaultWeight(vault1), w1 + dust);
+        assertEq(voting.getVaultWeight(vault2), w2);
+        assertEq(voting.getVaultWeight(vault3), w3);
         assertEq(voting.getTotalWeight(), alicePower);
     }
 
     function testVoteAggregatesDuplicateVaultInputs() public {
+        uint256 genesis = voting.genesisEpochStart();
+
+        // Lock tokens early enough to satisfy G-09
+        vm.warp(genesis - WEEK);
         _lockTokens(alice, 100 ether, FOUR_YEARS);
-        vm.warp(voting.genesisEpochStart() + 1);
+        vm.warp(genesis + 1);
 
         vm.startPrank(alice);
 
@@ -272,9 +310,15 @@ contract VaultGaugeVotingTest is Test {
         vm.stopPrank();
 
         uint256 epoch = voting.currentEpoch();
-        uint256 alicePower = ve.getVotingPower(alice);
-        uint256 expectedVault1Weight = (alicePower * 50) / 100;
-        uint256 expectedVault2Weight = (alicePower * 50) / 100;
+        // G-03: contract uses votingPowerAt(alice, epochEnd) for projected power
+        uint256 epochEnd = voting.epochEndTime(epoch);
+        uint256 alicePower = ve.votingPowerAt(alice, epochEnd);
+        uint256 baseVault1Weight = (alicePower * 50) / 100;
+        uint256 baseVault2Weight = (alicePower * 50) / 100;
+        // G-08: rounding dust is added to the first unique vault (vault1)
+        uint256 dust = alicePower - baseVault1Weight - baseVault2Weight;
+        uint256 expectedVault1Weight = baseVault1Weight + dust;
+        uint256 expectedVault2Weight = baseVault2Weight;
 
         assertEq(voting.getVaultWeight(vault1), expectedVault1Weight);
         assertEq(voting.getVaultWeight(vault2), expectedVault2Weight);
@@ -288,11 +332,14 @@ contract VaultGaugeVotingTest is Test {
     }
 
     function testVoteWeightBps() public {
-        // Lock tokens for both users
+        uint256 genesis = voting.genesisEpochStart();
+
+        // Lock tokens early enough to satisfy G-09
+        vm.warp(genesis - WEEK);
         _lockTokens(alice, 100 ether, FOUR_YEARS);
         _lockTokens(bob, 100 ether, FOUR_YEARS);
 
-        vm.warp(voting.genesisEpochStart() + 1);
+        vm.warp(genesis + 1);
 
         // Alice votes for vault1
         _vote(alice, vault1, 100);
@@ -309,13 +356,19 @@ contract VaultGaugeVotingTest is Test {
     }
 
     function testRevoting() public {
+        uint256 genesis = voting.genesisEpochStart();
+
+        // Lock tokens early enough to satisfy G-09
+        vm.warp(genesis - WEEK);
         _lockTokens(alice, 100 ether, FOUR_YEARS);
-        vm.warp(voting.genesisEpochStart() + 1);
+        vm.warp(genesis + 1);
 
         // Initial vote for vault1
         _vote(alice, vault1, 100);
 
-        uint256 alicePower = ve.getVotingPower(alice);
+        // G-03: contract uses votingPowerAt(alice, epochEnd) for projected power
+        uint256 epochEnd = voting.epochEndTime(voting.currentEpoch());
+        uint256 alicePower = ve.votingPowerAt(alice, epochEnd);
         assertEq(voting.getVaultWeight(vault1), alicePower);
         assertEq(voting.getVaultWeight(vault2), 0);
 
@@ -328,12 +381,18 @@ contract VaultGaugeVotingTest is Test {
     }
 
     function testResetVotes() public {
+        uint256 genesis = voting.genesisEpochStart();
+
+        // Lock tokens early enough to satisfy G-09
+        vm.warp(genesis - WEEK);
         _lockTokens(alice, 100 ether, FOUR_YEARS);
-        vm.warp(voting.genesisEpochStart() + 1);
+        vm.warp(genesis + 1);
 
         _vote(alice, vault1, 100);
 
-        uint256 alicePower = ve.getVotingPower(alice);
+        // G-03: contract uses votingPowerAt(alice, epochEnd) for projected power
+        uint256 epochEnd = voting.epochEndTime(voting.currentEpoch());
+        uint256 alicePower = ve.votingPowerAt(alice, epochEnd);
         assertEq(voting.getVaultWeight(vault1), alicePower);
 
         vm.prank(alice);
@@ -344,8 +403,12 @@ contract VaultGaugeVotingTest is Test {
     }
 
     function testResetVotesClearsAggregatedDuplicateVoteWeights() public {
+        uint256 genesis = voting.genesisEpochStart();
+
+        // Lock tokens early enough to satisfy G-09
+        vm.warp(genesis - WEEK);
         _lockTokens(alice, 100 ether, FOUR_YEARS);
-        vm.warp(voting.genesisEpochStart() + 1);
+        vm.warp(genesis + 1);
 
         vm.startPrank(alice);
 
@@ -376,8 +439,12 @@ contract VaultGaugeVotingTest is Test {
     }
 
     function testGetUserVotes() public {
+        uint256 genesis = voting.genesisEpochStart();
+
+        // Lock tokens early enough to satisfy G-09
+        vm.warp(genesis - WEEK);
         _lockTokens(alice, 100 ether, FOUR_YEARS);
-        vm.warp(voting.genesisEpochStart() + 1);
+        vm.warp(genesis + 1);
 
         vm.startPrank(alice);
 
@@ -402,8 +469,11 @@ contract VaultGaugeVotingTest is Test {
     // ================================
 
     function testCheckpointStoresWeights() public {
-        _lockTokens(alice, 100 ether, FOUR_YEARS);
         uint256 genesis = voting.genesisEpochStart();
+
+        // Lock tokens early enough to satisfy G-09
+        vm.warp(genesis - WEEK);
+        _lockTokens(alice, 100 ether, FOUR_YEARS);
         vm.warp(genesis + 1);
 
         _vote(alice, vault1, 100);
@@ -455,8 +525,12 @@ contract VaultGaugeVotingTest is Test {
     // ================================
 
     function testMaxVaultsPerVote() public {
+        uint256 genesis = voting.genesisEpochStart();
+
+        // Lock tokens early enough to satisfy G-09
+        vm.warp(genesis - WEEK);
         _lockTokens(alice, 100 ether, FOUR_YEARS);
-        vm.warp(voting.genesisEpochStart() + 1);
+        vm.warp(genesis + 1);
 
         // Create 11 vaults (more than MAX_VAULTS_PER_VOTE = 10)
         address[] memory manyVaults = new address[](11);
@@ -476,8 +550,12 @@ contract VaultGaugeVotingTest is Test {
     }
 
     function testZeroWeightNotAllowed() public {
+        uint256 genesis = voting.genesisEpochStart();
+
+        // Lock tokens early enough to satisfy G-09
+        vm.warp(genesis - WEEK);
         _lockTokens(alice, 100 ether, FOUR_YEARS);
-        vm.warp(voting.genesisEpochStart() + 1);
+        vm.warp(genesis + 1);
 
         vm.startPrank(alice);
 

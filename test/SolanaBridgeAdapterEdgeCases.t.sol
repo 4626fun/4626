@@ -236,7 +236,7 @@ contract SolanaBridgeAdapterEdgeCasesTest is Test {
 
         SolanaBridgeAdapter.LotteryEntry[] memory entries = new SolanaBridgeAdapter.LotteryEntry[](1);
         entries[0] = SolanaBridgeAdapter.LotteryEntry({
-            buyerSolanaPubkey: buyerPubkey, shareOFT: address(shareOFT), amountSolanaUnits: 2, solanaTxSig: bytes32(0)
+            buyerSolanaPubkey: buyerPubkey, shareOFT: address(shareOFT), amountSolanaUnits: 2, solanaTxSig: bytes32(uint256(1))
         });
 
         vm.prank(keeperTwin);

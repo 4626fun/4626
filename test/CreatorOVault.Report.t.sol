@@ -170,7 +170,10 @@ contract CreatorOVaultReportTest is Test {
         assertEq(vault.totalAssetsAtLastReport(), 0);
 
         uint256 donatedAssets = 100_000e18;
+        // injectCapital now requires onlyManagement (M-04 fix); call as owner
         vm.prank(donor);
+        creatorCoin.transfer(address(this), donatedAssets);
+        creatorCoin.approve(address(vault), donatedAssets);
         vault.injectCapital(donatedAssets);
 
         (uint256 profit, uint256 loss) = vault.report();
@@ -277,7 +280,10 @@ contract CreatorOVaultReportTest is Test {
         _lockProfit(PROFIT_ASSETS);
 
         vm.warp(block.timestamp + 2 days);
+        // injectCapital now requires onlyManagement (M-04 fix); call as owner
         vm.prank(donor);
+        creatorCoin.transfer(address(this), 150_000e18);
+        creatorCoin.approve(address(vault), 150_000e18);
         vault.injectCapital(150_000e18);
         vault.report();
 
@@ -295,7 +301,11 @@ contract CreatorOVaultReportTest is Test {
     }
 
     function _lockProfit(uint256 profitAssets) internal returns (uint256 locked) {
+        // injectCapital now requires onlyManagement (M-04 fix).
+        // Transfer tokens from donor to this contract (owner), then inject as owner.
         vm.prank(donor);
+        creatorCoin.transfer(address(this), profitAssets);
+        creatorCoin.approve(address(vault), profitAssets);
         vault.injectCapital(profitAssets);
         vault.report();
         locked = vault.totalLockedShares();

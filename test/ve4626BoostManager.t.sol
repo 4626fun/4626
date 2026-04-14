@@ -51,7 +51,7 @@ contract Ve4626BoostManagerMathTest is Test {
     address internal user = address(0xB0B);
 
     function setUp() public {
-        vm.roll(100);
+        vm.roll(302_401); // Past MIN_HOLDING_BLOCKS (302400) so boost calculation proceeds
         ve = new MockVe4626BoostMath();
         manager = new ve4626BoostManager(address(ve), owner);
     }

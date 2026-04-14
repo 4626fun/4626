@@ -34,6 +34,29 @@ contract MockVe4626 {
     function getRemainingLockTime(address user) external view returns (uint256) {
         return _remainingLockTime[user];
     }
+
+    // G-09: VaultGaugeVoting now calls getLock to enforce minimum lock age
+    struct Lock {
+        uint256 amount;
+        uint256 end;
+        uint256 start;
+        address lockedToken;
+        uint256 underlyingValue;
+    }
+    mapping(address => Lock) internal _locks;
+
+    function setLockStart(address user, uint256 start) external {
+        _locks[user].start = start;
+    }
+
+    function getLock(address user) external view returns (Lock memory) {
+        return _locks[user];
+    }
+
+    // G-03: VaultGaugeVoting now calls votingPowerAt for projected epoch-end power
+    function votingPowerAt(address user, uint256) external view returns (uint256) {
+        return _votingPower[user];
+    }
 }
 
 contract MockRegistry {
@@ -90,25 +113,26 @@ contract VaultGaugeVotingCheckpointAndWhitelistTest is Test {
     }
 
     function test_checkpoint_finalizesPreviousEpoch_andEmitsOnlyOncePerEpoch() public {
-        // Epoch 1 is ongoing, so epoch 0 is the most recently ended epoch.
-        _warpToEpoch(1, 1);
+        // G-23: epoch 0 is implicitly checkpointed (lastCheckpointedEpoch defaults to 0).
+        // Epoch 2 is ongoing, so checkpoint covers epoch 1 (the first explicitly checkpointed epoch).
+        _warpToEpoch(2, 1);
 
         vm.recordLogs();
         voting.checkpoint();
-        _assertSingleEpochCheckpointedLog(vm.getRecordedLogs(), 0, 0);
+        _assertSingleEpochCheckpointedLog(vm.getRecordedLogs(), 1, 0);
 
         // Calling again in the same epoch must be a no-op (no duplicate event).
         vm.recordLogs();
         voting.checkpoint();
         assertEq(vm.getRecordedLogs().length, 0);
 
-        // Move forward: epoch 2 is ongoing, so epoch 1 is the most recently ended epoch.
-        _warpToEpoch(2, 1);
+        // Move forward: epoch 3 is ongoing, so epoch 2 is the most recently ended epoch.
+        _warpToEpoch(3, 1);
 
         vm.recordLogs();
         voting.checkpoint();
-        _assertSingleEpochCheckpointedLog(vm.getRecordedLogs(), 1, 0);
-        assertEq(voting.lastCheckpointedEpoch(), 1);
+        _assertSingleEpochCheckpointedLog(vm.getRecordedLogs(), 2, 0);
+        assertEq(voting.lastCheckpointedEpoch(), 2);
     }
 
     function test_registryOnlyVault_isNotVoteEligible_orEnumerable_orBoosted() public {

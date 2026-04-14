@@ -202,6 +202,16 @@ contract DeploymentBatcherPermit2Test is Test {
         creatorToken.mint(ownerAddr, 100_000_000e18);
         vm.prank(ownerAddr);
         creatorToken.approve(address(permit2), type(uint256).max);
+
+        // FIX: F-01 requires phase1SplitStates to be finalized with matching addresses.
+        // Write Phase1SplitState directly into storage via vm.store.
+        // ReentrancyGuard=slot0, pendingAuctions=slot1, hasActivePendingAuction=slot2, phase1SplitStates=slot3
+        bytes32 baseSalt = keccak256(abi.encodePacked(address(creatorToken), ownerAddr, block.chainid, "4626:deploy:", "v-test"));
+        bytes32 base = keccak256(abi.encode(baseSalt, uint256(3)));
+        vm.store(address(batcher), bytes32(uint256(base) + 1), bytes32(uint256(uint160(address(vault)))));
+        vm.store(address(batcher), bytes32(uint256(base) + 2), bytes32(uint256(uint160(address(wrapper)))));
+        vm.store(address(batcher), bytes32(uint256(base) + 3), bytes32(uint256(uint160(address(shareOFT)))));
+        vm.store(address(batcher), bytes32(uint256(base) + 7), bytes32(uint256(0x0101)));
     }
 
     function test_finalizePhase2WithPermit2_pullsFundsViaPermit2_and_defersAuction() external {
@@ -223,6 +233,7 @@ contract DeploymentBatcherPermit2Test is Test {
             meteoraAlphaVault: bytes32(0),
             solanaIxs: new IBaseSolanaBridge.Ix[](0)
         });
+
         ISignatureTransfer.PermitTransferFrom memory permit = _permit(depositAmount);
 
         vm.prank(ownerAddr);

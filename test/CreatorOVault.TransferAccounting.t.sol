@@ -188,19 +188,17 @@ contract CreatorOVaultTransferAccountingTest is CreatorOVaultModulesTestBase {
         _setVaultModules(vault);
 
         uint256 amount = 1_000e18;
-        creatorCoin.mint(donor, amount);
-
-        vm.prank(donor);
+        // injectCapital now requires onlyManagement (M-04 fix); mint to test contract (owner) instead
+        creatorCoin.mint(address(this), amount);
         creatorCoin.approve(address(vault), type(uint256).max);
 
         uint256 expectedReceived = amount - (amount / 10);
-        vm.prank(donor);
         vm.expectRevert(abi.encodeWithSelector(CreatorOVault.TransferAmountMismatch.selector, amount, expectedReceived));
         vault.injectCapital(amount);
 
         assertEq(creatorCoin.balanceOf(address(vault)), 0);
         assertEq(vault.coinBalance(), 0);
-        assertEq(creatorCoin.balanceOf(donor), amount);
+        assertEq(creatorCoin.balanceOf(address(this)), amount);
     }
 
     function test_buyDebt_reverts_when_feeOnTransfer_token_receivedLessThanRequested() public {
@@ -246,7 +244,10 @@ contract CreatorOVaultTransferAccountingTest is CreatorOVaultModulesTestBase {
         vault.deposit(amount, alice);
         assertEq(vault.coinBalance(), creatorCoin.balanceOf(address(vault)));
 
+        // injectCapital now requires onlyManagement (M-04 fix); call as owner
         vm.prank(donor);
+        creatorCoin.transfer(address(this), 200e18);
+        creatorCoin.approve(address(vault), 200e18);
         vault.injectCapital(200e18);
         assertEq(vault.coinBalance(), creatorCoin.balanceOf(address(vault)));
 

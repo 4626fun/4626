@@ -97,15 +97,26 @@ contract CreatorOracleBroadcastCreatorPriceTest is Test {
         assertEq(address(oracle).balance, 0);
     }
 
-    function test_BroadcastCreatorPrice_RevertsWhenFeeNotDivisible() public {
+    function test_BroadcastCreatorPrice_RefundsRemainderWhenFeeNotDivisible() public {
         uint32[] memory dstEids = new uint32[](3);
         dstEids[0] = 111;
         dstEids[1] = 222;
         dstEids[2] = 333;
 
-        vm.expectRevert("FeeNotDivisible");
+        // msg.value = 10, 3 destinations => feePerChain = 3, remainder = 1 refunded to caller
+        uint256 balBefore = address(this).balance;
         oracle.broadcastCreatorPrice{value: 10}(dstEids, "");
+
+        assertEq(endpoint.sendCount(), 3, "expected one send per dstEid");
+        assertEq(endpoint.sentValues(0), 3);
+        assertEq(endpoint.sentValues(1), 3);
+        assertEq(endpoint.sentValues(2), 3);
+        // Remainder (1 wei) refunded to caller
+        assertEq(address(this).balance, balBefore - 9, "remainder should be refunded");
+        assertEq(address(oracle).balance, 0, "oracle should not hold funds");
     }
+
+    receive() external payable {}
 
     function test_BroadcastCreatorPrice_RevertsWhenNoDestinations() public {
         uint32[] memory dstEids = new uint32[](0);

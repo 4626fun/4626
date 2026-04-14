@@ -100,6 +100,10 @@ contract MockCharmVault {
         }
     }
 
+    function rebalance() external {
+        // no-op: S-H04 fix calls charmVault.rebalance() inside strategy.rebalance()
+    }
+
     function baseLower() external pure returns (int24) {
         return -887200;
     }

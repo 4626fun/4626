@@ -38,6 +38,16 @@ contract MockAjnaVaultAuth {
     function setAdmin(address nextAdmin) external {
         admin = nextAdmin;
     }
+
+    // F-21: isAdmin check before transferAdmin
+    function isAdmin(address account) external view returns (bool) {
+        return admin == address(0) || admin == account;
+    }
+
+    // F-04: two-step admin transfer
+    function transferAdmin(address nextAdmin) external {
+        admin = nextAdmin;
+    }
 }
 
 contract MockAjnaAdapter is MockOwnableTransfer {

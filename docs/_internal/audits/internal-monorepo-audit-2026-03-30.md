@@ -1,6 +1,6 @@
 # Internal monorepo audit — 2026-03-30
 
-**Index:** [docs/audits/README.md](./README.md)
+**Index:** [docs/audits/README.md](../../audits/README.md)
 
 Evidence captured from a clean workspace run. This document implements the layered audit plan (scope → automation → doc delta → trust boundaries → production parity checklist).
 
@@ -10,7 +10,7 @@ Evidence captured from a clean workspace run. This document implements the layer
 
 | Decision | Choice |
 |----------|--------|
-| **Audit type** | **Combined**: (a) engineering hygiene and CI parity, (b) application/trust-boundary review aligned with [AGENTS.md](https://github.com/wenakita/4626/blob/main/AGENTS.md), (c) protocol/economic pointers via existing [system.md](./system.md) (no new formal verification). |
+| **Audit type** | **Combined**: (a) engineering hygiene and CI parity, (b) application/trust-boundary review aligned with [AGENTS.md](https://github.com/wenakita/4626/blob/main/AGENTS.md), (c) protocol/economic pointers via existing [system.md](../../audits/system.md) (no new formal verification). |
 | **Timebox** | Single pass: automation + documentation synthesis + representative code pointers (not a full external security review). |
 | **In scope** | First-party code under `contracts/` (root Forge project), `frontend/` (SPA + Vercel API), `cre/` workflows, documented ops constants in AGENTS.md. |
 | **Out of scope** | Deep review of vendored `lib/**` submodules (treat as pinned third-party; only integrity noted). Full live bytecode diff against production (requires deploy artifacts and RPC; checklist only). Formal Slither/Semgrep campaigns (plan layer 4 optional tools). |
@@ -59,7 +59,7 @@ Record these SHAs in release notes when tagging deploys.
 
 ---
 
-## 3. Layer 2 — Doc-driven delta checklist ([system.md](./system.md))
+## 3. Layer 2 — Doc-driven delta checklist ([system.md](../../audits/system.md))
 
 The system audit remains the authoritative protocol narrative. Below: **status vs current tree** without re-proving economics (requires dedicated review).
 
@@ -86,7 +86,7 @@ The system audit remains the authoritative protocol narrative. Below: **status v
 | Link-start tokens **single-use / claim-bound** | Token replay across users | `createTelegramLinkStartToken` / `consumeTelegramActionToken` usage in [_webhook.runtime.ts](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/_webhook.runtime.ts) (e.g. vault deploy flows). | Audit any new callback paths for consume-on-success semantics. |
 | Group-scoped Telegram actions **owner-scoped** | Non-owner mutates shared bot state | Enforced in callback/update handlers under [frontend/api/_handlers/telegram/webhook/](https://github.com/wenakita/4626/tree/main/frontend/api/_handlers/telegram/webhook/) (review diffs when adding group features). | Requires per-feature verification; not exhaustively proven in this pass. |
 
-**Telegram canonical order** (email OTP, Privy sync, link persistence): see [Telegram Canonical Link Preservation](../operations/telegram-canonical-link-preservation.md) and [Account Auth Invariants](https://github.com/wenakita/4626/blob/main/frontend/docs/account-auth-invariants.md).
+**Telegram canonical order** (email OTP, Privy sync, link persistence): see [Telegram Canonical Link Preservation](../../operations/telegram-canonical-link-preservation.md) and [Account Auth Invariants](https://github.com/wenakita/4626/blob/main/frontend/docs/account-auth-invariants.md).
 
 ---
 
@@ -108,7 +108,7 @@ Perform before high-stakes release or investor diligence:
 
 - **Hygiene:** Forge tests pass; frontend lint/typecheck/tests pass; CRE workflow typecheck passes. `forge build --sizes` fails on EIP-170 (known).  
 - **Supply chain:** Frontend audit count reduced (see [npm-advisories-triage.md](./npm-advisories-triage.md)); CI runs gitleaks, `pnpm audit` summary, and informational Semgrep on API/server lib.  
-- **Protocol:** Defer to [system.md](./system.md) + §3 delta; no contradictions found in this automation-only pass.  
+- **Protocol:** Defer to [system.md](../../audits/system.md) + §3 delta; no contradictions found in this automation-only pass.  
 - **App trust boundaries:** Mapped to concrete handlers; machine-auth and Telegram proof paths are test-backed.  
 - **Next hardening:** Follow [npm-advisories-triage.md](./npm-advisories-triage.md) for remaining dev transitive advisories; optionally make **Slither** or **pnpm audit** blocking after triage; execute production parity checklist (§5) against live deploy.
 

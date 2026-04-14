@@ -22,6 +22,7 @@ contract MockRegistryForOVaultComposer {
     address public immutable endpoint;
     mapping(address => address) public wrapperForToken;
     mapping(address => address) public shareOftForToken;
+    mapping(address => address) public vaultForToken;
 
     constructor(address _endpoint) {
         endpoint = _endpoint;
@@ -30,6 +31,10 @@ contract MockRegistryForOVaultComposer {
     function setBindings(address creatorToken, address wrapper, address shareOft) external {
         wrapperForToken[creatorToken] = wrapper;
         shareOftForToken[creatorToken] = shareOft;
+    }
+
+    function setVaultForToken(address creatorToken, address vault) external {
+        vaultForToken[creatorToken] = vault;
     }
 
     function getLayerZeroEndpoint(uint256) external view returns (address) {
@@ -42,6 +47,10 @@ contract MockRegistryForOVaultComposer {
 
     function getShareOFTForToken(address creatorToken) external view returns (address) {
         return shareOftForToken[creatorToken];
+    }
+
+    function getVaultForToken(address creatorToken) external view returns (address) {
+        return vaultForToken[creatorToken];
     }
 }
 
@@ -62,6 +71,10 @@ contract MockWrapperForComposer {
     constructor(address _creatorCoin, address _shareOft) {
         creatorCoin = MockToken(_creatorCoin);
         shareOFT = MockToken(_shareOft);
+    }
+
+    function isBeneficiaryOperator(address) external pure returns (bool) {
+        return true;
     }
 
     function setDepositConfig(uint16 spendBps, uint16 mintBps, uint16 returnBps) external {
@@ -121,16 +134,30 @@ contract OVaultHubComposerTest is Test {
     MockWrapperForComposer internal wrapper;
     OVaultHubComposer internal composer;
 
+    address internal vault = address(0xDA0);
+
     function setUp() public {
         creatorToken = new MockToken("Creator", "CRT");
         shareOft = new MockToken("Share", "SHARE");
         registry = new MockRegistryForOVaultComposer(endpoint);
         wrapper = new MockWrapperForComposer(address(creatorToken), address(shareOft));
         registry.setBindings(address(creatorToken), address(wrapper), address(shareOft));
+        registry.setVaultForToken(address(creatorToken), vault);
 
         composer = new OVaultHubComposer(address(registry), owner);
         composer.setAllowedComposeSender(sourceOft, true);
         composer.setAllowedComposeSender(address(shareOft), true);
+
+        // C-2: configure mesh so _enforceMeshInvariants does not revert
+        composer.configureCreatorMesh(
+            address(creatorToken),
+            vault,
+            sourceOft,           // assetMeshToken
+            address(shareOft),   // shareMeshToken
+            SRC_EID,             // solanaEid
+            bytes32(uint256(uint160(composeFrom))), // solanaAssetPeer
+            bytes32(uint256(uint160(composeFrom)))  // solanaSharePeer
+        );
     }
 
     function test_RevertWhen_NotEndpoint() public {
@@ -144,7 +171,7 @@ contract OVaultHubComposerTest is Test {
             wrapper_: address(wrapper),
             receiver_: receiver,
             sourceOft_: sourceOft,
-            minOut: 0
+            minOut: 1
         });
 
         vm.expectRevert(OVaultHubComposer.OnlyEndpoint.selector);
@@ -165,7 +192,7 @@ contract OVaultHubComposerTest is Test {
             wrapper_: address(wrapper),
             receiver_: receiver,
             sourceOft_: sourceOft,
-            minOut: 0
+            minOut: 1
         });
 
         uint256 composerCreatorBefore = creatorToken.balanceOf(address(composer));
@@ -194,7 +221,7 @@ contract OVaultHubComposerTest is Test {
             wrapper_: address(wrapper),
             receiver_: receiver,
             sourceOft_: address(shareOft),
-            minOut: 0
+            minOut: 1
         });
 
         uint256 composerCreatorBefore = creatorToken.balanceOf(address(composer));
@@ -224,7 +251,7 @@ contract OVaultHubComposerTest is Test {
             wrapper_: address(wrapper),
             receiver_: receiver,
             sourceOft_: sourceOft,
-            minOut: 0
+            minOut: 1
         });
 
         vm.expectRevert(
@@ -255,7 +282,7 @@ contract OVaultHubComposerTest is Test {
             wrapper_: address(wrapper),
             receiver_: receiver,
             sourceOft_: address(shareOft),
-            minOut: 0
+            minOut: 1
         });
 
         vm.expectRevert(

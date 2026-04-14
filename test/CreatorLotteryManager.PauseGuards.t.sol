@@ -279,6 +279,7 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
     function test_VrfCallback_UsesStoredBoostedOddsForImmediateSettlement() public {
         boostManager.setBoostBps(20_000);
 
+        uint256 rawVrfId = localVrfConsumer.nextRequestId(); // raw ID before call
         vm.prank(authorizedSwap);
         uint256 requestId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 100 ether);
         assertGt(requestId, 0, "expected VRF request");
@@ -293,8 +294,9 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
         uint256[] memory randomWords = new uint256[](1);
         randomWords[0] = 60; // Above base odds (40), below boosted odds (80).
 
+        // CLM-01: receiveRandomWords expects the raw VRF ID; it applies _localVrfKey internally
         vm.prank(address(localVrfConsumer));
-        lotteryManager.receiveRandomWords(requestId, randomWords);
+        lotteryManager.receiveRandomWords(rawVrfId, randomWords);
 
         assertEq(gauge.payCount(), 1, "boosted odds should settle as a win");
         assertEq(gauge.lastWinner(), buyer, "winner should match buyer");
@@ -303,6 +305,7 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
     function test_VrfCallback_DefersWhilePaused_AndUsesStoredBoostedOddsAfterUnpause() public {
         boostManager.setBoostBps(20_000);
 
+        uint256 rawVrfId = localVrfConsumer.nextRequestId(); // raw ID before call
         vm.prank(authorizedSwap);
         uint256 requestId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 100 ether);
         assertGt(requestId, 0, "expected VRF request");
@@ -320,8 +323,9 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
         uint256[] memory randomWords = new uint256[](1);
         randomWords[0] = 60; // Above base odds (40), below boosted odds (80).
 
+        // CLM-01: receiveRandomWords expects the raw VRF ID; it applies _localVrfKey internally
         vm.prank(address(localVrfConsumer));
-        lotteryManager.receiveRandomWords(requestId, randomWords);
+        lotteryManager.receiveRandomWords(rawVrfId, randomWords);
 
         assertEq(gauge.payCount(), 0, "payout should be deferred while paused");
 
@@ -331,6 +335,8 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
         vm.prank(owner);
         lotteryManager.unpause();
 
+        // CLM-08: processPendingVrfResult is now onlyOwner
+        vm.prank(owner);
         (bool ok,) =
             address(lotteryManager).call(abi.encodeWithSignature("processPendingVrfResult(uint256)", requestId));
         assertTrue(ok, "processPendingVrfResult should succeed after unpause");
@@ -345,6 +351,7 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
     function test_VrfCallback_UsesStoredAdditiveProbabilityBoost() public {
         boostManager.setProbabilityBoostBps(1); // +100 PPM
 
+        uint256 rawVrfId = localVrfConsumer.nextRequestId(); // raw ID before call
         vm.prank(authorizedSwap);
         uint256 requestId = lotteryManager.processSwapLottery(buyer, shareOFT, 1 ether, 100 ether);
         assertGt(requestId, 0, "expected VRF request");
@@ -359,8 +366,9 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
         uint256[] memory randomWords = new uint256[](1);
         randomWords[0] = 100; // Above base odds (40), below boosted odds (140).
 
+        // CLM-01: receiveRandomWords expects the raw VRF ID; it applies _localVrfKey internally
         vm.prank(address(localVrfConsumer));
-        lotteryManager.receiveRandomWords(requestId, randomWords);
+        lotteryManager.receiveRandomWords(rawVrfId, randomWords);
 
         assertEq(gauge.payCount(), 1, "additive probability boost should settle as a win");
         assertEq(gauge.lastWinner(), buyer, "winner should match buyer");
@@ -370,6 +378,7 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
         uint256 tradeAmount = 2 ether;
         vaultGaugeVoting.setGaugeBoostPPM(vault, 10_000);
 
+        uint256 rawVrfId = localVrfConsumer.nextRequestId(); // raw ID before call
         vm.prank(authorizedSwap);
         uint256 requestId = lotteryManager.processSwapLottery(buyer, shareOFT, tradeAmount, 100 ether);
         assertGt(requestId, 0, "expected VRF request");
@@ -389,8 +398,9 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
         uint256[] memory randomWords = new uint256[](1);
         randomWords[0] = baseWinChance; // Loses at base odds, wins with stored gauge boost.
 
+        // CLM-01: receiveRandomWords expects the raw VRF ID; it applies _localVrfKey internally
         vm.prank(address(localVrfConsumer));
-        lotteryManager.receiveRandomWords(requestId, randomWords);
+        lotteryManager.receiveRandomWords(rawVrfId, randomWords);
 
         assertEq(gauge.payCount(), 1, "vote-directed gauge boost should settle as a win");
         assertEq(gauge.lastWinner(), buyer, "winner should match buyer");

@@ -374,7 +374,7 @@ contract DeploymentBatcherOVaultRuntimeConfigTest is Test {
     }
 
     function test_SetOVaultRuntimeConfig_OnlyProtocolTreasury() public {
-        vm.expectRevert(DeploymentBatcher.NotOwner.selector);
+        vm.expectRevert(DeploymentBatcher.NotProtocolTreasury.selector);
         batcher.setOVaultRuntimeConfig(address(0x2001), 30168, true);
     }
 

@@ -194,6 +194,9 @@ contract CreatorOVaultWrapperShareOFTValidationTest is Test {
         assertEq(wrapper.totalMinted(), shareOut);
         assertEq(wrapper.totalLocked(), shareOut * wrapper.NORMALIZATION_FACTOR());
 
+        // Advance past per-user wrapper cooldown (M-01 fix) so we reach the burn check
+        vm.roll(block.number + 1);
+
         vm.expectRevert(
             abi.encodeWithSelector(
                 CreatorOVaultWrapper.ShareOFTBurnBalanceMismatch.selector, alice, shareOut, shareOut, shareOut
