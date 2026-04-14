@@ -24,41 +24,60 @@
   <!-- Three.js Canvas (persistent particle field) -->
   <canvas id="three-canvas"></canvas>
 
+  <!-- Ambient glow orbs (CSS-driven atmosphere) -->
+  <div class="ambient-orb orb-1"></div>
+  <div class="ambient-orb orb-2"></div>
+  <div class="ambient-orb orb-3"></div>
+
   <!-- Fixed Nav -->
   <nav class="nav" id="main-nav">
     <a href="#" class="brand" aria-label="4626.fun home">
-      <span>4626</span>
-      <span class="brand-dot"></span>
-      <span>fun</span>
+      <img src="./assets/brand/app-icon-7.jpg" alt="4626" class="brand-icon">
+      <span class="brand-text">4626<span class="brand-dot"></span>fun</span>
     </a>
-    <a href="#closing" class="nav-btn">Enter App</a>
+    <div class="nav-right">
+      <a href="#" class="nav-link" target="_blank" rel="noopener noreferrer">Docs</a>
+      <a href="#closing" class="nav-btn">Launch App</a>
+    </div>
   </nav>
+
+  <!-- Scroll progress indicator -->
+  <div class="scroll-progress" id="scroll-progress"></div>
 
   <!-- ═══════════════════════════════════════════════
        SCROLL CONTAINER — ~3500vh cinematic journey
        ═══════════════════════════════════════════════ -->
   <div class="scroll-container">
 
-    <!-- ╔═══ CHAPTER 1: HERO (250vh) ═══╗ -->
-    <section class="scroll-scene" id="ch-hero" data-height="250">
+    <!-- ╔═══ CHAPTER 1: HERO (280vh) ═══╗ -->
+    <section class="scroll-scene" id="ch-hero" data-height="280">
       <div class="scene-pin">
         <!-- Blue vertical line -->
         <div class="hero-line" id="hero-line">
           <div class="hero-line-core"></div>
           <div class="hero-line-glow"></div>
         </div>
-        <!-- Text block on the right -->
+        <!-- Text block -->
         <div class="hero-content" id="hero-content">
-          <div class="section-label">ERC-4626 Creator Vaults</div>
-          <h1 class="hero-headline">DEPOSIT.<br>EARN TOGETHER.</h1>
+          <div class="section-label">ERC-4626 Creator Vaults on Base</div>
+          <h1 class="hero-headline">DEPOSIT.<br>EARN<br>TOGETHER.</h1>
           <div class="hero-support">
-            <p>Creator coin vaults.</p>
-            <p>Fees shared pro rata.</p>
+            <p>Deposit a creator coin into a vault.</p>
+            <p>Receive vault shares. Fees shared pro rata.</p>
             <p>Redeemable anytime.</p>
+          </div>
+          <div class="hero-chain">
+            <img src="./assets/brand/Base_lockup_2color.svg" alt="Base" class="chain-logo">
           </div>
           <div class="hero-cta">
             <a href="#closing" class="cta-button">Launch App</a>
           </div>
+        </div>
+        <!-- Hero floating tokens (decorative) -->
+        <div class="hero-float-tokens" id="hero-floats">
+          <img src="./assets/tokens/source/akita.webp" alt="" class="hero-float hero-float-1">
+          <img src="./assets/tokens/source/jesse.webp" alt="" class="hero-float hero-float-2">
+          <img src="./assets/tokens/share/akita-512.png" alt="" class="hero-float hero-float-3">
         </div>
       </div>
     </section>
@@ -85,13 +104,12 @@
 
         <!-- Camera wrapper (for zoom + pan) -->
         <div class="camera-wrapper" id="camera-wrapper">
-          <!-- Creator coin (AKITA) -->
+          <!-- Creator coin (AKITA) — REAL IMAGE -->
           <div class="token-coin" id="token-coin">
             <div class="token-icon" id="coin-icon">
-              <svg viewBox="0 0 96 96" width="96" height="96">
-                <circle cx="48" cy="48" r="47" fill="#0A0D14" stroke="#1A1D24" stroke-width="1"/>
-                <text x="48" y="56" text-anchor="middle" fill="#EDEDED" font-family="'Space Grotesk',sans-serif" font-size="28" font-weight="600">A</text>
-              </svg>
+              <div class="token-img-ring">
+                <img src="./assets/tokens/source/akita.webp" alt="AKITA" class="token-img" width="96" height="96">
+              </div>
             </div>
             <span class="token-label" id="coin-label">AKITA</span>
             <!-- Right detail panel -->
@@ -115,14 +133,12 @@
             </div>
           </div>
 
-          <!-- Vault share (■AKITA) -->
+          <!-- Vault share (■AKITA) — REAL IMAGE -->
           <div class="token-share" id="token-share">
             <div class="share-icon" id="share-icon">
-              <svg viewBox="0 0 96 96" width="96" height="96">
-                <rect x="1" y="1" width="94" height="94" rx="8" fill="#0A0D14" stroke="#0052FF" stroke-width="1" stroke-opacity="0.4"/>
-                <text x="48" y="40" text-anchor="middle" fill="#0052FF" font-family="'Space Grotesk',sans-serif" font-size="22" font-weight="600">■</text>
-                <text x="48" y="64" text-anchor="middle" fill="#EDEDED" font-family="'Space Grotesk',sans-serif" font-size="18" font-weight="500">A</text>
-              </svg>
+              <div class="share-img-ring">
+                <img src="./assets/tokens/share/akita-512.png" alt="■AKITA" class="share-img" width="96" height="96">
+              </div>
             </div>
             <span class="token-label share-label" id="share-label">■AKITA</span>
             <!-- Left detail panel -->
@@ -138,9 +154,15 @@
             <!-- Flow line from coin to engine -->
             <div class="flow-line" id="flow-line">
               <div class="flow-line-fill" id="flow-line-fill"></div>
+              <div class="flow-line-pulse"></div>
             </div>
             <!-- Engine box -->
             <div class="engine-box" id="engine-box">
+              <div class="engine-icon">
+                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5">
+                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                </svg>
+              </div>
               <p class="engine-label">Allocation</p>
               <p class="engine-label">Engine</p>
               <p class="engine-sub">Routes by weight</p>
@@ -148,15 +170,21 @@
             <!-- Branching SVG + Strategy cards -->
             <div class="branches" id="branches">
               <svg class="branch-svg" width="100" height="160" viewBox="0 0 100 160" fill="none">
-                <path class="branch-path" id="branch-0" d="M 0,80 C 40,80 60,20 100,20" stroke="#8A8F98" stroke-width="0.5" stroke-opacity="0.12"/>
-                <path class="branch-path" id="branch-1" d="M 0,80 C 50,80 50,80 100,80" stroke="#8A8F98" stroke-width="0.5" stroke-opacity="0.12"/>
-                <path class="branch-path" id="branch-2" d="M 0,80 C 40,80 60,140 100,140" stroke="#8A8F98" stroke-width="0.5" stroke-opacity="0.12"/>
+                <path class="branch-path" id="branch-0" d="M 0,80 C 40,80 60,20 100,20" stroke="url(#branchGrad)" stroke-width="1"/>
+                <path class="branch-path" id="branch-1" d="M 0,80 C 50,80 50,80 100,80" stroke="url(#branchGrad)" stroke-width="1"/>
+                <path class="branch-path" id="branch-2" d="M 0,80 C 40,80 60,140 100,140" stroke="url(#branchGrad)" stroke-width="1"/>
+                <defs>
+                  <linearGradient id="branchGrad" x1="0" y1="0" x2="100" y2="0" gradientUnits="userSpaceOnUse">
+                    <stop offset="0" stop-color="#0052FF" stop-opacity="0.3"/>
+                    <stop offset="1" stop-color="#8A8F98" stop-opacity="0.15"/>
+                  </linearGradient>
+                </defs>
               </svg>
               <div class="strategy-list">
                 <!-- Ajna -->
                 <div class="strategy-row" id="strat-0">
                   <div class="strategy-card-inner">
-                    <div class="strat-icon">A</div>
+                    <img src="./assets/tokens/strategy/ajna.png" alt="Ajna" class="strat-icon-img">
                     <div class="strat-info">
                       <div class="strat-header">
                         <span class="strat-name">Ajna</span>
@@ -170,7 +198,7 @@
                 <!-- Charm -->
                 <div class="strategy-row" id="strat-1">
                   <div class="strategy-card-inner">
-                    <div class="strat-icon">C</div>
+                    <img src="./assets/tokens/strategy/charm.png" alt="Charm" class="strat-icon-img">
                     <div class="strat-info">
                       <div class="strat-header">
                         <span class="strat-name">Charm</span>
@@ -188,7 +216,7 @@
                 <!-- Solana -->
                 <div class="strategy-row" id="strat-2">
                   <div class="strategy-card-inner">
-                    <div class="strat-icon">S</div>
+                    <img src="./assets/tokens/strategy/solana.png" alt="Solana" class="strat-icon-img">
                     <div class="strat-info">
                       <div class="strat-header">
                         <span class="strat-name">Solana</span>
@@ -231,7 +259,23 @@
           <!-- Intro -->
           <div class="accrue-intro" id="accrue-intro">
             <div class="section-label">Accrue</div>
-            <p class="accrue-desc">Fees accrue to the vault over time.</p>
+            <p class="accrue-desc">Fees accrue to the vault over time. Your share of the vault grows.</p>
+          </div>
+          <!-- Token pair display -->
+          <div class="accrue-pair" id="accrue-pair">
+            <div class="accrue-token">
+              <img src="./assets/tokens/share/akita-512.png" alt="■AKITA" class="accrue-token-img">
+              <span class="accrue-token-name">■AKITA</span>
+            </div>
+            <div class="accrue-arrow">
+              <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5">
+                <path d="M5 12h14M12 5l7 7-7 7"/>
+              </svg>
+            </div>
+            <div class="accrue-token">
+              <img src="./assets/tokens/source/akita.webp" alt="AKITA" class="accrue-token-img">
+              <span class="accrue-token-name">AKITA</span>
+            </div>
           </div>
           <!-- Clock / Date -->
           <div class="accrue-clock" id="accrue-clock">
@@ -294,61 +338,73 @@
           <div class="vaults-grid" id="vaults-grid">
             <!-- Akita -->
             <div class="vault-card" id="vc-0">
+              <div class="vault-card-glow"></div>
               <div class="vault-card-header">
                 <div class="vault-card-name">
-                  <div class="vault-card-icon">A</div>
-                  <h3>Akita Vault</h3>
+                  <img src="./assets/tokens/source/akita.webp" alt="Akita" class="vault-card-icon">
+                  <div>
+                    <h3>Akita Vault</h3>
+                    <span class="vault-card-share">■AKITA</span>
+                  </div>
                 </div>
-                <span class="vault-card-symbol">AKITA</span>
+                <img src="./assets/tokens/share/akita-512.png" alt="■AKITA" class="vault-card-share-img">
               </div>
-              <div class="vault-card-share">■AKITA</div>
               <div class="vault-card-stats">
-                <div><span class="vcs-label">APY</span><span class="vcs-value">14.2%</span></div>
+                <div><span class="vcs-label">APY</span><span class="vcs-value accent">14.2%</span></div>
                 <div><span class="vcs-label">TVL</span><span class="vcs-value">$1.8M</span></div>
               </div>
             </div>
             <!-- Jesse -->
             <div class="vault-card" id="vc-1">
+              <div class="vault-card-glow"></div>
               <div class="vault-card-header">
                 <div class="vault-card-name">
-                  <div class="vault-card-icon">J</div>
-                  <h3>Jesse Vault</h3>
+                  <img src="./assets/tokens/source/jesse.webp" alt="Jesse" class="vault-card-icon">
+                  <div>
+                    <h3>Jesse Vault</h3>
+                    <span class="vault-card-share">■JESSE</span>
+                  </div>
                 </div>
-                <span class="vault-card-symbol">JESSE</span>
+                <img src="./assets/tokens/share/jesse-512.png" alt="■JESSE" class="vault-card-share-img">
               </div>
-              <div class="vault-card-share">■JESSE</div>
               <div class="vault-card-stats">
-                <div><span class="vcs-label">APY</span><span class="vcs-value">18.6%</span></div>
+                <div><span class="vcs-label">APY</span><span class="vcs-value accent">18.6%</span></div>
                 <div><span class="vcs-label">TVL</span><span class="vcs-value">$3.2M</span></div>
               </div>
             </div>
             <!-- Gabriel Haines -->
             <div class="vault-card" id="vc-2">
+              <div class="vault-card-glow"></div>
               <div class="vault-card-header">
                 <div class="vault-card-name">
-                  <div class="vault-card-icon">G</div>
-                  <h3>Gabriel Haines Vault</h3>
+                  <img src="./assets/tokens/source/gabrielhaines.webp" alt="Gabriel Haines" class="vault-card-icon">
+                  <div>
+                    <h3>Gabriel Haines Vault</h3>
+                    <span class="vault-card-share">■GABRIELHAINES</span>
+                  </div>
                 </div>
-                <span class="vault-card-symbol">GABRIEL</span>
+                <img src="./assets/tokens/share/gabrielhaines-512.png" alt="■GABRIELHAINES" class="vault-card-share-img">
               </div>
-              <div class="vault-card-share">■GABRIELHAINES</div>
               <div class="vault-card-stats">
-                <div><span class="vcs-label">APY</span><span class="vcs-value">9.4%</span></div>
+                <div><span class="vcs-label">APY</span><span class="vcs-value accent">9.4%</span></div>
                 <div><span class="vcs-label">TVL</span><span class="vcs-value">$740K</span></div>
               </div>
             </div>
             <!-- Nick Shirley -->
             <div class="vault-card" id="vc-3">
+              <div class="vault-card-glow"></div>
               <div class="vault-card-header">
                 <div class="vault-card-name">
-                  <div class="vault-card-icon">N</div>
-                  <h3>Nick Shirley Vault</h3>
+                  <img src="./assets/tokens/source/thenickshirley.webp" alt="Nick Shirley" class="vault-card-icon">
+                  <div>
+                    <h3>Nick Shirley Vault</h3>
+                    <span class="vault-card-share">■THENICKSHIRLEY</span>
+                  </div>
                 </div>
-                <span class="vault-card-symbol">NICK</span>
+                <img src="./assets/tokens/share/thenickshirley-512.png" alt="■THENICKSHIRLEY" class="vault-card-share-img">
               </div>
-              <div class="vault-card-share">■THENICKSHIRLEY</div>
               <div class="vault-card-stats">
-                <div><span class="vcs-label">APY</span><span class="vcs-value">22.1%</span></div>
+                <div><span class="vcs-label">APY</span><span class="vcs-value accent">22.1%</span></div>
                 <div><span class="vcs-label">TVL</span><span class="vcs-value">$520K</span></div>
               </div>
             </div>
@@ -361,14 +417,18 @@
       </div>
     </section>
 
-    <!-- ╔═══ CHAPTER 5: CLOSE (250vh) ═══╗ -->
-    <section class="scroll-scene" id="ch-close" data-height="250">
+    <!-- ╔═══ CHAPTER 5: CLOSE (280vh) ═══╗ -->
+    <section class="scroll-scene" id="ch-close" data-height="280">
       <div class="scene-pin">
         <div class="close-container">
+          <!-- Ecosystem partners -->
+          <div class="close-partners" id="close-partners">
+            <img src="./assets/brand/Base_lockup_2color.svg" alt="Base" class="partner-logo">
+            <img src="./assets/brand/AJNA-Icon-2.svg" alt="Ajna" class="partner-logo">
+            <img src="./assets/brand/Zorb-3.svg" alt="Zora" class="partner-logo">
+          </div>
           <div class="close-brand" id="close-brand">
-            <span>4626</span>
-            <div class="close-dot" id="close-dot"></div>
-            <span>fun</span>
+            <img src="./assets/brand/logo-6.jpg" alt="4626" class="close-logo">
           </div>
           <div class="close-line" id="close-line"></div>
           <div class="close-cta" id="close-cta">
@@ -383,7 +443,10 @@
 
   <!-- Footer -->
   <footer class="footer">
-    <span>&copy; 2026 4626.fun</span>
+    <div class="footer-brand">
+      <img src="./assets/brand/app-icon-7.jpg" alt="4626" class="footer-icon">
+      <span>&copy; 2026 4626.fun</span>
+    </div>
     <div class="footer-links">
       <a href="#" target="_blank" rel="noopener noreferrer">Docs</a>
       <a href="https://github.com/wenakita" target="_blank" rel="noopener noreferrer">GitHub</a>
