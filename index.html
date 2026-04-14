@@ -38,7 +38,7 @@
   <!-- Fixed Nav -->
   <nav class="nav" id="main-nav">
     <a href="#" class="brand" aria-label="4626.fun home">
-      <img src="./assets/brand/app-icon-7.jpg" alt="4626" class="brand-icon">
+      <img src="./assets/brand/app-icon-7.jpg" alt="4626" class="brand-icon brand-icon-transparent">
       <span class="brand-text">4626<span class="brand-dot"></span>fun</span>
     </a>
     <div class="nav-right">
@@ -91,7 +91,19 @@
             <p class="hero-support-line" data-line="2">Redeemable anytime.</p>
           </div>
           <div class="hero-chain" id="hero-chain">
-            <img src="./assets/brand/Base_lockup_2color.svg" alt="Base" class="chain-logo">
+            <span class="hero-chain-text">Only on</span>
+            <img src="./assets/brand/Base_lockup_2color.svg" alt="Base" class="chain-logo chain-logo-base">
+            <span class="hero-chain-divider"></span>
+            <span class="hero-chain-text">Powered by</span>
+          </div>
+          <div class="hero-partners" id="hero-partners">
+            <img src="./assets/brand/zora-white.svg" alt="Zora" class="hero-partner-logo">
+            <img src="./assets/tokens/strategy/uniswap.jpg" alt="Uniswap" class="hero-partner-logo hero-partner-round">
+            <img src="./assets/brand/layerzero.png" alt="LayerZero" class="hero-partner-logo hero-partner-round">
+            <img src="./assets/tokens/strategy/chainlink.svg" alt="Chainlink" class="hero-partner-logo">
+            <img src="./assets/tokens/strategy/solana.jpg" alt="Solana" class="hero-partner-logo hero-partner-round">
+            <img src="./assets/brand/meteora.png" alt="Meteora" class="hero-partner-logo hero-partner-round">
+            <img src="./assets/tokens/strategy/ajna.png" alt="Ajna" class="hero-partner-logo hero-partner-round">
           </div>
           <div class="hero-cta" id="hero-cta">
             <a href="#closing" class="cta-button">Launch App</a>
@@ -102,8 +114,8 @@
         <div class="hero-float-tokens" id="hero-floats">
           <div class="hero-float-layer hero-float-layer-back" id="hero-layer-back">
             <img src="./assets/tokens/strategy/ajna.png" alt="" class="hero-float hero-float-back-1">
-            <img src="./assets/tokens/strategy/charm.png" alt="" class="hero-float hero-float-back-2">
-            <img src="./assets/tokens/strategy/solana.png" alt="" class="hero-float hero-float-back-3">
+            <img src="./assets/tokens/strategy/charm.jpg" alt="" class="hero-float hero-float-back-2">
+            <img src="./assets/tokens/strategy/solana.jpg" alt="" class="hero-float hero-float-back-3">
           </div>
           <div class="hero-float-layer hero-float-layer-mid" id="hero-layer-mid">
             <img src="./assets/tokens/source/jesse.webp" alt="" class="hero-float hero-float-mid-1">
@@ -219,10 +231,10 @@
             </div>
             <!-- Branching SVG + Strategy cards -->
             <div class="branches" id="branches">
-              <svg class="branch-svg" width="100" height="160" viewBox="0 0 100 160" fill="none">
-                <path class="branch-path" id="branch-0" d="M 0,80 C 40,80 60,20 100,20" stroke="url(#branchGrad)" stroke-width="1"/>
-                <path class="branch-path" id="branch-1" d="M 0,80 C 50,80 50,80 100,80" stroke="url(#branchGrad)" stroke-width="1"/>
-                <path class="branch-path" id="branch-2" d="M 0,80 C 40,80 60,140 100,140" stroke="url(#branchGrad)" stroke-width="1"/>
+              <svg class="branch-svg" width="80" height="180" viewBox="0 0 80 180" fill="none" preserveAspectRatio="none">
+                <path class="branch-path" id="branch-0" d="M 0,90 C 30,90 50,26 80,26" stroke="url(#branchGrad)" stroke-width="1.2"/>
+                <path class="branch-path" id="branch-1" d="M 0,90 C 40,90 40,90 80,90" stroke="url(#branchGrad)" stroke-width="1.2"/>
+                <path class="branch-path" id="branch-2" d="M 0,90 C 30,90 50,154 80,154" stroke="url(#branchGrad)" stroke-width="1.2"/>
                 <defs>
                   <linearGradient id="branchGrad" x1="0" y1="0" x2="100" y2="0" gradientUnits="userSpaceOnUse">
                     <stop offset="0" stop-color="#0052FF" stop-opacity="0.3"/>
@@ -260,7 +272,10 @@
                   </div>
                   <div class="downstream" id="downstream-1">
                     <div class="downstream-line"></div>
-                    <div class="downstream-box">Uniswap V3 Creator/USDC</div>
+                    <div class="downstream-box">
+                      <img src="./assets/tokens/strategy/uniswap.jpg" alt="Uniswap" class="downstream-logo">
+                      Uniswap V3 Creator/USDC
+                    </div>
                   </div>
                 </div>
                 <!-- Solana -->
@@ -278,7 +293,10 @@
                   </div>
                   <div class="downstream" id="downstream-2">
                     <div class="downstream-line"></div>
-                    <div class="downstream-box">Meteora Alpha Vaults</div>
+                    <div class="downstream-box">
+                      <img src="./assets/brand/meteora.png" alt="Meteora" class="downstream-logo">
+                      Meteora Alpha Vaults
+                    </div>
                   </div>
                 </div>
               </div>
@@ -474,11 +492,16 @@
           <!-- Ecosystem partners -->
           <div class="close-partners" id="close-partners">
             <img src="./assets/brand/Base_lockup_2color.svg" alt="Base" class="partner-logo">
-            <img src="./assets/brand/AJNA-Icon-2.svg" alt="Ajna" class="partner-logo">
-            <img src="./assets/brand/Zorb-3.svg" alt="Zora" class="partner-logo">
+            <img src="./assets/brand/zora-white.svg" alt="Zora" class="partner-logo">
+            <img src="./assets/tokens/strategy/uniswap.jpg" alt="Uniswap" class="partner-logo partner-logo-round">
+            <img src="./assets/brand/layerzero.png" alt="LayerZero" class="partner-logo partner-logo-round">
+            <img src="./assets/tokens/strategy/chainlink.svg" alt="Chainlink" class="partner-logo">
+            <img src="./assets/tokens/strategy/solana.jpg" alt="Solana" class="partner-logo partner-logo-round">
+            <img src="./assets/brand/meteora.png" alt="Meteora" class="partner-logo partner-logo-round">
+            <img src="./assets/tokens/strategy/ajna.png" alt="Ajna" class="partner-logo partner-logo-round">
           </div>
           <div class="close-brand" id="close-brand">
-            <img src="./assets/brand/logo-6.jpg" alt="4626" class="close-logo">
+            <img src="./assets/brand/logo-6.jpg" alt="4626" class="close-logo close-logo-transparent">
           </div>
           <div class="close-line" id="close-line"></div>
           <div class="close-cta" id="close-cta">
@@ -494,7 +517,7 @@
   <!-- Footer -->
   <footer class="footer">
     <div class="footer-brand">
-      <img src="./assets/brand/app-icon-7.jpg" alt="4626" class="footer-icon">
+      <img src="./assets/brand/app-icon-7.jpg" alt="4626" class="footer-icon brand-icon-transparent">
       <span>&copy; 2026 4626.fun</span>
     </div>
     <div class="footer-links">

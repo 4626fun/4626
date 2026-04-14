@@ -650,6 +650,7 @@ function multiMapSmooth(progress, stops, values) {
   const heroFloats = document.getElementById('hero-floats');
   const scrollCue = document.getElementById('hero-scroll-cue');
   const heroChain = document.getElementById('hero-chain');
+  const heroPartners = document.getElementById('hero-partners');
   const heroCta = document.getElementById('hero-cta');
   const chars = document.querySelectorAll('.hero-char');
   const supportLines = document.querySelectorAll('.hero-support-line');
@@ -688,7 +689,10 @@ function multiMapSmooth(progress, stops, values) {
   });
 
   entrance.to(heroChain, { opacity: 1, y: 0, duration: 0.7 }, 2.1);
-  entrance.to(heroCta, { opacity: 1, y: 0, duration: 0.7 }, 2.3);
+  if (heroPartners) {
+    entrance.to(heroPartners, { opacity: 1, y: 0, duration: 0.7 }, 2.35);
+  }
+  entrance.to(heroCta, { opacity: 1, y: 0, duration: 0.7 }, 2.55);
 
   if (heroFloats) {
     entrance.to(heroFloats, { opacity: 1, duration: 2, ease: 'power2.out' }, 1.5);
