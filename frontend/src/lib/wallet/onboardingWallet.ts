@@ -155,6 +155,84 @@ const CONFIRM_OWNER_RETRY_DELAY_MS = import.meta.env.MODE === 'test' ? 5 : 1_500
 const CONFIRM_OWNER_MAX_ATTEMPTS = 6
 const PAYMASTER_SESSION_MAX_ATTEMPTS = 3
 const PAYMASTER_SESSION_RETRY_DELAY_MS = import.meta.env.MODE === 'test' ? 5 : 300
+const SEND_CALLS_STATUS_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 25 : 8_000
+const SEND_CALLS_STATUS_POLL_MS = import.meta.env.MODE === 'test' ? 5 : 500
+
+function isTxHash(value: unknown): value is `0x${string}` {
+  return typeof value === 'string' && /^0x([a-fA-F0-9]{64})$/.test(value)
+}
+
+function isSendCallsUnsupportedError(error: unknown): boolean {
+  const code =
+    error && typeof error === 'object' && 'code' in error ? Number((error as { code?: unknown }).code) : Number.NaN
+  if (Number.isFinite(code) && (code === -32601 || code === 4200)) return true
+
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('method not found') ||
+    lower.includes('unsupported method') ||
+    lower.includes('method is not supported') ||
+    lower.includes('does not support')
+  )
+}
+
+function isUserRejectedWalletAction(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  return lower.includes('user rejected') || lower.includes('user denied') || lower.includes('rejected the request')
+}
+
+async function submitOwnerTxViaWalletSendCalls(params: {
+  walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+  chainId: number
+  sender: `0x${string}`
+  to: `0x${string}`
+  data: `0x${string}`
+}): Promise<`0x${string}`> {
+  const callBundle = await params.walletRequest({
+    method: 'wallet_sendCalls',
+    params: [
+      {
+        chainId: `0x${params.chainId.toString(16)}`,
+        from: params.sender,
+        calls: [{ to: params.to, data: params.data, value: '0x0' }],
+        atomicRequired: false,
+        version: '2.0.0',
+      },
+    ],
+  })
+  const callsId =
+    typeof callBundle === 'string'
+      ? callBundle
+      : callBundle && typeof callBundle === 'object' && typeof (callBundle as { id?: unknown }).id === 'string'
+        ? String((callBundle as { id: string }).id)
+        : ''
+  if (!callsId) throw new Error('wallet_sendCalls returned no call bundle id')
+
+  const startedAt = Date.now()
+  while (Date.now() - startedAt < SEND_CALLS_STATUS_TIMEOUT_MS) {
+    const result = await params.walletRequest({ method: 'wallet_getCallsStatus', params: [callsId] })
+    const statusCode = Number((result as { status?: unknown } | null)?.status)
+    const receipts = Array.isArray((result as { receipts?: unknown[] } | null)?.receipts)
+      ? ((result as { receipts: unknown[] }).receipts ?? [])
+      : []
+    const receiptHash =
+      receipts
+        .map((receipt) => String((receipt as { transactionHash?: unknown } | null)?.transactionHash ?? ''))
+        .find((value) => isTxHash(value)) ?? null
+    if (Number.isFinite(statusCode)) {
+      if (statusCode >= 200 && statusCode < 300) {
+        if (receiptHash) return receiptHash
+        throw new Error('wallet_sendCalls completed without a transaction hash yet. Retry confirmation shortly.')
+      }
+      if (statusCode >= 300) throw new Error(`wallet_sendCalls failed with status ${statusCode}`)
+    }
+    await delay(SEND_CALLS_STATUS_POLL_MS)
+  }
+
+  throw new Error('wallet_sendCalls status is still pending. Wait a moment and retry confirmation.')
+}
 
 export async function sendPreparedOwnerTx(params: {
   txRequest: PreparedOwnerTxRequest
