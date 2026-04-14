@@ -102,6 +102,11 @@ export function normalizeOwnerApprovalError(error: unknown): Error {
   if (error instanceof Error) {
     const message = String(error.message || '').trim()
     const lower = message.toLowerCase()
+    if (lower.includes('aa23') || (lower.includes('validateuserop') && lower.includes('revert'))) {
+      return new Error(
+        'Smart wallet signature validation failed during sponsorship (AA23). Reconnect the same Base smart wallet session and retry.',
+      )
+    }
     if (lower.includes('paymaster proxy internal error')) {
       return new Error(
         '4626 could not initialize Base gas sponsorship. Retry in a few seconds. If it persists, use Not you? Switch and reconnect the same Base wallet.',
@@ -198,6 +203,16 @@ function isUserRejectedWalletAction(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? '')
   const lower = message.toLowerCase()
   return lower.includes('user rejected') || lower.includes('user denied') || lower.includes('rejected the request')
+}
+
+function isValidationRevertedUserOpError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('aa23') ||
+    (lower.includes('validateuserop') && lower.includes('revert')) ||
+    lower.includes('validation reverted')
+  )
 }
 
 async function submitOwnerTxViaWalletSendCalls(params: {
@@ -352,7 +367,33 @@ export async function sendPreparedOwnerTx(params: {
           throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
         }
         if (PREFER_SPONSORED_CANONICAL_SELF_APPROVAL) {
-          txHash = await runSponsoredCanonicalUserOp()
+          try {
+            txHash = await runSponsoredCanonicalUserOp()
+          } catch (sponsoredError) {
+            if (!isValidationRevertedUserOpError(sponsoredError)) throw sponsoredError
+            const walletRequest =
+              typeof walletClient.request === 'function'
+                ? async (args: { method: string; params?: unknown[] }) => await walletClient.request!(args as any)
+                : null
+            if (walletRequest) {
+              txHash = await submitOwnerTxViaWalletSendCalls({
+                walletRequest,
+                chainId: txRequest.chainId,
+                sender: canonicalSmartWalletAddress as `0x${string}`,
+                to: txRequest.to,
+                data: txRequest.data,
+              })
+            } else {
+              if (typeof walletClient.sendTransaction !== 'function') throw sponsoredError
+              txHash = await walletClient.sendTransaction({
+                account: walletClient.account,
+                chain: base,
+                to: txRequest.to,
+                data: txRequest.data,
+                value: 0n,
+              })
+            }
+          }
         } else {
         const walletRequest =
           typeof walletClient.request === 'function'

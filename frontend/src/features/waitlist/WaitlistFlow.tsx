@@ -2,8 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLogin, usePrivy } from '@privy-io/react-auth'
 import { AnimatePresence, motion } from 'framer-motion'
 
-import { PulsingBasemark } from '@/components/brand/AnimatedBasemark'
-import { TextScramble } from '@/components/brand/TextScramble'
+import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { apiFetch } from '@/lib/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
@@ -296,24 +295,22 @@ function WaitlistAuthStep(props: {
       </div>
 
       <div className="relative z-10 w-full max-w-sm space-y-8 text-center">
-        {/* Square-led intro — Basemark assembles first, content follows */}
+        {/* Brand loader intro */}
         <motion.div
           initial={{ opacity: 0, scale: 0.85 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ duration: 0.24, ease: [0.4, 0, 0.2, 1] }}
-          className="mx-auto flex h-14 w-14 items-center justify-center"
+          className="mx-auto flex items-center justify-center"
         >
-          <PulsingBasemark size={48} color="#0052FF" />
+          <PixelWaveLoader name="flow" size={44} color="rgb(var(--brand-primary))" />
         </motion.div>
 
-        {/* headline with text scramble decode */}
+        {/* headline */}
         <motion.div {...stagger(0)} className="space-y-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#3C8AFF]/80">
             Secure onboarding
           </p>
-          <h2 className="text-[2.6rem] font-light leading-tight tracking-tight text-white">
-            <TextScramble text={authUi.title} trigger speed={0.6} complexity="simple" />
-          </h2>
+          <h2 className="text-[2.6rem] font-light leading-tight tracking-tight text-white">{authUi.title}</h2>
           <p className="mx-auto max-w-xs text-sm leading-relaxed text-zinc-400">{progressLabel}</p>
         </motion.div>
 
