@@ -76,7 +76,7 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('uses wallet_sendCalls for self-authenticated canonical CSW sessions when available', async () => {
+  it('uses direct sendTransaction when canonical mode is self-authenticated by CSW session', async () => {
     const sendTransaction = vi.fn(async () => TX_HASH)
     const ensurePaymasterSession = vi.fn(async () => true)
     const request = vi
@@ -139,95 +139,8 @@ describe('sendPreparedOwnerTx', () => {
 
     expect(ensurePaymasterSession).not.toHaveBeenCalled()
     expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
-    expect(request).toHaveBeenCalledTimes(1)
     expect(sendTransaction).toHaveBeenCalledTimes(1)
     expect(result.txHash).toBe(TX_HASH)
-  })
-
-  it('does not fall back to sendTransaction when wallet_sendCalls is user-rejected', async () => {
-    const sendTransaction = vi.fn(async () => TX_HASH)
-    const request = vi.fn(async () => {
-      throw new Error('User rejected the request.')
-    })
-
-    await expect(
-      sendPreparedOwnerTx({
-        txRequest: TX_REQUEST,
-        walletClient: {
-          account: CANONICAL_CSW,
-          sendTransaction,
-          request,
-        },
-        chainId: 8453,
-        authHeaders: async () => ({ Authorization: 'Bearer test' }),
-        signerAddress: CANONICAL_CSW,
-        executionMode: 'canonicalSmartWallet',
-        canonicalSmartWalletAddress: CANONICAL_CSW,
-        publicClient: {},
-        ensurePaymasterSession: async () => true,
-      }),
-    ).rejects.toThrow('User rejected the request.')
-
-    expect(request).toHaveBeenCalledTimes(1)
-    expect(sendTransaction).not.toHaveBeenCalled()
-    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
-  })
-
-  it('does not fall back to sendTransaction when wallet_sendCalls status stays pending', async () => {
-    const sendTransaction = vi.fn(async () => TX_HASH)
-    const request = vi
-      .fn()
-      .mockResolvedValueOnce('0xcall-bundle-id')
-      .mockResolvedValue({ status: 100, receipts: [] })
-
-    await expect(
-      sendPreparedOwnerTx({
-        txRequest: TX_REQUEST,
-        walletClient: {
-          account: CANONICAL_CSW,
-          sendTransaction,
-          request,
-        },
-        chainId: 8453,
-        authHeaders: async () => ({ Authorization: 'Bearer test' }),
-        signerAddress: CANONICAL_CSW,
-        executionMode: 'canonicalSmartWallet',
-        canonicalSmartWalletAddress: CANONICAL_CSW,
-        publicClient: {},
-        ensurePaymasterSession: async () => true,
-      }),
-    ).rejects.toThrow('wallet_sendCalls status is still pending')
-
-    expect(sendTransaction).not.toHaveBeenCalled()
-    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
-  })
-
-  it('does not treat wallet_sendCalls execution failures as unsupported fallback errors', async () => {
-    const sendTransaction = vi.fn(async () => TX_HASH)
-    const request = vi.fn(async () => {
-      throw new Error('wallet_sendCalls failed with status 500')
-    })
-
-    await expect(
-      sendPreparedOwnerTx({
-        txRequest: TX_REQUEST,
-        walletClient: {
-          account: CANONICAL_CSW,
-          sendTransaction,
-          request,
-        },
-        chainId: 8453,
-        authHeaders: async () => ({ Authorization: 'Bearer test' }),
-        signerAddress: CANONICAL_CSW,
-        executionMode: 'canonicalSmartWallet',
-        canonicalSmartWalletAddress: CANONICAL_CSW,
-        publicClient: {},
-        ensurePaymasterSession: async () => true,
-      }),
-    ).rejects.toThrow('wallet_sendCalls failed with status 500')
-
-    expect(sendTransaction).not.toHaveBeenCalled()
-    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
   })
 
   it('routes canonical CSW approval through paymaster user-op when signer is an owner EOA', async () => {

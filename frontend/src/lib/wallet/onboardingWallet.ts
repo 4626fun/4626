@@ -287,43 +287,16 @@ export async function sendPreparedOwnerTx(params: {
         signerAddress.toLowerCase() === canonicalSmartWalletAddress.toLowerCase()
 
       if (selfAuthenticatedCanonicalSession) {
-        let sendCallsUnsupported = false
-        const requestFn =
-          typeof walletClient.request === 'function'
-            ? (walletClient.request as (args: { method: string; params?: unknown[] }) => Promise<unknown>)
-            : null
-        if (requestFn) {
-          try {
-            txHash = await submitOwnerTxViaWalletSendCalls({
-              walletRequest: requestFn,
-              chainId: base.id,
-              sender: canonicalSmartWalletAddress as `0x${string}`,
-              to: txRequest.to,
-              data: txRequest.data,
-            })
-          } catch (sendCallsError) {
-            if (isUserRejectedWalletAction(sendCallsError)) throw sendCallsError
-            if (!isSendCallsUnsupportedError(sendCallsError)) throw sendCallsError
-            sendCallsUnsupported = true
-          }
-        } else {
-          sendCallsUnsupported = true
-        }
-        if (!txHash && sendCallsUnsupported) {
-          if (!walletClient.account || typeof walletClient.sendTransaction !== 'function') {
-            throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
-          }
-          txHash = await walletClient.sendTransaction({
-            account: walletClient.account,
-            chain: base,
-            to: txRequest.to,
-            data: txRequest.data,
-            value: 0n,
-          })
-        }
-        if (!txHash && !sendCallsUnsupported && (!walletClient.account || typeof walletClient.sendTransaction !== 'function')) {
+        if (!walletClient.account || typeof walletClient.sendTransaction !== 'function') {
           throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
         }
+        txHash = await walletClient.sendTransaction({
+          account: walletClient.account,
+          chain: base,
+          to: txRequest.to,
+          data: txRequest.data,
+          value: 0n,
+        })
       } else {
         if (!publicClient) {
           throw new Error('Canonical wallet client is unavailable. Reload and retry.')
