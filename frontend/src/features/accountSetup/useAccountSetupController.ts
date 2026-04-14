@@ -271,6 +271,7 @@ export function useAccountSetupController(params: {
     const result = await ensureWalletAlignedPaymasterSessionDetailed({
       hasMatchingSiweSession: siwe.isSignedIn,
       preferWalletSession: Boolean(connectedAddress),
+      allowPrivyBridgeFallback: false,
       signIn:
         typeof siwe.signIn === 'function'
           ? async () =>

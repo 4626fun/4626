@@ -1,6 +1,7 @@
 export type PaymasterSessionStrategyParams = {
   hasMatchingSiweSession: boolean
   preferWalletSession: boolean
+  allowPrivyBridgeFallback?: boolean
   signIn?: (() => Promise<string | null>) | null
   signInWithPrivyToken?: ((token: string) => Promise<string | null>) | null
   getPrivyAccessToken?: (() => Promise<string | null>) | null
@@ -26,6 +27,14 @@ export async function ensureWalletAlignedPaymasterSessionDetailed(
       walletAttemptFailureReason = 'wallet_signin_did_not_return_address'
     } catch {
       walletAttemptFailureReason = 'wallet_signin_failed'
+    }
+  }
+
+  const allowPrivyBridgeFallback = params.allowPrivyBridgeFallback !== false
+  if (!allowPrivyBridgeFallback) {
+    return {
+      ok: false,
+      reason: walletAttemptFailureReason ?? 'wallet_session_required',
     }
   }
 

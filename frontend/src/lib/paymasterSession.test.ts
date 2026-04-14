@@ -138,4 +138,20 @@ describe('ensureWalletAlignedPaymasterSessionDetailed', () => {
       reason: 'wallet_signin_did_not_return_address',
     })
   })
+
+  it('can disable Privy fallback and require wallet session only', async () => {
+    const result = await ensureWalletAlignedPaymasterSessionDetailed({
+      hasMatchingSiweSession: false,
+      preferWalletSession: true,
+      allowPrivyBridgeFallback: false,
+      signIn: async () => null,
+      signInWithPrivyToken: async () => '0x1234',
+      getPrivyAccessToken: async () => 'privy-token',
+    })
+
+    expect(result).toEqual({
+      ok: false,
+      reason: 'wallet_signin_did_not_return_address',
+    })
+  })
 })
