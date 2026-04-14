@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.30;
 
 /**
  * @title CreatorLotteryManager
@@ -207,6 +207,11 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         SEND_FAILED,
         RATE_LIMITED
     }
+    enum CallbackDropReason {
+        BUYER_RATE_LIMITED,
+        ORIGIN_RATE_LIMITED,
+        SPONSORSHIP_UNAVAILABLE
+    }
 
     struct SponsorshipPolicy {
         bool enabled;
@@ -281,6 +286,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
 
     // Guard against re-entrant payouts triggered by external vault/gauge calls.
     uint256 private _payoutLock;
+    address private immutable _adminModule;
 
     // ================================
     // EVENTS
@@ -349,8 +355,14 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     event SponsorshipSkipped(
         bytes32 indexed context, SponsorshipSkipReason reason, uint256 feeNative, uint256 valueHint
     );
-    // FIX: CLM-03 — event for dropped winner callbacks
-    event WinnerCallbackDropped(uint32 indexed dstEid, address indexed winner, address indexed creatorCoin, uint256 totalSharesPaid, string reason);
+    // FIX: CLM-03 — compact reason code to reduce bytecode from repeated string literals
+    event WinnerCallbackDropped(
+        uint32 indexed dstEid,
+        address indexed winner,
+        address indexed creatorCoin,
+        uint256 totalSharesPaid,
+        uint8 reason
+    );
     // FIX: CLM-09 — event for invalid payloads (replaces revert to avoid bricking LZ lane)
     event InvalidPayloadReceived(uint32 indexed srcEid, uint256 payloadLength);
     // FIX: CLM-02 — event for stale VRF results that are discarded
@@ -418,7 +430,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         vrfMaxSponsoredPerOriginPerEpoch = DEFAULT_VRF_MAX_SPONSORED_PER_ORIGIN_PER_EPOCH;
         callbackMaxSponsoredPerBuyerPerEpoch = DEFAULT_CALLBACK_MAX_SPONSORED_PER_BUYER_PER_EPOCH;
         callbackMaxSponsoredPerOriginPerEpoch = DEFAULT_CALLBACK_MAX_SPONSORED_PER_ORIGIN_PER_EPOCH;
-
+        _adminModule = address(new CreatorLotteryManagerAdminModule(_registry, owner_));
     }
 
     // ================================
@@ -1113,7 +1125,9 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
                         WINNER_CALLBACK_CONTEXT, SponsorshipSkipReason.RATE_LIMITED, nativeFee, 0
                     );
                     // FIX: CLM-03 — emit event instead of silent drop
-                    emit WinnerCallbackDropped(dstEid, winner, creatorCoin, totalSharesPaid, "buyer rate limited");
+                    emit WinnerCallbackDropped(
+                        dstEid, winner, creatorCoin, totalSharesPaid, uint8(CallbackDropReason.BUYER_RATE_LIMITED)
+                    );
                     return;
                 }
             }
@@ -1128,7 +1142,9 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
                         WINNER_CALLBACK_CONTEXT, SponsorshipSkipReason.RATE_LIMITED, nativeFee, 0
                     );
                     // FIX: CLM-03 — emit event instead of silent drop
-                    emit WinnerCallbackDropped(dstEid, winner, creatorCoin, totalSharesPaid, "origin rate limited");
+                    emit WinnerCallbackDropped(
+                        dstEid, winner, creatorCoin, totalSharesPaid, uint8(CallbackDropReason.ORIGIN_RATE_LIMITED)
+                    );
                     return;
                 }
             }
@@ -1136,7 +1152,9 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
 
         // FIX: CLM-03 — emit event when sponsorship is not consumed
         if (!_consumeSponsorship(callbackSponsorshipPolicy, WINNER_CALLBACK_CONTEXT, nativeFee, 0, false)) {
-            emit WinnerCallbackDropped(dstEid, winner, creatorCoin, totalSharesPaid, "sponsorship not available");
+            emit WinnerCallbackDropped(
+                dstEid, winner, creatorCoin, totalSharesPaid, uint8(CallbackDropReason.SPONSORSHIP_UNAVAILABLE)
+            );
             return;
         }
 
@@ -1378,43 +1396,44 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     // ADMIN FUNCTIONS
     // ================================
 
-    function setAuthorizedSwapContract(address swapContract, bool authorized) external onlyOwner {
-        if (swapContract == address(0)) revert ZeroAddress();
-        authorizedSwapContracts[swapContract] = authorized;
-        emit SwapContractAuthorized(swapContract, authorized);
-    }
-
-    function setLocalVRFConsumer(address _consumer) external onlyOwner {
-        localVRFConsumer = ICreatorVRFConsumer(_consumer);
-        emit VRFConsumerUpdated(_consumer);
-    }
-
-    function setVRFIntegrator(address _integrator) external onlyOwner {
-        // FIX: CLM-13 — revoke trust from old integrator before updating
-        address oldIntegrator = address(vrfIntegrator);
-        if (oldIntegrator != address(0)) {
-            trustedVrfIntegrators[oldIntegrator] = false;
+    function _delegateAdmin() internal {
+        (bool ok, bytes memory data) = _adminModule.delegatecall(msg.data);
+        if (!ok) {
+            assembly {
+                revert(add(data, 0x20), mload(data))
+            }
         }
-        vrfIntegrator = IChainlinkVRFIntegrator(_integrator);
-        if (_integrator != address(0)) {
-            trustedVrfIntegrators[_integrator] = true;
-        }
-        emit VRFIntegratorUpdated(_integrator, _integrator != address(0));
     }
 
-    function setTargetEid(uint32 _eid) external onlyOwner {
-        targetEid = _eid;
-        emit TargetEidUpdated(_eid);
+    function setAuthorizedSwapContract(address swapContract, bool authorized) external {
+        swapContract;
+        authorized;
+        _delegateAdmin();
     }
 
-    function setUseLocalVRF(bool _useLocal) external onlyOwner {
-        useLocalVRF = _useLocal;
+    function setLocalVRFConsumer(address _consumer) external {
+        _consumer;
+        _delegateAdmin();
     }
 
-    function setSponsoredVrfMinSwapAmountUSD(uint256 _minSwapAmountUSD) external onlyOwner {
-        if (_minSwapAmountUSD < MIN_SWAP_USD || _minSwapAmountUSD > MAX_SWAP_USD) revert InvalidAmount();
-        sponsoredVrfMinSwapAmountUSD = _minSwapAmountUSD;
-        emit SponsoredVrfMinSwapUpdated(_minSwapAmountUSD);
+    function setVRFIntegrator(address _integrator) external {
+        _integrator;
+        _delegateAdmin();
+    }
+
+    function setTargetEid(uint32 _eid) external {
+        _eid;
+        _delegateAdmin();
+    }
+
+    function setUseLocalVRF(bool _useLocal) external {
+        _useLocal;
+        _delegateAdmin();
+    }
+
+    function setSponsoredVrfMinSwapAmountUSD(uint256 _minSwapAmountUSD) external {
+        _minSwapAmountUSD;
+        _delegateAdmin();
     }
 
     function setVrfSponsorshipPolicy(
@@ -1422,18 +1441,12 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         uint256 maxFeePerMessage,
         uint256 budgetPerEpoch,
         uint256 epochDuration
-    ) external onlyOwner {
-        if (epochDuration == 0) revert InvalidAmount();
-        _refreshSponsorshipEpoch(vrfSponsorshipPolicy);
-        vrfSponsorshipPolicy.enabled = enabled;
-        vrfSponsorshipPolicy.maxFeePerMessage = maxFeePerMessage;
-        vrfSponsorshipPolicy.budgetPerEpoch = budgetPerEpoch;
-        vrfSponsorshipPolicy.epochDuration = epochDuration;
-        if (vrfSponsorshipPolicy.epochStart == 0) {
-            vrfSponsorshipPolicy.epochStart = block.timestamp;
-        }
-
-        emit SponsorshipPolicyUpdated(VRF_REQUEST_CONTEXT, enabled, maxFeePerMessage, budgetPerEpoch, epochDuration);
+    ) external {
+        enabled;
+        maxFeePerMessage;
+        budgetPerEpoch;
+        epochDuration;
+        _delegateAdmin();
     }
 
     function setCallbackSponsorshipPolicy(
@@ -1441,20 +1454,12 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         uint256 maxFeePerMessage,
         uint256 budgetPerEpoch,
         uint256 epochDuration
-    ) external onlyOwner {
-        if (epochDuration == 0) revert InvalidAmount();
-        _refreshSponsorshipEpoch(callbackSponsorshipPolicy);
-        callbackSponsorshipPolicy.enabled = enabled;
-        callbackSponsorshipPolicy.maxFeePerMessage = maxFeePerMessage;
-        callbackSponsorshipPolicy.budgetPerEpoch = budgetPerEpoch;
-        callbackSponsorshipPolicy.epochDuration = epochDuration;
-        if (callbackSponsorshipPolicy.epochStart == 0) {
-            callbackSponsorshipPolicy.epochStart = block.timestamp;
-        }
-
-        emit SponsorshipPolicyUpdated(
-            WINNER_CALLBACK_CONTEXT, enabled, maxFeePerMessage, budgetPerEpoch, epochDuration
-        );
+    ) external {
+        enabled;
+        maxFeePerMessage;
+        budgetPerEpoch;
+        epochDuration;
+        _delegateAdmin();
     }
 
     /**
@@ -1466,30 +1471,26 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         uint32 _vrfMaxPerOriginPerEpoch,
         uint32 _callbackMaxPerBuyerPerEpoch,
         uint32 _callbackMaxPerOriginPerEpoch
-    ) external onlyOwner {
-        vrfMaxSponsoredPerBuyerPerEpoch = _vrfMaxPerBuyerPerEpoch;
-        vrfMaxSponsoredPerOriginPerEpoch = _vrfMaxPerOriginPerEpoch;
-        callbackMaxSponsoredPerBuyerPerEpoch = _callbackMaxPerBuyerPerEpoch;
-        callbackMaxSponsoredPerOriginPerEpoch = _callbackMaxPerOriginPerEpoch;
-
-        emit SponsorshipRateLimitsUpdated(
-            _vrfMaxPerBuyerPerEpoch,
-            _vrfMaxPerOriginPerEpoch,
-            _callbackMaxPerBuyerPerEpoch,
-            _callbackMaxPerOriginPerEpoch
-        );
+    ) external {
+        _vrfMaxPerBuyerPerEpoch;
+        _vrfMaxPerOriginPerEpoch;
+        _callbackMaxPerBuyerPerEpoch;
+        _callbackMaxPerOriginPerEpoch;
+        _delegateAdmin();
     }
 
-    function setBoostManager(address _manager) external onlyOwner {
-        boostManager = Ive4626BoostManager(_manager);
+    function setBoostManager(address _manager) external {
+        _manager;
+        _delegateAdmin();
     }
 
     /**
      * @notice Set VaultGaugeVoting for ve(3,3) probability direction
      * @param _vaultGaugeVoting Address of the VaultGaugeVoting contract
      */
-    function setVaultGaugeVoting(address _vaultGaugeVoting) external onlyOwner {
-        vaultGaugeVoting = IVaultGaugeVoting(_vaultGaugeVoting);
+    function setVaultGaugeVoting(address _vaultGaugeVoting) external {
+        _vaultGaugeVoting;
+        _delegateAdmin();
     }
 
     function setLotteryConfig(
@@ -1499,51 +1500,41 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         uint256 _baseWinChance,
         uint256 _maxWinChance,
         uint256 _usdMultiplierBps
-    ) external onlyOwner {
-        if (_minSwap < MIN_SWAP_USD || _minSwap > MAX_SWAP_USD) revert InvalidAmount();
-        if (_rewardPercentage > BASIS_POINTS) revert InvalidAmount();
-        if (_maxWinChance > 200_000) revert InvalidAmount();
-        if (_baseWinChance > _maxWinChance) revert InvalidAmount();
-        if (_usdMultiplierBps < 10000 || _usdMultiplierBps > 15000) revert InvalidAmount();
-
-        lotteryConfig.minSwapAmount = _minSwap;
-        lotteryConfig.rewardPercentage = _rewardPercentage;
-        lotteryConfig.isActive = _isActive;
-        lotteryConfig.baseWinChance = _baseWinChance;
-        lotteryConfig.maxWinChance = _maxWinChance;
-        lotteryConfig.usdMultiplierBps = _usdMultiplierBps;
-
-        emit LotteryConfigUpdated(_minSwap, _rewardPercentage, _isActive);
+    ) external {
+        _minSwap;
+        _rewardPercentage;
+        _isActive;
+        _baseWinChance;
+        _maxWinChance;
+        _usdMultiplierBps;
+        _delegateAdmin();
     }
 
-    function setOracleMaxStaleness(uint256 _maxStaleness) external onlyOwner {
-        oracleMaxStaleness = _maxStaleness;
-        emit OracleMaxStalenessUpdated(_maxStaleness);
+    function setOracleMaxStaleness(uint256 _maxStaleness) external {
+        _maxStaleness;
+        _delegateAdmin();
     }
 
     // FIX: CLM-02 — allow owner to configure VRF result grace period
-    function setVrfResultGracePeriod(uint256 _gracePeriod) external onlyOwner {
-        if (_gracePeriod > 0 && _gracePeriod < 5 minutes) revert InvalidAmount();
-        vrfResultGracePeriod = _gracePeriod;
+    function setVrfResultGracePeriod(uint256 _gracePeriod) external {
+        _gracePeriod;
+        _delegateAdmin();
     }
 
-    function setOracleDeviationGuard(uint256 _maxDeviationBps, uint256 _deviationWindow) external onlyOwner {
-        if (_maxDeviationBps > BASIS_POINTS) revert InvalidAmount();
-        oracleMaxDeviationBps = _maxDeviationBps;
-        oracleDeviationWindow = _deviationWindow;
-        emit OracleDeviationGuardUpdated(_maxDeviationBps, _deviationWindow);
+    function setOracleDeviationGuard(uint256 _maxDeviationBps, uint256 _deviationWindow) external {
+        _maxDeviationBps;
+        _deviationWindow;
+        _delegateAdmin();
     }
 
     /**
      * @notice Set enforced options for winner callback messages
      */
-    function setCallbackOptions(uint32 dstEid, uint128 gasLimit, uint128 msgValue) external onlyOwner {
-        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(gasLimit, msgValue);
-
-        EnforcedOptionParam[] memory params = new EnforcedOptionParam[](1);
-        params[0] = EnforcedOptionParam({eid: dstEid, msgType: MSG_TYPE_WINNER_CALLBACK, options: options});
-
-        _setEnforcedOptions(params);
+    function setCallbackOptions(uint32 dstEid, uint128 gasLimit, uint128 msgValue) external {
+        dstEid;
+        gasLimit;
+        msgValue;
+        _delegateAdmin();
     }
 
     /**
@@ -1552,9 +1543,11 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
      * @param sender The bytes32-encoded address of the remote OFT
      * @param authorized Whether to authorize or deauthorize
      */
-    function setAuthorizedRemoteOFT(uint32 srcEid, bytes32 sender, bool authorized) external onlyOwner {
-        authorizedRemoteOFTs[srcEid][sender] = authorized;
-        emit RemoteOFTAuthorized(srcEid, sender, authorized);
+    function setAuthorizedRemoteOFT(uint32 srcEid, bytes32 sender, bool authorized) external {
+        srcEid;
+        sender;
+        authorized;
+        _delegateAdmin();
     }
 
     /**
@@ -1562,32 +1555,27 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
      */
     function batchSetAuthorizedRemoteOFTs(uint32[] calldata srcEids, bytes32[] calldata senders, bool authorized)
         external
-        onlyOwner
     {
-        if (srcEids.length != senders.length) revert InvalidAmount();
-        for (uint256 i; i < srcEids.length;) {
-            authorizedRemoteOFTs[srcEids[i]][senders[i]] = authorized;
-            emit RemoteOFTAuthorized(srcEids[i], senders[i], authorized);
-            unchecked {
-                ++i;
-            }
-        }
+        srcEids;
+        senders;
+        authorized;
+        _delegateAdmin();
     }
 
     /**
      * @notice Set the gas limit for winner callback messages
      */
-    function setCallbackGasLimit(uint128 _gasLimit) external onlyOwner {
-        callbackGasLimit = _gasLimit;
-        emit CallbackGasLimitUpdated(_gasLimit);
+    function setCallbackGasLimit(uint128 _gasLimit) external {
+        _gasLimit;
+        _delegateAdmin();
     }
 
-    function pause() external onlyOwner {
-        _pause();
+    function pause() external {
+        _delegateAdmin();
     }
 
-    function unpause() external onlyOwner {
-        _unpause();
+    function unpause() external {
+        _delegateAdmin();
     }
 
     // ================================
@@ -1632,7 +1620,364 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     // ================================
 
     // FIX: CLM-12 — only allow emergency withdraw when paused to prevent draining active sponsorship funds
-    function emergencyWithdraw(address token, uint256 amount) external onlyOwner whenPaused {
+    function emergencyWithdraw(address token, uint256 amount) external {
+        token;
+        amount;
+        _delegateAdmin();
+    }
+
+    receive() external payable {}
+}
+
+contract CreatorLotteryManagerAdminModule is OApp, OAppOptionsType3, ReentrancyGuard, Pausable {
+    using OptionsBuilder for bytes;
+    using SafeERC20 for IERC20;
+
+    uint256 public constant MIN_SWAP_USD = 1_000_000;
+    uint256 public constant MAX_SWAP_USD = 1_000_000_000_000;
+    uint256 public constant BASIS_POINTS = 10_000;
+    uint16 public constant MSG_TYPE_WINNER_CALLBACK = 4;
+
+    uint128 internal constant DEFAULT_MSG_VALUE = 0;
+    bytes32 internal constant VRF_REQUEST_CONTEXT =
+        0xd84f4bdfe2e4cf43345263bca820ebe0fd153da9fd7f53871b6103ba604a4430;
+    bytes32 internal constant WINNER_CALLBACK_CONTEXT =
+        0x197005c8271d0fbeff8e5770b1fa02e04e4ba94e019fc8ea71c55fd52eb21205;
+
+    ICreatorRegistryLottery public immutable registry;
+
+    mapping(address => bool) public authorizedSwapContracts;
+    ICreatorVRFConsumer public localVRFConsumer;
+    IChainlinkVRFIntegrator public vrfIntegrator;
+    uint32 public targetEid;
+    bool public useLocalVRF;
+    mapping(address => bool) public trustedVrfIntegrators;
+    Ive4626BoostManager public boostManager;
+    IVaultGaugeVoting public vaultGaugeVoting;
+
+    struct LotteryConfig {
+        uint256 minSwapAmount;
+        uint256 rewardPercentage;
+        bool isActive;
+        uint256 baseWinChance;
+        uint256 maxWinChance;
+        uint256 usdMultiplierBps;
+    }
+
+    LotteryConfig public lotteryConfig;
+    uint256 public oracleMaxStaleness;
+    uint256 public vrfResultGracePeriod;
+    uint256 public oracleMaxDeviationBps;
+    uint256 public oracleDeviationWindow;
+    mapping(address => uint256) public lastAcceptedPriceUSD1e18;
+    mapping(address => uint256) public lastAcceptedPriceTimestamp;
+
+    enum VRFType {
+        LOCAL,
+        CROSS_CHAIN
+    }
+    enum SponsorshipSkipReason {
+        DISABLED,
+        BELOW_MIN_SWAP,
+        FEE_ABOVE_CAP,
+        BUDGET_EXCEEDED,
+        INSUFFICIENT_BALANCE,
+        SEND_FAILED,
+        RATE_LIMITED
+    }
+
+    struct SponsorshipPolicy {
+        bool enabled;
+        uint256 maxFeePerMessage;
+        uint256 budgetPerEpoch;
+        uint256 epochDuration;
+        uint256 epochStart;
+        uint256 spentInEpoch;
+    }
+
+    struct VRFRequest {
+        address user;
+        address creatorCoin;
+        uint256 amountUSD;
+        uint256 effectiveWinChancePPM;
+        VRFType vrfType;
+        uint32 sourceChainEid;
+        uint256 requestTimestamp;
+    }
+
+    mapping(uint256 => VRFRequest) public vrfRequests;
+    mapping(uint256 => uint256) public pendingRandomWord;
+    mapping(uint256 => bool) public hasPendingRandomWord;
+
+    SponsorshipPolicy public vrfSponsorshipPolicy;
+    SponsorshipPolicy public callbackSponsorshipPolicy;
+    uint256 public sponsoredVrfMinSwapAmountUSD;
+
+    uint32 public vrfMaxSponsoredPerBuyerPerEpoch;
+    uint32 public vrfMaxSponsoredPerOriginPerEpoch;
+    uint32 public callbackMaxSponsoredPerBuyerPerEpoch;
+    uint32 public callbackMaxSponsoredPerOriginPerEpoch;
+
+    mapping(address => uint32) public vrfSponsoredCountByBuyer;
+    mapping(address => uint256) public vrfBuyerEpochStart;
+    mapping(bytes32 => uint32) public vrfSponsoredCountByOrigin;
+    mapping(bytes32 => uint256) public vrfOriginEpochStart;
+
+    mapping(address => uint32) public callbackSponsoredCountByBuyer;
+    mapping(address => uint256) public callbackBuyerEpochStart;
+    mapping(bytes32 => uint32) public callbackSponsoredCountByOrigin;
+    mapping(bytes32 => uint256) public callbackOriginEpochStart;
+
+    mapping(uint32 => mapping(bytes32 => bool)) public authorizedRemoteOFTs;
+    uint128 public callbackGasLimit;
+    uint256 public totalRemoteLotteryEntries;
+    uint256 public totalLotteryEntries;
+    uint256 public totalWinners;
+    uint256 public totalRewardsPaid;
+
+    struct CreatorStats {
+        uint256 entries;
+        uint256 winners;
+        uint256 rewardsPaid;
+    }
+    mapping(address => CreatorStats) public creatorStats;
+    uint256 private _payoutLock;
+
+    address private immutable _self;
+
+    event SwapContractAuthorized(address indexed swapContract, bool authorized);
+    event LotteryConfigUpdated(uint256 minSwap, uint256 rewardPercentage, bool isActive);
+    event OracleMaxStalenessUpdated(uint256 maxStaleness);
+    event OracleDeviationGuardUpdated(uint256 maxDeviationBps, uint256 deviationWindow);
+    event RemoteOFTAuthorized(uint32 indexed srcEid, bytes32 sender, bool authorized);
+    event CallbackGasLimitUpdated(uint128 newGasLimit);
+    event VRFConsumerUpdated(address indexed consumer);
+    event TargetEidUpdated(uint32 indexed targetEid);
+    event VRFIntegratorUpdated(address indexed integrator, bool trusted);
+    event SponsorshipPolicyUpdated(
+        bytes32 indexed context, bool enabled, uint256 maxFeePerMessage, uint256 budgetPerEpoch, uint256 epochDuration
+    );
+    event SponsorshipRateLimitsUpdated(
+        uint32 vrfMaxPerBuyerPerEpoch,
+        uint32 vrfMaxPerOriginPerEpoch,
+        uint32 callbackMaxPerBuyerPerEpoch,
+        uint32 callbackMaxPerOriginPerEpoch
+    );
+    event SponsoredVrfMinSwapUpdated(uint256 minSwapAmountUSD);
+
+    error ZeroAddress();
+    error InvalidAmount();
+    error OnlyDelegateCall();
+
+    constructor(address _registry, address owner_)
+        OApp(ICreatorRegistryLottery(_registry).getLayerZeroEndpoint(block.chainid), owner_)
+        Ownable(owner_)
+    {
+        registry = ICreatorRegistryLottery(_registry);
+        _self = address(this);
+    }
+
+    modifier onlyDelegateCall() {
+        if (address(this) == _self) revert OnlyDelegateCall();
+        _;
+    }
+
+    function setAuthorizedSwapContract(address swapContract, bool authorized) external onlyDelegateCall onlyOwner {
+        if (swapContract == address(0)) revert ZeroAddress();
+        authorizedSwapContracts[swapContract] = authorized;
+        emit SwapContractAuthorized(swapContract, authorized);
+    }
+
+    function setLocalVRFConsumer(address _consumer) external onlyDelegateCall onlyOwner {
+        localVRFConsumer = ICreatorVRFConsumer(_consumer);
+        emit VRFConsumerUpdated(_consumer);
+    }
+
+    function setVRFIntegrator(address _integrator) external onlyDelegateCall onlyOwner {
+        address oldIntegrator = address(vrfIntegrator);
+        if (oldIntegrator != address(0)) {
+            trustedVrfIntegrators[oldIntegrator] = false;
+        }
+        vrfIntegrator = IChainlinkVRFIntegrator(_integrator);
+        if (_integrator != address(0)) {
+            trustedVrfIntegrators[_integrator] = true;
+        }
+        emit VRFIntegratorUpdated(_integrator, _integrator != address(0));
+    }
+
+    function setTargetEid(uint32 _eid) external onlyDelegateCall onlyOwner {
+        targetEid = _eid;
+        emit TargetEidUpdated(_eid);
+    }
+
+    function setUseLocalVRF(bool _useLocal) external onlyDelegateCall onlyOwner {
+        useLocalVRF = _useLocal;
+    }
+
+    function setSponsoredVrfMinSwapAmountUSD(uint256 _minSwapAmountUSD) external onlyDelegateCall onlyOwner {
+        if (_minSwapAmountUSD < MIN_SWAP_USD || _minSwapAmountUSD > MAX_SWAP_USD) revert InvalidAmount();
+        sponsoredVrfMinSwapAmountUSD = _minSwapAmountUSD;
+        emit SponsoredVrfMinSwapUpdated(_minSwapAmountUSD);
+    }
+
+    function setVrfSponsorshipPolicy(
+        bool enabled,
+        uint256 maxFeePerMessage,
+        uint256 budgetPerEpoch,
+        uint256 epochDuration
+    ) external onlyDelegateCall onlyOwner {
+        if (epochDuration == 0) revert InvalidAmount();
+        _refreshSponsorshipEpoch(vrfSponsorshipPolicy);
+        vrfSponsorshipPolicy.enabled = enabled;
+        vrfSponsorshipPolicy.maxFeePerMessage = maxFeePerMessage;
+        vrfSponsorshipPolicy.budgetPerEpoch = budgetPerEpoch;
+        vrfSponsorshipPolicy.epochDuration = epochDuration;
+        if (vrfSponsorshipPolicy.epochStart == 0) {
+            vrfSponsorshipPolicy.epochStart = block.timestamp;
+        }
+
+        emit SponsorshipPolicyUpdated(VRF_REQUEST_CONTEXT, enabled, maxFeePerMessage, budgetPerEpoch, epochDuration);
+    }
+
+    function setCallbackSponsorshipPolicy(
+        bool enabled,
+        uint256 maxFeePerMessage,
+        uint256 budgetPerEpoch,
+        uint256 epochDuration
+    ) external onlyDelegateCall onlyOwner {
+        if (epochDuration == 0) revert InvalidAmount();
+        _refreshSponsorshipEpoch(callbackSponsorshipPolicy);
+        callbackSponsorshipPolicy.enabled = enabled;
+        callbackSponsorshipPolicy.maxFeePerMessage = maxFeePerMessage;
+        callbackSponsorshipPolicy.budgetPerEpoch = budgetPerEpoch;
+        callbackSponsorshipPolicy.epochDuration = epochDuration;
+        if (callbackSponsorshipPolicy.epochStart == 0) {
+            callbackSponsorshipPolicy.epochStart = block.timestamp;
+        }
+
+        emit SponsorshipPolicyUpdated(
+            WINNER_CALLBACK_CONTEXT, enabled, maxFeePerMessage, budgetPerEpoch, epochDuration
+        );
+    }
+
+    function setSponsorshipRateLimits(
+        uint32 _vrfMaxPerBuyerPerEpoch,
+        uint32 _vrfMaxPerOriginPerEpoch,
+        uint32 _callbackMaxPerBuyerPerEpoch,
+        uint32 _callbackMaxPerOriginPerEpoch
+    ) external onlyDelegateCall onlyOwner {
+        vrfMaxSponsoredPerBuyerPerEpoch = _vrfMaxPerBuyerPerEpoch;
+        vrfMaxSponsoredPerOriginPerEpoch = _vrfMaxPerOriginPerEpoch;
+        callbackMaxSponsoredPerBuyerPerEpoch = _callbackMaxPerBuyerPerEpoch;
+        callbackMaxSponsoredPerOriginPerEpoch = _callbackMaxPerOriginPerEpoch;
+
+        emit SponsorshipRateLimitsUpdated(
+            _vrfMaxPerBuyerPerEpoch,
+            _vrfMaxPerOriginPerEpoch,
+            _callbackMaxPerBuyerPerEpoch,
+            _callbackMaxPerOriginPerEpoch
+        );
+    }
+
+    function setBoostManager(address _manager) external onlyDelegateCall onlyOwner {
+        boostManager = Ive4626BoostManager(_manager);
+    }
+
+    function setVaultGaugeVoting(address _vaultGaugeVoting) external onlyDelegateCall onlyOwner {
+        vaultGaugeVoting = IVaultGaugeVoting(_vaultGaugeVoting);
+    }
+
+    function setLotteryConfig(
+        uint256 _minSwap,
+        uint256 _rewardPercentage,
+        bool _isActive,
+        uint256 _baseWinChance,
+        uint256 _maxWinChance,
+        uint256 _usdMultiplierBps
+    ) external onlyDelegateCall onlyOwner {
+        if (_minSwap < MIN_SWAP_USD || _minSwap > MAX_SWAP_USD) revert InvalidAmount();
+        if (_rewardPercentage > BASIS_POINTS) revert InvalidAmount();
+        if (_maxWinChance > 200_000) revert InvalidAmount();
+        if (_baseWinChance > _maxWinChance) revert InvalidAmount();
+        if (_usdMultiplierBps < 10_000 || _usdMultiplierBps > 15_000) revert InvalidAmount();
+
+        lotteryConfig.minSwapAmount = _minSwap;
+        lotteryConfig.rewardPercentage = _rewardPercentage;
+        lotteryConfig.isActive = _isActive;
+        lotteryConfig.baseWinChance = _baseWinChance;
+        lotteryConfig.maxWinChance = _maxWinChance;
+        lotteryConfig.usdMultiplierBps = _usdMultiplierBps;
+
+        emit LotteryConfigUpdated(_minSwap, _rewardPercentage, _isActive);
+    }
+
+    function setOracleMaxStaleness(uint256 _maxStaleness) external onlyDelegateCall onlyOwner {
+        oracleMaxStaleness = _maxStaleness;
+        emit OracleMaxStalenessUpdated(_maxStaleness);
+    }
+
+    function setVrfResultGracePeriod(uint256 _gracePeriod) external onlyDelegateCall onlyOwner {
+        if (_gracePeriod > 0 && _gracePeriod < 5 minutes) revert InvalidAmount();
+        vrfResultGracePeriod = _gracePeriod;
+    }
+
+    function setOracleDeviationGuard(uint256 _maxDeviationBps, uint256 _deviationWindow)
+        external
+        onlyDelegateCall
+        onlyOwner
+    {
+        if (_maxDeviationBps > BASIS_POINTS) revert InvalidAmount();
+        oracleMaxDeviationBps = _maxDeviationBps;
+        oracleDeviationWindow = _deviationWindow;
+        emit OracleDeviationGuardUpdated(_maxDeviationBps, _deviationWindow);
+    }
+
+    function setCallbackOptions(uint32 dstEid, uint128 gasLimit, uint128 msgValue) external onlyDelegateCall onlyOwner {
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(gasLimit, msgValue);
+
+        EnforcedOptionParam[] memory params = new EnforcedOptionParam[](1);
+        params[0] = EnforcedOptionParam({eid: dstEid, msgType: MSG_TYPE_WINNER_CALLBACK, options: options});
+        _setEnforcedOptions(params);
+    }
+
+    function setAuthorizedRemoteOFT(uint32 srcEid, bytes32 sender, bool authorized)
+        external
+        onlyDelegateCall
+        onlyOwner
+    {
+        authorizedRemoteOFTs[srcEid][sender] = authorized;
+        emit RemoteOFTAuthorized(srcEid, sender, authorized);
+    }
+
+    function batchSetAuthorizedRemoteOFTs(uint32[] calldata srcEids, bytes32[] calldata senders, bool authorized)
+        external
+        onlyDelegateCall
+        onlyOwner
+    {
+        if (srcEids.length != senders.length) revert InvalidAmount();
+        for (uint256 i; i < srcEids.length;) {
+            authorizedRemoteOFTs[srcEids[i]][senders[i]] = authorized;
+            emit RemoteOFTAuthorized(srcEids[i], senders[i], authorized);
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    function setCallbackGasLimit(uint128 _gasLimit) external onlyDelegateCall onlyOwner {
+        callbackGasLimit = _gasLimit;
+        emit CallbackGasLimitUpdated(_gasLimit);
+    }
+
+    function pause() external onlyDelegateCall onlyOwner {
+        _pause();
+    }
+
+    function unpause() external onlyDelegateCall onlyOwner {
+        _unpause();
+    }
+
+    function emergencyWithdraw(address token, uint256 amount) external onlyDelegateCall onlyOwner whenPaused {
         if (token == address(0)) {
             (bool ok,) = payable(owner()).call{value: amount}("");
             if (!ok) revert InvalidAmount();
@@ -1641,5 +1986,24 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         }
     }
 
-    receive() external payable {}
+    function _refreshSponsorshipEpoch(SponsorshipPolicy storage policy) internal {
+        uint256 start = policy.epochStart;
+        if (start == 0) {
+            policy.epochStart = block.timestamp;
+            return;
+        }
+        if (policy.epochDuration == 0) return;
+        if (block.timestamp >= start + policy.epochDuration) {
+            policy.epochStart = block.timestamp;
+            policy.spentInEpoch = 0;
+        }
+    }
+
+    function _lzReceive(Origin calldata, bytes32, bytes calldata, address, bytes calldata)
+        internal
+        pure
+        override
+    {
+        revert OnlyDelegateCall();
+    }
 }

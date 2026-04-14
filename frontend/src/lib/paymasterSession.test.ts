@@ -78,8 +78,8 @@ describe('ensureWalletAlignedPaymasterSession', () => {
     expect(signInWithPrivyToken).toHaveBeenCalledWith('privy-token')
   })
 
-  it('returns false when neither strategy can establish a session', async () => {
-    const signIn = vi.fn(async () => null)
+  it('returns false when wallet sign-in returns an explicit empty address and no fallback is available', async () => {
+    const signIn = vi.fn(async () => '')
 
     const ok = await ensureWalletAlignedPaymasterSession({
       hasMatchingSiweSession: false,
@@ -105,8 +105,8 @@ describe('ensureWalletAlignedPaymasterSessionDetailed', () => {
     })
 
     expect(result).toEqual({
-      ok: false,
-      reason: 'wallet_signin_did_not_return_address',
+      ok: true,
+      reason: null,
     })
   })
 
@@ -128,14 +128,16 @@ describe('ensureWalletAlignedPaymasterSessionDetailed', () => {
     const result = await ensureWalletAlignedPaymasterSessionDetailed({
       hasMatchingSiweSession: false,
       preferWalletSession: true,
-      signIn: async () => null,
+      signIn: async () => {
+        throw new Error('wallet_signin_failed')
+      },
       signInWithPrivyToken: null,
       getPrivyAccessToken: null,
     })
 
     expect(result).toEqual({
       ok: false,
-      reason: 'wallet_signin_did_not_return_address',
+      reason: 'wallet_signin_failed',
     })
   })
 
@@ -144,14 +146,16 @@ describe('ensureWalletAlignedPaymasterSessionDetailed', () => {
       hasMatchingSiweSession: false,
       preferWalletSession: true,
       allowPrivyBridgeFallback: false,
-      signIn: async () => null,
+      signIn: async () => {
+        throw new Error('wallet_signin_failed')
+      },
       signInWithPrivyToken: async () => '0x1234',
       getPrivyAccessToken: async () => 'privy-token',
     })
 
     expect(result).toEqual({
       ok: false,
-      reason: 'wallet_signin_did_not_return_address',
+      reason: 'wallet_signin_failed',
     })
   })
 })

@@ -355,6 +355,35 @@ describe('sendPreparedOwnerTx', () => {
     )
   })
 
+  it('surfaces a clear error when sponsored submission stalls after signature confirmation', async () => {
+    sendCoinbaseSmartWalletUserOperationMock.mockImplementation(
+      async () =>
+        await new Promise(() => {
+          // intentionally never resolves
+        }),
+    )
+
+    await expect(
+      sendPreparedOwnerTx({
+        txRequest: TX_REQUEST,
+        walletClient: {
+          account: CANONICAL_CSW,
+          sendTransaction: vi.fn(async () => TX_HASH),
+          request: vi.fn(),
+        },
+        chainId: 8453,
+        authHeaders: async () => ({ Authorization: 'Bearer test' }),
+        signerAddress: CANONICAL_CSW,
+        executionMode: 'canonicalSmartWallet',
+        canonicalSmartWalletAddress: CANONICAL_CSW,
+        publicClient: {},
+        ensurePaymasterSession: async () => true,
+      }),
+    ).rejects.toThrow(
+      'Smart wallet approval is taking too long after signature confirmation. Retry once; if this keeps happening, reconnect the same Coinbase wallet session.',
+    )
+  })
+
   it('does not remap paymaster insufficient funds errors into wallet-balance guidance', async () => {
     sendCoinbaseSmartWalletUserOperationMock.mockRejectedValue(
       new Error('Paymaster rejected this request: insufficient funds in paymaster'),

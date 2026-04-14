@@ -23,7 +23,9 @@ export async function ensureWalletAlignedPaymasterSessionDetailed(
   if (params.preferWalletSession && typeof params.signIn === 'function') {
     try {
       const signed = await params.signIn()
-      if (signed) return { ok: true, reason: null }
+      // Some wallet SIWE paths establish session without returning an address payload.
+      // Treat explicit null/undefined as success, but preserve explicit empty-string failures.
+      if (signed || signed == null) return { ok: true, reason: null }
       walletAttemptFailureReason = 'wallet_signin_did_not_return_address'
     } catch {
       walletAttemptFailureReason = 'wallet_signin_failed'

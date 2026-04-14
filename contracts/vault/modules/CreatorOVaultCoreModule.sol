@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.30;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC4626} from "@openzeppelin/contracts/interfaces/IERC4626.sol";
@@ -523,6 +523,8 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         address module = _strategiesModule;
         if (module == address(0)) revert ModulesNotSet();
 
+        // Delegatecall is intentional: strategies module shares the same vault storage layout.
+        // `_strategiesModule` is set by owner-gated module wiring and verified before use.
         (bool ok, bytes memory ret) =
             module.delegatecall(abi.encodeWithSelector(ICreatorOVaultStrategiesModuleInternal.__withdrawFromStrategies.selector, amountNeeded));
         if (!ok) _revertBytes(ret);
@@ -532,6 +534,7 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         address module = _strategiesModule;
         if (module == address(0)) revert ModulesNotSet();
 
+        // Delegatecall is intentional and access-controlled via module-address configuration.
         (bool ok, bytes memory ret) =
             module.delegatecall(abi.encodeWithSelector(ICreatorOVaultStrategiesModuleInternal.__autoAllocateToStrategy.selector));
         if (!ok) _revertBytes(ret);
@@ -702,4 +705,3 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
         }
     }
 }
-
