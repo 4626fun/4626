@@ -183,6 +183,7 @@ export function useAccountSetupController(params: {
   const { ensureEmbeddedWallet } = useEnsurePrivyEmbeddedWallet()
   const ownerInstallSectionRef = useRef<HTMLElement | null>(null)
   const hasInitialDataRef = useRef(Boolean(params.initialData))
+  const ownerApprovalRunIdRef = useRef(0)
 
   const privyAuthed = Boolean(privy?.authenticated)
   const privyWallets = useMemo(() => extractPrivyWalletsFromUser(privy?.user), [privy?.user])
@@ -478,13 +479,12 @@ export function useAccountSetupController(params: {
         await Promise.resolve(setActiveWallet(selectedWallet)).catch(() => null)
       }
       await sleep(120)
-      await loadMe({ showSpinner: false })
     } catch (connectError: any) {
       setError(typeof connectError?.message === 'string' ? connectError.message : 'Failed to connect owner wallet.')
     } finally {
       setBusyProvider(null)
     }
-  }, [connectWallet, loadMe, prefersWalletConnectQr, setActiveWallet])
+  }, [connectWallet, prefersWalletConnectQr, setActiveWallet])
 
   const callLinkEndpoint = useCallback(
     async (provider: string, value?: string | null) => {
@@ -842,6 +842,7 @@ export function useAccountSetupController(params: {
 
   const onEnable4626Signing = useCallback(async () => {
     if (!canonicalCswAddress) return
+    const runId = ++ownerApprovalRunIdRef.current
     setAdvancedBusy(true)
     setError(null)
     setNotice(null)
@@ -908,6 +909,7 @@ export function useAccountSetupController(params: {
       setNotice('4626 signing is enabled on your canonical CSW.')
       await loadMe({ showSpinner: false })
     } catch (ownerError: any) {
+      if (runId !== ownerApprovalRunIdRef.current) return
       const flags = {
         ...(ownerError?.needsEmbeddedWallet === true ? { needsEmbeddedWallet: true } : null),
         ...(ownerError?.needsBaseAppSetup === true ? { needsBaseAppSetup: true } : null),
@@ -918,6 +920,7 @@ export function useAccountSetupController(params: {
       setOwnerDelegationFlags(Object.keys(flags).length > 0 ? flags : null)
       setError(typeof ownerError?.message === 'string' ? ownerError.message : 'Failed to enable 4626 signing.')
     } finally {
+      if (runId !== ownerApprovalRunIdRef.current) return
       setAdvancedBusy(false)
     }
   }, [
@@ -942,6 +945,15 @@ export function useAccountSetupController(params: {
     })
     setConnectedOwnerState(result)
   }, [canonicalCswAddress, ownerSignerAddress, ownerSignerChainId, publicClient])
+
+  const onResetOwnerApproval = useCallback(async () => {
+    ownerApprovalRunIdRef.current += 1
+    setAdvancedBusy(false)
+    setError(null)
+    setNotice(null)
+    setOwnerDelegationFlags(null)
+    await retryOwnerCheck()
+  }, [retryOwnerCheck])
 
   const onAddRabbyCoOwner = useCallback(async (advancedOwnerAddress: string) => {
     const normalized = normalizeAddress(advancedOwnerAddress)
@@ -1145,6 +1157,7 @@ export function useAccountSetupController(params: {
     onLinkZora,
     onUnlinkProvider,
     onRefreshZora,
+    onResetOwnerApproval,
     onSwitchAccount,
     onAddRabbyCoOwner,
     ownerApprovalReady,
