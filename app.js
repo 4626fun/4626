@@ -981,6 +981,8 @@ function multiMapSmooth(progress, stops, values) {
   const statRatio = document.getElementById('stat-ratio');
   const statApy = document.getElementById('stat-apy');
   const equation = document.getElementById('accrue-equation');
+  const ratioDisplay = document.getElementById('accrue-ratio-display');
+  const ratioValue = document.getElementById('ratio-value');
 
   const TOTAL_DAYS = 243;
   const FINAL_RATIO = 1.034;
@@ -1008,6 +1010,7 @@ function multiMapSmooth(progress, stops, values) {
       section.querySelector('.scene-pin').style.opacity = sceneOp;
 
       intro.style.opacity = multiMapSmooth(p, [0.06, 0.16], [0, 1]);
+      if (ratioDisplay) ratioDisplay.style.opacity = multiMapSmooth(p, [0.08, 0.18], [0, 1]);
       if (pair) pair.style.opacity = multiMapSmooth(p, [0.10, 0.20], [0, 1]);
       clock.style.opacity = multiMapSmooth(p, [0.18, 0.26], [0, 1]);
       timeline.style.opacity = multiMapSmooth(p, [0.26, 0.34], [0, 1]);
@@ -1034,6 +1037,7 @@ function multiMapSmooth(progress, stops, values) {
       statRatio.textContent = clampedRatio.toFixed(3);
       statApy.textContent = `${apy.toFixed(1)}%`;
       equation.textContent = `1 ■AKITA = ${clampedRatio.toFixed(3)} AKITA`;
+      if (ratioValue) ratioValue.textContent = clampedRatio.toFixed(3);
 
       const pct = (currentDay / TOTAL_DAYS) * 100;
       timelineFill.style.width = `${pct}%`;

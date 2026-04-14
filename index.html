@@ -38,7 +38,10 @@
   <!-- Fixed Nav -->
   <nav class="nav" id="main-nav">
     <a href="#" class="brand" aria-label="4626.fun home">
-      <img src="./assets/brand/app-icon-7.jpg" alt="4626" class="brand-icon brand-icon-transparent">
+      <svg class="brand-icon-svg" viewBox="0 0 28 28" width="28" height="28" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="28" height="28" rx="6" fill="#0052FF" fill-opacity="0.12"/>
+        <rect x="9" y="9" width="10" height="10" rx="1.5" fill="#0052FF"/>
+      </svg>
       <span class="brand-text">4626<span class="brand-dot"></span>fun</span>
     </a>
     <div class="nav-right">
@@ -92,18 +95,18 @@
           </div>
           <div class="hero-chain" id="hero-chain">
             <span class="hero-chain-text">Only on</span>
-            <img src="./assets/brand/Base_lockup_2color.svg" alt="Base" class="chain-logo chain-logo-base">
+            <img src="./assets/brand/Base_lockup_white.svg" alt="Base" class="chain-logo chain-logo-base">
             <span class="hero-chain-divider"></span>
             <span class="hero-chain-text">Powered by</span>
           </div>
           <div class="hero-partners" id="hero-partners">
             <img src="./assets/brand/Zorb-3.svg" alt="Zora" class="hero-partner-logo">
-            <img src="./assets/brand/uniswap-cc.svg" alt="Uniswap" class="hero-partner-logo">
-            <img src="./assets/brand/layerzero.svg" alt="LayerZero" class="hero-partner-logo">
-            <img src="./assets/brand/chainlink-white.svg" alt="Chainlink" class="hero-partner-logo">
+            <img src="./assets/brand/uniswap-official-pink.svg" alt="Uniswap" class="hero-partner-logo">
+            <img src="./assets/brand/layerzero-official.svg" alt="LayerZero" class="hero-partner-logo">
+            <img src="./assets/brand/chainlink-white-official.svg" alt="Chainlink" class="hero-partner-logo">
             <img src="./assets/brand/solana-mark.svg" alt="Solana" class="hero-partner-logo">
             <img src="./assets/brand/meteora-v2.svg" alt="Meteora" class="hero-partner-logo">
-            <img src="./assets/brand/AJNA-Icon-2.svg" alt="Ajna" class="hero-partner-logo">
+            <img src="./assets/brand/ajna-official.svg" alt="Ajna" class="hero-partner-logo">
           </div>
           <div class="hero-cta" id="hero-cta">
             <a href="#closing" class="cta-button">Launch App</a>
@@ -246,7 +249,7 @@
                 <!-- Ajna -->
                 <div class="strategy-row" id="strat-0">
                   <div class="strategy-card-inner">
-                    <img src="./assets/brand/AJNA-Icon-2.svg" alt="Ajna" class="strat-icon-img">
+                    <img src="./assets/brand/ajna-official.svg" alt="Ajna" class="strat-icon-img">
                     <div class="strat-info">
                       <div class="strat-header">
                         <span class="strat-name">Ajna</span>
@@ -273,7 +276,7 @@
                   <div class="downstream" id="downstream-1">
                     <div class="downstream-line"></div>
                     <div class="downstream-box">
-                      <img src="./assets/brand/uniswap-cc.svg" alt="Uniswap" class="downstream-logo">
+                      <img src="./assets/brand/uniswap-official-pink.svg" alt="Uniswap" class="downstream-logo">
                       Uniswap V3 Creator/USDC
                     </div>
                   </div>
@@ -328,6 +331,11 @@
           <div class="accrue-intro" id="accrue-intro">
             <div class="section-label">Accrue</div>
             <p class="accrue-desc">Fees accrue to the vault over time. Your share of the vault grows.</p>
+          </div>
+          <!-- Central ratio display -->
+          <div class="accrue-ratio-display" id="accrue-ratio-display">
+            <p class="accrue-ratio-big">1 ■AKITA = <span class="ratio-accent" id="ratio-value">1.000</span> AKITA</p>
+            <p class="accrue-ratio-label">Exchange rate</p>
           </div>
           <!-- Token pair display -->
           <div class="accrue-pair" id="accrue-pair">
@@ -491,17 +499,20 @@
         <div class="close-container">
           <!-- Ecosystem partners -->
           <div class="close-partners" id="close-partners">
-            <img src="./assets/brand/Base_lockup_2color.svg" alt="Base" class="partner-logo">
+            <img src="./assets/brand/Base_lockup_white.svg" alt="Base" class="partner-logo">
             <img src="./assets/brand/Zorb-3.svg" alt="Zora" class="partner-logo">
-            <img src="./assets/brand/uniswap-cc.svg" alt="Uniswap" class="partner-logo">
-            <img src="./assets/brand/layerzero.svg" alt="LayerZero" class="partner-logo">
-            <img src="./assets/brand/chainlink-white.svg" alt="Chainlink" class="partner-logo">
+            <img src="./assets/brand/uniswap-official-pink.svg" alt="Uniswap" class="partner-logo">
+            <img src="./assets/brand/layerzero-official.svg" alt="LayerZero" class="partner-logo">
+            <img src="./assets/brand/chainlink-white-official.svg" alt="Chainlink" class="partner-logo">
             <img src="./assets/brand/solana-mark.svg" alt="Solana" class="partner-logo">
             <img src="./assets/brand/meteora-v2.svg" alt="Meteora" class="partner-logo">
-            <img src="./assets/brand/AJNA-Icon-2.svg" alt="Ajna" class="partner-logo">
+            <img src="./assets/brand/ajna-official.svg" alt="Ajna" class="partner-logo">
           </div>
           <div class="close-brand" id="close-brand">
-            <img src="./assets/brand/logo-6.jpg" alt="4626" class="close-logo close-logo-transparent">
+            <svg class="close-logo-svg" viewBox="0 0 64 64" width="64" height="64" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <rect width="64" height="64" rx="14" fill="#0052FF" fill-opacity="0.12"/>
+              <rect x="20" y="20" width="24" height="24" rx="3" fill="#0052FF"/>
+            </svg>
           </div>
           <div class="close-line" id="close-line"></div>
           <div class="close-cta" id="close-cta">
@@ -517,7 +528,10 @@
   <!-- Footer -->
   <footer class="footer">
     <div class="footer-brand">
-      <img src="./assets/brand/app-icon-7.jpg" alt="4626" class="footer-icon brand-icon-transparent">
+      <svg class="footer-icon-svg" viewBox="0 0 24 24" width="24" height="24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect width="24" height="24" rx="5" fill="#0052FF" fill-opacity="0.12"/>
+        <rect x="7" y="7" width="10" height="10" rx="1.5" fill="#0052FF"/>
+      </svg>
       <span>&copy; 2026 4626.fun</span>
     </div>
     <div class="footer-links">
