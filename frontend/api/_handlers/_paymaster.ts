@@ -1319,10 +1319,12 @@ export async function validateSponsoredSmartWalletCalls(params: {
     deploySessionOwner,
     debug: params.debug,
   })
-  await assertCreatorAllowlisted({
-    sessionAddress: params.sessionAddress,
-    creatorToken: validated.expectedCreatorToken,
-  })
+  if (validated.mode !== 'deploy_session_setup') {
+    await assertCreatorAllowlisted({
+      sessionAddress: params.sessionAddress,
+      creatorToken: validated.expectedCreatorToken,
+    })
+  }
   return validated
 }
 

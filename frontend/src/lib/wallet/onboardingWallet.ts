@@ -108,8 +108,24 @@ export function normalizeOwnerApprovalError(error: unknown): Error {
       )
     }
     if (lower.includes('paymaster rejected this request')) {
+      const reason = message
+        .replace(/^.*paymaster rejected this request:\s*/i, '')
+        .trim()
+      const normalizedReason = reason ? reason.replace(/\s+/g, ' ').trim() : ''
       return new Error(
-        'Gas sponsorship was rejected for this approval. Retry in Base app after reconnecting the same wallet session.',
+        normalizedReason
+          ? `Gas sponsorship was rejected for this approval (${normalizedReason}). Retry in Base app after reconnecting the same wallet session.`
+          : 'Gas sponsorship was rejected for this approval. Retry in Base app after reconnecting the same wallet session.',
+      )
+    }
+    if (lower.includes('paymaster') && lower.includes('insufficient funds')) {
+      return new Error(
+        'Gas sponsorship failed due to paymaster funding limits. This is a sponsor-side budget/policy issue, not your wallet ETH balance.',
+      )
+    }
+    if (lower.includes('paymaster') && lower.includes('insufficient sponsorship funds')) {
+      return new Error(
+        'Gas sponsorship failed due to paymaster funding limits. This is a sponsor-side budget/policy issue, not your wallet ETH balance.',
       )
     }
     if (
@@ -339,6 +355,7 @@ export async function sendPreparedOwnerTx(params: {
             ? async (args: { method: string; params?: unknown[] }) => await walletClient.request!(args as any)
             : null
 
+        let sendCallsFallbackMode: 'unsupported' | 'insufficient' | null = null
         if (walletRequest) {
           try {
             txHash = await submitOwnerTxViaWalletSendCalls({
@@ -350,13 +367,16 @@ export async function sendPreparedOwnerTx(params: {
             })
           } catch (sendCallsError) {
             if (isUserRejectedWalletAction(sendCallsError)) throw sendCallsError
-            if (!isSendCallsUnsupportedError(sendCallsError)) {
+            if (isSendCallsUnsupportedError(sendCallsError)) {
+              sendCallsFallbackMode = 'unsupported'
+            } else {
               const message = sendCallsError instanceof Error ? sendCallsError.message : String(sendCallsError ?? '')
               const lower = message.toLowerCase()
               const shouldRetrySponsored =
                 (lower.includes('error generating transaction') && lower.includes('enough funds')) ||
                 lower.includes('insufficient funds')
               if (!shouldRetrySponsored) throw sendCallsError
+              sendCallsFallbackMode = 'insufficient'
             }
           }
         }
@@ -364,7 +384,8 @@ export async function sendPreparedOwnerTx(params: {
         if (!txHash) {
           try {
             txHash = await runSponsoredCanonicalUserOp()
-          } catch {
+          } catch (sponsoredError) {
+            if (sendCallsFallbackMode === 'insufficient') throw sponsoredError
             if (typeof walletClient.sendTransaction !== 'function') {
               throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
             }

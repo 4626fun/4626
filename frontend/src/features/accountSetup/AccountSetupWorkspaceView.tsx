@@ -15,6 +15,36 @@ function shortAddr(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }
 
+function extractSponsorshipDiagnostic(errorMessage: string | null | undefined): string | null {
+  const message = typeof errorMessage === 'string' ? errorMessage.trim() : ''
+  if (!message) return null
+  const lower = message.toLowerCase()
+  if (!lower.includes('sponsor') && !lower.includes('paymaster') && !lower.includes('gas sponsorship')) {
+    return null
+  }
+
+  const explicitReasonMatch = message.match(/Gas sponsorship was rejected for this approval \(([^)]+)\)/i)
+  if (explicitReasonMatch?.[1]) {
+    return explicitReasonMatch[1].trim()
+  }
+
+  const deniedReasonMatch = message.match(/request denied - ([^.]+)/i)
+  if (deniedReasonMatch?.[1]) {
+    return deniedReasonMatch[1].trim()
+  }
+
+  if (lower.includes('not authenticated')) return 'not authenticated'
+  if (lower.includes('not_owner')) return 'not_owner'
+  if (lower.includes('vault allowlist required')) return 'vault allowlist required'
+  if (lower.includes('allowlist unavailable')) return 'allowlist unavailable'
+  if (lower.includes('rate limited')) return 'rate limited'
+  if (lower.includes('unsupported chainid')) return 'unsupported chainId'
+  if (lower.includes('unsupported entrypoint')) return 'unsupported entryPoint'
+  if (lower.includes('insufficient funds')) return 'insufficient funds in paymaster/sponsor'
+
+  return 'unknown sponsorship rejection'
+}
+
 type AccountSetupWorkspaceController = ReturnType<typeof useAccountSetupController>
 
 export function AccountSetupWorkspaceView(props: {
@@ -85,6 +115,7 @@ export function AccountSetupWorkspaceView(props: {
   const zoraStepComplete = zoraLinked
   const walletStepComplete = Boolean(canonicalCswAddress)
   const signingStepComplete = /4626 signing is enabled|already enabled/i.test(notice ?? '')
+  const sponsorshipDiagnostic = extractSponsorshipDiagnostic(error)
 
   if (context === 'waitlist') {
     const stepOneComplete = zoraStepComplete && walletStepComplete
@@ -121,7 +152,12 @@ export function AccountSetupWorkspaceView(props: {
         {/* Critical errors stay inline; notices are toasted */}
         {error ? (
           <div role="alert" aria-live="assertive" className="rounded-xl border border-rose-500/20 bg-rose-500/[0.08] px-4 py-3 text-sm text-rose-300">
-            {error}
+            <div>{error}</div>
+            {sponsorshipDiagnostic ? (
+              <div className="mt-2 rounded-lg border border-rose-400/20 bg-black/20 px-3 py-2 text-xs text-rose-200/90">
+                Sponsorship diagnostics: <span className="font-mono">{sponsorshipDiagnostic}</span>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -390,7 +426,12 @@ export function AccountSetupWorkspaceView(props: {
           aria-live="assertive"
           className="rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200"
         >
-          {error}
+          <div>{error}</div>
+          {sponsorshipDiagnostic ? (
+            <div className="mt-2 rounded-lg border border-rose-400/20 bg-black/20 px-3 py-2 text-xs text-rose-100/90">
+              Sponsorship diagnostics: <span className="font-mono">{sponsorshipDiagnostic}</span>
+            </div>
+          ) : null}
         </div>
       ) : null}
       {notice ? (

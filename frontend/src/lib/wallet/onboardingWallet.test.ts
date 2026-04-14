@@ -351,6 +351,32 @@ describe('sendPreparedOwnerTx', () => {
     )
   })
 
+  it('does not remap paymaster insufficient funds errors into wallet-balance guidance', async () => {
+    sendCoinbaseSmartWalletUserOperationMock.mockRejectedValue(
+      new Error('Paymaster rejected this request: insufficient funds in paymaster'),
+    )
+
+    await expect(
+      sendPreparedOwnerTx({
+        txRequest: TX_REQUEST,
+        walletClient: {
+          account: OWNER_EOA,
+          sendTransaction: vi.fn(async () => TX_HASH),
+          request: vi.fn(),
+        },
+        chainId: 8453,
+        authHeaders: async () => ({ Authorization: 'Bearer test' }),
+        signerAddress: OWNER_EOA,
+        executionMode: 'canonicalSmartWallet',
+        canonicalSmartWalletAddress: CANONICAL_CSW,
+        publicClient: {},
+        ensurePaymasterSession: async () => true,
+      }),
+    ).rejects.toThrow(
+      'Gas sponsorship was rejected for this approval (insufficient funds in paymaster). Retry in Base app after reconnecting the same wallet session.',
+    )
+  })
+
   it('rejects canonical execution when the prepared target is not the canonical CSW', async () => {
     await expect(
       sendPreparedOwnerTx({
