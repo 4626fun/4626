@@ -79,13 +79,54 @@ describe('sendPreparedOwnerTx', () => {
   it('uses direct sendTransaction when canonical mode is self-authenticated by CSW session', async () => {
     const sendTransaction = vi.fn(async () => TX_HASH)
     const ensurePaymasterSession = vi.fn(async () => true)
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce('0xcall-bundle-id')
+      .mockResolvedValueOnce({
+        status: 200,
+        receipts: [{ transactionHash: TX_HASH }],
+      })
 
     const result = await sendPreparedOwnerTx({
       txRequest: TX_REQUEST,
       walletClient: {
         account: CANONICAL_CSW,
         sendTransaction,
-        request: vi.fn(),
+        request,
+      },
+      chainId: 8453,
+      authHeaders: async () => ({ Authorization: 'Bearer test' }),
+      signerAddress: CANONICAL_CSW,
+      executionMode: 'canonicalSmartWallet',
+      canonicalSmartWalletAddress: CANONICAL_CSW,
+      publicClient: {},
+      ensurePaymasterSession,
+    })
+
+    expect(ensurePaymasterSession).not.toHaveBeenCalled()
+    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'wallet_sendCalls',
+      }),
+    )
+    expect(sendTransaction).not.toHaveBeenCalled()
+    expect(result.txHash).toBe(TX_HASH)
+  })
+
+  it('falls back to sendTransaction when wallet_sendCalls is unsupported for self-authenticated canonical sessions', async () => {
+    const sendTransaction = vi.fn(async () => TX_HASH)
+    const ensurePaymasterSession = vi.fn(async () => true)
+    const request = vi.fn(async () => {
+      throw new Error('Method not found')
+    })
+
+    const result = await sendPreparedOwnerTx({
+      txRequest: TX_REQUEST,
+      walletClient: {
+        account: CANONICAL_CSW,
+        sendTransaction,
+        request,
       },
       chainId: 8453,
       authHeaders: async () => ({ Authorization: 'Bearer test' }),
