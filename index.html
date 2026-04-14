@@ -21,6 +21,12 @@
 </head>
 <body>
 
+  <!-- Vignette overlay -->
+  <div class="vignette"></div>
+
+  <!-- Scan line effect -->
+  <div class="scan-line" id="scan-line"></div>
+
   <!-- Three.js Canvas (persistent particle field + morph system) -->
   <canvas id="three-canvas"></canvas>
 
@@ -497,6 +503,16 @@
       <a href="#" target="_blank" rel="noopener noreferrer">Discord</a>
     </div>
   </footer>
+
+  <!-- Audio toggle -->
+  <button class="audio-toggle muted" id="audio-toggle" aria-label="Toggle ambient audio">
+    <div class="audio-bars">
+      <div class="audio-bar"></div>
+      <div class="audio-bar"></div>
+      <div class="audio-bar"></div>
+      <div class="audio-bar"></div>
+    </div>
+  </button>
 
   <script type="module" src="./app.js"></script>
 </body>

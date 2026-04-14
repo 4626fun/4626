@@ -1,6 +1,8 @@
-/* app.js — 4626.fun Cinematic Scroll Experience v4
+/* app.js — 4626.fun Cinematic Scroll Experience v5
+   Audio + Smoothness + Token Alignment + Polish
    WebGL shader-driven particle morph + cinematic hero entrance
-   Enhanced Three.js particles + GSAP ScrollTrigger choreography */
+   Enhanced Three.js particles + GSAP ScrollTrigger choreography
+   Ambient spatial audio via Web Audio API */
 
 import * as THREE from 'three';
 
@@ -8,6 +10,206 @@ import * as THREE from 'three';
 // 0. REGISTER GSAP
 // ────────────────────────────────────────────
 gsap.registerPlugin(ScrollTrigger);
+
+// ────────────────────────────────────────────
+// 0.5 AMBIENT SPATIAL AUDIO SYSTEM
+// ────────────────────────────────────────────
+const AudioEngine = (function initAudio() {
+  let ctx = null;
+  let masterGain = null;
+  let droneGain = null;
+  let droneOsc1 = null;
+  let droneOsc2 = null;
+  let droneLfo = null;
+  let muted = true;
+  let initialized = false;
+
+  function init() {
+    if (initialized) return;
+    try {
+      ctx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = ctx.createGain();
+      masterGain.gain.value = 0;
+      masterGain.connect(ctx.destination);
+
+      // ── Drone: deep low hum underlying the experience ──
+      droneGain = ctx.createGain();
+      droneGain.gain.value = 0;
+      droneGain.connect(masterGain);
+
+      // Drone filter for warmth
+      const droneFilter = ctx.createBiquadFilter();
+      droneFilter.type = 'lowpass';
+      droneFilter.frequency.value = 200;
+      droneFilter.Q.value = 2;
+      droneFilter.connect(droneGain);
+
+      // Two detuned oscillators for thickness
+      droneOsc1 = ctx.createOscillator();
+      droneOsc1.type = 'sine';
+      droneOsc1.frequency.value = 55; // A1
+      droneOsc1.connect(droneFilter);
+      droneOsc1.start();
+
+      droneOsc2 = ctx.createOscillator();
+      droneOsc2.type = 'sine';
+      droneOsc2.frequency.value = 55.15; // slightly detuned for beating
+      droneOsc2.connect(droneFilter);
+      droneOsc2.start();
+
+      // Sub-bass layer
+      const subOsc = ctx.createOscillator();
+      subOsc.type = 'sine';
+      subOsc.frequency.value = 27.5; // A0
+      const subGain = ctx.createGain();
+      subGain.gain.value = 0.3;
+      subOsc.connect(subGain);
+      subGain.connect(droneFilter);
+      subOsc.start();
+
+      // LFO for slow volume swell
+      droneLfo = ctx.createOscillator();
+      droneLfo.type = 'sine';
+      droneLfo.frequency.value = 0.08; // very slow
+      const lfoGain = ctx.createGain();
+      lfoGain.gain.value = 0.04;
+      droneLfo.connect(lfoGain);
+      lfoGain.connect(droneGain.gain);
+      droneLfo.start();
+
+      initialized = true;
+    } catch (e) {
+      console.warn('Audio init failed:', e);
+    }
+  }
+
+  function setMuted(val) {
+    muted = val;
+    if (!initialized) return;
+    const now = ctx.currentTime;
+    masterGain.gain.cancelScheduledValues(now);
+    masterGain.gain.setTargetAtTime(val ? 0 : 1, now, 0.3);
+  }
+
+  // Set drone intensity based on scroll position
+  function setDroneLevel(level) {
+    if (!initialized || muted) return;
+    const now = ctx.currentTime;
+    const vol = Math.max(0, Math.min(0.12, level));
+    droneGain.gain.setTargetAtTime(vol, now, 0.5);
+  }
+
+  // Whoosh sound — breathy noise sweep for morph transitions
+  function playWhoosh(intensity = 0.5) {
+    if (!initialized || muted) return;
+    const now = ctx.currentTime;
+    const dur = 0.6 + intensity * 0.4;
+
+    // White noise buffer
+    const bufferSize = ctx.sampleRate * dur;
+    const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) {
+      data[i] = (Math.random() * 2 - 1) * (1 - i / bufferSize);
+    }
+
+    const source = ctx.createBufferSource();
+    source.buffer = buffer;
+
+    // Bandpass filter sweeps up
+    const filter = ctx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.Q.value = 3;
+    filter.frequency.setValueAtTime(200, now);
+    filter.frequency.exponentialRampToValueAtTime(2000, now + dur * 0.4);
+    filter.frequency.exponentialRampToValueAtTime(400, now + dur);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0, now);
+    gain.gain.linearRampToValueAtTime(0.08 * intensity, now + dur * 0.15);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + dur);
+
+    source.connect(filter);
+    filter.connect(gain);
+    gain.connect(masterGain);
+    source.start(now);
+    source.stop(now + dur);
+  }
+
+  // Chime — gentle crystalline tone for milestone unlocks
+  function playChime(pitch = 1) {
+    if (!initialized || muted) return;
+    const now = ctx.currentTime;
+    const baseFreq = 880 * pitch; // A5
+
+    // Two harmonics for shimmer
+    [1, 1.5, 2].forEach((harmonic, i) => {
+      const osc = ctx.createOscillator();
+      osc.type = 'sine';
+      osc.frequency.value = baseFreq * harmonic;
+
+      const gain = ctx.createGain();
+      const vol = 0.05 / (i + 1);
+      gain.gain.setValueAtTime(vol, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 1.5);
+
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start(now + i * 0.05);
+      osc.stop(now + 1.8);
+    });
+  }
+
+  // Soft impact — subtle low thud for deposit moments
+  function playSoftImpact() {
+    if (!initialized || muted) return;
+    const now = ctx.currentTime;
+
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(120, now);
+    osc.frequency.exponentialRampToValueAtTime(40, now + 0.3);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.1, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.4);
+
+    osc.connect(gain);
+    gain.connect(masterGain);
+    osc.start(now);
+    osc.stop(now + 0.5);
+  }
+
+  // Resume AudioContext (needed after user gesture)
+  function resume() {
+    if (ctx && ctx.state === 'suspended') {
+      ctx.resume();
+    }
+  }
+
+  return {
+    init,
+    setMuted,
+    setDroneLevel,
+    playWhoosh,
+    playChime,
+    playSoftImpact,
+    resume,
+    get muted() { return muted; },
+  };
+})();
+
+// Audio toggle button
+const audioToggle = document.getElementById('audio-toggle');
+if (audioToggle) {
+  audioToggle.addEventListener('click', () => {
+    AudioEngine.init();
+    AudioEngine.resume();
+    const wasMuted = AudioEngine.muted;
+    AudioEngine.setMuted(!wasMuted);
+    audioToggle.classList.toggle('muted', !wasMuted);
+  });
+}
 
 // ────────────────────────────────────────────
 // 1. THREE.JS PARTICLE FIELD (3-layer ambient)
@@ -279,8 +481,6 @@ const MorphSystem = (function initMorph() {
   const uScale = gl.getUniformLocation(program, 'uScale');
 
   // ── Generate particle positions ──
-  // Source shape: circle (AKITA coin)
-  // Target shape: rounded square (■AKITA vault share)
   const startPositions = new Float32Array(PARTICLE_COUNT * 2);
   const endPositions = new Float32Array(PARTICLE_COUNT * 2);
   const randoms = new Float32Array(PARTICLE_COUNT);
@@ -288,23 +488,18 @@ const MorphSystem = (function initMorph() {
 
   const RADIUS = 0.55;
   const SQUARE_SIZE = 0.5;
-  const SQUARE_R = 0.08; // corner radius
+  const SQUARE_R = 0.08;
 
   for (let i = 0; i < PARTICLE_COUNT; i++) {
-    // Circle: random point within disk
     const angle = Math.random() * Math.PI * 2;
     const r = Math.sqrt(Math.random()) * RADIUS;
     startPositions[i * 2]     = Math.cos(angle) * r;
     startPositions[i * 2 + 1] = Math.sin(angle) * r;
 
-    // Rounded square: sample random points inside
     let sx, sy;
     do {
       sx = (Math.random() - 0.5) * 2 * SQUARE_SIZE;
       sy = (Math.random() - 0.5) * 2 * SQUARE_SIZE;
-      // Check if inside rounded rect
-      const dx = Math.max(0, Math.abs(sx) - (SQUARE_SIZE - SQUARE_R));
-      const dy = Math.max(0, Math.abs(sy) - (SQUARE_SIZE - SQUARE_R));
     } while (Math.sqrt(
       Math.pow(Math.max(0, Math.abs(sx) - (SQUARE_SIZE - SQUARE_R)), 2) +
       Math.pow(Math.max(0, Math.abs(sy) - (SQUARE_SIZE - SQUARE_R)), 2)
@@ -314,12 +509,10 @@ const MorphSystem = (function initMorph() {
     endPositions[i * 2 + 1] = sy;
 
     randoms[i] = Math.random();
-    // Delay based on distance from center — center particles move first
     const dist = Math.sqrt(startPositions[i*2]**2 + startPositions[i*2+1]**2);
     delays[i] = dist / RADIUS * 0.5 + Math.random() * 0.2;
   }
 
-  // ── Upload buffers ──
   function createBuffer(data, attrib, size) {
     const buf = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buf);
@@ -346,7 +539,6 @@ const MorphSystem = (function initMorph() {
     gl.drawArrays(gl.POINTS, 0, PARTICLE_COUNT);
   }
 
-  // Animation loop
   function tick() {
     requestAnimationFrame(tick);
     render();
@@ -390,6 +582,20 @@ ScrollTrigger.create({
 });
 
 // ────────────────────────────────────────────
+// 5.5 SCAN LINE ACTIVATION
+// ────────────────────────────────────────────
+const scanLine = document.getElementById('scan-line');
+ScrollTrigger.create({
+  trigger: '#ch-token',
+  start: 'top top',
+  end: 'bottom top',
+  onEnter: () => scanLine && scanLine.classList.add('active'),
+  onLeave: () => scanLine && scanLine.classList.remove('active'),
+  onEnterBack: () => scanLine && scanLine.classList.add('active'),
+  onLeaveBack: () => scanLine && scanLine.classList.remove('active'),
+});
+
+// ────────────────────────────────────────────
 // HELPER: map scroll progress to value
 // ────────────────────────────────────────────
 function lerp(a, b, t) { return a + (b - a) * Math.max(0, Math.min(1, t)); }
@@ -417,6 +623,20 @@ function multiMap(progress, stops, values) {
   }
   return values[values.length - 1];
 }
+// Eased multiMap — applies cubic ease between each pair of stops for smoother motion
+function multiMapSmooth(progress, stops, values) {
+  if (progress <= stops[0]) return values[0];
+  if (progress >= stops[stops.length - 1]) return values[values.length - 1];
+  for (let i = 0; i < stops.length - 1; i++) {
+    if (progress >= stops[i] && progress <= stops[i + 1]) {
+      let t = (progress - stops[i]) / (stops[i + 1] - stops[i]);
+      // Apply smoothstep easing
+      t = t * t * (3 - 2 * t);
+      return values[i] + (values[i + 1] - values[i]) * t;
+    }
+  }
+  return values[values.length - 1];
+}
 
 // ────────────────────────────────────────────
 // 6. CHAPTER 1: HERO — CINEMATIC ENTRANCE (320vh)
@@ -437,17 +657,14 @@ function multiMap(progress, stops, values) {
   // ── Cinematic entrance timeline ──
   const entrance = gsap.timeline({ defaults: { ease: 'power3.out' } });
 
-  // 1. Blue streak grows from bottom
   entrance.fromTo(streak, { scaleY: 0, opacity: 0 }, {
     scaleY: 1, opacity: 1, duration: 1.4
   }, 0);
 
-  // 2. Section label fades in
   entrance.to(heroLabel, {
     opacity: 1, y: 0, duration: 0.8
   }, 0.4);
 
-  // 3. Character-by-character headline reveal with 3D rotation
   chars.forEach((char, i) => {
     const wordIndex = parseInt(char.closest('.hero-word').dataset.word);
     const wordDelay = wordIndex * 0.22;
@@ -460,28 +677,23 @@ function multiMap(progress, stops, values) {
     }, 0.6 + wordDelay + i * 0.028);
   });
 
-  // 4. Headline glow pulses in
   entrance.to(headlineGlow, {
     opacity: 1, duration: 1.8, ease: 'power2.out'
   }, 1.0);
 
-  // 5. Support lines stagger in
   supportLines.forEach((line, i) => {
     entrance.to(line, {
       opacity: 1, y: 0, duration: 0.7
     }, 1.6 + i * 0.15);
   });
 
-  // 6. Chain logo + CTA
   entrance.to(heroChain, { opacity: 1, y: 0, duration: 0.7 }, 2.1);
   entrance.to(heroCta, { opacity: 1, y: 0, duration: 0.7 }, 2.3);
 
-  // 7. Floating tokens fade in
   if (heroFloats) {
     entrance.to(heroFloats, { opacity: 1, duration: 2, ease: 'power2.out' }, 1.5);
   }
 
-  // 8. Scroll cue appears last
   if (scrollCue) {
     entrance.to(scrollCue, { opacity: 1, duration: 1.2 }, 3.0);
   }
@@ -510,7 +722,7 @@ function multiMap(progress, stops, values) {
     delay: 2,
   });
 
-  // ── Scroll-driven exit ──
+  // ── Scroll-driven exit + drone audio ──
   ScrollTrigger.create({
     trigger: section,
     start: 'top top',
@@ -518,17 +730,16 @@ function multiMap(progress, stops, values) {
     onUpdate: (self) => {
       const p = self.progress;
 
-      // Fade out content
+      // Audio: drone swell during hero
+      AudioEngine.setDroneLevel(multiMap(p, [0, 0.15, 0.40, 0.55], [0.04, 0.10, 0.10, 0.03]));
+
       const contentOp = multiMap(p, [0.40, 0.55], [1, 0]);
       heroContent.style.opacity = contentOp;
 
-      // Floating tokens fade
       if (heroFloats) heroFloats.style.opacity = contentOp * 0.7;
 
-      // Scroll cue disappears early
       if (scrollCue) scrollCue.style.opacity = multiMap(p, [0.05, 0.12], [1, 0]);
 
-      // Streak shrinks and fades
       const streakScaleY = multiMap(p, [0.50, 0.72], [1, 0]);
       const streakOp = multiMap(p, [0.65, 0.75], [1, 0]);
       streak.style.transform = `scaleY(${streakScaleY})`;
@@ -539,6 +750,7 @@ function multiMap(progress, stops, values) {
 
 // ────────────────────────────────────────────
 // 7. CHAPTER 2: TOKEN JOURNEY (1800vh)
+//    v5: Smooth continuous motion, aligned tokens, audio cues
 // ────────────────────────────────────────────
 (function chapterTokenJourney() {
   const section = document.getElementById('ch-token');
@@ -582,6 +794,10 @@ function multiMap(progress, stops, values) {
   const dualCopy = document.getElementById('dual-copy');
   const dualEntry = document.getElementById('dual-entry');
 
+  // Audio state tracking
+  let whooshPlayed = false;
+  let depositSoundPlayed = false;
+
   ScrollTrigger.create({
     trigger: section,
     start: 'top top',
@@ -589,29 +805,61 @@ function multiMap(progress, stops, values) {
     onUpdate: (self) => {
       const p = self.progress;
 
-      // ── Intro line ──
-      const introLineScaleY = mapRange(p, 0.003, 0.015, 0, 1);
-      const introLineOp = multiMap(p, [0.003, 0.007, 0.51, 0.57], [0, 1, 1, 0]);
+      // Audio: drone continues through token journey
+      AudioEngine.setDroneLevel(multiMap(p, [0, 0.04, 0.50, 0.60, 0.95, 1.0], [0.03, 0.06, 0.06, 0.08, 0.08, 0.02]));
+
+      // Audio: whoosh during morph
+      if (p >= 0.065 && p <= 0.075 && !whooshPlayed) {
+        AudioEngine.playWhoosh(0.7);
+        whooshPlayed = true;
+      }
+      if (p < 0.06 || p > 0.13) whooshPlayed = false;
+
+      // Audio: soft impact when deposit info appears
+      if (p >= 0.65 && p <= 0.66 && !depositSoundPlayed) {
+        AudioEngine.playSoftImpact();
+        depositSoundPlayed = true;
+      }
+      if (p < 0.64 || p > 0.70) depositSoundPlayed = false;
+
+      // ── Intro line — smooth fade/scale ──
+      const introLineScaleY = multiMapSmooth(p, [0.003, 0.015], [0, 1]);
+      const introLineOp = multiMapSmooth(p, [0.003, 0.007, 0.51, 0.57], [0, 1, 1, 0]);
       tokenLine.style.transform = `translateX(-50%) scaleY(${introLineScaleY})`;
       tokenLine.style.opacity = introLineOp;
 
-      const lineGlow = multiMap(p, [0.024, 0.035, 0.047, 0.124, 0.176, 0.34, 0.40, 0.51, 0.57], [0.08, 1, 0.55, 0.55, 0.08, 0.08, 0.30, 0.30, 0]);
+      const lineGlow = multiMapSmooth(p, [0.024, 0.035, 0.047, 0.124, 0.176, 0.34, 0.40, 0.51, 0.57], [0.08, 1, 0.55, 0.55, 0.08, 0.08, 0.30, 0.30, 0]);
       tokenLineGlowEl.style.opacity = lineGlow;
-      const lineW = multiMap(p, [0.003, 0.015, 0.024, 0.035, 0.047, 0.124, 0.176], [0, 1, 1, 3.5, 2, 2, 1]);
+      const lineW = multiMapSmooth(p, [0.003, 0.015, 0.024, 0.035, 0.047, 0.124, 0.176], [0, 1, 1, 3.5, 2, 2, 1]);
       tokenLineCoreEl.style.width = `${lineW}px`;
 
-      // ── Creator coin (AKITA) — real image ──
-      // Phases: enter → morph zone (fade out coin) → detail → allocation
-      const coinX = multiMap(p, [0.02, 0.06, 0.08, 0.12, 0.165, 0.51, 0.60], [-340, 0, 0, 0, 220, 220, 20]);
-      const coinOp = multiMap(p, [0.018, 0.03, 0.06, 0.08, 0.12, 0.14, 0.19, 0.26, 0.30], [0, 1, 1, 0, 0, 1, 0.4, 0.4, 1]);
-      const coinScale = multiMap(p, [0.11, 0.165, 0.26, 0.30], [1, 0.82, 0.82, 1]);
-      coin.style.transform = `translateX(${coinX}px) scale(${coinScale})`;
+      // ════════════════════════════════════════════
+      // TOKEN ALIGNMENT FIX — v5
+      // Both coin and share use translate(-50%, -50%) as base centering
+      // (they have CSS top:50% left:50% now)
+      // Then translateX shifts them horizontally. SAME Y offset for both.
+      // ════════════════════════════════════════════
+
+      // ── Creator coin (AKITA) — SMOOTH CONTINUOUS MOTION ──
+      // One fluid arc: enter from left → center → drift right for morph → right side for detail → allocation position
+      const coinX = multiMapSmooth(p,
+        [0.018, 0.045, 0.055, 0.08,  0.12,  0.14,  0.165,  0.30,  0.51, 0.60],
+        [-340,   0,      0,     0,     0,     180,   220,    220,   220,  20]
+      );
+      const coinOp = multiMapSmooth(p,
+        [0.018, 0.03,  0.055, 0.075, 0.12,  0.14,  0.26, 0.30],
+        [0,     1,     1,     0,     0,     1,     0.4,  1]
+      );
+      const coinScale = multiMapSmooth(p, [0.11, 0.165, 0.26, 0.30], [1, 0.82, 0.82, 1]);
+      coin.style.transform = `translate(-50%, -50%) translateX(${coinX}px) scale(${coinScale})`;
       coin.style.opacity = coinOp;
 
+      // Toggle depositing class for enhanced glow
+      coin.classList.toggle('depositing', p > 0.14 && p < 0.60);
+
       // ── MORPH ZONE — WebGL particle transition ──
-      // p 0.06–0.12: morph zone is active (coin fades, particles morph, share emerges)
       const morphActive = (p >= 0.055 && p <= 0.135);
-      const morphOp = multiMap(p, [0.055, 0.065, 0.125, 0.135], [0, 1, 1, 0]);
+      const morphOp = multiMapSmooth(p, [0.055, 0.065, 0.125, 0.135], [0, 1, 1, 0]);
 
       if (morphZone) {
         morphZone.style.opacity = morphOp;
@@ -621,23 +869,32 @@ function multiMap(progress, stops, values) {
         }
       }
       if (morphLabel) {
-        morphLabel.style.opacity = multiMap(p, [0.07, 0.085, 0.11, 0.125], [0, 1, 1, 0]);
+        morphLabel.style.opacity = multiMapSmooth(p, [0.07, 0.085, 0.11, 0.125], [0, 1, 1, 0]);
       }
 
-      // ── Vault share (■AKITA) — real image ──
-      // Appears after morph completes, then stays for detail + allocation phases
-      const shareOp = multiMap(p, [0.10, 0.13, 0.51, 0.60, 0.64, 0.67], [0, 1, 1, 0.35, 0.35, 0]);
-      const shareX = multiMap(p, [0.10, 0.165, 0.51, 0.60], [0, -220, -220, -50]);
-      const shareScale = multiMap(p, [0.10, 0.14, 0.51, 0.60], [0.6, 1, 1, 0.42]);
-      share.style.transform = `translateX(${shareX}px) scale(${shareScale})`;
+      // ── Vault share (■AKITA) — ALIGNED with coin, smooth motion ──
+      // Emerges after morph, mirrors coin position on the opposite side, SAME Y
+      const shareOp = multiMapSmooth(p,
+        [0.10, 0.13, 0.51, 0.60, 0.64, 0.67],
+        [0,    1,    1,    0.35, 0.35, 0]
+      );
+      const shareX = multiMapSmooth(p,
+        [0.10, 0.14, 0.165, 0.30, 0.51, 0.60],
+        [0,    -140, -220,  -220, -220, -50]
+      );
+      const shareScale = multiMapSmooth(p, [0.10, 0.14, 0.51, 0.60], [0.6, 1, 1, 0.42]);
+      share.style.transform = `translate(-50%, -50%) translateX(${shareX}px) scale(${shareScale})`;
       share.style.opacity = shareOp;
 
-      // ── Copy and labels ──
-      topCopy.style.opacity = multiMap(p, [0.02, 0.047, 0.055, 0.065], [0, 1, 1, 0]);
-      crossCopy.style.opacity = multiMap(p, [0.14, 0.176, 0.224, 0.259], [0, 1, 1, 0]);
+      // Toggle minted class for enhanced glow
+      share.classList.toggle('minted', p > 0.13 && p < 0.60);
 
-      const leftLabelOp = multiMap(p, [0.13, 0.159, 0.235, 0.271], [0, 1, 1, 0]);
-      const rightLabelOp = multiMap(p, [0.13, 0.159, 0.235, 0.271], [0, 1, 1, 0]);
+      // ── Copy and labels — smoothed ──
+      topCopy.style.opacity = multiMapSmooth(p, [0.02, 0.047, 0.055, 0.065], [0, 1, 1, 0]);
+      crossCopy.style.opacity = multiMapSmooth(p, [0.14, 0.176, 0.224, 0.259], [0, 1, 1, 0]);
+
+      const leftLabelOp = multiMapSmooth(p, [0.13, 0.159, 0.235, 0.271], [0, 1, 1, 0]);
+      const rightLabelOp = multiMapSmooth(p, [0.13, 0.159, 0.235, 0.271], [0, 1, 1, 0]);
       labelYou.style.opacity = leftLabelOp;
       labelVault.style.opacity = rightLabelOp;
       labelShares.style.opacity = leftLabelOp;
@@ -645,37 +902,37 @@ function multiMap(progress, stops, values) {
       coinLabel.style.opacity = rightLabelOp;
       shareLabel.style.opacity = leftLabelOp;
 
-      entryCue.style.opacity = multiMap(p, [0.165, 0.20, 0.235, 0.271], [0, 1, 1, 0]);
+      entryCue.style.opacity = multiMapSmooth(p, [0.165, 0.20, 0.235, 0.271], [0, 1, 1, 0]);
 
-      // ── Detail panels ──
-      const rightDetailOp = multiMap(p, [0.32, 0.37, 0.50, 0.54], [0, 1, 1, 0]);
-      const leftDetailOp = multiMap(p, [0.37, 0.42, 0.49, 0.53], [0, 1, 1, 0]);
+      // ── Detail panels — smoothed ──
+      const rightDetailOp = multiMapSmooth(p, [0.32, 0.37, 0.50, 0.54], [0, 1, 1, 0]);
+      const leftDetailOp = multiMapSmooth(p, [0.37, 0.42, 0.49, 0.53], [0, 1, 1, 0]);
       coinDetail.style.opacity = rightDetailOp;
       shareDetail.style.opacity = leftDetailOp;
 
-      dualCopy.style.opacity = multiMap(p, [0.42, 0.47, 0.50, 0.54], [0, 1, 1, 0]);
-      dualEntry.style.opacity = multiMap(p, [0.46, 0.50, 0.51, 0.54], [0, 1, 1, 0]);
+      dualCopy.style.opacity = multiMapSmooth(p, [0.42, 0.47, 0.50, 0.54], [0, 1, 1, 0]);
+      dualEntry.style.opacity = multiMapSmooth(p, [0.46, 0.50, 0.51, 0.54], [0, 1, 1, 0]);
 
-      // ── Camera zoom ──
-      const cameraScale = multiMap(p, [0.50, 0.58, 0.62, 0.68], [1, 1.06, 1.06, 1]);
+      // ── Camera zoom — smoother easing ──
+      const cameraScale = multiMapSmooth(p, [0.50, 0.58, 0.62, 0.68], [1, 1.06, 1.06, 1]);
       const panX = mapEased(p, 0.64, 0.86, 0, -400);
       cameraWrapper.style.transform = `scale(${cameraScale}) translateX(${panX}px)`;
 
-      // ── Deposit/allocation labels ──
-      depositInfo.style.opacity = multiMap(p, [0.65, 0.69], [0, 1]);
-      splitInfo.style.opacity = multiMap(p, [0.68, 0.72], [0, 1]);
-      idleBadge.style.opacity = multiMap(p, [0.70, 0.73], [0, 1]);
+      // ── Deposit/allocation labels — smoothed ──
+      depositInfo.style.opacity = multiMapSmooth(p, [0.65, 0.69], [0, 1]);
+      splitInfo.style.opacity = multiMapSmooth(p, [0.68, 0.72], [0, 1]);
+      idleBadge.style.opacity = multiMapSmooth(p, [0.70, 0.73], [0, 1]);
 
-      // ── Flow line + engine ──
-      flowLine.style.opacity = multiMap(p, [0.71, 0.76], [0, 1]);
+      // ── Flow line + engine — smoothed ──
+      flowLine.style.opacity = multiMapSmooth(p, [0.71, 0.76], [0, 1]);
       const flowW = mapRange(p, 0.71, 0.77, 0, 100);
       flowLineFill.style.width = `${flowW}%`;
-      engineBox.style.opacity = multiMap(p, [0.75, 0.79], [0, 1]);
+      engineBox.style.opacity = multiMapSmooth(p, [0.75, 0.79], [0, 1]);
 
-      // ── Branches ──
-      const b0Op = multiMap(p, [0.79, 0.83], [0, 1]);
-      const b1Op = multiMap(p, [0.83, 0.865], [0, 1]);
-      const b2Op = multiMap(p, [0.875, 0.905], [0, 1]);
+      // ── Branches — smoothed ──
+      const b0Op = multiMapSmooth(p, [0.79, 0.83], [0, 1]);
+      const b1Op = multiMapSmooth(p, [0.83, 0.865], [0, 1]);
+      const b2Op = multiMapSmooth(p, [0.875, 0.905], [0, 1]);
       branch0.style.opacity = b0Op;
       branch1.style.opacity = b1Op;
       branch2.style.opacity = b2Op;
@@ -684,21 +941,21 @@ function multiMap(progress, stops, values) {
       strat2.style.opacity = b2Op;
 
       // ── Downstreams ──
-      downstream1.style.opacity = multiMap(p, [0.855, 0.89], [0, 1]);
-      downstream2.style.opacity = multiMap(p, [0.895, 0.93], [0, 1]);
+      downstream1.style.opacity = multiMapSmooth(p, [0.855, 0.89], [0, 1]);
+      downstream2.style.opacity = multiMapSmooth(p, [0.895, 0.93], [0, 1]);
 
       // ── Fee label ──
-      feeLabel.style.opacity = multiMap(p, [0.92, 0.95], [0, 1]);
+      feeLabel.style.opacity = multiMapSmooth(p, [0.92, 0.95], [0, 1]);
 
       // ── Scene exit ──
-      const sceneExit = multiMap(p, [0.96, 0.995], [1, 0]);
+      const sceneExit = multiMapSmooth(p, [0.96, 0.995], [1, 0]);
       section.querySelector('.scene-pin').style.opacity = sceneExit;
     }
   });
 })();
 
 // ────────────────────────────────────────────
-// 8. CHAPTER 3: ACCRUE (650vh)
+// 8. CHAPTER 3: ACCRUE (650vh) + milestone chimes
 // ────────────────────────────────────────────
 (function chapterAccrue() {
   const section = document.getElementById('ch-accrue');
@@ -721,10 +978,10 @@ function multiMap(progress, stops, values) {
   const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
 
   const milestones = [
-    { days: 30, el: document.getElementById('ms-30') },
-    { days: 60, el: document.getElementById('ms-60') },
-    { days: 90, el: document.getElementById('ms-90') },
-    { days: 180, el: document.getElementById('ms-180') },
+    { days: 30, el: document.getElementById('ms-30'), chimed: false, pitch: 1.0 },
+    { days: 60, el: document.getElementById('ms-60'), chimed: false, pitch: 1.12 },
+    { days: 90, el: document.getElementById('ms-90'), chimed: false, pitch: 1.25 },
+    { days: 180, el: document.getElementById('ms-180'), chimed: false, pitch: 1.5 },
   ];
 
   ScrollTrigger.create({
@@ -734,15 +991,18 @@ function multiMap(progress, stops, values) {
     onUpdate: (self) => {
       const p = self.progress;
 
-      const sceneOp = multiMap(p, [0, 0.06, 0.86, 0.96], [0, 1, 1, 0]);
+      // Audio: drone during accrue
+      AudioEngine.setDroneLevel(multiMap(p, [0, 0.10, 0.50, 0.86, 0.96], [0.02, 0.06, 0.08, 0.06, 0.02]));
+
+      const sceneOp = multiMapSmooth(p, [0, 0.06, 0.86, 0.96], [0, 1, 1, 0]);
       section.querySelector('.scene-pin').style.opacity = sceneOp;
 
-      intro.style.opacity = multiMap(p, [0.06, 0.16], [0, 1]);
-      if (pair) pair.style.opacity = multiMap(p, [0.10, 0.20], [0, 1]);
-      clock.style.opacity = multiMap(p, [0.18, 0.26], [0, 1]);
-      timeline.style.opacity = multiMap(p, [0.26, 0.34], [0, 1]);
-      stats.style.opacity = multiMap(p, [0.38, 0.48], [0, 1]);
-      equation.style.opacity = multiMap(p, [0.38, 0.48], [0, 1]);
+      intro.style.opacity = multiMapSmooth(p, [0.06, 0.16], [0, 1]);
+      if (pair) pair.style.opacity = multiMapSmooth(p, [0.10, 0.20], [0, 1]);
+      clock.style.opacity = multiMapSmooth(p, [0.18, 0.26], [0, 1]);
+      timeline.style.opacity = multiMapSmooth(p, [0.26, 0.34], [0, 1]);
+      stats.style.opacity = multiMapSmooth(p, [0.38, 0.48], [0, 1]);
+      equation.style.opacity = multiMapSmooth(p, [0.38, 0.48], [0, 1]);
 
       const dayFloat = mapRange(p, 0.24, 0.74, 0, TOTAL_DAYS);
       const currentDay = Math.round(Math.max(0, Math.min(TOTAL_DAYS, dayFloat)));
@@ -770,10 +1030,17 @@ function multiMap(progress, stops, values) {
       timelineHead.style.left = `${pct}%`;
 
       milestones.forEach(ms => {
+        const wasReached = ms.el.classList.contains('reached');
         if (currentDay >= ms.days) {
           ms.el.classList.add('reached');
+          // Play chime on first reach
+          if (!wasReached && !ms.chimed) {
+            AudioEngine.playChime(ms.pitch);
+            ms.chimed = true;
+          }
         } else {
           ms.el.classList.remove('reached');
+          ms.chimed = false; // reset for scroll back
         }
       });
     }
@@ -801,8 +1068,11 @@ function multiMap(progress, stops, values) {
     onUpdate: (self) => {
       const p = self.progress;
 
-      const sceneOp = multiMap(p, [0, 0.10, 0.82, 0.94], [0, 1, 1, 0]);
-      const sceneY = mapRange(p, 0, 0.16, 40, 0);
+      // Audio: drone during vaults
+      AudioEngine.setDroneLevel(multiMap(p, [0, 0.10, 0.70, 0.94], [0.02, 0.05, 0.05, 0.01]));
+
+      const sceneOp = multiMapSmooth(p, [0, 0.10, 0.82, 0.94], [0, 1, 1, 0]);
+      const sceneY = multiMapSmooth(p, [0, 0.16], [40, 0]);
       section.querySelector('.scene-pin').style.opacity = sceneOp;
       section.querySelector('.vaults-container').style.transform = `translateY(${sceneY}px)`;
 
@@ -815,8 +1085,8 @@ function multiMap(progress, stops, values) {
         card.style.transform = `translateY(${Math.max(0, y)}px)`;
       });
 
-      cta.style.opacity = multiMap(p, [0.56, 0.70], [0, 1]);
-      disclaimer.style.opacity = multiMap(p, [0.64, 0.76], [0, 1]);
+      cta.style.opacity = multiMapSmooth(p, [0.56, 0.70], [0, 1]);
+      disclaimer.style.opacity = multiMapSmooth(p, [0.64, 0.76], [0, 1]);
     }
   });
 })();
@@ -839,18 +1109,21 @@ function multiMap(progress, stops, values) {
     onUpdate: (self) => {
       const p = self.progress;
 
-      const sceneOp = multiMap(p, [0.05, 0.25, 0.85, 1], [0, 1, 1, 0.9]);
+      // Audio: drone fades out at close
+      AudioEngine.setDroneLevel(multiMap(p, [0, 0.20, 0.70, 1.0], [0.02, 0.04, 0.04, 0]));
+
+      const sceneOp = multiMapSmooth(p, [0.05, 0.25, 0.85, 1], [0, 1, 1, 0.9]);
       section.querySelector('.scene-pin').style.opacity = sceneOp;
 
-      if (partners) partners.style.opacity = multiMap(p, [0.05, 0.20], [0, 1]);
-      brand.style.opacity = multiMap(p, [0.10, 0.28], [0, 1]);
+      if (partners) partners.style.opacity = multiMapSmooth(p, [0.05, 0.20], [0, 1]);
+      brand.style.opacity = multiMapSmooth(p, [0.10, 0.28], [0, 1]);
 
       const lineH = mapRange(p, 0.28, 0.50, 0, 80);
       line.style.height = `${Math.max(0, lineH)}px`;
-      line.style.opacity = multiMap(p, [0.28, 0.38], [0, 1]);
+      line.style.opacity = multiMapSmooth(p, [0.28, 0.38], [0, 1]);
 
-      cta.style.opacity = multiMap(p, [0.40, 0.56], [0, 1]);
-      tag.style.opacity = multiMap(p, [0.52, 0.66], [0, 1]);
+      cta.style.opacity = multiMapSmooth(p, [0.40, 0.56], [0, 1]);
+      tag.style.opacity = multiMapSmooth(p, [0.52, 0.66], [0, 1]);
     }
   });
 })();

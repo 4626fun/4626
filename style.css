@@ -124,7 +124,6 @@ body {
 .nav.visible {
   opacity: 1;
   transform: translateY(0);
-  border-bottom-color: var(--color-border);
 }
 .brand {
   display: inline-flex;
@@ -624,6 +623,8 @@ body {
 /* ─── Token images ─── */
 .token-coin, .token-share {
   position: absolute;
+  top: 50%;
+  left: 50%;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -1578,6 +1579,110 @@ body {
 
   .close-partners { gap: 1.25rem; }
   .partner-logo { height: 18px; }
+}
+
+/* ─── SCAN LINE GLOW EFFECT ─── */
+.scan-line {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent 0%, rgba(0, 82, 255, 0.08) 25%, rgba(0, 82, 255, 0.18) 50%, rgba(0, 82, 255, 0.08) 75%, transparent 100%);
+  z-index: 99;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.6s var(--ease-cinematic);
+}
+.scan-line.active {
+  opacity: 1;
+  animation: scan-sweep 4s linear infinite;
+}
+@keyframes scan-sweep {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(100vh); }
+}
+
+/* ─── ENHANCED TOKEN RING PULSE ─── */
+.token-img-ring,
+.share-img-ring {
+  transition: box-shadow 0.8s var(--ease-cinematic);
+}
+.token-coin.depositing .token-img-ring {
+  box-shadow:
+    0 0 40px rgba(0, 0, 0, 0.5),
+    0 0 80px rgba(0, 82, 255, 0.15),
+    0 0 120px rgba(0, 82, 255, 0.08);
+}
+.token-share.minted .share-img-ring {
+  box-shadow:
+    0 0 40px rgba(0, 0, 0, 0.5),
+    0 0 60px rgba(0, 82, 255, 0.25),
+    0 0 100px rgba(0, 82, 255, 0.12);
+}
+
+/* ─── AUDIO INDICATOR ─── */
+.audio-toggle {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 150;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface-glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: border-color 0.3s var(--ease-out), box-shadow 0.3s var(--ease-out);
+  opacity: 0;
+  animation: audio-fade-in 1s var(--ease-out) 3.5s forwards;
+}
+.audio-toggle:hover {
+  border-color: var(--color-border-accent);
+  box-shadow: 0 0 16px rgba(0, 82, 255, 0.1);
+}
+@keyframes audio-fade-in {
+  to { opacity: 1; }
+}
+.audio-bars {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 14px;
+}
+.audio-bar {
+  width: 2px;
+  background: var(--color-accent);
+  border-radius: 1px;
+  transition: height 0.3s var(--ease-out);
+}
+.audio-toggle.muted .audio-bar {
+  height: 2px !important;
+}
+.audio-bar:nth-child(1) { height: 4px; animation: bar-bounce 1.2s ease-in-out infinite; }
+.audio-bar:nth-child(2) { height: 10px; animation: bar-bounce 1.2s ease-in-out 0.15s infinite; }
+.audio-bar:nth-child(3) { height: 6px; animation: bar-bounce 1.2s ease-in-out 0.3s infinite; }
+.audio-bar:nth-child(4) { height: 12px; animation: bar-bounce 1.2s ease-in-out 0.45s infinite; }
+@keyframes bar-bounce {
+  0%, 100% { transform: scaleY(0.4); }
+  50% { transform: scaleY(1); }
+}
+.audio-toggle.muted .audio-bar {
+  animation: none;
+}
+
+/* ─── SUBTLE VIGNETTE ─── */
+.vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(0, 0, 0, 0.4) 100%);
 }
 
 /* ─── REDUCED MOTION ─── */
