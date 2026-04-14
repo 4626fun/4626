@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" fill="none">
+  <!-- Charm Finance cube logo -->
+  <!-- Left face (darker blue) -->
+  <path d="M10 65 L10 30 L50 10 L50 45 Z" fill="#2563EB"/>
+  <!-- Right face (medium blue) -->
+  <path d="M50 45 L50 10 L90 30 L90 65 Z" fill="#3B82F6"/>
+  <!-- Top face (lightest blue) -->
+  <path d="M10 30 L50 10 L90 30 L50 50 Z" fill="#60A5FA"/>
+  <!-- Front white face -->
+  <path d="M10 30 L10 65 L50 85 L50 50 Z" fill="#ffffff" rx="6"/>
+  <!-- Rounded white front -->
+  <rect x="8" y="32" width="42" height="50" rx="8" fill="#ffffff" transform="skewY(25) translate(2, -20)"/>
+</svg>
