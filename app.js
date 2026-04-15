@@ -871,18 +871,17 @@ function multiMapSmooth(progress, stops, values) {
 
   const depositInfo = document.getElementById('deposit-info');
   const splitInfo = document.getElementById('split-info');
-  const idleBadge = document.getElementById('idle-badge');
-  const flowLine = document.getElementById('flow-line');
-  const flowLineFill = document.getElementById('flow-line-fill');
-  const engineBox = document.getElementById('engine-box');
+  const nodeGraph = document.getElementById('node-graph');
+  const engineHub = document.getElementById('engine-hub');
+  const ngRowEngine = document.getElementById('ng-row-engine');
+  const ngRowIdle = document.getElementById('ng-row-idle');
+  const ngBranchSvg = document.getElementById('ng-branch-svg');
+  const ngEdgeFan = document.getElementById('ng-edge-fan');
   const strat0 = document.getElementById('strat-0');
   const strat1 = document.getElementById('strat-1');
   const strat2 = document.getElementById('strat-2');
   const downstream1 = document.getElementById('downstream-1');
   const downstream2 = document.getElementById('downstream-2');
-  const branch0 = document.getElementById('branch-0');
-  const branch1 = document.getElementById('branch-1');
-  const branch2 = document.getElementById('branch-2');
   const feeLabel = document.getElementById('fee-label');
   const dualCopy = document.getElementById('dual-copy');
   const dualEntry = document.getElementById('dual-entry');
@@ -1025,51 +1024,64 @@ function multiMapSmooth(progress, stops, values) {
       const panX = isMobile ? 0 : mapEased(p, 0.64, 0.86, 0, -400 * rm);
       cameraWrapper.style.transform = `scale(${cameraScale}) translateX(${panX}px)`;
 
-      // ── Deposit/allocation labels — smoothed ──
-      // On mobile, fade these out before the engine appears to avoid overlap
-      if (isMobile) {
-        depositInfo.style.opacity = multiMapSmooth(p, [0.65, 0.69, 0.73, 0.76], [0, 1, 1, 0]);
-        splitInfo.style.opacity   = multiMapSmooth(p, [0.68, 0.72, 0.73, 0.76], [0, 1, 1, 0]);
-        idleBadge.style.opacity   = multiMapSmooth(p, [0.70, 0.73, 0.73, 0.76], [0, 1, 1, 0]);
-      } else {
-        depositInfo.style.opacity = multiMapSmooth(p, [0.65, 0.69], [0, 1]);
-        splitInfo.style.opacity = multiMapSmooth(p, [0.68, 0.72], [0, 1]);
-        idleBadge.style.opacity = multiMapSmooth(p, [0.70, 0.73], [0, 1]);
+      // ── Deposit/allocation labels — fade out before node graph appears ──
+      depositInfo.style.opacity = multiMapSmooth(p, [0.65, 0.69, 0.71, 0.74], [0, 1, 1, 0]);
+      splitInfo.style.opacity   = multiMapSmooth(p, [0.67, 0.71, 0.71, 0.74], [0, 1, 1, 0]);
+
+      // ── Node Graph — horizontal flow (token logo → engine → strategies → downstreams + idle) ──
+      // Tight cascade: token logo + branch → engine hub → fan-out + strategies → downstreams → idle
+      // Total reveal window: p 0.74 → 0.88
+      if (nodeGraph) {
+        nodeGraph.style.opacity = multiMapSmooth(p, [0.74, 0.77], [0, 1]);
       }
 
-      // ── Flow line + engine — smoothed ──
-      flowLine.style.opacity = multiMapSmooth(p, [0.71, 0.76], [0, 1]);
-      const flowW = mapRange(p, 0.71, 0.77, 0, 100);
-      flowLineFill.style.width = `${flowW}%`;
-      engineBox.style.opacity = multiMapSmooth(p, [0.75, 0.79], [0, 1]);
+      // Branch SVG — fades in from token-coin
+      if (ngBranchSvg) ngBranchSvg.style.opacity = multiMapSmooth(p, [0.75, 0.79], [0, 1]);
 
-      // ── Branches — smoothed ──
-      const b0Op = multiMapSmooth(p, [0.79, 0.83], [0, 1]);
-      const b1Op = multiMapSmooth(p, [0.83, 0.865], [0, 1]);
-      const b2Op = multiMapSmooth(p, [0.875, 0.905], [0, 1]);
-      branch0.style.opacity = b0Op;
-      branch1.style.opacity = b1Op;
-      branch2.style.opacity = b2Op;
-      strat0.style.opacity = b0Op;
-      strat1.style.opacity = b1Op;
-      strat2.style.opacity = b2Op;
+      // Engine Hub — follows immediately with subtle scale
+      if (engineHub) {
+        const ehOp = multiMapSmooth(p, [0.76, 0.80], [0, 1]);
+        engineHub.style.opacity = ehOp;
+        engineHub.style.transform = `scale(${0.92 + ehOp * 0.08})`;
+      }
 
-      // ── Downstreams ──
-      downstream1.style.opacity = multiMapSmooth(p, [0.855, 0.89], [0, 1]);
-      downstream2.style.opacity = multiMapSmooth(p, [0.895, 0.93], [0, 1]);
+      // Fan-out edges from engine — starts as engine solidifies
+      if (ngEdgeFan) ngEdgeFan.style.opacity = multiMapSmooth(p, [0.78, 0.82], [0, 1]);
 
-      // ── Fee label ──
-      feeLabel.style.opacity = multiMapSmooth(p, [0.92, 0.95], [0, 1]);
+      // Strategy nodes — tight stagger with slide-in from left
+      const s0Op = multiMapSmooth(p, [0.79, 0.83], [0, 1]);
+      const s1Op = multiMapSmooth(p, [0.805, 0.845], [0, 1]);
+      const s2Op = multiMapSmooth(p, [0.82, 0.86], [0, 1]);
+      strat0.style.opacity = s0Op;
+      strat1.style.opacity = s1Op;
+      strat2.style.opacity = s2Op;
+      strat0.style.transform = `translateX(${(1 - s0Op) * 12}px)`;
+      strat1.style.transform = `translateX(${(1 - s1Op) * 12}px)`;
+      strat2.style.transform = `translateX(${(1 - s2Op) * 12}px)`;
 
-      // ── Scene exit ──
-      const sceneExit = multiMapSmooth(p, [0.96, 0.995], [1, 0]);
+      // Downstreams — appear after their parent strategy has solidified, slide in
+      const ds1Op = multiMapSmooth(p, [0.84, 0.87], [0, 1]);
+      const ds2Op = multiMapSmooth(p, [0.855, 0.885], [0, 1]);
+      downstream1.style.opacity = ds1Op;
+      downstream2.style.opacity = ds2Op;
+      downstream1.style.transform = `translateX(${(1 - ds1Op) * 8}px)`;
+      downstream2.style.transform = `translateX(${(1 - ds2Op) * 8}px)`;
+
+      // Idle row — after engine context is established (engine hub visible)
+      if (ngRowIdle) ngRowIdle.style.opacity = multiMapSmooth(p, [0.81, 0.85], [0, 1]);
+
+      // ── Fee label — more breathing room before exit ──
+      feeLabel.style.opacity = multiMapSmooth(p, [0.88, 0.91], [0, 1]);
+
+      // ── Scene exit — delayed to let fee label hold ──
+      const sceneExit = multiMapSmooth(p, [0.97, 0.995], [1, 0]);
       section.querySelector('.scene-pin').style.opacity = sceneExit;
     }
   });
 })();
 
 // ────────────────────────────────────────────
-// 8. CHAPTER 3: ACCRUE (650vh) + WebGL yield curve
+// 8. CHAPTER 3: ACCRUE (850vh) + WebGL self-drawing yield curve
 // ────────────────────────────────────────────
 (function chapterAccrue() {
   const section = document.getElementById('ch-accrue');
@@ -1086,97 +1098,42 @@ function multiMapSmooth(progress, stops, values) {
   const ratioValue = document.getElementById('ratio-value');
   const ycWrap = document.getElementById('yield-curve-wrap');
   const ycCanvas = document.getElementById('yield-curve-canvas');
-  const accrueVol = document.getElementById('accrue-volatility');
-  const volCanvas = document.getElementById('vol-chart-canvas');
+  const volNarrative = document.getElementById('vol-narrative');
   const volHeadline = document.getElementById('vol-headline');
   const volSub = document.getElementById('vol-sub');
+  const ycAxisY = document.getElementById('yc-axis-y');
+  const ycAxisX = document.getElementById('yc-axis-x');
+  const ycMilestonesWrap = document.getElementById('yc-milestones');
 
-  // ── Draw volatile price chart on canvas ──
-  function drawVolChart(progress) {
-    if (!volCanvas) return;
-    const dpr = window.devicePixelRatio || 1;
-    const rect = volCanvas.getBoundingClientRect();
-    const w = rect.width * dpr;
-    const h = rect.height * dpr;
-    if (w === 0 || h === 0) return;
-    volCanvas.width = w;
-    volCanvas.height = h;
-    const ctx = volCanvas.getContext('2d');
-    ctx.clearRect(0, 0, w, h);
-
-    // Generate volatile price data: up, down, up, up, up, down, down, down
-    const points = 120;
-    const data = new Float32Array(points);
-    data[0] = 0.45;
-    function srand(s) { let x = Math.sin(s * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
-    const trends = [0.008, -0.012, 0.006, 0.010, 0.007, -0.009, -0.014, -0.006];
-    const segLen = points / trends.length;
-    for (let i = 1; i < points; i++) {
-      const seg = Math.min(trends.length - 1, Math.floor(i / segLen));
-      const noise = (srand(i * 3.7) - 0.5) * 0.03;
-      data[i] = Math.max(0.08, Math.min(0.92, data[i - 1] + trends[seg] + noise));
-    }
-
-    const drawCount = Math.floor(progress * points);
-    if (drawCount < 2) return;
-
-    ctx.lineWidth = 2 * dpr;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    const grad = ctx.createLinearGradient(0, 0, w, 0);
-    for (let i = 0; i < drawCount; i++) {
-      const t = i / (points - 1);
-      const goingUp = i > 0 ? data[i] > data[i - 1] : true;
-      grad.addColorStop(t, goingUp ? 'rgba(34, 197, 94, 0.7)' : 'rgba(239, 68, 68, 0.6)');
-    }
-    ctx.strokeStyle = grad;
-
-    ctx.beginPath();
-    for (let i = 0; i < drawCount; i++) {
-      const x = (i / (points - 1)) * w;
-      const y = (1 - data[i]) * h;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-
-    const lastX = ((drawCount - 1) / (points - 1)) * w;
-    ctx.lineTo(lastX, h);
-    ctx.lineTo(0, h);
-    ctx.closePath();
-    const fillGrad = ctx.createLinearGradient(0, 0, 0, h);
-    fillGrad.addColorStop(0, 'rgba(0, 82, 255, 0.08)');
-    fillGrad.addColorStop(1, 'rgba(0, 82, 255, 0)');
-    ctx.fillStyle = fillGrad;
-    ctx.fill();
-  }
-
-  const TOTAL_DAYS = 243;
-  const VAULT_LAUNCH = new Date(2025, 7, 10);
+  // ── Timeline: Aug 10 2025 → Apr 15 2026 (248 days) ──
+  const TOTAL_DAYS = 248;
+  const VAULT_LAUNCH = new Date(2025, 7, 10); // Aug 10, 2025
   const MONTHS = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
 
-  // ── Organic variable-rate model ──
-  // Piecewise daily growth rates that create a believable yield curve:
-  //   Days 0-30:   aggressive early yield  (~82% annualized)
-  //   Days 30-75:  momentum builds          (~95% annualized)
-  //   Days 75-120: correction/cooldown      (~38% annualized)
-  //   Days 120-165: recovery phase           (~72% annualized)
-  //   Days 165-210: mature steady yield      (~54% annualized)
-  //   Days 210-243: late compression          (~41% annualized)
+  // ── Share-ratio model: 1.000 → 1.034 over 248 days ──
+  // Aggressive piecewise growth — higher APY display throughout:
+  //   Days 0-25:   launch surge               (~42% ann)
+  //   Days 25-55:  momentum peak              (~58% ann)
+  //   Days 55-95:  correction & rebalance     (~8% ann)
+  //   Days 95-140: second wind                (~48% ann)
+  //   Days 140-190: mature yield               (~35% ann)
+  //   Days 190-225: compression phase          (~22% ann)
+  //   Days 225-248: tail-off                   (~14% ann)
+  // NOTE: ratios are normalized post-hoc to land at exactly 1.034,
+  // so these APYs drive the *shape* — steeper climbs, sharper dips.
   const RATE_SEGMENTS = [
-    { end:  30, apy: 0.82 },
-    { end:  75, apy: 0.95 },
-    { end: 120, apy: 0.38 },
-    { end: 165, apy: 0.72 },
-    { end: 210, apy: 0.54 },
-    { end: 243, apy: 0.41 },
+    { end:  25, apy: 0.72 },
+    { end:  55, apy: 0.85 },
+    { end:  95, apy: 0.28 },
+    { end: 140, apy: 0.78 },
+    { end: 190, apy: 0.55 },
+    { end: 225, apy: 0.38 },
+    { end: 248, apy: 0.30 },
   ];
 
-  // Pre-compute daily ratios with micro-noise for organic feel
+  // Pre-compute daily ratios with micro-noise
   const _dailyRatio = new Float64Array(TOTAL_DAYS + 1);
   _dailyRatio[0] = 1.0;
-  // Seeded pseudo-random for deterministic noise
   function seededRand(seed) {
     let x = Math.sin(seed * 127.1 + 311.7) * 43758.5453;
     return x - Math.floor(x);
@@ -1186,12 +1143,16 @@ function multiMapSmooth(progress, stops, values) {
     for (let d = 1; d <= TOTAL_DAYS; d++) {
       while (seg < RATE_SEGMENTS.length - 1 && d > RATE_SEGMENTS[seg].end) seg++;
       const baseDaily = Math.pow(1 + RATE_SEGMENTS[seg].apy, 1 / 365) - 1;
-      // Add ±12% noise to daily rate for organic texture
-      const noise = (seededRand(d) - 0.5) * 0.24 * baseDaily;
+      // ±15% noise for organic texture
+      const noise = (seededRand(d) - 0.5) * 0.30 * baseDaily;
       _dailyRatio[d] = _dailyRatio[d - 1] * (1 + baseDaily + noise);
     }
+    // No normalization — let the organic rates determine the final ratio.
+    // With these aggressive segments the curve will reach ~1.25+ naturally.
   }
   const FINAL_RATIO = _dailyRatio[TOTAL_DAYS];
+  const RATIO_MIN = 1.000;
+  const RATIO_MAX = Math.ceil(FINAL_RATIO * 100) / 100 + 0.01; // Y-axis ceiling with headroom
 
   function ratioAtDay(d) {
     const di = Math.floor(Math.max(0, Math.min(TOTAL_DAYS, d)));
@@ -1208,12 +1169,91 @@ function multiMapSmooth(progress, stops, values) {
     return (Math.pow(r1 / r0, 365 / 7) - 1) * 100;
   }
 
-  // Populate milestone callout labels
-  [30, 90, 180, 243].forEach(d => {
-    const rSpan = document.getElementById('yc-r-' + d);
-    const aSpan = document.getElementById('yc-a-' + d);
-    if (rSpan) rSpan.textContent = ratioAtDay(d).toFixed(3);
-    if (aSpan) aSpan.textContent = apyAtDay(d).toFixed(1) + '% APY';
+  // ── Dynamically build axis labels ──
+  // Y-axis: evenly spaced from 1.000 to just above FINAL_RATIO
+  const ySteps = [];
+  {
+    // Pick a step that gives 6–8 grid lines
+    const range = RATIO_MAX - RATIO_MIN;
+    const rawStep = range / 7;
+    // Round step to nearest nice number (0.01, 0.02, 0.05, 0.10, 0.20 ...)
+    const mag = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    const niceSteps = [1, 2, 5, 10];
+    let step = mag;
+    for (const ns of niceSteps) {
+      if (mag * ns >= rawStep) { step = mag * ns; break; }
+    }
+    for (let v = RATIO_MIN; v <= RATIO_MAX + 0.0001; v += step) {
+      ySteps.push(Math.round(v * 1000) / 1000);
+    }
+  }
+  ycAxisY.innerHTML = '';
+  ySteps.forEach(v => {
+    const pct = ((v - RATIO_MIN) / (RATIO_MAX - RATIO_MIN)) * 100;
+    const span = document.createElement('span');
+    span.className = 'yc-label';
+    span.dataset.val = v.toFixed(3);
+    span.style.bottom = pct + '%';
+    span.textContent = v.toFixed(3);
+    ycAxisY.appendChild(span);
+  });
+
+  // X-axis: month ticks
+  const monthTicks = []; // { label, day }
+  {
+    const monthNames = ['Aug','Sep','Oct','Nov','Dec','Jan','Feb','Mar','Apr'];
+    const monthDates = [
+      new Date(2025, 7, 10),  // Aug
+      new Date(2025, 8, 1),   // Sep
+      new Date(2025, 9, 1),   // Oct
+      new Date(2025, 10, 1),  // Nov
+      new Date(2025, 11, 1),  // Dec
+      new Date(2026, 0, 1),   // Jan
+      new Date(2026, 1, 1),   // Feb
+      new Date(2026, 2, 1),   // Mar
+      new Date(2026, 3, 15),  // Apr 15
+    ];
+    monthDates.forEach((dt, i) => {
+      const diff = Math.round((dt - VAULT_LAUNCH) / 86400000);
+      if (diff >= 0 && diff <= TOTAL_DAYS) {
+        monthTicks.push({ label: monthNames[i], day: diff });
+      }
+    });
+  }
+  ycAxisX.innerHTML = '';
+  monthTicks.forEach(t => {
+    const span = document.createElement('span');
+    span.className = 'yc-label';
+    span.textContent = t.label;
+    // Position as percentage of chart width
+    span.style.left = (t.day / TOTAL_DAYS * 100) + '%';
+    span.style.position = 'absolute';
+    span.style.transform = 'translateX(-50%)';
+    ycAxisX.appendChild(span);
+  });
+
+  // ── Milestone callouts at key intervals ──
+  const milestoneConfigs = [
+    { day: 30,  label: 'Day 30',  pitch: 1.0 },
+    { day: 90,  label: 'Day 90',  pitch: 1.15 },
+    { day: 150, label: 'Day 150', pitch: 1.3 },
+    { day: 210, label: 'Day 210', pitch: 1.5 },
+    { day: 248, label: 'Day 248', pitch: 1.8 },
+  ];
+  ycMilestonesWrap.innerHTML = '';
+  const calloutData = milestoneConfigs.map(ms => {
+    const div = document.createElement('div');
+    div.className = 'yc-callout';
+    div.dataset.day = ms.day;
+    div.innerHTML = `
+      <div class="yc-callout-pip"></div>
+      <div class="yc-callout-card">
+        <span class="yc-callout-day">${ms.label}</span>
+        <span class="yc-callout-ratio">${ratioAtDay(ms.day).toFixed(3)}</span>
+        <span class="yc-callout-apy">${apyAtDay(ms.day).toFixed(1)}% APY</span>
+      </div>`;
+    ycMilestonesWrap.appendChild(div);
+    return { day: ms.day, el: div, chimed: false, pitch: ms.pitch };
   });
 
   // ── WebGL Yield Curve Renderer ──
@@ -1223,36 +1263,31 @@ function multiMapSmooth(progress, stops, values) {
   // Chart margins (normalized 0-1)
   const ML = 0.08, MR = 0.06, MT = 0.08, MB = 0.14;
 
-  // Generate curve points (365 samples for smooth curve)
-  const SAMPLES = 365;
+  // Generate curve points (500 samples for ultra-smooth)
+  const SAMPLES = 500;
   const curveVerts = [];
   for (let i = 0; i <= SAMPLES; i++) {
     const day = (i / SAMPLES) * TOTAL_DAYS;
     const r = ratioAtDay(day);
-    // Map to chart space
     const x = ML + (day / TOTAL_DAYS) * (1 - ML - MR);
-    const y = MB + ((r - 1.0) / (FINAL_RATIO - 1.0)) * (1 - MB - MT);
+    const y = MB + ((r - RATIO_MIN) / (RATIO_MAX - RATIO_MIN)) * (1 - MB - MT);
     curveVerts.push(x, y);
   }
 
-  // Grid lines (horizontal) — dynamic based on final ratio
+  // Grid lines
   const gridVerts = [];
-  const gridStepCount = 5;
-  const gridSteps = [];
-  for (let i = 0; i < gridStepCount; i++) {
-    gridSteps.push(1.0 + (FINAL_RATIO - 1.0) * (i / (gridStepCount - 1)));
-  }
-  gridSteps.forEach(r => {
-    const y = MB + ((r - 1.0) / (FINAL_RATIO - 1.0)) * (1 - MB - MT);
+  // Horizontal grid at each yStep
+  ySteps.forEach(v => {
+    const y = MB + ((v - RATIO_MIN) / (RATIO_MAX - RATIO_MIN)) * (1 - MB - MT);
     gridVerts.push(ML, y, 1 - MR, y);
   });
-  // Vertical grid
-  [0, 60, 120, 180, TOTAL_DAYS].forEach(d => {
-    const x = ML + (d / TOTAL_DAYS) * (1 - ML - MR);
+  // Vertical grid at month ticks
+  monthTicks.forEach(t => {
+    const x = ML + (t.day / TOTAL_DAYS) * (1 - ML - MR);
     gridVerts.push(x, MB, x, 1 - MT);
   });
 
-  // Shaders
+  // ── Shader compilation helpers ──
   function compileShader(src, type) {
     const s = gl.createShader(type);
     gl.shaderSource(s, src);
@@ -1267,7 +1302,7 @@ function multiMapSmooth(progress, stops, values) {
     return p;
   }
 
-  // Grid shader (simple)
+  // Grid shader
   const gridVS = `
     attribute vec2 a_pos;
     void main() {
@@ -1276,7 +1311,7 @@ function multiMapSmooth(progress, stops, values) {
   const gridFS = `
     precision mediump float;
     void main() {
-      gl_FragColor = vec4(1.0, 1.0, 1.0, 0.04);
+      gl_FragColor = vec4(1.0, 1.0, 1.0, 0.07);
     }`;
   const gridProg = linkProgram(
     compileShader(gridVS, gl.VERTEX_SHADER),
@@ -1287,7 +1322,7 @@ function multiMapSmooth(progress, stops, values) {
   gl.bindBuffer(gl.ARRAY_BUFFER, gridBuf);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(gridVerts), gl.STATIC_DRAW);
 
-  // Curve shader (glowing blue with bloom)
+  // ── Curve shader: pulsing glowing blue trace ──
   const curveVS = `
     attribute vec2 a_pos;
     varying vec2 v_uv;
@@ -1299,10 +1334,16 @@ function multiMapSmooth(progress, stops, values) {
     precision mediump float;
     uniform float u_drawPct;
     uniform float u_time;
+    uniform float u_headX;
     varying vec2 v_uv;
     void main() {
-      float glow = 0.85 + 0.15 * sin(u_time * 2.0 + v_uv.x * 12.0);
-      gl_FragColor = vec4(0.0, 0.32 * glow, 1.0 * glow, 1.0);
+      // Pulsing glow along the drawn portion
+      float glow = 0.80 + 0.20 * sin(u_time * 2.5 + v_uv.x * 14.0);
+      // Bright head bloom: intensify near the drawing tip
+      float headDist = abs(v_uv.x - u_headX);
+      float headBloom = smoothstep(0.06, 0.0, headDist) * 0.6;
+      float brightness = glow + headBloom;
+      gl_FragColor = vec4(0.0, 0.32 * brightness, 1.0 * brightness, 1.0);
     }`;
   const curveProg = linkProgram(
     compileShader(curveVS, gl.VERTEX_SHADER),
@@ -1311,18 +1352,23 @@ function multiMapSmooth(progress, stops, values) {
   const curvePosLoc = gl.getAttribLocation(curveProg, 'a_pos');
   const uDrawPct = gl.getUniformLocation(curveProg, 'u_drawPct');
   const uTime = gl.getUniformLocation(curveProg, 'u_time');
+  const uHeadX = gl.getUniformLocation(curveProg, 'u_headX');
   const curveBuf = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, curveBuf);
   gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(curveVerts), gl.STATIC_DRAW);
 
-  // Glow pass shader (thicker, dimmer line for bloom)
+  // ── Glow pass: wider, softer bloom line ──
   const glowFS = `
     precision mediump float;
     uniform float u_time;
+    uniform float u_headX;
     varying vec2 v_uv;
     void main() {
-      float pulse = 0.7 + 0.3 * sin(u_time * 1.5 + v_uv.x * 8.0);
-      gl_FragColor = vec4(0.0, 0.2 * pulse, 0.8 * pulse, 0.35);
+      float pulse = 0.6 + 0.4 * sin(u_time * 1.5 + v_uv.x * 8.0);
+      float headDist = abs(v_uv.x - u_headX);
+      float headBloom = smoothstep(0.08, 0.0, headDist) * 0.5;
+      float a = (0.30 + headBloom) * pulse;
+      gl_FragColor = vec4(0.0, 0.22 * pulse, 0.85 * pulse, a);
     }`;
   const glowProg = linkProgram(
     compileShader(curveVS, gl.VERTEX_SHADER),
@@ -1330,16 +1376,16 @@ function multiMapSmooth(progress, stops, values) {
   );
   const glowPosLoc = gl.getAttribLocation(glowProg, 'a_pos');
   const uGlowTime = gl.getUniformLocation(glowProg, 'u_time');
+  const uGlowHeadX = gl.getUniformLocation(glowProg, 'u_headX');
 
-  // Fill shader (gradient under curve)
-  // Build fill geometry: for each curve point, add a bottom vertex
+  // ── Fill gradient under curve ──
   function buildFillVerts(count) {
     const verts = [];
     for (let i = 0; i <= count && i <= SAMPLES; i++) {
       const x = curveVerts[i * 2];
       const y = curveVerts[i * 2 + 1];
-      verts.push(x, y);         // top (on curve)
-      verts.push(x, MB);        // bottom (baseline)
+      verts.push(x, y);
+      verts.push(x, MB);
     }
     return new Float32Array(verts);
   }
@@ -1357,8 +1403,8 @@ function multiMapSmooth(progress, stops, values) {
     uniform float u_top;
     void main() {
       float h = (v_uv.y - ${MB.toFixed(4)}) / (u_top - ${MB.toFixed(4)});
-      float alpha = h * 0.12;
-      gl_FragColor = vec4(0.0, 0.2, 1.0, alpha);
+      float alpha = h * 0.15;
+      gl_FragColor = vec4(0.0, 0.22, 1.0, alpha);
     }`;
   const fillProg = linkProgram(
     compileShader(fillVS, gl.VERTEX_SHADER),
@@ -1367,9 +1413,187 @@ function multiMapSmooth(progress, stops, values) {
   const fillPosLoc = gl.getAttribLocation(fillProg, 'a_pos');
   const uFillTop = gl.getUniformLocation(fillProg, 'u_top');
 
+  // ── Dot at curve head (leading indicator) ──
+  const dotVS = `
+    attribute vec2 a_pos;
+    uniform float u_pointSize;
+    void main() {
+      gl_Position = vec4(a_pos * 2.0 - 1.0, 0.0, 1.0);
+      gl_PointSize = u_pointSize;
+    }`;
+  const dotFS = `
+    precision mediump float;
+    uniform float u_time;
+    void main() {
+      float dist = length(gl_PointCoord - vec2(0.5));
+      if (dist > 0.5) discard;
+      float pulse = 0.7 + 0.3 * sin(u_time * 4.0);
+      float glow = smoothstep(0.5, 0.15, dist) * pulse;
+      gl_FragColor = vec4(0.15 * glow, 0.55 * glow, 1.0 * glow, glow);
+    }`;
+  const dotProg = linkProgram(
+    compileShader(dotVS, gl.VERTEX_SHADER),
+    compileShader(dotFS, gl.FRAGMENT_SHADER)
+  );
+  const dotPosLoc = gl.getAttribLocation(dotProg, 'a_pos');
+  const uDotPointSize = gl.getUniformLocation(dotProg, 'u_pointSize');
+  const uDotTime = gl.getUniformLocation(dotProg, 'u_time');
+  const dotBuf = gl.createBuffer();
+
+  // ── Volatile token price — Candlestick chart (behind yield curve) ──
+  const VOL_DAYS = TOTAL_DAYS;
+  const dailyPrice = new Float32Array(VOL_DAYS + 1);
+  dailyPrice[0] = 0.45;
+  function volSrand(s) { let x = Math.sin(s * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+  const volTrends = [0.006, -0.005, 0.008, -0.004, 0.005, 0.003, -0.003, 0.004, 0.002];
+  const volSegLen = VOL_DAYS / volTrends.length;
+  for (let i = 1; i <= VOL_DAYS; i++) {
+    const seg = Math.min(volTrends.length - 1, Math.floor(i / volSegLen));
+    const noise = (volSrand(i * 3.7) - 0.5) * 0.04;
+    dailyPrice[i] = Math.max(0.08, Math.min(0.92, dailyPrice[i - 1] + volTrends[seg] + noise));
+  }
+
+  // Group into candles (5-day periods)
+  const CANDLE_PERIOD = 5;
+  const NUM_CANDLES = Math.ceil(VOL_DAYS / CANDLE_PERIOD);
+  const candles = [];
+  for (let c = 0; c < NUM_CANDLES; c++) {
+    const dStart = c * CANDLE_PERIOD;
+    const dEnd = Math.min((c + 1) * CANDLE_PERIOD, VOL_DAYS);
+    const open = dailyPrice[dStart];
+    const close = dailyPrice[dEnd];
+    let high = -Infinity, low = Infinity;
+    for (let d = dStart; d <= dEnd; d++) {
+      if (dailyPrice[d] > high) high = dailyPrice[d];
+      if (dailyPrice[d] < low) low = dailyPrice[d];
+    }
+    candles.push({ open, close, high, low, dayStart: dStart, dayEnd: dEnd, bullish: close >= open });
+  }
+
+  function priceToY(p) {
+    const yNorm = p * 0.55 + 0.05;
+    return MB + yNorm * (1 - MB - MT);
+  }
+  function dayToX(d) {
+    return ML + (d / TOTAL_DAYS) * (1 - ML - MR);
+  }
+
+  // Build candle geometry
+  const candleBodyVerts = [];
+  const candleWickVerts = [];
+  const chartW = 1 - ML - MR;
+  const candleWidth = (chartW / NUM_CANDLES) * 0.65;
+  const wickWidth = candleWidth * 0.12;
+  candles.forEach(c => {
+    const cx = dayToX((c.dayStart + c.dayEnd) / 2);
+    const halfW = candleWidth / 2;
+    const halfWick = wickWidth / 2;
+    const yOpen = priceToY(c.open);
+    const yClose = priceToY(c.close);
+    const yHigh = priceToY(c.high);
+    const yLow = priceToY(c.low);
+    const bodyTop = Math.max(yOpen, yClose);
+    const bodyBot = Math.min(yOpen, yClose);
+    const minBody = 0.002;
+    const adjTop = bodyTop - bodyBot < minBody ? bodyBot + minBody : bodyTop;
+    const r = c.bullish ? 0.13 : 0.94;
+    const g = c.bullish ? 0.77 : 0.27;
+    const b = c.bullish ? 0.37 : 0.27;
+    candleBodyVerts.push(cx - halfW, bodyBot, r, g, b);
+    candleBodyVerts.push(cx + halfW, bodyBot, r, g, b);
+    candleBodyVerts.push(cx - halfW, adjTop, r, g, b);
+    candleBodyVerts.push(cx + halfW, bodyBot, r, g, b);
+    candleBodyVerts.push(cx + halfW, adjTop, r, g, b);
+    candleBodyVerts.push(cx - halfW, adjTop, r, g, b);
+    const wr = r * 0.7, wg = g * 0.7, wb = b * 0.7;
+    candleWickVerts.push(cx - halfWick, yLow, wr, wg, wb);
+    candleWickVerts.push(cx + halfWick, yLow, wr, wg, wb);
+    candleWickVerts.push(cx - halfWick, yHigh, wr, wg, wb);
+    candleWickVerts.push(cx + halfWick, yLow, wr, wg, wb);
+    candleWickVerts.push(cx + halfWick, yHigh, wr, wg, wb);
+    candleWickVerts.push(cx - halfWick, yHigh, wr, wg, wb);
+  });
+
+  const candleVS = `
+    attribute vec2 a_pos;
+    attribute vec3 a_color;
+    varying vec3 v_color;
+    void main() {
+      v_color = a_color;
+      gl_Position = vec4(a_pos * 2.0 - 1.0, 0.0, 1.0);
+    }`;
+  const candleFS = `
+    precision mediump float;
+    uniform float u_alpha;
+    varying vec3 v_color;
+    void main() {
+      gl_FragColor = vec4(v_color, 0.75 * u_alpha);
+    }`;
+  const candleProg = linkProgram(
+    compileShader(candleVS, gl.VERTEX_SHADER),
+    compileShader(candleFS, gl.FRAGMENT_SHADER)
+  );
+  const candlePosLoc = gl.getAttribLocation(candleProg, 'a_pos');
+  const candleColorLoc = gl.getAttribLocation(candleProg, 'a_color');
+  const uCandleAlpha = gl.getUniformLocation(candleProg, 'u_alpha');
+
+  const bodyData = new Float32Array(candleBodyVerts);
+  const wickData = new Float32Array(candleWickVerts);
+  const bodyBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, bodyBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, bodyData, gl.STATIC_DRAW);
+  const wickBufGL = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, wickBufGL);
+  gl.bufferData(gl.ARRAY_BUFFER, wickData, gl.STATIC_DRAW);
+
+  const VERTS_PER_CANDLE = 6;
+  const STRIDE = 5 * 4;
+
+  // Volume bars
+  const VOL_BAR_PERIOD = 5;
+  const NUM_VOL_BARS = NUM_CANDLES;
+  const volumeData = new Float32Array(NUM_VOL_BARS);
+  for (let i = 0; i < NUM_VOL_BARS; i++) {
+    const dStart = i * VOL_BAR_PERIOD;
+    const dEnd = Math.min((i + 1) * VOL_BAR_PERIOD, VOL_DAYS);
+    let maxSwing = 0;
+    for (let d = dStart; d < dEnd && d <= VOL_DAYS; d++) {
+      if (d > 0) maxSwing = Math.max(maxSwing, Math.abs(dailyPrice[d] - dailyPrice[d - 1]));
+    }
+    const baseVol = 0.2 + volSrand(i * 7.3 + 42) * 0.5;
+    const volSpike = maxSwing > 0.02 ? 1.5 : 1.0;
+    volumeData[i] = Math.min(1.0, baseVol * volSpike + volSrand(i * 11.1) * 0.3);
+  }
+  const volBarVerts = [];
+  const volBarHeight = (1 - MB - MT) * 0.18;
+  const volBarWidth = (chartW / NUM_VOL_BARS) * 0.7;
+  for (let i = 0; i < NUM_VOL_BARS; i++) {
+    const cx = dayToX((i + 0.5) * VOL_BAR_PERIOD);
+    const halfW = volBarWidth / 2;
+    const barTop = MB + volumeData[i] * volBarHeight;
+    const barBot = MB;
+    const isBullish = candles[i] && candles[i].bullish;
+    const r = isBullish ? 0.08 : 0.50;
+    const g = isBullish ? 0.40 : 0.14;
+    const b = isBullish ? 0.25 : 0.14;
+    volBarVerts.push(cx - halfW, barBot, r, g, b);
+    volBarVerts.push(cx + halfW, barBot, r, g, b);
+    volBarVerts.push(cx - halfW, barTop, r, g, b);
+    volBarVerts.push(cx + halfW, barBot, r, g, b);
+    volBarVerts.push(cx + halfW, barTop, r, g, b);
+    volBarVerts.push(cx - halfW, barTop, r, g, b);
+  }
+  const volBarData = new Float32Array(volBarVerts);
+  const volBarBuf = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, volBarBuf);
+  gl.bufferData(gl.ARRAY_BUFFER, volBarData, gl.STATIC_DRAW);
+  const VERTS_PER_VOL_BAR = 6;
+
   // State
-  let drawProgress = 0; // 0-1 how much of curve is drawn
-  let displayedRatio = 1.0; // Smoothly animated ratio display
+  let volDrawProgress = 0;
+  let volAlpha = 0;
+  let drawProgress = 0;
+  let displayedRatio = 1.0;
   let animTime = 0;
   let isActive = false;
 
@@ -1399,8 +1623,46 @@ function multiMapSmooth(progress, stops, values) {
     gl.drawArrays(gl.LINES, 0, gridVerts.length / 2);
 
     const drawCount = Math.floor(drawProgress * SAMPLES) + 1;
+    // Head position (normalized x of the tip)
+    const headX = drawCount > 0 ? curveVerts[(drawCount - 1) * 2] : ML;
 
-    // 2. Fill under curve
+    // 1.5 Volume bars
+    if (volAlpha > 0.01 && volDrawProgress > 0) {
+      const visibleVolBars = Math.floor(volDrawProgress * NUM_VOL_BARS);
+      if (visibleVolBars > 0) {
+        gl.useProgram(candleProg);
+        gl.uniform1f(uCandleAlpha, volAlpha * 0.7);
+        gl.bindBuffer(gl.ARRAY_BUFFER, volBarBuf);
+        gl.enableVertexAttribArray(candlePosLoc);
+        gl.vertexAttribPointer(candlePosLoc, 2, gl.FLOAT, false, STRIDE, 0);
+        gl.enableVertexAttribArray(candleColorLoc);
+        gl.vertexAttribPointer(candleColorLoc, 3, gl.FLOAT, false, STRIDE, 2 * 4);
+        gl.drawArrays(gl.TRIANGLES, 0, visibleVolBars * VERTS_PER_VOL_BAR);
+      }
+    }
+
+    // 2. Candlestick chart
+    if (volAlpha > 0.01 && volDrawProgress > 0) {
+      const visibleCandles = Math.floor(volDrawProgress * NUM_CANDLES);
+      if (visibleCandles > 0) {
+        gl.useProgram(candleProg);
+        gl.uniform1f(uCandleAlpha, volAlpha);
+        gl.bindBuffer(gl.ARRAY_BUFFER, wickBufGL);
+        gl.enableVertexAttribArray(candlePosLoc);
+        gl.vertexAttribPointer(candlePosLoc, 2, gl.FLOAT, false, STRIDE, 0);
+        gl.enableVertexAttribArray(candleColorLoc);
+        gl.vertexAttribPointer(candleColorLoc, 3, gl.FLOAT, false, STRIDE, 2 * 4);
+        gl.drawArrays(gl.TRIANGLES, 0, visibleCandles * VERTS_PER_CANDLE);
+        gl.bindBuffer(gl.ARRAY_BUFFER, bodyBuf);
+        gl.enableVertexAttribArray(candlePosLoc);
+        gl.vertexAttribPointer(candlePosLoc, 2, gl.FLOAT, false, STRIDE, 0);
+        gl.enableVertexAttribArray(candleColorLoc);
+        gl.vertexAttribPointer(candleColorLoc, 3, gl.FLOAT, false, STRIDE, 2 * 4);
+        gl.drawArrays(gl.TRIANGLES, 0, visibleCandles * VERTS_PER_CANDLE);
+      }
+    }
+
+    // 3. Fill under curve
     if (drawCount > 1) {
       const fv = buildFillVerts(drawCount);
       gl.useProgram(fillProg);
@@ -1412,50 +1674,58 @@ function multiMapSmooth(progress, stops, values) {
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, fv.length / 2);
     }
 
-    // 3. Glow pass (wide line)
+    // 4. Glow pass (wide bloom line)
     gl.useProgram(glowProg);
     gl.bindBuffer(gl.ARRAY_BUFFER, curveBuf);
     gl.enableVertexAttribArray(glowPosLoc);
     gl.vertexAttribPointer(glowPosLoc, 2, gl.FLOAT, false, 0, 0);
     gl.uniform1f(uGlowTime, animTime);
+    gl.uniform1f(uGlowHeadX, headX);
     gl.lineWidth(Math.min(4, gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE)[1]));
     gl.drawArrays(gl.LINE_STRIP, 0, drawCount);
 
-    // 4. Main curve (thin bright line)
+    // 5. Main curve (bright thin line)
     gl.useProgram(curveProg);
     gl.bindBuffer(gl.ARRAY_BUFFER, curveBuf);
     gl.enableVertexAttribArray(curvePosLoc);
     gl.vertexAttribPointer(curvePosLoc, 2, gl.FLOAT, false, 0, 0);
     gl.uniform1f(uDrawPct, drawProgress);
     gl.uniform1f(uTime, animTime);
+    gl.uniform1f(uHeadX, headX);
     gl.lineWidth(Math.min(2, gl.getParameter(gl.ALIASED_LINE_WIDTH_RANGE)[1]));
     gl.drawArrays(gl.LINE_STRIP, 0, drawCount);
+
+    // 6. Glowing dot at curve head
+    if (drawCount > 1 && drawProgress > 0.01 && drawProgress < 0.99) {
+      const hx = curveVerts[(drawCount - 1) * 2];
+      const hy = curveVerts[(drawCount - 1) * 2 + 1];
+      gl.useProgram(dotProg);
+      gl.bindBuffer(gl.ARRAY_BUFFER, dotBuf);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([hx, hy]), gl.DYNAMIC_DRAW);
+      gl.enableVertexAttribArray(dotPosLoc);
+      gl.vertexAttribPointer(dotPosLoc, 2, gl.FLOAT, false, 0, 0);
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      gl.uniform1f(uDotPointSize, 14.0 * dpr);
+      gl.uniform1f(uDotTime, animTime);
+      gl.drawArrays(gl.POINTS, 0, 1);
+    }
 
     requestAnimationFrame(render);
   }
 
-  // ── Milestone callouts positioning ──
-  const calloutData = [
-    { day: 30,  el: document.getElementById('yc-ms-30'),  chimed: false, pitch: 1.0 },
-    { day: 90,  el: document.getElementById('yc-ms-90'),  chimed: false, pitch: 1.25 },
-    { day: 180, el: document.getElementById('yc-ms-180'), chimed: false, pitch: 1.5 },
-    { day: 243, el: document.getElementById('yc-ms-243'), chimed: false, pitch: 1.8 },
-  ];
-
+  // ── Milestone callout positioning ──
   function positionCallouts() {
     const rect = ycCanvas.getBoundingClientRect();
     const wrapRect = ycWrap.getBoundingClientRect();
     calloutData.forEach(ms => {
       const xNorm = ML + (ms.day / TOTAL_DAYS) * (1 - ML - MR);
       const r = ratioAtDay(ms.day);
-      const yNorm = MB + ((r - 1.0) / (FINAL_RATIO - 1.0)) * (1 - MB - MT);
+      const yNorm = MB + ((r - RATIO_MIN) / (RATIO_MAX - RATIO_MIN)) * (1 - MB - MT);
       const px = rect.left - wrapRect.left + xNorm * rect.width;
       const py = rect.top - wrapRect.top + (1 - yNorm) * rect.height;
-      // Cap the callout position so the card doesn't clip the right edge
       const cappedPx = Math.min(px, wrapRect.width - 10);
       ms.el.style.left = `${cappedPx}px`;
       ms.el.style.bottom = `${wrapRect.height - py + 4}px`;
-      // Shift callout card alignment based on proximity to right edge
       const card = ms.el.querySelector('.yc-callout-card');
       if (card) {
         const edgeSpace = wrapRect.width - cappedPx;
@@ -1495,11 +1765,15 @@ function multiMapSmooth(progress, stops, values) {
       if (ratioDisplay) ratioDisplay.style.opacity = multiMapSmooth(p, [0.08, 0.18, 0.76, 0.82], [0, 1, 1, 0]);
       if (pair) pair.style.opacity = multiMapSmooth(p, [0.10, 0.20], [0, 1]);
       clock.style.opacity = multiMapSmooth(p, [0.18, 0.26, 0.76, 0.82], [0, 1, 1, 0]);
-      if (ycWrap) ycWrap.style.opacity = multiMapSmooth(p, [0.22, 0.32, 0.76, 0.84], [0, 1, 1, 0]);
-      stats.style.opacity = multiMapSmooth(p, [0.38, 0.48, 0.76, 0.84], [0, 1, 1, 0]);
-      if (equation) equation.style.opacity = multiMapSmooth(p, [0.38, 0.48, 0.76, 0.84], [0, 1, 1, 0]);
+      if (ycWrap) ycWrap.style.opacity = multiMapSmooth(p, [0.22, 0.32, 0.90, 0.97], [0, 1, 1, 0]);
+      stats.style.opacity = multiMapSmooth(p, [0.38, 0.48, 0.72, 0.80], [0, 1, 1, 0]);
+      if (equation) equation.style.opacity = multiMapSmooth(p, [0.38, 0.48, 0.72, 0.80], [0, 1, 1, 0]);
 
-      // Map scroll to curve draw progress
+      // Candlestick draws first, blue yield curve line lags behind
+      volAlpha = multiMapSmooth(p, [0.22, 0.30, 0.90, 0.96], [0, 1, 1, 0]);
+      volDrawProgress = Math.max(0, Math.min(1, multiMapSmooth(p, [0.22, 0.75], [0, 1])));
+
+      // Blue curve lags behind candlesticks
       const curveP = mapRange(p, 0.28, 0.78, 0, 1);
       drawProgress = Math.max(0, Math.min(1, curveP));
 
@@ -1514,13 +1788,10 @@ function multiMapSmooth(progress, stops, values) {
 
       const clampedRatio = ratioAtDay(currentDay);
 
-      // ── Smooth ratio tick-up animation ──
-      // Interpolate displayed ratio toward target for organic counter feel
+      // Smooth ratio tick-up
       displayedRatio += (clampedRatio - displayedRatio) * 0.12;
-      // Snap if very close to avoid perpetual floating
-      if (Math.abs(displayedRatio - clampedRatio) < 0.0005) displayedRatio = clampedRatio;
+      if (Math.abs(displayedRatio - clampedRatio) < 0.0001) displayedRatio = clampedRatio;
 
-      // Rolling 7-day APY for organic feel
       let apy = apyAtDay(currentDay);
 
       statDays.textContent = currentDay;
@@ -1545,39 +1816,36 @@ function multiMapSmooth(progress, stops, values) {
         }
       });
 
-      // ── Volatility narrative (appears after yield curve completes) ──
-      if (accrueVol) {
-        const volOp = multiMapSmooth(p, [0.76, 0.82, 0.93, 0.98], [0, 1, 1, 0]);
-        accrueVol.style.opacity = volOp;
-        // Draw chart progressively
-        const chartDraw = multiMapSmooth(p, [0.78, 0.90], [0, 1]);
-        drawVolChart(chartDraw);
-        // Headline/sub fade in after chart starts
-        if (volHeadline) volHeadline.style.opacity = multiMapSmooth(p, [0.82, 0.86, 0.93, 0.97], [0, 1, 1, 0]);
-        if (volSub) volSub.style.opacity = multiMapSmooth(p, [0.84, 0.88, 0.93, 0.97], [0, 1, 1, 0]);
+      // Volatile price narrative
+      if (volNarrative) {
+        volNarrative.style.opacity = multiMapSmooth(p, [0.74, 0.80, 0.90, 0.96], [0, 1, 1, 0]);
       }
+      if (volHeadline) volHeadline.style.opacity = multiMapSmooth(p, [0.74, 0.80, 0.90, 0.96], [0, 1, 1, 0]);
+      if (volSub) volSub.style.opacity = multiMapSmooth(p, [0.78, 0.84, 0.90, 0.96], [0, 1, 1, 0]);
     }
   });
 })();
 
 // ────────────────────────────────────────────
-// 8.5. CHAPTER 3.5: CCA AUCTION — SHARE TOKEN STORY (500vh)
+// 8.5. CHAPTER 3.5: CCA — SHARE TOKEN DISTRIBUTION (700vh)
+// Token swap reversal: deposited asset → back, share token → front
+// Camera pan right, left-side node graph reveals distribution segments
 // ────────────────────────────────────────────
 (function chapterCCA() {
   const section = document.getElementById('ch-cca');
   if (!section) return;
 
+  const camera = document.getElementById('cca-camera');
+  const depositCoin = document.getElementById('cca-deposit-coin');
+  const shareToken = document.getElementById('cca-share-token');
+  const shareLabel = document.getElementById('cca-share-label');
   const intro = document.getElementById('cca-intro');
-  const shareIcon = document.getElementById('cca-share-icon');
-  const distribution = document.getElementById('cca-distribution');
-  const segAuction = document.getElementById('cca-seg-auction');
-  const segVesting = document.getElementById('cca-seg-vesting');
-  const segLiquidity = document.getElementById('cca-seg-liquidity');
-  const fillAuction = document.getElementById('cca-fill-auction');
-  const fillVesting = document.getElementById('cca-fill-vesting');
-  const fillLiquidity = document.getElementById('cca-fill-liquidity');
+  const nodeGraph = document.getElementById('cca-node-graph');
+  const branchSvg = document.getElementById('cca-branch-svg');
+  const cardAuction = document.getElementById('cca-card-auction');
+  const cardVesting = document.getElementById('cca-card-vesting');
+  const cardLiquidity = document.getElementById('cca-card-liquidity');
   const summary = document.getElementById('cca-summary');
-  const ccaContainer = document.querySelector('.cca-container');
 
   let ccaChimePlayed = false;
 
@@ -1587,61 +1855,103 @@ function multiMapSmooth(progress, stops, values) {
     end: 'bottom top',
     onUpdate: (self) => {
       const p = self.progress;
+      const vw = window.innerWidth;
       const vh = window.innerHeight;
+      const isMobile = vw < 768;
+      const rm = Math.min(1, vw / 1200);
+      const iconHalf = isMobile ? 38 : 48;
+      const centerY = vh / 2 - iconHalf;
+      const centerX = vw / 2;
 
-      // Audio: ambient drone during CCA chapter
+      // Audio
       AudioEngine.setDroneLevel(multiMap(p, [0, 0.08, 0.60, 0.90], [0.02, 0.06, 0.06, 0.01]));
 
       // Scene entrance/exit
-      const sceneOp = multiMapSmooth(p, [0, 0.08, 0.88, 0.97], [0, 1, 1, 0]);
+      const sceneOp = multiMapSmooth(p, [0, 0.06, 0.90, 0.97], [0, 1, 1, 0]);
       section.querySelector('.scene-pin').style.opacity = sceneOp;
 
-      // ── Vertical drift: content scrolls upward as user scrolls ──
-      const driftY = multiMapSmooth(p, [0.10, 0.85], [0, -vh * 0.45]);
-      ccaContainer.style.transform = `translate(-50%, -50%) translateY(${driftY}px)`;
+      // ============================
+      // PHASE 1 (p 0.02–0.20): REVERSE SWAP
+      // Deposited asset (AKITA circle) fades to back,
+      // Share token (■AKITA square) comes to front
+      // ============================
 
-      // ── Intro ──
-      const introOp = multiMapSmooth(p, [0.04, 0.12, 0.28, 0.36], [0, 1, 1, 0]);
-      const introY = multiMapSmooth(p, [0.04, 0.14], [20, 0]);
-      intro.style.opacity = introOp;
-      intro.style.transform = `translateY(${introY}px)`;
+      // Deposited asset: starts centered, visible, scales down + fades back
+      const coinOp = multiMapSmooth(p, [0.02, 0.06, 0.10, 0.18], [0, 1, 0.6, 0]);
+      const coinScale = multiMapSmooth(p, [0.02, 0.06, 0.10, 0.18], [1, 1, 0.7, 0.5]);
+      const coinZ = multiMapSmooth(p, [0.08, 0.14], [3, 1]);
+      depositCoin.style.transform = `translate(${centerX}px, ${centerY}px) translate(-50%, 0) scale(${coinScale})`;
+      depositCoin.style.opacity = coinOp;
+      depositCoin.style.zIndex = Math.round(coinZ);
 
-      // ── Share token icon ──
-      const iconOp = multiMapSmooth(p, [0.06, 0.16, 0.80, 0.88], [0, 1, 1, 0]);
-      const iconScale = multiMapSmooth(p, [0.06, 0.18], [0.7, 1]);
-      shareIcon.style.opacity = iconOp;
-      shareIcon.style.transform = `scale(${iconScale})`;
+      // Share token: starts small + behind, grows + comes forward
+      const shareOp = multiMapSmooth(p,
+        [0.04, 0.10, 0.18, 0.28, 0.40, 0.88, 0.94],
+        [0,    0.5,  1,    1,    1,    1,    0]
+      );
+      const shareScale = multiMapSmooth(p,
+        [0.04, 0.10, 0.18, 0.28],
+        [0.5,  0.75, 1,    1]
+      );
+      // After p=0.28, share token moves right (like deposited asset in token journey)
+      const shareOffsetX = multiMapSmooth(p,
+        [0.18, 0.28, 0.38, 0.88],
+        [0,    0,    220*rm, 220*rm]
+      );
+      shareToken.style.transform = `translate(${centerX + shareOffsetX}px, ${centerY}px) translate(-50%, 0) scale(${shareScale})`;
+      shareToken.style.opacity = shareOp;
+      shareToken.style.zIndex = Math.round(multiMapSmooth(p, [0.08, 0.14], [1, 4]));
 
-      // Audio: chime when icon appears
+      // Share label
+      if (shareLabel) shareLabel.style.opacity = multiMapSmooth(p, [0.14, 0.20, 0.40, 0.88], [0, 1, 0, 0]);
+
+      // Audio: chime when share token comes forward
       if (p >= 0.14 && p <= 0.16 && !ccaChimePlayed) {
         AudioEngine.playChime(1.2);
         ccaChimePlayed = true;
       }
       if (p < 0.10 || p > 0.24) ccaChimePlayed = false;
 
-      // ── Distribution container ──
-      distribution.style.opacity = multiMapSmooth(p, [0.30, 0.38], [0, 1]);
+      // ============================
+      // PHASE 2 (p 0.16–0.34): INTRO TEXT
+      // "What happens with ■AKITA?"
+      // ============================
+      const introOp = multiMapSmooth(p, [0.16, 0.22, 0.30, 0.36], [0, 1, 1, 0]);
+      const introY = multiMapSmooth(p, [0.16, 0.24], [20, 0]);
+      intro.style.opacity = introOp;
+      intro.style.transform = `translateX(-50%) translateY(${introY}px)`;
 
-      // ── Segment 1: CCA Auction (40%) ──
-      const seg1T = multiMapSmooth(p, [0.32, 0.44], [0, 1]);
-      segAuction.style.opacity = seg1T;
-      segAuction.style.transform = `translateY(${(1 - seg1T) * 20}px)`;
-      fillAuction.style.width = `${seg1T * 40}%`;
+      // ============================
+      // PHASE 3 (p 0.32–0.46): CAMERA PAN RIGHT
+      // Mirror of ch-token's left pan
+      // ============================
+      const panX = isMobile ? 0 : multiMapSmooth(p, [0.32, 0.46], [0, 400*rm]);
+      camera.style.transform = `translateX(${panX}px)`;
 
-      // ── Segment 2: Creator Vesting (40%) ──
-      const seg2T = multiMapSmooth(p, [0.42, 0.54], [0, 1]);
-      segVesting.style.opacity = seg2T;
-      segVesting.style.transform = `translateY(${(1 - seg2T) * 20}px)`;
-      fillVesting.style.width = `${seg2T * 40}%`;
+      // ============================
+      // PHASE 4 (p 0.42–0.75): LEFT-SIDE NODE GRAPH
+      // Distribution cards cascade in from right
+      // ============================
+      if (nodeGraph) {
+        nodeGraph.style.opacity = multiMapSmooth(p, [0.42, 0.48], [0, 1]);
+      }
+      if (branchSvg) branchSvg.style.opacity = multiMapSmooth(p, [0.44, 0.50], [0, 1]);
 
-      // ── Segment 3: Liquidity (20%) ──
-      const seg3T = multiMapSmooth(p, [0.52, 0.64], [0, 1]);
-      segLiquidity.style.opacity = seg3T;
-      segLiquidity.style.transform = `translateY(${(1 - seg3T) * 20}px)`;
-      fillLiquidity.style.width = `${seg3T * 20}%`;
+      // Distribution cards — staggered reveal
+      const c1Op = multiMapSmooth(p, [0.48, 0.54], [0, 1]);
+      const c2Op = multiMapSmooth(p, [0.52, 0.58], [0, 1]);
+      const c3Op = multiMapSmooth(p, [0.56, 0.62], [0, 1]);
+      cardAuction.style.opacity = c1Op;
+      cardVesting.style.opacity = c2Op;
+      cardLiquidity.style.opacity = c3Op;
+      cardAuction.style.transform = `translateX(${(1 - c1Op) * -12}px)`;
+      cardVesting.style.transform = `translateX(${(1 - c2Op) * -12}px)`;
+      cardLiquidity.style.transform = `translateX(${(1 - c3Op) * -12}px)`;
 
-      // ── Summary ──
-      summary.style.opacity = multiMapSmooth(p, [0.72, 0.80, 0.86, 0.93], [0, 1, 1, 0]);
+      // ============================
+      // PHASE 5 (p 0.78–0.90): SUMMARY + EXIT
+      // ============================
+      summary.style.opacity = multiMapSmooth(p, [0.78, 0.84, 0.88, 0.93], [0, 1, 1, 0]);
     }
   });
 })();
@@ -1818,4 +2128,220 @@ window.__particleConverge = 0;
     onLeave: () => { window.__particleConverge = 0; },
     onLeaveBack: () => { window.__particleConverge = 0; },
   });
+})();
+
+/* ── Premium energy-pulse flow animation on node graph ── */
+(function initPulseFlow() {
+  const canvas = document.getElementById('ng-pulse-canvas');
+  const nodeGraph = document.getElementById('node-graph');
+  if (!canvas || !nodeGraph) return;
+  const ctx = canvas.getContext('2d');
+
+  /* Pulse particle config */
+  const PULSE_COLOR = [0, 82, 255];
+  const IDLE_COLOR  = [138, 143, 152];
+  const PULSE_RADIUS = 2.0;
+  const GLOW_RADIUS  = 10;
+  const TRAIL_COUNT  = 6;
+  const TRAIL_SPACING = 0.065;
+  const SPEED        = 0.00035;
+  const IDLE_SPEED   = 0.00020;
+
+  function cubicBezier(t, p0, p1, p2, p3) {
+    const u = 1 - t;
+    return {
+      x: u*u*u*p0.x + 3*u*u*t*p1.x + 3*u*t*t*p2.x + t*t*t*p3.x,
+      y: u*u*u*p0.y + 3*u*u*t*p1.y + 3*u*t*t*p2.y + t*t*t*p3.y
+    };
+  }
+
+  function evalPath(segments, t) {
+    const n = segments.length;
+    const si = Math.min(Math.floor(t * n), n - 1);
+    const lt = (t * n) - si;
+    return cubicBezier(lt, segments[si].p0, segments[si].p1, segments[si].p2, segments[si].p3);
+  }
+
+
+
+  /**
+   * Convert an SVG path's viewBox-space cubic bezier to screen-space,
+   * accounting for preserveAspectRatio="none" (linear stretch).
+   * svgEl: the <svg> element
+   * vb: { minX, minY, w, h } — the viewBox
+   * d: path definition as array of {cmd, points} or a bezier: [{vx,vy},...]
+   */
+  function svgToScreen(svgEl, vbMinX, vbMinY, vbW, vbH, vx, vy) {
+    const r  = svgEl.getBoundingClientRect();
+    const nr = nodeGraph.getBoundingClientRect();
+    return {
+      x: ((vx - vbMinX) / vbW) * r.width  + r.left - nr.left,
+      y: ((vy - vbMinY) / vbH) * r.height + r.top  - nr.top
+    };
+  }
+
+  /* Parse SVG cubic bezier path "M x,y C x,y x,y x,y C x,y x,y x,y" into segments */
+  function parseSvgCubic(svgEl, vbMinX, vbMinY, vbW, vbH, pathD) {
+    // Extract all coordinate pairs
+    const nums = pathD.match(/-?[\d.]+/g).map(Number);
+    // M startX,startY C cp1x,cp1y cp2x,cp2y endX,endY [C ...]
+    const segments = [];
+    let i = 0;
+    const startVx = nums[i++], startVy = nums[i++];
+    let cur = svgToScreen(svgEl, vbMinX, vbMinY, vbW, vbH, startVx, startVy);
+
+    while (i < nums.length) {
+      // Each C command has 3 pairs = 6 numbers
+      const cp1 = svgToScreen(svgEl, vbMinX, vbMinY, vbW, vbH, nums[i],   nums[i+1]);
+      const cp2 = svgToScreen(svgEl, vbMinX, vbMinY, vbW, vbH, nums[i+2], nums[i+3]);
+      const end = svgToScreen(svgEl, vbMinX, vbMinY, vbW, vbH, nums[i+4], nums[i+5]);
+      segments.push({ p0: cur, p1: cp1, p2: cp2, p3: end });
+      cur = end;
+      i += 6;
+    }
+    return segments;
+  }
+
+  let paths = [];
+
+  /* Path definitions matching the actual SVG <path d="..."> in index.html */
+  const BRANCH_ENGINE_D = 'M 1,-11 C 12,-11 18,6 30,18 C 42,30 60,38 75,38 C 85,38 92,38 100,38';
+  const BRANCH_IDLE_D   = 'M 1,-11 C 12,-11 18,10 30,32 C 45,58 65,88 75,95 C 85,102 92,105 100,105';
+  const FAN_AJNA_D      = 'M 0,50 C 16,50 18,16 34,16 C 46,16 54,16 60,16';
+  const FAN_CHARM_D     = 'M 0,50 C 14,50 22,50 32,50 C 42,50 48,50 60,50';
+  const FAN_SOLANA_D    = 'M 0,50 C 16,50 18,84 34,84 C 46,84 54,84 60,84';
+  const DS1_D           = 'M 0,8 C 8,8 10,4 16,4 C 22,4 24,8 30,8';
+  const DS2_D           = 'M 0,8 C 8,8 10,12 16,12 C 22,12 24,8 30,8';
+
+  function rebuildPaths() {
+    const branchSvg = document.getElementById('ng-branch-svg');
+    const fanSvg    = document.getElementById('ng-edge-fan');
+    const ds1Svg    = document.querySelector('#downstream-1 .ng-ds-edge');
+    const ds2Svg    = document.querySelector('#downstream-2 .ng-ds-edge');
+    if (!branchSvg || !fanSvg) return;
+
+    paths = [];
+
+    // Branch SVG: viewBox 0 -15 100 130
+    paths.push({
+      segments: parseSvgCubic(branchSvg, 0, -15, 100, 130, BRANCH_ENGINE_D),
+      color: PULSE_COLOR, speed: SPEED, trailCount: TRAIL_COUNT, phase: 0
+    });
+    paths.push({
+      segments: parseSvgCubic(branchSvg, 0, -15, 100, 130, BRANCH_IDLE_D),
+      color: IDLE_COLOR, speed: IDLE_SPEED, trailCount: 3, phase: 0.3
+    });
+
+    // Fan-out SVG: viewBox 0 0 60 100
+    paths.push({
+      segments: parseSvgCubic(fanSvg, 0, 0, 60, 100, FAN_AJNA_D),
+      color: PULSE_COLOR, speed: SPEED, trailCount: TRAIL_COUNT, phase: 0.0
+    });
+    paths.push({
+      segments: parseSvgCubic(fanSvg, 0, 0, 60, 100, FAN_CHARM_D),
+      color: PULSE_COLOR, speed: SPEED, trailCount: TRAIL_COUNT, phase: 0.33
+    });
+    paths.push({
+      segments: parseSvgCubic(fanSvg, 0, 0, 60, 100, FAN_SOLANA_D),
+      color: PULSE_COLOR, speed: SPEED, trailCount: TRAIL_COUNT, phase: 0.66
+    });
+
+    // Downstream SVGs: viewBox 0 0 30 16
+    if (ds1Svg) {
+      paths.push({
+        segments: parseSvgCubic(ds1Svg, 0, 0, 30, 16, DS1_D),
+        color: PULSE_COLOR, speed: SPEED * 0.7, trailCount: 3, phase: 0.15
+      });
+    }
+    if (ds2Svg) {
+      paths.push({
+        segments: parseSvgCubic(ds2Svg, 0, 0, 30, 16, DS2_D),
+        color: PULSE_COLOR, speed: SPEED * 0.7, trailCount: 3, phase: 0.5
+      });
+    }
+  }
+
+  function resizeCanvas() {
+    const cr = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width  = cr.width * dpr;
+    canvas.height = cr.height * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+
+  function drawPulse(x, y, color, alpha) {
+    const g = ctx.createRadialGradient(x, y, 0, x, y, GLOW_RADIUS);
+    g.addColorStop(0, `rgba(${color[0]},${color[1]},${color[2]},${0.55*alpha})`);
+    g.addColorStop(0.3, `rgba(${color[0]},${color[1]},${color[2]},${0.18*alpha})`);
+    g.addColorStop(1, `rgba(${color[0]},${color[1]},${color[2]},0)`);
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(x, y, GLOW_RADIUS, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.fillStyle = `rgba(${color[0]},${color[1]},${color[2]},${1.0*alpha})`;
+    ctx.beginPath();
+    ctx.arc(x, y, PULSE_RADIUS, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  /* Phase state — persists across rebuildPaths calls */
+  let phases = [0, 0.3, 0.0, 0.33, 0.66, 0.15, 0.5];
+  let pathsBuilt = false;
+  let lastTime = 0, running = false;
+
+  function buildOnce() {
+    rebuildPaths();
+    // Sync phase array length to paths
+    while (phases.length < paths.length) phases.push(Math.random());
+    pathsBuilt = true;
+  }
+
+  function render(time) {
+    if (!running) return;
+    requestAnimationFrame(render);
+    const dt = lastTime ? (time - lastTime) : 16;
+    lastTime = time;
+
+    const ngOp = parseFloat(nodeGraph.style.opacity || 0);
+    if (ngOp < 0.05) return;
+
+    if (!pathsBuilt) buildOnce();
+    resizeCanvas();
+    // Rebuild geometry (positions may shift with scroll) but preserve phases
+    rebuildPaths();
+
+    const w = canvas.width / (window.devicePixelRatio||1);
+    const h = canvas.height / (window.devicePixelRatio||1);
+    ctx.clearRect(0, 0, w, h);
+    ctx.globalCompositeOperation = 'lighter';
+
+    // Canvas extends 670px left of nodeGraph; offset pulse coordinates
+    const canvasR = canvas.getBoundingClientRect();
+    const ngR = nodeGraph.getBoundingClientRect();
+    const offsetX = ngR.left - canvasR.left;
+
+    for (let pi = 0; pi < paths.length; pi++) {
+      const p = paths[pi];
+      phases[pi] = (phases[pi] + p.speed * dt) % 1;
+      for (let i = 0; i < p.trailCount; i++) {
+        const t = (phases[pi] + i * TRAIL_SPACING) % 1;
+        const pt = evalPath(p.segments, t);
+        const edgeFade = Math.min(t/0.08, (1-t)/0.08, 1);
+        const trailFade = 1 - (i/p.trailCount)*0.65;
+        const alpha = edgeFade * trailFade * ngOp;
+        if (alpha > 0.01) drawPulse(pt.x + offsetX, pt.y, p.color, alpha);
+      }
+    }
+  }
+
+  function start() { if (running) return; running = true; lastTime = 0; requestAnimationFrame(render); }
+  function stop() { running = false; }
+
+  const obs = new IntersectionObserver(es => {
+    es.forEach(e => { if (e.isIntersecting) start(); else stop(); });
+  }, { threshold: 0.05 });
+  obs.observe(nodeGraph);
+
+  window.addEventListener('resize', () => { if (running) { resizeCanvas(); rebuildPaths(); } });
 })();

@@ -179,18 +179,11 @@
             <p class="deposit-label">Initial Deposit</p>
             <p class="deposit-amount">50,000,000</p>
             <p class="deposit-unit">AKITA</p>
+            <p class="deposit-desc">Creators deploy 50M of their own token to initiate the vault. These tokens are deployed into strategies, while 10% stays idle as a buffer.</p>
           </div>
           <div class="split-info" id="split-info">
             <p class="split-deployed">90% deployed</p>
           </div>
-          <div class="idle-badge" id="idle-badge">
-            <div class="idle-badge-box">
-              <p class="idle-label">10% idle in vault</p>
-              <p class="idle-amount">5,000,000</p>
-            </div>
-            <div class="idle-badge-line"></div>
-          </div>
-
           <!-- MORPH ZONE: WebGL particle morph overlay (positioned between coin & share) -->
           <div class="morph-zone" id="morph-zone">
             <canvas id="morph-canvas"></canvas>
@@ -208,7 +201,6 @@
               </div>
             </div>
             <span class="token-label share-label" id="share-label">■AKITA</span>
-            <!-- Left detail panel -->
             <div class="token-detail" id="share-detail">
               <div class="detail-section-label" style="color: var(--color-accent);">Vault<br>Share</div>
               <p class="detail-amount">1 ■AKITA</p>
@@ -216,91 +208,122 @@
             </div>
           </div>
 
-          <!-- ═══ Allocation Engine (revealed by panX) ═══ -->
-          <div class="allocation-engine" id="allocation-engine">
-            <!-- Flow line from coin to engine -->
-            <div class="flow-line" id="flow-line">
-              <div class="flow-line-fill" id="flow-line-fill"></div>
-              <div class="flow-line-pulse"></div>
-            </div>
-            <!-- Engine box -->
-            <div class="engine-box" id="engine-box">
-              <div class="engine-icon">
-                <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5">
-                  <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                </svg>
-              </div>
-              <p class="engine-label">Allocation</p>
-              <p class="engine-label">Engine</p>
-              <p class="engine-sub">Routes by weight</p>
-            </div>
-            <!-- Branching SVG + Strategy cards -->
-            <div class="branches" id="branches">
-              <svg class="branch-svg" width="80" height="180" viewBox="0 0 80 180" fill="none" preserveAspectRatio="none">
-                <path class="branch-path" id="branch-0" d="M 0,90 C 30,90 50,26 80,26" stroke="url(#branchGrad)" stroke-width="1.2"/>
-                <path class="branch-path" id="branch-1" d="M 0,90 C 40,90 40,90 80,90" stroke="url(#branchGrad)" stroke-width="1.2"/>
-                <path class="branch-path" id="branch-2" d="M 0,90 C 30,90 50,154 80,154" stroke="url(#branchGrad)" stroke-width="1.2"/>
-                <defs>
-                  <linearGradient id="branchGrad" x1="0" y1="0" x2="100" y2="0" gradientUnits="userSpaceOnUse">
-                    <stop offset="0" stop-color="#0052FF" stop-opacity="0.3"/>
-                    <stop offset="1" stop-color="#8A8F98" stop-opacity="0.15"/>
-                  </linearGradient>
-                </defs>
+          <!-- ═══ Horizontal Node Graph (revealed by panX) ═══ -->
+          <div class="node-graph" id="node-graph">
+            <!-- Shared SVG defs for pulse glow -->
+            <svg class="ng-defs" width="0" height="0">
+              <defs>
+                <filter id="ngGlow" x="-200%" y="-200%" width="500%" height="500%">
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
+                  <feMerge><feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+              </defs>
+            </svg>
+
+            <!-- Branches from token-coin (the existing AKITA avatar to the left) -->
+            <canvas id="ng-pulse-canvas" class="ng-pulse-canvas"></canvas>
+            <div class="ng-body">
+              <!-- Branch SVG — single origin splitting to engine (up) and idle (down) -->
+              <svg class="ng-branch-svg" id="ng-branch-svg" viewBox="0 -35 100 150" preserveAspectRatio="none">
+                <!-- Engine branch — originates from token logo right edge -->
+                <path d="M 1,-29 C 10,-29 16,-10 28,8 C 40,26 60,34 75,34 C 85,34 92,34 100,34" stroke="rgba(0,82,255,0.18)" stroke-width="1" fill="none"/>
+                <!-- Idle branch — originates from token logo right edge -->
+                <path d="M 1,-29 C 10,-29 18,0 30,28 C 44,60 60,82 75,92 C 85,100 92,104 100,104" stroke="rgba(138,143,152,0.13)" stroke-width="0.8" fill="none"/>
               </svg>
-              <div class="strategy-list">
-                <!-- Ajna -->
-                <div class="strategy-row" id="strat-0">
-                  <div class="strategy-card-inner">
-                    <img src="./assets/brand/ajna-official.svg" alt="Ajna" class="strat-icon-img">
-                    <div class="strat-info">
-                      <div class="strat-header">
-                        <span class="strat-name">Ajna</span>
-                        <span class="strat-pct">30%</span>
+
+              <!-- Right side: engine row + idle row stacked -->
+              <div class="ng-right-stack">
+                <!-- ROW 1: Engine path — Engine Hub → [Ajna, Charm, Solana] → [Uniswap, Meteora] -->
+                <div class="ng-row ng-row-engine" id="ng-row-engine">
+                  <!-- Col 1: Engine Hub -->
+                  <div class="ng-col ng-col-hub">
+                    <div class="engine-hub" id="engine-hub">
+                      <div class="engine-icon">
+                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5">
+                          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                        </svg>
                       </div>
-                      <p class="strat-amount">15,000,000</p>
-                      <p class="strat-role">Lending exposure</p>
+                      <p class="engine-label">Allocation</p>
+                      <p class="engine-label">Engine</p>
+                      <p class="engine-hub-deploy">90% deployed</p>
+                      <p class="engine-hub-amount">45,000,000</p>
+                      <p class="engine-sub">Routes by weight</p>
+                    </div>
+                  </div>
+                  <!-- Edge: engine → strategies (organic fan-out with cubic bezier curves) -->
+                  <svg class="ng-edge ng-edge-fan" id="ng-edge-fan" viewBox="0 0 60 100" preserveAspectRatio="none">
+                    <!-- Ajna — base -->
+                    <path d="M 0,50 C 16,50 18,16 34,16 C 46,16 54,16 60,16" stroke="rgba(0,82,255,0.16)" stroke-width="1" fill="none"/>
+                    <!-- Charm — base -->
+                    <path d="M 0,50 C 14,50 22,50 32,50 C 42,50 48,50 60,50" stroke="rgba(0,82,255,0.16)" stroke-width="1" fill="none"/>
+                    <!-- Solana — base -->
+                    <path d="M 0,50 C 16,50 18,84 34,84 C 46,84 54,84 60,84" stroke="rgba(0,82,255,0.16)" stroke-width="1" fill="none"/>
+                  </svg>
+                  <!-- Col 2: Strategy nodes -->
+                  <div class="ng-col ng-col-strats">
+                    <!-- Ajna -->
+                    <div class="ng-strat-node" id="strat-0">
+                      <div class="strategy-card-inner">
+                        <div class="strat-card-top">
+                          <img src="./assets/brand/ajna-official.svg" alt="Ajna" class="strat-icon-img">
+                          <span class="strat-name">Ajna Protocol</span>
+                        </div>
+                        <p class="strat-pct">30%</p>
+                        <p class="strat-amount">15,000,000 <span class="strat-unit">AKITA</span></p>
+                        <p class="strat-role">Allocated to permissionless lending pools for interest-bearing yield on idle collateral.</p>
+                      </div>
+                    </div>
+                    <!-- Charm + downstream -->
+                    <div class="ng-strat-node" id="strat-1">
+                      <div class="strategy-card-inner">
+                        <div class="strat-card-top">
+                          <img src="./assets/tokens/strategy/charm.png" alt="Charm" class="strat-icon-img">
+                          <span class="strat-name">Charm Finance</span>
+                        </div>
+                        <p class="strat-pct">30%</p>
+                        <p class="strat-amount">15,000,000 <span class="strat-unit">AKITA</span></p>
+                        <p class="strat-role">Assigned to the creator on a 1-year 365-day vesting schedule of irrevocable liquidity.</p>
+                      </div>
+                      <div class="ng-downstream" id="downstream-1">
+                        <svg class="ng-ds-edge" viewBox="0 0 30 16" preserveAspectRatio="none">
+                          <path d="M 0,8 C 8,8 10,4 16,4 C 22,4 24,8 30,8" stroke="rgba(0,82,255,0.14)" stroke-width="0.8" fill="none"/>
+                        </svg>
+                        <div class="downstream-box">
+                          <img src="./assets/brand/uniswap-official-pink.svg" alt="Uniswap" class="downstream-logo">
+                          Uniswap V3 Creator/USDC
+                        </div>
+                      </div>
+                    </div>
+                    <!-- Solana + downstream -->
+                    <div class="ng-strat-node" id="strat-2">
+                      <div class="strategy-card-inner">
+                        <div class="strat-card-top">
+                          <img src="./assets/brand/solana-mark.svg" alt="Solana" class="strat-icon-img">
+                          <span class="strat-name">Solana Ecosystem</span>
+                        </div>
+                        <p class="strat-pct">30%</p>
+                        <p class="strat-amount">15,000,000 <span class="strat-unit">AKITA</span></p>
+                        <p class="strat-role">Bridged to Solana for concentrated liquidity via Meteora Alpha Vaults.</p>
+                      </div>
+                      <div class="ng-downstream" id="downstream-2">
+                        <svg class="ng-ds-edge" viewBox="0 0 30 16" preserveAspectRatio="none">
+                          <path d="M 0,8 C 8,8 10,12 16,12 C 22,12 24,8 30,8" stroke="rgba(0,82,255,0.14)" stroke-width="0.8" fill="none"/>
+                        </svg>
+                        <div class="downstream-box">
+                          <img src="./assets/brand/meteora-v2.svg" alt="Meteora" class="downstream-logo">
+                          Meteora Alpha Vaults
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
-                <!-- Charm -->
-                <div class="strategy-row" id="strat-1">
-                  <div class="strategy-card-inner">
-                    <img src="./assets/tokens/strategy/charm.png" alt="Charm" class="strat-icon-img">
-                    <div class="strat-info">
-                      <div class="strat-header">
-                        <span class="strat-name">Charm</span>
-                        <span class="strat-pct">30%</span>
-                      </div>
-                      <p class="strat-amount">15,000,000</p>
-                      <p class="strat-role">Liquidity management</p>
-                    </div>
-                  </div>
-                  <div class="downstream" id="downstream-1">
-                    <div class="downstream-line"></div>
-                    <div class="downstream-box">
-                      <img src="./assets/brand/uniswap-official-pink.svg" alt="Uniswap" class="downstream-logo">
-                      Uniswap V3 Creator/USDC
-                    </div>
-                  </div>
-                </div>
-                <!-- Solana -->
-                <div class="strategy-row" id="strat-2">
-                  <div class="strategy-card-inner">
-                    <img src="./assets/brand/solana-mark.svg" alt="Solana" class="strat-icon-img">
-                    <div class="strat-info">
-                      <div class="strat-header">
-                        <span class="strat-name">Solana</span>
-                        <span class="strat-pct">30%</span>
-                      </div>
-                      <p class="strat-amount">15,000,000</p>
-                      <p class="strat-role">Ecosystem allocation</p>
-                    </div>
-                  </div>
-                  <div class="downstream" id="downstream-2">
-                    <div class="downstream-line"></div>
-                    <div class="downstream-box">
-                      <img src="./assets/brand/meteora-v2.svg" alt="Meteora" class="downstream-logo">
-                      Meteora Alpha Vaults
+
+                <!-- ROW 2: Idle path -->
+                <div class="ng-row ng-row-idle" id="ng-row-idle">
+                  <div class="ng-col ng-col-idle">
+                    <div class="idle-node" id="idle-badge">
+                      <p class="idle-label">10% idle</p>
+                      <p class="idle-amount">5,000,000</p>
                     </div>
                   </div>
                 </div>
@@ -353,55 +376,12 @@
           <!-- ═══ WebGL Yield Curve ═══ -->
           <div class="yield-curve-wrap" id="yield-curve-wrap">
             <canvas id="yield-curve-canvas"></canvas>
-            <!-- Y-axis labels -->
-            <div class="yc-axis yc-axis-y">
-              <span class="yc-label" data-val="1.000" style="bottom:0%">1.000</span>
-              <span class="yc-label" data-val="1.100" style="bottom:23.4%">1.100</span>
-              <span class="yc-label" data-val="1.200" style="bottom:46.8%">1.200</span>
-              <span class="yc-label" data-val="1.300" style="bottom:70.2%">1.300</span>
-              <span class="yc-label" data-val="1.427" style="bottom:100%">1.427</span>
-            </div>
-            <!-- X-axis labels -->
-            <div class="yc-axis yc-axis-x">
-              <span class="yc-label">Day 0</span>
-              <span class="yc-label">60</span>
-              <span class="yc-label">120</span>
-              <span class="yc-label">180</span>
-              <span class="yc-label">243</span>
-            </div>
-            <!-- Milestone callouts (ratio + APY populated by JS) -->
-            <div class="yc-callout" id="yc-ms-30" data-day="30">
-              <div class="yc-callout-pip"></div>
-              <div class="yc-callout-card">
-                <span class="yc-callout-day">Day 30</span>
-                <span class="yc-callout-ratio" id="yc-r-30"></span>
-                <span class="yc-callout-apy" id="yc-a-30"></span>
-              </div>
-            </div>
-            <div class="yc-callout" id="yc-ms-90" data-day="90">
-              <div class="yc-callout-pip"></div>
-              <div class="yc-callout-card">
-                <span class="yc-callout-day">Day 90</span>
-                <span class="yc-callout-ratio" id="yc-r-90"></span>
-                <span class="yc-callout-apy" id="yc-a-90"></span>
-              </div>
-            </div>
-            <div class="yc-callout" id="yc-ms-180" data-day="180">
-              <div class="yc-callout-pip"></div>
-              <div class="yc-callout-card">
-                <span class="yc-callout-day">Day 180</span>
-                <span class="yc-callout-ratio" id="yc-r-180"></span>
-                <span class="yc-callout-apy" id="yc-a-180"></span>
-              </div>
-            </div>
-            <div class="yc-callout" id="yc-ms-243" data-day="243">
-              <div class="yc-callout-pip"></div>
-              <div class="yc-callout-card">
-                <span class="yc-callout-day">Day 243</span>
-                <span class="yc-callout-ratio" id="yc-r-243"></span>
-                <span class="yc-callout-apy" id="yc-a-243"></span>
-              </div>
-            </div>
+            <!-- Y-axis labels (populated by JS for 1.000→1.034 range) -->
+            <div class="yc-axis yc-axis-y" id="yc-axis-y"></div>
+            <!-- X-axis labels (month ticks Aug 2025 → Apr 2026, populated by JS) -->
+            <div class="yc-axis yc-axis-x" id="yc-axis-x"></div>
+            <!-- Milestone callouts at key months (populated by JS) -->
+            <div id="yc-milestones"></div>
           </div>
 
           <!-- Stats row -->
@@ -424,108 +404,109 @@
           <p class="accrue-equation" id="accrue-equation" style="display:none"></p>
         </div>
 
-        <!-- Token price volatility narrative (absolutely positioned in scene-pin) -->
-        <div class="accrue-volatility" id="accrue-volatility">
-          <div class="vol-chart-wrap">
-            <canvas id="vol-chart-canvas"></canvas>
-            <div class="vol-chart-labels">
-              <span class="vol-label-up">↑</span>
-              <span class="vol-label-down">↓</span>
-              <span class="vol-label-up">↑</span>
-              <span class="vol-label-up">↑</span>
-              <span class="vol-label-up">↑</span>
-              <span class="vol-label-down">↓</span>
-              <span class="vol-label-down">↓</span>
-              <span class="vol-label-down">↓</span>
-            </div>
-          </div>
+        <!-- Volatility narrative text (overlaid on yield curve area) -->
+        <div class="vol-narrative" id="vol-narrative">
           <p class="vol-headline" id="vol-headline">The token price can do anything.</p>
           <p class="vol-sub" id="vol-sub">But vault holders earn fees regardless — pro rata, every day, no matter what.</p>
         </div>
       </div>
     </section>
 
-    <!-- ╔═══ CHAPTER 3.5: SHARE TOKEN STORY — CCA AUCTION (500vh) ═══╗ -->
-    <section class="scroll-scene" id="ch-cca" data-height="500">
+    <!-- ╔═══ CHAPTER 3.5: SHARE TOKEN STORY — CCA DISTRIBUTION (700vh) ═══╗ -->
+    <section class="scroll-scene" id="ch-cca" data-height="700">
       <div class="scene-pin">
-        <div class="cca-container">
 
-          <!-- Intro -->
+        <!-- Camera wrapper for share-token pan (mirrors deposited-asset pan in ch-token) -->
+        <div class="cca-camera" id="cca-camera">
+
+          <!-- Deposited asset — fades to back -->
+          <div class="cca-deposit-coin" id="cca-deposit-coin">
+            <div class="token-img-ring">
+              <img src="./assets/tokens/source/akita.webp" alt="AKITA" class="token-img" width="96" height="96">
+            </div>
+          </div>
+
+          <!-- Share token — comes to front -->
+          <div class="cca-share-token" id="cca-share-token">
+            <div class="share-img-ring">
+              <img src="./assets/tokens/share/akita-512.png" alt="■AKITA" class="cca-share-img" width="96" height="96">
+            </div>
+            <span class="cca-share-label" id="cca-share-label">■AKITA</span>
+          </div>
+
+          <!-- Intro text overlay -->
           <div class="cca-intro" id="cca-intro">
             <div class="section-label">Share Token</div>
             <p class="cca-headline" id="cca-headline">What happens with ■AKITA?</p>
             <p class="cca-desc" id="cca-desc">Every vault begins with a Uniswap Continuous Clearing Auction over 7 days. The share token is distributed to bootstrap liquidity, reward the creator, and align the community.</p>
           </div>
 
-          <!-- Central share token icon -->
-          <div class="cca-share-icon" id="cca-share-icon">
-            <div class="cca-share-ring">
-              <img src="./assets/tokens/share/akita-512.png" alt="■AKITA" class="cca-share-img" width="80" height="80">
-            </div>
-            <span class="cca-share-label">■AKITA</span>
-          </div>
+          <!-- LEFT-SIDE NODE GRAPH: Share token → 3 CCA distribution segments -->
+          <div class="cca-node-graph" id="cca-node-graph">
 
-          <!-- Distribution arcs / segments -->
-          <div class="cca-distribution" id="cca-distribution">
+            <!-- Left stack: 3 distribution cards (first in DOM = left side) -->
+            <div class="cca-left-stack">
+              <!-- CCA Auction card -->
+              <div class="cca-dist-card" id="cca-card-auction">
+                <div class="strategy-card-inner">
+                  <div class="strat-card-top">
+                    <img src="./assets/brand/uniswap-official-pink.svg" alt="Uniswap" class="strat-icon-img">
+                    <span class="strat-name">CCA Auction</span>
+                  </div>
+                  <p class="strat-pct">40%</p>
+                  <p class="strat-role">Auctioned over 7 days via Uniswap Continuous Clearing Auction. Open to the public.</p>
+                </div>
+              </div>
 
-            <!-- Auction segment -->
-            <div class="cca-segment" id="cca-seg-auction">
-              <div class="cca-segment-bar">
-                <div class="cca-segment-fill cca-fill-auction" id="cca-fill-auction"></div>
-              </div>
-              <div class="cca-segment-content">
-                <div class="cca-seg-header">
-                  <span class="cca-seg-pct">40%</span>
-                  <span class="cca-seg-title">CCA Auction</span>
-                </div>
-                <p class="cca-seg-desc">Auctioned over 7 days via Uniswap Continuous Clearing Auction. Open to the public — anyone can bid.</p>
-                <div class="cca-seg-badge">
-                  <img src="./assets/brand/uniswap-official-pink.svg" alt="Uniswap" class="cca-seg-badge-icon">
-                  <span>Uniswap CCA</span>
+              <!-- Creator Vesting card -->
+              <div class="cca-dist-card" id="cca-card-vesting">
+                <div class="strategy-card-inner">
+                  <div class="strat-card-top">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#0052FF" stroke-width="1.5" class="strat-icon-img" style="border-radius: 50%; background: rgba(0,82,255,0.08); padding: 3px;">
+                      <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
+                      <path d="M12 6v6l4 2"/>
+                    </svg>
+                    <span class="strat-name">Creator Vesting</span>
+                  </div>
+                  <p class="strat-pct">40%</p>
+                  <p class="strat-role">Vested to the creator over 1 year. Linearly unlocking — aligning long-term incentives.</p>
                 </div>
               </div>
-            </div>
 
-            <!-- Vesting segment -->
-            <div class="cca-segment" id="cca-seg-vesting">
-              <div class="cca-segment-bar">
-                <div class="cca-segment-fill cca-fill-vesting" id="cca-fill-vesting"></div>
-              </div>
-              <div class="cca-segment-content">
-                <div class="cca-seg-header">
-                  <span class="cca-seg-pct">40%</span>
-                  <span class="cca-seg-title">Creator Vesting</span>
-                </div>
-                <p class="cca-seg-desc">Vested to the creator over 1 year. Linearly unlocking — aligning long-term incentives.</p>
-                <div class="cca-seg-meta">
-                  <span class="cca-seg-meta-item">12-month linear vest</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Liquidity segment -->
-            <div class="cca-segment" id="cca-seg-liquidity">
-              <div class="cca-segment-bar">
-                <div class="cca-segment-fill cca-fill-liquidity" id="cca-fill-liquidity"></div>
-              </div>
-              <div class="cca-segment-content">
-                <div class="cca-seg-header">
-                  <span class="cca-seg-pct">20%</span>
-                  <span class="cca-seg-title">Liquidity</span>
-                </div>
-                <p class="cca-seg-desc">Seeded directly into the trading pool. Ensures ■AKITA is liquid and tradeable from day one.</p>
-                <div class="cca-seg-meta">
-                  <span class="cca-seg-meta-item">Protocol-owned liquidity</span>
+              <!-- Liquidity card -->
+              <div class="cca-dist-card" id="cca-card-liquidity">
+                <div class="strategy-card-inner">
+                  <div class="strat-card-top">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#0052FF" stroke-width="1.5" class="strat-icon-img" style="border-radius: 50%; background: rgba(0,82,255,0.08); padding: 3px;">
+                      <path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/>
+                    </svg>
+                    <span class="strat-name">Liquidity Pool</span>
+                  </div>
+                  <p class="strat-pct">20%</p>
+                  <p class="strat-role">Seeded directly into the trading pool. Ensures ■AKITA is liquid and tradeable from day one.</p>
                 </div>
               </div>
             </div>
+
+            <!-- Branch SVG — curves flow right from cards toward share token -->
+            <svg class="cca-branch-svg" id="cca-branch-svg" viewBox="0 0 660 500" preserveAspectRatio="xMidYMid meet">
+              <!-- CCA Auction branch: from card1 center-Y to share token center -->
+              <path d="M 0,80 C 100,80 180,80 280,80 C 420,80 560,260 660,260" stroke="rgba(0,82,255,0.18)" stroke-width="1.2" fill="none"/>
+              <!-- Creator Vesting branch: center straight -->
+              <path d="M 0,250 C 120,250 280,250 400,252 C 500,256 580,260 660,260" stroke="rgba(0,82,255,0.18)" stroke-width="1.2" fill="none"/>
+              <!-- Liquidity branch: from card3 center-Y to share token center -->
+              <path d="M 0,420 C 100,420 180,420 280,420 C 420,420 560,260 660,260" stroke="rgba(0,82,255,0.18)" stroke-width="1.2" fill="none"/>
+            </svg>
+
+            <canvas id="cca-pulse-canvas" class="cca-pulse-canvas"></canvas>
 
           </div>
-
-          <!-- Summary line -->
-          <p class="cca-summary" id="cca-summary">Deposit an asset. Yield accrues. The share token finds price discovery.</p>
 
         </div>
+
+        <!-- Summary line -->
+        <p class="cca-summary" id="cca-summary">Deposit an asset. Yield accrues. The share token finds price discovery.</p>
+
       </div>
     </section>
 
