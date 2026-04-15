@@ -4,7 +4,7 @@ const { isServerAdminAddressMock } = vi.hoisted(() => ({
   isServerAdminAddressMock: vi.fn(),
 }))
 
-vi.mock('../../_lib/trust.js', () => ({
+vi.mock('../../_lib/infra/trust.js', () => ({
   isAddressLike: (value: string) => /^0x[a-fA-F0-9]{40}$/.test(String(value ?? '')),
   isServerAdminAddress: isServerAdminAddressMock,
 }))

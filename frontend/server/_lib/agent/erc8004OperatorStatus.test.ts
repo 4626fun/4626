@@ -32,7 +32,7 @@ vi.mock('./agentRegistration.js', () => ({
   buildAgentRegistration: (origin: string) => mocks.buildAgentRegistration(origin),
 }))
 
-vi.mock('../origin.js', () => ({
+vi.mock('../infra/origin.js', () => ({
   getErc8004PublicOrigin: (req?: unknown) => mocks.getErc8004PublicOrigin(req),
 }))
 

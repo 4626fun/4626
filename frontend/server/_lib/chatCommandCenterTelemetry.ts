@@ -1,4 +1,4 @@
-import { getDb } from './postgres.js'
+import { getDb } from './db/postgres.js'
 
 type EventInput = {
   event: string

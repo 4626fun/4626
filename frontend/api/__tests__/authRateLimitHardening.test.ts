@@ -10,7 +10,7 @@ const { checkRateLimitMock } = vi.hoisted(() => ({
   })),
 }))
 
-vi.mock('../../server/_lib/rateLimit.js', () => ({
+vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: checkRateLimitMock,
   getClientIp: vi.fn(() => '203.0.113.11'),
   rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),

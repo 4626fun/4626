@@ -24,7 +24,7 @@ vi.mock('../../server/_lib/contracts.js', () => ({
   getApiContracts: () => ({ lotteryManager: '0x77705A2f173dd52F28300447506Dc35086c34626' }),
 }))
 
-vi.mock('../../server/_lib/rateLimit.js', () => ({
+vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: checkRateLimitMock,
   getClientIp: getClientIpMock,
   rateLimitKey: rateLimitKeyMock,

@@ -9,7 +9,7 @@ vi.mock('./canonicalWalletsSchema.js', () => ({
   ensureCanonicalWalletsSchema: (...args: unknown[]) => ensureCanonicalWalletsSchemaMock(...args),
 }))
 
-vi.mock('./postgres.js', () => ({
+vi.mock('./db/postgres.js', () => ({
   isDbConfigured: () => isDbConfiguredMock(),
   getDb: () => getDbMock(),
 }))

@@ -89,7 +89,7 @@ const {
   trackTelegramLinkEventMock: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/postgres.js', () => ({
+vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
 }))
 
@@ -142,7 +142,7 @@ vi.mock('../../server/_lib/telegramLinkTelemetry.js', () => ({
   trackTelegramLinkEvent: trackTelegramLinkEventMock,
 }))
 
-vi.mock('../../server/_lib/durableRateLimit.js', () => ({
+vi.mock('../../server/_lib/infra/durableRateLimit.js', () => ({
   checkDurableRateLimit: checkDurableRateLimitMock,
 }))
 

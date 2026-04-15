@@ -13,7 +13,7 @@ import {
 
 
 
-import { checkDurableRateLimit } from '../../../../server/_lib/durableRateLimit.js'
+import { checkDurableRateLimit } from '../../../../server/_lib/infra/durableRateLimit.js'
 
 import {
   AMOE_CREDITS_PER_ENTRY,

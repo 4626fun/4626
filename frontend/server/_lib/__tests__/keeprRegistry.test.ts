@@ -10,7 +10,7 @@ vi.mock('../keeprSchema.js', () => ({
   ensureKeeprSchema: ensureKeeprSchemaMock,
 }))
 
-vi.mock('../postgres.js', () => ({
+vi.mock('../db/postgres.js', () => ({
   getDb: getDbMock,
 }))
 

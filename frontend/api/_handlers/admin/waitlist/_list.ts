@@ -13,7 +13,7 @@ import {
 
 
 
-import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/supabaseAdmin.js'
+import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/db/supabaseAdmin.js'
 import { ensureWaitlistSchema } from '../../../../server/_lib/waitlistSchema.js'
 
 type WaitlistListItem = {

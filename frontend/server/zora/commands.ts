@@ -2,7 +2,7 @@ import type { Address } from 'viem'
 import { isAddress, getAddress, parseEther, formatEther, formatUnits, createPublicClient, http, parseAbi } from 'viem'
 import { base } from 'viem/chains'
 
-import { logger } from '../_lib/logger.js'
+import { logger } from '../_lib/infra/logger.js'
 import { walletRpc } from '../_lib/privyWalletApi.js'
 import type { KeeprVaultRow } from '../_lib/keeprRegistry.js'
 import type { KeeprRole, KeeprCommandResult } from '../commands/types.js'

@@ -32,12 +32,12 @@ vi.mock('../../server/_lib/auth/deployAuth.js', () => ({
   readDeployAuthFromRequest: readDeployAuthFromRequestMock,
 }))
 
-vi.mock('../../server/_lib/postgres.js', () => ({
+vi.mock('../../server/_lib/db/postgres.js', () => ({
   isDbConfigured: isDbConfiguredMock,
   getDb: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/rateLimit.js', () => ({
+vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: checkRateLimitMock,
   RATE_LIMITS: { deployCreate: { windowMs: 60_000, maxRequests: 3 } },
   rateLimitKey: rateLimitKeyMock,

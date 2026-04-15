@@ -19,7 +19,7 @@ import {
   readOnchainSnapshot,
   type RegistrationProbe,
 } from '../../../../../server/_lib/agent/erc8004Review.js'
-import { getErc8004PublicOrigin } from '../../../../../server/_lib/origin.js'
+import { getErc8004PublicOrigin } from '../../../../../server/_lib/infra/origin.js'
 import { getTeeAttestationStatus } from '../../../../../server/_lib/agent/teeAttestationGate.js'
 import {
   buildAgentUriPolicy,

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { getCanonicalOrigin, getErc8004PublicOrigin } from '../../server/_lib/origin.ts'
+import { getCanonicalOrigin, getErc8004PublicOrigin } from '../../server/_lib/infra/origin.ts'
 import { applyEnv, createMockReq } from './helpers'
 
 describe('origin resolution', () => {

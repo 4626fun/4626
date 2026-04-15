@@ -102,9 +102,9 @@ vi.mock('../../server/_lib/agent/agentRegistration.js', () => ({
   buildAgentRegistration: (origin: string) => mocks.buildAgentRegistration(origin),
 }))
 
-vi.mock('../../server/_lib/origin.js', () => ({
-  getCanonicalOrigin: mocks.getCanonicalOrigin as unknown as typeof import('../../server/_lib/origin.js').getCanonicalOrigin,
-  getErc8004PublicOrigin: mocks.getErc8004PublicOrigin as unknown as typeof import('../../server/_lib/origin.js').getErc8004PublicOrigin,
+vi.mock('../../server/_lib/infra/origin.js', () => ({
+  getCanonicalOrigin: mocks.getCanonicalOrigin as unknown as typeof import('../../server/_lib/infra/origin.js').getCanonicalOrigin,
+  getErc8004PublicOrigin: mocks.getErc8004PublicOrigin as unknown as typeof import('../../server/_lib/infra/origin.js').getErc8004PublicOrigin,
 }))
 
 vi.mock('../../server/_lib/agent/teeAttestationGate.js', () => ({

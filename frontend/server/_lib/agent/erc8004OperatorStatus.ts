@@ -7,7 +7,7 @@ import { buildAgentUriPolicy, type AgentUriPolicy } from '../../../src/lib/agent
 import { buildAgentRegistration, type RegistrationFile } from './agentRegistration.js'
 import { publishAgentRegistrationToGrove, resolveAgentRegistrationKey } from './agentRegistrationPublisher.js'
 import { getAgentRegistrationState } from './agentRegistrationState.js'
-import { getErc8004PublicOrigin } from '../origin.js'
+import { getErc8004PublicOrigin } from '../infra/origin.js'
 
 export type AgentPublishGroveData = {
   lensUri: string

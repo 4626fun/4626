@@ -1,5 +1,5 @@
 import { ensureKeeprSchema } from './keeprSchema.js'
-import { getDb } from './postgres.js'
+import { getDb } from './db/postgres.js'
 
 type JsonMap = Record<string, unknown>
 

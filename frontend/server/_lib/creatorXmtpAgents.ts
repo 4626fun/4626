@@ -2,7 +2,7 @@ import { randomBytes, createCipheriv, createDecipheriv } from 'node:crypto'
 import { getAddress } from 'viem'
 import { generatePrivateKey, privateKeyToAccount } from 'viem/accounts'
 
-import { getDb, isDbConfigured } from './postgres.js'
+import { getDb, isDbConfigured } from './db/postgres.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

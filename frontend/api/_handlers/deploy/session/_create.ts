@@ -31,17 +31,17 @@ import { ensureDeploySessionsSchema, hashDeployToken, insertDeploySession, rando
 
 import { ensureWaitlistSchema } from '../../../../server/_lib/waitlistSchema.js'
 
-import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/supabaseAdmin.js'
+import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/db/supabaseAdmin.js'
 import { getOrCreateCreatorAgentWallet } from '../../../../server/_lib/creatorAgentWallets.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/auth/deployAuth.js'
 import { buildDeployPermissionGrant } from '../../../../server/_lib/erc7712Permissions.js'
-import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
+import { getCanonicalOrigin } from '../../../../server/_lib/infra/origin.js'
 import { resolveCoinPartiesAndOwner } from '../../../../server/_lib/coinParties.js'
 import { charmPoolNotIndexedError, extractCharmCreateVaultPool, isCharmPoolIndexed } from '../../../../server/_lib/charmVaults.js'
 import { readProfileWalletAuthority } from '../../../../server/_lib/canonicalWalletResolver.js'
 import {
   normalizeSolanaAssetMintOrigin,
-} from '../../../../server/_lib/solanaOvaultCompatibility.js'
+} from '../../../../server/_lib/onchain/solanaOvaultCompatibility.js'
 import { hasContractBytecode } from '../../../../shared/wallet/bytecode.js'
 
 export type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }

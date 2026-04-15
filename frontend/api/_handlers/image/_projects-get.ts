@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { getImageGenerationProject } from '../../../server/_lib/imageProjects.js'
+import { getImageGenerationProject } from '../../../server/_lib/image/imageProjects.js'
 import { getImageApiActor, parseRequiredString, prepareImageApiAuthenticated } from './_shared.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

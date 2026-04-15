@@ -1,7 +1,7 @@
 import { createPublicClient, http, isAddress, type Address } from 'viem'
 
 import { getValidationRegistryAddress, VALIDATION_REGISTRY_ABI } from './erc8004.js'
-import { logger } from '../logger.js'
+import { logger } from '../infra/logger.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

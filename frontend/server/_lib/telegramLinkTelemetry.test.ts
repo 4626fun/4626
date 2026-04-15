@@ -6,13 +6,13 @@ const isDbConfiguredMock = vi.fn()
 const loggerInfoMock = vi.fn()
 const loggerWarnMock = vi.fn()
 
-vi.mock('./postgres.js', () => ({
+vi.mock('./db/postgres.js', () => ({
   getDb: getDbMock,
   getDbInitError: getDbInitErrorMock,
   isDbConfigured: isDbConfiguredMock,
 }))
 
-vi.mock('./logger.js', () => ({
+vi.mock('./infra/logger.js', () => ({
   logger: {
     info: loggerInfoMock,
     warn: loggerWarnMock,

@@ -1,7 +1,7 @@
 import type { Address } from 'viem'
 
 import { getKeeprVaultByGroupId, type KeeprVaultRow } from '../../_lib/keeprRegistry.js'
-import { isAddressLike } from '../../_lib/trust.js'
+import { isAddressLike } from '../../_lib/infra/trust.js'
 
 export type VaultAccessRole = 'OWNER' | 'ADMIN' | 'MEMBER'
 

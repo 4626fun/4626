@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { enqueueImageGenerationJob, getImageGenerationJob } from '../../../server/_lib/imageGenerationJobs.js'
-import { getImageGenerationProject } from '../../../server/_lib/imageProjects.js'
-import { processImageGenerationJob } from '../../../server/_lib/imageGenerationRunner.js'
+import { enqueueImageGenerationJob, getImageGenerationJob } from '../../../server/_lib/image/imageGenerationJobs.js'
+import { getImageGenerationProject } from '../../../server/_lib/image/imageProjects.js'
+import { processImageGenerationJob } from '../../../server/_lib/image/imageGenerationRunner.js'
 import { checkRateLimit, getClientIp, rateLimitKey, RATE_LIMITS } from '../../../packages/server-core/src/index.js'
 import { getImageApiActor, parseRequiredString, prepareImageApiAuthenticated, readBody } from './_shared.js'
 

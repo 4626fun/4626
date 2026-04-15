@@ -1,5 +1,5 @@
 import type { RuntimeDecision, RuntimeRecord } from '../cre/runtimeBridge.js'
-import { getDb } from '../postgres.js'
+import { getDb } from '../db/postgres.js'
 import {
   createAlertEvent,
   createTaskItem,

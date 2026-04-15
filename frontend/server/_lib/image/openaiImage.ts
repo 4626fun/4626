@@ -1,5 +1,5 @@
-import { readServerEnvVar } from './serverEnv.js'
-import { fetchRemoteAi, prepareRemoteAiText } from './agentControl/remoteAi.js'
+import { readServerEnvVar } from '../infra/serverEnv.js'
+import { fetchRemoteAi, prepareRemoteAiText } from '../agentControl/remoteAi.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

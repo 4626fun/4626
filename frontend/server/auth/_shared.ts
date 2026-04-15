@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
-import { getTrustedRequestOrigins, normalizeOrigin } from '../_lib/trust.js'
+import { getTrustedRequestOrigins, normalizeOrigin } from '../_lib/infra/trust.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

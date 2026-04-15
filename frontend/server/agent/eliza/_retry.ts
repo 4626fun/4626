@@ -1,5 +1,5 @@
 import { AgentError, isRetryableAgentError, toAgentError } from './_errors.js'
-import { logger } from '../../_lib/logger.js'
+import { logger } from '../../_lib/infra/logger.js'
 
 const DEFAULT_MAX_RETRIES = 2
 const DEFAULT_BASE_DELAY_MS = 750

@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { isAddress } from 'viem'
 
-import { getCompletedImageProjectForVaultOwner } from '../../../server/_lib/imageProjects.js'
+import { getCompletedImageProjectForVaultOwner } from '../../../server/_lib/image/imageProjects.js'
 import { getImageApiActor, prepareImageApiAuthenticated } from './_shared.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

@@ -15,8 +15,8 @@ import {
   resolvePayoutRouterFeeConfig,
   resolvePayoutRouterKeeperAddress,
   resolvePayoutRouterZoraToken,
-} from '../../../server/_lib/payoutRouterRuntime.js'
-import { isServerAdminAddress } from '../../../server/_lib/trust.js'
+} from '../../../server/_lib/onchain/payoutRouterRuntime.js'
+import { isServerAdminAddress } from '../../../server/_lib/infra/trust.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

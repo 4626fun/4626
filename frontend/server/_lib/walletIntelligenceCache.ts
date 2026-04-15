@@ -11,7 +11,7 @@
  * by returning null / empty results.
  */
 
-import { getDb, isDbConfigured } from './postgres.js'
+import { getDb, isDbConfigured } from './db/postgres.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

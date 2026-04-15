@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
-import { getDb } from '../../_lib/postgres.js'
-import { logger } from '../../_lib/logger.js'
+import { getDb } from '../../_lib/db/postgres.js'
+import { logger } from '../../_lib/infra/logger.js'
 
 type AgentTask = {
   id: number

@@ -18,7 +18,7 @@ import {
 } from '../../../../packages/server-core/src/index.js'
 
 
-import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/supabaseAdmin.js'
+import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/db/supabaseAdmin.js'
 
 import { logAdminAction } from '../../../../server/_lib/adminAudit.js'
 

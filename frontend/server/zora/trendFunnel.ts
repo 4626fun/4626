@@ -2,7 +2,7 @@ import type { Address } from 'viem'
 import { getAddress, isAddress } from 'viem'
 
 import { getOrCreateCreatorAgentWallet } from '../_lib/creatorAgentWallets.js'
-import { logger } from '../_lib/logger.js'
+import { logger } from '../_lib/infra/logger.js'
 import { walletRpc } from '../_lib/privyWalletApi.js'
 import { markTrendOpFailed, markTrendOpFunnelCompleted, markTrendOpFunnelPending } from '../_lib/zoraTrendOpsStore.js'
 

@@ -1,7 +1,7 @@
 import type { AgentCapabilityResponse, AgentMembership, MembershipStatusReason } from '../../../api/_handlers/v1/agents/_accessSchemas.js'
 import { checkSharesEligibility } from '../keeprGating.js'
 import { ensureKeeprSchema } from '../keeprSchema.js'
-import { getDb } from '../postgres.js'
+import { getDb } from '../db/postgres.js'
 import { ensureTelegramTradingSchema } from '../telegramTrading.js'
 
 type Db = {

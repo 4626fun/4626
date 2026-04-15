@@ -1,6 +1,6 @@
-import { logger } from '../../_lib/logger.js'
+import { logger } from '../../_lib/infra/logger.js'
 import { fetchRemoteAi, prepareRemoteAiText } from '../../_lib/agentControl/remoteAi.js'
-import { readServerEnvVar } from '../../_lib/serverEnv.js'
+import { readServerEnvVar } from '../../_lib/infra/serverEnv.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

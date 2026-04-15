@@ -6,7 +6,7 @@ import sharp from 'sharp'
 import { checkRateLimit, getClientIp, rateLimitKey, RATE_LIMITS } from '../../../packages/server-core/src/index.js'
 import { requireServerKey } from '../../../server/zora/_shared.js'
 import { fetchBytes } from '../../../server/_lib/blob.js'
-import { attachImageGenerationAsset, getImageGenerationProject } from '../../../server/_lib/imageProjects.js'
+import { attachImageGenerationAsset, getImageGenerationProject } from '../../../server/_lib/image/imageProjects.js'
 import { getImageApiActor, parseRequiredString, prepareImageApiAuthenticated, readBody } from './_shared.js'
 
 const FRAME_SVG_URL = new URL('../../../public/brand/4626v2.svg', import.meta.url)

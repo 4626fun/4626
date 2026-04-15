@@ -5,7 +5,7 @@ const { getDbMock, uploadImageStorageObjectMock } = vi.hoisted(() => ({
   uploadImageStorageObjectMock: vi.fn(),
 }))
 
-vi.mock('./postgres.js', () => ({
+vi.mock('../db/postgres.js', () => ({
   getDb: getDbMock,
 }))
 

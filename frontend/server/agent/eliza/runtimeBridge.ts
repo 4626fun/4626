@@ -1,9 +1,9 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, randomUUID, randomBytes } from 'node:crypto'
 import type { IAgentRuntime, Memory, Plugin } from '@elizaos/core'
 
-import { getDb } from '../../_lib/postgres.js'
+import { getDb } from '../../_lib/db/postgres.js'
 import { buildRuntimeSessionContext } from '../../_lib/auth/session.js'
-import { logger } from '../../_lib/logger.js'
+import { logger } from '../../_lib/infra/logger.js'
 import { getGroveChainId, resolveLensUri, tryUploadImmutableJson } from '../../_lib/lensGrove.js'
 import { getElizaEmbeddingService } from './embeddings.js'
 

@@ -3,7 +3,7 @@ import type { VercelRequest } from '@vercel/node'
 import { getKeeprVaultByVaultAddress, type KeeprVaultRow } from '../keeprRegistry.js'
 import { getKeeprVaultAutomationByVaultAddress } from '../keeprAutomation.js'
 import { listCreatorXmtpAgents, type CreatorXmtpAgentRow } from '../creatorXmtpAgents.js'
-import { getDb } from '../postgres.js'
+import { getDb } from '../db/postgres.js'
 import { ensureTelegramTradingSchema } from '../telegramTrading.js'
 import { ensureCreRuntimeSchema } from '../cre/runtimeSchema.js'
 import {

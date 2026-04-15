@@ -18,7 +18,7 @@ vi.mock('../../server/_lib/agent/agentRegistrationPublisher.js', () => ({
   resolveAgentRegistrationKey: (payload: any, suffix: string) => resolveAgentRegistrationKeyMock(payload, suffix),
 }))
 
-vi.mock('../../server/_lib/origin.js', () => ({
+vi.mock('../../server/_lib/infra/origin.js', () => ({
   getCanonicalOrigin: (req: any) => getCanonicalOriginMock(req),
   getErc8004PublicOrigin: (req: any) => getErc8004PublicOriginMock(req),
 }))

@@ -9,11 +9,11 @@ const getDbMock = vi.fn()
 const walletRpcMock = vi.fn()
 const attestationGateMock = vi.fn()
 
-vi.mock('../../_lib/durableRateLimit.js', () => ({
+vi.mock('../../_lib/infra/durableRateLimit.js', () => ({
   checkDurableRateLimit: (...args: unknown[]) => checkDurableRateLimitMock(...args),
 }))
 
-vi.mock('../../_lib/postgres.js', () => ({
+vi.mock('../../_lib/db/postgres.js', () => ({
   isDbConfigured: () => isDbConfiguredMock(),
   getDb: () => getDbMock(),
 }))
@@ -26,7 +26,7 @@ vi.mock('../../_lib/agent/teeAttestationGate.js', () => ({
   assertTeeAttestationOrThrow: (...args: unknown[]) => attestationGateMock(...args),
 }))
 
-vi.mock('../../_lib/logger.js', () => ({
+vi.mock('../../_lib/infra/logger.js', () => ({
   logger: {
     info: vi.fn(),
     warn: vi.fn(),

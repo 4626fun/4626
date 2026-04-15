@@ -1,9 +1,9 @@
 import { AgentError } from './_errors.js'
 import { DailyBudgetGuard, parsePositiveNumber } from './_rateLimit.js'
 import { fetchRemoteAi, prepareRemoteAiText } from '../../_lib/agentControl/remoteAi.js'
-import { logger } from '../../_lib/logger.js'
-import { emitTelemetryEvent } from '../../_lib/telemetry.js'
-import { readServerEnvVar } from '../../_lib/serverEnv.js'
+import { logger } from '../../_lib/infra/logger.js'
+import { emitTelemetryEvent } from '../../_lib/infra/telemetry.js'
+import { readServerEnvVar } from '../../_lib/infra/serverEnv.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

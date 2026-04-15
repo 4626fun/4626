@@ -3,7 +3,7 @@ import { createPublicClient, encodeFunctionData, getAddress, http, isAddress, ke
 import { base } from 'viem/chains'
 
 import { getOrCreateCreatorAgentWallet } from '../_lib/creatorAgentWallets.js'
-import { logger } from '../_lib/logger.js'
+import { logger } from '../_lib/infra/logger.js'
 import { walletRpc } from '../_lib/privyWalletApi.js'
 
 declare const process: { env: Record<string, string | undefined> }

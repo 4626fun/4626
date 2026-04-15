@@ -28,8 +28,8 @@ vi.mock('../../server/auth/_shared.js', async () => {
   }
 })
 
-vi.mock('../../server/_lib/rateLimit.js', async () => {
-  const actual = await vi.importActual<typeof import('../../server/_lib/rateLimit.js')>('../../server/_lib/rateLimit.js')
+vi.mock('../../server/_lib/infra/rateLimit.js', async () => {
+  const actual = await vi.importActual<typeof import('../../server/_lib/infra/rateLimit.js')>('../../server/_lib/infra/rateLimit.js')
   return {
     ...actual,
     checkRateLimit: checkRateLimitMock,

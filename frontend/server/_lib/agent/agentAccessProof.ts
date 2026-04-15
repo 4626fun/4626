@@ -10,7 +10,7 @@ import {
   type AgentRoomAccessToken,
   type RoomCapability,
 } from '../../../api/_handlers/v1/agents/_accessSchemas.js'
-import { getDb } from '../postgres.js'
+import { getDb } from '../db/postgres.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

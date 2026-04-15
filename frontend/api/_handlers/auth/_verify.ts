@@ -25,7 +25,7 @@ import {
 } from '../../../packages/server-core/src/index.js'
 import { isCswOwner } from '../../../server/_lib/cswOwner.js'
 
-import { getTrustedRequestOrigins, isAddressLike, normalizeOrigin } from '../../../server/_lib/trust.js'
+import { getTrustedRequestOrigins, isAddressLike, normalizeOrigin } from '../../../server/_lib/infra/trust.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
 import { upsertProfileByWallet } from '../../../server/_lib/profileSync.js'
 type VerifyBody = { message?: string; signature?: string; nonceToken?: string; cswAddress?: string }

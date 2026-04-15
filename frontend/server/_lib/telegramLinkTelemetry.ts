@@ -1,5 +1,5 @@
-import { logger } from './logger.js'
-import { getDb, getDbInitError, isDbConfigured } from './postgres.js'
+import { logger } from './infra/logger.js'
+import { getDb, getDbInitError, isDbConfigured } from './db/postgres.js'
 
 type TelegramLinkTelemetryInput = {
   event: string

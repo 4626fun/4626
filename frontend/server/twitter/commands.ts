@@ -2,7 +2,7 @@ import { createHmac, randomBytes } from 'node:crypto'
 
 import type { Address } from 'viem'
 
-import { logger } from '../_lib/logger.js'
+import { logger } from '../_lib/infra/logger.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

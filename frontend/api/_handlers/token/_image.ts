@@ -32,7 +32,7 @@ import {
 
 import { blobHeadOrNull, blobPutBytes, fetchBytes, sha256Hex } from '../../../server/_lib/blob.js'
 import { resolveCreatorTokenArtwork, type CreatorTokenArtwork } from '../../../server/_lib/creatorTokenArtwork.js'
-import { getCompletedImageProjectForVault } from '../../../server/_lib/imageProjects.js'
+import { getCompletedImageProjectForVault } from '../../../server/_lib/image/imageProjects.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

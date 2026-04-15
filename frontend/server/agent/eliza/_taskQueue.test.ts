@@ -4,7 +4,7 @@ const { getDbMock } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
 }))
 
-vi.mock('../../_lib/postgres.js', () => ({
+vi.mock('../../_lib/db/postgres.js', () => ({
   getDb: getDbMock,
 }))
 

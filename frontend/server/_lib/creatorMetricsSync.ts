@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto'
 import { createPublicClient, http, parseAbiItem } from 'viem'
 import { base } from 'viem/chains'
-import { getDb } from './postgres.js'
-import { logger } from './logger.js'
+import { getDb } from './db/postgres.js'
+import { logger } from './infra/logger.js'
 import { requireServerKey } from '../zora/_shared.js'
 
 type Db = {

@@ -20,7 +20,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
   setNoStore: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/postgres.js', () => ({
+vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
 }))
 
@@ -36,7 +36,7 @@ vi.mock('../../server/_lib/canonicalWalletsSchema.js', () => ({
   ensureCanonicalWalletsSchema: vi.fn(async () => {}),
 }))
 
-vi.mock('../../server/_lib/rateLimit.js', () => ({
+vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: checkRateLimitMock,
   rateLimitKey: rateLimitKeyMock,
   getClientIp: getClientIpMock,

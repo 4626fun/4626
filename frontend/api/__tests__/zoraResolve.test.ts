@@ -17,7 +17,7 @@ const {
   resolveAndPersistZoraSignalsMock: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/postgres.js', () => ({
+vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
 }))
 

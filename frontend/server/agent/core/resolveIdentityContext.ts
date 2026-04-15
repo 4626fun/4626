@@ -1,4 +1,4 @@
-import { isAddressLike, isServerAdminAddress } from '../../_lib/trust.js'
+import { isAddressLike, isServerAdminAddress } from '../../_lib/infra/trust.js'
 
 export type AgentSessionSource = 'xmtp' | 'telegram'
 

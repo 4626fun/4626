@@ -29,24 +29,24 @@ import { readDeployAuthFromRequest } from '../../../server/_lib/auth/deployAuth.
 import {
   SOLANA_NATIVE_MINT,
   resolveMeteoraAlphaVaultConfig,
-} from '../../../server/_lib/meteoraAlphaVaultConfig.js'
+} from '../../../server/_lib/onchain/meteoraAlphaVaultConfig.js'
 import {
   evaluateSolanaOvaultMintCompatibility,
   normalizeSolanaAssetMintOrigin,
   parseSolanaOvaultMintCompatibilityHints,
   readSolanaOvaultMintCompatibilityHintsFromEnv,
-} from '../../../server/_lib/solanaOvaultCompatibility.js'
+} from '../../../server/_lib/onchain/solanaOvaultCompatibility.js'
 import {
   evaluateCanonicalBridgeTokenPolicy,
   evaluateRemoteProvisionerLiveness,
   probeRemoteProvisionerHealth,
   readSolanaBridgeLivenessPolicy,
-} from '../../../server/_lib/solanaBridgePolicy.js'
+} from '../../../server/_lib/onchain/solanaBridgePolicy.js'
 import { resolveShareTokenMetadataUrls } from '../../../server/_lib/shareTokenMetadata.js'
 import {
   isRunnerUnavailable,
   runWrapToken,
-} from '../../../server/_lib/solanaBridgeCliRunner.js'
+} from '../../../server/_lib/onchain/solanaBridgeCliRunner.js'
 import {
   ERC20_METADATA_ABI,
   WRAP_TOKEN_NAME_MAX_LENGTH,
@@ -56,11 +56,11 @@ import {
   normalizeExactWrapTokenSymbol,
   normalizeWrapTokenMetadataUri,
   readBridgeTokenMetadata,
-} from '../../../server/_lib/solanaBridgeTokenMetadata.js'
+} from '../../../server/_lib/onchain/solanaBridgeTokenMetadata.js'
 import {
   parseMintPubkeyFromWrapOutput,
   solanaPubkeyToBytes32Hex,
-} from '../../../server/_lib/solanaBridgePubkey.js'
+} from '../../../server/_lib/onchain/solanaBridgePubkey.js'
 
 type RegisterSolanaBridgeTokenRequest = {
   bridgeToken?: string

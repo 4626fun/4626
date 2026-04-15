@@ -15,7 +15,7 @@ const { getDbMock, ensureWaitlistSchemaMock, syncUserWalletsMock, getUserByIdMoc
   getUserByIdMock: vi.fn(async () => ({ id: 'did:privy:test-user', linkedAccounts: [] })),
 }))
 
-vi.mock('../../server/_lib/postgres.js', () => ({
+vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
   isDbConfigured: vi.fn(() => true),
 }))

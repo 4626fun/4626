@@ -11,14 +11,14 @@ const mocks = vi.hoisted(() => ({
   getCanonicalOriginMock: vi.fn(() => 'https://app.4626.fun'),
 }))
 
-vi.mock('./imageProjects.js', () => ({
+vi.mock('./image/imageProjects.js', () => ({
   createImageGenerationProject: mocks.createImageGenerationProjectMock,
   getCompletedImageProjectForVault: mocks.getCompletedImageProjectForVaultMock,
   getImageGenerationProject: mocks.getImageGenerationProjectMock,
   setImageProjectVaultAddress: mocks.setImageProjectVaultAddressMock,
 }))
 
-vi.mock('./origin.js', () => ({
+vi.mock('./infra/origin.js', () => ({
   getCanonicalOrigin: mocks.getCanonicalOriginMock,
 }))
 

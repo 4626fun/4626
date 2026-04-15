@@ -1,11 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('../../server/_lib/postgres.js', () => ({
+vi.mock('../../server/_lib/db/postgres.js', () => ({
   isDbConfigured: vi.fn(() => false),
   getDb: vi.fn(async () => null),
 }))
 
-import { resolveMeteoraAlphaVaultConfig } from '../../server/_lib/meteoraAlphaVaultConfig.js'
+import { resolveMeteoraAlphaVaultConfig } from '../../server/_lib/onchain/meteoraAlphaVaultConfig.js'
 
 const CREATOR_TOKEN = '0x5b674196812451B7cEC024FE9d22D2c0b172fa75'
 const SOL_MINT = 'So11111111111111111111111111111111111111112'

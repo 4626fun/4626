@@ -16,7 +16,7 @@ import {
   rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 import { getDeploySessionById, signDeployToken, transitionDeploySession, updateDeploySession } from '../../../../server/_lib/deploySessions.js'
-import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
+import { getCanonicalOrigin } from '../../../../server/_lib/infra/origin.js'
 import { buildUserOpErrorDebug } from '../../../../server/_lib/userOpRevertDebug.js'
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 import { parseGrant, validateCallsAgainstGrant } from '../../../../server/_lib/erc7712Permissions.js'
@@ -33,7 +33,7 @@ import {
 } from '../../../../server/_lib/deployLaunchImage.js'
 import { verifyDeployPhase2Invariants } from '../../../../server/_lib/deployPhase2Invariants.js'
 import { ingestShareOftIntoManagedTokenlist } from '../../token/_managedTokenList.js'
-import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../server/_lib/solanaOvaultCompatibility.js'
+import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../server/_lib/onchain/solanaOvaultCompatibility.js'
 import { validateSponsoredSmartWalletCalls } from '../../_paymaster.js'
 import { DeploySessionAccessError, loadAuthorizedDeploySession, normalizeDeploySessionId } from './_sessionAccess.js'
 

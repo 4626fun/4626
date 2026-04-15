@@ -42,7 +42,7 @@ import {
 
 import { ensureCreatorWalletsSchema } from '../../server/_lib/creatorWallets.js'
 import { getActiveDeploySessionForSender, getDeploySessionByTokenHash, hashDeployToken, signDeployToken } from '../../server/_lib/deploySessions.js'
-import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/supabaseAdmin.js'
+import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/db/supabaseAdmin.js'
 import {
   resolveAuthorizedWalletProfile,
   resolvePersistedWalletIdentity,
@@ -53,7 +53,7 @@ import {
 import {
   resolvePayoutRouterExternalSwapApprovals,
   resolvePayoutRouterKeeperAddress,
-} from '../../server/_lib/payoutRouterRuntime.js'
+} from '../../server/_lib/onchain/payoutRouterRuntime.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

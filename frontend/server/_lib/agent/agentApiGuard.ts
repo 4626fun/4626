@@ -2,8 +2,8 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { readSessionFromRequest } from '../../auth/_shared.js'
 import { readSiwaAgentFromRequest } from '../../auth/_siwa.js'
-import { getClientIp, rateLimitKey } from '../rateLimit.js'
-import { checkDurableRateLimit, type DurableRateLimitResult } from '../durableRateLimit.js'
+import { getClientIp, rateLimitKey } from '../infra/rateLimit.js'
+import { checkDurableRateLimit, type DurableRateLimitResult } from '../infra/durableRateLimit.js'
 import { logAgentApiRequest } from './agentAudit.js'
 
 export const AGENT_RATE_LIMITS = {

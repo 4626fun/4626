@@ -16,7 +16,7 @@ const { getDbMock, verifyMessageMock, createPublicClientMock, clientGetBytecodeM
   }),
 )
 
-vi.mock('../../server/_lib/postgres.js', () => ({
+vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
 }))
 

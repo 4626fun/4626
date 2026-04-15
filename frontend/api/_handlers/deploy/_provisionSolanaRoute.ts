@@ -19,19 +19,19 @@ import {
 } from '../../../packages/server-core/src/index.js'
 
 
-import { evaluateCanonicalBridgeTokenPolicy } from '../../../server/_lib/solanaBridgePolicy.js'
+import { evaluateCanonicalBridgeTokenPolicy } from '../../../server/_lib/onchain/solanaBridgePolicy.js'
 import {
   WRAP_TOKEN_NAME_MAX_LENGTH,
   WRAP_TOKEN_SYMBOL_MAX_LENGTH,
   normalizeExactWrapTokenName,
   normalizeExactWrapTokenSymbol,
   readBridgeTokenMetadata,
-} from '../../../server/_lib/solanaBridgeTokenMetadata.js'
-import { runWrapToken } from '../../../server/_lib/solanaBridgeCliRunner.js'
+} from '../../../server/_lib/onchain/solanaBridgeTokenMetadata.js'
+import { runWrapToken } from '../../../server/_lib/onchain/solanaBridgeCliRunner.js'
 import {
   parseMintPubkeyFromWrapOutput,
   solanaPubkeyToBytes32Hex,
-} from '../../../server/_lib/solanaBridgePubkey.js'
+} from '../../../server/_lib/onchain/solanaBridgePubkey.js'
 
 type ProvisionRouteRequest = {
   bridgeToken?: string

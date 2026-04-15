@@ -12,7 +12,7 @@ import {
 } from '../../../packages/server-core/src/index.js'
 
 
-import { fetchExternalJson } from '../../../server/_lib/externalFetch.js'
+import { fetchExternalJson } from '../../../server/_lib/infra/externalFetch.js'
 
 
 /**

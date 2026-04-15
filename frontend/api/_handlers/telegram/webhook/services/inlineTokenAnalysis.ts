@@ -2,7 +2,7 @@ import type { Address } from 'viem'
 import { createPublicClient, erc20Abi, getAddress, http } from 'viem'
 import { base } from 'viem/chains'
 
-import { fetchExternalJson } from '../../../../../server/_lib/externalFetch.js'
+import { fetchExternalJson } from '../../../../../server/_lib/infra/externalFetch.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

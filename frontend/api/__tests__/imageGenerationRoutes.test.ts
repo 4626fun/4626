@@ -74,7 +74,7 @@ vi.mock('../../server/_lib/auth/session.js', () => ({
   isAdminAddress: isAdminAddressMock,
 }))
 
-vi.mock('../../server/_lib/imageProjects.js', () => ({
+vi.mock('../../server/_lib/image/imageProjects.js', () => ({
   createImageGenerationProject: createImageGenerationProjectMock,
   attachImageGenerationAsset: attachImageGenerationAssetMock,
   getImageGenerationProject: getImageGenerationProjectMock,
@@ -82,12 +82,12 @@ vi.mock('../../server/_lib/imageProjects.js', () => ({
   setImageProjectVaultAddress: setImageProjectVaultAddressMock,
 }))
 
-vi.mock('../../server/_lib/imageGenerationJobs.js', () => ({
+vi.mock('../../server/_lib/image/imageGenerationJobs.js', () => ({
   enqueueImageGenerationJob: enqueueImageGenerationJobMock,
   getImageGenerationJob: getImageGenerationJobMock,
 }))
 
-vi.mock('../../server/_lib/imageGenerationRunner.js', () => ({
+vi.mock('../../server/_lib/image/imageGenerationRunner.js', () => ({
   processImageGenerationJob: processImageGenerationJobMock,
 }))
 

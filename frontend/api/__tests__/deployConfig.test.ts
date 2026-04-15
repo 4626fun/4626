@@ -29,11 +29,11 @@ vi.mock('../../packages/server-core/src/index.js', () => ({
   readRequestPrincipalAddress: readRequestPrincipalAddressMock,
 }))
 
-vi.mock('../../server/_lib/trust.js', () => ({
+vi.mock('../../server/_lib/infra/trust.js', () => ({
   isServerAdminAddress: isServerAdminAddressMock,
 }))
 
-vi.mock('../../server/_lib/payoutRouterRuntime.js', () => ({
+vi.mock('../../server/_lib/onchain/payoutRouterRuntime.js', () => ({
   resolvePayoutRouterKeeperAddress: resolvePayoutRouterKeeperAddressMock,
   resolvePayoutRouterExternalSwapApprovals: resolvePayoutRouterExternalSwapApprovalsMock,
   resolvePayoutRouterFeeConfig: resolvePayoutRouterFeeConfigMock,

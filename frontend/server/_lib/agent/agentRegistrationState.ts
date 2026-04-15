@@ -1,5 +1,5 @@
-import { getDb, isDbConfigured } from '../postgres.js'
-import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../supabaseAdmin.js'
+import { getDb, isDbConfigured } from '../db/postgres.js'
+import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../db/supabaseAdmin.js'
 
 type Db = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>

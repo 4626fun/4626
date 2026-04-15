@@ -69,11 +69,11 @@ vi.mock('@xmtp/agent-sdk', () => ({
   getInstallationInfo: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/postgres.js', () => ({
+vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: mocks.getDb,
 }))
 
-vi.mock('../../server/_lib/logger.js', () => ({
+vi.mock('../../server/_lib/infra/logger.js', () => ({
   logger: mocks.logger,
 }))
 

@@ -75,7 +75,7 @@ vi.mock('../../server/_lib/deploySessions.js', () => ({
   decryptWithSecret: decryptWithSecretMock,
 }))
 
-vi.mock('../../server/_lib/rateLimit.js', () => ({
+vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: checkRateLimitMock,
   RATE_LIMITS: {
     deploySessionStatus: { windowMs: 60_000, maxRequests: 240 },
@@ -85,7 +85,7 @@ vi.mock('../../server/_lib/rateLimit.js', () => ({
   rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
 }))
 
-vi.mock('../../server/_lib/origin.js', () => ({
+vi.mock('../../server/_lib/infra/origin.js', () => ({
   getCanonicalOrigin: vi.fn(() => 'https://app.4626.fun'),
 }))
 

@@ -11,7 +11,7 @@ import {
 
 
 import { resolveAmoeWallet } from '../../../../server/_lib/amoeWalletResolver.js'
-import { checkDurableRateLimit } from '../../../../server/_lib/durableRateLimit.js'
+import { checkDurableRateLimit } from '../../../../server/_lib/infra/durableRateLimit.js'
 
 import { claimDailyTwitterCheckin } from '../../../../server/_lib/lotteryAmoe.js'
 

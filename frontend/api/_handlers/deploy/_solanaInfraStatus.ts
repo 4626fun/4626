@@ -23,7 +23,7 @@ import {
   evaluateSolanaOvaultMintCompatibility,
   normalizeSolanaAssetMintOrigin,
   readSolanaOvaultMintCompatibilityHintsFromEnv,
-} from '../../../server/_lib/solanaOvaultCompatibility.js'
+} from '../../../server/_lib/onchain/solanaOvaultCompatibility.js'
 import {
   evaluateCanonicalBridgeTokenPolicy,
   evaluateRemoteProvisionerLiveness,
@@ -31,7 +31,7 @@ import {
   readCanonicalBridgeTokenAllowlist,
   readCanonicalBridgeTokenAllowlistRequired,
   readSolanaBridgeLivenessPolicy,
-} from '../../../server/_lib/solanaBridgePolicy.js'
+} from '../../../server/_lib/onchain/solanaBridgePolicy.js'
 
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
 const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex

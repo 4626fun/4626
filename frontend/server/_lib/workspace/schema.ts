@@ -1,4 +1,4 @@
-import { getDb, isDbConfigured } from '../postgres.js'
+import { getDb, isDbConfigured } from '../db/postgres.js'
 
 let workspaceSchemaEnsured = false
 

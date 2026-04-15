@@ -13,19 +13,19 @@ const {
   checkRateLimitMock: vi.fn(() => ({ allowed: true, remaining: 19, resetAt: Date.now() + 60_000 })),
 }))
 
-vi.mock('../../server/_lib/postgres.js', () => ({
+vi.mock('../../server/_lib/db/postgres.js', () => ({
   ensureCreatorAccessSchema: ensureCreatorAccessSchemaMock,
   getDb: getDbMock,
   isDbConfigured: () => true,
   getDbInitError: () => null,
 }))
 
-vi.mock('../../server/_lib/supabaseAdmin.js', () => ({
+vi.mock('../../server/_lib/db/supabaseAdmin.js', () => ({
   isSupabaseAdminConfigured: () => false,
   getSupabaseAdmin: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/rateLimit.js', () => ({
+vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: checkRateLimitMock,
   getClientIp: vi.fn(() => '127.0.0.1'),
   rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),

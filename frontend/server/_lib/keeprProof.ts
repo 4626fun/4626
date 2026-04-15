@@ -3,7 +3,7 @@ import type { VercelRequest } from '@vercel/node'
 
 import { readSessionFromRequest } from '../auth/_shared.js'
 import { ensureKeeprSchema } from './keeprSchema.js'
-import { getDb } from './postgres.js'
+import { getDb } from './db/postgres.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

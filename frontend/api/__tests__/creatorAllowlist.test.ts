@@ -27,7 +27,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
   setNoStore: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/postgres.js', () => ({
+vi.mock('../../server/_lib/db/postgres.js', () => ({
   ensureCreatorAccessSchema: ensureCreatorAccessSchemaMock,
   getDb: getDbMock,
   getDbInitError: vi.fn(() => null),
@@ -43,7 +43,7 @@ vi.mock('../../server/_lib/coinParties.js', () => ({
   resolveCoinParties: resolveCoinPartiesMock,
 }))
 
-vi.mock('../../server/_lib/supabaseAdmin.js', () => ({
+vi.mock('../../server/_lib/db/supabaseAdmin.js', () => ({
   isSupabaseAdminConfigured: isSupabaseAdminConfiguredMock,
   getSupabaseAdmin: getSupabaseAdminMock,
 }))

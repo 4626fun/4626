@@ -10,7 +10,7 @@ import {
 } from '../../../../packages/server-core/src/index.js'
 
 import { buildAgentRegistration } from '../../../../server/_lib/agent/agentRegistration.js'
-import { getErc8004PublicOrigin } from '../../../../server/_lib/origin.js'
+import { getErc8004PublicOrigin } from '../../../../server/_lib/infra/origin.js'
 import { buildReputationGraph } from '../../../../server/_lib/reputationGraph.js'
 import { buildWalletIntelligence } from '../../../../server/_lib/walletIntelligence.js'
 import { queryFeedbackIndex, type FeedbackIndexEntry } from '../../../../server/_lib/walletIntelligenceCache.js'

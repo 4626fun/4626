@@ -37,7 +37,7 @@ vi.mock('../../packages/server-core/src/index.js', () => ({
   RATE_LIMITS: { adminAction: { windowMs: 60_000, maxRequests: 30 } },
 }))
 
-vi.mock('../../server/_lib/supabaseAdmin.js', () => ({
+vi.mock('../../server/_lib/db/supabaseAdmin.js', () => ({
   isSupabaseAdminConfigured: mocks.isSupabaseAdminConfigured,
   getSupabaseAdmin: mocks.getSupabaseAdmin,
 }))

@@ -12,7 +12,7 @@ import {
   RATE_LIMITS,
   rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
-import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
+import { getCanonicalOrigin } from '../../../../server/_lib/infra/origin.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/auth/deployAuth.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }

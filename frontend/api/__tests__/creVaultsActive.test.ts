@@ -22,7 +22,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
   setNoStore: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/postgres.js', () => ({
+vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
   isDbConfigured: isDbConfiguredMock,
 }))
@@ -461,7 +461,7 @@ describe('/api/(cre/)?vaults/active automation exposure', () => {
 
 describe('ensureKeeprSchema migration-first guardrails', () => {
   afterEach(() => {
-    vi.doUnmock('../../server/_lib/postgres.js')
+    vi.doUnmock('../../server/_lib/db/postgres.js')
     vi.doUnmock('../../server/_lib/keeprSchema.js')
   })
 
@@ -477,7 +477,7 @@ describe('ensureKeeprSchema migration-first guardrails', () => {
       }),
     }
 
-    vi.doMock('../../server/_lib/postgres.js', () => ({
+    vi.doMock('../../server/_lib/db/postgres.js', () => ({
       getDb: vi.fn(async () => db),
       isDbConfigured: vi.fn(() => true),
     }))

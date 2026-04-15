@@ -43,7 +43,7 @@ vi.mock('../../server/_lib/auth/requestPrincipal.js', () => ({
   readRequestPrincipal: readRequestPrincipalMock,
 }))
 
-vi.mock('../../server/_lib/rateLimit.js', () => ({
+vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: checkRateLimitMock,
   getClientIp: getClientIpMock,
   rateLimitKey: rateLimitKeyMock,

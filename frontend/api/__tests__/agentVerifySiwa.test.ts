@@ -93,7 +93,7 @@ vi.mock('../../server/_lib/agent/erc8004.js', () => ({
   getIdentityRegistryAddress: getIdentityRegistryAddressMock,
 }))
 
-vi.mock('../../server/_lib/trust.js', () => ({
+vi.mock('../../server/_lib/infra/trust.js', () => ({
   getTrustedRequestOrigins: getTrustedRequestOriginsMock,
   normalizeOrigin: normalizeOriginMock,
 }))

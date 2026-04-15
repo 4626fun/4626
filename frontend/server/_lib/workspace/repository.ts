@@ -1,4 +1,4 @@
-import { getDb } from '../postgres.js'
+import { getDb } from '../db/postgres.js'
 import { ensureWorkspaceSchema } from './schema.js'
 
 export type WorkspaceSeverity = 'info' | 'warn' | 'critical'

@@ -16,7 +16,7 @@ vi.mock('../../server/_lib/canonicalWalletsSchema.js', () => ({
   ensureCanonicalWalletsSchema: ensureCanonicalWalletsSchemaMock,
 }))
 
-vi.mock('../../server/_lib/postgres.js', () => ({
+vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
   isDbConfigured: isDbConfiguredMock,
 }))

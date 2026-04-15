@@ -27,7 +27,7 @@ vi.mock('../../server/agent/eliza/plugins/cre/index.js', () => ({
   isCreWriteCommandText: isCreWriteCommandTextMock,
 }))
 
-vi.mock('../../server/_lib/rateLimit.js', () => ({
+vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: checkRateLimitMock,
   getClientIp: getClientIpMock,
   rateLimitKey: rateLimitKeyMock,

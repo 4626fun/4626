@@ -7,8 +7,8 @@ import {
   getCompletedImageProjectForVault,
   getImageGenerationProject,
   setImageProjectVaultAddress,
-} from './imageProjects.js'
-import { getCanonicalOrigin } from './origin.js'
+} from './image/imageProjects.js'
+import { getCanonicalOrigin } from './infra/origin.js'
 
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
 const CHAIN_ID_BASE = 8453

@@ -1,1 +1,1 @@
-export { createCorrelationId, logger } from '../../../server/_lib/logger.js'
+export { createCorrelationId, logger } from '../../../server/_lib/infra/logger.js'

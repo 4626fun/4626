@@ -15,7 +15,7 @@ import {
 
 
 import { normalizeReferralCode } from '../../../../server/_lib/referrals.js'
-import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/supabaseAdmin.js'
+import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/db/supabaseAdmin.js'
 import { ensureWaitlistSchema } from '../../../../server/_lib/waitlistSchema.js'
 
 const DEFAULT_BASE_RPCS = ['https://mainnet.base.org', 'https://base.llamarpc.com']

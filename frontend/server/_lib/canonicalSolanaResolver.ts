@@ -1,5 +1,5 @@
 import { ensureCanonicalWalletsSchema } from './canonicalWalletsSchema.js'
-import { getDb, isDbConfigured } from './postgres.js'
+import { getDb, isDbConfigured } from './db/postgres.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 

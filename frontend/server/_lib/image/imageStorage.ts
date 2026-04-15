@@ -1,4 +1,4 @@
-import { getSupabaseAdmin } from './supabaseAdmin.js'
+import { getSupabaseAdmin } from '../db/supabaseAdmin.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

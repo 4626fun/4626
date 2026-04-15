@@ -59,12 +59,12 @@ vi.mock('../../server/_lib/auth/deployAuth.js', () => ({
   readDeployAuthFromRequest: readDeployAuthFromRequestMock,
 }))
 
-vi.mock('../../server/_lib/postgres.js', () => ({
+vi.mock('../../server/_lib/db/postgres.js', () => ({
   isDbConfigured: isDbConfiguredMock,
   getDb: getDbMock,
 }))
 
-vi.mock('../../server/_lib/rateLimit.js', () => ({
+vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: checkRateLimitMock,
   RATE_LIMITS: {
     deployCreate: { limit: 3, windowMs: 60_000 },
@@ -73,7 +73,7 @@ vi.mock('../../server/_lib/rateLimit.js', () => ({
   rateLimitKey: vi.fn(() => 'rl_key'),
 }))
 
-vi.mock('../../server/_lib/origin.js', () => ({
+vi.mock('../../server/_lib/infra/origin.js', () => ({
   getCanonicalOrigin: vi.fn(() => 'https://app.4626.fun'),
 }))
 
@@ -93,7 +93,7 @@ vi.mock('../../server/_lib/creatorAgentWallets.js', () => ({
   })),
 }))
 
-vi.mock('../../server/_lib/supabaseAdmin.js', () => ({
+vi.mock('../../server/_lib/db/supabaseAdmin.js', () => ({
   isSupabaseAdminConfigured: vi.fn(() => false),
   getSupabaseAdmin: vi.fn(),
 }))
@@ -122,7 +122,7 @@ vi.mock('../../server/_lib/erc7712Permissions.js', () => ({
   buildDeployPermissionGrant: vi.fn(() => ({ version: 'erc7712-v1' })),
 }))
 
-vi.mock('../../server/_lib/solanaOvaultCompatibility.js', () => ({
+vi.mock('../../server/_lib/onchain/solanaOvaultCompatibility.js', () => ({
   normalizeSolanaAssetMintOrigin: vi.fn((_value: unknown, fallback: string) => fallback),
   parseSolanaOvaultMintCompatibilityHints: vi.fn(() => ({
     existingMintCompatible: null,

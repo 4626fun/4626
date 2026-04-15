@@ -16,7 +16,7 @@ vi.mock('../../server/_lib/chatCommandCenterTelemetry.js', () => ({
   trackChatCommandCenterEvent: trackChatCommandCenterEventMock,
 }))
 
-vi.mock('../../server/_lib/rateLimit.js', () => ({
+vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: checkRateLimitMock,
   getClientIp: getClientIpMock,
   rateLimitKey: rateLimitKeyMock,

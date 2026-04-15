@@ -65,7 +65,7 @@ vi.mock('../../server/auth/_siwa.js', () => ({
   readSiwaAgentFromRequest: readSiwaAgentFromRequestMock,
 }))
 
-vi.mock('../../server/_lib/rateLimit.js', () => ({
+vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: checkRateLimitMock,
   getClientIp: getClientIpMock,
   rateLimitKey: rateLimitKeyMock,
@@ -74,7 +74,7 @@ vi.mock('../../server/_lib/rateLimit.js', () => ({
   },
 }))
 
-vi.mock('../../server/_lib/postgres.js', () => ({
+vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
   isDbConfigured: isDbConfiguredMock,
 }))
@@ -93,7 +93,7 @@ vi.mock('../../server/_lib/coinParties.js', () => ({
   isAddressLike: (v: string) => /^0x[a-fA-F0-9]{40}$/.test(v),
 }))
 
-vi.mock('../../server/_lib/logger.js', () => ({
+vi.mock('../../server/_lib/infra/logger.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
 

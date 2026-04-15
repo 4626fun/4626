@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ExternalFetchError, fetchExternalJson } from '../../server/_lib/externalFetch.ts'
+import { ExternalFetchError, fetchExternalJson } from '../../server/_lib/infra/externalFetch.ts'
 
 describe('external fetch hardening', () => {
   beforeEach(() => {

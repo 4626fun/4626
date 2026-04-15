@@ -21,7 +21,7 @@ vi.mock('../../packages/server-core/src/index.js', () => ({
   },
 }))
 
-vi.mock('../../server/_lib/origin.js', () => ({
+vi.mock('../../server/_lib/infra/origin.js', () => ({
   getCanonicalOrigin: mocks.getCanonicalOrigin,
   getErc8004PublicOrigin: mocks.getErc8004PublicOrigin,
 }))

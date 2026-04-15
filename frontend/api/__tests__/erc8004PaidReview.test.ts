@@ -34,7 +34,7 @@ vi.mock('../../server/_lib/lensGrove.js', () => ({
   tryUploadImmutableJson: mocks.tryUploadImmutableJson,
 }))
 
-vi.mock('../../server/_lib/rateLimit.js', () => ({
+vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: mocks.checkRateLimit,
   getClientIp: mocks.getClientIp,
   rateLimitKey: mocks.rateLimitKey,

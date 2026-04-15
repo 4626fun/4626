@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto'
 
-import { getDb } from './postgres.js'
+import { getDb } from './db/postgres.js'
 import { ensureWaitlistSchema } from './waitlistSchema.js'
 
 declare const process: { env: Record<string, string | undefined> }

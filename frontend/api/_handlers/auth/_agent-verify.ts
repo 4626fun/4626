@@ -29,7 +29,7 @@ import {
 } from '../../../server/auth/_siwa.js'
 import { resolveCanonicalSmartWalletAddress } from '../../../server/_lib/canonicalWalletResolver.js'
 import { getIdentityRegistryAddress } from '../../../server/_lib/agent/erc8004.js'
-import { getTrustedRequestOrigins, normalizeOrigin } from '../../../server/_lib/trust.js'
+import { getTrustedRequestOrigins, normalizeOrigin } from '../../../server/_lib/infra/trust.js'
 
 
 declare const process: { env: Record<string, string | undefined> }

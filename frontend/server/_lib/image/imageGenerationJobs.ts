@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 
-import { getDb } from './postgres.js'
+import { getDb } from '../db/postgres.js'
 import { ensureImageGenerationSchema, updateImageGenerationProject } from './imageProjects.js'
 
 export type ImageGenerationJobKind = 'generate' | 'refine'

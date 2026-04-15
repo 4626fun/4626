@@ -1,4 +1,4 @@
-import { logger } from '../_lib/logger.js'
+import { logger } from '../_lib/infra/logger.js'
 import type { KeeprVaultRow } from '../_lib/keeprRegistry.js'
 import { isHandledConversationalSlashPrefix, normalizeConversationalPrompt } from '../agent/core/conversationalInput.js'
 import { toAgentError } from '../agent/eliza/_errors.js'

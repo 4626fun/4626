@@ -1,5 +1,5 @@
 import { checkRateLimit, type RateLimitConfig, type RateLimitResult } from './rateLimit.js'
-import { getDb, isDbConfigured } from './postgres.js'
+import { getDb, isDbConfigured } from '../db/postgres.js'
 
 type Db = { query?: (text: string, params?: any[]) => Promise<{ rows: any[] }>; sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 

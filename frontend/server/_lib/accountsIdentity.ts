@@ -4,7 +4,7 @@ import { getAddress } from 'viem'
 
 import { verifyPrivyRequest } from './canonicalCswDelegation.js'
 import { assertNoEmailPrivyCollision } from './identityRecovery.js'
-import { extractPrivyVerifiedEmail } from './trust.js'
+import { extractPrivyVerifiedEmail } from './infra/trust.js'
 import { ensureWaitlistSchema } from './waitlistSchema.js'
 import { classifyLinkedAccounts, type PrivyUserLike } from './walletMapping.js'
 import { resolveCanonicalCsw } from './canonicalCswDelegation.js'

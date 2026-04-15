@@ -3,7 +3,7 @@ import { isAddress } from 'viem'
 
 import { checkRateLimit, getClientIp, rateLimitKey, RATE_LIMITS } from '../../../packages/server-core/src/index.js'
 import { getImageApiActor, parseRequiredString, prepareImageApiAuthenticated, readBody } from './_shared.js'
-import { getImageGenerationProject, setImageProjectVaultAddress } from '../../../server/_lib/imageProjects.js'
+import { getImageGenerationProject, setImageProjectVaultAddress } from '../../../server/_lib/image/imageProjects.js'
 import { resolveCoinPartiesAndOwner } from '../../../server/_lib/coinParties.js'
 import {
   resolveAuthorizedRequestPrincipal,

@@ -8,9 +8,9 @@
  * onchain `addOwnerAddress` transaction.
  */
 
-import { getDb, isDbConfigured } from './postgres.js'
+import { getDb, isDbConfigured } from './db/postgres.js'
 import { getOrCreateCreatorAgentWallet } from './creatorAgentWallets.js'
-import { logger } from './logger.js'
+import { logger } from './infra/logger.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

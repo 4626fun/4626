@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { applyEnv } from '../../api/__tests__/helpers'
+import { applyEnv } from '../../../api/__tests__/helpers'
 
 describe('openai image generation', () => {
   let restoreEnv: (() => void) | null = null

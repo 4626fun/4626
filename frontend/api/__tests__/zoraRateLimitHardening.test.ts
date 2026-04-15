@@ -31,7 +31,7 @@ vi.mock('../../packages/server-core/src/index.js', async () => {
   }
 })
 
-vi.mock('../../server/_lib/rateLimit.js', () => ({
+vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: libCheckRateLimitMock,
   getClientIp: vi.fn(() => '198.51.100.99'),
   rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),

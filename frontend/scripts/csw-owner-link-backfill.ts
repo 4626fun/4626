@@ -17,8 +17,8 @@ import {
   type CswOwnerLinkStatus,
   upsertCswOwnerLinkStatus,
 } from '../server/_lib/cswOwnerLinkStatus.js'
-import { getDb, isDbConfigured } from '../server/_lib/postgres.js'
-import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../server/_lib/supabaseAdmin.js'
+import { getDb, isDbConfigured } from '../server/_lib/db/postgres.js'
+import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../server/_lib/db/supabaseAdmin.js'
 
 declare const process: {
   argv: string[]

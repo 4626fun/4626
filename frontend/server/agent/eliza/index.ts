@@ -69,14 +69,14 @@ import { WelcomeConversationTracker, fingerprintAgentConfig, getActionRetryBudge
 import { getHealthProbeStatusCode } from './_healthStatus.js'
 import { handleXmtpFallbackResponse } from './_xmtpFallback.js'
 
-import { getDb, getDbInitError, isDbConfigured } from '../../_lib/postgres.js'
+import { getDb, getDbInitError, isDbConfigured } from '../../_lib/db/postgres.js'
 import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../../_lib/creatorXmtpAgents.js'
 import { createPrivyScwSigner } from '../../_lib/privyXmtpSigner.js'
 import { buildAgentRegistration } from '../../_lib/agent/agentRegistration.js'
 import { publishAgentRegistrationToGrove } from '../../_lib/agent/agentRegistrationPublisher.js'
 import { formatWelcomeNumberedOptions } from '../../_lib/chatCommandFallback.js'
-import { createCorrelationLogger, logger } from '../../_lib/logger.js'
-import { emitTelemetryEvent } from '../../_lib/telemetry.js'
+import { createCorrelationLogger, logger } from '../../_lib/infra/logger.js'
+import { emitTelemetryEvent } from '../../_lib/infra/telemetry.js'
 import {
   TARGET_CANONICAL_CSW_ADDRESS,
   isTargetCanonicalCsw,

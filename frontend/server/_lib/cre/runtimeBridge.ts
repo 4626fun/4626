@@ -3,9 +3,9 @@ import type { VercelRequest } from "@vercel/node"
 import { hexToBytes } from "viem"
 import { privateKeyToAccount } from "viem/accounts"
 
-import { logger } from "../logger.js"
+import { logger } from "../infra/logger.js"
 import { enqueueKeeprAction } from "../keeprRegistry.js"
-import { getDb, isDbConfigured } from "../postgres.js"
+import { getDb, isDbConfigured } from "../db/postgres.js"
 import { ensureCreRuntimeSchema } from "./runtimeSchema.js"
 
 type RuntimeRow = {

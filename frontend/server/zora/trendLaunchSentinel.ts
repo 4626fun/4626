@@ -1,6 +1,6 @@
 import { isAddress } from 'viem'
 
-import { logger } from '../_lib/logger.js'
+import { logger } from '../_lib/infra/logger.js'
 import { markTrendOpDeployed, markTrendOpDeploying, markTrendOpFailed, upsertTrendPrediction } from '../_lib/zoraTrendOpsStore.js'
 import { preflightTrendTicker, reserveTrendTicker } from './trends.js'
 

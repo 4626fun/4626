@@ -1,4 +1,4 @@
-import { getDb } from './postgres.js'
+import { getDb } from './db/postgres.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 

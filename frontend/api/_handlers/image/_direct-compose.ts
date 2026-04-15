@@ -2,14 +2,14 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import sharp from 'sharp'
 
 import { checkRateLimit, getClientIp, rateLimitKey, RATE_LIMITS } from '../../../packages/server-core/src/index.js'
-import { downloadImageStorageObject } from '../../../server/_lib/imageStorage.js'
-import { extractForegroundFromSubjectImageBytes } from '../../../server/_lib/imageForegroundExtraction.js'
-import { composeLockedFrameImage } from '../../../server/_lib/imageCompositor.js'
+import { downloadImageStorageObject } from '../../../server/_lib/image/imageStorage.js'
+import { extractForegroundFromSubjectImageBytes } from '../../../server/_lib/image/imageForegroundExtraction.js'
+import { composeLockedFrameImage } from '../../../server/_lib/image/imageCompositor.js'
 import {
   createOutputImageGenerationAsset,
   getImageGenerationProject,
   updateImageGenerationProject,
-} from '../../../server/_lib/imageProjects.js'
+} from '../../../server/_lib/image/imageProjects.js'
 import { getImageApiActor, parseRequiredString, prepareImageApiAuthenticated, readBody } from './_shared.js'
 
 type Body = { projectId?: string }

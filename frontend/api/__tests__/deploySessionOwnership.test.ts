@@ -62,18 +62,18 @@ vi.mock('../../server/_lib/deploySessions.js', () => ({
   randomId: vi.fn(() => 'sess_123'),
 }))
 
-vi.mock('../../server/_lib/postgres.js', () => ({
+vi.mock('../../server/_lib/db/postgres.js', () => ({
   isDbConfigured: isDbConfiguredMock,
   getDb: getDbMock,
 }))
 
-vi.mock('../../server/_lib/rateLimit.js', () => ({
+vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
   RATE_LIMITS: { deployCreate: { limit: 3, windowMs: 60_000 } },
   rateLimitKey: vi.fn(() => 'rl_key'),
 }))
 
-vi.mock('../../server/_lib/supabaseAdmin.js', () => ({
+vi.mock('../../server/_lib/db/supabaseAdmin.js', () => ({
   isSupabaseAdminConfigured: vi.fn(() => false),
   getSupabaseAdmin: vi.fn(),
 }))
@@ -82,7 +82,7 @@ vi.mock('../../server/_lib/creatorAgentWallets.js', () => ({
   getOrCreateCreatorAgentWallet: getOrCreateCreatorAgentWalletMock,
 }))
 
-vi.mock('../../server/_lib/origin.js', () => ({
+vi.mock('../../server/_lib/infra/origin.js', () => ({
   getCanonicalOrigin: vi.fn(() => 'https://4626-test-akita-llc.vercel.app'),
 }))
 

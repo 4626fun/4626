@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { resolveKeeprEffectiveActionType } from './agentControl/trustZones.js'
 import { ensureKeeprSchema } from './keeprSchema.js'
-import { getDb } from './postgres.js'
+import { getDb } from './db/postgres.js'
 
 export type KeeprConfigV1 = {
   version: number

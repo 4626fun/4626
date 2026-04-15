@@ -2,7 +2,7 @@ import type { VercelRequest } from '@vercel/node'
 
 import { readSessionFromRequest } from '../../auth/_shared.js'
 import { buildAgentSessionContext, type AgentSessionContext } from '../../agent/core/resolveIdentityContext.js'
-import { isAddressLike, isServerAdminAddress, normalizeEmail } from '../trust.js'
+import { isAddressLike, isServerAdminAddress, normalizeEmail } from '../infra/trust.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

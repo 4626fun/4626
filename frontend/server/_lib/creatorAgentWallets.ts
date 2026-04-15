@@ -1,7 +1,7 @@
 import { getAddress } from 'viem'
 
 import { createAgentWallet } from './privyWalletApi.js'
-import { getDb, isDbConfigured } from './postgres.js'
+import { getDb, isDbConfigured } from './db/postgres.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 

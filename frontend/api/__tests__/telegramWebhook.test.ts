@@ -149,7 +149,7 @@ vi.mock('../../server/twitter/commands.js', () => ({
   handleTwitterCommand: handleTwitterCommandMock,
 }))
 
-vi.mock('../../server/_lib/postgres.js', () => ({
+vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
   isDbConfigured: () => true,
 }))

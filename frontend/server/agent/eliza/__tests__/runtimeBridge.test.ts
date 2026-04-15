@@ -18,7 +18,7 @@ const {
   resolveLensUriMock: vi.fn((uri: string) => uri),
 }))
 
-vi.mock('../../../_lib/postgres.js', () => ({
+vi.mock('../../../_lib/db/postgres.js', () => ({
   getDb: getDbMock,
 }))
 

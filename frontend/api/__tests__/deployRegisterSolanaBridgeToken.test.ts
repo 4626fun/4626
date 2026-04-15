@@ -59,7 +59,7 @@ vi.mock('../../server/_lib/contracts.js', () => ({
   getApiContracts: getApiContractsMock,
 }))
 
-vi.mock('../../server/_lib/rateLimit.js', () => ({
+vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: checkRateLimitMock,
   getClientIp: getClientIpMock,
   rateLimitKey: rateLimitKeyMock,
@@ -69,7 +69,7 @@ vi.mock('../../server/_lib/auth/session.js', () => ({
   isAdminAddress: isAdminAddressMock,
 }))
 
-vi.mock('../../server/_lib/meteoraAlphaVaultConfig.js', () => ({
+vi.mock('../../server/_lib/onchain/meteoraAlphaVaultConfig.js', () => ({
   resolveMeteoraAlphaVaultConfig: resolveMeteoraConfigMock,
   SOLANA_NATIVE_MINT: 'So11111111111111111111111111111111111111112',
 }))

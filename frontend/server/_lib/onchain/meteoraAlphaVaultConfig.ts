@@ -1,6 +1,6 @@
 import { getAddress, isAddress, type Address } from 'viem'
 
-import { getDb, isDbConfigured } from './postgres.js'
+import { getDb, isDbConfigured } from '../db/postgres.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 

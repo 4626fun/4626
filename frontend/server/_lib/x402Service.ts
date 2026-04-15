@@ -12,7 +12,7 @@ import {
 } from 'x402/types'
 import { useFacilitator as createFacilitatorClient } from 'x402/verify'
 
-import { getCanonicalOrigin } from './origin.js'
+import { getCanonicalOrigin } from './infra/origin.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

@@ -25,13 +25,13 @@ vi.mock('../../server/auth/_siwa.js', () => ({
   readSiwaAgentFromRequest: readSiwaAgentFromRequestMock,
 }))
 
-vi.mock('../../server/_lib/rateLimit.js', () => ({
+vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: checkRateLimitMock,
   RATE_LIMITS: { deploySessionStart: { windowMs: 60_000, maxRequests: 20 } },
   rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
 }))
 
-vi.mock('../../server/_lib/origin.js', () => ({
+vi.mock('../../server/_lib/infra/origin.js', () => ({
   getCanonicalOrigin: vi.fn(() => 'https://app.4626.fun'),
 }))
 

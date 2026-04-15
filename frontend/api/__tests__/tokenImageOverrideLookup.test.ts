@@ -52,7 +52,7 @@ vi.mock('../../server/_lib/blob.js', () => ({
   sha256Hex: mocks.sha256HexMock,
 }))
 
-vi.mock('../../server/_lib/imageProjects.js', () => ({
+vi.mock('../../server/_lib/image/imageProjects.js', () => ({
   getCompletedImageProjectForVault: mocks.getCompletedImageProjectForVaultMock,
 }))
 

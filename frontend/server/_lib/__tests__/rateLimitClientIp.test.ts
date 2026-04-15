@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { getClientIp } from '../rateLimit.js'
+import { getClientIp } from '../infra/rateLimit.js'
 
 const originalNodeEnv = process.env.NODE_ENV
 

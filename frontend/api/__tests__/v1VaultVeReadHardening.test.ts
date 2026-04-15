@@ -21,7 +21,7 @@ vi.mock('../../server/_lib/agent/agentApiGuard.js', () => ({
   guardAgentApiRequest: mocks.guardAgentApiRequest,
 }))
 
-vi.mock('../../server/_lib/rateLimit.js', () => ({
+vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: mocks.checkRateLimit,
   getClientIp: mocks.getClientIp,
   rateLimitKey: mocks.rateLimitKey,

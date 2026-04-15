@@ -19,7 +19,7 @@ import {
 
 
 import { getDeploySessionById, signDeployToken, updateDeploySession } from '../../../../server/_lib/deploySessions.js'
-import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
+import { getCanonicalOrigin } from '../../../../server/_lib/infra/origin.js'
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/auth/deployAuth.js'
 import { validateSponsoredSmartWalletCalls } from '../../_paymaster.js'

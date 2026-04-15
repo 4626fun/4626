@@ -56,7 +56,7 @@ vi.mock('../../packages/server-core/src/index.js', () => ({
   getDb: getDbMock,
 }))
 
-vi.mock('../../server/_lib/rateLimit.js', () => ({
+vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: checkRateLimitMock,
   RATE_LIMITS: {
     cswLink: { windowMs: 60_000, maxRequests: 20 },
@@ -79,7 +79,7 @@ vi.mock('../../server/_lib/walletSync.js', () => ({
   })),
 }))
 
-vi.mock('../../server/_lib/solanaSweepJobs.js', () => ({
+vi.mock('../../server/_lib/onchain/solanaSweepJobs.js', () => ({
   enqueueSolanaSweepJob: vi.fn(async () => ({ id: 1, status: 'queued', min_lamports: 0n })),
   processSolanaSweepJobs: vi.fn(async () => ({
     processed: 0,

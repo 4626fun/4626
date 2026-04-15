@@ -106,7 +106,7 @@ vi.mock('../../packages/server-core/src/index.js', async () => {
   }
 })
 
-vi.mock('../../server/_lib/origin.js', () => ({
+vi.mock('../../server/_lib/infra/origin.js', () => ({
   getErc8004PublicOrigin: () => mocks.getErc8004PublicOrigin(),
 }))
 

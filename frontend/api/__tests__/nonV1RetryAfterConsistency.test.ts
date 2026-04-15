@@ -48,7 +48,7 @@ vi.mock('../../server/auth/_handoff.js', () => ({
   consumeHandoffCode: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/supabaseAdmin.js', () => ({
+vi.mock('../../server/_lib/db/supabaseAdmin.js', () => ({
   isSupabaseAdminConfigured: vi.fn(() => false),
   getSupabaseAdmin: vi.fn(() => null),
 }))

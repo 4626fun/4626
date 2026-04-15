@@ -14,7 +14,7 @@ import {
 
 import { ensureCreatorWalletsSchema } from '../../server/_lib/creatorWallets.js'
 import { isAddressLike, resolveCoinParties } from '../../server/_lib/coinParties.js'
-import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/supabaseAdmin.js'
+import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/db/supabaseAdmin.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

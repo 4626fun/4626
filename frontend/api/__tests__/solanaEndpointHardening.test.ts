@@ -24,7 +24,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
   readJsonBody: readJsonBodyMock,
 }))
 
-vi.mock('../../server/_lib/rateLimit.js', () => ({
+vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: checkRateLimitMock,
   RATE_LIMITS: {
     solanaRouteProvision: { windowMs: 60_000, maxRequests: 20 },
@@ -42,7 +42,7 @@ vi.mock('../../server/_lib/auth/requestPrincipal.js', () => ({
   resolveAuthorizedRequestPrincipal: vi.fn(async () => null),
 }))
 
-vi.mock('../../server/_lib/postgres.js', () => ({
+vi.mock('../../server/_lib/db/postgres.js', () => ({
   isDbConfigured: vi.fn(() => true),
   getDb: getDbMock,
 }))

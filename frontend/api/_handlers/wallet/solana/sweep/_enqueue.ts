@@ -17,7 +17,7 @@ import {
 
 
 import { ensureWaitlistSchema } from '../../../../../server/_lib/waitlistSchema.js'
-import { enqueueSolanaSweepJob } from '../../../../../server/_lib/solanaSweepJobs.js'
+import { enqueueSolanaSweepJob } from '../../../../../server/_lib/onchain/solanaSweepJobs.js'
 import { resolveCanonicalSolanaWalletByProfileId } from '../../../../../server/_lib/canonicalSolanaResolver.js'
 
 type Body = {

@@ -2,7 +2,7 @@ import { type ClassifiedLinkedAccounts, classifyLinkedAccounts, type MappedWalle
 import { ensureCanonicalWalletsSchema } from './canonicalWalletsSchema.js'
 import { fetchZoraProfile } from './zoraProfile.js'
 import { assertNoEmailPrivyCollision } from './identityRecovery.js'
-import { extractPrivyVerifiedEmail } from './trust.js'
+import { extractPrivyVerifiedEmail } from './infra/trust.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 

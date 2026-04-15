@@ -20,8 +20,8 @@ import {
   resolveKeeprEffectiveActionType,
   resolveKeeprTrustZone,
 } from '../_lib/agentControl/trustZones.js'
-import { getDb } from '../_lib/postgres.js'
-import { logger } from '../_lib/logger.js'
+import { getDb } from '../_lib/db/postgres.js'
+import { logger } from '../_lib/infra/logger.js'
 import { resolveXmtpDbDirectory } from '../_lib/xmtpDbDirectory.js'
 import {
   fileLooksLikePlainSqlite,

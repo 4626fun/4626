@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 
 import { uploadImageStorageObject } from './imageStorage.js'
-import { getDb } from './postgres.js'
+import { getDb } from '../db/postgres.js'
 
 export type ImageGenerationProjectStatus =
   | 'draft'

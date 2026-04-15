@@ -1,5 +1,5 @@
 import { assertNoEmailPrivyCollision } from './identityRecovery.js'
-import { normalizeEmail } from './trust.js'
+import { normalizeEmail } from './infra/trust.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 

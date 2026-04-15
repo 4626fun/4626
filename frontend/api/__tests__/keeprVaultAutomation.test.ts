@@ -218,7 +218,7 @@ async function loadAutomationHandlerWithRealResolver(params: {
   vi.doMock('../../server/_lib/auth/session.js', () => ({
     getSessionAddress: getSessionAddressMock,
   }))
-  vi.doMock('../../server/_lib/postgres.js', () => ({
+  vi.doMock('../../server/_lib/db/postgres.js', () => ({
     getDb: vi.fn(async () => ({ sql: dbSqlMock })),
     isDbConfigured: vi.fn(() => true),
   }))
@@ -261,7 +261,7 @@ afterEach(() => {
   vi.doUnmock('../../server/_lib/canonicalWalletResolver.js')
   vi.doUnmock('../../server/_lib/keeprRegistry.js')
   vi.doUnmock('../../server/_lib/keeprAutomation.js')
-  vi.doUnmock('../../server/_lib/postgres.js')
+  vi.doUnmock('../../server/_lib/db/postgres.js')
   vi.doUnmock('../../server/_lib/canonicalWalletsSchema.js')
   vi.doUnmock('../../server/_lib/walletSync.js')
 })

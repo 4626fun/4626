@@ -64,7 +64,7 @@ vi.mock('../../server/_lib/contracts.js', () => ({
   getApiContracts: () => getApiContractsMock(),
 }))
 
-vi.mock('../../server/_lib/postgres.js', () => ({
+vi.mock('../../server/_lib/db/postgres.js', () => ({
   isDbConfigured: () => isDbConfiguredMock(),
   getDb: getDbMock,
   ensureCreatorWalletsSchema: vi.fn(),
@@ -76,7 +76,7 @@ vi.mock('../../server/_lib/creatorWallets.js', () => ({
   ensureCreatorWalletsSchema: vi.fn(async () => {}),
 }))
 
-vi.mock('../../server/_lib/supabaseAdmin.js', () => ({
+vi.mock('../../server/_lib/db/supabaseAdmin.js', () => ({
   isSupabaseAdminConfigured: () => isSupabaseAdminConfiguredMock(),
   getSupabaseAdmin: vi.fn(),
 }))
@@ -92,7 +92,7 @@ vi.mock('../../server/_lib/coinParties.js', () => ({
   resolveCoinParties: vi.fn(() => Promise.resolve({ creator: sessionAddress, payoutRecipient: sessionAddress })),
 }))
 
-vi.mock('../../server/_lib/logger.js', () => ({
+vi.mock('../../server/_lib/infra/logger.js', () => ({
   logger: { warn: vi.fn(), error: vi.fn() },
 }))
 

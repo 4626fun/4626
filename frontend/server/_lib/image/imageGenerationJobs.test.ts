@@ -5,7 +5,7 @@ const { getDbMock, updateImageGenerationProjectMock } = vi.hoisted(() => ({
   updateImageGenerationProjectMock: vi.fn(),
 }))
 
-vi.mock('./postgres.js', () => ({
+vi.mock('../db/postgres.js', () => ({
   getDb: getDbMock,
 }))
 

@@ -14,7 +14,7 @@ import {
 } from '../../../../../packages/server-core/src/index.js'
 
 
-import { processSolanaSweepJobs } from '../../../../../server/_lib/solanaSweepJobs.js'
+import { processSolanaSweepJobs } from '../../../../../server/_lib/onchain/solanaSweepJobs.js'
 
 type Body = {
   limit?: number

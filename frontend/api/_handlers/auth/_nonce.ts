@@ -17,7 +17,7 @@ import {
   getClientIp,
   rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
-import { getCanonicalOrigin } from '../../../server/_lib/origin.js'
+import { getCanonicalOrigin } from '../../../server/_lib/infra/origin.js'
 type NonceResponse = {
   nonce: string
   nonceToken: string
