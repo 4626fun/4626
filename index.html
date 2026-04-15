@@ -184,8 +184,11 @@
             <p class="split-deployed">90% deployed</p>
           </div>
           <div class="idle-badge" id="idle-badge">
-            <p class="idle-label">10% idle in vault</p>
-            <p class="idle-amount">5,000,000</p>
+            <div class="idle-badge-box">
+              <p class="idle-label">10% idle in vault</p>
+              <p class="idle-amount">5,000,000</p>
+            </div>
+            <div class="idle-badge-line"></div>
           </div>
 
           <!-- MORPH ZONE: WebGL particle morph overlay (positioned between coin & share) -->
@@ -323,7 +326,7 @@
     </section>
 
     <!-- ╔═══ CHAPTER 3: ACCRUE (650vh) ═══╗ -->
-    <section class="scroll-scene" id="ch-accrue" data-height="650">
+    <section class="scroll-scene" id="ch-accrue" data-height="850">
       <div class="scene-pin">
         <div class="accrue-container accrue-container-v2">
           <!-- Intro -->
@@ -420,11 +423,30 @@
           </div>
           <p class="accrue-equation" id="accrue-equation" style="display:none"></p>
         </div>
+
+        <!-- Token price volatility narrative (absolutely positioned in scene-pin) -->
+        <div class="accrue-volatility" id="accrue-volatility">
+          <div class="vol-chart-wrap">
+            <canvas id="vol-chart-canvas"></canvas>
+            <div class="vol-chart-labels">
+              <span class="vol-label-up">↑</span>
+              <span class="vol-label-down">↓</span>
+              <span class="vol-label-up">↑</span>
+              <span class="vol-label-up">↑</span>
+              <span class="vol-label-up">↑</span>
+              <span class="vol-label-down">↓</span>
+              <span class="vol-label-down">↓</span>
+              <span class="vol-label-down">↓</span>
+            </div>
+          </div>
+          <p class="vol-headline" id="vol-headline">The token price can do anything.</p>
+          <p class="vol-sub" id="vol-sub">But vault holders earn fees regardless — pro rata, every day, no matter what.</p>
+        </div>
       </div>
     </section>
 
     <!-- ╔═══ CHAPTER 3.5: SHARE TOKEN STORY — CCA AUCTION (500vh) ═══╗ -->
-    <section class="scroll-scene" id="ch-cca" data-height="650">
+    <section class="scroll-scene" id="ch-cca" data-height="500">
       <div class="scene-pin">
         <div class="cca-container">
 
@@ -441,25 +463,6 @@
               <img src="./assets/tokens/share/akita-512.png" alt="■AKITA" class="cca-share-img" width="80" height="80">
             </div>
             <span class="cca-share-label">■AKITA</span>
-          </div>
-
-          <!-- Token price volatility narrative -->
-          <div class="cca-volatility" id="cca-volatility">
-            <div class="vol-chart-wrap">
-              <canvas id="vol-chart-canvas"></canvas>
-              <div class="vol-chart-labels">
-                <span class="vol-label-up">↑</span>
-                <span class="vol-label-down">↓</span>
-                <span class="vol-label-up">↑</span>
-                <span class="vol-label-up">↑</span>
-                <span class="vol-label-up">↑</span>
-                <span class="vol-label-down">↓</span>
-                <span class="vol-label-down">↓</span>
-                <span class="vol-label-down">↓</span>
-              </div>
-            </div>
-            <p class="vol-headline" id="vol-headline">The token price can do anything.</p>
-            <p class="vol-sub" id="vol-sub">But vault holders earn fees regardless — pro rata, every day, no matter what.</p>
           </div>
 
           <!-- Distribution arcs / segments -->

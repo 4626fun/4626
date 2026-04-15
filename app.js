@@ -1086,6 +1086,71 @@ function multiMapSmooth(progress, stops, values) {
   const ratioValue = document.getElementById('ratio-value');
   const ycWrap = document.getElementById('yield-curve-wrap');
   const ycCanvas = document.getElementById('yield-curve-canvas');
+  const accrueVol = document.getElementById('accrue-volatility');
+  const volCanvas = document.getElementById('vol-chart-canvas');
+  const volHeadline = document.getElementById('vol-headline');
+  const volSub = document.getElementById('vol-sub');
+
+  // ── Draw volatile price chart on canvas ──
+  function drawVolChart(progress) {
+    if (!volCanvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    const rect = volCanvas.getBoundingClientRect();
+    const w = rect.width * dpr;
+    const h = rect.height * dpr;
+    if (w === 0 || h === 0) return;
+    volCanvas.width = w;
+    volCanvas.height = h;
+    const ctx = volCanvas.getContext('2d');
+    ctx.clearRect(0, 0, w, h);
+
+    // Generate volatile price data: up, down, up, up, up, down, down, down
+    const points = 120;
+    const data = new Float32Array(points);
+    data[0] = 0.45;
+    function srand(s) { let x = Math.sin(s * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
+    const trends = [0.008, -0.012, 0.006, 0.010, 0.007, -0.009, -0.014, -0.006];
+    const segLen = points / trends.length;
+    for (let i = 1; i < points; i++) {
+      const seg = Math.min(trends.length - 1, Math.floor(i / segLen));
+      const noise = (srand(i * 3.7) - 0.5) * 0.03;
+      data[i] = Math.max(0.08, Math.min(0.92, data[i - 1] + trends[seg] + noise));
+    }
+
+    const drawCount = Math.floor(progress * points);
+    if (drawCount < 2) return;
+
+    ctx.lineWidth = 2 * dpr;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    const grad = ctx.createLinearGradient(0, 0, w, 0);
+    for (let i = 0; i < drawCount; i++) {
+      const t = i / (points - 1);
+      const goingUp = i > 0 ? data[i] > data[i - 1] : true;
+      grad.addColorStop(t, goingUp ? 'rgba(34, 197, 94, 0.7)' : 'rgba(239, 68, 68, 0.6)');
+    }
+    ctx.strokeStyle = grad;
+
+    ctx.beginPath();
+    for (let i = 0; i < drawCount; i++) {
+      const x = (i / (points - 1)) * w;
+      const y = (1 - data[i]) * h;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.stroke();
+
+    const lastX = ((drawCount - 1) / (points - 1)) * w;
+    ctx.lineTo(lastX, h);
+    ctx.lineTo(0, h);
+    ctx.closePath();
+    const fillGrad = ctx.createLinearGradient(0, 0, 0, h);
+    fillGrad.addColorStop(0, 'rgba(0, 82, 255, 0.08)');
+    fillGrad.addColorStop(1, 'rgba(0, 82, 255, 0)');
+    ctx.fillStyle = fillGrad;
+    ctx.fill();
+  }
 
   const TOTAL_DAYS = 243;
   const VAULT_LAUNCH = new Date(2025, 7, 10);
@@ -1423,16 +1488,16 @@ function multiMapSmooth(progress, stops, values) {
       // Audio: drone during accrue
       AudioEngine.setDroneLevel(multiMap(p, [0, 0.10, 0.50, 0.86, 0.96], [0.02, 0.06, 0.08, 0.06, 0.02]));
 
-      const sceneOp = multiMapSmooth(p, [0, 0.06, 0.86, 0.96], [0, 1, 1, 0]);
+      const sceneOp = multiMapSmooth(p, [0, 0.06, 0.93, 0.99], [0, 1, 1, 0]);
       section.querySelector('.scene-pin').style.opacity = sceneOp;
 
-      intro.style.opacity = multiMapSmooth(p, [0.06, 0.16], [0, 1]);
-      if (ratioDisplay) ratioDisplay.style.opacity = multiMapSmooth(p, [0.08, 0.18], [0, 1]);
+      intro.style.opacity = multiMapSmooth(p, [0.06, 0.16, 0.76, 0.82], [0, 1, 1, 0]);
+      if (ratioDisplay) ratioDisplay.style.opacity = multiMapSmooth(p, [0.08, 0.18, 0.76, 0.82], [0, 1, 1, 0]);
       if (pair) pair.style.opacity = multiMapSmooth(p, [0.10, 0.20], [0, 1]);
-      clock.style.opacity = multiMapSmooth(p, [0.18, 0.26], [0, 1]);
-      if (ycWrap) ycWrap.style.opacity = multiMapSmooth(p, [0.22, 0.32], [0, 1]);
-      stats.style.opacity = multiMapSmooth(p, [0.38, 0.48], [0, 1]);
-      if (equation) equation.style.opacity = multiMapSmooth(p, [0.38, 0.48], [0, 1]);
+      clock.style.opacity = multiMapSmooth(p, [0.18, 0.26, 0.76, 0.82], [0, 1, 1, 0]);
+      if (ycWrap) ycWrap.style.opacity = multiMapSmooth(p, [0.22, 0.32, 0.76, 0.84], [0, 1, 1, 0]);
+      stats.style.opacity = multiMapSmooth(p, [0.38, 0.48, 0.76, 0.84], [0, 1, 1, 0]);
+      if (equation) equation.style.opacity = multiMapSmooth(p, [0.38, 0.48, 0.76, 0.84], [0, 1, 1, 0]);
 
       // Map scroll to curve draw progress
       const curveP = mapRange(p, 0.28, 0.78, 0, 1);
@@ -1479,6 +1544,18 @@ function multiMapSmooth(progress, stops, values) {
           ms.chimed = false;
         }
       });
+
+      // ── Volatility narrative (appears after yield curve completes) ──
+      if (accrueVol) {
+        const volOp = multiMapSmooth(p, [0.76, 0.82, 0.93, 0.98], [0, 1, 1, 0]);
+        accrueVol.style.opacity = volOp;
+        // Draw chart progressively
+        const chartDraw = multiMapSmooth(p, [0.78, 0.90], [0, 1]);
+        drawVolChart(chartDraw);
+        // Headline/sub fade in after chart starts
+        if (volHeadline) volHeadline.style.opacity = multiMapSmooth(p, [0.82, 0.86, 0.93, 0.97], [0, 1, 1, 0]);
+        if (volSub) volSub.style.opacity = multiMapSmooth(p, [0.84, 0.88, 0.93, 0.97], [0, 1, 1, 0]);
+      }
     }
   });
 })();
@@ -1501,78 +1578,6 @@ function multiMapSmooth(progress, stops, values) {
   const fillLiquidity = document.getElementById('cca-fill-liquidity');
   const summary = document.getElementById('cca-summary');
   const ccaContainer = document.querySelector('.cca-container');
-  const volatility = document.getElementById('cca-volatility');
-  const volCanvas = document.getElementById('vol-chart-canvas');
-  const volHeadline = document.getElementById('vol-headline');
-  const volSub = document.getElementById('vol-sub');
-
-  // ── Draw volatile price chart on canvas ──
-  function drawVolChart(progress) {
-    if (!volCanvas) return;
-    const dpr = window.devicePixelRatio || 1;
-    const rect = volCanvas.getBoundingClientRect();
-    const w = rect.width * dpr;
-    const h = rect.height * dpr;
-    if (w === 0 || h === 0) return;
-    volCanvas.width = w;
-    volCanvas.height = h;
-    const ctx = volCanvas.getContext('2d');
-    ctx.clearRect(0, 0, w, h);
-
-    // Generate volatile price data: up, down, up, up, up, down, down, down
-    const points = 120;
-    const data = new Float32Array(points);
-    data[0] = 0.45;
-    // Seeded random for determinism
-    function srand(s) { let x = Math.sin(s * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); }
-    // Trend segments: up, down, up, up, up, down, down, down
-    const trends = [0.008, -0.012, 0.006, 0.010, 0.007, -0.009, -0.014, -0.006];
-    const segLen = points / trends.length;
-    for (let i = 1; i < points; i++) {
-      const seg = Math.min(trends.length - 1, Math.floor(i / segLen));
-      const noise = (srand(i * 3.7) - 0.5) * 0.03;
-      data[i] = Math.max(0.08, Math.min(0.92, data[i - 1] + trends[seg] + noise));
-    }
-
-    // How many points to draw based on scroll progress (0-1 maps to reveal)
-    const drawCount = Math.floor(progress * points);
-    if (drawCount < 2) return;
-
-    // Draw line
-    ctx.lineWidth = 2 * dpr;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-
-    // Gradient stroke: green when going up, red when going down
-    const grad = ctx.createLinearGradient(0, 0, w, 0);
-    for (let i = 0; i < drawCount; i++) {
-      const t = i / (points - 1);
-      const goingUp = i > 0 ? data[i] > data[i - 1] : true;
-      grad.addColorStop(t, goingUp ? 'rgba(34, 197, 94, 0.7)' : 'rgba(239, 68, 68, 0.6)');
-    }
-    ctx.strokeStyle = grad;
-
-    ctx.beginPath();
-    for (let i = 0; i < drawCount; i++) {
-      const x = (i / (points - 1)) * w;
-      const y = (1 - data[i]) * h;
-      if (i === 0) ctx.moveTo(x, y);
-      else ctx.lineTo(x, y);
-    }
-    ctx.stroke();
-
-    // Gradient fill below the line
-    const lastX = ((drawCount - 1) / (points - 1)) * w;
-    const lastY = (1 - data[drawCount - 1]) * h;
-    ctx.lineTo(lastX, h);
-    ctx.lineTo(0, h);
-    ctx.closePath();
-    const fillGrad = ctx.createLinearGradient(0, 0, 0, h);
-    fillGrad.addColorStop(0, 'rgba(0, 82, 255, 0.08)');
-    fillGrad.addColorStop(1, 'rgba(0, 82, 255, 0)');
-    ctx.fillStyle = fillGrad;
-    ctx.fill();
-  }
 
   let ccaChimePlayed = false;
 
@@ -1592,55 +1597,45 @@ function multiMapSmooth(progress, stops, values) {
       section.querySelector('.scene-pin').style.opacity = sceneOp;
 
       // ── Vertical drift: content scrolls upward as user scrolls ──
-      const driftY = multiMapSmooth(p, [0.12, 0.85], [0, -vh * 0.55]);
+      const driftY = multiMapSmooth(p, [0.10, 0.85], [0, -vh * 0.45]);
       ccaContainer.style.transform = `translate(-50%, -50%) translateY(${driftY}px)`;
 
       // ── Intro ──
-      const introOp = multiMapSmooth(p, [0.04, 0.10, 0.22, 0.30], [0, 1, 1, 0]);
-      const introY = multiMapSmooth(p, [0.04, 0.12], [20, 0]);
+      const introOp = multiMapSmooth(p, [0.04, 0.12, 0.28, 0.36], [0, 1, 1, 0]);
+      const introY = multiMapSmooth(p, [0.04, 0.14], [20, 0]);
       intro.style.opacity = introOp;
       intro.style.transform = `translateY(${introY}px)`;
 
       // ── Share token icon ──
-      const iconOp = multiMapSmooth(p, [0.06, 0.14, 0.80, 0.88], [0, 1, 1, 0]);
-      const iconScale = multiMapSmooth(p, [0.06, 0.16], [0.7, 1]);
+      const iconOp = multiMapSmooth(p, [0.06, 0.16, 0.80, 0.88], [0, 1, 1, 0]);
+      const iconScale = multiMapSmooth(p, [0.06, 0.18], [0.7, 1]);
       shareIcon.style.opacity = iconOp;
       shareIcon.style.transform = `scale(${iconScale})`;
 
       // Audio: chime when icon appears
-      if (p >= 0.12 && p <= 0.14 && !ccaChimePlayed) {
+      if (p >= 0.14 && p <= 0.16 && !ccaChimePlayed) {
         AudioEngine.playChime(1.2);
         ccaChimePlayed = true;
       }
-      if (p < 0.08 || p > 0.22) ccaChimePlayed = false;
-
-      // ── Volatility chart ──
-      const volOp = multiMapSmooth(p, [0.14, 0.20, 0.38, 0.44], [0, 1, 1, 0]);
-      volatility.style.opacity = volOp;
-      // Draw chart progressively
-      const chartDraw = multiMapSmooth(p, [0.16, 0.34], [0, 1]);
-      drawVolChart(chartDraw);
-      // Headline/sub fade slightly after chart starts
-      if (volHeadline) volHeadline.style.opacity = multiMapSmooth(p, [0.22, 0.28, 0.38, 0.44], [0, 1, 1, 0]);
-      if (volSub) volSub.style.opacity = multiMapSmooth(p, [0.26, 0.32, 0.38, 0.44], [0, 1, 1, 0]);
+      if (p < 0.10 || p > 0.24) ccaChimePlayed = false;
 
       // ── Distribution container ──
-      distribution.style.opacity = multiMapSmooth(p, [0.40, 0.46], [0, 1]);
+      distribution.style.opacity = multiMapSmooth(p, [0.30, 0.38], [0, 1]);
 
       // ── Segment 1: CCA Auction (40%) ──
-      const seg1T = multiMapSmooth(p, [0.42, 0.52], [0, 1]);
+      const seg1T = multiMapSmooth(p, [0.32, 0.44], [0, 1]);
       segAuction.style.opacity = seg1T;
       segAuction.style.transform = `translateY(${(1 - seg1T) * 20}px)`;
       fillAuction.style.width = `${seg1T * 40}%`;
 
       // ── Segment 2: Creator Vesting (40%) ──
-      const seg2T = multiMapSmooth(p, [0.50, 0.60], [0, 1]);
+      const seg2T = multiMapSmooth(p, [0.42, 0.54], [0, 1]);
       segVesting.style.opacity = seg2T;
       segVesting.style.transform = `translateY(${(1 - seg2T) * 20}px)`;
       fillVesting.style.width = `${seg2T * 40}%`;
 
       // ── Segment 3: Liquidity (20%) ──
-      const seg3T = multiMapSmooth(p, [0.58, 0.68], [0, 1]);
+      const seg3T = multiMapSmooth(p, [0.52, 0.64], [0, 1]);
       segLiquidity.style.opacity = seg3T;
       segLiquidity.style.transform = `translateY(${(1 - seg3T) * 20}px)`;
       fillLiquidity.style.width = `${seg3T * 20}%`;

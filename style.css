@@ -808,7 +808,7 @@ body {
 /* ─── DEPOSIT INFO — glass overlay panel, centered in scene ─── */
 .deposit-info {
   position: absolute;
-  bottom: 22%;
+  bottom: 36%;
   left: 50%;
   transform: translateX(-50%);
   text-align: center;
@@ -852,7 +852,7 @@ body {
 }
 .split-info {
   position: absolute;
-  bottom: 22%;
+  bottom: 36%;
   left: 50%;
   transform: translateX(-50%) translateY(calc(100% + 0.75rem));
 }
@@ -863,17 +863,42 @@ body {
   color: rgba(0, 82, 255, 0.5);
   font-weight: 400;
 }
+/* Idle badge — branches horizontally to the left (like allocation engine goes right) */
 .idle-badge {
   position: absolute;
-  bottom: 22%;
-  left: 50%;
-  transform: translateX(-50%) translateY(calc(100% + 2.5rem));
-  border: 1px solid var(--color-border);
-  background: var(--color-surface-glass);
-  padding: 0.5rem 0.75rem;
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
-  border-radius: 4px;
+  top: 50%;
+  right: calc(50% + 80px);
+  transform: translateY(-50%);
+  display: flex;
+  align-items: center;
+  flex-direction: row-reverse;
+  gap: 0;
+  border: none;
+  background: none;
+  padding: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  border-radius: 0;
+}
+.idle-badge-line {
+  width: 100px;
+  height: 1px;
+  background: linear-gradient(270deg, var(--color-accent), rgba(138, 143, 152, 0.15));
+  opacity: 0.5;
+  flex-shrink: 0;
+}
+.idle-badge-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+  background: rgba(8, 12, 20, 0.5);
+  backdrop-filter: blur(20px) saturate(1.2);
+  -webkit-backdrop-filter: blur(20px) saturate(1.2);
+  border-radius: 8px;
+  white-space: nowrap;
 }
 .idle-label {
   font-size: 9px;
@@ -1865,8 +1890,29 @@ body {
   }
 
   /* Deposit info */
+  .deposit-info {
+    bottom: 32%;
+  }
+  .split-info {
+    bottom: 32%;
+  }
   .deposit-amount {
     font-size: 1rem;
+  }
+  /* Idle badge — reflow to centered below on mobile */
+  .idle-badge {
+    top: auto;
+    bottom: 18%;
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    flex-direction: column;
+    align-items: center;
+  }
+  .idle-badge-line {
+    width: 1px;
+    height: 40px;
+    background: linear-gradient(180deg, var(--color-accent), rgba(138, 143, 152, 0.15));
   }
 
   /* Allocation engine — reflow to vertical centered layout on mobile */
@@ -2225,12 +2271,18 @@ body {
   font-weight: 400;
 }
 
-/* Token price volatility narrative */
-.cca-volatility {
+/* Token price volatility narrative (in Accrue chapter — absolutely positioned center) */
+.accrue-volatility {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
   width: 100%;
+  max-width: 600px;
   text-align: center;
-  margin-bottom: 2rem;
   opacity: 0;
+  z-index: 8;
+  pointer-events: none;
 }
 .vol-chart-wrap {
   position: relative;
