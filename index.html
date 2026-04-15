@@ -424,7 +424,7 @@
     </section>
 
     <!-- ╔═══ CHAPTER 3.5: SHARE TOKEN STORY — CCA AUCTION (500vh) ═══╗ -->
-    <section class="scroll-scene" id="ch-cca" data-height="500">
+    <section class="scroll-scene" id="ch-cca" data-height="650">
       <div class="scene-pin">
         <div class="cca-container">
 
@@ -432,7 +432,7 @@
           <div class="cca-intro" id="cca-intro">
             <div class="section-label">Share Token</div>
             <p class="cca-headline" id="cca-headline">What happens with ■AKITA?</p>
-            <p class="cca-desc" id="cca-desc">Every vault begins with a Uniswap Conditional Claim Auction over 7 days. The share token is distributed to bootstrap liquidity, reward the creator, and align the community.</p>
+            <p class="cca-desc" id="cca-desc">Every vault begins with a Uniswap Continuous Clearing Auction over 7 days. The share token is distributed to bootstrap liquidity, reward the creator, and align the community.</p>
           </div>
 
           <!-- Central share token icon -->
@@ -441,6 +441,25 @@
               <img src="./assets/tokens/share/akita-512.png" alt="■AKITA" class="cca-share-img" width="80" height="80">
             </div>
             <span class="cca-share-label">■AKITA</span>
+          </div>
+
+          <!-- Token price volatility narrative -->
+          <div class="cca-volatility" id="cca-volatility">
+            <div class="vol-chart-wrap">
+              <canvas id="vol-chart-canvas"></canvas>
+              <div class="vol-chart-labels">
+                <span class="vol-label-up">↑</span>
+                <span class="vol-label-down">↓</span>
+                <span class="vol-label-up">↑</span>
+                <span class="vol-label-up">↑</span>
+                <span class="vol-label-up">↑</span>
+                <span class="vol-label-down">↓</span>
+                <span class="vol-label-down">↓</span>
+                <span class="vol-label-down">↓</span>
+              </div>
+            </div>
+            <p class="vol-headline" id="vol-headline">The token price can do anything.</p>
+            <p class="vol-sub" id="vol-sub">But vault holders earn fees regardless — pro rata, every day, no matter what.</p>
           </div>
 
           <!-- Distribution arcs / segments -->
@@ -456,7 +475,7 @@
                   <span class="cca-seg-pct">40%</span>
                   <span class="cca-seg-title">CCA Auction</span>
                 </div>
-                <p class="cca-seg-desc">Auctioned over 7 days via Uniswap Conditional Claim Auction. Open to the public — anyone can bid.</p>
+                <p class="cca-seg-desc">Auctioned over 7 days via Uniswap Continuous Clearing Auction. Open to the public — anyone can bid.</p>
                 <div class="cca-seg-badge">
                   <img src="./assets/brand/uniswap-official-pink.svg" alt="Uniswap" class="cca-seg-badge-icon">
                   <span>Uniswap CCA</span>
