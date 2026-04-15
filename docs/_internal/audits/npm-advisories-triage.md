@@ -22,7 +22,7 @@ Local sweep: `pnpm security:local` at repo root ([scripts/security-audit-local.s
 
 | Severity | Package | Notes |
 |----------|---------|--------|
-| Low | **elliptic** | Via LayerZero V2 tooling (`@layerzerolabs/oapp-evm` → `ethers@5` → `@ethersproject/signing-key`). **No patched release** on npm for GHSA-848j; custom patch mitigates a separate signing issue. **Risk acceptance**: LZ V2 bridge compatibility requires current tooling; production services do **not** execute the ethers v5 / hardhat JS toolchain. Tracking + time-boxed risk acceptance: [Issue #227](https://github.com/wenakita/4626/issues/227). In GitHub **Dependabot**, you can **dismiss** with reason *“No fixed version; LZ V2 tooling; runtime does not execute ethers v5.”* |
+| Low | **elliptic** | Via LayerZero V2 tooling (`@layerzerolabs/oapp-evm` → `ethers@5` → `@ethersproject/signing-key`). **No patched release** on npm for GHSA-848j; custom patch mitigates a separate signing issue. **Risk acceptance (time-boxed):** accepted through **2026-07-31** with monthly review. Tracking issue: [#227](https://github.com/wenakita/4626/issues/227). Next review due: **2026-05-15**. In GitHub **Dependabot**, dismiss with reason *“No fixed version; LZ V2 tooling; runtime does not execute ethers v5.”* |
 
 ---
 
@@ -39,6 +39,7 @@ Local sweep: `pnpm security:local` at repo root ([scripts/security-audit-local.s
 | **serialize-javascript** | Override **7.0.5** (align with root tooling). |
 | **picomatch** | `picomatch@2` → **2.3.2**, `picomatch@4` → **4.0.4**. |
 | **brace-expansion** | **5.0.5**. |
+| **follow-redirects** | `pnpm.overrides.follow-redirects` → **1.16.0** (fixes GHSA-r4q5-vmmm-2653 custom auth header leak on cross-domain redirects). |
 
 ### Current status (2026-04-09)
 
@@ -69,6 +70,18 @@ Local sweep: `pnpm security:local` at repo root ([scripts/security-audit-local.s
 | **serialize-javascript** | **7.0.5** (was 7.0.3). |
 | **picomatch** | `picomatch@2` → **2.3.2**, `picomatch@4` → **4.0.4** (fast-glob). |
 | **brace-expansion** | **5.0.5**. |
+| **follow-redirects** | `pnpm.overrides.follow-redirects` → **1.16.0** (fixes GHSA-r4q5-vmmm-2653). |
+
+---
+
+## Dependabot alerts snapshot (2026-04-14)
+
+| Alert | Status | Resolution / Rationale |
+|-------|--------|------------------------|
+| [#180](https://github.com/wenakita/4626/security/dependabot/180) `follow-redirects` in `frontend/pnpm-lock.yaml` | **Fixed in repo** | Override and lockfile updated to `follow-redirects@1.16.0` (patched range starts at 1.16.0). |
+| [#179](https://github.com/wenakita/4626/security/dependabot/179) `follow-redirects` in `apps/docs-site/pnpm-lock.yaml` | **Fixed in repo** | Override and lockfile updated to `follow-redirects@1.16.0`. |
+| [#178](https://github.com/wenakita/4626/security/dependabot/178) `rand` in `tools/vanity-salt-grinder/Cargo.lock` | **Time-boxed risk acceptance** | Transitive constraint from `ethers-core v2.0.14` requires `rand ^0.8`; forcing `0.9.4` fails dependency resolution. Accepted through **2026-07-31**; next review **2026-05-15**. |
+| [#177](https://github.com/wenakita/4626/security/dependabot/177) `rand` in `programs/creator-share-hook/Cargo.lock` | **Time-boxed risk acceptance** | Transitive constraint from `solana-zk-sdk v4.0.0` requires `rand ^0.8.5`; forcing `0.9.4` fails dependency resolution. Accepted through **2026-07-31**; next review **2026-05-15**. |
 
 ---
 

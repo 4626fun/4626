@@ -169,6 +169,7 @@
       "minimatch": "10.2.3",
       "node-fetch": "2.7.0",
       "path-to-regexp": "8.4.0",
+      "follow-redirects": "1.16.0",
       "qs": "6.14.2",
       "socket.io-parser": "4.2.6",
       "tar": "7.5.11",
