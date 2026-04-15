@@ -43,7 +43,11 @@ import {
 import { ensureCreatorWalletsSchema } from '../../server/_lib/creatorWallets.js'
 import { getActiveDeploySessionForSender, getDeploySessionByTokenHash, hashDeployToken, signDeployToken } from '../../server/_lib/deploySessions.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/supabaseAdmin.js'
-import { resolveAuthorizedWalletProfile, resolvePersistedWalletIdentity } from '../../server/_lib/canonicalWalletResolver.js'
+import {
+  resolveAuthorizedWalletProfile,
+  resolvePersistedWalletIdentity,
+  resolvePersistedWalletIdentityForProfileId,
+} from '../../server/_lib/canonicalWalletResolver.js'
 
 
 import {
@@ -1411,6 +1415,11 @@ async function resolveCanonicalEmbeddedOwnerForSender(params: {
   // In that case, resolve profile authority first, then map to canonical persisted identity.
   const authority = await resolveAuthorizedWalletProfile(params.sessionAddress)
   if (!authority?.canonicalSmartWalletAddress) return null
+  if (Number.isFinite(authority.profileId) && authority.profileId > 0) {
+    const authorityProfileIdentity = await resolvePersistedWalletIdentityForProfileId(authority.profileId)
+    const authorityProfileEmbeddedOwner = resolveEmbeddedOwner(authorityProfileIdentity)
+    if (authorityProfileEmbeddedOwner) return authorityProfileEmbeddedOwner
+  }
   const authorityCanonicalIdentity = await resolvePersistedWalletIdentity(authority.canonicalSmartWalletAddress)
   return resolveEmbeddedOwner(authorityCanonicalIdentity)
 }

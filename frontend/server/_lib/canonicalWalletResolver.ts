@@ -233,7 +233,7 @@ async function findProfilesForAddress(
          FROM profile_wallets
          WHERE LOWER(address) = ${input}
        )
-    LIMIT 2;
+    LIMIT 10;
   `
 
   return (profileResult.rows ?? [])
@@ -248,6 +248,18 @@ async function findProfilesForAddress(
     .filter((row): row is ProfileMatch => row !== null)
 }
 
+function buildPersistedWalletIdentity(
+  profile: ProfileMatch,
+  persisted: Awaited<ReturnType<typeof readPersistedIdentity>> | null,
+): PersistedWalletIdentity {
+  return {
+    profileId: profile.id,
+    canonicalSmartWallet: normalizeAddress(persisted?.canonicalSmartWallet),
+    embeddedEoa: normalizeAddress(persisted?.embeddedEoa),
+    privyUserId: profile.privyUserId,
+  }
+}
+
 async function resolvePersistedIdentityForKnownAddress(address: string): Promise<PersistedWalletIdentity | null> {
   const input = normalizeLower(address)
   if (!input || !isAddressLike(input)) return null
@@ -259,16 +271,30 @@ async function resolvePersistedIdentityForKnownAddress(address: string): Promise
   await ensureCanonicalWalletsSchema(db as any)
 
   const profiles = await findProfilesForAddress(db, input)
-  if (profiles.length !== 1) return null
+  if (profiles.length === 0) return null
 
-  const profile = profiles[0]
-  const persisted = await readPersistedIdentity(db as any, profile.id)
-  return {
-    profileId: profile.id,
-    canonicalSmartWallet: normalizeAddress(persisted?.canonicalSmartWallet),
-    embeddedEoa: normalizeAddress(persisted?.embeddedEoa),
-    privyUserId: profile.privyUserId,
+  if (profiles.length === 1) {
+    const profile = profiles[0]
+    const persisted = await readPersistedIdentity(db as any, profile.id)
+    return buildPersistedWalletIdentity(profile, persisted)
   }
+
+  const resolved = await Promise.all(
+    profiles.map(async (profile) => {
+      const persisted = await readPersistedIdentity(db as any, profile.id)
+      return buildPersistedWalletIdentity(profile, persisted)
+    }),
+  )
+
+  const exactMatches = resolved.filter((identity) => {
+    const canonical = normalizeAddress(identity.canonicalSmartWallet)
+    const embedded = normalizeAddress(identity.embeddedEoa)
+    if (!canonical || !embedded) return false
+    return canonical === input || embedded === input
+  })
+
+  if (exactMatches.length === 1) return exactMatches[0]
+  return null
 }
 
 export async function resolvePersistedWalletIdentity(address: string): Promise<PersistedWalletIdentity | null> {
@@ -288,6 +314,38 @@ export async function resolvePersistedWalletIdentity(address: string): Promise<P
     canonicalSmartWallet: canonical,
     embeddedEoa: embedded,
   }
+}
+
+export async function resolvePersistedWalletIdentityForProfileId(profileId: number): Promise<PersistedWalletIdentity | null> {
+  if (!Number.isFinite(profileId) || profileId <= 0) return null
+  if (!isDbConfigured()) return null
+
+  const db = await getDb()
+  if (!db) return null
+
+  await ensureCanonicalWalletsSchema(db as any)
+
+  const profileResult = await db.sql`
+    SELECT id, privy_user_id
+    FROM profiles
+    WHERE id = ${Math.floor(profileId)}
+    LIMIT 1;
+  `
+
+  const profileRow = profileResult.rows?.[0]
+  const id = Number(profileRow?.id ?? 0)
+  if (!Number.isFinite(id) || id <= 0) return null
+
+  const persisted = await readPersistedIdentity(db as any, id)
+  const identity = buildPersistedWalletIdentity(
+    {
+      id,
+      privyUserId: normalizeOptionalString(profileRow?.privy_user_id),
+    },
+    persisted,
+  )
+  if (!identity.canonicalSmartWallet || !identity.embeddedEoa) return null
+  return identity
 }
 
 export async function resolveCanonicalSmartWalletAddress(address: string): Promise<string | null> {
