@@ -249,6 +249,16 @@ function shouldFallbackSelfAuthenticatedCanonicalToSendCalls(error: unknown): bo
   )
 }
 
+function isInsufficientFundsLikeWalletSendCallsError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  return (
+    ((lower.includes('error generating transaction') || lower.includes('error generating message')) &&
+      lower.includes('enough funds')) ||
+    lower.includes('insufficient funds')
+  )
+}
+
 async function submitOwnerTxViaWalletSendCalls(params: {
   walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
   chainId: number
@@ -351,7 +361,7 @@ export async function sendPreparedOwnerTx(params: {
       }
       const selfAuthenticatedCanonicalSession =
         signerAddress.toLowerCase() === canonicalSmartWalletAddress.toLowerCase()
-      const runSponsoredCanonicalUserOp = async () => {
+      const runSponsoredCanonicalUserOp = async (opts?: { disableTypedDataSigning?: boolean }) => {
         if (!publicClient) {
           throw new Error('Canonical wallet client is unavailable. Reload and retry.')
         }
@@ -373,7 +383,7 @@ export async function sendPreparedOwnerTx(params: {
               ownerAddress: signerAddress as `0x${string}`,
               calls: [{ to: txRequest.to, data: txRequest.data, value: 0n }],
               version: '1',
-              useTypedDataSigning: selfAuthenticatedCanonicalSession,
+              useTypedDataSigning: selfAuthenticatedCanonicalSession && opts?.disableTypedDataSigning !== true,
             }),
             USER_OP_SUBMIT_TIMEOUT_MS,
             new Error('userop_submission_timeout'),
@@ -413,14 +423,22 @@ export async function sendPreparedOwnerTx(params: {
               typeof walletClient.request === 'function'
                 ? async (args: { method: string; params?: unknown[] }) => await walletClient.request!(args as any)
                 : null
-            if (!walletRequest) throw sponsoredError
-            txHash = await submitOwnerTxViaWalletSendCalls({
-              walletRequest,
-              chainId: txRequest.chainId,
-              sender: canonicalSmartWalletAddress as `0x${string}`,
-              to: txRequest.to,
-              data: txRequest.data,
-            })
+            if (walletRequest) {
+              try {
+                txHash = await submitOwnerTxViaWalletSendCalls({
+                  walletRequest,
+                  chainId: txRequest.chainId,
+                  sender: canonicalSmartWalletAddress as `0x${string}`,
+                  to: txRequest.to,
+                  data: txRequest.data,
+                })
+              } catch (sendCallsError) {
+                if (!isInsufficientFundsLikeWalletSendCallsError(sendCallsError)) throw sendCallsError
+                txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true })
+              }
+            } else {
+              txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true })
+            }
           }
         } else {
         const walletRequest =

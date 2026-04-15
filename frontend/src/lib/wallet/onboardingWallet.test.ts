@@ -422,6 +422,47 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
+  it('retries sponsored canonical user-op with non-typed signature when sendCalls reports insufficient funds', async () => {
+    const ensurePaymasterSession = vi.fn(async () => true)
+    const request = vi.fn(async () => {
+      throw new Error('Error generating transaction. Please make sure you have enough funds to complete the transaction.')
+    })
+    sendCoinbaseSmartWalletUserOperationMock
+      .mockRejectedValueOnce(new Error('UserOperation failed: signTypedData (CSW EIP-712) timed out after 30s'))
+      .mockResolvedValueOnce({ transactionHash: TX_HASH })
+
+    const result = await sendPreparedOwnerTx({
+      txRequest: TX_REQUEST,
+      walletClient: {
+        account: CANONICAL_CSW,
+        sendTransaction: vi.fn(async () => TX_HASH),
+        request,
+      },
+      chainId: 8453,
+      authHeaders: async () => ({ Authorization: 'Bearer test' }),
+      signerAddress: CANONICAL_CSW,
+      executionMode: 'canonicalSmartWallet',
+      canonicalSmartWalletAddress: CANONICAL_CSW,
+      publicClient: {},
+      ensurePaymasterSession,
+    })
+
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(2)
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        useTypedDataSigning: true,
+      }),
+    )
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        useTypedDataSigning: false,
+      }),
+    )
+    expect(result.txHash).toBe(TX_HASH)
+  })
+
   it('normalizes canonical typed-data timeout error for user guidance', async () => {
     sendCoinbaseSmartWalletUserOperationMock.mockRejectedValue(
       new Error('UserOperation failed: signTypedData (CSW EIP-712) timed out after 30s'),
