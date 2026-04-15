@@ -43,7 +43,7 @@ import {
 import { ensureCreatorWalletsSchema } from '../../server/_lib/creatorWallets.js'
 import { getActiveDeploySessionForSender, getDeploySessionByTokenHash, hashDeployToken, signDeployToken } from '../../server/_lib/deploySessions.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/supabaseAdmin.js'
-import { resolvePersistedWalletIdentity } from '../../server/_lib/canonicalWalletResolver.js'
+import { resolveAuthorizedWalletProfile, resolvePersistedWalletIdentity } from '../../server/_lib/canonicalWalletResolver.js'
 
 
 import {
@@ -1404,7 +1404,15 @@ async function resolveCanonicalEmbeddedOwnerForSender(params: {
   if (senderBoundEmbeddedOwner) return senderBoundEmbeddedOwner
 
   const sessionIdentity = await resolvePersistedWalletIdentity(params.sessionAddress)
-  return resolveEmbeddedOwner(sessionIdentity)
+  const sessionBoundEmbeddedOwner = resolveEmbeddedOwner(sessionIdentity)
+  if (sessionBoundEmbeddedOwner) return sessionBoundEmbeddedOwner
+
+  // Some sessions resolve to profile owner wallets that are not canonical/embedded addresses.
+  // In that case, resolve profile authority first, then map to canonical persisted identity.
+  const authority = await resolveAuthorizedWalletProfile(params.sessionAddress)
+  if (!authority?.canonicalSmartWalletAddress) return null
+  const authorityCanonicalIdentity = await resolvePersistedWalletIdentity(authority.canonicalSmartWalletAddress)
+  return resolveEmbeddedOwner(authorityCanonicalIdentity)
 }
 
 function assertCanonicalSwapRouterExecuteEncoding(data: Hex): void {

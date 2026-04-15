@@ -301,7 +301,8 @@ Keeper bots in `cre/` relay data between Solana and Base. Install: `cd cre && np
 - When Zora linking is the active context, prefer showing the Zora handle as the human-readable identity label over a truncated wallet address that does not match what the user expects for their canonical smart wallet.
 - For waitlist/onboarding UI, prefer cleaner card treatments with minimal framing; remove heavy outer borders when they add visual noise.
 - For exported skill/context documentation packs, prefer comprehensive self-contained writeups that assume the reader does not have direct repository access.
-- Loading and progress labels must match the actual action context — reserve action verbs (e.g., "Deploying...") for when the action is executing, not for page navigation or initial load.
+- Loading and progress labels must match the actual action context — reserve action verbs (e.g., "Deploying...") for when the action is executing, not for page navigation or initial load, and keep unrelated controls (for example `Reset`) from switching labels during other in-flight actions.
+- For waitlist and account-setup loading states, prefer `PixelWaveLoader`-style motion and avoid text-scramble or four-square placeholder loaders that feel laggy or off-brand.
 - For nav bars, prefer edge-to-edge layout over centered max-width, text-only links without hover backgrounds, and no visual separators between nav and content.
 
 ## Learned Workspace Facts

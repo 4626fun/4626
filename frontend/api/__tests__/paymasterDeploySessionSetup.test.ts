@@ -39,6 +39,7 @@ const getApiContractsMock = vi.fn()
 const isDbConfiguredMock = vi.fn()
 const isSupabaseAdminConfiguredMock = vi.fn()
 const readJsonBodyMock = vi.fn()
+const resolveAuthorizedWalletProfileMock = vi.fn()
 const resolvePersistedWalletIdentityMock = vi.fn()
 const loggerWarnMock = vi.fn()
 const loggerErrorMock = vi.fn()
@@ -91,6 +92,7 @@ vi.mock('../../server/_lib/logger.js', () => ({
 }))
 
 vi.mock('../../server/_lib/canonicalWalletResolver.js', () => ({
+  resolveAuthorizedWalletProfile: (...args: unknown[]) => resolveAuthorizedWalletProfileMock(...args),
   resolvePersistedWalletIdentity: (...args: unknown[]) => resolvePersistedWalletIdentityMock(...args),
 }))
 
@@ -147,6 +149,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
 
     readRequestPrincipalMock.mockReturnValue(sessionAddress)
     getActiveDeploySessionMock.mockResolvedValue({ sessionSigner })
+    resolveAuthorizedWalletProfileMock.mockResolvedValue(null)
     resolvePersistedWalletIdentityMock.mockResolvedValue(null)
     getApiContractsMock.mockReturnValue({
       creatorVaultBatcher: '0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753',
@@ -506,6 +509,101 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
       (call) => call?.[0] === '[paymaster-proxy] validation denied' && (call?.[1] as { msg?: string } | undefined)?.msg === 'deploy_session_missing',
     )
     expect(hasDeploySessionMissingWarn).toBe(false)
+  })
+
+  it('accepts handler addOwnerAddress self-call when canonical embedded owner resolves via session profile authority', async () => {
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+        outputs: [],
+      },
+    ] as const
+    const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
+      {
+        type: 'function',
+        name: 'addOwnerAddress',
+        stateMutability: 'nonpayable',
+        inputs: [{ name: 'owner', type: 'address' }],
+        outputs: [],
+      },
+    ] as const
+
+    const embeddedOwner = getAddress('0x7777777777777777777777777777777777777777')
+    const sessionOwnerWallet = getAddress('0x8888888888888888888888888888888888888888')
+    getActiveDeploySessionMock.mockResolvedValueOnce(null)
+    readRequestPrincipalMock.mockReturnValue(sessionOwnerWallet)
+    resolveAuthorizedWalletProfileMock.mockResolvedValueOnce({
+      canonicalSmartWalletAddress: sender,
+      activeOwnerWalletAddress: sessionOwnerWallet,
+      profileId: 1,
+    })
+    let senderLookupCount = 0
+    resolvePersistedWalletIdentityMock.mockImplementation(async (address: string) => {
+      if (String(address).toLowerCase() === sender.toLowerCase()) {
+        senderLookupCount += 1
+        if (senderLookupCount === 1) return null
+        return {
+          canonicalSmartWallet: sender,
+          embeddedEoa: embeddedOwner,
+        }
+      }
+      return null
+    })
+    mockGetBytecode.mockImplementation(async ({ address }: { address: string }) => {
+      if (String(address).toLowerCase() === embeddedOwner.toLowerCase()) return '0x'
+      return '0x1234'
+    })
+
+    const innerData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+      functionName: 'addOwnerAddress',
+      args: [embeddedOwner],
+    })
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'execute',
+      args: [sender, 0n, innerData],
+    })
+
+    const userOp = {
+      sender,
+      callData,
+      initCode: '0x',
+    }
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [userOp, ENTRYPOINT_V06, 8453],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    const identityLookupAddresses = resolvePersistedWalletIdentityMock.mock.calls.map((call) =>
+      String(call?.[0] ?? '').toLowerCase(),
+    )
+    expect(resolveAuthorizedWalletProfileMock).toHaveBeenCalledWith(sessionOwnerWallet)
+    expect(identityLookupAddresses).toContain(sessionOwnerWallet.toLowerCase())
+    expect(identityLookupAddresses.filter((addr) => addr === sender.toLowerCase()).length).toBeGreaterThanOrEqual(2)
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).not.toMatch(/request denied/i)
+    expect(errMsg).not.toMatch(/deploy_session_missing/i)
   })
 
   it('rejects addOwnerAddress self-call when canonical embedded-owner binding mismatches owner arg', async () => {
