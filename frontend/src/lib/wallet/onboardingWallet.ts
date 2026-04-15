@@ -735,21 +735,6 @@ export async function sendPreparedOwnerTx(params: {
           }
         }
 
-        if (
-          !txHash &&
-          sendCallsFallbackMode === 'unsupported' &&
-          walletClient.account &&
-          typeof walletClient.sendTransaction === 'function'
-        ) {
-          txHash = await walletClient.sendTransaction({
-            account: walletClient.account,
-            chain: base,
-            to: txRequest.to,
-            data: txRequest.data,
-            value: 0n,
-          })
-        }
-
         if (!txHash) {
           try {
             txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
@@ -822,16 +807,7 @@ export async function sendPreparedOwnerTx(params: {
               }
             }
             if (!txHash) {
-              if (typeof walletClient.sendTransaction !== 'function') {
-                throw nonTypedRetryError ?? sponsoredError
-              }
-              txHash = await walletClient.sendTransaction({
-                account: walletClient.account,
-                chain: base,
-                to: txRequest.to,
-                data: txRequest.data,
-                value: 0n,
-              })
+              throw nonTypedRetryError ?? sponsoredError
             }
           }
         }
