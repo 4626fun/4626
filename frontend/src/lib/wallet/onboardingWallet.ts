@@ -112,6 +112,11 @@ export function normalizeOwnerApprovalError(error: unknown): Error {
         'Smart wallet approval is taking too long after signature confirmation. Retry once; if this keeps happening, reconnect the same Coinbase wallet session.',
       )
     }
+    if (lower.includes('signtypeddata (csw eip-712) timed out') || lower.includes('eth_signtypeddata_v4 (csw eip-712) timed out')) {
+      return new Error(
+        'Coinbase Smart Wallet signature confirmation timed out. Retry once; if it repeats, reconnect the same Base wallet session and approve again.',
+      )
+    }
     if (lower.includes('paymaster proxy internal error')) {
       return new Error(
         '4626 could not initialize Base gas sponsorship. Retry in a few seconds. If it persists, use Not you? Switch and reconnect the same Base wallet.',
@@ -230,6 +235,18 @@ function isAA23ValidationRevert(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? '')
   const lower = message.toLowerCase()
   return lower.includes('aa23') || (lower.includes('validateuserop') && lower.includes('revert'))
+}
+
+function shouldFallbackSelfAuthenticatedCanonicalToSendCalls(error: unknown): boolean {
+  if (isAA23ValidationRevert(error)) return true
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('signtypeddata (csw eip-712) timed out') ||
+    lower.includes('eth_signtypeddata_v4 (csw eip-712) timed out') ||
+    ((lower.includes('error generating transaction') || lower.includes('error generating message')) &&
+      lower.includes('enough funds'))
+  )
 }
 
 async function submitOwnerTxViaWalletSendCalls(params: {
@@ -391,7 +408,7 @@ export async function sendPreparedOwnerTx(params: {
           try {
             txHash = await runSponsoredCanonicalUserOp()
           } catch (sponsoredError) {
-            if (!isAA23ValidationRevert(sponsoredError)) throw sponsoredError
+            if (!shouldFallbackSelfAuthenticatedCanonicalToSendCalls(sponsoredError)) throw sponsoredError
             const walletRequest =
               typeof walletClient.request === 'function'
                 ? async (args: { method: string; params?: unknown[] }) => await walletClient.request!(args as any)

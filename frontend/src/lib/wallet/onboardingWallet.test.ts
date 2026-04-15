@@ -384,6 +384,70 @@ describe('sendPreparedOwnerTx', () => {
     )
   })
 
+  it('falls back to wallet_sendCalls when canonical typed-data signing times out', async () => {
+    const ensurePaymasterSession = vi.fn(async () => true)
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce('0xcall-bundle-id')
+      .mockResolvedValueOnce({
+        status: 200,
+        receipts: [{ transactionHash: TX_HASH }],
+      })
+    sendCoinbaseSmartWalletUserOperationMock.mockRejectedValueOnce(
+      new Error('UserOperation failed: signTypedData (CSW EIP-712) timed out after 30s'),
+    )
+
+    const result = await sendPreparedOwnerTx({
+      txRequest: TX_REQUEST,
+      walletClient: {
+        account: CANONICAL_CSW,
+        sendTransaction: vi.fn(async () => TX_HASH),
+        request,
+      },
+      chainId: 8453,
+      authHeaders: async () => ({ Authorization: 'Bearer test' }),
+      signerAddress: CANONICAL_CSW,
+      executionMode: 'canonicalSmartWallet',
+      canonicalSmartWalletAddress: CANONICAL_CSW,
+      publicClient: {},
+      ensurePaymasterSession,
+    })
+
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({
+        method: 'wallet_sendCalls',
+      }),
+    )
+    expect(result.txHash).toBe(TX_HASH)
+  })
+
+  it('normalizes canonical typed-data timeout error for user guidance', async () => {
+    sendCoinbaseSmartWalletUserOperationMock.mockRejectedValue(
+      new Error('UserOperation failed: signTypedData (CSW EIP-712) timed out after 30s'),
+    )
+
+    await expect(
+      sendPreparedOwnerTx({
+        txRequest: TX_REQUEST,
+        walletClient: {
+          account: OWNER_EOA,
+          sendTransaction: vi.fn(async () => TX_HASH),
+          request: vi.fn(),
+        },
+        chainId: 8453,
+        authHeaders: async () => ({ Authorization: 'Bearer test' }),
+        signerAddress: OWNER_EOA,
+        executionMode: 'canonicalSmartWallet',
+        canonicalSmartWalletAddress: CANONICAL_CSW,
+        publicClient: {},
+        ensurePaymasterSession: async () => true,
+      }),
+    ).rejects.toThrow(
+      'Coinbase Smart Wallet signature confirmation timed out. Retry once; if it repeats, reconnect the same Base wallet session and approve again.',
+    )
+  })
+
   it('does not remap paymaster insufficient funds errors into wallet-balance guidance', async () => {
     sendCoinbaseSmartWalletUserOperationMock.mockRejectedValue(
       new Error('Paymaster rejected this request: insufficient funds in paymaster'),
