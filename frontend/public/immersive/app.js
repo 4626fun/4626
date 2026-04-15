@@ -1827,23 +1827,25 @@ function multiMapSmooth(progress, stops, values) {
 })();
 
 // ────────────────────────────────────────────
-// 8.5. CHAPTER 3.5: CCA AUCTION — SHARE TOKEN STORY (500vh)
+// 8.5. CHAPTER 3.5: CCA — SHARE TOKEN DISTRIBUTION (700vh)
+// Token swap reversal: deposited asset → back, share token → front
+// Camera pan right, left-side node graph reveals distribution segments
 // ────────────────────────────────────────────
 (function chapterCCA() {
   const section = document.getElementById('ch-cca');
   if (!section) return;
 
+  const camera = document.getElementById('cca-camera');
+  const depositCoin = document.getElementById('cca-deposit-coin');
+  const shareToken = document.getElementById('cca-share-token');
+  const shareLabel = document.getElementById('cca-share-label');
   const intro = document.getElementById('cca-intro');
-  const shareIcon = document.getElementById('cca-share-icon');
-  const distribution = document.getElementById('cca-distribution');
-  const segAuction = document.getElementById('cca-seg-auction');
-  const segVesting = document.getElementById('cca-seg-vesting');
-  const segLiquidity = document.getElementById('cca-seg-liquidity');
-  const fillAuction = document.getElementById('cca-fill-auction');
-  const fillVesting = document.getElementById('cca-fill-vesting');
-  const fillLiquidity = document.getElementById('cca-fill-liquidity');
+  const nodeGraph = document.getElementById('cca-node-graph');
+  const branchSvg = document.getElementById('cca-branch-svg');
+  const cardAuction = document.getElementById('cca-card-auction');
+  const cardVesting = document.getElementById('cca-card-vesting');
+  const cardLiquidity = document.getElementById('cca-card-liquidity');
   const summary = document.getElementById('cca-summary');
-  const ccaContainer = document.querySelector('.cca-container');
 
   let ccaChimePlayed = false;
 
@@ -1853,61 +1855,103 @@ function multiMapSmooth(progress, stops, values) {
     end: 'bottom top',
     onUpdate: (self) => {
       const p = self.progress;
+      const vw = window.innerWidth;
       const vh = window.innerHeight;
+      const isMobile = vw < 768;
+      const rm = Math.min(1, vw / 1200);
+      const iconHalf = isMobile ? 38 : 48;
+      const centerY = vh / 2 - iconHalf;
+      const centerX = vw / 2;
 
-      // Audio: ambient drone during CCA chapter
+      // Audio
       AudioEngine.setDroneLevel(multiMap(p, [0, 0.08, 0.60, 0.90], [0.02, 0.06, 0.06, 0.01]));
 
       // Scene entrance/exit
-      const sceneOp = multiMapSmooth(p, [0, 0.08, 0.88, 0.97], [0, 1, 1, 0]);
+      const sceneOp = multiMapSmooth(p, [0, 0.06, 0.90, 0.97], [0, 1, 1, 0]);
       section.querySelector('.scene-pin').style.opacity = sceneOp;
 
-      // ── Vertical drift: content scrolls upward as user scrolls ──
-      const driftY = multiMapSmooth(p, [0.10, 0.85], [0, -vh * 0.45]);
-      ccaContainer.style.transform = `translate(-50%, -50%) translateY(${driftY}px)`;
+      // ============================
+      // PHASE 1 (p 0.02–0.20): REVERSE SWAP
+      // Deposited asset (AKITA circle) fades to back,
+      // Share token (■AKITA square) comes to front
+      // ============================
 
-      // ── Intro ──
-      const introOp = multiMapSmooth(p, [0.04, 0.12, 0.28, 0.36], [0, 1, 1, 0]);
-      const introY = multiMapSmooth(p, [0.04, 0.14], [20, 0]);
-      intro.style.opacity = introOp;
-      intro.style.transform = `translateY(${introY}px)`;
+      // Deposited asset: starts centered, visible, scales down + fades back
+      const coinOp = multiMapSmooth(p, [0.02, 0.06, 0.10, 0.18], [0, 1, 0.6, 0]);
+      const coinScale = multiMapSmooth(p, [0.02, 0.06, 0.10, 0.18], [1, 1, 0.7, 0.5]);
+      const coinZ = multiMapSmooth(p, [0.08, 0.14], [3, 1]);
+      depositCoin.style.transform = `translate(${centerX}px, ${centerY}px) translate(-50%, 0) scale(${coinScale})`;
+      depositCoin.style.opacity = coinOp;
+      depositCoin.style.zIndex = Math.round(coinZ);
 
-      // ── Share token icon ──
-      const iconOp = multiMapSmooth(p, [0.06, 0.16, 0.80, 0.88], [0, 1, 1, 0]);
-      const iconScale = multiMapSmooth(p, [0.06, 0.18], [0.7, 1]);
-      shareIcon.style.opacity = iconOp;
-      shareIcon.style.transform = `scale(${iconScale})`;
+      // Share token: starts small + behind, grows + comes forward
+      const shareOp = multiMapSmooth(p,
+        [0.04, 0.10, 0.18, 0.28, 0.40, 0.88, 0.94],
+        [0,    0.5,  1,    1,    1,    1,    0]
+      );
+      const shareScale = multiMapSmooth(p,
+        [0.04, 0.10, 0.18, 0.28],
+        [0.5,  0.75, 1,    1]
+      );
+      // After p=0.28, share token moves right (like deposited asset in token journey)
+      const shareOffsetX = multiMapSmooth(p,
+        [0.18, 0.28, 0.38, 0.88],
+        [0,    0,    220*rm, 220*rm]
+      );
+      shareToken.style.transform = `translate(${centerX + shareOffsetX}px, ${centerY}px) translate(-50%, 0) scale(${shareScale})`;
+      shareToken.style.opacity = shareOp;
+      shareToken.style.zIndex = Math.round(multiMapSmooth(p, [0.08, 0.14], [1, 4]));
 
-      // Audio: chime when icon appears
+      // Share label
+      if (shareLabel) shareLabel.style.opacity = multiMapSmooth(p, [0.14, 0.20, 0.40, 0.88], [0, 1, 0, 0]);
+
+      // Audio: chime when share token comes forward
       if (p >= 0.14 && p <= 0.16 && !ccaChimePlayed) {
         AudioEngine.playChime(1.2);
         ccaChimePlayed = true;
       }
       if (p < 0.10 || p > 0.24) ccaChimePlayed = false;
 
-      // ── Distribution container ──
-      distribution.style.opacity = multiMapSmooth(p, [0.30, 0.38], [0, 1]);
+      // ============================
+      // PHASE 2 (p 0.16–0.34): INTRO TEXT
+      // "What happens with ■AKITA?"
+      // ============================
+      const introOp = multiMapSmooth(p, [0.16, 0.22, 0.30, 0.36], [0, 1, 1, 0]);
+      const introY = multiMapSmooth(p, [0.16, 0.24], [20, 0]);
+      intro.style.opacity = introOp;
+      intro.style.transform = `translateX(-50%) translateY(${introY}px)`;
 
-      // ── Segment 1: CCA Auction (40%) ──
-      const seg1T = multiMapSmooth(p, [0.32, 0.44], [0, 1]);
-      segAuction.style.opacity = seg1T;
-      segAuction.style.transform = `translateY(${(1 - seg1T) * 20}px)`;
-      fillAuction.style.width = `${seg1T * 40}%`;
+      // ============================
+      // PHASE 3 (p 0.32–0.46): CAMERA PAN RIGHT
+      // Mirror of ch-token's left pan
+      // ============================
+      const panX = isMobile ? 0 : multiMapSmooth(p, [0.32, 0.46], [0, 400*rm]);
+      camera.style.transform = `translateX(${panX}px)`;
 
-      // ── Segment 2: Creator Vesting (40%) ──
-      const seg2T = multiMapSmooth(p, [0.42, 0.54], [0, 1]);
-      segVesting.style.opacity = seg2T;
-      segVesting.style.transform = `translateY(${(1 - seg2T) * 20}px)`;
-      fillVesting.style.width = `${seg2T * 40}%`;
+      // ============================
+      // PHASE 4 (p 0.42–0.75): LEFT-SIDE NODE GRAPH
+      // Distribution cards cascade in from right
+      // ============================
+      if (nodeGraph) {
+        nodeGraph.style.opacity = multiMapSmooth(p, [0.42, 0.48], [0, 1]);
+      }
+      if (branchSvg) branchSvg.style.opacity = multiMapSmooth(p, [0.44, 0.50], [0, 1]);
 
-      // ── Segment 3: Liquidity (20%) ──
-      const seg3T = multiMapSmooth(p, [0.52, 0.64], [0, 1]);
-      segLiquidity.style.opacity = seg3T;
-      segLiquidity.style.transform = `translateY(${(1 - seg3T) * 20}px)`;
-      fillLiquidity.style.width = `${seg3T * 20}%`;
+      // Distribution cards — staggered reveal
+      const c1Op = multiMapSmooth(p, [0.48, 0.54], [0, 1]);
+      const c2Op = multiMapSmooth(p, [0.52, 0.58], [0, 1]);
+      const c3Op = multiMapSmooth(p, [0.56, 0.62], [0, 1]);
+      cardAuction.style.opacity = c1Op;
+      cardVesting.style.opacity = c2Op;
+      cardLiquidity.style.opacity = c3Op;
+      cardAuction.style.transform = `translateX(${(1 - c1Op) * -12}px)`;
+      cardVesting.style.transform = `translateX(${(1 - c2Op) * -12}px)`;
+      cardLiquidity.style.transform = `translateX(${(1 - c3Op) * -12}px)`;
 
-      // ── Summary ──
-      summary.style.opacity = multiMapSmooth(p, [0.72, 0.80, 0.86, 0.93], [0, 1, 1, 0]);
+      // ============================
+      // PHASE 5 (p 0.78–0.90): SUMMARY + EXIT
+      // ============================
+      summary.style.opacity = multiMapSmooth(p, [0.78, 0.84, 0.88, 0.93], [0, 1, 1, 0]);
     }
   });
 })();
@@ -2127,30 +2171,30 @@ window.__particleConverge = 0;
    * vb: { minX, minY, w, h } — the viewBox
    * d: path definition as array of {cmd, points} or a bezier: [{vx,vy},...]
    */
-  function svgToScreen(svgEl, vbW, vbH, vx, vy) {
+  function svgToScreen(svgEl, vbMinX, vbMinY, vbW, vbH, vx, vy) {
     const r  = svgEl.getBoundingClientRect();
     const nr = nodeGraph.getBoundingClientRect();
     return {
-      x: (vx / vbW) * r.width  + r.left - nr.left,
-      y: (vy / vbH) * r.height + r.top  - nr.top
+      x: ((vx - vbMinX) / vbW) * r.width  + r.left - nr.left,
+      y: ((vy - vbMinY) / vbH) * r.height + r.top  - nr.top
     };
   }
 
   /* Parse SVG cubic bezier path "M x,y C x,y x,y x,y C x,y x,y x,y" into segments */
-  function parseSvgCubic(svgEl, vbW, vbH, pathD) {
+  function parseSvgCubic(svgEl, vbMinX, vbMinY, vbW, vbH, pathD) {
     // Extract all coordinate pairs
     const nums = pathD.match(/-?[\d.]+/g).map(Number);
     // M startX,startY C cp1x,cp1y cp2x,cp2y endX,endY [C ...]
     const segments = [];
     let i = 0;
     const startVx = nums[i++], startVy = nums[i++];
-    let cur = svgToScreen(svgEl, vbW, vbH, startVx, startVy);
+    let cur = svgToScreen(svgEl, vbMinX, vbMinY, vbW, vbH, startVx, startVy);
 
     while (i < nums.length) {
       // Each C command has 3 pairs = 6 numbers
-      const cp1 = svgToScreen(svgEl, vbW, vbH, nums[i],   nums[i+1]);
-      const cp2 = svgToScreen(svgEl, vbW, vbH, nums[i+2], nums[i+3]);
-      const end = svgToScreen(svgEl, vbW, vbH, nums[i+4], nums[i+5]);
+      const cp1 = svgToScreen(svgEl, vbMinX, vbMinY, vbW, vbH, nums[i],   nums[i+1]);
+      const cp2 = svgToScreen(svgEl, vbMinX, vbMinY, vbW, vbH, nums[i+2], nums[i+3]);
+      const end = svgToScreen(svgEl, vbMinX, vbMinY, vbW, vbH, nums[i+4], nums[i+5]);
       segments.push({ p0: cur, p1: cp1, p2: cp2, p3: end });
       cur = end;
       i += 6;
@@ -2161,8 +2205,8 @@ window.__particleConverge = 0;
   let paths = [];
 
   /* Path definitions matching the actual SVG <path d="..."> in index.html */
-  const BRANCH_ENGINE_D = 'M 0,63 C 20,63 30,44 50,44 C 64,44 72,44 80,44';
-  const BRANCH_IDLE_D   = 'M 0,63 C 20,63 30,95 50,95 C 64,95 72,95 80,95';
+  const BRANCH_ENGINE_D = 'M 1,-11 C 12,-11 18,6 30,18 C 42,30 60,38 75,38 C 85,38 92,38 100,38';
+  const BRANCH_IDLE_D   = 'M 1,-11 C 12,-11 18,10 30,32 C 45,58 65,88 75,95 C 85,102 92,105 100,105';
   const FAN_AJNA_D      = 'M 0,50 C 16,50 18,16 34,16 C 46,16 54,16 60,16';
   const FAN_CHARM_D     = 'M 0,50 C 14,50 22,50 32,50 C 42,50 48,50 60,50';
   const FAN_SOLANA_D    = 'M 0,50 C 16,50 18,84 34,84 C 46,84 54,84 60,84';
@@ -2178,52 +2222,50 @@ window.__particleConverge = 0;
 
     paths = [];
 
-    // Branch SVG: viewBox 0 0 80 100
+    // Branch SVG: viewBox 0 -15 100 130
     paths.push({
-      segments: parseSvgCubic(branchSvg, 80, 100, BRANCH_ENGINE_D),
+      segments: parseSvgCubic(branchSvg, 0, -15, 100, 130, BRANCH_ENGINE_D),
       color: PULSE_COLOR, speed: SPEED, trailCount: TRAIL_COUNT, phase: 0
     });
     paths.push({
-      segments: parseSvgCubic(branchSvg, 80, 100, BRANCH_IDLE_D),
+      segments: parseSvgCubic(branchSvg, 0, -15, 100, 130, BRANCH_IDLE_D),
       color: IDLE_COLOR, speed: IDLE_SPEED, trailCount: 3, phase: 0.3
     });
 
     // Fan-out SVG: viewBox 0 0 60 100
     paths.push({
-      segments: parseSvgCubic(fanSvg, 60, 100, FAN_AJNA_D),
+      segments: parseSvgCubic(fanSvg, 0, 0, 60, 100, FAN_AJNA_D),
       color: PULSE_COLOR, speed: SPEED, trailCount: TRAIL_COUNT, phase: 0.0
     });
     paths.push({
-      segments: parseSvgCubic(fanSvg, 60, 100, FAN_CHARM_D),
+      segments: parseSvgCubic(fanSvg, 0, 0, 60, 100, FAN_CHARM_D),
       color: PULSE_COLOR, speed: SPEED, trailCount: TRAIL_COUNT, phase: 0.33
     });
     paths.push({
-      segments: parseSvgCubic(fanSvg, 60, 100, FAN_SOLANA_D),
+      segments: parseSvgCubic(fanSvg, 0, 0, 60, 100, FAN_SOLANA_D),
       color: PULSE_COLOR, speed: SPEED, trailCount: TRAIL_COUNT, phase: 0.66
     });
 
     // Downstream SVGs: viewBox 0 0 30 16
     if (ds1Svg) {
       paths.push({
-        segments: parseSvgCubic(ds1Svg, 30, 16, DS1_D),
+        segments: parseSvgCubic(ds1Svg, 0, 0, 30, 16, DS1_D),
         color: PULSE_COLOR, speed: SPEED * 0.7, trailCount: 3, phase: 0.15
       });
     }
     if (ds2Svg) {
       paths.push({
-        segments: parseSvgCubic(ds2Svg, 30, 16, DS2_D),
+        segments: parseSvgCubic(ds2Svg, 0, 0, 30, 16, DS2_D),
         color: PULSE_COLOR, speed: SPEED * 0.7, trailCount: 3, phase: 0.5
       });
     }
   }
 
   function resizeCanvas() {
-    const r = nodeGraph.getBoundingClientRect();
+    const cr = canvas.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    canvas.width  = r.width * dpr;
-    canvas.height = r.height * dpr;
-    canvas.style.width  = r.width + 'px';
-    canvas.style.height = r.height + 'px';
+    canvas.width  = cr.width * dpr;
+    canvas.height = cr.height * dpr;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   }
 
@@ -2274,6 +2316,11 @@ window.__particleConverge = 0;
     ctx.clearRect(0, 0, w, h);
     ctx.globalCompositeOperation = 'lighter';
 
+    // Canvas extends 670px left of nodeGraph; offset pulse coordinates
+    const canvasR = canvas.getBoundingClientRect();
+    const ngR = nodeGraph.getBoundingClientRect();
+    const offsetX = ngR.left - canvasR.left;
+
     for (let pi = 0; pi < paths.length; pi++) {
       const p = paths[pi];
       phases[pi] = (phases[pi] + p.speed * dt) % 1;
@@ -2283,7 +2330,7 @@ window.__particleConverge = 0;
         const edgeFade = Math.min(t/0.08, (1-t)/0.08, 1);
         const trailFade = 1 - (i/p.trailCount)*0.65;
         const alpha = edgeFade * trailFade * ngOp;
-        if (alpha > 0.01) drawPulse(pt.x, pt.y, p.color, alpha);
+        if (alpha > 0.01) drawPulse(pt.x + offsetX, pt.y, p.color, alpha);
       }
     }
   }

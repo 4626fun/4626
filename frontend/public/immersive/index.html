@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <base href="/immersive/">
   <title>4626.fun — Deposit. Earn Together.</title>
   <meta name="description" content="ERC-4626 creator coin vaults. Deposit a creator coin, receive vault shares, earn fees pro rata. Redeemable anytime.">
   <base href="/immersive/">
@@ -225,11 +226,11 @@
             <canvas id="ng-pulse-canvas" class="ng-pulse-canvas"></canvas>
             <div class="ng-body">
               <!-- Branch SVG — single origin splitting to engine (up) and idle (down) -->
-              <svg class="ng-branch-svg" id="ng-branch-svg" viewBox="0 0 80 100" preserveAspectRatio="none">
-                <!-- Engine branch — base -->
-                <path d="M 0,63 C 20,63 30,44 50,44 C 64,44 72,44 80,44" stroke="rgba(0,82,255,0.18)" stroke-width="1" fill="none"/>
-                <!-- Idle branch — base -->
-                <path d="M 0,63 C 20,63 30,95 50,95 C 64,95 72,95 80,95" stroke="rgba(138,143,152,0.13)" stroke-width="0.8" fill="none"/>
+              <svg class="ng-branch-svg" id="ng-branch-svg" viewBox="0 -35 100 150" preserveAspectRatio="none">
+                <!-- Engine branch — originates from token logo right edge -->
+                <path d="M 1,-29 C 10,-29 16,-10 28,8 C 40,26 60,34 75,34 C 85,34 92,34 100,34" stroke="rgba(0,82,255,0.18)" stroke-width="1" fill="none"/>
+                <!-- Idle branch — originates from token logo right edge -->
+                <path d="M 1,-29 C 10,-29 18,0 30,28 C 44,60 60,82 75,92 C 85,100 92,104 100,104" stroke="rgba(138,143,152,0.13)" stroke-width="0.8" fill="none"/>
               </svg>
 
               <!-- Right side: engine row + idle row stacked -->
@@ -413,87 +414,101 @@
       </div>
     </section>
 
-    <!-- ╔═══ CHAPTER 3.5: SHARE TOKEN STORY — CCA AUCTION (500vh) ═══╗ -->
-    <section class="scroll-scene" id="ch-cca" data-height="500">
+    <!-- ╔═══ CHAPTER 3.5: SHARE TOKEN STORY — CCA DISTRIBUTION (700vh) ═══╗ -->
+    <section class="scroll-scene" id="ch-cca" data-height="700">
       <div class="scene-pin">
-        <div class="cca-container">
 
-          <!-- Intro -->
+        <!-- Camera wrapper for share-token pan (mirrors deposited-asset pan in ch-token) -->
+        <div class="cca-camera" id="cca-camera">
+
+          <!-- Deposited asset — fades to back -->
+          <div class="cca-deposit-coin" id="cca-deposit-coin">
+            <div class="token-img-ring">
+              <img src="./assets/tokens/source/akita.webp" alt="AKITA" class="token-img" width="96" height="96">
+            </div>
+          </div>
+
+          <!-- Share token — comes to front -->
+          <div class="cca-share-token" id="cca-share-token">
+            <div class="share-img-ring">
+              <img src="./assets/tokens/share/akita-512.png" alt="■AKITA" class="cca-share-img" width="96" height="96">
+            </div>
+            <span class="cca-share-label" id="cca-share-label">■AKITA</span>
+          </div>
+
+          <!-- Intro text overlay -->
           <div class="cca-intro" id="cca-intro">
             <div class="section-label">Share Token</div>
             <p class="cca-headline" id="cca-headline">What happens with ■AKITA?</p>
             <p class="cca-desc" id="cca-desc">Every vault begins with a Uniswap Continuous Clearing Auction over 7 days. The share token is distributed to bootstrap liquidity, reward the creator, and align the community.</p>
           </div>
 
-          <!-- Central share token icon -->
-          <div class="cca-share-icon" id="cca-share-icon">
-            <div class="cca-share-ring">
-              <img src="./assets/tokens/share/akita-512.png" alt="■AKITA" class="cca-share-img" width="80" height="80">
-            </div>
-            <span class="cca-share-label">■AKITA</span>
-          </div>
+          <!-- LEFT-SIDE NODE GRAPH: Share token → 3 CCA distribution segments -->
+          <div class="cca-node-graph" id="cca-node-graph">
 
-          <!-- Distribution arcs / segments -->
-          <div class="cca-distribution" id="cca-distribution">
+            <!-- Left stack: 3 distribution cards (first in DOM = left side) -->
+            <div class="cca-left-stack">
+              <!-- CCA Auction card -->
+              <div class="cca-dist-card" id="cca-card-auction">
+                <div class="strategy-card-inner">
+                  <div class="strat-card-top">
+                    <img src="./assets/brand/uniswap-official-pink.svg" alt="Uniswap" class="strat-icon-img">
+                    <span class="strat-name">CCA Auction</span>
+                  </div>
+                  <p class="strat-pct">40%</p>
+                  <p class="strat-role">Auctioned over 7 days via Uniswap Continuous Clearing Auction. Open to the public.</p>
+                </div>
+              </div>
 
-            <!-- Auction segment -->
-            <div class="cca-segment" id="cca-seg-auction">
-              <div class="cca-segment-bar">
-                <div class="cca-segment-fill cca-fill-auction" id="cca-fill-auction"></div>
-              </div>
-              <div class="cca-segment-content">
-                <div class="cca-seg-header">
-                  <span class="cca-seg-pct">40%</span>
-                  <span class="cca-seg-title">CCA Auction</span>
-                </div>
-                <p class="cca-seg-desc">Auctioned over 7 days via Uniswap Continuous Clearing Auction. Open to the public — anyone can bid.</p>
-                <div class="cca-seg-badge">
-                  <img src="./assets/brand/uniswap-official-pink.svg" alt="Uniswap" class="cca-seg-badge-icon">
-                  <span>Uniswap CCA</span>
+              <!-- Creator Vesting card -->
+              <div class="cca-dist-card" id="cca-card-vesting">
+                <div class="strategy-card-inner">
+                  <div class="strat-card-top">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#0052FF" stroke-width="1.5" class="strat-icon-img" style="border-radius: 50%; background: rgba(0,82,255,0.08); padding: 3px;">
+                      <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
+                      <path d="M12 6v6l4 2"/>
+                    </svg>
+                    <span class="strat-name">Creator Vesting</span>
+                  </div>
+                  <p class="strat-pct">40%</p>
+                  <p class="strat-role">Vested to the creator over 1 year. Linearly unlocking — aligning long-term incentives.</p>
                 </div>
               </div>
-            </div>
 
-            <!-- Vesting segment -->
-            <div class="cca-segment" id="cca-seg-vesting">
-              <div class="cca-segment-bar">
-                <div class="cca-segment-fill cca-fill-vesting" id="cca-fill-vesting"></div>
-              </div>
-              <div class="cca-segment-content">
-                <div class="cca-seg-header">
-                  <span class="cca-seg-pct">40%</span>
-                  <span class="cca-seg-title">Creator Vesting</span>
-                </div>
-                <p class="cca-seg-desc">Vested to the creator over 1 year. Linearly unlocking — aligning long-term incentives.</p>
-                <div class="cca-seg-meta">
-                  <span class="cca-seg-meta-item">12-month linear vest</span>
-                </div>
-              </div>
-            </div>
-
-            <!-- Liquidity segment -->
-            <div class="cca-segment" id="cca-seg-liquidity">
-              <div class="cca-segment-bar">
-                <div class="cca-segment-fill cca-fill-liquidity" id="cca-fill-liquidity"></div>
-              </div>
-              <div class="cca-segment-content">
-                <div class="cca-seg-header">
-                  <span class="cca-seg-pct">20%</span>
-                  <span class="cca-seg-title">Liquidity</span>
-                </div>
-                <p class="cca-seg-desc">Seeded directly into the trading pool. Ensures ■AKITA is liquid and tradeable from day one.</p>
-                <div class="cca-seg-meta">
-                  <span class="cca-seg-meta-item">Protocol-owned liquidity</span>
+              <!-- Liquidity card -->
+              <div class="cca-dist-card" id="cca-card-liquidity">
+                <div class="strategy-card-inner">
+                  <div class="strat-card-top">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#0052FF" stroke-width="1.5" class="strat-icon-img" style="border-radius: 50%; background: rgba(0,82,255,0.08); padding: 3px;">
+                      <path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/>
+                    </svg>
+                    <span class="strat-name">Liquidity Pool</span>
+                  </div>
+                  <p class="strat-pct">20%</p>
+                  <p class="strat-role">Seeded directly into the trading pool. Ensures ■AKITA is liquid and tradeable from day one.</p>
                 </div>
               </div>
             </div>
+
+            <!-- Branch SVG — curves flow right from cards toward share token -->
+            <svg class="cca-branch-svg" id="cca-branch-svg" viewBox="0 0 660 500" preserveAspectRatio="xMidYMid meet">
+              <!-- CCA Auction branch: from card1 center-Y to share token center -->
+              <path d="M 0,80 C 100,80 180,80 280,80 C 420,80 560,260 660,260" stroke="rgba(0,82,255,0.18)" stroke-width="1.2" fill="none"/>
+              <!-- Creator Vesting branch: center straight -->
+              <path d="M 0,250 C 120,250 280,250 400,252 C 500,256 580,260 660,260" stroke="rgba(0,82,255,0.18)" stroke-width="1.2" fill="none"/>
+              <!-- Liquidity branch: from card3 center-Y to share token center -->
+              <path d="M 0,420 C 100,420 180,420 280,420 C 420,420 560,260 660,260" stroke="rgba(0,82,255,0.18)" stroke-width="1.2" fill="none"/>
+            </svg>
+
+            <canvas id="cca-pulse-canvas" class="cca-pulse-canvas"></canvas>
 
           </div>
-
-          <!-- Summary line -->
-          <p class="cca-summary" id="cca-summary">Deposit an asset. Yield accrues. The share token finds price discovery.</p>
 
         </div>
+
+        <!-- Summary line -->
+        <p class="cca-summary" id="cca-summary">Deposit an asset. Yield accrues. The share token finds price discovery.</p>
+
       </div>
     </section>
 

@@ -951,24 +951,28 @@ body {
 }
 .ng-defs { position: absolute; }
 .ng-body {
+  position: relative;
   display: flex;
   align-items: stretch;
 }
 /* ── Animated energy-pulse flow on bezier curves ── */
 .ng-pulse-canvas {
   position: absolute;
-  top: 0; left: 0;
-  width: 100%; height: 100%;
+  top: 0; left: -670px;
+  width: calc(100% + 670px); height: 100%;
   pointer-events: none;
   z-index: 5;
 }
 
 /* Branch SVG — from token-coin to engine + idle */
 .ng-branch-svg {
-  width: 80px;
+  position: absolute;
+  left: -670px;
+  top: 0;
+  width: 750px;
+  height: 100%;
   flex-shrink: 0;
   overflow: visible;
-  align-self: stretch;
 }
 /* Right stack: engine row + idle row */
 .ng-right-stack {
@@ -1950,7 +1954,7 @@ body {
     flex-wrap: nowrap;
     align-items: center;
   }
-  .ng-branch-svg { width: 40px; }
+  .ng-branch-svg { position: static; left: auto; width: 40px; height: auto; align-self: stretch; }
   .ng-edge { width: 36px; }
   .ng-edge-fan { width: 28px; }
   .engine-hub {
@@ -2195,26 +2199,72 @@ body {
 }
 
 /* ═══════════════════════════════════════
-   CHAPTER 3.5: CCA AUCTION — SHARE TOKEN STORY
+   CHAPTER 3.5: CCA — SHARE TOKEN DISTRIBUTION
    ═══════════════════════════════════════ */
-.cca-container {
-  width: 100%;
-  max-width: 680px;
-  padding: 0 2rem;
+
+/* Camera wrapper for pan effect */
+.cca-camera {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  will-change: transform;
+}
+
+/* Deposited asset — starts centered, fades to back */
+.cca-deposit-coin {
+  position: absolute;
+  top: 0; left: 0;
   display: flex;
   flex-direction: column;
   align-items: center;
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
+  will-change: transform, opacity;
+  opacity: 0;
+  z-index: 2;
 }
 
-/* Intro */
-.cca-intro {
-  text-align: center;
-  margin-bottom: 1.5rem;
+/* Share token — starts behind, comes to front */
+.cca-share-token {
+  position: absolute;
+  top: 0; left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  will-change: transform, opacity;
   opacity: 0;
+  z-index: 3;
+}
+.cca-share-token .share-img-ring {
+  width: 96px;
+  height: 96px;
+}
+.cca-share-img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.cca-share-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--color-accent);
+  font-weight: 400;
+}
+
+/* Intro text */
+.cca-intro {
+  position: absolute;
+  top: 15%;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+  width: 100%;
+  max-width: 580px;
+  padding: 0 2rem;
+  opacity: 0;
+  z-index: 10;
 }
 .cca-headline {
   font-family: var(--font-display);
@@ -2235,44 +2285,46 @@ body {
   margin: 0 auto;
 }
 
-/* Central share token icon */
-.cca-share-icon {
+/* LEFT-SIDE Node graph — mirrored from strategy graph
+   After camera pans +400px right, this must appear centered-left.
+   Raw left position: cards should land around 180–440px from viewport left
+   after camera adds +400, so raw left = ~-220px to ~40px.
+   We position the container so the left-stack sits at ~left: 60px raw,
+   and the branch SVG extends rightward from the cards toward the share token. */
+.cca-node-graph {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  left: 60px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  opacity: 0;
+  z-index: 4;
+}
+.cca-branch-svg {
+  position: relative;
+  width: 660px;
+  flex-shrink: 0;
+  overflow: visible;
+  align-self: stretch;
+}
+.cca-pulse-canvas {
+  position: absolute;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  z-index: 5;
+}
+.cca-left-stack {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
+  gap: 1rem;
+  flex-shrink: 0;
+}
+.cca-dist-card {
   opacity: 0;
-}
-.cca-share-ring {
-  width: 80px;
-  height: 80px;
-  border-radius: 50%;
-  overflow: hidden;
-  border: 2px solid rgba(0, 82, 255, 0.25);
-  box-shadow:
-    0 0 40px rgba(0, 82, 255, 0.12),
-    0 0 80px rgba(0, 82, 255, 0.06);
-  transition: box-shadow 1s var(--ease-cinematic);
-}
-.cca-share-ring:hover {
-  box-shadow:
-    0 0 60px rgba(0, 82, 255, 0.2),
-    0 0 120px rgba(0, 82, 255, 0.08);
-}
-.cca-share-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.cca-share-label {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--color-accent);
-  font-weight: 400;
+  min-width: 260px;
 }
 
 /* Volatility narrative text — overlaid below the yield curve area */
@@ -2304,147 +2356,27 @@ body {
   line-height: 1.6;
 }
 
-/* Distribution container */
-.cca-distribution {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-  opacity: 0;
-}
-
-/* Individual segment */
-.cca-segment {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  opacity: 0;
-  transform: translateY(20px);
-}
-
-/* Progress bar */
-.cca-segment-bar {
-  width: 100%;
-  height: 3px;
-  background: rgba(255, 255, 255, 0.04);
-  border-radius: 2px;
-  overflow: hidden;
-}
-.cca-segment-fill {
-  height: 100%;
-  border-radius: 2px;
-  width: 0%;
-  transition: width 1.2s var(--ease-cinematic);
-}
-.cca-fill-auction {
-  background: linear-gradient(90deg, var(--color-accent), var(--color-accent-bright));
-}
-.cca-fill-vesting {
-  background: linear-gradient(90deg, rgba(0, 82, 255, 0.6), rgba(59, 130, 255, 0.5));
-}
-.cca-fill-liquidity {
-  background: linear-gradient(90deg, rgba(0, 82, 255, 0.35), rgba(59, 130, 255, 0.25));
-}
-
-/* Segment content */
-.cca-segment-content {
-  padding: 0.85rem 1.25rem;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface-glass);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-radius: 8px;
-  transition: border-color 0.4s var(--ease-out), box-shadow 0.4s var(--ease-out);
-}
-.cca-segment-content:hover {
-  border-color: var(--color-border-accent);
-  box-shadow: 0 4px 24px rgba(0, 82, 255, 0.06);
-}
-
-/* Header row */
-.cca-seg-header {
-  display: flex;
-  align-items: baseline;
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
-}
-.cca-seg-pct {
-  font-family: var(--font-mono);
-  font-size: clamp(1.5rem, 1.2rem + 1vw, 2rem);
-  font-weight: 300;
-  letter-spacing: -0.02em;
-  color: var(--color-accent);
-}
-.cca-seg-title {
-  font-family: var(--font-display);
-  font-size: clamp(0.85rem, 0.7rem + 0.4vw, 1rem);
-  font-weight: 500;
-  letter-spacing: 0.02em;
-  color: var(--color-text);
-}
-
-/* Description */
-.cca-seg-desc {
-  font-size: clamp(0.75rem, 0.65rem + 0.3vw, 0.875rem);
-  font-weight: 300;
-  color: rgba(200, 205, 214, 0.4);
-  line-height: 1.6;
-  letter-spacing: 0.01em;
-}
-
-/* Badge (Uniswap CCA) */
-.cca-seg-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.4rem;
-  margin-top: 0.6rem;
-  padding: 0.3rem 0.65rem;
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  background: rgba(8, 11, 17, 0.5);
-  font-size: 9px;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: var(--color-text-muted);
-  font-weight: 400;
-}
-.cca-seg-badge-icon {
-  width: 14px;
-  height: 14px;
-  object-fit: contain;
-}
-
-/* Meta line */
-.cca-seg-meta {
-  margin-top: 0.5rem;
-}
-.cca-seg-meta-item {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.15em;
-  text-transform: uppercase;
-  color: rgba(0, 82, 255, 0.4);
-  font-weight: 300;
-}
+/* (Old CCA segment styles removed — replaced by node graph cards) */
 
 /* Summary */
 .cca-summary {
+  position: absolute;
+  bottom: 8%;
+  left: 50%;
+  transform: translateX(-50%);
   text-align: center;
   font-size: clamp(0.85rem, 0.72rem + 0.4vw, 1.05rem);
   font-weight: 300;
   color: rgba(200, 205, 214, 0.35);
   letter-spacing: 0.02em;
   line-height: 1.7;
-  margin-top: 1.5rem;
+  max-width: 500px;
   opacity: 0;
+  z-index: 10;
 }
 
 /* ─── CCA Mobile overrides ─── */
 @media (max-width: 768px) {
-  .cca-container {
-    padding: 0 1rem;
-    max-width: 100%;
-  }
   .cca-headline {
     font-size: clamp(1.2rem, 1rem + 0.8vw, 1.6rem);
   }
@@ -2452,25 +2384,16 @@ body {
     font-size: 0.8rem;
     padding: 0 0.5rem;
   }
-  .cca-share-ring {
-    width: 64px;
-    height: 64px;
+  .cca-share-token .share-img-ring {
+    width: 76px;
+    height: 76px;
   }
-  .cca-seg-pct {
-    font-size: 1.25rem;
+  .cca-node-graph {
+    left: 50%;
+    transform: translate(-50%, -50%);
+    flex-direction: column;
   }
-  .cca-segment-content {
-    padding: 0.75rem 1rem;
-  }
-  .cca-seg-desc {
-    font-size: 0.7rem;
-  }
-  .cca-seg-badge {
-    font-size: 7px;
-  }
-  .cca-seg-meta-item {
-    font-size: 7px;
-  }
+  .cca-branch-svg { display: none; }
   .cca-summary {
     font-size: 0.8rem;
     padding: 0 0.5rem;
