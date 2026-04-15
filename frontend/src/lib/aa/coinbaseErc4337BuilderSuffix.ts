@@ -61,10 +61,25 @@ export function applyBuilderDataSuffixToCalls(
   chainId: number,
   dataSuffix: Hex | undefined = DATA_SUFFIX,
   debug = false,
+  smartWallet?: Address,
 ): Array<{ to: Address; value?: bigint; data?: Hex }> {
   if (!dataSuffix || !isBaseChain(chainId)) return calls
 
   return calls.map((c) => {
+    // Never append builder suffix to self-calls (CSW owner management).
+    // The suffix corrupts the ABI-encoded calldata for functions like
+    // addOwnerAddress, removeOwnerAtIndex, etc., causing the bundler's
+    // eth_estimateUserOperationGas simulation to revert.
+    if (smartWallet && c.to.toLowerCase() === smartWallet.toLowerCase()) {
+      if (debug) {
+        logger.debug('[Builder] Smart wallet self-call detected; skipping suffix', {
+          target: c.to,
+          dataPrefix: String(c.data ?? '').slice(0, 10),
+        })
+      }
+      return c
+    }
+
     if (isUniversalRouterTarget(c.to)) {
       const cleanedData = stripKnownBuilderDataSuffix(c.data, dataSuffix)
       const candidateData = canonicalizeUniversalRouterExecuteCalldata(cleanedData ?? c.data)
