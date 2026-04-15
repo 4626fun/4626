@@ -39,6 +39,37 @@ body {
   overflow-x: hidden;
 }
 
+/* ─── GPU COMPOSITING: promote all scroll-animated layers ─── */
+.scene-pin,
+.token-img-ring,
+.share-img-ring,
+.strategy-card-inner,
+.cca-camera,
+.cca-deposit-coin,
+.cca-share-token,
+.cca-node-graph,
+.cca-intro,
+.cca-summary,
+.cca-dist-card,
+.hero-streak,
+.hero-content,
+.hero-floats,
+.hero-parallax-layer,
+.vaults-container,
+.vault-card,
+.close-brand,
+.close-cta,
+.close-tag,
+#morph-zone,
+.ng-body,
+.engine-hub,
+.ds-card,
+.vol-narrative {
+  will-change: transform, opacity;
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+}
+
 /* ─── THREE.JS CANVAS ─── */
 #three-canvas {
   position: fixed;
@@ -48,6 +79,8 @@ body {
   height: 100vh;
   z-index: 0;
   pointer-events: none;
+  will-change: contents;
+  contain: strict;
 }
 
 /* ─── AMBIENT ORBS ─── */
@@ -216,6 +249,8 @@ body {
 }
 .scroll-scene {
   position: relative;
+  contain: layout style;
+  transform: translateZ(0);
 }
 .scene-pin {
   position: sticky;
@@ -226,6 +261,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  contain: layout style;
+  transform: translateZ(0);
 }
 
 /* ─── SECTION LABEL ─── */

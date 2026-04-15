@@ -12,6 +12,30 @@ import * as THREE from 'three';
 gsap.registerPlugin(ScrollTrigger);
 
 // ────────────────────────────────────────────
+// 0.1 RAF WRITE SCHEDULER — batch DOM writes to prevent layout thrashing
+// ────────────────────────────────────────────
+const WriteBatch = (() => {
+  const _queue = [];
+  let _scheduled = false;
+  function flush() {
+    _scheduled = false;
+    const len = _queue.length;
+    for (let i = 0; i < len; i++) _queue[i]();
+    _queue.length = 0;
+  }
+  return {
+    /** Queue a DOM-write callback; all queued writes flush in a single rAF */
+    write(fn) {
+      _queue.push(fn);
+      if (!_scheduled) {
+        _scheduled = true;
+        requestAnimationFrame(flush);
+      }
+    }
+  };
+})();
+
+// ────────────────────────────────────────────
 // 0.5 AMBIENT SPATIAL AUDIO SYSTEM
 // ────────────────────────────────────────────
 const AudioEngine = (function initAudio() {
@@ -219,7 +243,7 @@ if (audioToggle) {
   if (!canvas) return;
 
   const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: false });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.setSize(window.innerWidth, window.innerHeight);
 
   const scene = new THREE.Scene();
@@ -404,8 +428,22 @@ if (audioToggle) {
     }
   }
 
+  // ── Scroll-aware frame throttle: halve particle FPS during active scroll ──
+  let _scrolling = false;
+  let _scrollTimer = 0;
+  let _frameCount = 0;
+  window.addEventListener('scroll', () => {
+    _scrolling = true;
+    clearTimeout(_scrollTimer);
+    _scrollTimer = setTimeout(() => { _scrolling = false; }, 150);
+  }, { passive: true });
+
   function animate() {
     requestAnimationFrame(animate);
+    _frameCount++;
+    // During scroll, render particles at half rate to free GPU for compositing
+    if (_scrolling && (_frameCount & 1)) return;
+
     updateParticles(pos1, vel1, COUNT1, 10);
     updateParticles(pos2, vel2, COUNT2, 15);
     updateParticles(pos3, vel3, COUNT3, 8);
@@ -432,7 +470,7 @@ if (audioToggle) {
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
     // Update pixel ratio uniform on all bokeh materials
-    const pr = Math.min(window.devicePixelRatio, 2);
+    const pr = Math.min(window.devicePixelRatio, 1.5);
     renderer.setPixelRatio(pr);
     [mat1, mat2, mat3].forEach(m => { if (m.uniforms) m.uniforms.uPixelRatio.value = pr; });
   });
@@ -625,15 +663,23 @@ const MorphSystem = (function initMorph() {
     gl.drawArrays(gl.POINTS, 0, PARTICLE_COUNT);
   }
 
+  let morphVisible = false;
+  let morphRAF = 0;
   function tick() {
-    requestAnimationFrame(tick);
+    if (!morphVisible) { morphRAF = 0; return; }
     render();
+    morphRAF = requestAnimationFrame(tick);
   }
-  tick();
 
   return {
     setProgress(p) { currentProgress = Math.max(0, Math.min(1, p)); },
-    getProgress() { return currentProgress; }
+    getProgress() { return currentProgress; },
+    setVisible(v) {
+      const wasVisible = morphVisible;
+      morphVisible = v;
+      // Start loop on-demand; stops itself when invisible
+      if (v && !wasVisible && !morphRAF) { morphRAF = requestAnimationFrame(tick); }
+    }
   };
 })();
 
@@ -653,7 +699,7 @@ const progressBar = document.getElementById('scroll-progress');
 window.addEventListener('scroll', () => {
   const h = document.documentElement.scrollHeight - window.innerHeight;
   const pct = h > 0 ? (window.scrollY / h) * 100 : 0;
-  progressBar.style.height = `${pct}%`;
+  WriteBatch.write(() => { progressBar.style.height = `${pct}%`; });
 }, { passive: true });
 
 // ────────────────────────────────────────────
@@ -822,21 +868,20 @@ function multiMapSmooth(progress, stops, values) {
     end: 'bottom top',
     onUpdate: (self) => {
       const p = self.progress;
-
-      // Audio: drone swell during hero
+      // Audio: drone swell during hero (non-DOM, run immediately)
       AudioEngine.setDroneLevel(multiMap(p, [0, 0.15, 0.40, 0.55], [0.04, 0.10, 0.10, 0.03]));
-
+      // Compute values synchronously, defer DOM writes
       const contentOp = multiMap(p, [0.40, 0.55], [1, 0]);
-      heroContent.style.opacity = contentOp;
-
-      if (heroFloats) heroFloats.style.opacity = contentOp * 0.7;
-
-      if (scrollCue) scrollCue.style.opacity = multiMap(p, [0.05, 0.12], [1, 0]);
-
+      const cueCp = scrollCue ? multiMap(p, [0.05, 0.12], [1, 0]) : 0;
       const streakScaleY = multiMap(p, [0.50, 0.72], [1, 0]);
       const streakOp = multiMap(p, [0.65, 0.75], [1, 0]);
-      streak.style.transform = `scaleY(${streakScaleY})`;
-      streak.style.opacity = streakOp;
+      WriteBatch.write(() => {
+        heroContent.style.opacity = contentOp;
+        if (heroFloats) heroFloats.style.opacity = contentOp * 0.7;
+        if (scrollCue) scrollCue.style.opacity = cueCp;
+        streak.style.transform = `scaleY(${streakScaleY})`;
+        streak.style.opacity = streakOp;
+      });
     }
   });
 })();
@@ -897,185 +942,154 @@ function multiMapSmooth(progress, stops, values) {
     onUpdate: (self) => {
       const p = self.progress;
 
-      // Audio: drone continues through token journey
+      // Audio (non-DOM, run immediately)
       AudioEngine.setDroneLevel(multiMap(p, [0, 0.04, 0.50, 0.60, 0.95, 1.0], [0.03, 0.06, 0.06, 0.08, 0.08, 0.02]));
-
-      // Audio: whoosh during morph
-      if (p >= 0.065 && p <= 0.075 && !whooshPlayed) {
-        AudioEngine.playWhoosh(0.7);
-        whooshPlayed = true;
-      }
+      if (p >= 0.065 && p <= 0.075 && !whooshPlayed) { AudioEngine.playWhoosh(0.7); whooshPlayed = true; }
       if (p < 0.06 || p > 0.13) whooshPlayed = false;
-
-      // Audio: soft impact when deposit info appears
-      if (p >= 0.65 && p <= 0.66 && !depositSoundPlayed) {
-        AudioEngine.playSoftImpact();
-        depositSoundPlayed = true;
-      }
+      if (p >= 0.65 && p <= 0.66 && !depositSoundPlayed) { AudioEngine.playSoftImpact(); depositSoundPlayed = true; }
       if (p < 0.64 || p > 0.70) depositSoundPlayed = false;
 
-      // ── Intro line — smooth fade/scale ──
+      // ── Compute ALL values synchronously (reads only) ──
       const introLineScaleY = multiMapSmooth(p, [0.003, 0.015], [0, 1]);
       const introLineOp = multiMapSmooth(p, [0.003, 0.007, 0.51, 0.57], [0, 1, 1, 0]);
-      tokenLine.style.transform = `translateX(-50%) scaleY(${introLineScaleY})`;
-      tokenLine.style.opacity = introLineOp;
-
       const lineGlow = multiMapSmooth(p, [0.024, 0.035, 0.047, 0.124, 0.176, 0.34, 0.40, 0.51, 0.57], [0.08, 1, 0.55, 0.55, 0.08, 0.08, 0.30, 0.30, 0]);
-      tokenLineGlowEl.style.opacity = lineGlow;
       const lineW = multiMapSmooth(p, [0.003, 0.015, 0.024, 0.035, 0.047, 0.124, 0.176], [0, 1, 1, 3.5, 2, 2, 1]);
-      tokenLineCoreEl.style.width = `${lineW}px`;
 
-      // ════════════════════════════════════════════
-      // TOKEN ALIGNMENT FIX — v5
-      // Both coin and share are positioned at top:0,left:0 in CSS.
-      // JS applies translate(X, Y) where Y = 50vh - 50px (half icon height)
-      // and X = 50vw + offset. This guarantees identical vertical center.
-      // ════════════════════════════════════════════
       const vw = window.innerWidth;
       const vh = window.innerHeight;
       const isMobile = vw < 768;
-      // Responsive multiplier: 1.0 at desktop (1600px), scales down on mobile
       const rm = Math.min(1, vw / 1200);
-      // Center Y: middle of viewport minus half the icon ring height
-      // Desktop: 96px rings → 48px offset, Mobile: 76px rings → 38px offset
       const iconHalf = isMobile ? 38 : 48;
       const centerY = vh / 2 - iconHalf;
       const centerX = vw / 2;
-
-      // ── Creator coin (AKITA) — SMOOTH CONTINUOUS MOTION ──
-      // On mobile, use wider spread multiplier so detail panels don't collide
       const spread = isMobile ? Math.max(rm, 0.55) : rm;
+
       const coinOffsetX = multiMapSmooth(p,
-        [0.018, 0.045, 0.055, 0.08,  0.12,  0.14,  0.165,  0.30,  0.51, 0.60],
-        [-340*rm, 0,    0,     0,     0,     180*spread, 220*spread, 220*spread, 220*spread, 20*rm]
+        [0.018, 0.045, 0.055, 0.08, 0.12, 0.14, 0.165, 0.30, 0.51, 0.60],
+        [-340*rm, 0, 0, 0, 0, 180*spread, 220*spread, 220*spread, 220*spread, 20*rm]
       );
       const coinOp = multiMapSmooth(p,
-        [0.018, 0.03,  0.055, 0.075, 0.12,  0.14,  0.26, 0.30],
-        [0,     1,     1,     0,     0,     1,     0.4,  1]
+        [0.018, 0.03, 0.055, 0.075, 0.12, 0.14, 0.26, 0.30],
+        [0, 1, 1, 0, 0, 1, 0.4, 1]
       );
       const coinScale = multiMapSmooth(p, [0.11, 0.165, 0.26, 0.30], [1, 0.82, 0.82, 1]);
-      // On mobile, lift coin upward during allocation phase to make room for engine below
       const coinLiftY = isMobile ? multiMapSmooth(p, [0.60, 0.68], [0, -vh * 0.28]) : 0;
-      coin.style.transform = `translate(${centerX + coinOffsetX}px, ${centerY + coinLiftY}px) translate(-50%, 0) scale(${coinScale})`;
-      coin.style.opacity = coinOp;
+      const coinTx = `translate(${centerX + coinOffsetX}px, ${centerY + coinLiftY}px) translate(-50%, 0) scale(${coinScale})`;
+      const coinDepositing = p > 0.14 && p < 0.60;
 
-      // Toggle depositing class for enhanced glow
-      coin.classList.toggle('depositing', p > 0.14 && p < 0.60);
-
-      // ── MORPH ZONE — WebGL particle transition ──
       const morphActive = (p >= 0.055 && p <= 0.135);
       const morphOp = multiMapSmooth(p, [0.055, 0.065, 0.125, 0.135], [0, 1, 1, 0]);
+      const morphProgress = morphActive ? Math.max(0, Math.min(1, mapRange(p, 0.06, 0.12, 0, 1))) : 0;
+      const morphLabelOp = multiMapSmooth(p, [0.07, 0.085, 0.11, 0.125], [0, 1, 1, 0]);
 
-      if (morphZone) {
-        morphZone.style.opacity = morphOp;
-        if (morphActive && MorphSystem) {
-          const morphProgress = mapRange(p, 0.06, 0.12, 0, 1);
-          MorphSystem.setProgress(Math.max(0, Math.min(1, morphProgress)));
-        }
-      }
-      if (morphLabel) {
-        morphLabel.style.opacity = multiMapSmooth(p, [0.07, 0.085, 0.11, 0.125], [0, 1, 1, 0]);
-      }
-
-      // ── Vault share (■AKITA) — ALIGNED with coin, smooth motion ──
-      // Emerges after morph, mirrors coin position on the opposite side, SAME centerY
       const shareOp = multiMapSmooth(p,
         [0.10, 0.13, 0.51, 0.60, 0.64, 0.67],
-        [0,    1,    1,    0.35, 0.35, 0]
+        [0, 1, 1, 0.35, 0.35, 0]
       );
       const shareOffsetX = multiMapSmooth(p,
         [0.10, 0.14, 0.165, 0.30, 0.51, 0.60],
-        [0,    -140*spread, -220*spread, -220*spread, -220*spread, -50*rm]
+        [0, -140*spread, -220*spread, -220*spread, -220*spread, -50*rm]
       );
       const shareScale = multiMapSmooth(p, [0.10, 0.14, 0.51, 0.60], [0.6, 1, 1, 0.42]);
-      share.style.transform = `translate(${centerX + shareOffsetX}px, ${centerY}px) translate(-50%, 0) scale(${shareScale})`;
-      share.style.opacity = shareOp;
+      const shareTx = `translate(${centerX + shareOffsetX}px, ${centerY}px) translate(-50%, 0) scale(${shareScale})`;
+      const shareMinted = p > 0.13 && p < 0.60;
 
-      // Toggle minted class for enhanced glow
-      share.classList.toggle('minted', p > 0.13 && p < 0.60);
-
-      // ── Copy and labels — smoothed ──
-      topCopy.style.opacity = multiMapSmooth(p, [0.02, 0.047, 0.055, 0.065], [0, 1, 1, 0]);
-      crossCopy.style.opacity = multiMapSmooth(p, [0.14, 0.176, 0.224, 0.259], [0, 1, 1, 0]);
-
+      const topCopyOp = multiMapSmooth(p, [0.02, 0.047, 0.055, 0.065], [0, 1, 1, 0]);
+      const crossCopyOp = multiMapSmooth(p, [0.14, 0.176, 0.224, 0.259], [0, 1, 1, 0]);
       const leftLabelOp = multiMapSmooth(p, [0.13, 0.159, 0.235, 0.271], [0, 1, 1, 0]);
       const rightLabelOp = multiMapSmooth(p, [0.13, 0.159, 0.235, 0.271], [0, 1, 1, 0]);
-      labelYou.style.opacity = leftLabelOp;
-      labelVault.style.opacity = rightLabelOp;
-      labelShares.style.opacity = leftLabelOp;
-      labelUnderlying.style.opacity = rightLabelOp;
-      coinLabel.style.opacity = rightLabelOp;
-      shareLabel.style.opacity = leftLabelOp;
-
-      entryCue.style.opacity = multiMapSmooth(p, [0.165, 0.20, 0.235, 0.271], [0, 1, 1, 0]);
-
-      // ── Detail panels — smoothed ──
+      const entryCueOp = multiMapSmooth(p, [0.165, 0.20, 0.235, 0.271], [0, 1, 1, 0]);
       const rightDetailOp = multiMapSmooth(p, [0.32, 0.37, 0.50, 0.54], [0, 1, 1, 0]);
       const leftDetailOp = multiMapSmooth(p, [0.37, 0.42, 0.49, 0.53], [0, 1, 1, 0]);
-      coinDetail.style.opacity = rightDetailOp;
-      shareDetail.style.opacity = leftDetailOp;
+      const dualCopyOp = multiMapSmooth(p, [0.42, 0.47, 0.50, 0.54], [0, 1, 1, 0]);
+      const dualEntryOp = multiMapSmooth(p, [0.46, 0.50, 0.51, 0.54], [0, 1, 1, 0]);
 
-      dualCopy.style.opacity = multiMapSmooth(p, [0.42, 0.47, 0.50, 0.54], [0, 1, 1, 0]);
-      dualEntry.style.opacity = multiMapSmooth(p, [0.46, 0.50, 0.51, 0.54], [0, 1, 1, 0]);
-
-      // ── Camera zoom — smoother easing ──
       const cameraScale = multiMapSmooth(p, [0.50, 0.58, 0.62, 0.68], [1, 1.06, 1.06, 1]);
-      // On mobile, skip the panX that reveals the allocation engine (hidden on mobile)
       const panX = isMobile ? 0 : mapEased(p, 0.64, 0.86, 0, -400 * rm);
-      cameraWrapper.style.transform = `scale(${cameraScale}) translateX(${panX}px)`;
+      const cameraTx = `scale(${cameraScale}) translateX(${panX}px)`;
 
-      // ── Deposit/allocation labels — fade out before node graph appears ──
-      depositInfo.style.opacity = multiMapSmooth(p, [0.65, 0.69, 0.71, 0.74], [0, 1, 1, 0]);
-      splitInfo.style.opacity   = multiMapSmooth(p, [0.67, 0.71, 0.71, 0.74], [0, 1, 1, 0]);
+      const depositInfoOp = multiMapSmooth(p, [0.65, 0.69, 0.71, 0.74], [0, 1, 1, 0]);
+      const splitInfoOp = multiMapSmooth(p, [0.67, 0.71, 0.71, 0.74], [0, 1, 1, 0]);
 
-      // ── Node Graph — horizontal flow (token logo → engine → strategies → downstreams + idle) ──
-      // Tight cascade: token logo + branch → engine hub → fan-out + strategies → downstreams → idle
-      // Total reveal window: p 0.74 → 0.88
-      if (nodeGraph) {
-        nodeGraph.style.opacity = multiMapSmooth(p, [0.74, 0.77], [0, 1]);
-      }
-
-      // Branch SVG — fades in from token-coin
-      if (ngBranchSvg) ngBranchSvg.style.opacity = multiMapSmooth(p, [0.75, 0.79], [0, 1]);
-
-      // Engine Hub — follows immediately with subtle scale
-      if (engineHub) {
-        const ehOp = multiMapSmooth(p, [0.76, 0.80], [0, 1]);
-        engineHub.style.opacity = ehOp;
-        engineHub.style.transform = `scale(${0.92 + ehOp * 0.08})`;
-      }
-
-      // Fan-out edges from engine — starts as engine solidifies
-      if (ngEdgeFan) ngEdgeFan.style.opacity = multiMapSmooth(p, [0.78, 0.82], [0, 1]);
-
-      // Strategy nodes — tight stagger with slide-in from left
+      const nodeGraphOp = multiMapSmooth(p, [0.74, 0.77], [0, 1]);
+      const ngBranchOp = multiMapSmooth(p, [0.75, 0.79], [0, 1]);
+      const ehOp = multiMapSmooth(p, [0.76, 0.80], [0, 1]);
+      const ehTx = `scale(${0.92 + ehOp * 0.08})`;
+      const ngEdgeFanOp = multiMapSmooth(p, [0.78, 0.82], [0, 1]);
       const s0Op = multiMapSmooth(p, [0.79, 0.83], [0, 1]);
       const s1Op = multiMapSmooth(p, [0.805, 0.845], [0, 1]);
       const s2Op = multiMapSmooth(p, [0.82, 0.86], [0, 1]);
-      strat0.style.opacity = s0Op;
-      strat1.style.opacity = s1Op;
-      strat2.style.opacity = s2Op;
-      strat0.style.transform = `translateX(${(1 - s0Op) * 12}px)`;
-      strat1.style.transform = `translateX(${(1 - s1Op) * 12}px)`;
-      strat2.style.transform = `translateX(${(1 - s2Op) * 12}px)`;
-
-      // Downstreams — appear after their parent strategy has solidified, slide in
       const ds1Op = multiMapSmooth(p, [0.84, 0.87], [0, 1]);
       const ds2Op = multiMapSmooth(p, [0.855, 0.885], [0, 1]);
-      downstream1.style.opacity = ds1Op;
-      downstream2.style.opacity = ds2Op;
-      downstream1.style.transform = `translateX(${(1 - ds1Op) * 8}px)`;
-      downstream2.style.transform = `translateX(${(1 - ds2Op) * 8}px)`;
-
-      // Idle row — after engine context is established (engine hub visible)
-      if (ngRowIdle) ngRowIdle.style.opacity = multiMapSmooth(p, [0.81, 0.85], [0, 1]);
-
-      // ── Fee label — more breathing room before exit ──
-      feeLabel.style.opacity = multiMapSmooth(p, [0.88, 0.91], [0, 1]);
-
-      // ── Scene exit — delayed to let fee label hold ──
+      const ngRowIdleOp = multiMapSmooth(p, [0.81, 0.85], [0, 1]);
+      const feeLabelOp = multiMapSmooth(p, [0.88, 0.91], [0, 1]);
       const sceneExit = multiMapSmooth(p, [0.97, 0.995], [1, 0]);
-      section.querySelector('.scene-pin').style.opacity = sceneExit;
+
+      // ── Batch ALL DOM writes into a single rAF frame ──
+      WriteBatch.write(() => {
+        tokenLine.style.transform = `translateX(-50%) scaleY(${introLineScaleY})`;
+        tokenLine.style.opacity = introLineOp;
+        tokenLineGlowEl.style.opacity = lineGlow;
+        tokenLineCoreEl.style.width = `${lineW}px`;
+
+        coin.style.transform = coinTx;
+        coin.style.opacity = coinOp;
+        coin.classList.toggle('depositing', coinDepositing);
+
+        if (morphZone) {
+          morphZone.style.opacity = morphOp;
+          MorphSystem.setVisible(morphActive);
+          if (morphActive && MorphSystem) MorphSystem.setProgress(morphProgress);
+        }
+        if (morphLabel) morphLabel.style.opacity = morphLabelOp;
+
+        share.style.transform = shareTx;
+        share.style.opacity = shareOp;
+        share.classList.toggle('minted', shareMinted);
+
+        topCopy.style.opacity = topCopyOp;
+        crossCopy.style.opacity = crossCopyOp;
+        labelYou.style.opacity = leftLabelOp;
+        labelVault.style.opacity = rightLabelOp;
+        labelShares.style.opacity = leftLabelOp;
+        labelUnderlying.style.opacity = rightLabelOp;
+        coinLabel.style.opacity = rightLabelOp;
+        shareLabel.style.opacity = leftLabelOp;
+        entryCue.style.opacity = entryCueOp;
+
+        coinDetail.style.opacity = rightDetailOp;
+        shareDetail.style.opacity = leftDetailOp;
+        dualCopy.style.opacity = dualCopyOp;
+        dualEntry.style.opacity = dualEntryOp;
+
+        cameraWrapper.style.transform = cameraTx;
+        depositInfo.style.opacity = depositInfoOp;
+        splitInfo.style.opacity = splitInfoOp;
+
+        if (nodeGraph) nodeGraph.style.opacity = nodeGraphOp;
+        if (ngBranchSvg) ngBranchSvg.style.opacity = ngBranchOp;
+        if (engineHub) {
+          engineHub.style.opacity = ehOp;
+          engineHub.style.transform = ehTx;
+        }
+        if (ngEdgeFan) ngEdgeFan.style.opacity = ngEdgeFanOp;
+
+        strat0.style.opacity = s0Op;
+        strat1.style.opacity = s1Op;
+        strat2.style.opacity = s2Op;
+        strat0.style.transform = `translateX(${(1 - s0Op) * 12}px)`;
+        strat1.style.transform = `translateX(${(1 - s1Op) * 12}px)`;
+        strat2.style.transform = `translateX(${(1 - s2Op) * 12}px)`;
+
+        downstream1.style.opacity = ds1Op;
+        downstream2.style.opacity = ds2Op;
+        downstream1.style.transform = `translateX(${(1 - ds1Op) * 8}px)`;
+        downstream2.style.transform = `translateX(${(1 - ds2Op) * 8}px)`;
+
+        if (ngRowIdle) ngRowIdle.style.opacity = ngRowIdleOp;
+        feeLabel.style.opacity = feeLabelOp;
+        section.querySelector('.scene-pin').style.opacity = sceneExit;
+      });
     }
   });
 })();
@@ -1754,74 +1768,77 @@ function multiMapSmooth(progress, stops, values) {
     onLeaveBack: () => { isActive = false; },
     onUpdate: (self) => {
       const p = self.progress;
-
-      // Audio: drone during accrue
+      // Audio (non-DOM)
       AudioEngine.setDroneLevel(multiMap(p, [0, 0.10, 0.50, 0.86, 0.96], [0.02, 0.06, 0.08, 0.06, 0.02]));
 
+      // Compute all values
       const sceneOp = multiMapSmooth(p, [0, 0.06, 0.93, 0.99], [0, 1, 1, 0]);
-      section.querySelector('.scene-pin').style.opacity = sceneOp;
-
-      intro.style.opacity = multiMapSmooth(p, [0.06, 0.16, 0.76, 0.82], [0, 1, 1, 0]);
-      if (ratioDisplay) ratioDisplay.style.opacity = multiMapSmooth(p, [0.08, 0.18, 0.76, 0.82], [0, 1, 1, 0]);
-      if (pair) pair.style.opacity = multiMapSmooth(p, [0.10, 0.20], [0, 1]);
-      clock.style.opacity = multiMapSmooth(p, [0.18, 0.26, 0.76, 0.82], [0, 1, 1, 0]);
-      if (ycWrap) ycWrap.style.opacity = multiMapSmooth(p, [0.22, 0.32, 0.90, 0.97], [0, 1, 1, 0]);
-      stats.style.opacity = multiMapSmooth(p, [0.38, 0.48, 0.72, 0.80], [0, 1, 1, 0]);
-      if (equation) equation.style.opacity = multiMapSmooth(p, [0.38, 0.48, 0.72, 0.80], [0, 1, 1, 0]);
-
-      // Candlestick draws first, blue yield curve line lags behind
-      volAlpha = multiMapSmooth(p, [0.22, 0.30, 0.90, 0.96], [0, 1, 1, 0]);
-      volDrawProgress = Math.max(0, Math.min(1, multiMapSmooth(p, [0.22, 0.75], [0, 1])));
-
-      // Blue curve lags behind candlesticks
+      const introOp = multiMapSmooth(p, [0.06, 0.16, 0.76, 0.82], [0, 1, 1, 0]);
+      const ratioOp = multiMapSmooth(p, [0.08, 0.18, 0.76, 0.82], [0, 1, 1, 0]);
+      const pairOp = multiMapSmooth(p, [0.10, 0.20], [0, 1]);
+      const clockOp = multiMapSmooth(p, [0.18, 0.26, 0.76, 0.82], [0, 1, 1, 0]);
+      const ycOp = multiMapSmooth(p, [0.22, 0.32, 0.90, 0.97], [0, 1, 1, 0]);
+      const statsOp = multiMapSmooth(p, [0.38, 0.48, 0.72, 0.80], [0, 1, 1, 0]);
+      const eqOp = multiMapSmooth(p, [0.38, 0.48, 0.72, 0.80], [0, 1, 1, 0]);
+      const _volAlpha = multiMapSmooth(p, [0.22, 0.30, 0.90, 0.96], [0, 1, 1, 0]);
+      const _volDraw = Math.max(0, Math.min(1, multiMapSmooth(p, [0.22, 0.75], [0, 1])));
       const curveP = mapRange(p, 0.28, 0.78, 0, 1);
-      drawProgress = Math.max(0, Math.min(1, curveP));
-
-      // Day + ratio from draw progress
-      const dayFloat = drawProgress * TOTAL_DAYS;
+      const _drawProg = Math.max(0, Math.min(1, curveP));
+      const dayFloat = _drawProg * TOTAL_DAYS;
       const currentDay = Math.round(Math.max(0, Math.min(TOTAL_DAYS, dayFloat)));
-
       const date = new Date(VAULT_LAUNCH);
       date.setDate(date.getDate() + currentDay);
       const dateStr = `${MONTHS[date.getMonth()]} ${String(date.getDate()).padStart(2, '0')}, ${date.getFullYear()}`;
-      clockDate.textContent = dateStr;
-
       const clampedRatio = ratioAtDay(currentDay);
-
-      // Smooth ratio tick-up
       displayedRatio += (clampedRatio - displayedRatio) * 0.12;
       if (Math.abs(displayedRatio - clampedRatio) < 0.0001) displayedRatio = clampedRatio;
+      const apy = apyAtDay(currentDay);
+      const volNarrOp = multiMapSmooth(p, [0.74, 0.80, 0.90, 0.96], [0, 1, 1, 0]);
+      const volHeadOp = multiMapSmooth(p, [0.74, 0.80, 0.90, 0.96], [0, 1, 1, 0]);
+      const volSubOp = multiMapSmooth(p, [0.78, 0.84, 0.90, 0.96], [0, 1, 1, 0]);
 
-      let apy = apyAtDay(currentDay);
-
-      statDays.textContent = currentDay;
-      statRatio.textContent = displayedRatio.toFixed(3);
-      statApy.textContent = `${apy.toFixed(1)}%`;
-      if (equation) equation.textContent = `1 ■AKITA = ${displayedRatio.toFixed(3)} AKITA`;
-      if (ratioValue) ratioValue.textContent = displayedRatio.toFixed(3);
-
-      // Position + activate callouts
-      positionCallouts();
+      // Audio: chimes for callouts (non-DOM)
       calloutData.forEach(ms => {
         const wasActive = ms.el.classList.contains('active');
-        if (currentDay >= ms.day) {
-          ms.el.classList.add('active');
-          if (!wasActive && !ms.chimed) {
-            AudioEngine.playChime(ms.pitch);
-            ms.chimed = true;
-          }
-        } else {
-          ms.el.classList.remove('active');
-          ms.chimed = false;
+        if (currentDay >= ms.day && !wasActive && !ms.chimed) {
+          AudioEngine.playChime(ms.pitch);
+          ms.chimed = true;
         }
+        if (currentDay < ms.day) ms.chimed = false;
       });
 
-      // Volatile price narrative
-      if (volNarrative) {
-        volNarrative.style.opacity = multiMapSmooth(p, [0.74, 0.80, 0.90, 0.96], [0, 1, 1, 0]);
-      }
-      if (volHeadline) volHeadline.style.opacity = multiMapSmooth(p, [0.74, 0.80, 0.90, 0.96], [0, 1, 1, 0]);
-      if (volSub) volSub.style.opacity = multiMapSmooth(p, [0.78, 0.84, 0.90, 0.96], [0, 1, 1, 0]);
+      // Batch DOM writes
+      WriteBatch.write(() => {
+        volAlpha = _volAlpha;
+        volDrawProgress = _volDraw;
+        drawProgress = _drawProg;
+
+        section.querySelector('.scene-pin').style.opacity = sceneOp;
+        intro.style.opacity = introOp;
+        if (ratioDisplay) ratioDisplay.style.opacity = ratioOp;
+        if (pair) pair.style.opacity = pairOp;
+        clock.style.opacity = clockOp;
+        if (ycWrap) ycWrap.style.opacity = ycOp;
+        stats.style.opacity = statsOp;
+        if (equation) equation.style.opacity = eqOp;
+
+        clockDate.textContent = dateStr;
+        statDays.textContent = currentDay;
+        statRatio.textContent = displayedRatio.toFixed(3);
+        statApy.textContent = `${apy.toFixed(1)}%`;
+        if (equation) equation.textContent = `1 ■AKITA = ${displayedRatio.toFixed(3)} AKITA`;
+        if (ratioValue) ratioValue.textContent = displayedRatio.toFixed(3);
+
+        positionCallouts();
+        calloutData.forEach(ms => {
+          if (currentDay >= ms.day) ms.el.classList.add('active');
+          else ms.el.classList.remove('active');
+        });
+
+        if (volNarrative) volNarrative.style.opacity = volNarrOp;
+        if (volHeadline) volHeadline.style.opacity = volHeadOp;
+        if (volSub) volSub.style.opacity = volSubOp;
+      });
     }
   });
 })();
@@ -1863,95 +1880,61 @@ function multiMapSmooth(progress, stops, values) {
       const centerY = vh / 2 - iconHalf;
       const centerX = vw / 2;
 
-      // Audio
+      // Audio (non-DOM)
       AudioEngine.setDroneLevel(multiMap(p, [0, 0.08, 0.60, 0.90], [0.02, 0.06, 0.06, 0.01]));
-
-      // Scene entrance/exit
-      const sceneOp = multiMapSmooth(p, [0, 0.06, 0.90, 0.97], [0, 1, 1, 0]);
-      section.querySelector('.scene-pin').style.opacity = sceneOp;
-
-      // ============================
-      // PHASE 1 (p 0.02–0.20): REVERSE SWAP
-      // Deposited asset (AKITA circle) fades to back,
-      // Share token (■AKITA square) comes to front
-      // ============================
-
-      // Deposited asset: starts centered, visible, scales down + fades back
-      const coinOp = multiMapSmooth(p, [0.02, 0.06, 0.10, 0.18], [0, 1, 0.6, 0]);
-      const coinScale = multiMapSmooth(p, [0.02, 0.06, 0.10, 0.18], [1, 1, 0.7, 0.5]);
-      const coinZ = multiMapSmooth(p, [0.08, 0.14], [3, 1]);
-      depositCoin.style.transform = `translate(${centerX}px, ${centerY}px) translate(-50%, 0) scale(${coinScale})`;
-      depositCoin.style.opacity = coinOp;
-      depositCoin.style.zIndex = Math.round(coinZ);
-
-      // Share token: starts small + behind, grows + comes forward
-      const shareOp = multiMapSmooth(p,
-        [0.04, 0.10, 0.18, 0.28, 0.40, 0.88, 0.94],
-        [0,    0.5,  1,    1,    1,    1,    0]
-      );
-      const shareScale = multiMapSmooth(p,
-        [0.04, 0.10, 0.18, 0.28],
-        [0.5,  0.75, 1,    1]
-      );
-      // After p=0.28, share token moves right (like deposited asset in token journey)
-      const shareOffsetX = multiMapSmooth(p,
-        [0.18, 0.28, 0.38, 0.88],
-        [0,    0,    220*rm, 220*rm]
-      );
-      shareToken.style.transform = `translate(${centerX + shareOffsetX}px, ${centerY}px) translate(-50%, 0) scale(${shareScale})`;
-      shareToken.style.opacity = shareOp;
-      shareToken.style.zIndex = Math.round(multiMapSmooth(p, [0.08, 0.14], [1, 4]));
-
-      // Share label
-      if (shareLabel) shareLabel.style.opacity = multiMapSmooth(p, [0.14, 0.20, 0.40, 0.88], [0, 1, 0, 0]);
-
-      // Audio: chime when share token comes forward
-      if (p >= 0.14 && p <= 0.16 && !ccaChimePlayed) {
-        AudioEngine.playChime(1.2);
-        ccaChimePlayed = true;
-      }
+      if (p >= 0.14 && p <= 0.16 && !ccaChimePlayed) { AudioEngine.playChime(1.2); ccaChimePlayed = true; }
       if (p < 0.10 || p > 0.24) ccaChimePlayed = false;
 
-      // ============================
-      // PHASE 2 (p 0.16–0.34): INTRO TEXT
-      // "What happens with ■AKITA?"
-      // ============================
+      // Compute all values
+      const sceneOp = multiMapSmooth(p, [0, 0.06, 0.90, 0.97], [0, 1, 1, 0]);
+      const coinOp = multiMapSmooth(p, [0.02, 0.06, 0.10, 0.18], [0, 1, 0.6, 0]);
+      const coinScale = multiMapSmooth(p, [0.02, 0.06, 0.10, 0.18], [1, 1, 0.7, 0.5]);
+      const coinZ = Math.round(multiMapSmooth(p, [0.08, 0.14], [3, 1]));
+      const coinTx = `translate(${centerX}px, ${centerY}px) translate(-50%, 0) scale(${coinScale})`;
+
+      const shareOp = multiMapSmooth(p, [0.04, 0.10, 0.18, 0.28, 0.40, 0.88, 0.94], [0, 0.5, 1, 1, 1, 1, 0]);
+      const shareScale = multiMapSmooth(p, [0.04, 0.10, 0.18, 0.28], [0.5, 0.75, 1, 1]);
+      const shareOffsetX = multiMapSmooth(p, [0.18, 0.28, 0.38, 0.88], [0, 0, 220*rm, 220*rm]);
+      const shareTx = `translate(${centerX + shareOffsetX}px, ${centerY}px) translate(-50%, 0) scale(${shareScale})`;
+      const shareZ = Math.round(multiMapSmooth(p, [0.08, 0.14], [1, 4]));
+      const shareLabelOp = multiMapSmooth(p, [0.14, 0.20, 0.40, 0.88], [0, 1, 0, 0]);
+
       const introOp = multiMapSmooth(p, [0.16, 0.22, 0.30, 0.36], [0, 1, 1, 0]);
       const introY = multiMapSmooth(p, [0.16, 0.24], [20, 0]);
-      intro.style.opacity = introOp;
-      intro.style.transform = `translateX(-50%) translateY(${introY}px)`;
-
-      // ============================
-      // PHASE 3 (p 0.32–0.46): CAMERA PAN RIGHT
-      // Mirror of ch-token's left pan
-      // ============================
+      const introTx = `translateX(-50%) translateY(${introY}px)`;
       const panX = isMobile ? 0 : multiMapSmooth(p, [0.32, 0.46], [0, 400*rm]);
-      camera.style.transform = `translateX(${panX}px)`;
-
-      // ============================
-      // PHASE 4 (p 0.42–0.75): LEFT-SIDE NODE GRAPH
-      // Distribution cards cascade in from right
-      // ============================
-      if (nodeGraph) {
-        nodeGraph.style.opacity = multiMapSmooth(p, [0.42, 0.48], [0, 1]);
-      }
-      if (branchSvg) branchSvg.style.opacity = multiMapSmooth(p, [0.44, 0.50], [0, 1]);
-
-      // Distribution cards — staggered reveal
+      const nodeGraphOp = multiMapSmooth(p, [0.42, 0.48], [0, 1]);
+      const branchOp = multiMapSmooth(p, [0.44, 0.50], [0, 1]);
       const c1Op = multiMapSmooth(p, [0.48, 0.54], [0, 1]);
       const c2Op = multiMapSmooth(p, [0.52, 0.58], [0, 1]);
       const c3Op = multiMapSmooth(p, [0.56, 0.62], [0, 1]);
-      cardAuction.style.opacity = c1Op;
-      cardVesting.style.opacity = c2Op;
-      cardLiquidity.style.opacity = c3Op;
-      cardAuction.style.transform = `translateX(${(1 - c1Op) * -12}px)`;
-      cardVesting.style.transform = `translateX(${(1 - c2Op) * -12}px)`;
-      cardLiquidity.style.transform = `translateX(${(1 - c3Op) * -12}px)`;
+      const summaryOp = multiMapSmooth(p, [0.78, 0.84, 0.88, 0.93], [0, 1, 1, 0]);
 
-      // ============================
-      // PHASE 5 (p 0.78–0.90): SUMMARY + EXIT
-      // ============================
-      summary.style.opacity = multiMapSmooth(p, [0.78, 0.84, 0.88, 0.93], [0, 1, 1, 0]);
+      WriteBatch.write(() => {
+        section.querySelector('.scene-pin').style.opacity = sceneOp;
+        depositCoin.style.transform = coinTx;
+        depositCoin.style.opacity = coinOp;
+        depositCoin.style.zIndex = coinZ;
+
+        shareToken.style.transform = shareTx;
+        shareToken.style.opacity = shareOp;
+        shareToken.style.zIndex = shareZ;
+        if (shareLabel) shareLabel.style.opacity = shareLabelOp;
+
+        intro.style.opacity = introOp;
+        intro.style.transform = introTx;
+        camera.style.transform = `translateX(${panX}px)`;
+
+        if (nodeGraph) nodeGraph.style.opacity = nodeGraphOp;
+        if (branchSvg) branchSvg.style.opacity = branchOp;
+        cardAuction.style.opacity = c1Op;
+        cardVesting.style.opacity = c2Op;
+        cardLiquidity.style.opacity = c3Op;
+        cardAuction.style.transform = `translateX(${(1 - c1Op) * -12}px)`;
+        cardVesting.style.transform = `translateX(${(1 - c2Op) * -12}px)`;
+        cardLiquidity.style.transform = `translateX(${(1 - c3Op) * -12}px)`;
+        summary.style.opacity = summaryOp;
+      });
     }
   });
 })();
@@ -1976,32 +1959,33 @@ function multiMapSmooth(progress, stops, values) {
     end: 'bottom top',
     onUpdate: (self) => {
       const p = self.progress;
-
-      // Audio: drone during vaults
+      // Audio (non-DOM)
       AudioEngine.setDroneLevel(multiMap(p, [0, 0.10, 0.70, 0.94], [0.02, 0.05, 0.05, 0.01]));
 
+      // Compute
       const sceneOp = multiMapSmooth(p, [0, 0.10, 0.82, 0.94], [0, 1, 1, 0]);
       const sceneY = multiMapSmooth(p, [0, 0.16], [40, 0]);
-      section.querySelector('.scene-pin').style.opacity = sceneOp;
-      section.querySelector('.vaults-container').style.transform = `translateY(${sceneY}px)`;
-
-      // ── Vault cards — dramatic staggered entrance with scale + rotation ──
-      cards.forEach((card, i) => {
+      const cardValues = cards.map((card, i) => {
         const start = 0.12 + i * 0.10;
         const end = 0.30 + i * 0.10;
         const t = Math.max(0, Math.min(1, (p - start) / (end - start)));
-        // Smooth ease-out cubic
         const eased = 1 - Math.pow(1 - t, 3);
-        const op = eased;
-        const y = (1 - eased) * 60;
-        const scale = 0.92 + eased * 0.08;
-        const rotX = (1 - eased) * 8;
-        card.style.opacity = Math.min(1, Math.max(0, op));
-        card.style.transform = `translateY(${Math.max(0, y)}px) scale(${scale}) perspective(800px) rotateX(${rotX}deg)`;
+        return { op: Math.min(1, Math.max(0, eased)), y: (1 - eased) * 60, scale: 0.92 + eased * 0.08, rotX: (1 - eased) * 8 };
       });
+      const ctaOp = multiMapSmooth(p, [0.56, 0.70], [0, 1]);
+      const discOp = multiMapSmooth(p, [0.64, 0.76], [0, 1]);
 
-      cta.style.opacity = multiMapSmooth(p, [0.56, 0.70], [0, 1]);
-      disclaimer.style.opacity = multiMapSmooth(p, [0.64, 0.76], [0, 1]);
+      WriteBatch.write(() => {
+        section.querySelector('.scene-pin').style.opacity = sceneOp;
+        section.querySelector('.vaults-container').style.transform = `translateY(${sceneY}px)`;
+        cards.forEach((card, i) => {
+          const v = cardValues[i];
+          card.style.opacity = v.op;
+          card.style.transform = `translateY(${Math.max(0, v.y)}px) scale(${v.scale}) perspective(800px) rotateX(${v.rotX}deg)`;
+        });
+        cta.style.opacity = ctaOp;
+        disclaimer.style.opacity = discOp;
+      });
     }
   });
 })();
@@ -2025,37 +2009,34 @@ function multiMapSmooth(progress, stops, values) {
     end: 'bottom top',
     onUpdate: (self) => {
       const p = self.progress;
-
-      // Audio: drone fades out at close
+      // Audio (non-DOM)
       AudioEngine.setDroneLevel(multiMap(p, [0, 0.20, 0.70, 1.0], [0.02, 0.04, 0.04, 0]));
-
-      const sceneOp = multiMapSmooth(p, [0.05, 0.25, 0.85, 1], [0, 1, 1, 0.9]);
-      section.querySelector('.scene-pin').style.opacity = sceneOp;
-
-      if (partners) partners.style.opacity = multiMapSmooth(p, [0.05, 0.20], [0, 1]);
-      brand.style.opacity = multiMapSmooth(p, [0.10, 0.28], [0, 1]);
-
-      const lineH = mapRange(p, 0.28, 0.50, 0, 80);
-      line.style.height = `${Math.max(0, lineH)}px`;
-      line.style.opacity = multiMapSmooth(p, [0.28, 0.38], [0, 1]);
-
-      cta.style.opacity = multiMapSmooth(p, [0.40, 0.56], [0, 1]);
-      tag.style.opacity = multiMapSmooth(p, [0.52, 0.66], [0, 1]);
-
-      // ── Close chapter: particle convergence effect ──
-      // Scale particles toward center as user reaches the end
-      const converge = multiMapSmooth(p, [0.50, 0.90], [0, 1]);
-      if (closeLogo) {
-        const logoGlow = converge * 0.4;
-        closeLogo.style.filter = `drop-shadow(0 0 ${20 + converge * 40}px rgba(0, 82, 255, ${logoGlow}))`;
-        closeLogo.style.transform = `scale(${1 + converge * 0.08})`;
-      }
-      // Chime at convergence peak
-      if (p >= 0.85 && !closeSoundPlayed) {
-        AudioEngine.playChime(2.0);
-        closeSoundPlayed = true;
-      }
+      if (p >= 0.85 && !closeSoundPlayed) { AudioEngine.playChime(2.0); closeSoundPlayed = true; }
       if (p < 0.80) closeSoundPlayed = false;
+
+      // Compute
+      const sceneOp = multiMapSmooth(p, [0.05, 0.25, 0.85, 1], [0, 1, 1, 0.9]);
+      const partnersOp = multiMapSmooth(p, [0.05, 0.20], [0, 1]);
+      const brandOp = multiMapSmooth(p, [0.10, 0.28], [0, 1]);
+      const lineH = Math.max(0, mapRange(p, 0.28, 0.50, 0, 80));
+      const lineOp = multiMapSmooth(p, [0.28, 0.38], [0, 1]);
+      const ctaOp = multiMapSmooth(p, [0.40, 0.56], [0, 1]);
+      const tagOp = multiMapSmooth(p, [0.52, 0.66], [0, 1]);
+      const converge = multiMapSmooth(p, [0.50, 0.90], [0, 1]);
+
+      WriteBatch.write(() => {
+        section.querySelector('.scene-pin').style.opacity = sceneOp;
+        if (partners) partners.style.opacity = partnersOp;
+        brand.style.opacity = brandOp;
+        line.style.height = `${lineH}px`;
+        line.style.opacity = lineOp;
+        cta.style.opacity = ctaOp;
+        tag.style.opacity = tagOp;
+        if (closeLogo) {
+          closeLogo.style.filter = `drop-shadow(0 0 ${20 + converge * 40}px rgba(0, 82, 255, ${converge * 0.4}))`;
+          closeLogo.style.transform = `scale(${1 + converge * 0.08})`;
+        }
+      });
     }
   });
 })();
