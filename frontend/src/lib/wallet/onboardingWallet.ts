@@ -282,7 +282,7 @@ const PAYMASTER_SESSION_RETRY_DELAY_MS = import.meta.env.MODE === 'test' ? 5 : 3
 const USER_OP_SUBMIT_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 120 : 45_000
 const SEND_CALLS_STATUS_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 25 : 8_000
 const SEND_CALLS_STATUS_POLL_MS = import.meta.env.MODE === 'test' ? 5 : 500
-const PREFER_SPONSORED_CANONICAL_SELF_APPROVAL = true
+const PREFER_SPONSORED_CANONICAL_SELF_APPROVAL = false
 
 function getConfirmOwnerRetryDelayMs(attempt: number): number {
   const multiplier = Math.min(5, Math.max(1, attempt + 1))
@@ -735,9 +735,24 @@ export async function sendPreparedOwnerTx(params: {
           }
         }
 
+        if (
+          !txHash &&
+          sendCallsFallbackMode === 'unsupported' &&
+          walletClient.account &&
+          typeof walletClient.sendTransaction === 'function'
+        ) {
+          txHash = await walletClient.sendTransaction({
+            account: walletClient.account,
+            chain: base,
+            to: txRequest.to,
+            data: txRequest.data,
+            value: 0n,
+          })
+        }
+
         if (!txHash) {
           try {
-            txHash = await runSponsoredCanonicalUserOp()
+            txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
           } catch (sponsoredError) {
             emitOwnerApprovalStage(onStageEvent, {
               runId: effectiveApprovalRunId,
@@ -750,16 +765,74 @@ export async function sendPreparedOwnerTx(params: {
               message: sponsoredError instanceof Error ? sponsoredError.message : String(sponsoredError ?? ''),
             })
             if (sendCallsFallbackMode === 'insufficient') throw sponsoredError
-            if (typeof walletClient.sendTransaction !== 'function') {
-              throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
+            let nonTypedRetryError: unknown = null
+            if (shouldFallbackSelfAuthenticatedCanonicalToSendCalls(sponsoredError)) {
+              try {
+                txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true, attempt: 2 })
+              } catch (retryError) {
+                emitOwnerApprovalStage(onStageEvent, {
+                  runId: effectiveApprovalRunId,
+                  stage: 'userop_nontyped',
+                  status: 'error',
+                  executionMode,
+                  signerAddress,
+                  canonicalCswAddress: canonicalSmartWalletAddress,
+                  code: classifyOwnerApprovalError(retryError).code,
+                  message: retryError instanceof Error ? retryError.message : String(retryError ?? ''),
+                })
+                nonTypedRetryError = retryError
+              }
+              if (
+                !txHash &&
+                nonTypedRetryError &&
+                !shouldFallbackSelfAuthenticatedCanonicalToSendCalls(nonTypedRetryError)
+              ) {
+                throw nonTypedRetryError
+              }
             }
-            txHash = await walletClient.sendTransaction({
-              account: walletClient.account,
-              chain: base,
-              to: txRequest.to,
-              data: txRequest.data,
-              value: 0n,
-            })
+            if (!txHash && walletRequest && (nonTypedRetryError || shouldFallbackSelfAuthenticatedCanonicalToSendCalls(sponsoredError))) {
+              try {
+                txHash = await submitOwnerTxViaWalletSendCalls({
+                  walletRequest,
+                  chainId: txRequest.chainId,
+                  sender: canonicalSmartWalletAddress as `0x${string}`,
+                  to: txRequest.to,
+                  data: txRequest.data,
+                  paymasterUrl,
+                  approvalRunId: effectiveApprovalRunId,
+                  executionMode,
+                  signerAddress,
+                  canonicalCswAddress: canonicalSmartWalletAddress,
+                  onStageEvent,
+                })
+              } catch (sendCallsRetryError) {
+                emitOwnerApprovalStage(onStageEvent, {
+                  runId: effectiveApprovalRunId,
+                  stage: 'send_calls',
+                  status: 'error',
+                  executionMode,
+                  signerAddress,
+                  canonicalCswAddress: canonicalSmartWalletAddress,
+                  code: classifyOwnerApprovalError(sendCallsRetryError).code,
+                  message: sendCallsRetryError instanceof Error ? sendCallsRetryError.message : String(sendCallsRetryError ?? ''),
+                })
+                if (isUserRejectedWalletAction(sendCallsRetryError)) throw sendCallsRetryError
+                if (nonTypedRetryError) throw nonTypedRetryError
+                throw sendCallsRetryError
+              }
+            }
+            if (!txHash) {
+              if (typeof walletClient.sendTransaction !== 'function') {
+                throw nonTypedRetryError ?? sponsoredError
+              }
+              txHash = await walletClient.sendTransaction({
+                account: walletClient.account,
+                chain: base,
+                to: txRequest.to,
+                data: txRequest.data,
+                value: 0n,
+              })
+            }
           }
         }
         }

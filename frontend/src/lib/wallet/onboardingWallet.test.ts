@@ -77,7 +77,7 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('uses sponsored canonical user-op when canonical mode is self-authenticated by CSW session', async () => {
+  it('uses wallet_sendCalls first when canonical mode is self-authenticated by CSW session', async () => {
     const sendTransaction = vi.fn(async () => TX_HASH)
     const ensurePaymasterSession = vi.fn(async () => true)
     const request = vi
@@ -104,14 +104,9 @@ describe('sendPreparedOwnerTx', () => {
       ensurePaymasterSession,
     })
 
-    expect(ensurePaymasterSession).toHaveBeenCalledTimes(1)
-    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
-    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        useTypedDataSigning: true,
-      }),
-    )
-    expect(request).not.toHaveBeenCalled()
+    expect(ensurePaymasterSession).not.toHaveBeenCalled()
+    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+    expect(request).toHaveBeenCalled()
     expect(sendTransaction).not.toHaveBeenCalled()
     expect(result.txHash).toBe(TX_HASH)
   })
@@ -119,12 +114,19 @@ describe('sendPreparedOwnerTx', () => {
   it('passes embedded-owner lookup address for canonical self-auth owner-index resolution', async () => {
     const ensurePaymasterSession = vi.fn(async () => true)
 
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce('0xcall-bundle-id')
+      .mockResolvedValueOnce({
+        status: 200,
+        receipts: [{ transactionHash: TX_HASH }],
+      })
     const result = await sendPreparedOwnerTx({
       txRequest: TX_REQUEST,
       walletClient: {
         account: CANONICAL_CSW,
         sendTransaction: vi.fn(async () => TX_HASH),
-        request: vi.fn(),
+        request,
       },
       chainId: 8453,
       authHeaders: async () => ({ Authorization: 'Bearer test' }),
@@ -137,18 +139,16 @@ describe('sendPreparedOwnerTx', () => {
       ensurePaymasterSession,
     })
 
-    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
-    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledWith(
+    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+    expect(request).toHaveBeenCalledWith(
       expect.objectContaining({
-        ownerAddress: CANONICAL_CSW,
-        ownerIndexLookupAddress: OWNER_EOA,
-        useTypedDataSigning: true,
+        method: 'wallet_sendCalls',
       }),
     )
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('does not fall back to sendTransaction when sponsored canonical self-approval fails', async () => {
+  it('falls back to sendTransaction when wallet_sendCalls is unsupported in canonical self-approval', async () => {
     const sendTransaction = vi.fn(async () => TX_HASH)
     const ensurePaymasterSession = vi.fn(async () => true)
     const request = vi.fn(async () => {
@@ -158,29 +158,26 @@ describe('sendPreparedOwnerTx', () => {
       new Error('Paymaster rejected this request: request denied - not authenticated'),
     )
 
-    await expect(
-      sendPreparedOwnerTx({
-        txRequest: TX_REQUEST,
-        walletClient: {
-          account: CANONICAL_CSW,
-          sendTransaction,
-          request,
-        },
-        chainId: 8453,
-        authHeaders: async () => ({ Authorization: 'Bearer test' }),
-        signerAddress: CANONICAL_CSW,
-        executionMode: 'canonicalSmartWallet',
-        canonicalSmartWalletAddress: CANONICAL_CSW,
-        publicClient: {},
-        ensurePaymasterSession,
-      }),
-    ).rejects.toThrow(
-      'Gas sponsorship was rejected for this approval (request denied - not authenticated). Retry in Base app after reconnecting the same wallet session.',
-    )
-    expect(ensurePaymasterSession).toHaveBeenCalledTimes(4)
-    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(3)
-    expect(request).not.toHaveBeenCalled()
-    expect(sendTransaction).not.toHaveBeenCalled()
+    const result = await sendPreparedOwnerTx({
+      txRequest: TX_REQUEST,
+      walletClient: {
+        account: CANONICAL_CSW,
+        sendTransaction,
+        request,
+      },
+      chainId: 8453,
+      authHeaders: async () => ({ Authorization: 'Bearer test' }),
+      signerAddress: CANONICAL_CSW,
+      executionMode: 'canonicalSmartWallet',
+      canonicalSmartWalletAddress: CANONICAL_CSW,
+      publicClient: {},
+      ensurePaymasterSession,
+    })
+    expect(ensurePaymasterSession).not.toHaveBeenCalled()
+    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+    expect(request).toHaveBeenCalled()
+    expect(sendTransaction).toHaveBeenCalledTimes(1)
+    expect(result.txHash).toBe(TX_HASH)
   })
 
   it('routes canonical CSW approval through paymaster user-op when signer is an owner EOA', async () => {
@@ -389,6 +386,9 @@ describe('sendPreparedOwnerTx', () => {
   })
 
   it('surfaces a clear error when sponsored submission stalls after signature confirmation', async () => {
+    const request = vi.fn(async () => {
+      throw new Error('Method not found')
+    })
     sendCoinbaseSmartWalletUserOperationMock.mockImplementation(
       async () =>
         await new Promise(() => {
@@ -401,8 +401,7 @@ describe('sendPreparedOwnerTx', () => {
         txRequest: TX_REQUEST,
         walletClient: {
           account: CANONICAL_CSW,
-          sendTransaction: vi.fn(async () => TX_HASH),
-          request: vi.fn(),
+          request,
         },
         chainId: 8453,
         authHeaders: async () => ({ Authorization: 'Bearer test' }),
@@ -419,7 +418,9 @@ describe('sendPreparedOwnerTx', () => {
 
   it('retries sponsored canonical user-op without typed-data signing when typed-data signing times out', async () => {
     const ensurePaymasterSession = vi.fn(async () => true)
-    const request = vi.fn()
+    const request = vi.fn(async () => {
+      throw new Error('Method not found')
+    })
     sendCoinbaseSmartWalletUserOperationMock.mockRejectedValueOnce(
       new Error('UserOperation failed: signTypedData (CSW EIP-712) timed out after 30s'),
     )
@@ -428,7 +429,6 @@ describe('sendPreparedOwnerTx', () => {
       txRequest: TX_REQUEST,
       walletClient: {
         account: CANONICAL_CSW,
-        sendTransaction: vi.fn(async () => TX_HASH),
         request,
       },
       chainId: 8453,
@@ -453,20 +453,21 @@ describe('sendPreparedOwnerTx', () => {
         useTypedDataSigning: false,
       }),
     )
-    expect(request).not.toHaveBeenCalled()
+    expect(request).toHaveBeenCalled()
     expect(result.txHash).toBe(TX_HASH)
   })
 
   it('retries sponsored canonical user-op without typed-data signing when typed lane fails with AA23', async () => {
     const ensurePaymasterSession = vi.fn(async () => true)
-    const request = vi.fn()
+    const request = vi.fn(async () => {
+      throw new Error('Method not found')
+    })
     sendCoinbaseSmartWalletUserOperationMock.mockRejectedValueOnce(new Error('AA23 reverted (or OOG)'))
 
     const result = await sendPreparedOwnerTx({
       txRequest: TX_REQUEST,
       walletClient: {
         account: CANONICAL_CSW,
-        sendTransaction: vi.fn(async () => TX_HASH),
         request,
       },
       chainId: 8453,
@@ -495,7 +496,7 @@ describe('sendPreparedOwnerTx', () => {
         ownerIndexLookupAddress: OWNER_EOA,
       }),
     )
-    expect(request).not.toHaveBeenCalled()
+    expect(request).toHaveBeenCalled()
     expect(result.txHash).toBe(TX_HASH)
   })
 
@@ -503,6 +504,7 @@ describe('sendPreparedOwnerTx', () => {
     const ensurePaymasterSession = vi.fn(async () => true)
     const request = vi
       .fn()
+      .mockRejectedValueOnce(new Error('Method not found'))
       .mockResolvedValueOnce('0xcall-bundle-id')
       .mockResolvedValueOnce({
         status: 200,
@@ -516,7 +518,6 @@ describe('sendPreparedOwnerTx', () => {
       txRequest: TX_REQUEST,
       walletClient: {
         account: CANONICAL_CSW,
-        sendTransaction: vi.fn(async () => TX_HASH),
         request,
       },
       chainId: 8453,
