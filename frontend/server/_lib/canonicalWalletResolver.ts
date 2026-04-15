@@ -164,6 +164,16 @@ export async function resolveAuthorizedWalletProfile(address: string): Promise<P
        OR LOWER(p.csw_address) = ${input}
        OR LOWER(p.base_sub_account) = ${input}
        OR LOWER(canonical.address) = ${input}
+       OR p.id IN (
+         SELECT pw.profile_id
+         FROM profile_wallets pw
+         WHERE LOWER(pw.address) = ${input}
+           AND (
+             pw.is_primary = true
+             OR pw.is_embedded_eoa = true
+             OR pw.is_canonical_smart_wallet = true
+           )
+       )
     LIMIT 1;
   `
 
@@ -181,7 +191,22 @@ export async function resolveAuthorizedWalletProfile(address: string): Promise<P
   })
   if (!authority) return null
 
-  if (authority.canonicalSmartWalletAddress === input || authority.activeOwnerWalletAddress === input) {
+  const profileWalletMatchResult = await db.sql`
+    SELECT 1
+    FROM profile_wallets
+    WHERE profile_id = ${Math.floor(profileId)}
+      AND LOWER(address) = ${input}
+      AND (
+        is_primary = true
+        OR is_embedded_eoa = true
+        OR is_canonical_smart_wallet = true
+      )
+    LIMIT 1;
+  `
+  const matchedProfileWallet =
+    Array.isArray(profileWalletMatchResult.rows) && profileWalletMatchResult.rows.length > 0
+
+  if (matchedProfileWallet || authority.canonicalSmartWalletAddress === input || authority.activeOwnerWalletAddress === input) {
     return authority
   }
 
