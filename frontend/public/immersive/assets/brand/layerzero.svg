@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="48" height="48">
+  <!-- LayerZero — two overlapping triangles -->
+  <path d="M24 4L6 38h36L24 4z" fill="none" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" opacity="0.95"/>
+  <path d="M24 44L6 10h36L24 44z" fill="none" stroke="#ffffff" stroke-width="2" stroke-linejoin="round" opacity="0.5"/>
+</svg>

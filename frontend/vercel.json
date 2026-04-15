@@ -79,112 +79,156 @@
     },
     {
       "src": "/assets/(.*)",
-      "headers": { "cache-control": "public, max-age=31536000, immutable" },
+      "headers": {
+        "cache-control": "public, max-age=31536000, immutable"
+      },
       "continue": true
     },
     {
       "src": "/.well-known/agent-registration.json",
-      "headers": { "cache-control": "no-store" },
+      "headers": {
+        "cache-control": "no-store"
+      },
       "dest": "/api/agent-registration"
     },
     {
       "src": "/manifest.json",
-      "headers": { "cache-control": "no-store" },
+      "headers": {
+        "cache-control": "no-store"
+      },
       "continue": true
     },
     {
       "src": "/.well-known/farcaster.json",
-      "headers": { "cache-control": "no-store" },
+      "headers": {
+        "cache-control": "no-store"
+      },
       "continue": true
     },
     {
       "src": "/explore/(.*)",
-      "headers": { "x-robots-tag": "noindex, follow" },
+      "headers": {
+        "x-robots-tag": "noindex, follow"
+      },
       "continue": true
     },
     {
       "src": "/swap",
-      "headers": { "x-robots-tag": "noindex, follow" },
+      "headers": {
+        "x-robots-tag": "noindex, follow"
+      },
       "continue": true
     },
     {
       "src": "/positions",
-      "headers": { "x-robots-tag": "noindex, follow" },
+      "headers": {
+        "x-robots-tag": "noindex, follow"
+      },
       "continue": true
     },
     {
       "src": "/portfolio",
-      "headers": { "x-robots-tag": "noindex, follow" },
+      "headers": {
+        "x-robots-tag": "noindex, follow"
+      },
       "continue": true
     },
     {
       "src": "/vault/(.*)",
-      "headers": { "x-robots-tag": "noindex, follow" },
+      "headers": {
+        "x-robots-tag": "noindex, follow"
+      },
       "continue": true
     },
     {
       "src": "/deploy",
-      "headers": { "x-robots-tag": "noindex, follow" },
+      "headers": {
+        "x-robots-tag": "noindex, follow"
+      },
       "continue": true
     },
     {
       "src": "/leaderboard",
-      "headers": { "x-robots-tag": "noindex, follow" },
+      "headers": {
+        "x-robots-tag": "noindex, follow"
+      },
       "continue": true
     },
     {
       "src": "/waitlist(.*)",
-      "headers": { "x-robots-tag": "noindex, follow" },
+      "headers": {
+        "x-robots-tag": "noindex, follow"
+      },
       "continue": true
     },
     {
       "src": "/accounts(.*)",
-      "headers": { "x-robots-tag": "noindex, follow" },
+      "headers": {
+        "x-robots-tag": "noindex, follow"
+      },
       "continue": true
     },
     {
       "src": "/faq(.*)",
-      "headers": { "x-robots-tag": "noindex, follow" },
+      "headers": {
+        "x-robots-tag": "noindex, follow"
+      },
       "continue": true
     },
     {
       "src": "/auction/(.*)",
-      "headers": { "x-robots-tag": "noindex, follow" },
+      "headers": {
+        "x-robots-tag": "noindex, follow"
+      },
       "continue": true
     },
     {
       "src": "/coin/(.*)",
-      "headers": { "x-robots-tag": "noindex, follow" },
+      "headers": {
+        "x-robots-tag": "noindex, follow"
+      },
       "continue": true
     },
     {
       "src": "/status",
-      "headers": { "x-robots-tag": "noindex, follow" },
+      "headers": {
+        "x-robots-tag": "noindex, follow"
+      },
       "continue": true
     },
     {
       "src": "/agents(.*)",
-      "headers": { "x-robots-tag": "noindex, follow" },
+      "headers": {
+        "x-robots-tag": "noindex, follow"
+      },
       "continue": true
     },
     {
       "src": "/admin(.*)",
-      "headers": { "x-robots-tag": "noindex, follow" },
+      "headers": {
+        "x-robots-tag": "noindex, follow"
+      },
       "continue": true
     },
     {
       "src": "/index.html",
-      "headers": { "cache-control": "no-store" },
+      "headers": {
+        "cache-control": "no-store"
+      },
       "continue": true
     },
     {
       "src": "/app.html",
-      "headers": { "cache-control": "no-store" },
+      "headers": {
+        "cache-control": "no-store"
+      },
       "continue": true
     },
     {
       "src": "/telegram-link.html",
-      "headers": { "cache-control": "no-store" },
+      "headers": {
+        "cache-control": "no-store"
+      },
       "continue": true
     },
     {
@@ -197,11 +241,27 @@
       ],
       "dest": "/app.html"
     },
-    { "src": "/__api/(.*)", "dest": "/api/$1", "continue": true },
-    { "src": "/api/keepr/actions/execute", "dest": "/api/keepr/actions/execute" },
-    { "src": "/api/agent/process", "dest": "/api/agent/process" },
-    { "src": "/robots.txt", "dest": "/api/robots.txt" },
-    { "src": "/sitemap.xml", "dest": "/api/sitemap.xml" },
+    {
+      "src": "/__api/(.*)",
+      "dest": "/api/$1",
+      "continue": true
+    },
+    {
+      "src": "/api/keepr/actions/execute",
+      "dest": "/api/keepr/actions/execute"
+    },
+    {
+      "src": "/api/agent/process",
+      "dest": "/api/agent/process"
+    },
+    {
+      "src": "/robots.txt",
+      "dest": "/api/robots.txt"
+    },
+    {
+      "src": "/sitemap.xml",
+      "dest": "/api/sitemap.xml"
+    },
     {
       "src": "/explore/creators",
       "has": [
@@ -279,12 +339,39 @@
       ],
       "dest": "/api/social-preview?kind=trends"
     },
-    { "src": "/api/v1/token/([a-fA-F0-9x]+)/image", "dest": "/api/token/image?address=$1" },
-    { "src": "/api/v1/token/([a-fA-F0-9x]+)/logo\\.(png|svg)", "dest": "/api/token/image?address=$1&format=$2&size=64" },
-    { "src": "/api/(.*)", "dest": "/api/[...path]?path=$1" },
-    { "src": "/telegram/link", "dest": "/telegram-link.html" },
-    { "src": "/telegram/menu", "dest": "/telegram-link.html" },
-    { "handle": "filesystem" },
+    {
+      "src": "/api/v1/token/([a-fA-F0-9x]+)/image",
+      "dest": "/api/token/image?address=$1"
+    },
+    {
+      "src": "/api/v1/token/([a-fA-F0-9x]+)/logo\\.(png|svg)",
+      "dest": "/api/token/image?address=$1&format=$2&size=64"
+    },
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/[...path]?path=$1"
+    },
+    {
+      "src": "/telegram/link",
+      "dest": "/telegram-link.html"
+    },
+    {
+      "src": "/telegram/menu",
+      "dest": "/telegram-link.html"
+    },
+    {
+      "src": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "4626.fun"
+        }
+      ],
+      "dest": "/immersive/index.html"
+    },
+    {
+      "handle": "filesystem"
+    },
     {
       "src": "/((?!assets/).*)",
       "has": [
@@ -295,6 +382,9 @@
       ],
       "dest": "/app.html"
     },
-    { "src": "/((?!assets/).*)", "dest": "/index.html" }
+    {
+      "src": "/((?!assets/).*)",
+      "dest": "/index.html"
+    }
   ]
 }
