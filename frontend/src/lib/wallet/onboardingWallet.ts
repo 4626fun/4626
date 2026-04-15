@@ -259,6 +259,15 @@ function isInsufficientFundsLikeWalletSendCallsError(error: unknown): boolean {
   )
 }
 
+function isTypedDataSigningTimeoutError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  return (
+    lower.includes('signtypeddata (csw eip-712) timed out') ||
+    lower.includes('eth_signtypeddata_v4 (csw eip-712) timed out')
+  )
+}
+
 async function submitOwnerTxViaWalletSendCalls(params: {
   walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
   chainId: number
@@ -419,6 +428,20 @@ export async function sendPreparedOwnerTx(params: {
             txHash = await runSponsoredCanonicalUserOp()
           } catch (sponsoredError) {
             if (!shouldFallbackSelfAuthenticatedCanonicalToSendCalls(sponsoredError)) throw sponsoredError
+            const shouldRetryWithoutTypedData = isTypedDataSigningTimeoutError(sponsoredError)
+            let nonTypedRetryError: unknown = null
+            if (shouldRetryWithoutTypedData) {
+              try {
+                txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true })
+              } catch (retryError) {
+                nonTypedRetryError = retryError
+              }
+            }
+            if (txHash) {
+              // Retry without typed-data signing succeeded.
+            } else if (nonTypedRetryError && !isInsufficientFundsLikeWalletSendCallsError(nonTypedRetryError)) {
+              throw nonTypedRetryError
+            } else {
             const walletRequest =
               typeof walletClient.request === 'function'
                 ? async (args: { method: string; params?: unknown[] }) => await walletClient.request!(args as any)
@@ -438,6 +461,7 @@ export async function sendPreparedOwnerTx(params: {
               }
             } else {
               txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true })
+            }
             }
           }
         } else {
