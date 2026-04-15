@@ -21,18 +21,18 @@ import { usePrivy, useWallets } from '@privy-io/react-auth'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
-import { ensureWalletAlignedPaymasterSession } from '@/lib/paymasterSession'
+import { ensureWalletAlignedPaymasterSession } from '@/lib/paymaster/paymasterSession'
 import { ConnectButton } from '@/components/account/ConnectButton'
 import { CONTRACTS } from '@/config/contracts'
-import { appendBuilderSuffixToHex } from '@/lib/baseBuilderCodes'
+import { appendBuilderSuffixToHex } from '@/lib/base/baseBuilderCodes'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { AgentPublishStatus, type AgentPublishData } from './AgentPublishStatus'
 import {
   STRICT_IMMUTABLE_AGENT_URI_SUMMARY,
   toRegistrationDataUri,
-} from '@/lib/erc8004AgentUriPolicy'
-import { logger } from '@/lib/logger'
+} from '@/lib/agent/erc8004AgentUriPolicy'
+import { logger } from '@/lib/observability/logger'
 import { LoadingText } from '@/components/ui/LoadingState'
 const CANONICAL_SMART_WALLET = '0xAb6d5C10b03300326CD7fAb7267Ae192842967b5'
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'

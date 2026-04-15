@@ -3,7 +3,7 @@ import { useMemo } from 'react'
 
 import { TokenAvatar } from '@/components/swap/TokenAvatar'
 import { LoadingText } from '@/components/ui/LoadingState'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 import type { TokenDisplay } from '@/lib/uniswap/swapUtils'
 
 type TokenInputVariant = {

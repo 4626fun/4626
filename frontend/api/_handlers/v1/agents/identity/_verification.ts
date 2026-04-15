@@ -10,7 +10,7 @@ import {
 } from '../../../../../packages/server-core/src/index.js'
 
 
-import { buildAgentRegistration, type RegistrationFile } from '../../../../../server/_lib/agentRegistration.js'
+import { buildAgentRegistration, type RegistrationFile } from '../../../../../server/_lib/agent/agentRegistration.js'
 import {
   extractCanonicalCsw,
   fetchRegistrationPayload,
@@ -18,9 +18,9 @@ import {
   probeEndpoint,
   readOnchainSnapshot,
   type RegistrationProbe,
-} from '../../../../../server/_lib/erc8004Review.js'
+} from '../../../../../server/_lib/agent/erc8004Review.js'
 import { getErc8004PublicOrigin } from '../../../../../server/_lib/origin.js'
-import { getTeeAttestationStatus } from '../../../../../server/_lib/teeAttestationGate.js'
+import { getTeeAttestationStatus } from '../../../../../server/_lib/agent/teeAttestationGate.js'
 import {
   buildAgentUriPolicy,
   type AgentUriPolicy,
@@ -29,7 +29,7 @@ import {
   ERC8004_DOMAIN_VERIFICATION_PATH,
   STRICT_IMMUTABLE_AGENT_URI_KIND,
   STRICT_IMMUTABLE_AGENT_URI_SCHEMES,
-} from '../../../../../src/lib/erc8004AgentUriPolicy.js'
+} from '../../../../../src/lib/agent/erc8004AgentUriPolicy.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
-import { apiFetch } from '@/lib/apiBase'
+import { apiFetch } from '@/lib/api/apiBase'
 import { classifyUniswapRequestFailure, warnUniswapRequestOnce } from './requestDiagnostics'
 
 export type PoolHistoryData = {

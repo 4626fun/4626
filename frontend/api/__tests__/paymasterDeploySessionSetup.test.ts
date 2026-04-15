@@ -49,7 +49,7 @@ const mockReadContract = vi.fn()
 const mockGetBytecode = vi.fn()
 const mockGetLogs = vi.fn()
 
-vi.mock('../../server/_lib/requestPrincipal.js', () => ({
+vi.mock('../../server/_lib/auth/requestPrincipal.js', () => ({
   readRequestPrincipalAddress: (...args: unknown[]) => readRequestPrincipalMock(...args),
 }))
 

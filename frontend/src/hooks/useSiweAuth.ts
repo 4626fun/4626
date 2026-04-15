@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAccount, useSignMessage } from 'wagmi'
 import { base } from 'wagmi/chains'
-import { apiFetch } from '@/lib/apiBase'
-import type { ApiEnvelope } from '@/lib/apiEnvelope'
+import { apiFetch } from '@/lib/api/apiBase'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { useLogin, usePrivy } from '@privy-io/react-auth'
 
 type MeResponse = { address: string } | null

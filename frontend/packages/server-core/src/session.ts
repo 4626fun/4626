@@ -1,1 +1,1 @@
-export { getSessionAddress, isAdminAddress, isAdminEmail } from '../../../server/_lib/session.js'
+export { getSessionAddress, isAdminAddress, isAdminEmail } from '../../../server/_lib/auth/session.js'

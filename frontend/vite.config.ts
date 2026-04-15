@@ -8,7 +8,7 @@ import { createRequire } from 'module'
 import { URL } from 'url'
 import type { IncomingMessage, ServerResponse } from 'http'
 
-import { classifyManualChunk } from './src/lib/viteManualChunks'
+import { classifyManualChunk } from './src/lib/build/viteManualChunks'
 import { zoraCliRoutePaths } from './api/_handlers/zora/cli/_routes'
 
 const buildTelegramLinkStandalone = process.env.TELEGRAM_LINK_STANDALONE_BUILD === '1'

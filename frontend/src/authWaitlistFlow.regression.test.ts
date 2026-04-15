@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { getGenericNotFoundCta, resolveAccess } from './App'
 import { buildAppEntryPath } from './lib/auth/appEntry'
-import { MARKETING_ORIGIN } from './lib/host'
+import { MARKETING_ORIGIN } from './lib/env/host'
 import { buildWaitlistEntryUrl } from './lib/auth/waitlistEntry'
 
 const SESSION_ADDRESS = '0x1234567890123456789012345678901234567890'

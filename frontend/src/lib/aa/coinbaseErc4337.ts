@@ -1,16 +1,13 @@
 import type { Address, Hex } from 'viem'
 import {
-  decodeAbiParameters,
-  decodeFunctionData,
   encodeAbiParameters,
-  encodeFunctionData,
   getAddress,
   hashTypedData,
   http,
   isAddress,
   toHex,
 } from 'viem'
-import { debugLogsFlag, useropTelemetryFlag } from '@/lib/featureFlags'
+import { debugLogsFlag, useropTelemetryFlag } from '@/lib/flags/featureFlags'
 import { toAccount } from 'viem/accounts'
 import {
   createBundlerClient,
@@ -21,10 +18,44 @@ import {
   toCoinbaseSmartAccount,
   waitForUserOperationReceipt,
 } from 'viem/account-abstraction'
-import { trackEvent } from '@/lib/analytics'
-import { apiFetch } from '@/lib/apiBase'
-import { logger } from '@/lib/logger'
-import { appendBuilderSuffixToHex, DATA_SUFFIX, isBaseChain } from '@/lib/baseBuilderCodes'
+import { trackEvent } from '@/lib/analytics/analytics'
+import { apiFetch } from '@/lib/api/apiBase'
+import { logger } from '@/lib/observability/logger'
+import { DATA_SUFFIX } from '@/lib/base/baseBuilderCodes'
+import { applyBuilderDataSuffixToCalls } from './coinbaseErc4337BuilderSuffix'
+import {
+  ensureSignatureHex,
+  isHexString,
+  isUserOpHashLike,
+  runSignatureExtractionHarness,
+  signatureMeta,
+} from './coinbaseErc4337Signature'
+import {
+  isPaymasterProxyUrl,
+  isSameOriginUrl,
+  normalizeUrl,
+  resolveBundlerUrlForNonPaymaster,
+} from './coinbaseErc4337EndpointUtils'
+import {
+  classifyUserOpErrorCode,
+  ensureUserOperationSucceeded,
+  extractRevertInfo,
+  formatMetaMessages,
+  getErrorDiagnosticMessage,
+  getRpcErrorDetails,
+  isExpectedUserOpTimeoutError,
+  isLikelyVerificationGasLimitError,
+  isPaymasterAuthPolicyError,
+  isPaymasterPolicyError,
+  isPaymasterRoutingPolicyError,
+  isPaymasterStakeError,
+  isPaymasterUnavailableError,
+} from './coinbaseErc4337ErrorUtils'
+import {
+  fetchCoinbaseSmartWalletOwners,
+  findCoinbaseSmartWalletOwnerIndex,
+  resetOwnerIndexCacheForTests,
+} from './coinbaseErc4337Owners'
 
 // ============================================================================
 // ENTRYPOINT v0.6 ENFORCEMENT
@@ -39,105 +70,6 @@ const ENTRYPOINT_V06 = getAddress(entryPoint06Address)
 const ENTRYPOINT_V06_EXPECTED = getAddress('0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789')
 const BUNDLER_PROBE_TIMEOUT_MS = 3_000
 const RPC_READ_TIMEOUT_MS = 8_000
-const UNIVERSAL_ROUTER_EXECUTE_SELECTOR = '0x3593564c' as const
-const UNIVERSAL_ROUTER_BASE_CURRENT = getAddress('0x6ff5693b99212da76ad316178a184ab56d299b43').toLowerCase()
-const UNISWAP_UNIVERSAL_ROUTER_ABI = [
-  {
-    type: 'function',
-    name: 'execute',
-    stateMutability: 'payable',
-    inputs: [
-      { name: 'commands', type: 'bytes' },
-      { name: 'inputs', type: 'bytes[]' },
-      { name: 'deadline', type: 'uint256' },
-    ],
-    outputs: [],
-  },
-] as const
-
-function isUniversalRouterTarget(to: Address): boolean {
-  const target = String(to).toLowerCase()
-  return target === UNIVERSAL_ROUTER_BASE_CURRENT
-}
-
-function stripKnownBuilderDataSuffix(data: Hex | undefined, dataSuffix: Hex | undefined): Hex | undefined {
-  if (!data || data === '0x' || !dataSuffix) return data
-  const payload = data.slice(2)
-  const suffix = dataSuffix.slice(2)
-  if (!suffix) return data
-  if (payload.length <= suffix.length) return data
-  if (!payload.toLowerCase().endsWith(suffix.toLowerCase())) return data
-  return `0x${payload.slice(0, payload.length - suffix.length)}` as Hex
-}
-
-function canonicalizeUniversalRouterExecuteCalldata(data: Hex | undefined): Hex | undefined {
-  if (!data || data === '0x') return data
-  if (!data.toLowerCase().startsWith(UNIVERSAL_ROUTER_EXECUTE_SELECTOR)) return data
-
-  try {
-    const decoded = decodeFunctionData({
-      abi: UNISWAP_UNIVERSAL_ROUTER_ABI,
-      data,
-    })
-    if (decoded.functionName !== 'execute') return data
-    return encodeFunctionData({
-      abi: UNISWAP_UNIVERSAL_ROUTER_ABI,
-      functionName: 'execute',
-      args: decoded.args,
-    })
-  } catch {
-    // If decode fails, preserve original payload rather than mutating semantics.
-    return data
-  }
-}
-
-export function applyBuilderDataSuffixToCalls(
-  calls: Array<{ to: Address; value?: bigint; data?: Hex }>,
-  chainId: number,
-  dataSuffix: Hex | undefined = DATA_SUFFIX,
-): Array<{ to: Address; value?: bigint; data?: Hex }> {
-  if (!dataSuffix || !isBaseChain(chainId)) return calls
-
-  return calls.map((c) => {
-    if (isUniversalRouterTarget(c.to)) {
-      const cleanedData = stripKnownBuilderDataSuffix(c.data, dataSuffix)
-      const candidateData = canonicalizeUniversalRouterExecuteCalldata(cleanedData ?? c.data)
-      const isCanonical =
-        !!candidateData &&
-        candidateData !== '0x' &&
-        candidateData.toLowerCase().startsWith(UNIVERSAL_ROUTER_EXECUTE_SELECTOR)
-
-      if (AA_DEBUG) {
-        logger.debug('[Builder] Universal Router call detected', {
-          target: c.to,
-          originalDataPrefix: String(c.data ?? '').slice(0, 30),
-          cleanedDataPrefix: cleanedData?.slice(0, 30) ?? 'none',
-          willPreserveCanonical: isCanonical,
-        })
-      }
-
-      if (isCanonical) {
-        if (AA_DEBUG) logger.info('[Builder] Preserving canonical Universal Router calldata (no suffix)')
-      } else if (AA_DEBUG) {
-        logger.warn('[Builder] Universal Router calldata is non-canonical; preserving without suffix mutation', {
-          target: c.to,
-          cleanedDataPrefix: cleanedData?.slice(0, 30) ?? 'none',
-        })
-      }
-
-      // Never append builder suffix to Universal Router calls.
-      return {
-        ...c,
-        data: candidateData ?? cleanedData ?? c.data,
-      }
-    }
-
-    return {
-      ...c,
-      data: appendBuilderSuffixToHex(c.data, { chainId, dataSuffix }),
-    }
-  })
-}
 
 // Sanity check at module load time
 if (ENTRYPOINT_V06 !== ENTRYPOINT_V06_EXPECTED) {
@@ -419,17 +351,6 @@ function recordUserOpTelemetry(sample: UserOpTelemetrySample): void {
   if (shouldFlushByInterval) flushUserOpTelemetry('interval')
 }
 
-function classifyUserOpErrorCode(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error ?? '')
-  const lower = message.toLowerCase()
-  if (lower.includes('aa23')) return 'aa23_validation'
-  if (lower.includes('signtypeddata') && lower.includes('timed out')) return 'typed_data_timeout'
-  if (lower.includes('paymaster')) return 'paymaster_error'
-  if (lower.includes('insufficient funds')) return 'insufficient_funds'
-  if (lower.includes('timeout')) return 'timeout'
-  return 'unknown'
-}
-
 const PAYMASTER_DEBUG_HEADER_ENABLED =
   String((import.meta.env as Record<string, string | undefined>).VITE_PAYMASTER_DEBUG ?? '')
     .trim()
@@ -438,47 +359,6 @@ const PAYMASTER_DEBUG_HEADER_ENABLED =
     .trim()
     .toLowerCase() === 'true' ||
   AA_DEBUG
-
-function normalizeUrl(value: string): string {
-  const v = value.trim()
-  if (!v) return v
-  try {
-    const base = typeof window !== 'undefined' ? window.location.origin : undefined
-    const u = base ? new URL(v, base) : new URL(v)
-    return u.toString()
-  } catch {
-    return v
-  }
-}
-
-function isSameOriginUrl(value: string): boolean {
-  if (typeof window === 'undefined') return false
-  try {
-    const u = new URL(value, window.location.origin)
-    return u.origin === window.location.origin
-  } catch {
-    return false
-  }
-}
-
-function isPaymasterProxyUrl(value: string): boolean {
-  try {
-    const base = typeof window !== 'undefined' ? window.location.origin : undefined
-    const u = base ? new URL(value, base) : new URL(value)
-    return u.pathname === '/api/paymaster'
-  } catch {
-    return false
-  }
-}
-
-function resolveBundlerUrlForNonPaymaster(bundlerUrl: string): string {
-  const envBundler = (import.meta.env as Record<string, string | undefined>)['VITE_CDP_BUNDLER_URL']
-  if (!envBundler?.trim()) return bundlerUrl
-  if (!isPaymasterProxyUrl(bundlerUrl)) return bundlerUrl
-  return normalizeUrl(envBundler)
-}
-
-const HEX_STRING_RE = /^0x[0-9a-fA-F]+$/
 
 function formatGasValue(value: unknown): string | null {
   if (typeof value === 'bigint') return value.toString()
@@ -495,64 +375,6 @@ function formatGasEstimate(estimate: any) {
     paymasterVerificationGasLimit: formatGasValue(estimate?.paymasterVerificationGasLimit),
     paymasterPostOpGasLimit: formatGasValue(estimate?.paymasterPostOpGasLimit),
   }
-}
-
-// Known error selectors for decoding revert reasons
-const KNOWN_ERROR_SELECTORS: Record<string, string> = {
-  '0x08c379a0': 'Error(string)',
-  '0x4e487b71': 'Panic(uint256)',
-  // Coinbase Smart Wallet errors
-  '0x82b42900': 'Unauthorized()',
-  // Deployment-batcher errors
-  '0x30cd7471': 'NotOwner()',
-  '0xd92e233d': 'ZeroAddress()',
-  '0xb92e9c7a': 'InvalidPercent()',
-  '0x1375159e': 'InvalidCodeId()',
-  '0x02058db0': 'Phase1Missing()',
-  '0x7c604444': 'Phase1CoreMissing()',
-  '0x8d8721fc': 'Phase1StateMismatch()',
-  '0x585b9263': 'InvalidWeight()',
-  '0xe10fdfee': 'V3PoolMissing()',
-  '0x24c0a9e0': 'MissingInitialSqrtPriceX96()',
-  '0x18b789e6': 'AuctionAlreadyPending()',
-  '0x0fd83a8b': 'NoPendingAuction()',
-  '0x56a694d2': 'AuctionShareOFTMismatch()',
-  '0x8284e8bf': 'AuctionAmountMismatch()',
-  '0xf79c143b': 'Phase2Missing()',
-  // UniversalCreate2DeployerFromStore
-  '0xb4f54111': 'DeployFailed()',
-}
-
-function extractRevertInfo(e: unknown): { error: string; revertData?: Hex; errorName?: string } {
-  const errAny = e as any
-  const msg = e instanceof Error ? e.message : String(e ?? '')
-  const result: { error: string; revertData?: Hex; errorName?: string } = { error: msg }
-  
-  // Extract revert data from various error structures
-  const revertData = errAny?.cause?.cause?.data ?? errAny?.cause?.data ?? errAny?.data
-  if (revertData && typeof revertData === 'string' && revertData.startsWith('0x')) {
-    result.revertData = revertData as Hex
-    const selector = revertData.slice(0, 10).toLowerCase()
-    if (KNOWN_ERROR_SELECTORS[selector]) {
-      result.errorName = KNOWN_ERROR_SELECTORS[selector]
-    }
-  }
-  
-  // Extract error reason from viem's parsed errors
-  if (errAny?.cause?.reason) result.error = errAny.cause.reason
-  if (errAny?.shortMessage) result.error = errAny.shortMessage
-  
-  return result
-}
-
-function isLikelyVerificationGasLimitError(message: string): boolean {
-  const lc = message.toLowerCase()
-  return (
-    lc.includes('aa40') ||
-    lc.includes('signature verification used more gas') ||
-    lc.includes('over verificationgaslimit') ||
-    lc.includes('over verification gas limit')
-  )
 }
 
 async function logUserOpEstimate(params: {
@@ -627,166 +449,6 @@ async function logUserOpEstimate(params: {
   }
 }
 
-function isHexString(value: unknown): value is Hex {
-  return typeof value === 'string' && HEX_STRING_RE.test(value)
-}
-
-function getHexByteLength(hex: string): number | null {
-  if (!hex.startsWith('0x')) return null
-  const body = hex.slice(2)
-  if (body.length % 2 !== 0) return null
-  return body.length / 2
-}
-
-function signatureMeta(signature: Hex) {
-  const byteLength = getHexByteLength(signature)
-  return {
-    signatureLength: signature.length,
-    byteLength,
-    is64Bytes: byteLength === 64,
-    is65Bytes: byteLength === 65,
-  }
-}
-
-function isPaymasterStakeError(error: unknown): boolean {
-  const msg = getErrorDiagnosticMessage(error)
-  const lc = msg.toLowerCase()
-  return (
-    lc.includes('banned opcode') ||
-    lc.includes('stake/unstake delay') ||
-    lc.includes('entity stake') ||
-    lc.includes('unstake delay too low')
-  )
-}
-
-function getErrorDiagnosticMessage(error: unknown): string {
-  const err = error as any
-  const parts: string[] = []
-  const push = (value: unknown) => {
-    if (typeof value !== 'string') return
-    const normalized = value.replace(/\s+/g, ' ').trim()
-    if (!normalized) return
-    parts.push(normalized)
-  }
-
-  push(err?.message)
-  push(err?.shortMessage)
-  push(err?.details)
-  push(err?.cause?.message)
-  push(err?.cause?.shortMessage)
-  push(err?.cause?.details)
-
-  const appendMetaMessages = (meta: unknown) => {
-    if (!Array.isArray(meta)) return
-    for (const entry of meta) {
-      if (typeof entry === 'string') {
-        push(entry)
-      } else {
-        try {
-          push(JSON.stringify(entry))
-        } catch {
-          // ignore non-serializable entries
-        }
-      }
-    }
-  }
-
-  appendMetaMessages(err?.metaMessages)
-  appendMetaMessages(err?.cause?.metaMessages)
-
-  const deduped: string[] = []
-  for (const item of parts) {
-    if (!deduped.includes(item)) deduped.push(item)
-  }
-  if (deduped.length === 0) {
-    return error instanceof Error ? error.message : String(error ?? '')
-  }
-  return deduped.join(' | ')
-}
-
-function getRpcErrorDetails(error: unknown): string | null {
-  const err = error as any
-  const details = typeof err?.details === 'string' ? err.details.trim() : ''
-  if (details) return details
-  const causeDetails = typeof err?.cause?.details === 'string' ? err.cause.details.trim() : ''
-  return causeDetails || null
-}
-
-function ensureUserOperationSucceeded(receipt: unknown, context: string): void {
-  const r = receipt as any
-  const success = r?.success
-  const txStatus = r?.receipt?.status
-  const reason =
-    (typeof r?.reason === 'string' && r.reason) ||
-    (typeof r?.revertReason === 'string' && r.revertReason) ||
-    (typeof r?.error === 'string' && r.error) ||
-    null
-
-  const txReverted =
-    txStatus === 'reverted' ||
-    txStatus === 0 ||
-    txStatus === '0x0' ||
-    txStatus === false
-
-  // Bundlers can return a transaction hash even when the specific UserOp reverted.
-  // Guard phase progression on UserOp-level success, not just tx inclusion.
-  if (success === false || txReverted) {
-    const reasonSuffix = reason ? ` Reason: ${reason}` : ''
-    throw new Error(`UserOperation reverted during ${context}.${reasonSuffix}`)
-  }
-}
-
-function isPaymasterUnavailableError(error: unknown): boolean {
-  const msg = getErrorDiagnosticMessage(error)
-  const lc = msg.toLowerCase()
-  // NOTE: Do NOT match generic viem wrapper text like 'resource not available' /
-  // 'requested resource not available'. Viem uses that shortMessage for ALL -32002
-  // JSON-RPC errors, so matching it would misclassify upstream CDP policy rejections
-  // as "paymaster unavailable" and trigger unwanted no-paymaster fallback.
-  // Only match our own specific error strings that indicate genuine unavailability.
-  return (
-    lc.includes('cdp paymaster endpoint is not configured') ||
-    lc.includes('server misconfigured') ||
-    lc.includes('upstream request failed') ||
-    lc.includes('method not allowed')
-  )
-}
-
-function isPaymasterPolicyError(error: unknown): boolean {
-  const msg = getErrorDiagnosticMessage(error)
-  const lc = msg.toLowerCase()
-  return lc.includes('request denied') || lc.includes('not authenticated')
-}
-
-function isPaymasterAuthPolicyError(error: unknown): boolean {
-  const msg = getErrorDiagnosticMessage(error)
-  const lc = msg.toLowerCase()
-  return (
-    lc.includes('request denied - no_session') ||
-    lc.includes('request denied - not authenticated') ||
-    lc.includes('not authenticated') ||
-    lc.includes('session expired')
-  )
-}
-
-function isPaymasterRoutingPolicyError(error: unknown): boolean {
-  const msg = getErrorDiagnosticMessage(error)
-  const lc = msg.toLowerCase()
-  return lc.includes('unsupported chainid') || lc.includes('unsupported entrypoint')
-}
-
-function formatMetaMessages(error: unknown): string | null {
-  const meta = (error as any)?.metaMessages
-  if (!Array.isArray(meta) || meta.length === 0) return null
-  const messages = meta
-    .map((m) => (typeof m === 'string' ? m : JSON.stringify(m)))
-    .map((m) => String(m).replace(/\s+/g, ' ').trim())
-    .filter(Boolean)
-  if (messages.length === 0) return null
-  const limited = messages.slice(0, 3)
-  return limited.join(' | ') + (messages.length > limited.length ? ' | ...' : '')
-}
-
 const TRANSIENT_USER_OP_RETRY_DELAYS_MS = [250, 750, 1500] as const
 
 function delay(ms: number): Promise<void> {
@@ -810,17 +472,6 @@ function isTransientUserOpSubmissionError(error: unknown): boolean {
     lc.includes('request timeout') ||
     lc.includes('network error') ||
     lc.includes('failed to fetch')
-  )
-}
-
-function isExpectedUserOpTimeoutError(error: unknown): boolean {
-  const msg = getErrorDiagnosticMessage(error).toLowerCase()
-  if (!msg) return false
-  return (
-    msg.includes('timed out') ||
-    msg.includes('timeout') ||
-    msg.includes('request took too long') ||
-    msg.includes('gateway timeout')
   )
 }
 
@@ -871,73 +522,9 @@ export type PollUserOperationStatusOptions = {
   signal?: AbortSignal
 }
 
-function isUserOpHashLike(value: unknown): boolean {
-  return isHexString(value) && value.length === 66
-}
-
-type SignatureExtraction = { signature: Hex | null; source: string | null }
-
-function extractSignatureHex(value: unknown, depth = 0): SignatureExtraction {
-  if (isHexString(value)) {
-    return { signature: value as Hex, source: depth === 0 ? 'string' : `nested.${depth}` }
-  }
-  if (!value || typeof value !== 'object' || depth > 2) {
-    return { signature: null, source: null }
-  }
-  const record = value as Record<string, unknown>
-  const direct = record.signature ?? record.sig
-  if (isHexString(direct)) {
-    return { signature: direct as Hex, source: 'object.signature' }
-  }
-  const candidates: Array<[string, unknown]> = [
-    ['data', record.data],
-    ['result', record.result],
-    ['response', record.response],
-    ['signature', record.signature],
-    ['sig', record.sig],
-  ]
-  for (const [key, candidate] of candidates) {
-    if (isHexString(candidate)) {
-      return { signature: candidate as Hex, source: `object.${key}` }
-    }
-    if (candidate && typeof candidate === 'object') {
-      const nested = extractSignatureHex(candidate, depth + 1)
-      if (nested.signature) {
-        return { signature: nested.signature, source: `object.${key}.${nested.source ?? 'nested'}` }
-      }
-    }
-  }
-  return { signature: null, source: null }
-}
-
-function ensureSignatureHex(value: unknown, context: string): Hex {
-  const { signature, source } = extractSignatureHex(value)
-  if (!signature) {
-    throw new Error(`Invalid signature returned from ${context}`)
-  }
-  debugSignature(context, signature, source)
-  return signature
-}
-
-export function runSignatureExtractionHarness() {
-  const sig65 = `0x${'11'.repeat(65)}`
-  const sig64 = `0x${'22'.repeat(64)}`
-  const cases = [
-    { name: 'raw string', input: sig65 },
-    { name: 'object signature', input: { signature: sig65, encoding: 'hex' } },
-    { name: 'nested data signature', input: { data: { signature: sig65 } } },
-    { name: 'nested result signature (64-byte)', input: { result: { signature: sig64 } } },
-  ]
-  return cases.map((t) => {
-    const { signature, source } = extractSignatureHex(t.input)
-    const meta = signature ? signatureMeta(signature) : null
-    return {
-      name: t.name,
-      ok: Boolean(signature),
-      source,
-      signatureLength: meta?.signatureLength ?? null,
-      byteLength: meta?.byteLength ?? null,
-    }
+function ensureSignatureHexWithDebug(value: unknown, context: string): Hex {
+  return ensureSignatureHex(value, context, (signature, source) => {
+    debugSignature(context, signature, source)
   })
 }
 
@@ -957,57 +544,6 @@ function getStoredSessionToken(): string | null {
   } catch {
     return null
   }
-}
-
-const COINBASE_SMART_WALLET_OWNERS_ABI = [
-  {
-    type: 'function',
-    name: 'ownerCount',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-  {
-    type: 'function',
-    name: 'ownerAtIndex',
-    stateMutability: 'view',
-    inputs: [{ name: 'index', type: 'uint256' }],
-    outputs: [{ type: 'bytes' }],
-  },
-  {
-    type: 'function',
-    name: 'nextOwnerIndex',
-    stateMutability: 'view',
-    inputs: [],
-    outputs: [{ type: 'uint256' }],
-  },
-] as const
-
-const OWNER_INDEX_CACHE_TTL_MS = 5 * 60_000
-
-type OwnerIndexCacheEntry = {
-  ownerIndex: number
-  ownerCountSnapshot: number
-  expiresAt: number
-}
-
-const OWNER_INDEX_CACHE = new Map<string, OwnerIndexCacheEntry>()
-
-function getOwnerIndexCacheKey(params: {
-  chainId: number
-  smartWallet: Address
-  ownerAddress: Address
-}): string {
-  return `${params.chainId}:${params.smartWallet.toLowerCase()}:${params.ownerAddress.toLowerCase()}`
-}
-
-export function resetOwnerIndexCacheForTests(): void {
-  OWNER_INDEX_CACHE.clear()
-}
-
-function asOwnerBytes(owner: Address): Hex {
-  // Coinbase Smart Wallet stores EOA owners as 32-byte left-padded address bytes.
-  return encodeAbiParameters([{ type: 'address' }], [owner]) as Hex
 }
 
 /**
@@ -1030,138 +566,7 @@ export function assertEntryPointV06(address: Address): void {
   }
 }
 
-export async function findCoinbaseSmartWalletOwnerIndex(params: {
-  publicClient: PublicClientLike
-  smartWallet: Address
-  ownerAddress: Address
-  maxScan?: number
-  useCache?: boolean
-}): Promise<{ ownerIndex: number | null; ownerCount: number }> {
-  const { publicClient, smartWallet, ownerAddress, maxScan = 256, useCache = true } = params
-  const chainId = Number((publicClient as any)?.chain?.id ?? 0)
-  const cacheKey = getOwnerIndexCacheKey({ chainId, smartWallet, ownerAddress })
-  if (!useCache) OWNER_INDEX_CACHE.delete(cacheKey)
-
-  const countRaw = (await withTimeout(
-    publicClient.readContract({
-      address: smartWallet,
-      abi: COINBASE_SMART_WALLET_OWNERS_ABI,
-      functionName: 'ownerCount',
-    }),
-    RPC_READ_TIMEOUT_MS,
-    'ownerCount read',
-  )) as bigint
-  const count = Number(countRaw)
-  if (!Number.isFinite(count) || count <= 0) {
-    OWNER_INDEX_CACHE.delete(cacheKey)
-    return { ownerIndex: null, ownerCount: 0 }
-  }
-
-  const scanLimit = Math.max(1, maxScan)
-  if (useCache) {
-    const cached = OWNER_INDEX_CACHE.get(cacheKey)
-    if (cached && cached.expiresAt > Date.now()) {
-      if (cached.ownerCountSnapshot === count && cached.ownerIndex >= 0 && cached.ownerIndex < scanLimit) {
-        return { ownerIndex: cached.ownerIndex, ownerCount: count }
-      }
-      OWNER_INDEX_CACHE.delete(cacheKey)
-    }
-  }
-
-  // Use nextOwnerIndex when available to avoid missing owners after removals.
-  let upperBound = count
-  try {
-    const nextRaw = (await withTimeout(
-      publicClient.readContract({
-        address: smartWallet,
-        abi: COINBASE_SMART_WALLET_OWNERS_ABI,
-        functionName: 'nextOwnerIndex',
-      }),
-      RPC_READ_TIMEOUT_MS,
-      'nextOwnerIndex read',
-    )) as bigint
-    const next = Number(nextRaw)
-    if (Number.isFinite(next) && next > 0) upperBound = next
-  } catch {
-    // ignore; fallback to ownerCount
-  }
-
-  const expected = asOwnerBytes(ownerAddress).toLowerCase()
-  const limit = Math.min(upperBound, scanLimit)
-  for (let i = 0; i < limit; i++) {
-    const b = (await withTimeout(
-      publicClient.readContract({
-        address: smartWallet,
-        abi: COINBASE_SMART_WALLET_OWNERS_ABI,
-        functionName: 'ownerAtIndex',
-        args: [BigInt(i)],
-      }),
-      RPC_READ_TIMEOUT_MS,
-      `ownerAtIndex(${i}) read`,
-    )) as Hex
-    if (String(b).toLowerCase() === expected) {
-      if (useCache) {
-        OWNER_INDEX_CACHE.set(cacheKey, {
-          ownerIndex: i,
-          ownerCountSnapshot: count,
-          expiresAt: Date.now() + OWNER_INDEX_CACHE_TTL_MS,
-        })
-      }
-      return { ownerIndex: i, ownerCount: count }
-    }
-  }
-  OWNER_INDEX_CACHE.delete(cacheKey)
-  return { ownerIndex: null, ownerCount: count }
-}
-
-export async function fetchCoinbaseSmartWalletOwners(params: {
-  publicClient: PublicClientLike
-  smartWallet: Address
-  maxOwners?: number
-}): Promise<Address[]> {
-  const { publicClient, smartWallet, maxOwners = 32 } = params
-  const countRaw = (await publicClient.readContract({
-    address: smartWallet,
-    abi: COINBASE_SMART_WALLET_OWNERS_ABI,
-    functionName: 'ownerCount',
-  })) as bigint
-  const count = Number(countRaw)
-  if (!Number.isFinite(count) || count <= 0) return []
-
-  let upperBound = count
-  try {
-    const nextRaw = (await publicClient.readContract({
-      address: smartWallet,
-      abi: COINBASE_SMART_WALLET_OWNERS_ABI,
-      functionName: 'nextOwnerIndex',
-    })) as bigint
-    const next = Number(nextRaw)
-    if (Number.isFinite(next) && next > 0) upperBound = next
-  } catch {
-    // ignore; fallback to ownerCount
-  }
-
-  const limit = Math.min(upperBound, Math.max(1, maxOwners))
-  const owners: Address[] = []
-  for (let i = 0; i < limit; i += 1) {
-    try {
-      const raw = (await publicClient.readContract({
-        address: smartWallet,
-        abi: COINBASE_SMART_WALLET_OWNERS_ABI,
-        functionName: 'ownerAtIndex',
-        args: [BigInt(i)],
-      })) as `0x${string}`
-      const decoded = decodeAbiParameters([{ type: 'address' }], raw)[0] as string
-      if (!isAddress(decoded)) continue
-      const addr = getAddress(decoded)
-      if (addr === getAddress('0x0000000000000000000000000000000000000000')) continue
-      if (!owners.includes(addr)) owners.push(addr)
-    } catch {
-      continue
-    }
-  }
-  return owners
-}
+export { fetchCoinbaseSmartWalletOwners, findCoinbaseSmartWalletOwnerIndex, resetOwnerIndexCacheForTests }
 
 type UserOpSignMode = 'eth_sign' | 'signMessage' | 'auto'
 
@@ -1254,7 +659,7 @@ function createWalletBackedLocalAccount(params: {
             SIGN_TIMEOUT_MS,
             'eth_sign',
           )
-          const sig = ensureSignatureHex(rawSig, 'eth_sign')
+          const sig = ensureSignatureHexWithDebug(rawSig, 'eth_sign')
           debugSignatureReady('eth_sign', sig, { address })
           return sig
         } catch (e) {
@@ -1292,7 +697,7 @@ function createWalletBackedLocalAccount(params: {
           } else {
             throw new Error('Wallet does not support signMessage or personal_sign')
           }
-          const sig = ensureSignatureHex(rawSig, 'signMessage')
+          const sig = ensureSignatureHexWithDebug(rawSig, 'signMessage')
           debugSignatureReady('signMessage', sig, { address })
           return sig
         } catch (e) {
@@ -1399,7 +804,7 @@ function createWalletBackedLocalAccount(params: {
       } else {
         throw new Error('Wallet does not support signMessage or personal_sign')
       }
-      return ensureSignatureHex(rawSig, 'signMessage')
+      return ensureSignatureHexWithDebug(rawSig, 'signMessage')
     },
     signTypedData: async (typedData: any) => {
       let rawSig: unknown
@@ -1421,7 +826,7 @@ function createWalletBackedLocalAccount(params: {
       } else {
         throw new Error('Wallet does not support signTypedData')
       }
-      return ensureSignatureHex(rawSig, 'signTypedData')
+      return ensureSignatureHexWithDebug(rawSig, 'signTypedData')
     },
     signTransaction: async (tx, options) => {
       const wc: any = walletClient as any
@@ -1635,7 +1040,7 @@ async function signUserOpViaTypedData(params: {
   } else {
     throw new Error('Wallet does not support signTypedData')
   }
-  return ensureSignatureHex(rawSig, 'signTypedData (CSW EIP-712)')
+  return ensureSignatureHexWithDebug(rawSig, 'signTypedData (CSW EIP-712)')
 }
 
 function wrapAccountWithTypedDataSigning(params: {
@@ -1768,7 +1173,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   if (!walletClient) throw new Error('Missing wallet client')
   if (!calls || calls.length === 0) throw new Error('No calls provided')
   const chainId = (publicClient as any).chain?.id ?? 8453
-  const attributedCalls = applyBuilderDataSuffixToCalls(calls, chainId)
+  const attributedCalls = applyBuilderDataSuffixToCalls(calls, chainId, DATA_SUFFIX, AA_DEBUG)
   const ownerIndexLookupAddress =
     typeof ownerIndexLookupAddressRaw === 'string' && isAddress(ownerIndexLookupAddressRaw)
       ? getAddress(ownerIndexLookupAddressRaw)
@@ -1778,7 +1183,10 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
 
   const normalizedBundlerUrl = normalizeUrl(bundlerUrlInput)
   const paymasterUrl = normalizeUrl(paymasterUrlInput ?? bundlerUrlInput)
-  let bundlerUrlForBundler = resolveBundlerUrlForNonPaymaster(normalizedBundlerUrl)
+  let bundlerUrlForBundler = resolveBundlerUrlForNonPaymaster(
+    normalizedBundlerUrl,
+    (import.meta.env as Record<string, string | undefined>)['VITE_CDP_BUNDLER_URL'],
+  )
   let shouldSendSessionToBundler = isPaymasterProxyUrl(bundlerUrlForBundler)
   const shouldSendSessionToPaymaster = isSameOriginUrl(paymasterUrl)
   const canFallbackBundlerProbeToProxy =

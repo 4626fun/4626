@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   getInitialTelegramMiniAppEntryResolution,
   resolveTelegramMiniAppEntryBootstrap,
-} from '@/lib/telegramMiniAppRouteGuard'
+} from '@/lib/telegram/telegramMiniAppRouteGuard'
 
 type TelegramMiniAppEntryState = {
   search: string

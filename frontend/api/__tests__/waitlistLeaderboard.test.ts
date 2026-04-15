@@ -23,7 +23,7 @@ vi.mock('../../server/_lib/waitlistSchema.js', () => ({
   ensureWaitlistSchema: ensureWaitlistSchemaMock,
 }))
 
-vi.mock('../../server/_lib/requestPrincipal.js', () => ({
+vi.mock('../../server/_lib/auth/requestPrincipal.js', () => ({
   resolveAuthorizedRequestPrincipal: resolveAuthorizedRequestPrincipalMock,
 }))
 

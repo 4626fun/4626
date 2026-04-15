@@ -3,7 +3,7 @@ import { useLogin, usePrivy } from '@privy-io/react-auth'
 import { AnimatePresence, motion } from 'framer-motion'
 
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
-import { apiFetch } from '@/lib/apiBase'
+import { apiFetch } from '@/lib/api/apiBase'
 import { buildAppEntryUrl } from '@/lib/auth/appEntry'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
 import {
@@ -12,7 +12,7 @@ import {
   readStoredWaitlistReferralCode,
   storeWaitlistReferralCode,
 } from '@/lib/auth/waitlistEntry'
-import { getAppBaseUrl } from '@/lib/host'
+import { getAppBaseUrl } from '@/lib/env/host'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import type { ApiEnvelope, OnboardingBootstrapResponse } from '@/lib/wallet/onboardingWallet'

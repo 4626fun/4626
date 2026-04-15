@@ -1,8 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { useSiweAuth } from './useSiweAuth'
-import { apiFetch } from '@/lib/apiBase'
-import { API_ENDPOINTS } from '@/lib/apiEndpoints'
-import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/apiEnvelope'
+import { apiFetch } from '@/lib/api/apiBase'
+import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
+import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/api/apiEnvelope'
 type AdminResponse = { address: string; isAdmin: boolean } | null
 
 type DeriveAdminStatusInput = {

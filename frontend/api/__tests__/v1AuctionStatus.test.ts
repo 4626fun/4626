@@ -22,7 +22,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
   handleOptions: mocks.handleOptions,
 }))
 
-vi.mock('../../server/_lib/agentApiGuard.js', () => ({
+vi.mock('../../server/_lib/agent/agentApiGuard.js', () => ({
   guardAgentApiRequest: mocks.guardAgentApiRequest,
 }))
 

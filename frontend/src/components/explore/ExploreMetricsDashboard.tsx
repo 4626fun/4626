@@ -1,9 +1,9 @@
 import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 
-import { apiFetch } from '@/lib/apiBase'
-import { API_ENDPOINTS } from '@/lib/apiEndpoints'
-import type { ApiEnvelope } from '@/lib/apiEnvelope'
+import { apiFetch } from '@/lib/api/apiBase'
+import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { LoadingText } from '@/components/ui/LoadingState'
 
 type ExploreMetricHistoryPoint = {

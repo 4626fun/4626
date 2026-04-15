@@ -19,7 +19,7 @@ vi.mock('../../packages/server-core/src/index.js', async () => {
   }
 })
 
-vi.mock('../../server/_lib/erc8004OperatorStatus.js', () => ({
+vi.mock('../../server/_lib/agent/erc8004OperatorStatus.js', () => ({
   buildAgentOperatorStatus: (req?: unknown) => mocks.buildAgentOperatorStatus(req),
 }))
 

@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 const DEFAULT_DURATION_MS = 600
 const DEFAULT_GRID_SIZE = 3

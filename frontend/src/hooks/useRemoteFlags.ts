@@ -4,7 +4,7 @@ import {
   fetchRemoteFlags,
   getRemoteFlagValues,
   getRemoteFlag,
-} from '@/lib/remoteFlags'
+} from '@/lib/flags/remoteFlags'
 
 type RemoteFlagValues = Record<string, unknown>
 

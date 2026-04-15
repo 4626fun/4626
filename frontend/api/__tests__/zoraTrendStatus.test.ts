@@ -28,11 +28,11 @@ vi.mock('../../server/zora/_shared.js', () => ({
   setCors: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/requestPrincipal.js', () => ({
+vi.mock('../../server/_lib/auth/requestPrincipal.js', () => ({
   readRequestPrincipal: readRequestPrincipalMock,
 }))
 
-vi.mock('../../server/_lib/session.js', () => ({
+vi.mock('../../server/_lib/auth/session.js', () => ({
   isAdminAddress: isAdminAddressMock,
 }))
 

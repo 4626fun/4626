@@ -21,9 +21,9 @@ import { useTokenIdentity } from '@/hooks/useTokenIdentity'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { extractPrivyWalletsFromUser } from '@/lib/privy/embeddedWallet'
-import type { ApiEnvelope } from '@/lib/apiEnvelope'
-import { apiFetch } from '@/lib/apiBase'
-import { API_ENDPOINTS } from '@/lib/apiEndpoints'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import { apiFetch } from '@/lib/api/apiBase'
+import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 import {
   claimLiquidityFees,
   createPosition,
@@ -51,7 +51,7 @@ import {
 import { ensureProviderOnBase } from '@/lib/wallet/safeSwitchToBase'
 import { resolveCreatorTradeTokenAddress } from '@/lib/onchain/vaultResolve'
 import { useAccountContext } from '@/wallet/accountContext'
-import { useScreenshotReady } from '@/lib/screenshotMode'
+import { useScreenshotReady } from '@/lib/ui/screenshotMode'
 
 const CORE_TOKENS: TokenOption[] = [
   // Represent ETH as native for Uniswap Trading API + wagmi balances.

@@ -75,7 +75,7 @@ vi.mock('react-router-dom', async () => {
   }
 })
 
-vi.mock('@/lib/telegramWebApp', () => ({
+vi.mock('@/lib/telegram/telegramWebApp', () => ({
   ensureTelegramMiniAppSession: ensureSessionMock,
   loadTelegramWebApp: vi.fn(async () => ({
     ...(telegramWebAppState.hasMainButton ? { MainButton: telegramMainButtonMock } : {}),
@@ -89,11 +89,11 @@ vi.mock('@/lib/telegramWebApp', () => ({
   setupTelegramMiniAppUi: setupUiMock,
 }))
 
-vi.mock('@/lib/apiBase', () => ({
+vi.mock('@/lib/api/apiBase', () => ({
   apiFetch: apiFetchMock,
 }))
 
-vi.mock('@/lib/telegramLinkTelemetry', () => ({
+vi.mock('@/lib/telegram/telegramLinkTelemetry', () => ({
   trackTelegramLinkTelemetryEvent: trackTelegramLinkTelemetryEventMock,
   createTelegramLinkFlowId: createTelegramLinkFlowIdMock,
 }))

@@ -1,11 +1,11 @@
 import { getAddress, isAddress } from 'viem'
-import { apiFetch } from '@/lib/apiBase'
+import { apiFetch } from '@/lib/api/apiBase'
 import {
   getBasename,
   getBasenameProfile,
   getBasenameProfileByName,
   resolveBasenameAddress,
-} from '@/lib/basename-api'
+} from '@/lib/basename/basename-api'
 
 const OPTIONAL_LOOKUP_TIMEOUT_MS = 1_200
 

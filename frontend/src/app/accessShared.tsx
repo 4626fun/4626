@@ -1,13 +1,13 @@
 import { createContext, useContext } from 'react'
 
 import { buildWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
-import { APP_ORIGIN } from '@/lib/host'
+import { APP_ORIGIN } from '@/lib/env/host'
 export {
   getInitialTelegramMiniAppEntryResolution,
   hasTelegramLinkEntryContext,
   hasTelegramLinkQueryContext,
   resolveTelegramMiniAppEntryBootstrap,
-} from '@/lib/telegramMiniAppRouteGuard'
+} from '@/lib/telegram/telegramMiniAppRouteGuard'
 
 export type RouteId = 'public' | 'session' | 'accepted' | 'creator' | 'admin'
 export type AccessReason = 'ok' | 'loading' | 'needs-session' | 'needs-acceptance' | 'needs-admin' | 'needs-creator' | 'not-found'
@@ -23,7 +23,7 @@ export type AccessState = {
   allowlistEnforced: boolean
   effectiveAddress: string | null
   marketingUrl: string
-  hostMode: import('@/lib/host').HostMode
+  hostMode: import('@/lib/env/host').HostMode
 }
 
 const ROUTE_REQUIREMENTS: Record<RouteId, { session?: boolean; accepted?: boolean; creator?: boolean; admin?: boolean }> = {

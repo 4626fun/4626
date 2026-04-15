@@ -10,11 +10,11 @@ const getCanonicalOriginMock = vi.fn((_: unknown) => 'https://4626.fun')
 const getErc8004PublicOriginMock = vi.fn((_: unknown) => 'https://4626.fun')
 const checkRateLimitMock = vi.fn(() => ({ allowed: true, remaining: 10, resetAt: Date.now() + 60_000 }))
 
-vi.mock('../../server/_lib/agentRegistration.js', () => ({
+vi.mock('../../server/_lib/agent/agentRegistration.js', () => ({
   buildAgentRegistration: (origin: string) => buildAgentRegistrationMock(origin),
 }))
 
-vi.mock('../../server/_lib/agentRegistrationPublisher.js', () => ({
+vi.mock('../../server/_lib/agent/agentRegistrationPublisher.js', () => ({
   publishAgentRegistrationToGrove: (params: any) => publishAgentRegistrationToGroveMock(params),
   resolveAgentRegistrationKey: (payload: any, suffix: string) => resolveAgentRegistrationKeyMock(payload, suffix),
 }))

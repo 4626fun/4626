@@ -4,9 +4,9 @@ import { useLocation } from 'react-router-dom'
 
 import { AppLoadingState } from '@/components/layout/AppLoadingState'
 import { Layout } from '@/components/layout/Layout'
-import { isAppOnlyPath } from '@/lib/appOnlyPaths'
+import { isAppOnlyPath } from '@/lib/auth/appOnlyPaths'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
-import { APP_ORIGIN, MARKETING_ORIGIN, getHostMode, isCurrentWindowUrl, type HostMode } from '@/lib/host'
+import { APP_ORIGIN, MARKETING_ORIGIN, getHostMode, isCurrentWindowUrl, type HostMode } from '@/lib/env/host'
 import { bridgePrivySession, createAuthHandoffCode } from '@/features/waitlist/waitlistHandoff'
 import { AccountContextProvider } from '@/wallet/accountContext'
 

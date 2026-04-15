@@ -15,8 +15,8 @@ import {
 } from '../../../../../packages/server-core/src/index.js'
 
 
-import { type FeedbackPayload, getIdentityRegistryAddress, getReputationRegistryAddress, REPUTATION_REGISTRY_ABI } from '../../../../../server/_lib/erc8004.js'
-import { buildErc8004TechnicalReview } from '../../../../../server/_lib/erc8004Review.js'
+import { type FeedbackPayload, getIdentityRegistryAddress, getReputationRegistryAddress, REPUTATION_REGISTRY_ABI } from '../../../../../server/_lib/agent/erc8004.js'
+import { buildErc8004TechnicalReview } from '../../../../../server/_lib/agent/erc8004Review.js'
 import { tryUploadImmutableJson } from '../../../../../server/_lib/lensGrove.js'
 import {
   evaluateX402Payment,

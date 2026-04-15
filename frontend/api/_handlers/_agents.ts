@@ -11,7 +11,7 @@ import {
   buildPublicAgentRegistrationUrl,
   buildPublicDomainVerificationUrl,
   STRICT_IMMUTABLE_AGENT_URI_SUMMARY,
-} from '../../src/lib/erc8004AgentUriPolicy.js'
+} from '../../src/lib/agent/erc8004AgentUriPolicy.js'
 import { getErc8004PublicOrigin } from '../../server/_lib/origin.js'
 
 declare const process: { env: Record<string, string | undefined> }

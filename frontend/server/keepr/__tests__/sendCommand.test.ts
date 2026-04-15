@@ -22,7 +22,7 @@ vi.mock('../../_lib/privyWalletApi.js', () => ({
   walletRpc: (...args: unknown[]) => walletRpcMock(...args),
 }))
 
-vi.mock('../../_lib/teeAttestationGate.js', () => ({
+vi.mock('../../_lib/agent/teeAttestationGate.js', () => ({
   assertTeeAttestationOrThrow: (...args: unknown[]) => attestationGateMock(...args),
 }))
 

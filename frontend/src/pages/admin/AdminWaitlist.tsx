@@ -16,8 +16,8 @@ import {
 import { useAccount } from 'wagmi'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
-import { apiFetch } from '@/lib/apiBase'
-import type { ApiEnvelope } from '@/lib/apiEnvelope'
+import { apiFetch } from '@/lib/api/apiBase'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { LoadingText } from '@/components/ui/LoadingState'
 
 type WaitlistListItem = {

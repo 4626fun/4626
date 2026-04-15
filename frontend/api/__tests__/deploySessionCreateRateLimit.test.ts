@@ -28,7 +28,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
   setNoStore: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/deployAuth.js', () => ({
+vi.mock('../../server/_lib/auth/deployAuth.js', () => ({
   readDeployAuthFromRequest: readDeployAuthFromRequestMock,
 }))
 

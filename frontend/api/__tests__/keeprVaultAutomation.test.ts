@@ -142,7 +142,7 @@ async function loadAutomationHandlerWithMockedResolver(params: {
           : params.disableRow,
       )
 
-  vi.doMock('../../server/_lib/session.js', () => ({
+  vi.doMock('../../server/_lib/auth/session.js', () => ({
     getSessionAddress: getSessionAddressMock,
   }))
   vi.doMock('../../server/_lib/canonicalWalletResolver.js', () => ({
@@ -215,7 +215,7 @@ async function loadAutomationHandlerWithRealResolver(params: {
       : params.disableRow,
   )
 
-  vi.doMock('../../server/_lib/session.js', () => ({
+  vi.doMock('../../server/_lib/auth/session.js', () => ({
     getSessionAddress: getSessionAddressMock,
   }))
   vi.doMock('../../server/_lib/postgres.js', () => ({
@@ -257,7 +257,7 @@ async function loadAutomationHandlerWithRealResolver(params: {
 afterEach(() => {
   vi.restoreAllMocks()
   vi.resetModules()
-  vi.doUnmock('../../server/_lib/session.js')
+  vi.doUnmock('../../server/_lib/auth/session.js')
   vi.doUnmock('../../server/_lib/canonicalWalletResolver.js')
   vi.doUnmock('../../server/_lib/keeprRegistry.js')
   vi.doUnmock('../../server/_lib/keeprAutomation.js')

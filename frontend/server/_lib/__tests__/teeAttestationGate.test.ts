@@ -27,7 +27,7 @@ describe('teeAttestationGate', () => {
   })
 
   it('returns pass-through status when enforcement is disabled', async () => {
-    const { getTeeAttestationStatus } = await import('../teeAttestationGate.ts')
+    const { getTeeAttestationStatus } = await import('../agent/teeAttestationGate.ts')
     const status = await getTeeAttestationStatus()
     expect(status.enabled).toBe(false)
     expect(status.passed).toBe(true)
@@ -38,7 +38,7 @@ describe('teeAttestationGate', () => {
     process.env.TEE_ENFORCEMENT_ENABLED = 'true'
     process.env.TEE_ENFORCEMENT_FAIL_OPEN = 'false'
 
-    const { assertTeeAttestationOrThrow, getTeeAttestationStatus } = await import('../teeAttestationGate.ts')
+    const { assertTeeAttestationOrThrow, getTeeAttestationStatus } = await import('../agent/teeAttestationGate.ts')
     const status = await getTeeAttestationStatus()
     expect(status.enabled).toBe(true)
     expect(status.passed).toBe(false)
@@ -55,7 +55,7 @@ describe('teeAttestationGate', () => {
     process.env.TEE_ENFORCEMENT_ENABLED = 'true'
     process.env.TEE_ENFORCEMENT_FAIL_OPEN = 'true'
 
-    const { assertTeeAttestationOrThrow, getTeeAttestationStatus } = await import('../teeAttestationGate.ts')
+    const { assertTeeAttestationOrThrow, getTeeAttestationStatus } = await import('../agent/teeAttestationGate.ts')
     const status = await getTeeAttestationStatus()
     expect(status.enabled).toBe(true)
     expect(status.passed).toBe(true)

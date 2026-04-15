@@ -7,8 +7,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 let mockAppOrigin = 'https://app.4626.fun'
 let mockHostMode: 'app' | 'marketing' = 'app'
 
-vi.mock('@/lib/host', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/host')>('@/lib/host')
+vi.mock('@/lib/env/host', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/env/host')>('@/lib/env/host')
   return {
     ...actual,
     get APP_ORIGIN() {

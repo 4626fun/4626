@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useReadContract } from 'wagmi'
-import { logger } from '@/lib/logger'
+import { logger } from '@/lib/observability/logger'
 
 // ABI for tokenURI function (common to CreatorCoin contracts)
 const tokenURIAbi = [

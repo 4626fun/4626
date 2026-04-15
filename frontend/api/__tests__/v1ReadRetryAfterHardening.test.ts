@@ -41,7 +41,7 @@ vi.mock('../../server/_lib/keeprSchema.js', () => ({
   ensureKeeprSchema: mocks.ensureKeeprSchema,
 }))
 
-vi.mock('../../server/_lib/agentAccessResolver.js', () => ({
+vi.mock('../../server/_lib/agent/agentAccessResolver.js', () => ({
   resolveAgentCapabilityResponse: mocks.resolveAgentCapabilityResponse,
 }))
 

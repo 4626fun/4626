@@ -33,7 +33,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
   setNoStore: setNoStoreMock,
 }))
 
-vi.mock('../../server/_lib/agentApiGuard.js', () => ({
+vi.mock('../../server/_lib/agent/agentApiGuard.js', () => ({
   guardAgentApiRequest: guardAgentApiRequestMock,
 }))
 

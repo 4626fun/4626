@@ -8,10 +8,10 @@ import { erc20Abi } from 'viem'
 
 import { useVault } from '@/hooks/useVault'
 import { useZoraCoin } from '@/lib/zora/hooks'
-import { apiFetch } from '@/lib/apiBase'
-import { toShareSymbol } from '@/lib/tokenSymbols'
+import { apiFetch } from '@/lib/api/apiBase'
+import { toShareSymbol } from '@/lib/tokens/tokenSymbols'
 import { shareTokenLogo } from '@/lib/uniswap/swapUtils'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 const BASE_BRANDMARK_BLUE = '/base/base-square-blue.svg'
 

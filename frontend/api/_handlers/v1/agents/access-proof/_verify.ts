@@ -21,8 +21,8 @@ import {
 import {
   issueAgentRoomAccessToken,
   verifyAgentAccessProofSubmission,
-} from '../../../../../server/_lib/agentAccessProof.js'
-import { resolveMembershipForRoom } from '../../../../../server/_lib/agentAccessResolver.js'
+} from '../../../../../server/_lib/agent/agentAccessProof.js'
+import { resolveMembershipForRoom } from '../../../../../server/_lib/agent/agentAccessResolver.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 

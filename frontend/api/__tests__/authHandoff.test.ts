@@ -16,7 +16,7 @@ vi.mock('../../server/_lib/postgres.js', () => ({
   getDb: getDbMock,
 }))
 
-vi.mock('../../server/_lib/requestPrincipal.js', () => ({
+vi.mock('../../server/_lib/auth/requestPrincipal.js', () => ({
   readRequestPrincipalAddress: readRequestPrincipalAddressMock,
 }))
 

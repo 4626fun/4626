@@ -9,7 +9,7 @@ import { AppLoadingState } from '@/components/layout/AppLoadingState'
 import { TelegramMiniAppUnavailable } from '@/components/telegram/TelegramMiniAppUnavailable'
 import { useTelegramMiniAppEntryStatus } from '@/hooks/useTelegramMiniAppEntryStatus'
 import { TelegramLinkPrivyProvider } from '@/lib/privy/telegramLinkClient'
-import { ThemeProvider } from '@/lib/theme'
+import { ThemeProvider } from '@/lib/ui/theme'
 import { TelegramLink } from '@/pages/telegram/TelegramLink'
 
 function TelegramLinkStandaloneApp() {

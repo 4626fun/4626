@@ -11,14 +11,14 @@ import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugC
 import { useExploreHorizontalTableSync } from '@/components/explore/useExploreHorizontalTableSync'
 import { getExploreColumns, getHorizontalScrollStops } from '@/components/explore/tableColumns'
 import { fetchZoraCoin, fetchZoraExplore, fetchZoraProfile, fetchZoraProfileCoins } from '@/lib/zora/client'
-import { apiFetch } from '@/lib/apiBase'
-import { API_ENDPOINTS } from '@/lib/apiEndpoints'
-import type { ApiEnvelope } from '@/lib/apiEnvelope'
+import { apiFetch } from '@/lib/api/apiBase'
+import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { useMigratedCoins } from '@/hooks/useMigratedCoins'
 import { useWindowInfiniteScrollLoadMore } from '@/hooks/useWindowInfiniteScrollLoadMore'
 import type { ZoraCoin, ZoraExploreListType } from '@/lib/zora/types'
 import { getZoraExploreVolumeNote } from '@/lib/zora/exploreVolume'
-import { useScreenshotMode, useScreenshotReady } from '@/lib/screenshotMode'
+import { useScreenshotMode, useScreenshotReady } from '@/lib/ui/screenshotMode'
 import {
   flattenExplorePagedNodes,
   matchesCoinSearchQuery,

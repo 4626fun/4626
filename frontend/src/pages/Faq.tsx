@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { ArrowRight, ChevronDown, Search, ShieldCheck, X } from 'lucide-react'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
-import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
-import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
+import { SHARE_SYMBOL_PREFIX } from '@/lib/tokens/tokenSymbols'
+import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
 import { META, PageMeta } from '@/components/seo/PageMeta'
 
 type FaqItem = {

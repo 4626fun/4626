@@ -1,4 +1,4 @@
-import { getMarketingBaseUrl, getWaitlistReferralBaseUrl } from '@/lib/host'
+import { getMarketingBaseUrl, getWaitlistReferralBaseUrl } from '@/lib/env/host'
 
 const CANONICAL_MARKETING_WAITLIST_PATH = '/waitlist'
 const WAITLIST_REFERRAL_PATH_PREFIX = '/r'

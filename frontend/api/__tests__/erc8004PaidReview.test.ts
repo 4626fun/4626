@@ -15,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   tryUploadImmutableJson: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/agentApiGuard.js', () => ({
+vi.mock('../../server/_lib/agent/agentApiGuard.js', () => ({
   guardAgentApiRequest: mocks.guardAgentApiRequest,
 }))
 
@@ -26,7 +26,7 @@ vi.mock('../../server/_lib/x402Service.js', () => ({
   setX402CorsHeaders: mocks.setX402CorsHeaders,
 }))
 
-vi.mock('../../server/_lib/erc8004Review.js', () => ({
+vi.mock('../../server/_lib/agent/erc8004Review.js', () => ({
   buildErc8004TechnicalReview: mocks.buildErc8004TechnicalReview,
 }))
 

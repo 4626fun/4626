@@ -33,7 +33,7 @@ import {
   REPUTATION_REGISTRY_ABI,
   formatFeedbackValue,
   ratingLabel,
-} from './erc8004.js'
+} from './agent/erc8004.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

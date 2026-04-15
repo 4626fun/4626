@@ -21,7 +21,7 @@ const {
   readJsonBodyMock: vi.fn(async () => ({})),
 }))
 
-vi.mock('../../server/_lib/agentApiGuard.js', () => ({
+vi.mock('../../server/_lib/agent/agentApiGuard.js', () => ({
   guardAgentApiRequest: guardAgentApiRequestMock,
 }))
 

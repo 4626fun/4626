@@ -1,4 +1,4 @@
-import type { TelegramMiniAppLinkContext } from '@/lib/telegramMiniAppLink'
+import type { TelegramMiniAppLinkContext } from '@/lib/telegram/telegramMiniAppLink'
 
 export type FlowErrorCode =
   | 'INVALID_TELEGRAM_CONTEXT'

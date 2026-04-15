@@ -37,7 +37,7 @@ vi.mock('../../server/_lib/rateLimit.js', () => ({
   getClientIp: getClientIpMock,
 }))
 
-vi.mock('../../server/_lib/requestPrincipal.js', () => ({
+vi.mock('../../server/_lib/auth/requestPrincipal.js', () => ({
   readRequestPrincipalAddress: readRequestPrincipalAddressMock,
   resolveAuthorizedRequestPrincipal: vi.fn(async () => null),
 }))

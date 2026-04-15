@@ -1,6 +1,6 @@
-import { apiFetch } from '@/lib/apiBase'
-import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/apiEnvelope'
-import { API_ENDPOINTS } from '@/lib/apiEndpoints'
+import { apiFetch } from '@/lib/api/apiBase'
+import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/api/apiEnvelope'
+import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 import type {
   WorkspaceActionResult,
   WorkspaceActivityResponse,

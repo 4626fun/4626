@@ -16,7 +16,7 @@ const checkRateLimitMock = vi.fn()
 const getClientIpMock = vi.fn()
 const rateLimitKeyMock = vi.fn()
 
-vi.mock('../../server/_lib/agentApiGuard.js', () => ({
+vi.mock('../../server/_lib/agent/agentApiGuard.js', () => ({
   guardAgentApiRequest: guardMock,
 }))
 

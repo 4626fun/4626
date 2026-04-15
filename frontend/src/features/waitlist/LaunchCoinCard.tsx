@@ -11,7 +11,7 @@ import { isAddress, getAddress, toHex } from 'viem'
 import { uploadImmutableBlob, uploadImmutableJson } from '@/lib/lens/grove'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
-import { logger } from '@/lib/logger'
+import { logger } from '@/lib/observability/logger'
 import { ensureProviderOnBase } from '@/lib/wallet/safeSwitchToBase'
 import { getZoraPlatformReferrerAddress } from '@/lib/zora/referrals'
 

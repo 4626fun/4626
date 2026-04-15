@@ -1,5 +1,5 @@
 import type { Address } from 'viem'
-import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/apiEnvelope'
+import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/api/apiEnvelope'
 
 export async function fetchCoinTradeRewardsBatchFromApi(params: {
   recipient: Address

@@ -6,7 +6,7 @@ const readRequestPrincipalAddressMock = vi.hoisted(
   () => vi.fn((..._args: unknown[]) => '0x00000000000000000000000000000000000000aa'),
 )
 
-vi.mock('../../server/_lib/requestPrincipal.js', () => ({
+vi.mock('../../server/_lib/auth/requestPrincipal.js', () => ({
   readRequestPrincipalAddress: readRequestPrincipalAddressMock,
 }))
 

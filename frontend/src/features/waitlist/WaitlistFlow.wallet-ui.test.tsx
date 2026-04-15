@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 
-import { apiFetch } from '@/lib/apiBase'
+import { apiFetch } from '@/lib/api/apiBase'
 
 import { WaitlistFlow } from './WaitlistFlow'
 import { WaitlistSetupWorkspace } from './WaitlistSetupWorkspace'
@@ -87,12 +87,12 @@ vi.mock('wagmi', async (importOriginal) => {
   }
 })
 
-vi.mock('@/lib/apiBase', () => ({
+vi.mock('@/lib/api/apiBase', () => ({
   apiFetch: vi.fn(),
 }))
 
-vi.mock('@/lib/host', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/host')>()
+vi.mock('@/lib/env/host', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/env/host')>()
   return {
     ...actual,
     getAppBaseUrl: () => 'https://app.4626.fun',

@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { Routes, Route, Navigate, Outlet, useLocation, Link } from 'react-router-dom'
 
-import { APP_ORIGIN, getHostMode } from '@/lib/host'
+import { APP_ORIGIN, getHostMode } from '@/lib/env/host'
 
 import { useOptionalAccessContext, waitlistEntryHref } from './app/accessShared'
 import {

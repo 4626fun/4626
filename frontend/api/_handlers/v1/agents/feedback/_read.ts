@@ -34,7 +34,7 @@ import {
   ratingLabel,
   type OnChainFeedback,
   type FeedbackSummary,
-} from '../../../../../server/_lib/erc8004.js'
+} from '../../../../../server/_lib/agent/erc8004.js'
 import { queryFeedbackIndex } from '../../../../../server/_lib/walletIntelligenceCache.js'
 
 declare const process: { env: Record<string, string | undefined> }

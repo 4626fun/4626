@@ -12,17 +12,17 @@ import {
 } from '@/components/deploy/DeploymentSuccess'
 import { getDeploymentsForOwner } from '@/hooks/useDeploymentTracker'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
-import { apiFetch } from '@/lib/apiBase'
-import type { ApiEnvelope } from '@/lib/apiEnvelope'
-import { resolveBaseAppInviteUrl } from '@/lib/baseAppInvite'
-import { getAppBaseUrl } from '@/lib/host'
-import { pickPrivyEmbeddedEoaWallet } from '@/lib/privyEmbeddedEoa'
+import { apiFetch } from '@/lib/api/apiBase'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import { resolveBaseAppInviteUrl } from '@/lib/base/baseAppInvite'
+import { getAppBaseUrl } from '@/lib/env/host'
+import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
 import { AgentOperatorStatus, type AgentOperatorStatusData } from './AgentOperatorStatus'
 import { AgentPublishStatus, type AgentPublishData } from './AgentPublishStatus'
 import { LoadingText } from '@/components/ui/LoadingState'
 
 export { AjnaAutomationOptInCard } from '@/components/deploy/DeploymentSuccess'
-export { pickPrivyEmbeddedEoaWallet } from '@/lib/privyEmbeddedEoa'
+export { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
 
 type AgentData = {
   creatorAddress: string

@@ -6,7 +6,7 @@ import { isAddress, type Address } from 'viem'
 import { AKITA } from '@/config/contracts'
 import { META, PageMeta } from '@/components/seo/PageMeta'
 import { CcaAuctionPanel } from '@/components/cca/CcaAuctionPanel'
-import { toShareSymbol } from '@/lib/tokenSymbols'
+import { toShareSymbol } from '@/lib/tokens/tokenSymbols'
 
 function resolveCcaStrategyFromRouteParam(addr: string | undefined): Address {
   // Preserve backwards compatibility with older links in this repo that passed

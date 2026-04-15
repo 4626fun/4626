@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Component, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
-import { getPrivyAppId, getPrivyClientId, isPrivyClientEnabled } from '@/lib/flags'
+import { getPrivyAppId, getPrivyClientId, isPrivyClientEnabled } from '@/lib/flags/flags'
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth'
 import { base } from 'viem/chains'
 import { createPrivyAppearance } from './clientAppearance'

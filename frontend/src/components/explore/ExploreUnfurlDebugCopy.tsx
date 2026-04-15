@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 
-import { debugLogsFlag } from '@/lib/featureFlags'
+import { debugLogsFlag } from '@/lib/flags/featureFlags'
 import { ExploreCopyButton } from '@/components/explore/ExploreUiPrimitives'
 
 const DEFAULT_SOCIAL_BOT_USER_AGENT = 'Twitterbot/1.0'

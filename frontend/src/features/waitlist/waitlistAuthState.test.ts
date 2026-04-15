@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { apiFetch } from '@/lib/apiBase'
+import { apiFetch } from '@/lib/api/apiBase'
 
 import {
   isAlreadyLoggedInAuthError,
@@ -10,7 +10,7 @@ import {
   shouldStopWaitlistAutoAuthRetry,
 } from './waitlistAuthState'
 
-vi.mock('@/lib/apiBase', () => ({
+vi.mock('@/lib/api/apiBase', () => ({
   apiFetch: vi.fn(async () => ({ ok: true })),
 }))
 

@@ -4,8 +4,8 @@ import type { Address, Hex } from 'viem'
 import { base } from 'viem/chains'
 import { usePublicClient, useWalletClient } from 'wagmi'
 
-import { apiFetch } from '@/lib/apiBase'
-import type { ApiEnvelope } from '@/lib/apiEnvelope'
+import { apiFetch } from '@/lib/api/apiBase'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 
 type CreditSnapshot = {
   wallet: Address

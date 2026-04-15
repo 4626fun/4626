@@ -1,7 +1,7 @@
 import { motion } from 'framer-motion'
 import { VaultGaugeVotingPanel } from '../components/ve33/VaultGaugeVotingPanel'
 import { AKITA } from '../config/contracts'
-import { toShareSymbol } from '@/lib/tokenSymbols'
+import { toShareSymbol } from '@/lib/tokens/tokenSymbols'
 import { META, PageMeta } from '@/components/seo/PageMeta'
 
 // Example vaults - in production, fetch from registry

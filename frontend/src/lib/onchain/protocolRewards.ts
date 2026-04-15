@@ -1,7 +1,7 @@
 import { Address, createPublicClient, http } from 'viem'
 import { base } from 'viem/chains'
-import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/apiEnvelope'
-import { getBrowserBaseReadRpcUrl } from '@/lib/baseReadRpcPolicy'
+import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/api/apiEnvelope'
+import { getBrowserBaseReadRpcUrl } from '@/lib/base/baseReadRpcPolicy'
 
 const PROTOCOL_REWARDS_ADDRESS = `0x${'7777777F279eba3d3Ad8F4E708545291A6fDBA8B'}` as Address
 

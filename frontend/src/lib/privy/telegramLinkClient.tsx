@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { PrivyProvider } from '@privy-io/react-auth'
 
-import { getPrivyAppId, getPrivyClientId, isPrivyClientEnabled } from '@/lib/flags'
+import { getPrivyAppId, getPrivyClientId, isPrivyClientEnabled } from '@/lib/flags/flags'
 
 type PrivyProviderConfig = Parameters<typeof PrivyProvider>[0]['config']
 type DefinedPrivyProviderConfig = NonNullable<PrivyProviderConfig>

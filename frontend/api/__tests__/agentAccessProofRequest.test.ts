@@ -35,7 +35,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
   setNoStore: setNoStoreMock,
 }))
 
-vi.mock('../../server/_lib/agentApiGuard.js', () => ({
+vi.mock('../../server/_lib/agent/agentApiGuard.js', () => ({
   guardAgentApiRequest: guardAgentApiRequestMock,
 }))
 
@@ -48,11 +48,11 @@ vi.mock('../../server/_lib/rateLimit.js', () => ({
   },
 }))
 
-vi.mock('../../server/_lib/agentAccessProof.js', () => ({
+vi.mock('../../server/_lib/agent/agentAccessProof.js', () => ({
   issueAgentAccessProofRequest: issueAgentAccessProofRequestMock,
 }))
 
-vi.mock('../../server/_lib/agentAccessResolver.js', () => ({
+vi.mock('../../server/_lib/agent/agentAccessResolver.js', () => ({
   resolveMembershipForRoom: resolveMembershipForRoomMock,
 }))
 

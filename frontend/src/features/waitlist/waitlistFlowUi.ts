@@ -1,4 +1,4 @@
-import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
+import { SHARE_SYMBOL_PREFIX } from '@/lib/tokens/tokenSymbols'
 
 export type WaitlistEmailUi = {
   title: string

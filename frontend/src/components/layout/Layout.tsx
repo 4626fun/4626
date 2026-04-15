@@ -6,8 +6,8 @@ import {
   getCanonicalMarketingWaitlistPath,
   isMarketingWaitlistEntryLocation,
 } from '@/lib/auth/waitlistEntry'
-import { isPublicSiteMode } from '@/lib/flags'
-import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
+import { isPublicSiteMode } from '@/lib/flags/flags'
+import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
 import { AppLoadingState } from '@/components/layout/AppLoadingState'
 import { FlagToolbarBridge } from '@/components/flags/FlagToolbarBridge'
 

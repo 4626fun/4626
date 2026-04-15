@@ -3,7 +3,7 @@ import path from 'node:path'
 
 import { afterEach, describe, expect, it } from 'vitest'
 
-import { buildAgentRegistration } from '../agentRegistration.js'
+import { buildAgentRegistration } from '../agent/agentRegistration.js'
 
 const ENV_KEYS = [
   'ERC8004_AGENT_REGISTRATION_JSON',

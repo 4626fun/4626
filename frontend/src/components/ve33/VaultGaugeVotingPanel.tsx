@@ -1,8 +1,8 @@
 import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useVaultGaugeVoting, useTimeRemaining, formatVotingPower } from '../../hooks/useVaultGaugeVoting'
-import { logger } from '@/lib/logger'
-import { toShareSymbol } from '@/lib/tokenSymbols'
+import { logger } from '@/lib/observability/logger'
+import { toShareSymbol } from '@/lib/tokens/tokenSymbols'
 import { CONTRACTS } from '@/config/contracts'
 
 const SHARE_SYMBOL = toShareSymbol('4626')

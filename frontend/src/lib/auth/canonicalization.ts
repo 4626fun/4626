@@ -1,5 +1,5 @@
-import { apiFetch, type ApiFetchInit } from '@/lib/apiBase'
-import type { ApiEnvelope } from '@/lib/apiEnvelope'
+import { apiFetch, type ApiFetchInit } from '@/lib/api/apiBase'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 
 type CanonicalizationApiEnvelope<T> = ApiEnvelope<T> & {
   code?: string
@@ -20,11 +20,13 @@ export type CanonicalizationResult = {
   privySynced: boolean
   onboardingBootstrapped: boolean
   onboarding: OnboardingBootstrapResponse | null
-  flags: {
-    needsEmbeddedWallet: boolean
-    needsBaseAppSetup: boolean
-    baseAppUrl: string | null
-  }
+  flags: CanonicalizationFlags
+}
+
+type CanonicalizationFlags = {
+  needsEmbeddedWallet: boolean
+  needsBaseAppSetup: boolean
+  baseAppUrl: string | null
 }
 
 type CanonicalizationParams = {
@@ -51,6 +53,39 @@ function readApiError(payload: unknown, fallback: string): string {
 
 function normalizeToken(token: string | null | undefined): string {
   return typeof token === 'string' ? token.trim() : ''
+}
+
+function emptyCanonicalizationFlags(): CanonicalizationFlags {
+  return {
+    needsEmbeddedWallet: false,
+    needsBaseAppSetup: false,
+    baseAppUrl: null,
+  }
+}
+
+function buildCanonicalizationResult(params: {
+  privySynced: boolean
+  onboardingBootstrapped: boolean
+  onboarding: OnboardingBootstrapResponse | null
+  flags?: CanonicalizationFlags
+}): CanonicalizationResult {
+  return {
+    privySynced: params.privySynced,
+    onboardingBootstrapped: params.onboardingBootstrapped,
+    onboarding: params.onboarding,
+    flags: params.flags ?? emptyCanonicalizationFlags(),
+  }
+}
+
+function readOnboardingFlags(
+  payload: CanonicalizationApiEnvelope<OnboardingBootstrapResponse> | null,
+): CanonicalizationFlags {
+  return {
+    needsEmbeddedWallet: payload?.needsEmbeddedWallet === true,
+    needsBaseAppSetup: payload?.needsBaseAppSetup === true,
+    baseAppUrl:
+      typeof payload?.baseAppUrl === 'string' && payload.baseAppUrl.trim() ? payload.baseAppUrl.trim() : null,
+  }
 }
 
 function isRecoveryRequiredAuthFailure(params: {
@@ -93,16 +128,11 @@ export async function runCanonicalizationPipeline(params: CanonicalizationParams
   const strict = params.strictOnboardingBootstrap === true
 
   if (!token) {
-    return {
+    return buildCanonicalizationResult({
       privySynced: false,
       onboardingBootstrapped: false,
       onboarding: null,
-      flags: {
-        needsEmbeddedWallet: false,
-        needsBaseAppSetup: false,
-        baseAppUrl: null,
-      },
-    }
+    })
   }
 
   const authRes = await fetcher('/api/auth/privy', {
@@ -143,27 +173,18 @@ export async function runCanonicalizationPipeline(params: CanonicalizationParams
   const onboardingPayload =
     (await onboardingRes.json().catch(() => null)) as CanonicalizationApiEnvelope<OnboardingBootstrapResponse> | null
   if (onboardingRes.ok && onboardingPayload?.success && onboardingPayload.data) {
-    return {
+    return buildCanonicalizationResult({
       privySynced: true,
       onboardingBootstrapped: true,
       onboarding: onboardingPayload.data,
-      flags: {
-        needsEmbeddedWallet: false,
-        needsBaseAppSetup: false,
-        baseAppUrl: null,
-      },
-    }
+    })
   }
 
-  const flags = {
-    needsEmbeddedWallet: onboardingPayload?.needsEmbeddedWallet === true,
-    needsBaseAppSetup: onboardingPayload?.needsBaseAppSetup === true,
-    baseAppUrl: typeof onboardingPayload?.baseAppUrl === 'string' && onboardingPayload.baseAppUrl.trim()
-      ? onboardingPayload.baseAppUrl.trim()
-      : null,
-  }
+  const flags = readOnboardingFlags(onboardingPayload)
   if (strict) {
-    const error = new Error(readApiError(onboardingPayload, 'Failed to bootstrap canonical delegation.')) as CanonicalizationError
+    const error = new Error(
+      readApiError(onboardingPayload, 'Failed to bootstrap canonical delegation.'),
+    ) as CanonicalizationError
     if (flags.needsEmbeddedWallet) error.needsEmbeddedWallet = true
     if (flags.needsBaseAppSetup) error.needsBaseAppSetup = true
     if (flags.baseAppUrl) error.baseAppUrl = flags.baseAppUrl
@@ -171,16 +192,11 @@ export async function runCanonicalizationPipeline(params: CanonicalizationParams
   }
 
   if (isTransientOnboardingBootstrapFailure({ status: onboardingRes.status, payload: onboardingPayload })) {
-    return {
+    return buildCanonicalizationResult({
       privySynced: true,
       onboardingBootstrapped: false,
       onboarding: null,
-      flags: {
-        needsEmbeddedWallet: false,
-        needsBaseAppSetup: false,
-        baseAppUrl: null,
-      },
-    }
+    })
   }
 
   // In non-strict mode we only tolerate actionable delegation flags.
@@ -189,10 +205,10 @@ export async function runCanonicalizationPipeline(params: CanonicalizationParams
     throw new Error(readApiError(onboardingPayload, 'Failed to bootstrap canonical delegation.'))
   }
 
-  return {
+  return buildCanonicalizationResult({
     privySynced: true,
     onboardingBootstrapped: false,
     onboarding: null,
     flags,
-  }
+  })
 }

@@ -69,7 +69,7 @@ const {
   resolveAuthorizedRequestPrincipalMock: vi.fn(async () => null),
 }))
 
-vi.mock('../../server/_lib/session.js', () => ({
+vi.mock('../../server/_lib/auth/session.js', () => ({
   getSessionAddress: getSessionAddressMock,
   isAdminAddress: isAdminAddressMock,
 }))
@@ -91,7 +91,7 @@ vi.mock('../../server/_lib/imageGenerationRunner.js', () => ({
   processImageGenerationJob: processImageGenerationJobMock,
 }))
 
-vi.mock('../../server/_lib/session.js', () => ({
+vi.mock('../../server/_lib/auth/session.js', () => ({
   getSessionAddress: getSessionAddressMock,
   isAdminAddress: isAdminAddressMock,
 }))
@@ -100,7 +100,7 @@ vi.mock('../../server/_lib/coinParties.js', () => ({
   resolveCoinPartiesAndOwner: resolveCoinPartiesAndOwnerMock,
 }))
 
-vi.mock('../../server/_lib/requestPrincipal.js', () => ({
+vi.mock('../../server/_lib/auth/requestPrincipal.js', () => ({
   resolveAuthorizedRequestPrincipal: resolveAuthorizedRequestPrincipalMock,
 }))
 

@@ -6,7 +6,7 @@ import {
   normalizeWaitlistReferralCode,
   storeWaitlistReferralCode,
 } from '@/lib/auth/waitlistEntry'
-import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
+import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
 
 export function WaitlistInviteEntry() {
   const { referralCode } = useParams<{ referralCode?: string }>()

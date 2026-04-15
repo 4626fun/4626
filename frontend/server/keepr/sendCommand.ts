@@ -3,7 +3,7 @@ import { encodeFunctionData, parseUnits, isAddress, getAddress } from 'viem'
 
 import { logger } from '../_lib/logger.js'
 import { walletRpc } from '../_lib/privyWalletApi.js'
-import { assertTeeAttestationOrThrow } from '../_lib/teeAttestationGate.js'
+import { assertTeeAttestationOrThrow } from '../_lib/agent/teeAttestationGate.js'
 import { checkDurableRateLimit } from '../_lib/durableRateLimit.js'
 import { getDb, isDbConfigured } from '../_lib/postgres.js'
 import type { KeeprVaultRow } from '../_lib/keeprRegistry.js'

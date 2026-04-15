@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 import { FlagValues, FlagDefinitions } from 'flags/react'
 
-import { resolveAllFlagValues, buildFlagDefinitions } from '@/lib/featureFlags'
+import { resolveAllFlagValues, buildFlagDefinitions } from '@/lib/flags/featureFlags'
 import { useRemoteFlagsInit } from '@/hooks/useRemoteFlags'
 
 /**

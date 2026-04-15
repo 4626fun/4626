@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import type { Address, Hex } from 'viem'
 import { encodeFunctionData } from 'viem'
 
-import { appendDataSuffixToHex, resolveDataSuffix, payloadEndsWithDataSuffix } from '../baseBuilderCodes'
-import { applyBuilderDataSuffixToCalls } from './coinbaseErc4337'
+import { appendDataSuffixToHex, resolveDataSuffix, payloadEndsWithDataSuffix } from '@/lib/base/baseBuilderCodes'
+import { applyBuilderDataSuffixToCalls } from './coinbaseErc4337BuilderSuffix'
 
 describe('applyBuilderDataSuffixToCalls', () => {
   const target = '0x0000000000000000000000000000000000000001' as Address

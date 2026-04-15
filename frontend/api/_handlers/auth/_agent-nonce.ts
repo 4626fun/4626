@@ -22,7 +22,7 @@ import {
 
 import { ensureSiwaNonceSchema, isAddressLike, parseAgentRegistryRef, storeSiwaNonce } from '../../../server/auth/_siwa.js'
 import { resolveCanonicalSmartWalletAddress } from '../../../server/_lib/canonicalWalletResolver.js'
-import { getIdentityRegistryAddress } from '../../../server/_lib/erc8004.js'
+import { getIdentityRegistryAddress } from '../../../server/_lib/agent/erc8004.js'
 import { getCanonicalOrigin } from '../../../server/_lib/origin.js'
 
 

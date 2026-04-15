@@ -7,7 +7,7 @@ import {
   createImageGenerationProject,
   directComposeProject,
   getVaultImage,
-} from '@/lib/imageGenerationApi'
+} from '@/lib/api/imageGenerationApi'
 
 type Props = {
   vaultAddress: string
