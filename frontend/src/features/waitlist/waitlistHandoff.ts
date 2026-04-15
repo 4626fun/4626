@@ -1,4 +1,4 @@
-import { apiFetch } from '@/lib/apiBase'
+import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/wallet/onboardingWallet'
 
 export type PrivyAuthSessionResponse = {

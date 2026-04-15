@@ -89,7 +89,7 @@ vi.mock('../../server/_lib/canonicalWalletResolver.js', () => ({
   resolveCanonicalSmartWalletAddress: resolveCanonicalSmartWalletAddressMock,
 }))
 
-vi.mock('../../server/_lib/erc8004.js', () => ({
+vi.mock('../../server/_lib/agent/erc8004.js', () => ({
   getIdentityRegistryAddress: getIdentityRegistryAddressMock,
 }))
 

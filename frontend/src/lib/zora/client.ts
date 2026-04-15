@@ -1,8 +1,8 @@
 import type { Address } from 'viem'
 import { base } from 'viem/chains'
-import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/apiEnvelope'
-import type { ApiEnvelope } from '@/lib/apiEnvelope'
-import { logger } from '@/lib/logger'
+import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/api/apiEnvelope'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import { logger } from '@/lib/observability/logger'
 
 import { initZoraCoinsSdk } from './init'
 import type { ZoraCoin, ZoraExploreList, ZoraExploreListType, ZoraProfile } from './types'

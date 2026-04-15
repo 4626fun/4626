@@ -12,8 +12,8 @@
 
 import { useEffect } from 'react'
 
-import { PAGE_META } from '@/lib/pageMetaContent'
-import { SITE_APP_NAME, SITE_DESCRIPTION, SITE_IMAGE_ALT } from '@/lib/siteMeta'
+import { PAGE_META } from '@/lib/seo/pageMetaContent'
+import { SITE_APP_NAME, SITE_DESCRIPTION, SITE_IMAGE_ALT } from '@/lib/seo/siteMeta'
 
 function getPageOrigin(): string {
   if (typeof window === 'undefined') return 'https://app.4626.fun'

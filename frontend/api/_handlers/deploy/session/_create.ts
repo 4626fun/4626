@@ -33,7 +33,7 @@ import { ensureWaitlistSchema } from '../../../../server/_lib/waitlistSchema.js'
 
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/supabaseAdmin.js'
 import { getOrCreateCreatorAgentWallet } from '../../../../server/_lib/creatorAgentWallets.js'
-import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
+import { readDeployAuthFromRequest } from '../../../../server/_lib/auth/deployAuth.js'
 import { buildDeployPermissionGrant } from '../../../../server/_lib/erc7712Permissions.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { resolveCoinPartiesAndOwner } from '../../../../server/_lib/coinParties.js'

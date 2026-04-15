@@ -32,12 +32,11 @@
     "src/config/contracts.defaults.ts",
     "src/deploy/**/*.ts",
     "src/lib/deploy/create2Salts.ts",
-    "src/lib/erc8004AgentUriPolicy.ts",
-    "src/lib/viteManualChunks.ts",
+    "src/lib/agent/erc8004AgentUriPolicy.ts",
+    "src/lib/build/viteManualChunks.ts",
     "shared/deploy/bytecode.generated.ts",
     "shared/deploy/create2Salts.ts",
     "shared/wallet/bytecode.ts",
-    "build/viteManualChunks.ts",
     "src/wallet/canonicalWalletPolicy.ts"
   ]
 }

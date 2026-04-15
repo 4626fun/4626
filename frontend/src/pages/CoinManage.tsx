@@ -6,7 +6,7 @@ import { isAddress, type Address } from 'viem'
 import { base } from 'wagmi/chains'
 import { ArrowLeft, Loader2 } from 'lucide-react'
 
-import { isLensGroveEnabled } from '@/lib/flags'
+import { isLensGroveEnabled } from '@/lib/flags/flags'
 import { fetchLensJson, resolveLensUri, uploadImmutableBlob, uploadImmutableJson } from '@/lib/lens/grove'
 import { useZoraCoin } from '@/lib/zora/hooks'
 

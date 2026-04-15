@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
-import { buildAgentRegistration, type RegistrationFile } from '../server/_lib/agentRegistration.js'
+import { buildAgentRegistration, type RegistrationFile } from '../server/_lib/agent/agentRegistration.js'
 import { getErc8004PublicOrigin } from '../server/_lib/origin.js'
 
 function setNoStore(res: VercelResponse) {

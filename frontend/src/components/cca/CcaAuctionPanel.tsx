@@ -4,7 +4,7 @@ import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteCont
 import type { Address } from 'viem'
 import { formatUnits, isAddress, parseEther, parseEventLogs } from 'viem'
 import { motion, AnimatePresence } from 'framer-motion'
-import { apiFetch } from '@/lib/apiBase'
+import { apiFetch } from '@/lib/api/apiBase'
 
 import {
   MAX_UINT128,

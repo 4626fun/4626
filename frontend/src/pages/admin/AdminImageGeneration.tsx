@@ -7,12 +7,12 @@ import {
   getImageGenerationJob,
   getImageGenerationProject,
   uploadImageGenerationAsset,
-} from '@/lib/imageGenerationApi'
+} from '@/lib/api/imageGenerationApi'
 import {
   generateAgentCreative,
   isReferralOgEnvelope,
   type CreativeEnvelope,
-} from '@/lib/agentCreative'
+} from '@/lib/agent/agentCreative'
 
 function latestOutputUrl(project: Awaited<ReturnType<typeof getImageGenerationProject>> | null): string | null {
   if (!project?.assets?.length) return null

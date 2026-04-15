@@ -6,7 +6,7 @@ import {
   WalletWalletConnect,
 } from '@web3icons/react'
 
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 import { inferWalletProvider, walletProviderLabel } from '@/lib/wallet/providerIdentity'
 
 interface WalletProviderIconProps {

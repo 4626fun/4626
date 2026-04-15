@@ -1,4 +1,4 @@
-import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
+import { SHARE_SYMBOL_PREFIX } from '@/lib/tokens/tokenSymbols'
 import { AccountSetupWorkspaceView } from '@/features/accountSetup/AccountSetupWorkspaceView'
 import type { AccountSetupMe } from '@/features/accountSetup/types'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'

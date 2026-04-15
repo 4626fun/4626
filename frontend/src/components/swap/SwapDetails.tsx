@@ -3,7 +3,7 @@ import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 
 import { RouteDisplay } from '@/components/swap/RouteDisplay'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 type SwapDetailsProps = {
   routeSummary: string | null

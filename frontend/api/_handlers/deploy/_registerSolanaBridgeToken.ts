@@ -23,7 +23,7 @@ import {
 
 
 
-import { readDeployAuthFromRequest } from '../../../server/_lib/deployAuth.js'
+import { readDeployAuthFromRequest } from '../../../server/_lib/auth/deployAuth.js'
 
 
 import {

@@ -6,14 +6,14 @@ const getBasenameProfileByNameMock = vi.fn()
 const resolveBasenameAddressMock = vi.fn()
 const apiFetchMock = vi.fn()
 
-vi.mock('@/lib/basename-api', () => ({
+vi.mock('@/lib/basename/basename-api', () => ({
   getBasename: (...args: unknown[]) => getBasenameMock(...args),
   getBasenameProfile: (...args: unknown[]) => getBasenameProfileMock(...args),
   getBasenameProfileByName: (...args: unknown[]) => getBasenameProfileByNameMock(...args),
   resolveBasenameAddress: (...args: unknown[]) => resolveBasenameAddressMock(...args),
 }))
 
-vi.mock('@/lib/apiBase', () => ({
+vi.mock('@/lib/api/apiBase', () => ({
   apiFetch: (...args: unknown[]) => apiFetchMock(...args),
 }))
 

@@ -17,7 +17,7 @@ const {
   createPublicClientMock: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/session.js', () => ({
+vi.mock('../../server/_lib/auth/session.js', () => ({
   getSessionAddress: getSessionAddressMock,
 }))
 

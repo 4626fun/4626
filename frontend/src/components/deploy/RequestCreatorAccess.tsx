@@ -4,9 +4,9 @@ import { useEffect, useMemo } from 'react'
 import { useAccount } from 'wagmi'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
-import { apiFetch } from '@/lib/apiBase'
-import { API_ENDPOINTS } from '@/lib/apiEndpoints'
-import type { ApiEnvelope } from '@/lib/apiEnvelope'
+import { apiFetch } from '@/lib/api/apiBase'
+import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 
 type CreatorAccessStatus =
   | {

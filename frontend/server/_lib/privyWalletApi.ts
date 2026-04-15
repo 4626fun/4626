@@ -1,5 +1,5 @@
 import { createPrivateKey, sign } from 'node:crypto'
-import { assertTeeAttestationOrThrow } from './teeAttestationGate.js'
+import { assertTeeAttestationOrThrow } from './agent/teeAttestationGate.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

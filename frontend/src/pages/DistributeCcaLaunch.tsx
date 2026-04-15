@@ -4,7 +4,7 @@ import { ArrowLeft, ArrowRight } from 'lucide-react'
 
 import { PageMeta } from '@/components/seo/PageMeta'
 import { STORY_CONTENT } from '@/features/home/vault-flow/model/storyContent'
-import { SHARE_SYMBOL_PREFIX } from '@/lib/tokenSymbols'
+import { SHARE_SYMBOL_PREFIX } from '@/lib/tokens/tokenSymbols'
 
 const DEFAULT_DEPOSIT_TOKENS = STORY_CONTENT.defaultDepositTokens
 const DEFAULT_AUCTION_WINDOW = STORY_CONTENT.defaultAuctionWindow

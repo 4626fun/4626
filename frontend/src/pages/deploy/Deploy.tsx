@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 
 import { PageMeta } from '@/components/seo/PageMeta'
-import { useScreenshotReady } from '@/lib/screenshotMode'
+import { useScreenshotReady } from '@/lib/ui/screenshotMode'
 
 const CARD_BASE =
   'vault-surface vault-hover-lift rounded-2xl p-6 sm:p-8 border border-[rgb(var(--vault-border-strong)/0.6)]'

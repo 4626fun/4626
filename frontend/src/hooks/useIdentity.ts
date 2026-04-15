@@ -8,7 +8,7 @@
 import { useEffect, useState } from 'react'
 import { createPublicClient, fallback, http } from 'viem'
 import { mainnet } from 'viem/chains'
-import { getBasenameProfile, formatBasename } from '@/lib/basename-api'
+import { getBasenameProfile, formatBasename } from '@/lib/basename/basename-api'
 
 export type IdentitySource = 'lens' | 'ens' | 'basename' | 'address'
 

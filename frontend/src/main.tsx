@@ -3,8 +3,8 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 
 import { RootRouter } from './RootRouter'
-import { ThemeProvider } from '@/lib/theme'
-import { privyAnalyticsFlag } from '@/lib/featureFlags'
+import { ThemeProvider } from '@/lib/ui/theme'
+import { privyAnalyticsFlag } from '@/lib/flags/featureFlags'
 import {
   getPrivyPasswordlessBackoffMs,
   getPrivyPasswordlessFailureBackoffMs,

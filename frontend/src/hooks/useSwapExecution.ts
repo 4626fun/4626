@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { erc20Abi, formatUnits, isAddress, parseUnits } from 'viem'
-import { debugLogsFlag } from '@/lib/featureFlags'
+import { debugLogsFlag } from '@/lib/flags/featureFlags'
 
 import { CONTRACTS } from '@/config/contracts'
 import {
@@ -9,7 +9,7 @@ import {
   detectTxSendMode,
   type TxRouterContext,
   type TxRouterDebugEvent,
-} from '@/lib/txRouter'
+} from '@/lib/tx/txRouter'
 import {
   evaluateSwapPolicyInput,
   evaluateSwapPolicyRouting,

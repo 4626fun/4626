@@ -5,7 +5,7 @@ import { AuctionPriceChart } from '@/components/cca/AuctionPriceChart'
 import { AuctionFAQ } from '@/components/cca/AuctionFAQ'
 import { AuctionRecentBidsPanel } from '@/components/cca/AuctionRecentBidsPanel'
 import { InfoPopover } from '@/components/cca/InfoPopover'
-import { toShareSymbol } from '@/lib/tokenSymbols'
+import { toShareSymbol } from '@/lib/tokens/tokenSymbols'
 
 function rand(): number {
   if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {

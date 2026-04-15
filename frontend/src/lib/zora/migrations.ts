@@ -8,8 +8,8 @@
 import { createPublicClient, http } from 'viem'
 import { decodeAbiParameters, isAddress, parseAbiParameters } from 'viem'
 import { base } from 'viem/chains'
-import { getBrowserBaseReadRpcUrl } from '@/lib/baseReadRpcPolicy'
-import { zoraMigrationVerifyImplFlag } from '@/lib/featureFlags'
+import { getBrowserBaseReadRpcUrl } from '@/lib/base/baseReadRpcPolicy'
+import { zoraMigrationVerifyImplFlag } from '@/lib/flags/featureFlags'
 
 // LiquidityMigrated event signature
 // event LiquidityMigrated(PoolKey oldPoolKey, bytes32 indexed oldPoolKeyHash, PoolKey newPoolKey, bytes32 indexed newPoolKeyHash)

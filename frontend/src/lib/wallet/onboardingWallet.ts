@@ -1,11 +1,11 @@
-import { apiFetch } from '@/lib/apiBase'
-import { resolveApiErrorMessage } from '@/lib/apiEnvelope'
+import { apiFetch } from '@/lib/api/apiBase'
+import { resolveApiErrorMessage } from '@/lib/api/apiEnvelope'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
-import type { ApiEnvelope } from '@/lib/apiEnvelope'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { isAddress } from 'viem'
 import { base } from 'viem/chains'
-export type { ApiEnvelope } from '@/lib/apiEnvelope'
+export type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 
 export type OwnerDelegationFlags = {
   needsEmbeddedWallet?: boolean
@@ -282,7 +282,6 @@ const PAYMASTER_SESSION_RETRY_DELAY_MS = import.meta.env.MODE === 'test' ? 5 : 3
 const USER_OP_SUBMIT_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 120 : 45_000
 const SEND_CALLS_STATUS_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 25 : 8_000
 const SEND_CALLS_STATUS_POLL_MS = import.meta.env.MODE === 'test' ? 5 : 500
-const PREFER_SPONSORED_CANONICAL_SELF_APPROVAL = false
 
 function getConfirmOwnerRetryDelayMs(attempt: number): number {
   const multiplier = Math.min(5, Math.max(1, attempt + 1))
@@ -317,11 +316,6 @@ function isUserRejectedWalletAction(error: unknown): boolean {
 function shouldFallbackSelfAuthenticatedCanonicalToSendCalls(error: unknown): boolean {
   const { code } = classifyOwnerApprovalError(error)
   return code === 'aa23_validation' || code === 'typed_data_timeout' || code === 'wallet_generation_insufficient'
-}
-
-function isInsufficientFundsLikeWalletSendCallsError(error: unknown): boolean {
-  const { code } = classifyOwnerApprovalError(error)
-  return code === 'wallet_generation_insufficient' || code === 'paymaster_insufficient'
 }
 
 function emitOwnerApprovalStage(
@@ -623,81 +617,6 @@ export async function sendPreparedOwnerTx(params: {
         if (!walletClient.account) {
           throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
         }
-        if (PREFER_SPONSORED_CANONICAL_SELF_APPROVAL) {
-          try {
-            txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
-          } catch (sponsoredError) {
-            emitOwnerApprovalStage(onStageEvent, {
-              runId: effectiveApprovalRunId,
-              stage: 'userop_typed',
-              status: 'error',
-              executionMode,
-              signerAddress,
-              canonicalCswAddress: canonicalSmartWalletAddress,
-              code: classifyOwnerApprovalError(sponsoredError).code,
-              message: sponsoredError instanceof Error ? sponsoredError.message : String(sponsoredError ?? ''),
-            })
-            if (!shouldFallbackSelfAuthenticatedCanonicalToSendCalls(sponsoredError)) throw sponsoredError
-            let nonTypedRetryError: unknown = null
-            try {
-              txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true, attempt: 2 })
-            } catch (retryError) {
-              emitOwnerApprovalStage(onStageEvent, {
-                runId: effectiveApprovalRunId,
-                stage: 'userop_nontyped',
-                status: 'error',
-                executionMode,
-                signerAddress,
-                canonicalCswAddress: canonicalSmartWalletAddress,
-                code: classifyOwnerApprovalError(retryError).code,
-                message: retryError instanceof Error ? retryError.message : String(retryError ?? ''),
-              })
-              nonTypedRetryError = retryError
-            }
-            if (txHash) {
-              // Retry without typed-data signing succeeded.
-            } else if (nonTypedRetryError && !shouldFallbackSelfAuthenticatedCanonicalToSendCalls(nonTypedRetryError)) {
-              throw nonTypedRetryError
-            } else {
-            const walletRequest =
-              typeof walletClient.request === 'function'
-                ? async (args: { method: string; params?: unknown[] }) => await walletClient.request!(args as any)
-                : null
-            if (walletRequest) {
-              try {
-                txHash = await submitOwnerTxViaWalletSendCalls({
-                  walletRequest,
-                  chainId: txRequest.chainId,
-                  sender: canonicalSmartWalletAddress as `0x${string}`,
-                  to: txRequest.to,
-                  data: txRequest.data,
-                  paymasterUrl,
-                  approvalRunId: effectiveApprovalRunId,
-                  executionMode,
-                  signerAddress,
-                  canonicalCswAddress: canonicalSmartWalletAddress,
-                  onStageEvent,
-                })
-              } catch (sendCallsError) {
-                emitOwnerApprovalStage(onStageEvent, {
-                  runId: effectiveApprovalRunId,
-                  stage: 'send_calls',
-                  status: 'error',
-                  executionMode,
-                  signerAddress,
-                  canonicalCswAddress: canonicalSmartWalletAddress,
-                  code: classifyOwnerApprovalError(sendCallsError).code,
-                  message: sendCallsError instanceof Error ? sendCallsError.message : String(sendCallsError ?? ''),
-                })
-                if (!isInsufficientFundsLikeWalletSendCallsError(sendCallsError)) throw sendCallsError
-                txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true, attempt: 3 })
-              }
-            } else {
-              txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true, attempt: 3 })
-            }
-            }
-          }
-        } else {
         const walletRequest =
           typeof walletClient.request === 'function'
             ? async (args: { method: string; params?: unknown[] }) => await walletClient.request!(args as any)
@@ -810,7 +729,6 @@ export async function sendPreparedOwnerTx(params: {
               throw nonTypedRetryError ?? sponsoredError
             }
           }
-        }
         }
       } else {
         txHash = await runSponsoredCanonicalUserOp()

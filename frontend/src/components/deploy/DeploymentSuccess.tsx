@@ -6,8 +6,8 @@ import { useMutation, useQuery } from '@tanstack/react-query'
 import { usePublicClient } from 'wagmi'
 import { ExternalLink, CheckCircle2, ArrowRight, Wallet, BarChart3, Sparkles } from 'lucide-react'
 import type { DeploymentRecord } from '@/hooks/useDeploymentTracker'
-import { apiFetch } from '@/lib/apiBase'
-import type { ApiEnvelope } from '@/lib/apiEnvelope'
+import { apiFetch } from '@/lib/api/apiBase'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 
 const shortAddress = (addr: string) => `${addr.slice(0, 6)}…${addr.slice(-4)}`
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'

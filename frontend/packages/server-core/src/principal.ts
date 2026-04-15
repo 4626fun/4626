@@ -1,1 +1,1 @@
-export { readRequestPrincipal, readRequestPrincipalAddress, resolveAuthorizedRequestPrincipal } from '../../../server/_lib/requestPrincipal.js'
+export { readRequestPrincipal, readRequestPrincipalAddress, resolveAuthorizedRequestPrincipal } from '../../../server/_lib/auth/requestPrincipal.js'

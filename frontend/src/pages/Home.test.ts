@@ -40,7 +40,7 @@ vi.mock('@/components/seo/PageMeta', () => ({
   },
 }))
 
-vi.mock('@/lib/host', () => ({
+vi.mock('@/lib/env/host', () => ({
   getHostMode: () => 'marketing',
 }))
 

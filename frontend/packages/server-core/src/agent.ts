@@ -1,1 +1,1 @@
-export { guardAgentApiRequest } from '../../../server/_lib/agentApiGuard.js'
+export { guardAgentApiRequest } from '../../../server/_lib/agent/agentApiGuard.js'

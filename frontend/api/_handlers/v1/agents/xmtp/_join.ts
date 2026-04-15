@@ -14,7 +14,7 @@ import {
 } from '../../../../../packages/server-core/src/index.js'
 
 
-import { verifyAgentRoomAccessToken } from '../../../../../server/_lib/agentAccessProof.js'
+import { verifyAgentRoomAccessToken } from '../../../../../server/_lib/agent/agentAccessProof.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 

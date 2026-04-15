@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react'
 import { AlertTriangle, CheckCircle2, Info, X, XCircle } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 type AlertVariant = 'info' | 'warning' | 'error' | 'success'
 

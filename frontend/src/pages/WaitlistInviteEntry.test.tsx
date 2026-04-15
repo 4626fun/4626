@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { render, screen } from '@testing-library/react'
 
-vi.mock('@/lib/host', () => ({
+vi.mock('@/lib/env/host', () => ({
   getHostMode: () => 'marketing',
   getMarketingBaseUrl: () => 'https://4626.fun',
 }))

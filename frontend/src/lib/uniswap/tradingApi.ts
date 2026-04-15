@@ -1,9 +1,9 @@
 import { normalizeUniswapError } from './error'
 import type { components } from './generated/tradeApi'
-import { apiFetch } from '@/lib/apiBase'
-import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/apiEnvelope'
-import { API_ENDPOINTS } from '@/lib/apiEndpoints'
-import { APP_ORIGIN, MARKETING_ORIGIN } from '@/lib/host'
+import { apiFetch } from '@/lib/api/apiBase'
+import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/api/apiEnvelope'
+import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
+import { APP_ORIGIN, MARKETING_ORIGIN } from '@/lib/env/host'
 import { buildCdpPriceRequest, executeCdpSwap, fetchCdpSwapPrice } from '@/lib/swap/cdpApi'
 import { resolveSwapProviderSelection, shouldFallbackToUniswap, type SwapProvider } from '@/lib/swap/providerConfig'
 

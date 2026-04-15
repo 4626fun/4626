@@ -10,12 +10,15 @@ const exts = new Set(['.ts', '.tsx', '.js', '.mjs', '.cjs'])
 const bannedPatterns = [
   /server\/auth\/_shared\.js$/,
   /server\/_lib\/agentApiGuard\.js$/,
+  /server\/_lib\/agent\/agentApiGuard\.js$/,
   /server\/_lib\/contracts\.js$/,
   /server\/_lib\/logger\.js$/,
   /server\/_lib\/postgres\.js$/,
   /server\/_lib\/rateLimit\.js$/,
   /server\/_lib\/requestPrincipal\.js$/,
+  /server\/_lib\/auth\/requestPrincipal\.js$/,
   /server\/_lib\/session\.js$/,
+  /server\/_lib\/auth\/session\.js$/,
 ]
 
 const importRegex =

@@ -51,7 +51,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
   readJsonBody: vi.fn(async (req: any) => req.body ?? null),
 }))
 
-vi.mock('../../server/_lib/deployAuth.js', () => ({
+vi.mock('../../server/_lib/auth/deployAuth.js', () => ({
   readDeployAuthFromRequest: readDeployAuthMock,
 }))
 
@@ -65,7 +65,7 @@ vi.mock('../../server/_lib/rateLimit.js', () => ({
   rateLimitKey: rateLimitKeyMock,
 }))
 
-vi.mock('../../server/_lib/session.js', () => ({
+vi.mock('../../server/_lib/auth/session.js', () => ({
   isAdminAddress: isAdminAddressMock,
 }))
 

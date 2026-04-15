@@ -13,7 +13,7 @@ import {
 } from '../../../../packages/server-core/src/index.js'
 
 
-import { resolveAgentCapabilityResponse } from '../../../../server/_lib/agentAccessResolver.js'
+import { resolveAgentCapabilityResponse } from '../../../../server/_lib/agent/agentAccessResolver.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 

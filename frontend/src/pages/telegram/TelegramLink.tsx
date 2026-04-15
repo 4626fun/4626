@@ -4,16 +4,16 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useLoginWithEmail, usePrivy } from '@privy-io/react-auth'
 
 import { META, PageMeta } from '@/components/seo/PageMeta'
-import { apiFetch } from '@/lib/apiBase'
-import type { ApiEnvelope } from '@/lib/apiEnvelope'
+import { apiFetch } from '@/lib/api/apiBase'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { writeStoredSessionToken } from '@/hooks/useSiweAuth'
 import {
   clearStoredTelegramMiniAppLinkContext,
   resolveTelegramMiniAppLinkContext,
   stripTelegramMiniAppLinkParams,
   type TelegramMiniAppLinkContext,
-} from '@/lib/telegramMiniAppLink'
-import { createTelegramLinkFlowId, trackTelegramLinkTelemetryEvent } from '@/lib/telegramLinkTelemetry'
+} from '@/lib/telegram/telegramMiniAppLink'
+import { createTelegramLinkFlowId, trackTelegramLinkTelemetryEvent } from '@/lib/telegram/telegramLinkTelemetry'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import {
   ensureTelegramMiniAppSession,
@@ -21,7 +21,7 @@ import {
   openTelegramExternalLink,
   readTelegramWebApp,
   setupTelegramMiniAppUi,
-} from '@/lib/telegramWebApp'
+} from '@/lib/telegram/telegramWebApp'
 
 import {
   createFlowError,

@@ -5,14 +5,14 @@ import { createWalletClient, custom, type Address } from 'viem'
 import { base } from 'viem/chains'
 import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 
-import { apiFetch } from '@/lib/apiBase'
-import { trackEvent } from '@/lib/analytics'
+import { apiFetch } from '@/lib/api/apiBase'
+import { trackEvent } from '@/lib/analytics/analytics'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
-import { logger } from '@/lib/logger'
+import { logger } from '@/lib/observability/logger'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { extractPrivyWalletsFromUser, useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import { isUnauthorizedCrossAppLinkError, performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
-import { isTelegramMiniAppContext, readPrivyTelegramLaunchParams } from '@/lib/telegramWebApp'
+import { isTelegramMiniAppContext, readPrivyTelegramLaunchParams } from '@/lib/telegram/telegramWebApp'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import {
   type ApiEnvelope,
@@ -27,7 +27,7 @@ import {
   shouldRefreshOwnerDelegationOnForeground,
 } from '@/lib/wallet/onboardingWallet'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
-import { ensureWalletAlignedPaymasterSessionDetailed } from '@/lib/paymasterSession'
+import { ensureWalletAlignedPaymasterSessionDetailed } from '@/lib/paymaster/paymasterSession'
 import { buildZoraHandoffUrl } from '@/lib/zora/referrals'
 import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
 import { selectCrossAppAuthAction } from '@/features/waitlist/ownerInstallMapping'

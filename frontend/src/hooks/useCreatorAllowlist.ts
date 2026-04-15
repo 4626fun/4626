@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
-import { API_ENDPOINTS } from '@/lib/apiEndpoints'
-import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/apiEnvelope'
-import { apiFetch } from '@/lib/apiBase'
+import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
+import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/api/apiEnvelope'
+import { apiFetch } from '@/lib/api/apiBase'
 
 export type CreatorAllowlistMode = 'disabled' | 'enforced'
 

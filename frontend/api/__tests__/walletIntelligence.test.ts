@@ -48,7 +48,7 @@ vi.mock('../../server/_lib/walletIntelligenceCache.js', () => ({
   cacheWalletIntelligence: cacheWalletIntelligenceMock,
 }))
 
-vi.mock('../../server/_lib/agentApiGuard.js', () => ({
+vi.mock('../../server/_lib/agent/agentApiGuard.js', () => ({
   guardAgentApiRequest: guardMock,
   AGENT_RATE_LIMITS: {
     read: { windowMs: 60_000, maxRequests: 120 },
@@ -58,7 +58,7 @@ vi.mock('../../server/_lib/agentApiGuard.js', () => ({
   },
 }))
 
-vi.mock('../../server/_lib/agentAudit.js', () => ({
+vi.mock('../../server/_lib/agent/agentAudit.js', () => ({
   logAgentApiRequest: vi.fn(),
 }))
 

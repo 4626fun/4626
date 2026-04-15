@@ -14,7 +14,7 @@ import {
   type TradeQuoteRequest,
   type TradeQuoteResponse,
 } from './tradingApi'
-import { MARKETING_ORIGIN } from '@/lib/host'
+import { MARKETING_ORIGIN } from '@/lib/env/host'
 
 const VALID_TX = {
   to: '0x0000000000000000000000000000000000000001',

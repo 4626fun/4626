@@ -1,5 +1,5 @@
-import type { ApiEnvelope } from '@/lib/apiEnvelope'
-import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/apiEnvelope'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import { parseApiEnvelope, resolveApiErrorMessage } from '@/lib/api/apiEnvelope'
 
 export type DebankChainBalance = {
   id: string

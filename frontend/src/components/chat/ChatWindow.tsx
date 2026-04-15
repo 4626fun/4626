@@ -13,8 +13,8 @@ import { Minus, X, Send, Loader2, ArrowLeft, RotateCcw, CornerUpLeft, XCircle } 
 import { useAccount } from 'wagmi'
 import { useXmtp, type ChatMessage } from '@/lib/xmtp/provider'
 import { useIdentity } from '@/hooks/useIdentity'
-import { apiFetch } from '@/lib/apiBase'
-import { trackEvent } from '@/lib/analytics'
+import { apiFetch } from '@/lib/api/apiBase'
+import { trackEvent } from '@/lib/analytics/analytics'
 import { useAccountContext } from '@/wallet/accountContext'
 import { getAgentIdentity } from './agentIdentity'
 import {

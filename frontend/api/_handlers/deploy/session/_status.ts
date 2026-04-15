@@ -20,7 +20,7 @@ import { getCanonicalOrigin } from '../../../../server/_lib/origin.js'
 import { buildUserOpErrorDebug } from '../../../../server/_lib/userOpRevertDebug.js'
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
 import { parseGrant, validateCallsAgainstGrant } from '../../../../server/_lib/erc7712Permissions.js'
-import { readDeployAuthFromRequest } from '../../../../server/_lib/deployAuth.js'
+import { readDeployAuthFromRequest } from '../../../../server/_lib/auth/deployAuth.js'
 import { DEFAULT_CHAIN_ID } from '../../../../server/zora/_shared.js'
 import {
   ensureLaunchImageReady,

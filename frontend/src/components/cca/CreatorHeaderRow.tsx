@@ -2,8 +2,8 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { CheckCircle } from 'lucide-react'
 import type { Address } from 'viem'
 
-import { getTalentPassport, type TalentPassport } from '@/lib/talent-api'
-import { resolveCreatorAddress } from '@/lib/creator-coin-resolver'
+import { getTalentPassport, type TalentPassport } from '@/lib/talent/talent-api'
+import { resolveCreatorAddress } from '@/lib/creator/creator-coin-resolver'
 
 export function CreatorHeaderRow({
   creatorAddress,

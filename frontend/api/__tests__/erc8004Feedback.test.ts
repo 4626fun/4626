@@ -17,7 +17,7 @@ const { guardMock, tryUploadMock, buildReputationGraphMock, readRequestPrincipal
 }))
 
 // Mock the rate-limit guard so tests don't need a real DB / IP lookup.
-vi.mock('../../server/_lib/agentApiGuard.js', () => ({
+vi.mock('../../server/_lib/agent/agentApiGuard.js', () => ({
   AGENT_RATE_LIMITS: {
     read: { windowMs: 60_000, maxRequests: 120 },
     logs: { windowMs: 60_000, maxRequests: 30 },
@@ -39,7 +39,7 @@ vi.mock('../../server/_lib/reputationGraph.js', () => ({
 }))
 
 
-vi.mock('../../server/_lib/requestPrincipal.js', () => ({
+vi.mock('../../server/_lib/auth/requestPrincipal.js', () => ({
   readRequestPrincipal: readRequestPrincipalMock,
 }))
 

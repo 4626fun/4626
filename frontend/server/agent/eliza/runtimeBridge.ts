@@ -2,7 +2,7 @@ import { createCipheriv, createDecipheriv, createHash, createHmac, randomUUID, r
 import type { IAgentRuntime, Memory, Plugin } from '@elizaos/core'
 
 import { getDb } from '../../_lib/postgres.js'
-import { buildRuntimeSessionContext } from '../../_lib/session.js'
+import { buildRuntimeSessionContext } from '../../_lib/auth/session.js'
 import { logger } from '../../_lib/logger.js'
 import { getGroveChainId, resolveLensUri, tryUploadImmutableJson } from '../../_lib/lensGrove.js'
 import { getElizaEmbeddingService } from './embeddings.js'

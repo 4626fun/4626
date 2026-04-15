@@ -42,7 +42,7 @@ import { resolveCanonicalSmartWalletAddress } from '../../../../../server/_lib/c
 import {
   getIdentityRegistryAddress,
   IDENTITY_REGISTRY_ABI,
-} from '../../../../../server/_lib/erc8004.js'
+} from '../../../../../server/_lib/agent/erc8004.js'
 
 /** EIP-712 domain matching the on-chain IdentityRegistryUpgradeable. */
 function buildEip712Domain(chainId: number) {

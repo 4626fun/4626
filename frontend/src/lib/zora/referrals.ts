@@ -1,5 +1,5 @@
 import { getAddress, isAddress, type Address } from 'viem'
-import { getAppBaseUrl } from '@/lib/host'
+import { getAppBaseUrl } from '@/lib/env/host'
 
 const DEFAULT_PLATFORM_REFERRER = '0x4bEabD0AfbCC2F0440CDEF1c3c745D43fAe704EF'
 const DEFAULT_INVITE_URL = 'https://zora.co/invite'

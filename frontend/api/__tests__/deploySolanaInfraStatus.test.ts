@@ -21,7 +21,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
   setNoStore: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/session.js', () => ({
+vi.mock('../../server/_lib/auth/session.js', () => ({
   getSessionAddress: getSessionAddressMock,
   isAdminAddress: isAdminAddressMock,
 }))

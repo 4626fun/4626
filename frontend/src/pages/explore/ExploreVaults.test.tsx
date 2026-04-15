@@ -30,7 +30,7 @@ vi.mock('@tanstack/react-query', () => ({
   useInfiniteQuery: useInfiniteQueryMock,
 }))
 
-vi.mock('@/lib/apiBase', () => ({
+vi.mock('@/lib/api/apiBase', () => ({
   apiFetch: apiFetchMock,
 }))
 

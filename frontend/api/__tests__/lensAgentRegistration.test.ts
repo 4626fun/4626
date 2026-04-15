@@ -9,11 +9,11 @@ const readRequestPrincipalMock = vi.fn()
 const getCanonicalOriginMock = vi.fn((_: unknown) => 'https://4626.fun')
 const getErc8004PublicOriginMock = vi.fn((_: unknown) => 'https://4626.fun')
 
-vi.mock('../../server/_lib/agentRegistration.js', () => ({
+vi.mock('../../server/_lib/agent/agentRegistration.js', () => ({
   buildAgentRegistration: (origin: string) => buildAgentRegistrationMock(origin),
 }))
 
-vi.mock('../../server/_lib/agentRegistrationPublisher.js', () => ({
+vi.mock('../../server/_lib/agent/agentRegistrationPublisher.js', () => ({
   publishAgentRegistrationToGrove: (params: any) => publishAgentRegistrationToGroveMock(params),
   resolveAgentRegistrationKey: (payload: any, suffix: string) => resolveAgentRegistrationKeyMock(payload, suffix),
 }))
@@ -23,7 +23,7 @@ vi.mock('../../server/_lib/origin.js', () => ({
   getErc8004PublicOrigin: (req: any) => getErc8004PublicOriginMock(req),
 }))
 
-vi.mock('../../server/_lib/requestPrincipal.js', () => ({
+vi.mock('../../server/_lib/auth/requestPrincipal.js', () => ({
   readRequestPrincipal: (req: any) => readRequestPrincipalMock(req),
 }))
 

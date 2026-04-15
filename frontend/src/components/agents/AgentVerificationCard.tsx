@@ -2,8 +2,8 @@ import { useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { AlertTriangle, ExternalLink, ShieldCheck } from 'lucide-react'
 
-import { apiFetch } from '@/lib/apiBase'
-import type { ApiEnvelope } from '@/lib/apiEnvelope'
+import { apiFetch } from '@/lib/api/apiBase'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { LoadingInline } from '@/components/ui/LoadingState'
 
 type MirrorProbeData = {

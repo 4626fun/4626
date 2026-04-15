@@ -12,7 +12,7 @@ import {
   rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
 
-import { buildAgentPublishStatus, type AgentPublishData } from '../../../server/_lib/erc8004OperatorStatus.js'
+import { buildAgentPublishStatus, type AgentPublishData } from '../../../server/_lib/agent/erc8004OperatorStatus.js'
 
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string; missing?: string[] }

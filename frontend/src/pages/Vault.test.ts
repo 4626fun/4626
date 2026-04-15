@@ -143,7 +143,7 @@ vi.mock('@/components/brand/TokenOrb', () => ({
     React.createElement('img', { src: image, alt: symbol ?? 'Token image' }),
 }))
 
-vi.mock('@/lib/tokenSymbols', () => ({
+vi.mock('@/lib/tokens/tokenSymbols', () => ({
   SHARE_SYMBOL_PREFIX: '■',
   toShareSymbol: (symbol: string) => `s${symbol}`,
 }))

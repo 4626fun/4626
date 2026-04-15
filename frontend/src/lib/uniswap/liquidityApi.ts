@@ -1,5 +1,5 @@
 import { normalizeUniswapError } from './error'
-import type { ApiEnvelope } from '@/lib/apiEnvelope'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 
 export type LiquidityAction = 'positions' | 'quote-create' | 'create' | 'add' | 'remove' | 'claim' | 'migrate'
 

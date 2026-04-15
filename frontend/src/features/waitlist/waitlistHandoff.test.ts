@@ -4,7 +4,7 @@ import { bridgePrivySession, createAuthHandoffCode } from './waitlistHandoff'
 
 const apiFetchMock = vi.fn()
 
-vi.mock('@/lib/apiBase', () => ({
+vi.mock('@/lib/api/apiBase', () => ({
   apiFetch: (...args: unknown[]) => apiFetchMock(...args),
 }))
 

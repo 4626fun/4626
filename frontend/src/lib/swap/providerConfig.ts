@@ -1,4 +1,4 @@
-import { swapProviderFlag } from '@/lib/featureFlags'
+import { swapProviderFlag } from '@/lib/flags/featureFlags'
 import { normalizeUniswapError } from '@/lib/uniswap/error'
 
 export type SwapProvider = 'uniswap' | 'cdp'

@@ -8,10 +8,10 @@ import { AppLoadingState } from '@/components/layout/AppLoadingState'
 import { useTelegramMiniAppEntryStatus } from '@/hooks/useTelegramMiniAppEntryStatus'
 import { useAdminStatusFromSession } from '@/hooks/useAdminStatus'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
-import { apiFetch } from '@/lib/apiBase'
-import type { ApiEnvelope } from '@/lib/apiEnvelope'
-import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
-import { isScreenshotMode } from '@/lib/screenshotMode'
+import { apiFetch } from '@/lib/api/apiBase'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
+import { isScreenshotMode } from '@/lib/ui/screenshotMode'
 import {
   AccessContext,
   computeAcceptedFromAppAccessStatus,

@@ -1,7 +1,7 @@
 import { useMemo } from 'react'
 
 import { getLoadingIntentConfig, type LoadingIntent } from '@/components/layout/appLoadingIntents'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 import { PixelWaveLoader } from './PixelWaveLoader'
 

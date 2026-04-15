@@ -15,7 +15,7 @@ import type {
   HistoricalVolumeData,
   TimeframeData,
 } from './types'
-import { apiFetch } from '@/lib/apiBase'
+import { apiFetch } from '@/lib/api/apiBase'
 import {
   classifyUniswapRequestFailure,
   extractGraphqlOperationName,

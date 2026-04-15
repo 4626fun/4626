@@ -7,8 +7,8 @@ import {
   buildCanonicalMarketingWaitlistUrl,
   getCanonicalMarketingWaitlistPath,
 } from '@/lib/auth/waitlistEntry'
-import { isPublicSiteMode } from '@/lib/flags'
-import { getHostMode, getMarketingBaseUrl } from '@/lib/host'
+import { isPublicSiteMode } from '@/lib/flags/flags'
+import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
 import { Logo } from './Logo'
 import { TextScramble } from './TextScramble'
 

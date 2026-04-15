@@ -38,7 +38,7 @@ import {
 import {
   getReputationRegistryAddress,
   REPUTATION_REGISTRY_ABI,
-} from '../../../../../server/_lib/erc8004.js'
+} from '../../../../../server/_lib/agent/erc8004.js'
 
 type SubmitRequest = {
   action?: string

@@ -22,7 +22,7 @@ vi.mock('../../../_lib/postgres.js', () => ({
   getDb: getDbMock,
 }))
 
-vi.mock('../../../_lib/session.js', () => ({
+vi.mock('../../../_lib/auth/session.js', () => ({
   buildRuntimeSessionContext: buildRuntimeSessionContextMock,
 }))
 

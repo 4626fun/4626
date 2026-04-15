@@ -1,9 +1,9 @@
 import { http, createConfig, fallback } from 'wagmi'
 import { base, mainnet, arbitrum, optimism, polygon } from 'wagmi/chains'
 import { coinbaseWallet, injected, metaMask } from 'wagmi/connectors'
-import { DATA_SUFFIX, warnGlobalWagmiDataSuffixBehavior } from '@/lib/baseBuilderCodes'
-import { BASE_RPC_PROXY_PATH, isBrowserRestrictedBaseRpc } from '@/lib/baseReadRpcPolicy'
-import { injectedConnectorFlag } from '@/lib/featureFlags'
+import { DATA_SUFFIX, warnGlobalWagmiDataSuffixBehavior } from '@/lib/base/baseBuilderCodes'
+import { BASE_RPC_PROXY_PATH, isBrowserRestrictedBaseRpc } from '@/lib/base/baseReadRpcPolicy'
+import { injectedConnectorFlag } from '@/lib/flags/featureFlags'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 
 /**

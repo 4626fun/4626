@@ -5,7 +5,7 @@ import {
   STRICT_IMMUTABLE_AGENT_URI_KIND,
   STRICT_IMMUTABLE_AGENT_URI_SUMMARY,
   STRICT_IMMUTABLE_AGENT_URI_WRITE_HINT,
-} from '@/lib/erc8004AgentUriPolicy'
+} from '@/lib/agent/erc8004AgentUriPolicy'
 
 export function AgentUriService() {
   const origin = typeof window === 'undefined' ? 'https://4626.fun' : window.location.origin

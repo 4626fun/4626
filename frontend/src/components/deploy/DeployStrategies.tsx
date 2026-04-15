@@ -4,7 +4,7 @@ import { base } from 'wagmi/chains'
 import { encodeFunctionData, erc20Abi, getContractAddress, isAddress, parseUnits, type Address, type Hex } from 'viem'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 import { CONTRACTS } from '@/config/contracts'
-import { logger } from '@/lib/logger'
+import { logger } from '@/lib/observability/logger'
 import { Alert } from '@/components/ui/Alert'
 
 interface DeployStrategiesProps {

@@ -5,7 +5,7 @@ import {
   readRequestPrincipal,
 } from '../../../../packages/server-core/src/index.js'
 
-import { buildAgentOperatorStatus } from '../../../../server/_lib/erc8004OperatorStatus.js'
+import { buildAgentOperatorStatus } from '../../../../server/_lib/agent/erc8004OperatorStatus.js'
 
 type ApiEnvelope<T> = {
   success: boolean

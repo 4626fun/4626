@@ -110,7 +110,7 @@ vi.mock('../../server/_lib/origin.js', () => ({
   getErc8004PublicOrigin: () => mocks.getErc8004PublicOrigin(),
 }))
 
-vi.mock('../../server/_lib/agentRegistration.js', () => ({
+vi.mock('../../server/_lib/agent/agentRegistration.js', () => ({
   buildAgentRegistration: (origin: string) => mocks.buildAgentRegistration(origin),
 }))
 

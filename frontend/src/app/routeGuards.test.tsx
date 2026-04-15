@@ -17,8 +17,8 @@ vi.mock('@/features/waitlist/waitlistHandoff', () => ({
   createAuthHandoffCode: async () => '',
 }))
 
-vi.mock('@/lib/host', async () => {
-  const actual = await vi.importActual<typeof import('@/lib/host')>('@/lib/host')
+vi.mock('@/lib/env/host', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/env/host')>('@/lib/env/host')
   return {
     ...actual,
     get APP_ORIGIN() {

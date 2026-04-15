@@ -34,8 +34,8 @@ import {
 } from '../../../packages/server-core/src/index.js'
 
 import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
-import { getIdentityRegistryAddress } from '../../../server/_lib/erc8004.js'
-import type { FeedbackPayload } from '../../../server/_lib/erc8004.js'
+import { getIdentityRegistryAddress } from '../../../server/_lib/agent/erc8004.js'
+import type { FeedbackPayload } from '../../../server/_lib/agent/erc8004.js'
 
 
 declare const process: { env: Record<string, string | undefined> }

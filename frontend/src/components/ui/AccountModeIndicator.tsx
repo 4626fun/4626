@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Zap } from 'lucide-react'
 import { useAccountContext } from '@/wallet/accountContext'
-import { cn } from '@/lib/utils'
+import { cn } from '@/lib/shared/utils'
 
 interface AccountModeIndicatorProps {
   compact?: boolean
