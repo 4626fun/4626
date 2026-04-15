@@ -12,7 +12,7 @@
 
 > **RateLimitConfig** = `object`
 
-Defined in: [server/\_lib/rateLimit.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L30)
+Defined in: [server/\_lib/rateLimit.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L36)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [server/\_lib/rateLimit.ts:30](https://github.com/wenakita/4626/blob
 
 > **maxRequests**: `number`
 
-Defined in: [server/\_lib/rateLimit.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L32)
+Defined in: [server/\_lib/rateLimit.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L38)
 
 ##### windowMs
 
 > **windowMs**: `number`
 
-Defined in: [server/\_lib/rateLimit.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L31)
+Defined in: [server/\_lib/rateLimit.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L37)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [server/\_lib/rateLimit.ts:31](https://github.com/wenakita/4626/blob
 
 > **RateLimitResult** = `object`
 
-Defined in: [server/\_lib/rateLimit.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L35)
+Defined in: [server/\_lib/rateLimit.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L41)
 
 #### Properties
 
@@ -42,19 +42,19 @@ Defined in: [server/\_lib/rateLimit.ts:35](https://github.com/wenakita/4626/blob
 
 > **allowed**: `boolean`
 
-Defined in: [server/\_lib/rateLimit.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L36)
+Defined in: [server/\_lib/rateLimit.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L42)
 
 ##### remaining
 
 > **remaining**: `number`
 
-Defined in: [server/\_lib/rateLimit.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L37)
+Defined in: [server/\_lib/rateLimit.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L43)
 
 ##### resetAt
 
 > **resetAt**: `number`
 
-Defined in: [server/\_lib/rateLimit.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L38)
+Defined in: [server/\_lib/rateLimit.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L44)
 
 ## Variables
 
@@ -62,7 +62,7 @@ Defined in: [server/\_lib/rateLimit.ts:38](https://github.com/wenakita/4626/blob
 
 > `const` **RATE\_LIMITS**: `object`
 
-Defined in: [server/\_lib/rateLimit.ts:79](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L79)
+Defined in: [server/\_lib/rateLimit.ts:85](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L85)
 
 #### Type Declaration
 
@@ -744,7 +744,7 @@ Defined in: [server/\_lib/rateLimit.ts:79](https://github.com/wenakita/4626/blob
 
 > **checkRateLimit**(`key`, `config`): [`RateLimitResult`](#ratelimitresult)
 
-Defined in: [server/\_lib/rateLimit.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L45)
+Defined in: [server/\_lib/rateLimit.ts:51](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L51)
 
 Check if a key is rate limited.
 Returns whether the request is allowed and remaining quota.
@@ -769,7 +769,7 @@ Returns whether the request is allowed and remaining quota.
 
 > **getClientIp**(`req`): `string`
 
-Defined in: [server/\_lib/rateLimit.ts:197](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L197)
+Defined in: [server/\_lib/rateLimit.ts:203](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L203)
 
 Helper to get client IP from request headers.
 
@@ -791,7 +791,7 @@ Helper to get client IP from request headers.
 
 > **rateLimitKey**(...`parts`): `string`
 
-Defined in: [server/\_lib/rateLimit.ts:225](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L225)
+Defined in: [server/\_lib/rateLimit.ts:233](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/rateLimit.ts#L233)
 
 Build a rate limit key from components.
 

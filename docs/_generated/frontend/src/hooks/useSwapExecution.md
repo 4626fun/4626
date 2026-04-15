@@ -12,7 +12,7 @@
 
 > **evaluateCanonicalSubmitSession**(`input`): `CanonicalSubmitSessionResult`
 
-Defined in: [src/hooks/useSwapExecution.ts:185](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L185)
+Defined in: [src/hooks/useSwapExecution.ts:219](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L219)
 
 #### Parameters
 
@@ -26,11 +26,29 @@ Defined in: [src/hooks/useSwapExecution.ts:185](https://github.com/wenakita/4626
 
 ***
 
+### evaluateSwapSessionGate()
+
+> **evaluateSwapSessionGate**(`input`): `SwapSessionGateResult`
+
+Defined in: [src/hooks/useSwapExecution.ts:166](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L166)
+
+#### Parameters
+
+##### input
+
+`SwapSessionGateInput`
+
+#### Returns
+
+`SwapSessionGateResult`
+
+***
+
 ### resolveCanonicalSubmitSession()
 
 > **resolveCanonicalSubmitSession**(`input`, `ensureCanonicalSession?`): `Promise`\<`CanonicalSubmitSessionResult`\>
 
-Defined in: [src/hooks/useSwapExecution.ts:123](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L123)
+Defined in: [src/hooks/useSwapExecution.ts:133](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L133)
 
 #### Parameters
 
@@ -52,7 +70,7 @@ Defined in: [src/hooks/useSwapExecution.ts:123](https://github.com/wenakita/4626
 
 > **useSwapExecution**(`params`): `object`
 
-Defined in: [src/hooks/useSwapExecution.ts:278](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L278)
+Defined in: [src/hooks/useSwapExecution.ts:312](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSwapExecution.ts#L312)
 
 #### Parameters
 

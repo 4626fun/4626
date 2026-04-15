@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/flags/\_evaluate.ts:30](https://github.com/wenakita/4626/blob/c75a1c24d9b9350ac3d121d5a700640674fe0027/frontend/api/_handlers/flags/_evaluate.ts#L30)
+Defined in: [api/\_handlers/flags/\_evaluate.ts:30](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/flags/_evaluate.ts#L30)
 
 GET /api/flags/evaluate
 

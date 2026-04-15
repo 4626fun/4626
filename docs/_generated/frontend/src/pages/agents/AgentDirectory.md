@@ -12,7 +12,7 @@
 
 > **AgentDirectory**(): `Element`
 
-Defined in: [src/pages/agents/AgentDirectory.tsx:109](https://github.com/wenakita/4626/blob/main/frontend/src/pages/agents/AgentDirectory.tsx#L109)
+Defined in: [src/pages/agents/AgentDirectory.tsx:110](https://github.com/wenakita/4626/blob/main/frontend/src/pages/agents/AgentDirectory.tsx#L110)
 
 #### Returns
 

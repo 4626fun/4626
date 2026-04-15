@@ -12,7 +12,7 @@
 
 > **LoadingIntent** = `"page"` \| `"session"` \| `"redirect"` \| `"deploy"` \| `"processing"`
 
-Defined in: [src/components/layout/appLoadingIntents.ts:3](https://github.com/wenakita/4626/blob/c75a1c24d9b9350ac3d121d5a700640674fe0027/frontend/src/components/layout/appLoadingIntents.ts#L3)
+Defined in: [src/components/layout/appLoadingIntents.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/appLoadingIntents.ts#L3)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/components/layout/appLoadingIntents.ts:3](https://github.com/we
 
 > **LoadingIntentConfig** = `object`
 
-Defined in: [src/components/layout/appLoadingIntents.ts:16](https://github.com/wenakita/4626/blob/c75a1c24d9b9350ac3d121d5a700640674fe0027/frontend/src/components/layout/appLoadingIntents.ts#L16)
+Defined in: [src/components/layout/appLoadingIntents.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/appLoadingIntents.ts#L16)
 
 #### Properties
 
@@ -28,19 +28,19 @@ Defined in: [src/components/layout/appLoadingIntents.ts:16](https://github.com/w
 
 > **headline**: `string`
 
-Defined in: [src/components/layout/appLoadingIntents.ts:17](https://github.com/wenakita/4626/blob/c75a1c24d9b9350ac3d121d5a700640674fe0027/frontend/src/components/layout/appLoadingIntents.ts#L17)
+Defined in: [src/components/layout/appLoadingIntents.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/appLoadingIntents.ts#L17)
 
 ##### pattern
 
 > **pattern**: `LoadingPattern`
 
-Defined in: [src/components/layout/appLoadingIntents.ts:19](https://github.com/wenakita/4626/blob/c75a1c24d9b9350ac3d121d5a700640674fe0027/frontend/src/components/layout/appLoadingIntents.ts#L19)
+Defined in: [src/components/layout/appLoadingIntents.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/appLoadingIntents.ts#L19)
 
 ##### srStatus
 
 > **srStatus**: `string`
 
-Defined in: [src/components/layout/appLoadingIntents.ts:18](https://github.com/wenakita/4626/blob/c75a1c24d9b9350ac3d121d5a700640674fe0027/frontend/src/components/layout/appLoadingIntents.ts#L18)
+Defined in: [src/components/layout/appLoadingIntents.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/appLoadingIntents.ts#L18)
 
 ## Variables
 
@@ -48,7 +48,7 @@ Defined in: [src/components/layout/appLoadingIntents.ts:18](https://github.com/w
 
 > `const` **LOADING\_INTENT\_CONFIG**: `Record`\<[`LoadingIntent`](#loadingintent), [`LoadingIntentConfig`](#loadingintentconfig)\>
 
-Defined in: [src/components/layout/appLoadingIntents.ts:88](https://github.com/wenakita/4626/blob/c75a1c24d9b9350ac3d121d5a700640674fe0027/frontend/src/components/layout/appLoadingIntents.ts#L88)
+Defined in: [src/components/layout/appLoadingIntents.ts:88](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/appLoadingIntents.ts#L88)
 
 ## Functions
 
@@ -56,7 +56,7 @@ Defined in: [src/components/layout/appLoadingIntents.ts:88](https://github.com/w
 
 > **getLoadingIntentConfig**(`intent`): [`LoadingIntentConfig`](#loadingintentconfig)
 
-Defined in: [src/components/layout/appLoadingIntents.ts:116](https://github.com/wenakita/4626/blob/c75a1c24d9b9350ac3d121d5a700640674fe0027/frontend/src/components/layout/appLoadingIntents.ts#L116)
+Defined in: [src/components/layout/appLoadingIntents.ts:116](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/appLoadingIntents.ts#L116)
 
 #### Parameters
 
@@ -74,7 +74,7 @@ Defined in: [src/components/layout/appLoadingIntents.ts:116](https://github.com/
 
 > **getLoadingIntentFromPath**(`pathname`): [`LoadingIntent`](#loadingintent)
 
-Defined in: [src/components/layout/appLoadingIntents.ts:120](https://github.com/wenakita/4626/blob/c75a1c24d9b9350ac3d121d5a700640674fe0027/frontend/src/components/layout/appLoadingIntents.ts#L120)
+Defined in: [src/components/layout/appLoadingIntents.ts:120](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/appLoadingIntents.ts#L120)
 
 #### Parameters
 

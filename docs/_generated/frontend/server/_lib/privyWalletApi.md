@@ -50,7 +50,7 @@ Defined in: [server/\_lib/privyWalletApi.ts:193](https://github.com/wenakita/462
 
 > **secp256k1SignHash**(`params`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [server/\_lib/privyWalletApi.ts:237](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/privyWalletApi.ts#L237)
+Defined in: [server/\_lib/privyWalletApi.ts:241](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/privyWalletApi.ts#L241)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **AgentVerificationCard**(): `Element`
 
-Defined in: [src/components/agents/AgentVerificationCard.tsx:109](https://github.com/wenakita/4626/blob/main/frontend/src/components/agents/AgentVerificationCard.tsx#L109)
+Defined in: [src/components/agents/AgentVerificationCard.tsx:110](https://github.com/wenakita/4626/blob/main/frontend/src/components/agents/AgentVerificationCard.tsx#L110)
 
 #### Returns
 

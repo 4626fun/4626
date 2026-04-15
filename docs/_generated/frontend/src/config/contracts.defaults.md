@@ -190,28 +190,28 @@ Defined in: [src/config/contracts.defaults.ts:83](https://github.com/wenakita/46
 
 ##### ccaStrategy
 
-> `readonly` **ccaStrategy**: `` `0x${string}` `` = `AKITA_DEFAULTS.ccaStrategy`
+> `readonly` **ccaStrategy**: `` `0x${string}` ``
 
 ##### gaugeController
 
-> `readonly` **gaugeController**: `` `0x${string}` `` = `AKITA_DEFAULTS.gaugeController`
+> `readonly` **gaugeController**: `` `0x${string}` ``
 
 ##### oracle
 
-> `readonly` **oracle**: `` `0x${string}` `` = `AKITA_DEFAULTS.oracle`
+> `readonly` **oracle**: `` `0x${string}` ``
 
 ##### shareOFT
 
-> `readonly` **shareOFT**: `` `0x${string}` `` = `AKITA_DEFAULTS.shareOFT`
+> `readonly` **shareOFT**: `` `0x${string}` ``
 
 ##### token
 
-> `readonly` **token**: `` `0x${string}` `` = `AKITA_DEFAULTS.token`
+> `readonly` **token**: `` `0x${string}` ``
 
 ##### vault
 
-> `readonly` **vault**: `` `0x${string}` `` = `AKITA_DEFAULTS.vault`
+> `readonly` **vault**: `` `0x${string}` ``
 
 ##### wrapper
 
-> `readonly` **wrapper**: `` `0x${string}` `` = `AKITA_DEFAULTS.wrapper`
+> `readonly` **wrapper**: `` `0x${string}` ``

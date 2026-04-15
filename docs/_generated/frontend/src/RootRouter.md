@@ -12,7 +12,7 @@
 
 > **RootRouter**(): `Element`
 
-Defined in: [src/RootRouter.tsx:72](https://github.com/wenakita/4626/blob/main/frontend/src/RootRouter.tsx#L72)
+Defined in: [src/RootRouter.tsx:75](https://github.com/wenakita/4626/blob/main/frontend/src/RootRouter.tsx#L75)
 
 #### Returns
 

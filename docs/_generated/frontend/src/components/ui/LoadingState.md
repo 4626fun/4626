@@ -12,7 +12,7 @@
 
 > **LoadingBlockProps** = `BaseLoadingProps` & `object`
 
-Defined in: [src/components/ui/LoadingState.tsx:71](https://github.com/wenakita/4626/blob/c75a1c24d9b9350ac3d121d5a700640674fe0027/frontend/src/components/ui/LoadingState.tsx#L71)
+Defined in: [src/components/ui/LoadingState.tsx:71](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L71)
 
 #### Type Declaration
 
@@ -30,7 +30,7 @@ Defined in: [src/components/ui/LoadingState.tsx:71](https://github.com/wenakita/
 
 > **LoadingInlineProps** = `BaseLoadingProps` & `object`
 
-Defined in: [src/components/ui/LoadingState.tsx:34](https://github.com/wenakita/4626/blob/c75a1c24d9b9350ac3d121d5a700640674fe0027/frontend/src/components/ui/LoadingState.tsx#L34)
+Defined in: [src/components/ui/LoadingState.tsx:34](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L34)
 
 #### Type Declaration
 
@@ -48,7 +48,7 @@ Defined in: [src/components/ui/LoadingState.tsx:34](https://github.com/wenakita/
 
 > **LoadingTextProps** = `BaseLoadingProps` & `object`
 
-Defined in: [src/components/ui/LoadingState.tsx:63](https://github.com/wenakita/4626/blob/c75a1c24d9b9350ac3d121d5a700640674fe0027/frontend/src/components/ui/LoadingState.tsx#L63)
+Defined in: [src/components/ui/LoadingState.tsx:63](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L63)
 
 #### Type Declaration
 
@@ -62,7 +62,7 @@ Defined in: [src/components/ui/LoadingState.tsx:63](https://github.com/wenakita/
 
 > **LoadingBlock**(`props`): `Element`
 
-Defined in: [src/components/ui/LoadingState.tsx:76](https://github.com/wenakita/4626/blob/c75a1c24d9b9350ac3d121d5a700640674fe0027/frontend/src/components/ui/LoadingState.tsx#L76)
+Defined in: [src/components/ui/LoadingState.tsx:76](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L76)
 
 #### Parameters
 
@@ -80,7 +80,7 @@ Defined in: [src/components/ui/LoadingState.tsx:76](https://github.com/wenakita/
 
 > **LoadingInline**(`props`): `Element`
 
-Defined in: [src/components/ui/LoadingState.tsx:39](https://github.com/wenakita/4626/blob/c75a1c24d9b9350ac3d121d5a700640674fe0027/frontend/src/components/ui/LoadingState.tsx#L39)
+Defined in: [src/components/ui/LoadingState.tsx:39](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L39)
 
 #### Parameters
 
@@ -98,7 +98,7 @@ Defined in: [src/components/ui/LoadingState.tsx:39](https://github.com/wenakita/
 
 > **LoadingText**(`props`): `Element`
 
-Defined in: [src/components/ui/LoadingState.tsx:67](https://github.com/wenakita/4626/blob/c75a1c24d9b9350ac3d121d5a700640674fe0027/frontend/src/components/ui/LoadingState.tsx#L67)
+Defined in: [src/components/ui/LoadingState.tsx:67](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/LoadingState.tsx#L67)
 
 #### Parameters
 

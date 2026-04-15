@@ -156,7 +156,7 @@ Defined in: [server/\_lib/accountsIdentity.ts:516](https://github.com/wenakita/4
 
 > **buildAccountsMePayload**(`params`): `Promise`\<[`AccountsMePayload`](#accountsmepayload)\>
 
-Defined in: [server/\_lib/accountsIdentity.ts:830](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/accountsIdentity.ts#L830)
+Defined in: [server/\_lib/accountsIdentity.ts:828](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/accountsIdentity.ts#L828)
 
 #### Parameters
 
@@ -256,7 +256,7 @@ Defined in: [server/\_lib/accountsIdentity.ts:653](https://github.com/wenakita/4
 
 > **recordProviderLink**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/accountsIdentity.ts:898](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/accountsIdentity.ts#L898)
+Defined in: [server/\_lib/accountsIdentity.ts:896](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/accountsIdentity.ts#L896)
 
 #### Parameters
 
@@ -292,7 +292,7 @@ Defined in: [server/\_lib/accountsIdentity.ts:898](https://github.com/wenakita/4
 
 > **recordProviderUnlink**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/accountsIdentity.ts:974](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/accountsIdentity.ts#L974)
+Defined in: [server/\_lib/accountsIdentity.ts:972](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/accountsIdentity.ts#L972)
 
 #### Parameters
 
@@ -488,7 +488,7 @@ Defined in: [server/\_lib/accountsIdentity.ts:371](https://github.com/wenakita/4
 
 > **verifyPrivyForAccounts**(`req`): `Promise`\<`PrivyRequestContext`\>
 
-Defined in: [server/\_lib/accountsIdentity.ts:997](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/accountsIdentity.ts#L997)
+Defined in: [server/\_lib/accountsIdentity.ts:995](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/accountsIdentity.ts#L995)
 
 #### Parameters
 

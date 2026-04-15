@@ -12,7 +12,7 @@
 
 > **readOptionalZoraStatus**(`params`): [`ZoraLinkStatusResponse`](types.md#zoralinkstatusresponse) \| `null`
 
-Defined in: [src/features/accountSetup/useAccountSetupController.ts:108](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L108)
+Defined in: [src/features/accountSetup/useAccountSetupController.ts:111](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L111)
 
 #### Parameters
 
@@ -36,7 +36,7 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:108](https:/
 
 > **shouldRefreshAccountsOnForeground**(`input`): `boolean`
 
-Defined in: [src/features/accountSetup/useAccountSetupController.ts:96](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L96)
+Defined in: [src/features/accountSetup/useAccountSetupController.ts:99](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L99)
 
 #### Parameters
 
@@ -64,7 +64,7 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:96](https://
 
 > **useAccountSetupController**(`params`): `object`
 
-Defined in: [src/features/accountSetup/useAccountSetupController.ts:165](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L165)
+Defined in: [src/features/accountSetup/useAccountSetupController.ts:168](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L168)
 
 #### Parameters
 
@@ -148,11 +148,11 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:165](https:/
 
 ##### connectOwnerWallet()
 
-> **connectOwnerWallet**: () => `void`
+> **connectOwnerWallet**: () => `Promise`\<`void`\>
 
 ###### Returns
 
-`void`
+`Promise`\<`void`\>
 
 ##### connectWallet
 
@@ -281,6 +281,22 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:165](https:/
 ##### onRefreshZora()
 
 > **onRefreshZora**: () => `Promise`\<`void`\>
+
+###### Returns
+
+`Promise`\<`void`\>
+
+##### onResetOwnerApproval()
+
+> **onResetOwnerApproval**: () => `Promise`\<`void`\>
+
+###### Returns
+
+`Promise`\<`void`\>
+
+##### onSwitchAccount()
+
+> **onSwitchAccount**: () => `Promise`\<`void`\>
 
 ###### Returns
 

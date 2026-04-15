@@ -12,7 +12,7 @@
 
 > **Layout**(`props`): `Element`
 
-Defined in: [src/components/layout/Layout.tsx:60](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/Layout.tsx#L60)
+Defined in: [src/components/layout/Layout.tsx:103](https://github.com/wenakita/4626/blob/main/frontend/src/components/layout/Layout.tsx#L103)
 
 #### Parameters
 

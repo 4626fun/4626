@@ -20,7 +20,7 @@ Defined in: [src/features/accountSetup/shared.ts:3](https://github.com/wenakita/
 
 > **deriveOwnerAuthorityState**(`input`): [`OwnerAuthorityState`](types.md#ownerauthoritystate)
 
-Defined in: [src/features/accountSetup/shared.ts:39](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/shared.ts#L39)
+Defined in: [src/features/accountSetup/shared.ts:41](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/shared.ts#L41)
 
 #### Parameters
 
@@ -78,7 +78,7 @@ Defined in: [src/features/accountSetup/shared.ts:25](https://github.com/wenakita
 
 > **isMobileWalletEnvironment**(): `boolean`
 
-Defined in: [src/features/accountSetup/shared.ts:33](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/shared.ts#L33)
+Defined in: [src/features/accountSetup/shared.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/shared.ts#L35)
 
 #### Returns
 
@@ -126,7 +126,7 @@ Defined in: [src/features/accountSetup/shared.ts:19](https://github.com/wenakita
 
 > **sleep**(`ms`): `Promise`\<`void`\>
 
-Defined in: [src/features/accountSetup/shared.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/shared.ts#L29)
+Defined in: [src/features/accountSetup/shared.ts:31](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/shared.ts#L31)
 
 #### Parameters
 

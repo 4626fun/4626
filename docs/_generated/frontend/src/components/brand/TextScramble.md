@@ -10,7 +10,7 @@
 
 ### TextScrambleProps
 
-Defined in: [src/components/brand/TextScramble.tsx:6](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/TextScramble.tsx#L6)
+Defined in: [src/components/brand/TextScramble.tsx:8](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/TextScramble.tsx#L8)
 
 #### Properties
 
@@ -18,37 +18,39 @@ Defined in: [src/components/brand/TextScramble.tsx:6](https://github.com/wenakit
 
 > `optional` **className**: `string`
 
-Defined in: [src/components/brand/TextScramble.tsx:8](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/TextScramble.tsx#L8)
+Defined in: [src/components/brand/TextScramble.tsx:10](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/TextScramble.tsx#L10)
 
 ##### complexity?
 
 > `optional` **complexity**: [`TextScrambleComplexity`](#textscramblecomplexity)
 
-Defined in: [src/components/brand/TextScramble.tsx:12](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/TextScramble.tsx#L12)
+Defined in: [src/components/brand/TextScramble.tsx:15](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/TextScramble.tsx#L15)
 
 ##### font?
 
 > `optional` **font**: [`TextScrambleFont`](#textscramblefont)
 
-Defined in: [src/components/brand/TextScramble.tsx:9](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/TextScramble.tsx#L9)
+Defined in: [src/components/brand/TextScramble.tsx:11](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/TextScramble.tsx#L11)
 
 ##### speed?
 
 > `optional` **speed**: `number`
 
-Defined in: [src/components/brand/TextScramble.tsx:11](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/TextScramble.tsx#L11)
+Defined in: [src/components/brand/TextScramble.tsx:14](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/TextScramble.tsx#L14)
+
+Resolve speed multiplier (higher = faster). Default 1.0
 
 ##### text
 
 > **text**: `string`
 
-Defined in: [src/components/brand/TextScramble.tsx:7](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/TextScramble.tsx#L7)
+Defined in: [src/components/brand/TextScramble.tsx:9](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/TextScramble.tsx#L9)
 
 ##### trigger?
 
 > `optional` **trigger**: `boolean`
 
-Defined in: [src/components/brand/TextScramble.tsx:10](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/TextScramble.tsx#L10)
+Defined in: [src/components/brand/TextScramble.tsx:12](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/TextScramble.tsx#L12)
 
 ## Type Aliases
 
@@ -56,7 +58,7 @@ Defined in: [src/components/brand/TextScramble.tsx:10](https://github.com/wenaki
 
 > **TextScrambleComplexity** = `"simple"` \| `"complex"`
 
-Defined in: [src/components/brand/TextScramble.tsx:4](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/TextScramble.tsx#L4)
+Defined in: [src/components/brand/TextScramble.tsx:6](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/TextScramble.tsx#L6)
 
 ***
 
@@ -64,7 +66,7 @@ Defined in: [src/components/brand/TextScramble.tsx:4](https://github.com/wenakit
 
 > **TextScrambleFont** = `"sans"` \| `"mono"` \| `"doto"`
 
-Defined in: [src/components/brand/TextScramble.tsx:3](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/TextScramble.tsx#L3)
+Defined in: [src/components/brand/TextScramble.tsx:5](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/TextScramble.tsx#L5)
 
 ## Functions
 
@@ -72,7 +74,13 @@ Defined in: [src/components/brand/TextScramble.tsx:3](https://github.com/wenakit
 
 > **TextScramble**(`__namedParameters`): `Element`
 
-Defined in: [src/components/brand/TextScramble.tsx:36](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/TextScramble.tsx#L36)
+Defined in: [src/components/brand/TextScramble.tsx:44](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/TextScramble.tsx#L44)
+
+Base brand "tech scramble" — vertical glyph swaps that cascade
+left-to-right and resolve into the final message.
+
+Per spec: headlines & teasers only, Medium weight, sequences ≤800ms.
+Pair with a quick fade-in of supporting content.
 
 #### Parameters
 

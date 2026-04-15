@@ -12,7 +12,7 @@
 
 > **AnimatedBasemark**(`__namedParameters`): `Element`
 
-Defined in: [src/components/brand/AnimatedBasemark.tsx:31](https://github.com/wenakita/4626/blob/c75a1c24d9b9350ac3d121d5a700640674fe0027/frontend/src/components/brand/AnimatedBasemark.tsx#L31)
+Defined in: [src/components/brand/AnimatedBasemark.tsx:31](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/AnimatedBasemark.tsx#L31)
 
 #### Parameters
 
@@ -40,7 +40,7 @@ Defined in: [src/components/brand/AnimatedBasemark.tsx:31](https://github.com/we
 
 > **PulsingBasemark**(`__namedParameters`): `Element`
 
-Defined in: [src/components/brand/AnimatedBasemark.tsx:75](https://github.com/wenakita/4626/blob/c75a1c24d9b9350ac3d121d5a700640674fe0027/frontend/src/components/brand/AnimatedBasemark.tsx#L75)
+Defined in: [src/components/brand/AnimatedBasemark.tsx:75](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/AnimatedBasemark.tsx#L75)
 
 #### Parameters
 

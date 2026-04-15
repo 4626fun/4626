@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/auth/\_privy.ts:168](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/auth/_privy.ts#L168)
+Defined in: [api/\_handlers/auth/\_privy.ts:174](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/auth/_privy.ts#L174)
 
 #### Parameters
 
