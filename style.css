@@ -1826,8 +1826,76 @@ body {
     font-size: 1rem;
   }
 
-  /* Hide desktop allocation engine on mobile */
-  .allocation-engine { display: none; }
+  /* Allocation engine — reflow to vertical centered layout on mobile */
+  .allocation-engine {
+    position: absolute;
+    top: 42%;
+    left: 50%;
+    transform: translate(-50%, 0);
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6rem;
+    width: calc(100% - 2rem);
+    max-width: 340px;
+  }
+
+  /* Hide the horizontal flow line on mobile */
+  .flow-line { display: none; }
+
+  /* Engine box — centered, compact */
+  .engine-box {
+    margin-left: 0;
+    padding: 0.6rem 1rem;
+  }
+  .engine-label { font-size: 7px; }
+  .engine-sub { font-size: 6px; }
+
+  /* Hide branching SVG on mobile — use vertical stack instead */
+  .branches {
+    flex-direction: column;
+    align-items: center;
+    margin-left: 0;
+    gap: 0;
+  }
+  .branch-svg { display: none; }
+
+  /* Strategy list — vertical, full width, compact */
+  .strategy-list {
+    margin-left: 0;
+    width: 100%;
+    gap: 0.4rem;
+  }
+  .strategy-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0.25rem;
+  }
+  .strategy-card-inner {
+    min-width: 0;
+    width: 100%;
+    padding: 0.5rem 0.65rem;
+    gap: 0.5rem;
+  }
+  .strat-icon-img {
+    width: 22px;
+    height: 22px;
+  }
+  .strat-name { font-size: 8px; }
+  .strat-pct { font-size: 8px; }
+  .strat-amount { font-size: 0.75rem; }
+  .strat-role { font-size: 6.5px; }
+
+  /* Downstream — compact below each card */
+  .downstream {
+    justify-content: flex-start;
+    gap: 0.3rem;
+    margin-left: 1.5rem;
+  }
+  .downstream-line { width: 12px; }
+  .downstream-box {
+    font-size: 6px;
+    padding: 0.3rem 0.5rem;
+  }
 
   /* Morph zone */
   .morph-zone {

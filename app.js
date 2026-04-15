@@ -904,7 +904,9 @@ function multiMapSmooth(progress, stops, values) {
         [0,     1,     1,     0,     0,     1,     0.4,  1]
       );
       const coinScale = multiMapSmooth(p, [0.11, 0.165, 0.26, 0.30], [1, 0.82, 0.82, 1]);
-      coin.style.transform = `translate(${centerX + coinOffsetX}px, ${centerY}px) translate(-50%, 0) scale(${coinScale})`;
+      // On mobile, lift coin upward during allocation phase to make room for engine below
+      const coinLiftY = isMobile ? multiMapSmooth(p, [0.60, 0.68], [0, -vh * 0.28]) : 0;
+      coin.style.transform = `translate(${centerX + coinOffsetX}px, ${centerY + coinLiftY}px) translate(-50%, 0) scale(${coinScale})`;
       coin.style.opacity = coinOp;
 
       // Toggle depositing class for enhanced glow
@@ -973,9 +975,16 @@ function multiMapSmooth(progress, stops, values) {
       cameraWrapper.style.transform = `scale(${cameraScale}) translateX(${panX}px)`;
 
       // ── Deposit/allocation labels — smoothed ──
-      depositInfo.style.opacity = multiMapSmooth(p, [0.65, 0.69], [0, 1]);
-      splitInfo.style.opacity = multiMapSmooth(p, [0.68, 0.72], [0, 1]);
-      idleBadge.style.opacity = multiMapSmooth(p, [0.70, 0.73], [0, 1]);
+      // On mobile, fade these out before the engine appears to avoid overlap
+      if (isMobile) {
+        depositInfo.style.opacity = multiMapSmooth(p, [0.65, 0.69, 0.73, 0.76], [0, 1, 1, 0]);
+        splitInfo.style.opacity   = multiMapSmooth(p, [0.68, 0.72, 0.73, 0.76], [0, 1, 1, 0]);
+        idleBadge.style.opacity   = multiMapSmooth(p, [0.70, 0.73, 0.73, 0.76], [0, 1, 1, 0]);
+      } else {
+        depositInfo.style.opacity = multiMapSmooth(p, [0.65, 0.69], [0, 1]);
+        splitInfo.style.opacity = multiMapSmooth(p, [0.68, 0.72], [0, 1]);
+        idleBadge.style.opacity = multiMapSmooth(p, [0.70, 0.73], [0, 1]);
+      }
 
       // ── Flow line + engine — smoothed ──
       flowLine.style.opacity = multiMapSmooth(p, [0.71, 0.76], [0, 1]);
