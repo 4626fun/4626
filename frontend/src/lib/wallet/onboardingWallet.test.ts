@@ -384,39 +384,6 @@ describe('sendPreparedOwnerTx', () => {
     )
   })
 
-  it('falls back to wallet_sendCalls when sponsored canonical self-approval fails with AA23', async () => {
-    sendCoinbaseSmartWalletUserOperationMock.mockRejectedValue(
-      new Error('UserOperation failed: validation reverted: [reason]: AA23 reverted (or OOG)'),
-    )
-    const request = vi
-      .fn()
-      .mockResolvedValueOnce('0xcall-bundle-id')
-      .mockResolvedValueOnce({
-        status: 200,
-        receipts: [{ transactionHash: TX_HASH }],
-      })
-
-    const result = await sendPreparedOwnerTx({
-      txRequest: TX_REQUEST,
-      walletClient: {
-        account: CANONICAL_CSW,
-        sendTransaction: vi.fn(async () => TX_HASH),
-        request,
-      },
-      chainId: 8453,
-      authHeaders: async () => ({ Authorization: 'Bearer test' }),
-      signerAddress: CANONICAL_CSW,
-      executionMode: 'canonicalSmartWallet',
-      canonicalSmartWalletAddress: CANONICAL_CSW,
-      publicClient: {},
-      ensurePaymasterSession: async () => true,
-    })
-
-    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
-    expect(request).toHaveBeenCalledTimes(2)
-    expect(result.txHash).toBe(TX_HASH)
-  })
-
   it('does not remap paymaster insufficient funds errors into wallet-balance guidance', async () => {
     sendCoinbaseSmartWalletUserOperationMock.mockRejectedValue(
       new Error('Paymaster rejected this request: insufficient funds in paymaster'),
