@@ -1377,22 +1377,34 @@ function getSelector(data: Hex): string {
 async function resolveCanonicalEmbeddedOwnerForSender(params: {
   sessionAddress: Address
   sender: Address
-  calls: InnerCall[]
+  calls: Array<{ target?: Address; to?: Address; data: Hex }>
 }): Promise<Address | null> {
   const hasAddOwnerSelfCall = params.calls.some(
-    (call) => call.target === params.sender && getSelector(call.data) === SELECTOR_CSW_ADD_OWNER_ADDRESS,
+    (call) => {
+      const callTarget = call.target ?? call.to
+      return !!callTarget && getAddress(callTarget) === params.sender && getSelector(call.data) === SELECTOR_CSW_ADD_OWNER_ADDRESS
+    },
   )
   if (!hasAddOwnerSelfCall) return null
 
-  const identity = await resolvePersistedWalletIdentity(params.sessionAddress)
-  if (!identity?.canonicalSmartWallet || !identity.embeddedEoa) return null
-  try {
-    const canonical = getAddress(identity.canonicalSmartWallet)
-    if (canonical !== params.sender) return null
-    return getAddress(identity.embeddedEoa)
-  } catch {
-    return null
+  const resolveEmbeddedOwner = (identity: Awaited<ReturnType<typeof resolvePersistedWalletIdentity>>): Address | null => {
+    if (!identity?.canonicalSmartWallet || !identity.embeddedEoa) return null
+    try {
+      const canonical = getAddress(identity.canonicalSmartWallet)
+      if (canonical !== params.sender) return null
+      return getAddress(identity.embeddedEoa)
+    } catch {
+      return null
+    }
   }
+
+  // Prefer sender-bound identity (canonical CSW), then fall back to session identity.
+  const senderIdentity = await resolvePersistedWalletIdentity(params.sender)
+  const senderBoundEmbeddedOwner = resolveEmbeddedOwner(senderIdentity)
+  if (senderBoundEmbeddedOwner) return senderBoundEmbeddedOwner
+
+  const sessionIdentity = await resolvePersistedWalletIdentity(params.sessionAddress)
+  return resolveEmbeddedOwner(sessionIdentity)
 }
 
 function assertCanonicalSwapRouterExecuteEncoding(data: Hex): void {
