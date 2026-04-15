@@ -116,6 +116,38 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
+  it('passes embedded-owner lookup address for canonical self-auth owner-index resolution', async () => {
+    const ensurePaymasterSession = vi.fn(async () => true)
+
+    const result = await sendPreparedOwnerTx({
+      txRequest: TX_REQUEST,
+      walletClient: {
+        account: CANONICAL_CSW,
+        sendTransaction: vi.fn(async () => TX_HASH),
+        request: vi.fn(),
+      },
+      chainId: 8453,
+      authHeaders: async () => ({ Authorization: 'Bearer test' }),
+      ownerAddress: OWNER_EOA,
+      ownerIndexLookupAddress: OWNER_EOA,
+      signerAddress: CANONICAL_CSW,
+      executionMode: 'canonicalSmartWallet',
+      canonicalSmartWalletAddress: CANONICAL_CSW,
+      publicClient: {},
+      ensurePaymasterSession,
+    })
+
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ownerAddress: CANONICAL_CSW,
+        ownerIndexLookupAddress: OWNER_EOA,
+        useTypedDataSigning: true,
+      }),
+    )
+    expect(result.txHash).toBe(TX_HASH)
+  })
+
   it('does not fall back to sendTransaction when sponsored canonical self-approval fails', async () => {
     const sendTransaction = vi.fn(async () => TX_HASH)
     const ensurePaymasterSession = vi.fn(async () => true)
@@ -419,6 +451,48 @@ describe('sendPreparedOwnerTx', () => {
       2,
       expect.objectContaining({
         useTypedDataSigning: false,
+      }),
+    )
+    expect(request).not.toHaveBeenCalled()
+    expect(result.txHash).toBe(TX_HASH)
+  })
+
+  it('retries sponsored canonical user-op without typed-data signing when typed lane fails with AA23', async () => {
+    const ensurePaymasterSession = vi.fn(async () => true)
+    const request = vi.fn()
+    sendCoinbaseSmartWalletUserOperationMock.mockRejectedValueOnce(new Error('AA23 reverted (or OOG)'))
+
+    const result = await sendPreparedOwnerTx({
+      txRequest: TX_REQUEST,
+      walletClient: {
+        account: CANONICAL_CSW,
+        sendTransaction: vi.fn(async () => TX_HASH),
+        request,
+      },
+      chainId: 8453,
+      authHeaders: async () => ({ Authorization: 'Bearer test' }),
+      ownerAddress: OWNER_EOA,
+      ownerIndexLookupAddress: OWNER_EOA,
+      signerAddress: CANONICAL_CSW,
+      executionMode: 'canonicalSmartWallet',
+      canonicalSmartWalletAddress: CANONICAL_CSW,
+      publicClient: {},
+      ensurePaymasterSession,
+    })
+
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(2)
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        useTypedDataSigning: true,
+        ownerIndexLookupAddress: OWNER_EOA,
+      }),
+    )
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        useTypedDataSigning: false,
+        ownerIndexLookupAddress: OWNER_EOA,
       }),
     )
     expect(request).not.toHaveBeenCalled()

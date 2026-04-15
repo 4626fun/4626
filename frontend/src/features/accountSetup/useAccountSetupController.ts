@@ -16,6 +16,7 @@ import { isTelegramMiniAppContext, readPrivyTelegramLaunchParams } from '@/lib/t
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import {
   type ApiEnvelope,
+  type OnboardingBootstrapResponse,
   type OwnerDelegationFlags,
   type OwnerApprovalStageEvent,
   type PrepareOwnerResponse,
@@ -816,6 +817,7 @@ export function useAccountSetupController(params: {
     async (
       txRequest: { chainId: 8453; to: `0x${string}`; data: `0x${string}`; value: '0x0' },
       ownerAddress?: string | null,
+      ownerIndexLookupAddress?: string | null,
       opts?: { approvalRunId?: string | null; onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null },
     ) => {
       let effectiveWalletClient = walletClient
@@ -846,6 +848,7 @@ export function useAccountSetupController(params: {
         switchChainAsync: effectiveSwitchChain,
         authHeaders,
         ownerAddress,
+        ownerIndexLookupAddress,
         signerAddress: ownerSignerAddress,
         executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
         canonicalSmartWalletAddress: canonicalCswAddress,
@@ -911,7 +914,7 @@ export function useAccountSetupController(params: {
         headers,
         body: JSON.stringify({}),
       })
-      let preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<unknown> | null
+      let preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<OnboardingBootstrapResponse> | null
       if ((!preflightRes.ok || !preflightPayload?.success) && (preflightPayload as any)?.needsEmbeddedWallet === true) {
         await ensureEmbeddedWallet()
         preflightRes = await apiFetch('/api/onboarding/bootstrap', {
@@ -919,7 +922,7 @@ export function useAccountSetupController(params: {
           headers,
           body: JSON.stringify({}),
         })
-        preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<unknown> | null
+        preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<OnboardingBootstrapResponse> | null
         if (!preflightRes.ok || !preflightPayload?.success) {
           emitOwnerApprovalStageEvent({
             runId: approvalRunId,
@@ -955,6 +958,10 @@ export function useAccountSetupController(params: {
         signerAddress: ownerSignerAddress ?? null,
         canonicalCswAddress,
       })
+      const preflightOwnerLookupAddress =
+        connectedCanonicalWalletSelected
+          ? preflightPayload?.data?.privyEmbeddedEoaAddress ?? null
+          : ownerSignerAddress ?? null
 
       emitOwnerApprovalStageEvent({
         runId: approvalRunId,
@@ -1008,6 +1015,7 @@ export function useAccountSetupController(params: {
       await sendPreparedOwnerTx(
         preparePayload.data.txRequest,
         connectedCanonicalWalletSelected ? null : ownerSignerAddress ?? null,
+        preflightOwnerLookupAddress,
         {
           approvalRunId,
           onStageEvent: emitOwnerApprovalStageEvent,
@@ -1106,7 +1114,7 @@ export function useAccountSetupController(params: {
         setNotice('Rabby address is already an owner.')
         return
       }
-      await sendPreparedOwnerTx(preparePayload.data.txRequest, normalized)
+      await sendPreparedOwnerTx(preparePayload.data.txRequest, normalized, normalized)
       setNotice('Rabby co-owner added.')
       await loadMe({ showSpinner: false })
     } catch (rabbyError: any) {

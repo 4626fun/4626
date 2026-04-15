@@ -3,6 +3,7 @@ import { resolveApiErrorMessage } from '@/lib/apiEnvelope'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import type { ApiEnvelope } from '@/lib/apiEnvelope'
+import { isAddress } from 'viem'
 import { base } from 'viem/chains'
 export type { ApiEnvelope } from '@/lib/apiEnvelope'
 
@@ -473,6 +474,7 @@ export async function sendPreparedOwnerTx(params: {
   switchChainAsync?: ((args: { chainId: typeof base.id }) => Promise<unknown>) | null
   authHeaders: () => Promise<Record<string, string>>
   ownerAddress?: string | null
+  ownerIndexLookupAddress?: string | null
   signerAddress?: string | null
   executionMode: OwnerApprovalExecutionMode
   canonicalSmartWalletAddress?: string | null
@@ -488,6 +490,7 @@ export async function sendPreparedOwnerTx(params: {
     switchChainAsync,
     authHeaders,
     ownerAddress,
+    ownerIndexLookupAddress,
     signerAddress,
     executionMode,
     canonicalSmartWalletAddress,
@@ -515,6 +518,16 @@ export async function sendPreparedOwnerTx(params: {
       }
       const selfAuthenticatedCanonicalSession =
         signerAddress.toLowerCase() === canonicalSmartWalletAddress.toLowerCase()
+      const ownerIndexLookupAddressForUserOp =
+        selfAuthenticatedCanonicalSession &&
+        typeof ownerIndexLookupAddress === 'string' &&
+        isAddress(ownerIndexLookupAddress)
+          ? ownerIndexLookupAddress
+          : selfAuthenticatedCanonicalSession &&
+              typeof ownerAddress === 'string' &&
+              isAddress(ownerAddress)
+            ? ownerAddress
+            : null
       const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
       const paymasterUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
       const runSponsoredCanonicalUserOp = async (opts?: { disableTypedDataSigning?: boolean; attempt?: number }) => {
@@ -545,6 +558,10 @@ export async function sendPreparedOwnerTx(params: {
               bundlerUrl: paymasterUrl,
               smartWallet: canonicalSmartWalletAddress as `0x${string}`,
               ownerAddress: signerAddress as `0x${string}`,
+              ownerIndexLookupAddress:
+                typeof ownerIndexLookupAddressForUserOp === 'string'
+                  ? (ownerIndexLookupAddressForUserOp as `0x${string}`)
+                  : undefined,
               calls: [{ to: txRequest.to, data: txRequest.data, value: 0n }],
               version: '1',
               useTypedDataSigning: selfAuthenticatedCanonicalSession && opts?.disableTypedDataSigning !== true,

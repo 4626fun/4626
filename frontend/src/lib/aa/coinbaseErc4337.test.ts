@@ -5,6 +5,7 @@ import {
   findCoinbaseSmartWalletOwnerIndex,
   pollUserOperationStatus,
   resetOwnerIndexCacheForTests,
+  sendCoinbaseSmartWalletUserOperation,
   simulateSmartWalletCalls,
   verifyBundlerSupportsV06,
 } from './coinbaseErc4337'
@@ -12,6 +13,7 @@ import {
 const SMART_WALLET = '0x1111111111111111111111111111111111111111'
 const OWNER_ADDRESS = '0x2222222222222222222222222222222222222222'
 const OTHER_ADDRESS = '0x3333333333333333333333333333333333333333'
+const LOOKUP_ADDRESS = '0x4444444444444444444444444444444444444444'
 const TX_HASH = `0x${'a'.repeat(64)}`
 const USER_OP_HASH = `0x${'b'.repeat(64)}`
 
@@ -116,6 +118,37 @@ describe('coinbaseErc4337 latency helpers', () => {
 
     const fnCalls = readContract.mock.calls.map(([arg]) => (arg as ReadContractArgs).functionName)
     expect(fnCalls.filter((name) => name === 'nextOwnerIndex')).toHaveLength(2)
+  })
+
+  it('fails fast with explicit ownerIndexLookupAddress instead of probing CSW owner indexes', async () => {
+    const ownerBytes = encodeAbiParameters([{ type: 'address' }], [OWNER_ADDRESS])
+    const otherBytes = encodeAbiParameters([{ type: 'address' }], [OTHER_ADDRESS])
+    const readContract = vi.fn(async ({ functionName, args }: ReadContractArgs) => {
+      if (functionName === 'ownerCount') return 2n
+      if (functionName === 'nextOwnerIndex') return 2n
+      if (functionName === 'ownerAtIndex') {
+        const index = Number((args?.[0] as bigint | undefined) ?? 0n)
+        return index === 0 ? ownerBytes : otherBytes
+      }
+      throw new Error(`Unexpected functionName: ${functionName}`)
+    })
+
+    await expect(
+      sendCoinbaseSmartWalletUserOperation({
+        publicClient: { chain: { id: 8453 }, readContract } as any,
+        walletClient: {} as any,
+        bundlerUrl: 'https://bundler.invalid',
+        smartWallet: SMART_WALLET as `0x${string}`,
+        ownerAddress: SMART_WALLET as `0x${string}`,
+        ownerIndexLookupAddress: LOOKUP_ADDRESS as `0x${string}`,
+        calls: [{ to: OWNER_ADDRESS as `0x${string}`, data: '0x1234' as `0x${string}` }],
+      }),
+    ).rejects.toThrow(`Connected wallet (${LOOKUP_ADDRESS}) is not an onchain owner of the smart wallet (${SMART_WALLET}).`)
+
+    const ownerAtIndexCalls = readContract.mock.calls
+      .map(([arg]) => arg as ReadContractArgs)
+      .filter((arg) => arg.functionName === 'ownerAtIndex')
+    expect(ownerAtIndexCalls).toHaveLength(2)
   })
 
   it('treats Unauthorized executeBatch simulation as non-blocking', async () => {

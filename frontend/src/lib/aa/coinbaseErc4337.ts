@@ -704,11 +704,6 @@ function getErrorDiagnosticMessage(error: unknown): string {
   return deduped.join(' | ')
 }
 
-function isLikelyAA23ValidationRevert(message: string): boolean {
-  const lc = message.toLowerCase()
-  return lc.includes('aa23') || (lc.includes('validateuserop') && lc.includes('revert')) || lc.includes('validation reverted')
-}
-
 function getRpcErrorDetails(error: unknown): string | null {
   const err = error as any
   const details = typeof err?.details === 'string' ? err.details.trim() : ''
@@ -1705,6 +1700,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   paymasterUrl?: string
   smartWallet: Address
   ownerAddress: Address
+  ownerIndexLookupAddress?: Address
   calls: Array<{ to: Address; value?: bigint; data?: Hex }>
   version?: '1' | '1.1'
   userOpSignMode?: UserOpSignMode
@@ -1735,6 +1731,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     paymasterUrl: paymasterUrlInput,
     smartWallet,
     ownerAddress,
+    ownerIndexLookupAddress: ownerIndexLookupAddressRaw,
     calls,
     version = '1',
     userOpSignMode = 'auto',
@@ -1772,6 +1769,11 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   if (!calls || calls.length === 0) throw new Error('No calls provided')
   const chainId = (publicClient as any).chain?.id ?? 8453
   const attributedCalls = applyBuilderDataSuffixToCalls(calls, chainId)
+  const ownerIndexLookupAddress =
+    typeof ownerIndexLookupAddressRaw === 'string' && isAddress(ownerIndexLookupAddressRaw)
+      ? getAddress(ownerIndexLookupAddressRaw)
+      : null
+  const ownerAddressForLookup = ownerIndexLookupAddress ?? ownerAddress
 
   const normalizedBundlerUrl = normalizeUrl(bundlerUrlInput)
   const paymasterUrl = normalizeUrl(paymasterUrlInput ?? bundlerUrlInput)
@@ -1836,7 +1838,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     const ownerLookup = await findCoinbaseSmartWalletOwnerIndex({
       publicClient,
       smartWallet,
-      ownerAddress,
+      ownerAddress: ownerAddressForLookup,
       useCache: !bypassOwnerIndexCache,
     })
     ownerIndex = ownerLookup.ownerIndex
@@ -1845,6 +1847,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       logger.debug('[ERC-4337] Owner index lookup', {
         smartWallet,
         ownerAddress,
+        ownerAddressForLookup,
         ownerIndex,
         ownerCount,
       })
@@ -1858,10 +1861,11 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   }
 
   if (ownerIndex === null) {
-    const ownerLooksLikeSmartWallet = ownerAddress.toLowerCase() === smartWallet.toLowerCase()
+    const ownerLooksLikeSmartWallet = ownerAddressForLookup.toLowerCase() === smartWallet.toLowerCase()
     const maxProbeOwners = 16
     const probeOwnerCount = Math.min(ownerCount, maxProbeOwners)
-    if (ownerLooksLikeSmartWallet && probeOwnerCount > 0) {
+    const canProbeOwnerIndex = ownerLooksLikeSmartWallet && probeOwnerCount > 0 && ownerIndexLookupAddress === null
+    if (canProbeOwnerIndex) {
       let lastSignatureMismatch: unknown = null
       for (let probeIndex = 0; probeIndex < probeOwnerCount; probeIndex += 1) {
         try {
@@ -1883,8 +1887,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
           const signatureMismatch =
             probeMsg.includes('invalid signature') ||
             probeMsg.includes('signature check failed') ||
-            probeMsg.includes('userop signature verification failed') ||
-            isLikelyAA23ValidationRevert(probeMsg)
+            probeMsg.includes('userop signature verification failed')
           if (!signatureMismatch) throw probeErr
           lastSignatureMismatch = probeErr
           if (AA_DEBUG) {
@@ -1900,7 +1903,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     }
 
     throw new Error(
-      `Connected wallet (${ownerAddress}) is not an onchain owner of the smart wallet (${smartWallet}). ` +
+      `Connected wallet (${ownerAddressForLookup}) is not an onchain owner of the smart wallet (${smartWallet}). ` +
       'Add this wallet as an owner first, or connect with a wallet that is already an owner.'
     )
   }
@@ -2301,6 +2304,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         paymasterUrl: paymasterUrlInput,
         smartWallet,
         ownerAddress,
+        ownerIndexLookupAddress: ownerIndexLookupAddress ?? undefined,
         calls,
         version,
         userOpSignMode,
@@ -2333,6 +2337,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
           paymasterUrl: paymasterUrlInput,
           smartWallet,
           ownerAddress,
+          ownerIndexLookupAddress: ownerIndexLookupAddress ?? undefined,
           calls,
           version,
           userOpSignMode: 'signMessage',
@@ -2365,6 +2370,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         paymasterUrl: paymasterUrlInput,
         smartWallet,
         ownerAddress,
+        ownerIndexLookupAddress: ownerIndexLookupAddress ?? undefined,
         calls,
         version,
         userOpSignMode: 'eth_sign',
