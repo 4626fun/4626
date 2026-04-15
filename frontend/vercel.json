@@ -360,6 +360,16 @@
       "dest": "/telegram-link.html"
     },
     {
+      "src": "/",
+      "has": [
+        {
+          "type": "host",
+          "value": "4626.fun"
+        }
+      ],
+      "dest": "/immersive/index.html"
+    },
+    {
       "handle": "filesystem"
     },
     {
@@ -371,16 +381,6 @@
         }
       ],
       "dest": "/app.html"
-    },
-    {
-      "src": "/",
-      "has": [
-        {
-          "type": "host",
-          "value": "4626.fun"
-        }
-      ],
-      "dest": "/immersive/index.html"
     },
     {
       "src": "/((?!assets/).*)",
