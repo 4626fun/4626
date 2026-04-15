@@ -79,6 +79,7 @@ export function AccountSetupWorkspaceView(props: {
     onEnable4626Signing,
     onLinkZora,
     onRefreshZora,
+    onResetOwnerApproval,
     onSwitchAccount,
     ownerApprovalReady,
     ownerAuthorityState,
@@ -372,8 +373,7 @@ export function AccountSetupWorkspaceView(props: {
                       </button>
                       <button
                         type="button"
-                        disabled={advancedBusy}
-                        onClick={() => void retryOwnerCheck()}
+                        onClick={() => void onResetOwnerApproval()}
                         className="inline-flex h-9 items-center text-xs font-medium text-rose-900/80 transition-colors hover:text-rose-700 disabled:opacity-50"
                       >
                         Reset
@@ -750,7 +750,7 @@ export function AccountSetupWorkspaceView(props: {
                     <button
                       type="button"
                       disabled={advancedBusy || busyProvider === 'owner_wallet'}
-                      onClick={() => void retryOwnerCheck()}
+                      onClick={() => void onResetOwnerApproval()}
                       className="rounded-lg bg-white/5 px-3 py-2 text-xs text-zinc-300 transition hover:bg-white/10 hover:text-zinc-100"
                     >
                       Retry owner check

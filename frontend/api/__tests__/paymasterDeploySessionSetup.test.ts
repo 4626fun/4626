@@ -307,7 +307,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     expect(errMsg).toMatch(/contract_owner_not_allowed/i)
   })
 
-  it('accepts addOwnerAddress self-call for deploy_session_setup when principal equals sender', async () => {
+  it('rejects addOwnerAddress self-call for deploy_session_setup when deploy session is missing', async () => {
     const COINBASE_SMART_WALLET_ABI = [
       {
         type: 'function',
@@ -331,7 +331,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
       },
     ] as const
 
-    // No deploy-session row should be required in this path.
+    // A deploy session is required to bind the owner being added.
     getActiveDeploySessionMock.mockResolvedValueOnce(null)
     readRequestPrincipalMock.mockReturnValue(sender)
 
@@ -376,8 +376,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
 
     const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
     const errMsg = String(responseBody?.error?.message ?? '')
-    expect(errMsg).not.toMatch(/request denied/i)
-    expect(errMsg).not.toMatch(/deploy_session_missing/i)
+    expect(errMsg).toMatch(/deploy_session_missing/i)
   })
 
   it('rejects sponsored calls when sender provenance is not a Coinbase smart wallet implementation', async () => {
