@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.30;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -51,6 +51,7 @@ contract DeploymentBatcherPhase3Helper {
     error CharmFactoryGovernanceMismatch(address expected, address actual);
     error CharmFactoryProtocolFeeMismatch(uint256 expected, uint256 actual);
     error CharmVaultManagerMismatch(address expected, address actual);
+    error Phase3HelperLostAdmin();
 
     IUniversalCreate2DeployerFromStore public immutable create2Deployer;
     address public immutable protocolTreasury;
@@ -159,10 +160,7 @@ contract DeploymentBatcherPhase3Helper {
         IOwnableTransfer(out.ajnaStrategy).transferOwnership(protocolTreasury);
         // FIX: F-21 — verify this helper is still admin before transferring, to fail explicitly
         // instead of silently leaving auth locked to this helper address
-        require(
-            IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).isAdmin(address(this)),
-            "Phase3Helper lost admin before transfer"
-        );
+        if (!IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).isAdmin(address(this))) revert Phase3HelperLostAdmin();
         // FIX: F-04 compatibility — use two-step admin transfer
         IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).transferAdmin(protocolTreasury);
 
@@ -347,6 +345,73 @@ contract DeploymentBatcherUniV4Helper {
     }
 }
 
+contract DeploymentBatcherUtilsHelper {
+    function toLower(string calldata input) external pure returns (string memory) {
+        bytes memory b = bytes(input);
+        for (uint256 i = 0; i < b.length; i++) {
+            uint8 c = uint8(b[i]);
+            if (c >= 65 && c <= 90) {
+                b[i] = bytes1(c + 32);
+            }
+        }
+        return string(b);
+    }
+
+    function toUpper(string calldata input) external pure returns (string memory) {
+        bytes memory b = bytes(input);
+        for (uint256 i = 0; i < b.length; i++) {
+            uint8 c = uint8(b[i]);
+            if (c >= 97 && c <= 122) {
+                b[i] = bytes1(c - 32);
+            }
+        }
+        return string(b);
+    }
+
+    function deriveBaseSalt(address creatorToken, address owner, uint256 chainId, string calldata version)
+        external
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encodePacked(creatorToken, owner, chainId, "4626:deploy:", version));
+    }
+
+    function saltFor(bytes32 baseSalt, string calldata label) external pure returns (bytes32) {
+        return keccak256(abi.encodePacked(baseSalt, label));
+    }
+
+    function deriveShareOftSalt(address owner, string calldata shareSymbolLower, string calldata version)
+        external
+        pure
+        returns (bytes32)
+    {
+        bytes32 base = keccak256(abi.encodePacked(owner, shareSymbolLower));
+        return keccak256(abi.encodePacked(base, "CreatorShareOFT:", version));
+    }
+
+    function phase1ParamsHash(
+        address creatorToken,
+        address owner,
+        string calldata vaultName,
+        string calldata vaultSymbol,
+        string calldata shareName,
+        string calldata shareSymbol,
+        string calldata version
+    ) external pure returns (bytes32) {
+        return keccak256(
+            abi.encode(creatorToken, owner, vaultName, vaultSymbol, shareName, shareSymbol, version)
+        );
+    }
+
+    function phase1CodeIdsHash(bytes32 vault, bytes32 wrapper, bytes32 shareOFT, bytes32 oftBootstrap)
+        external
+        pure
+        returns (bytes32)
+    {
+        return keccak256(abi.encode(vault, wrapper, shareOFT, oftBootstrap));
+    }
+}
+
 interface IUniversalBytecodeStore {
     function get(bytes32 codeId) external view returns (bytes memory);
 }
@@ -469,6 +534,147 @@ interface IAjnaVaultAuthConfigurator {
 
 interface IERC4626StrategyAdapterAdmin {
     function setIdleBufferBps(uint256 newBps) external;
+}
+
+contract DeploymentBatcherPhase2Module {
+    using SafeERC20 for IERC20;
+
+    uint8 internal constant AUCTION_PERCENT = 40;
+    uint8 internal constant VESTING_PERCENT = 40;
+    uint16 internal constant DEFAULT_LAUNCH_DISCOUNT_BPS = 8_000;
+    uint16 internal constant DEFAULT_LAUNCH_TICK_SPACING_BPS = 100;
+
+    error NotBatcherContext();
+
+    struct FinalizeExecutionResult {
+        uint256 auctionAmount;
+        uint256 lpReserveAmount;
+        uint256 vestingAmount;
+        address vestingAddress;
+        uint64 vestingStartTimestamp;
+        uint64 vestingDurationSeconds;
+    }
+
+    IUniversalCreate2DeployerFromStore public immutable create2Deployer;
+    address public immutable registry;
+    address public immutable chainlinkEthUsd;
+    address public immutable poolManager;
+    address public immutable taxHook;
+    address public immutable protocolTreasury;
+    address public immutable lotteryManager;
+    address public immutable vaultActivationBatcher;
+    address public immutable batcher;
+
+    constructor(
+        address _create2Deployer,
+        address _registry,
+        address _chainlinkEthUsd,
+        address _poolManager,
+        address _taxHook,
+        address _protocolTreasury,
+        address _lotteryManager,
+        address _vaultActivationBatcher
+    ) {
+        create2Deployer = IUniversalCreate2DeployerFromStore(_create2Deployer);
+        registry = _registry;
+        chainlinkEthUsd = _chainlinkEthUsd;
+        poolManager = _poolManager;
+        taxHook = _taxHook;
+        protocolTreasury = _protocolTreasury;
+        lotteryManager = _lotteryManager;
+        vaultActivationBatcher = _vaultActivationBatcher;
+        batcher = msg.sender;
+    }
+
+    function deployPhase2Core(
+        DeploymentBatcher.Phase2CoreParams calldata params,
+        DeploymentBatcher.CodeIds calldata codeIds,
+        bytes32 baseSalt,
+        string calldata shareSymbolLower
+    ) external returns (DeploymentBatcher.Phase2Result memory out) {
+        if (address(this) != batcher) revert NotBatcherContext();
+
+        address treasury = protocolTreasury;
+        address tempOwner = address(this);
+
+        bytes32 gaugeSalt = _saltFor(baseSalt, "gauge");
+        bytes32 ccaSalt = _saltFor(baseSalt, "cca");
+        bytes32 oracleSalt = _saltFor(baseSalt, "oracle");
+
+        bytes memory gaugeArgs = abi.encode(params.shareOFT, treasury, protocolTreasury, tempOwner);
+        out.gaugeController = create2Deployer.deploy(gaugeSalt, codeIds.gauge, gaugeArgs);
+
+        bytes memory ccaArgs = abi.encode(params.shareOFT, address(0), params.vault, params.vault, tempOwner);
+        out.ccaStrategy = create2Deployer.deploy(ccaSalt, codeIds.cca, ccaArgs);
+
+        bytes memory oracleArgs = abi.encode(registry, chainlinkEthUsd, shareSymbolLower, tempOwner);
+        out.oracle = create2Deployer.deploy(oracleSalt, codeIds.oracle, oracleArgs);
+
+        ICreatorShareOFT(params.shareOFT).setGaugeController(out.gaugeController);
+
+        ICreatorGaugeController(out.gaugeController).setVault(params.vault);
+        ICreatorGaugeController(out.gaugeController).setWrapper(params.wrapper);
+        ICreatorGaugeController(out.gaugeController).setCreatorCoin(params.creatorToken);
+        if (lotteryManager != address(0)) {
+            ICreatorGaugeController(out.gaugeController).setLotteryManager(lotteryManager);
+        }
+        ICreatorGaugeController(out.gaugeController).setOracle(out.oracle);
+
+        ICreatorOVault(params.vault).setGaugeController(out.gaugeController);
+
+        ICCALaunchStrategy(out.ccaStrategy).setApprovedLauncher(address(this), true);
+        if (vaultActivationBatcher != address(0)) {
+            ICCALaunchStrategy(out.ccaStrategy).setApprovedLauncher(vaultActivationBatcher, true);
+        }
+        ICCALaunchStrategy(out.ccaStrategy).setRecipients(out.ccaStrategy, out.ccaStrategy);
+        ICCALaunchStrategy(out.ccaStrategy).setBackingVault(params.vault);
+        ICCALaunchStrategy(out.ccaStrategy)
+            .setMigrationConfig(address(0), protocolTreasury, protocolTreasury, 1, 14_400);
+        ICCALaunchStrategy(out.ccaStrategy).setOracleConfig(out.oracle, poolManager, taxHook, out.gaugeController);
+        ICCALaunchStrategy(out.ccaStrategy).setLaunchDiscountBps(DEFAULT_LAUNCH_DISCOUNT_BPS);
+        ICCALaunchStrategy(out.ccaStrategy).setLaunchTickSpacingBps(DEFAULT_LAUNCH_TICK_SPACING_BPS);
+    }
+
+    function finalizePhase2Execution(DeploymentBatcher.Phase2FinalizeParams calldata params, bytes32 baseSalt)
+        external
+        returns (FinalizeExecutionResult memory result)
+    {
+        if (address(this) != batcher) revert NotBatcherContext();
+
+        IERC20(params.creatorToken).forceApprove(params.wrapper, params.depositAmount);
+        uint256 shareTokens = ICreatorOVaultWrapper(params.wrapper).deposit(params.depositAmount);
+
+        result.auctionAmount = (shareTokens * AUCTION_PERCENT) / 100;
+        result.vestingAmount = (shareTokens * VESTING_PERCENT) / 100;
+        result.lpReserveAmount = shareTokens - result.auctionAmount - result.vestingAmount;
+
+        if (result.lpReserveAmount > 0) {
+            IERC20(params.shareOFT).safeTransfer(params.ccaStrategy, result.lpReserveAmount);
+        }
+
+        if (result.vestingAmount > 0) {
+            result.vestingStartTimestamp = uint64(block.timestamp);
+            result.vestingDurationSeconds = uint64(365 days);
+            bytes32 vestingSalt = keccak256(abi.encodePacked(baseSalt, "vesting"));
+            CreatorLinearVesting vesting = new CreatorLinearVesting{salt: vestingSalt}(
+                params.shareOFT, params.owner, result.vestingStartTimestamp, result.vestingDurationSeconds
+            );
+            result.vestingAddress = address(vesting);
+            IERC20(params.shareOFT).safeTransfer(result.vestingAddress, result.vestingAmount);
+        }
+
+        ICreatorOVault(params.vault).setProtocolRescue(protocolTreasury);
+        ICreatorOVault(params.vault).transferOwnership(params.owner);
+        ICreatorOVaultWrapper(params.wrapper).transferOwnership(protocolTreasury);
+        ICreatorShareOFT(params.shareOFT).transferOwnership(protocolTreasury);
+        ICreatorGaugeController(params.gaugeController).transferOwnership(protocolTreasury);
+        ICCALaunchStrategy(params.ccaStrategy).transferOwnership(protocolTreasury);
+        IOwnableTransfer(params.oracle).transferOwnership(protocolTreasury);
+    }
+
+    function _saltFor(bytes32 baseSalt, string memory label) internal pure returns (bytes32) {
+        return keccak256(abi.encodePacked(baseSalt, label));
+    }
 }
 
 /**
@@ -771,8 +977,12 @@ contract DeploymentBatcher is ReentrancyGuard {
     OVaultRuntimeConfig private ovaultRuntimeConfig;
     /// @notice Dedicated phase-3 execution helper to keep this contract under EIP-170 runtime limits.
     DeploymentBatcherPhase3Helper public immutable phase3Helper;
+    /// @notice Dedicated phase-2 execution helper (delegatecall) to keep this contract under EIP-170 runtime limits.
+    DeploymentBatcherPhase2Module public immutable phase2Module;
     /// @notice Dedicated UniV4 execution helper to keep this contract under EIP-170 runtime limits.
     DeploymentBatcherUniV4Helper public immutable uniV4Helper;
+    /// @notice String/salt/hash helper contract to keep this contract under EIP-170 runtime limits.
+    DeploymentBatcherUtilsHelper public immutable utilsHelper;
 
     event Phase1Deployed(
         address indexed creatorToken,
@@ -924,7 +1134,18 @@ contract DeploymentBatcher is ReentrancyGuard {
         phase3Helper = new DeploymentBatcherPhase3Helper(
             _create2Deployer, _protocolTreasury, _usdc, _uniswapV3Factory, _uniswapRouter, _ajnaFactory
         );
+        phase2Module = new DeploymentBatcherPhase2Module(
+            _create2Deployer,
+            _registry,
+            _chainlinkEthUsd,
+            _poolManager,
+            _taxHook,
+            _protocolTreasury,
+            _lotteryManager,
+            _vaultActivationBatcher
+        );
         uniV4Helper = new DeploymentBatcherUniV4Helper(_create2Deployer, _poolManager, _permit2);
+        utilsHelper = new DeploymentBatcherUtilsHelper();
     }
 
     // ================================
@@ -959,11 +1180,20 @@ contract DeploymentBatcher is ReentrancyGuard {
         // FIX: F-06 — cap symbol length to prevent gas griefing in _toLower/_toUpper loops
         if (bytes(params.shareSymbol).length > 32) revert SymbolTooLong();
 
-        string memory shareSymbolLower = _toLower(params.shareSymbol);
-        bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
-        bytes32 shareOftSalt = _deriveShareOftSalt(params.owner, shareSymbolLower, params.version);
-        bytes32 paramsHash = _phase1ParamsHash(params);
-        bytes32 codeIdsHash = _phase1CodeIdsHash(codeIds);
+        string memory shareSymbolLower = utilsHelper.toLower(params.shareSymbol);
+        bytes32 baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
+        bytes32 shareOftSalt = utilsHelper.deriveShareOftSalt(params.owner, shareSymbolLower, params.version);
+        bytes32 paramsHash = utilsHelper.phase1ParamsHash(
+            params.creatorToken,
+            params.owner,
+            params.vaultName,
+            params.vaultSymbol,
+            params.shareName,
+            params.shareSymbol,
+            params.version
+        );
+        bytes32 codeIdsHash =
+            utilsHelper.phase1CodeIdsHash(codeIds.vault, codeIds.wrapper, codeIds.shareOFT, codeIds.oftBootstrap);
 
         Phase1SplitState storage state = phase1SplitStates[baseSalt];
         if (state.coreDone) {
@@ -981,8 +1211,8 @@ contract DeploymentBatcher is ReentrancyGuard {
 
         // Batcher owns the contracts until Phase 2 completes final wiring + ownership transfers.
         address tempOwner = address(this);
-        bytes32 vaultSalt = _saltFor(baseSalt, "vault");
-        bytes32 wrapperSalt = _saltFor(baseSalt, "wrapper");
+        bytes32 vaultSalt = utilsHelper.saltFor(baseSalt, "vault");
+        bytes32 wrapperSalt = utilsHelper.saltFor(baseSalt, "wrapper");
 
         // OFT bootstrap registry is chain-global + constructor-less => initCodeHash == codeId.
         bytes32 oftBootstrapSalt = keccak256("4626:OFTBootstrapRegistry:v1");
@@ -1025,12 +1255,21 @@ contract DeploymentBatcher is ReentrancyGuard {
         // FIX: F-06 — cap symbol length to prevent gas griefing in _toLower/_toUpper loops
         if (bytes(params.shareSymbol).length > 32) revert SymbolTooLong();
 
-        string memory shareSymbolLower = _toLower(params.shareSymbol);
-        string memory shareSymbolUpper = _toUpper(params.shareSymbol);
-        bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
-        bytes32 expectedShareOftSalt = _deriveShareOftSalt(params.owner, shareSymbolLower, params.version);
-        bytes32 paramsHash = _phase1ParamsHash(params);
-        bytes32 codeIdsHash = _phase1CodeIdsHash(codeIds);
+        string memory shareSymbolLower = utilsHelper.toLower(params.shareSymbol);
+        string memory shareSymbolUpper = utilsHelper.toUpper(params.shareSymbol);
+        bytes32 baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
+        bytes32 expectedShareOftSalt = utilsHelper.deriveShareOftSalt(params.owner, shareSymbolLower, params.version);
+        bytes32 paramsHash = utilsHelper.phase1ParamsHash(
+            params.creatorToken,
+            params.owner,
+            params.vaultName,
+            params.vaultSymbol,
+            params.shareName,
+            params.shareSymbol,
+            params.version
+        );
+        bytes32 codeIdsHash =
+            utilsHelper.phase1CodeIdsHash(codeIds.vault, codeIds.wrapper, codeIds.shareOFT, codeIds.oftBootstrap);
 
         Phase1SplitState storage state = phase1SplitStates[baseSalt];
         if (!state.coreDone) revert Phase1CoreMissing();
@@ -1104,7 +1343,37 @@ contract DeploymentBatcher is ReentrancyGuard {
         returns (Phase2Result memory out)
     {
         _requireOwner(params.owner);
-        out = _deployPhase2Core(params, codeIds);
+        if (params.creatorToken == address(0) || params.owner == address(0)) revert ZeroAddress();
+        if (params.vault == address(0) || params.wrapper == address(0) || params.shareOFT == address(0)) {
+            revert ZeroAddress();
+        }
+        _requirePhase2CodeIds(codeIds);
+        if (params.vault.code.length == 0 || params.wrapper.code.length == 0 || params.shareOFT.code.length == 0) {
+            revert Phase1Missing();
+        }
+
+        bytes32 baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
+        {
+            Phase1SplitState storage p1state = phase1SplitStates[baseSalt];
+            if (!p1state.finalized) revert Phase1Missing();
+            if (p1state.vault != params.vault || p1state.wrapper != params.wrapper || p1state.shareOFT != params.shareOFT) {
+                revert Phase1StateMismatch();
+            }
+        }
+        if (params.creatorTreasury != address(0) && params.creatorTreasury != protocolTreasury) {
+            revert InvalidCreatorTreasury(params.creatorTreasury);
+        }
+        if (params.payoutRecipient != address(0)) revert InvalidPayoutRecipient();
+
+        string memory shareSymbolLower = utilsHelper.toLower(params.shareSymbol);
+        bytes memory outData = _delegatePhase2(
+            abi.encodeWithSelector(
+                DeploymentBatcherPhase2Module.deployPhase2Core.selector, params, codeIds, baseSalt, shareSymbolLower
+            )
+        );
+        out = abi.decode(outData, (Phase2Result));
+
+        emit Phase2CoreDeployed(params.creatorToken, params.owner, out.gaugeController, out.ccaStrategy, out.oracle);
     }
 
     function finalizePhase2(Phase2FinalizeParams calldata params)
@@ -1141,7 +1410,7 @@ contract DeploymentBatcher is ReentrancyGuard {
             revert ZeroAddress();
         }
 
-        bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
+        bytes32 baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
         PendingAuction memory pending = pendingAuctions[baseSalt];
         if (pending.amount == 0) revert NoPendingAuction();
         if (pending.shareOFT != params.shareOFT) revert AuctionShareOFTMismatch();
@@ -1161,89 +1430,6 @@ contract DeploymentBatcher is ReentrancyGuard {
         emit AuctionLaunchedDeferred(
             params.creatorToken, params.owner, params.shareOFT, pending.ccaStrategy, pending.amount, auction
         );
-    }
-
-    function _deployPhase2Core(Phase2CoreParams memory params, CodeIds calldata codeIds)
-        internal
-        returns (Phase2Result memory out)
-    {
-        if (params.creatorToken == address(0) || params.owner == address(0)) revert ZeroAddress();
-        if (params.vault == address(0) || params.wrapper == address(0) || params.shareOFT == address(0)) {
-            revert ZeroAddress();
-        }
-        _requirePhase2CodeIds(codeIds);
-
-        // Require phase-1 contracts to exist.
-        if (params.vault.code.length == 0 || params.wrapper.code.length == 0 || params.shareOFT.code.length == 0) {
-            revert Phase1Missing();
-        }
-
-        // FIX: F-01 — verify vault/wrapper/shareOFT were deployed by this batcher's Phase 1
-        {
-            bytes32 p2BaseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
-            Phase1SplitState storage p1state = phase1SplitStates[p2BaseSalt];
-            if (!p1state.finalized) revert Phase1Missing();
-            if (p1state.vault != params.vault || p1state.wrapper != params.wrapper || p1state.shareOFT != params.shareOFT) {
-                revert Phase1StateMismatch();
-            }
-        }
-
-        // Enforce protocol custody lane for treasury split in hardened deploy mode.
-        // Legacy callers may pass zero (treated as protocol treasury), but non-zero
-        // creator treasury overrides are rejected.
-        if (params.creatorTreasury != address(0) && params.creatorTreasury != protocolTreasury) {
-            revert InvalidCreatorTreasury(params.creatorTreasury);
-        }
-        // Payout recipient is configured explicitly via payout router + policy controller.
-        if (params.payoutRecipient != address(0)) revert InvalidPayoutRecipient();
-        address treasury = protocolTreasury;
-        address tempOwner = address(this);
-
-        string memory shareSymbolLower = _toLower(params.shareSymbol);
-
-        bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
-        bytes32 gaugeSalt = _saltFor(baseSalt, "gauge");
-        bytes32 ccaSalt = _saltFor(baseSalt, "cca");
-        bytes32 oracleSalt = _saltFor(baseSalt, "oracle");
-
-        bytes memory gaugeArgs = abi.encode(params.shareOFT, treasury, protocolTreasury, tempOwner);
-        out.gaugeController = create2Deployer.deploy(gaugeSalt, codeIds.gauge, gaugeArgs);
-
-        bytes memory ccaArgs = abi.encode(params.shareOFT, address(0), params.vault, params.vault, tempOwner);
-        out.ccaStrategy = create2Deployer.deploy(ccaSalt, codeIds.cca, ccaArgs);
-
-        bytes memory oracleArgs = abi.encode(address(registry), chainlinkEthUsd, shareSymbolLower, tempOwner);
-        out.oracle = create2Deployer.deploy(oracleSalt, codeIds.oracle, oracleArgs);
-
-        // Phase-2 wiring (now that gauge + oracle exist).
-        ICreatorShareOFT(params.shareOFT).setGaugeController(out.gaugeController);
-
-        ICreatorGaugeController(out.gaugeController).setVault(params.vault);
-        ICreatorGaugeController(out.gaugeController).setWrapper(params.wrapper);
-        ICreatorGaugeController(out.gaugeController).setCreatorCoin(params.creatorToken);
-        if (lotteryManager != address(0)) {
-            ICreatorGaugeController(out.gaugeController).setLotteryManager(lotteryManager);
-        }
-        ICreatorGaugeController(out.gaugeController).setOracle(out.oracle);
-
-        ICreatorOVault(params.vault).setGaugeController(out.gaugeController);
-
-        ICCALaunchStrategy(out.ccaStrategy).setApprovedLauncher(address(this), true);
-        if (vaultActivationBatcher != address(0)) {
-            ICCALaunchStrategy(out.ccaStrategy).setApprovedLauncher(vaultActivationBatcher, true);
-        }
-        // Route raise + unsold auction flows back to strategy so migration can be deterministic.
-        ICCALaunchStrategy(out.ccaStrategy).setRecipients(out.ccaStrategy, out.ccaStrategy);
-        ICCALaunchStrategy(out.ccaStrategy).setBackingVault(params.vault);
-        // Position manager can be set later by governance if not known at deploy-time.
-        ICCALaunchStrategy(out.ccaStrategy)
-            .setMigrationConfig(address(0), protocolTreasury, protocolTreasury, 1, 14_400);
-        ICCALaunchStrategy(out.ccaStrategy).setOracleConfig(out.oracle, poolManager, taxHook, out.gaugeController);
-        // Launch floor/tick are derived onchain from oracle data; wire explicit defaults here.
-        ICCALaunchStrategy(out.ccaStrategy).setLaunchDiscountBps(DEFAULT_LAUNCH_DISCOUNT_BPS);
-        ICCALaunchStrategy(out.ccaStrategy).setLaunchTickSpacingBps(DEFAULT_LAUNCH_TICK_SPACING_BPS);
-
-        emit Phase2CoreDeployed(params.creatorToken, params.owner, out.gaugeController, out.ccaStrategy, out.oracle);
     }
 
     function _finalizePhase2Internal(Phase2FinalizeParams memory params) internal returns (Phase2Result memory out) {
@@ -1268,7 +1454,7 @@ contract DeploymentBatcher is ReentrancyGuard {
             revert Phase2Missing();
         }
 
-        bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
+        bytes32 baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
 
         // FIX: F-01 — verify vault/wrapper/shareOFT were deployed by this batcher's Phase 1
         {
@@ -1283,19 +1469,14 @@ contract DeploymentBatcher is ReentrancyGuard {
         out.ccaStrategy = params.ccaStrategy;
         out.oracle = params.oracle;
 
-        // Deposit + wrap
-        //
-        // Route through wrapper.deposit so vault shares are minted directly to the wrapper
-        // and wrapped internally. This avoids same-transaction vault-share transfer cooldown
-        // checks (deposit to batcher -> transfer to wrapper) on hardened vault configs.
-        IERC20(params.creatorToken).forceApprove(params.wrapper, params.depositAmount);
-        uint256 shareTokens = ICreatorOVaultWrapper(params.wrapper).deposit(params.depositAmount);
+        bytes memory moduleOut =
+            _delegatePhase2(
+                abi.encodeWithSelector(DeploymentBatcherPhase2Module.finalizePhase2Execution.selector, params, baseSalt)
+            );
+        DeploymentBatcherPhase2Module.FinalizeExecutionResult memory execution =
+            abi.decode(moduleOut, (DeploymentBatcherPhase2Module.FinalizeExecutionResult));
 
-        // ── Fixed Three-Way Split: 40% CCA / 40% creator vesting / 20% LP reserve ──
-        uint256 auctionAmount = (shareTokens * AUCTION_PERCENT) / 100; // 40%
-        uint256 vestingAmount = (shareTokens * VESTING_PERCENT) / 100; // 40%
-        uint256 lpReserveAmount = shareTokens - auctionAmount - vestingAmount; // 20% remainder
-        if (auctionAmount > 0) {
+        if (execution.auctionAmount > 0) {
             PendingAuction storage pending = pendingAuctions[baseSalt];
             if (pending.amount != 0) revert AuctionAlreadyPending();
             // FIX: F-02 — version-independent guard prevents replay bricking across re-deployments
@@ -1307,46 +1488,29 @@ contract DeploymentBatcher is ReentrancyGuard {
             pendingAuctions[baseSalt] = PendingAuction({
                 shareOFT: params.shareOFT,
                 ccaStrategy: params.ccaStrategy,
-                amount: auctionAmount,
-                lpReserveAmount: lpReserveAmount
+                amount: execution.auctionAmount,
+                lpReserveAmount: execution.lpReserveAmount
             });
             emit AuctionDeferred(
-                params.creatorToken, params.owner, params.shareOFT, params.ccaStrategy, auctionAmount, lpReserveAmount
+                params.creatorToken,
+                params.owner,
+                params.shareOFT,
+                params.ccaStrategy,
+                execution.auctionAmount,
+                execution.lpReserveAmount
             );
         }
 
-        // 2. Strategy LP reserve
-        if (lpReserveAmount > 0) {
-            IERC20(params.shareOFT).safeTransfer(params.ccaStrategy, lpReserveAmount);
-        }
-
-        // 3. Creator vesting
-        if (vestingAmount > 0) {
-            // Vest the creator’s ShareOFT allocation to reduce immediate sell pressure.
-            // Default: linear over 365 days, no cliff, starting now.
-            // FIX: F-16 — use CREATE2 (salt) for deterministic, pre-verifiable vesting address
-            bytes32 vestingSalt = keccak256(abi.encodePacked(baseSalt, "vesting"));
-            CreatorLinearVesting vesting =
-                new CreatorLinearVesting{salt: vestingSalt}(params.shareOFT, params.owner, uint64(block.timestamp), uint64(365 days));
-            IERC20(params.shareOFT).safeTransfer(address(vesting), vestingAmount);
+        if (execution.vestingAmount > 0) {
             emit CreatorShareVestingDeployed(
                 params.shareOFT,
                 params.owner,
-                address(vesting),
-                vestingAmount,
-                uint64(block.timestamp),
-                uint64(365 days)
+                execution.vestingAddress,
+                execution.vestingAmount,
+                execution.vestingStartTimestamp,
+                execution.vestingDurationSeconds
             );
         }
-
-        // Final ownership (hybrid)
-        ICreatorOVault(params.vault).setProtocolRescue(protocolTreasury);
-        ICreatorOVault(params.vault).transferOwnership(params.owner);
-        ICreatorOVaultWrapper(params.wrapper).transferOwnership(protocolTreasury);
-        ICreatorShareOFT(params.shareOFT).transferOwnership(protocolTreasury);
-        ICreatorGaugeController(params.gaugeController).transferOwnership(protocolTreasury);
-        ICCALaunchStrategy(params.ccaStrategy).transferOwnership(protocolTreasury);
-        IOwnableTransfer(params.oracle).transferOwnership(protocolTreasury);
 
         emit Phase2DeployedAndLaunched(
             params.creatorToken, params.owner, params.gaugeController, params.ccaStrategy, params.oracle, out.auction
@@ -1388,7 +1552,7 @@ contract DeploymentBatcher is ReentrancyGuard {
             revert ZeroAddress();
         }
 
-        bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
+        bytes32 baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
         out = phase3Helper.deployPhase3Strategies(params, codeIds, baseSalt);
 
         // ───────────────────────────────
@@ -1443,7 +1607,7 @@ contract DeploymentBatcher is ReentrancyGuard {
         _requireOwner(params.owner);
         _requireUniV4CodeIds(codeIds);
 
-        bytes32 baseSalt = _deriveBaseSalt(params.creatorToken, params.owner, params.version);
+        bytes32 baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
         out = uniV4Helper.deployUniV4Strategies(params, codeIds, baseSalt);
 
         emit UniV4StrategiesDeployed(
@@ -1560,69 +1724,18 @@ contract DeploymentBatcher is ReentrancyGuard {
         }
     }
 
-    function _phase1ParamsHash(Phase1Params calldata params) internal pure returns (bytes32) {
-        return keccak256(
-            abi.encode(
-                params.creatorToken,
-                params.owner,
-                params.vaultName,
-                params.vaultSymbol,
-                params.shareName,
-                params.shareSymbol,
-                params.version
-            )
-        );
-    }
-
-    function _phase1CodeIdsHash(CodeIds calldata codeIds) internal pure returns (bytes32) {
-        return keccak256(abi.encode(codeIds.vault, codeIds.wrapper, codeIds.shareOFT, codeIds.oftBootstrap));
+    function _delegatePhase2(bytes memory callData) internal returns (bytes memory result) {
+        (bool ok, bytes memory outData) = address(phase2Module).delegatecall(callData);
+        if (!ok) {
+            assembly {
+                revert(add(outData, 0x20), mload(outData))
+            }
+        }
+        return outData;
     }
 
     function _deriveInitCodeHash(bytes32 codeId, bytes memory constructorArgs) internal view returns (bytes32) {
         bytes memory creationCode = bytecodeStore.get(codeId);
         return keccak256(bytes.concat(creationCode, constructorArgs));
-    }
-
-    function _deriveBaseSalt(address creatorToken, address owner, string memory version)
-        internal
-        view
-        returns (bytes32)
-    {
-        return keccak256(abi.encodePacked(creatorToken, owner, block.chainid, "4626:deploy:", version));
-    }
-
-    function _saltFor(bytes32 baseSalt, string memory label) internal pure returns (bytes32) {
-        return keccak256(abi.encodePacked(baseSalt, label));
-    }
-
-    function _deriveShareOftSalt(address owner, string memory shareSymbolLower, string memory version)
-        internal
-        pure
-        returns (bytes32)
-    {
-        bytes32 base = keccak256(abi.encodePacked(owner, shareSymbolLower));
-        return keccak256(abi.encodePacked(base, "CreatorShareOFT:", version));
-    }
-
-    function _toLower(string memory input) internal pure returns (string memory) {
-        bytes memory b = bytes(input);
-        for (uint256 i = 0; i < b.length; i++) {
-            uint8 c = uint8(b[i]);
-            if (c >= 65 && c <= 90) {
-                b[i] = bytes1(c + 32);
-            }
-        }
-        return string(b);
-    }
-
-    function _toUpper(string memory input) internal pure returns (string memory) {
-        bytes memory b = bytes(input);
-        for (uint256 i = 0; i < b.length; i++) {
-            uint8 c = uint8(b[i]);
-            if (c >= 97 && c <= 122) {
-                b[i] = bytes1(c - 32);
-            }
-        }
-        return string(b);
     }
 }

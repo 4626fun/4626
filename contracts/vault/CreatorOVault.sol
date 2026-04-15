@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.30;
 
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
@@ -613,6 +613,8 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
         }
     }
 
+    /// @dev Delegatecall is intentional: modules execute against this vault's storage root.
+    ///      Access control is enforced by the calling external functions before dispatch.
     function _delegate(address module) internal {
         if (module == address(0)) revert ModulesNotSet();
         assembly {
@@ -628,6 +630,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     /// @dev Delegatecall helper that returns normally so modifiers can clean up.
     ///      Do NOT use `_delegate()` from a function with a modifier that has an epilogue
     ///      (e.g. OZ `nonReentrant`), since `_delegate()` uses an assembly `return`.
+    ///      Delegate targets are module addresses configured by owner-only `setModulesOnce`.
     function _delegateAndReturn(address module) internal returns (bytes memory ret) {
         if (module == address(0)) revert ModulesNotSet();
         (bool ok, bytes memory data) = module.delegatecall(msg.data);

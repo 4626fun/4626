@@ -376,7 +376,7 @@ export function AccountSetupWorkspaceView(props: {
                         onClick={() => void retryOwnerCheck()}
                         className="inline-flex h-9 items-center text-xs font-medium text-rose-900/80 transition-colors hover:text-rose-700 disabled:opacity-50"
                       >
-                        {advancedBusy ? 'Resetting...' : 'Reset'}
+                        Reset
                       </button>
                     </div>
 

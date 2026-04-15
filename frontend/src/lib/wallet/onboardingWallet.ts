@@ -107,6 +107,11 @@ export function normalizeOwnerApprovalError(error: unknown): Error {
         'Smart wallet signature validation failed during sponsorship (AA23). Reconnect the same Base smart wallet session and retry.',
       )
     }
+    if (lower.includes('userop_submission_timeout')) {
+      return new Error(
+        'Smart wallet approval is taking too long after signature confirmation. Retry once; if this keeps happening, reconnect the same Coinbase wallet session.',
+      )
+    }
     if (lower.includes('paymaster proxy internal error')) {
       return new Error(
         '4626 could not initialize Base gas sponsorship. Retry in a few seconds. If it persists, use Not you? Switch and reconnect the same Base wallet.',
@@ -173,10 +178,25 @@ function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms))
 }
 
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutError: Error): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(timeoutError), timeoutMs)
+      }),
+    ])
+  } finally {
+    if (timer) clearTimeout(timer)
+  }
+}
+
 const CONFIRM_OWNER_RETRY_DELAY_MS = import.meta.env.MODE === 'test' ? 5 : 1_500
 const CONFIRM_OWNER_MAX_ATTEMPTS = 6
 const PAYMASTER_SESSION_MAX_ATTEMPTS = 3
 const PAYMASTER_SESSION_RETRY_DELAY_MS = import.meta.env.MODE === 'test' ? 5 : 300
+const USER_OP_SUBMIT_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 120 : 45_000
 const SEND_CALLS_STATUS_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 25 : 8_000
 const SEND_CALLS_STATUS_POLL_MS = import.meta.env.MODE === 'test' ? 5 : 500
 const PREFER_SPONSORED_CANONICAL_SELF_APPROVAL = true
@@ -321,16 +341,20 @@ export async function sendPreparedOwnerTx(params: {
         const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
         const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
         const runUserOp = async () =>
-          await sendCoinbaseSmartWalletUserOperation({
-            publicClient: publicClient as any,
-            walletClient: walletClient as any,
-            bundlerUrl,
-            smartWallet: canonicalSmartWalletAddress as `0x${string}`,
-            ownerAddress: signerAddress as `0x${string}`,
-            calls: [{ to: txRequest.to, data: txRequest.data, value: 0n }],
-            version: '1',
-            useTypedDataSigning: selfAuthenticatedCanonicalSession,
-          })
+          await withTimeout(
+            sendCoinbaseSmartWalletUserOperation({
+              publicClient: publicClient as any,
+              walletClient: walletClient as any,
+              bundlerUrl,
+              smartWallet: canonicalSmartWalletAddress as `0x${string}`,
+              ownerAddress: signerAddress as `0x${string}`,
+              calls: [{ to: txRequest.to, data: txRequest.data, value: 0n }],
+              version: '1',
+              useTypedDataSigning: selfAuthenticatedCanonicalSession,
+            }),
+            USER_OP_SUBMIT_TIMEOUT_MS,
+            new Error('userop_submission_timeout'),
+          )
 
         let result: Awaited<ReturnType<typeof sendCoinbaseSmartWalletUserOperation>> | null = null
         let lastRetryableError: unknown = null

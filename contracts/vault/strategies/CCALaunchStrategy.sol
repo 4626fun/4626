@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
+pragma solidity 0.8.30;
 
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -15,6 +15,8 @@ import {LPFeeLibrary} from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 import {LiquidityAmounts} from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
 import {ICreatorOracle} from "../../interfaces/ICreatorOracle.sol";
+import {CCALaunchStrategyConfigModule} from "./CCALaunchStrategyConfigModule.sol";
+import {CCALaunchStrategyEncodingHelper} from "./CCALaunchStrategyEncodingHelper.sol";
 import {Plan, StrategyPlanner} from "liquidity-launcher/src/libraries/StrategyPlanner.sol";
 import {TokenPricing} from "liquidity-launcher/src/libraries/TokenPricing.sol";
 import {BasePositionParams, FullRangeParams} from "liquidity-launcher/src/types/PositionTypes.sol";
@@ -124,9 +126,6 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     uint24 public constant VESTING_SPLIT_MPS = 4_000_000;
     /// @notice LP reserve allocation: 20%
     uint24 public constant LP_RESERVE_SPLIT_MPS = 2_000_000;
-    /// @notice Unix epoch (1970-01-01 00:00 UTC) was a Thursday, so weekly boundaries align to Thursday 00:00 UTC.
-    uint256 internal constant THURSDAY_EPOCH_SECONDS = 7 days;
-
     enum LifecyclePhase {
         Idle,
         AuctionLive,
@@ -272,6 +271,8 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     uint64 public defaultSweepDelayBlocks = 14_400; // ~8 hours on Base @2s blocks
     /// @notice If false, `launchAuctionSimple` is disabled.
     bool public simpleLaunchEnabled;
+    address private immutable _configModule;
+    CCALaunchStrategyEncodingHelper private immutable _encodingHelper;
 
     // ================================
     // EVENTS
@@ -295,7 +296,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         uint256 ethUsdPrice
     );
 
-    event ConfigUpdated(string param, uint256 value);
+    event ConfigUpdated(bytes32 param, uint256 value);
     event RecipientsUpdated(address fundsRecipient, address tokensRecipient);
     event OracleConfigured(address indexed oracle, address poolManager, address hook);
     event V4PoolConfigured(address indexed oracle, address token0, address token1);
@@ -337,6 +338,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     error ZeroAmount();
     error InvalidConfig();
     error Unauthorized();
+    error EthTransferFailed();
 
     // ================================
     // CONSTRUCTOR
@@ -371,6 +373,10 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         positionRecipient = _owner;
         operator = _owner;
         simpleLaunchEnabled = false;
+        _configModule = address(
+            new CCALaunchStrategyConfigModule(_auctionToken, _currency, _fundsRecipient, _tokensRecipient, _owner)
+        );
+        _encodingHelper = new CCALaunchStrategyEncodingHelper();
     }
 
     // ================================
@@ -391,30 +397,34 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     // APPROVED LAUNCHERS
     // ================================
 
+    function _delegateConfig() internal {
+        (bool ok, bytes memory data) = _configModule.delegatecall(msg.data);
+        if (!ok) {
+            assembly {
+                revert(add(data, 0x20), mload(data))
+            }
+        }
+    }
+
     /**
      * @notice Approve or revoke launcher permissions
      * @param launcher Address to approve (e.g., VaultActivationBatcher)
      * @param approved Whether to approve or revoke
      * @dev Only owner can manage approved launchers
      */
-    function setApprovedLauncher(address launcher, bool approved) external onlyOwner {
-        if (launcher == address(0)) revert ZeroAddress();
-        approvedLaunchers[launcher] = approved;
-        emit LauncherApproved(launcher, approved);
+    function setApprovedLauncher(address launcher, bool approved) external {
+        launcher;
+        approved;
+        _delegateConfig();
     }
 
     /**
      * @notice Update the Uniswap CCA factory address used for deployments.
      * @dev Allows migrating to newer Uniswap factory deployments without redeploying this strategy.
      */
-    function setCcaFactory(address newFactory) external onlyOwner {
-        if (newFactory == address(0)) revert ZeroAddress();
-        // Basic sanity: ensure it's a contract (avoids accidental EOA config).
-        if (newFactory.code.length == 0) revert InvalidConfig();
-
-        address old = ccaFactory;
-        ccaFactory = newFactory;
-        emit CcaFactoryUpdated(old, newFactory);
+    function setCcaFactory(address newFactory) external {
+        newFactory;
+        _delegateConfig();
     }
 
     /**
@@ -427,38 +437,30 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         address _operator,
         uint64 _migrationDelayBlocks,
         uint64 _sweepDelayBlocks
-    ) external onlyOwner {
-        if (_positionRecipient == address(0) || _operator == address(0)) revert ZeroAddress();
-        if (_migrationDelayBlocks == 0) revert InvalidConfig();
-        if (_sweepDelayBlocks == 0) revert InvalidConfig();
-        if (_positionManager != address(0) && _positionManager.code.length == 0) revert InvalidConfig();
-
-        positionManager = IPositionManager(_positionManager);
-        positionRecipient = _positionRecipient;
-        operator = _operator;
-        migrationDelayBlocks = _migrationDelayBlocks;
-        defaultSweepDelayBlocks = _sweepDelayBlocks;
-
-        emit MigrationConfigUpdated(
-            _positionManager, _positionRecipient, _operator, _migrationDelayBlocks, _sweepDelayBlocks
-        );
+    ) external {
+        _positionManager;
+        _positionRecipient;
+        _operator;
+        _migrationDelayBlocks;
+        _sweepDelayBlocks;
+        _delegateConfig();
     }
 
     /**
      * @notice Configure optional backing-vault telemetry source.
      * @dev This is non-blocking visibility only; no auction/migration gates depend on it.
      */
-    function setBackingVault(address _backingVault) external onlyOwner {
-        backingVault = _backingVault;
-        emit BackingVaultUpdated(_backingVault);
+    function setBackingVault(address _backingVault) external {
+        _backingVault;
+        _delegateConfig();
     }
 
     /**
      * @notice Enable or disable simplified launch path.
      */
-    function setSimpleLaunchEnabled(bool enabled) external onlyOwner {
-        simpleLaunchEnabled = enabled;
-        emit SimpleLaunchToggled(enabled);
+    function setSimpleLaunchEnabled(bool enabled) external {
+        enabled;
+        _delegateConfig();
     }
 
     // ================================
@@ -867,28 +869,14 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
      * @notice Sweep residual auction token balance after sweep window.
      */
     function sweepResidualAuctionToken() external nonReentrant {
-        _requireOperatorSweep();
-        uint256 amount = auctionToken.balanceOf(address(this));
-        if (amount == 0) return;
-        auctionToken.safeTransfer(operator, amount);
-        emit TokensSwept(address(this), amount);
+        _delegateConfig();
     }
 
     /**
      * @notice Sweep residual raised currency balance after sweep window.
      */
     function sweepResidualCurrency() external nonReentrant {
-        _requireOperatorSweep();
-        uint256 amount = _currencyBalance(address(this));
-        if (amount == 0) return;
-
-        if (currency == address(0)) {
-            (bool ok,) = payable(operator).call{value: amount}("");
-            require(ok, "ETH transfer failed");
-        } else {
-            IERC20(currency).safeTransfer(operator, amount);
-        }
-        emit FundsSwept(address(this), amount);
+        _delegateConfig();
     }
 
     // ================================
@@ -944,19 +932,7 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     }
 
     function _deriveScheduledStartBlock() internal view returns (uint64 startBlock) {
-        uint256 nextThursdayStartTimestamp = _nextThursdayStartTimestamp(block.timestamp);
-        uint256 deltaBlocks;
-        if (nextThursdayStartTimestamp > block.timestamp) {
-            deltaBlocks = Math.ceilDiv(nextThursdayStartTimestamp - block.timestamp, uint256(launchBlockTimeSeconds));
-        }
-        if (deltaBlocks == 0) deltaBlocks = 1;
-        startBlock = uint64(block.number + deltaBlocks);
-    }
-
-    function _nextThursdayStartTimestamp(uint256 currentTimestamp) internal pure returns (uint256) {
-        uint256 remainder = currentTimestamp % THURSDAY_EPOCH_SECONDS;
-        if (remainder == 0) return currentTimestamp;
-        return currentTimestamp + (THURSDAY_EPOCH_SECONDS - remainder);
+        return _encodingHelper.deriveScheduledStartBlock(block.number, block.timestamp, launchBlockTimeSeconds);
     }
 
     function _deriveLaunchPricing()
@@ -964,33 +940,9 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         view
         returns (uint256 floorPriceQ96, uint256 tickSpacingQ96, uint256 creatorUsdPrice, uint256 ethUsdPrice)
     {
-        if (oracle == address(0)) revert LaunchOracleNotConfigured();
-        if (currency != address(0)) revert UnsupportedLaunchCurrency(currency);
-
-        (int256 creatorUsdSigned, uint256 creatorTimestamp) = ICreatorOracle(oracle).getCreatorPrice();
-        (int256 ethUsdSigned, uint256 ethTimestamp) = ICreatorOracle(oracle).getEthPrice();
-
-        if (creatorUsdSigned <= 0 || ethUsdSigned <= 0) {
-            revert LaunchOracleInvalidPrice(creatorUsdSigned, ethUsdSigned);
-        }
-
-        if (
-            creatorTimestamp == 0 || ethTimestamp == 0 || creatorTimestamp > block.timestamp
-                || ethTimestamp > block.timestamp || block.timestamp - creatorTimestamp > launchOracleMaxAge
-                || block.timestamp - ethTimestamp > launchOracleMaxAge
-        ) {
-            revert LaunchOracleStale(creatorTimestamp, ethTimestamp, launchOracleMaxAge, block.timestamp);
-        }
-
-        creatorUsdPrice = uint256(creatorUsdSigned);
-        ethUsdPrice = uint256(ethUsdSigned);
-
-        uint256 discountedCreatorUsd = Math.mulDiv(creatorUsdPrice, uint256(launchDiscountBps), BPS_DENOMINATOR);
-        uint256 rawFloorPriceQ96 = Math.mulDiv(discountedCreatorUsd, Q96, ethUsdPrice);
-
-        tickSpacingQ96 = _deriveLaunchTickSpacing(rawFloorPriceQ96);
-        floorPriceQ96 = (rawFloorPriceQ96 / tickSpacingQ96) * tickSpacingQ96;
-        if (floorPriceQ96 == 0) revert LaunchFloorTooLow(rawFloorPriceQ96, tickSpacingQ96);
+        return _encodingHelper.deriveLaunchPricing(
+            oracle, currency, launchOracleMaxAge, launchDiscountBps, launchTickSpacingBps, block.timestamp
+        );
     }
 
     function _deriveLaunchTickSpacing(uint256 floorPriceQ96) internal view returns (uint256 tickSpacingQ96) {
@@ -998,14 +950,36 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         if (tickSpacingQ96 < 2) tickSpacingQ96 = 2;
     }
 
+    function _encodeAuctionParams(
+        uint256 floorPrice,
+        uint256 tickSpacingQ96,
+        uint128 requiredRaise,
+        uint64 startBlock,
+        uint64 endBlock,
+        uint64 claimBlock,
+        bytes memory auctionSteps
+    ) internal view returns (bytes memory) {
+        return _encodingHelper.encodeAuctionParams(
+            currency,
+            tokensRecipient,
+            fundsRecipient,
+            floorPrice,
+            tickSpacingQ96,
+            requiredRaise,
+            startBlock,
+            endBlock,
+            claimBlock,
+            auctionSteps
+        );
+    }
+
+    function _createUniswapSafeDefaultSteps(uint64 duration) internal view returns (bytes memory) {
+        return _encodingHelper.createUniswapSafeDefaultSteps(duration);
+    }
+
     function _currencyBalance(address holder) internal view returns (uint256) {
         if (currency == address(0)) return holder.balance;
         return IERC20(currency).balanceOf(holder);
-    }
-
-    function _requireOperatorSweep() internal view {
-        if (msg.sender != operator) revert NotOperator(msg.sender, operator);
-        if (block.number < lastSweepBlock) revert SweepNotAllowed(lastSweepBlock, block.number);
     }
 
     function _buildPoolKey() internal view returns (PoolKey memory key) {
@@ -1020,118 +994,6 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         });
     }
 
-    /**
-     * @notice Encode auction parameters for CCA factory
-     */
-    function _encodeAuctionParams(
-        uint256 floorPrice,
-        uint256 tickSpacingQ96,
-        uint128 requiredRaise,
-        uint64 startBlock,
-        uint64 endBlock,
-        uint64 claimBlock,
-        bytes memory auctionSteps
-    ) internal view returns (bytes memory) {
-        // AuctionParameters struct encoding
-        return abi.encode(
-            currency, // currency (address(0) for ETH)
-            tokensRecipient, // tokensRecipient
-            fundsRecipient, // fundsRecipient
-            startBlock, // startBlock
-            endBlock, // endBlock
-            claimBlock, // claimBlock
-            tickSpacingQ96, // tickSpacing
-            address(0), // validationHook (none for now)
-            floorPrice, // floorPrice
-            requiredRaise, // requiredCurrencyRaised
-            auctionSteps // auctionStepsData
-        );
-    }
-
-    /**
-     * @notice Create linear auction steps (sell evenly over time)
-     * @param duration Total duration in blocks
-     */
-    function _createLinearSteps(uint64 duration) internal pure returns (bytes memory) {
-        // Single step: sell 100% of tokens evenly over duration
-        // mps = MPS (100% = 10,000,000 mps over entire duration)
-        uint24 mpsPerBlock = uint24(MPS / duration);
-
-        // Pack: HIGH 24 bits = mps, LOW 40 bits = blockDelta
-        // StepLib.parse() expects: mps = uint24(bytes3(data)), blockDelta = uint40(uint64(data))
-        bytes8 packed = bytes8((uint64(mpsPerBlock) << 40) | uint64(duration));
-
-        return abi.encodePacked(packed);
-    }
-
-    /**
-     * @notice Create accelerating auction steps (sell more towards end)
-     * @dev Rewards early participants more
-     */
-    function _createAcceleratingSteps(uint64 duration) internal pure returns (bytes memory) {
-        // Three phases: 20% in first half, 30% in third quarter, 50% in last quarter
-        uint64 phase1Duration = duration / 2;
-        uint64 phase2Duration = duration / 4;
-        uint64 phase3Duration = duration - phase1Duration - phase2Duration;
-
-        // Use uint256 for intermediate calculations to avoid overflow
-        uint256 mpsValue = uint256(MPS);
-
-        // Pack format: HIGH 24 bits = mps, LOW 40 bits = blockDelta
-        // StepLib.parse() expects: mps = uint24(bytes3(data)), blockDelta = uint40(uint64(data))
-
-        // Phase 1: 20% over 50% of time = slow
-        uint24 mps1 = uint24((mpsValue * 2000) / 10000 / phase1Duration); // 20% / phase1
-        bytes8 packed1 = bytes8((uint64(mps1) << 40) | uint64(phase1Duration));
-
-        // Phase 2: 30% over 25% of time = medium
-        uint24 mps2 = uint24((mpsValue * 3000) / 10000 / phase2Duration);
-        bytes8 packed2 = bytes8((uint64(mps2) << 40) | uint64(phase2Duration));
-
-        // Phase 3: 50% over 25% of time = fast
-        uint24 mps3 = uint24((mpsValue * 5000) / 10000 / phase3Duration);
-        bytes8 packed3 = bytes8((uint64(mps3) << 40) | uint64(phase3Duration));
-
-        return abi.encodePacked(packed1, packed2, packed3);
-    }
-
-    /**
-     * @notice Create a Uniswap-safe default schedule.
-     * @dev Uniswap recommends the final block sells a significant amount of tokens because
-     *      the final clearing price is used to initialize downstream liquidity.
-     *      We allocate 20% over the first half, 45% over the middle, and the remainder in the final block.
-     */
-    function _createUniswapSafeDefaultSteps(uint64 duration) internal pure returns (bytes memory) {
-        // For very short auctions, fall back to linear to avoid zero-length phases.
-        if (duration <= 2) return _createLinearSteps(duration);
-
-        // Reserve the final block for a large issuance.
-        uint64 lastBlock = 1;
-        uint64 phase1Blocks = duration / 2; // ~50%
-        uint64 phase2Blocks = duration - phase1Blocks - lastBlock;
-        if (phase1Blocks == 0 || phase2Blocks == 0) return _createLinearSteps(duration);
-
-        // Compute per-block issuance (mps) for phase 1 and 2 using floor division.
-        // Then allocate the exact remainder to the final block so total issuance = 100%.
-        uint24 phase1Total = 2_000_000; // 20% of 1e7
-        uint24 phase2Total = 4_500_000; // 45% of 1e7
-
-        uint24 mps1 = uint24(uint256(phase1Total) / uint256(phase1Blocks));
-        uint24 mps2 = uint24(uint256(phase2Total) / uint256(phase2Blocks));
-
-        uint256 issued1 = uint256(mps1) * uint256(phase1Blocks);
-        uint256 issued2 = uint256(mps2) * uint256(phase2Blocks);
-        uint24 mps3 = uint24(MPS - uint24(issued1 + issued2)); // remainder (includes rounding slack)
-
-        // Pack format: HIGH 24 bits = mps, LOW 40 bits = blockDelta
-        // StepLib.parse() expects: mps = uint24(bytes3(data)), blockDelta = uint40(uint64(data))
-        bytes8 packed1 = bytes8((uint64(mps1) << 40) | uint64(phase1Blocks));
-        bytes8 packed2 = bytes8((uint64(mps2) << 40) | uint64(phase2Blocks));
-        bytes8 packed3 = bytes8((uint64(mps3) << 40) | uint64(lastBlock));
-
-        return abi.encodePacked(packed1, packed2, packed3);
-    }
-
     // ================================
     // ADMIN
     // ================================
@@ -1139,104 +1001,93 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     /**
      * @notice Update default auction duration
      */
-    function setDefaultDuration(uint64 _duration) external onlyOwner {
-        if (_duration == 0) revert InvalidConfig();
-        defaultDuration = _duration;
-        emit ConfigUpdated("duration", _duration);
+    function setDefaultDuration(uint64 _duration) external {
+        _duration;
+        _delegateConfig();
     }
 
     /**
      * @notice Update default claim delay
      */
-    function setDefaultClaimDelay(uint64 _delay) external onlyOwner {
-        defaultClaimDelay = _delay;
-        emit ConfigUpdated("claimDelay", _delay);
+    function setDefaultClaimDelay(uint64 _delay) external {
+        _delay;
+        _delegateConfig();
     }
 
     /**
      * @notice Update the block-time estimate used for Thursday UTC launch alignment.
      */
-    function setLaunchBlockTimeSeconds(uint64 _secondsPerBlock) external onlyOwner {
-        if (_secondsPerBlock == 0) revert InvalidConfig();
-        launchBlockTimeSeconds = _secondsPerBlock;
-        emit ConfigUpdated("launchBlockTimeSeconds", _secondsPerBlock);
+    function setLaunchBlockTimeSeconds(uint64 _secondsPerBlock) external {
+        _secondsPerBlock;
+        _delegateConfig();
     }
 
     /**
      * @notice Update migration delay after auction end.
      */
-    function setMigrationDelayBlocks(uint64 _delay) external onlyOwner {
-        if (_delay == 0) revert InvalidConfig();
-        migrationDelayBlocks = _delay;
-        emit ConfigUpdated("migrationDelayBlocks", _delay);
+    function setMigrationDelayBlocks(uint64 _delay) external {
+        _delay;
+        _delegateConfig();
     }
 
     /**
      * @notice Update default post-claim sweep delay.
      */
-    function setDefaultSweepDelayBlocks(uint64 _delay) external onlyOwner {
-        if (_delay == 0) revert InvalidConfig();
-        defaultSweepDelayBlocks = _delay;
-        emit ConfigUpdated("sweepDelayBlocks", _delay);
+    function setDefaultSweepDelayBlocks(uint64 _delay) external {
+        _delay;
+        _delegateConfig();
     }
 
     /**
      * @notice Update default tick spacing
      */
-    function setDefaultTickSpacing(uint256 _spacing) external onlyOwner {
-        if (_spacing == 0) revert InvalidConfig();
-        defaultTickSpacing = _spacing;
-        emit ConfigUpdated("tickSpacing", _spacing);
+    function setDefaultTickSpacing(uint256 _spacing) external {
+        _spacing;
+        _delegateConfig();
     }
 
     /**
      * @notice Update default floor price
      * @dev Legacy fallback value retained for backwards compatibility. Launch flow derives floor onchain.
      */
-    function setDefaultFloorPrice(uint256 _price) external onlyOwner {
-        if (_price == 0) revert InvalidConfig();
-        defaultFloorPrice = _price;
-        emit ConfigUpdated("floorPrice", _price);
+    function setDefaultFloorPrice(uint256 _price) external {
+        _price;
+        _delegateConfig();
     }
 
     /**
      * @notice Update launch floor discount applied to oracle price.
      * @param _discountBps Discount in bps (10000 = 100%, 8000 = 80%).
      */
-    function setLaunchDiscountBps(uint16 _discountBps) external onlyOwner {
-        if (_discountBps == 0 || _discountBps > BPS_DENOMINATOR) revert InvalidConfig();
-        launchDiscountBps = _discountBps;
-        emit ConfigUpdated("launchDiscountBps", _discountBps);
+    function setLaunchDiscountBps(uint16 _discountBps) external {
+        _discountBps;
+        _delegateConfig();
     }
 
     /**
      * @notice Update launch tick spacing (as bps of derived launch floor).
      * @param _tickSpacingBps Tick spacing bps (100 = 1%).
      */
-    function setLaunchTickSpacingBps(uint16 _tickSpacingBps) external onlyOwner {
-        if (_tickSpacingBps == 0 || _tickSpacingBps > BPS_DENOMINATOR) revert InvalidConfig();
-        launchTickSpacingBps = _tickSpacingBps;
-        emit ConfigUpdated("launchTickSpacingBps", _tickSpacingBps);
+    function setLaunchTickSpacingBps(uint16 _tickSpacingBps) external {
+        _tickSpacingBps;
+        _delegateConfig();
     }
 
     /**
      * @notice Update maximum accepted oracle staleness for launch pricing.
      */
-    function setLaunchOracleMaxAge(uint64 _maxAge) external onlyOwner {
-        if (_maxAge == 0) revert InvalidConfig();
-        launchOracleMaxAge = _maxAge;
-        emit ConfigUpdated("launchOracleMaxAge", _maxAge);
+    function setLaunchOracleMaxAge(uint64 _maxAge) external {
+        _maxAge;
+        _delegateConfig();
     }
 
     /**
      * @notice Update fund recipients
      */
-    function setRecipients(address _fundsRecipient, address _tokensRecipient) external onlyOwner {
-        if (_fundsRecipient == address(0)) revert ZeroAddress();
-        if (_tokensRecipient == address(0)) revert ZeroAddress();
-        fundsRecipient = _fundsRecipient;
-        tokensRecipient = _tokensRecipient;
-        emit RecipientsUpdated(_fundsRecipient, _tokensRecipient);
+    function setRecipients(address _fundsRecipient, address _tokensRecipient) external {
+        _fundsRecipient;
+        _tokensRecipient;
+        _delegateConfig();
     }
 
     /**
@@ -1248,53 +1099,48 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
      */
     function setOracleConfig(address _oracle, address _poolManager, address _taxHook, address _feeRecipient)
         external
-        onlyOwner
     {
-        oracle = _oracle;
-        poolManager = IPoolManager(_poolManager);
-        taxHook = _taxHook;
-        feeRecipient = _feeRecipient;
-        emit OracleConfigured(_oracle, _poolManager, _taxHook);
+        _oracle;
+        _poolManager;
+        _taxHook;
+        _feeRecipient;
+        _delegateConfig();
     }
 
     /**
      * @notice Update fee recipient (GaugeController)
      * @param _feeRecipient New fee recipient address
      */
-    function setFeeRecipient(address _feeRecipient) external onlyOwner {
-        if (_feeRecipient == address(0)) revert ZeroAddress();
-        feeRecipient = _feeRecipient;
+    function setFeeRecipient(address _feeRecipient) external {
+        _feeRecipient;
+        _delegateConfig();
     }
 
     /**
      * @notice Update tax rate
      * @param _taxRateBps Tax rate in basis points (690 = 6.9%)
      */
-    function setTaxRate(uint256 _taxRateBps) external onlyOwner {
-        if (_taxRateBps > 1000) revert("Tax too high"); // Max 10%
-        taxRateBps = _taxRateBps;
+    function setTaxRate(uint256 _taxRateBps) external {
+        _taxRateBps;
+        _delegateConfig();
     }
 
     /**
      * @notice Update V4 pool fee tier
      * @param _feeTier Fee in hundredths of bips (3000 = 0.3%)
      */
-    function setPoolFeeTier(uint24 _feeTier) external onlyOwner {
-        if (_feeTier > LPFeeLibrary.MAX_LP_FEE) revert InvalidConfig();
-        poolFeeTier = _feeTier;
-        emit ConfigUpdated("poolFeeTier", _feeTier);
+    function setPoolFeeTier(uint24 _feeTier) external {
+        _feeTier;
+        _delegateConfig();
     }
 
     /**
      * @notice Update V4 pool tick spacing
      * @param _tickSpacing Tick spacing for the pool
      */
-    function setPoolTickSpacing(int24 _tickSpacing) external onlyOwner {
-        if (_tickSpacing > TickMath.MAX_TICK_SPACING || _tickSpacing < TickMath.MIN_TICK_SPACING) {
-            revert InvalidConfig();
-        }
-        poolTickSpacing = _tickSpacing;
-        emit ConfigUpdated("poolTickSpacing", uint256(int256(_tickSpacing)));
+    function setPoolTickSpacing(int24 _tickSpacing) external {
+        _tickSpacing;
+        _delegateConfig();
     }
 
     // ================================
@@ -1424,18 +1270,19 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     /**
      * @notice Emergency withdraw tokens stuck in strategy
      */
-    function emergencyWithdraw(address token, uint256 amount, address to) external onlyOwner {
-        if (to == address(0)) revert ZeroAddress();
-        IERC20(token).safeTransfer(to, amount);
+    function emergencyWithdraw(address token, uint256 amount, address to) external {
+        token;
+        amount;
+        to;
+        _delegateConfig();
     }
 
     /**
      * @notice Emergency withdraw ETH
      */
-    function emergencyWithdrawETH(address payable to) external onlyOwner {
-        if (to == address(0)) revert ZeroAddress();
-        (bool ok,) = to.call{value: address(this).balance}("");
-        require(ok, "ETH transfer failed");
+    function emergencyWithdrawETH(address payable to) external {
+        to;
+        _delegateConfig();
     }
 
     receive() external payable {}
