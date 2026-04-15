@@ -124,19 +124,35 @@ export function VaultNavBar(props: { interactive?: boolean }) {
       <div className="absolute inset-0 bg-vault-bg/74 backdrop-blur-xl" />
 
       <div className="relative h-14 w-full px-4 md:px-6 lg:px-8 flex items-center gap-3">
-        <Link
-          to={brandHref}
-          className="flex items-center gap-2.5 group cursor-pointer shrink-0"
-          onMouseEnter={() => setBrandHovered(true)}
-          onMouseLeave={() => setBrandHovered(false)}
-          onFocus={() => setBrandHovered(true)}
-          onBlur={() => setBrandHovered(false)}
-        >
-          <Logo showText={false} width={28} height={28} forceHover={brandHovered} />
-          <span className="text-[15px] tracking-[0.03em] text-white font-medium leading-none">
-            <TextScramble text="4626.fun" trigger={brandHovered} speed={0.75} complexity="simple" />
-          </span>
-        </Link>
+        {hostMode === 'marketing' ? (
+          <a
+            href="/"
+            className="flex items-center gap-2.5 group cursor-pointer shrink-0"
+            onMouseEnter={() => setBrandHovered(true)}
+            onMouseLeave={() => setBrandHovered(false)}
+            onFocus={() => setBrandHovered(true)}
+            onBlur={() => setBrandHovered(false)}
+          >
+            <Logo showText={false} width={28} height={28} forceHover={brandHovered} />
+            <span className="text-[15px] tracking-[0.03em] text-white font-medium leading-none">
+              <TextScramble text="4626.fun" trigger={brandHovered} speed={0.75} complexity="simple" />
+            </span>
+          </a>
+        ) : (
+          <Link
+            to={brandHref}
+            className="flex items-center gap-2.5 group cursor-pointer shrink-0"
+            onMouseEnter={() => setBrandHovered(true)}
+            onMouseLeave={() => setBrandHovered(false)}
+            onFocus={() => setBrandHovered(true)}
+            onBlur={() => setBrandHovered(false)}
+          >
+            <Logo showText={false} width={28} height={28} forceHover={brandHovered} />
+            <span className="text-[15px] tracking-[0.03em] text-white font-medium leading-none">
+              <TextScramble text="4626.fun" trigger={brandHovered} speed={0.75} complexity="simple" />
+            </span>
+          </Link>
+        )}
 
         <nav className="min-w-0 flex-1">
           <div className="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap scrollbar-hide">

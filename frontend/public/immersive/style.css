@@ -17,8 +17,8 @@
   --color-border-hover: rgba(255, 255, 255, 0.12);
   --color-border-accent: rgba(0, 82, 255, 0.2);
   --color-text: #EDEDED;
-  --color-text-muted: #A0A5AE;
-  --color-text-faint: #5C6270;
+  --color-text-muted: #C8CDD6;
+  --color-text-faint: #8A90A0;
   --color-accent: #0052FF;
   --color-accent-bright: #3B82FF;
   --color-accent-glow: rgba(0, 82, 255, 0.15);
@@ -658,7 +658,7 @@ body {
   right: 0;
   text-align: center;
   font-size: clamp(1rem, 0.8rem + 0.6vw, 1.25rem);
-  color: rgba(200, 205, 214, 0.45);
+  color: rgba(200, 205, 214, 0.78);
   font-weight: 200;
   letter-spacing: 0.02em;
   line-height: 1.7;
@@ -681,7 +681,7 @@ body {
 }
 .side-label-right {
   right: 10%;
-  color: rgba(160, 165, 174, 0.4);
+  color: rgba(160, 165, 174, 0.75);
 }
 
 .top-label {
@@ -699,7 +699,7 @@ body {
 }
 .top-label-right {
   right: 10%;
-  color: rgba(160, 165, 174, 0.35);
+  color: rgba(160, 165, 174, 0.72);
 }
 
 .camera-wrapper {
@@ -798,7 +798,7 @@ body {
   font-size: 13px;
   letter-spacing: 0.3em;
   text-transform: uppercase;
-  color: rgba(200, 205, 214, 0.55);
+  color: rgba(200, 205, 214, 0.82);
   font-weight: 400;
   opacity: 0;
 }
@@ -834,7 +834,7 @@ body {
 }
 .detail-desc {
   font-size: 0.75rem;
-  color: rgba(200, 205, 214, 0.35);
+  color: rgba(200, 205, 214, 0.72);
   font-weight: 300;
   margin-top: 0.5rem;
   max-width: 200px;
@@ -920,7 +920,7 @@ body {
 .idle-amount {
   font-family: var(--font-mono);
   font-size: 11px;
-  color: rgba(200, 210, 225, 0.6);
+  color: rgba(200, 210, 225, 0.85);
   margin-top: 0.2rem;
 }
 
@@ -1117,7 +1117,7 @@ body {
 }
 .engine-sub {
   font-size: 8px;
-  color: rgba(200, 210, 225, 0.45);
+  color: rgba(200, 210, 225, 0.78);
   letter-spacing: 0.1em;
   font-weight: 300;
   margin-top: 0.3rem;
@@ -1179,19 +1179,19 @@ body {
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 300;
-  color: rgba(200, 210, 225, 0.55);
+  color: rgba(200, 210, 225, 0.82);
   letter-spacing: 0.02em;
 }
 .strat-unit {
   font-size: 9px;
   letter-spacing: 0.15em;
   text-transform: uppercase;
-  color: rgba(200, 210, 225, 0.35);
+  color: rgba(200, 210, 225, 0.72);
 }
 .strat-role {
   font-size: 10px;
   line-height: 1.5;
-  color: rgba(200, 210, 225, 0.45);
+  color: rgba(200, 210, 225, 0.78);
   margin-top: 0.4rem;
   letter-spacing: 0.01em;
   font-weight: 300;
@@ -1219,7 +1219,7 @@ body {
   font-size: 9px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(200, 205, 214, 0.6);
+  color: rgba(200, 205, 214, 0.85);
   font-weight: 400;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
   white-space: nowrap;
@@ -1233,7 +1233,7 @@ body {
   right: 0;
   text-align: center;
   font-size: clamp(1rem, 0.8rem + 0.6vw, 1.25rem);
-  color: rgba(200, 205, 214, 0.45);
+  color: rgba(200, 205, 214, 0.78);
   font-weight: 200;
   max-width: 28rem;
   margin: 0 auto;
@@ -1264,7 +1264,7 @@ body {
 }
 .dual-copy p {
   font-size: clamp(0.8125rem, 0.7rem + 0.5vw, 1.125rem);
-  color: rgba(200, 205, 214, 0.4);
+  color: rgba(200, 205, 214, 0.75);
   font-weight: 200;
   line-height: 1.7;
   letter-spacing: 0.02em;
@@ -1312,7 +1312,7 @@ body {
 .accrue-desc {
   font-size: clamp(1rem, 0.8rem + 0.6vw, 1.25rem);
   font-weight: 300;
-  color: rgba(200, 205, 214, 0.45);
+  color: rgba(200, 205, 214, 0.78);
   letter-spacing: 0.02em;
   line-height: 1.7;
 }
@@ -1345,7 +1345,7 @@ body {
   font-size: 12px;
   letter-spacing: 0.15em;
   text-transform: uppercase;
-  color: rgba(200, 210, 225, 0.5);
+  color: rgba(200, 210, 225, 0.8);
 }
 .ratio-hairline {
   width: 1px;
@@ -1356,7 +1356,7 @@ body {
   font-family: var(--font-mono);
   font-size: 12px;
   letter-spacing: 0.05em;
-  color: rgba(200, 210, 225, 0.4);
+  color: rgba(200, 210, 225, 0.75);
 }
 
 /* Clock — minimal date */
@@ -1412,7 +1412,7 @@ body {
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.05em;
-  color: rgba(200, 210, 225, 0.45);
+  color: rgba(200, 210, 225, 0.78);
   transform: translateY(50%);
   white-space: nowrap;
 }
@@ -1427,7 +1427,7 @@ body {
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.06em;
-  color: rgba(200, 210, 225, 0.45);
+  color: rgba(200, 210, 225, 0.78);
   position: absolute;
   transform: translateX(-50%);
   white-space: nowrap;
@@ -1490,7 +1490,7 @@ body {
   font-size: 9px;
   letter-spacing: 0.25em;
   text-transform: uppercase;
-  color: rgba(200, 210, 225, 0.55);
+  color: rgba(200, 210, 225, 0.82);
   font-weight: 400;
 }
 .yc-callout-ratio {
@@ -1612,7 +1612,7 @@ body {
   font-size: 10px;
   letter-spacing: 0.2em;
   text-transform: uppercase;
-  color: rgba(200, 210, 225, 0.45);
+  color: rgba(200, 210, 225, 0.78);
   margin-bottom: 0.5rem;
 }
 .accrue-equation {
@@ -1925,6 +1925,14 @@ body {
     text-align: center;
     align-items: center;
   }
+  .hero-title {
+    font-size: clamp(2.5rem, 2rem + 3vw, 4rem);
+    line-height: 0.92;
+  }
+  .hero-desc {
+    font-size: clamp(0.9rem, 0.8rem + 0.5vw, 1.1rem);
+    color: rgba(220, 225, 235, 0.85);
+  }
   .hero-section-label { justify-content: center; }
   .hero-chain { justify-content: center; flex-wrap: wrap; }
   .hero-partners { justify-content: center; flex-wrap: wrap; gap: 12px; }
@@ -1934,38 +1942,48 @@ body {
 
   /* ── Chapter 2: Token Journey ── */
 
-  /* Side labels — hide on very small screens to prevent clipping */
+  /* Side labels — larger and brighter */
   .side-label-left,
   .side-label-right {
-    font-size: 7px;
+    font-size: 8px;
     letter-spacing: 0.2em;
+    color: rgba(220, 225, 235, 0.6);
   }
   .side-label-left { left: 2%; }
   .side-label-right { right: 2%; }
-  .top-label-left { left: 3%; font-size: 7px; letter-spacing: 0.15em; }
-  .top-label-right { right: 3%; font-size: 7px; letter-spacing: 0.15em; }
+  .top-label-left { left: 3%; font-size: 8px; letter-spacing: 0.15em; color: rgba(220, 225, 235, 0.6); }
+  .top-label-right { right: 3%; font-size: 8px; letter-spacing: 0.15em; color: rgba(220, 225, 235, 0.6); }
 
-  /* Token images — scale down */
+  /* Token images — slightly larger on mobile for visibility */
   .token-img-ring,
   .share-img-ring {
-    width: 76px;
-    height: 76px;
+    width: 82px;
+    height: 82px;
   }
 
-  /* Detail panels — stack vertically instead of side-by-side overlap */
+  /* Token labels beneath rings — brighter */
+  .token-name {
+    font-size: 10px;
+    color: rgba(220, 225, 235, 0.75);
+  }
+
+  /* Detail panels — more readable */
   .token-detail {
-    max-width: 160px;
+    max-width: 170px;
   }
   .detail-section-label {
-    font-size: 8px;
+    font-size: 9px;
     letter-spacing: 0.2em;
+    color: rgba(220, 225, 235, 0.65);
   }
   .detail-amount {
-    font-size: clamp(0.875rem, 0.7rem + 0.6vw, 1.25rem);
+    font-size: clamp(0.95rem, 0.8rem + 0.6vw, 1.3rem);
+    color: #EDEDED;
   }
   .detail-desc {
-    font-size: 0.65rem;
-    max-width: 150px;
+    font-size: 0.72rem;
+    max-width: 160px;
+    color: rgba(220, 225, 235, 0.72);
   }
 
   /* Deposit info */
@@ -1976,8 +1994,10 @@ body {
     bottom: 14%;
   }
   .deposit-amount {
-    font-size: 1rem;
+    font-size: 1.05rem;
+    color: #EDEDED;
   }
+
   /* ── Node Graph — mobile reflow ── */
   .node-graph {
     left: 50%;
@@ -1997,39 +2017,39 @@ body {
   .engine-hub {
     padding: 0.5rem 0.65rem;
   }
-  .engine-label { font-size: 6px; }
-  .engine-sub { font-size: 5.5px; }
-  .engine-hub-deploy { font-size: 6px; }
-  .engine-hub-amount { font-size: 0.65rem; }
+  .engine-label { font-size: 7px; color: rgba(220, 225, 235, 0.7); }
+  .engine-sub { font-size: 6.5px; color: rgba(220, 225, 235, 0.6); }
+  .engine-hub-deploy { font-size: 7px; }
+  .engine-hub-amount { font-size: 0.72rem; color: #EDEDED; }
   .engine-icon svg { width: 14px; height: 14px; }
   .ng-col-strats { gap: 0.35rem; }
   .strategy-card-inner {
     min-width: 0;
-    max-width: 180px;
-    padding: 0.65rem 0.75rem;
+    max-width: 200px;
+    padding: 0.7rem 0.8rem;
     gap: 0.25rem;
     border-radius: 10px;
   }
   .strat-card-top { gap: 0.35rem; }
   .strat-icon-img {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
   }
-  .strat-name { font-size: 7px; }
-  .strat-pct { font-size: 1.1rem; }
-  .strat-amount { font-size: 8px; }
-  .strat-unit { font-size: 7px; }
-  .strat-role { font-size: 7px; max-width: 160px; }
+  .strat-name { font-size: 8px; color: rgba(220, 225, 235, 0.72); }
+  .strat-pct { font-size: 1.2rem; color: #EDEDED; }
+  .strat-amount { font-size: 9px; color: rgba(220, 225, 235, 0.65); }
+  .strat-unit { font-size: 8px; }
+  .strat-role { font-size: 8px; max-width: 180px; color: rgba(220, 225, 235, 0.68); }
   .ng-ds-edge { width: 18px; }
   .downstream-box {
-    font-size: 6.5px;
-    padding: 0.35rem 0.55rem;
+    font-size: 7px;
+    padding: 0.4rem 0.6rem;
     gap: 5px;
   }
-  .downstream-logo { width: 16px; height: 16px; }
+  .downstream-logo { width: 18px; height: 18px; }
   .idle-node { padding: 0.4rem 0.65rem; }
-  .idle-label { font-size: 7px; }
-  .idle-amount { font-size: 8px; }
+  .idle-label { font-size: 7.5px; color: rgba(220, 225, 235, 0.65); }
+  .idle-amount { font-size: 9px; color: #EDEDED; }
 
   /* Morph zone */
   .morph-zone {
@@ -2037,15 +2057,18 @@ body {
     height: 200px;
   }
 
-  /* Bottom copy */
+  /* Bottom copy — brighter and larger */
+  .token-top-copy,
   .token-cross-copy,
   .dual-copy p {
-    font-size: clamp(0.8rem, 0.7rem + 0.4vw, 1rem);
+    font-size: clamp(0.9rem, 0.78rem + 0.4vw, 1.1rem);
     padding: 0 1.25rem;
+    color: rgba(220, 225, 235, 0.85);
   }
   .token-entry-cue,
   .dual-entry {
-    font-size: 0.65rem;
+    font-size: 0.72rem;
+    color: rgba(220, 225, 235, 0.65);
   }
 
   /* ── Chapter 3: Accrue ── */
@@ -2055,42 +2078,47 @@ body {
     font-size: clamp(2.75rem, 2rem + 3vw, 4.5rem);
   }
   .ratio-meta { gap: 0.4rem; }
-  .ratio-unit, .ratio-from { font-size: 8px; letter-spacing: 0.1em; }
-  .accrue-desc { font-size: 0.875rem; }
-  .clock-date { font-size: 0.8rem; letter-spacing: 0.15em; }
+  .ratio-unit, .ratio-from { font-size: 9px; letter-spacing: 0.1em; color: rgba(220, 225, 235, 0.7); }
+  .accrue-desc { font-size: 0.95rem; color: rgba(220, 225, 235, 0.82); }
+  .clock-date { font-size: 0.85rem; letter-spacing: 0.15em; color: rgba(220, 225, 235, 0.75); }
 
   /* Yield curve */
   .yield-curve-wrap { aspect-ratio: 4 / 3; }
   .yc-axis-y { left: -2px; width: 32px; }
-  .yc-axis-y .yc-label { font-size: 8px; }
+  .yc-axis-y .yc-label { font-size: 9px; color: rgba(220, 225, 235, 0.55); }
   .yc-axis-x { left: 36px; }
-  .yc-axis-x .yc-label { font-size: 8px; }
-  .yc-callout-card { padding: 7px 10px; border-radius: 8px; }
-  .yc-callout-ratio { font-size: 13px; }
-  .yc-callout-apy { font-size: 9px; }
-  .yc-callout-day { font-size: 7px; }
+  .yc-axis-x .yc-label { font-size: 9px; color: rgba(220, 225, 235, 0.55); }
+  .yc-callout-card { padding: 8px 11px; border-radius: 8px; }
+  .yc-callout-ratio { font-size: 14px; color: #EDEDED; }
+  .yc-callout-apy { font-size: 10px; }
+  .yc-callout-day { font-size: 8px; color: rgba(220, 225, 235, 0.65); }
 
   /* Stats bar */
   .accrue-stats {
-    border: 1px solid rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
     border-radius: 10px;
-    background: rgba(8, 12, 20, 0.4);
+    background: rgba(8, 12, 20, 0.5);
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
     margin: 0.5rem 0.5rem 0;
   }
   .accrue-stat { padding: 0.875rem 1rem; }
-  .accrue-stat-value { font-size: 1rem; }
-  .accrue-stat-label { font-size: 8px; letter-spacing: 0.15em; }
+  .accrue-stat-value { font-size: 1.05rem; color: #EDEDED; }
+  .accrue-stat-label { font-size: 9px; letter-spacing: 0.15em; color: rgba(220, 225, 235, 0.65); }
   .accrue-stat-divider { height: 18px; }
+  .accrue-equation {
+    font-size: 0.85rem;
+    color: rgba(220, 225, 235, 0.78);
+  }
 
   /* ── Chapter 4: Vaults ── */
   .vaults-container { padding: 0 1rem; }
   .vaults-grid { grid-template-columns: 1fr; }
   .vault-card { padding: 1.25rem; }
-  .vault-card-icon { width: 34px; height: 34px; }
-  .vault-card-name h3 { font-size: 0.9rem; }
-  .vcs-value { font-size: 1.1rem; }
+  .vault-card-icon { width: 36px; height: 36px; }
+  .vault-card-name h3 { font-size: 0.95rem; color: #EDEDED; }
+  .vcs-value { font-size: 1.15rem; }
+  .vcs-label { color: rgba(220, 225, 235, 0.65); }
 
   /* ── Chapter 5: Close ── */
   .close-partners {
@@ -2100,7 +2128,13 @@ body {
     padding: 0 1rem;
     max-width: 320px;
   }
-  .partner-logo { height: 18px; }
+  .partner-logo { height: 20px; }
+  .close-brand { margin-bottom: 0.5rem; }
+  .close-line { display: block; }
+  .close-tagline {
+    font-size: 0.85rem;
+    color: rgba(220, 225, 235, 0.7);
+  }
 
   /* ── Footer ── */
   .footer {
@@ -2113,12 +2147,12 @@ body {
   .footer-links {
     gap: 1rem;
   }
-  .footer-links a { font-size: 0.65rem; }
+  .footer-links a { font-size: 0.7rem; color: rgba(220, 225, 235, 0.6); }
 
   /* ── Nav — tighter on mobile ── */
-  .nav-link { font-size: 0.65rem; letter-spacing: 0.1em; }
-  .nav-btn { font-size: 0.6rem; padding: 0.5rem 0.75rem; letter-spacing: 0.12em; }
-  .brand-text { font-size: 0.95rem; }
+  .nav-link { font-size: 0.7rem; letter-spacing: 0.1em; }
+  .nav-btn { font-size: 0.65rem; padding: 0.5rem 0.85rem; letter-spacing: 0.12em; }
+  .brand-text { font-size: 1rem; }
 
 }
 
@@ -2313,9 +2347,9 @@ body {
   margin-bottom: 0.75rem;
 }
 .cca-desc {
-  font-size: clamp(0.85rem, 0.72rem + 0.4vw, 1.05rem);
+  font-size: clamp(0.92rem, 0.78rem + 0.4vw, 1.1rem);
   font-weight: 300;
-  color: rgba(200, 205, 214, 0.45);
+  color: rgba(220, 225, 235, 0.80);
   letter-spacing: 0.02em;
   line-height: 1.7;
   max-width: 520px;
@@ -2402,9 +2436,9 @@ body {
   left: 50%;
   transform: translateX(-50%);
   text-align: center;
-  font-size: clamp(0.85rem, 0.72rem + 0.4vw, 1.05rem);
+  font-size: clamp(0.92rem, 0.78rem + 0.4vw, 1.1rem);
   font-weight: 300;
-  color: rgba(200, 205, 214, 0.35);
+  color: rgba(220, 225, 235, 0.78);
   letter-spacing: 0.02em;
   line-height: 1.7;
   max-width: 500px;
@@ -2415,15 +2449,17 @@ body {
 /* ─── CCA Mobile overrides ─── */
 @media (max-width: 768px) {
   .cca-headline {
-    font-size: clamp(1.2rem, 1rem + 0.8vw, 1.6rem);
+    font-size: clamp(1.3rem, 1.1rem + 0.8vw, 1.7rem);
+    color: #EDEDED;
   }
   .cca-desc {
-    font-size: 0.8rem;
-    padding: 0 0.5rem;
+    font-size: 0.88rem;
+    padding: 0 0.75rem;
+    color: rgba(220, 225, 235, 0.78);
   }
   .cca-share-token .share-img-ring {
-    width: 76px;
-    height: 76px;
+    width: 82px;
+    height: 82px;
   }
   .cca-node-graph {
     left: 50%;
@@ -2431,19 +2467,24 @@ body {
     flex-direction: column;
   }
   .cca-branch-svg { display: none; }
+  .cca-dist-card {
+    min-width: 220px;
+  }
   .cca-summary {
-    font-size: 0.8rem;
-    padding: 0 0.5rem;
+    font-size: 0.88rem;
+    padding: 0 0.75rem;
+    color: rgba(220, 225, 235, 0.75);
   }
   .vol-narrative {
-    max-width: 90%;
+    max-width: 92%;
     bottom: 4%;
   }
   .vol-headline {
-    font-size: 0.92rem;
+    font-size: 1rem;
+    color: rgba(255, 255, 255, 0.95);
   }
   .vol-sub {
-    font-size: 0.7rem;
+    font-size: 0.75rem;
     padding: 0 0.5rem;
   }
 }
