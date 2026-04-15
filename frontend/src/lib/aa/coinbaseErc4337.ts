@@ -301,6 +301,11 @@ type UserOpTelemetrySample = {
   paymasterMode: 'sponsored' | 'self_funded' | 'fallback_to_self_funded'
   signatureMode: 'eth_sign' | 'signMessage' | 'auto'
   ownerIsContract: boolean
+  approvalRunId?: string | null
+  approvalStage?: string | null
+  executionMode?: string | null
+  approvalAttempt?: number | null
+  errorCode?: string | null
 }
 
 const userOpTelemetrySamples: UserOpTelemetrySample[] = []
@@ -412,6 +417,17 @@ function recordUserOpTelemetry(sample: UserOpTelemetrySample): void {
     return
   }
   if (shouldFlushByInterval) flushUserOpTelemetry('interval')
+}
+
+function classifyUserOpErrorCode(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  if (lower.includes('aa23')) return 'aa23_validation'
+  if (lower.includes('signtypeddata') && lower.includes('timed out')) return 'typed_data_timeout'
+  if (lower.includes('paymaster')) return 'paymaster_error'
+  if (lower.includes('insufficient funds')) return 'insufficient_funds'
+  if (lower.includes('timeout')) return 'timeout'
+  return 'unknown'
 }
 
 const PAYMASTER_DEBUG_HEADER_ENABLED =
@@ -1705,6 +1721,12 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   retryWithTypedDataSigning?: boolean
   bypassOwnerIndexCache?: boolean
   ownerIndexOverride?: number
+  ownerApprovalContext?: {
+    approvalRunId?: string | null
+    stage?: string | null
+    executionMode?: string | null
+    attempt?: number | null
+  }
 }): Promise<{ userOpHash: Hex; transactionHash: Hex }> {
   const {
     publicClient,
@@ -1727,6 +1749,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     retryWithLowGasContractSigner = true,
     bypassOwnerIndexCache = false,
     ownerIndexOverride: ownerIndexOverrideRaw,
+    ownerApprovalContext,
   } = params
 
   const submissionStartedAt = Date.now()
@@ -1737,6 +1760,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     : 'sponsored'
   let telemetrySignatureMode: UserOpTelemetrySample['signatureMode'] = userOpSignMode
   let telemetryOwnerIsContract = typeof ownerIsContractOverride === 'boolean' ? ownerIsContractOverride : false
+  let telemetryErrorCode: string | null = null
 
   try {
   // Input validation
@@ -2489,8 +2513,15 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   }
   } catch (error) {
     telemetryStatus = isExpectedUserOpTimeoutError(error) ? 'timeout' : 'error'
+    telemetryErrorCode = classifyUserOpErrorCode(error)
     throw error
   } finally {
+    const ownerApprovalTelemetry = {
+      approvalRunId: ownerApprovalContext?.approvalRunId ?? null,
+      approvalStage: ownerApprovalContext?.stage ?? null,
+      executionMode: ownerApprovalContext?.executionMode ?? null,
+      approvalAttempt: ownerApprovalContext?.attempt ?? null,
+    }
     recordUserOpTelemetry({
       status: telemetryStatus,
       durationMs: Math.max(0, Date.now() - submissionStartedAt),
@@ -2498,7 +2529,24 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       paymasterMode: telemetryPaymasterMode,
       signatureMode: telemetrySignatureMode,
       ownerIsContract: telemetryOwnerIsContract,
+      ...ownerApprovalTelemetry,
+      errorCode: telemetryErrorCode,
     })
+    if (ownerApprovalTelemetry.approvalRunId) {
+      trackEvent('owner_approval_userop_lane', {
+        runId: ownerApprovalTelemetry.approvalRunId,
+        stage: ownerApprovalTelemetry.approvalStage,
+        executionMode: ownerApprovalTelemetry.executionMode,
+        attempt: ownerApprovalTelemetry.approvalAttempt,
+        status: telemetryStatus,
+        paymasterMode: telemetryPaymasterMode,
+        signatureMode: telemetrySignatureMode,
+        ownerIsContract: telemetryOwnerIsContract,
+        verificationGasLimit: telemetryVerificationGasLimit,
+        durationMs: Math.max(0, Date.now() - submissionStartedAt),
+        errorCode: telemetryErrorCode,
+      })
+    }
   }
 }
 

@@ -43,6 +43,7 @@ describe('sendPreparedOwnerTx', () => {
           canonicalCswAddress: CANONICAL_CSW,
           ownerAddress: OWNER_EOA,
           txHash: TX_HASH,
+          confirmationState: 'owner_confirmed',
         },
       }),
     )
@@ -472,6 +473,153 @@ describe('sendPreparedOwnerTx', () => {
       }),
     )
     expect(result.txHash).toBe(TX_HASH)
+  })
+
+  it('retries wallet_sendCalls without capabilities when wallet rejects capability payload', async () => {
+    const ensurePaymasterSession = vi.fn(async () => true)
+    const request = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('Invalid params: unexpected property capabilities'))
+      .mockResolvedValueOnce('0xcall-bundle-id')
+      .mockResolvedValueOnce({
+        status: 200,
+        receipts: [{ transactionHash: TX_HASH }],
+      })
+    sendCoinbaseSmartWalletUserOperationMock
+      .mockRejectedValueOnce(new Error('UserOperation failed: signTypedData (CSW EIP-712) timed out after 30s'))
+      .mockRejectedValueOnce(new Error('Error generating transaction. Please make sure you have enough funds to complete the transaction.'))
+
+    const result = await sendPreparedOwnerTx({
+      txRequest: TX_REQUEST,
+      walletClient: {
+        account: CANONICAL_CSW,
+        sendTransaction: vi.fn(async () => TX_HASH),
+        request,
+      },
+      chainId: 8453,
+      authHeaders: async () => ({ Authorization: 'Bearer test' }),
+      signerAddress: CANONICAL_CSW,
+      executionMode: 'canonicalSmartWallet',
+      canonicalSmartWalletAddress: CANONICAL_CSW,
+      publicClient: {},
+      ensurePaymasterSession,
+    })
+
+    expect(request).toHaveBeenCalledTimes(3)
+    expect(request).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        method: 'wallet_sendCalls',
+        params: [expect.objectContaining({ capabilities: expect.any(Object) })],
+      }),
+    )
+    expect(request).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        method: 'wallet_sendCalls',
+        params: [expect.not.objectContaining({ capabilities: expect.anything() })],
+      }),
+    )
+    expect(result.txHash).toBe(TX_HASH)
+  })
+
+  it('retries confirm-owner for pending confirmation states and succeeds after delayed indexing', async () => {
+    const onStageEvent = vi.fn()
+    apiFetchMock
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          success: true,
+          data: {
+            isOwner: false,
+            canonicalCswAddress: CANONICAL_CSW,
+            ownerAddress: OWNER_EOA,
+            txHash: TX_HASH,
+            confirmationState: 'pending_tx',
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          success: true,
+          data: {
+            isOwner: false,
+            canonicalCswAddress: CANONICAL_CSW,
+            ownerAddress: OWNER_EOA,
+            txHash: TX_HASH,
+            confirmationState: 'owner_not_found_yet',
+          },
+        }),
+      )
+      .mockResolvedValueOnce(
+        makeJsonResponse({
+          success: true,
+          data: {
+            isOwner: true,
+            canonicalCswAddress: CANONICAL_CSW,
+            ownerAddress: OWNER_EOA,
+            txHash: TX_HASH,
+            confirmationState: 'owner_confirmed',
+          },
+        }),
+      )
+
+    const result = await sendPreparedOwnerTx({
+      txRequest: TX_REQUEST,
+      walletClient: {
+        account: OWNER_EOA,
+        sendTransaction: vi.fn(async () => TX_HASH),
+      },
+      chainId: 8453,
+      authHeaders: async () => ({ Authorization: 'Bearer test' }),
+      ownerAddress: OWNER_EOA,
+      signerAddress: OWNER_EOA,
+      executionMode: 'ownerDirect',
+      approvalRunId: 'approval-test-1',
+      onStageEvent,
+    })
+
+    expect(apiFetchMock).toHaveBeenCalledTimes(3)
+    expect(result.isOwner).toBe(true)
+    expect(onStageEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        runId: 'approval-test-1',
+        stage: 'confirm_owner',
+        status: 'retry',
+        code: 'pending_tx',
+      }),
+    )
+  })
+
+  it('surfaces tx_failed confirmation state without retrying', async () => {
+    apiFetchMock.mockResolvedValueOnce(
+      makeJsonResponse({
+        success: true,
+        data: {
+          isOwner: false,
+          canonicalCswAddress: CANONICAL_CSW,
+          ownerAddress: OWNER_EOA,
+          txHash: TX_HASH,
+          confirmationState: 'tx_failed',
+        },
+        error: 'Owner install transaction failed onchain.',
+      }),
+    )
+
+    await expect(
+      sendPreparedOwnerTx({
+        txRequest: TX_REQUEST,
+        walletClient: {
+          account: OWNER_EOA,
+          sendTransaction: vi.fn(async () => TX_HASH),
+        },
+        chainId: 8453,
+        authHeaders: async () => ({ Authorization: 'Bearer test' }),
+        ownerAddress: OWNER_EOA,
+        signerAddress: OWNER_EOA,
+        executionMode: 'ownerDirect',
+      }),
+    ).rejects.toThrow('Owner install transaction failed onchain.')
+    expect(apiFetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('normalizes canonical typed-data timeout error for user guidance', async () => {

@@ -36,6 +36,7 @@ export type ConfirmOwnerResponse = {
   canonicalCswAddress: string
   ownerAddress: string
   txHash: string | null
+  confirmationState?: 'owner_confirmed' | 'pending_tx' | 'owner_not_found_yet' | 'tx_failed'
 }
 
 export type PreparedOwnerTxRequest = {
@@ -46,6 +47,29 @@ export type PreparedOwnerTxRequest = {
 }
 
 export type OwnerApprovalExecutionMode = 'canonicalSmartWallet' | 'ownerDirect'
+
+export type OwnerApprovalStage =
+  | 'preflight'
+  | 'prepare'
+  | 'userop_typed'
+  | 'userop_nontyped'
+  | 'send_calls'
+  | 'confirm_owner'
+
+export type OwnerApprovalStageStatus = 'start' | 'retry' | 'success' | 'error'
+
+export type OwnerApprovalStageEvent = {
+  runId: string
+  stage: OwnerApprovalStage
+  status: OwnerApprovalStageStatus
+  attempt?: number
+  executionMode: OwnerApprovalExecutionMode
+  signerAddress?: string | null
+  canonicalCswAddress?: string | null
+  txHash?: string | null
+  code?: string
+  message?: string
+}
 
 export function readApiError(payload: unknown, fallback: string): string {
   return resolveApiErrorMessage(payload, fallback)
@@ -98,82 +122,135 @@ export function shouldRefreshOwnerDelegationOnForeground(input: {
   return Boolean(input.ownerDelegationFlags?.needsBaseAppSetup || input.ownerDelegationFlags?.needsEmbeddedWallet)
 }
 
-export function normalizeOwnerApprovalError(error: unknown): Error {
-  if (error instanceof Error) {
-    const message = String(error.message || '').trim()
-    const lower = message.toLowerCase()
-    if (lower.includes('aa23') || (lower.includes('validateuserop') && lower.includes('revert'))) {
-      return new Error(
-        'Smart wallet signature validation failed during sponsorship (AA23). Reconnect the same Base smart wallet session and retry.',
-      )
-    }
-    if (lower.includes('userop_submission_timeout')) {
-      return new Error(
-        'Smart wallet approval is taking too long after signature confirmation. Retry once; if this keeps happening, reconnect the same Coinbase wallet session.',
-      )
-    }
-    if (lower.includes('signtypeddata (csw eip-712) timed out') || lower.includes('eth_signtypeddata_v4 (csw eip-712) timed out')) {
-      return new Error(
-        'Coinbase Smart Wallet signature confirmation timed out. Retry once; if it repeats, reconnect the same Base wallet session and approve again.',
-      )
-    }
-    if (lower.includes('paymaster proxy internal error')) {
-      return new Error(
-        '4626 could not initialize Base gas sponsorship. Retry in a few seconds. If it persists, use Not you? Switch and reconnect the same Base wallet.',
-      )
-    }
-    if (lower.includes('paymaster rejected this request')) {
-      const reason = message
-        .replace(/^.*paymaster rejected this request:\s*/i, '')
-        .trim()
-      const normalizedReason = reason ? reason.replace(/\s+/g, ' ').trim() : ''
-      return new Error(
-        normalizedReason
-          ? `Gas sponsorship was rejected for this approval (${normalizedReason}). Retry in Base app after reconnecting the same wallet session.`
-          : 'Gas sponsorship was rejected for this approval. Retry in Base app after reconnecting the same wallet session.',
-      )
-    }
-    if (lower.includes('paymaster') && lower.includes('insufficient funds')) {
-      return new Error(
-        'Gas sponsorship failed due to paymaster funding limits. This is a sponsor-side budget/policy issue, not your wallet ETH balance.',
-      )
-    }
-    if (lower.includes('paymaster') && lower.includes('insufficient sponsorship funds')) {
-      return new Error(
-        'Gas sponsorship failed due to paymaster funding limits. This is a sponsor-side budget/policy issue, not your wallet ETH balance.',
-      )
-    }
-    if (
-      ((lower.includes('error generating transaction') || lower.includes('error generating message')) &&
-        lower.includes('enough funds')) ||
-      lower.includes('insufficient funds')
-    ) {
-      return new Error(
-        'Wallet could not generate the Coinbase Smart Wallet signature/approval. Retry from the same Base/Zora smart wallet, and reconnect it if the sponsor session has gone stale.',
-      )
-    }
-    if (lower.includes('missing 4626 session token')) {
-      return new Error('4626 could not start the smart-wallet sponsor session. Sign in again and retry.')
-    }
-    if (lower.includes('request denied') || lower.includes('not authenticated')) {
-      return new Error('4626 sponsor session was rejected. Sign in again and retry the smart-wallet approval.')
-    }
-    if (lower.includes('session principal does not own sender csw') || lower.includes('not_owner')) {
-      return new Error('The current 4626 session is not authorized for this canonical smart wallet. Reconnect the same Base/Zora wallet and retry.')
-    }
-    if (lower.includes('not an onchain owner of the smart wallet')) {
-      return new Error('The connected signer is not an onchain owner of this Coinbase Smart Wallet. Reconnect a current owner and retry.')
-    }
-    return error
+type OwnerApprovalErrorCode =
+  | 'aa23_validation'
+  | 'submission_timeout'
+  | 'typed_data_timeout'
+  | 'paymaster_internal'
+  | 'paymaster_rejected'
+  | 'paymaster_insufficient'
+  | 'wallet_generation_insufficient'
+  | 'missing_session_token'
+  | 'request_denied'
+  | 'not_owner'
+  | 'not_onchain_owner'
+  | 'unknown'
+
+type ClassifiedOwnerApprovalError = {
+  message: string
+  lower: string
+  code: OwnerApprovalErrorCode
+}
+
+function classifyOwnerApprovalError(error: unknown): ClassifiedOwnerApprovalError {
+  const message = error instanceof Error ? String(error.message || '').trim() : String(error ?? '').trim()
+  const lower = message.toLowerCase()
+  if (!lower) return { message, lower, code: 'unknown' }
+  if (lower.includes('aa23') || (lower.includes('validateuserop') && lower.includes('revert'))) {
+    return { message, lower, code: 'aa23_validation' }
   }
+  if (lower.includes('userop_submission_timeout')) {
+    return { message, lower, code: 'submission_timeout' }
+  }
+  if (lower.includes('signtypeddata (csw eip-712) timed out') || lower.includes('eth_signtypeddata_v4 (csw eip-712) timed out')) {
+    return { message, lower, code: 'typed_data_timeout' }
+  }
+  if (lower.includes('paymaster proxy internal error')) {
+    return { message, lower, code: 'paymaster_internal' }
+  }
+  if (lower.includes('paymaster rejected this request')) {
+    return { message, lower, code: 'paymaster_rejected' }
+  }
+  if (
+    (lower.includes('paymaster') && lower.includes('insufficient funds')) ||
+    lower.includes('insufficient sponsorship funds')
+  ) {
+    return { message, lower, code: 'paymaster_insufficient' }
+  }
+  if (
+    ((lower.includes('error generating transaction') || lower.includes('error generating message')) && lower.includes('enough funds')) ||
+    lower.includes('insufficient funds')
+  ) {
+    return { message, lower, code: 'wallet_generation_insufficient' }
+  }
+  if (lower.includes('missing 4626 session token')) {
+    return { message, lower, code: 'missing_session_token' }
+  }
+  if (lower.includes('request denied') || lower.includes('not authenticated')) {
+    return { message, lower, code: 'request_denied' }
+  }
+  if (lower.includes('session principal does not own sender csw') || lower.includes('not_owner')) {
+    return { message, lower, code: 'not_owner' }
+  }
+  if (lower.includes('not an onchain owner of the smart wallet')) {
+    return { message, lower, code: 'not_onchain_owner' }
+  }
+  return { message, lower, code: 'unknown' }
+}
+
+export function normalizeOwnerApprovalError(error: unknown): Error {
+  const classified = classifyOwnerApprovalError(error)
+  if (classified.code === 'aa23_validation') {
+    return new Error(
+      'Smart wallet signature validation failed during sponsorship (AA23). Reconnect the same Base smart wallet session and retry.',
+    )
+  }
+  if (classified.code === 'submission_timeout') {
+    return new Error(
+      'Smart wallet approval is taking too long after signature confirmation. Retry once; if this keeps happening, reconnect the same Coinbase wallet session.',
+    )
+  }
+  if (classified.code === 'typed_data_timeout') {
+    return new Error(
+      'Coinbase Smart Wallet signature confirmation timed out. Retry once; if it repeats, reconnect the same Base wallet session and approve again.',
+    )
+  }
+  if (classified.code === 'paymaster_internal') {
+    return new Error(
+      '4626 could not initialize Base gas sponsorship. Retry in a few seconds. If it persists, use Not you? Switch and reconnect the same Base wallet.',
+    )
+  }
+  if (classified.code === 'paymaster_rejected') {
+    const reason = classified.message
+      .replace(/^.*paymaster rejected this request:\s*/i, '')
+      .trim()
+    const normalizedReason = reason ? reason.replace(/\s+/g, ' ').trim() : ''
+    return new Error(
+      normalizedReason
+        ? `Gas sponsorship was rejected for this approval (${normalizedReason}). Retry in Base app after reconnecting the same wallet session.`
+        : 'Gas sponsorship was rejected for this approval. Retry in Base app after reconnecting the same wallet session.',
+    )
+  }
+  if (classified.code === 'paymaster_insufficient') {
+    return new Error(
+      'Gas sponsorship failed due to paymaster funding limits. This is a sponsor-side budget/policy issue, not your wallet ETH balance.',
+    )
+  }
+  if (classified.code === 'wallet_generation_insufficient') {
+    return new Error(
+      'Wallet could not generate the Coinbase Smart Wallet signature/approval. Retry from the same Base/Zora smart wallet, and reconnect it if the sponsor session has gone stale.',
+    )
+  }
+  if (classified.code === 'missing_session_token') {
+    return new Error('4626 could not start the smart-wallet sponsor session. Sign in again and retry.')
+  }
+  if (classified.code === 'request_denied') {
+    return new Error('4626 sponsor session was rejected. Sign in again and retry the smart-wallet approval.')
+  }
+  if (classified.code === 'not_owner') {
+    return new Error('The current 4626 session is not authorized for this canonical smart wallet. Reconnect the same Base/Zora wallet and retry.')
+  }
+  if (classified.code === 'not_onchain_owner') {
+    return new Error('The connected signer is not an onchain owner of this Coinbase Smart Wallet. Reconnect a current owner and retry.')
+  }
+  if (error instanceof Error) return error
   return new Error('Failed to submit the owner approval transaction.')
 }
 
 function isRetryablePaymasterSessionError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error ?? '')
-  const lower = message.toLowerCase()
+  const { lower, code } = classifyOwnerApprovalError(error)
+  if (code === 'paymaster_internal') return true
   return (
-    lower.includes('paymaster proxy internal error') ||
     lower.includes('request denied - no_session') ||
     lower.includes('request denied - not authenticated')
   )
@@ -197,14 +274,19 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutErr
   }
 }
 
-const CONFIRM_OWNER_RETRY_DELAY_MS = import.meta.env.MODE === 'test' ? 5 : 1_500
-const CONFIRM_OWNER_MAX_ATTEMPTS = 6
+const CONFIRM_OWNER_RETRY_DELAY_BASE_MS = import.meta.env.MODE === 'test' ? 5 : 1_500
+const CONFIRM_OWNER_MAX_ATTEMPTS = import.meta.env.MODE === 'test' ? 6 : 10
 const PAYMASTER_SESSION_MAX_ATTEMPTS = 3
 const PAYMASTER_SESSION_RETRY_DELAY_MS = import.meta.env.MODE === 'test' ? 5 : 300
 const USER_OP_SUBMIT_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 120 : 45_000
 const SEND_CALLS_STATUS_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 25 : 8_000
 const SEND_CALLS_STATUS_POLL_MS = import.meta.env.MODE === 'test' ? 5 : 500
 const PREFER_SPONSORED_CANONICAL_SELF_APPROVAL = true
+
+function getConfirmOwnerRetryDelayMs(attempt: number): number {
+  const multiplier = Math.min(5, Math.max(1, attempt + 1))
+  return CONFIRM_OWNER_RETRY_DELAY_BASE_MS * multiplier
+}
 
 function isTxHash(value: unknown): value is `0x${string}` {
   return typeof value === 'string' && /^0x([a-fA-F0-9]{64})$/.test(value)
@@ -231,41 +313,25 @@ function isUserRejectedWalletAction(error: unknown): boolean {
   return lower.includes('user rejected') || lower.includes('user denied') || lower.includes('rejected the request')
 }
 
-function isAA23ValidationRevert(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error ?? '')
-  const lower = message.toLowerCase()
-  return lower.includes('aa23') || (lower.includes('validateuserop') && lower.includes('revert'))
-}
-
 function shouldFallbackSelfAuthenticatedCanonicalToSendCalls(error: unknown): boolean {
-  if (isAA23ValidationRevert(error)) return true
-  const message = error instanceof Error ? error.message : String(error ?? '')
-  const lower = message.toLowerCase()
-  return (
-    lower.includes('signtypeddata (csw eip-712) timed out') ||
-    lower.includes('eth_signtypeddata_v4 (csw eip-712) timed out') ||
-    ((lower.includes('error generating transaction') || lower.includes('error generating message')) &&
-      lower.includes('enough funds'))
-  )
+  const { code } = classifyOwnerApprovalError(error)
+  return code === 'aa23_validation' || code === 'typed_data_timeout' || code === 'wallet_generation_insufficient'
 }
 
 function isInsufficientFundsLikeWalletSendCallsError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error ?? '')
-  const lower = message.toLowerCase()
-  return (
-    ((lower.includes('error generating transaction') || lower.includes('error generating message')) &&
-      lower.includes('enough funds')) ||
-    lower.includes('insufficient funds')
-  )
+  const { code } = classifyOwnerApprovalError(error)
+  return code === 'wallet_generation_insufficient' || code === 'paymaster_insufficient'
 }
 
-function isTypedDataSigningTimeoutError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error ?? '')
-  const lower = message.toLowerCase()
-  return (
-    lower.includes('signtypeddata (csw eip-712) timed out') ||
-    lower.includes('eth_signtypeddata_v4 (csw eip-712) timed out')
-  )
+function emitOwnerApprovalStage(
+  callback: ((event: OwnerApprovalStageEvent) => void) | null | undefined,
+  event: OwnerApprovalStageEvent,
+): void {
+  try {
+    callback?.(event)
+  } catch {
+    // keep approval flow resilient even if telemetry callback fails
+  }
 }
 
 async function submitOwnerTxViaWalletSendCalls(params: {
@@ -274,19 +340,72 @@ async function submitOwnerTxViaWalletSendCalls(params: {
   sender: `0x${string}`
   to: `0x${string}`
   data: `0x${string}`
+  paymasterUrl?: string | null
+  approvalRunId: string
+  executionMode: OwnerApprovalExecutionMode
+  signerAddress?: string | null
+  canonicalCswAddress?: string | null
+  onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null
 }): Promise<`0x${string}`> {
-  const callBundle = await params.walletRequest({
-    method: 'wallet_sendCalls',
-    params: [
-      {
-        chainId: `0x${params.chainId.toString(16)}`,
-        from: params.sender,
-        calls: [{ to: params.to, data: params.data, value: '0x0' }],
-        atomicRequired: false,
-        version: '2.0.0',
-      },
-    ],
+  const supportsPaymasterCapability = typeof params.paymasterUrl === 'string' && params.paymasterUrl.trim().length > 0
+  emitOwnerApprovalStage(params.onStageEvent, {
+    runId: params.approvalRunId,
+    stage: 'send_calls',
+    status: 'start',
+    attempt: 1,
+    executionMode: params.executionMode,
+    signerAddress: params.signerAddress ?? null,
+    canonicalCswAddress: params.canonicalCswAddress ?? null,
   })
+  const payloadBase = {
+    chainId: `0x${params.chainId.toString(16)}`,
+    from: params.sender,
+    calls: [{ to: params.to, data: params.data, value: '0x0' }],
+    atomicRequired: false,
+    version: '2.0.0',
+  } as Record<string, unknown>
+  const payloadWithPaymaster = supportsPaymasterCapability
+    ? {
+        ...payloadBase,
+        capabilities: {
+          paymasterService: {
+            url: String(params.paymasterUrl).trim(),
+          },
+        },
+      }
+    : payloadBase
+
+  let callBundle: unknown
+  try {
+    callBundle = await params.walletRequest({
+      method: 'wallet_sendCalls',
+      params: [payloadWithPaymaster],
+    })
+  } catch (error) {
+    if (!supportsPaymasterCapability) throw error
+    const message = error instanceof Error ? error.message : String(error ?? '')
+    const lower = message.toLowerCase()
+    const invalidCapabilities =
+      lower.includes('invalid params') ||
+      lower.includes('unexpected property') ||
+      lower.includes('capabilities')
+    if (!invalidCapabilities) throw error
+    emitOwnerApprovalStage(params.onStageEvent, {
+      runId: params.approvalRunId,
+      stage: 'send_calls',
+      status: 'retry',
+      attempt: 2,
+      executionMode: params.executionMode,
+      signerAddress: params.signerAddress ?? null,
+      canonicalCswAddress: params.canonicalCswAddress ?? null,
+      code: 'send_calls_capabilities_rejected',
+      message,
+    })
+    callBundle = await params.walletRequest({
+      method: 'wallet_sendCalls',
+      params: [payloadBase],
+    })
+  }
   const callsId =
     typeof callBundle === 'string'
       ? callBundle
@@ -308,7 +427,18 @@ async function submitOwnerTxViaWalletSendCalls(params: {
         .find((value) => isTxHash(value)) ?? null
     if (Number.isFinite(statusCode)) {
       if (statusCode >= 200 && statusCode < 300) {
-        if (receiptHash) return receiptHash
+        if (receiptHash) {
+          emitOwnerApprovalStage(params.onStageEvent, {
+            runId: params.approvalRunId,
+            stage: 'send_calls',
+            status: 'success',
+            executionMode: params.executionMode,
+            signerAddress: params.signerAddress ?? null,
+            canonicalCswAddress: params.canonicalCswAddress ?? null,
+            txHash: receiptHash,
+          })
+          return receiptHash
+        }
         throw new Error('wallet_sendCalls completed without a transaction hash yet. Retry confirmation shortly.')
       }
       if (statusCode >= 300) throw new Error(`wallet_sendCalls failed with status ${statusCode}`)
@@ -316,6 +446,16 @@ async function submitOwnerTxViaWalletSendCalls(params: {
     await delay(SEND_CALLS_STATUS_POLL_MS)
   }
 
+  emitOwnerApprovalStage(params.onStageEvent, {
+    runId: params.approvalRunId,
+    stage: 'send_calls',
+    status: 'error',
+    executionMode: params.executionMode,
+    signerAddress: params.signerAddress ?? null,
+    canonicalCswAddress: params.canonicalCswAddress ?? null,
+    code: 'send_calls_pending_timeout',
+    message: 'wallet_sendCalls status is still pending. Wait a moment and retry confirmation.',
+  })
   throw new Error('wallet_sendCalls status is still pending. Wait a moment and retry confirmation.')
 }
 
@@ -338,6 +478,8 @@ export async function sendPreparedOwnerTx(params: {
   canonicalSmartWalletAddress?: string | null
   publicClient?: unknown
   ensurePaymasterSession?: (() => Promise<boolean>) | null
+  approvalRunId?: string | null
+  onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null
 }): Promise<ConfirmOwnerResponse> {
   const {
     txRequest,
@@ -351,7 +493,10 @@ export async function sendPreparedOwnerTx(params: {
     canonicalSmartWalletAddress,
     publicClient,
     ensurePaymasterSession,
+    approvalRunId,
+    onStageEvent,
   } = params
+  const effectiveApprovalRunId = typeof approvalRunId === 'string' && approvalRunId.trim() ? approvalRunId.trim() : `approval-${Date.now()}`
   if (!walletClient) {
     throw new Error('Connect an owner wallet to send this transaction.')
   }
@@ -370,7 +515,19 @@ export async function sendPreparedOwnerTx(params: {
       }
       const selfAuthenticatedCanonicalSession =
         signerAddress.toLowerCase() === canonicalSmartWalletAddress.toLowerCase()
-      const runSponsoredCanonicalUserOp = async (opts?: { disableTypedDataSigning?: boolean }) => {
+      const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
+      const paymasterUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
+      const runSponsoredCanonicalUserOp = async (opts?: { disableTypedDataSigning?: boolean; attempt?: number }) => {
+        const stage: OwnerApprovalStage = opts?.disableTypedDataSigning ? 'userop_nontyped' : 'userop_typed'
+        emitOwnerApprovalStage(onStageEvent, {
+          runId: effectiveApprovalRunId,
+          stage,
+          status: opts?.attempt && opts.attempt > 1 ? 'retry' : 'start',
+          attempt: opts?.attempt,
+          executionMode,
+          signerAddress,
+          canonicalCswAddress: canonicalSmartWalletAddress,
+        })
         if (!publicClient) {
           throw new Error('Canonical wallet client is unavailable. Reload and retry.')
         }
@@ -380,19 +537,23 @@ export async function sendPreparedOwnerTx(params: {
             throw new Error('Missing 4626 session token for paymaster request.')
           }
         }
-        const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-        const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
         const runUserOp = async () =>
           await withTimeout(
             sendCoinbaseSmartWalletUserOperation({
               publicClient: publicClient as any,
               walletClient: walletClient as any,
-              bundlerUrl,
+              bundlerUrl: paymasterUrl,
               smartWallet: canonicalSmartWalletAddress as `0x${string}`,
               ownerAddress: signerAddress as `0x${string}`,
               calls: [{ to: txRequest.to, data: txRequest.data, value: 0n }],
               version: '1',
               useTypedDataSigning: selfAuthenticatedCanonicalSession && opts?.disableTypedDataSigning !== true,
+              ownerApprovalContext: {
+                approvalRunId: effectiveApprovalRunId,
+                stage,
+                executionMode,
+                attempt: opts?.attempt ?? null,
+              },
             }),
             USER_OP_SUBMIT_TIMEOUT_MS,
             new Error('userop_submission_timeout'),
@@ -416,7 +577,29 @@ export async function sendPreparedOwnerTx(params: {
             }
           }
         }
-        if (!result) throw (lastRetryableError ?? new Error('Paymaster session retry exhausted.'))
+        if (!result) {
+          const terminalError = lastRetryableError ?? new Error('Paymaster session retry exhausted.')
+          emitOwnerApprovalStage(onStageEvent, {
+            runId: effectiveApprovalRunId,
+            stage,
+            status: 'error',
+            executionMode,
+            signerAddress,
+            canonicalCswAddress: canonicalSmartWalletAddress,
+            code: classifyOwnerApprovalError(terminalError).code,
+            message: terminalError instanceof Error ? terminalError.message : String(terminalError ?? ''),
+          })
+          throw terminalError
+        }
+        emitOwnerApprovalStage(onStageEvent, {
+          runId: effectiveApprovalRunId,
+          stage,
+          status: 'success',
+          executionMode,
+          signerAddress,
+          canonicalCswAddress: canonicalSmartWalletAddress,
+          txHash: result.transactionHash,
+        })
         return result.transactionHash
       }
       if (selfAuthenticatedCanonicalSession) {
@@ -425,21 +608,38 @@ export async function sendPreparedOwnerTx(params: {
         }
         if (PREFER_SPONSORED_CANONICAL_SELF_APPROVAL) {
           try {
-            txHash = await runSponsoredCanonicalUserOp()
+            txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
           } catch (sponsoredError) {
+            emitOwnerApprovalStage(onStageEvent, {
+              runId: effectiveApprovalRunId,
+              stage: 'userop_typed',
+              status: 'error',
+              executionMode,
+              signerAddress,
+              canonicalCswAddress: canonicalSmartWalletAddress,
+              code: classifyOwnerApprovalError(sponsoredError).code,
+              message: sponsoredError instanceof Error ? sponsoredError.message : String(sponsoredError ?? ''),
+            })
             if (!shouldFallbackSelfAuthenticatedCanonicalToSendCalls(sponsoredError)) throw sponsoredError
-            const shouldRetryWithoutTypedData = isTypedDataSigningTimeoutError(sponsoredError)
             let nonTypedRetryError: unknown = null
-            if (shouldRetryWithoutTypedData) {
-              try {
-                txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true })
-              } catch (retryError) {
-                nonTypedRetryError = retryError
-              }
+            try {
+              txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true, attempt: 2 })
+            } catch (retryError) {
+              emitOwnerApprovalStage(onStageEvent, {
+                runId: effectiveApprovalRunId,
+                stage: 'userop_nontyped',
+                status: 'error',
+                executionMode,
+                signerAddress,
+                canonicalCswAddress: canonicalSmartWalletAddress,
+                code: classifyOwnerApprovalError(retryError).code,
+                message: retryError instanceof Error ? retryError.message : String(retryError ?? ''),
+              })
+              nonTypedRetryError = retryError
             }
             if (txHash) {
               // Retry without typed-data signing succeeded.
-            } else if (nonTypedRetryError && !isInsufficientFundsLikeWalletSendCallsError(nonTypedRetryError)) {
+            } else if (nonTypedRetryError && !shouldFallbackSelfAuthenticatedCanonicalToSendCalls(nonTypedRetryError)) {
               throw nonTypedRetryError
             } else {
             const walletRequest =
@@ -454,13 +654,29 @@ export async function sendPreparedOwnerTx(params: {
                   sender: canonicalSmartWalletAddress as `0x${string}`,
                   to: txRequest.to,
                   data: txRequest.data,
+                  paymasterUrl,
+                  approvalRunId: effectiveApprovalRunId,
+                  executionMode,
+                  signerAddress,
+                  canonicalCswAddress: canonicalSmartWalletAddress,
+                  onStageEvent,
                 })
               } catch (sendCallsError) {
+                emitOwnerApprovalStage(onStageEvent, {
+                  runId: effectiveApprovalRunId,
+                  stage: 'send_calls',
+                  status: 'error',
+                  executionMode,
+                  signerAddress,
+                  canonicalCswAddress: canonicalSmartWalletAddress,
+                  code: classifyOwnerApprovalError(sendCallsError).code,
+                  message: sendCallsError instanceof Error ? sendCallsError.message : String(sendCallsError ?? ''),
+                })
                 if (!isInsufficientFundsLikeWalletSendCallsError(sendCallsError)) throw sendCallsError
-                txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true })
+                txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true, attempt: 3 })
               }
             } else {
-              txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true })
+              txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true, attempt: 3 })
             }
             }
           }
@@ -479,6 +695,12 @@ export async function sendPreparedOwnerTx(params: {
               sender: canonicalSmartWalletAddress as `0x${string}`,
               to: txRequest.to,
               data: txRequest.data,
+              paymasterUrl,
+              approvalRunId: effectiveApprovalRunId,
+              executionMode,
+              signerAddress,
+              canonicalCswAddress: canonicalSmartWalletAddress,
+              onStageEvent,
             })
           } catch (sendCallsError) {
             if (isUserRejectedWalletAction(sendCallsError)) throw sendCallsError
@@ -500,6 +722,16 @@ export async function sendPreparedOwnerTx(params: {
           try {
             txHash = await runSponsoredCanonicalUserOp()
           } catch (sponsoredError) {
+            emitOwnerApprovalStage(onStageEvent, {
+              runId: effectiveApprovalRunId,
+              stage: 'userop_typed',
+              status: 'error',
+              executionMode,
+              signerAddress,
+              canonicalCswAddress: canonicalSmartWalletAddress,
+              code: classifyOwnerApprovalError(sponsoredError).code,
+              message: sponsoredError instanceof Error ? sponsoredError.message : String(sponsoredError ?? ''),
+            })
             if (sendCallsFallbackMode === 'insufficient') throw sponsoredError
             if (typeof walletClient.sendTransaction !== 'function') {
               throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
@@ -539,6 +771,16 @@ export async function sendPreparedOwnerTx(params: {
   const headers = await authHeaders()
   let lastPayload: ApiEnvelope<ConfirmOwnerResponse> | null = null
   let lastMessage = 'Owner status is not confirmed yet. Please retry in a moment.'
+  emitOwnerApprovalStage(onStageEvent, {
+    runId: effectiveApprovalRunId,
+    stage: 'confirm_owner',
+    status: 'start',
+    attempt: 1,
+    executionMode,
+    signerAddress,
+    canonicalCswAddress: canonicalSmartWalletAddress ?? null,
+    txHash,
+  })
   for (let attempt = 0; attempt < CONFIRM_OWNER_MAX_ATTEMPTS; attempt += 1) {
     const confirmRes = await apiFetch('/api/wallet/confirm-owner', {
       method: 'POST',
@@ -546,25 +788,67 @@ export async function sendPreparedOwnerTx(params: {
       body: JSON.stringify({
         txHash,
         ownerAddress: ownerAddress ?? null,
+        approvalRunId: effectiveApprovalRunId,
       }),
     })
     const confirmPayload = (await confirmRes.json().catch(() => null)) as ApiEnvelope<ConfirmOwnerResponse> | null
     lastPayload = confirmPayload
 
     if (confirmRes.ok && confirmPayload?.success && confirmPayload.data?.isOwner) {
+      emitOwnerApprovalStage(onStageEvent, {
+        runId: effectiveApprovalRunId,
+        stage: 'confirm_owner',
+        status: 'success',
+        attempt: attempt + 1,
+        executionMode,
+        signerAddress,
+        canonicalCswAddress: confirmPayload.data.canonicalCswAddress,
+        txHash,
+      })
       return confirmPayload.data
     }
 
     lastMessage = readApiError(confirmPayload, 'Owner status is not confirmed yet.')
+    const confirmationState = confirmPayload?.data?.confirmationState
+    const pendingConfirmationState =
+      confirmationState === 'pending_tx' || confirmationState === 'owner_not_found_yet'
+    const terminalConfirmationState = confirmationState === 'tx_failed'
     const canRetry =
+      !terminalConfirmationState &&
       attempt + 1 < CONFIRM_OWNER_MAX_ATTEMPTS &&
       (
+        pendingConfirmationState ||
         (confirmRes.ok && confirmPayload?.success && confirmPayload?.data?.isOwner === false) ||
         String(lastMessage).toLowerCase().includes('not confirmed')
       )
+    if (canRetry) {
+      emitOwnerApprovalStage(onStageEvent, {
+        runId: effectiveApprovalRunId,
+        stage: 'confirm_owner',
+        status: 'retry',
+        attempt: attempt + 2,
+        executionMode,
+        signerAddress,
+        canonicalCswAddress: canonicalSmartWalletAddress ?? null,
+        txHash,
+        code: confirmPayload?.data?.confirmationState ?? 'pending_confirmation',
+        message: lastMessage,
+      })
+    }
     if (!canRetry) break
-    await delay(CONFIRM_OWNER_RETRY_DELAY_MS)
+    await delay(getConfirmOwnerRetryDelayMs(attempt))
   }
 
+  emitOwnerApprovalStage(onStageEvent, {
+    runId: effectiveApprovalRunId,
+    stage: 'confirm_owner',
+    status: 'error',
+    executionMode,
+    signerAddress,
+    canonicalCswAddress: canonicalSmartWalletAddress ?? null,
+    txHash,
+    code: lastPayload?.data?.confirmationState ?? classifyOwnerApprovalError(lastMessage).code,
+    message: lastMessage,
+  })
   throw buildOwnerDelegationError(lastPayload, lastMessage)
 }

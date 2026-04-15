@@ -6,7 +6,9 @@ import { base } from 'viem/chains'
 import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 
 import { apiFetch } from '@/lib/apiBase'
+import { trackEvent } from '@/lib/analytics'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
+import { logger } from '@/lib/logger'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { extractPrivyWalletsFromUser, useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import { isUnauthorizedCrossAppLinkError, performZoraCrossAppAuth } from '@/lib/privy/zoraCrossApp'
@@ -15,6 +17,7 @@ import { useSiweAuth } from '@/hooks/useSiweAuth'
 import {
   type ApiEnvelope,
   type OwnerDelegationFlags,
+  type OwnerApprovalStageEvent,
   type PrepareOwnerResponse,
   buildOwnerDelegationError,
   deriveOwnerDelegationFlags,
@@ -288,6 +291,26 @@ export function useAccountSetupController(params: {
     const reason = result.reason ?? 'unknown_session_bootstrap_failure'
     throw new Error(`Paymaster session bootstrap failed: ${reason}`)
   }, [getAccessToken, siwe])
+
+  const emitOwnerApprovalStageEvent = useCallback(
+    (event: OwnerApprovalStageEvent) => {
+      const payload = {
+        runId: event.runId,
+        stage: event.stage,
+        status: event.status,
+        attempt: event.attempt ?? null,
+        executionMode: event.executionMode,
+        signerAddress: event.signerAddress ?? null,
+        canonicalCswAddress: event.canonicalCswAddress ?? null,
+        txHash: event.txHash ?? null,
+        code: event.code ?? null,
+        message: event.message ?? null,
+      }
+      trackEvent('owner_approval_stage', payload)
+      logger.info('[OwnerApproval] stage', payload)
+    },
+    [],
+  )
 
   const loadMe = useCallback(
     async (options?: { showSpinner?: boolean }) => {
@@ -790,7 +813,11 @@ export function useAccountSetupController(params: {
   }, [privy])
 
   const sendPreparedOwnerTx = useCallback(
-    async (txRequest: { chainId: 8453; to: `0x${string}`; data: `0x${string}`; value: '0x0' }, ownerAddress?: string | null) => {
+    async (
+      txRequest: { chainId: 8453; to: `0x${string}`; data: `0x${string}`; value: '0x0' },
+      ownerAddress?: string | null,
+      opts?: { approvalRunId?: string | null; onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null },
+    ) => {
       let effectiveWalletClient = walletClient
       let effectiveChainId = chainId
       let effectiveSwitchChain = switchChainAsync
@@ -824,6 +851,8 @@ export function useAccountSetupController(params: {
         canonicalSmartWalletAddress: canonicalCswAddress,
         publicClient,
         ensurePaymasterSession,
+        approvalRunId: opts?.approvalRunId ?? null,
+        onStageEvent: opts?.onStageEvent ?? null,
       })
     },
     [
@@ -843,6 +872,7 @@ export function useAccountSetupController(params: {
   const onEnable4626Signing = useCallback(async () => {
     if (!canonicalCswAddress) return
     const runId = ++ownerApprovalRunIdRef.current
+    const approvalRunId = `owner-approval-${Date.now()}-${runId}`
     setAdvancedBusy(true)
     setError(null)
     setNotice(null)
@@ -867,6 +897,15 @@ export function useAccountSetupController(params: {
       }
 
       const headers = await authHeaders()
+      emitOwnerApprovalStageEvent({
+        runId: approvalRunId,
+        stage: 'preflight',
+        status: 'start',
+        attempt: 1,
+        executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
+        signerAddress: ownerSignerAddress ?? null,
+        canonicalCswAddress,
+      })
       let preflightRes = await apiFetch('/api/onboarding/bootstrap', {
         method: 'POST',
         headers,
@@ -882,13 +921,50 @@ export function useAccountSetupController(params: {
         })
         preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<unknown> | null
         if (!preflightRes.ok || !preflightPayload?.success) {
+          emitOwnerApprovalStageEvent({
+            runId: approvalRunId,
+            stage: 'preflight',
+            status: 'error',
+            executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
+            signerAddress: ownerSignerAddress ?? null,
+            canonicalCswAddress,
+            code: 'preflight_failed_after_embedded_retry',
+            message: readApiError(preflightPayload, 'Signer preflight failed.'),
+          })
           throw buildOwnerDelegationError(preflightPayload, 'Signer preflight failed.')
         }
       }
       if (!preflightRes.ok || !preflightPayload?.success) {
+        emitOwnerApprovalStageEvent({
+          runId: approvalRunId,
+          stage: 'preflight',
+          status: 'error',
+          executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
+          signerAddress: ownerSignerAddress ?? null,
+          canonicalCswAddress,
+          code: 'preflight_failed',
+          message: readApiError(preflightPayload, 'Signer preflight failed.'),
+        })
         throw buildOwnerDelegationError(preflightPayload, 'Signer preflight failed.')
       }
+      emitOwnerApprovalStageEvent({
+        runId: approvalRunId,
+        stage: 'preflight',
+        status: 'success',
+        executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
+        signerAddress: ownerSignerAddress ?? null,
+        canonicalCswAddress,
+      })
 
+      emitOwnerApprovalStageEvent({
+        runId: approvalRunId,
+        stage: 'prepare',
+        status: 'start',
+        attempt: 1,
+        executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
+        signerAddress: ownerSignerAddress ?? null,
+        canonicalCswAddress,
+      })
       const prepareRes = await apiFetch('/api/wallet/prepare-add-privy-owner', {
         method: 'POST',
         headers,
@@ -896,15 +972,46 @@ export function useAccountSetupController(params: {
       })
       const preparePayload = (await prepareRes.json().catch(() => null)) as ApiEnvelope<PrepareOwnerResponse> | null
       if (!prepareRes.ok || !preparePayload?.success || !preparePayload.data) {
+        emitOwnerApprovalStageEvent({
+          runId: approvalRunId,
+          stage: 'prepare',
+          status: 'error',
+          executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
+          signerAddress: ownerSignerAddress ?? null,
+          canonicalCswAddress,
+          code: 'prepare_failed',
+          message: readApiError(preparePayload, 'Failed to prepare owner install.'),
+        })
         throw buildOwnerDelegationError(preparePayload, 'Failed to prepare owner install.')
       }
       if (preparePayload.data.alreadyOwner) {
+        emitOwnerApprovalStageEvent({
+          runId: approvalRunId,
+          stage: 'prepare',
+          status: 'success',
+          executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
+          signerAddress: ownerSignerAddress ?? null,
+          canonicalCswAddress,
+          code: 'already_owner',
+        })
         setNotice('4626 signing is already enabled.')
         return
       }
+      emitOwnerApprovalStageEvent({
+        runId: approvalRunId,
+        stage: 'prepare',
+        status: 'success',
+        executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
+        signerAddress: ownerSignerAddress ?? null,
+        canonicalCswAddress,
+      })
       await sendPreparedOwnerTx(
         preparePayload.data.txRequest,
         connectedCanonicalWalletSelected ? null : ownerSignerAddress ?? null,
+        {
+          approvalRunId,
+          onStageEvent: emitOwnerApprovalStageEvent,
+        },
       )
       setNotice('4626 signing is enabled on your canonical CSW.')
       await loadMe({ showSpinner: false })
@@ -927,6 +1034,7 @@ export function useAccountSetupController(params: {
     authHeaders,
     canonicalCswAddress,
     connectedCanonicalWalletSelected,
+    emitOwnerApprovalStageEvent,
     ensureEmbeddedWallet,
     loadMe,
     ownerSignerAddress,

@@ -27,6 +27,7 @@ type ConfirmResponse = {
   canonicalCswAddress: string
   ownerAddress: string
   txHash: string | null
+  confirmationState: 'owner_confirmed' | 'pending_tx' | 'owner_not_found_yet' | 'tx_failed'
 }
 
 function resolveStatusCode(error: unknown): number {
@@ -89,12 +90,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       req,
       ownerAddress,
       cswAddress,
+      txHash: txHash || null,
     })
     const data: ConfirmResponse = {
       isOwner: confirmed.isOwner,
       canonicalCswAddress: confirmed.canonicalCswAddress,
       ownerAddress: confirmed.ownerAddress,
       txHash: txHash || null,
+      confirmationState: confirmed.confirmationState,
     }
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<ConfirmResponse>)
   } catch (error: unknown) {

@@ -127,6 +127,7 @@ describe('confirmOwnerState', () => {
       isOwner: true,
       canonicalCswAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
       ownerAddress: '0x00000000000000000000000000000000000000aa',
+      confirmationState: 'owner_confirmed',
     })
 
     const metadataQuery = sqlCalls.find((call) =>

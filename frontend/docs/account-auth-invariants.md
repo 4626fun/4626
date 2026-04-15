@@ -134,6 +134,44 @@ Rules:
 - features that require canonical CSW execution must stay gated until this owner-installation step is complete
 - after verified email, the default web setup surface is `/waitlist`; `/accounts` is reserved for advanced settings, recovery, and secondary identity controls
 
+### Canonical owner-install runtime policy
+
+For canonical self-auth approval (connected signer equals canonical CSW), the
+runtime fallback ladder is fixed:
+
+1. sponsored UserOp with typed-data signing
+2. sponsored UserOp without typed-data signing
+3. `wallet_sendCalls` fallback (with capability payload retry compatibility)
+
+Do not reorder this sequence without a deliberate product/runtime decision.
+
+### Canonical owner confirmation semantics
+
+Owner install completion is evaluated by `/api/wallet/confirm-owner` using both:
+
+- onchain owner check result
+- tx lifecycle classification across configured Base RPCs
+
+`confirmationState` must be interpreted as:
+
+- `owner_confirmed`: owner installed (terminal success)
+- `pending_tx`: tx not yet confirmed (retry/backoff state)
+- `owner_not_found_yet`: tx/indexing lag state (retry/backoff state)
+- `tx_failed`: tx reverted/failed (terminal failure)
+
+Features requiring canonical execution remain gated until `owner_confirmed`.
+
+### Owner-approval observability
+
+Owner approval emits run-scoped stage telemetry with `approvalRunId` across:
+
+- account setup controller orchestration (`preflight`, `prepare`)
+- onboarding execution lanes (`userop_typed`, `userop_nontyped`, `send_calls`, `confirm_owner`)
+- ERC-4337 helper lane telemetry enrichment
+
+This telemetry is required for production diagnosis and should be preserved when
+refactoring account setup or wallet execution paths.
+
 ### Related owner-install docs
 
 For the operational owner-install flow and support guidance, see:

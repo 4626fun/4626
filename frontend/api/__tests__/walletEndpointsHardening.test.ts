@@ -31,6 +31,7 @@ const {
     isOwner: false,
     canonicalCswAddress: '0x00000000000000000000000000000000000000aa',
     ownerAddress: '0x00000000000000000000000000000000000000bb',
+    confirmationState: 'owner_not_found_yet',
   })),
   extractDelegationFlagsMock: vi.fn(() => ({})),
 }))
@@ -120,6 +121,7 @@ describe('wallet endpoint hardening', () => {
       isOwner: false,
       canonicalCswAddress: '0x00000000000000000000000000000000000000aa',
       ownerAddress: '0x00000000000000000000000000000000000000bb',
+      confirmationState: 'owner_not_found_yet',
     })
     process.env.SOLANA_SWEEP_PROCESSOR_SECRET = 'processor-secret'
   })

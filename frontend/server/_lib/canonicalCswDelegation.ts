@@ -1,6 +1,6 @@
 import type { VercelRequest } from '@vercel/node'
 import { PrivyClient } from '@privy-io/server-auth'
-import { createPublicClient, getAddress, http, type Address } from 'viem'
+import { createPublicClient, getAddress, http, type Address, type Hex } from 'viem'
 import { base } from 'viem/chains'
 
 import { resolveBaseAppInviteUrl } from './baseAppInvite.js'
@@ -44,6 +44,7 @@ type StructuredDelegationError = Error & {
 }
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
+const TX_HASH_RE = /^0x[a-fA-F0-9]{64}$/
 const DEFAULT_BASE_RPCS = ['https://mainnet.base.org', 'https://base.llamarpc.com'] as const
 
 let delegationColumnsEnsured = false
@@ -493,6 +494,31 @@ async function checkOwnerAcrossRpcs(params: {
   return false
 }
 
+async function checkTxStatusAcrossRpcs(txHash: string): Promise<'pending' | 'failed' | 'confirmed' | 'unknown'> {
+  if (!TX_HASH_RE.test(String(txHash).trim())) return 'unknown'
+  const normalizedHash = String(txHash).trim() as Hex
+  let sawNotFound = false
+  let sawUnexpectedError = false
+  for (const rpc of getBaseRpcUrls()) {
+    try {
+      const client = createBasePublicClient(rpc)
+      const receipt = await client.getTransactionReceipt({ hash: normalizedHash })
+      const status = String((receipt as { status?: unknown } | null)?.status ?? '').toLowerCase()
+      if (status === 'reverted' || status === '0x0') return 'failed'
+      return 'confirmed'
+    } catch (error) {
+      const message = error instanceof Error ? error.message.toLowerCase() : String(error ?? '').toLowerCase()
+      if (message.includes('not found') || message.includes('not yet mined') || message.includes('transaction could not be found')) {
+        sawNotFound = true
+        continue
+      }
+      sawUnexpectedError = true
+    }
+  }
+  if (sawNotFound && !sawUnexpectedError) return 'pending'
+  return sawUnexpectedError ? 'unknown' : 'pending'
+}
+
 export async function loadCanonicalDelegationState(params: {
   db: Db
   privyUserId: string
@@ -570,7 +596,13 @@ export async function confirmOwnerState(params: {
   req: VercelRequest
   ownerAddress?: string | null
   cswAddress?: string | null
-}): Promise<{ isOwner: boolean; canonicalCswAddress: string; ownerAddress: string }> {
+  txHash?: string | null
+}): Promise<{
+  isOwner: boolean
+  canonicalCswAddress: string
+  ownerAddress: string
+  confirmationState: 'owner_confirmed' | 'pending_tx' | 'owner_not_found_yet' | 'tx_failed'
+}> {
   const { db, req } = params
   const bootstrap = await bootstrapCanonicalDelegationState({ db, req })
   const canonicalCswAddress = resolveConfirmOwnerCanonicalCsw({
@@ -585,6 +617,7 @@ export async function confirmOwnerState(params: {
     cswAddress: canonicalCswAddress,
     ownerAddress,
   })
+  const txStatus = params.txHash ? await checkTxStatusAcrossRpcs(params.txHash) : 'unknown'
 
   if (ownerAddress === bootstrap.privyEmbeddedEoaAddress) {
     const updated = await db.sql`
@@ -631,6 +664,13 @@ export async function confirmOwnerState(params: {
     isOwner: isOwnerNow,
     canonicalCswAddress,
     ownerAddress,
+    confirmationState: isOwnerNow
+      ? 'owner_confirmed'
+      : txStatus === 'failed'
+        ? 'tx_failed'
+        : txStatus === 'pending'
+          ? 'pending_tx'
+          : 'owner_not_found_yet',
   }
 }
 

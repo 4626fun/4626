@@ -29,6 +29,7 @@ describe('POST /api/wallet/confirm-owner', () => {
       isOwner: true,
       canonicalCswAddress: '0x00000000000000000000000000000000000000aa',
       ownerAddress: '0x00000000000000000000000000000000000000bb',
+      confirmationState: 'owner_confirmed',
     })
 
     const req = createMockReq({
@@ -47,6 +48,7 @@ describe('POST /api/wallet/confirm-owner', () => {
       canonicalCswAddress: '0x00000000000000000000000000000000000000aa',
       ownerAddress: '0x00000000000000000000000000000000000000bb',
       txHash: '0x1234',
+      confirmationState: 'owner_confirmed',
     })
   })
 

@@ -82,6 +82,53 @@ Rules:
 - the client must not silently choose a stale linked wallet over the actually connected signer
 - canonical-smart-wallet execution must reject prepared targets that do not match the canonical CSW
 
+### Deterministic canonical fallback ladder
+
+Canonical self-auth owner install now follows one strict sequence:
+
+1. sponsored UserOp with typed-data signing (`userop_typed`)
+2. sponsored UserOp without typed-data signing (`userop_nontyped`)
+3. `wallet_sendCalls` fallback (`send_calls`)
+
+`wallet_sendCalls` keeps a compatibility retry for wallets that reject the
+`capabilities.paymasterService` payload:
+
+- first attempt includes capabilities payload
+- if rejected by wallet params validation, retry without capabilities
+
+This order is intentional and must remain deterministic.
+
+## Confirmation states
+
+`POST /api/wallet/confirm-owner` now returns `confirmationState` alongside
+`isOwner` so clients can distinguish indexing delay from terminal failures.
+
+Possible values:
+
+- `owner_confirmed` — owner is installed onchain
+- `pending_tx` — submitted tx not confirmed yet across configured Base RPCs
+- `owner_not_found_yet` — tx is confirmed/unknown but owner not indexed yet
+- `tx_failed` — tx is confirmed failed/reverted
+
+UI and retry behavior should use this state, not only `isOwner`.
+
+## Observability contract
+
+Owner approval emits one run-scoped telemetry stream using `approvalRunId`.
+
+Stage set:
+
+- `preflight`
+- `prepare`
+- `userop_typed`
+- `userop_nontyped`
+- `send_calls`
+- `confirm_owner`
+
+Each stage event records: run id, stage, status (`start|retry|success|error`),
+attempt, execution mode, signer, canonical CSW, and terminal code/message when
+available. This is the primary production debugging surface.
+
 ## Session and paymaster expectations
 
 Canonical smart-wallet mode depends on a live 4626 session for the same-origin paymaster/bundler proxy.
