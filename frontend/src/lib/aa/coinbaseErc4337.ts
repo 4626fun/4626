@@ -1773,7 +1773,8 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     typeof ownerIndexLookupAddressRaw === 'string' && isAddress(ownerIndexLookupAddressRaw)
       ? getAddress(ownerIndexLookupAddressRaw)
       : null
-  const ownerAddressForLookup = ownerIndexLookupAddress ?? ownerAddress
+  let ownerAddressForLookup = ownerIndexLookupAddress ?? ownerAddress
+  let usingExplicitOwnerLookupAddress = ownerIndexLookupAddress !== null
 
   const normalizedBundlerUrl = normalizeUrl(bundlerUrlInput)
   const paymasterUrl = normalizeUrl(paymasterUrlInput ?? bundlerUrlInput)
@@ -1835,12 +1836,33 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   let ownerIndex: number | null = ownerIndexOverride
   let ownerCount = 0
   if (ownerIndexOverride === null) {
-    const ownerLookup = await findCoinbaseSmartWalletOwnerIndex({
+    let ownerLookup = await findCoinbaseSmartWalletOwnerIndex({
       publicClient,
       smartWallet,
       ownerAddress: ownerAddressForLookup,
       useCache: !bypassOwnerIndexCache,
     })
+    if (
+      ownerLookup.ownerIndex === null &&
+      usingExplicitOwnerLookupAddress &&
+      ownerAddressForLookup.toLowerCase() !== ownerAddress.toLowerCase()
+    ) {
+      ownerAddressForLookup = ownerAddress
+      usingExplicitOwnerLookupAddress = false
+      ownerLookup = await findCoinbaseSmartWalletOwnerIndex({
+        publicClient,
+        smartWallet,
+        ownerAddress: ownerAddressForLookup,
+        useCache: !bypassOwnerIndexCache,
+      })
+      if (AA_DEBUG) {
+        logger.warn('[ERC-4337] Explicit owner lookup address is not an owner; falling back to signer address lookup', {
+          smartWallet,
+          ownerAddress,
+          ownerIndexLookupAddress,
+        })
+      }
+    }
     ownerIndex = ownerLookup.ownerIndex
     ownerCount = ownerLookup.ownerCount
     if (AA_DEBUG) {
@@ -1864,7 +1886,10 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     const ownerLooksLikeSmartWallet = ownerAddressForLookup.toLowerCase() === smartWallet.toLowerCase()
     const maxProbeOwners = 16
     const probeOwnerCount = Math.min(ownerCount, maxProbeOwners)
-    const canProbeOwnerIndex = ownerLooksLikeSmartWallet && probeOwnerCount > 0 && ownerIndexLookupAddress === null
+    const canProbeOwnerIndex =
+      ownerLooksLikeSmartWallet &&
+      probeOwnerCount > 0 &&
+      (!usingExplicitOwnerLookupAddress || ownerIndexLookupAddress === null)
     if (canProbeOwnerIndex) {
       let lastSignatureMismatch: unknown = null
       for (let probeIndex = 0; probeIndex < probeOwnerCount; probeIndex += 1) {

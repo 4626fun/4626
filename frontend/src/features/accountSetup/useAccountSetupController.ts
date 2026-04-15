@@ -959,9 +959,9 @@ export function useAccountSetupController(params: {
         canonicalCswAddress,
       })
       const preflightOwnerLookupAddress =
-        connectedCanonicalWalletSelected
+        connectedCanonicalWalletSelected && preflightPayload?.data?.privyIsOwner === true
           ? preflightPayload?.data?.privyEmbeddedEoaAddress ?? null
-          : ownerSignerAddress ?? null
+          : null
 
       emitOwnerApprovalStageEvent({
         runId: approvalRunId,
@@ -1114,7 +1114,7 @@ export function useAccountSetupController(params: {
         setNotice('Rabby address is already an owner.')
         return
       }
-      await sendPreparedOwnerTx(preparePayload.data.txRequest, normalized, normalized)
+      await sendPreparedOwnerTx(preparePayload.data.txRequest, normalized, null)
       setNotice('Rabby co-owner added.')
       await loadMe({ showSpinner: false })
     } catch (rabbyError: any) {
