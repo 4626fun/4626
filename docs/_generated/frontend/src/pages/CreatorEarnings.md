@@ -12,7 +12,7 @@
 
 > **CreatorEarnings**(): `Element`
 
-Defined in: [src/pages/CreatorEarnings.tsx:93](https://github.com/wenakita/4626/blob/main/frontend/src/pages/CreatorEarnings.tsx#L93)
+Defined in: [src/pages/CreatorEarnings.tsx:94](https://github.com/wenakita/4626/blob/main/frontend/src/pages/CreatorEarnings.tsx#L94)
 
 #### Returns
 

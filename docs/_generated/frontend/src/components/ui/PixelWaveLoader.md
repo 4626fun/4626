@@ -60,7 +60,7 @@ Defined in: [src/components/ui/PixelWaveLoader.tsx:14](https://github.com/wenaki
 
 ### PixelWavePreset
 
-> **PixelWavePreset** = `"wave-lr"` \| `"wave-rl"` \| `"wave-tb"` \| `"wave-bt"` \| `"wave-diag"`
+> **PixelWavePreset** = `"wave-lr"` \| `"wave-rl"` \| `"wave-tb"` \| `"wave-bt"` \| `"wave-diag"` \| `"wave-orbit-cw"`
 
 Defined in: [src/components/ui/PixelWaveLoader.tsx:10](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/PixelWaveLoader.tsx#L10)
 
@@ -70,7 +70,7 @@ Defined in: [src/components/ui/PixelWaveLoader.tsx:10](https://github.com/wenaki
 
 > **PixelWaveLoader**(`__namedParameters`): `Element`
 
-Defined in: [src/components/ui/PixelWaveLoader.tsx:95](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/PixelWaveLoader.tsx#L95)
+Defined in: [src/components/ui/PixelWaveLoader.tsx:112](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/PixelWaveLoader.tsx#L112)
 
 #### Parameters
 

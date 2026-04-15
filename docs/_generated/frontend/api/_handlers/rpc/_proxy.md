@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/rpc/\_proxy.ts:513](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/rpc/_proxy.ts#L513)
+Defined in: [api/\_handlers/rpc/\_proxy.ts:550](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/rpc/_proxy.ts#L550)
 
 #### Parameters
 

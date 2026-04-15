@@ -43,6 +43,7 @@ import {
 import { ensureCreatorWalletsSchema } from '../../server/_lib/creatorWallets.js'
 import { getActiveDeploySessionForSender, getDeploySessionByTokenHash, hashDeployToken, signDeployToken } from '../../server/_lib/deploySessions.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/supabaseAdmin.js'
+import { resolvePersistedWalletIdentity } from '../../server/_lib/canonicalWalletResolver.js'
 
 
 import {
@@ -1250,6 +1251,7 @@ export async function validateSponsoredSmartWalletCalls(params: {
   sessionAddress: Address
   calls: Array<{ to: Address; value: bigint; data: Hex }>
   deploySessionOwner?: Address | null
+  canonicalEmbeddedOwner?: Address | null
   allowCleanupOnlyForInactiveDeploySession?: boolean
   initCode?: Hex | null
   factory?: Address | null
@@ -1317,6 +1319,7 @@ export async function validateSponsoredSmartWalletCalls(params: {
     sessionAddress: params.sessionAddress,
     callData,
     deploySessionOwner,
+    canonicalEmbeddedOwner: params.canonicalEmbeddedOwner ?? null,
     debug: params.debug,
   })
   if (validated.mode !== 'deploy_session_setup') {
@@ -1369,6 +1372,39 @@ function isHexString(v: unknown): v is Hex {
 
 function getSelector(data: Hex): string {
   return data.length >= 10 ? data.slice(0, 10).toLowerCase() : ''
+}
+
+async function resolveCanonicalEmbeddedOwnerForSender(params: {
+  sessionAddress: Address
+  sender: Address
+  calls: Array<{ target?: Address; to?: Address; data: Hex }>
+}): Promise<Address | null> {
+  const hasAddOwnerSelfCall = params.calls.some(
+    (call) => {
+      const callTarget = call.target ?? call.to
+      return !!callTarget && getAddress(callTarget) === params.sender && getSelector(call.data) === SELECTOR_CSW_ADD_OWNER_ADDRESS
+    },
+  )
+  if (!hasAddOwnerSelfCall) return null
+
+  const resolveEmbeddedOwner = (identity: Awaited<ReturnType<typeof resolvePersistedWalletIdentity>>): Address | null => {
+    if (!identity?.canonicalSmartWallet || !identity.embeddedEoa) return null
+    try {
+      const canonical = getAddress(identity.canonicalSmartWallet)
+      if (canonical !== params.sender) return null
+      return getAddress(identity.embeddedEoa)
+    } catch {
+      return null
+    }
+  }
+
+  // Prefer sender-bound identity (canonical CSW), then fall back to session identity.
+  const senderIdentity = await resolvePersistedWalletIdentity(params.sender)
+  const senderBoundEmbeddedOwner = resolveEmbeddedOwner(senderIdentity)
+  if (senderBoundEmbeddedOwner) return senderBoundEmbeddedOwner
+
+  const sessionIdentity = await resolvePersistedWalletIdentity(params.sessionAddress)
+  return resolveEmbeddedOwner(sessionIdentity)
 }
 
 function assertCanonicalSwapRouterExecuteEncoding(data: Hex): void {
@@ -1780,6 +1816,7 @@ async function validateInnerCalls(params: {
   sessionAddress: Address
   callData: Hex
   deploySessionOwner?: Address | null
+  canonicalEmbeddedOwner?: Address | null
   debug?: (info: {
     deployer: Address
     storeEnv: Address | null
@@ -2635,20 +2672,30 @@ async function validateInnerCalls(params: {
               includeExpired: allowInactiveForCleanup,
               includeFailed: allowInactiveForCleanup,
             })
-      if (!ds?.sessionSigner || !isAddress(ds.sessionSigner)) throw new Error('deploy_session_missing')
+      const deploySessionSigner = ds?.sessionSigner && isAddress(ds.sessionSigner) ? getAddress(ds.sessionSigner as Address) : null
+      const canonicalEmbeddedOwner =
+        params.canonicalEmbeddedOwner && isAddress(params.canonicalEmbeddedOwner)
+          ? getAddress(params.canonicalEmbeddedOwner)
+          : null
 
       if (decodedSelf.functionName === 'addOwnerAddress') {
-        const sessionSigner = getAddress(ds.sessionSigner as Address)
         const ownerArg = getAddress(decodedSelf.args[0] as Address)
-        if (ownerArg !== sessionSigner) throw new Error('deploy_session_owner_mismatch')
+        if (deploySessionSigner) {
+          if (ownerArg !== deploySessionSigner) throw new Error('deploy_session_owner_mismatch')
+        } else if (canonicalEmbeddedOwner) {
+          if (ownerArg !== canonicalEmbeddedOwner) throw new Error('canonical_embedded_owner_mismatch')
+        } else {
+          throw new Error('deploy_session_missing')
+        }
         const client = await getBaseClient()
-        const ownerCode = await client.getBytecode({ address: sessionSigner })
+        const ownerCode = await client.getBytecode({ address: ownerArg })
         if (ownerCode && ownerCode !== '0x') throw new Error('contract_owner_not_allowed')
         continue
       }
       if (decodedSelf.functionName === 'removeOwnerAtIndex') {
+        if (!deploySessionSigner) throw new Error('deploy_session_missing')
         const ownerBytes = decodedSelf.args[1] as Hex
-        const expected = asOwnerBytes(getAddress(ds.sessionSigner as Address))
+        const expected = asOwnerBytes(deploySessionSigner)
         if (String(ownerBytes).toLowerCase() !== String(expected).toLowerCase()) throw new Error('deploy_session_owner_mismatch')
         continue
       }
@@ -3126,6 +3173,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       let sessionAddress: Address | null = null
       let deploySessionOwner: Address | null = null
+      let canonicalEmbeddedOwner: Address | null = null
       let allowCleanupOnlyForInactiveDeploySession = false
 
       if (principalAddress) {
@@ -3159,11 +3207,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const factory = typeof factoryRaw === 'string' && isAddress(factoryRaw) ? getAddress(factoryRaw) : null
       const factoryData = isHexString(factoryDataRaw) ? (factoryDataRaw as Hex) : null
       const calls = decodeSmartWalletInnerCalls(callDataRaw as Hex)
+      if (sessionAddress && !deploySessionOwner) {
+        canonicalEmbeddedOwner = await resolveCanonicalEmbeddedOwnerForSender({
+          sessionAddress,
+          sender,
+          calls,
+        }).catch(() => null)
+      }
       const validated = await validateSponsoredSmartWalletCalls({
         sender,
         sessionAddress,
         calls,
         deploySessionOwner,
+        canonicalEmbeddedOwner,
         allowCleanupOnlyForInactiveDeploySession,
         initCode,
         factory,

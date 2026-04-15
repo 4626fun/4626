@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/zora/\_metrics.ts:326](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/_metrics.ts#L326)
+Defined in: [api/\_handlers/zora/\_metrics.ts:360](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/zora/_metrics.ts#L360)
 
 #### Parameters
 

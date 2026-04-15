@@ -70,6 +70,7 @@ type WaitlistStatsData = {
 
 const HANDOFF_QUERY_KEY = 'cv_handoff'
 const FLOW_TIMEOUT_MS = 20_000
+const WAITLIST_EASE: [number, number, number, number] = [0.4, 0, 0.2, 1]
 
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return new Promise((resolve, reject) => {
@@ -248,7 +249,7 @@ function WaitlistAuthStep(props: {
   const stagger = (i: number) => ({
     initial: { opacity: 0, y: 12 },
     animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.22, delay: 0.1 + i * 0.06, ease: [0.4, 0, 0.2, 1] },
+    transition: { duration: 0.22, delay: 0.1 + i * 0.06, ease: WAITLIST_EASE },
   })
 
   return (
@@ -257,7 +258,7 @@ function WaitlistAuthStep(props: {
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0, y: -6 }}
-      transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+      transition={{ duration: 0.22, ease: WAITLIST_EASE }}
       className="relative flex min-h-[460px] items-center justify-center py-12 sm:py-20"
     >
       {/* dot grid texture — Base brand pattern */}
@@ -299,7 +300,7 @@ function WaitlistAuthStep(props: {
         <motion.div
           initial={{ opacity: 0, scale: 0.85 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.24, ease: [0.4, 0, 0.2, 1] }}
+          transition={{ duration: 0.24, ease: WAITLIST_EASE }}
           className="mx-auto flex items-center justify-center"
         >
           <PixelWaveLoader name="flow" size={44} color="rgb(var(--brand-primary))" />
@@ -1106,7 +1107,7 @@ export function WaitlistFlow(props: {
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0 }}
-            transition={{ duration: 0.22, ease: [0.4, 0, 0.2, 1] }}
+            transition={{ duration: 0.22, ease: WAITLIST_EASE }}
           >
             <WaitlistSetupWorkspace
               initialAccount={account}

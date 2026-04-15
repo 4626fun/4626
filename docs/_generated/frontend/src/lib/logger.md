@@ -12,7 +12,7 @@
 
 > `const` **logger**: `object`
 
-Defined in: [src/lib/logger.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/lib/logger.ts#L17)
+Defined in: [src/lib/logger.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/logger.ts#L19)
 
 #### Type Declaration
 

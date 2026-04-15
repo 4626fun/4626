@@ -126,7 +126,7 @@ Defined in: [server/\_lib/deploySessions.ts:47](https://github.com/wenakita/4626
 
 > **getActiveDeploySessionForSender**(`params`): `Promise`\<[`DeploySessionRecord`](#deploysessionrecord) \| `null`\>
 
-Defined in: [server/\_lib/deploySessions.ts:214](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploySessions.ts#L214)
+Defined in: [server/\_lib/deploySessions.ts:217](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploySessions.ts#L217)
 
 #### Parameters
 
@@ -164,7 +164,7 @@ Intended for cleanup-only flows (removing the temporary owner).
 
 > **getDeploySessionById**(`id`): `Promise`\<[`DeploySessionRecord`](#deploysessionrecord) \| `null`\>
 
-Defined in: [server/\_lib/deploySessions.ts:196](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploySessions.ts#L196)
+Defined in: [server/\_lib/deploySessions.ts:199](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploySessions.ts#L199)
 
 #### Parameters
 
@@ -182,7 +182,7 @@ Defined in: [server/\_lib/deploySessions.ts:196](https://github.com/wenakita/462
 
 > **getDeploySessionByTokenHash**(`tokenHash`): `Promise`\<[`DeploySessionRecord`](#deploysessionrecord) \| `null`\>
 
-Defined in: [server/\_lib/deploySessions.ts:205](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploySessions.ts#L205)
+Defined in: [server/\_lib/deploySessions.ts:208](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploySessions.ts#L208)
 
 #### Parameters
 
@@ -314,7 +314,7 @@ Defined in: [server/\_lib/deploySessions.ts:131](https://github.com/wenakita/462
 
 > **transitionDeploySession**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/deploySessions.ts:324](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploySessions.ts#L324)
+Defined in: [server/\_lib/deploySessions.ts:327](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploySessions.ts#L327)
 
 #### Parameters
 
@@ -358,7 +358,7 @@ Defined in: [server/\_lib/deploySessions.ts:324](https://github.com/wenakita/462
 
 > **updateDeploySession**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/deploySessions.ts:279](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploySessions.ts#L279)
+Defined in: [server/\_lib/deploySessions.ts:282](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploySessions.ts#L282)
 
 #### Parameters
 

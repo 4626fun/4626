@@ -12,7 +12,7 @@
 
 > `const` **\_\_testables**: `object`
 
-Defined in: [api/\_handlers/token/\_image.ts:2703](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_image.ts#L2703)
+Defined in: [api/\_handlers/token/\_image.ts:2712](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/token/_image.ts#L2712)
 
 #### Type Declaration
 

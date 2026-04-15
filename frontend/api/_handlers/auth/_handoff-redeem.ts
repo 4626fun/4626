@@ -70,6 +70,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   // FIX: FINDING-04 — enforce both per-IP and global rate limits to resist distributed brute-force.
   if (!checkGlobalHandoffRateLimit()) {
+    const retryAfterSeconds = Math.max(1, Math.ceil((globalHandoffWindowResetAt - Date.now()) / 1000))
+    res.setHeader('Retry-After', String(retryAfterSeconds))
     return res.status(429).json({ success: false, error: 'Too many requests' } satisfies ApiEnvelope<never>)
   }
 

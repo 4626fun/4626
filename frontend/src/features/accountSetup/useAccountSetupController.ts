@@ -287,7 +287,7 @@ export function useAccountSetupController(params: {
     if (result.ok) return true
     const reason = result.reason ?? 'unknown_session_bootstrap_failure'
     throw new Error(`Paymaster session bootstrap failed: ${reason}`)
-  }, [connectedAddress, getAccessToken, siwe])
+  }, [getAccessToken, siwe])
 
   const loadMe = useCallback(
     async (options?: { showSpinner?: boolean }) => {

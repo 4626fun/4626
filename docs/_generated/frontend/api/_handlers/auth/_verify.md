@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/auth/\_verify.ts:47](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/auth/_verify.ts#L47)
+Defined in: [api/\_handlers/auth/\_verify.ts:49](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/auth/_verify.ts#L49)
 
 #### Parameters
 

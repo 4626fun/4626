@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { decodeFunctionData, encodeFunctionData, getAddress } from 'viem'
 
-import paymasterHandler from '../_handlers/_paymaster.ts'
+import paymasterHandler, { validateSponsoredSmartWalletCalls } from '../_handlers/_paymaster.ts'
 import { createMockReq, createMockRes } from './helpers'
 import { applyEnv } from './helpers'
 
@@ -39,6 +39,9 @@ const getApiContractsMock = vi.fn()
 const isDbConfiguredMock = vi.fn()
 const isSupabaseAdminConfiguredMock = vi.fn()
 const readJsonBodyMock = vi.fn()
+const resolvePersistedWalletIdentityMock = vi.fn()
+const loggerWarnMock = vi.fn()
+const loggerErrorMock = vi.fn()
 
 const mockReadContract = vi.fn()
 const mockGetBytecode = vi.fn()
@@ -84,7 +87,11 @@ vi.mock('../../server/_lib/coinParties.js', () => ({
 }))
 
 vi.mock('../../server/_lib/logger.js', () => ({
-  logger: { warn: vi.fn(), error: vi.fn() },
+  logger: { warn: (...args: unknown[]) => loggerWarnMock(...args), error: (...args: unknown[]) => loggerErrorMock(...args) },
+}))
+
+vi.mock('../../server/_lib/canonicalWalletResolver.js', () => ({
+  resolvePersistedWalletIdentity: (...args: unknown[]) => resolvePersistedWalletIdentityMock(...args),
 }))
 
 vi.mock('../../src/deploy/bytecode.generated.js', () => ({
@@ -140,6 +147,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
 
     readRequestPrincipalMock.mockReturnValue(sessionAddress)
     getActiveDeploySessionMock.mockResolvedValue({ sessionSigner })
+    resolvePersistedWalletIdentityMock.mockResolvedValue(null)
     getApiContractsMock.mockReturnValue({
       creatorVaultBatcher: '0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753',
       vaultActivationBatcher: '0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB',
@@ -331,7 +339,7 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
       },
     ] as const
 
-    // A deploy session is required to bind the owner being added.
+    // Without deploy-session binding or canonical embedded-owner binding, sponsorship is denied.
     getActiveDeploySessionMock.mockResolvedValueOnce(null)
     readRequestPrincipalMock.mockReturnValue(sender)
 
@@ -377,6 +385,157 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
     const errMsg = String(responseBody?.error?.message ?? '')
     expect(errMsg).toMatch(/deploy_session_missing/i)
+  })
+
+  it('accepts addOwnerAddress self-call when owner matches canonical persisted embedded EOA without deploy session', async () => {
+    const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
+      {
+        type: 'function',
+        name: 'addOwnerAddress',
+        stateMutability: 'nonpayable',
+        inputs: [{ name: 'owner', type: 'address' }],
+        outputs: [],
+      },
+    ] as const
+
+    const embeddedOwner = getAddress('0x4444444444444444444444444444444444444444')
+    getActiveDeploySessionMock.mockResolvedValueOnce(null)
+    mockGetBytecode.mockImplementation(async ({ address }: { address: string }) => {
+      if (String(address).toLowerCase() === embeddedOwner.toLowerCase()) return '0x'
+      return '0x1234'
+    })
+
+    const innerData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+      functionName: 'addOwnerAddress',
+      args: [embeddedOwner],
+    })
+    await expect(
+      validateSponsoredSmartWalletCalls({
+        sender,
+        sessionAddress,
+        calls: [{ to: sender, value: 0n, data: innerData }],
+        canonicalEmbeddedOwner: embeddedOwner,
+      }),
+    ).resolves.toMatchObject({
+      expectedCreatorToken: null,
+      mode: 'deploy_session_setup',
+    })
+  })
+
+  it('accepts handler addOwnerAddress self-call when canonical embedded owner resolves from sender identity', async () => {
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+        outputs: [],
+      },
+    ] as const
+    const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
+      {
+        type: 'function',
+        name: 'addOwnerAddress',
+        stateMutability: 'nonpayable',
+        inputs: [{ name: 'owner', type: 'address' }],
+        outputs: [],
+      },
+    ] as const
+
+    const embeddedOwner = getAddress('0x6666666666666666666666666666666666666666')
+    getActiveDeploySessionMock.mockResolvedValueOnce(null)
+    readRequestPrincipalMock.mockReturnValue(sessionAddress)
+    resolvePersistedWalletIdentityMock.mockImplementation(async (address: string) => {
+      if (String(address).toLowerCase() === sender.toLowerCase()) {
+        return {
+          canonicalSmartWallet: sender,
+          embeddedEoa: embeddedOwner,
+        }
+      }
+      return null
+    })
+    mockGetBytecode.mockImplementation(async ({ address }: { address: string }) => {
+      if (String(address).toLowerCase() === embeddedOwner.toLowerCase()) return '0x'
+      return '0x1234'
+    })
+
+    const innerData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+      functionName: 'addOwnerAddress',
+      args: [embeddedOwner],
+    })
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'execute',
+      args: [sender, 0n, innerData],
+    })
+
+    const userOp = {
+      sender,
+      callData,
+      initCode: '0x',
+    }
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [userOp, ENTRYPOINT_V06, 8453],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    expect(resolvePersistedWalletIdentityMock).toHaveBeenCalledWith(sender)
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).not.toMatch(/request denied/i)
+    expect(errMsg).not.toMatch(/deploy_session_missing/i)
+    const hasDeploySessionMissingWarn = loggerWarnMock.mock.calls.some(
+      (call) => call?.[0] === '[paymaster-proxy] validation denied' && (call?.[1] as { msg?: string } | undefined)?.msg === 'deploy_session_missing',
+    )
+    expect(hasDeploySessionMissingWarn).toBe(false)
+  })
+
+  it('rejects addOwnerAddress self-call when canonical embedded-owner binding mismatches owner arg', async () => {
+    const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
+      {
+        type: 'function',
+        name: 'addOwnerAddress',
+        stateMutability: 'nonpayable',
+        inputs: [{ name: 'owner', type: 'address' }],
+        outputs: [],
+      },
+    ] as const
+
+    const embeddedOwner = getAddress('0x4444444444444444444444444444444444444444')
+    const mismatchedOwner = getAddress('0x5555555555555555555555555555555555555555')
+    getActiveDeploySessionMock.mockResolvedValueOnce(null)
+
+    const innerData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+      functionName: 'addOwnerAddress',
+      args: [mismatchedOwner],
+    })
+    await expect(
+      validateSponsoredSmartWalletCalls({
+        sender,
+        sessionAddress,
+        calls: [{ to: sender, value: 0n, data: innerData }],
+        canonicalEmbeddedOwner: embeddedOwner,
+      }),
+    ).rejects.toThrow(/canonical_embedded_owner_mismatch/i)
   })
 
   it('rejects sponsored calls when sender provenance is not a Coinbase smart wallet implementation', async () => {

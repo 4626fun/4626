@@ -89,7 +89,6 @@ export function AccountSetupWorkspaceView(props: {
     ownerPrimaryCtaLabel,
     providerCollision,
     readableCswOwners,
-    retryOwnerCheck,
     zoraCrossAppCount,
     zoraHandoffUrl,
     zoraLinked,

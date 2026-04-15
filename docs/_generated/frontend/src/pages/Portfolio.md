@@ -12,7 +12,7 @@
 
 > **Portfolio**(): `Element`
 
-Defined in: [src/pages/Portfolio.tsx:309](https://github.com/wenakita/4626/blob/main/frontend/src/pages/Portfolio.tsx#L309)
+Defined in: [src/pages/Portfolio.tsx:310](https://github.com/wenakita/4626/blob/main/frontend/src/pages/Portfolio.tsx#L310)
 
 #### Returns
 

@@ -4,6 +4,7 @@ import { BASE_EASE, DURATION, STAGGER_STEP } from './motion'
 
 const CELL_GAP = 3
 const CELL_RX = 3
+const BASE_EASE_BEZIER: [number, number, number, number] = [...BASE_EASE]
 
 type BasemarkCell = {
   x: number
@@ -63,7 +64,7 @@ export function AnimatedBasemark({
           transition={{
             duration: DURATION.standard,
             delay: cell.delay,
-            ease: BASE_EASE as unknown as number[],
+            ease: BASE_EASE_BEZIER,
           }}
           style={{ transformOrigin: `${cell.x + cell.width / 2}px ${cell.y + cell.height / 2}px` }}
         />
@@ -110,7 +111,7 @@ export function PulsingBasemark({
           transition={{
             duration: 2.4,
             delay: cell.delay,
-            ease: BASE_EASE as unknown as number[],
+            ease: BASE_EASE_BEZIER,
             times: [0, 0.25, 0.65, 1],
             repeat: Infinity,
             repeatDelay: 3,

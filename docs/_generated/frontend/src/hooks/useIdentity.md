@@ -108,7 +108,7 @@ Defined in: [src/hooks/useIdentity.ts:13](https://github.com/wenakita/4626/blob/
 
 > **pickIdentityAvatar**(`params`): `string` \| `null`
 
-Defined in: [src/hooks/useIdentity.ts:91](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useIdentity.ts#L91)
+Defined in: [src/hooks/useIdentity.ts:115](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useIdentity.ts#L115)
 
 #### Parameters
 
@@ -132,7 +132,7 @@ Defined in: [src/hooks/useIdentity.ts:91](https://github.com/wenakita/4626/blob/
 
 > **prefetchIdentities**(`addresses`): `void`
 
-Defined in: [src/hooks/useIdentity.ts:405](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useIdentity.ts#L405)
+Defined in: [src/hooks/useIdentity.ts:429](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useIdentity.ts#L429)
 
 Batch resolve — useful for pre-warming the cache
 
@@ -152,7 +152,7 @@ Batch resolve — useful for pre-warming the cache
 
 > **useIdentity**(`address`): `object`
 
-Defined in: [src/hooks/useIdentity.ts:332](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useIdentity.ts#L332)
+Defined in: [src/hooks/useIdentity.ts:356](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useIdentity.ts#L356)
 
 #### Parameters
 
