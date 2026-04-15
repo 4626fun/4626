@@ -169,22 +169,23 @@
             <!-- Right detail panel -->
             <div class="token-detail" id="coin-detail">
               <div class="detail-section-label" style="color: var(--color-text-muted);">Deposited<br>Asset</div>
-              <p class="detail-amount">12,500 AKITA</p>
+              <p class="detail-amount">1 AKITA</p>
               <p class="detail-desc">Deposited in vault. Earning fees.</p>
             </div>
-            <!-- Deposit data (appears later in journey) -->
-            <div class="deposit-info" id="deposit-info">
-              <p class="deposit-label">Initial Deposit</p>
-              <p class="deposit-amount">50,000,000</p>
-              <p class="deposit-unit">AKITA</p>
-            </div>
-            <div class="split-info" id="split-info">
-              <p class="split-deployed">90% deployed</p>
-            </div>
-            <div class="idle-badge" id="idle-badge">
-              <p class="idle-label">10% idle in vault</p>
-              <p class="idle-amount">5,000,000</p>
-            </div>
+          </div>
+
+          <!-- Deposit data — centered glass overlay (positioned in scene, not inside token-coin) -->
+          <div class="deposit-info" id="deposit-info">
+            <p class="deposit-label">Initial Deposit</p>
+            <p class="deposit-amount">50,000,000</p>
+            <p class="deposit-unit">AKITA</p>
+          </div>
+          <div class="split-info" id="split-info">
+            <p class="split-deployed">90% deployed</p>
+          </div>
+          <div class="idle-badge" id="idle-badge">
+            <p class="idle-label">10% idle in vault</p>
+            <p class="idle-amount">5,000,000</p>
           </div>
 
           <!-- MORPH ZONE: WebGL particle morph overlay (positioned between coin & share) -->
@@ -207,7 +208,7 @@
             <!-- Left detail panel -->
             <div class="token-detail" id="share-detail">
               <div class="detail-section-label" style="color: var(--color-accent);">Vault<br>Share</div>
-              <p class="detail-amount">12,500 ■AKITA</p>
+              <p class="detail-amount">1 ■AKITA</p>
               <p class="detail-desc">Held by you. Redeemable anytime for your claim on the vault.</p>
             </div>
           </div>
@@ -314,7 +315,7 @@
           <p>Deposit a creator coin. Receive a vault share.</p>
           <p>Your vault share is a redeemable claim on the vault.</p>
         </div>
-        <p class="dual-entry" id="dual-entry">At entry in this demo, 1 AKITA mints 1 ■AKITA.</p>
+        <p class="dual-entry" id="dual-entry">At entry, 1 AKITA mints 1 ■AKITA.</p>
 
         <!-- Fee label (allocation phase) -->
         <p class="fee-label" id="fee-label">Fees flow back · pro rata</p>
@@ -418,6 +419,90 @@
             </div>
           </div>
           <p class="accrue-equation" id="accrue-equation" style="display:none"></p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ╔═══ CHAPTER 3.5: SHARE TOKEN STORY — CCA AUCTION (500vh) ═══╗ -->
+    <section class="scroll-scene" id="ch-cca" data-height="500">
+      <div class="scene-pin">
+        <div class="cca-container">
+
+          <!-- Intro -->
+          <div class="cca-intro" id="cca-intro">
+            <div class="section-label">Share Token</div>
+            <p class="cca-headline" id="cca-headline">What happens with ■AKITA?</p>
+            <p class="cca-desc" id="cca-desc">Every vault begins with a Uniswap Conditional Claim Auction over 7 days. The share token is distributed to bootstrap liquidity, reward the creator, and align the community.</p>
+          </div>
+
+          <!-- Central share token icon -->
+          <div class="cca-share-icon" id="cca-share-icon">
+            <div class="cca-share-ring">
+              <img src="./assets/tokens/share/akita-512.png" alt="■AKITA" class="cca-share-img" width="80" height="80">
+            </div>
+            <span class="cca-share-label">■AKITA</span>
+          </div>
+
+          <!-- Distribution arcs / segments -->
+          <div class="cca-distribution" id="cca-distribution">
+
+            <!-- Auction segment -->
+            <div class="cca-segment" id="cca-seg-auction">
+              <div class="cca-segment-bar">
+                <div class="cca-segment-fill cca-fill-auction" id="cca-fill-auction"></div>
+              </div>
+              <div class="cca-segment-content">
+                <div class="cca-seg-header">
+                  <span class="cca-seg-pct">40%</span>
+                  <span class="cca-seg-title">CCA Auction</span>
+                </div>
+                <p class="cca-seg-desc">Auctioned over 7 days via Uniswap Conditional Claim Auction. Open to the public — anyone can bid.</p>
+                <div class="cca-seg-badge">
+                  <img src="./assets/brand/uniswap-official-pink.svg" alt="Uniswap" class="cca-seg-badge-icon">
+                  <span>Uniswap CCA</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Vesting segment -->
+            <div class="cca-segment" id="cca-seg-vesting">
+              <div class="cca-segment-bar">
+                <div class="cca-segment-fill cca-fill-vesting" id="cca-fill-vesting"></div>
+              </div>
+              <div class="cca-segment-content">
+                <div class="cca-seg-header">
+                  <span class="cca-seg-pct">40%</span>
+                  <span class="cca-seg-title">Creator Vesting</span>
+                </div>
+                <p class="cca-seg-desc">Vested to the creator over 1 year. Linearly unlocking — aligning long-term incentives.</p>
+                <div class="cca-seg-meta">
+                  <span class="cca-seg-meta-item">12-month linear vest</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Liquidity segment -->
+            <div class="cca-segment" id="cca-seg-liquidity">
+              <div class="cca-segment-bar">
+                <div class="cca-segment-fill cca-fill-liquidity" id="cca-fill-liquidity"></div>
+              </div>
+              <div class="cca-segment-content">
+                <div class="cca-seg-header">
+                  <span class="cca-seg-pct">20%</span>
+                  <span class="cca-seg-title">Liquidity</span>
+                </div>
+                <p class="cca-seg-desc">Seeded directly into the trading pool. Ensures ■AKITA is liquid and tradeable from day one.</p>
+                <div class="cca-seg-meta">
+                  <span class="cca-seg-meta-item">Protocol-owned liquidity</span>
+                </div>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Summary line -->
+          <p class="cca-summary" id="cca-summary">Deposit an asset. Yield accrues. The share token finds price discovery.</p>
+
         </div>
       </div>
     </section>

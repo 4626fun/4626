@@ -346,21 +346,61 @@ if (audioToggle) {
   const mat3 = makeBokehMaterial(0x3B82FF, 12, 0.35, FOCAL_Z);
   scene.add(new THREE.Points(geo3, mat3));
 
+  // ── Cursor tracking for magnetic repulsion field ──
   let mouseX = 0, mouseY = 0;
+  let mouseWorldX = 0, mouseWorldY = 0;
   document.addEventListener('mousemove', (e) => {
     mouseX = (e.clientX / window.innerWidth - 0.5) * 0.4;
     mouseY = (e.clientY / window.innerHeight - 0.5) * 0.4;
+    // Map mouse to world coordinates for particle repulsion
+    mouseWorldX = (e.clientX / window.innerWidth - 0.5) * 20;
+    mouseWorldY = -(e.clientY / window.innerHeight - 0.5) * 20;
   });
+
+  const REPULSION_RADIUS = 3.5;
+  const REPULSION_STRENGTH = 0.04;
 
   function updateParticles(posArr, velArr, count, bound) {
     for (let i = 0; i < count; i++) {
-      posArr[i * 3]     += velArr[i * 3];
-      posArr[i * 3 + 1] += velArr[i * 3 + 1];
-      posArr[i * 3 + 2] += velArr[i * 3 + 2];
-      if (posArr[i * 3] > bound) posArr[i * 3] = -bound;
-      if (posArr[i * 3] < -bound) posArr[i * 3] = bound;
-      if (posArr[i * 3 + 1] > bound) posArr[i * 3 + 1] = -bound;
-      if (posArr[i * 3 + 1] < -bound) posArr[i * 3 + 1] = bound;
+      const ix = i * 3;
+      const iy = i * 3 + 1;
+      const iz = i * 3 + 2;
+
+      // ── Cursor magnetic repulsion ──
+      const dx = posArr[ix] - mouseWorldX;
+      const dy = posArr[iy] - mouseWorldY;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      if (dist < REPULSION_RADIUS && dist > 0.01) {
+        const force = (1 - dist / REPULSION_RADIUS) * REPULSION_STRENGTH;
+        const nx = dx / dist;
+        const ny = dy / dist;
+        velArr[ix] += nx * force;
+        velArr[iy] += ny * force;
+      }
+
+      // Dampen velocities slightly to prevent runaway
+      velArr[ix] *= 0.995;
+      velArr[iy] *= 0.995;
+
+      posArr[ix] += velArr[ix];
+      posArr[iy] += velArr[iy];
+      posArr[iz] += velArr[iz];
+      if (posArr[ix] > bound) posArr[ix] = -bound;
+      if (posArr[ix] < -bound) posArr[ix] = bound;
+      if (posArr[iy] > bound) posArr[iy] = -bound;
+      if (posArr[iy] < -bound) posArr[iy] = bound;
+    }
+  }
+
+  // ── Apply convergence: drift particles toward center ──
+  function applyConvergence(posArr, count) {
+    const c = window.__particleConverge || 0;
+    if (c < 0.01) return;
+    const strength = c * 0.008; // gentle drift
+    for (let i = 0; i < count; i++) {
+      posArr[i * 3]     += (0 - posArr[i * 3]) * strength;
+      posArr[i * 3 + 1] += (0 - posArr[i * 3 + 1]) * strength;
+      posArr[i * 3 + 2] += (-2 - posArr[i * 3 + 2]) * strength * 0.5;
     }
   }
 
@@ -369,6 +409,12 @@ if (audioToggle) {
     updateParticles(pos1, vel1, COUNT1, 10);
     updateParticles(pos2, vel2, COUNT2, 15);
     updateParticles(pos3, vel3, COUNT3, 8);
+
+    // Particle convergence toward center (close chapter finale)
+    applyConvergence(pos1, COUNT1);
+    applyConvergence(pos2, COUNT2);
+    applyConvergence(pos3, COUNT3);
+
     geo1.attributes.position.needsUpdate = true;
     geo2.attributes.position.needsUpdate = true;
     geo3.attributes.position.needsUpdate = true;
@@ -429,8 +475,10 @@ const MorphSystem = (function initMorph() {
 
     void main() {
       float delay = aDelay * 0.3;
-      float prog = clamp((uProgress - delay) / (1.0 - delay), 0.0, 1.0);
-      prog = prog * prog * (3.0 - 2.0 * prog);
+      // Per-particle speed variation — some rush ahead, stragglers lag behind
+      float speedMult = 0.6 + aRandom * 0.8; // range 0.6x to 1.4x
+      float rawProg = clamp((uProgress * speedMult - delay) / (1.0 - delay), 0.0, 1.0);
+      float prog = rawProg * rawProg * (3.0 - 2.0 * rawProg);
 
       float explode = sin(prog * 3.14159);
       float noiseX = sin(aRandom * 47.3 + uTime * 2.0) * explode * 0.35;
@@ -600,11 +648,12 @@ document.querySelectorAll('.scroll-scene').forEach(scene => {
 // ────────────────────────────────────────────
 // 4. SCROLL PROGRESS BAR
 // ────────────────────────────────────────────
+// ── Vertical scroll progress line (left edge) ──
 const progressBar = document.getElementById('scroll-progress');
 window.addEventListener('scroll', () => {
   const h = document.documentElement.scrollHeight - window.innerHeight;
   const pct = h > 0 ? (window.scrollY / h) * 100 : 0;
-  progressBar.style.width = `${pct}%`;
+  progressBar.style.height = `${pct}%`;
 }, { passive: true });
 
 // ────────────────────────────────────────────
@@ -704,6 +753,7 @@ function multiMapSmooth(progress, stops, values) {
     opacity: 1, y: 0, duration: 0.8
   }, 0.4);
 
+  // ── Hero text staggered clip-path reveal ──
   chars.forEach((char, i) => {
     const wordIndex = parseInt(char.closest('.hero-word').dataset.word);
     const wordDelay = wordIndex * 0.22;
@@ -711,9 +761,10 @@ function multiMapSmooth(progress, stops, values) {
       opacity: 1,
       y: 0,
       rotateX: 0,
-      duration: 0.6,
+      clipPath: 'inset(0 0 0% 0)',
+      duration: 0.7,
       ease: 'power4.out',
-    }, 0.6 + wordDelay + i * 0.028);
+    }, 0.6 + wordDelay + i * 0.032);
   });
 
   entrance.to(headlineGlow, {
@@ -1253,6 +1304,7 @@ function multiMapSmooth(progress, stops, values) {
 
   // State
   let drawProgress = 0; // 0-1 how much of curve is drawn
+  let displayedRatio = 1.0; // Smoothly animated ratio display
   let animTime = 0;
   let isActive = false;
 
@@ -1397,14 +1449,20 @@ function multiMapSmooth(progress, stops, values) {
 
       const clampedRatio = ratioAtDay(currentDay);
 
+      // ── Smooth ratio tick-up animation ──
+      // Interpolate displayed ratio toward target for organic counter feel
+      displayedRatio += (clampedRatio - displayedRatio) * 0.12;
+      // Snap if very close to avoid perpetual floating
+      if (Math.abs(displayedRatio - clampedRatio) < 0.0005) displayedRatio = clampedRatio;
+
       // Rolling 7-day APY for organic feel
       let apy = apyAtDay(currentDay);
 
       statDays.textContent = currentDay;
-      statRatio.textContent = clampedRatio.toFixed(3);
+      statRatio.textContent = displayedRatio.toFixed(3);
       statApy.textContent = `${apy.toFixed(1)}%`;
-      if (equation) equation.textContent = `1 ■AKITA = ${clampedRatio.toFixed(3)} AKITA`;
-      if (ratioValue) ratioValue.textContent = clampedRatio.toFixed(3);
+      if (equation) equation.textContent = `1 ■AKITA = ${displayedRatio.toFixed(3)} AKITA`;
+      if (ratioValue) ratioValue.textContent = displayedRatio.toFixed(3);
 
       // Position + activate callouts
       positionCallouts();
@@ -1421,6 +1479,92 @@ function multiMapSmooth(progress, stops, values) {
           ms.chimed = false;
         }
       });
+    }
+  });
+})();
+
+// ────────────────────────────────────────────
+// 8.5. CHAPTER 3.5: CCA AUCTION — SHARE TOKEN STORY (500vh)
+// ────────────────────────────────────────────
+(function chapterCCA() {
+  const section = document.getElementById('ch-cca');
+  if (!section) return;
+
+  const intro = document.getElementById('cca-intro');
+  const shareIcon = document.getElementById('cca-share-icon');
+  const distribution = document.getElementById('cca-distribution');
+  const segAuction = document.getElementById('cca-seg-auction');
+  const segVesting = document.getElementById('cca-seg-vesting');
+  const segLiquidity = document.getElementById('cca-seg-liquidity');
+  const fillAuction = document.getElementById('cca-fill-auction');
+  const fillVesting = document.getElementById('cca-fill-vesting');
+  const fillLiquidity = document.getElementById('cca-fill-liquidity');
+  const summary = document.getElementById('cca-summary');
+  const ccaContainer = document.querySelector('.cca-container');
+
+  let ccaChimePlayed = false;
+
+  ScrollTrigger.create({
+    trigger: section,
+    start: 'top top',
+    end: 'bottom top',
+    onUpdate: (self) => {
+      const p = self.progress;
+      const vh = window.innerHeight;
+
+      // Audio: ambient drone during CCA chapter
+      AudioEngine.setDroneLevel(multiMap(p, [0, 0.08, 0.60, 0.90], [0.02, 0.06, 0.06, 0.01]));
+
+      // Scene entrance/exit
+      const sceneOp = multiMapSmooth(p, [0, 0.08, 0.88, 0.97], [0, 1, 1, 0]);
+      section.querySelector('.scene-pin').style.opacity = sceneOp;
+
+      // ── Vertical drift: content scrolls upward as user scrolls ──
+      const driftY = multiMapSmooth(p, [0.15, 0.80], [0, -vh * 0.35]);
+      ccaContainer.style.transform = `translate(-50%, -50%) translateY(${driftY}px)`;
+
+      // ── Intro ──
+      const introOp = multiMapSmooth(p, [0.04, 0.12, 0.30, 0.42], [0, 1, 1, 0]);
+      const introY = multiMapSmooth(p, [0.04, 0.14], [20, 0]);
+      intro.style.opacity = introOp;
+      intro.style.transform = `translateY(${introY}px)`;
+
+      // ── Share token icon ──
+      const iconOp = multiMapSmooth(p, [0.08, 0.16, 0.75, 0.85], [0, 1, 1, 0]);
+      const iconScale = multiMapSmooth(p, [0.08, 0.18], [0.7, 1]);
+      shareIcon.style.opacity = iconOp;
+      shareIcon.style.transform = `scale(${iconScale})`;
+
+      // Audio: chime when icon appears
+      if (p >= 0.14 && p <= 0.16 && !ccaChimePlayed) {
+        AudioEngine.playChime(1.2);
+        ccaChimePlayed = true;
+      }
+      if (p < 0.10 || p > 0.25) ccaChimePlayed = false;
+
+      // ── Distribution container ──
+      distribution.style.opacity = multiMapSmooth(p, [0.16, 0.22], [0, 1]);
+
+      // ── Segment 1: CCA Auction (40%) ──
+      const seg1T = multiMapSmooth(p, [0.20, 0.34], [0, 1]);
+      segAuction.style.opacity = seg1T;
+      segAuction.style.transform = `translateY(${(1 - seg1T) * 20}px)`;
+      fillAuction.style.width = `${seg1T * 40}%`;
+
+      // ── Segment 2: Creator Vesting (40%) ──
+      const seg2T = multiMapSmooth(p, [0.34, 0.48], [0, 1]);
+      segVesting.style.opacity = seg2T;
+      segVesting.style.transform = `translateY(${(1 - seg2T) * 20}px)`;
+      fillVesting.style.width = `${seg2T * 40}%`;
+
+      // ── Segment 3: Liquidity (20%) ──
+      const seg3T = multiMapSmooth(p, [0.48, 0.62], [0, 1]);
+      segLiquidity.style.opacity = seg3T;
+      segLiquidity.style.transform = `translateY(${(1 - seg3T) * 20}px)`;
+      fillLiquidity.style.width = `${seg3T * 20}%`;
+
+      // ── Summary ──
+      summary.style.opacity = multiMapSmooth(p, [0.64, 0.74, 0.85, 0.93], [0, 1, 1, 0]);
     }
   });
 })();
@@ -1454,13 +1598,19 @@ function multiMapSmooth(progress, stops, values) {
       section.querySelector('.scene-pin').style.opacity = sceneOp;
       section.querySelector('.vaults-container').style.transform = `translateY(${sceneY}px)`;
 
+      // ── Vault cards — dramatic staggered entrance with scale + rotation ──
       cards.forEach((card, i) => {
-        const start = 0.14 + i * 0.08;
-        const end = 0.30 + i * 0.08;
-        const op = mapRange(p, start, end, 0, 1);
-        const y = mapRange(p, start, end, 30, 0);
+        const start = 0.12 + i * 0.10;
+        const end = 0.30 + i * 0.10;
+        const t = Math.max(0, Math.min(1, (p - start) / (end - start)));
+        // Smooth ease-out cubic
+        const eased = 1 - Math.pow(1 - t, 3);
+        const op = eased;
+        const y = (1 - eased) * 60;
+        const scale = 0.92 + eased * 0.08;
+        const rotX = (1 - eased) * 8;
         card.style.opacity = Math.min(1, Math.max(0, op));
-        card.style.transform = `translateY(${Math.max(0, y)}px)`;
+        card.style.transform = `translateY(${Math.max(0, y)}px) scale(${scale}) perspective(800px) rotateX(${rotX}deg)`;
       });
 
       cta.style.opacity = multiMapSmooth(p, [0.56, 0.70], [0, 1]);
@@ -1479,6 +1629,8 @@ function multiMapSmooth(progress, stops, values) {
   const line = document.getElementById('close-line');
   const cta = document.getElementById('close-cta');
   const tag = document.getElementById('close-tag');
+  const closeLogo = document.querySelector('.close-logo');
+  let closeSoundPlayed = false;
 
   ScrollTrigger.create({
     trigger: section,
@@ -1502,6 +1654,91 @@ function multiMapSmooth(progress, stops, values) {
 
       cta.style.opacity = multiMapSmooth(p, [0.40, 0.56], [0, 1]);
       tag.style.opacity = multiMapSmooth(p, [0.52, 0.66], [0, 1]);
+
+      // ── Close chapter: particle convergence effect ──
+      // Scale particles toward center as user reaches the end
+      const converge = multiMapSmooth(p, [0.50, 0.90], [0, 1]);
+      if (closeLogo) {
+        const logoGlow = converge * 0.4;
+        closeLogo.style.filter = `drop-shadow(0 0 ${20 + converge * 40}px rgba(0, 82, 255, ${logoGlow}))`;
+        closeLogo.style.transform = `scale(${1 + converge * 0.08})`;
+      }
+      // Chime at convergence peak
+      if (p >= 0.85 && !closeSoundPlayed) {
+        AudioEngine.playChime(2.0);
+        closeSoundPlayed = true;
+      }
+      if (p < 0.80) closeSoundPlayed = false;
     }
+  });
+})();
+
+// ────────────────────────────────────────────
+// 11. VAULT CARD 3D TILT ON HOVER
+// ────────────────────────────────────────────
+(function initVaultCardTilt() {
+  const cards = document.querySelectorAll('.vault-card');
+  const MAX_TILT = 12; // degrees
+
+  cards.forEach(card => {
+    card.addEventListener('mousemove', (e) => {
+      const rect = card.getBoundingClientRect();
+      const x = (e.clientX - rect.left) / rect.width - 0.5;
+      const y = (e.clientY - rect.top) / rect.height - 0.5;
+      const rotY = x * MAX_TILT;
+      const rotX = -y * MAX_TILT;
+      card.style.transform = `perspective(800px) rotateX(${rotX}deg) rotateY(${rotY}deg) scale(1.02)`;
+    });
+
+    card.addEventListener('mouseleave', () => {
+      card.style.transform = 'perspective(800px) rotateX(0deg) rotateY(0deg) scale(1)';
+    });
+  });
+})();
+
+// ────────────────────────────────────────────
+// 12. ENHANCED SOUND DESIGN — Additional audio wiring
+// ────────────────────────────────────────────
+(function enhancedAudio() {
+  // Bass pulse on CTA hover
+  document.querySelectorAll('.cta-button, .enter-vaults-btn, .nav-btn').forEach(btn => {
+    btn.addEventListener('mouseenter', () => {
+      AudioEngine.playSoftImpact();
+    });
+  });
+
+  // Chime when vault cards enter view (triggered once)
+  let vaultChimePlayed = false;
+  const vaultsSection = document.getElementById('ch-vaults');
+  if (vaultsSection) {
+    const obs = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting && !vaultChimePlayed) {
+          AudioEngine.playChime(0.8);
+          vaultChimePlayed = true;
+        }
+      });
+    }, { threshold: 0.15 });
+    obs.observe(vaultsSection);
+  }
+})();
+
+// ────────────────────────────────────────────
+// 13. PARTICLE CONVERGENCE — Three.js particles drift to center at close
+// ────────────────────────────────────────────
+// Expose convergence factor as global for the Three.js particle loop to read
+window.__particleConverge = 0;
+(function trackConvergence() {
+  const closeSection = document.getElementById('ch-close');
+  if (!closeSection) return;
+  ScrollTrigger.create({
+    trigger: closeSection,
+    start: 'top top',
+    end: 'bottom top',
+    onUpdate: (self) => {
+      window.__particleConverge = multiMapSmooth(self.progress, [0.40, 0.90], [0, 1]);
+    },
+    onLeave: () => { window.__particleConverge = 0; },
+    onLeaveBack: () => { window.__particleConverge = 0; },
   });
 })();
