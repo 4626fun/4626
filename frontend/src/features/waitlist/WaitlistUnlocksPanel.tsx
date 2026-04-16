@@ -1,4 +1,5 @@
-import { Check, Sparkles, TrendingUp } from 'lucide-react'
+import { ArrowUpRight, Check, Sparkles, TrendingUp } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 import type { AccountScore } from '@/features/accountSetup/types'
 import { ReferralShareBlock } from './ReferralShareBlock'
@@ -128,20 +129,41 @@ export function WaitlistUnlocksPanel({ score, email, className = '' }: WaitlistU
         <div className="pt-2 border-t border-white/5">
           <div className="bv-kicker text-zinc-400 mb-1.5">Earn more points</div>
           <ul className="space-y-1">
-            {POINT_SUGGESTIONS.slice(0, 4).map((suggestion) => (
-              <li
-                key={suggestion.label}
-                className="flex items-center justify-between gap-3 text-[11px]"
-              >
-                <span className="text-zinc-300 truncate">{suggestion.label}</span>
+            {POINT_SUGGESTIONS.slice(0, 4).map((suggestion) => {
+              const pointsNode = (
                 <span className="shrink-0 tabular-nums text-zinc-500">
                   +{suggestion.points}
                   {suggestion.hint ? (
                     <span className="ml-1 text-zinc-600">· {suggestion.hint}</span>
                   ) : null}
                 </span>
-              </li>
-            ))}
+              )
+              if (suggestion.to) {
+                return (
+                  <li key={suggestion.label}>
+                    <Link
+                      to={suggestion.to}
+                      className="group flex items-center justify-between gap-3 text-[11px] rounded-md -mx-1.5 px-1.5 py-1 transition-colors hover:bg-white/5"
+                    >
+                      <span className="flex items-center gap-1 text-zinc-300 truncate">
+                        <span className="truncate">{suggestion.label}</span>
+                        <ArrowUpRight className="w-3 h-3 shrink-0 text-zinc-600 transition-colors group-hover:text-brand-300" />
+                      </span>
+                      {pointsNode}
+                    </Link>
+                  </li>
+                )
+              }
+              return (
+                <li
+                  key={suggestion.label}
+                  className="flex items-center justify-between gap-3 text-[11px] px-1.5 py-1"
+                >
+                  <span className="text-zinc-300 truncate">{suggestion.label}</span>
+                  {pointsNode}
+                </li>
+              )
+            })}
           </ul>
         </div>
       ) : null}

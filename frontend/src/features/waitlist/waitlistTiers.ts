@@ -112,18 +112,27 @@ export function computeProgress(points: number): WaitlistProgress {
  * Curated "how to earn more points" suggestions based on `WAITLIST_POINTS` on
  * the server. Kept in sync by mirror rather than import because
  * `server/_lib/*` is not importable from `src/` (frontend boundary rule).
+ *
+ * When `to` is set, the suggestion renders as an internal link; when unset,
+ * it renders as static text (useful for passive actions like "a referral
+ * completes their profile" which the user can't directly trigger).
  */
 export type PointSuggestion = {
   label: string
   points: number
   hint?: string
+  /**
+   * Optional in-app route that will help the user complete this action.
+   * Kept as a simple path so the tiers module stays UI-framework-agnostic.
+   */
+  to?: string
 }
 
 export const POINT_SUGGESTIONS: readonly PointSuggestion[] = [
-  { label: 'Link your Coinbase Smart Wallet', points: 10, hint: 'One-time' },
+  { label: 'Link your Coinbase Smart Wallet', points: 10, hint: 'One-time', to: '/accounts' },
   { label: 'Refer a friend who signs up', points: 2, hint: 'Per referral' },
   { label: 'Referral links their CSW', points: 4, hint: 'Per qualified referral' },
   { label: 'Referral completes profile', points: 6, hint: 'Per qualified referral' },
-  { label: 'Connect Zora', points: 2 },
-  { label: 'Connect X / Discord / Telegram', points: 2, hint: 'Per platform' },
+  { label: 'Connect Zora', points: 2, to: '/accounts' },
+  { label: 'Connect X / Discord / Telegram', points: 2, hint: 'Per platform', to: '/accounts' },
 ] as const
