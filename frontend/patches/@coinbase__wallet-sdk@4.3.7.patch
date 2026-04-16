@@ -1,0 +1,30 @@
+--- a/dist/CoinbaseWalletProvider.js
++++ b/dist/CoinbaseWalletProvider.js
+@@ -50,7 +50,8 @@
+                         storeSignerType(signerType);
+                         break;
+                     }
+-                    case 'wallet_sendCalls': {
++                    case 'wallet_sendCalls':
++                    case 'wallet_addSubAccount': {
+                         const ephemeralSigner = this.initSigner('scw');
+                         await ephemeralSigner.handshake({ method: 'handshake' }); // exchange session keys
+                         const result = await ephemeralSigner.request(args); // send diffie-hellman encrypted request
+--- a/dist/sign/scw/SCWSigner.js
++++ b/dist/sign/scw/SCWSigner.js
+@@ -63,6 +63,7 @@
+         if (this.accounts.length === 0) {
+             switch (request.method) {
+                 case 'wallet_sendCalls':
++                case 'wallet_addSubAccount':
+                     return this.sendRequestToPopup(request);
+                 default:
+                     throw standardErrors.provider.unauthorized();
+@@ -99,6 +100,7 @@
+             case 'wallet_sendCalls':
+             case 'wallet_showCallsStatus':
+             case 'wallet_grantPermissions':
++            case 'wallet_addSubAccount':
+                 return this.sendRequestToPopup(request);
+             default:
+                 if (!this.chain.rpcUrl)

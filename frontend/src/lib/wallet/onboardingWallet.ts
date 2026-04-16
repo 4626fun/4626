@@ -55,6 +55,7 @@ export type OwnerApprovalStage =
   | 'userop_typed'
   | 'userop_nontyped'
   | 'send_calls'
+  | 'add_sub_account'
   | 'confirm_owner'
 
 export type OwnerApprovalStageStatus = 'start' | 'retry' | 'success' | 'error'
@@ -371,17 +372,6 @@ async function submitOwnerTxViaWalletSendCalls(params: {
       }
     : payloadBase
 
-  // ── Diagnostic logging (remove after debugging) ──
-  console.group('[4626] wallet_sendCalls diagnostic')
-  console.log('sender:', params.sender)
-  console.log('to:', params.to)
-  console.log('data:', params.data?.slice(0, 20) + '…')
-  console.log('chainIdHex:', chainIdHex)
-  console.log('paymasterUrl:', paymasterUrlStr)
-  console.log('supportsPaymaster:', supportsPaymasterCapability)
-  console.log('full payload:', JSON.stringify(payloadWithPaymaster, null, 2))
-  console.groupEnd()
-
   let callBundle: unknown
   try {
     callBundle = await params.walletRequest({
@@ -389,13 +379,6 @@ async function submitOwnerTxViaWalletSendCalls(params: {
       params: [payloadWithPaymaster],
     })
   } catch (error) {
-    // ── Diagnostic logging (remove after debugging) ──
-    console.error('[4626] wallet_sendCalls FAILED:', {
-      message: error instanceof Error ? error.message : String(error),
-      code: (error as any)?.code,
-      data: (error as any)?.data,
-      details: (error as any)?.details,
-    })
     if (!supportsPaymasterCapability) throw error
     const message = error instanceof Error ? error.message : String(error ?? '')
     const lower = message.toLowerCase()
@@ -415,13 +398,11 @@ async function submitOwnerTxViaWalletSendCalls(params: {
       code: 'send_calls_capabilities_rejected',
       message,
     })
-    console.warn('[4626] Retrying wallet_sendCalls without capabilities...')
     callBundle = await params.walletRequest({
       method: 'wallet_sendCalls',
       params: [payloadBase],
     })
   }
-  console.log('[4626] wallet_sendCalls SUCCESS:', JSON.stringify(callBundle))
   const callsId =
     typeof callBundle === 'string'
       ? callBundle
@@ -473,6 +454,83 @@ async function submitOwnerTxViaWalletSendCalls(params: {
     message: 'wallet_sendCalls status is still pending. Wait a moment and retry confirmation.',
   })
   throw new Error('wallet_sendCalls status is still pending. Wait a moment and retry confirmation.')
+}
+
+/**
+ * Use wallet_addSubAccount to register the Privy EOA as a sub-account key
+ * on the canonical Coinbase Smart Wallet.  This bypasses the popup's self-call
+ * check (eGe) which blocks wallet_sendCalls where target === sender.
+ *
+ * The popup handles owner management internally — it adds the provided address
+ * key without requiring the caller to build an addOwnerAddress calldata payload.
+ */
+async function submitOwnerViaAddSubAccount(params: {
+  walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+  ownerAddress: `0x${string}`
+  approvalRunId: string
+  executionMode: OwnerApprovalExecutionMode
+  signerAddress?: string | null
+  canonicalCswAddress?: string | null
+  onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null
+}): Promise<{ address: string }> {
+  emitOwnerApprovalStage(params.onStageEvent, {
+    runId: params.approvalRunId,
+    stage: 'add_sub_account',
+    status: 'start',
+    attempt: 1,
+    executionMode: params.executionMode,
+    signerAddress: params.signerAddress ?? null,
+    canonicalCswAddress: params.canonicalCswAddress ?? null,
+  })
+
+  let result: unknown
+  try {
+    result = await params.walletRequest({
+      method: 'wallet_addSubAccount',
+      params: [
+        {
+          version: '1',
+          account: {
+            type: 'create',
+            keys: [
+              {
+                type: 'address',
+                publicKey: params.ownerAddress,
+              },
+            ],
+          },
+        },
+      ],
+    })
+  } catch (error) {
+    emitOwnerApprovalStage(params.onStageEvent, {
+      runId: params.approvalRunId,
+      stage: 'add_sub_account',
+      status: 'error',
+      executionMode: params.executionMode,
+      signerAddress: params.signerAddress ?? null,
+      canonicalCswAddress: params.canonicalCswAddress ?? null,
+      code: classifyOwnerApprovalError(error).code,
+      message: error instanceof Error ? error.message : String(error ?? ''),
+    })
+    throw error
+  }
+
+  const resultAddress =
+    result && typeof result === 'object' && typeof (result as { address?: unknown }).address === 'string'
+      ? ((result as { address: string }).address as string)
+      : ''
+
+  emitOwnerApprovalStage(params.onStageEvent, {
+    runId: params.approvalRunId,
+    stage: 'add_sub_account',
+    status: 'success',
+    executionMode: params.executionMode,
+    signerAddress: params.signerAddress ?? null,
+    canonicalCswAddress: params.canonicalCswAddress ?? null,
+  })
+
+  return { address: resultAddress }
 }
 
 export async function sendPreparedOwnerTx(params: {
@@ -635,18 +693,17 @@ export async function sendPreparedOwnerTx(params: {
         return result.transactionHash
       }
       if (selfAuthenticatedCanonicalSession) {
-        // ── Self-authenticated session: wallet_sendCalls FIRST ──
-        // In self-auth mode (CSW signs for itself), the UserOp signing path
-        // fundamentally cannot produce a valid signature. The CSW extension
-        // blocks eth_sign (raw hash signing), and our typed-data/personal_sign
-        // fallbacks sign the replay-safe EIP-712 hash — but validateUserOp
-        // checks against the raw userOpHash → always "Invalid signature".
+        // ── Self-authenticated session: wallet_addSubAccount FIRST ──
+        // In self-auth mode (CSW signs for itself), we use wallet_addSubAccount
+        // to register the Privy EOA as a sub-account key.  This bypasses the
+        // popup's self-call check (eGe) which blocks wallet_sendCalls where
+        // target === sender with non-empty data.
         //
-        // wallet_sendCalls delegates the entire UserOp lifecycle (including
-        // signing) to the extension, which handles signature production
-        // internally via passkeys. The extension needs the DIRECT CDP paymaster
-        // URL (not our proxy) because it makes its own HTTP requests without
-        // forwarding the user's session cookies.
+        // wallet_addSubAccount is forwarded to keys.coinbase.com via our SDK
+        // patch (CSW 4.3.7), where the popup handles owner management internally
+        // without triggering the self-call guard.
+        //
+        // Fallback chain: addSubAccount → sendCalls → UserOp
         if (!walletClient.account) {
           throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
         }
@@ -655,30 +712,106 @@ export async function sendPreparedOwnerTx(params: {
             ? async (args: { method: string; params?: unknown[] }) => await walletClient.request!(args as any)
             : null
 
-        // Resolve the direct CDP paymaster URL for wallet_sendCalls (ERC-7677).
-        // The CSW extension calls this URL directly (not through our proxy),
-        // so it needs the actual CDP endpoint (e.g. https://api.developer.coinbase.com/rpc/v1/base/<KEY>).
-        // Our session-protected proxy (/api/paymaster) won't work because the extension
-        // makes its own HTTP requests without forwarding the user's session cookies.
-        //
-        // Priority: VITE_CDP_SENDCALLS_PAYMASTER_URL > VITE_CDP_PAYMASTER_URL (if external) > null
-        // If null, sendCalls is attempted WITHOUT paymaster capabilities — the extension
-        // may still sponsor via its own mechanisms (Coinbase balance, Magic Spend).
-        const sendCallsEnv =
-          (import.meta.env.VITE_CDP_SENDCALLS_PAYMASTER_URL as string | undefined)?.trim() || ''
-        const rawCdpPaymasterUrl =
-          (import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined)?.trim() || ''
-        const isExternalNonProxy = (url: string) =>
-          url.startsWith('https://') && !url.includes('/api/paymaster')
-        const resolvedDirectUrl = isExternalNonProxy(sendCallsEnv)
-          ? sendCallsEnv
-          : isExternalNonProxy(rawCdpPaymasterUrl)
-            ? rawCdpPaymasterUrl
+        // Resolve the Privy EOA address to add as a sub-account key.
+        // ownerAddress is the Privy embedded EOA that we want the canonical CSW
+        // to recognise as an owner.
+        const privyEoaToAdd =
+          typeof ownerAddress === 'string' && isAddress(ownerAddress)
+            ? (ownerAddress as `0x${string}`)
             : null
-        // Never pass the session-protected proxy URL to sendCalls — the extension can't use it
-        const sendCallsPaymasterUrl = resolvedDirectUrl
 
-        if (walletRequest) {
+        if (walletRequest && privyEoaToAdd) {
+          try {
+            // ── Primary path: wallet_addSubAccount ──
+            await submitOwnerViaAddSubAccount({
+              walletRequest,
+              ownerAddress: privyEoaToAdd,
+              approvalRunId: effectiveApprovalRunId,
+              executionMode,
+              signerAddress,
+              canonicalCswAddress: canonicalSmartWalletAddress,
+              onStageEvent,
+            })
+            // wallet_addSubAccount does not return a txHash (owner is added
+            // internally by the popup).  Set a sentinel so confirm-owner can
+            // poll for the owner record without a specific tx.
+            txHash = '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`
+          } catch (addSubError) {
+            // If the user rejected, don't fall back
+            if (isUserRejectedWalletAction(addSubError)) throw addSubError
+
+            // ── Fallback: wallet_sendCalls ──
+            // Resolve the direct CDP paymaster URL for wallet_sendCalls (ERC-7677).
+            const sendCallsEnv =
+              (import.meta.env.VITE_CDP_SENDCALLS_PAYMASTER_URL as string | undefined)?.trim() || ''
+            const rawCdpPaymasterUrl =
+              (import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined)?.trim() || ''
+            const isExternalNonProxy = (url: string) =>
+              url.startsWith('https://') && !url.includes('/api/paymaster')
+            const resolvedDirectUrl = isExternalNonProxy(sendCallsEnv)
+              ? sendCallsEnv
+              : isExternalNonProxy(rawCdpPaymasterUrl)
+                ? rawCdpPaymasterUrl
+                : null
+            const sendCallsPaymasterUrl = resolvedDirectUrl
+
+            try {
+              txHash = await submitOwnerTxViaWalletSendCalls({
+                walletRequest,
+                chainId: txRequest.chainId,
+                sender: canonicalSmartWalletAddress as `0x${string}`,
+                to: txRequest.to,
+                data: txRequest.data,
+                paymasterUrl: sendCallsPaymasterUrl,
+                approvalRunId: effectiveApprovalRunId,
+                executionMode,
+                signerAddress,
+                canonicalCswAddress: canonicalSmartWalletAddress,
+                onStageEvent,
+              })
+            } catch (sendCallsError) {
+              emitOwnerApprovalStage(onStageEvent, {
+                runId: effectiveApprovalRunId,
+                stage: 'send_calls',
+                status: 'error',
+                executionMode,
+                signerAddress,
+                canonicalCswAddress: canonicalSmartWalletAddress,
+                code: classifyOwnerApprovalError(sendCallsError).code,
+                message: sendCallsError instanceof Error ? sendCallsError.message : String(sendCallsError ?? ''),
+              })
+              if (isUserRejectedWalletAction(sendCallsError)) throw sendCallsError
+              // ── Last resort: sponsored UserOp ──
+              try {
+                txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
+              } catch (userOpError) {
+                emitOwnerApprovalStage(onStageEvent, {
+                  runId: effectiveApprovalRunId,
+                  stage: 'userop_typed',
+                  status: 'error',
+                  executionMode,
+                  signerAddress,
+                  canonicalCswAddress: canonicalSmartWalletAddress,
+                  code: classifyOwnerApprovalError(userOpError).code,
+                  message: userOpError instanceof Error ? userOpError.message : String(userOpError ?? ''),
+                })
+                throw sendCallsError
+              }
+            }
+          }
+        } else if (walletRequest) {
+          // No Privy EOA available — fall back to sendCalls with UserOp recovery
+          const sendCallsEnv =
+            (import.meta.env.VITE_CDP_SENDCALLS_PAYMASTER_URL as string | undefined)?.trim() || ''
+          const rawCdpPaymasterUrl =
+            (import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined)?.trim() || ''
+          const isExternalNonProxy = (url: string) =>
+            url.startsWith('https://') && !url.includes('/api/paymaster')
+          const resolvedDirectUrl = isExternalNonProxy(sendCallsEnv)
+            ? sendCallsEnv
+            : isExternalNonProxy(rawCdpPaymasterUrl)
+              ? rawCdpPaymasterUrl
+              : null
           try {
             txHash = await submitOwnerTxViaWalletSendCalls({
               walletRequest,
@@ -686,7 +819,7 @@ export async function sendPreparedOwnerTx(params: {
               sender: canonicalSmartWalletAddress as `0x${string}`,
               to: txRequest.to,
               data: txRequest.data,
-              paymasterUrl: sendCallsPaymasterUrl,
+              paymasterUrl: resolvedDirectUrl,
               approvalRunId: effectiveApprovalRunId,
               executionMode,
               signerAddress,
@@ -694,20 +827,8 @@ export async function sendPreparedOwnerTx(params: {
               onStageEvent,
             })
           } catch (sendCallsError) {
-            emitOwnerApprovalStage(onStageEvent, {
-              runId: effectiveApprovalRunId,
-              stage: 'send_calls',
-              status: 'error',
-              executionMode,
-              signerAddress,
-              canonicalCswAddress: canonicalSmartWalletAddress,
-              code: classifyOwnerApprovalError(sendCallsError).code,
-              message: sendCallsError instanceof Error ? sendCallsError.message : String(sendCallsError ?? ''),
-            })
-            // If the user rejected, don't fall back to UserOp
             if (isUserRejectedWalletAction(sendCallsError)) throw sendCallsError
-            // Fall back to sponsored UserOp as last resort
-            // (may work if signing path changes in future extension updates)
+            // Last resort: sponsored UserOp
             try {
               txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
             } catch (userOpError) {
@@ -721,7 +842,6 @@ export async function sendPreparedOwnerTx(params: {
                 code: classifyOwnerApprovalError(userOpError).code,
                 message: userOpError instanceof Error ? userOpError.message : String(userOpError ?? ''),
               })
-              // Throw the original sendCalls error as it's more actionable
               throw sendCallsError
             }
           }
@@ -730,7 +850,7 @@ export async function sendPreparedOwnerTx(params: {
           txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
         }
         if (!txHash) {
-          throw new Error('Owner approval failed: neither wallet_sendCalls nor UserOp path produced a transaction.')
+          throw new Error('Owner approval failed: no execution path produced a result.')
         }
       } else {
         txHash = await runSponsoredCanonicalUserOp()
