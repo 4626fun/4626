@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getStringQuery, handleOptions, setCache, setCors } from '../../../server/zora/_shared.js'
 import { getDb } from '../../../packages/server-core/src/index.js'
-import { ensureCreatorMetricsSchema } from '../../../server/_lib/creatorMetricsSync.js'
+import { ensureCreatorMetricsSchema } from '../../../server/_lib/zora/creatorMetricsSync.js'
 
 type MetricsScope = 'creators'
 type SyncStatus = 'idle' | 'running' | 'error'

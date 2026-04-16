@@ -11,7 +11,7 @@ vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
 }))
 
-vi.mock('../../server/_lib/creatorMetricsSync.js', () => ({
+vi.mock('../../server/_lib/zora/creatorMetricsSync.js', () => ({
   ensureCreatorMetricsSchema: ensureCreatorMetricsSchemaMock,
 }))
 

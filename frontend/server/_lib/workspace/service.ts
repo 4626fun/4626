@@ -1,10 +1,10 @@
 import type { VercelRequest } from '@vercel/node'
 
-import { getKeeprVaultByVaultAddress, type KeeprVaultRow } from '../keeprRegistry.js'
-import { getKeeprVaultAutomationByVaultAddress } from '../keeprAutomation.js'
-import { listCreatorXmtpAgents, type CreatorXmtpAgentRow } from '../creatorXmtpAgents.js'
+import { getKeeprVaultByVaultAddress, type KeeprVaultRow } from '../keepr/keeprRegistry.js'
+import { getKeeprVaultAutomationByVaultAddress } from '../keepr/keeprAutomation.js'
+import { listCreatorXmtpAgents, type CreatorXmtpAgentRow } from '../messaging/creatorXmtpAgents.js'
 import { getDb } from '../db/postgres.js'
-import { ensureTelegramTradingSchema } from '../telegramTrading.js'
+import { ensureTelegramTradingSchema } from '../messaging/telegramTrading.js'
 import { ensureCreRuntimeSchema } from '../cre/runtimeSchema.js'
 import {
   createActivityEvent,

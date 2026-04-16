@@ -12,7 +12,7 @@ import {
 } from '../../../../../packages/server-core/src/index.js'
 
 
-import { isOfficialCharmVault, officialCharmVaultError } from '../../../../../server/_lib/charmVaults.js'
+import { isOfficialCharmVault, officialCharmVaultError } from '../../../../../server/_lib/deploy/charmVaults.js'
 import type { BuildTxResponse } from '../_types.js'
 import { CREATOR_CHARM_STRATEGY_ABI } from './_abi.js'
 import {

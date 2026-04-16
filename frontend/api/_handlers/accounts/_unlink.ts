@@ -21,7 +21,7 @@ import {
   syncEmailIdentity,
   type AccountLinkProvider,
   verifyPrivyForAccounts,
-} from '../../../server/_lib/accountsIdentity.js'
+} from '../../../server/_lib/identity/accountsIdentity.js'
 
 type UnlinkBody = {
   provider?: AccountLinkProvider

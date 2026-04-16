@@ -11,12 +11,12 @@ import {
 import { base } from 'viem/chains'
 import type { SupabaseClient } from '@supabase/supabase-js'
 
-import { ensureCanonicalWalletsSchema } from '../server/_lib/canonicalWalletsSchema.js'
+import { ensureCanonicalWalletsSchema } from '../server/_lib/wallet/canonicalWalletsSchema.js'
 import {
   ensureCswOwnerLinkStatusSchema,
   type CswOwnerLinkStatus,
   upsertCswOwnerLinkStatus,
-} from '../server/_lib/cswOwnerLinkStatus.js'
+} from '../server/_lib/wallet/cswOwnerLinkStatus.js'
 import { getDb, isDbConfigured } from '../server/_lib/db/postgres.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../server/_lib/db/supabaseAdmin.js'
 

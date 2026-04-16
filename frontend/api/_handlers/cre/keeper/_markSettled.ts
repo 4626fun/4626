@@ -32,7 +32,7 @@ import {
 } from '../../../../packages/server-core/src/index.js'
 
 
-import { ensureKeeprSchema } from '../../../../server/_lib/keeprSchema.js'
+import { ensureKeeprSchema } from '../../../../server/_lib/keepr/keeprSchema.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)

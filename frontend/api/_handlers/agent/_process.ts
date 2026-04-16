@@ -27,15 +27,13 @@ import {
   getClientIp,
   rateLimitKey,
   RATE_LIMITS,
-} from '../../../packages/server-core/src/index.js'
-
-import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../../../server/_lib/creatorXmtpAgents.js'
-import { createPrivyScwSigner } from '../../../server/_lib/privyXmtpSigner.js'
-import {
+  decryptPrivateKey,
+  ensureCreatorXmtpAgentsSchema,
   findMountedAncestorPath,
   hasDedicatedMount,
   resolveXmtpDbDirectory,
-} from '../../../server/_lib/xmtpDbDirectory.js'
+} from '../../../packages/server-core/src/index.js'
+import { createPrivyScwSigner } from '../../../server/_lib/wallet/privyXmtpSigner.js'
 import { executeDeterministicCommand } from '../../../server/agent/core/executeDeterministicCommand.js'
 
 

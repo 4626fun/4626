@@ -13,11 +13,11 @@ import {
   RATE_LIMITS,
 } from '../../../packages/server-core/src/index.js'
 
-import { checkSharesEligibility, getKeeprBaseRpcUrls } from '../../../server/_lib/keeprGating.js'
-import { enqueueKeeprAction, getKeeprVaultByVaultAddress, isKeeprJoinLocked } from '../../../server/_lib/keeprRegistry.js'
-import { ensureKeeprSchema } from '../../../server/_lib/keeprSchema.js'
+import { checkSharesEligibility, getKeeprBaseRpcUrls } from '../../../server/_lib/keepr/keeprGating.js'
+import { enqueueKeeprAction, getKeeprVaultByVaultAddress, isKeeprJoinLocked } from '../../../server/_lib/keepr/keeprRegistry.js'
+import { ensureKeeprSchema } from '../../../server/_lib/keepr/keeprSchema.js'
 
-import { verifyKeeprJoinProof } from '../../../server/_lib/keeprProof.js'
+import { verifyKeeprJoinProof } from '../../../server/_lib/keepr/keeprProof.js'
 
 type JoinBody = {
   vaultAddress?: string

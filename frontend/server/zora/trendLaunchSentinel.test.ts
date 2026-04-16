@@ -12,7 +12,7 @@ vi.mock('./trends.js', () => ({
   reserveTrendTicker: reserveTrendTickerMock,
 }))
 
-vi.mock('../_lib/zoraTrendOpsStore.js', () => ({
+vi.mock('../_lib/zora/zoraTrendOpsStore.js', () => ({
   upsertTrendPrediction: upsertTrendPredictionMock,
   markTrendOpDeploying: markTrendOpDeployingMock,
   markTrendOpDeployed: markTrendOpDeployedMock,

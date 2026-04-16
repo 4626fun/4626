@@ -1,4 +1,4 @@
-import { getKeeprVaultByGroupId } from '../_lib/keeprRegistry.js'
+import { getKeeprVaultByGroupId } from '../_lib/keepr/keeprRegistry.js'
 import { resolveVaultAccessRoleFromVault } from '../agent/core/resolveVaultRole.js'
 import { toAgentError, toUserFacingAgentErrorMessage } from '../agent/eliza/_errors.js'
 import { getCommandFamily } from './registry.js'

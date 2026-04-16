@@ -27,11 +27,11 @@ vi.mock('../../server/_lib/db/postgres.js', () => ({
   isDbConfigured: isDbConfiguredMock,
 }))
 
-vi.mock('../../server/_lib/keeprSchema.js', () => ({
+vi.mock('../../server/_lib/keepr/keeprSchema.js', () => ({
   ensureKeeprSchema: ensureKeeprSchemaMock,
 }))
 
-vi.mock('../../server/_lib/creatorRegistryVerification.js', () => ({
+vi.mock('../../server/_lib/onchain/creatorRegistryVerification.js', () => ({
   validateCreatorRegistryBinding: validateCreatorRegistryBindingMock,
 }))
 
@@ -462,12 +462,12 @@ describe('/api/(cre/)?vaults/active automation exposure', () => {
 describe('ensureKeeprSchema migration-first guardrails', () => {
   afterEach(() => {
     vi.doUnmock('../../server/_lib/db/postgres.js')
-    vi.doUnmock('../../server/_lib/keeprSchema.js')
+    vi.doUnmock('../../server/_lib/keepr/keeprSchema.js')
   })
 
   it('fails fast with actionable missing-schema details instead of runtime DDL', async () => {
     vi.resetModules()
-    vi.doUnmock('../../server/_lib/keeprSchema.js')
+    vi.doUnmock('../../server/_lib/keepr/keeprSchema.js')
 
     const sqlCalls: string[] = []
     const db = {
@@ -482,7 +482,7 @@ describe('ensureKeeprSchema migration-first guardrails', () => {
       isDbConfigured: vi.fn(() => true),
     }))
 
-    const { ensureKeeprSchema } = await import('../../server/_lib/keeprSchema.js')
+    const { ensureKeeprSchema } = await import('../../server/_lib/keepr/keeprSchema.js')
     await expect(ensureKeeprSchema()).rejects.toThrow(/keepr_schema_migration_required:/)
 
     const sqlText = sqlCalls.join('\n')

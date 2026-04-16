@@ -12,7 +12,7 @@ const {
   readPersistedIdentityMock: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/canonicalWalletsSchema.js', () => ({
+vi.mock('../../server/_lib/wallet/canonicalWalletsSchema.js', () => ({
   ensureCanonicalWalletsSchema: ensureCanonicalWalletsSchemaMock,
 }))
 
@@ -21,7 +21,7 @@ vi.mock('../../server/_lib/db/postgres.js', () => ({
   isDbConfigured: isDbConfiguredMock,
 }))
 
-vi.mock('../../server/_lib/walletSync.js', () => ({
+vi.mock('../../server/_lib/wallet/walletSync.js', () => ({
   readPersistedIdentity: readPersistedIdentityMock,
 }))
 
@@ -29,7 +29,7 @@ import {
   resolveCanonicalSmartWalletAddress,
   resolveAuthorizedWalletProfile,
   resolvePersistedWalletIdentity,
-} from '../../server/_lib/canonicalWalletResolver.js'
+} from '../../server/_lib/wallet/canonicalWalletResolver.js'
 
 const PROFILE_ID = 42
 const PRIVY_USER_ID = 'did:privy:user-1'

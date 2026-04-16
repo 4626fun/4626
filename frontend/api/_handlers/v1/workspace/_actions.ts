@@ -12,12 +12,12 @@ import {
   RATE_LIMITS,
   checkRateLimit,
   rateLimitKey,
+  ensureTelegramTradingSchema,
+  upsertHolderRoomPolicy,
 } from '../../../../packages/server-core/src/index.js'
 
 
-import { enqueueKeeprAction } from '../../../../server/_lib/keeprRegistry.js'
-
-import { ensureTelegramTradingSchema, upsertHolderRoomPolicy } from '../../../../server/_lib/telegramTrading.js'
+import { enqueueKeeprAction } from '../../../../server/_lib/keepr/keeprRegistry.js'
 import { createTelegramSummaryTransport } from '../../../../server/_lib/workspace/telegramTransport.js'
 import { publishWorkspaceXmtpMessage, type WorkspaceXmtpMessageType } from '../../../../server/_lib/workspace/xmtpPublisher.js'
 import {

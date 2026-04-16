@@ -15,35 +15,35 @@ const getCachedWalletIntelligenceMock = vi.fn()
 const cacheWalletIntelligenceMock = vi.fn()
 const guardMock = vi.fn()
 
-vi.mock('../../server/_lib/funderTrace.js', () => ({
+vi.mock('../../server/_lib/lens/funderTrace.js', () => ({
   traceFundersMultiChain: traceFundersMock,
 }))
 
-vi.mock('../../server/_lib/walletLabels.js', () => ({
+vi.mock('../../server/_lib/wallet/walletLabels.js', () => ({
   getWalletLabelsBatch: getWalletLabelsBatchMock,
 }))
 
-vi.mock('../../server/_lib/ensResolver.js', () => ({
+vi.mock('../../server/_lib/identity/ensResolver.js', () => ({
   getEnsProfile: getEnsProfileMock,
 }))
 
-vi.mock('../../server/_lib/debankPortfolio.js', () => ({
+vi.mock('../../server/_lib/lens/debankPortfolio.js', () => ({
   getWalletPortfolio: getWalletPortfolioMock,
 }))
 
-vi.mock('../../server/_lib/canonicalWalletResolver.js', () => ({
+vi.mock('../../server/_lib/wallet/canonicalWalletResolver.js', () => ({
   resolveCanonicalSmartWalletAddress: resolveCanonicalMock,
 }))
 
-vi.mock('../../server/_lib/lensAccounts.js', () => ({
+vi.mock('../../server/_lib/identity/lensAccounts.js', () => ({
   resolveLensUserByOwner: resolveLensMock,
 }))
 
-vi.mock('../../server/_lib/lensGrove.js', () => ({
+vi.mock('../../server/_lib/lens/lensGrove.js', () => ({
   tryUploadImmutableJson: tryUploadMock,
 }))
 
-vi.mock('../../server/_lib/walletIntelligenceCache.js', () => ({
+vi.mock('../../server/_lib/wallet/walletIntelligenceCache.js', () => ({
   getCachedWalletIntelligence: getCachedWalletIntelligenceMock,
   cacheWalletIntelligence: cacheWalletIntelligenceMock,
 }))

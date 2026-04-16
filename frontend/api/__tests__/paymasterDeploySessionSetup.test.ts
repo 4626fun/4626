@@ -53,14 +53,14 @@ vi.mock('../../server/_lib/auth/requestPrincipal.js', () => ({
   readRequestPrincipalAddress: (...args: unknown[]) => readRequestPrincipalMock(...args),
 }))
 
-vi.mock('../../server/_lib/deploySessions.js', () => ({
+vi.mock('../../server/_lib/deploy/deploySessions.js', () => ({
   getActiveDeploySessionForSender: (...args: unknown[]) => getActiveDeploySessionMock(...args),
   getDeploySessionByTokenHash: vi.fn(),
   hashDeployToken: vi.fn(),
   signDeployToken: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/contracts.js', () => ({
+vi.mock('../../server/_lib/onchain/contracts.js', () => ({
   getApiContracts: () => getApiContractsMock(),
 }))
 
@@ -84,7 +84,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
   readJsonBody: (...args: unknown[]) => readJsonBodyMock(...args),
 }))
 
-vi.mock('../../server/_lib/coinParties.js', () => ({
+vi.mock('../../server/_lib/onchain/coinParties.js', () => ({
   resolveCoinParties: vi.fn(() => Promise.resolve({ creator: sessionSigner, payoutRecipient: sessionSigner })),
 }))
 
@@ -92,7 +92,7 @@ vi.mock('../../server/_lib/infra/logger.js', () => ({
   logger: { warn: (...args: unknown[]) => loggerWarnMock(...args), error: (...args: unknown[]) => loggerErrorMock(...args) },
 }))
 
-vi.mock('../../server/_lib/canonicalWalletResolver.js', () => ({
+vi.mock('../../server/_lib/wallet/canonicalWalletResolver.js', () => ({
   resolveAuthorizedWalletProfile: (...args: unknown[]) => resolveAuthorizedWalletProfileMock(...args),
   resolvePersistedWalletIdentity: (...args: unknown[]) => resolvePersistedWalletIdentityMock(...args),
   resolvePersistedWalletIdentityForProfileId: (...args: unknown[]) => resolvePersistedWalletIdentityForProfileIdMock(...args),

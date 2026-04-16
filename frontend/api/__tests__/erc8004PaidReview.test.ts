@@ -19,7 +19,7 @@ vi.mock('../../server/_lib/agent/agentApiGuard.js', () => ({
   guardAgentApiRequest: mocks.guardAgentApiRequest,
 }))
 
-vi.mock('../../server/_lib/x402Service.js', () => ({
+vi.mock('../../server/_lib/payments/x402Service.js', () => ({
   evaluateX402Payment: mocks.evaluateX402Payment,
   sendPaymentRequiredResponse: mocks.sendPaymentRequiredResponse,
   setSettlementResponseHeaders: mocks.setSettlementResponseHeaders,
@@ -30,7 +30,7 @@ vi.mock('../../server/_lib/agent/erc8004Review.js', () => ({
   buildErc8004TechnicalReview: mocks.buildErc8004TechnicalReview,
 }))
 
-vi.mock('../../server/_lib/lensGrove.js', () => ({
+vi.mock('../../server/_lib/lens/lensGrove.js', () => ({
   tryUploadImmutableJson: mocks.tryUploadImmutableJson,
 }))
 

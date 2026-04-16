@@ -34,7 +34,11 @@ vi.mock('viem/chains', () => ({
   base: {},
 }))
 
-import { buildAmoeEntryMessage, issueAmoeNonce, verifyAmoeEntryProof } from '../../server/_lib/lotteryAmoe.js'
+import {
+  buildAmoeEntryMessage,
+  issueAmoeNonce,
+  verifyAmoeEntryProof,
+} from '../../server/_lib/lottery/lotteryAmoe.js'
 
 describe('AMOE proof verification', () => {
   beforeEach(() => {

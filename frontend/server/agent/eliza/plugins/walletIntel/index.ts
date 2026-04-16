@@ -14,10 +14,10 @@
 import type { Action, Content, HandlerCallback, IAgentRuntime, Memory, Plugin, State } from '@elizaos/core'
 
 // Direct imports — no HTTP bridge needed
-import { buildWalletIntelligence } from '../../../../_lib/walletIntelligence.js'
-import { traceFundersMultiChain } from '../../../../_lib/funderTrace.js'
-import { getWalletPortfolio } from '../../../../_lib/debankPortfolio.js'
-import { getWalletLabelsBatch } from '../../../../_lib/walletLabels.js'
+import { buildWalletIntelligence } from '../../../../_lib/wallet/walletIntelligence.js'
+import { traceFundersMultiChain } from '../../../../_lib/lens/funderTrace.js'
+import { getWalletPortfolio } from '../../../../_lib/lens/debankPortfolio.js'
+import { getWalletLabelsBatch } from '../../../../_lib/wallet/walletLabels.js'
 
 // ---------------------------------------------------------------------------
 // Helpers

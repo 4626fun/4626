@@ -9,7 +9,7 @@ import {
   IDENTITY_REGISTRY_ABI,
   getIdentityRegistryAddress,
 } from './erc8004.js'
-import { buildReputationGraph } from '../reputationGraph.js'
+import { buildReputationGraph } from '../lens/reputationGraph.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

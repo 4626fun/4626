@@ -17,13 +17,13 @@ import {
 
 import { type FeedbackPayload, getIdentityRegistryAddress, getReputationRegistryAddress, REPUTATION_REGISTRY_ABI } from '../../../../../server/_lib/agent/erc8004.js'
 import { buildErc8004TechnicalReview } from '../../../../../server/_lib/agent/erc8004Review.js'
-import { tryUploadImmutableJson } from '../../../../../server/_lib/lensGrove.js'
+import { tryUploadImmutableJson } from '../../../../../server/_lib/lens/lensGrove.js'
 import {
   evaluateX402Payment,
   sendPaymentRequiredResponse,
   setSettlementResponseHeaders,
   setX402CorsHeaders,
-} from '../../../../../server/_lib/x402Service.js'
+} from '../../../../../server/_lib/payments/x402Service.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 

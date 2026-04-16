@@ -10,7 +10,7 @@ import {
   getDb,
 } from '../../../../packages/server-core/src/index.js'
 
-import { ensureKeeprSchema } from '../../../../server/_lib/keeprSchema.js'
+import { ensureKeeprSchema } from '../../../../server/_lib/keepr/keeprSchema.js'
 import {
   KEEPR_TRUST_ZONE_KEY_HEADER,
   getKeeprTrustZoneEnvKey,

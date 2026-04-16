@@ -40,14 +40,14 @@ import {
   deriveVaultShareBurnStreamSalt,
 } from '../../shared/deploy/create2Salts.js'
 
-import { ensureCreatorWalletsSchema } from '../../server/_lib/creatorWallets.js'
-import { getActiveDeploySessionForSender, getDeploySessionByTokenHash, hashDeployToken, signDeployToken } from '../../server/_lib/deploySessions.js'
+import { ensureCreatorWalletsSchema } from '../../server/_lib/wallet/creatorWallets.js'
+import { getActiveDeploySessionForSender, getDeploySessionByTokenHash, hashDeployToken, signDeployToken } from '../../server/_lib/deploy/deploySessions.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/db/supabaseAdmin.js'
 import {
   resolveAuthorizedWalletProfile,
   resolvePersistedWalletIdentity,
   resolvePersistedWalletIdentityForProfileId,
-} from '../../server/_lib/canonicalWalletResolver.js'
+} from '../../server/_lib/wallet/canonicalWalletResolver.js'
 
 
 import {

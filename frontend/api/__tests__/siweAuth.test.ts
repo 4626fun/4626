@@ -35,11 +35,11 @@ vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
 }))
 
-vi.mock('../../server/_lib/waitlistSchema.js', () => ({
+vi.mock('../../server/_lib/onboarding/waitlistSchema.js', () => ({
   ensureWaitlistSchema: ensureWaitlistSchemaMock,
 }))
 
-vi.mock('../../server/_lib/profileSync.js', () => ({
+vi.mock('../../server/_lib/identity/profileSync.js', () => ({
   upsertProfileByWallet: upsertProfileByWalletMock,
 }))
 
@@ -121,7 +121,7 @@ describe('siwe auth hardening', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     restoreEnv = applyEnv({
-      AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
+      AUTH_SESSION_SECRET: 'test-auth-session-secret-1234567',
       APP_ORIGIN: 'https://4626.fun',
     })
   })

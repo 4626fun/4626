@@ -14,10 +14,10 @@ import {
   readRequestPrincipalAddress,
 } from '../../../packages/server-core/src/index.js'
 
-import { resolveOnchainIdentityProfile } from '../../../server/_lib/onchainIdentityProfile.js'
+import { resolveOnchainIdentityProfile } from '../../../server/_lib/identity/onchainIdentityProfile.js'
 
 
-import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
+import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 
 type WalletItem = {
   address: string

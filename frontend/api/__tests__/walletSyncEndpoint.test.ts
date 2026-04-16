@@ -20,11 +20,11 @@ vi.mock('../../server/_lib/db/postgres.js', () => ({
   isDbConfigured: vi.fn(() => true),
 }))
 
-vi.mock('../../server/_lib/waitlistSchema.js', () => ({
+vi.mock('../../server/_lib/onboarding/waitlistSchema.js', () => ({
   ensureWaitlistSchema: ensureWaitlistSchemaMock,
 }))
 
-vi.mock('../../server/_lib/walletSync.js', () => ({
+vi.mock('../../server/_lib/wallet/walletSync.js', () => ({
   syncUserWallets: syncUserWalletsMock,
 }))
 
@@ -35,7 +35,7 @@ vi.mock('@privy-io/server-auth', () => ({
   },
 }))
 
-vi.mock('../../server/_lib/canonicalWalletsSchema.js', () => ({
+vi.mock('../../server/_lib/wallet/canonicalWalletsSchema.js', () => ({
   ensureCanonicalWalletsSchema: vi.fn(async () => {}),
 }))
 
@@ -45,7 +45,7 @@ describe('wallet sync endpoint', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     restoreEnv = applyEnv({
-      AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
+      AUTH_SESSION_SECRET: 'test-auth-session-secret-1234567',
       PRIVY_APP_ID: 'test-privy-id',
       PRIVY_APP_SECRET: 'test-privy-secret',
     })

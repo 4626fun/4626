@@ -38,7 +38,7 @@ vi.mock('../../packages/server-core/src/index.js', () => ({
   },
 }))
 
-vi.mock('../../server/_lib/keeprSchema.js', () => ({
+vi.mock('../../server/_lib/keepr/keeprSchema.js', () => ({
   ensureKeeprSchema: ensureKeeprSchemaMock,
 }))
 

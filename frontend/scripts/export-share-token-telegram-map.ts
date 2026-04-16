@@ -5,7 +5,7 @@ import { erc20Abi, http, isAddress, parseAbiItem, type Address, type PublicClien
 import { base } from 'viem/chains'
 import { createPublicClient } from 'viem'
 
-import { getKeeprBaseRpcUrls } from '../server/_lib/keeprGating.js'
+import { getKeeprBaseRpcUrls } from '../server/_lib/keepr/keeprGating.js'
 import { getDb, isDbConfigured } from '../server/_lib/db/postgres.js'
 
 declare const process: {

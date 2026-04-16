@@ -7,9 +7,9 @@ import {
   isDbConfigured,
 } from '../../../packages/server-core/src/index.js'
 
-import { listKeeprVaultAutomationByVaultAddresses } from '../../../server/_lib/keeprAutomation.js'
+import { listKeeprVaultAutomationByVaultAddresses } from '../../../server/_lib/keepr/keeprAutomation.js'
 
-import { ensureKeeprSchema } from '../../../server/_lib/keeprSchema.js'
+import { ensureKeeprSchema } from '../../../server/_lib/keepr/keeprSchema.js'
 
 export interface VaultAutomationConfig {
   automationEnabled: boolean

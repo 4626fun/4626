@@ -13,7 +13,7 @@ vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
 }))
 
-vi.mock('../../server/_lib/canonicalCswDelegation.js', () => ({
+vi.mock('../../server/_lib/wallet/canonicalCswDelegation.js', () => ({
   confirmOwnerState: confirmOwnerStateMock,
   extractDelegationFlags: extractDelegationFlagsMock,
 }))

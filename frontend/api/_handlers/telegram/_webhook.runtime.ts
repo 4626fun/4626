@@ -15,35 +15,6 @@ import {
   rateLimitKey,
   getClientIp,
   RATE_LIMITS,
-} from '../../../packages/server-core/src/index.js'
-
-import { checkSharesEligibility } from '../../../server/_lib/keeprGating.js'
-import { ensureAccountsIdentitySchema, fetchCreatorCoinSummary } from '../../../server/_lib/accountsIdentity.js'
-import { getKeeprVaultByGroupId, getKeeprVaultByVaultAddress } from '../../../server/_lib/keeprRegistry.js'
-import { ensureKeeprSchema } from '../../../server/_lib/keeprSchema.js'
-import { extractCreatorCoinAddressFromProfile, fetchZoraProfile } from '../../../server/_lib/zoraProfile.js'
-import { appendControlAuditEvent } from '../../../server/_lib/agentControl/audit.js'
-import { evaluatePolicy } from '../../../server/_lib/agentControl/policy.js'
-import { nowIso } from '../../../server/_lib/agentControl/types.js'
-import {
-  buildTelegramTradeControlBundle,
-  TELEGRAM_TRADE_CONTROL_ACTIONS,
-  TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
-} from '../../../server/_lib/agentControl/telegramTradeControl.js'
-
-import { resolveBaseAppInviteUrl as resolveBaseAppInviteUrlShared } from '../../../server/_lib/baseAppInvite.js'
-import {
-  isCoinbaseSmartWalletHelperError,
-  resolvePrivyCoinbaseSmartWalletOwnerContext,
-  sendPrivyCoinbaseSmartWalletUserOperation,
-} from '../../../server/_lib/privyCoinbaseSmartWallet.js'
-import {
-  resolveTelegramIdentityContext,
-  type TelegramSenderWalletSource as SenderWalletSource,
-} from '../../../server/agent/core/resolveIdentityContext.js'
-import { executeDeterministicCommand } from '../../../server/agent/core/executeDeterministicCommand.js'
-import { processTelegramAgentInput } from '../../../server/agent/core/processTelegramAgentInput.js'
-import {
   clearTelegramActiveMessage,
   consumeTelegramActionToken,
   createTelegramLinkStartToken,
@@ -71,8 +42,35 @@ import {
   upsertTelegramOnboardingSession,
   upsertTelegramTradePercentPrompt,
   upsertHolderRoomMember,
-} from '../../../server/_lib/telegramTrading.js'
-import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
+} from '../../../packages/server-core/src/index.js'
+
+import { checkSharesEligibility } from '../../../server/_lib/keepr/keeprGating.js'
+import { ensureAccountsIdentitySchema, fetchCreatorCoinSummary } from '../../../server/_lib/identity/accountsIdentity.js'
+import { getKeeprVaultByGroupId, getKeeprVaultByVaultAddress } from '../../../server/_lib/keepr/keeprRegistry.js'
+import { ensureKeeprSchema } from '../../../server/_lib/keepr/keeprSchema.js'
+import { extractCreatorCoinAddressFromProfile, fetchZoraProfile } from '../../../server/_lib/zora/zoraProfile.js'
+import { appendControlAuditEvent } from '../../../server/_lib/agentControl/audit.js'
+import { evaluatePolicy } from '../../../server/_lib/agentControl/policy.js'
+import { nowIso } from '../../../server/_lib/agentControl/types.js'
+import {
+  buildTelegramTradeControlBundle,
+  TELEGRAM_TRADE_CONTROL_ACTIONS,
+  TELEGRAM_TRADE_CONTROL_SUBSYSTEM,
+} from '../../../server/_lib/agentControl/telegramTradeControl.js'
+
+import { resolveBaseAppInviteUrl as resolveBaseAppInviteUrlShared } from '../../../server/_lib/onboarding/baseAppInvite.js'
+import {
+  isCoinbaseSmartWalletHelperError,
+  resolvePrivyCoinbaseSmartWalletOwnerContext,
+  sendPrivyCoinbaseSmartWalletUserOperation,
+} from '../../../server/_lib/wallet/privyCoinbaseSmartWallet.js'
+import {
+  resolveTelegramIdentityContext,
+  type TelegramSenderWalletSource as SenderWalletSource,
+} from '../../../server/agent/core/resolveIdentityContext.js'
+import { executeDeterministicCommand } from '../../../server/agent/core/executeDeterministicCommand.js'
+import { processTelegramAgentInput } from '../../../server/agent/core/processTelegramAgentInput.js'
+import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 
 import { getTelegramWebhookConfig } from './webhook/config.js'
 import {

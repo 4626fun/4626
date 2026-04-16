@@ -11,6 +11,8 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
+  ensureTelegramTradingSchema,
+  readTelegramMiniAppSession,
 } from '../../../packages/server-core/src/index.js'
 
 
@@ -18,8 +20,7 @@ import {
   ensureAccountsIdentitySchema,
   syncEmailIdentity,
   verifyPrivyForAccounts,
-} from '../../../server/_lib/accountsIdentity.js'
-import { ensureTelegramTradingSchema, readTelegramMiniAppSession } from '../../../server/_lib/telegramTrading.js'
+} from '../../../server/_lib/identity/accountsIdentity.js'
 
 type LinkReadyBody = {
   email?: string

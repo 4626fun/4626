@@ -16,7 +16,7 @@ import {
 import {
   bootstrapCanonicalDelegationState,
   extractDelegationFlags,
-} from '../../../server/_lib/canonicalCswDelegation.js'
+} from '../../../server/_lib/wallet/canonicalCswDelegation.js'
 
 type BootstrapResponse = {
   chainId: 8453

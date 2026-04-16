@@ -3,8 +3,8 @@ import { isAddress, getAddress, parseEther, formatEther, formatUnits, createPubl
 import { base } from 'viem/chains'
 
 import { logger } from '../_lib/infra/logger.js'
-import { walletRpc } from '../_lib/privyWalletApi.js'
-import type { KeeprVaultRow } from '../_lib/keeprRegistry.js'
+import { walletRpc } from '../_lib/wallet/privyWalletApi.js'
+import type { KeeprVaultRow } from '../_lib/keepr/keeprRegistry.js'
 import type { KeeprRole, KeeprCommandResult } from '../commands/types.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -158,7 +158,7 @@ async function handleBalance(params: {
   let agentWalletAddress: string
 
   try {
-    const { getOrCreateCreatorAgentWallet } = await import('../_lib/creatorAgentWallets.js')
+    const { getOrCreateCreatorAgentWallet } = await import('../_lib/wallet/creatorAgentWallets.js')
     const wallet = await getOrCreateCreatorAgentWallet({ creatorToken: params.vault.creatorCoinAddress })
     agentWalletAddress = wallet.address
   } catch (err) {
@@ -266,7 +266,7 @@ async function handleCreate(params: {
   let agentWalletId: string
   let agentWalletAddress: string
   try {
-    const { getOrCreateCreatorAgentWallet } = await import('../_lib/creatorAgentWallets.js')
+    const { getOrCreateCreatorAgentWallet } = await import('../_lib/wallet/creatorAgentWallets.js')
     const wallet = await getOrCreateCreatorAgentWallet({ creatorToken: params.vault.creatorCoinAddress })
     agentWalletId = wallet.walletId
     agentWalletAddress = wallet.address
@@ -382,7 +382,7 @@ async function handleBuy(params: {
   let agentWalletId: string
   let agentWalletAddress: string
   try {
-    const { getOrCreateCreatorAgentWallet } = await import('../_lib/creatorAgentWallets.js')
+    const { getOrCreateCreatorAgentWallet } = await import('../_lib/wallet/creatorAgentWallets.js')
     const wallet = await getOrCreateCreatorAgentWallet({ creatorToken: params.vault.creatorCoinAddress })
     agentWalletId = wallet.walletId
     agentWalletAddress = wallet.address
@@ -489,7 +489,7 @@ async function handleSell(params: {
   let agentWalletId: string
   let agentWalletAddress: string
   try {
-    const { getOrCreateCreatorAgentWallet } = await import('../_lib/creatorAgentWallets.js')
+    const { getOrCreateCreatorAgentWallet } = await import('../_lib/wallet/creatorAgentWallets.js')
     const wallet = await getOrCreateCreatorAgentWallet({ creatorToken: params.vault.creatorCoinAddress })
     agentWalletId = wallet.walletId
     agentWalletAddress = wallet.address
@@ -692,7 +692,7 @@ async function handleTrend(params: {
       markTrendOpDeploying,
       markTrendOpFailed,
       upsertTrendPrediction,
-    } = await import('../_lib/zoraTrendOpsStore.js')
+    } = await import('../_lib/zora/zoraTrendOpsStore.js')
 
     if (sub === 'check') {
       const preflight = await preflightTrendTicker({ ticker })

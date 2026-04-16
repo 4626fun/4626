@@ -1,7 +1,7 @@
 import { isAddress } from 'viem'
 
 import { logger } from '../_lib/infra/logger.js'
-import { markTrendOpDeployed, markTrendOpDeploying, markTrendOpFailed, upsertTrendPrediction } from '../_lib/zoraTrendOpsStore.js'
+import { markTrendOpDeployed, markTrendOpDeploying, markTrendOpFailed, upsertTrendPrediction } from '../_lib/zora/zoraTrendOpsStore.js'
 import { preflightTrendTicker, reserveTrendTicker } from './trends.js'
 
 declare const process: { env: Record<string, string | undefined> }

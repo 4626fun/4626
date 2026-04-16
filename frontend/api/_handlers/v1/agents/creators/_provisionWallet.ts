@@ -21,8 +21,8 @@ import {
 } from '../../../../../packages/server-core/src/index.js'
 
 
-import { resolveCanonicalSmartWalletAddress } from '../../../../../server/_lib/canonicalWalletResolver.js'
-import { getOrCreateCreatorAgentWallet } from '../../../../../server/_lib/creatorAgentWallets.js'
+import { resolveCanonicalSmartWalletAddress } from '../../../../../server/_lib/wallet/canonicalWalletResolver.js'
+import { getOrCreateCreatorAgentWallet } from '../../../../../server/_lib/wallet/creatorAgentWallets.js'
 
 function setPublicCors(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')

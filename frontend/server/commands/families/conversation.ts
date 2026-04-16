@@ -6,7 +6,7 @@ import {
   isConversationalAgentInput,
   resolveConversationalPrompt,
 } from '../../agent/core/conversationalInput.js'
-import type { KeeprVaultRow } from '../../_lib/keeprRegistry.js'
+import type { KeeprVaultRow } from '../../_lib/keepr/keeprRegistry.js'
 import type { KeeprCommandResult } from '../types.js'
 import { formatGroupConnectGuidance, looksLikeGroupConnectIntent } from './keepr.js'
 

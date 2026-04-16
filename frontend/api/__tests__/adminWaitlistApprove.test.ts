@@ -40,15 +40,15 @@ vi.mock('../../packages/server-core/src/index.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
 
-vi.mock('../../server/_lib/waitlistSchema.js', () => ({
+vi.mock('../../server/_lib/onboarding/waitlistSchema.js', () => ({
   ensureWaitlistSchema: ensureWaitlistSchemaMock,
 }))
 
-vi.mock('../../server/_lib/adminAudit.js', () => ({
+vi.mock('../../server/_lib/admin/adminAudit.js', () => ({
   logAdminAction: logAdminActionMock,
 }))
 
-vi.mock('../../server/_lib/creatorXmtpAgents.js', () => ({
+vi.mock('../../server/_lib/messaging/creatorXmtpAgents.js', () => ({
   enableCswAgent: vi.fn(),
   getOrCreateCreatorXmtpAgent: vi.fn(),
 }))

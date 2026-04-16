@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => {
   }
 })
 
-vi.mock('../../server/_lib/privyCoinbaseSmartWallet.js', () => ({
+vi.mock('../../server/_lib/wallet/privyCoinbaseSmartWallet.js', () => ({
   CoinbaseSmartWalletHelperError: mocks.MockCoinbaseSmartWalletHelperError,
   isCoinbaseSmartWalletHelperError: (error: unknown) =>
     error instanceof mocks.MockCoinbaseSmartWalletHelperError ||
@@ -32,7 +32,7 @@ vi.mock('../../server/_lib/privyCoinbaseSmartWallet.js', () => ({
   resolvePrivyCoinbaseSmartWalletOwnerContext: mocks.resolvePrivyCoinbaseSmartWalletOwnerContext,
 }))
 
-vi.mock('../../server/_lib/privyWalletApi.js', () => ({
+vi.mock('../../server/_lib/wallet/privyWalletApi.js', () => ({
   walletRpc: mocks.walletRpc,
 }))
 
@@ -50,7 +50,7 @@ vi.mock('viem', async () => {
   }
 })
 
-import { createPrivyScwSigner } from '../../server/_lib/privyXmtpSigner.ts'
+import { createPrivyScwSigner } from '../../server/_lib/wallet/privyXmtpSigner.ts'
 
 describe('createPrivyScwSigner', () => {
   beforeEach(() => {

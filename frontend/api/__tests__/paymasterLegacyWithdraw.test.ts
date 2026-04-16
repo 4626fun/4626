@@ -34,14 +34,14 @@ vi.mock('../../server/_lib/auth/requestPrincipal.js', () => ({
   readRequestPrincipalAddress: (...args: unknown[]) => readRequestPrincipalMock(...args),
 }))
 
-vi.mock('../../server/_lib/deploySessions.js', () => ({
+vi.mock('../../server/_lib/deploy/deploySessions.js', () => ({
   getActiveDeploySessionForSender: vi.fn(),
   getDeploySessionByTokenHash: vi.fn(),
   hashDeployToken: vi.fn(),
   signDeployToken: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/contracts.js', () => ({
+vi.mock('../../server/_lib/onchain/contracts.js', () => ({
   getApiContracts: () => getApiContractsMock(),
 }))
 
@@ -65,7 +65,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
   readJsonBody: (...args: unknown[]) => readJsonBodyMock(...args),
 }))
 
-vi.mock('../../server/_lib/coinParties.js', () => ({
+vi.mock('../../server/_lib/onchain/coinParties.js', () => ({
   resolveCoinParties: vi.fn(() => Promise.resolve({ creator: sessionAddress, payoutRecipient: sessionAddress })),
 }))
 
