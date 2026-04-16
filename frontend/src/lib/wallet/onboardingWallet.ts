@@ -628,9 +628,11 @@ export async function sendPreparedOwnerTx(params: {
           (import.meta.env.VITE_CDP_SENDCALLS_PAYMASTER_URL as string | undefined)?.trim() || ''
         const rawCdpPaymasterUrl =
           (import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined)?.trim() || ''
-        const resolvedDirectUrl = sendCallsEnv.startsWith('https://')
+        const isExternalNonProxy = (url: string) =>
+          url.startsWith('https://') && !url.includes('/api/paymaster')
+        const resolvedDirectUrl = isExternalNonProxy(sendCallsEnv)
           ? sendCallsEnv
-          : rawCdpPaymasterUrl.startsWith('https://') && !rawCdpPaymasterUrl.includes('/api/paymaster')
+          : isExternalNonProxy(rawCdpPaymasterUrl)
             ? rawCdpPaymasterUrl
             : null
         // Never pass the session-protected proxy URL to sendCalls — the extension can't use it
