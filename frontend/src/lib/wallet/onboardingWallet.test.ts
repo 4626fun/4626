@@ -512,13 +512,13 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('retries wallet_sendCalls without capabilities when wallet rejects capability payload in self-auth primary path', async () => {
-    // In the new self-auth flow, sendCalls is the PRIMARY path (not fallback).
-    // First sendCalls call rejects capabilities, second call (without capabilities) succeeds.
+  it('sends wallet_sendCalls without paymaster capabilities when no direct CDP URL is configured', async () => {
+    // When VITE_CDP_SENDCALLS_PAYMASTER_URL is unset (test env default),
+    // sendCalls is sent without paymaster capabilities. The extension may
+    // still sponsor via its own mechanisms (Coinbase balance, Magic Spend).
     const ensurePaymasterSession = vi.fn(async () => true)
     const request = vi
       .fn()
-      .mockRejectedValueOnce(new Error('Invalid params: unexpected property capabilities'))
       .mockResolvedValueOnce('0xcall-bundle-id')
       .mockResolvedValueOnce({
         status: 200,
@@ -541,24 +541,22 @@ describe('sendPreparedOwnerTx', () => {
       ensurePaymasterSession,
     })
 
-    // UserOps should NOT have been attempted — sendCalls handled it
-    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
-    // 3 request calls: sendCalls with caps (rejected), sendCalls without caps, getCallsStatus
-    expect(request).toHaveBeenCalledTimes(3)
+    // sendCalls should be called without capabilities (no direct CDP URL in test env)
+    expect(request).toHaveBeenCalledTimes(2)
     expect(request).toHaveBeenNthCalledWith(
       1,
-      expect.objectContaining({
-        method: 'wallet_sendCalls',
-        params: [expect.objectContaining({ capabilities: expect.any(Object) })],
-      }),
-    )
-    expect(request).toHaveBeenNthCalledWith(
-      2,
       expect.objectContaining({
         method: 'wallet_sendCalls',
         params: [expect.not.objectContaining({ capabilities: expect.anything() })],
       }),
     )
+    // getCallsStatus poll
+    expect(request).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({ method: 'wallet_getCallsStatus' }),
+    )
+    // UserOps should NOT have been attempted — sendCalls succeeded
+    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
     expect(result.txHash).toBe(TX_HASH)
   })
 
