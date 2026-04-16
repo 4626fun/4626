@@ -12,10 +12,10 @@ import {
   getClientIp,
   rateLimitKey,
   RATE_LIMITS,
-} from '../../packages/server-core/src/index.js'
+} from '../../../packages/server-core/src/index.js'
 
 
-import { isSupabaseAdminConfigured } from '../../server/_lib/db/supabaseAdmin.js'
+import { isSupabaseAdminConfigured } from '../../../server/_lib/db/supabaseAdmin.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

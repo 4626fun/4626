@@ -25,7 +25,7 @@ function prefixRouteLoaders(prefix: string, loaders: ApiRouteLoaders): ApiRouteL
 // route families back into it so Vercel doesn't spend extra packaging passes
 // on wrappers that do not need runtime isolation.
 export const apiRouteLoaders: ApiRouteLoaders = {
-  'agents': () => import('./_agents.js'),
+  'agents': () => import('./agents/_agents.js'),
   'agent/creative': () => import('./agent/_creative.js'),
   'agent/stream': () => import('./agent/_stream.js'),
   // agent/process is deployed as a standalone function (api/agent/process.ts)
@@ -63,7 +63,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
 
   'flags/discover': () => import('./flags/_discover.js'),
   'flags/evaluate': () => import('./flags/_evaluate.js'),
-  'health': () => import('./_health.js'),
+  'health': () => import('./health/_health.js'),
 
   'onchain/coinTradeRewardsBatch': () => import('./onchain/_coinTradeRewardsBatch.js'),
   'onchain/protocolRewardsClaimable': () => import('./onchain/_protocolRewardsClaimable.js'),

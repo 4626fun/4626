@@ -6,13 +6,13 @@ import {
   RATE_LIMITS,
   checkRateLimit,
   rateLimitKey,
-} from '../../packages/server-core/src/index.js'
+} from '../../../packages/server-core/src/index.js'
 import {
   buildPublicAgentRegistrationUrl,
   buildPublicDomainVerificationUrl,
   STRICT_IMMUTABLE_AGENT_URI_SUMMARY,
-} from '../../src/lib/agent/erc8004AgentUriPolicy.js'
-import { getErc8004PublicOrigin } from '../../server/_lib/infra/origin.js'
+} from '../../../src/lib/agent/erc8004AgentUriPolicy.js'
+import { getErc8004PublicOrigin } from '../../../server/_lib/infra/origin.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
