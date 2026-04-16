@@ -1,8 +1,9 @@
 import { useMemo, useState } from 'react'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/Toast'
 
 import { Button } from '@/components/ui/Button'
 import { Alert } from '@/components/ui/Alert'
+import { SegmentedTabs } from '@/components/ui/Tabs'
 import { useCreatorWorkspace } from '@/hooks/useCreatorWorkspace'
 import type { WorkspaceTabId } from '@/lib/workspace/types'
 import { WorkspaceOverviewTab } from './WorkspaceOverviewTab'
@@ -96,27 +97,11 @@ export function CreatorWorkspacePanel(props: {
       </div>
 
       <div className="w-full overflow-x-auto">
-        <div className="inline-flex min-w-full gap-1 rounded-full border border-white/10 bg-white/5 p-1">
-          {WORKSPACE_TABS.map((tab) => {
-            const isActive = activeTab === tab.id
-            return (
-              <button
-                key={tab.id}
-                type="button"
-                className={`rounded-full px-3 py-1.5 text-xs transition ${
-                  isActive
-                    ? 'bg-brand-primary/20 text-zinc-100 border border-brand-primary/30'
-                    : 'text-zinc-500 hover:text-zinc-200'
-                }`}
-                onClick={() => {
-                  props.onTabChange?.(tab.id)
-                }}
-              >
-                {tab.label}
-              </button>
-            )
-          })}
-        </div>
+        <SegmentedTabs
+          tabs={WORKSPACE_TABS}
+          activeTab={activeTab}
+          onChange={(tabId) => props.onTabChange?.(tabId as WorkspaceTabId)}
+        />
       </div>
 
       {errorMessage ? <Alert variant="error" onDismiss={() => setErrorMessage(null)}>{errorMessage}</Alert> : null}

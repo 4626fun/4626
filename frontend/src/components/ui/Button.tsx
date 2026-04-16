@@ -15,7 +15,7 @@ const CDS_VARIANT_MAP = {
 } as const
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ variant = 'primary', size = 'md', loading = false, disabled, className, children, ...props }, ref) => {
+  ({ variant = 'primary', size = 'md', loading = false, disabled, className, children, color: _color, ...props }, ref) => {
     return (
       <CdsButton
         ref={ref}

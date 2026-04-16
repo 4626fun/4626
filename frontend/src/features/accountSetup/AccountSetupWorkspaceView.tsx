@@ -1,6 +1,6 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
 import { CheckCircle2, ExternalLink } from 'lucide-react'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/Toast'
 
 import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { LoadingText } from '@/components/ui/LoadingState'
@@ -102,7 +102,7 @@ export function AccountSetupWorkspaceView(props: {
   useEffect(() => {
     if (notice && notice !== shownNoticeRef.current) {
       shownNoticeRef.current = notice
-      toast.success(notice, { position: 'bottom-right', duration: 6000 })
+      toast.success(notice, { duration: 6000 })
     }
   }, [notice])
 
