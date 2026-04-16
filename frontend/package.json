@@ -72,6 +72,8 @@
   "dependencies": {
     "@4626/brand-kit": "workspace:*",
     "@buildersgarden/siwa": "^0.0.11",
+    "@coinbase/cds-icons": "^5.13.0",
+    "@coinbase/cds-web": "^8.62.1",
     "@coinbase/wallet-sdk": "4.3.7",
     "@effect-ak/tg-bot-client": "^1.5.0",
     "@flags-sdk/vercel": "^1.2.1",
@@ -181,7 +183,16 @@
       "brace-expansion": "5.0.5",
       "elliptic": "6.6.1",
       "langsmith": "0.5.18",
-      "serialize-javascript": "7.0.5"
+      "serialize-javascript": "7.0.5",
+      "@coinbase/cds-web>react": "$react",
+      "@coinbase/cds-web>react-dom": "$react-dom",
+      "@coinbase/cds-web>framer-motion": "$framer-motion",
+      "@coinbase/cds-icons>react": "$react",
+      "@coinbase/cds-icons>react-dom": "$react-dom",
+      "@coinbase/cds-common>react": "$react",
+      "@coinbase/cds-common>react-dom": "$react-dom",
+      "@react-spring/web>react": "$react",
+      "@react-spring/web>react-dom": "$react-dom"
     },
     "patchedDependencies": {
       "elliptic@6.6.1": "patches/elliptic@6.6.1.patch"
