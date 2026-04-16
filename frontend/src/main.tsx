@@ -5,6 +5,8 @@ import { BrowserRouter } from 'react-router-dom'
 import { RootRouter } from './RootRouter'
 import { ThemeProvider } from '@/lib/ui/theme'
 import { ThemeProvider as CdsThemeProvider, MediaQueryProvider as CdsMediaQueryProvider } from '@coinbase/cds-web/system'
+import { PortalProvider as CdsPortalProvider } from '@coinbase/cds-web/overlays'
+import { CdsToastBridge } from '@/components/ui/Toast'
 import { theme4626 } from '@/theme/cds-theme'
 import { privyAnalyticsFlag } from '@/lib/flags/featureFlags'
 import {
@@ -341,9 +343,12 @@ if (!redirectWwwToCanonicalApex()) {
       <ThemeProvider>
         <CdsMediaQueryProvider>
           <CdsThemeProvider theme={theme4626} activeColorScheme="dark">
-            <BrowserRouter>
-              <RootRouter />
-            </BrowserRouter>
+            <CdsPortalProvider>
+              <CdsToastBridge />
+              <BrowserRouter>
+                <RootRouter />
+              </BrowserRouter>
+            </CdsPortalProvider>
           </CdsThemeProvider>
         </CdsMediaQueryProvider>
       </ThemeProvider>

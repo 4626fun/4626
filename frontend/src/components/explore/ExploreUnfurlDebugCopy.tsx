@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 
 import { debugLogsFlag } from '@/lib/flags/featureFlags'
 import { ExploreCopyButton } from '@/components/explore/ExploreUiPrimitives'
+import { Tooltip } from '@/components/ui/Tooltip'
 
 const DEFAULT_SOCIAL_BOT_USER_AGENT = 'Twitterbot/1.0'
 
@@ -56,16 +57,15 @@ export function ExploreUnfurlDebugCopy({
   return (
     <div data-screenshot-hide="true" className={rootClassName}>
       <span className="uppercase tracking-[0.16em] text-zinc-500">QA</span>
-      <div className="group relative inline-flex items-center">
-        <ExploreCopyButton
-          text={debugUrl}
-          title={label}
-          className="rounded-md p-1 hover:bg-white/8"
-        />
-        <div className="pointer-events-none absolute left-1/2 top-full z-20 mt-2 w-max max-w-[min(94vw,680px)] -translate-x-1/2 rounded-md border border-white/12 bg-black/92 px-2 py-1 text-[10px] text-zinc-300 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100">
-          <span className="font-mono break-all">{tooltipText}</span>
+      <Tooltip content={<span className="font-mono text-[10px] break-all">{tooltipText}</span>} placement="bottom">
+        <div className="inline-flex items-center">
+          <ExploreCopyButton
+            text={debugUrl}
+            title={label}
+            className="rounded-md p-1 hover:bg-white/8"
+          />
         </div>
-      </div>
+      </Tooltip>
     </div>
   )
 }

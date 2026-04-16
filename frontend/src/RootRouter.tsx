@@ -1,6 +1,5 @@
 import { Suspense, lazy, useEffect, type ComponentType, type ReactNode } from 'react'
 import { Route, Routes, useLocation } from 'react-router-dom'
-import { Toaster } from 'sonner'
 import { APP_ORIGIN, getHostMode, isCurrentWindowUrl } from '@/lib/env/host'
 import { isAppOnlyPath } from '@/lib/auth/appOnlyPaths'
 import { AppLoadingState } from '@/components/layout/AppLoadingState'
@@ -83,20 +82,6 @@ export function RootRouter() {
 
   return (
     <>
-      <Toaster
-        position="bottom-right"
-        theme="dark"
-        toastOptions={{
-          classNames: {
-            toast: 'bg-zinc-900 border border-zinc-800 text-zinc-100 rounded-xl shadow-void text-sm',
-            success: 'border-emerald-400/20',
-            error: 'border-rose-400/20',
-            warning: 'border-amber-400/20',
-            info: 'border-cyan-400/20',
-          },
-        }}
-      />
-
       {shouldRouteToApp ? (
         <AppHostRedirect target={appRedirectTarget} />
       ) : (

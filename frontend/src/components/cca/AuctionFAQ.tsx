@@ -1,6 +1,6 @@
-import { motion, AnimatePresence } from 'framer-motion'
 import { useState } from 'react'
-import { ChevronDown, HelpCircle } from 'lucide-react'
+import { HelpCircle } from 'lucide-react'
+import { Accordion, AccordionItem } from '@coinbase/cds-web/accordion'
 
 interface FAQItem {
   question: string
@@ -38,7 +38,7 @@ const faqItems: FAQItem[] = [
 ]
 
 export function AuctionFAQ() {
-  const [openIndex, setOpenIndex] = useState<number | null>(0)
+  const [activeKey, setActiveKey] = useState<string | null>('0')
 
   return (
     <div className="border border-white/10 rounded-2xl overflow-hidden bg-black/20">
@@ -47,49 +47,19 @@ export function AuctionFAQ() {
         <h4 className="headline text-lg">Common Questions</h4>
       </div>
 
-      <div className="divide-y divide-white/10">
+      <Accordion activeKey={activeKey} onChange={setActiveKey}>
         {faqItems.map((item, index) => (
-          <motion.div
+          <AccordionItem
             key={index}
-            initial={{ opacity: 0, y: 6 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: index * 0.03 }}
-            className="bg-transparent"
+            itemKey={String(index)}
+            title={item.question}
           >
-            <button
-              onClick={() => setOpenIndex(openIndex === index ? null : index)}
-              className="w-full text-left px-6 py-5 flex items-center justify-between gap-4 group"
-            >
-              <span className="text-[15px] font-medium text-white group-hover:text-uniswap transition-colors">
-                {item.question}
-              </span>
-              <motion.div
-                animate={{ rotate: openIndex === index ? 180 : 0 }}
-                transition={{ duration: 0.2 }}
-                className="text-zinc-500 group-hover:text-white transition-colors"
-              >
-                <ChevronDown className="w-4 h-4" />
-              </motion.div>
-            </button>
-
-            <AnimatePresence>
-              {openIndex === index && (
-                <motion.div
-                  initial={{ height: 0, opacity: 0 }}
-                  animate={{ height: 'auto', opacity: 1 }}
-                  exit={{ height: 0, opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="overflow-hidden"
-                >
-                  <div className="px-6 pb-5 text-sm text-zinc-400 leading-relaxed max-w-prose">
-                    {item.answer}
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </motion.div>
+            <div className="text-sm text-zinc-400 leading-relaxed max-w-prose">
+              {item.answer}
+            </div>
+          </AccordionItem>
         ))}
-      </div>
+      </Accordion>
 
       <div className="px-6 py-5 border-t border-white/10">
         <a
@@ -103,4 +73,3 @@ export function AuctionFAQ() {
     </div>
   )
 }
-

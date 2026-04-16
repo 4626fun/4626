@@ -1,7 +1,8 @@
 import { isValidElement, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { AnimatePresence, motion } from 'framer-motion'
-import { ArrowRight, ChevronDown, Search, ShieldCheck, X } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { ArrowRight, Search, ShieldCheck, X } from 'lucide-react'
+import { FaqAccordion } from '@/components/ui/Accordion'
 import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
 import { SHARE_SYMBOL_PREFIX } from '@/lib/tokens/tokenSymbols'
 import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
@@ -62,61 +63,6 @@ function normalizeSchemaText(node: ReactNode): string {
   return faqNodeToPlainText(node).replace(/\s+/g, ' ').trim()
 }
 
-function FaqAccordionItem({
-  item,
-  isOpen,
-  onToggle,
-}: {
-  item: FaqItem
-  isOpen: boolean
-  onToggle: () => void
-}) {
-  return (
-    <div
-      id={`faq-${item.id}`}
-      className={`relative ${
-        isOpen ? 'bg-white/2' : 'hover:bg-white/1.5'
-      } transition-colors`}
-    >
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={isOpen}
-        aria-controls={`faq-panel-${item.id}`}
-        className="w-full flex items-start justify-between gap-6 px-5 py-5 text-left group focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-cyan-400/40"
-      >
-        <div className="space-y-1">
-          <div className="text-white font-light text-base sm:text-lg">{item.question}</div>
-        </div>
-        <ChevronDown
-          className={`w-5 h-5 mt-1 text-zinc-600 group-hover:text-zinc-400 transition-transform ${
-            isOpen ? 'rotate-180' : ''
-          }`}
-        />
-      </button>
-
-      <AnimatePresence initial={false}>
-        {isOpen ? (
-          <motion.div
-            id={`faq-panel-${item.id}`}
-            key="content"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.22 }}
-            className="overflow-hidden"
-          >
-            <div className="pb-6 px-5">
-              <div className="text-sm text-zinc-400/90 font-light leading-relaxed space-y-3">
-                {item.answer}
-              </div>
-            </div>
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
-    </div>
-  )
-}
 
 const FAQ_SECTIONS: FaqSection[] = [
   {
@@ -955,16 +901,19 @@ export function Faq() {
                       </div>
 
                       <div className={`${surface} overflow-hidden`}>
-                        <div className="divide-y divide-white/5">
-                        {section.items.map((item) => (
-                          <FaqAccordionItem
-                            key={item.id}
-                            item={item}
-                            isOpen={!!open[item.id]}
-                            onToggle={() => setOpen((prev) => ({ ...prev, [item.id]: !prev[item.id] }))}
-                          />
-                        ))}
-                        </div>
+                        <FaqAccordion
+                          items={section.items.map((item) => ({
+                            key: item.id,
+                            title: item.question,
+                            children: (
+                              <div className="text-sm text-zinc-400/90 font-light leading-relaxed space-y-3">
+                                {item.answer}
+                              </div>
+                            ),
+                          }))}
+                          openKeys={open}
+                          onToggle={(key) => setOpen((prev) => ({ ...prev, [key]: !prev[key] }))}
+                        />
                       </div>
                     </div>
                   ))}

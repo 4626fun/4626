@@ -4,10 +4,9 @@ import { useAccount, usePublicClient, useReadContract, useWriteContract, useWait
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { formatUnits, getAddress, isAddress, parseUnits, erc20Abi, type Address } from 'viem'
 import { base } from 'viem/chains'
-import { toast } from 'sonner'
+import { toast } from '@/components/ui/Toast'
 import {
   ArrowDownToLine,
-  ArrowUpFromLine,
   CheckCircle2,
   ExternalLink,
   Clock,
@@ -16,6 +15,7 @@ import {
 } from 'lucide-react'
 import { Alert } from '@/components/ui/Alert'
 import { Button } from '@/components/ui/Button'
+import { SegmentedTabs } from '@/components/ui/Tabs'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { AccountModeIndicator } from '@/components/ui/AccountModeIndicator'
 import { AKITA, CONTRACTS } from '../config/contracts'
@@ -817,47 +817,26 @@ export function Vault() {
           >
             <span className="label">Vault Operations</span>
             <h2 className="headline text-3xl sm:text-5xl mt-4 sm:mt-6">Manage Position</h2>
-            <div className="mt-4 inline-flex items-center gap-1 rounded-full border border-white/10 bg-white/5 p-1">
-              <button
-                type="button"
-                className={`rounded-full px-3 py-1.5 text-xs transition ${
-                  !showWorkspacePanel
-                    ? 'bg-brand-primary/20 text-zinc-100 border border-brand-primary/30'
-                    : 'text-zinc-500 hover:text-zinc-200'
-                }`}
-                onClick={() =>
+            <div className="mt-4 inline-flex">
+              <SegmentedTabs
+                tabs={[
+                  { id: 'manage', label: 'Position' },
+                  { id: 'workspace', label: 'Workspace' },
+                ]}
+                activeTab={showWorkspacePanel ? 'workspace' : 'manage'}
+                onChange={(tabId) =>
                   setSearchParams(
                     updateVaultWorkspaceQuery({
                       current: searchParams,
-                      panel: 'manage',
+                      panel: tabId as 'manage' | 'workspace',
+                      ...(tabId === 'workspace'
+                        ? { tab: workspaceQuery.tab, taskId: workspaceQuery.taskId }
+                        : {}),
                     }),
                     { replace: true },
                   )
                 }
-              >
-                Position
-              </button>
-              <button
-                type="button"
-                className={`rounded-full px-3 py-1.5 text-xs transition ${
-                  showWorkspacePanel
-                    ? 'bg-brand-primary/20 text-zinc-100 border border-brand-primary/30'
-                    : 'text-zinc-500 hover:text-zinc-200'
-                }`}
-                onClick={() =>
-                  setSearchParams(
-                    updateVaultWorkspaceQuery({
-                      current: searchParams,
-                      panel: 'workspace',
-                      tab: workspaceQuery.tab,
-                      taskId: workspaceQuery.taskId,
-                    }),
-                    { replace: true },
-                  )
-                }
-              >
-                Workspace
-              </button>
+              />
             </div>
           </motion.div>
 
@@ -865,28 +844,11 @@ export function Vault() {
             {/* Main Form */}
             <div className="lg:col-span-3 space-y-10 sm:space-y-12">
               {/* Mode Selector */}
-              <div className="w-full inline-flex items-center gap-0.5 rounded-full border border-white/10 bg-linear-to-b from-white/8 to-white/3 p-0.5 backdrop-blur-sm">
-                {tabs.map((tab) => {
-                  const active = activeTab === tab
-                  const Icon = tab === 'Deposit' ? ArrowDownToLine : ArrowUpFromLine
-                  return (
-                    <button
-                      key={tab}
-                      type="button"
-                      onClick={() => setActiveTab(tab)}
-                      aria-pressed={active}
-                      className={`flex-1 h-10 rounded-full border flex items-center justify-center gap-2 text-[11px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-primary ${
-                        active
-                          ? 'border-brand-primary/35 bg-brand-primary/18 text-zinc-100 shadow-[0_8px_20px_-14px_rgba(0,82,255,0.9)]'
-                          : 'border-transparent text-zinc-500 hover:border-white/10 hover:text-zinc-200'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
-                      <span className="font-medium">{tab}</span>
-                    </button>
-                  )
-                })}
-              </div>
+              <SegmentedTabs
+                tabs={tabs.map((tab) => ({ id: tab, label: tab }))}
+                activeTab={activeTab}
+                onChange={(tabId) => setActiveTab(tabId as TabType)}
+              />
 
               {/* Account Mode Indicator */}
               <AccountModeIndicator compact />
