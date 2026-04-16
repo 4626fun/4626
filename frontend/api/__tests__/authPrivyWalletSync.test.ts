@@ -5,12 +5,18 @@ import { applyEnv, createMockReq, createMockRes, readSetCookies } from './helper
 
 const {
   getDbMock,
+  checkRateLimitMock,
+  getClientIpMock,
+  rateLimitKeyMock,
   ensureWaitlistSchemaMock,
   syncUserWalletsMock,
   verifyAuthTokenMock,
   getUserByIdMock,
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
+  checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
+  getClientIpMock: vi.fn(() => '127.0.0.1'),
+  rateLimitKeyMock: vi.fn((...parts: string[]) => parts.join(':')),
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
   syncUserWalletsMock: vi.fn(async () => ({
     profileId: 1,
@@ -27,16 +33,53 @@ const {
   })),
 }))
 
-vi.mock('../../server/_lib/db/postgres.js', () => ({
+vi.mock('../../packages/server-core/src/index.js', () => ({
+  COOKIE_SESSION: '__Host-4626_session',
+  handleOptions: vi.fn(() => false),
+  setCors: vi.fn(),
+  setNoStore: vi.fn(),
+  setCookie: vi.fn((_req: any, res: any, name: string, value: string) => {
+    const current = res.getHeader('set-cookie')
+    const next = `${name}=${value}; Path=/; HttpOnly`
+    if (!current) {
+      res.setHeader('set-cookie', [next])
+      return
+    }
+    if (Array.isArray(current)) {
+      res.setHeader('set-cookie', [...current, next])
+      return
+    }
+    res.setHeader('set-cookie', [String(current), next])
+  }),
+  makeSessionToken: vi.fn(() => 'test-session-token'),
   getDb: getDbMock,
-}))
-
-vi.mock('../../server/_lib/waitlistSchema.js', () => ({
-  ensureWaitlistSchema: ensureWaitlistSchemaMock,
-}))
-
-vi.mock('../../server/_lib/walletSync.js', () => ({
+  RATE_LIMITS: {
+    authPrivy: { windowMs: 60_000, maxRequests: 20 },
+  },
+  checkRateLimit: checkRateLimitMock,
+  getClientIp: getClientIpMock,
+  rateLimitKey: rateLimitKeyMock,
+  classifyLinkedAccounts: vi.fn((user: any) => {
+    const linkedAccounts = Array.isArray(user?.linkedAccounts) ? user.linkedAccounts : []
+    const smartWallet = linkedAccounts.find((entry: any) => entry?.type === 'smart_wallet' && typeof entry?.address === 'string')
+    const allWallets = linkedAccounts
+      .filter((entry: any) => typeof entry?.address === 'string')
+      .map((entry: any) => ({
+        address: String(entry.address),
+        chain: entry?.chainType === 'solana' ? 'solana' : 'evm',
+      }))
+    return {
+      allWallets,
+      canonicalSmartWallet: smartWallet ? { address: String(smartWallet.address) } : null,
+      activeOwnerWallet: null,
+      primaryWalletAddress: smartWallet ? String(smartWallet.address) : null,
+    }
+  }),
   syncUserWallets: syncUserWalletsMock,
+}))
+
+vi.mock('../../server/_lib/onboarding/waitlistSchema.js', () => ({
+  ensureWaitlistSchema: ensureWaitlistSchemaMock,
 }))
 
 vi.mock('@privy-io/server-auth', () => ({

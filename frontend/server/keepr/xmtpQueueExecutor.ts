@@ -13,7 +13,7 @@ import {
 import { privateKeyToAccount } from 'viem/accounts'
 import { base } from 'viem/chains'
 
-import { getKeeprVaultAutomationByVaultAddress } from '../_lib/keeprAutomation.js'
+import { getKeeprVaultAutomationByVaultAddress } from '../_lib/keepr/keeprAutomation.js'
 import {
   formatTrustZoneDisabledError,
   isKeeprTrustZoneWriteEnabled,
@@ -22,21 +22,21 @@ import {
 } from '../_lib/agentControl/trustZones.js'
 import { getDb } from '../_lib/db/postgres.js'
 import { logger } from '../_lib/infra/logger.js'
-import { resolveXmtpDbDirectory } from '../_lib/xmtpDbDirectory.js'
+import { resolveXmtpDbDirectory } from '../_lib/messaging/xmtpDbDirectory.js'
 import {
   fileLooksLikePlainSqlite,
   hasLegacyMigrationBackupForFile,
-} from '../_lib/xmtpDbEncryption.js'
-import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../_lib/creatorXmtpAgents.js'
+} from '../_lib/messaging/xmtpDbEncryption.js'
+import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../_lib/messaging/creatorXmtpAgents.js'
 import {
   findCoinbaseSmartWalletOwnerIndex,
   sendCoinbaseSmartWalletUserOperation,
   sendPrivyCoinbaseSmartWalletUserOperation,
   resolvePrivyCoinbaseSmartWalletOwnerContext,
-} from '../_lib/privyCoinbaseSmartWallet.js'
-import { createPrivyScwSigner } from '../_lib/privyXmtpSigner.js'
-import { ensureKeeprSchema } from '../_lib/keeprSchema.js'
-import { isOfficialCharmVault, officialCharmVaultError } from '../_lib/charmVaults.js'
+} from '../_lib/wallet/privyCoinbaseSmartWallet.js'
+import { createPrivyScwSigner } from '../_lib/wallet/privyXmtpSigner.js'
+import { ensureKeeprSchema } from '../_lib/keepr/keeprSchema.js'
+import { isOfficialCharmVault, officialCharmVaultError } from '../_lib/deploy/charmVaults.js'
 
 declare const process: { env: Record<string, string | undefined>; cwd(): string }
 

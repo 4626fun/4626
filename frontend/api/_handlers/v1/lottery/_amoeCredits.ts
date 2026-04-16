@@ -10,8 +10,8 @@ import {
 } from '../../../../packages/server-core/src/index.js'
 
 
-import { resolveAmoeWallet } from '../../../../server/_lib/amoeWalletResolver.js'
-import { getAmoeCreditSnapshot } from '../../../../server/_lib/lotteryAmoe.js'
+import { resolveAmoeWallet } from '../../../../server/_lib/lottery/amoeWalletResolver.js'
+import { getAmoeCreditSnapshot } from '../../../../server/_lib/lottery/lotteryAmoe.js'
 
 function setPublicCors(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')

@@ -33,7 +33,7 @@ vi.mock('../../server/_lib/agent/agentApiGuard.js', () => ({
   guardAgentApiRequest: mocks.guardAgentApiRequest,
 }))
 
-vi.mock('../../server/_lib/contracts.js', () => ({
+vi.mock('../../server/_lib/onchain/contracts.js', () => ({
   getApiContracts: mocks.getApiContracts,
 }))
 

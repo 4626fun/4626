@@ -2,7 +2,7 @@ import type { VercelRequest } from '@vercel/node'
 
 import { readSessionFromRequest } from '../../auth/_shared.js'
 import { readSiwaAgentFromRequest } from '../../auth/_siwa.js'
-import { resolveAuthorizedWalletProfile } from '../canonicalWalletResolver.js'
+import { resolveAuthorizedWalletProfile } from '../wallet/canonicalWalletResolver.js'
 
 export type RequestPrincipal = {
   source: 'session' | 'siwa'

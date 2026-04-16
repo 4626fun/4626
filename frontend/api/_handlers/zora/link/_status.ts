@@ -10,7 +10,7 @@ import {
   getClientIp,
   rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
-import { extractZoraCrossAppAccounts, verifyPrivyForAccounts } from '../../../../server/_lib/accountsIdentity.js'
+import { extractZoraCrossAppAccounts, verifyPrivyForAccounts } from '../../../../server/_lib/identity/accountsIdentity.js'
 
 type ZoraLinkStatusResponse = {
   zoraLinked: boolean

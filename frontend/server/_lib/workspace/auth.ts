@@ -1,6 +1,6 @@
 import type { VercelRequest } from '@vercel/node'
 
-import { getKeeprVaultByVaultAddress, type KeeprVaultRow } from '../keeprRegistry.js'
+import { getKeeprVaultByVaultAddress, type KeeprVaultRow } from '../keepr/keeprRegistry.js'
 import { readRequestPrincipal, resolveAuthorizedRequestPrincipal } from '../auth/requestPrincipal.js'
 import { isServerAdminAddress } from '../infra/trust.js'
 

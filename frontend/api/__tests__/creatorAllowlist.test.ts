@@ -34,11 +34,11 @@ vi.mock('../../server/_lib/db/postgres.js', () => ({
   isDbConfigured: isDbConfiguredMock,
 }))
 
-vi.mock('../../server/_lib/creatorWallets.js', () => ({
+vi.mock('../../server/_lib/wallet/creatorWallets.js', () => ({
   ensureCreatorWalletsSchema: ensureCreatorWalletsSchemaMock,
 }))
 
-vi.mock('../../server/_lib/coinParties.js', () => ({
+vi.mock('../../server/_lib/onchain/coinParties.js', () => ({
   isAddressLike: vi.fn((value: string) => /^0x[a-fA-F0-9]{40}$/.test(String(value || ''))),
   resolveCoinParties: resolveCoinPartiesMock,
 }))

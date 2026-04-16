@@ -565,12 +565,28 @@ describe('sendPreparedOwnerTx', () => {
     // Use api.developer.coinbase.com to verify the domain normalisation
     // to api.cdp.coinbase.com (required by keys.coinbase.com CSP).
     vi.stubEnv('VITE_CDP_SENDCALLS_PAYMASTER_URL', 'https://api.developer.coinbase.com/rpc/v1/base/TESTKEY')
-    const request = vi
-      .fn()
-      .mockResolvedValueOnce('0xcall-bundle-id')
-      .mockResolvedValueOnce({
-        status: 200,
-        receipts: [{ transactionHash: TX_HASH }],
+    try {
+      const request = vi
+        .fn()
+        .mockResolvedValueOnce('0xcall-bundle-id')
+        .mockResolvedValueOnce({
+          status: 200,
+          receipts: [{ transactionHash: TX_HASH }],
+        })
+
+      const result = await sendPreparedOwnerTx({
+        txRequest: TX_REQUEST,
+        walletClient: {
+          account: CANONICAL_CSW,
+          sendTransaction: vi.fn(async () => TX_HASH),
+          request,
+        },
+        chainId: 8453,
+        authHeaders: async () => ({ Authorization: 'Bearer test' }),
+        signerAddress: CANONICAL_CSW,
+        executionMode: 'canonicalSmartWallet',
+        canonicalSmartWalletAddress: CANONICAL_CSW,
+        publicClient: {},
       })
 
     const result = await sendPreparedOwnerTx({

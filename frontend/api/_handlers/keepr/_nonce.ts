@@ -9,7 +9,7 @@ import {
 } from '../../../packages/server-core/src/index.js'
 
 
-import { buildKeeprJoinMessage, issueKeeprJoinNonce } from '../../../server/_lib/keeprProof.js'
+import { buildKeeprJoinMessage, issueKeeprJoinNonce } from '../../../server/_lib/keepr/keeprProof.js'
 
 type KeeprNonceResponse = {
   vaultAddress: `0x${string}`

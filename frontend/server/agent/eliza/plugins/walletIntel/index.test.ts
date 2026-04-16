@@ -12,16 +12,16 @@ const {
   getWalletLabelsBatchMock: vi.fn(),
 }))
 
-vi.mock('../../../../_lib/walletIntelligence.js', () => ({
+vi.mock('../../../../_lib/wallet/walletIntelligence.js', () => ({
   buildWalletIntelligence: buildWalletIntelligenceMock,
 }))
-vi.mock('../../../../_lib/funderTrace.js', () => ({
+vi.mock('../../../../_lib/lens/funderTrace.js', () => ({
   traceFundersMultiChain: traceFundersMultiChainMock,
 }))
-vi.mock('../../../../_lib/debankPortfolio.js', () => ({
+vi.mock('../../../../_lib/lens/debankPortfolio.js', () => ({
   getWalletPortfolio: getWalletPortfolioMock,
 }))
-vi.mock('../../../../_lib/walletLabels.js', () => ({
+vi.mock('../../../../_lib/wallet/walletLabels.js', () => ({
   getWalletLabelsBatch: getWalletLabelsBatchMock,
 }))
 

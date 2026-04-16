@@ -21,12 +21,12 @@ vi.mock('../../server/_lib/auth/session.js', () => ({
   getSessionAddress: getSessionAddressMock,
 }))
 
-vi.mock('../../server/_lib/keeprRegistry.js', () => ({
+vi.mock('../../server/_lib/keepr/keeprRegistry.js', () => ({
   computeConfigHash: computeConfigHashMock,
   upsertKeeprVault: upsertKeeprVaultMock,
 }))
 
-vi.mock('../../server/_lib/creatorRegistryVerification.js', () => ({
+vi.mock('../../server/_lib/onchain/creatorRegistryVerification.js', () => ({
   validateCreatorRegistryBinding: validateCreatorRegistryBindingMock,
 }))
 

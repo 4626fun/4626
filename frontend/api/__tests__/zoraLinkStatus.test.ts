@@ -8,7 +8,7 @@ const { verifyPrivyForAccountsMock, extractZoraCrossAppAccountsMock } = vi.hoist
   extractZoraCrossAppAccountsMock: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/accountsIdentity.js', () => ({
+vi.mock('../../server/_lib/identity/accountsIdentity.js', () => ({
   verifyPrivyForAccounts: verifyPrivyForAccountsMock,
   extractZoraCrossAppAccounts: extractZoraCrossAppAccountsMock,
 }))

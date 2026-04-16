@@ -30,15 +30,15 @@ function resetTrendEnv() {
   }
 }
 
-vi.mock('../_lib/creatorAgentWallets.js', () => ({
+vi.mock('../_lib/wallet/creatorAgentWallets.js', () => ({
   getOrCreateCreatorAgentWallet: getOrCreateCreatorAgentWalletMock,
 }))
 
-vi.mock('../_lib/privyWalletApi.js', () => ({
+vi.mock('../_lib/wallet/privyWalletApi.js', () => ({
   walletRpc: walletRpcMock,
 }))
 
-vi.mock('../_lib/zoraTrendOpsStore.js', () => ({
+vi.mock('../_lib/zora/zoraTrendOpsStore.js', () => ({
   markTrendOpFunnelPending: markTrendOpFunnelPendingMock,
   markTrendOpFunnelCompleted: markTrendOpFunnelCompletedMock,
   markTrendOpFailed: markTrendOpFailedMock,

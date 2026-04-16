@@ -47,11 +47,11 @@ vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
 }))
 
-vi.mock('../../server/_lib/waitlistSchema.js', () => ({
+vi.mock('../../server/_lib/onboarding/waitlistSchema.js', () => ({
   ensureWaitlistSchema: ensureWaitlistSchemaMock,
 }))
 
-vi.mock('../../server/_lib/accountsIdentity.js', () => ({
+vi.mock('../../server/_lib/identity/accountsIdentity.js', () => ({
   ensureAccountsIdentitySchema: ensureAccountsIdentitySchemaMock,
   syncEmailIdentity: syncEmailIdentityMock,
   upsertAccount: upsertAccountMock,
@@ -59,7 +59,7 @@ vi.mock('../../server/_lib/accountsIdentity.js', () => ({
   buildAccountsMePayload: buildAccountsMePayloadMock,
 }))
 
-vi.mock('../../server/_lib/identityRecovery.js', () => ({
+vi.mock('../../server/_lib/identity/identityRecovery.js', () => ({
   assertNoEmailPrivyCollision: assertNoEmailPrivyCollisionMock,
   isIdentityRecoveryRequiredError: (error: any) => error?.code === 'IDENTITY_RECOVERY_REQUIRED',
 }))

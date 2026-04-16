@@ -19,7 +19,7 @@ Source of truth by concern:
 - Waitlist entry + email capture: `frontend/api/_handlers/_routes.waitlist.ts` and `frontend/api/_handlers/waitlist/_bootstrap.ts`
 - Signed-in setup workspace shell: `frontend/src/features/waitlist/WaitlistFlow.tsx` and `frontend/src/features/waitlist/WaitlistSetupWorkspace.tsx`
 - Shared setup-first account modules: `frontend/src/features/accountSetup/AccountSetupWorkspaceView.tsx`, `frontend/src/features/accountSetup/useAccountSetupController.ts`, and `frontend/src/features/accountSetup/shared.ts`
-- Linked identity state + scoring: `frontend/api/_handlers/accounts/_me.ts` and `frontend/server/_lib/accountsIdentity.ts`
+- Linked identity state + scoring: `frontend/api/_handlers/accounts/_me.ts` and `frontend/server/_lib/identity/accountsIdentity.ts`
 - Zora discovery + canonical CSW refresh: `frontend/api/_handlers/_routes.zora.ts` and `frontend/api/_handlers/zora/_resolve.ts`
 - Cross-origin auth/session continuation: `frontend/api/_handlers/auth/_handoff-create.ts`, `frontend/api/_handlers/auth/_handoff-redeem.ts`, `frontend/src/features/waitlist/waitlistHandoff.ts`, and `frontend/src/hooks/useSiweAuth.ts`
 - Advanced linked-identity / recovery surface: `frontend/src/pages/accounts/AccountsPage.tsx`

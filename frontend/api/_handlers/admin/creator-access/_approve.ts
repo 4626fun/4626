@@ -20,7 +20,7 @@ import {
 
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/db/supabaseAdmin.js'
 
-import { logAdminAction } from '../../../../server/_lib/adminAudit.js'
+import { logAdminAction } from '../../../../server/_lib/admin/adminAudit.js'
 
 
 type ApproveBody = {

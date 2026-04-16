@@ -45,7 +45,7 @@ vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   },
 }))
 
-vi.mock('../../server/_lib/charmVaults.js', () => ({
+vi.mock('../../server/_lib/deploy/charmVaults.js', () => ({
   isOfficialCharmVault: mocks.isOfficialCharmVault,
   officialCharmVaultError: mocks.officialCharmVaultError,
 }))

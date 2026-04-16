@@ -24,6 +24,7 @@ import {
   RATE_LIMITS,
   checkRateLimit,
   rateLimitKey,
+  queryFeedbackIndex,
 } from '../../../../../packages/server-core/src/index.js'
 
 
@@ -35,7 +36,6 @@ import {
   type OnChainFeedback,
   type FeedbackSummary,
 } from '../../../../../server/_lib/agent/erc8004.js'
-import { queryFeedbackIndex } from '../../../../../server/_lib/walletIntelligenceCache.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

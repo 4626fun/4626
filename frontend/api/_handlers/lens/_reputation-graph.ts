@@ -24,8 +24,8 @@ import {
   rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
 
-import { buildReputationGraph } from '../../../server/_lib/reputationGraph.js'
-import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
+import { buildReputationGraph } from '../../../server/_lib/lens/reputationGraph.js'
+import { tryUploadImmutableJson } from '../../../server/_lib/lens/lensGrove.js'
 
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }

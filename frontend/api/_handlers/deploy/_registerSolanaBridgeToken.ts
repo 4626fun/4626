@@ -42,7 +42,7 @@ import {
   probeRemoteProvisionerHealth,
   readSolanaBridgeLivenessPolicy,
 } from '../../../server/_lib/onchain/solanaBridgePolicy.js'
-import { resolveShareTokenMetadataUrls } from '../../../server/_lib/shareTokenMetadata.js'
+import { resolveShareTokenMetadataUrls } from '../../../server/_lib/infra/shareTokenMetadata.js'
 import {
   isRunnerUnavailable,
   runWrapToken,

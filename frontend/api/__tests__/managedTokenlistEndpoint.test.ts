@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   fetchBytesMock: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/blob.js', () => ({
+vi.mock('../../server/_lib/infra/blob.js', () => ({
   blobHeadOrNull: mocks.blobHeadOrNullMock,
   fetchBytes: mocks.fetchBytesMock,
   blobPutBytes: vi.fn(),

@@ -1,8 +1,8 @@
 import type { Address } from 'viem'
 
-import { checkSharesEligibility } from '../../_lib/keeprGating.js'
-import { getKeeprVaultByGroupId, setKeeprJoinLocked } from '../../_lib/keeprRegistry.js'
-import { formatNumberedCommandFallback } from '../../_lib/chatCommandFallback.js'
+import { checkSharesEligibility } from '../../_lib/keepr/keeprGating.js'
+import { getKeeprVaultByGroupId, setKeeprJoinLocked } from '../../_lib/keepr/keeprRegistry.js'
+import { formatNumberedCommandFallback } from '../../_lib/messaging/chatCommandFallback.js'
 import type { KeeprCommandResult, KeeprRole } from '../types.js'
 
 type KeeprHelpTopic = 'quick' | 'all' | 'core' | 'coin' | 'social' | 'ops' | 'wallet' | 'group' | 'admin'

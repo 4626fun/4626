@@ -12,7 +12,7 @@ import { promisify } from 'node:util'
 
 import sharp from 'sharp'
 import { renderPremiumTokenIcon } from './_premiumTokenIconRenderer.js'
-import { ensureFontconfig } from '../../../server/_lib/ensureFontconfig.js'
+import { ensureFontconfig } from '../../../server/_lib/infra/ensureFontconfig.js'
 
 const execFileP = promisify(execFile)
 
@@ -30,8 +30,8 @@ import {
   rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
 
-import { blobHeadOrNull, blobPutBytes, fetchBytes, sha256Hex } from '../../../server/_lib/blob.js'
-import { resolveCreatorTokenArtwork, type CreatorTokenArtwork } from '../../../server/_lib/creatorTokenArtwork.js'
+import { blobHeadOrNull, blobPutBytes, fetchBytes, sha256Hex } from '../../../server/_lib/infra/blob.js'
+import { resolveCreatorTokenArtwork, type CreatorTokenArtwork } from '../../../server/_lib/image/creatorTokenArtwork.js'
 import { getCompletedImageProjectForVault } from '../../../server/_lib/image/imageProjects.js'
 
 declare const process: { env: Record<string, string | undefined> }

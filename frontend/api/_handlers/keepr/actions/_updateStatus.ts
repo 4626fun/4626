@@ -15,7 +15,7 @@ import {
   RATE_LIMITS,
 } from '../../../../packages/server-core/src/index.js'
 
-import { ensureKeeprSchema } from '../../../../server/_lib/keeprSchema.js'
+import { ensureKeeprSchema } from '../../../../server/_lib/keepr/keeprSchema.js'
 
 import { normalizeKeeprActionStatusForWorkspace } from '../../../../server/_lib/workspace/normalizer.js'
 import {

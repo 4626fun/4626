@@ -3,11 +3,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 const getEnsProfileMock = vi.fn()
 const getBasenameNameMock = vi.fn()
 
-vi.mock('../_lib/ensResolver.js', () => ({
+vi.mock('../_lib/identity/ensResolver.js', () => ({
   getEnsProfile: getEnsProfileMock,
 }))
 
-vi.mock('../_lib/basenameResolver.js', () => ({
+vi.mock('../_lib/identity/basenameResolver.js', () => ({
   getBasenameName: getBasenameNameMock,
 }))
 

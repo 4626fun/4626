@@ -33,7 +33,7 @@ import {
   rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
 
-import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
+import { tryUploadImmutableJson } from '../../../server/_lib/lens/lensGrove.js'
 import { getIdentityRegistryAddress } from '../../../server/_lib/agent/erc8004.js'
 import type { FeedbackPayload } from '../../../server/_lib/agent/erc8004.js'
 

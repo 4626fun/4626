@@ -77,7 +77,7 @@ vi.mock('../../server/_lib/infra/origin.js', () => ({
   getCanonicalOrigin: vi.fn(() => 'https://app.4626.fun'),
 }))
 
-vi.mock('../../server/_lib/deploySessions.js', () => ({
+vi.mock('../../server/_lib/deploy/deploySessions.js', () => ({
   ensureDeploySessionsSchema: vi.fn(async () => {}),
   hashDeployToken: vi.fn(() => 'hashed'),
   insertDeploySession: insertDeploySessionMock,
@@ -86,7 +86,7 @@ vi.mock('../../server/_lib/deploySessions.js', () => ({
   updateDeploySession: updateDeploySessionMock,
 }))
 
-vi.mock('../../server/_lib/creatorAgentWallets.js', () => ({
+vi.mock('../../server/_lib/wallet/creatorAgentWallets.js', () => ({
   getOrCreateCreatorAgentWallet: vi.fn(async () => ({
     walletId: 'agent_1',
     address: '0x00000000000000000000000000000000000000f1',
@@ -98,27 +98,27 @@ vi.mock('../../server/_lib/db/supabaseAdmin.js', () => ({
   getSupabaseAdmin: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/coinParties.js', () => ({
+vi.mock('../../server/_lib/onchain/coinParties.js', () => ({
   resolveCoinParties: vi.fn(async () => ({ creator: null, payoutRecipient: null })),
   resolveCoinPartiesAndOwner: resolveCoinPartiesAndOwnerMock,
 }))
 
-vi.mock('../../server/_lib/charmVaults.js', () => ({
+vi.mock('../../server/_lib/deploy/charmVaults.js', () => ({
   extractCharmCreateVaultPool: vi.fn(() => null),
   isCharmPoolIndexed: vi.fn(async () => true),
   charmPoolNotIndexedError: (pool: string) =>
     `Charm pool ${pool} is not currently indexed by Charm's public vault data source.`,
 }))
 
-vi.mock('../../server/_lib/waitlistSchema.js', () => ({
+vi.mock('../../server/_lib/onboarding/waitlistSchema.js', () => ({
   ensureWaitlistSchema: vi.fn(async () => {}),
 }))
 
-vi.mock('../../server/_lib/canonicalWalletsSchema.js', () => ({
+vi.mock('../../server/_lib/wallet/canonicalWalletsSchema.js', () => ({
   ensureCanonicalWalletsSchema: vi.fn(async () => {}),
 }))
 
-vi.mock('../../server/_lib/erc7712Permissions.js', () => ({
+vi.mock('../../server/_lib/deploy/erc7712Permissions.js', () => ({
   buildDeployPermissionGrant: vi.fn(() => ({ version: 'erc7712-v1' })),
 }))
 
@@ -217,6 +217,7 @@ describe('deploy session dry run', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     process.env.BASE_RPC_URL = 'http://127.0.0.1:8545'
+    process.env.DEPLOY_SESSION_TOKEN_HMAC_SECRET = 'test-deploy-session-hmac-secret'
     createWalletClientMock.mockImplementation(() => ({
       request: requestMock,
       sendTransaction: sendTransactionMock,

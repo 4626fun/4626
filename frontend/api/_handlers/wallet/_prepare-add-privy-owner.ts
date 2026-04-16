@@ -14,8 +14,8 @@ import {
 import {
   bootstrapCanonicalDelegationState,
   extractDelegationFlags,
-} from '../../../server/_lib/canonicalCswDelegation.js'
-import { prepareAddOwnerTx } from '../../../server/_lib/coinbaseSmartWalletOwner.js'
+} from '../../../server/_lib/wallet/canonicalCswDelegation.js'
+import { prepareAddOwnerTx } from '../../../server/_lib/wallet/coinbaseSmartWalletOwner.js'
 type PrepareResponse =
   | { alreadyOwner: true }
   | {

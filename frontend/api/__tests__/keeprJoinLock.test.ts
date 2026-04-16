@@ -46,22 +46,22 @@ vi.mock('../../packages/server-core/src/index.js', () => ({
   },
 }))
 
-vi.mock('../../server/_lib/keeprGating.js', () => ({
+vi.mock('../../server/_lib/keepr/keeprGating.js', () => ({
   checkSharesEligibility: checkSharesEligibilityMock,
   getKeeprBaseRpcUrls: getKeeprBaseRpcUrlsMock,
 }))
 
-vi.mock('../../server/_lib/keeprRegistry.js', () => ({
+vi.mock('../../server/_lib/keepr/keeprRegistry.js', () => ({
   enqueueKeeprAction: enqueueKeeprActionMock,
   getKeeprVaultByVaultAddress: getKeeprVaultByVaultAddressMock,
   isKeeprJoinLocked: isKeeprJoinLockedMock,
 }))
 
-vi.mock('../../server/_lib/keeprSchema.js', () => ({
+vi.mock('../../server/_lib/keepr/keeprSchema.js', () => ({
   ensureKeeprSchema: ensureKeeprSchemaMock,
 }))
 
-vi.mock('../../server/_lib/keeprProof.js', () => ({
+vi.mock('../../server/_lib/keepr/keeprProof.js', () => ({
   verifyKeeprJoinProof: verifyKeeprJoinProofMock,
 }))
 

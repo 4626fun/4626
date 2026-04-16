@@ -19,7 +19,7 @@ const {
   rateLimitKeyMock: vi.fn((...parts: string[]) => parts.join(':')),
 }))
 
-vi.mock('../../server/_lib/keeprRegistry.js', () => ({
+vi.mock('../../server/_lib/keepr/keeprRegistry.js', () => ({
   getKeeprVaultByGroupId: getKeeprVaultByGroupIdMock,
 }))
 

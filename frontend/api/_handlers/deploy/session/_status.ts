@@ -15,11 +15,11 @@ import {
   RATE_LIMITS,
   rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
-import { getDeploySessionById, signDeployToken, transitionDeploySession, updateDeploySession } from '../../../../server/_lib/deploySessions.js'
+import { getDeploySessionById, signDeployToken, transitionDeploySession, updateDeploySession } from '../../../../server/_lib/deploy/deploySessions.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/infra/origin.js'
-import { buildUserOpErrorDebug } from '../../../../server/_lib/userOpRevertDebug.js'
-import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
-import { parseGrant, validateCallsAgainstGrant } from '../../../../server/_lib/erc7712Permissions.js'
+import { buildUserOpErrorDebug } from '../../../../server/_lib/deploy/userOpRevertDebug.js'
+import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/wallet/privyWalletApi.js'
+import { parseGrant, validateCallsAgainstGrant } from '../../../../server/_lib/deploy/erc7712Permissions.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/auth/deployAuth.js'
 import { DEFAULT_CHAIN_ID } from '../../../../server/zora/_shared.js'
 import {
@@ -30,8 +30,8 @@ import {
   LAUNCH_IMAGE_VAULT_KEY,
   LAUNCH_IMAGE_VERIFIED_AT_KEY,
   LAUNCH_IMAGE_VERIFIED_BYTES_KEY,
-} from '../../../../server/_lib/deployLaunchImage.js'
-import { verifyDeployPhase2Invariants } from '../../../../server/_lib/deployPhase2Invariants.js'
+} from '../../../../server/_lib/deploy/deployLaunchImage.js'
+import { verifyDeployPhase2Invariants } from '../../../../server/_lib/deploy/deployPhase2Invariants.js'
 import { ingestShareOftIntoManagedTokenlist } from '../../token/_managedTokenList.js'
 import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../server/_lib/onchain/solanaOvaultCompatibility.js'
 import { validateSponsoredSmartWalletCalls } from '../../_paymaster.js'

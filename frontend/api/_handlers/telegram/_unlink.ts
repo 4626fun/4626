@@ -11,11 +11,11 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
+  ensureTelegramTradingSchema,
+  getTelegramLinkByUserId,
+  revokeTelegramLink,
 } from '../../../packages/server-core/src/index.js'
-
-
-import { ensureTelegramTradingSchema, getTelegramLinkByUserId, revokeTelegramLink } from '../../../server/_lib/telegramTrading.js'
-import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
+import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 import { verifyTelegramLinkApiSecret } from './webhook/services/access.js'
 import { asTrimmed, readTelegramUserId } from './webhook/utils.js'
 

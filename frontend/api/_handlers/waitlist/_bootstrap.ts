@@ -14,7 +14,7 @@ import {
 } from '../../../packages/server-core/src/index.js'
 
 
-import { assertNoEmailPrivyCollision, isIdentityRecoveryRequiredError } from '../../../server/_lib/identityRecovery.js'
+import { assertNoEmailPrivyCollision, isIdentityRecoveryRequiredError } from '../../../server/_lib/identity/identityRecovery.js'
 import {
   dedupeReferralCodeCandidates,
   getClientIp,
@@ -22,17 +22,17 @@ import {
   hashForAttribution,
   normalizeReferralCode,
   referralCodeFromEmail,
-} from '../../../server/_lib/referrals.js'
-import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
-import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/waitlistPoints.js'
+} from '../../../server/_lib/onboarding/referrals.js'
+import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
+import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/onboarding/waitlistPoints.js'
 import {
   buildAccountsMePayload,
   ensureAccountsIdentitySchema,
   syncEmailIdentity,
   upsertAccount,
   verifyPrivyForAccounts,
-} from '../../../server/_lib/accountsIdentity.js'
-import { runWithOwnedEmailCollisionAdoption } from '../../../server/_lib/emailCollisionAdoption.js'
+} from '../../../server/_lib/identity/accountsIdentity.js'
+import { runWithOwnedEmailCollisionAdoption } from '../../../server/_lib/identity/emailCollisionAdoption.js'
 
 type BootstrapBody = { email?: string; referralCode?: string }
 type WaitlistBootstrapResponse =
