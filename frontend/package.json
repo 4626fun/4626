@@ -184,7 +184,8 @@
       "serialize-javascript": "7.0.5"
     },
     "patchedDependencies": {
-      "elliptic@6.6.1": "patches/elliptic@6.6.1.patch"
+      "elliptic@6.6.1": "patches/elliptic@6.6.1.patch",
+      "@coinbase/wallet-sdk@4.3.7": "patches/@coinbase__wallet-sdk@4.3.7.patch"
     }
   }
 }
