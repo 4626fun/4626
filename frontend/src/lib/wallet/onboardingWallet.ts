@@ -456,82 +456,14 @@ async function submitOwnerTxViaWalletSendCalls(params: {
   throw new Error('wallet_sendCalls status is still pending. Wait a moment and retry confirmation.')
 }
 
-/**
- * Use wallet_addSubAccount to register the Privy EOA as a sub-account key
- * on the canonical Coinbase Smart Wallet.  This bypasses the popup's self-call
- * check (eGe) which blocks wallet_sendCalls where target === sender.
- *
- * The popup handles owner management internally — it adds the provided address
- * key without requiring the caller to build an addOwnerAddress calldata payload.
- */
-async function submitOwnerViaAddSubAccount(params: {
-  walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
-  ownerAddress: `0x${string}`
-  approvalRunId: string
-  executionMode: OwnerApprovalExecutionMode
-  signerAddress?: string | null
-  canonicalCswAddress?: string | null
-  onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null
-}): Promise<{ address: string }> {
-  emitOwnerApprovalStage(params.onStageEvent, {
-    runId: params.approvalRunId,
-    stage: 'add_sub_account',
-    status: 'start',
-    attempt: 1,
-    executionMode: params.executionMode,
-    signerAddress: params.signerAddress ?? null,
-    canonicalCswAddress: params.canonicalCswAddress ?? null,
-  })
-
-  let result: unknown
-  try {
-    result = await params.walletRequest({
-      method: 'wallet_addSubAccount',
-      params: [
-        {
-          version: '1',
-          account: {
-            type: 'create',
-            keys: [
-              {
-                type: 'address',
-                publicKey: params.ownerAddress,
-              },
-            ],
-          },
-        },
-      ],
-    })
-  } catch (error) {
-    emitOwnerApprovalStage(params.onStageEvent, {
-      runId: params.approvalRunId,
-      stage: 'add_sub_account',
-      status: 'error',
-      executionMode: params.executionMode,
-      signerAddress: params.signerAddress ?? null,
-      canonicalCswAddress: params.canonicalCswAddress ?? null,
-      code: classifyOwnerApprovalError(error).code,
-      message: error instanceof Error ? error.message : String(error ?? ''),
-    })
-    throw error
-  }
-
-  const resultAddress =
-    result && typeof result === 'object' && typeof (result as { address?: unknown }).address === 'string'
-      ? ((result as { address: string }).address as string)
-      : ''
-
-  emitOwnerApprovalStage(params.onStageEvent, {
-    runId: params.approvalRunId,
-    stage: 'add_sub_account',
-    status: 'success',
-    executionMode: params.executionMode,
-    signerAddress: params.signerAddress ?? null,
-    canonicalCswAddress: params.canonicalCswAddress ?? null,
-  })
-
-  return { address: resultAddress }
-}
+// NOTE: submitOwnerViaAddSubAccount has been removed.
+// wallet_addSubAccount with type:'create' creates new sub-accounts — it does
+// NOT add an address as an onchain owner of the canonical CSW.  The popup
+// approved the request, but the Privy EOA was never added to the CSW's owner
+// list.  The sponsored UserOp path (runSponsoredCanonicalUserOp) is now the
+// primary execution path for self-authenticated sessions.  The UserOp wraps
+// addOwnerAddress through the EntryPoint, and the popup signs it via
+// eth_signTypedData_v4 (EIP-712) which has no self-call guard.
 
 export async function sendPreparedOwnerTx(params: {
   txRequest: PreparedOwnerTxRequest
@@ -693,17 +625,21 @@ export async function sendPreparedOwnerTx(params: {
         return result.transactionHash
       }
       if (selfAuthenticatedCanonicalSession) {
-        // ── Self-authenticated session: wallet_addSubAccount FIRST ──
-        // In self-auth mode (CSW signs for itself), we use wallet_addSubAccount
-        // to register the Privy EOA as a sub-account key.  This bypasses the
-        // popup's self-call check (eGe) which blocks wallet_sendCalls where
-        // target === sender with non-empty data.
+        // ── Self-authenticated session: UserOp FIRST ──
+        // In self-auth mode (CSW signs for itself), the popup's eGe function
+        // blocks wallet_sendCalls where target === sender.  addOwnerAddress is
+        // inherently a self-call, so wallet_sendCalls always fails.
         //
-        // wallet_addSubAccount is forwarded to keys.coinbase.com via our SDK
-        // patch (CSW 4.3.7), where the popup handles owner management internally
-        // without triggering the self-call guard.
+        // wallet_addSubAccount creates sub-accounts — it does NOT add the Privy
+        // EOA as an onchain owner of the canonical CSW.  Confirmed by testing:
+        // the popup approves the request, but the address is never added to the
+        // CSW's owner list and confirm-owner polls indefinitely.
         //
-        // Fallback chain: addSubAccount → sendCalls → UserOp
+        // The correct path is a sponsored UserOp: the UserOp wraps the
+        // addOwnerAddress call through the EntryPoint, and the popup signs it
+        // via eth_signTypedData_v4 (EIP-712) which has no self-call guard.
+        //
+        // Fallback chain: UserOp(typed) → UserOp(non-typed) → sendCalls
         if (!walletClient.account) {
           throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
         }
@@ -712,142 +648,75 @@ export async function sendPreparedOwnerTx(params: {
             ? async (args: { method: string; params?: unknown[] }) => await walletClient.request!(args as any)
             : null
 
-        // Resolve the Privy EOA address to add as a sub-account key.
-        // ownerAddress is the Privy embedded EOA that we want the canonical CSW
-        // to recognise as an owner.
-        const privyEoaToAdd =
-          typeof ownerAddress === 'string' && isAddress(ownerAddress)
-            ? (ownerAddress as `0x${string}`)
-            : null
+        try {
+          // ── Primary path: sponsored UserOp with EIP-712 typed signing ──
+          txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
+        } catch (typedUserOpError) {
+          if (isUserRejectedWalletAction(typedUserOpError)) throw typedUserOpError
+          emitOwnerApprovalStage(onStageEvent, {
+            runId: effectiveApprovalRunId,
+            stage: 'userop_typed',
+            status: 'error',
+            executionMode,
+            signerAddress,
+            canonicalCswAddress: canonicalSmartWalletAddress,
+            code: classifyOwnerApprovalError(typedUserOpError).code,
+            message: typedUserOpError instanceof Error ? typedUserOpError.message : String(typedUserOpError ?? ''),
+          })
 
-        if (walletRequest && privyEoaToAdd) {
+          // ── Fallback: UserOp with non-typed signing ──
           try {
-            // ── Primary path: wallet_addSubAccount ──
-            await submitOwnerViaAddSubAccount({
-              walletRequest,
-              ownerAddress: privyEoaToAdd,
-              approvalRunId: effectiveApprovalRunId,
+            txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true, attempt: 2 })
+          } catch (nonTypedUserOpError) {
+            if (isUserRejectedWalletAction(nonTypedUserOpError)) throw nonTypedUserOpError
+            emitOwnerApprovalStage(onStageEvent, {
+              runId: effectiveApprovalRunId,
+              stage: 'userop_nontyped',
+              status: 'error',
               executionMode,
               signerAddress,
               canonicalCswAddress: canonicalSmartWalletAddress,
-              onStageEvent,
+              code: classifyOwnerApprovalError(nonTypedUserOpError).code,
+              message: nonTypedUserOpError instanceof Error ? nonTypedUserOpError.message : String(nonTypedUserOpError ?? ''),
             })
-            // wallet_addSubAccount does not return a txHash (owner is added
-            // internally by the popup).  Set a sentinel so confirm-owner can
-            // poll for the owner record without a specific tx.
-            txHash = '0x0000000000000000000000000000000000000000000000000000000000000000' as `0x${string}`
-          } catch (addSubError) {
-            // If the user rejected, don't fall back
-            if (isUserRejectedWalletAction(addSubError)) throw addSubError
 
-            // ── Fallback: wallet_sendCalls ──
-            // Resolve the direct CDP paymaster URL for wallet_sendCalls (ERC-7677).
-            const sendCallsEnv =
-              (import.meta.env.VITE_CDP_SENDCALLS_PAYMASTER_URL as string | undefined)?.trim() || ''
-            const rawCdpPaymasterUrl =
-              (import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined)?.trim() || ''
-            const isExternalNonProxy = (url: string) =>
-              url.startsWith('https://') && !url.includes('/api/paymaster')
-            const resolvedDirectUrl = isExternalNonProxy(sendCallsEnv)
-              ? sendCallsEnv
-              : isExternalNonProxy(rawCdpPaymasterUrl)
-                ? rawCdpPaymasterUrl
-                : null
-            const sendCallsPaymasterUrl = resolvedDirectUrl
-
-            try {
-              txHash = await submitOwnerTxViaWalletSendCalls({
-                walletRequest,
-                chainId: txRequest.chainId,
-                sender: canonicalSmartWalletAddress as `0x${string}`,
-                to: txRequest.to,
-                data: txRequest.data,
-                paymasterUrl: sendCallsPaymasterUrl,
-                approvalRunId: effectiveApprovalRunId,
-                executionMode,
-                signerAddress,
-                canonicalCswAddress: canonicalSmartWalletAddress,
-                onStageEvent,
-              })
-            } catch (sendCallsError) {
-              emitOwnerApprovalStage(onStageEvent, {
-                runId: effectiveApprovalRunId,
-                stage: 'send_calls',
-                status: 'error',
-                executionMode,
-                signerAddress,
-                canonicalCswAddress: canonicalSmartWalletAddress,
-                code: classifyOwnerApprovalError(sendCallsError).code,
-                message: sendCallsError instanceof Error ? sendCallsError.message : String(sendCallsError ?? ''),
-              })
-              if (isUserRejectedWalletAction(sendCallsError)) throw sendCallsError
-              // ── Last resort: sponsored UserOp ──
+            // ── Last resort: wallet_sendCalls (will fail with self-call
+            //    check unless Coinbase updates the popup) ──
+            if (walletRequest) {
+              const sendCallsEnv =
+                (import.meta.env.VITE_CDP_SENDCALLS_PAYMASTER_URL as string | undefined)?.trim() || ''
+              const rawCdpPaymasterUrl =
+                (import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined)?.trim() || ''
+              const isExternalNonProxy = (url: string) =>
+                url.startsWith('https://') && !url.includes('/api/paymaster')
+              const resolvedDirectUrl = isExternalNonProxy(sendCallsEnv)
+                ? sendCallsEnv
+                : isExternalNonProxy(rawCdpPaymasterUrl)
+                  ? rawCdpPaymasterUrl
+                  : null
               try {
-                txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
-              } catch (userOpError) {
-                emitOwnerApprovalStage(onStageEvent, {
-                  runId: effectiveApprovalRunId,
-                  stage: 'userop_typed',
-                  status: 'error',
+                txHash = await submitOwnerTxViaWalletSendCalls({
+                  walletRequest,
+                  chainId: txRequest.chainId,
+                  sender: canonicalSmartWalletAddress as `0x${string}`,
+                  to: txRequest.to,
+                  data: txRequest.data,
+                  paymasterUrl: resolvedDirectUrl,
+                  approvalRunId: effectiveApprovalRunId,
                   executionMode,
                   signerAddress,
                   canonicalCswAddress: canonicalSmartWalletAddress,
-                  code: classifyOwnerApprovalError(userOpError).code,
-                  message: userOpError instanceof Error ? userOpError.message : String(userOpError ?? ''),
+                  onStageEvent,
                 })
-                throw sendCallsError
+              } catch (sendCallsError) {
+                if (isUserRejectedWalletAction(sendCallsError)) throw sendCallsError
+                // All paths exhausted — throw the original UserOp error
+                throw typedUserOpError
               }
+            } else {
+              throw typedUserOpError
             }
           }
-        } else if (walletRequest) {
-          // No Privy EOA available — fall back to sendCalls with UserOp recovery
-          const sendCallsEnv =
-            (import.meta.env.VITE_CDP_SENDCALLS_PAYMASTER_URL as string | undefined)?.trim() || ''
-          const rawCdpPaymasterUrl =
-            (import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined)?.trim() || ''
-          const isExternalNonProxy = (url: string) =>
-            url.startsWith('https://') && !url.includes('/api/paymaster')
-          const resolvedDirectUrl = isExternalNonProxy(sendCallsEnv)
-            ? sendCallsEnv
-            : isExternalNonProxy(rawCdpPaymasterUrl)
-              ? rawCdpPaymasterUrl
-              : null
-          try {
-            txHash = await submitOwnerTxViaWalletSendCalls({
-              walletRequest,
-              chainId: txRequest.chainId,
-              sender: canonicalSmartWalletAddress as `0x${string}`,
-              to: txRequest.to,
-              data: txRequest.data,
-              paymasterUrl: resolvedDirectUrl,
-              approvalRunId: effectiveApprovalRunId,
-              executionMode,
-              signerAddress,
-              canonicalCswAddress: canonicalSmartWalletAddress,
-              onStageEvent,
-            })
-          } catch (sendCallsError) {
-            if (isUserRejectedWalletAction(sendCallsError)) throw sendCallsError
-            // Last resort: sponsored UserOp
-            try {
-              txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
-            } catch (userOpError) {
-              emitOwnerApprovalStage(onStageEvent, {
-                runId: effectiveApprovalRunId,
-                stage: 'userop_typed',
-                status: 'error',
-                executionMode,
-                signerAddress,
-                canonicalCswAddress: canonicalSmartWalletAddress,
-                code: classifyOwnerApprovalError(userOpError).code,
-                message: userOpError instanceof Error ? userOpError.message : String(userOpError ?? ''),
-              })
-              throw sendCallsError
-            }
-          }
-        } else {
-          // No walletRequest available — try UserOp path directly
-          txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
         }
         if (!txHash) {
           throw new Error('Owner approval failed: no execution path produced a result.')
