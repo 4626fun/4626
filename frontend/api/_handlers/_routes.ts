@@ -92,6 +92,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'admin/waitlist/approve': () => import('./admin/waitlist/_approve.js'),
   'admin/waitlist/deny': () => import('./admin/waitlist/_deny.js'),
   'admin/waitlist/delete': () => import('./admin/waitlist/_delete.js'),
+  'admin/userop/health': () => import('./admin/userop/_health.js'),
 
   ...prefixRouteLoaders('auth', authRouteLoaders),
   ...prefixRouteLoaders('cdp', cdpRouteLoaders),

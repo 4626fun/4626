@@ -39,9 +39,9 @@ const _bridge: {
 export function CdsToastBridge() {
   const cds = useCdsToast()
   const ref = useRef(cds)
-  ref.current = cds
 
   useEffect(() => {
+    ref.current = cds
     _bridge.show = (text, options) => ref.current.show(text, options as any)
     _bridge.hide = () => ref.current.hide()
     _bridge.clearQueue = () => ref.current.clearQueue()
@@ -51,7 +51,7 @@ export function CdsToastBridge() {
       _bridge.hide = () => {}
       _bridge.clearQueue = () => {}
     }
-  }, [])
+  }, [cds])
 
   return null
 }
