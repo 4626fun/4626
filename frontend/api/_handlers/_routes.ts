@@ -35,6 +35,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'telegram/webhook': () => import('./telegram/_webhook.js'),
 
   'onboarding/bootstrap': () => import('./onboarding/_bootstrap.js'),
+  'onboarding/register-sub-account': () => import('./onboarding/_register-sub-account.js'),
   'accounts/me': () => import('./accounts/_me.js'),
   'accounts/link': () => import('./accounts/_link.js'),
   'accounts/unlink': () => import('./accounts/_unlink.js'),

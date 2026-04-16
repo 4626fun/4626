@@ -906,59 +906,94 @@ export function useAccountSetupController(params: {
         const result = await subAccount.setupSubAccount()
 
         if (result?.subAccountAddress) {
-          emitOwnerApprovalStageEvent({
-            runId: approvalRunId,
-            stage: 'preflight',
-            status: 'success',
-            executionMode: 'subAccount',
-            signerAddress: subAccount.embeddedWallet?.address ?? null,
-            canonicalCswAddress,
-            code: result.created ? 'sub_account_created' : 'sub_account_existing',
-          })
-
-          // Notify backend about the sub-account address so it can be
-          // associated with this user's canonical account.
-          try {
-            const headers = await authHeaders()
-            await apiFetch('/api/onboarding/register-sub-account', {
-              method: 'POST',
-              headers,
-              body: JSON.stringify({
-                subAccountAddress: result.subAccountAddress,
-                parentAddress: result.parentAddress,
-              }),
+          // Guard: verify the sub-account was created under the correct
+          // parent wallet.  Users with multiple Coinbase wallets could end
+          // up with a sub-account derived from the wrong parent.
+          if (
+            result.parentAddress &&
+            canonicalCswAddress &&
+            result.parentAddress.toLowerCase() !== canonicalCswAddress.toLowerCase()
+          ) {
+            logger.warn('Sub-account parent mismatch — expected canonical CSW', {
+              expected: canonicalCswAddress,
+              actual: result.parentAddress,
+              subAccountAddress: result.subAccountAddress,
             })
-          } catch (registerErr) {
-            // Non-fatal: sub-account is on-chain regardless.  Backend can
-            // discover it later via the parent CSW.
-            logger.warn('Sub-account backend registration failed', { error: registerErr })
-          }
+            emitOwnerApprovalStageEvent({
+              runId: approvalRunId,
+              stage: 'preflight',
+              status: 'error',
+              executionMode: 'subAccount',
+              signerAddress: subAccount.embeddedWallet?.address ?? null,
+              canonicalCswAddress,
+              code: 'sub_account_parent_mismatch',
+              message: `Sub-account parent ${result.parentAddress} does not match canonical CSW ${canonicalCswAddress}.`,
+            })
+            // Fall through to legacy path — do NOT register a mismatched sub-account.
+          } else {
+            emitOwnerApprovalStageEvent({
+              runId: approvalRunId,
+              stage: 'preflight',
+              status: 'success',
+              executionMode: 'subAccount',
+              signerAddress: subAccount.embeddedWallet?.address ?? null,
+              canonicalCswAddress,
+              code: result.created ? 'sub_account_created' : 'sub_account_existing',
+            })
 
-          setNotice(
-            result.created
-              ? '4626 sub-account created. Signing is enabled.'
-              : '4626 sub-account found. Signing is enabled.',
-          )
-          await loadMe({ showSpinner: false })
-          return
+            // Notify backend about the sub-account address so it can be
+            // associated with this user's canonical account.
+            try {
+              const headers = await authHeaders()
+              const registerRes = await apiFetch('/api/onboarding/register-sub-account', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                  subAccountAddress: result.subAccountAddress,
+                  parentAddress: result.parentAddress,
+                }),
+              })
+              if (!registerRes.ok) {
+                const body = await registerRes.json().catch(() => null)
+                logger.warn('Sub-account backend registration returned non-OK', {
+                  status: registerRes.status,
+                  body,
+                })
+              }
+            } catch (registerErr) {
+              // Non-fatal: sub-account is on-chain regardless.  Backend can
+              // discover it later via the parent CSW.
+              logger.warn('Sub-account backend registration failed', { error: registerErr })
+            }
+
+            setNotice(
+              result.created
+                ? '4626 sub-account created. Signing is enabled.'
+                : '4626 sub-account found. Signing is enabled.',
+            )
+            await loadMe({ showSpinner: false })
+            return
+          }
         }
 
         // Sub-account setup returned null (e.g. user cancelled Spend
-        // Permission popup).  Fall through to the legacy path which will
-        // surface the appropriate error to the user.
-        emitOwnerApprovalStageEvent({
-          runId: approvalRunId,
-          stage: 'preflight',
-          status: 'error',
-          executionMode: 'subAccount',
-          signerAddress: subAccount.embeddedWallet?.address ?? null,
-          canonicalCswAddress,
-          code: 'sub_account_setup_failed',
-          message: subAccount.error?.message ?? 'Sub-account setup did not complete.',
-        })
-        logger.warn('Sub-account setup returned null, falling through to legacy owner path', {
-          error: subAccount.error?.message,
-        })
+        // Permission popup).  Emit a generic failure event only if we
+        // haven't already emitted a more specific one (e.g. parent mismatch).
+        if (!result?.subAccountAddress) {
+          emitOwnerApprovalStageEvent({
+            runId: approvalRunId,
+            stage: 'preflight',
+            status: 'error',
+            executionMode: 'subAccount',
+            signerAddress: subAccount.embeddedWallet?.address ?? null,
+            canonicalCswAddress,
+            code: 'sub_account_setup_failed',
+            message: subAccount.error?.message ?? 'Sub-account setup did not complete.',
+          })
+          logger.warn('Sub-account setup returned null, falling through to legacy owner path', {
+            error: subAccount.error?.message,
+          })
+        }
       }
 
       // ── Legacy owner-approval path (fallback / non-self-auth) ───────
