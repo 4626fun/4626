@@ -4,6 +4,8 @@ import { BrowserRouter } from 'react-router-dom'
 
 import { RootRouter } from './RootRouter'
 import { ThemeProvider } from '@/lib/ui/theme'
+import { ThemeProvider as CdsThemeProvider, MediaQueryProvider as CdsMediaQueryProvider } from '@coinbase/cds-web/system'
+import { theme4626 } from '@/theme/cds-theme'
 import { privyAnalyticsFlag } from '@/lib/flags/featureFlags'
 import {
   getPrivyPasswordlessBackoffMs,
@@ -12,6 +14,8 @@ import {
   isPrivyPasswordlessInitRequest,
   normalizeFetchMethod,
 } from '@/lib/privy/passwordlessFetchGuard'
+import '@coinbase/cds-icons/fonts/web/icon-font.css'
+import '@coinbase/cds-web/globalStyles'
 import '@4626/brand-kit/styles'
 import './index.css'
 import '@google/model-viewer' // registers <model-viewer>; bundled so devtools don't resolve CDN maps under webRoot
@@ -335,9 +339,13 @@ if (!redirectWwwToCanonicalApex()) {
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       <ThemeProvider>
-        <BrowserRouter>
-          <RootRouter />
-        </BrowserRouter>
+        <CdsMediaQueryProvider>
+          <CdsThemeProvider theme={theme4626} activeColorScheme="dark">
+            <BrowserRouter>
+              <RootRouter />
+            </BrowserRouter>
+          </CdsThemeProvider>
+        </CdsMediaQueryProvider>
       </ThemeProvider>
     </React.StrictMode>,
   )

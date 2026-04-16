@@ -72,6 +72,8 @@
   "dependencies": {
     "@4626/brand-kit": "workspace:*",
     "@buildersgarden/siwa": "^0.0.11",
+    "@coinbase/cds-icons": "^5.13.0",
+    "@coinbase/cds-web": "^8.62.1",
     "@coinbase/wallet-sdk": "4.3.7",
     "@effect-ak/tg-bot-client": "^1.5.0",
     "@flags-sdk/vercel": "^1.2.1",
