@@ -560,6 +560,52 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
+  it('sends wallet_sendCalls with chain-keyed AND flat paymaster capabilities when CDP URL is set', async () => {
+    // Stub the env var that supplies the direct CDP paymaster URL
+    vi.stubEnv('VITE_CDP_SENDCALLS_PAYMASTER_URL', 'https://api.developer.coinbase.com/rpc/v1/base/TESTKEY')
+    const request = vi
+      .fn()
+      .mockResolvedValueOnce('0xcall-bundle-id')
+      .mockResolvedValueOnce({
+        status: 200,
+        receipts: [{ transactionHash: TX_HASH }],
+      })
+
+    const result = await sendPreparedOwnerTx({
+      txRequest: TX_REQUEST,
+      walletClient: {
+        account: CANONICAL_CSW,
+        sendTransaction: vi.fn(async () => TX_HASH),
+        request,
+      },
+      chainId: 8453,
+      authHeaders: async () => ({ Authorization: 'Bearer test' }),
+      signerAddress: CANONICAL_CSW,
+      executionMode: 'canonicalSmartWallet',
+      canonicalSmartWalletAddress: CANONICAL_CSW,
+      publicClient: {},
+    })
+
+    // Capabilities should contain BOTH flat and chain-keyed paymaster formats
+    const sendCallsPayload = request.mock.calls[0][0].params[0]
+    expect(sendCallsPayload.capabilities).toBeDefined()
+    expect(sendCallsPayload.capabilities.paymasterUrl).toBe(
+      'https://api.developer.coinbase.com/rpc/v1/base/TESTKEY',
+    )
+    expect(sendCallsPayload.capabilities.paymasterService).toBeDefined()
+    expect(sendCallsPayload.capabilities.paymasterService.url).toBe(
+      'https://api.developer.coinbase.com/rpc/v1/base/TESTKEY',
+    )
+    // Chain-keyed entry for Base (0x2105)
+    expect(sendCallsPayload.capabilities.paymasterService['0x2105']).toBeDefined()
+    expect(sendCallsPayload.capabilities.paymasterService['0x2105'].url).toBe(
+      'https://api.developer.coinbase.com/rpc/v1/base/TESTKEY',
+    )
+
+    expect(result.txHash).toBe(TX_HASH)
+    vi.unstubAllEnvs()
+  })
+
   it('retries confirm-owner for pending confirmation states and succeeds after delayed indexing', async () => {
     const onStageEvent = vi.fn()
     apiFetchMock

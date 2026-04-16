@@ -333,19 +333,32 @@ async function submitOwnerTxViaWalletSendCalls(params: {
     signerAddress: params.signerAddress ?? null,
     canonicalCswAddress: params.canonicalCswAddress ?? null,
   })
+  const chainIdHex = `0x${params.chainId.toString(16)}`
   const payloadBase = {
-    chainId: `0x${params.chainId.toString(16)}`,
+    chainId: chainIdHex,
     from: params.sender,
     calls: [{ to: params.to, data: params.data, value: '0x0' }],
     atomicRequired: false,
     version: '2.0.0',
   } as Record<string, unknown>
+  // Build paymaster capabilities in BOTH flat (EIP-5792 v2) and chain-keyed
+  // (ERC-7677) formats so the CSW extension can locate the URL regardless of
+  // which spec revision it implements.  Coinbase Wallet SDK issue #1600 notes
+  // the extension still follows the older chain-keyed layout; passing both is
+  // harmless because the wallet ignores keys it doesn't recognise.
+  const paymasterUrlStr = String(params.paymasterUrl).trim()
   const payloadWithPaymaster = supportsPaymasterCapability
     ? {
         ...payloadBase,
         capabilities: {
+          // Flat key used by Base Sub Accounts / newer CSW builds
+          paymasterUrl: paymasterUrlStr,
+          // ERC-7677 chain-keyed format (older CSW builds per SDK issue #1600)
           paymasterService: {
-            url: String(params.paymasterUrl).trim(),
+            url: paymasterUrlStr,
+            [chainIdHex]: {
+              url: paymasterUrlStr,
+            },
           },
         },
       }
