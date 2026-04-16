@@ -170,7 +170,8 @@ function classifyOwnerApprovalError(error: unknown): ClassifiedOwnerApprovalErro
   }
   if (
     ((lower.includes('error generating transaction') || lower.includes('error generating message')) && lower.includes('enough funds')) ||
-    lower.includes('insufficient funds')
+    lower.includes('insufficient funds') ||
+    lower.includes('not enough funds')
   ) {
     return { message, lower, code: 'wallet_generation_insufficient' }
   }
@@ -647,7 +648,8 @@ export async function sendPreparedOwnerTx(params: {
               const lower = message.toLowerCase()
               const shouldRetrySponsored =
                 (lower.includes('error generating transaction') && lower.includes('enough funds')) ||
-                lower.includes('insufficient funds')
+                lower.includes('insufficient funds') ||
+                lower.includes('not enough funds')
               if (!shouldRetrySponsored) throw sendCallsError
               sendCallsFallbackMode = 'insufficient'
             }
