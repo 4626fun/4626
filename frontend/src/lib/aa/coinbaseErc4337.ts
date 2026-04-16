@@ -1090,6 +1090,30 @@ function wrapAccountWithTypedDataSigning(params: {
         })
       }
 
+      // ── Pre-wrapped signature detection ──
+      // The Coinbase Wallet extension, when signing for a CSW address, may return
+      // a signature that is already wrapped as SignatureWrapper(ownerIndex, rawSig).
+      // A raw ECDSA sig is exactly 65 bytes (130 hex chars + "0x"). If the returned
+      // signature is longer, it's already a complete SignatureWrapper.
+      // Wrapping it again produces a double-wrapped structure the contract cannot
+      // validate → AA23.
+      //
+      // The CoinbaseSmartWallet contract does NOT enforce nonce_key == ownerIndex.
+      // It only checks `key != REPLAYABLE_NONCE_KEY (8453)` for standard calls.
+      // So we can safely pass through the extension's pre-wrapped signature as-is,
+      // regardless of which ownerIndex it chose internally.
+      const sigByteLength = typeof signature === 'string' ? (signature.length - 2) / 2 : 0
+      if (sigByteLength > 65) {
+        if (AA_DEBUG) {
+          logger.debug('[ERC-4337] Signature > 65 bytes; already wrapped by wallet extension — returning as-is', {
+            smartWallet,
+            ownerIndex,
+            sigByteLength,
+          })
+        }
+        return signature
+      }
+
       return encodeAbiParameters(
         [{ type: 'uint256' }, { type: 'bytes' }],
         [BigInt(ownerIndex), signature],
@@ -1488,6 +1512,49 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     }
   }
 
+  // ── Pre-wrapped signature guard (non-typed-data path) ──
+  // When useTypedDataSigning is false, viem's baseAccount.signUserOperation calls
+  // our localAccount.sign() → gets whatever the wallet returns → then wraps it
+  // via wrapSignature(). If the CSW extension already returned a pre-wrapped
+  // SignatureWrapper (>65 bytes), viem would double-wrap it → AA23.
+  // Override signUserOperation to detect pre-wrapped sigs and return them as-is.
+  const origSignUserOp = (baseAccount as any).signUserOperation?.bind(baseAccount)
+  if (origSignUserOp) {
+    ;(baseAccount as any).signUserOperation = async function (userOperation: any) {
+      const wrapped: Hex = await origSignUserOp(userOperation)
+      // viem's wrapSignature always produces a SignatureWrapper. If the inner sig
+      // from the wallet was already wrapped, the result is double-wrapped.
+      // Detect: try to ABI-decode the outer wrapper and check if signatureData
+      // is itself longer than 65 bytes (indicating a nested wrapper).
+      try {
+        const hex = wrapped.slice(2)
+        // ABI-encoded tuple(uint8 ownerIndex, bytes signatureData):
+        //   word[0] = 0x20 (offset to tuple)
+        //   word[1] = ownerIndex
+        //   word[2] = offset to bytes
+        //   word[3] = bytes length
+        //   word[4..] = bytes data
+        const innerSigLen = parseInt(hex.slice(192, 256), 16)
+        if (innerSigLen > 65) {
+          // The inner signatureData is itself a pre-wrapped SignatureWrapper.
+          // Extract it and return as the top-level signature.
+          const innerSigHex = ('0x' + hex.slice(256, 256 + innerSigLen * 2)) as Hex
+          if (AA_DEBUG) {
+            logger.debug('[ERC-4337] signUserOperation: detected double-wrapped sig; unwrapping to inner', {
+              smartWallet,
+              outerSigByteLength: (hex.length) / 2,
+              innerSigByteLength: innerSigLen,
+            })
+          }
+          return innerSigHex
+        }
+      } catch {
+        // Decoding failed; return as-is
+      }
+      return wrapped
+    }
+  }
+
   const account = wrapAccountWithTypedDataSigning({
     account: baseAccount,
     walletClient,
@@ -1586,9 +1653,12 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
 
   // ── Fetch the correct nonce using ownerIndex as the key ──
   // viem's toCoinbaseSmartAccount does not override getNonce, so the default
-  // nonceKeyManager uses Date.now() as the key. CoinbaseSmartWallet.validateUserOp
-  // requires the nonce key to equal the ownerIndex from the SignatureWrapper.
-  // We read the nonce directly from the EntryPoint to ensure the key matches.
+  // nonceKeyManager uses Date.now() as the key which produces extremely large
+  // nonce keys that can collide or confuse bundlers.
+  // CoinbaseSmartWallet.validateUserOp only checks that the nonce key != 8453
+  // (REPLAYABLE_NONCE_KEY) for standard calls; it does NOT require key == ownerIndex.
+  // We use ownerIndex as a stable, deterministic key to avoid the Date.now() problem.
+  // We read the nonce directly from the EntryPoint to ensure correctness.
   //
   // This is a function rather than a one-shot read so that transient retries
   // can re-read the nonce. If a previous attempt was received by the bundler
