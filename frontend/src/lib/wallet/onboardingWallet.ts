@@ -299,11 +299,6 @@ function isUserRejectedWalletAction(error: unknown): boolean {
   return lower.includes('user rejected') || lower.includes('user denied') || lower.includes('rejected the request')
 }
 
-function shouldFallbackSelfAuthenticatedCanonicalToSendCalls(error: unknown): boolean {
-  const { code } = classifyOwnerApprovalError(error)
-  return code === 'aa23_validation' || code === 'typed_data_timeout' || code === 'wallet_generation_insufficient'
-}
-
 function emitOwnerApprovalStage(
   callback: ((event: OwnerApprovalStageEvent) => void) | null | undefined,
   event: OwnerApprovalStageEvent,
@@ -600,14 +595,18 @@ export async function sendPreparedOwnerTx(params: {
         return result.transactionHash
       }
       if (selfAuthenticatedCanonicalSession) {
-        // ── Self-authenticated session: try sponsored UserOp FIRST ──
-        // The CSW wallet's own wallet_sendCalls path sends its own HTTP request
-        // to paymasterService.url but does NOT forward the user's session cookies.
-        // The /api/paymaster endpoint requires authentication, so the CSW wallet
-        // gets a no_session rejection → shows "Error generating transaction" popup
-        // → user cancels → user_rejected → sponsored fallback never runs.
-        // By trying runSponsoredCanonicalUserOp first, we construct the UserOp
-        // ourselves with proper auth headers, avoiding the CSW paymaster issue.
+        // ── Self-authenticated session: wallet_sendCalls FIRST ──
+        // In self-auth mode (CSW signs for itself), the UserOp signing path
+        // fundamentally cannot produce a valid signature. The CSW extension
+        // blocks eth_sign (raw hash signing), and our typed-data/personal_sign
+        // fallbacks sign the replay-safe EIP-712 hash — but validateUserOp
+        // checks against the raw userOpHash → always "Invalid signature".
+        //
+        // wallet_sendCalls delegates the entire UserOp lifecycle (including
+        // signing) to the extension, which handles signature production
+        // internally via passkeys. The extension needs the DIRECT CDP paymaster
+        // URL (not our proxy) because it makes its own HTTP requests without
+        // forwarding the user's session cookies.
         if (!walletClient.account) {
           throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
         }
@@ -616,81 +615,71 @@ export async function sendPreparedOwnerTx(params: {
             ? async (args: { method: string; params?: unknown[] }) => await walletClient.request!(args as any)
             : null
 
-        try {
+        // Resolve the direct CDP paymaster URL for wallet_sendCalls.
+        // The extension calls this URL directly (not through our proxy),
+        // so it needs the actual CDP endpoint with embedded API key auth.
+        // Read the raw env var to bypass resolveCdpPaymasterUrl's proxy rewrite.
+        // Only use it if it looks like an absolute external URL (not a relative path
+        // like /api/paymaster which is our session-protected proxy).
+        const rawCdpPaymasterUrl =
+          (import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined)?.trim() || ''
+        const isDirectCdpUrl =
+          rawCdpPaymasterUrl.startsWith('https://') && !rawCdpPaymasterUrl.includes('/api/paymaster')
+        const sendCallsPaymasterUrl = isDirectCdpUrl ? rawCdpPaymasterUrl : paymasterUrl
+
+        if (walletRequest) {
+          try {
+            txHash = await submitOwnerTxViaWalletSendCalls({
+              walletRequest,
+              chainId: txRequest.chainId,
+              sender: canonicalSmartWalletAddress as `0x${string}`,
+              to: txRequest.to,
+              data: txRequest.data,
+              paymasterUrl: sendCallsPaymasterUrl,
+              approvalRunId: effectiveApprovalRunId,
+              executionMode,
+              signerAddress,
+              canonicalCswAddress: canonicalSmartWalletAddress,
+              onStageEvent,
+            })
+          } catch (sendCallsError) {
+            emitOwnerApprovalStage(onStageEvent, {
+              runId: effectiveApprovalRunId,
+              stage: 'send_calls',
+              status: 'error',
+              executionMode,
+              signerAddress,
+              canonicalCswAddress: canonicalSmartWalletAddress,
+              code: classifyOwnerApprovalError(sendCallsError).code,
+              message: sendCallsError instanceof Error ? sendCallsError.message : String(sendCallsError ?? ''),
+            })
+            // If the user rejected, don't fall back to UserOp
+            if (isUserRejectedWalletAction(sendCallsError)) throw sendCallsError
+            // Fall back to sponsored UserOp as last resort
+            // (may work if signing path changes in future extension updates)
+            try {
+              txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
+            } catch (userOpError) {
+              emitOwnerApprovalStage(onStageEvent, {
+                runId: effectiveApprovalRunId,
+                stage: 'userop_typed',
+                status: 'error',
+                executionMode,
+                signerAddress,
+                canonicalCswAddress: canonicalSmartWalletAddress,
+                code: classifyOwnerApprovalError(userOpError).code,
+                message: userOpError instanceof Error ? userOpError.message : String(userOpError ?? ''),
+              })
+              // Throw the original sendCalls error as it's more actionable
+              throw sendCallsError
+            }
+          }
+        } else {
+          // No walletRequest available — try UserOp path directly
           txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
-        } catch (sponsoredError) {
-          emitOwnerApprovalStage(onStageEvent, {
-            runId: effectiveApprovalRunId,
-            stage: 'userop_typed',
-            status: 'error',
-            executionMode,
-            signerAddress,
-            canonicalCswAddress: canonicalSmartWalletAddress,
-            code: classifyOwnerApprovalError(sponsoredError).code,
-            message: sponsoredError instanceof Error ? sponsoredError.message : String(sponsoredError ?? ''),
-          })
-          // Try non-typed-data signing as second attempt
-          let nonTypedRetryError: unknown = null
-          if (shouldFallbackSelfAuthenticatedCanonicalToSendCalls(sponsoredError)) {
-            try {
-              txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true, attempt: 2 })
-            } catch (retryError) {
-              emitOwnerApprovalStage(onStageEvent, {
-                runId: effectiveApprovalRunId,
-                stage: 'userop_nontyped',
-                status: 'error',
-                executionMode,
-                signerAddress,
-                canonicalCswAddress: canonicalSmartWalletAddress,
-                code: classifyOwnerApprovalError(retryError).code,
-                message: retryError instanceof Error ? retryError.message : String(retryError ?? ''),
-              })
-              nonTypedRetryError = retryError
-            }
-            if (
-              !txHash &&
-              nonTypedRetryError &&
-              !shouldFallbackSelfAuthenticatedCanonicalToSendCalls(nonTypedRetryError)
-            ) {
-              throw nonTypedRetryError
-            }
-          }
-          // Last resort: fall back to wallet_sendCalls if UserOp paths failed
-          // with retryable errors (aa23, typed_data_timeout, wallet_generation_insufficient)
-          if (!txHash && walletRequest && (nonTypedRetryError || shouldFallbackSelfAuthenticatedCanonicalToSendCalls(sponsoredError))) {
-            try {
-              txHash = await submitOwnerTxViaWalletSendCalls({
-                walletRequest,
-                chainId: txRequest.chainId,
-                sender: canonicalSmartWalletAddress as `0x${string}`,
-                to: txRequest.to,
-                data: txRequest.data,
-                paymasterUrl,
-                approvalRunId: effectiveApprovalRunId,
-                executionMode,
-                signerAddress,
-                canonicalCswAddress: canonicalSmartWalletAddress,
-                onStageEvent,
-              })
-            } catch (sendCallsRetryError) {
-              emitOwnerApprovalStage(onStageEvent, {
-                runId: effectiveApprovalRunId,
-                stage: 'send_calls',
-                status: 'error',
-                executionMode,
-                signerAddress,
-                canonicalCswAddress: canonicalSmartWalletAddress,
-                code: classifyOwnerApprovalError(sendCallsRetryError).code,
-                message: sendCallsRetryError instanceof Error ? sendCallsRetryError.message : String(sendCallsRetryError ?? ''),
-              })
-              if (isUserRejectedWalletAction(sendCallsRetryError)) throw sendCallsRetryError
-              if (nonTypedRetryError) throw nonTypedRetryError
-              throw sendCallsRetryError
-            }
-          }
-          if (!txHash) {
-            throw nonTypedRetryError ?? sponsoredError
-          }
+        }
+        if (!txHash) {
+          throw new Error('Owner approval failed: neither wallet_sendCalls nor UserOp path produced a transaction.')
         }
       } else {
         txHash = await runSponsoredCanonicalUserOp()
