@@ -1509,6 +1509,54 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     })
   }
 
+  // ── Fetch the correct nonce using ownerIndex as the key ──
+  // viem's toCoinbaseSmartAccount does not override getNonce, so the default
+  // nonceKeyManager uses Date.now() as the key. CoinbaseSmartWallet.validateUserOp
+  // requires the nonce key to equal the ownerIndex from the SignatureWrapper.
+  // We read the nonce directly from the EntryPoint to ensure the key matches.
+  let correctNonce: bigint | undefined
+  try {
+    const entryPointNonce = await withTimeout(
+      (publicClient as any).readContract({
+        address: entryPoint06Address,
+        abi: [{
+          type: 'function',
+          name: 'getNonce',
+          inputs: [
+            { name: 'sender', type: 'address' },
+            { name: 'key', type: 'uint192' },
+          ],
+          outputs: [{ type: 'uint256' }],
+          stateMutability: 'view',
+        }],
+        functionName: 'getNonce',
+        args: [smartWallet, BigInt(ownerIndex)],
+      }),
+      RPC_READ_TIMEOUT_MS,
+      'EntryPoint getNonce',
+    ) as bigint
+    correctNonce = entryPointNonce
+    if (AA_DEBUG) {
+      logger.debug('[ERC-4337] EntryPoint nonce for ownerIndex', {
+        smartWallet,
+        ownerIndex,
+        nonce: String(entryPointNonce),
+        nonceKey: String(BigInt(ownerIndex)),
+      })
+    }
+  } catch (nonceError: unknown) {
+    if (AA_DEBUG) {
+      const msg = nonceError instanceof Error ? nonceError.message : String(nonceError ?? '')
+      logger.warn('[ERC-4337] Failed to read EntryPoint nonce; falling back to account default', {
+        smartWallet,
+        ownerIndex,
+        error: msg,
+      })
+    }
+    // If we can't read the nonce, leave it undefined so the default path runs.
+    // This will likely AA23 but is no worse than the current behavior.
+  }
+
   let userOpHash: Hex | null = null
   let lastError: unknown = null
   let attemptedWithoutPaymaster = false
@@ -1546,6 +1594,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       account,
       calls: attributedCalls,
       verificationGasLimit,
+      ...(typeof correctNonce === 'bigint' ? { nonce: correctNonce } : {}),
       ...(usePaymaster
         ? {
             paymaster: {
