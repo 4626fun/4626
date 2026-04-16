@@ -6,8 +6,10 @@ import { LoadingText } from '@/components/ui/LoadingState'
 import { apiFetch } from '@/lib/api/apiBase'
 import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
-import { getCanonicalMarketingWaitlistPath } from '@/lib/auth/waitlistEntry'
+import { getCanonicalMarketingWaitlistPath, getMarketingWaitlistReferralUrl } from '@/lib/auth/waitlistEntry'
+import { getMarketingBaseUrl } from '@/lib/env/host'
 import { META, PageMeta } from '@/components/seo/PageMeta'
+import { ShareVaultButton } from '@/components/share/ShareVaultButton'
 
 type LeaderboardRow = {
   rank: number
@@ -116,6 +118,18 @@ export function Leaderboard() {
     return data.leaderboard.some((row) => row.signupId === data.me?.signupId)
   }, [data])
 
+  const myRankShare = useMemo(() => {
+    if (!data?.me) return null
+    // Use the referral URL when available so each share doubles as a referral;
+    // fall back to the plain /leaderboard URL otherwise.
+    const url = data.me.referralCode
+      ? getMarketingWaitlistReferralUrl(data.me.referralCode)
+      : `${getMarketingBaseUrl()}/leaderboard`
+    const points = formatWholeNumber(data.me.pointsTotal)
+    const text = `Ranked #${data.me.rank} on 4626 with ${points} points. Join me:`
+    return { url, text }
+  }, [data])
+
   return (
     <section className="relative overflow-hidden bg-vault-bg text-white min-h-[calc(100vh-0px)]">
       <PageMeta title={META.leaderboard.title} description={META.leaderboard.description} canonicalPath="/leaderboard" />
@@ -129,12 +143,22 @@ export function Leaderboard() {
             </div>
             {subtitle ? <div className="text-[11px] text-zinc-700 mt-2">{subtitle}</div> : null}
           </div>
-          <Link
-            to={getCanonicalMarketingWaitlistPath()}
-            className="btn-accent btn-compact h-fit inline-flex items-center"
-          >
-            Invite friends
-          </Link>
+          <div className="flex items-center gap-3 h-fit">
+            {myRankShare ? (
+              <ShareVaultButton
+                url={myRankShare.url}
+                text={myRankShare.text}
+                label={`Share rank #${data?.me?.rank ?? ''}`}
+                showLabel
+              />
+            ) : null}
+            <Link
+              to={getCanonicalMarketingWaitlistPath()}
+              className="btn-accent btn-compact inline-flex items-center"
+            >
+              Invite friends
+            </Link>
+          </div>
         </div>
 
         <div className="mt-8 flex items-center justify-between gap-3">
