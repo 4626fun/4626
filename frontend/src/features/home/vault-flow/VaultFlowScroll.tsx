@@ -1168,7 +1168,7 @@ export function VaultFlowScroll(_props: Props) {
             </div>
 
             {/* Bezier paths — SVG source dot is the continuation of the badge above */}
-            <DistributionPaths p1={cardPaths[0]} p2={cardPaths[1]} p3={cardPaths[2]} />
+            <DistributionPaths p1={cardPaths[0]!} p2={cardPaths[1]!} p3={cardPaths[2]!} />
 
             {/* Distribution cards — fade in one at a time as paths reach them */}
             <div className="grid grid-cols-1 gap-3 sm:gap-4 md:grid-cols-3 w-full mt-1">

@@ -7342,7 +7342,7 @@ function DeployVaultMain() {
         : 18
     const raw = formatUnits(minFirstDeposit, decimals)
     const [whole, fraction = ''] = raw.split('.')
-    const groupedWhole = whole.replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    const groupedWhole = (whole ?? '').replace(/\B(?=(\d{3})+(?!\d))/g, ',')
     const trimmedFraction = fraction.replace(/0+$/, '')
     return trimmedFraction ? `${groupedWhole}.${trimmedFraction}` : groupedWhole
   }, [minFirstDeposit, resolvedTokenDecimals])

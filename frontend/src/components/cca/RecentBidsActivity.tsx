@@ -55,7 +55,7 @@ function generateMockBid(): Bid {
   
   return {
     id: randomId(),
-    address: addresses[randInt(addresses.length)],
+    address: addresses[randInt(addresses.length)] ?? addresses[0]!,
     amount: rand() * 0.5 + 0.01,
     // "Max price" is what the bidder is willing to pay per token (simulated)
     maxPriceEthPerToken: 0.00004 + rand() * 0.00004,

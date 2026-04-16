@@ -193,7 +193,7 @@ async function getV3TwapTick(params: { publicClient: ReadonlyPublicClient; pool:
   const tickCumulatives = (res as any)?.[0] as readonly bigint[] | undefined
   if (!tickCumulatives || tickCumulatives.length < 2) throw new Error('V3 observe returned no tick cumulatives')
 
-  const tickDelta = tickCumulatives[1] - tickCumulatives[0]
+  const tickDelta = tickCumulatives[1]! - tickCumulatives[0]!
   const timeDelta = BigInt(durationSec)
   const meanTick = floorDiv(tickDelta, timeDelta)
   const n = Number(meanTick)

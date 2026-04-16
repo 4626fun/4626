@@ -205,9 +205,9 @@ export function useVaultGaugeVoting({ votingAddress, ve4626Address }: UseVaultGa
     const [vaults, weights] = userVotesRaw as [string[], bigint[]]
     return vaults.map((vault, i) => ({
       vault,
-      weight: weights[i],
-      weightBps: totalWeight && totalWeight > 0n 
-        ? Number((weights[i] * 10000n) / totalWeight) 
+      weight: weights[i] ?? 0n,
+      weightBps: totalWeight && totalWeight > 0n
+        ? Number(((weights[i] ?? 0n) * 10000n) / totalWeight)
         : 0,
     }))
   }, [userVotesRaw, totalWeight])

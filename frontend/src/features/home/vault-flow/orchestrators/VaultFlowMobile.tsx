@@ -109,7 +109,7 @@ function MobileBeatCard({ state, content }: { state: StoryState; content: StoryR
               </div>
             ))}
             <p className="mt-2 text-[10px] leading-relaxed text-zinc-600">
-              {content.distribution[0].purposeCopy}
+              {content.distribution[0]!.purposeCopy}
             </p>
           </div>
         )}

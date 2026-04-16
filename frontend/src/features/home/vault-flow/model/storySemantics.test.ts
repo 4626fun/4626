@@ -149,8 +149,8 @@ describe('beat windows', () => {
       })
 
       it('first window starts at 0 and last ends at 1', () => {
-        expect(windows[0].start).toBe(0)
-        expect(windows[windows.length - 1].end).toBe(1)
+        expect(windows[0]!.start).toBe(0)
+        expect(windows[windows.length - 1]!.end).toBe(1)
       })
 
       it('holdStart and holdEnd are within [0, 1] for every window', () => {
@@ -165,7 +165,7 @@ describe('beat windows', () => {
 
       it('windows are non-overlapping and contiguous', () => {
         for (let i = 1; i < windows.length; i++) {
-          expect(windows[i].start).toBeCloseTo(windows[i - 1].end, 5)
+          expect(windows[i]!.start).toBeCloseTo(windows[i - 1]!.end, 5)
         }
       })
     })

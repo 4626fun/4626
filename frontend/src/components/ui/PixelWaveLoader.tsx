@@ -105,7 +105,7 @@ function normalizeDelays(delays: number[] | undefined, fallbackDelays: number[])
   return fallbackDelays.map((fallbackDelay, index) => {
     const candidateDelay = delays[index % delays.length]
 
-    return Number.isFinite(candidateDelay) ? Math.max(0, Math.round(candidateDelay)) : fallbackDelay
+    return candidateDelay !== undefined && Number.isFinite(candidateDelay) ? Math.max(0, Math.round(candidateDelay)) : fallbackDelay
   })
 }
 

@@ -165,11 +165,11 @@ export function resolveBeatWindow(
   // Walk backwards so the last beat "owns" progress=1.0
   for (let i = windows.length - 1; i >= 0; i--) {
     const w = windows[i]
-    if (globalProgress >= w.start) {
+    if (w && globalProgress >= w.start) {
       const span = w.end - w.start
       const beatProgress = span > 0 ? Math.min((globalProgress - w.start) / span, 1) : 1
       return { window: w, beatProgress }
     }
   }
-  return { window: windows[0], beatProgress: 0 }
+  return { window: windows[0]!, beatProgress: 0 }
 }

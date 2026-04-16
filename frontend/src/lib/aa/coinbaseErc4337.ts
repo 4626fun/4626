@@ -868,8 +868,8 @@ export async function simulateSmartWalletCalls(params: {
   // First, try to simulate the direct target call (as if smart wallet is msg.sender)
   // This bypasses the smart wallet's authorization checks and tests just the target contract
   let directCallResult: { success: boolean; error?: string; revertData?: Hex; errorName?: string } | undefined
-  if (calls.length === 1 && calls[0].data && typeof client?.call === 'function') {
-    const call = calls[0]
+  if (calls.length === 1 && calls[0]?.data && typeof client?.call === 'function') {
+    const call = calls[0]!
     try {
       await client.call({
         to: call.to,
@@ -927,7 +927,7 @@ export async function simulateSmartWalletCalls(params: {
     }
     
     if (calls.length === 1) {
-      const call = calls[0]
+      const call = calls[0]!
       await client.simulateContract({
         address: smartWallet,
         abi: EXECUTE_ABI,
@@ -1766,7 +1766,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
 
   const attemptSend = async (usePaymaster: boolean) => {
     for (let i = 0; i < uniqueVerificationGasLimits.length; i++) {
-      const limit = uniqueVerificationGasLimits[i]
+      const limit = uniqueVerificationGasLimits[i]!
       try {
         let sent = false
         const maxTransientAttempts = 1 + TRANSIENT_USER_OP_RETRY_DELAYS_MS.length

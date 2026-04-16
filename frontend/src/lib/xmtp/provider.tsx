@@ -1348,7 +1348,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         summaries.sort((a, b) => (b.lastMessageAt?.getTime() ?? 0) - (a.lastMessageAt?.getTime() ?? 0))
         let normalizedSummaries: ChatConversation[] = []
         for (let i = summaries.length - 1; i >= 0; i -= 1) {
-          normalizedSummaries = upsertConversationSummary(normalizedSummaries, summaries[i])
+          normalizedSummaries = upsertConversationSummary(normalizedSummaries, summaries[i]!)
         }
         conversationsRef.current = normalizedSummaries
         if (mountedRef.current) setConversations(normalizedSummaries)
@@ -1376,15 +1376,15 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
             setConversations((prev) => {
               const idx = prev.findIndex((c) => c.id === convoId)
               if (idx === -1) return prev
-              const updated = { ...prev[idx] }
+              const updated: ChatConversation = { ...prev[idx]! }
               if (typeof msg.content === 'string') {
                 updated.lastMessageText = parseWireContent(msg.content).content
               }
               updated.lastMessageAt = msg.sentAt
-              if (!chatMsg.isSelf) updated.unreadCount += 1
+              if (!chatMsg.isSelf) updated.unreadCount = (updated.unreadCount ?? 0) + 1
               const next = [...prev]
               next.splice(idx, 1)
-              const reordered = [updated, ...next]
+              const reordered: ChatConversation[] = [updated, ...next]
               conversationsRef.current = reordered
               return reordered
             })

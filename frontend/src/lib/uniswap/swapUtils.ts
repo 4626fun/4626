@@ -143,8 +143,8 @@ export function sanitizeDecimalInput(value: string, maxFractionDigits = 18): str
   if (!compact.includes('.')) return compact
 
   const [whole, fraction] = compact.split('.', 2)
-  const safeWhole = whole.replace(/^0+(?=\d)/, '') || '0'
-  const safeFraction = fraction.slice(0, Math.max(0, maxFractionDigits))
+  const safeWhole = (whole ?? '').replace(/^0+(?=\d)/, '') || '0'
+  const safeFraction = (fraction ?? '').slice(0, Math.max(0, maxFractionDigits))
   return `${safeWhole}.${safeFraction}`
 }
 

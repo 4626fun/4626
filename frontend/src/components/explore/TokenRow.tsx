@@ -360,7 +360,7 @@ export function TokenTableHeader({ timeframe = '1d', collapseIdentity = false, c
         {groupSpans.map((g) => {
           const slice = columns.slice(g.start, g.end + 1)
           const hasSticky = slice.some((c) => c.sticky)
-          const left = hasSticky ? stickyLeft[columns[g.start].id] : undefined
+          const left = hasSticky ? stickyLeft[columns[g.start]!.id] : undefined
           const alignClass = g.id === 'identity' ? 'text-left' : 'text-center'
           return (
             <div

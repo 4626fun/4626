@@ -105,7 +105,7 @@ export function useExploreHorizontalTableSync({
       let prevStop = 0
       for (let i = stops.length - 1; i >= 0; i -= 1) {
         const stop = stops[i]
-        if (stop < currentLeft - 1) {
+        if (stop !== undefined && stop < currentLeft - 1) {
           prevStop = stop
           break
         }

@@ -302,9 +302,10 @@ export async function getTimeframeData(
   
   // Get the primary pool (highest TVL)
   const primaryPool = pools[0]
-  
+  if (!primaryPool) return null
+
   let dataPoints: HistoricalVolumeData[] = []
-  
+
   if (config.hours > 0 && config.hours <= 24) {
     // Use hour data for short timeframes
     const hourData = await getPoolHourData(primaryPool.id, config.hours)
