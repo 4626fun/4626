@@ -8,7 +8,7 @@ import {
   getCanonicalMarketingWaitlistPath,
 } from '@/lib/auth/waitlistEntry'
 import { isPublicSiteMode } from '@/lib/flags/flags'
-import { getHostMode, getMarketingBaseUrl } from '@/lib/env/host'
+import { getHostMode, getMarketingBaseUrl, MARKETING_ORIGIN } from '@/lib/env/host'
 import { Logo } from './Logo'
 import { TextScramble } from './TextScramble'
 
@@ -61,7 +61,9 @@ export function VaultNavBar(props: { interactive?: boolean }) {
       : buildCanonicalMarketingWaitlistUrl(getMarketingBaseUrl())
   const baseItems = publicMode || hostMode === 'marketing' ? NAV_ITEMS_PUBLIC : NAV_ITEMS
   const items = interactive && isAdmin && hostMode !== 'marketing' ? [...baseItems, ADMIN_ITEM] : baseItems
-  const brandHref = hostMode === 'marketing' ? '/' : '/swap'
+  // Use the absolute marketing origin so mobile browsers perform a full server
+  // roundtrip instead of letting the SPA handle "/" via React Router.
+  const brandHref = hostMode === 'marketing' ? MARKETING_ORIGIN : '/swap'
   const showConnect = interactive && !publicMode && hostMode !== 'marketing'
 
   const renderNavLinks = () =>
@@ -126,7 +128,7 @@ export function VaultNavBar(props: { interactive?: boolean }) {
       <div className="relative h-14 w-full px-4 md:px-6 lg:px-8 flex items-center gap-3">
         {hostMode === 'marketing' ? (
           <a
-            href="/"
+            href={MARKETING_ORIGIN}
             className="flex items-center gap-2.5 group cursor-pointer shrink-0"
             onMouseEnter={() => setBrandHovered(true)}
             onMouseLeave={() => setBrandHovered(false)}
