@@ -26,7 +26,7 @@ describe('fetchDelegationStatus', () => {
 
     expect(res.requestId).toBe('req_1')
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    const [url, init] = fetchMock.mock.calls[0]
+    const [url, init] = fetchMock.mock.calls[0]!
     expect(String(url)).toBe('/api/uniswap/checkDelegation')
     expect(init?.method).toBe('POST')
   })

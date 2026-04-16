@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 
+import { NavigationBar } from '@coinbase/cds-web/navigation'
+
 import { ConnectButton } from '@/components/account/ConnectButton'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
 import {
@@ -61,32 +63,59 @@ export function VaultNavBar(props: { interactive?: boolean }) {
       : buildCanonicalMarketingWaitlistUrl(getMarketingBaseUrl())
   const baseItems = publicMode || hostMode === 'marketing' ? NAV_ITEMS_PUBLIC : NAV_ITEMS
   const items = interactive && isAdmin && hostMode !== 'marketing' ? [...baseItems, ADMIN_ITEM] : baseItems
-  // Use the absolute marketing origin so mobile browsers perform a full server
-  // roundtrip instead of letting the SPA handle "/" via React Router.
   const brandHref = hostMode === 'marketing' ? MARKETING_ORIGIN : '/swap'
   const showConnect = interactive && !publicMode && hostMode !== 'marketing'
+
+  const brandElement = (
+    <>
+      <Logo showText={false} width={28} height={28} forceHover={brandHovered} />
+      <span className="text-[15px] tracking-[0.03em] text-white font-medium leading-none">
+        <TextScramble text="4626.fun" trigger={brandHovered} speed={0.75} complexity="simple" />
+      </span>
+    </>
+  )
+
+  const brandLogo = hostMode === 'marketing' ? (
+    <a
+      href={MARKETING_ORIGIN}
+      className="flex items-center gap-2.5 group cursor-pointer shrink-0"
+      onMouseEnter={() => setBrandHovered(true)}
+      onMouseLeave={() => setBrandHovered(false)}
+      onFocus={() => setBrandHovered(true)}
+      onBlur={() => setBrandHovered(false)}
+    >
+      {brandElement}
+    </a>
+  ) : (
+    <Link
+      to={brandHref}
+      className="flex items-center gap-2.5 group cursor-pointer shrink-0"
+      onMouseEnter={() => setBrandHovered(true)}
+      onMouseLeave={() => setBrandHovered(false)}
+      onFocus={() => setBrandHovered(true)}
+      onBlur={() => setBrandHovered(false)}
+    >
+      {brandElement}
+    </Link>
+  )
 
   const renderNavLinks = () =>
     items.map((item) => {
       const active = isActiveLink(location, item)
+      const linkClass = `group relative inline-flex h-8 items-center justify-center rounded-lg border-0 px-3 outline-none transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] focus-visible:ring-1 focus-visible:ring-white/25`
+      const labelClass = `relative z-10 text-[13px] font-medium tracking-[0.01em] transition-colors duration-150 ease-[cubic-bezier(0.4,0,0.2,1)] ${
+        active ? 'text-white' : 'text-zinc-300'
+      }`
+
       if (item.to === getCanonicalMarketingWaitlistPath()) {
-        const className = `group relative inline-flex h-8 items-center justify-center rounded-lg border-0 px-3 outline-none transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] focus-visible:ring-1 focus-visible:ring-white/25 ${
-            ''
-          }`
-        const content = (
-          <span
-            className="relative z-10 text-[13px] font-medium tracking-[0.01em] text-zinc-300 transition-colors duration-150 ease-[cubic-bezier(0.4,0,0.2,1)]"
-          >
-            {item.label}
-          </span>
-        )
+        const content = <span className={labelClass}>{item.label}</span>
         if (hostMode === 'marketing') {
           return (
             <Link
               key={item.to}
               to={canonicalMarketingWaitlistHref}
               aria-current={active ? 'page' : undefined}
-              className={className}
+              className={linkClass}
             >
               {content}
             </Link>
@@ -97,7 +126,7 @@ export function VaultNavBar(props: { interactive?: boolean }) {
             key={item.to}
             href={canonicalMarketingWaitlistHref}
             aria-current={active ? 'page' : undefined}
-            className={className}
+            className={linkClass}
           >
             {content}
           </a>
@@ -108,15 +137,9 @@ export function VaultNavBar(props: { interactive?: boolean }) {
           key={item.to}
           to={item.to}
           aria-current={active ? 'page' : undefined}
-          className={`group relative inline-flex h-8 items-center justify-center rounded-lg border-0 px-3 outline-none transition-all duration-200 ease-[cubic-bezier(0.4,0,0.2,1)] focus-visible:ring-1 focus-visible:ring-white/25 ${
-            ''
-          }`}
+          className={linkClass}
         >
-          <span
-            className="relative z-10 text-[13px] font-medium tracking-[0.01em] text-zinc-300 transition-colors duration-150 ease-[cubic-bezier(0.4,0,0.2,1)]"
-          >
-            {item.label}
-          </span>
+          <span className={labelClass}>{item.label}</span>
         </Link>
       )
     })
@@ -125,48 +148,22 @@ export function VaultNavBar(props: { interactive?: boolean }) {
     <header className="hidden md:block sticky top-0 left-0 right-0 z-50">
       <div className="absolute inset-0 bg-vault-bg/74 backdrop-blur-xl" />
 
-      <div className="relative h-14 w-full px-4 md:px-6 lg:px-8 flex items-center gap-3">
-        {hostMode === 'marketing' ? (
-          <a
-            href={MARKETING_ORIGIN}
-            className="flex items-center gap-2.5 group cursor-pointer shrink-0"
-            onMouseEnter={() => setBrandHovered(true)}
-            onMouseLeave={() => setBrandHovered(false)}
-            onFocus={() => setBrandHovered(true)}
-            onBlur={() => setBrandHovered(false)}
-          >
-            <Logo showText={false} width={28} height={28} forceHover={brandHovered} />
-            <span className="text-[15px] tracking-[0.03em] text-white font-medium leading-none">
-              <TextScramble text="4626.fun" trigger={brandHovered} speed={0.75} complexity="simple" />
-            </span>
-          </a>
-        ) : (
-          <Link
-            to={brandHref}
-            className="flex items-center gap-2.5 group cursor-pointer shrink-0"
-            onMouseEnter={() => setBrandHovered(true)}
-            onMouseLeave={() => setBrandHovered(false)}
-            onFocus={() => setBrandHovered(true)}
-            onBlur={() => setBrandHovered(false)}
-          >
-            <Logo showText={false} width={28} height={28} forceHover={brandHovered} />
-            <span className="text-[15px] tracking-[0.03em] text-white font-medium leading-none">
-              <TextScramble text="4626.fun" trigger={brandHovered} speed={0.75} complexity="simple" />
-            </span>
-          </Link>
-        )}
-
-        <nav className="min-w-0 flex-1">
-          <div className="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap scrollbar-hide">
-            {renderNavLinks()}
-          </div>
-        </nav>
-
-        {showConnect ? (
-          <div className="shrink-0">
-            <ConnectButton variant="nav" />
-          </div>
-        ) : null}
+      <div className="relative">
+        <NavigationBar
+          start={brandLogo}
+          end={showConnect ? (
+            <div className="shrink-0">
+              <ConnectButton variant="nav" />
+            </div>
+          ) : undefined}
+          accessibilityLabel="Main navigation"
+        >
+          <nav className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap scrollbar-hide">
+              {renderNavLinks()}
+            </div>
+          </nav>
+        </NavigationBar>
       </div>
     </header>
   )

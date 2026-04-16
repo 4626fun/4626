@@ -80,9 +80,9 @@ export function TextScramble({
 
         if (index < resolved) return { char, style: {} }
 
-        let randomChar = SIMPLE_SYMBOLS[randInt(SIMPLE_SYMBOLS.length)]
+        let randomChar: string = SIMPLE_SYMBOLS[randInt(SIMPLE_SYMBOLS.length)] ?? '?'
         if (isComplex && rand() > 0.3) {
-          randomChar = COMPLEX_CHARS[randInt(COMPLEX_CHARS.length)]
+          randomChar = COMPLEX_CHARS[randInt(COMPLEX_CHARS.length)] ?? randomChar
         }
 
         const yOffset = (frame % 2 === 0 ? -1 : 1) * (2 + rand() * 3)

@@ -1,43 +1,33 @@
+import { Fallback } from '@coinbase/cds-web/layout'
 import { cn } from '@/lib/shared/utils'
 
 interface SkeletonProps {
   className?: string
 }
 
-/**
- * Shimmer skeleton block. Respects `prefers-reduced-motion`.
- * Use to replace content during loading to prevent layout shift.
- */
 export function Skeleton({ className }: SkeletonProps) {
   return (
-    <div
-      aria-hidden="true"
-      className={cn(
-        'relative overflow-hidden rounded-lg bg-white/5',
-        'motion-safe:after:absolute motion-safe:after:inset-0',
-        'motion-safe:after:bg-linear-to-r motion-safe:after:from-transparent motion-safe:after:via-white/[0.04] motion-safe:after:to-transparent',
-        'motion-safe:after:animate-shimmer',
-        className,
-      )}
-    />
+    <span className={cn('block overflow-hidden', className)}>
+      <Fallback width="100%" height="100%" shape="rectangle" />
+    </span>
   )
 }
 
-/** Multi-line text skeleton — alias kept for backward compatibility */
 export function SkeletonText({ lines = 3, className }: { lines?: number; className?: string }) {
   return (
     <div className={cn('flex flex-col gap-2', className)} aria-hidden="true">
       {Array.from({ length: lines }).map((_, i) => (
-        <Skeleton
+        <Fallback
           key={i}
-          className={cn('h-3 w-full', i === lines - 1 && 'w-3/5')}
+          width={i === lines - 1 ? '60%' : '100%'}
+          height={12}
+          shape="rectangle"
         />
       ))}
     </div>
   )
 }
 
-/** Stack of skeleton rows for list/table loading states */
 export function SkeletonRows({
   count = 3,
   rowClassName,
@@ -48,7 +38,9 @@ export function SkeletonRows({
   return (
     <div className="flex flex-col gap-3">
       {Array.from({ length: count }).map((_, i) => (
-        <Skeleton key={i} className={cn('h-10 w-full', rowClassName)} />
+        <span key={i} className={cn('block', rowClassName)}>
+          <Fallback width="100%" height={40} shape="rectangle" />
+        </span>
       ))}
     </div>
   )

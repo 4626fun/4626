@@ -34,7 +34,7 @@ import {
 import { verifyDeployPhase2Invariants } from '../../../../server/_lib/deploy/deployPhase2Invariants.js'
 import { ingestShareOftIntoManagedTokenlist } from '../../token/_managedTokenList.js'
 import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../server/_lib/onchain/solanaOvaultCompatibility.js'
-import { validateSponsoredSmartWalletCalls } from '../../_paymaster.js'
+import { validateSponsoredSmartWalletCalls } from '../../paymaster/_paymaster.js'
 import { DeploySessionAccessError, loadAuthorizedDeploySession, normalizeDeploySessionId } from './_sessionAccess.js'
 
 declare const process: { env: Record<string, string | undefined> }

@@ -102,11 +102,11 @@ export async function apiFetch(path: string, init: ApiFetchInit = {}, bases?: st
 
   let lastErr: unknown = null
   for (let baseIndex = 0; baseIndex < baseList.length; baseIndex += 1) {
-    const base = baseList[baseIndex]
+    const base = baseList[baseIndex]!
     for (let pathIndex = 0; pathIndex < tryPaths.length; pathIndex += 1) {
       const p = tryPaths[pathIndex]
       const hasNextAttempt = pathIndex < tryPaths.length - 1 || baseIndex < baseList.length - 1
-      const url = joinBase(base, p)
+      const url = joinBase(base, p!)
       try {
         const res = await fetch(url, baseInit)
         // In dev, Vite may serve index.html for unknown paths; treat that as a miss.

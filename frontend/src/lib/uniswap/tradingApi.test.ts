@@ -431,7 +431,7 @@ describe('createOrder', () => {
 
     expect(result.orderId).toBe('ord1')
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    const [url, init] = fetchMock.mock.calls[0]
+    const [url, init] = fetchMock.mock.calls[0]!
     expect(url).toBe('/api/uniswap/order')
     expect(init?.method).toBe('POST')
     expect((init?.headers as any)?.['Content-Type']).toBe('application/json')

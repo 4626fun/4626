@@ -179,8 +179,8 @@ function parseVaultHint(hint?: string): { prefix: string; suffix: string } | nul
   if (isAddress(raw)) return { prefix: raw.toLowerCase(), suffix: '' }
   const parts = raw.split('...')
   if (parts.length !== 2) return null
-  const prefix = parts[0].trim().toLowerCase()
-  const suffix = parts[1].trim().toLowerCase()
+  const prefix = parts[0]!.trim().toLowerCase()
+  const suffix = parts[1]!.trim().toLowerCase()
   if (!prefix || !suffix) return null
   return { prefix, suffix }
 }
@@ -190,7 +190,7 @@ function matchVaultHint(hint: string | undefined, vaults: string[]): string | nu
   if (!parsed) return null
   if (parsed.suffix === '' && isAddress(parsed.prefix)) return parsed.prefix
   const matches = vaults.filter((vault) => vault.startsWith(parsed.prefix) && vault.endsWith(parsed.suffix))
-  return matches.length === 1 ? matches[0] : null
+  return matches.length === 1 ? matches[0] ?? null : null
 }
 
 function getLegacyVestingStartBlock(): bigint {
@@ -2040,7 +2040,7 @@ function AgentFeedback() {
                           <span key={s} className={`text-xs ${fb.value >= s ? 'text-amber-400' : 'text-zinc-700'}`}>★</span>
                         ))}
                       </div>
-                      <span className="text-sm text-zinc-200">{fb.decimals === 0 ? fb.value : (fb.value / 10 ** fb.decimals).toFixed(fb.decimals)}</span>
+                      <span className="text-sm text-zinc-200">{fb.decimals === 0 ? fb.value : (fb.value / 10 ** (fb.decimals ?? 0)).toFixed(fb.decimals ?? 0)}</span>
                     </div>
                     {(fb.tag1 || fb.tag2) && (
                       <div className="flex gap-1.5 text-[10px]">

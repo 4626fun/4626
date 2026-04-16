@@ -108,7 +108,7 @@ vi.mock('../../server/_lib/deploy/deployPhase2Invariants.js', () => ({
   verifyDeployPhase2Invariants: verifyDeployPhase2InvariantsMock,
 }))
 
-vi.mock('../_handlers/_paymaster.js', () => ({
+vi.mock('../_handlers/paymaster/_paymaster.js', () => ({
   validateSponsoredSmartWalletCalls: validateSponsoredSmartWalletCallsMock,
 }))
 

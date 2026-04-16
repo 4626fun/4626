@@ -6,6 +6,9 @@ import { useReadContract } from 'wagmi'
 import { formatUnits } from 'viem'
 import { erc20Abi } from 'viem'
 
+import { ContentCard, ContentCardBody, ContentCardFooter } from '@coinbase/cds-web/cards/ContentCard'
+import { RollingNumber } from '@coinbase/cds-web/numbers/RollingNumber'
+
 import { useVault } from '@/hooks/useVault'
 import { useZoraCoin } from '@/lib/zora/hooks'
 import { apiFetch } from '@/lib/api/apiBase'
@@ -113,11 +116,6 @@ function formatCompactNumber(n: number): string {
   return n.toLocaleString(undefined, { maximumFractionDigits: 2 })
 }
 
-function formatCompactUsd(n: number): string {
-  if (!Number.isFinite(n) || n <= 0) return '$0'
-  return `$${formatCompactNumber(n)}`
-}
-
 function shortAddress(value: string): string {
   if (!value) return 'Unknown'
   return `${value.slice(0, 6)}…${value.slice(-4)}`
@@ -204,153 +202,169 @@ export function VaultCard({ vault, compact = false, withMyVault = false }: Vault
   const title = shareSymbol || data.name || 'Vault'
 
   return (
-    <article
+    <ContentCard
       className={cn(
         'vault-surface-muted vault-hover-lift p-3 transition',
         compact ? 'space-y-2' : 'space-y-3',
       )}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex flex-1 items-start gap-3">
-          {tokenImageUrl ? (
-            <img
-              src={tokenImageUrl}
-              alt=""
-              className="h-12 w-12 shrink-0 rounded-xl object-cover border border-white/10"
-              loading="lazy"
-            />
-          ) : null}
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="text-sm font-semibold text-white truncate">{title}</div>
-              <span className="inline-block rounded-full border border-brand-primary/20 bg-brand-primary/10 px-2 py-0.5 text-[10px] text-brand-200">
-                Creator
-              </span>
-            </div>
-            <div className="app-meta-value mt-1 leading-4 text-zinc-500 break-all">
-              Share token: {shareOFT ?? 'Unavailable'}
-            </div>
-            <div className="app-meta-value mt-1 inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/6 px-2 py-0.5 text-zinc-400">
-              <img alt="Base" className="h-3.5 w-3.5 rounded-full object-contain shrink-0" loading="lazy" src={BASE_BRANDMARK_BLUE} />
-              <span>Base</span>
-            </div>
-          </div>
-        </div>
-        <div className="w-[7.5rem] shrink-0 text-right text-xs text-zinc-500">
-          <div>{tvlUsd != null ? 'TVL' : 'Assets in vault'}</div>
-          <div className="text-sm text-zinc-200">{tvlUsd != null ? formatCompactUsd(tvlUsd) : tvlLabel}</div>
-          {tvlUsd != null ? <div className="app-meta-value mt-1 text-zinc-500">{tvlLabel} in vault</div> : null}
-        </div>
-      </div>
-
-      <div className="app-meta-value flex flex-wrap items-center gap-2 text-zinc-500">
-        {auctionLive && auctionUrl ? (
-          <a
-            href={auctionUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="rounded-full border border-emerald-400/40 bg-emerald-500/15 px-2 py-0.5 text-emerald-200 hover:bg-emerald-500/25 transition"
-          >
-            Auction Live Now
-          </a>
-        ) : null}
-        {auctionFinished ? (
-          <span className="rounded-full border border-sky-400/30 bg-sky-500/10 px-2 py-0.5 text-sky-200">
-            Auction Finished
-          </span>
-        ) : null}
-        {auctionFailed ? (
-          <span className="rounded-full border border-rose-400/35 bg-rose-500/10 px-2 py-0.5 text-rose-200">
-            Auction Failed
-          </span>
-        ) : null}
-        {auctionStatusUnavailable ? (
-          <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-amber-200">
-            Auction Status Unavailable
-          </span>
-        ) : null}
-        {committedDisplay ? (
-          <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-200">
-            Committed {committedDisplay}
-          </span>
-        ) : null}
-        {withMyVault && userHasShare ? (
-          <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-200">Position found</span>
-        ) : null}
-      </div>
-
-      {auctionLive && recentActivity.length > 0 ? (
-        <div className="rounded-xl border border-white/12 bg-linear-to-b from-white/8 to-white/3 px-3 py-2 backdrop-blur-sm">
-          <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">Live activity</div>
-          <div className="space-y-1.5">
-            {recentActivity.map((item) => (
-              <div key={item.transactionHash} className="flex items-center justify-between gap-3 text-[11px]">
-                <span className="text-zinc-400">{shortAddress(item.owner)}</span>
-                <span className="text-zinc-200">{item.amountDisplay}</span>
+      <ContentCardBody>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex flex-1 items-start gap-3">
+            {tokenImageUrl ? (
+              <img
+                src={tokenImageUrl}
+                alt=""
+                className="h-12 w-12 shrink-0 rounded-xl object-cover border border-white/10"
+                loading="lazy"
+              />
+            ) : null}
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="text-sm font-semibold text-white truncate">{title}</div>
+                <span className="inline-block rounded-full border border-brand-primary/20 bg-brand-primary/10 px-2 py-0.5 text-[10px] text-brand-200">
+                  Creator
+                </span>
               </div>
-            ))}
+              <div className="app-meta-value mt-1 leading-4 text-zinc-500 break-all">
+                Share token: {shareOFT ?? 'Unavailable'}
+              </div>
+              <div className="app-meta-value mt-1 inline-flex items-center gap-1.5 rounded-full border border-white/12 bg-white/6 px-2 py-0.5 text-zinc-400">
+                <img alt="Base" className="h-3.5 w-3.5 rounded-full object-contain shrink-0" loading="lazy" src={BASE_BRANDMARK_BLUE} />
+                <span>Base</span>
+              </div>
+            </div>
+          </div>
+          <div className="w-[7.5rem] shrink-0 text-right text-xs text-zinc-500">
+            <div>{tvlUsd != null ? 'TVL' : 'Assets in vault'}</div>
+            <div className="text-sm text-zinc-200">
+              {tvlUsd != null ? (
+                <RollingNumber
+                  value={tvlUsd}
+                  prefix={<span>$</span>}
+                  format={{ notation: 'compact', maximumFractionDigits: 1 }}
+                  color="fg"
+                  colorPulseOnUpdate
+                />
+              ) : (
+                tvlLabel
+              )}
+            </div>
+            {tvlUsd != null ? <div className="app-meta-value mt-1 text-zinc-500">{tvlLabel} in vault</div> : null}
           </div>
         </div>
-      ) : null}
 
-      {auctionFailed && ccaStrategy ? (
-        <Link
-          to={`/complete-auction/${ccaStrategy}`}
-          className="inline-flex w-full items-center justify-center rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 py-2 text-xs text-rose-200 transition hover:bg-rose-500/20"
-        >
-          Recover Auction + Strategy Funds
-        </Link>
-      ) : null}
+        <div className="app-meta-value flex flex-wrap items-center gap-2 text-zinc-500">
+          {auctionLive && auctionUrl ? (
+            <a
+              href={auctionUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-full border border-emerald-400/40 bg-emerald-500/15 px-2 py-0.5 text-emerald-200 hover:bg-emerald-500/25 transition"
+            >
+              Auction Live Now
+            </a>
+          ) : null}
+          {auctionFinished ? (
+            <span className="rounded-full border border-sky-400/30 bg-sky-500/10 px-2 py-0.5 text-sky-200">
+              Auction Finished
+            </span>
+          ) : null}
+          {auctionFailed ? (
+            <span className="rounded-full border border-rose-400/35 bg-rose-500/10 px-2 py-0.5 text-rose-200">
+              Auction Failed
+            </span>
+          ) : null}
+          {auctionStatusUnavailable ? (
+            <span className="rounded-full border border-amber-400/30 bg-amber-500/10 px-2 py-0.5 text-amber-200">
+              Auction Status Unavailable
+            </span>
+          ) : null}
+          {committedDisplay ? (
+            <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-200">
+              Committed {committedDisplay}
+            </span>
+          ) : null}
+          {withMyVault && userHasShare ? (
+            <span className="rounded-full border border-emerald-400/30 bg-emerald-500/10 px-2 py-0.5 text-emerald-200">Position found</span>
+          ) : null}
+        </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <Link
-          to={vaultPath}
-          className={cn(
-            'inline-flex h-8 items-center justify-center rounded-lg border border-white/12 bg-white/5 px-3 py-1.5 text-xs text-zinc-300 transition-all duration-200 hover:-translate-y-px hover:bg-white/8',
-          )}
-          title={`Open vault ${vault.vaultAddress}`}
-        >
-          <Wallet className="h-3.5 w-3.5 mr-1" />
-          Deposit
-        </Link>
-        <button
-          type="button"
-          onClick={() => {
-            if (userHasShare) {
-              window.location.assign(vaultPath)
-            }
-          }}
-          disabled={!userHasShare}
-          className={cn(
-            'inline-flex h-8 items-center justify-center rounded-lg border border-white/12 px-3 py-1.5 text-xs transition-all duration-200',
-            userHasShare
-              ? 'bg-white/5 text-zinc-300 hover:-translate-y-px hover:bg-white/8'
-              : 'bg-white/2.5 text-zinc-600 cursor-not-allowed',
-          )}
-        >
-          <TrendingUp className="h-3.5 w-3.5 mr-1" />
-          Withdraw
-        </button>
-      </div>
+        {auctionLive && recentActivity.length > 0 ? (
+          <div className="rounded-xl border border-white/12 bg-linear-to-b from-white/8 to-white/3 px-3 py-2 backdrop-blur-sm">
+            <div className="mb-2 text-[10px] font-medium uppercase tracking-[0.12em] text-zinc-500">Live activity</div>
+            <div className="space-y-1.5">
+              {recentActivity.map((item) => (
+                <div key={item.transactionHash} className="flex items-center justify-between gap-3 text-[11px]">
+                  <span className="text-zinc-400">{shortAddress(item.owner)}</span>
+                  <span className="text-zinc-200">{item.amountDisplay}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
 
-      <div className="flex items-center justify-between text-[11px]">
-        <Link
-          to={`/vault/${vault.vaultAddress}`}
-          className="inline-flex items-center gap-1 rounded-full border border-white/12 bg-white/5 px-2 py-1 text-zinc-300 hover:text-zinc-100 transition"
-        >
-          <FileSpreadsheet className="h-3.5 w-3.5" />
-          View vault
-        </Link>
-        <button
-          type="button"
-          onClick={() => {
-            navigator.clipboard?.writeText(vault.vaultAddress).catch(() => {})
-          }}
-          className="text-zinc-500 hover:text-zinc-300 text-[10px]"
-        >
-          {vault.vaultAddress.slice(0, 8)}…
-        </button>
-      </div>
-    </article>
+        {auctionFailed && ccaStrategy ? (
+          <Link
+            to={`/complete-auction/${ccaStrategy}`}
+            className="inline-flex w-full items-center justify-center rounded-lg border border-rose-400/35 bg-rose-500/10 px-3 py-2 text-xs text-rose-200 transition hover:bg-rose-500/20"
+          >
+            Recover Auction + Strategy Funds
+          </Link>
+        ) : null}
+      </ContentCardBody>
+
+      <ContentCardFooter>
+        <div className="grid grid-cols-2 gap-2 w-full">
+          <Link
+            to={vaultPath}
+            className={cn(
+              'inline-flex h-8 items-center justify-center rounded-lg border border-white/12 bg-white/5 px-3 py-1.5 text-xs text-zinc-300 transition-all duration-200 hover:-translate-y-px hover:bg-white/8',
+            )}
+            title={`Open vault ${vault.vaultAddress}`}
+          >
+            <Wallet className="h-3.5 w-3.5 mr-1" />
+            Deposit
+          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              if (userHasShare) {
+                window.location.assign(vaultPath)
+              }
+            }}
+            disabled={!userHasShare}
+            className={cn(
+              'inline-flex h-8 items-center justify-center rounded-lg border border-white/12 px-3 py-1.5 text-xs transition-all duration-200',
+              userHasShare
+                ? 'bg-white/5 text-zinc-300 hover:-translate-y-px hover:bg-white/8'
+                : 'bg-white/2.5 text-zinc-600 cursor-not-allowed',
+            )}
+          >
+            <TrendingUp className="h-3.5 w-3.5 mr-1" />
+            Withdraw
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between text-[11px] w-full mt-2">
+          <Link
+            to={`/vault/${vault.vaultAddress}`}
+            className="inline-flex items-center gap-1 rounded-full border border-white/12 bg-white/5 px-2 py-1 text-zinc-300 hover:text-zinc-100 transition"
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5" />
+            View vault
+          </Link>
+          <button
+            type="button"
+            onClick={() => {
+              navigator.clipboard?.writeText(vault.vaultAddress).catch(() => {})
+            }}
+            className="text-zinc-500 hover:text-zinc-300 text-[10px]"
+          >
+            {vault.vaultAddress.slice(0, 8)}…
+          </button>
+        </div>
+      </ContentCardFooter>
+    </ContentCard>
   )
 }

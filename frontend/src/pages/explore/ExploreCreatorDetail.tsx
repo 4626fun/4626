@@ -347,7 +347,7 @@ export function ExploreCreatorDetail() {
 
   const primaryPool = useMemo<UniswapPool | null>(() => {
     if (!pools || pools.length === 0) return null
-    return [...pools].sort((a, b) => parseNumber(b.totalValueLockedUSD) - parseNumber(a.totalValueLockedUSD))[0]
+    return [...pools].sort((a, b) => parseNumber(b.totalValueLockedUSD) - parseNumber(a.totalValueLockedUSD))[0] ?? null
   }, [pools])
 
   const { data: swaps = [], isLoading: swapsLoading } = useQuery({

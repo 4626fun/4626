@@ -305,7 +305,7 @@ Keeper bots in `cre/` relay data between Solana and Base. Install: `cd cre && np
 - For waitlist and account-setup loading states, prefer `PixelWaveLoader`-style motion and avoid text-scramble or four-square placeholder loaders that feel laggy or off-brand.
 - For nav bars, prefer edge-to-edge layout over centered max-width, text-only links without hover backgrounds, and no visual separators between nav and content.
 - Prefer aggressive simplification passes in large folders: identify and remove or archive unnecessary files (including `.ts`/`.tsx`), not just documentation, to reduce complexity.
-- During broad cleanup/refactor sweeps, prefer sustained autonomous execution with minimal pause-and-confirm loops.
+- During broad cleanup/refactor sweeps, prefer sustained autonomous execution with minimal pause-and-confirm loops, and parallelize with subagents to expedite when the sweep spans many files or folders.
 
 ## Learned Workspace Facts
 
@@ -316,3 +316,5 @@ Keeper bots in `cre/` relay data between Solana and Base. Install: `cd cre && np
 - `/api/uniswap/quote` and `/api/uniswap/swap` proxy endpoints require an authenticated 4626 session principal; `useSwapExecution` gates quote requests behind session hydration to avoid 401 errors.
 - `GET /api/waitlist/stats` serves live waitlist count data for urgency display; waitlist capacity uses configurable 100-slot tiers with dynamic "Only X spots remaining!" messaging.
 - Canonical CSW owner-install sponsorship accepts `addOwnerAddress` self-calls for the authenticated Privy embedded EOA without requiring deploy-session signer state; keep deploy-session checks scoped to deploy-session automation paths.
+- `frontend/src/lib/aa/` and `frontend/src/lib/uniswap/` are cross-cutting client utilities with multiple feature consumers; keep them under `src/lib/` rather than relocating into individual `src/features/*` folders.
+- `pnpm -C frontend guard:frontend-boundaries` enforces that `frontend/src/components/ui` has no imports from `src/features/`, complementing the existing `guard:server-core-boundary` check (`scripts/check-frontend-boundaries.mjs` / `scripts/check-server-core-boundary.mjs`).

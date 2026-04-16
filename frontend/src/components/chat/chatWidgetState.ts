@@ -32,7 +32,7 @@ export function rekeyOpenWindows(
       deduped.push(windowItem)
       continue
     }
-    const existing = deduped[existingIndex]
+    const existing = deduped[existingIndex]!
     deduped[existingIndex] = {
       ...existing,
       ...windowItem,

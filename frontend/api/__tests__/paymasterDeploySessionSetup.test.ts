@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { decodeFunctionData, encodeFunctionData, getAddress } from 'viem'
 
-import paymasterHandler, { validateSponsoredSmartWalletCalls } from '../_handlers/_paymaster.ts'
+import paymasterHandler, { validateSponsoredSmartWalletCalls } from '../_handlers/paymaster/_paymaster.ts'
 import { createMockReq, createMockRes } from './helpers'
 import { applyEnv } from './helpers'
 

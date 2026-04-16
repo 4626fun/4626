@@ -121,7 +121,7 @@ export function buildGroupSpans(columns: ExploreTableColumn[]) {
     if (firstIdx === -1) continue
     let lastIdx = firstIdx
     for (; lastIdx < columns.length; lastIdx += 1) {
-      if (columns[lastIdx].group !== group.id) break
+      if (columns[lastIdx]!.group !== group.id) break
     }
     out.push({ id: group.id, label: group.label, start: firstIdx, end: lastIdx - 1 })
   }

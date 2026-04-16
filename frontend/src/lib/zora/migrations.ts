@@ -234,7 +234,7 @@ async function mapWithConcurrency<T, R>(
     while (cursor < items.length) {
       const index = cursor
       cursor += 1
-      results[index] = await mapper(items[index])
+      results[index] = await mapper(items[index]!)
     }
   }
 
@@ -248,8 +248,8 @@ function extractSuggestedRangeDelta(error: unknown): bigint | null {
   const rangeMatch = msg.match(/\[(0x[0-9a-fA-F]+),\s*(0x[0-9a-fA-F]+)\]/)
   if (rangeMatch) {
     try {
-      const from = BigInt(rangeMatch[1])
-      const to = BigInt(rangeMatch[2])
+      const from = BigInt(rangeMatch[1]!)
+      const to = BigInt(rangeMatch[2]!)
       if (to >= from) return to - from
     } catch {
       // ignore
@@ -258,7 +258,7 @@ function extractSuggestedRangeDelta(error: unknown): bigint | null {
   const limitMatch = msg.toLowerCase().match(/up to a (\d+) block range/)
   if (limitMatch) {
     try {
-      const n = BigInt(limitMatch[1])
+      const n = BigInt(limitMatch[1]!)
       if (n > 0n) return n - 1n
     } catch {
       // ignore

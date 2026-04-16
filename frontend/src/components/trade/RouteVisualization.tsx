@@ -36,13 +36,13 @@ export function RouteVisualization(props: {
   compact?: boolean
 }) {
   const nodes = buildNodes(props.routeSummary)
-  const isSameChain = nodes.length === 3 && nodes[0].label === nodes[2].label
+  const isSameChain = nodes.length === 3 && nodes[0]!.label === nodes[2]!.label
 
   if (props.compact) {
     return (
       <div className={`inline-flex items-center gap-1 ${props.className ?? ''}`}>
         <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-zinc-300 border border-white/8">
-          {nodes[0].label}
+          {nodes[0]!.label}
         </span>
         <svg width="16" height="6" viewBox="0 0 16 6" fill="none" aria-hidden>
           <path d="M0 3 L12 3 M10 1 L14 3 L10 5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" className="text-zinc-600" />
@@ -54,7 +54,7 @@ export function RouteVisualization(props: {
           </span>
         ) : (
           <span className="rounded-full bg-white/5 px-2 py-0.5 text-[10px] text-zinc-300 border border-white/8">
-            {nodes[nodes.length - 1].label}
+            {nodes[nodes.length - 1]!.label}
           </span>
         )}
       </div>

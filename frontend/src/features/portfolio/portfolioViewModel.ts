@@ -56,6 +56,7 @@ function isForbiddenHost(hostname: string): boolean {
   const ipv4 = parseIpv4(host)
   if (!ipv4) return false
   const [a, b] = ipv4
+  if (a === undefined || b === undefined) return false
   if (a === 10) return true
   if (a === 127) return true
   if (a === 0) return true
