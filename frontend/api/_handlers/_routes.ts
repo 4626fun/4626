@@ -45,7 +45,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'portfolio/me': () => import('./portfolio/_me.js'),
   'vaults/active': () => import('./vaults/_active.js'),
 
-  'creator-allowlist': () => import('./_creator-allowlist.js'),
+  'creator-allowlist': () => import('./creator-access/_allowlist.js'),
   'creator-access/request': () => import('./creator-access/_request.js'),
   'creator-access/status': () => import('./creator-access/_status.js'),
 
@@ -75,7 +75,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'status/protocolReport': () => import('./status/_protocolReport.js'),
   'status/vaultReport': () => import('./status/_vaultReport.js'),
 
-  'sync-creator-metrics': () => import('./_sync-creator-metrics.js'),
+  'sync-creator-metrics': () => import('./zora/_sync-creator-metrics.js'),
   'rpc': () => import('./rpc/_proxy.js'),
 
   'token/metadata': () => import('./token/_metadata.js'),

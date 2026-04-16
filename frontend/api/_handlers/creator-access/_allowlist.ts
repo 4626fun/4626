@@ -9,12 +9,12 @@ import {
   getDb,
   getDbInitError,
   isDbConfigured,
-} from '../../packages/server-core/src/index.js'
+} from '../../../packages/server-core/src/index.js'
 
 
-import { ensureCreatorWalletsSchema } from '../../server/_lib/wallet/creatorWallets.js'
-import { isAddressLike, resolveCoinParties } from '../../server/_lib/onchain/coinParties.js'
-import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../server/_lib/db/supabaseAdmin.js'
+import { ensureCreatorWalletsSchema } from '../../../server/_lib/wallet/creatorWallets.js'
+import { isAddressLike, resolveCoinParties } from '../../../server/_lib/onchain/coinParties.js'
+import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../server/_lib/db/supabaseAdmin.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

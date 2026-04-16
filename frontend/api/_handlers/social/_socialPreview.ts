@@ -6,7 +6,7 @@ import {
   getStringQuery,
   requireServerKey,
   setPublicCors,
-} from '../../server/zora/_shared.js'
+} from '../../../server/zora/_shared.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

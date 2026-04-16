@@ -214,7 +214,7 @@ function localApiRoutesPlugin(): Plugin {
         '/api/sitemap.xml': () => import('./api/sitemap.xml'),
         '/api/social-preview': () => import('./api/social-preview'),
         '/api/social-preview-debug': () => import('./api/social-preview-debug'),
-        '/api/creator-allowlist': () => import('./api/_handlers/_creator-allowlist'),
+        '/api/creator-allowlist': () => import('./api/_handlers/creator-access/_allowlist'),
         '/api/flags/discover': () => import('./api/_handlers/flags/_discover'),
         '/api/flags/evaluate': () => import('./api/_handlers/flags/_evaluate'),
         '/api/waitlist/bootstrap': () => import('./api/_handlers/waitlist/_bootstrap'),

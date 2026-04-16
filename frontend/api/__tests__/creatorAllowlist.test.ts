@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import handler from '../_handlers/_creator-allowlist.ts'
+import handler from '../_handlers/creator-access/_allowlist.ts'
 import { createMockReq, createMockRes } from './helpers'
 
 const {
