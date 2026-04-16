@@ -1,15 +1,12 @@
 {
-  "buildCommand": "pnpm run builder-codes:assert-env && pnpm run build",
+  "buildCommand": "pnpm run builder-codes:assert-env && pnpm run build:highmem",
   "devCommand": "pnpm run dev",
   "installCommand": "pnpm install --frozen-lockfile",
   "ignoreCommand": "bash scripts/vercel-ignore.sh",
   "framework": "vite",
   "outputDirectory": "dist",
   "git": {
-    "deploymentEnabled": {
-      "**": false,
-      "main": true
-    }
+    "deploymentEnabled": true
   },
   "functions": {
     "api/agent-registration.ts": {
