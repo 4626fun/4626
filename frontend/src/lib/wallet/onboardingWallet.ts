@@ -346,7 +346,14 @@ async function submitOwnerTxViaWalletSendCalls(params: {
   // which spec revision it implements.  Coinbase Wallet SDK issue #1600 notes
   // the extension still follows the older chain-keyed layout; passing both is
   // harmless because the wallet ignores keys it doesn't recognise.
-  const paymasterUrlStr = String(params.paymasterUrl).trim()
+  // Normalise the paymaster domain: the keys.coinbase.com popup CSP allows
+  // api.cdp.coinbase.com but NOT api.developer.coinbase.com.  Both endpoints
+  // share the same API-key namespace, so swapping the host is safe.
+  const rawUrl = String(params.paymasterUrl).trim()
+  const paymasterUrlStr = rawUrl.replace(
+    'https://api.developer.coinbase.com/',
+    'https://api.cdp.coinbase.com/',
+  )
   const payloadWithPaymaster = supportsPaymasterCapability
     ? {
         ...payloadBase,
