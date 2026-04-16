@@ -1,8 +1,7 @@
-diff --git a/dist/CoinbaseWalletProvider.js b/dist/CoinbaseWalletProvider.js
-index 1234567..abcdefg 100644
 --- a/dist/CoinbaseWalletProvider.js
 +++ b/dist/CoinbaseWalletProvider.js
-@@ -83,7 +83,8 @@
+@@ -50,7 +50,8 @@
+                         storeSignerType(signerType);
                          break;
                      }
 -                    case 'wallet_sendCalls': {
@@ -11,8 +10,6 @@ index 1234567..abcdefg 100644
                          const ephemeralSigner = this.initSigner('scw');
                          await ephemeralSigner.handshake({ method: 'handshake' }); // exchange session keys
                          const result = await ephemeralSigner.request(args); // send diffie-hellman encrypted request
-diff --git a/dist/sign/scw/SCWSigner.js b/dist/sign/scw/SCWSigner.js
-index 1234567..abcdefg 100644
 --- a/dist/sign/scw/SCWSigner.js
 +++ b/dist/sign/scw/SCWSigner.js
 @@ -63,6 +63,7 @@
