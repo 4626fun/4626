@@ -64,6 +64,7 @@
     "check:agent-discoverability": "node scripts/check-agent-discoverability.mjs",
     "verify:protocol-assets": "node scripts/verify-protocol-assets.mjs",
     "guard:server-core-boundary": "node scripts/check-server-core-boundary.mjs",
+    "guard:frontend-boundaries": "node scripts/check-frontend-boundaries.mjs",
     "builder-codes:verify": "if [ -f .env ]; then tsx --env-file=.env scripts/verify-builder-codes.ts; else tsx scripts/verify-builder-codes.ts; fi",
     "builder-codes:assert-env": "tsx scripts/assert-builder-codes-env.ts",
     "deploy:autopilot": "node scripts/deploy-autopilot.mjs",

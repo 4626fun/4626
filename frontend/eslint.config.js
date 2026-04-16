@@ -10,7 +10,6 @@ export default [
       'node_modules/**',
       'scripts/**',
       'fix_duplicates.js',
-      'archive/**',
       'src/**/generated/**',
     ],
   },
