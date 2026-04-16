@@ -52,6 +52,7 @@ export type OwnerApprovalExecutionMode = 'canonicalSmartWallet' | 'ownerDirect'
 export type OwnerApprovalStage =
   | 'preflight'
   | 'prepare'
+  | 'prepare_calls'
   | 'userop_typed'
   | 'userop_nontyped'
   | 'send_calls'
@@ -284,6 +285,8 @@ const PAYMASTER_SESSION_RETRY_DELAY_MS = import.meta.env.MODE === 'test' ? 5 : 3
 const USER_OP_SUBMIT_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 120 : 45_000
 const SEND_CALLS_STATUS_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 25 : 8_000
 const SEND_CALLS_STATUS_POLL_MS = import.meta.env.MODE === 'test' ? 5 : 500
+const PREPARED_CALLS_STATUS_TIMEOUT_MS = import.meta.env.MODE === 'test' ? 25 : 12_000
+const PREPARED_CALLS_STATUS_POLL_MS = import.meta.env.MODE === 'test' ? 5 : 500
 
 function getConfirmOwnerRetryDelayMs(attempt: number): number {
   const multiplier = Math.min(5, Math.max(1, attempt + 1))
@@ -456,14 +459,191 @@ async function submitOwnerTxViaWalletSendCalls(params: {
   throw new Error('wallet_sendCalls status is still pending. Wait a moment and retry confirmation.')
 }
 
-// NOTE: submitOwnerViaAddSubAccount has been removed.
-// wallet_addSubAccount with type:'create' creates new sub-accounts — it does
-// NOT add an address as an onchain owner of the canonical CSW.  The popup
-// approved the request, but the Privy EOA was never added to the CSW's owner
-// list.  The sponsored UserOp path (runSponsoredCanonicalUserOp) is now the
-// primary execution path for self-authenticated sessions.  The UserOp wraps
-// addOwnerAddress through the EntryPoint, and the popup signs it via
-// eth_signTypedData_v4 (EIP-712) which has no self-call guard.
+// ── wallet_prepareCalls → personal_sign → wallet_sendPreparedCalls ──
+// This is the CORRECT path for self-auth mode (CSW signs for itself).
+//
+// WHY: The popup's eGe function blocks wallet_sendCalls when target === sender
+// ("Self calls are not allowed").  addOwnerAddress is inherently a self-call.
+// The viem-based UserOp path fails because it can't discover or sign with the
+// CSW's passkey owner (the passkey is at owner[0] but signing requires WebAuthn
+// which only the popup can mediate).
+//
+// HOW: wallet_prepareCalls and wallet_sendPreparedCalls both route to Coinbase
+// RPC via the SDK's default handler (not the popup).  The RPC builds a UserOp
+// and returns a hash.  We sign that hash using personal_sign which DOES go to
+// the popup but has NO eGe self-call check — the popup uses the passkey to
+// produce the signature.  Then wallet_sendPreparedCalls submits the signed
+// UserOp to the RPC.
+async function submitOwnerViaPreparedCalls(params: {
+  walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
+  chainId: number
+  sender: `0x${string}`
+  to: `0x${string}`
+  data: `0x${string}`
+  paymasterUrl: string | null
+  approvalRunId: string
+  executionMode: OwnerApprovalExecutionMode
+  signerAddress: string | null
+  canonicalCswAddress: string | null
+  onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null
+}): Promise<`0x${string}`> {
+  const chainIdHex = `0x${params.chainId.toString(16)}`
+
+  emitOwnerApprovalStage(params.onStageEvent, {
+    runId: params.approvalRunId,
+    stage: 'prepare_calls',
+    status: 'start',
+    executionMode: params.executionMode,
+    signerAddress: params.signerAddress,
+    canonicalCswAddress: params.canonicalCswAddress,
+  })
+
+  // Step 1: wallet_prepareCalls → goes to Coinbase RPC (default case in SCWSigner)
+  const prepareCallsPayload: Record<string, unknown> = {
+    from: params.sender,
+    chainId: chainIdHex,
+    calls: [{ to: params.to, data: params.data, value: '0x0' }],
+    capabilities: {} as Record<string, unknown>,
+  }
+  // Inject paymaster capability if available
+  if (params.paymasterUrl) {
+    const paymasterUrlStr = String(params.paymasterUrl).trim().replace(
+      'https://api.developer.coinbase.com/',
+      'https://api.cdp.coinbase.com/',
+    )
+    ;(prepareCallsPayload.capabilities as Record<string, unknown>).paymasterUrl = paymasterUrlStr
+    ;(prepareCallsPayload.capabilities as Record<string, unknown>).paymasterService = {
+      url: paymasterUrlStr,
+      [chainIdHex]: { url: paymasterUrlStr },
+    }
+  }
+
+  const prepareResult = await params.walletRequest({
+    method: 'wallet_prepareCalls',
+    params: [prepareCallsPayload],
+  }) as {
+    type?: string
+    chainId?: string
+    signatureRequest?: { hash?: string }
+    userOp?: unknown
+    capabilities?: Record<string, unknown>
+  } | null
+
+  if (!prepareResult?.signatureRequest?.hash) {
+    throw new Error('wallet_prepareCalls did not return a signature request hash.')
+  }
+  if (!prepareResult.userOp) {
+    throw new Error('wallet_prepareCalls did not return a userOp.')
+  }
+
+  // The hash from wallet_prepareCalls is double-hex-encoded per the CSW SDK.
+  // It comes back as a hex-encoded string of the hex hash.
+  let hashToSign = prepareResult.signatureRequest.hash as `0x${string}`
+  // If the hash looks like a hex-encoded hex string, decode one layer.
+  // The SDK does: hexToString(hash) to unwrap. We check if decoding the hex
+  // bytes yields a string starting with '0x'.
+  try {
+    const decoded = hexToStringInner(hashToSign)
+    if (decoded.startsWith('0x') && decoded.length === 66) {
+      hashToSign = decoded as `0x${string}`
+    }
+  } catch { /* use as-is */ }
+
+  // Step 2: personal_sign → goes to popup (no eGe check), passkey signs
+  const signature = await params.walletRequest({
+    method: 'personal_sign',
+    params: [hashToSign, params.sender],
+  }) as `0x${string}`
+
+  if (!signature || typeof signature !== 'string' || !signature.startsWith('0x')) {
+    throw new Error('personal_sign did not return a valid signature.')
+  }
+
+  // Step 3: wallet_sendPreparedCalls → goes to Coinbase RPC (default case)
+  const sendResult = await params.walletRequest({
+    method: 'wallet_sendPreparedCalls',
+    params: [{
+      version: '1.0',
+      type: prepareResult.type ?? 'user-operation-v06',
+      data: prepareResult.userOp,
+      chainId: prepareResult.chainId ?? chainIdHex,
+      signature: {
+        type: 'secp256k1' as const,
+        data: {
+          address: params.sender,
+          signature,
+        },
+      },
+    }],
+  }) as string | string[] | null
+
+  // sendPreparedCalls returns an array of call bundle IDs
+  const callsId =
+    typeof sendResult === 'string'
+      ? sendResult
+      : Array.isArray(sendResult) && typeof sendResult[0] === 'string'
+        ? sendResult[0]
+        : ''
+
+  if (!callsId) {
+    throw new Error('wallet_sendPreparedCalls returned no call bundle id.')
+  }
+
+  // Step 4: Poll wallet_getCallsStatus for the transaction hash
+  const startedAt = Date.now()
+  while (Date.now() - startedAt < PREPARED_CALLS_STATUS_TIMEOUT_MS) {
+    const result = await params.walletRequest({ method: 'wallet_getCallsStatus', params: [callsId] })
+    const statusCode = Number((result as { status?: unknown } | null)?.status)
+    const receipts = Array.isArray((result as { receipts?: unknown[] } | null)?.receipts)
+      ? ((result as { receipts: unknown[] }).receipts ?? [])
+      : []
+    const receiptHash =
+      receipts
+        .map((receipt) => String((receipt as { transactionHash?: unknown } | null)?.transactionHash ?? ''))
+        .find((value) => isTxHash(value)) ?? null
+    if (Number.isFinite(statusCode)) {
+      if (statusCode >= 200 && statusCode < 300) {
+        if (receiptHash) {
+          emitOwnerApprovalStage(params.onStageEvent, {
+            runId: params.approvalRunId,
+            stage: 'prepare_calls',
+            status: 'success',
+            executionMode: params.executionMode,
+            signerAddress: params.signerAddress,
+            canonicalCswAddress: params.canonicalCswAddress,
+            txHash: receiptHash,
+          })
+          return receiptHash
+        }
+        throw new Error('wallet_sendPreparedCalls completed without a transaction hash. Retry shortly.')
+      }
+      if (statusCode >= 300) throw new Error(`wallet_sendPreparedCalls failed with status ${statusCode}`)
+    }
+    await delay(PREPARED_CALLS_STATUS_POLL_MS)
+  }
+
+  emitOwnerApprovalStage(params.onStageEvent, {
+    runId: params.approvalRunId,
+    stage: 'prepare_calls',
+    status: 'error',
+    executionMode: params.executionMode,
+    signerAddress: params.signerAddress,
+    canonicalCswAddress: params.canonicalCswAddress,
+    code: 'prepared_calls_pending_timeout',
+    message: 'wallet_sendPreparedCalls status is still pending.',
+  })
+  throw new Error('wallet_sendPreparedCalls status is still pending. Wait a moment and retry confirmation.')
+}
+
+// Decode hex-encoded bytes to a UTF-8 string (for double-hex-encoded hashes)
+function hexToStringInner(hex: string): string {
+  const stripped = hex.startsWith('0x') ? hex.slice(2) : hex
+  const bytes = new Uint8Array(stripped.length / 2)
+  for (let i = 0; i < bytes.length; i++) {
+    bytes[i] = parseInt(stripped.substring(i * 2, i * 2 + 2), 16)
+  }
+  return new TextDecoder().decode(bytes)
+}
 
 export async function sendPreparedOwnerTx(params: {
   txRequest: PreparedOwnerTxRequest
@@ -625,21 +805,23 @@ export async function sendPreparedOwnerTx(params: {
         return result.transactionHash
       }
       if (selfAuthenticatedCanonicalSession) {
-        // ── Self-authenticated session: UserOp FIRST ──
+        // ── Self-authenticated session: prepareCalls FIRST ──
         // In self-auth mode (CSW signs for itself), the popup's eGe function
-        // blocks wallet_sendCalls where target === sender.  addOwnerAddress is
-        // inherently a self-call, so wallet_sendCalls always fails.
+        // blocks wallet_sendCalls where target === sender ("Self calls are not
+        // allowed").  addOwnerAddress is inherently a self-call.
         //
-        // wallet_addSubAccount creates sub-accounts — it does NOT add the Privy
-        // EOA as an onchain owner of the canonical CSW.  Confirmed by testing:
-        // the popup approves the request, but the address is never added to the
-        // CSW's owner list and confirm-owner polls indefinitely.
+        // The viem-based UserOp path (runSponsoredCanonicalUserOp) also fails
+        // because the CSW's primary signer is a passkey (WebAuthn at owner[0]).
+        // The UserOp function can't discover or match the passkey owner index,
+        // and it can't produce a WebAuthn signature from code.
         //
-        // The correct path is a sponsored UserOp: the UserOp wraps the
-        // addOwnerAddress call through the EntryPoint, and the popup signs it
-        // via eth_signTypedData_v4 (EIP-712) which has no self-call guard.
+        // The correct path is wallet_prepareCalls → personal_sign →
+        // wallet_sendPreparedCalls.  prepareCalls and sendPreparedCalls both
+        // route to Coinbase RPC (SCWSigner default case), bypassing the popup's
+        // eGe check.  personal_sign goes to the popup for passkey signing but
+        // has NO self-call guard.
         //
-        // Fallback chain: UserOp(typed) → UserOp(non-typed) → sendCalls
+        // Fallback chain: prepareCalls → UserOp(typed) → UserOp(non-typed)
         if (!walletClient.account) {
           throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
         }
@@ -648,74 +830,81 @@ export async function sendPreparedOwnerTx(params: {
             ? async (args: { method: string; params?: unknown[] }) => await walletClient.request!(args as any)
             : null
 
-        try {
-          // ── Primary path: sponsored UserOp with EIP-712 typed signing ──
-          txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
-        } catch (typedUserOpError) {
-          if (isUserRejectedWalletAction(typedUserOpError)) throw typedUserOpError
-          emitOwnerApprovalStage(onStageEvent, {
-            runId: effectiveApprovalRunId,
-            stage: 'userop_typed',
-            status: 'error',
-            executionMode,
-            signerAddress,
-            canonicalCswAddress: canonicalSmartWalletAddress,
-            code: classifyOwnerApprovalError(typedUserOpError).code,
-            message: typedUserOpError instanceof Error ? typedUserOpError.message : String(typedUserOpError ?? ''),
-          })
+        // Resolve paymaster URL for all paths
+        const sendCallsEnv =
+          (import.meta.env.VITE_CDP_SENDCALLS_PAYMASTER_URL as string | undefined)?.trim() || ''
+        const rawCdpPaymasterUrl =
+          (import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined)?.trim() || ''
+        const isExternalNonProxy = (url: string) =>
+          url.startsWith('https://') && !url.includes('/api/paymaster')
+        const resolvedDirectUrl = isExternalNonProxy(sendCallsEnv)
+          ? sendCallsEnv
+          : isExternalNonProxy(rawCdpPaymasterUrl)
+            ? rawCdpPaymasterUrl
+            : null
 
-          // ── Fallback: UserOp with non-typed signing ──
+        if (walletRequest) {
           try {
-            txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true, attempt: 2 })
-          } catch (nonTypedUserOpError) {
-            if (isUserRejectedWalletAction(nonTypedUserOpError)) throw nonTypedUserOpError
+            // ── Primary path: wallet_prepareCalls → personal_sign → wallet_sendPreparedCalls ──
+            txHash = await submitOwnerViaPreparedCalls({
+              walletRequest,
+              chainId: txRequest.chainId,
+              sender: canonicalSmartWalletAddress as `0x${string}`,
+              to: txRequest.to,
+              data: txRequest.data,
+              paymasterUrl: resolvedDirectUrl,
+              approvalRunId: effectiveApprovalRunId,
+              executionMode,
+              signerAddress,
+              canonicalCswAddress: canonicalSmartWalletAddress,
+              onStageEvent,
+            })
+          } catch (prepareCallsError) {
+            if (isUserRejectedWalletAction(prepareCallsError)) throw prepareCallsError
             emitOwnerApprovalStage(onStageEvent, {
               runId: effectiveApprovalRunId,
-              stage: 'userop_nontyped',
+              stage: 'prepare_calls',
               status: 'error',
               executionMode,
               signerAddress,
               canonicalCswAddress: canonicalSmartWalletAddress,
-              code: classifyOwnerApprovalError(nonTypedUserOpError).code,
-              message: nonTypedUserOpError instanceof Error ? nonTypedUserOpError.message : String(nonTypedUserOpError ?? ''),
+              code: classifyOwnerApprovalError(prepareCallsError).code,
+              message: prepareCallsError instanceof Error ? prepareCallsError.message : String(prepareCallsError ?? ''),
             })
 
-            // ── Last resort: wallet_sendCalls (will fail with self-call
-            //    check unless Coinbase updates the popup) ──
-            if (walletRequest) {
-              const sendCallsEnv =
-                (import.meta.env.VITE_CDP_SENDCALLS_PAYMASTER_URL as string | undefined)?.trim() || ''
-              const rawCdpPaymasterUrl =
-                (import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined)?.trim() || ''
-              const isExternalNonProxy = (url: string) =>
-                url.startsWith('https://') && !url.includes('/api/paymaster')
-              const resolvedDirectUrl = isExternalNonProxy(sendCallsEnv)
-                ? sendCallsEnv
-                : isExternalNonProxy(rawCdpPaymasterUrl)
-                  ? rawCdpPaymasterUrl
-                  : null
+            // ── Fallback: sponsored UserOp with EIP-712 typed signing ──
+            try {
+              txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
+            } catch (typedUserOpError) {
+              if (isUserRejectedWalletAction(typedUserOpError)) throw typedUserOpError
+              emitOwnerApprovalStage(onStageEvent, {
+                runId: effectiveApprovalRunId,
+                stage: 'userop_typed',
+                status: 'error',
+                executionMode,
+                signerAddress,
+                canonicalCswAddress: canonicalSmartWalletAddress,
+                code: classifyOwnerApprovalError(typedUserOpError).code,
+                message: typedUserOpError instanceof Error ? typedUserOpError.message : String(typedUserOpError ?? ''),
+              })
+
+              // ── Last fallback: UserOp with non-typed signing ──
               try {
-                txHash = await submitOwnerTxViaWalletSendCalls({
-                  walletRequest,
-                  chainId: txRequest.chainId,
-                  sender: canonicalSmartWalletAddress as `0x${string}`,
-                  to: txRequest.to,
-                  data: txRequest.data,
-                  paymasterUrl: resolvedDirectUrl,
-                  approvalRunId: effectiveApprovalRunId,
-                  executionMode,
-                  signerAddress,
-                  canonicalCswAddress: canonicalSmartWalletAddress,
-                  onStageEvent,
-                })
-              } catch (sendCallsError) {
-                if (isUserRejectedWalletAction(sendCallsError)) throw sendCallsError
-                // All paths exhausted — throw the original UserOp error
-                throw typedUserOpError
+                txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true, attempt: 2 })
+              } catch (nonTypedUserOpError) {
+                if (isUserRejectedWalletAction(nonTypedUserOpError)) throw nonTypedUserOpError
+                // All paths exhausted — throw the prepareCalls error (most informative)
+                throw prepareCallsError
               }
-            } else {
-              throw typedUserOpError
             }
+          }
+        } else {
+          // No walletRequest available — try UserOp paths directly
+          try {
+            txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
+          } catch (typedUserOpError) {
+            if (isUserRejectedWalletAction(typedUserOpError)) throw typedUserOpError
+            txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true, attempt: 2 })
           }
         }
         if (!txHash) {
