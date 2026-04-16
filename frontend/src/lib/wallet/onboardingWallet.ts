@@ -47,7 +47,7 @@ export type PreparedOwnerTxRequest = {
   value: '0x0'
 }
 
-export type OwnerApprovalExecutionMode = 'canonicalSmartWallet' | 'ownerDirect'
+export type OwnerApprovalExecutionMode = 'canonicalSmartWallet' | 'ownerDirect' | 'subAccount'
 
 export type OwnerApprovalStage =
   | 'preflight'

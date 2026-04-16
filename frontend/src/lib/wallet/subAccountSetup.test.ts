@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest'
+import { describe, it, expect, vi } from 'vitest'
 import {
   getExistingSubAccount,
   createSubAccount,
@@ -158,7 +158,7 @@ describe('configureSubAccountSigner', () => {
     expect(setToOwnerAccount).toHaveBeenCalledTimes(1)
 
     // Invoke the registered callback
-    const registeredFn = setToOwnerAccount.mock.calls[0][0]
+    const registeredFn = setToOwnerAccount.mock.calls[0]![0]
     const result = await registeredFn()
     expect(toViemAccountFn).toHaveBeenCalledWith({ wallet: embeddedWallet })
     expect(result).toEqual({ account: mockViemAccount })

@@ -108,8 +108,9 @@ export async function getExistingSubAccount(params: {
         ? (response as SubAccount[])
         : []
 
-  if (subAccounts.length > 0 && isAddress(subAccounts[0].address)) {
-    return subAccounts[0]
+  const first = subAccounts[0]
+  if (first && isAddress(first.address)) {
+    return first
   }
   return null
 }
