@@ -589,35 +589,22 @@ describe('sendPreparedOwnerTx', () => {
         publicClient: {},
       })
 
-    const result = await sendPreparedOwnerTx({
-      txRequest: TX_REQUEST,
-      walletClient: {
-        account: CANONICAL_CSW,
-        sendTransaction: vi.fn(async () => TX_HASH),
-        request,
-      },
-      chainId: 8453,
-      authHeaders: async () => ({ Authorization: 'Bearer test' }),
-      signerAddress: CANONICAL_CSW,
-      executionMode: 'canonicalSmartWallet',
-      canonicalSmartWalletAddress: CANONICAL_CSW,
-      publicClient: {},
-    })
+      // Capabilities should contain BOTH flat and chain-keyed paymaster formats
+      // AND the domain should be normalised to api.cdp.coinbase.com
+      const normalised = 'https://api.cdp.coinbase.com/rpc/v1/base/TESTKEY'
+      const sendCallsPayload = request.mock.calls[0][0].params[0]
+      expect(sendCallsPayload.capabilities).toBeDefined()
+      expect(sendCallsPayload.capabilities.paymasterUrl).toBe(normalised)
+      expect(sendCallsPayload.capabilities.paymasterService).toBeDefined()
+      expect(sendCallsPayload.capabilities.paymasterService.url).toBe(normalised)
+      // Chain-keyed entry for Base (0x2105)
+      expect(sendCallsPayload.capabilities.paymasterService['0x2105']).toBeDefined()
+      expect(sendCallsPayload.capabilities.paymasterService['0x2105'].url).toBe(normalised)
 
-    // Capabilities should contain BOTH flat and chain-keyed paymaster formats
-    // AND the domain should be normalised to api.cdp.coinbase.com
-    const normalised = 'https://api.cdp.coinbase.com/rpc/v1/base/TESTKEY'
-    const sendCallsPayload = request.mock.calls[0][0].params[0]
-    expect(sendCallsPayload.capabilities).toBeDefined()
-    expect(sendCallsPayload.capabilities.paymasterUrl).toBe(normalised)
-    expect(sendCallsPayload.capabilities.paymasterService).toBeDefined()
-    expect(sendCallsPayload.capabilities.paymasterService.url).toBe(normalised)
-    // Chain-keyed entry for Base (0x2105)
-    expect(sendCallsPayload.capabilities.paymasterService['0x2105']).toBeDefined()
-    expect(sendCallsPayload.capabilities.paymasterService['0x2105'].url).toBe(normalised)
-
-    expect(result.txHash).toBe(TX_HASH)
-    vi.unstubAllEnvs()
+      expect(result.txHash).toBe(TX_HASH)
+    } finally {
+      vi.unstubAllEnvs()
+    }
   })
 
   it('retries confirm-owner for pending confirmation states and succeeds after delayed indexing', async () => {
