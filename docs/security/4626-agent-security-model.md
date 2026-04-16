@@ -28,7 +28,7 @@ This rollout does not introduce a separate secure-agent service. The control pla
   - [`frontend/api/_handlers/telegram/_miniapp-session.ts`](../../frontend/api/_handlers/telegram/_miniapp-session.ts)
   - [`frontend/api/_handlers/telegram/_link-ready.ts`](../../frontend/api/_handlers/telegram/_link-ready.ts)
   - [`frontend/api/_handlers/telegram/_link-complete.ts`](../../frontend/api/_handlers/telegram/_link-complete.ts)
-  - [`frontend/server/_lib/telegramTrading.ts`](../../frontend/server/_lib/telegramTrading.ts)
+  - [`frontend/server/_lib/messaging/telegramTrading.ts`](../../frontend/server/_lib/messaging/telegramTrading.ts)
 - Telegram callback trade and deploy flows:
   - [`frontend/api/_handlers/telegram/_webhook.runtime.ts`](../../frontend/api/_handlers/telegram/_webhook.runtime.ts)
   - [`frontend/api/_handlers/telegram/webhook`](../../frontend/api/_handlers/telegram/webhook)
@@ -39,7 +39,7 @@ This rollout does not introduce a separate secure-agent service. The control pla
 ### Replay, TTL, and audit storage
 
 - Telegram callback tokens, replay nonces, and legacy action audit:
-  - [`frontend/server/_lib/telegramTrading.ts`](../../frontend/server/_lib/telegramTrading.ts)
+  - [`frontend/server/_lib/messaging/telegramTrading.ts`](../../frontend/server/_lib/messaging/telegramTrading.ts)
 - CRE runtime authentication plus idempotent decision storage:
   - [`frontend/server/_lib/cre/runtimeBridge.ts`](../../frontend/server/_lib/cre/runtimeBridge.ts)
 - Control-plane audit stream:
@@ -64,16 +64,16 @@ This rollout does not introduce a separate secure-agent service. The control pla
 ### Signing, deploy, bridge, payout, and config-changing paths
 
 - Privy and CSW signing:
-  - [`frontend/server/_lib/privyWalletApi.ts`](../../frontend/server/_lib/privyWalletApi.ts)
-  - [`frontend/server/_lib/privyCoinbaseSmartWallet.ts`](../../frontend/server/_lib/privyCoinbaseSmartWallet.ts)
+  - [`frontend/server/_lib/wallet/privyWalletApi.ts`](../../frontend/server/_lib/wallet/privyWalletApi.ts)
+  - [`frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts`](../../frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts)
 - Deploy session orchestration:
   - [`frontend/api/_handlers/deploy/session/_create.ts`](../../frontend/api/_handlers/deploy/session/_create.ts)
   - [`frontend/api/_handlers/deploy/session/_status.ts`](../../frontend/api/_handlers/deploy/session/_status.ts)
   - [`frontend/api/_handlers/deploy/session/_continue.ts`](../../frontend/api/_handlers/deploy/session/_continue.ts)
   - [`frontend/api/_handlers/deploy/session/_sessionAccess.ts`](../../frontend/api/_handlers/deploy/session/_sessionAccess.ts)
-  - [`frontend/server/_lib/deploySessions.ts`](../../frontend/server/_lib/deploySessions.ts)
+  - [`frontend/server/_lib/deploy/deploySessions.ts`](../../frontend/server/_lib/deploy/deploySessions.ts)
 - Paymaster policy:
-  - [`frontend/api/_handlers/_paymaster.ts`](../../frontend/api/_handlers/_paymaster.ts)
+  - [`frontend/api/_handlers/paymaster/_paymaster.ts`](../../frontend/api/_handlers/paymaster/_paymaster.ts)
 - Solana route and token registration:
   - [`frontend/api/_handlers/deploy/_registerSolanaBridgeToken.ts`](../../frontend/api/_handlers/deploy/_registerSolanaBridgeToken.ts)
   - [`frontend/server/solana-provisioner/index.ts`](../../frontend/server/solana-provisioner/index.ts)
@@ -87,14 +87,14 @@ This rollout does not introduce a separate secure-agent service. The control pla
 - Embeddings:
   - [`frontend/server/agent/eliza/embeddings.ts`](../../frontend/server/agent/eliza/embeddings.ts)
 - OpenAI image generation and evaluation:
-  - [`frontend/server/_lib/openaiImage.ts`](../../frontend/server/_lib/openaiImage.ts)
+  - [`frontend/server/_lib/image/openaiImage.ts`](../../frontend/server/_lib/image/openaiImage.ts)
 - CRE keeper AI assessment:
   - [`frontend/api/_handlers/cre/keeper/_aiAssess.ts`](../../frontend/api/_handlers/cre/keeper/_aiAssess.ts)
 
 ### Environment, secrets, and machine auth
 
 - Shared env loading:
-  - [`frontend/server/_lib/serverEnv.ts`](../../frontend/server/_lib/serverEnv.ts)
+  - [`frontend/server/_lib/infra/serverEnv.ts`](../../frontend/server/_lib/infra/serverEnv.ts)
 - Shared machine auth:
   - [`frontend/packages/server-core/src/machine-auth.ts`](../../frontend/packages/server-core/src/machine-auth.ts)
 
@@ -211,7 +211,7 @@ Remote-AI egress is intentionally centralized around [`frontend/server/_lib/agen
 
 - [`frontend/server/agent/eliza/llm.ts`](../../frontend/server/agent/eliza/llm.ts)
 - [`frontend/server/agent/eliza/embeddings.ts`](../../frontend/server/agent/eliza/embeddings.ts)
-- [`frontend/server/_lib/openaiImage.ts`](../../frontend/server/_lib/openaiImage.ts)
+- [`frontend/server/_lib/image/openaiImage.ts`](../../frontend/server/_lib/image/openaiImage.ts)
 - [`frontend/api/_handlers/cre/keeper/_aiAssess.ts`](../../frontend/api/_handlers/cre/keeper/_aiAssess.ts)
 
 ## Verified Assumptions

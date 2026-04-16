@@ -16,6 +16,7 @@ import {
   type ResolvedStatusFixContext,
   type VaultReportResponse,
 } from '@/features/status/statusShared'
+import { InfraReadinessBadges } from '@/features/status/InfraReadinessBadges'
 import { LoadingInline } from '@/components/ui/LoadingState'
 
 const LazyStatusFixPanel = lazy(async () => {
@@ -238,6 +239,7 @@ export function Status() {
                 <div>{globalSummary.fail} fail</div>
               </div>
             </div>
+            <InfraReadinessBadges className="pt-1" />
           </motion.div>
 
           {/* Verify a vault */}

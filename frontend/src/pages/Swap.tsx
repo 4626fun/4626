@@ -3,14 +3,15 @@ import { useSearchParams } from 'react-router-dom'
 import { Droplets, Plus, RefreshCw } from 'lucide-react'
 import { getAddress, isAddress, toHex, type Address, type Hex } from 'viem'
 import { useQuery } from '@tanstack/react-query'
-import { useAccount, useBalance, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
-import { usePrivy } from '@privy-io/react-auth'
+import { useAccount, useBalance, useConnect, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
+import { useLogin, usePrivy } from '@privy-io/react-auth'
 import { useDebounceValue } from 'usehooks-ts'
 
 import { META, PageMeta } from '@/components/seo/PageMeta'
 import { SwapSettingsModal } from '@/components/trade/SwapSettingsModal'
 import { Alert } from '@/components/ui/Alert'
 import { SwapCard } from '@/components/swap/SwapCard'
+import { SwapConnectGate } from '@/components/swap/SwapConnectGate'
 import { SwapPageLayout } from '@/components/swap/SwapPageLayout'
 import { TokenSelectorModal, type SwapTokenOption } from '@/components/swap/TokenSelectorModal'
 import { DEFAULT_CHAIN_ID, type SupportedChainId, getChainMeta } from '@/config/chains'
@@ -31,6 +32,7 @@ import {
   quoteCreatePosition,
   removeLiquidity,
 } from '@/lib/uniswap/liquidityApi'
+import { deriveSwapConnectGate } from '@/lib/swap/connectGate'
 import { pickQuote } from '@/lib/uniswap/tradingApi'
 import { type WalletMode } from '@/lib/uniswap/walletMode'
 import {
@@ -202,6 +204,17 @@ function useSafeSwapPrivyHook(enabled: boolean) {
       user: null,
       getAccessToken: null as null | (() => Promise<string | null>),
     } as any
+  }
+}
+
+function useSafeSwapLoginHook(enabled: boolean): { login: ((opts?: any) => Promise<unknown>) | null } {
+  try {
+    const value = useLogin() as any
+    if (!enabled || typeof value?.login !== 'function') return { login: null }
+    return { login: value.login as (opts?: any) => Promise<unknown> }
+  } catch (error) {
+    warnSwapPrivyHookFailure('useLogin', error)
+    return { login: null }
   }
 }
 
@@ -407,6 +420,8 @@ export function Swap() {
     user: privyUser,
     getAccessToken,
   } = useSafeSwapPrivyHook(privyHooksEnabled)
+  const { login: privyLogin } = useSafeSwapLoginHook(privyHooksEnabled)
+  const { connectors: wagmiConnectors, connect: wagmiConnect } = useConnect()
   const privyWallets = useMemo(() => extractPrivyWalletsFromUser(privyUser), [privyUser])
   const auth = useSiweAuth()
   const {
@@ -793,29 +808,54 @@ export function Swap() {
     executionMode === 'canonical' && canonicalSignerGate.code === 'privy-client-disabled'
   const showPrivyLoadingHint = executionMode === 'canonical' && canonicalSignerGate.code === 'privy-auth-loading'
   const canonicalSignInMethod = 'privy' as const
-  const swapSessionGuard = useMemo(() => {
-    if (!sessionHydrated) {
-      return {
-        ready: false,
-        title: 'Restoring 4626 session',
-        message: 'Loading your account session before requesting swap quotes.',
+  const connectGate = useMemo(
+    () =>
+      deriveSwapConnectGate({
+        sessionHydrated,
+        hasSession,
+        executionAddress,
+        authBusy,
+      }),
+    [authBusy, executionAddress, hasSession, sessionHydrated],
+  )
+  const handleConnectGateAction = useCallback(() => {
+    if (authBusy) return
+
+    // `wallet-required`: user has a 4626 session but wagmi has no connected
+    // wallet on this device. Prefer the Privy-hosted wallet modal (same path
+    // /deploy/vault uses); if Privy is disabled for this env, fall back to
+    // wagmi's first usable connector so SIWE-only deployments still work.
+    if (connectGate.state === 'wallet-required') {
+      if (typeof privyLogin === 'function' && privyHooksEnabled) {
+        void privyLogin({ loginMethods: ['wallet'] }).catch(() => {
+          // Privy surfaces its own modal-level errors; re-entry on next click
+          // is fine if the user closes the modal without connecting.
+        })
+        return
       }
+      const fallbackConnector =
+        wagmiConnectors.find((c) => !String(c.id ?? '').toLowerCase().includes('injected')) ??
+        wagmiConnectors[0]
+      if (fallbackConnector) {
+        wagmiConnect({ connector: fallbackConnector })
+        return
+      }
+      // No connector available — fall through to the SIWE path which will
+      // surface a clear "Connect wallet first, then sign in." error.
     }
 
-    if (!hasSession) {
-      return {
-        ready: false,
-        title: 'Sign in required for swap',
-        message: 'Sign in to 4626 before requesting Uniswap quotes or submitting swaps.',
-      }
-    }
-
-    return {
-      ready: true,
-      title: null,
-      message: null,
-    }
-  }, [hasSession, sessionHydrated])
+    void signIn({ method: executionMode === 'canonical' ? canonicalSignInMethod : 'auto' })
+  }, [
+    authBusy,
+    canonicalSignInMethod,
+    connectGate.state,
+    executionMode,
+    privyHooksEnabled,
+    privyLogin,
+    signIn,
+    wagmiConnect,
+    wagmiConnectors,
+  ])
   const ensureCanonicalSession = useCallback(async (): Promise<string | null> => {
     if (executionMode !== 'canonical') return null
     if (!getAccessToken || typeof signInWithPrivyToken !== 'function') return null
@@ -1347,6 +1387,14 @@ export function Swap() {
       <SwapPageLayout
         swapPanel={
           activePanel === 'swap' ? (
+            !connectGate.ready ? (
+              <SwapConnectGate
+                gate={connectGate}
+                busy={authBusy}
+                errorMessage={authError}
+                onPrimaryAction={handleConnectGateAction}
+              />
+            ) : (
             <SwapCard
               tokenInDisplay={tokenInDisplay}
               tokenOutDisplay={tokenOutDisplay}
@@ -1403,6 +1451,7 @@ export function Swap() {
               needsUnverifiedConfirmation={unverifiedSelectionMode}
               unverifiedTokenLabel={unverifiedTokenLabel}
             />
+            )
           ) : (
             <LiquidityPanel
               tokenInSymbol={tokenInSymbol}
@@ -1444,29 +1493,6 @@ export function Swap() {
         title="Swap"
         subtitle="1-Click Swaps on Base"
       />
-
-      {activePanel === 'swap' && !swapSessionGuard.ready ? (
-        <div data-screenshot-hide="true" className="mx-auto mt-4 max-w-4xl">
-          <Alert
-            variant={sessionHydrated ? 'warning' : 'info'}
-            title={swapSessionGuard.title ?? undefined}
-            action={
-              sessionHydrated
-                ? {
-                    label: authBusy ? 'Signing in...' : 'Sign in to 4626',
-                    onClick: () => {
-                      if (authBusy) return
-                      void signIn({ method: executionMode === 'canonical' ? canonicalSignInMethod : 'auto' })
-                    },
-                  }
-                : undefined
-            }
-          >
-            {swapSessionGuard.message}
-            {authError && sessionHydrated ? <div className="mt-2 text-rose-300">{authError}</div> : null}
-          </Alert>
-        </div>
-      ) : null}
 
       {activePanel === 'swap' && needsPrivyCanonicalAuth ? (
         <div data-screenshot-hide="true" className="mx-auto mt-4 max-w-4xl">

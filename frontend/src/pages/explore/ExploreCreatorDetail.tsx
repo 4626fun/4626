@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ExternalLink, ArrowLeft, Share2, Globe, Users, Coins, TrendingUp, Calendar, MessageSquare } from 'lucide-react'
+import { ExternalLink, ArrowLeft, Globe, Users, Coins, TrendingUp, Calendar, MessageSquare } from 'lucide-react'
 import { Link, Navigate, useParams } from 'react-router-dom'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { getAddress, isAddress } from 'viem'
@@ -8,6 +8,7 @@ import { useQuery } from '@tanstack/react-query'
 
 import { ExploreCopyButton, ExploreStatRow } from '@/components/explore/ExploreUiPrimitives'
 import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugCopy'
+import { ShareVaultButton } from '@/components/share/ShareVaultButton'
 import { LoadingInline, LoadingText } from '@/components/ui/LoadingState'
 import { fetchZoraCoin } from '@/lib/zora/client'
 import { useZoraProfile, useZoraProfileCoins } from '@/lib/zora/hooks'
@@ -822,13 +823,11 @@ export function ExploreCreatorDetail() {
                     text={tokenAddress}
                     {...copyButtonProps}
                   />
-                  <button
-                    type="button"
-                    className="text-zinc-400 hover:text-white transition-colors"
-                    title="Share"
-                  >
-                    <Share2 className="w-4 h-4" />
-                  </button>
+                  <ShareVaultButton
+                    url={typeof window !== 'undefined' ? `${window.location.origin}${socialPreviewPath}` : undefined}
+                    text={`${displayName} ($${symbol}) on 4626`}
+                    label="Share"
+                  />
                 </div>
               </div>
 

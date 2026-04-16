@@ -30,6 +30,23 @@ import {
 } from '@/wallet/canonicalWalletPolicy'
 import { CANONICAL_SCW_CHAIN_ID, decideXmtpSignerType, resolveXmtpChainId } from '@/lib/xmtp/signerUtils'
 import {
+  buildNotRegisteredDmMessage,
+  encodeWireContent,
+  extractCanMessageResult,
+  extractInstallationLimitInboxId,
+  formatXmtpEnvLabel,
+  hexToBytes,
+  isInstallationLimitError,
+  isOpfsAccessHandleError,
+  isScwSignatureValidationError,
+  isWrongChainIdError,
+  isXmtpEnvironmentMismatchError,
+  isXmtpNotRegisteredError,
+  normalizeEvmAddress,
+  parseWireContent,
+  truncateAddress,
+} from '@/lib/xmtp/xmtpHelpers'
+import {
   Client,
   LogLevel,
   Opfs,
@@ -42,7 +59,7 @@ import {
   type AsyncStreamProxy,
 } from '@xmtp/browser-sdk'
 import { IdentifierKind } from '@xmtp/browser-sdk'
-import { getAddress, isAddress, encodeAbiParameters, recoverMessageAddress, hashMessage } from 'viem'
+import { encodeAbiParameters, recoverMessageAddress, hashMessage } from 'viem'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -382,26 +399,6 @@ function clearAutoConnect(address: string): void {
   }
 }
 
-function hexToBytes(hex: string): Uint8Array {
-  const h = hex.startsWith('0x') ? hex.slice(2) : hex
-  const bytes = new Uint8Array(h.length / 2)
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(h.slice(i * 2, i * 2 + 2), 16)
-  }
-  return bytes
-}
-
-function truncateAddress(addr: string): string {
-  if (addr.length <= 10) return addr
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`
-}
-
-function normalizeEvmAddress(value: unknown): string | null {
-  if (typeof value !== 'string') return null
-  const raw = value.trim()
-  if (!raw || !isAddress(raw)) return null
-  return getAddress(raw).toLowerCase()
-}
 
 function upsertConversationSummary(
   prev: ChatConversation[],
@@ -431,79 +428,6 @@ function upsertConversationSummary(
   })
 
   return [merged, ...filtered]
-}
-
-type ParsedWireContent = {
-  content: string
-  contentType: ChatMessageContentType
-  richPreview?: string
-  replyToId: string | null
-}
-
-const REPLY_PREFIX_RE = /^\[reply:([a-zA-Z0-9._:-]{1,160})\]\s*/i
-const JSON_CODE_FENCE_RE = /^```json\s*([\s\S]*?)\s*```$/i
-const GENERIC_CODE_FENCE_RE = /^```[a-zA-Z0-9_-]*\s*([\s\S]*?)\s*```$/i
-
-function parseWireContent(raw: string): ParsedWireContent {
-  const initial = String(raw ?? '')
-  const replyMatch = initial.match(REPLY_PREFIX_RE)
-  const replyToId = replyMatch?.[1] ? replyMatch[1] : null
-  const content = replyMatch ? initial.slice(replyMatch[0].length).trim() : initial.trim()
-
-  const jsonFenceMatch = content.match(JSON_CODE_FENCE_RE)
-  if (jsonFenceMatch?.[1]) {
-    try {
-      const parsed = JSON.parse(jsonFenceMatch[1]) as unknown
-      if (parsed && typeof parsed === 'object') {
-        return {
-          content,
-          contentType: 'json',
-          richPreview: JSON.stringify(parsed, null, 2),
-          replyToId,
-        }
-      }
-    } catch {
-      // Fallback to plain text when JSON is invalid.
-    }
-  }
-
-  if (content.startsWith('{') && content.endsWith('}')) {
-    try {
-      const parsed = JSON.parse(content) as unknown
-      if (parsed && typeof parsed === 'object') {
-        return {
-          content,
-          contentType: 'json',
-          richPreview: JSON.stringify(parsed, null, 2),
-          replyToId,
-        }
-      }
-    } catch {
-      // ignore parse errors
-    }
-  }
-
-  const codeFenceMatch = content.match(GENERIC_CODE_FENCE_RE)
-  if (codeFenceMatch?.[1]) {
-    return {
-      content: codeFenceMatch[1].trim(),
-      contentType: 'code',
-      replyToId,
-    }
-  }
-
-  return {
-    content,
-    contentType: 'text',
-    replyToId,
-  }
-}
-
-function encodeWireContent(text: string, options?: SendChatMessageOptions): string {
-  const body = text.trim()
-  const replyToId = options?.replyToId?.trim()
-  if (!replyToId) return body
-  return `[reply:${replyToId}] ${body}`
 }
 
 function pickCanonicalSmartWalletAddress(row: WaitlistMeData | null): string | null {
@@ -539,93 +463,6 @@ function pickCanonicalSmartWalletAddress(row: WaitlistMeData | null): string | n
   return null
 }
 
-function extractInstallationLimitInboxId(message: string): string | null {
-  const msg = String(message || '')
-  // Example:
-  // "Cannot register a new installation because the InboxID <hex> has already registered 10/10 installations..."
-  const m = msg.match(/InboxID\s+([0-9a-fA-F]{64})/)
-  return m?.[1] ? m[1].toLowerCase() : null
-}
-
-function formatXmtpEnvLabel(env: 'production' | 'dev' | 'local'): string {
-  if (env === 'production') return 'production'
-  if (env === 'dev') return 'dev'
-  return 'local'
-}
-
-function isXmtpNotRegisteredError(message: string): boolean {
-  const m = String(message || '').toLowerCase()
-  return (
-    m.includes('address not registered on xmtp') ||
-    m.includes('notfound.inboxidforaddress') ||
-    m.includes('inboxidforaddress')
-  )
-}
-
-function isXmtpEnvironmentMismatchError(message: string): boolean {
-  const m = String(message || '').toLowerCase()
-  return (
-    m.includes('different xmtp network environment') ||
-    (m.includes('xmtp') && m.includes('environment') && (m.includes('production') || m.includes('dev') || m.includes('local')))
-  )
-}
-
-function readCanMessageBoolean(value: unknown): boolean | null {
-  if (typeof value === 'boolean') return value
-  if (!value || typeof value !== 'object') return null
-  const maybeFlag = (value as { canMessage?: unknown }).canMessage
-  return typeof maybeFlag === 'boolean' ? maybeFlag : null
-}
-
-function extractCanMessageResult(result: unknown, address: `0x${string}`): boolean | null {
-  const normalizedTarget = normalizeEvmAddress(address)
-  if (!normalizedTarget) return null
-
-  if (result instanceof Map) {
-    for (const [key, value] of result.entries()) {
-      const keyAddress = normalizeEvmAddress(
-        typeof key === 'string'
-          ? key
-          : (key as { identifier?: unknown; address?: unknown } | null)?.identifier ??
-              (key as { identifier?: unknown; address?: unknown } | null)?.address ??
-              null,
-      )
-      if (!keyAddress || keyAddress !== normalizedTarget) continue
-      const parsed = readCanMessageBoolean(value)
-      if (parsed !== null) return parsed
-    }
-    return null
-  }
-
-  if (Array.isArray(result)) {
-    if (result.length === 1) {
-      const singleParsed = readCanMessageBoolean(result[0])
-      if (singleParsed !== null) return singleParsed
-    }
-    for (const entry of result) {
-      if (!entry || typeof entry !== 'object') continue
-      const maybeEntry = entry as { identifier?: unknown; address?: unknown; canMessage?: unknown }
-      const entryAddress = normalizeEvmAddress(maybeEntry.identifier ?? maybeEntry.address)
-      if (!entryAddress || entryAddress !== normalizedTarget) continue
-      const parsed = readCanMessageBoolean(maybeEntry)
-      if (parsed !== null) return parsed
-    }
-    return null
-  }
-
-  if (result && typeof result === 'object') {
-    const entries = Object.entries(result as Record<string, unknown>)
-    for (const [key, value] of entries) {
-      const normalizedKey = normalizeEvmAddress(key)
-      if (!normalizedKey || normalizedKey !== normalizedTarget) continue
-      const parsed = readCanMessageBoolean(value)
-      if (parsed !== null) return parsed
-    }
-  }
-
-  return null
-}
-
 async function canMessageAddressOnCurrentEnv(address: `0x${string}`): Promise<boolean | null> {
   const identifiers = [{ identifier: address, identifierKind: IdentifierKind.Ethereum }]
   try {
@@ -639,40 +476,6 @@ async function canMessageAddressOnCurrentEnv(address: `0x${string}`): Promise<bo
       return null
     }
   }
-}
-
-function buildNotRegisteredDmMessage(params: {
-  peerAddress: `0x${string}`
-  canonicalizedFromAddress: `0x${string}` | null
-}): string {
-  const envLabel = formatXmtpEnvLabel(XMTP_ENV)
-  if (params.canonicalizedFromAddress && params.canonicalizedFromAddress !== params.peerAddress) {
-    return `Resolved canonical wallet ${truncateAddress(params.peerAddress)} is not registered on XMTP (${envLabel}). Original address ${truncateAddress(params.canonicalizedFromAddress)} maps here in 4626; make sure that canonical wallet has XMTP on the same environment.`
-  }
-  return `Address ${truncateAddress(params.peerAddress)} is not registered on XMTP (${envLabel}). Ask the recipient to open an XMTP-enabled app on the same environment, then retry.`
-}
-
-function isInstallationLimitError(message: string): boolean {
-  const m = String(message || '').toLowerCase()
-  return m.includes('registered 10/10 installations') || m.includes('10/10 installations')
-}
-
-function isWrongChainIdError(message: string): boolean {
-  const m = String(message || '').toLowerCase()
-  return m.includes('wrong chain id') || (m.includes('initially added with') && m.includes('signing from 0'))
-}
-
-function isScwSignatureValidationError(message: string): boolean {
-  const m = String(message || '').toLowerCase()
-  return (
-    m.includes('smart contract wallet signature is invalid') ||
-    (m.includes('signature') && m.includes('validation failed'))
-  )
-}
-
-function isOpfsAccessHandleError(message: string): boolean {
-  const m = String(message || '').toLowerCase()
-  return m.includes('createsyncaccesshandle') || m.includes('nomodificationallowederror')
 }
 
 function isXmtpVerboseLoggingEnabled(): boolean {
@@ -2075,6 +1878,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           message: buildNotRegisteredDmMessage({
             peerAddress: normalizedPeerAddress,
             canonicalizedFromAddress,
+            env: XMTP_ENV,
           }),
         }
       }
@@ -2114,6 +1918,7 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
           message: buildNotRegisteredDmMessage({
             peerAddress: normalizedPeerAddress,
             canonicalizedFromAddress,
+            env: XMTP_ENV,
           }),
         }
       }
