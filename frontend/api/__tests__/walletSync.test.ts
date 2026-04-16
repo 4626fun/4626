@@ -1,18 +1,18 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { classifyLinkedAccounts } from '../../server/_lib/walletMapping.ts'
-import { syncUserWallets } from '../../server/_lib/walletSync.ts'
+import { classifyLinkedAccounts } from '../../server/_lib/wallet/walletMapping.ts'
+import { syncUserWallets } from '../../server/_lib/wallet/walletSync.ts'
 import { canonicalWalletSchemaReadyResult } from './helpers'
 
 const { fetchZoraProfileMock } = vi.hoisted(() => ({
   fetchZoraProfileMock: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/zoraProfile.js', () => ({
+vi.mock('../../server/_lib/zora/zoraProfile.js', () => ({
   fetchZoraProfile: fetchZoraProfileMock,
 }))
 
-vi.mock('../../server/_lib/canonicalWalletsSchema.js', () => ({
+vi.mock('../../server/_lib/wallet/canonicalWalletsSchema.js', () => ({
   ensureCanonicalWalletsSchema: vi.fn(async () => {}),
 }))
 

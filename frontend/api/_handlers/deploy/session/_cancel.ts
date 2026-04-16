@@ -18,9 +18,9 @@ import {
 } from '../../../../packages/server-core/src/index.js'
 
 
-import { getDeploySessionById, signDeployToken, updateDeploySession } from '../../../../server/_lib/deploySessions.js'
+import { getDeploySessionById, signDeployToken, updateDeploySession } from '../../../../server/_lib/deploy/deploySessions.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/infra/origin.js'
-import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/privyWalletApi.js'
+import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/wallet/privyWalletApi.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/auth/deployAuth.js'
 import { validateSponsoredSmartWalletCalls } from '../../_paymaster.js'
 import { DeploySessionAccessError, loadAuthorizedDeploySession, normalizeDeploySessionId } from './_sessionAccess.js'

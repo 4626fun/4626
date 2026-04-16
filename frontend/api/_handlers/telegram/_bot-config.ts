@@ -10,13 +10,11 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../packages/server-core/src/index.js'
-import {
   resolveTelegramBotToken,
   setTelegramWebhook,
   setTelegramChatMenuButton,
   setTelegramMyCommands,
-} from '../../../server/_lib/telegramBotApi.js'
+} from '../../../packages/server-core/src/index.js'
 import { getTelegramWebhookConfig } from './webhook/config.js'
 import {
   TELEGRAM_ADMIN_BOT_COMMANDS,

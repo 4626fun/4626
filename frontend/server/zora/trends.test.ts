@@ -18,11 +18,11 @@ vi.mock('viem', async (importOriginal) => {
   }
 })
 
-vi.mock('../_lib/privyWalletApi.js', () => ({
+vi.mock('../_lib/wallet/privyWalletApi.js', () => ({
   walletRpc: walletRpcMock,
 }))
 
-vi.mock('../_lib/creatorAgentWallets.js', () => ({
+vi.mock('../_lib/wallet/creatorAgentWallets.js', () => ({
   getOrCreateCreatorAgentWallet: getOrCreateCreatorAgentWalletMock,
 }))
 

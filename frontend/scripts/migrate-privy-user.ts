@@ -3,9 +3,9 @@
 import { PrivyClient } from '@privy-io/server-auth'
 
 import { getDb } from '../server/_lib/db/postgres.ts'
-import { ensureWaitlistSchema } from '../server/_lib/waitlistSchema.ts'
-import { syncUserWallets, type SyncUserWalletsResult } from '../server/_lib/walletSync.ts'
-import type { PrivyUserLike } from '../server/_lib/walletMapping.ts'
+import { ensureWaitlistSchema } from '../server/_lib/onboarding/waitlistSchema.ts'
+import { syncUserWallets, type SyncUserWalletsResult } from '../server/_lib/wallet/walletSync.ts'
+import type { PrivyUserLike } from '../server/_lib/wallet/walletMapping.ts'
 
 declare const process: {
   argv: string[]

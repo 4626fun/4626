@@ -16,9 +16,9 @@ import {
 
 
 
-import { ensureWaitlistSchema } from '../../../../../server/_lib/waitlistSchema.js'
+import { ensureWaitlistSchema } from '../../../../../server/_lib/onboarding/waitlistSchema.js'
 import { enqueueSolanaSweepJob } from '../../../../../server/_lib/onchain/solanaSweepJobs.js'
-import { resolveCanonicalSolanaWalletByProfileId } from '../../../../../server/_lib/canonicalSolanaResolver.js'
+import { resolveCanonicalSolanaWalletByProfileId } from '../../../../../server/_lib/wallet/canonicalSolanaResolver.js'
 
 type Body = {
   minLamports?: number | string

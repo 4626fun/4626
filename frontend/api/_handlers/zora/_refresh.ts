@@ -18,7 +18,7 @@ import {
   resolveAndPersistZoraSignals,
   syncEmailIdentity,
   verifyPrivyForAccounts,
-} from '../../../server/_lib/accountsIdentity.js'
+} from '../../../server/_lib/identity/accountsIdentity.js'
 
 type ZoraRefreshResponse = {
   canonicalCswAddress: string | null

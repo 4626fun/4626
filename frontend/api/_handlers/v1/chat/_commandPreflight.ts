@@ -12,7 +12,7 @@ import {
   checkRateLimit,
   rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
-import { getKeeprVaultByGroupId } from '../../../../server/_lib/keeprRegistry.js'
+import { getKeeprVaultByGroupId } from '../../../../server/_lib/keepr/keeprRegistry.js'
 import { isCreWriteCommandText } from '../../../../server/agent/eliza/plugins/cre/index.js'
 
 type KeeprRole = 'OWNER' | 'ADMIN' | 'MEMBER'

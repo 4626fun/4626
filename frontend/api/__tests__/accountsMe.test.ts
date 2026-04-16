@@ -21,7 +21,7 @@ vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
 }))
 
-vi.mock('../../server/_lib/accountsIdentity.js', () => ({
+vi.mock('../../server/_lib/identity/accountsIdentity.js', () => ({
   verifyPrivyForAccounts: verifyPrivyForAccountsMock,
   ensureAccountsIdentitySchema: ensureAccountsIdentitySchemaMock,
   syncEmailIdentity: syncEmailIdentityMock,

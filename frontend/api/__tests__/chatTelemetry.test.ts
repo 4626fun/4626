@@ -12,7 +12,7 @@ const { checkRateLimitMock, getClientIpMock, rateLimitKeyMock } = vi.hoisted(() 
   rateLimitKeyMock: vi.fn((...parts: string[]) => parts.join(':')),
 }))
 
-vi.mock('../../server/_lib/chatCommandCenterTelemetry.js', () => ({
+vi.mock('../../server/_lib/messaging/chatCommandCenterTelemetry.js', () => ({
   trackChatCommandCenterEvent: trackChatCommandCenterEventMock,
 }))
 

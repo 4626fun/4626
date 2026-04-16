@@ -79,16 +79,16 @@ vi.mock('../../server/_lib/db/postgres.js', () => ({
   isDbConfigured: isDbConfiguredMock,
 }))
 
-vi.mock('../../server/_lib/creatorAgentWallets.js', () => ({
+vi.mock('../../server/_lib/wallet/creatorAgentWallets.js', () => ({
   getOrCreateCreatorAgentWallet: getOrCreateCreatorAgentWalletMock,
 }))
 
-vi.mock('../../server/_lib/creatorXmtpAgents.js', () => ({
+vi.mock('../../server/_lib/messaging/creatorXmtpAgents.js', () => ({
   enableCswAgent: enableCswAgentMock,
   getOrCreateCreatorXmtpAgent: getOrCreateCreatorXmtpAgentMock,
 }))
 
-vi.mock('../../server/_lib/coinParties.js', () => ({
+vi.mock('../../server/_lib/onchain/coinParties.js', () => ({
   resolveCoinParties: resolveCoinPartiesMock,
   isAddressLike: (v: string) => /^0x[a-fA-F0-9]{40}$/.test(v),
 }))
@@ -97,7 +97,7 @@ vi.mock('../../server/_lib/infra/logger.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
 
-vi.mock('../../server/_lib/canonicalWalletsSchema.js', () => ({
+vi.mock('../../server/_lib/wallet/canonicalWalletsSchema.js', () => ({
   ensureCanonicalWalletsSchema: vi.fn(async () => {}),
 }))
 

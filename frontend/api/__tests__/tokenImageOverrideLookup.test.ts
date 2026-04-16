@@ -45,7 +45,7 @@ vi.mock('../../server/zora/_shared.js', () => ({
   getNumberQuery: mocks.getNumberQueryMock,
 }))
 
-vi.mock('../../server/_lib/blob.js', () => ({
+vi.mock('../../server/_lib/infra/blob.js', () => ({
   blobHeadOrNull: mocks.blobHeadOrNullMock,
   blobPutBytes: mocks.blobPutBytesMock,
   fetchBytes: mocks.fetchBytesMock,

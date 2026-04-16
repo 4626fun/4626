@@ -124,7 +124,7 @@ vi.mock('viem', async () => {
   }
 })
 
-vi.mock('../../server/_lib/privyCoinbaseSmartWallet.js', () => ({
+vi.mock('../../server/_lib/wallet/privyCoinbaseSmartWallet.js', () => ({
   isCoinbaseSmartWalletHelperError: (error: unknown) =>
     Boolean(error && typeof error === 'object' && typeof (error as any).code === 'string' && typeof (error as any).retryable === 'boolean'),
   resolvePrivyCoinbaseSmartWalletOwnerContext: resolvePrivyCoinbaseSmartWalletOwnerContextMock,
@@ -154,19 +154,19 @@ vi.mock('../../server/_lib/db/postgres.js', () => ({
   isDbConfigured: () => true,
 }))
 
-vi.mock('../../server/_lib/waitlistSchema.js', () => ({
+vi.mock('../../server/_lib/onboarding/waitlistSchema.js', () => ({
   ensureWaitlistSchema: ensureWaitlistSchemaMock,
 }))
 
-vi.mock('../../server/_lib/keeprSchema.js', () => ({
+vi.mock('../../server/_lib/keepr/keeprSchema.js', () => ({
   ensureKeeprSchema: ensureKeeprSchemaMock,
 }))
 
-vi.mock('../../server/_lib/keeprGating.js', () => ({
+vi.mock('../../server/_lib/keepr/keeprGating.js', () => ({
   checkSharesEligibility: checkSharesEligibilityMock,
 }))
 
-vi.mock('../../server/_lib/zoraProfile.js', () => ({
+vi.mock('../../server/_lib/zora/zoraProfile.js', () => ({
   fetchZoraProfile: fetchZoraProfileMock,
   extractCreatorCoinAddressFromProfile: (profile: any) => {
     const raw = typeof profile?.creatorCoin?.address === 'string' ? profile.creatorCoin.address.trim() : ''
@@ -174,7 +174,7 @@ vi.mock('../../server/_lib/zoraProfile.js', () => ({
   },
 }))
 
-vi.mock('../../server/_lib/accountsIdentity.js', () => ({
+vi.mock('../../server/_lib/identity/accountsIdentity.js', () => ({
   ensureAccountsIdentitySchema: ensureAccountsIdentitySchemaMock,
   fetchCreatorCoinSummary: fetchCreatorCoinSummaryMock,
 }))
@@ -183,7 +183,7 @@ vi.mock('../../server/_lib/agentControl/audit.js', () => ({
   appendControlAuditEvent: appendControlAuditEventMock,
 }))
 
-vi.mock('../../server/_lib/telegramTrading.js', () => ({
+vi.mock('../../server/_lib/messaging/telegramTrading.js', () => ({
   createTelegramLinkStartToken: createTelegramLinkStartTokenMock,
   createTelegramActionToken: createTelegramActionTokenMock,
   consumeTelegramActionToken: consumeTelegramActionTokenMock,

@@ -65,11 +65,11 @@ vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   getClientIp: getClientIpMock,
 }))
 
-vi.mock('../../server/_lib/waitlistSchema.js', () => ({
+vi.mock('../../server/_lib/onboarding/waitlistSchema.js', () => ({
   ensureWaitlistSchema: vi.fn(async () => {}),
 }))
 
-vi.mock('../../server/_lib/walletSync.js', () => ({
+vi.mock('../../server/_lib/wallet/walletSync.js', () => ({
   syncUserWallets: vi.fn(async () => ({
     canonicalSmartWallet: null,
     canonicalSolanaWallet: null,
@@ -91,7 +91,7 @@ vi.mock('../../server/_lib/onchain/solanaSweepJobs.js', () => ({
   })),
 }))
 
-vi.mock('../../server/_lib/canonicalCswDelegation.js', () => ({
+vi.mock('../../server/_lib/wallet/canonicalCswDelegation.js', () => ({
   bootstrapCanonicalDelegationState: bootstrapCanonicalDelegationStateMock,
   confirmOwnerState: confirmOwnerStateMock,
   extractDelegationFlags: extractDelegationFlagsMock,

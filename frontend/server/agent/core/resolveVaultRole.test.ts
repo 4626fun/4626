@@ -4,7 +4,7 @@ const { getKeeprVaultByGroupIdMock } = vi.hoisted(() => ({
   getKeeprVaultByGroupIdMock: vi.fn(),
 }))
 
-vi.mock('../../_lib/keeprRegistry.js', () => ({
+vi.mock('../../_lib/keepr/keeprRegistry.js', () => ({
   getKeeprVaultByGroupId: getKeeprVaultByGroupIdMock,
 }))
 

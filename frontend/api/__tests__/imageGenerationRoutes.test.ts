@@ -96,7 +96,7 @@ vi.mock('../../server/_lib/auth/session.js', () => ({
   isAdminAddress: isAdminAddressMock,
 }))
 
-vi.mock('../../server/_lib/coinParties.js', () => ({
+vi.mock('../../server/_lib/onchain/coinParties.js', () => ({
   resolveCoinPartiesAndOwner: resolveCoinPartiesAndOwnerMock,
 }))
 

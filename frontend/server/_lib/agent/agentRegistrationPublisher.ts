@@ -8,7 +8,7 @@ import {
   updateMutableJson,
   uploadMutableJson,
   type GroveUploadResult,
-} from '../lensGrove.js'
+} from '../lens/lensGrove.js'
 import { getAgentRegistrationState, upsertAgentRegistrationState } from './agentRegistrationState.js'
 
 declare const process: { env: Record<string, string | undefined> }

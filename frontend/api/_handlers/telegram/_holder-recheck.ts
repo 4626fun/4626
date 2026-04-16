@@ -2,19 +2,17 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import type { Address } from 'viem'
 
 import {
-  checkSharesEligibility } from '../../../server/_lib/keeprGating.js'
+  checkSharesEligibility } from '../../../server/_lib/keepr/keeprGating.js'
 import { getDb,
   RATE_LIMITS,
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../packages/server-core/src/index.js'
-import {
   ensureTelegramTradingSchema,
   listHolderRoomMembersNeedingRecheck,
   upsertHolderRoomMember,
   type TelegramHolderRoomRecheckRow,
-} from '../../../server/_lib/telegramTrading.js'
+} from '../../../packages/server-core/src/index.js'
 import { getTelegramWebhookConfig } from './webhook/config.js'
 
 declare const process: { env: Record<string, string | undefined> }

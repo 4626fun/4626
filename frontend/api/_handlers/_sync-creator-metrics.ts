@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { runCreatorMetricsSync } from '../../server/_lib/creatorMetricsSync.js'
+import { runCreatorMetricsSync } from '../../server/_lib/zora/creatorMetricsSync.js'
 import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey } from '../../packages/server-core/src/index.js'
 declare const process: { env: Record<string, string | undefined> }
 

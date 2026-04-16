@@ -11,7 +11,7 @@ import {
 
 
 
-import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
+import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 
 type ConnectedAccount = {
   address: string

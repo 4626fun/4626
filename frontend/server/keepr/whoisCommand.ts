@@ -1,8 +1,8 @@
 import { getAddress, isAddress } from 'viem'
 
 import type { KeeprCommandResult } from '../commands/types.js'
-import { getEnsProfile, type EnsProfile } from '../_lib/ensResolver.js'
-import { getBasenameName } from '../_lib/basenameResolver.js'
+import { getEnsProfile, type EnsProfile } from '../_lib/identity/ensResolver.js'
+import { getBasenameName } from '../_lib/identity/basenameResolver.js'
 
 const CACHE_TTL_MS = 5 * 60_000
 const MAX_CACHE_ENTRIES = 2_000

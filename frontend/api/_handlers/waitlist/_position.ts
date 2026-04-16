@@ -10,11 +10,11 @@ import {
   readRequestPrincipalAddress,
 } from '../../../packages/server-core/src/index.js'
 
-import { isAuthorizedWalletForProfile } from '../../../server/_lib/canonicalWalletResolver.js'
+import { isAuthorizedWalletForProfile } from '../../../server/_lib/wallet/canonicalWalletResolver.js'
 
 
 
-import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
+import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 
 type WaitlistPositionResponse = {
   email: string | null

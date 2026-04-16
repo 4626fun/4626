@@ -10,8 +10,8 @@ import {
   RATE_LIMITS,
   checkRateLimit,
   rateLimitKey,
+  trackChatCommandCenterEvent,
 } from '../../../../packages/server-core/src/index.js'
-import { trackChatCommandCenterEvent } from '../../../../server/_lib/chatCommandCenterTelemetry.js'
 
 type TelemetryBody = {
   event?: string

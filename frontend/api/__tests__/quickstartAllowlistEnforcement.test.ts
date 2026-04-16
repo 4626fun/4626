@@ -47,20 +47,20 @@ vi.mock('../../packages/server-core/src/index.js', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }))
 
-vi.mock('../../server/_lib/canonicalWalletResolver.js', () => ({
+vi.mock('../../server/_lib/wallet/canonicalWalletResolver.js', () => ({
   resolvePersistedWalletIdentity: resolvePersistedWalletIdentityMock,
 }))
 
-vi.mock('../../server/_lib/creatorAgentWallets.js', () => ({
+vi.mock('../../server/_lib/wallet/creatorAgentWallets.js', () => ({
   getOrCreateCreatorAgentWallet: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/creatorXmtpAgents.js', () => ({
+vi.mock('../../server/_lib/messaging/creatorXmtpAgents.js', () => ({
   enableCswAgent: vi.fn(),
   getOrCreateCreatorXmtpAgent: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/coinParties.js', () => ({
+vi.mock('../../server/_lib/onchain/coinParties.js', () => ({
   resolveCoinParties: vi.fn(),
   isAddressLike: (value: string) => /^0x[a-fA-F0-9]{40}$/.test(value),
 }))

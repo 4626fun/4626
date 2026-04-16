@@ -33,7 +33,7 @@ import type {
   Plugin,
   State,
 } from '@elizaos/core'
-import { getKeeprVaultByGroupId } from '../../../../_lib/keeprRegistry.js'
+import { getKeeprVaultByGroupId } from '../../../../_lib/keepr/keeprRegistry.js'
 import { resolveVaultAccessRoleFromVault } from '../../../core/resolveVaultRole.js'
 
 // ---------------------------------------------------------------------------

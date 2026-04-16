@@ -54,7 +54,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
   setNoStore: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/deploySessions.js', () => ({
+vi.mock('../../server/_lib/deploy/deploySessions.js', () => ({
   ensureDeploySessionsSchema: ensureDeploySessionsSchemaMock,
   hashDeployToken: vi.fn(() => 'hashed'),
   insertDeploySession: insertDeploySessionMock,
@@ -78,7 +78,7 @@ vi.mock('../../server/_lib/db/supabaseAdmin.js', () => ({
   getSupabaseAdmin: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/creatorAgentWallets.js', () => ({
+vi.mock('../../server/_lib/wallet/creatorAgentWallets.js', () => ({
   getOrCreateCreatorAgentWallet: getOrCreateCreatorAgentWalletMock,
 }))
 
@@ -86,23 +86,23 @@ vi.mock('../../server/_lib/infra/origin.js', () => ({
   getCanonicalOrigin: vi.fn(() => 'https://4626-test-akita-llc.vercel.app'),
 }))
 
-vi.mock('../../server/_lib/coinParties.js', () => ({
+vi.mock('../../server/_lib/onchain/coinParties.js', () => ({
   resolveCoinParties: resolveCoinPartiesMock,
   resolveCoinPartiesAndOwner: resolveCoinPartiesAndOwnerMock,
 }))
 
-vi.mock('../../server/_lib/charmVaults.js', () => ({
+vi.mock('../../server/_lib/deploy/charmVaults.js', () => ({
   extractCharmCreateVaultPool: extractCharmCreateVaultPoolMock,
   isCharmPoolIndexed: isCharmPoolIndexedMock,
   charmPoolNotIndexedError: (pool: string) =>
     `Charm pool ${pool} is not currently indexed by Charm's public vault data source. Deploying a vault against this pool can succeed on-chain but remain invisible on alpha.charm.fi.`,
 }))
 
-vi.mock('../../server/_lib/waitlistSchema.js', () => ({
+vi.mock('../../server/_lib/onboarding/waitlistSchema.js', () => ({
   ensureWaitlistSchema: ensureWaitlistSchemaMock,
 }))
 
-vi.mock('../../server/_lib/canonicalWalletsSchema.js', () => ({
+vi.mock('../../server/_lib/wallet/canonicalWalletsSchema.js', () => ({
   ensureCanonicalWalletsSchema: vi.fn(async () => {}),
 }))
 
@@ -333,6 +333,7 @@ describe('deploy session ownership guardrails', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     delete process.env.DEPLOY_SESSION_TTL_MINUTES
+    process.env.DEPLOY_SESSION_TOKEN_HMAC_SECRET = 'test-deploy-session-hmac-secret'
     resolveCoinPartiesMock.mockResolvedValue({ creator: null, payoutRecipient: null })
     resolveCoinPartiesAndOwnerMock.mockResolvedValue({
       creator: '0x0000000000000000000000000000000000000002',

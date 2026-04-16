@@ -70,11 +70,11 @@ import { getHealthProbeStatusCode } from './_healthStatus.js'
 import { handleXmtpFallbackResponse } from './_xmtpFallback.js'
 
 import { getDb, getDbInitError, isDbConfigured } from '../../_lib/db/postgres.js'
-import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../../_lib/creatorXmtpAgents.js'
-import { createPrivyScwSigner } from '../../_lib/privyXmtpSigner.js'
+import { decryptPrivateKey, ensureCreatorXmtpAgentsSchema } from '../../_lib/messaging/creatorXmtpAgents.js'
+import { createPrivyScwSigner } from '../../_lib/wallet/privyXmtpSigner.js'
 import { buildAgentRegistration } from '../../_lib/agent/agentRegistration.js'
 import { publishAgentRegistrationToGrove } from '../../_lib/agent/agentRegistrationPublisher.js'
-import { formatWelcomeNumberedOptions } from '../../_lib/chatCommandFallback.js'
+import { formatWelcomeNumberedOptions } from '../../_lib/messaging/chatCommandFallback.js'
 import { createCorrelationLogger, logger } from '../../_lib/infra/logger.js'
 import { emitTelemetryEvent } from '../../_lib/infra/telemetry.js'
 import {
@@ -91,12 +91,12 @@ import {
   hasDedicatedMount,
   listXmtpDb3FilesUnderRoot,
   resolveXmtpDbDirectory,
-} from '../../_lib/xmtpDbDirectory.js'
+} from '../../_lib/messaging/xmtpDbDirectory.js'
 import {
   fileLooksLikePlainSqlite,
   hasLegacyMigrationBackupForFile,
   hasLegacyPlaintextDbInDir,
-} from '../../_lib/xmtpDbEncryption.js'
+} from '../../_lib/messaging/xmtpDbEncryption.js'
 
 declare const process: {
   env: Record<string, string | undefined>

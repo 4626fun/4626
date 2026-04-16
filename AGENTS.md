@@ -304,6 +304,8 @@ Keeper bots in `cre/` relay data between Solana and Base. Install: `cd cre && np
 - Loading and progress labels must match the actual action context — reserve action verbs (e.g., "Deploying...") for when the action is executing, not for page navigation or initial load, and keep unrelated controls (for example `Reset`) from switching labels during other in-flight actions.
 - For waitlist and account-setup loading states, prefer `PixelWaveLoader`-style motion and avoid text-scramble or four-square placeholder loaders that feel laggy or off-brand.
 - For nav bars, prefer edge-to-edge layout over centered max-width, text-only links without hover backgrounds, and no visual separators between nav and content.
+- Prefer aggressive simplification passes in large folders: identify and remove or archive unnecessary files (including `.ts`/`.tsx`), not just documentation, to reduce complexity.
+- During broad cleanup/refactor sweeps, prefer sustained autonomous execution with minimal pause-and-confirm loops.
 
 ## Learned Workspace Facts
 

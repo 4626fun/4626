@@ -16,8 +16,8 @@ import {
 } from '../../../../packages/server-core/src/index.js'
 
 
-import { computeConfigHash, type KeeprConfigV1, upsertKeeprVault } from '../../../../server/_lib/keeprRegistry.js'
-import { validateCreatorRegistryBinding } from '../../../../server/_lib/creatorRegistryVerification.js'
+import { computeConfigHash, type KeeprConfigV1, upsertKeeprVault } from '../../../../server/_lib/keepr/keeprRegistry.js'
+import { validateCreatorRegistryBinding } from '../../../../server/_lib/onchain/creatorRegistryVerification.js'
 
 const VAULT_OWNER_ABI = [
   { type: 'function', name: 'owner', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },

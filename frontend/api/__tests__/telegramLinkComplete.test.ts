@@ -42,19 +42,19 @@ vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
 }))
 
-vi.mock('../../server/_lib/waitlistSchema.js', () => ({
+vi.mock('../../server/_lib/onboarding/waitlistSchema.js', () => ({
   ensureWaitlistSchema: ensureWaitlistSchemaMock,
 }))
 
-vi.mock('../../server/_lib/walletSync.js', () => ({
+vi.mock('../../server/_lib/wallet/walletSync.js', () => ({
   syncUserWallets: syncUserWalletsMock,
 }))
 
-vi.mock('../../server/_lib/identityRecovery.js', () => ({
+vi.mock('../../server/_lib/identity/identityRecovery.js', () => ({
   isIdentityRecoveryRequiredError: (error: any) => error?.code === 'IDENTITY_RECOVERY_REQUIRED',
 }))
 
-vi.mock('../../server/_lib/accountsIdentity.js', () => ({
+vi.mock('../../server/_lib/identity/accountsIdentity.js', () => ({
   ensureAccountsIdentitySchema: ensureAccountsIdentitySchemaMock,
   verifyPrivyForAccounts: verifyPrivyForAccountsMock,
   syncEmailIdentity: syncEmailIdentityMock,
@@ -62,7 +62,7 @@ vi.mock('../../server/_lib/accountsIdentity.js', () => ({
   recordProviderLink: recordProviderLinkMock,
 }))
 
-vi.mock('../../server/_lib/telegramTrading.js', () => ({
+vi.mock('../../server/_lib/messaging/telegramTrading.js', () => ({
   ensureTelegramTradingSchema: ensureTelegramTradingSchemaMock,
   readTelegramMiniAppSession: readTelegramMiniAppSessionMock,
   readTelegramLinkStartTokenStatus: readTelegramLinkStartTokenStatusMock,
@@ -72,7 +72,7 @@ vi.mock('../../server/_lib/telegramTrading.js', () => ({
   upsertTelegramUserLink: upsertTelegramUserLinkMock,
 }))
 
-vi.mock('../../server/_lib/telegramLinkTelemetry.js', () => ({
+vi.mock('../../server/_lib/messaging/telegramLinkTelemetry.js', () => ({
   trackTelegramLinkEvent: trackTelegramLinkEventMock,
 }))
 

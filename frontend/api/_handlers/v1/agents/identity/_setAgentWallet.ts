@@ -38,7 +38,7 @@ import {
 } from '../../../../../packages/server-core/src/index.js'
 
 
-import { resolveCanonicalSmartWalletAddress } from '../../../../../server/_lib/canonicalWalletResolver.js'
+import { resolveCanonicalSmartWalletAddress } from '../../../../../server/_lib/wallet/canonicalWalletResolver.js'
 import {
   getIdentityRegistryAddress,
   IDENTITY_REGISTRY_ABI,

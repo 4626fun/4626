@@ -26,7 +26,7 @@ vi.mock('../../server/_lib/auth/session.js', () => ({
   isAdminAddress: isAdminAddressMock,
 }))
 
-vi.mock('../../server/_lib/contracts.js', () => ({
+vi.mock('../../server/_lib/onchain/contracts.js', () => ({
   getApiContracts: getApiContractsMock,
 }))
 

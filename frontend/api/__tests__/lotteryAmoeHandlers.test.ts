@@ -20,7 +20,7 @@ vi.mock('../../server/_lib/agent/agentApiGuard.js', () => ({
   guardAgentApiRequest: guardMock,
 }))
 
-vi.mock('../../server/_lib/contracts.js', () => ({
+vi.mock('../../server/_lib/onchain/contracts.js', () => ({
   getApiContracts: () => ({ lotteryManager: '0x77705A2f173dd52F28300447506Dc35086c34626' }),
 }))
 
@@ -34,7 +34,7 @@ vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   },
 }))
 
-vi.mock('../../server/_lib/canonicalWalletResolver.js', () => ({
+vi.mock('../../server/_lib/wallet/canonicalWalletResolver.js', () => ({
   resolveAuthorizedWalletProfile: resolveAuthorizedWalletProfileMock,
 }))
 
@@ -44,7 +44,7 @@ vi.mock('../../server/auth/_shared.js', () => ({
   readJsonBody: vi.fn(async (req: any) => req.body ?? null),
 }))
 
-vi.mock('../../server/_lib/lotteryAmoe.js', () => ({
+vi.mock('../../server/_lib/lottery/lotteryAmoe.js', () => ({
   AMOE_CREDITS_PER_ENTRY: 100,
   issueAmoeNonce: issueAmoeNonceMock,
   buildAmoeEntryMessage: buildAmoeEntryMessageMock,

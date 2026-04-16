@@ -9,7 +9,7 @@ import {
 import { getNumberQuery, getStringQuery, handleOptions, setCors } from '../../../server/zora/_shared.js'
 
 
-import { getTrendOpByTickerHash, listRecentTrendOps } from '../../../server/_lib/zoraTrendOpsStore.js'
+import { getTrendOpByTickerHash, listRecentTrendOps } from '../../../server/_lib/zora/zoraTrendOpsStore.js'
 import { preflightTrendTicker } from '../../../server/zora/trends.js'
 
 function isAuthorizedAdmin(req: VercelRequest): boolean {

@@ -6,7 +6,7 @@ import {
   getDb,
 } from '../../../packages/server-core/src/index.js'
 
-import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
+import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 
 type WaitlistStatsResponse = {
   signedUpCount: number

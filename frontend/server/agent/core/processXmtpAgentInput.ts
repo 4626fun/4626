@@ -1,5 +1,5 @@
 import type { SharedConversationalRuntimeContext } from '../../ai/chat.js'
-import { formatNumberedCommandFallback } from '../../_lib/chatCommandFallback.js'
+import { formatNumberedCommandFallback } from '../../_lib/messaging/chatCommandFallback.js'
 import { executeConversationalFallback } from './executeConversationalFallback.js'
 import {
   EMPTY_CONVERSATIONAL_PROMPT_RESPONSE,

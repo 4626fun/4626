@@ -8,8 +8,8 @@ import {
   setNoStore,
   getClientIp,
   rateLimitKey,
+  trackTelegramLinkEvent,
 } from '../../../packages/server-core/src/index.js'
-import { trackTelegramLinkEvent } from '../../../server/_lib/telegramLinkTelemetry.js'
 import { checkDurableRateLimit } from '../../../server/_lib/infra/durableRateLimit.js'
 import { verifyTelegramLinkApiSecret } from './webhook/services/access.js'
 

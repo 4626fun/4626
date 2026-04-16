@@ -14,11 +14,11 @@ vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
 }))
 
-vi.mock('../../server/_lib/waitlistSchema.js', () => ({
+vi.mock('../../server/_lib/onboarding/waitlistSchema.js', () => ({
   ensureWaitlistSchema: ensureWaitlistSchemaMock,
 }))
 
-vi.mock('../../server/_lib/onchainIdentityProfile.js', () => ({
+vi.mock('../../server/_lib/identity/onchainIdentityProfile.js', () => ({
   resolveOnchainIdentityProfile: resolveOnchainIdentityProfileMock,
 }))
 
@@ -118,7 +118,7 @@ describe('portfolio /api/portfolio/me', () => {
     portfolioTestables.clearPublicOnchainSummaryCacheForTests()
     resolveOnchainIdentityProfileMock.mockResolvedValue(null)
     restoreEnv = applyEnv({
-      AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
+      AUTH_SESSION_SECRET: 'test-auth-session-secret-1234567',
       DEBANK_ACCESS_KEY: undefined,
     })
   })
@@ -153,7 +153,7 @@ describe('portfolio /api/portfolio/me', () => {
   it('caches Debank summaries for repeated public requests', async () => {
     if (restoreEnv) restoreEnv()
     restoreEnv = applyEnv({
-      AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
+      AUTH_SESSION_SECRET: 'test-auth-session-secret-1234567',
       DEBANK_ACCESS_KEY: 'test-debank-key',
     })
     portfolioTestables.clearPublicOnchainSummaryCacheForTests()

@@ -77,35 +77,35 @@ vi.mock('../../server/_lib/infra/logger.js', () => ({
   logger: mocks.logger,
 }))
 
-vi.mock('../../server/_lib/xmtpDbDirectory.js', () => ({
+vi.mock('../../server/_lib/messaging/xmtpDbDirectory.js', () => ({
   resolveXmtpDbDirectory: vi.fn(() => '/tmp/keepr-xmtp-tests'),
 }))
 
-vi.mock('../../server/_lib/creatorXmtpAgents.js', () => ({
+vi.mock('../../server/_lib/messaging/creatorXmtpAgents.js', () => ({
   decryptPrivateKey: mocks.decryptPrivateKey,
   ensureCreatorXmtpAgentsSchema: mocks.ensureCreatorXmtpAgentsSchema,
 }))
 
-vi.mock('../../server/_lib/privyXmtpSigner.js', () => ({
+vi.mock('../../server/_lib/wallet/privyXmtpSigner.js', () => ({
   createPrivyScwSigner: mocks.createPrivyScwSigner,
 }))
 
-vi.mock('../../server/_lib/keeprAutomation.js', () => ({
+vi.mock('../../server/_lib/keepr/keeprAutomation.js', () => ({
   getKeeprVaultAutomationByVaultAddress: mocks.getKeeprVaultAutomationByVaultAddress,
 }))
 
-vi.mock('../../server/_lib/privyCoinbaseSmartWallet.js', () => ({
+vi.mock('../../server/_lib/wallet/privyCoinbaseSmartWallet.js', () => ({
   findCoinbaseSmartWalletOwnerIndex: mocks.findCoinbaseSmartWalletOwnerIndex,
   sendCoinbaseSmartWalletUserOperation: mocks.sendCoinbaseSmartWalletUserOperation,
   resolvePrivyCoinbaseSmartWalletOwnerContext: mocks.resolvePrivyCoinbaseSmartWalletOwnerContext,
   sendPrivyCoinbaseSmartWalletUserOperation: mocks.sendPrivyCoinbaseSmartWalletUserOperation,
 }))
 
-vi.mock('../../server/_lib/keeprSchema.js', () => ({
+vi.mock('../../server/_lib/keepr/keeprSchema.js', () => ({
   ensureKeeprSchema: mocks.ensureKeeprSchema,
 }))
 
-vi.mock('../../server/_lib/charmVaults.js', () => ({
+vi.mock('../../server/_lib/deploy/charmVaults.js', () => ({
   isOfficialCharmVault: vi.fn(async () => true),
   officialCharmVaultError: vi.fn((vault: string) => `not_official:${vault}`),
 }))

@@ -20,7 +20,7 @@ import {
   consumeAmoeCreditsForEntry,
   createAmoeAttestation,
   verifyAmoeEntryProof,
-} from '../../../../server/_lib/lotteryAmoe.js'
+} from '../../../../server/_lib/lottery/lotteryAmoe.js'
 
 type SubmitBody = {
   creatorCoin?: string
@@ -157,7 +157,7 @@ async function relayAmoeEntryTransaction(params: {
       resolvePrivyCoinbaseSmartWalletOwnerContext,
       sendCoinbaseSmartWalletUserOperation,
       sendPrivyCoinbaseSmartWalletUserOperation,
-    } = await import('../../../../server/_lib/privyCoinbaseSmartWallet.js')
+    } = await import('../../../../server/_lib/wallet/privyCoinbaseSmartWallet.js')
     const calls = [{ to: params.to, value: 0n, data: params.callData }]
 
     const privyWalletId = readAmoeRelayPrivyWalletId()

@@ -14,7 +14,7 @@ import {
 } from '../../../packages/server-core/src/index.js'
 
 
-import { isIdentityRecoveryRequiredError } from '../../../server/_lib/identityRecovery.js'
+import { isIdentityRecoveryRequiredError } from '../../../server/_lib/identity/identityRecovery.js'
 import {
   buildAccountsMePayload,
   ensureAccountsIdentitySchema,
@@ -22,7 +22,7 @@ import {
   syncEmailIdentity,
   type AccountLinkProvider,
   verifyPrivyForAccounts,
-} from '../../../server/_lib/accountsIdentity.js'
+} from '../../../server/_lib/identity/accountsIdentity.js'
 
 type LinkBody = {
   provider?: AccountLinkProvider

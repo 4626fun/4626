@@ -28,7 +28,7 @@ describe('privy wallet policy enforcement', () => {
     const fetchMock = vi.fn()
     globalThis.fetch = fetchMock as unknown as typeof fetch
 
-    const mod = await import('../../server/_lib/privyWalletApi.ts')
+    const mod = await import('../../server/_lib/wallet/privyWalletApi.ts')
 
     await expect(mod.createAgentWallet()).rejects.toThrow('PRIVY_WALLET_POLICY_ID missing in production')
     expect(fetchMock).not.toHaveBeenCalled()

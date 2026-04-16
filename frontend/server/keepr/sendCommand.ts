@@ -2,11 +2,11 @@ import type { Address } from 'viem'
 import { encodeFunctionData, parseUnits, isAddress, getAddress } from 'viem'
 
 import { logger } from '../_lib/infra/logger.js'
-import { walletRpc } from '../_lib/privyWalletApi.js'
+import { walletRpc } from '../_lib/wallet/privyWalletApi.js'
 import { assertTeeAttestationOrThrow } from '../_lib/agent/teeAttestationGate.js'
 import { checkDurableRateLimit } from '../_lib/infra/durableRateLimit.js'
 import { getDb, isDbConfigured } from '../_lib/db/postgres.js'
-import type { KeeprVaultRow } from '../_lib/keeprRegistry.js'
+import type { KeeprVaultRow } from '../_lib/keepr/keeprRegistry.js'
 import type { KeeprRole, KeeprCommandResult } from '../commands/types.js'
 
 // ---------------------------------------------------------------------------
@@ -313,7 +313,7 @@ export async function handleSendCommand(params: {
   let agentWalletId: string
   let agentWalletAddress: string
   try {
-    const { getOrCreateCreatorAgentWallet } = await import('../_lib/creatorAgentWallets.js')
+    const { getOrCreateCreatorAgentWallet } = await import('../_lib/wallet/creatorAgentWallets.js')
     const wallet = await getOrCreateCreatorAgentWallet({ creatorToken: params.vault.creatorCoinAddress })
     agentWalletId = wallet.walletId
     agentWalletAddress = wallet.address

@@ -1,4 +1,4 @@
-import { enqueueKeeprAction, getKeeprVaultByVaultAddress } from '../keeprRegistry.js'
+import { enqueueKeeprAction, getKeeprVaultByVaultAddress } from '../keepr/keeprRegistry.js'
 
 export type WorkspaceXmtpMessageType =
   | 'approval_request'

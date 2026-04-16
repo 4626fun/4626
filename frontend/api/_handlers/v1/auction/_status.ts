@@ -10,7 +10,7 @@ import {
 } from '../../../../packages/server-core/src/index.js'
 
 
-import { auctionTokenDisplaySymbol } from '../../../../server/_lib/auctionTokenDisplaySymbol.js'
+import { auctionTokenDisplaySymbol } from '../../../../server/_lib/auction/auctionTokenDisplaySymbol.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

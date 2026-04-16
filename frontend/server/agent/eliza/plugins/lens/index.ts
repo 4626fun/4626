@@ -14,11 +14,11 @@
 import type { Action, Content, HandlerCallback, IAgentRuntime, Memory, Plugin, State } from '@elizaos/core'
 
 // Direct imports — no HTTP bridge needed
-import { resolveLensUserByOwner } from '../../../../_lib/lensAccounts.js'
-import { resolveCanonicalSmartWalletAddress } from '../../../../_lib/canonicalWalletResolver.js'
-import { tryUploadImmutableJson } from '../../../../_lib/lensGrove.js'
-import { buildShareTokenMetadata } from '../../../../_lib/shareTokenMetadata.js'
-import { lensGql } from '../../../../_lib/lensClient.js'
+import { resolveLensUserByOwner } from '../../../../_lib/identity/lensAccounts.js'
+import { resolveCanonicalSmartWalletAddress } from '../../../../_lib/wallet/canonicalWalletResolver.js'
+import { tryUploadImmutableJson } from '../../../../_lib/lens/lensGrove.js'
+import { buildShareTokenMetadata } from '../../../../_lib/infra/shareTokenMetadata.js'
+import { lensGql } from '../../../../_lib/lens/lensClient.js'
 
 // ---------------------------------------------------------------------------
 // GraphQL queries (replaces SDK typed-document imports)

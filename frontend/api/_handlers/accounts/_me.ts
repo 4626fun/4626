@@ -14,7 +14,7 @@ import {
   ensureAccountsIdentitySchema,
   syncEmailIdentity,
   verifyPrivyForAccounts,
-} from '../../../server/_lib/accountsIdentity.js'
+} from '../../../server/_lib/identity/accountsIdentity.js'
 
 type AccountsMeResponse = Awaited<ReturnType<typeof buildAccountsMePayload>>
 

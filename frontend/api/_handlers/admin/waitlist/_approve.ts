@@ -15,15 +15,14 @@ import {
   checkRateLimit,
   rateLimitKey,
   logger,
+  enableCswAgent,
+  getOrCreateCreatorXmtpAgent,
 } from '../../../../packages/server-core/src/index.js'
 
 
 
-import { ensureWaitlistSchema } from '../../../../server/_lib/waitlistSchema.js'
-import { logAdminAction } from '../../../../server/_lib/adminAudit.js'
-
-import { enableCswAgent, getOrCreateCreatorXmtpAgent } from '../../../../server/_lib/creatorXmtpAgents.js'
-
+import { ensureWaitlistSchema } from '../../../../server/_lib/onboarding/waitlistSchema.js'
+import { logAdminAction } from '../../../../server/_lib/admin/adminAudit.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

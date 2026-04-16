@@ -4,7 +4,7 @@ import type { IAgentRuntime, Memory, Plugin } from '@elizaos/core'
 import { getDb } from '../../_lib/db/postgres.js'
 import { buildRuntimeSessionContext } from '../../_lib/auth/session.js'
 import { logger } from '../../_lib/infra/logger.js'
-import { getGroveChainId, resolveLensUri, tryUploadImmutableJson } from '../../_lib/lensGrove.js'
+import { getGroveChainId, resolveLensUri, tryUploadImmutableJson } from '../../_lib/lens/lensGrove.js'
 import { getElizaEmbeddingService } from './embeddings.js'
 
 type Db = {

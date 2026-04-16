@@ -27,18 +27,18 @@ import {
   rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 
-import { ensureDeploySessionsSchema, hashDeployToken, insertDeploySession, randomDeployToken, randomId } from '../../../../server/_lib/deploySessions.js'
+import { ensureDeploySessionsSchema, hashDeployToken, insertDeploySession, randomDeployToken, randomId } from '../../../../server/_lib/deploy/deploySessions.js'
 
-import { ensureWaitlistSchema } from '../../../../server/_lib/waitlistSchema.js'
+import { ensureWaitlistSchema } from '../../../../server/_lib/onboarding/waitlistSchema.js'
 
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/db/supabaseAdmin.js'
-import { getOrCreateCreatorAgentWallet } from '../../../../server/_lib/creatorAgentWallets.js'
+import { getOrCreateCreatorAgentWallet } from '../../../../server/_lib/wallet/creatorAgentWallets.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/auth/deployAuth.js'
-import { buildDeployPermissionGrant } from '../../../../server/_lib/erc7712Permissions.js'
+import { buildDeployPermissionGrant } from '../../../../server/_lib/deploy/erc7712Permissions.js'
 import { getCanonicalOrigin } from '../../../../server/_lib/infra/origin.js'
-import { resolveCoinPartiesAndOwner } from '../../../../server/_lib/coinParties.js'
-import { charmPoolNotIndexedError, extractCharmCreateVaultPool, isCharmPoolIndexed } from '../../../../server/_lib/charmVaults.js'
-import { readProfileWalletAuthority } from '../../../../server/_lib/canonicalWalletResolver.js'
+import { resolveCoinPartiesAndOwner } from '../../../../server/_lib/onchain/coinParties.js'
+import { charmPoolNotIndexedError, extractCharmCreateVaultPool, isCharmPoolIndexed } from '../../../../server/_lib/deploy/charmVaults.js'
+import { readProfileWalletAuthority } from '../../../../server/_lib/wallet/canonicalWalletResolver.js'
 import {
   normalizeSolanaAssetMintOrigin,
 } from '../../../../server/_lib/onchain/solanaOvaultCompatibility.js'

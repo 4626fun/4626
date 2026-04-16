@@ -53,7 +53,7 @@ vi.mock('../../packages/server-core/src/index.js', () => ({
   rateLimitKey: rateLimitKeyMock,
 }))
 
-vi.mock('../../server/_lib/zoraTrendOpsStore.js', () => ({
+vi.mock('../../server/_lib/zora/zoraTrendOpsStore.js', () => ({
   upsertTrendPrediction: upsertTrendPredictionMock,
   markTrendOpDeploying: markTrendOpDeployingMock,
   markTrendOpDeployed: markTrendOpDeployedMock,

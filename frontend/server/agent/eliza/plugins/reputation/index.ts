@@ -11,7 +11,7 @@
 import type { Action, Content, HandlerCallback, IAgentRuntime, Memory, Plugin, State } from '@elizaos/core'
 
 // Direct imports — no HTTP bridge needed
-import { buildReputationGraph } from '../../../../_lib/reputationGraph.js'
+import { buildReputationGraph } from '../../../../_lib/lens/reputationGraph.js'
 import { erc8004Identity } from '../../identity.js'
 
 // ---------------------------------------------------------------------------

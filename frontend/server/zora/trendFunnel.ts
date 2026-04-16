@@ -1,10 +1,10 @@
 import type { Address } from 'viem'
 import { getAddress, isAddress } from 'viem'
 
-import { getOrCreateCreatorAgentWallet } from '../_lib/creatorAgentWallets.js'
+import { getOrCreateCreatorAgentWallet } from '../_lib/wallet/creatorAgentWallets.js'
 import { logger } from '../_lib/infra/logger.js'
-import { walletRpc } from '../_lib/privyWalletApi.js'
-import { markTrendOpFailed, markTrendOpFunnelCompleted, markTrendOpFunnelPending } from '../_lib/zoraTrendOpsStore.js'
+import { walletRpc } from '../_lib/wallet/privyWalletApi.js'
+import { markTrendOpFailed, markTrendOpFunnelCompleted, markTrendOpFunnelPending } from '../_lib/zora/zoraTrendOpsStore.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

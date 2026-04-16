@@ -18,8 +18,8 @@ import {
 
 
 
-import { ensureWaitlistSchema } from '../../../../server/_lib/waitlistSchema.js'
-import { logAdminAction } from '../../../../server/_lib/adminAudit.js'
+import { ensureWaitlistSchema } from '../../../../server/_lib/onboarding/waitlistSchema.js'
+import { logAdminAction } from '../../../../server/_lib/admin/adminAudit.js'
 
 
 type Body = { id?: number; note?: string | null }

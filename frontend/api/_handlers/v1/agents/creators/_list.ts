@@ -8,10 +8,8 @@ import {
   checkRateLimit,
   rateLimitKey,
   isAdminAddress,
+  listCreatorXmtpAgents,
 } from '../../../../../packages/server-core/src/index.js'
-
-
-import { listCreatorXmtpAgents } from '../../../../../server/_lib/creatorXmtpAgents.js'
 
 function setPublicCors(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')

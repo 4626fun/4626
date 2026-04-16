@@ -18,9 +18,9 @@ import {
   getKeeprVaultAutomationByVaultAddress,
   type KeeprVaultAutomationRow,
   upsertKeeprVaultAutomation,
-} from '../../../../server/_lib/keeprAutomation.js'
-import { getKeeprVaultByVaultAddress } from '../../../../server/_lib/keeprRegistry.js'
-import { resolvePersistedWalletIdentity } from '../../../../server/_lib/canonicalWalletResolver.js'
+} from '../../../../server/_lib/keepr/keeprAutomation.js'
+import { getKeeprVaultByVaultAddress } from '../../../../server/_lib/keepr/keeprRegistry.js'
+import { resolvePersistedWalletIdentity } from '../../../../server/_lib/wallet/canonicalWalletResolver.js'
 
 
 type AutomationBody = {
