@@ -22,6 +22,7 @@ import {
 
 type SignatureModeStat = { mode: string; count: number }
 type PaymasterModeStat = { mode: string; count: number }
+type SubmissionPathStat = { path: string; count: number }
 type WindowStats = {
   batchCount: number
   totalSamples: number
@@ -37,6 +38,7 @@ type WindowStats = {
   avgP99Ms: number | null
   signatureModeBreakdown: SignatureModeStat[]
   paymasterModeBreakdown: PaymasterModeStat[]
+  submissionPathBreakdown: SubmissionPathStat[]
   topErrorCodes: Array<{ code: string; count: number }>
   firstEventAt: string | null
   lastEventAt: string | null
@@ -67,6 +69,7 @@ const ZERO_WINDOW: WindowStats = {
   avgP99Ms: null,
   signatureModeBreakdown: [],
   paymasterModeBreakdown: [],
+  submissionPathBreakdown: [],
   topErrorCodes: [],
   firstEventAt: null,
   lastEventAt: null,
@@ -134,6 +137,7 @@ async function loadWindow(
 
   const signatureModes = new Map<string, number>()
   const paymasterModes = new Map<string, number>()
+  const submissionPaths = new Map<string, number>()
   const errorCodes = new Map<string, number>()
 
   let firstEventAt: string | null = null
@@ -171,8 +175,15 @@ async function loadWindow(
     successCount += asNumber(payload.successCount)
     errorCount += asNumber(payload.errorCount)
     timeoutCount += asNumber(payload.timeoutCount)
-    fallbackToSelfFundedCount += asNumber(payload.fallbackToSelfFundedCount)
-    ownerIsContractCount += asNumber(payload.ownerIsContractCount)
+
+    // Prefer new generic fields, but fall back to the legacy flat shape so
+    // older telemetry rows still contribute.
+    const paymasterUsage =
+      (payload.paymasterUsage as Record<string, unknown> | undefined) ?? null
+    fallbackToSelfFundedCount +=
+      asNumber(payload.fallbackToSelfFundedCount) || asNumber(paymasterUsage?.fallbackToSelfFunded)
+    const ownerType = (payload.ownerType as Record<string, unknown> | undefined) ?? null
+    ownerIsContractCount += asNumber(payload.ownerIsContractCount) || asNumber(ownerType?.contract)
 
     const p50 = asNumber(payload.p50Ms)
     const p95 = asNumber(payload.p95Ms)
@@ -184,25 +195,30 @@ async function loadWindow(
       percentileWeight += samples
     }
 
-    const sig = payload.signatureModeBreakdown
-    if (sig && typeof sig === 'object') {
-      for (const [mode, count] of Object.entries(sig as Record<string, unknown>)) {
-        bumpTopN(signatureModes, mode, asNumber(count))
-      }
+    const sig =
+      (payload.signatureModeBreakdown as Record<string, unknown> | undefined) ??
+      (payload.signatureModes as Record<string, unknown> | undefined) ??
+      null
+    if (sig) {
+      for (const [mode, count] of Object.entries(sig)) bumpTopN(signatureModes, mode, asNumber(count))
     }
 
-    const pm = payload.paymasterModeBreakdown
-    if (pm && typeof pm === 'object') {
-      for (const [mode, count] of Object.entries(pm as Record<string, unknown>)) {
-        bumpTopN(paymasterModes, mode, asNumber(count))
-      }
+    const pm =
+      (payload.paymasterModeBreakdown as Record<string, unknown> | undefined) ??
+      (payload.paymasterUsage as Record<string, unknown> | undefined) ??
+      null
+    if (pm) {
+      for (const [mode, count] of Object.entries(pm)) bumpTopN(paymasterModes, mode, asNumber(count))
     }
 
-    const errs = payload.errorCodes
-    if (errs && typeof errs === 'object') {
-      for (const [code, count] of Object.entries(errs as Record<string, unknown>)) {
-        bumpTopN(errorCodes, code, asNumber(count))
-      }
+    const sp = (payload.submissionPathBreakdown as Record<string, unknown> | undefined) ?? null
+    if (sp) {
+      for (const [path, count] of Object.entries(sp)) bumpTopN(submissionPaths, path, asNumber(count))
+    }
+
+    const errs = (payload.errorCodes as Record<string, unknown> | undefined) ?? null
+    if (errs) {
+      for (const [code, count] of Object.entries(errs)) bumpTopN(errorCodes, code, asNumber(count))
     }
   }
 
@@ -225,6 +241,7 @@ async function loadWindow(
     avgP99Ms: percentileWeight > 0 ? Math.round(p99Weighted / percentileWeight) : null,
     signatureModeBreakdown: topN(signatureModes, 10).map(({ key, count }) => ({ mode: key, count })),
     paymasterModeBreakdown: topN(paymasterModes, 10).map(({ key, count }) => ({ mode: key, count })),
+    submissionPathBreakdown: topN(submissionPaths, 10).map(({ key, count }) => ({ path: key, count })),
     topErrorCodes: topN(errorCodes, 10).map(({ key, count }) => ({ code: key, count })),
     firstEventAt,
     lastEventAt,

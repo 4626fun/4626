@@ -13,6 +13,8 @@ const USEROP_TELEMETRY_FLUSH_INTERVAL_MS = 60_000
 const USEROP_TELEMETRY_SAMPLE_RATE = 0.2
 const USEROP_TELEMETRY_SLOW_MS = 2_500
 
+export type UserOpSubmissionPath = 'eth_sendUserOperation' | 'wallet_sendCalls'
+
 export type UserOpTelemetrySample = {
   status: 'success' | 'error' | 'timeout'
   durationMs: number
@@ -25,6 +27,12 @@ export type UserOpTelemetrySample = {
   executionMode?: string | null
   approvalAttempt?: number | null
   errorCode?: string | null
+  /**
+   * Which submission path produced this sample. Defaults to
+   * 'eth_sendUserOperation' when unset for backward compatibility with legacy
+   * call sites in coinbaseErc4337.ts.
+   */
+  submissionPath?: UserOpSubmissionPath
 }
 
 const userOpTelemetrySamples: UserOpTelemetrySample[] = []
@@ -95,6 +103,29 @@ function flushUserOpTelemetry(reason: 'batch' | 'interval' | 'timeout'): void {
     ]),
   )
 
+  // Generic maps consumed by the admin UserOp health dashboard. Flat modes
+  // above are kept for backward compatibility with any legacy analytics
+  // consumers, while these maps let us add new enum values without schema
+  // churn.
+  const signatureModeBreakdown: Record<string, number> = {}
+  const paymasterModeBreakdown: Record<string, number> = {}
+  const submissionPathBreakdown: Record<string, number> = {}
+  const errorCodes: Record<string, number> = {}
+  let fallbackToSelfFundedCount = 0
+  let ownerIsContractCount = 0
+  for (const sample of samples) {
+    signatureModeBreakdown[sample.signatureMode] = (signatureModeBreakdown[sample.signatureMode] ?? 0) + 1
+    paymasterModeBreakdown[sample.paymasterMode] = (paymasterModeBreakdown[sample.paymasterMode] ?? 0) + 1
+    const path = sample.submissionPath ?? 'eth_sendUserOperation'
+    submissionPathBreakdown[path] = (submissionPathBreakdown[path] ?? 0) + 1
+    if (sample.paymasterMode === 'fallback_to_self_funded') fallbackToSelfFundedCount += 1
+    if (sample.ownerIsContract) ownerIsContractCount += 1
+    if (sample.errorCode && sample.errorCode.trim()) {
+      const code = sample.errorCode.trim()
+      errorCodes[code] = (errorCodes[code] ?? 0) + 1
+    }
+  }
+
   const payload = {
     source: 'coinbaseErc4337',
     reason,
@@ -105,10 +136,18 @@ function flushUserOpTelemetry(reason: 'batch' | 'interval' | 'timeout'): void {
     p50Ms: percentile(durations, 50),
     p95Ms: percentile(durations, 95),
     p99Ms: percentile(durations, 99),
+    // Legacy flat counts retained for backward compatibility.
     signatureModes,
     paymasterUsage,
     ownerType,
     verificationGasLimitUsed,
+    // Generic, agg-friendly breakdowns used by /api/admin/userop/health.
+    signatureModeBreakdown,
+    paymasterModeBreakdown,
+    submissionPathBreakdown,
+    errorCodes,
+    fallbackToSelfFundedCount,
+    ownerIsContractCount,
   }
 
   trackEvent('xmtp_userop_submission_batch', payload)
