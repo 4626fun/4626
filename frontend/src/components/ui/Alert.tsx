@@ -30,6 +30,7 @@ export function Alert({
   variant = 'info',
   title,
   children,
+  action,
   onDismiss,
   className,
 }: AlertProps) {
@@ -45,6 +46,15 @@ export function Alert({
         bordered
       >
         {children}
+        {action ? (
+          <button
+            type="button"
+            onClick={action.onClick}
+            className="mt-2 inline-flex items-center rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white hover:bg-white/15 transition-colors"
+          >
+            {action.label}
+          </button>
+        ) : null}
       </Banner>
     </div>
   )

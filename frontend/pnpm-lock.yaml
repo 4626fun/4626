@@ -35,6 +35,15 @@ overrides:
   elliptic: 6.6.1
   langsmith: 0.5.18
   serialize-javascript: 7.0.5
+  '@coinbase/cds-web>react': ^19.2.4
+  '@coinbase/cds-web>react-dom': ^19.2.4
+  '@coinbase/cds-web>framer-motion': ^12.33.0
+  '@coinbase/cds-icons>react': ^19.2.4
+  '@coinbase/cds-icons>react-dom': ^19.2.4
+  '@coinbase/cds-common>react': ^19.2.4
+  '@coinbase/cds-common>react-dom': ^19.2.4
+  '@react-spring/web>react': ^19.2.4
+  '@react-spring/web>react-dom': ^19.2.4
 
 patchedDependencies:
   elliptic@6.6.1:
@@ -418,8 +427,8 @@ packages:
   '@coinbase/cds-common@8.62.1':
     resolution: {integrity: sha512-XE8ggzpC7IAishFA7gzpKb6xxCMwkk/I7/51nK1H+V8MVgceuPVNJNBbP9jFNOP9KzKILGXr5kxaahV4NDScXg==}
     peerDependencies:
-      react: ^18.3.1
-      react-dom: ^18.3.1
+      react: ^19.2.4
+      react-dom: ^19.2.4
 
   '@coinbase/cds-icons@5.13.0':
     resolution: {integrity: sha512-Z3vEfDyRdmumQjyQEuUsq6cOkt0SfLOFxZzysCCxA1ULto8Y5QuMCIzGbOoOpmUqLe5zMZ+tqpP+slSLXIjhkQ==}
@@ -440,9 +449,9 @@ packages:
   '@coinbase/cds-web@8.62.1':
     resolution: {integrity: sha512-JYAjGGACZbDacGefml3LZU4/Q663H0224FSnTFWzv5G+257BRY5TouSdBjRCgmuA98MYFwQXBd/JLNjMUrR1kw==}
     peerDependencies:
-      framer-motion: ^10.18.0
-      react: ^18.3.1
-      react-dom: ^18.3.1
+      framer-motion: ^12.33.0
+      react: ^19.2.4
+      react-dom: ^19.2.4
 
   '@coinbase/wallet-sdk@4.3.7':
     resolution: {integrity: sha512-z6e5XDw6EF06RqkeyEa+qD0dZ2ZbLci99vx3zwDY//XO8X7166tqKJrR2XlQnzVmtcUuJtCd5fCvr9Cu6zzX7w==}
@@ -1922,8 +1931,8 @@ packages:
   '@react-spring/web@9.7.5':
     resolution: {integrity: sha512-lmvqGwpe+CSttsWNZVr+Dg62adtKhauGwLyGE/RRyZ8AAMLgb9x3NDMA5RMElXo+IMyTkPp7nxTB8ZQlmhb6JQ==}
     peerDependencies:
-      react: ^16.8.0 || ^17.0.0 || ^18.0.0
-      react-dom: ^16.8.0 || ^17.0.0 || ^18.0.0
+      react: ^19.2.4
+      react-dom: ^19.2.4
 
   '@react-stately/flags@3.1.2':
     resolution: {integrity: sha512-2HjFcZx1MyQXoPqcBGALwWWmgFVUk2TuKVIQxCbRq7fPyWXIl6VHcakCLurdtYC2Iks7zizvz0Idv48MQ38DWg==}
