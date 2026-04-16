@@ -977,21 +977,23 @@ export function useAccountSetupController(params: {
         }
 
         // Sub-account setup returned null (e.g. user cancelled Spend
-        // Permission popup).  Fall through to the legacy path which will
-        // surface the appropriate error to the user.
-        emitOwnerApprovalStageEvent({
-          runId: approvalRunId,
-          stage: 'preflight',
-          status: 'error',
-          executionMode: 'subAccount',
-          signerAddress: subAccount.embeddedWallet?.address ?? null,
-          canonicalCswAddress,
-          code: 'sub_account_setup_failed',
-          message: subAccount.error?.message ?? 'Sub-account setup did not complete.',
-        })
-        logger.warn('Sub-account setup returned null, falling through to legacy owner path', {
-          error: subAccount.error?.message,
-        })
+        // Permission popup).  Emit a generic failure event only if we
+        // haven't already emitted a more specific one (e.g. parent mismatch).
+        if (!result?.subAccountAddress) {
+          emitOwnerApprovalStageEvent({
+            runId: approvalRunId,
+            stage: 'preflight',
+            status: 'error',
+            executionMode: 'subAccount',
+            signerAddress: subAccount.embeddedWallet?.address ?? null,
+            canonicalCswAddress,
+            code: 'sub_account_setup_failed',
+            message: subAccount.error?.message ?? 'Sub-account setup did not complete.',
+          })
+          logger.warn('Sub-account setup returned null, falling through to legacy owner path', {
+            error: subAccount.error?.message,
+          })
+        }
       }
 
       // ── Legacy owner-approval path (fallback / non-self-auth) ───────
