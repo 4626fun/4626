@@ -1173,7 +1173,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   if (!walletClient) throw new Error('Missing wallet client')
   if (!calls || calls.length === 0) throw new Error('No calls provided')
   const chainId = (publicClient as any).chain?.id ?? 8453
-  const attributedCalls = applyBuilderDataSuffixToCalls(calls, chainId, DATA_SUFFIX, AA_DEBUG)
+  const attributedCalls = applyBuilderDataSuffixToCalls(calls, chainId, DATA_SUFFIX, AA_DEBUG, smartWallet)
   const ownerIndexLookupAddress =
     typeof ownerIndexLookupAddressRaw === 'string' && isAddress(ownerIndexLookupAddressRaw)
       ? getAddress(ownerIndexLookupAddressRaw)
