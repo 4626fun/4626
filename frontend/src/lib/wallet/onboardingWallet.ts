@@ -314,7 +314,9 @@ function emitOwnerApprovalStage(
   }
 }
 
-async function submitOwnerTxViaWalletSendCalls(params: {
+// Retained for reference during ongoing onboarding wallet refactor; exported
+// to satisfy tsc noUnusedLocals without deleting the documented implementation.
+export async function _submitOwnerTxViaWalletSendCalls(params: {
   walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
   chainId: number
   sender: `0x${string}`
@@ -474,7 +476,7 @@ async function submitOwnerTxViaWalletSendCalls(params: {
 // the popup but has NO eGe self-call check — the popup uses the passkey to
 // produce the signature.  Then wallet_sendPreparedCalls submits the signed
 // UserOp to the RPC.
-async function submitOwnerViaPreparedCalls(params: {
+export async function _submitOwnerViaPreparedCalls(params: {
   walletRequest: (args: { method: string; params?: unknown[] }) => Promise<unknown>
   chainId: number
   sender: `0x${string}`
