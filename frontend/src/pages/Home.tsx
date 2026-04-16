@@ -6,7 +6,7 @@ import { useMemo } from 'react'
 import { META, PageMeta } from '@/components/seo/PageMeta'
 import { VaultFlowRoot } from '@/features/home/vault-flow/VaultFlowRoot'
 import { STORY_CONTENT } from '@/features/home/vault-flow/model/storyContent'
-import { getHostMode } from '@/lib/env/host'
+import { getHostMode, MARKETING_ORIGIN } from '@/lib/env/host'
 
 const DEFAULT_DEPOSIT_TOKENS = STORY_CONTENT.defaultDepositTokens
 const DEFAULT_SHARE_TOKENS = `${DEFAULT_DEPOSIT_TOKENS} ${STORY_CONTENT.shareTokenSymbol}`
@@ -45,6 +45,14 @@ export function Home() {
 
   if (hostMode === 'app') {
     return <Navigate to="/swap" replace />
+  }
+
+  // When the SPA renders "/" on the marketing host (e.g. via bfcache or mobile
+  // desktop-mode cache), redirect to the immersive landing page served by Vercel
+  // at the domain root. A hard navigation ensures we exit the SPA shell.
+  if (hostMode === 'marketing' && typeof window !== 'undefined') {
+    window.location.replace(MARKETING_ORIGIN)
+    return null
   }
 
   return (
