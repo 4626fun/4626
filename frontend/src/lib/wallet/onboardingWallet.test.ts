@@ -77,10 +77,10 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('uses sponsored UserOp first when canonical mode is self-authenticated and ownerAddress is available', async () => {
+  it('self-auth tries eth_sendTransaction first, falls back to UserOp when request mock returns undefined', async () => {
     const sendTransaction = vi.fn(async () => TX_HASH)
     const ensurePaymasterSession = vi.fn(async () => true)
-    const request = vi.fn()
+    const request = vi.fn() // returns undefined for eth_sendTransaction → triggers fallback
 
     const result = await sendPreparedOwnerTx({
       txRequest: TX_REQUEST,
@@ -99,8 +99,13 @@ describe('sendPreparedOwnerTx', () => {
       ensurePaymasterSession,
     })
 
-    // Self-auth goes directly to UserOp (no addSubAccount, no sendCalls)
+    // eth_sendTransaction was attempted first (primary path)
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'eth_sendTransaction' }),
+    )
+    // Fell back to UserOp since eth_sendTransaction returned undefined
     expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
+    // No addSubAccount or wallet_sendCalls
     expect(request).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'wallet_addSubAccount' }),
     )
@@ -111,10 +116,10 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.isOwner).toBe(true)
   })
 
-  it('uses sponsored UserOp when no ownerAddress is available in self-auth mode', async () => {
+  it('self-auth falls back to UserOp when no ownerAddress is available and eth_sendTransaction fails', async () => {
     const sendTransaction = vi.fn(async () => TX_HASH)
     const ensurePaymasterSession = vi.fn(async () => true)
-    const request = vi.fn()
+    const request = vi.fn() // returns undefined for eth_sendTransaction → triggers fallback
 
     const result = await sendPreparedOwnerTx({
       txRequest: TX_REQUEST,
@@ -132,7 +137,11 @@ describe('sendPreparedOwnerTx', () => {
       ensurePaymasterSession,
     })
 
-    // Self-auth goes directly to UserOp regardless of ownerAddress
+    // eth_sendTransaction attempted first
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'eth_sendTransaction' }),
+    )
+    // Fell back to UserOp
     expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
     expect(request).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'wallet_sendCalls' }),
@@ -141,9 +150,9 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('self-auth falls back to non-typed UserOp when typed UserOp fails', async () => {
+  it('self-auth falls back from eth_sendTransaction to typed UserOp to non-typed UserOp', async () => {
     const ensurePaymasterSession = vi.fn(async () => true)
-    const request = vi.fn()
+    const request = vi.fn() // returns undefined for eth_sendTransaction → triggers fallback chain
     // First UserOp (typed) fails, second (non-typed) succeeds
     sendCoinbaseSmartWalletUserOperationMock
       .mockRejectedValueOnce(new Error('eth_signTypedData_v4 not supported'))
@@ -167,6 +176,10 @@ describe('sendPreparedOwnerTx', () => {
       ensurePaymasterSession,
     })
 
+    // eth_sendTransaction attempted first
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'eth_sendTransaction' }),
+    )
     // UserOp tried twice (typed then non-typed)
     expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(2)
     // Second call should have disableTypedDataSigning: true
@@ -181,10 +194,10 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('does not fall back when user rejects UserOp signing in self-auth mode', async () => {
+  it('does not fall back further when user rejects UserOp signing after eth_sendTransaction fails in self-auth mode', async () => {
     const sendTransaction = vi.fn(async () => TX_HASH)
     const ensurePaymasterSession = vi.fn(async () => true)
-    const request = vi.fn()
+    const request = vi.fn() // eth_sendTransaction returns undefined → falls to UserOp
     // UserOp signing rejected by user
     sendCoinbaseSmartWalletUserOperationMock.mockRejectedValue(
       new Error('User rejected the request'),
@@ -208,9 +221,13 @@ describe('sendPreparedOwnerTx', () => {
         ensurePaymasterSession,
       }),
     ).rejects.toThrow('User rejected the request')
-    // UserOp was attempted once
+    // eth_sendTransaction was attempted first
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'eth_sendTransaction' }),
+    )
+    // UserOp was attempted once as fallback
     expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
-    // Should NOT fall back to sendCalls or non-typed UserOp when user rejected
+    // Should NOT fall back to non-typed UserOp when user rejected
     expect(request).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'wallet_sendCalls' }),
     )
@@ -522,14 +539,14 @@ describe('sendPreparedOwnerTx', () => {
     )
   })
 
-  it('self-auth falls back through prepareCalls → UserOp(typed) → UserOp(non-typed) when prepareCalls and typed fail', async () => {
-    // In the new self-auth flow: prepareCalls FIRST, then UserOp(typed), then UserOp(non-typed).
-    // Test: prepareCalls fails, typed UserOp fails, non-typed UserOp succeeds.
+  it('self-auth falls back through eth_sendTransaction → UserOp(typed) → UserOp(non-typed) when sendTx and typed fail', async () => {
+    // In the new self-auth flow: eth_sendTransaction FIRST, then UserOp(typed), then UserOp(non-typed).
+    // Test: eth_sendTransaction fails, typed UserOp fails, non-typed UserOp succeeds.
     const ensurePaymasterSession = vi.fn(async () => true)
     const request = vi
       .fn()
-      // wallet_prepareCalls fails (RPC error or unsupported)
-      .mockRejectedValueOnce(new Error('wallet_prepareCalls not supported'))
+      // eth_sendTransaction fails (e.g. popup error)
+      .mockRejectedValueOnce(new Error('eth_sendTransaction popup error'))
     sendCoinbaseSmartWalletUserOperationMock
       .mockRejectedValueOnce(new Error('Internal error typed'))
       .mockResolvedValueOnce({ transactionHash: TX_HASH })
@@ -552,24 +569,27 @@ describe('sendPreparedOwnerTx', () => {
       ensurePaymasterSession,
     })
 
-    // prepareCalls was attempted
+    // eth_sendTransaction was attempted as primary path
     expect(request).toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'wallet_prepareCalls' }),
+      expect.objectContaining({ method: 'eth_sendTransaction' }),
     )
-    // Both UserOp attempts made (typed failed, non-typed succeeded)
+    // Both UserOp attempts made as fallback (typed failed, non-typed succeeded)
     expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(2)
-    // No addSubAccount
+    // No addSubAccount or wallet_sendCalls
     expect(request).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'wallet_addSubAccount' }),
+    )
+    expect(request).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'wallet_sendCalls' }),
     )
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('self-auth uses sponsored UserOp directly without sendCalls in default flow', async () => {
-    // In self-auth mode, the primary path is UserOp. sendCalls is only used as
-    // a last-resort fallback when both UserOp attempts fail.
+  it('self-auth tries eth_sendTransaction then falls to UserOp when request returns undefined', async () => {
+    // In self-auth mode, the primary path is eth_sendTransaction.
+    // When request mock returns undefined (no tx hash), falls to UserOp.
     const ensurePaymasterSession = vi.fn(async () => true)
-    const request = vi.fn()
+    const request = vi.fn() // returns undefined → triggers fallback
 
     const result = await sendPreparedOwnerTx({
       txRequest: TX_REQUEST,
@@ -587,92 +607,71 @@ describe('sendPreparedOwnerTx', () => {
       ensurePaymasterSession,
     })
 
-    // UserOp succeeds on first attempt
+    // eth_sendTransaction was attempted first
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'eth_sendTransaction' }),
+    )
+    // UserOp succeeds as fallback
     expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
-    // sendCalls should NOT be called — UserOp succeeded
+    // sendCalls should NOT be called
     expect(request).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'wallet_sendCalls' }),
     )
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('self-auth prepareCalls path injects paymaster capabilities and completes', async () => {
-    // Test the prepareCalls primary path: wallet_prepareCalls → personal_sign →
-    // wallet_sendPreparedCalls.  Verify paymaster URL is injected and domain
-    // is normalised to api.cdp.coinbase.com.
-    vi.stubEnv('VITE_CDP_SENDCALLS_PAYMASTER_URL', 'https://api.developer.coinbase.com/rpc/v1/base/TESTKEY')
-    try {
-      const PREPARE_HASH = '0x' + 'bb'.repeat(32)
-      const SIGNATURE = '0x' + 'cc'.repeat(65)
-      const request = vi
-        .fn()
-        // wallet_prepareCalls returns prepared UserOp
-        .mockImplementation(async (args: { method: string; params?: unknown[] }) => {
-          if (args.method === 'wallet_prepareCalls') {
-            return {
-              type: 'user-operation-v06',
-              chainId: '0x2105',
-              signatureRequest: { hash: PREPARE_HASH },
-              userOp: { sender: CANONICAL_CSW, nonce: '0x0' },
-            }
-          }
-          if (args.method === 'personal_sign') {
-            return SIGNATURE
-          }
-          if (args.method === 'wallet_sendPreparedCalls') {
-            return ['0xcall-bundle-id']
-          }
-          if (args.method === 'wallet_getCallsStatus') {
-            return {
-              status: 200,
-              receipts: [{ transactionHash: TX_HASH }],
-            }
-          }
-          return null
-        })
-
-      const result = await sendPreparedOwnerTx({
-        txRequest: TX_REQUEST,
-        walletClient: {
-          account: CANONICAL_CSW,
-          sendTransaction: vi.fn(async () => TX_HASH),
-          request,
-        },
-        chainId: 8453,
-        authHeaders: async () => ({ Authorization: 'Bearer test' }),
-        signerAddress: CANONICAL_CSW,
-        executionMode: 'canonicalSmartWallet',
-        canonicalSmartWalletAddress: CANONICAL_CSW,
-        publicClient: {},
-        ensurePaymasterSession: async () => true,
+  it('self-auth eth_sendTransaction primary path succeeds and skips UserOp fallbacks', async () => {
+    // Test the eth_sendTransaction primary path for self-auth mode.
+    // When eth_sendTransaction succeeds, no UserOp or prepareCalls fallback is needed.
+    const request = vi.fn()
+      .mockImplementation(async (args: { method: string; params?: unknown[] }) => {
+        if (args.method === 'eth_sendTransaction') {
+          return TX_HASH
+        }
+        return null
       })
 
-      // prepareCalls was called
-      const prepareCallsCalls = request.mock.calls.filter(
-        (c: any[]) => c[0]?.method === 'wallet_prepareCalls'
-      )
-      expect(prepareCallsCalls.length).toBe(1)
-      // Verify paymaster capabilities were injected with normalised domain
-      const normalised = 'https://api.cdp.coinbase.com/rpc/v1/base/TESTKEY'
-      const preparePayload = prepareCallsCalls[0]![0]!.params[0] as Record<string, unknown>
-      const caps = preparePayload.capabilities as Record<string, unknown>
-      expect(caps.paymasterUrl).toBe(normalised)
-      expect(caps.paymasterService).toBeDefined()
+    const result = await sendPreparedOwnerTx({
+      txRequest: TX_REQUEST,
+      walletClient: {
+        account: CANONICAL_CSW,
+        sendTransaction: vi.fn(async () => TX_HASH),
+        request,
+      },
+      chainId: 8453,
+      authHeaders: async () => ({ Authorization: 'Bearer test' }),
+      signerAddress: CANONICAL_CSW,
+      executionMode: 'canonicalSmartWallet',
+      canonicalSmartWalletAddress: CANONICAL_CSW,
+      publicClient: {},
+      ensurePaymasterSession: async () => true,
+    })
 
-      // personal_sign was called with the hash
-      expect(request).toHaveBeenCalledWith(
-        expect.objectContaining({ method: 'personal_sign' }),
-      )
-      // sendPreparedCalls was called
-      expect(request).toHaveBeenCalledWith(
-        expect.objectContaining({ method: 'wallet_sendPreparedCalls' }),
-      )
-      // UserOp was NOT used (prepareCalls succeeded)
-      expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
-      expect(result.txHash).toBe(TX_HASH)
-    } finally {
-      vi.unstubAllEnvs()
-    }
+    // eth_sendTransaction was called as primary path
+    const sendTxCalls = request.mock.calls.filter(
+      (c: any[]) => c[0]?.method === 'eth_sendTransaction'
+    )
+    expect(sendTxCalls.length).toBe(1)
+    // Verify correct tx params were passed
+    const txParams = sendTxCalls[0]![0]!.params[0] as Record<string, unknown>
+    expect(txParams.from).toBe(CANONICAL_CSW)
+    expect(txParams.to).toBe(CANONICAL_CSW)
+    expect(txParams.data).toBe(TX_REQUEST.data)
+    expect(txParams.value).toBe('0x0')
+
+    // No prepareCalls, sendPreparedCalls, or wallet_sendCalls
+    expect(request).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'wallet_prepareCalls' }),
+    )
+    expect(request).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'wallet_sendPreparedCalls' }),
+    )
+    expect(request).not.toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'wallet_sendCalls' }),
+    )
+    // UserOp was NOT used (eth_sendTransaction succeeded)
+    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+    expect(result.txHash).toBe(TX_HASH)
   })
 
   it('retries confirm-owner for pending confirmation states and succeeds after delayed indexing', async () => {
