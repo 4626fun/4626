@@ -575,15 +575,18 @@ async function submitOwnerViaPreparedCalls(params: {
         },
       },
     }],
-  }) as string | string[] | null
+  }) as unknown
 
-  // sendPreparedCalls returns an array of call bundle IDs
+  // sendPreparedCalls may return a bare string, string[], or an object with
+  // an id/preparedCallIds field depending on the wallet implementation.
   const callsId =
     typeof sendResult === 'string'
       ? sendResult
       : Array.isArray(sendResult) && typeof sendResult[0] === 'string'
         ? sendResult[0]
-        : ''
+        : sendResult && typeof sendResult === 'object' && typeof (sendResult as { id?: unknown }).id === 'string'
+          ? String((sendResult as { id: string }).id)
+          : ''
 
   if (!callsId) {
     throw new Error('wallet_sendPreparedCalls returned no call bundle id.')
