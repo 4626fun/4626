@@ -65,7 +65,7 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
               </p>
             </div>
           ) : null}
-          <WaitlistUnlocksPanel score={initialAccount.score} />
+          <WaitlistUnlocksPanel score={initialAccount.score} email={initialAccount.email} />
         </div>
       }
     />

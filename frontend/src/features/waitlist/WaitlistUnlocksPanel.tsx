@@ -1,6 +1,8 @@
 import { Check, Sparkles, TrendingUp } from 'lucide-react'
 
 import type { AccountScore } from '@/features/accountSetup/types'
+import { ReferralShareBlock } from './ReferralShareBlock'
+import { useMyReferralCode } from './useMyReferralCode'
 import {
   POINT_SUGGESTIONS,
   WAITLIST_TIERS,
@@ -10,6 +12,7 @@ import {
 
 type WaitlistUnlocksPanelProps = {
   score: AccountScore | null | undefined
+  email?: string | null
   className?: string
 }
 
@@ -62,9 +65,10 @@ function TierRow({
   )
 }
 
-export function WaitlistUnlocksPanel({ score, className = '' }: WaitlistUnlocksPanelProps) {
+export function WaitlistUnlocksPanel({ score, email, className = '' }: WaitlistUnlocksPanelProps) {
   const points = typeof score?.points === 'number' ? score.points : 0
   const progress = computeProgress(points)
+  const referral = useMyReferralCode(email)
 
   return (
     <div className={`rounded-xl border border-white/10 bg-black/25 p-4 space-y-4 ${className}`}>
@@ -140,6 +144,14 @@ export function WaitlistUnlocksPanel({ score, className = '' }: WaitlistUnlocksP
             ))}
           </ul>
         </div>
+      ) : null}
+
+      {referral.data?.referralCode ? (
+        <ReferralShareBlock
+          referralCode={referral.data.referralCode}
+          qualifiedCount={referral.data.referrals.qualifiedCount}
+          pendingCount={referral.data.referrals.pendingCount}
+        />
       ) : null}
     </div>
   )
