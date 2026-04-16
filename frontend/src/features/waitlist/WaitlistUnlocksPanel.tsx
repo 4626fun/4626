@@ -1,6 +1,9 @@
-import { Check, Sparkles, TrendingUp } from 'lucide-react'
+import { ArrowUpRight, Check, Sparkles, TrendingUp } from 'lucide-react'
+import { Link } from 'react-router-dom'
 
 import type { AccountScore } from '@/features/accountSetup/types'
+import { ReferralShareBlock } from './ReferralShareBlock'
+import { useMyReferralCode } from './useMyReferralCode'
 import {
   POINT_SUGGESTIONS,
   WAITLIST_TIERS,
@@ -10,6 +13,7 @@ import {
 
 type WaitlistUnlocksPanelProps = {
   score: AccountScore | null | undefined
+  email?: string | null
   className?: string
 }
 
@@ -62,9 +66,10 @@ function TierRow({
   )
 }
 
-export function WaitlistUnlocksPanel({ score, className = '' }: WaitlistUnlocksPanelProps) {
+export function WaitlistUnlocksPanel({ score, email, className = '' }: WaitlistUnlocksPanelProps) {
   const points = typeof score?.points === 'number' ? score.points : 0
   const progress = computeProgress(points)
+  const referral = useMyReferralCode(email)
 
   return (
     <div className={`rounded-xl border border-white/10 bg-black/25 p-4 space-y-4 ${className}`}>
@@ -124,22 +129,51 @@ export function WaitlistUnlocksPanel({ score, className = '' }: WaitlistUnlocksP
         <div className="pt-2 border-t border-white/5">
           <div className="bv-kicker text-zinc-400 mb-1.5">Earn more points</div>
           <ul className="space-y-1">
-            {POINT_SUGGESTIONS.slice(0, 4).map((suggestion) => (
-              <li
-                key={suggestion.label}
-                className="flex items-center justify-between gap-3 text-[11px]"
-              >
-                <span className="text-zinc-300 truncate">{suggestion.label}</span>
+            {POINT_SUGGESTIONS.slice(0, 4).map((suggestion) => {
+              const pointsNode = (
                 <span className="shrink-0 tabular-nums text-zinc-500">
                   +{suggestion.points}
                   {suggestion.hint ? (
                     <span className="ml-1 text-zinc-600">· {suggestion.hint}</span>
                   ) : null}
                 </span>
-              </li>
-            ))}
+              )
+              if (suggestion.to) {
+                return (
+                  <li key={suggestion.label}>
+                    <Link
+                      to={suggestion.to}
+                      className="group flex items-center justify-between gap-3 text-[11px] rounded-md -mx-1.5 px-1.5 py-1 transition-colors hover:bg-white/5"
+                    >
+                      <span className="flex items-center gap-1 text-zinc-300 truncate">
+                        <span className="truncate">{suggestion.label}</span>
+                        <ArrowUpRight className="w-3 h-3 shrink-0 text-zinc-600 transition-colors group-hover:text-brand-300" />
+                      </span>
+                      {pointsNode}
+                    </Link>
+                  </li>
+                )
+              }
+              return (
+                <li
+                  key={suggestion.label}
+                  className="flex items-center justify-between gap-3 text-[11px] px-1.5 py-1"
+                >
+                  <span className="text-zinc-300 truncate">{suggestion.label}</span>
+                  {pointsNode}
+                </li>
+              )
+            })}
           </ul>
         </div>
+      ) : null}
+
+      {referral.data?.referralCode ? (
+        <ReferralShareBlock
+          referralCode={referral.data.referralCode}
+          qualifiedCount={referral.data.referrals.qualifiedCount}
+          pendingCount={referral.data.referrals.pendingCount}
+        />
       ) : null}
     </div>
   )

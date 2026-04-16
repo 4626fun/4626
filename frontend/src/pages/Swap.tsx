@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom'
 import { Droplets, Plus, RefreshCw } from 'lucide-react'
 import { getAddress, isAddress, toHex, type Address, type Hex } from 'viem'
 import { useQuery } from '@tanstack/react-query'
-import { useAccount, useBalance, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
+import { useAccount, useBalance, useConnect, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 import { useLogin, usePrivy } from '@privy-io/react-auth'
 import { useDebounceValue } from 'usehooks-ts'
 
@@ -421,6 +421,7 @@ export function Swap() {
     getAccessToken,
   } = useSafeSwapPrivyHook(privyHooksEnabled)
   const { login: privyLogin } = useSafeSwapLoginHook(privyHooksEnabled)
+  const { connectors: wagmiConnectors, connect: wagmiConnect } = useConnect()
   const privyWallets = useMemo(() => extractPrivyWalletsFromUser(privyUser), [privyUser])
   const auth = useSiweAuth()
   const {
@@ -813,18 +814,36 @@ export function Swap() {
         sessionHydrated,
         hasSession,
         executionAddress,
+        authBusy,
       }),
-    [executionAddress, hasSession, sessionHydrated],
+    [authBusy, executionAddress, hasSession, sessionHydrated],
   )
   const handleConnectGateAction = useCallback(() => {
     if (authBusy) return
-    if (connectGate.state === 'wallet-required' && typeof privyLogin === 'function' && privyHooksEnabled) {
-      void privyLogin({ loginMethods: ['wallet'] }).catch(() => {
-        // Privy surfaces its own modal-level errors; fall back to the SIWE path
-        // on the next click if the user closes the modal without connecting.
-      })
-      return
+
+    // `wallet-required`: user has a 4626 session but wagmi has no connected
+    // wallet on this device. Prefer the Privy-hosted wallet modal (same path
+    // /deploy/vault uses); if Privy is disabled for this env, fall back to
+    // wagmi's first usable connector so SIWE-only deployments still work.
+    if (connectGate.state === 'wallet-required') {
+      if (typeof privyLogin === 'function' && privyHooksEnabled) {
+        void privyLogin({ loginMethods: ['wallet'] }).catch(() => {
+          // Privy surfaces its own modal-level errors; re-entry on next click
+          // is fine if the user closes the modal without connecting.
+        })
+        return
+      }
+      const fallbackConnector =
+        wagmiConnectors.find((c) => !String(c.id ?? '').toLowerCase().includes('injected')) ??
+        wagmiConnectors[0]
+      if (fallbackConnector) {
+        wagmiConnect({ connector: fallbackConnector })
+        return
+      }
+      // No connector available — fall through to the SIWE path which will
+      // surface a clear "Connect wallet first, then sign in." error.
     }
+
     void signIn({ method: executionMode === 'canonical' ? canonicalSignInMethod : 'auto' })
   }, [
     authBusy,
@@ -834,6 +853,8 @@ export function Swap() {
     privyHooksEnabled,
     privyLogin,
     signIn,
+    wagmiConnect,
+    wagmiConnectors,
   ])
   const ensureCanonicalSession = useCallback(async (): Promise<string | null> => {
     if (executionMode !== 'canonical') return null

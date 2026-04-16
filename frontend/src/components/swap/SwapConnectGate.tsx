@@ -22,7 +22,6 @@ type SwapConnectGateProps = {
  */
 export function SwapConnectGate(props: SwapConnectGateProps) {
   const { gate } = props
-  const isHydrating = gate.state === 'hydrating'
 
   return (
     <div
@@ -41,11 +40,11 @@ export function SwapConnectGate(props: SwapConnectGateProps) {
         <p className="mx-auto max-w-[320px] text-sm text-zinc-400">{gate.message}</p>
       </div>
 
-      {isHydrating ? (
+      {gate.showSpinner ? (
         <div
           className="h-8 w-8 animate-spin rounded-full border-2 border-white/15 border-t-white/70"
           role="status"
-          aria-label="Restoring session"
+          aria-label={gate.spinnerLabel || 'Loading'}
         />
       ) : (
         <Button
@@ -53,7 +52,7 @@ export function SwapConnectGate(props: SwapConnectGateProps) {
           size="lg"
           className="mt-1 h-11 w-full max-w-[260px] rounded-xl shadow-[0_12px_34px_-14px_rgba(0,82,255,0.9)]"
           loading={props.busy}
-          disabled={props.busy}
+          disabled={props.busy || !gate.actionLabel}
           onClick={props.onPrimaryAction}
         >
           {gate.actionLabel}
@@ -61,7 +60,9 @@ export function SwapConnectGate(props: SwapConnectGateProps) {
       )}
 
       {props.errorMessage ? (
-        <div className="max-w-[320px] text-xs text-red-400/90">{props.errorMessage}</div>
+        <div className="max-w-[320px] text-xs text-red-400/90" role="alert">
+          {props.errorMessage}
+        </div>
       ) : null}
     </div>
   )

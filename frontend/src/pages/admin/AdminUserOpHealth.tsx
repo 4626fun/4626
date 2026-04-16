@@ -7,6 +7,7 @@ import { LoadingText } from '@/components/ui/LoadingState'
 
 type SignatureModeStat = { mode: string; count: number }
 type PaymasterModeStat = { mode: string; count: number }
+type SubmissionPathStat = { path: string; count: number }
 type ErrorCodeStat = { code: string; count: number }
 
 type WindowStats = {
@@ -24,6 +25,7 @@ type WindowStats = {
   avgP99Ms: number | null
   signatureModeBreakdown: SignatureModeStat[]
   paymasterModeBreakdown: PaymasterModeStat[]
+  submissionPathBreakdown: SubmissionPathStat[]
   topErrorCodes: ErrorCodeStat[]
   firstEventAt: string | null
   lastEventAt: string | null
@@ -188,7 +190,13 @@ function WindowPanel(props: { label: string; stats: WindowStats }) {
         <StatCard label="p99 latency" value={formatMs(stats.avgP99Ms)} sublabel="weighted by samples" />
       </div>
 
-      <div className="grid gap-3 lg:grid-cols-3">
+      <div className="grid gap-3 lg:grid-cols-2 xl:grid-cols-4">
+        <BreakdownList
+          title="Submission path"
+          items={stats.submissionPathBreakdown.map((s) => ({ label: s.path, count: s.count }))}
+          emptyLabel="No submission path data"
+          total={stats.totalSamples}
+        />
         <BreakdownList
           title="Paymaster mode"
           items={stats.paymasterModeBreakdown.map((s) => ({ label: s.mode, count: s.count }))}
