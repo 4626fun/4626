@@ -1012,9 +1012,17 @@ export function useAccountSetupController(params: {
         signerAddress: ownerSignerAddress ?? null,
         canonicalCswAddress,
       })
+      // In self-auth mode (CSW signing for itself), pass the Privy embedded
+      // EOA address so wallet_addSubAccount can register it as a sub-account
+      // key.  Previously this was null, which skipped the addSubAccount path
+      // and fell through to wallet_sendCalls (blocked by the popup's self-call
+      // check).  The preflight response always includes the Privy EOA address.
+      const ownerAddressForTx = connectedCanonicalWalletSelected
+        ? preflightPayload?.data?.privyEmbeddedEoaAddress ?? null
+        : ownerSignerAddress ?? null
       await sendPreparedOwnerTx(
         preparePayload.data.txRequest,
-        connectedCanonicalWalletSelected ? null : ownerSignerAddress ?? null,
+        ownerAddressForTx,
         preflightOwnerLookupAddress,
         {
           approvalRunId,
