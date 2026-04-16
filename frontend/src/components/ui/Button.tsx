@@ -24,7 +24,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         loading={loading}
         disabled={disabled || loading}
         className={className}
-        onClick={props.onClick}
+        {...props}
       >
         {children}
       </CdsButton>
