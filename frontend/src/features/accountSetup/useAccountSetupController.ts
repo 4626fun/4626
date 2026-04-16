@@ -488,12 +488,13 @@ export function useAccountSetupController(params: {
         connectWallet({
           walletList: [
             'coinbase_wallet',
+            'base_account',
             prefersWalletConnectQr ? 'wallet_connect_qr' : 'wallet_connect',
             'detected_ethereum_wallets',
             'metamask',
           ],
           walletChainType: 'ethereum-only',
-          description: 'Connect one of the current owners of your Coinbase Smart Wallet on Base to approve the 4626 owner install.',
+          description: 'Connect via Base Account for sub-account signing, or connect one of the current owners of your Coinbase Smart Wallet on Base.',
         }),
       ).catch((connectError: unknown) => {
         const message = connectError instanceof Error ? connectError.message : String(connectError ?? '')
@@ -886,6 +887,41 @@ export function useAccountSetupController(params: {
     setNotice(null)
     setOwnerDelegationFlags(null)
     try {
+      // ── Reconnect guard ──────────────────────────────────────────────
+      // The user's CSW is connected but the sub-account SDK is unavailable.
+      // This happens when the wallet was connected as 'coinbase_wallet'
+      // instead of 'base_account'.  The legacy addOwnerAddress path will
+      // hit the eGe "Self calls are not allowed" error, so short-circuit
+      // with an actionable message.
+      if (connectedCanonicalWalletSelected && !subAccount.canSetup) {
+        const walletType = subAccount.baseAccountWallet
+          ? String((subAccount.baseAccountWallet as any).walletClientType ?? 'unknown')
+          : 'none'
+        logger.warn('Sub-account SDK unavailable — wallet connected as wrong type', {
+          walletClientType: walletType,
+          hasEmbeddedWallet: Boolean(subAccount.embeddedWallet),
+          hasBaseAccountWallet: Boolean(subAccount.baseAccountWallet),
+        })
+        emitOwnerApprovalStageEvent({
+          runId: approvalRunId,
+          stage: 'preflight',
+          status: 'error',
+          attempt: 1,
+          executionMode: 'subAccount',
+          signerAddress: subAccount.embeddedWallet?.address ?? null,
+          canonicalCswAddress,
+          code: 'base_account_reconnect_required',
+          message: `Wallet is connected as "${walletType}" — reconnect via Base Account to enable sub-account signing.`,
+        })
+        setError(
+          'Your smart wallet is connected via Coinbase Wallet instead of Base Account. ' +
+          'Disconnect and reconnect using "Base Account" to enable sub-account signing. ' +
+          'The legacy approval path is blocked for self-owned wallets.',
+        )
+        setAdvancedBusy(false)
+        return
+      }
+
       // ── Sub-account path (preferred for self-auth mode) ──────────────
       // When the connected wallet IS the CSW itself, the old addOwnerAddress
       // flow is a self-call blocked by the CSW popup's eGe guard.  Instead,
@@ -1277,6 +1313,10 @@ export function useAccountSetupController(params: {
       (!connectedAddress || activeExternalOwnerWalletMatchesConnectedAddress),
   )
   const subAccountReady = connectedCanonicalWalletSelected && subAccount.canSetup
+  // True when the CSW itself is the connected wallet but the Base Account SDK
+  // isn't available — meaning the wallet was connected as 'coinbase_wallet'
+  // instead of 'base_account' and the sub-account path can't activate.
+  const needsBaseAccountReconnect = connectedCanonicalWalletSelected && !subAccount.canSetup
   const ownerApprovalReady = subAccountReady || (connectedOwnerReady && (signerClientReady || privySignerClientReady) && !needsEmbeddedWallet)
   const ownerAuthorityState = useMemo(
     () =>
@@ -1306,57 +1346,76 @@ export function useAccountSetupController(params: {
     })
   }, [me])
   const ownerChecklist = useMemo<OwnerChecklistItem[]>(
-    () => subAccountReady
+    () => needsBaseAccountReconnect
       ? [
           {
-            title: 'Smart Wallet connected',
-            description: `Wallet ${shortValue(canonicalCswAddress!)} is your CSW.`,
+            title: 'Smart Wallet detected',
+            description: `Wallet ${shortValue(canonicalCswAddress!)} is your CSW, but it was connected via Coinbase Wallet.`,
             state: 'complete' as const,
           },
           {
-            title: 'Sub-account ready',
-            description: 'A derived sub-account will handle 4626 signing without popup restrictions.',
-            state: 'complete' as const,
+            title: 'Reconnect via Base Account',
+            description: 'Disconnect your wallet and reconnect using "Base Account" to enable sub-account signing. The current connection type does not support the sub-account SDK.',
+            state: 'active' as const,
           },
           {
             title: 'Enable signing',
-            description: subAccount.isSettingUp
-              ? 'Setting up sub-account…'
-              : subAccount.subAccountAddress
-                ? `Sub-account ${shortValue(subAccount.subAccountAddress)} is active.`
-                : 'One click to create your sub-account and enable signing.',
-            state: subAccount.subAccountAddress ? 'complete' as const : 'active' as const,
+            description: 'After reconnecting via Base Account, one click will create your sub-account.',
+            state: 'blocked' as const,
           },
         ]
-      : [
-          {
-            title: 'Connect owner',
-            description: ownerSignerAddress
-              ? `Wallet ${shortValue(ownerSignerAddress)} is connected.`
-              : 'Connect one of the current CSW owners.',
-            state: ownerSignerAddress ? 'complete' : 'active',
-          },
-          {
-            title: 'Verify authority',
-            description: ownerAuthorityState.hint,
-            state: connectedOwnerReady ? 'complete' : ownerSignerAddress ? 'active' : 'blocked',
-          },
-          {
-            title: 'Approve on Base',
-            description: ownerApprovalReady
-              ? connectedCanonicalWalletSelected
-                ? '4626 can now submit one Base smart-wallet approval to add its embedded owner.'
-                : '4626 can now add its embedded owner through one Base owner transaction.'
-              : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
-                ? 'Wait for the signer client to finish hydrating, then approve.'
-                : 'Approval unlocks after a current owner is connected and verified.',
-            state: ownerApprovalReady ? 'complete' : connectedOwnerReady ? 'active' : 'blocked',
-          },
-        ],
+      : subAccountReady
+        ? [
+            {
+              title: 'Smart Wallet connected',
+              description: `Wallet ${shortValue(canonicalCswAddress!)} is your CSW.`,
+              state: 'complete' as const,
+            },
+            {
+              title: 'Sub-account ready',
+              description: 'A derived sub-account will handle 4626 signing without popup restrictions.',
+              state: 'complete' as const,
+            },
+            {
+              title: 'Enable signing',
+              description: subAccount.isSettingUp
+                ? 'Setting up sub-account…'
+                : subAccount.subAccountAddress
+                  ? `Sub-account ${shortValue(subAccount.subAccountAddress)} is active.`
+                  : 'One click to create your sub-account and enable signing.',
+              state: subAccount.subAccountAddress ? 'complete' as const : 'active' as const,
+            },
+          ]
+        : [
+            {
+              title: 'Connect owner',
+              description: ownerSignerAddress
+                ? `Wallet ${shortValue(ownerSignerAddress)} is connected.`
+                : 'Connect one of the current CSW owners.',
+              state: ownerSignerAddress ? 'complete' : 'active',
+            },
+            {
+              title: 'Verify authority',
+              description: ownerAuthorityState.hint,
+              state: connectedOwnerReady ? 'complete' : ownerSignerAddress ? 'active' : 'blocked',
+            },
+            {
+              title: 'Approve on Base',
+              description: ownerApprovalReady
+                ? connectedCanonicalWalletSelected
+                  ? '4626 can now submit one Base smart-wallet approval to add its embedded owner.'
+                  : '4626 can now add its embedded owner through one Base owner transaction.'
+                : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
+                  ? 'Wait for the signer client to finish hydrating, then approve.'
+                  : 'Approval unlocks after a current owner is connected and verified.',
+              state: ownerApprovalReady ? 'complete' : connectedOwnerReady ? 'active' : 'blocked',
+            },
+          ],
     [
       canonicalCswAddress,
       connectedCanonicalWalletSelected,
       connectedOwnerReady,
+      needsBaseAccountReconnect,
       ownerApprovalReady,
       ownerAuthorityState.hint,
       ownerSignerAddress,
@@ -1367,15 +1426,17 @@ export function useAccountSetupController(params: {
       subAccountReady,
     ],
   )
-  const ownerPrimaryCtaLabel = subAccountReady
-    ? 'Enable 4626 via sub-account'
-    : ownerApprovalReady
-      ? 'Approve 4626 on this wallet'
-      : needsEmbeddedWallet
-        ? 'Provisioning embedded wallet…'
-        : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
-          ? 'Finishing wallet session…'
-          : 'Owner approval required'
+  const ownerPrimaryCtaLabel = needsBaseAccountReconnect
+    ? 'Reconnect via Base Account'
+    : subAccountReady
+      ? 'Enable 4626 via sub-account'
+      : ownerApprovalReady
+        ? 'Approve 4626 on this wallet'
+        : needsEmbeddedWallet
+          ? 'Provisioning embedded wallet…'
+          : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
+            ? 'Finishing wallet session…'
+            : 'Owner approval required'
 
   useEffect(() => {
     if (!ownerInstallResumeState.requested) return
@@ -1419,6 +1480,7 @@ export function useAccountSetupController(params: {
     login,
     loginWithCrossAppAccount,
     me,
+    needsBaseAccountReconnect,
     needsBaseAppSetup,
     needsEmbeddedWallet,
     notice,

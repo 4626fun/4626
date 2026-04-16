@@ -73,6 +73,7 @@ export function AccountSetupWorkspaceView(props: {
     inTelegramMiniApp,
     loading,
     me,
+    needsBaseAccountReconnect,
     needsBaseAppSetup,
     needsEmbeddedWallet,
     notice,
@@ -127,11 +128,13 @@ export function AccountSetupWorkspaceView(props: {
     const resolvedOpen: 1 | 2 =
       openStep === 1 || openStep === 2 ? openStep : stepOneComplete ? 2 : 1
     const ownerWalletConnecting = busyProvider === 'owner_wallet'
-    const primarySigningLabel = connectedOwnerReady
-      ? 'Approve signing access'
-      : ownerWalletConnecting
-        ? 'Connecting wallet…'
-        : 'Connect owner wallet'
+    const primarySigningLabel = needsBaseAccountReconnect
+      ? 'Reconnect via Base Account'
+      : connectedOwnerReady
+        ? 'Approve signing access'
+        : ownerWalletConnecting
+          ? 'Connecting wallet…'
+          : 'Connect owner wallet'
     const primarySigningActionLabel = advancedBusy ? 'Working…' : primarySigningLabel
 
     const toggleStep = (n: 1 | 2) => {
@@ -365,7 +368,7 @@ export function AccountSetupWorkspaceView(props: {
                       <button
                         type="button"
                         disabled={advancedBusy || ownerWalletConnecting || needsEmbeddedWallet}
-                        onClick={() => (connectedOwnerReady ? void onEnable4626Signing() : connectOwnerWallet())}
+                        onClick={() => (needsBaseAccountReconnect ? connectOwnerWallet() : connectedOwnerReady ? void onEnable4626Signing() : connectOwnerWallet())}
                         className="inline-flex h-9 items-center rounded-lg bg-brand-primary px-4 text-sm font-semibold text-white shadow-[0_4px_16px_rgba(0,82,255,0.22)] hover:bg-brand-hover disabled:opacity-50"
                       >
                         {primarySigningActionLabel}
@@ -718,7 +721,15 @@ export function AccountSetupWorkspaceView(props: {
                   </div>
                 ) : null}
                 <div className="mt-4 flex flex-wrap items-start gap-3">
-                  {connectedOwnerReady ? (
+                  {needsBaseAccountReconnect ? (
+                    <button
+                      type="button"
+                      onClick={() => connectOwnerWallet()}
+                      className="btn-accent btn-no-icon inline-flex"
+                    >
+                      {ownerPrimaryCtaLabel}
+                    </button>
+                  ) : connectedOwnerReady ? (
                     <button
                       type="button"
                       disabled={advancedBusy || !canonicalCswAddress || !ownerApprovalReady}
