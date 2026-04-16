@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Production-only deployments: skip all preview environment builds.
-if [ "${VERCEL_ENV:-}" = "preview" ]; then
-  exit 0
-fi
-
-# Only build production branch for this project.
-# Non-main branches should not produce app preview builds.
+# Allow explicit preview branches through; skip other previews.
 case "${VERCEL_GIT_COMMIT_REF:-}" in
   main|refs/heads/main|"")
     ;;
+  feat/cds-integration)
+    # Let this feature branch build previews
+    exit 1
+    ;;
   *)
+    # Skip all other preview / non-main builds
     exit 0
     ;;
 esac
