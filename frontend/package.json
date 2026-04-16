@@ -196,7 +196,8 @@
       "@react-spring/web>react-dom": "$react-dom"
     },
     "patchedDependencies": {
-      "elliptic@6.6.1": "patches/elliptic@6.6.1.patch"
+      "elliptic@6.6.1": "patches/elliptic@6.6.1.patch",
+      "@coinbase/wallet-sdk@4.3.7": "patches/@coinbase__wallet-sdk@4.3.7.patch"
     }
   }
 }
