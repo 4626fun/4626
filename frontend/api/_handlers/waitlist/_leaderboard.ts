@@ -9,12 +9,12 @@ import {
 
 
 
-import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
+import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 import {
   getWaitlistLeaderboardData,
   type WaitlistLeaderboardPointsType,
   type WaitlistLeaderboardResponse,
-} from '../../../server/_lib/waitlistLeaderboard.js'
+} from '../../../server/_lib/onboarding/waitlistLeaderboard.js'
 
 export default async function handler(req: any, res: any) {
   setCors(req, res)

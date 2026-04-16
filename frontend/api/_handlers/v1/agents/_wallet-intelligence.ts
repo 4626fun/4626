@@ -10,12 +10,12 @@ import {
   checkRateLimit,
   rateLimitKey,
   readBoundedJsonObjectBody,
+  buildWalletIntelligence,
+  getCachedWalletIntelligence,
+  cacheWalletIntelligence,
+  type WalletIntelligenceOptions,
 } from '../../../../packages/server-core/src/index.js'
-
-
-import { buildWalletIntelligence, type WalletIntelligenceOptions } from '../../../../server/_lib/walletIntelligence.js'
-import { tryUploadImmutableJson } from '../../../../server/_lib/lensGrove.js'
-import { getCachedWalletIntelligence, cacheWalletIntelligence } from '../../../../server/_lib/walletIntelligenceCache.js'
+import { tryUploadImmutableJson } from '../../../../server/_lib/lens/lensGrove.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 const MAX_CHAIN_IDS = 5

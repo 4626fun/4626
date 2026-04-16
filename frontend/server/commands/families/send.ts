@@ -1,6 +1,6 @@
 import type { Address } from 'viem'
 
-import type { KeeprVaultRow } from '../../_lib/keeprRegistry.js'
+import type { KeeprVaultRow } from '../../_lib/keepr/keeprRegistry.js'
 import { handleSendCommand } from '../../keepr/sendCommand.js'
 import type { KeeprRole, KeeprCommandResult } from '../types.js'
 

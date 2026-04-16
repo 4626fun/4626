@@ -14,7 +14,7 @@ import {
 } from '../../../packages/server-core/src/index.js'
 
 
-import { confirmOwnerState, extractDelegationFlags } from '../../../server/_lib/canonicalCswDelegation.js'
+import { confirmOwnerState, extractDelegationFlags } from '../../../server/_lib/wallet/canonicalCswDelegation.js'
 
 type ConfirmBody = {
   cswAddress?: string

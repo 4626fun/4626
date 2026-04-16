@@ -1,1 +1,1 @@
-export { getApiContracts } from '../../../server/_lib/contracts.js'
+export { getApiContracts } from '../../../server/_lib/onchain/contracts.js'

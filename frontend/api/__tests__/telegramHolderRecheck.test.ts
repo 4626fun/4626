@@ -20,13 +20,13 @@ vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
 }))
 
-vi.mock('../../server/_lib/telegramTrading.js', () => ({
+vi.mock('../../server/_lib/messaging/telegramTrading.js', () => ({
   ensureTelegramTradingSchema: ensureTelegramTradingSchemaMock,
   listHolderRoomMembersNeedingRecheck: listHolderRoomMembersNeedingRecheckMock,
   upsertHolderRoomMember: upsertHolderRoomMemberMock,
 }))
 
-vi.mock('../../server/_lib/keeprGating.js', () => ({
+vi.mock('../../server/_lib/keepr/keeprGating.js', () => ({
   checkSharesEligibility: checkSharesEligibilityMock,
 }))
 

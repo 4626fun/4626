@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { deriveLinkedMethodsFromPrivyUser } from '../../server/_lib/accountsIdentity.js'
+import { deriveLinkedMethodsFromPrivyUser } from '../../server/_lib/identity/accountsIdentity.js'
 
 describe('deriveLinkedMethodsFromPrivyUser', () => {
   it('derives telegram linked methods from the current Privy telegram type only', () => {

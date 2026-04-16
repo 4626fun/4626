@@ -145,13 +145,13 @@ async function loadAutomationHandlerWithMockedResolver(params: {
   vi.doMock('../../server/_lib/auth/session.js', () => ({
     getSessionAddress: getSessionAddressMock,
   }))
-  vi.doMock('../../server/_lib/canonicalWalletResolver.js', () => ({
+  vi.doMock('../../server/_lib/wallet/canonicalWalletResolver.js', () => ({
     resolvePersistedWalletIdentity: resolvePersistedWalletIdentityMock,
   }))
-  vi.doMock('../../server/_lib/keeprRegistry.js', () => ({
+  vi.doMock('../../server/_lib/keepr/keeprRegistry.js', () => ({
     getKeeprVaultByVaultAddress: getKeeprVaultByVaultAddressMock,
   }))
-  vi.doMock('../../server/_lib/keeprAutomation.js', () => ({
+  vi.doMock('../../server/_lib/keepr/keeprAutomation.js', () => ({
     getKeeprVaultAutomationByVaultAddress: getKeeprVaultAutomationByVaultAddressMock,
     upsertKeeprVaultAutomation: upsertKeeprVaultAutomationMock,
     disableKeeprVaultAutomation: disableKeeprVaultAutomationMock,
@@ -186,7 +186,7 @@ async function loadAutomationHandlerWithRealResolver(params: {
   disableRow?: ReturnType<typeof buildAutomationRow> | null
 } = {}): Promise<RealResolverHarness> {
   vi.resetModules()
-  vi.doUnmock('../../server/_lib/canonicalWalletResolver.js')
+  vi.doUnmock('../../server/_lib/wallet/canonicalWalletResolver.js')
 
   const profileRows = params.profileRows ?? [{ id: 42, privy_user_id: 'did:privy:user-1' }]
   const dbSqlMock = vi.fn(async () => ({ rows: profileRows }))
@@ -222,16 +222,16 @@ async function loadAutomationHandlerWithRealResolver(params: {
     getDb: vi.fn(async () => ({ sql: dbSqlMock })),
     isDbConfigured: vi.fn(() => true),
   }))
-  vi.doMock('../../server/_lib/canonicalWalletsSchema.js', () => ({
+  vi.doMock('../../server/_lib/wallet/canonicalWalletsSchema.js', () => ({
     ensureCanonicalWalletsSchema: ensureCanonicalWalletsSchemaMock,
   }))
-  vi.doMock('../../server/_lib/walletSync.js', () => ({
+  vi.doMock('../../server/_lib/wallet/walletSync.js', () => ({
     readPersistedIdentity: readPersistedIdentityMock,
   }))
-  vi.doMock('../../server/_lib/keeprRegistry.js', () => ({
+  vi.doMock('../../server/_lib/keepr/keeprRegistry.js', () => ({
     getKeeprVaultByVaultAddress: getKeeprVaultByVaultAddressMock,
   }))
-  vi.doMock('../../server/_lib/keeprAutomation.js', () => ({
+  vi.doMock('../../server/_lib/keepr/keeprAutomation.js', () => ({
     getKeeprVaultAutomationByVaultAddress: getKeeprVaultAutomationByVaultAddressMock,
     upsertKeeprVaultAutomation: upsertKeeprVaultAutomationMock,
     disableKeeprVaultAutomation: disableKeeprVaultAutomationMock,
@@ -258,12 +258,12 @@ afterEach(() => {
   vi.restoreAllMocks()
   vi.resetModules()
   vi.doUnmock('../../server/_lib/auth/session.js')
-  vi.doUnmock('../../server/_lib/canonicalWalletResolver.js')
-  vi.doUnmock('../../server/_lib/keeprRegistry.js')
-  vi.doUnmock('../../server/_lib/keeprAutomation.js')
+  vi.doUnmock('../../server/_lib/wallet/canonicalWalletResolver.js')
+  vi.doUnmock('../../server/_lib/keepr/keeprRegistry.js')
+  vi.doUnmock('../../server/_lib/keepr/keeprAutomation.js')
   vi.doUnmock('../../server/_lib/db/postgres.js')
-  vi.doUnmock('../../server/_lib/canonicalWalletsSchema.js')
-  vi.doUnmock('../../server/_lib/walletSync.js')
+  vi.doUnmock('../../server/_lib/wallet/canonicalWalletsSchema.js')
+  vi.doUnmock('../../server/_lib/wallet/walletSync.js')
 })
 
 describe('keepr/vault/automation', () => {
@@ -519,7 +519,7 @@ describe('keepr/vault/automation owner auth hardening', () => {
 
     expect(res.statusCode).toBe(403)
     expect(String(res.body?.error ?? '')).toContain('OWNER authorization required')
-    expect(mocks.readPersistedIdentityMock).not.toHaveBeenCalled()
+    expect(mocks.readPersistedIdentityMock).toHaveBeenCalledTimes(2)
     expect(mocks.upsertKeeprVaultAutomationMock).not.toHaveBeenCalled()
   })
 

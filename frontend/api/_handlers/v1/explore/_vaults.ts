@@ -12,8 +12,8 @@ import {
   rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 
-import { ensureCreatorMetricsSchema } from '../../../../server/_lib/creatorMetricsSync.js'
-import { ensureKeeprSchema } from '../../../../server/_lib/keeprSchema.js'
+import { ensureCreatorMetricsSchema } from '../../../../server/_lib/zora/creatorMetricsSync.js'
+import { ensureKeeprSchema } from '../../../../server/_lib/keepr/keeprSchema.js'
 
 type ExploreVaultSort = 'volume' | 'marketCap' | 'fees24h' | 'new'
 type ExploreVaultTimeFilter = '1d' | '1w' | '1y'

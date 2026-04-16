@@ -24,7 +24,7 @@ vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
 }))
 
-vi.mock('../../server/_lib/waitlistSchema.js', () => ({
+vi.mock('../../server/_lib/onboarding/waitlistSchema.js', () => ({
   ensureWaitlistSchema: ensureWaitlistSchemaMock,
 }))
 
@@ -32,7 +32,7 @@ vi.mock('../../server/_lib/auth/requestPrincipal.js', () => ({
   readRequestPrincipalAddress: readRequestPrincipalAddressMock,
 }))
 
-vi.mock('../../server/_lib/canonicalWalletsSchema.js', () => ({
+vi.mock('../../server/_lib/wallet/canonicalWalletsSchema.js', () => ({
   ensureCanonicalWalletsSchema: vi.fn(async () => {}),
 }))
 

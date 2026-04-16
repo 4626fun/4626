@@ -1,6 +1,6 @@
 import { Connection, Keypair, PublicKey, SystemProgram, Transaction } from '@solana/web3.js'
 
-import { ensureCanonicalWalletsSchema } from '../canonicalWalletsSchema.js'
+import { ensureCanonicalWalletsSchema } from '../wallet/canonicalWalletsSchema.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 

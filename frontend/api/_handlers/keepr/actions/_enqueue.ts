@@ -16,9 +16,9 @@ import {
   RATE_LIMITS,
 } from '../../../../packages/server-core/src/index.js'
 
-import { getKeeprVaultAutomationByVaultAddress } from '../../../../server/_lib/keeprAutomation.js'
+import { getKeeprVaultAutomationByVaultAddress } from '../../../../server/_lib/keepr/keeprAutomation.js'
 
-import { enqueueKeeprAction } from '../../../../server/_lib/keeprRegistry.js'
+import { enqueueKeeprAction } from '../../../../server/_lib/keepr/keeprRegistry.js'
 import {
   KEEPR_TRUST_ZONE_KEY_HEADER,
   formatTrustZoneDisabledError,

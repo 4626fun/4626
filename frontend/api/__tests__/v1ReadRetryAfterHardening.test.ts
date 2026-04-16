@@ -33,11 +33,11 @@ vi.mock('../../packages/server-core/src/index.js', () => ({
   },
 }))
 
-vi.mock('../../server/_lib/creatorMetricsSync.js', () => ({
+vi.mock('../../server/_lib/zora/creatorMetricsSync.js', () => ({
   ensureCreatorMetricsSchema: mocks.ensureCreatorMetricsSchema,
 }))
 
-vi.mock('../../server/_lib/keeprSchema.js', () => ({
+vi.mock('../../server/_lib/keepr/keeprSchema.js', () => ({
   ensureKeeprSchema: mocks.ensureKeeprSchema,
 }))
 

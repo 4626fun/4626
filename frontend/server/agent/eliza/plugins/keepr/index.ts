@@ -22,7 +22,7 @@ import type {
 } from '@elizaos/core'
 
 import { executeDeterministicCommand } from '../../../core/executeDeterministicCommand.js'
-import { getKeeprVaultByGroupId } from '../../../../_lib/keeprRegistry.js'
+import { getKeeprVaultByGroupId } from '../../../../_lib/keepr/keeprRegistry.js'
 import { assertTeeAttestationOrThrow } from '../../../../_lib/agent/teeAttestationGate.js'
 import { matchesAnyCommandFamily, matchesCommandFamily } from '../../../../commands/registry.js'
 import { toAgentError, toUserFacingAgentErrorMessage } from '../../_errors.js'

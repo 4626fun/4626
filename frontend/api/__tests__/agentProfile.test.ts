@@ -124,13 +124,13 @@ vi.mock('../_handlers/v1/agents/identity/_verification.ts', async () => {
   }
 })
 
-vi.mock('../../server/_lib/reputationGraph.js', () => ({
+vi.mock('../../server/_lib/lens/reputationGraph.js', () => ({
   buildReputationGraph: (params: unknown) => mocks.buildReputationGraph(params),
 }))
 
-vi.mock('../../server/_lib/walletIntelligenceCache.js', async () => {
-  const actual = await vi.importActual<typeof import('../../server/_lib/walletIntelligenceCache.js')>(
-    '../../server/_lib/walletIntelligenceCache.js',
+vi.mock('../../server/_lib/wallet/walletIntelligenceCache.js', async () => {
+  const actual = await vi.importActual<typeof import('../../server/_lib/wallet/walletIntelligenceCache.js')>(
+    '../../server/_lib/wallet/walletIntelligenceCache.js',
   )
   return {
     ...actual,
@@ -138,7 +138,7 @@ vi.mock('../../server/_lib/walletIntelligenceCache.js', async () => {
   }
 })
 
-vi.mock('../../server/_lib/walletIntelligence.js', () => ({
+vi.mock('../../server/_lib/wallet/walletIntelligence.js', () => ({
   buildWalletIntelligence: (address: string, options?: unknown) => mocks.buildWalletIntelligence(address, options),
 }))
 

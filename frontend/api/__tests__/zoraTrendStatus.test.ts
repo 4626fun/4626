@@ -40,7 +40,7 @@ vi.mock('../../server/zora/trends.js', () => ({
   preflightTrendTicker: preflightTrendTickerMock,
 }))
 
-vi.mock('../../server/_lib/zoraTrendOpsStore.js', () => ({
+vi.mock('../../server/_lib/zora/zoraTrendOpsStore.js', () => ({
   getTrendOpByTickerHash: getTrendOpByTickerHashMock,
   listRecentTrendOps: listRecentTrendOpsMock,
 }))

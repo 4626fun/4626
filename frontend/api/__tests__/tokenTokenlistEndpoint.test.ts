@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   buildShareTokenMetadataMock: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/shareTokenMetadata.js', () => ({
+vi.mock('../../server/_lib/infra/shareTokenMetadata.js', () => ({
   buildShareTokenMetadata: mocks.buildShareTokenMetadataMock,
 }))
 

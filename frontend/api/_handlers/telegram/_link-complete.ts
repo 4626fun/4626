@@ -11,21 +11,8 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../packages/server-core/src/index.js'
-
-import { isIdentityRecoveryRequiredError } from '../../../server/_lib/identityRecovery.js'
-
-import { trackTelegramLinkEvent } from '../../../server/_lib/telegramLinkTelemetry.js'
-import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
-import { syncUserWallets } from '../../../server/_lib/walletSync.js'
-import {
-  buildAccountsMePayload,
-  ensureAccountsIdentitySchema,
-  recordProviderLink,
-  syncEmailIdentity,
-  verifyPrivyForAccounts,
-} from '../../../server/_lib/accountsIdentity.js'
-import {
+  trackTelegramLinkEvent,
+  syncUserWallets,
   claimAndConsumeTelegramLinkStartToken,
   ensureTelegramTradingSchema,
   getTelegramLinkByUserId,
@@ -33,7 +20,17 @@ import {
   readTelegramMiniAppSession,
   runTelegramMergePreflight,
   upsertTelegramUserLink,
-} from '../../../server/_lib/telegramTrading.js'
+} from '../../../packages/server-core/src/index.js'
+
+import { isIdentityRecoveryRequiredError } from '../../../server/_lib/identity/identityRecovery.js'
+import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
+import {
+  buildAccountsMePayload,
+  ensureAccountsIdentitySchema,
+  recordProviderLink,
+  syncEmailIdentity,
+  verifyPrivyForAccounts,
+} from '../../../server/_lib/identity/accountsIdentity.js'
 
 type LinkCompleteBody = {
   sessionToken?: string

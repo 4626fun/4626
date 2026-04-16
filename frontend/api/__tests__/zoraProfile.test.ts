@@ -27,7 +27,7 @@ vi.mock('../../server/zora/_shared.js', () => ({
   setCors: setCorsMock,
 }))
 
-vi.mock('../../server/_lib/zoraProfile.js', () => ({
+vi.mock('../../server/_lib/zora/zoraProfile.js', () => ({
   fetchZoraProfile: fetchZoraProfileMock,
 }))
 

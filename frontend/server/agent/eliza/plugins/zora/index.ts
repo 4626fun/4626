@@ -18,7 +18,7 @@ import type {
 
 import { matchesCommandFamily } from '../../../../commands/registry.js'
 import { executeDeterministicCommand } from '../../../core/executeDeterministicCommand.js'
-import { getKeeprVaultByGroupId } from '../../../../_lib/keeprRegistry.js'
+import { getKeeprVaultByGroupId } from '../../../../_lib/keepr/keeprRegistry.js'
 
 // ---------------------------------------------------------------------------
 // Helpers

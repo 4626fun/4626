@@ -9,8 +9,8 @@ import {
   handleOptions,
   setCors,
 } from '../../../server/zora/_shared.js'
-import { buildShareTokenMetadata } from '../../../server/_lib/shareTokenMetadata.js'
-import { tryUploadImmutableJson } from '../../../server/_lib/lensGrove.js'
+import { buildShareTokenMetadata } from '../../../server/_lib/infra/shareTokenMetadata.js'
+import { tryUploadImmutableJson } from '../../../server/_lib/lens/lensGrove.js'
 import { RATE_LIMITS, checkRateLimit, getClientIp, rateLimitKey, readRequestPrincipal } from '../../../packages/server-core/src/index.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }

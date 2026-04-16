@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 
 import { getStringQuery, handleOptions, requireServerKey, setCache, setCors } from '../../../server/zora/_shared.js'
-import { fetchZoraProfile } from '../../../server/_lib/zoraProfile.js'
+import { fetchZoraProfile } from '../../../server/_lib/zora/zoraProfile.js'
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)

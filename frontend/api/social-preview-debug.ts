@@ -7,7 +7,7 @@ import {
   matchSocialPreviewRewrite,
   normalizeSocialPreviewInput,
   resolveSocialPreviewPayloadSafe,
-} from './_handlers/_socialPreview.js'
+} from './_handlers/social/_socialPreview.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

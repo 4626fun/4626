@@ -26,7 +26,7 @@ vi.mock('../../../_lib/auth/session.js', () => ({
   buildRuntimeSessionContext: buildRuntimeSessionContextMock,
 }))
 
-vi.mock('../../../_lib/lensGrove.js', () => ({
+vi.mock('../../../_lib/lens/lensGrove.js', () => ({
   tryUploadImmutableJson: tryUploadImmutableJsonMock,
   getGroveChainId: getGroveChainIdMock,
   resolveLensUri: resolveLensUriMock,

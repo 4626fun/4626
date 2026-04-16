@@ -10,7 +10,7 @@ import {
   requireServerKey,
   setPublicCors,
 } from '../../../server/zora/_shared.js'
-import { buildShareTokenMetadata } from '../../../server/_lib/shareTokenMetadata.js'
+import { buildShareTokenMetadata } from '../../../server/_lib/infra/shareTokenMetadata.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

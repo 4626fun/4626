@@ -13,11 +13,12 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
+  classifyLinkedAccounts,
+  syncUserWallets,
+  type ClassifiedLinkedAccounts,
 } from '../../../packages/server-core/src/index.js'
-import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
-import { classifyLinkedAccounts, type ClassifiedLinkedAccounts } from '../../../server/_lib/walletMapping.js'
-import { syncUserWallets } from '../../../server/_lib/walletSync.js'
-import { isIdentityRecoveryRequiredError } from '../../../server/_lib/identityRecovery.js'
+import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
+import { isIdentityRecoveryRequiredError } from '../../../server/_lib/identity/identityRecovery.js'
 import { PrivyClient } from '@privy-io/server-auth'
 
 declare const process: { env: Record<string, string | undefined> }

@@ -7,13 +7,14 @@ import {
   RATE_LIMITS,
   checkRateLimit,
   rateLimitKey,
+  buildWalletIntelligence,
+  queryFeedbackIndex,
+  type FeedbackIndexEntry,
 } from '../../../../packages/server-core/src/index.js'
 
 import { buildAgentRegistration } from '../../../../server/_lib/agent/agentRegistration.js'
 import { getErc8004PublicOrigin } from '../../../../server/_lib/infra/origin.js'
-import { buildReputationGraph } from '../../../../server/_lib/reputationGraph.js'
-import { buildWalletIntelligence } from '../../../../server/_lib/walletIntelligence.js'
-import { queryFeedbackIndex, type FeedbackIndexEntry } from '../../../../server/_lib/walletIntelligenceCache.js'
+import { buildReputationGraph } from '../../../../server/_lib/lens/reputationGraph.js'
 import { buildExpectedVerifiedEndpoints, buildAgentVerificationData } from './identity/_verification.js'
 
 type LatestReviewArtifact = {

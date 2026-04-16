@@ -42,15 +42,15 @@ vi.mock('../../server/_lib/db/supabaseAdmin.js', () => ({
   getSupabaseAdmin: mocks.getSupabaseAdmin,
 }))
 
-vi.mock('../../server/_lib/waitlistSchema.js', () => ({
+vi.mock('../../server/_lib/onboarding/waitlistSchema.js', () => ({
   ensureWaitlistSchema: mocks.ensureWaitlistSchema,
 }))
 
-vi.mock('../../server/_lib/adminAudit.js', () => ({
+vi.mock('../../server/_lib/admin/adminAudit.js', () => ({
   logAdminAction: mocks.logAdminAction,
 }))
 
-vi.mock('../../server/_lib/creatorXmtpAgents.js', () => ({
+vi.mock('../../server/_lib/messaging/creatorXmtpAgents.js', () => ({
   enableCswAgent: vi.fn(async () => null),
   getOrCreateCreatorXmtpAgent: vi.fn(async () => null),
 }))

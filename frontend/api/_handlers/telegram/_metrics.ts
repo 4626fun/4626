@@ -6,16 +6,14 @@ import {
   setCors,
   setNoStore,
   getDb,
-} from '../../../packages/server-core/src/index.js'
-
-
-import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
-import {
   ensureTelegramTradingSchema,
   getTelegramFunnelMetrics,
   isTelegramFunnelMetricsEnabled,
   isTelegramFunnelMetricsEnabledForChat,
-} from '../../../server/_lib/telegramTrading.js'
+} from '../../../packages/server-core/src/index.js'
+
+
+import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 import { verifyTelegramLinkApiSecret } from './webhook/services/access.js'
 import { parseWindowHours, readQueryString } from './webhook/utils.js'
 

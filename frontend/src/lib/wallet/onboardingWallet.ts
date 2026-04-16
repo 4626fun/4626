@@ -346,7 +346,14 @@ async function submitOwnerTxViaWalletSendCalls(params: {
   // which spec revision it implements.  Coinbase Wallet SDK issue #1600 notes
   // the extension still follows the older chain-keyed layout; passing both is
   // harmless because the wallet ignores keys it doesn't recognise.
-  const paymasterUrlStr = String(params.paymasterUrl).trim()
+  // Normalise the paymaster domain: the keys.coinbase.com popup CSP allows
+  // api.cdp.coinbase.com but NOT api.developer.coinbase.com.  Both endpoints
+  // share the same API-key namespace, so swapping the host is safe.
+  const rawUrl = String(params.paymasterUrl).trim()
+  const paymasterUrlStr = rawUrl.replace(
+    'https://api.developer.coinbase.com/',
+    'https://api.cdp.coinbase.com/',
+  )
   const payloadWithPaymaster = supportsPaymasterCapability
     ? {
         ...payloadBase,
@@ -364,6 +371,17 @@ async function submitOwnerTxViaWalletSendCalls(params: {
       }
     : payloadBase
 
+  // ── Diagnostic logging (remove after debugging) ──
+  console.group('[4626] wallet_sendCalls diagnostic')
+  console.log('sender:', params.sender)
+  console.log('to:', params.to)
+  console.log('data:', params.data?.slice(0, 20) + '…')
+  console.log('chainIdHex:', chainIdHex)
+  console.log('paymasterUrl:', paymasterUrlStr)
+  console.log('supportsPaymaster:', supportsPaymasterCapability)
+  console.log('full payload:', JSON.stringify(payloadWithPaymaster, null, 2))
+  console.groupEnd()
+
   let callBundle: unknown
   try {
     callBundle = await params.walletRequest({
@@ -371,6 +389,13 @@ async function submitOwnerTxViaWalletSendCalls(params: {
       params: [payloadWithPaymaster],
     })
   } catch (error) {
+    // ── Diagnostic logging (remove after debugging) ──
+    console.error('[4626] wallet_sendCalls FAILED:', {
+      message: error instanceof Error ? error.message : String(error),
+      code: (error as any)?.code,
+      data: (error as any)?.data,
+      details: (error as any)?.details,
+    })
     if (!supportsPaymasterCapability) throw error
     const message = error instanceof Error ? error.message : String(error ?? '')
     const lower = message.toLowerCase()
@@ -390,11 +415,13 @@ async function submitOwnerTxViaWalletSendCalls(params: {
       code: 'send_calls_capabilities_rejected',
       message,
     })
+    console.warn('[4626] Retrying wallet_sendCalls without capabilities...')
     callBundle = await params.walletRequest({
       method: 'wallet_sendCalls',
       params: [payloadBase],
     })
   }
+  console.log('[4626] wallet_sendCalls SUCCESS:', JSON.stringify(callBundle))
   const callsId =
     typeof callBundle === 'string'
       ? callBundle

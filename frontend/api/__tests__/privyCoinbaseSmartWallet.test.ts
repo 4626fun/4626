@@ -7,7 +7,7 @@ const { getWalletByIdMock, secp256k1SignHashMock, walletRpcMock } = vi.hoisted((
   walletRpcMock: vi.fn(),
 }))
 
-vi.mock('../../server/_lib/privyWalletApi.js', () => ({
+vi.mock('../../server/_lib/wallet/privyWalletApi.js', () => ({
   getWalletById: getWalletByIdMock,
   secp256k1SignHash: secp256k1SignHashMock,
   walletRpc: walletRpcMock,
@@ -16,7 +16,7 @@ vi.mock('../../server/_lib/privyWalletApi.js', () => ({
 import {
   findCoinbaseSmartWalletOwnerIndex,
   resolvePrivyCoinbaseSmartWalletOwnerContext,
-} from '../../server/_lib/privyCoinbaseSmartWallet.ts'
+} from '../../server/_lib/wallet/privyCoinbaseSmartWallet.ts'
 
 const SMART_WALLET = '0x1111111111111111111111111111111111111111'
 const OWNER = '0x2222222222222222222222222222222222222222'

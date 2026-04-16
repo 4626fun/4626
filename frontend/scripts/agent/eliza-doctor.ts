@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { hasDedicatedMount, resolveXmtpDbDirectory } from '../../server/_lib/xmtpDbDirectory.js'
+import { hasDedicatedMount, resolveXmtpDbDirectory } from '../../server/_lib/messaging/xmtpDbDirectory.js'
 
 type StartupMode = 'multi-agent' | 'single-agent-csw' | 'single-agent-eoa' | 'standby-only' | 'unconfigured'
 

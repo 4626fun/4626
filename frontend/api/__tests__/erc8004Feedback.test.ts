@@ -27,14 +27,14 @@ vi.mock('../../server/_lib/agent/agentApiGuard.js', () => ({
   guardAgentApiRequest: guardMock,
 }))
 
-vi.mock('../../server/_lib/lensGrove.js', () => ({
+vi.mock('../../server/_lib/lens/lensGrove.js', () => ({
   LENS_MAINNET_CHAIN_ID: 232,
   uploadImmutableJson: tryUploadMock,
   tryUploadImmutableJson: tryUploadMock,
   resolveLensUri: (uri: string) => uri,
 }))
 
-vi.mock('../../server/_lib/reputationGraph.js', () => ({
+vi.mock('../../server/_lib/lens/reputationGraph.js', () => ({
   buildReputationGraph: buildReputationGraphMock,
 }))
 

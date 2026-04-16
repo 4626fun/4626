@@ -30,14 +30,15 @@ import {
   RATE_LIMITS,
   checkRateLimit,
   rateLimitKey,
+  enableCswAgent,
+  getOrCreateCreatorXmtpAgent,
 } from '../../../../packages/server-core/src/index.js'
 
 
-import { resolvePersistedWalletIdentity } from '../../../../server/_lib/canonicalWalletResolver.js'
+import { resolvePersistedWalletIdentity } from '../../../../server/_lib/wallet/canonicalWalletResolver.js'
 
-import { getOrCreateCreatorAgentWallet } from '../../../../server/_lib/creatorAgentWallets.js'
-import { enableCswAgent, getOrCreateCreatorXmtpAgent } from '../../../../server/_lib/creatorXmtpAgents.js'
-import { resolveCoinParties, isAddressLike } from '../../../../server/_lib/coinParties.js'
+import { getOrCreateCreatorAgentWallet } from '../../../../server/_lib/wallet/creatorAgentWallets.js'
+import { resolveCoinParties, isAddressLike } from '../../../../server/_lib/onchain/coinParties.js'
 
 
 declare const process: { env: Record<string, string | undefined> }
@@ -386,7 +387,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (coinAddress) {
       try {
-        const { upsertKeeprVault } = await import('../../../../server/_lib/keeprRegistry.js')
+        const { upsertKeeprVault } = await import('../../../../server/_lib/keepr/keeprRegistry.js')
 
         // Generate a placeholder group ID — the user can update this later
         // or it gets overwritten when they create an actual XMTP group

@@ -2,9 +2,9 @@ import type { Address } from 'viem'
 import { createPublicClient, encodeFunctionData, getAddress, http, isAddress, keccak256, parseAbi, toBytes } from 'viem'
 import { base } from 'viem/chains'
 
-import { getOrCreateCreatorAgentWallet } from '../_lib/creatorAgentWallets.js'
+import { getOrCreateCreatorAgentWallet } from '../_lib/wallet/creatorAgentWallets.js'
 import { logger } from '../_lib/infra/logger.js'
-import { walletRpc } from '../_lib/privyWalletApi.js'
+import { walletRpc } from '../_lib/wallet/privyWalletApi.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

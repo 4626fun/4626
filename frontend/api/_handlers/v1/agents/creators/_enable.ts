@@ -8,11 +8,12 @@ import {
   RATE_LIMITS,
   checkRateLimit,
   rateLimitKey,
+  getOrCreateCreatorXmtpAgent,
+  enableCswAgent,
 } from '../../../../../packages/server-core/src/index.js'
 
 
-import { resolveCanonicalSmartWalletAddress } from '../../../../../server/_lib/canonicalWalletResolver.js'
-import { getOrCreateCreatorXmtpAgent, enableCswAgent } from '../../../../../server/_lib/creatorXmtpAgents.js'
+import { resolveCanonicalSmartWalletAddress } from '../../../../../server/_lib/wallet/canonicalWalletResolver.js'
 
 function setPublicCors(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')

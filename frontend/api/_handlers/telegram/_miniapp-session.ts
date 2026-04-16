@@ -11,15 +11,11 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
-} from '../../../packages/server-core/src/index.js'
-
-
-import { trackTelegramLinkEvent } from '../../../server/_lib/telegramLinkTelemetry.js'
-import {
+  trackTelegramLinkEvent,
   claimTelegramMiniAppReplayNonce,
   createTelegramMiniAppSession,
   ensureTelegramTradingSchema,
-} from '../../../server/_lib/telegramTrading.js'
+} from '../../../packages/server-core/src/index.js'
 
 import { getTelegramWebhookConfig } from './webhook/config.js'
 import { resolveTelegramMiniAppVerificationStatusCode, verifyTelegramMiniAppInitData } from './webhook/miniAppAuth.js'

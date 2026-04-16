@@ -1,4 +1,4 @@
-import { getKeeprVaultByGroupId, type KeeprVaultRow } from '../../_lib/keeprRegistry.js'
+import { getKeeprVaultByGroupId, type KeeprVaultRow } from '../../_lib/keepr/keeprRegistry.js'
 import { generateLlmResponse, type SharedConversationalRuntimeContext } from '../../ai/chat.js'
 import type { AssistantRuntimeTruthInput } from '../../ai/runtimeTruth.js'
 

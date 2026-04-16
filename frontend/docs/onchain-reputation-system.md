@@ -22,13 +22,13 @@ It replaces older scoring-model docs that referenced removed modules.
 
 ## Core server modules
 
-- Reputation graph builder: `frontend/server/_lib/reputationGraph.ts`
-- Wallet intelligence builder: `frontend/server/_lib/walletIntelligence.ts`
-- Wallet intelligence cache: `frontend/server/_lib/walletIntelligenceCache.ts`
+- Reputation graph builder: `frontend/server/_lib/lens/reputationGraph.ts`
+- Wallet intelligence builder: `frontend/server/_lib/wallet/walletIntelligence.ts`
+- Wallet intelligence cache: `frontend/server/_lib/wallet/walletIntelligenceCache.ts`
 - ERC-8004 operator/review helpers:
-  - `frontend/server/_lib/erc8004.ts`
-  - `frontend/server/_lib/erc8004Review.ts`
-  - `frontend/server/_lib/erc8004OperatorStatus.ts`
+  - `frontend/server/_lib/agent/erc8004.ts`
+  - `frontend/server/_lib/agent/erc8004Review.ts`
+  - `frontend/server/_lib/agent/erc8004OperatorStatus.ts`
 
 ## Data sources and enrichment paths
 
@@ -42,7 +42,7 @@ It replaces older scoring-model docs that referenced removed modules.
     - `frontend/api/_handlers/debank/_tokenList.ts`
 - Basename resolution:
   - Client helper: `frontend/src/lib/basename-api.ts`
-  - Server resolver: `frontend/server/_lib/basenameResolver.ts`
+  - Server resolver: `frontend/server/_lib/identity/basenameResolver.ts`
 
 ## Runtime guardrails
 

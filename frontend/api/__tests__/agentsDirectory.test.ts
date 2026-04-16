@@ -45,7 +45,7 @@ describe('/api/agents directory hints', () => {
   })
 
   it('advertises the strict immutable URI strategy and public mirror URLs', async () => {
-    const { default: handler } = await import('../_handlers/_agents.ts')
+    const { default: handler } = await import('../_handlers/agents/_agents.ts')
     const req = createMockReq({ method: 'GET', url: '/api/agents' })
     const res = createMockRes()
 
@@ -67,7 +67,7 @@ describe('/api/agents directory hints', () => {
   it('keeps discoverability hints pinned to the ERC-8004 public origin even when the request host differs', async () => {
     mocks.getCanonicalOrigin.mockReturnValue('https://preview-4626.vercel.app')
 
-    const { default: handler } = await import('../_handlers/_agents.ts')
+    const { default: handler } = await import('../_handlers/agents/_agents.ts')
     const req = createMockReq({ method: 'GET', url: '/api/agents' })
     const res = createMockRes()
 
@@ -83,7 +83,7 @@ describe('/api/agents directory hints', () => {
   it('returns 429 with retry-after when directory read rate limit is exceeded', async () => {
     mocks.checkRateLimit.mockReturnValueOnce({ allowed: false, remaining: 0, resetAt: Date.now() + 60_000 })
 
-    const { default: handler } = await import('../_handlers/_agents.ts')
+    const { default: handler } = await import('../_handlers/agents/_agents.ts')
     const req = createMockReq({ method: 'GET', url: '/api/agents' })
     const res = createMockRes()
 

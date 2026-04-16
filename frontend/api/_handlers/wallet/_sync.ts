@@ -12,9 +12,9 @@ import {
   checkRateLimit,
   getClientIp,
   rateLimitKey,
+  syncUserWallets,
 } from '../../../packages/server-core/src/index.js'
-import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
-import { syncUserWallets } from '../../../server/_lib/walletSync.js'
+import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 import { PrivyClient } from '@privy-io/server-auth'
 
 declare const process: { env: Record<string, string | undefined> }

@@ -23,11 +23,11 @@ import {
   getClientIp,
   rateLimitKey,
 } from '../../../packages/server-core/src/index.js'
-import { isCswOwner } from '../../../server/_lib/cswOwner.js'
+import { isCswOwner } from '../../../server/_lib/wallet/cswOwner.js'
 
 import { getTrustedRequestOrigins, isAddressLike, normalizeOrigin } from '../../../server/_lib/infra/trust.js'
-import { ensureWaitlistSchema } from '../../../server/_lib/waitlistSchema.js'
-import { upsertProfileByWallet } from '../../../server/_lib/profileSync.js'
+import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
+import { upsertProfileByWallet } from '../../../server/_lib/identity/profileSync.js'
 type VerifyBody = { message?: string; signature?: string; nonceToken?: string; cswAddress?: string }
 
 // FIX: FINDING-02/07 — removed sessionToken from response body;

@@ -20,7 +20,7 @@ import {
   markTrendOpDeploying,
   markTrendOpFailed,
   upsertTrendPrediction,
-} from '../../../server/_lib/zoraTrendOpsStore.js'
+} from '../../../server/_lib/zora/zoraTrendOpsStore.js'
 import { preflightTrendTicker, reserveTrendTicker } from '../../../server/zora/trends.js'
 
 function isAuthorizedAdmin(req: VercelRequest): { ok: boolean; actorAddress: string | null } {

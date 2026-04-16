@@ -46,7 +46,7 @@ vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   },
 }))
 
-vi.mock('../../server/_lib/canonicalWalletResolver.js', () => ({
+vi.mock('../../server/_lib/wallet/canonicalWalletResolver.js', () => ({
   resolveCanonicalSmartWalletAddress: resolveCanonicalSmartWalletAddressMock,
 }))
 

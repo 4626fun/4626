@@ -34,11 +34,11 @@ const {
   isDbConfiguredMock: vi.fn(() => true),
 }))
 
-vi.mock('../../server/_lib/keeprRegistry.js', () => ({
+vi.mock('../../server/_lib/keepr/keeprRegistry.js', () => ({
   enqueueKeeprAction: enqueueKeeprActionMock,
 }))
 
-vi.mock('../../server/_lib/keeprAutomation.js', () => ({
+vi.mock('../../server/_lib/keepr/keeprAutomation.js', () => ({
   getKeeprVaultAutomationByVaultAddress: getKeeprVaultAutomationByVaultAddressMock,
 }))
 
@@ -52,7 +52,10 @@ describe('keepr/actions/enqueue', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
-    restoreEnv = applyEnv({ KEEPR_API_KEY: 'test-keepr-key' })
+    restoreEnv = applyEnv({
+      KEEPR_API_KEY: 'test-keepr-key',
+      KEEPR_ZONE_KEY_FINANCIAL_EXECUTION: 'zone-financial-secret',
+    })
     getKeeprVaultAutomationByVaultAddressMock.mockResolvedValue(buildAutomationRow())
     getDbMock.mockResolvedValue({ sql: vi.fn() })
     isDbConfiguredMock.mockReturnValue(true)
@@ -97,7 +100,10 @@ describe('keepr/actions/enqueue', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { authorization: 'Bearer test-keepr-key' },
+      headers: {
+        authorization: 'Bearer test-keepr-key',
+        'x-keepr-zone-key': 'zone-financial-secret',
+      },
       body: {
         vaultAddress: '0x00000000000000000000000000000000000000bb',
         groupId: 'group-1',
@@ -124,7 +130,10 @@ describe('keepr/actions/enqueue', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { authorization: 'Bearer test-keepr-key' },
+      headers: {
+        authorization: 'Bearer test-keepr-key',
+        'x-keepr-zone-key': 'zone-financial-secret',
+      },
       body: {
         vaultAddress: '0x00000000000000000000000000000000000000bb',
         groupId: 'group-1',
@@ -152,7 +161,10 @@ describe('keepr/actions/enqueue', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { authorization: 'Bearer test-keepr-key' },
+      headers: {
+        authorization: 'Bearer test-keepr-key',
+        'x-keepr-zone-key': 'zone-financial-secret',
+      },
       body: {
         vaultAddress: '0x00000000000000000000000000000000000000bb',
         groupId: 'group-1',
@@ -181,7 +193,10 @@ describe('keepr/actions/enqueue', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { authorization: 'Bearer test-keepr-key' },
+      headers: {
+        authorization: 'Bearer test-keepr-key',
+        'x-keepr-zone-key': 'zone-financial-secret',
+      },
       body: {
         vaultAddress: '0x00000000000000000000000000000000000000bb',
         groupId: 'group-1',
@@ -211,7 +226,10 @@ describe('keepr/actions/enqueue', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { authorization: 'Bearer test-keepr-key' },
+      headers: {
+        authorization: 'Bearer test-keepr-key',
+        'x-keepr-zone-key': 'zone-financial-secret',
+      },
       body: {
         vaultAddress: '0x00000000000000000000000000000000000000bb',
         groupId: 'group-1',
@@ -237,7 +255,10 @@ describe('keepr/actions/enqueue', () => {
 
     const req = createMockReq({
       method: 'POST',
-      headers: { authorization: 'Bearer test-keepr-key' },
+      headers: {
+        authorization: 'Bearer test-keepr-key',
+        'x-keepr-zone-key': 'zone-financial-secret',
+      },
       body: {
         vaultAddress: '0x00000000000000000000000000000000000000bb',
         groupId: 'group-1',
@@ -327,7 +348,10 @@ describe('keepr/actions/enqueue', () => {
     try {
       const req = createMockReq({
         method: 'POST',
-        headers: { authorization: 'Bearer test-keepr-key' },
+      headers: {
+        authorization: 'Bearer test-keepr-key',
+        'x-keepr-zone-key': 'zone-financial-secret',
+      },
         body: {
           vaultAddress: '0x00000000000000000000000000000000000000bb',
           groupId: 'group-1',
@@ -343,8 +367,14 @@ describe('keepr/actions/enqueue', () => {
 
       await handler(req, res)
 
-      expect(res.statusCode).toBe(401)
-      expect(enqueueKeeprActionMock).not.toHaveBeenCalled()
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.success).toBe(true)
+      expect(res.body?.data?.trustZone).toBe('financial_execution')
+      expect(enqueueKeeprActionMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          actionType: 'strategy.ajna.rebucket',
+        }),
+      )
     } finally {
       restoreZoneEnv()
     }
@@ -358,7 +388,10 @@ describe('keepr/actions/enqueue', () => {
     try {
       const req = createMockReq({
         method: 'POST',
-        headers: { authorization: 'Bearer test-keepr-key' },
+        headers: {
+          authorization: 'Bearer test-keepr-key',
+          'x-keepr-zone-key': 'zone-financial-secret',
+        },
         body: {
           vaultAddress: '0x00000000000000000000000000000000000000bb',
           groupId: 'group-1',

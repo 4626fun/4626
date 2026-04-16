@@ -14,7 +14,7 @@ import {
 
 
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/db/supabaseAdmin.js'
-import { ensureWaitlistSchema } from '../../../../server/_lib/waitlistSchema.js'
+import { ensureWaitlistSchema } from '../../../../server/_lib/onboarding/waitlistSchema.js'
 
 type WaitlistListItem = {
   id: number

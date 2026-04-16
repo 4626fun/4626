@@ -67,7 +67,7 @@ vi.mock('../../server/auth/_siwa.js', () => ({
   readSiwaAgentFromRequest: readSiwaAgentFromRequestMock,
 }))
 
-vi.mock('../../server/_lib/deploySessions.js', () => ({
+vi.mock('../../server/_lib/deploy/deploySessions.js', () => ({
   getDeploySessionById: getDeploySessionByIdMock,
   transitionDeploySession: transitionDeploySessionMock,
   updateDeploySession: updateDeploySessionMock,
@@ -89,12 +89,12 @@ vi.mock('../../server/_lib/infra/origin.js', () => ({
   getCanonicalOrigin: vi.fn(() => 'https://app.4626.fun'),
 }))
 
-vi.mock('../../server/_lib/privyWalletApi.js', () => ({
+vi.mock('../../server/_lib/wallet/privyWalletApi.js', () => ({
   secp256k1SignHash: vi.fn(async () => '0xsig'),
   walletRpc: vi.fn(async () => ({ data: { signature: '0xabc' } })),
 }))
 
-vi.mock('../../server/_lib/deployLaunchImage.js', () => ({
+vi.mock('../../server/_lib/deploy/deployLaunchImage.js', () => ({
   ensureLaunchImageReady: ensureLaunchImageReadyMock,
   LAUNCH_IMAGE_PROJECT_ID_KEY: 'launchImageProjectId',
   LAUNCH_IMAGE_READY_AT_KEY: 'launchImageReadyAt',
@@ -104,7 +104,7 @@ vi.mock('../../server/_lib/deployLaunchImage.js', () => ({
   LAUNCH_IMAGE_VERIFIED_BYTES_KEY: 'launchImageVerifiedBytes',
 }))
 
-vi.mock('../../server/_lib/deployPhase2Invariants.js', () => ({
+vi.mock('../../server/_lib/deploy/deployPhase2Invariants.js', () => ({
   verifyDeployPhase2Invariants: verifyDeployPhase2InvariantsMock,
 }))
 

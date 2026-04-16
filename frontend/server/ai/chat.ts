@@ -1,5 +1,5 @@
 import { logger } from '../_lib/infra/logger.js'
-import type { KeeprVaultRow } from '../_lib/keeprRegistry.js'
+import type { KeeprVaultRow } from '../_lib/keepr/keeprRegistry.js'
 import { isHandledConversationalSlashPrefix, normalizeConversationalPrompt } from '../agent/core/conversationalInput.js'
 import { toAgentError } from '../agent/eliza/_errors.js'
 import { parsePositiveNumber } from '../agent/eliza/_rateLimit.js'

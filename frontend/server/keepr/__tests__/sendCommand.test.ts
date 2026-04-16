@@ -18,7 +18,7 @@ vi.mock('../../_lib/db/postgres.js', () => ({
   getDb: () => getDbMock(),
 }))
 
-vi.mock('../../_lib/privyWalletApi.js', () => ({
+vi.mock('../../_lib/wallet/privyWalletApi.js', () => ({
   walletRpc: (...args: unknown[]) => walletRpcMock(...args),
 }))
 

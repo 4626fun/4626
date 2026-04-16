@@ -10,7 +10,7 @@ import {
   readBoundedJsonObjectBody,
 } from '../../../packages/server-core/src/index.js'
 import { setPublicCors, setCache, DEFAULT_CHAIN_ID, getNumberQuery, getStringQuery, handleOptions, requireServerKey } from '../../../server/zora/_shared.js'
-import { blobHeadOrNull, blobPutBytes, fetchBytes } from '../../../server/_lib/blob.js'
+import { blobHeadOrNull, blobPutBytes, fetchBytes } from '../../../server/_lib/infra/blob.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

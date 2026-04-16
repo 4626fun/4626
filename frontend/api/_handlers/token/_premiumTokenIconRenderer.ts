@@ -4,7 +4,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import sharp from 'sharp'
 import { generateSegmentationMask, type SegmentationModel } from './_segmentation.js'
-import { ensureFontconfig } from '../../../server/_lib/ensureFontconfig.js'
+import { ensureFontconfig } from '../../../server/_lib/infra/ensureFontconfig.js'
 
 type BlendMode = NonNullable<sharp.OverlayOptions['blend']>
 type ArtworkFitMode = 'cover' | 'contain'

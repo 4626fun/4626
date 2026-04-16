@@ -21,7 +21,7 @@ vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   },
 }))
 
-import syncCreatorMetricsHandler from '../_handlers/_sync-creator-metrics.ts'
+import syncCreatorMetricsHandler from '../_handlers/zora/_sync-creator-metrics.ts'
 import creatorAccessRequestHandler from '../_handlers/creator-access/_request.ts'
 import creKeeperAiAssessHandler from '../_handlers/cre/keeper/_aiAssess.ts'
 import creKeeperAlertHandler from '../_handlers/cre/keeper/_alert.ts'

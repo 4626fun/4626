@@ -15,7 +15,7 @@ vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDbInitError: getDbInitErrorMock,
 }))
 
-vi.mock('../../server/_lib/canonicalCswDelegation.js', () => ({
+vi.mock('../../server/_lib/wallet/canonicalCswDelegation.js', () => ({
   bootstrapCanonicalDelegationState: bootstrapCanonicalDelegationStateMock,
   extractDelegationFlags: extractDelegationFlagsMock,
 }))

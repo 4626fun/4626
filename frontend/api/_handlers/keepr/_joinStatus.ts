@@ -8,7 +8,7 @@ import {
   getDb,
 } from '../../../packages/server-core/src/index.js'
 
-import { ensureKeeprSchema } from '../../../server/_lib/keeprSchema.js'
+import { ensureKeeprSchema } from '../../../server/_lib/keepr/keeprSchema.js'
 
 
 type JoinStatusResponse =
