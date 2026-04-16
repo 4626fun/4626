@@ -69,7 +69,7 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'onchain/protocolRewardsClaimable': () => import('./onchain/_protocolRewardsClaimable.js'),
   'onchain/protocolRewardsWithdrawn': () => import('./onchain/_protocolRewardsWithdrawn.js'),
 
-  'paymaster': () => import('./_paymaster.js'),
+  'paymaster': () => import('./paymaster/_paymaster.js'),
   'social/recipient': () => import('./social/_recipient.js'),
   'social/talent': () => import('./social/_talent.js'),
   'status/protocolReport': () => import('./status/_protocolReport.js'),

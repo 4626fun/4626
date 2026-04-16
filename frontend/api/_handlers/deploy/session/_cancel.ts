@@ -22,7 +22,7 @@ import { getDeploySessionById, signDeployToken, updateDeploySession } from '../.
 import { getCanonicalOrigin } from '../../../../server/_lib/infra/origin.js'
 import { secp256k1SignHash, walletRpc } from '../../../../server/_lib/wallet/privyWalletApi.js'
 import { readDeployAuthFromRequest } from '../../../../server/_lib/auth/deployAuth.js'
-import { validateSponsoredSmartWalletCalls } from '../../_paymaster.js'
+import { validateSponsoredSmartWalletCalls } from '../../paymaster/_paymaster.js'
 import { DeploySessionAccessError, loadAuthorizedDeploySession, normalizeDeploySessionId } from './_sessionAccess.js'
 
 declare const process: { env: Record<string, string | undefined> }

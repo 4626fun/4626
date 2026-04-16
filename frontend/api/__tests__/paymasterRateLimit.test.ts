@@ -19,7 +19,7 @@ vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   },
 }))
 
-import handler from '../_handlers/_paymaster.ts'
+import handler from '../_handlers/paymaster/_paymaster.ts'
 
 describe('paymaster endpoint rate-limit hardening', () => {
   it('returns a JSON-RPC rate-limit error when limiter rejects', async () => {

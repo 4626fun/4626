@@ -27,7 +27,7 @@ import { readDeployAuthFromRequest } from '../../../../server/_lib/auth/deployAu
 import { ensureLaunchImageReady } from '../../../../server/_lib/deploy/deployLaunchImage.js'
 import { verifyDeployPhase2Invariants } from '../../../../server/_lib/deploy/deployPhase2Invariants.js'
 import { readSolanaOvaultMintCompatibilityHintsFromEnv } from '../../../../server/_lib/onchain/solanaOvaultCompatibility.js'
-import { validateSponsoredSmartWalletCalls } from '../../_paymaster.js'
+import { validateSponsoredSmartWalletCalls } from '../../paymaster/_paymaster.js'
 import { DeploySessionAccessError, loadAuthorizedDeploySession, normalizeDeploySessionId } from './_sessionAccess.js'
 
 declare const process: { env: Record<string, string | undefined> }

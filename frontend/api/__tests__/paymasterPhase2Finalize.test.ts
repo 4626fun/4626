@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { encodeFunctionData, getAddress, keccak256, toBytes, type Address } from 'viem'
 
-import paymasterHandler from '../_handlers/_paymaster.ts'
+import paymasterHandler from '../_handlers/paymaster/_paymaster.ts'
 import { applyEnv, createMockReq, createMockRes } from './helpers'
 
 const ENTRYPOINT_V06 = getAddress('0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789')
