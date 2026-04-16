@@ -368,79 +368,18 @@ const channelPlugins = [
 const plugins = [...corePlugins, ...channelPlugins]
 const allActions = plugins.flatMap((p) => p.actions ?? [])
 
-type AgentSwarmRole = 'general' | 'trader' | 'social' | 'knowledge'
-
-const DEFAULT_SWARM_CAPABILITIES: Record<AgentSwarmRole, string[]> = {
-  general: [],
-  trader: ['uniswap', 'zora', 'cre', 'keepr'],
-  social: ['lens'],
-  knowledge: ['knowledge', 'reputation', 'wallet'],
-}
-
-function normalizeSwarmRole(raw: string): AgentSwarmRole | null {
-  const normalized = raw.trim().toLowerCase()
-  if (normalized === 'general' || normalized === 'trader' || normalized === 'social' || normalized === 'knowledge') {
-    return normalized
-  }
-  return null
-}
-
-function parseSwarmRoleMap(raw: string | undefined): Record<string, AgentSwarmRole> {
-  const source = String(raw ?? '').trim()
-  if (!source) return {}
-  try {
-    const parsed = JSON.parse(source) as Record<string, unknown>
-    const out: Record<string, AgentSwarmRole> = {}
-    for (const [key, value] of Object.entries(parsed ?? {})) {
-      const role = normalizeSwarmRole(String(value ?? ''))
-      if (!role) continue
-      out[key.toLowerCase()] = role
-    }
-    return out
-  } catch {
-    logger.warn('[eliza/swarm] failed to parse ELIZA_SWARM_ROLE_MAP_JSON; using defaults')
-    return {}
-  }
-}
-
-function parseSwarmCapabilityMap(raw: string | undefined): Partial<Record<AgentSwarmRole, string[]>> {
-  const source = String(raw ?? '').trim()
-  if (!source) return {}
-  try {
-    const parsed = JSON.parse(source) as Record<string, unknown>
-    const out: Partial<Record<AgentSwarmRole, string[]>> = {}
-    for (const [key, value] of Object.entries(parsed ?? {})) {
-      const role = normalizeSwarmRole(key)
-      if (!role || !Array.isArray(value)) continue
-      out[role] = value
-        .map((entry) => String(entry ?? '').trim().toLowerCase())
-        .filter(Boolean)
-    }
-    return out
-  } catch {
-    logger.warn('[eliza/swarm] failed to parse ELIZA_SWARM_CAPABILITIES_JSON; using defaults')
-    return {}
-  }
-}
+import {
+  parseSwarmCapabilityMap,
+  parseSwarmRoleMap,
+  resolveSwarmProfile as resolveSwarmProfileFromMap,
+  type AgentSwarmRole,
+} from './elizaSwarmRoles.js'
 
 const SWARM_ROLE_MAP = parseSwarmRoleMap(process.env.ELIZA_SWARM_ROLE_MAP_JSON)
 const SWARM_CAPABILITY_OVERRIDES = parseSwarmCapabilityMap(process.env.ELIZA_SWARM_CAPABILITIES_JSON)
 
-function inferSwarmRoleFromAgentKey(agentKey: string): AgentSwarmRole {
-  const normalized = agentKey.trim().toLowerCase()
-  if (normalized.includes('trader')) return 'trader'
-  if (normalized.includes('social')) return 'social'
-  if (normalized.includes('knowledge')) return 'knowledge'
-  return 'general'
-}
-
 function resolveSwarmProfile(agentKey: string): { role: AgentSwarmRole; capabilities: string[] } {
-  const normalized = agentKey.trim().toLowerCase()
-  const mapped = SWARM_ROLE_MAP[normalized]
-  const role = mapped ?? inferSwarmRoleFromAgentKey(agentKey)
-  const overridden = SWARM_CAPABILITY_OVERRIDES[role]
-  const capabilities = (overridden ?? DEFAULT_SWARM_CAPABILITIES[role]).map((entry) => entry.toLowerCase())
-  return { role, capabilities }
+  return resolveSwarmProfileFromMap(agentKey, SWARM_ROLE_MAP, SWARM_CAPABILITY_OVERRIDES)
 }
 
 function roleCharacter(role: AgentSwarmRole): {

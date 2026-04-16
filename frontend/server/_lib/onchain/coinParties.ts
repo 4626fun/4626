@@ -1,3 +1,22 @@
+/**
+ * Resolve the CreatorCoin parties onchain.
+ *
+ * Canonical lane naming (see AGENTS.md "Canonical Lane Terminology" +
+ * docs/audits/creatorvault-business-logic-core-structure-audit.md §3):
+ *
+ * - The returned `payoutRecipient` is CreatorCoin `payoutRecipient()` — i.e.
+ *   the `creatorCoinPayoutRecipient` lane, which routes CreatorCoin EXTERNAL
+ *   earnings (router mode: via `PayoutRouter.convertAndQueue(...)` into vault
+ *   shares for holder PPS accretion).
+ * - It is NOT the `tradeFeeCollector` lane. Trade-fee routing
+ *   (ShareOFT/hook plane) flows through a separate destination on the
+ *   gauge/hook path.
+ *
+ * The literal variable name `payoutRecipient` is kept because it mirrors the
+ * onchain function name; only use `creatorCoinPayoutRecipient` in prose, UI
+ * copy, comments that discuss lane behavior, and cross-file docs.
+ */
+
 declare const process: { env: Record<string, string | undefined> }
 
 export function isAddressLike(value: string): boolean {

@@ -13,6 +13,17 @@
  *   settledAt?: string,
  *   settlementStage?: string
  * }
+ *
+ * Enforces audit §5.1 invariant 5 at the endpoint:
+ *   - `settledAt` is only accepted when `settlementStage === 'completed'`.
+ *   - `settledAt` must be a valid ISO-8601 timestamp not in the future.
+ *
+ * This guards against a bad CRE workflow version or a compromised
+ * KEEPR_API_KEY writing `settled_at` without the completion state machine
+ * passing in `/api/cre/keeper/sweep`. Invariants 1-4 (trade-fee collector,
+ * creator-coin payout recipient mode, creator treasury, completion chain)
+ * are still verified by `/sweep` and fail closed there; this endpoint is the
+ * DB writer and must not contradict that gate.
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
@@ -79,6 +90,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: false,
       error: 'Must provide graduatedAt, settledAt, or settlementStage',
     } satisfies ApiEnvelope<never>)
+  }
+
+  // Audit §5.1 invariant 5: settledAt is only written when the completion
+  // state machine in /api/cre/keeper/sweep reports stage='completed'. Reject
+  // any request that tries to write settledAt paired with a different stage,
+  // or settledAt in the future, or a malformed timestamp.
+  if (settledAt) {
+    if (normalizedStage.toLowerCase() !== 'completed') {
+      return res.status(400).json({
+        success: false,
+        error: 'settledAt may only be written when settlementStage="completed"',
+      } satisfies ApiEnvelope<never>)
+    }
+    const parsedSettledAt = Date.parse(settledAt)
+    if (!Number.isFinite(parsedSettledAt)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Invalid settledAt — expected ISO-8601 timestamp',
+      } satisfies ApiEnvelope<never>)
+    }
+    // Allow a small amount of clock skew (5 minutes) so callers that generated
+    // the timestamp slightly ahead of the server clock aren't rejected.
+    const maxAllowedMs = Date.now() + 5 * 60 * 1000
+    if (parsedSettledAt > maxAllowedMs) {
+      return res.status(400).json({
+        success: false,
+        error: 'settledAt cannot be in the future',
+      } satisfies ApiEnvelope<never>)
+    }
   }
 
   if (!isDbConfigured()) {
