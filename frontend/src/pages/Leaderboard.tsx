@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { Table, TableHeader, TableBody, TableRow, TableCell } from '@coinbase/cds-web/tables'
 import { Alert } from '@/components/ui/Alert'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { apiFetch } from '@/lib/api/apiBase'
@@ -150,73 +151,96 @@ export function Leaderboard() {
         ) : null}
 
         <div className="mt-6 rounded-xl border border-white/8 bg-vault-card/40 overflow-hidden">
-          <div className="grid grid-cols-12 gap-2 px-4 py-3 border-b border-white/8 text-[10px] font-medium text-zinc-700">
-            <div className="col-span-2">Rank</div>
-            <div className="col-span-6">User</div>
-            <div className="col-span-4 text-right">Points</div>
-          </div>
-          {data?.leaderboard?.length ? (
-            <div>
-              {data.leaderboard.map((r) => {
-                const isMe = Boolean(data?.me && data.me.signupId === r.signupId)
-                return (
-                <div
-                  key={`${r.rank}-${r.signupId}`}
-                  className={[
-                    'grid grid-cols-12 gap-2 px-4 py-3 border-b border-white/5',
-                    isMe ? 'bg-brand-primary/6' : null,
-                    r.borderTier >= 1 ? 'bg-brand-primary/[0.035] border-l-2 border-l-[#0052FF]/30' : null,
-                  ]
-                    .filter(Boolean)
-                    .join(' ')}
-                >
-                  <div className="col-span-2 text-sm text-zinc-300">#{r.rank}</div>
-                  <div className="col-span-6 text-sm text-zinc-200">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <div className="font-mono truncate">{r.display}</div>
-                      {isMe ? (
-                        <div className="shrink-0 inline-flex items-center rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
-                          You
+          <Table variant="ruled" compact accessibilityLabel="Leaderboard rankings">
+            <TableHeader>
+              <TableRow disableHoverIndicator>
+                <TableCell title="Rank" width="20%" />
+                <TableCell title="User" width="50%" />
+                <TableCell title="Points" width="30%" justifyContent="flex-end" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {data?.leaderboard?.length ? (
+                data.leaderboard.map((r) => {
+                  const isMe = Boolean(data?.me && data.me.signupId === r.signupId)
+                  return (
+                    <TableRow
+                      key={`${r.rank}-${r.signupId}`}
+                      className={[
+                        isMe ? 'bg-brand-primary/6' : '',
+                        r.borderTier >= 1 ? 'bg-brand-primary/[0.035] border-l-2 border-l-[#0052FF]/30' : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                    >
+                      <TableCell>
+                        <span className="text-sm text-zinc-300">#{r.rank}</span>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm text-zinc-200">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="font-mono truncate">{r.display}</div>
+                            {isMe ? (
+                              <div className="shrink-0 inline-flex items-center rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
+                                You
+                              </div>
+                            ) : null}
+                            {r.borderTier >= 1 ? (
+                              <div className="shrink-0 inline-flex items-center rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
+                                Tier {r.borderTier}
+                              </div>
+                            ) : null}
+                          </div>
+                          {r.referralCode ? <div className="text-[11px] text-zinc-700">code: {r.referralCode}</div> : null}
                         </div>
-                      ) : null}
-                      {r.borderTier >= 1 ? (
-                        <div className="shrink-0 inline-flex items-center rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
-                          Tier {r.borderTier}
-                        </div>
-                      ) : null}
-                    </div>
-                    {r.referralCode ? <div className="text-[11px] text-zinc-700">code: {r.referralCode}</div> : null}
-                  </div>
-                  <div className="col-span-4 text-right text-sm text-zinc-200 tabular-nums">
-                    <span title={formatPointsTooltip(r)}>{formatWholeNumber(r.pointsTotal)}</span>
-                  </div>
-                </div>
-                )
-              })}
-            </div>
-          ) : (
-            <div className="px-4 py-6 text-sm text-zinc-600">No ranked creators yet.</div>
-          )}
+                      </TableCell>
+                      <TableCell justifyContent="flex-end">
+                        <span className="text-sm text-zinc-200 tabular-nums" title={formatPointsTooltip(r)}>
+                          {formatWholeNumber(r.pointsTotal)}
+                        </span>
+                      </TableCell>
+                    </TableRow>
+                  )
+                })
+              ) : (
+                <TableRow disableHoverIndicator>
+                  <TableCell colSpan={3}>
+                    <span className="text-sm text-zinc-600">No ranked creators yet.</span>
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
         </div>
 
         {data?.me && !meInTop ? (
           <div className="mt-4 rounded-xl border border-brand-primary/20 bg-brand-primary/5 overflow-hidden">
             <div className="px-4 py-2.5 border-b border-white/8 text-[11px] font-medium text-brand-300">Your rank</div>
-            <div className="grid grid-cols-12 gap-2 px-4 py-3">
-              <div className="col-span-2 text-sm text-zinc-300">#{data.me.rank}</div>
-              <div className="col-span-6 text-sm text-zinc-200">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="font-mono truncate">{data.me.display}</div>
-                  <div className="shrink-0 inline-flex items-center rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
-                    You
-                  </div>
-                </div>
-                {data.me.referralCode ? <div className="text-[11px] text-zinc-700">code: {data.me.referralCode}</div> : null}
-              </div>
-              <div className="col-span-4 text-right text-sm text-zinc-200 tabular-nums">
-                <span title={formatPointsTooltip(data.me)}>{formatWholeNumber(data.me.pointsTotal)}</span>
-              </div>
-            </div>
+            <Table variant="ruled" compact accessibilityLabel="Your ranking">
+              <TableBody>
+                <TableRow disableHoverIndicator>
+                  <TableCell width="20%">
+                    <span className="text-sm text-zinc-300">#{data.me.rank}</span>
+                  </TableCell>
+                  <TableCell width="50%">
+                    <div className="text-sm text-zinc-200">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="font-mono truncate">{data.me.display}</div>
+                        <div className="shrink-0 inline-flex items-center rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
+                          You
+                        </div>
+                      </div>
+                      {data.me.referralCode ? <div className="text-[11px] text-zinc-700">code: {data.me.referralCode}</div> : null}
+                    </div>
+                  </TableCell>
+                  <TableCell width="30%" justifyContent="flex-end">
+                    <span className="text-sm text-zinc-200 tabular-nums" title={formatPointsTooltip(data.me)}>
+                      {formatWholeNumber(data.me.pointsTotal)}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              </TableBody>
+            </Table>
           </div>
         ) : null}
       </div>
