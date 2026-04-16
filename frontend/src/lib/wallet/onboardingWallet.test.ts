@@ -646,7 +646,7 @@ describe('sendPreparedOwnerTx', () => {
       // Capabilities should contain BOTH flat and chain-keyed paymaster formats
       // AND the domain should be normalised to api.cdp.coinbase.com
       const normalised = 'https://api.cdp.coinbase.com/rpc/v1/base/TESTKEY'
-      const sendCallsPayload = request.mock.calls[0][0].params[0]
+      const sendCallsPayload = request.mock.calls[0]![0]!.params[0]
       expect(sendCallsPayload.capabilities).toBeDefined()
       expect(sendCallsPayload.capabilities.paymasterUrl).toBe(normalised)
       expect(sendCallsPayload.capabilities.paymasterService).toBeDefined()

@@ -372,17 +372,6 @@ async function submitOwnerTxViaWalletSendCalls(params: {
       }
     : payloadBase
 
-  // ── Diagnostic logging (remove after debugging) ──
-  console.group('[4626] wallet_sendCalls diagnostic')
-  console.log('sender:', params.sender)
-  console.log('to:', params.to)
-  console.log('data:', params.data?.slice(0, 20) + '…')
-  console.log('chainIdHex:', chainIdHex)
-  console.log('paymasterUrl:', paymasterUrlStr)
-  console.log('supportsPaymaster:', supportsPaymasterCapability)
-  console.log('full payload:', JSON.stringify(payloadWithPaymaster, null, 2))
-  console.groupEnd()
-
   let callBundle: unknown
   try {
     callBundle = await params.walletRequest({
@@ -390,13 +379,6 @@ async function submitOwnerTxViaWalletSendCalls(params: {
       params: [payloadWithPaymaster],
     })
   } catch (error) {
-    // ── Diagnostic logging (remove after debugging) ──
-    console.error('[4626] wallet_sendCalls FAILED:', {
-      message: error instanceof Error ? error.message : String(error),
-      code: (error as any)?.code,
-      data: (error as any)?.data,
-      details: (error as any)?.details,
-    })
     if (!supportsPaymasterCapability) throw error
     const message = error instanceof Error ? error.message : String(error ?? '')
     const lower = message.toLowerCase()
@@ -416,13 +398,11 @@ async function submitOwnerTxViaWalletSendCalls(params: {
       code: 'send_calls_capabilities_rejected',
       message,
     })
-    console.warn('[4626] Retrying wallet_sendCalls without capabilities...')
     callBundle = await params.walletRequest({
       method: 'wallet_sendCalls',
       params: [payloadBase],
     })
   }
-  console.log('[4626] wallet_sendCalls SUCCESS:', JSON.stringify(callBundle))
   const callsId =
     typeof callBundle === 'string'
       ? callBundle
@@ -503,11 +483,6 @@ async function submitOwnerViaAddSubAccount(params: {
     canonicalCswAddress: params.canonicalCswAddress ?? null,
   })
 
-  console.group('[4626] wallet_addSubAccount diagnostic')
-  console.log('ownerAddress (Privy EOA):', params.ownerAddress)
-  console.log('canonicalCswAddress:', params.canonicalCswAddress)
-  console.groupEnd()
-
   let result: unknown
   try {
     result = await params.walletRequest({
@@ -528,12 +503,6 @@ async function submitOwnerViaAddSubAccount(params: {
       ],
     })
   } catch (error) {
-    console.error('[4626] wallet_addSubAccount FAILED:', {
-      message: error instanceof Error ? error.message : String(error),
-      code: (error as any)?.code,
-      data: (error as any)?.data,
-      details: (error as any)?.details,
-    })
     emitOwnerApprovalStage(params.onStageEvent, {
       runId: params.approvalRunId,
       stage: 'add_sub_account',
@@ -546,8 +515,6 @@ async function submitOwnerViaAddSubAccount(params: {
     })
     throw error
   }
-
-  console.log('[4626] wallet_addSubAccount SUCCESS:', JSON.stringify(result))
 
   const resultAddress =
     result && typeof result === 'object' && typeof (result as { address?: unknown }).address === 'string'
@@ -833,7 +800,7 @@ export async function sendPreparedOwnerTx(params: {
             }
           }
         } else if (walletRequest) {
-          // No Privy EOA available — fall back to sendCalls directly
+          // No Privy EOA available — fall back to sendCalls with UserOp recovery
           const sendCallsEnv =
             (import.meta.env.VITE_CDP_SENDCALLS_PAYMASTER_URL as string | undefined)?.trim() || ''
           const rawCdpPaymasterUrl =
@@ -845,19 +812,39 @@ export async function sendPreparedOwnerTx(params: {
             : isExternalNonProxy(rawCdpPaymasterUrl)
               ? rawCdpPaymasterUrl
               : null
-          txHash = await submitOwnerTxViaWalletSendCalls({
-            walletRequest,
-            chainId: txRequest.chainId,
-            sender: canonicalSmartWalletAddress as `0x${string}`,
-            to: txRequest.to,
-            data: txRequest.data,
-            paymasterUrl: resolvedDirectUrl,
-            approvalRunId: effectiveApprovalRunId,
-            executionMode,
-            signerAddress,
-            canonicalCswAddress: canonicalSmartWalletAddress,
-            onStageEvent,
-          })
+          try {
+            txHash = await submitOwnerTxViaWalletSendCalls({
+              walletRequest,
+              chainId: txRequest.chainId,
+              sender: canonicalSmartWalletAddress as `0x${string}`,
+              to: txRequest.to,
+              data: txRequest.data,
+              paymasterUrl: resolvedDirectUrl,
+              approvalRunId: effectiveApprovalRunId,
+              executionMode,
+              signerAddress,
+              canonicalCswAddress: canonicalSmartWalletAddress,
+              onStageEvent,
+            })
+          } catch (sendCallsError) {
+            if (isUserRejectedWalletAction(sendCallsError)) throw sendCallsError
+            // Last resort: sponsored UserOp
+            try {
+              txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
+            } catch (userOpError) {
+              emitOwnerApprovalStage(onStageEvent, {
+                runId: effectiveApprovalRunId,
+                stage: 'userop_typed',
+                status: 'error',
+                executionMode,
+                signerAddress,
+                canonicalCswAddress: canonicalSmartWalletAddress,
+                code: classifyOwnerApprovalError(userOpError).code,
+                message: userOpError instanceof Error ? userOpError.message : String(userOpError ?? ''),
+              })
+              throw sendCallsError
+            }
+          }
         } else {
           // No walletRequest available — try UserOp path directly
           txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
