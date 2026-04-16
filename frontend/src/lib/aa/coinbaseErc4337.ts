@@ -1514,48 +1514,56 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   // nonceKeyManager uses Date.now() as the key. CoinbaseSmartWallet.validateUserOp
   // requires the nonce key to equal the ownerIndex from the SignatureWrapper.
   // We read the nonce directly from the EntryPoint to ensure the key matches.
-  let correctNonce: bigint | undefined
-  try {
-    const entryPointNonce = await withTimeout(
-      (publicClient as any).readContract({
-        address: entryPoint06Address,
-        abi: [{
-          type: 'function',
-          name: 'getNonce',
-          inputs: [
-            { name: 'sender', type: 'address' },
-            { name: 'key', type: 'uint192' },
-          ],
-          outputs: [{ type: 'uint256' }],
-          stateMutability: 'view',
-        }],
-        functionName: 'getNonce',
-        args: [smartWallet, BigInt(ownerIndex)],
-      }),
-      RPC_READ_TIMEOUT_MS,
-      'EntryPoint getNonce',
-    ) as bigint
-    correctNonce = entryPointNonce
-    if (AA_DEBUG) {
-      logger.debug('[ERC-4337] EntryPoint nonce for ownerIndex', {
-        smartWallet,
-        ownerIndex,
-        nonce: String(entryPointNonce),
-        nonceKey: String(BigInt(ownerIndex)),
-      })
+  //
+  // This is a function rather than a one-shot read so that transient retries
+  // can re-read the nonce. If a previous attempt was received by the bundler
+  // but the client timed out, the sequence may have advanced.
+  const ENTRYPOINT_GET_NONCE_ABI = [{
+    type: 'function' as const,
+    name: 'getNonce' as const,
+    inputs: [
+      { name: 'sender', type: 'address' as const },
+      { name: 'key', type: 'uint192' as const },
+    ],
+    outputs: [{ type: 'uint256' as const }],
+    stateMutability: 'view' as const,
+  }]
+  const readOwnerIndexNonce = async (): Promise<bigint | undefined> => {
+    try {
+      const entryPointNonce = await withTimeout(
+        (publicClient as any).readContract({
+          address: entryPoint06Address,
+          abi: ENTRYPOINT_GET_NONCE_ABI,
+          functionName: 'getNonce',
+          args: [smartWallet, BigInt(ownerIndex)],
+        }),
+        RPC_READ_TIMEOUT_MS,
+        'EntryPoint getNonce',
+      ) as bigint
+      if (AA_DEBUG) {
+        logger.debug('[ERC-4337] EntryPoint nonce for ownerIndex', {
+          smartWallet,
+          ownerIndex,
+          nonce: String(entryPointNonce),
+          nonceKey: String(BigInt(ownerIndex)),
+        })
+      }
+      return entryPointNonce
+    } catch (nonceError: unknown) {
+      if (AA_DEBUG) {
+        const msg = nonceError instanceof Error ? nonceError.message : String(nonceError ?? '')
+        logger.warn('[ERC-4337] Failed to read EntryPoint nonce; falling back to account default', {
+          smartWallet,
+          ownerIndex,
+          error: msg,
+        })
+      }
+      // If we can't read the nonce, return undefined so the default path runs.
+      // This will likely AA23 but is no worse than the pre-fix behavior.
+      return undefined
     }
-  } catch (nonceError: unknown) {
-    if (AA_DEBUG) {
-      const msg = nonceError instanceof Error ? nonceError.message : String(nonceError ?? '')
-      logger.warn('[ERC-4337] Failed to read EntryPoint nonce; falling back to account default', {
-        smartWallet,
-        ownerIndex,
-        error: msg,
-      })
-    }
-    // If we can't read the nonce, leave it undefined so the default path runs.
-    // This will likely AA23 but is no worse than the current behavior.
   }
+  let correctNonce = await readOwnerIndexNonce()
 
   let userOpHash: Hex | null = null
   let lastError: unknown = null
@@ -1639,6 +1647,9 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
               })
             }
             await delay(retryInMs)
+            // Re-read nonce before retry: if the timed-out attempt was actually
+            // received by the bundler and mined, the sequence will have advanced.
+            correctNonce = await readOwnerIndexNonce() ?? correctNonce
           }
         }
         if (!sent) throw lastError ?? new Error('UserOp submission failed')
@@ -1710,6 +1721,9 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
         isGasRetry: shouldRetryVerificationGas(lastError),
       })
     }
+    // Refresh nonce before paymaster-fallback retry in case the sponsored
+    // attempt was partially processed and the sequence advanced.
+    correctNonce = await readOwnerIndexNonce() ?? correctNonce
     await attemptSend(false)
   }
 
