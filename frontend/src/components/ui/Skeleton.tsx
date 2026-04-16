@@ -7,7 +7,7 @@ interface SkeletonProps {
 
 export function Skeleton({ className }: SkeletonProps) {
   return (
-    <span className={cn('block', className)}>
+    <span className={cn('block overflow-hidden', className)}>
       <Fallback width="100%" height="100%" shape="rectangle" />
     </span>
   )
