@@ -808,23 +808,25 @@ export async function sendPreparedOwnerTx(params: {
         return result.transactionHash
       }
       if (selfAuthenticatedCanonicalSession) {
-        // ── Self-authenticated session: prepareCalls FIRST ──
+        // ── Self-authenticated session: eth_sendTransaction FIRST ──
         // In self-auth mode (CSW signs for itself), the popup's eGe function
         // blocks wallet_sendCalls where target === sender ("Self calls are not
         // allowed").  addOwnerAddress is inherently a self-call.
         //
         // The viem-based UserOp path (runSponsoredCanonicalUserOp) also fails
         // because the CSW's primary signer is a passkey (WebAuthn at owner[0]).
-        // The UserOp function can't discover or match the passkey owner index,
-        // and it can't produce a WebAuthn signature from code.
+        // The UserOp function can't discover or match the passkey owner index.
         //
-        // The correct path is wallet_prepareCalls → personal_sign →
-        // wallet_sendPreparedCalls.  prepareCalls and sendPreparedCalls both
-        // route to Coinbase RPC (SCWSigner default case), bypassing the popup's
-        // eGe check.  personal_sign goes to the popup for passkey signing but
-        // has NO self-call guard.
+        // wallet_prepareCalls → wallet_sendPreparedCalls fails because
+        // wallet_sendPreparedCalls expects a raw signer signature (secp256k1
+        // address or webauthn credential), but we can't produce the passkey's
+        // WebAuthn credential data from code.
         //
-        // Fallback chain: prepareCalls → UserOp(typed) → UserOp(non-typed)
+        // eth_sendTransaction goes through the popup but uses the standard
+        // transaction approval UI, NOT the wallet_sendCalls batch handler.
+        // The eGe self-call check ONLY applies to wallet_sendCalls.
+        //
+        // Fallback chain: eth_sendTransaction → UserOp(typed) → UserOp(non-typed)
         if (!walletClient.account) {
           throw new Error('Reconnect the canonical Coinbase Smart Wallet and retry.')
         }
@@ -833,46 +835,55 @@ export async function sendPreparedOwnerTx(params: {
             ? async (args: { method: string; params?: unknown[] }) => await walletClient.request!(args as any)
             : null
 
-        // Resolve paymaster URL for all paths
-        const sendCallsEnv =
-          (import.meta.env.VITE_CDP_SENDCALLS_PAYMASTER_URL as string | undefined)?.trim() || ''
-        const rawCdpPaymasterUrl =
-          (import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined)?.trim() || ''
-        const isExternalNonProxy = (url: string) =>
-          url.startsWith('https://') && !url.includes('/api/paymaster')
-        const resolvedDirectUrl = isExternalNonProxy(sendCallsEnv)
-          ? sendCallsEnv
-          : isExternalNonProxy(rawCdpPaymasterUrl)
-            ? rawCdpPaymasterUrl
-            : null
-
         if (walletRequest) {
           try {
-            // ── Primary path: wallet_prepareCalls → personal_sign → wallet_sendPreparedCalls ──
-            txHash = await submitOwnerViaPreparedCalls({
-              walletRequest,
-              chainId: txRequest.chainId,
-              sender: canonicalSmartWalletAddress as `0x${string}`,
-              to: txRequest.to,
-              data: txRequest.data,
-              paymasterUrl: resolvedDirectUrl,
-              approvalRunId: effectiveApprovalRunId,
+            // ── Primary path: eth_sendTransaction via popup ──
+            // eth_sendTransaction is routed to the popup like wallet_sendCalls,
+            // but uses the standard transaction approval UI which does NOT have
+            // the eGe self-call guard.  The CSW popup internally handles the
+            // passkey signing for eth_sendTransaction.
+            emitOwnerApprovalStage(onStageEvent, {
+              runId: effectiveApprovalRunId,
+              stage: 'send_calls',
+              status: 'start',
               executionMode,
               signerAddress,
               canonicalCswAddress: canonicalSmartWalletAddress,
-              onStageEvent,
             })
-          } catch (prepareCallsError) {
-            if (isUserRejectedWalletAction(prepareCallsError)) throw prepareCallsError
+            const sendTxResult = await walletRequest({
+              method: 'eth_sendTransaction',
+              params: [{
+                from: canonicalSmartWalletAddress,
+                to: txRequest.to,
+                data: txRequest.data,
+                value: '0x0',
+              }],
+            })
+            if (typeof sendTxResult === 'string' && isTxHash(sendTxResult)) {
+              txHash = sendTxResult
+              emitOwnerApprovalStage(onStageEvent, {
+                runId: effectiveApprovalRunId,
+                stage: 'send_calls',
+                status: 'success',
+                executionMode,
+                signerAddress,
+                canonicalCswAddress: canonicalSmartWalletAddress,
+                txHash,
+              })
+            } else {
+              throw new Error('eth_sendTransaction did not return a transaction hash.')
+            }
+          } catch (sendTxError) {
+            if (isUserRejectedWalletAction(sendTxError)) throw sendTxError
             emitOwnerApprovalStage(onStageEvent, {
               runId: effectiveApprovalRunId,
-              stage: 'prepare_calls',
+              stage: 'send_calls',
               status: 'error',
               executionMode,
               signerAddress,
               canonicalCswAddress: canonicalSmartWalletAddress,
-              code: classifyOwnerApprovalError(prepareCallsError).code,
-              message: prepareCallsError instanceof Error ? prepareCallsError.message : String(prepareCallsError ?? ''),
+              code: classifyOwnerApprovalError(sendTxError).code,
+              message: sendTxError instanceof Error ? sendTxError.message : String(sendTxError ?? ''),
             })
 
             // ── Fallback: sponsored UserOp with EIP-712 typed signing ──
@@ -896,8 +907,8 @@ export async function sendPreparedOwnerTx(params: {
                 txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true, attempt: 2 })
               } catch (nonTypedUserOpError) {
                 if (isUserRejectedWalletAction(nonTypedUserOpError)) throw nonTypedUserOpError
-                // All paths exhausted — throw the prepareCalls error (most informative)
-                throw prepareCallsError
+                // All paths exhausted — throw the sendTx error (most informative)
+                throw sendTxError
               }
             }
           }
