@@ -77,16 +77,10 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('uses wallet_sendCalls first when canonical mode is self-authenticated by CSW session', async () => {
+  it('uses sponsored UserOp first when canonical mode is self-authenticated by CSW session', async () => {
     const sendTransaction = vi.fn(async () => TX_HASH)
     const ensurePaymasterSession = vi.fn(async () => true)
-    const request = vi
-      .fn()
-      .mockResolvedValueOnce('0xcall-bundle-id')
-      .mockResolvedValueOnce({
-        status: 200,
-        receipts: [{ transactionHash: TX_HASH }],
-      })
+    const request = vi.fn()
 
     const result = await sendPreparedOwnerTx({
       txRequest: TX_REQUEST,
@@ -104,9 +98,9 @@ describe('sendPreparedOwnerTx', () => {
       ensurePaymasterSession,
     })
 
-    expect(ensurePaymasterSession).not.toHaveBeenCalled()
-    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
-    expect(request).toHaveBeenCalled()
+    expect(ensurePaymasterSession).toHaveBeenCalledTimes(1)
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
+    expect(request).not.toHaveBeenCalled()
     expect(sendTransaction).not.toHaveBeenCalled()
     expect(result.txHash).toBe(TX_HASH)
   })
@@ -114,13 +108,7 @@ describe('sendPreparedOwnerTx', () => {
   it('passes embedded-owner lookup address for canonical self-auth owner-index resolution', async () => {
     const ensurePaymasterSession = vi.fn(async () => true)
 
-    const request = vi
-      .fn()
-      .mockResolvedValueOnce('0xcall-bundle-id')
-      .mockResolvedValueOnce({
-        status: 200,
-        receipts: [{ transactionHash: TX_HASH }],
-      })
+    const request = vi.fn()
     const result = await sendPreparedOwnerTx({
       txRequest: TX_REQUEST,
       walletClient: {
@@ -139,21 +127,20 @@ describe('sendPreparedOwnerTx', () => {
       ensurePaymasterSession,
     })
 
-    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
-    expect(request).toHaveBeenCalledWith(
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        method: 'wallet_sendCalls',
+        ownerIndexLookupAddress: OWNER_EOA,
       }),
     )
+    expect(request).not.toHaveBeenCalled()
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('falls back to sponsored user-op when wallet_sendCalls is unsupported in canonical self-approval', async () => {
+  it('succeeds via sponsored user-op directly in canonical self-approval without needing wallet_sendCalls', async () => {
     const sendTransaction = vi.fn(async () => TX_HASH)
     const ensurePaymasterSession = vi.fn(async () => true)
-    const request = vi.fn(async () => {
-      throw new Error('Method not found')
-    })
+    const request = vi.fn()
     sendCoinbaseSmartWalletUserOperationMock.mockResolvedValue({ transactionHash: TX_HASH })
 
     const result = await sendPreparedOwnerTx({
@@ -173,7 +160,7 @@ describe('sendPreparedOwnerTx', () => {
     })
     expect(ensurePaymasterSession).toHaveBeenCalledTimes(1)
     expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
-    expect(request).toHaveBeenCalled()
+    expect(request).not.toHaveBeenCalled()
     expect(sendTransaction).not.toHaveBeenCalled()
     expect(result.txHash).toBe(TX_HASH)
   })
@@ -417,9 +404,7 @@ describe('sendPreparedOwnerTx', () => {
 
   it('retries sponsored canonical user-op without typed-data signing when typed-data signing times out', async () => {
     const ensurePaymasterSession = vi.fn(async () => true)
-    const request = vi.fn(async () => {
-      throw new Error('Method not found')
-    })
+    const request = vi.fn()
     sendCoinbaseSmartWalletUserOperationMock.mockRejectedValueOnce(
       new Error('UserOperation failed: signTypedData (CSW EIP-712) timed out after 30s'),
     )
@@ -453,15 +438,13 @@ describe('sendPreparedOwnerTx', () => {
         useTypedDataSigning: false,
       }),
     )
-    expect(request).toHaveBeenCalled()
+    expect(request).not.toHaveBeenCalled()
     expect(result.txHash).toBe(TX_HASH)
   })
 
   it('retries sponsored canonical user-op without typed-data signing when typed lane fails with AA23', async () => {
     const ensurePaymasterSession = vi.fn(async () => true)
-    const request = vi.fn(async () => {
-      throw new Error('Method not found')
-    })
+    const request = vi.fn()
     sendCoinbaseSmartWalletUserOperationMock.mockRejectedValueOnce(new Error('AA23 reverted (or OOG)'))
 
     const result = await sendPreparedOwnerTx({
@@ -497,7 +480,7 @@ describe('sendPreparedOwnerTx', () => {
         ownerIndexLookupAddress: OWNER_EOA,
       }),
     )
-    expect(request).toHaveBeenCalled()
+    expect(request).not.toHaveBeenCalled()
     expect(result.txHash).toBe(TX_HASH)
   })
 
@@ -505,7 +488,6 @@ describe('sendPreparedOwnerTx', () => {
     const ensurePaymasterSession = vi.fn(async () => true)
     const request = vi
       .fn()
-      .mockRejectedValueOnce(new Error('Method not found'))
       .mockResolvedValueOnce('0xcall-bundle-id')
       .mockResolvedValueOnce({
         status: 200,
@@ -552,8 +534,10 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
-  it('retries wallet_sendCalls without capabilities when wallet rejects capability payload', async () => {
+  it('retries wallet_sendCalls without capabilities when wallet rejects capability payload in fallback path', async () => {
     const ensurePaymasterSession = vi.fn(async () => true)
+    // wallet_sendCalls is only reached as last-resort fallback after both UserOp paths fail.
+    // First call rejects capabilities, second call (without capabilities) succeeds.
     const request = vi
       .fn()
       .mockRejectedValueOnce(new Error('Invalid params: unexpected property capabilities'))
@@ -582,6 +566,7 @@ describe('sendPreparedOwnerTx', () => {
       ensurePaymasterSession,
     })
 
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(2)
     expect(request).toHaveBeenCalledTimes(3)
     expect(request).toHaveBeenNthCalledWith(
       1,
