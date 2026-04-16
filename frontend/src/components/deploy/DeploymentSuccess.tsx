@@ -4,10 +4,11 @@ import { Link } from 'react-router-dom'
 import type { Address } from 'viem'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { usePublicClient } from 'wagmi'
-import { ExternalLink, CheckCircle2, ArrowRight, Wallet, BarChart3, Sparkles } from 'lucide-react'
+import { ExternalLink, CheckCircle2, ArrowRight, Wallet, BarChart3, Sparkles, Share2 } from 'lucide-react'
 import type { DeploymentRecord } from '@/hooks/useDeploymentTracker'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
+import { ShareVaultButton } from '@/components/share/ShareVaultButton'
 
 const shortAddress = (addr: string) => `${addr.slice(0, 6)}…${addr.slice(-4)}`
 const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
@@ -446,6 +447,43 @@ export function DeploymentSuccess({
           </div>
         )}
       </div>
+
+      {/* Share your vault — the post-deploy moment has the highest share intent. */}
+      {deployment.contracts.vault ? (
+        <div className="rounded-2xl border border-brand-primary/25 bg-gradient-to-br from-brand-primary/10 via-black/40 to-black/40 p-4 sm:p-5">
+          <div className="flex items-start justify-between gap-3 flex-wrap">
+            <div className="min-w-0">
+              <div className="bv-kicker text-brand-300 flex items-center gap-1.5">
+                <Share2 className="w-3 h-3" /> Share your vault
+              </div>
+              <div className="mt-1 text-sm text-zinc-200">
+                Let your community know the vault is live.
+              </div>
+              <div className="mt-0.5 text-[11px] text-zinc-500 font-mono break-all">
+                {typeof window !== 'undefined'
+                  ? `${window.location.origin}/vault/${deployment.contracts.vault.toLowerCase()}`
+                  : `/vault/${deployment.contracts.vault.toLowerCase()}`}
+              </div>
+            </div>
+            <div className="shrink-0">
+              <ShareVaultButton
+                url={
+                  typeof window !== 'undefined'
+                    ? `${window.location.origin}/vault/${deployment.contracts.vault.toLowerCase()}`
+                    : undefined
+                }
+                text={
+                  shareSymbol
+                    ? `Just deployed ${shareSymbol} on 4626 — creator vault + share token are live on Base.`
+                    : 'Just deployed a creator vault on 4626 — share token is live on Base.'
+                }
+                label="Share"
+                showLabel
+              />
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {deployment.contracts.vault ? (
         <AjnaAutomationOptInCard
