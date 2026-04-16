@@ -615,17 +615,26 @@ export async function sendPreparedOwnerTx(params: {
             ? async (args: { method: string; params?: unknown[] }) => await walletClient.request!(args as any)
             : null
 
-        // Resolve the direct CDP paymaster URL for wallet_sendCalls.
-        // The extension calls this URL directly (not through our proxy),
-        // so it needs the actual CDP endpoint with embedded API key auth.
-        // Read the raw env var to bypass resolveCdpPaymasterUrl's proxy rewrite.
-        // Only use it if it looks like an absolute external URL (not a relative path
-        // like /api/paymaster which is our session-protected proxy).
+        // Resolve the direct CDP paymaster URL for wallet_sendCalls (ERC-7677).
+        // The CSW extension calls this URL directly (not through our proxy),
+        // so it needs the actual CDP endpoint (e.g. https://api.developer.coinbase.com/rpc/v1/base/<KEY>).
+        // Our session-protected proxy (/api/paymaster) won't work because the extension
+        // makes its own HTTP requests without forwarding the user's session cookies.
+        //
+        // Priority: VITE_CDP_SENDCALLS_PAYMASTER_URL > VITE_CDP_PAYMASTER_URL (if external) > null
+        // If null, sendCalls is attempted WITHOUT paymaster capabilities — the extension
+        // may still sponsor via its own mechanisms (Coinbase balance, Magic Spend).
+        const sendCallsEnv =
+          (import.meta.env.VITE_CDP_SENDCALLS_PAYMASTER_URL as string | undefined)?.trim() || ''
         const rawCdpPaymasterUrl =
           (import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined)?.trim() || ''
-        const isDirectCdpUrl =
-          rawCdpPaymasterUrl.startsWith('https://') && !rawCdpPaymasterUrl.includes('/api/paymaster')
-        const sendCallsPaymasterUrl = isDirectCdpUrl ? rawCdpPaymasterUrl : paymasterUrl
+        const resolvedDirectUrl = sendCallsEnv.startsWith('https://')
+          ? sendCallsEnv
+          : rawCdpPaymasterUrl.startsWith('https://') && !rawCdpPaymasterUrl.includes('/api/paymaster')
+            ? rawCdpPaymasterUrl
+            : null
+        // Never pass the session-protected proxy URL to sendCalls — the extension can't use it
+        const sendCallsPaymasterUrl = resolvedDirectUrl
 
         if (walletRequest) {
           try {
