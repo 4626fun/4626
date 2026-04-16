@@ -31,6 +31,7 @@ import { OrbBorder } from '@/components/brand/OrbBorder'
 import { TokenOrb } from '@/components/brand/TokenOrb'
 import { TokenAvatar } from '@/components/swap/TokenAvatar'
 import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugCopy'
+import { ShareVaultButton } from '@/components/share/ShareVaultButton'
 import { SHARE_SYMBOL_PREFIX, toShareSymbol } from '@/lib/tokens/tokenSymbols'
 import { CreatorWorkspacePanel } from '@/components/workspace/CreatorWorkspacePanel'
 import { parseVaultWorkspaceQuery, updateVaultWorkspaceQuery } from '@/features/vault/vaultWorkspaceQuery'
@@ -652,6 +653,12 @@ export function Vault() {
                 </div>
 
                 <div className="mt-7 flex flex-col gap-3 border-t border-white/6 pt-5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
+                  <ShareVaultButton
+                    url={socialPreviewPath ? `${window.location.origin}${socialPreviewPath}` : undefined}
+                    text={`${shareSymbol || 'Vault'} on 4626 — deposit ${underlyingSymbol || ''} to mint shares`}
+                    label="Share vault"
+                    showLabel
+                  />
                   {socialPreviewPath ? <ExploreUnfurlDebugCopy path={socialPreviewPath} /> : null}
                   {wrapperAddress ? (
                     <a
