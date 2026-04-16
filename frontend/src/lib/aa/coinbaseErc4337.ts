@@ -1320,7 +1320,13 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
           const signatureMismatch =
             probeMsg.includes('invalid signature') ||
             probeMsg.includes('signature check failed') ||
-            probeMsg.includes('userop signature verification failed')
+            probeMsg.includes('userop signature verification failed') ||
+            // AA23 ("reverted or OOG") during gas estimation often means the
+            // stub signature format doesn't match the owner type at this index
+            // (e.g. ECDSA stub vs WebAuthn passkey owner). Treat as mismatch
+            // so the probe continues to the next index.
+            probeMsg.includes('aa23') ||
+            probeMsg.includes('reverted (or oog)')
           if (!signatureMismatch) throw probeErr
           lastSignatureMismatch = probeErr
           if (AA_DEBUG) {
@@ -1412,6 +1418,75 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     ownerIndex,
     version,
   })
+
+  // ── Passkey stub override ──
+  // When the signer is the CSW itself (self-auth / ownerIsContract), the actual
+  // authentication happens via a passkey inside the Coinbase extension. The SDK's
+  // getStubSignature() returns an ECDSA dummy because it sees `owner.type === 'local'`,
+  // but the contract validates the stub against `ownerAtIndex(ownerIndex)`. If that
+  // slot holds a WebAuthn passkey (64 bytes of x,y), the ECDSA stub (65 bytes) will
+  // fail format checks during eth_estimateUserOperationGas → validateUserOp → AA23.
+  // Detect this case and patch getStubSignature to return the WebAuthn-format stub.
+  if (ownerIsContract) {
+    try {
+      const ownerBytesAtIndex = await withTimeout(
+        publicClient.readContract({
+          address: smartWallet,
+          abi: [{
+            type: 'function' as const,
+            name: 'ownerAtIndex' as const,
+            inputs: [{ name: 'index', type: 'uint256' as const }],
+            outputs: [{ type: 'bytes' as const }],
+            stateMutability: 'view' as const,
+          }],
+          functionName: 'ownerAtIndex',
+          args: [BigInt(ownerIndex)],
+        }),
+        RPC_READ_TIMEOUT_MS,
+        `ownerAtIndex(${ownerIndex}) passkey probe`,
+      ) as Hex
+      const ownerBytesLength = typeof ownerBytesAtIndex === 'string'
+        ? (ownerBytesAtIndex.length - 2) / 2
+        : 0
+      if (ownerBytesLength === 64) {
+        // Owner at this index is a WebAuthn passkey (64 bytes = x,y coordinates).
+        // Replace the ECDSA stub with the canonical WebAuthn stub from the SDK.
+        ;(baseAccount as any).getStubSignature = async function () {
+          if (AA_DEBUG) {
+            logger.debug('[ERC-4337] Using WebAuthn passkey stub for gas estimation', {
+              smartWallet,
+              ownerIndex,
+              ownerBytesLength,
+            })
+          }
+          // Canonical WebAuthn stub signature from viem's toCoinbaseSmartAccount.
+          // This is the exact value used by the SDK when owner.type === 'webAuthn'.
+          return '0x0000000000000000000000000000000000000000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000200000000000000000000000000000000000000000000000000000000000000002000000000000000000000000000000000000000000000000000000000000000c0000000000000000000000000000000000000000000000000000000000000012000000000000000000000000000000000000000000000000000000000000000170000000000000000000000000000000000000000000000000000000000000001949fc7c88032b9fcb5f6efc7a7b8c63668eae9871b765e23123bb473ff57aa831a7c0d9276168ebcc29f2875a0239cffdf2a9cd1c2007c5c77c071db9264df1d000000000000000000000000000000000000000000000000000000000000002549960de5880e8c687434170f6476605b8fe4aeb9a28632c7995cf3ba831d97630500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000008a7b2274797065223a22776562617574686e2e676574222c226368616c6c656e6765223a2273496a396e6164474850596759334b7156384f7a4a666c726275504b474f716d59576f4d57516869467773222c226f726967696e223a2268747470733a2f2f7369676e2e636f696e626173652e636f6d222c2263726f73734f726967696e223a66616c73657d00000000000000000000000000000000000000000000' as Hex
+        }
+        if (AA_DEBUG) {
+          logger.debug('[ERC-4337] Passkey owner detected at ownerIndex; stub patched', {
+            smartWallet,
+            ownerIndex,
+          })
+        }
+      } else if (AA_DEBUG) {
+        logger.debug('[ERC-4337] Owner at index is not a passkey; using default ECDSA stub', {
+          smartWallet,
+          ownerIndex,
+          ownerBytesLength,
+        })
+      }
+    } catch (passkeyProbeError: unknown) {
+      if (AA_DEBUG) {
+        const msg = passkeyProbeError instanceof Error ? passkeyProbeError.message : String(passkeyProbeError ?? '')
+        logger.warn('[ERC-4337] Failed to probe owner type at ownerIndex; using default stub', {
+          smartWallet,
+          ownerIndex,
+          error: msg,
+        })
+      }
+    }
+  }
 
   const account = wrapAccountWithTypedDataSigning({
     account: baseAccount,
