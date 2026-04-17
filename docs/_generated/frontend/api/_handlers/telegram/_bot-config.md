@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/telegram/\_bot-config.ts:69](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/_bot-config.ts#L69)
+Defined in: [api/\_handlers/telegram/\_bot-config.ts:67](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/_bot-config.ts#L67)
 
 #### Parameters
 

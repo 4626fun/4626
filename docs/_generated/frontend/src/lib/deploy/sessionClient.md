@@ -60,7 +60,7 @@ Defined in: [src/lib/deploy/sessionClient.ts:15](https://github.com/wenakita/462
 
 ### PostJsonWithTimeout()
 
-> **PostJsonWithTimeout** = \<`T`\>(`params`) => `Promise`\<\{ `json`: [`ApiEnvelope`](../apiEnvelope.md#apienvelope)\<`T`\> \| `null`; `response`: `Response`; \}\>
+> **PostJsonWithTimeout** = \<`T`\>(`params`) => `Promise`\<\{ `json`: [`ApiEnvelope`](../api/apiEnvelope.md#apienvelope)\<`T`\> \| `null`; `response`: `Response`; \}\>
 
 Defined in: [src/lib/deploy/sessionClient.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L6)
 
@@ -96,13 +96,13 @@ Defined in: [src/lib/deploy/sessionClient.ts:6](https://github.com/wenakita/4626
 
 #### Returns
 
-`Promise`\<\{ `json`: [`ApiEnvelope`](../apiEnvelope.md#apienvelope)\<`T`\> \| `null`; `response`: `Response`; \}\>
+`Promise`\<\{ `json`: [`ApiEnvelope`](../api/apiEnvelope.md#apienvelope)\<`T`\> \| `null`; `response`: `Response`; \}\>
 
 ## Functions
 
 ### postDeploySessionRequestWithAuthRetry()
 
-> **postDeploySessionRequestWithAuthRetry**\<`T`\>(`params`): `Promise`\<[`ApiEnvelope`](../apiEnvelope.md#apienvelope)\<`T`\>\>
+> **postDeploySessionRequestWithAuthRetry**\<`T`\>(`params`): `Promise`\<[`ApiEnvelope`](../api/apiEnvelope.md#apienvelope)\<`T`\>\>
 
 Defined in: [src/lib/deploy/sessionClient.ts:33](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/sessionClient.ts#L33)
 
@@ -146,7 +146,7 @@ Defined in: [src/lib/deploy/sessionClient.ts:33](https://github.com/wenakita/462
 
 #### Returns
 
-`Promise`\<[`ApiEnvelope`](../apiEnvelope.md#apienvelope)\<`T`\>\>
+`Promise`\<[`ApiEnvelope`](../api/apiEnvelope.md#apienvelope)\<`T`\>\>
 
 ***
 
@@ -234,4 +234,4 @@ Defined in: [src/lib/deploy/sessionClient.ts:24](https://github.com/wenakita/462
 
 ### ApiEnvelope
 
-Re-exports [ApiEnvelope](../apiEnvelope.md#apienvelope)
+Re-exports [ApiEnvelope](../api/apiEnvelope.md#apienvelope)

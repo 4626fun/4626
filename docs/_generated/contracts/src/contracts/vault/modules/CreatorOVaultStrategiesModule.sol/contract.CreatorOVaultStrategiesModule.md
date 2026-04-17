@@ -81,6 +81,13 @@ function addStrategy(address strategy, uint256 weight, bool addToQueue) public o
 function removeStrategy(address strategy) external onlyDelegateCall;
 ```
 
+### forceRemoveStrategy
+
+
+```solidity
+function forceRemoveStrategy(address strategy) external onlyDelegateCall;
+```
+
 ### updateStrategyWeight
 
 
@@ -111,13 +118,6 @@ function _depositIntoStrategyMeasured(address strategy, uint256 amount) internal
 
 ```solidity
 function _withdrawFromStrategyMeasured(address strategy, uint256 amount) internal returns (uint256 withdrawn);
-```
-
-### _withdrawFromStrategyBestEffort
-
-
-```solidity
-function _withdrawFromStrategyBestEffort(address strategy, uint256 amount) internal returns (uint256 withdrawn);
 ```
 
 ### _getStrategyAssetsSafe

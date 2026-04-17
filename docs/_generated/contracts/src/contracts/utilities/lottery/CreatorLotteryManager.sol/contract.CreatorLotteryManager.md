@@ -240,6 +240,13 @@ uint256 public oracleMaxStaleness = 2 hours
 ```
 
 
+### vrfResultGracePeriod
+
+```solidity
+uint256 public vrfResultGracePeriod = 30 minutes
+```
+
+
 ### oracleMaxDeviationBps
 Circuit breaker: maximum allowed price deviation (bps) within `oracleDeviationWindow`.
 
@@ -474,6 +481,13 @@ uint256 private _payoutLock
 ```
 
 
+### _adminModule
+
+```solidity
+address private immutable _adminModule
+```
+
+
 ## Functions
 ### constructor
 
@@ -556,6 +570,20 @@ function _requestLocalVRF(address creatorCoin, address buyer, uint256 swapValueU
     returns (uint256);
 ```
 
+### _localVrfKey
+
+
+```solidity
+function _localVrfKey(uint256 requestId) internal pure returns (uint256);
+```
+
+### _crossChainVrfKey
+
+
+```solidity
+function _crossChainVrfKey(uint256 sequence) internal pure returns (uint256);
+```
+
 ### receiveRandomWords
 
 Local VRF callback
@@ -582,7 +610,7 @@ While paused, callbacks store randomness and skip settlement to halt jackpot out
 
 
 ```solidity
-function processPendingVrfResult(uint256 requestId) external whenNotPaused nonReentrant;
+function processPendingVrfResult(uint256 requestId) external onlyOwner whenNotPaused nonReentrant;
 ```
 
 ### _processVRFResult
@@ -834,46 +862,62 @@ function _payoutLocalJackpot(address triggeringCoin, address winner, uint16 payo
 |`<none>`|`uint256`|totalPaidOut Total number of vaults that paid out|
 
 
+### _payoutLocalJackpotInner
+
+
+```solidity
+function _payoutLocalJackpotInner(address triggeringCoin, address winner, uint16 payoutBps)
+    internal
+    returns (uint256 totalPaidOut);
+```
+
+### _delegateAdmin
+
+
+```solidity
+function _delegateAdmin() internal;
+```
+
 ### setAuthorizedSwapContract
 
 
 ```solidity
-function setAuthorizedSwapContract(address swapContract, bool authorized) external onlyOwner;
+function setAuthorizedSwapContract(address swapContract, bool authorized) external;
 ```
 
 ### setLocalVRFConsumer
 
 
 ```solidity
-function setLocalVRFConsumer(address _consumer) external onlyOwner;
+function setLocalVRFConsumer(address _consumer) external;
 ```
 
 ### setVRFIntegrator
 
 
 ```solidity
-function setVRFIntegrator(address _integrator) external onlyOwner;
+function setVRFIntegrator(address _integrator) external;
 ```
 
 ### setTargetEid
 
 
 ```solidity
-function setTargetEid(uint32 _eid) external onlyOwner;
+function setTargetEid(uint32 _eid) external;
 ```
 
 ### setUseLocalVRF
 
 
 ```solidity
-function setUseLocalVRF(bool _useLocal) external onlyOwner;
+function setUseLocalVRF(bool _useLocal) external;
 ```
 
 ### setSponsoredVrfMinSwapAmountUSD
 
 
 ```solidity
-function setSponsoredVrfMinSwapAmountUSD(uint256 _minSwapAmountUSD) external onlyOwner;
+function setSponsoredVrfMinSwapAmountUSD(uint256 _minSwapAmountUSD) external;
 ```
 
 ### setVrfSponsorshipPolicy
@@ -885,7 +929,7 @@ function setVrfSponsorshipPolicy(
     uint256 maxFeePerMessage,
     uint256 budgetPerEpoch,
     uint256 epochDuration
-) external onlyOwner;
+) external;
 ```
 
 ### setCallbackSponsorshipPolicy
@@ -897,7 +941,7 @@ function setCallbackSponsorshipPolicy(
     uint256 maxFeePerMessage,
     uint256 budgetPerEpoch,
     uint256 epochDuration
-) external onlyOwner;
+) external;
 ```
 
 ### setSponsorshipRateLimits
@@ -913,14 +957,14 @@ function setSponsorshipRateLimits(
     uint32 _vrfMaxPerOriginPerEpoch,
     uint32 _callbackMaxPerBuyerPerEpoch,
     uint32 _callbackMaxPerOriginPerEpoch
-) external onlyOwner;
+) external;
 ```
 
 ### setBoostManager
 
 
 ```solidity
-function setBoostManager(address _manager) external onlyOwner;
+function setBoostManager(address _manager) external;
 ```
 
 ### setVaultGaugeVoting
@@ -929,7 +973,7 @@ Set VaultGaugeVoting for ve(3,3) probability direction
 
 
 ```solidity
-function setVaultGaugeVoting(address _vaultGaugeVoting) external onlyOwner;
+function setVaultGaugeVoting(address _vaultGaugeVoting) external;
 ```
 **Parameters**
 
@@ -949,21 +993,28 @@ function setLotteryConfig(
     uint256 _baseWinChance,
     uint256 _maxWinChance,
     uint256 _usdMultiplierBps
-) external onlyOwner;
+) external;
 ```
 
 ### setOracleMaxStaleness
 
 
 ```solidity
-function setOracleMaxStaleness(uint256 _maxStaleness) external onlyOwner;
+function setOracleMaxStaleness(uint256 _maxStaleness) external;
+```
+
+### setVrfResultGracePeriod
+
+
+```solidity
+function setVrfResultGracePeriod(uint256 _gracePeriod) external;
 ```
 
 ### setOracleDeviationGuard
 
 
 ```solidity
-function setOracleDeviationGuard(uint256 _maxDeviationBps, uint256 _deviationWindow) external onlyOwner;
+function setOracleDeviationGuard(uint256 _maxDeviationBps, uint256 _deviationWindow) external;
 ```
 
 ### setCallbackOptions
@@ -972,7 +1023,7 @@ Set enforced options for winner callback messages
 
 
 ```solidity
-function setCallbackOptions(uint32 dstEid, uint128 gasLimit, uint128 msgValue) external onlyOwner;
+function setCallbackOptions(uint32 dstEid, uint128 gasLimit, uint128 msgValue) external;
 ```
 
 ### setAuthorizedRemoteOFT
@@ -981,7 +1032,7 @@ Authorize a remote OFT as a valid lottery entry sender
 
 
 ```solidity
-function setAuthorizedRemoteOFT(uint32 srcEid, bytes32 sender, bool authorized) external onlyOwner;
+function setAuthorizedRemoteOFT(uint32 srcEid, bytes32 sender, bool authorized) external;
 ```
 **Parameters**
 
@@ -999,8 +1050,7 @@ Batch authorize remote OFTs
 
 ```solidity
 function batchSetAuthorizedRemoteOFTs(uint32[] calldata srcEids, bytes32[] calldata senders, bool authorized)
-    external
-    onlyOwner;
+    external;
 ```
 
 ### setCallbackGasLimit
@@ -1009,21 +1059,21 @@ Set the gas limit for winner callback messages
 
 
 ```solidity
-function setCallbackGasLimit(uint128 _gasLimit) external onlyOwner;
+function setCallbackGasLimit(uint128 _gasLimit) external;
 ```
 
 ### pause
 
 
 ```solidity
-function pause() external onlyOwner;
+function pause() external;
 ```
 
 ### unpause
 
 
 ```solidity
-function unpause() external onlyOwner;
+function unpause() external;
 ```
 
 ### getWinChance
@@ -1058,7 +1108,7 @@ function getCreatorLotteryStats(address creatorCoin)
 
 
 ```solidity
-function emergencyWithdraw(address token, uint256 amount) external onlyOwner;
+function emergencyWithdraw(address token, uint256 amount) external;
 ```
 
 ### receive
@@ -1257,6 +1307,30 @@ event SponsorshipSkipped(
 );
 ```
 
+### WinnerCallbackDropped
+
+```solidity
+event WinnerCallbackDropped(
+    uint32 indexed dstEid,
+    address indexed winner,
+    address indexed creatorCoin,
+    uint256 totalSharesPaid,
+    uint8 reason
+);
+```
+
+### InvalidPayloadReceived
+
+```solidity
+event InvalidPayloadReceived(uint32 indexed srcEid, uint256 payloadLength);
+```
+
+### StaleVRFResultDiscarded
+
+```solidity
+event StaleVRFResultDiscarded(uint256 indexed requestId, uint256 requestTimestamp, uint256 gracePeriod);
+```
+
 ## Errors
 ### ZeroAddress
 
@@ -1286,6 +1360,12 @@ error CallerFeeMismatch(uint256 provided, uint256 required);
 
 ```solidity
 error NoPendingVrfResult(uint256 requestId);
+```
+
+### ETHRefundFailed
+
+```solidity
+error ETHRefundFailed();
 ```
 
 ## Structs
@@ -1327,6 +1407,8 @@ struct VRFRequest {
     uint256 effectiveWinChancePPM;
     VRFType vrfType;
     uint32 sourceChainEid; // 0 = local (hub), non-zero = remote chain lottery entry
+    // FIX: CLM-02 — track request creation time to reject stale VRF results
+    uint256 requestTimestamp;
 }
 ```
 
@@ -1365,6 +1447,16 @@ enum SponsorshipSkipReason {
     INSUFFICIENT_BALANCE,
     SEND_FAILED,
     RATE_LIMITED
+}
+```
+
+### CallbackDropReason
+
+```solidity
+enum CallbackDropReason {
+    BUYER_RATE_LIMITED,
+    ORIGIN_RATE_LIMITED,
+    SPONSORSHIP_UNAVAILABLE
 }
 ```
 

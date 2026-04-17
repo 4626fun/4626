@@ -211,3 +211,9 @@ error RolloverNotAllowedYet();
 error NotZeroVoteEpoch();
 ```
 
+### VaultNotWhitelisted
+
+```solidity
+error VaultNotWhitelisted();
+```
+

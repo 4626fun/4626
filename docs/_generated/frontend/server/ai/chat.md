@@ -80,7 +80,7 @@ Defined in: [server/ai/chat.ts:436](https://github.com/wenakita/4626/blob/main/f
 
 ###### vault
 
-[`KeeprVaultRow`](../_lib/keeprRegistry.md#keeprvaultrow) \| `null`
+[`KeeprVaultRow`](../_lib/keepr/keeprRegistry.md#keeprvaultrow) \| `null`
 
 #### Returns
 

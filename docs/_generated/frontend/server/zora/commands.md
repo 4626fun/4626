@@ -36,7 +36,7 @@ Defined in: [server/zora/commands.ts:894](https://github.com/wenakita/4626/blob/
 
 ###### vault
 
-[`KeeprVaultRow`](../_lib/keeprRegistry.md#keeprvaultrow)
+[`KeeprVaultRow`](../_lib/keepr/keeprRegistry.md#keeprvaultrow)
 
 #### Returns
 

@@ -24,12 +24,19 @@ address public immutable permit2
 ```
 
 
+### registry
+
+```solidity
+ICreatorRegistryLookup public immutable registry
+```
+
+
 ## Functions
 ### constructor
 
 
 ```solidity
-constructor(address _permit2) ;
+constructor(address _permit2, address _registry) ;
 ```
 
 ### _executeActivateAndLaunch
@@ -292,5 +299,17 @@ error PermitAmountTooLow();
 
 ```solidity
 error InvalidReserveRecipient(address expectedRecipient, address actualRecipient);
+```
+
+### VaultRegistryMismatch
+
+```solidity
+error VaultRegistryMismatch(address expected, address actual);
+```
+
+### WrapperRegistryMismatch
+
+```solidity
+error WrapperRegistryMismatch(address expected, address actual);
 ```
 

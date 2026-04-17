@@ -5,7 +5,36 @@
 [IAjnaERC4626StrategyFactory](/contracts/helpers/batchers/StrategyDeploymentFactories.sol/interface.IAjnaERC4626StrategyFactory.md)
 
 
+## State Variables
+### authDeployer
+
+```solidity
+AjnaVaultAuthDeployer public immutable authDeployer
+```
+
+
+### vaultDeployer
+
+```solidity
+AjnaInnerVaultDeployer public immutable vaultDeployer
+```
+
+
+### adapterDeployer
+
+```solidity
+AjnaAdapterDeployer public immutable adapterDeployer
+```
+
+
 ## Functions
+### constructor
+
+
+```solidity
+constructor() ;
+```
+
 ### deploy
 
 

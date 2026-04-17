@@ -31,11 +31,18 @@ address public constant LZ_COMMON_ENDPOINT = 0x1a44076050125825900e736c501f859c5
 
 Return the LayerZero endpoint for any chain.
 
-Always returns LZ_COMMON_ENDPOINT. The chain ID parameter is
-accepted for interface compatibility but has no effect.
+FIX: F-23 — Always returns LZ_COMMON_ENDPOINT regardless of chainId.
+The chainId parameter is retained solely for ICreatorRegistry interface
+compatibility. LZ v2 EndpointV2 shares a single CREATE2 address across
+all EVM chains, so per-chain resolution is unnecessary.
 
 
 ```solidity
-function getLayerZeroEndpoint(uint256) external pure returns (address);
+function getLayerZeroEndpoint(
+    uint256 /* chainId — intentionally unused */
+)
+    external
+    pure
+    returns (address);
 ```
 

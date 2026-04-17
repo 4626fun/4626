@@ -34,19 +34,19 @@ Re-exports [getGenericNotFoundCta](app/routeGuards.md#getgenericnotfoundcta)
 
 ### getInitialTelegramMiniAppEntryResolution
 
-Re-exports [getInitialTelegramMiniAppEntryResolution](lib/telegramMiniAppRouteGuard.md#getinitialtelegramminiappentryresolution)
+Re-exports [getInitialTelegramMiniAppEntryResolution](lib/telegram/telegramMiniAppRouteGuard.md#getinitialtelegramminiappentryresolution)
 
 ***
 
 ### hasTelegramLinkEntryContext
 
-Re-exports [hasTelegramLinkEntryContext](lib/telegramMiniAppRouteGuard.md#hastelegramlinkentrycontext)
+Re-exports [hasTelegramLinkEntryContext](lib/telegram/telegramMiniAppRouteGuard.md#hastelegramlinkentrycontext)
 
 ***
 
 ### hasTelegramLinkQueryContext
 
-Re-exports [hasTelegramLinkQueryContext](lib/telegramMiniAppRouteGuard.md#hastelegramlinkquerycontext)
+Re-exports [hasTelegramLinkQueryContext](lib/telegram/telegramMiniAppRouteGuard.md#hastelegramlinkquerycontext)
 
 ***
 
@@ -58,4 +58,4 @@ Re-exports [resolveAccess](app/accessShared.md#resolveaccess)
 
 ### resolveTelegramMiniAppEntryBootstrap
 
-Re-exports [resolveTelegramMiniAppEntryBootstrap](lib/telegramMiniAppRouteGuard.md#resolvetelegramminiappentrybootstrap)
+Re-exports [resolveTelegramMiniAppEntryBootstrap](lib/telegram/telegramMiniAppRouteGuard.md#resolvetelegramminiappentrybootstrap)

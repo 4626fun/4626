@@ -12,7 +12,7 @@
 
 > **CreatorWorkspacePanel**(`props`): `Element`
 
-Defined in: [src/components/workspace/CreatorWorkspacePanel.tsx:26](https://github.com/wenakita/4626/blob/main/frontend/src/components/workspace/CreatorWorkspacePanel.tsx#L26)
+Defined in: [src/components/workspace/CreatorWorkspacePanel.tsx:27](https://github.com/wenakita/4626/blob/main/frontend/src/components/workspace/CreatorWorkspacePanel.tsx#L27)
 
 #### Parameters
 

@@ -8,6 +8,7 @@ import {
   AdminDeployStrategies,
   AdminImageGeneration,
   AdminOps,
+  AdminUserOpHealth,
   AdminWaitlist,
   AgentDirectory,
   AgentRegister,
@@ -154,4 +155,5 @@ export const ADMIN_CHILD_ROUTES: PathRouteDef[] = [
       </SmartWalletRoute>
     ),
   },
+  { path: 'userop-health', element: <AdminUserOpHealth /> },
 ]

@@ -77,12 +77,33 @@ uint256 public burnedActive
 ```
 
 
+### authorizedQueuers
+
+```solidity
+mapping(address => bool) public authorizedQueuers
+```
+
+
+### failedBurnAccumulator
+
+```solidity
+uint256 public failedBurnAccumulator
+```
+
+
 ## Functions
 ### constructor
 
 
 ```solidity
 constructor(address _vault) ;
+```
+
+### setAuthorizedQueuer
+
+
+```solidity
+function setAuthorizedQueuer(address queuer, bool authorized) external;
 ```
 
 ### epochStart
@@ -218,6 +239,18 @@ event StreamDripped(
 event StreamCompleted(uint256 indexed epochStart, uint256 totalBurned, uint256 pps);
 ```
 
+### BurnFailed
+
+```solidity
+event BurnFailed(uint256 indexed epochStart, uint256 burnAttempted, uint256 failedTotal);
+```
+
+### QueuerAuthorizationUpdated
+
+```solidity
+event QueuerAuthorizationUpdated(address indexed queuer, bool authorized);
+```
+
 ## Errors
 ### ZeroAddress
 
@@ -259,5 +292,11 @@ error NoNewShares();
 
 ```solidity
 error PendingEpochMismatch(uint256 pendingEpochStart, uint256 requiredEpochStart);
+```
+
+### UnauthorizedQueuer
+
+```solidity
+error UnauthorizedQueuer();
 ```
 

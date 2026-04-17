@@ -15,6 +15,13 @@ This vault is intended to sit behind `ERC4626StrategyAdapter`, with
 
 
 ## State Variables
+### MAX_BUCKETS
+
+```solidity
+uint256 public constant MAX_BUCKETS = 50
+```
+
+
 ### AJNA_POOL
 
 ```solidity
@@ -111,12 +118,22 @@ function maxMint(address receiver) public view override returns (uint256);
 
 ### maxWithdraw
 
+Returns the maximum assets withdrawable by `owner` from the idle buffer only.
+
+FIX: F-19 — ERC-4626 deviation: this intentionally understates available assets
+because bucket LP positions require an on-chain Ajna pool interaction to liquidate.
+Off-chain integrators should query bucket positions separately for total availability.
+
 
 ```solidity
 function maxWithdraw(address owner) public view override returns (uint256);
 ```
 
 ### maxRedeem
+
+Returns the maximum shares redeemable by `owner` backed by idle buffer only.
+
+FIX: F-19 — see maxWithdraw; same ERC-4626 deviation applies.
 
 
 ```solidity
@@ -346,6 +363,12 @@ event BucketMovedToBuffer(uint256 indexed bucketIndex, uint256 assets, uint256 b
 event BucketMoved(uint256 indexed fromIndex, uint256 indexed toIndex, uint256 fromBucketLp, uint256 toBucketLp);
 ```
 
+### FeeCollected
+
+```solidity
+event FeeCollected(address indexed recipient, uint256 amount);
+```
+
 ## Errors
 ### NotAuthorized
 
@@ -369,5 +392,11 @@ error InvalidQuoteToken();
 
 ```solidity
 error BufferLiquidityInsufficient();
+```
+
+### MaxBucketsReached
+
+```solidity
+error MaxBucketsReached();
 ```
 

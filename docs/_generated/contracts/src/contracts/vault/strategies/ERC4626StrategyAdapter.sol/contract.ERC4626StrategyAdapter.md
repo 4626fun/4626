@@ -52,6 +52,15 @@ bool private _isActive
 ```
 
 
+### rebalanceActive
+FIX: S-C04 — rebalance lock prevents deposit-during-rebalance window
+
+
+```solidity
+bool public rebalanceActive
+```
+
+
 ### idleBufferBps
 Target % of strategy assets to keep idle (basis points).
 
@@ -290,6 +299,12 @@ event ValuationGuardUpdated(uint256 maxIncreaseBps, uint256 maxDecreaseBps, uint
 event ValuationSnapshotSynced(uint256 assetsPerShare, uint256 timestamp);
 ```
 
+### RebalanceDepositFailed
+
+```solidity
+event RebalanceDepositFailed(uint256 amount, bytes reason);
+```
+
 ## Errors
 ### OnlyVault
 
@@ -313,5 +328,11 @@ error InvalidBps();
 
 ```solidity
 error InvalidWindow();
+```
+
+### RebalanceInProgress
+
+```solidity
+error RebalanceInProgress();
 ```
 

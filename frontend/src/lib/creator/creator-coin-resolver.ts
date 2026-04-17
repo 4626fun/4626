@@ -1,5 +1,17 @@
-// Utility to resolve CreatorCoin contract addresses to actual creator addresses
-// Based on a CreatorCoin token page on BaseScan.
+/**
+ * Utility to resolve CreatorCoin contract addresses to actual creator addresses.
+ * Based on a CreatorCoin token page on BaseScan.
+ *
+ * Canonical lane naming (see AGENTS.md "Canonical Lane Terminology" +
+ * docs/audits/creatorvault-business-logic-core-structure-audit.md §3):
+ *
+ * - `getCreatorCoinPayoutRecipient(...)` returns CreatorCoin `payoutRecipient()`
+ *   — i.e. the `creatorCoinPayoutRecipient` lane (CreatorCoin EXTERNAL
+ *   earnings routing; router mode feeds holder PPS accretion via
+ *   `PayoutRouter.convertAndQueue(...)`).
+ * - It is NOT the `tradeFeeCollector` lane. Do not use this helper to
+ *   resolve ShareOFT/hook trade-fee destinations.
+ */
 
 import { createPublicClient, http, type Address } from 'viem'
 import { base } from 'viem/chains'

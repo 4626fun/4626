@@ -626,9 +626,20 @@ function getGaugeControllerForToken(address _token) external view override retur
 
 ### getAllCreatorCoins
 
+FIX: F-25 — WARNING: this function returns an unbounded array. It will revert
+when `registeredTokens` grows large enough to exceed the block gas limit for on-chain
+callers. Use `getCreatorCoinsPaginated` for bounded access.
+
 
 ```solidity
 function getAllCreatorCoins() external view override returns (address[] memory);
+```
+
+### getCreatorCoinsPaginated
+
+
+```solidity
+function getCreatorCoinsPaginated(uint256 offset, uint256 limit) external view returns (address[] memory result);
 ```
 
 ### isCreatorCoinRegistered

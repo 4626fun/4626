@@ -12,7 +12,7 @@
 
 > **Badge**(`__namedParameters`): `Element`
 
-Defined in: [src/components/ui/Badge.tsx:33](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Badge.tsx#L33)
+Defined in: [src/components/ui/Badge.tsx:34](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Badge.tsx#L34)
 
 #### Parameters
 

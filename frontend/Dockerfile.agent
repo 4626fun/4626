@@ -30,7 +30,11 @@ FROM base AS deps
 
 # Copy package manifests + patch files (referenced by pnpm.patchedDependencies)
 COPY frontend/package.json frontend/pnpm-lock.yaml ./
-COPY patches/ ./patches/
+# Use the frontend workspace patches directory because pnpm resolves
+# `patchedDependencies` paths relative to the package.json being installed
+# (frontend/package.json). The repo-root `patches/` is for the Solidity
+# workspace and does not contain frontend patches.
+COPY frontend/patches/ ./patches/
 
 # Install ALL deps (tsx, @elizaos/core are in devDependencies).
 # Use --ignore-scripts first to avoid OOM from parallel native builds,

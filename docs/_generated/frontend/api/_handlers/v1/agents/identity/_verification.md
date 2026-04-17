@@ -60,7 +60,7 @@ Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:174](https://gi
 
 ##### endpoint
 
-> **endpoint**: `Awaited`\<`ReturnType`\<*typeof* [`probeEndpoint`](../../../../../server/_lib/erc8004Review.md#probeendpoint)\>\>
+> **endpoint**: `Awaited`\<`ReturnType`\<*typeof* [`probeEndpoint`](../../../../../server/_lib/agent/erc8004Review.md#probeendpoint)\>\>
 
 Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:179](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L179)
 
@@ -106,7 +106,7 @@ Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:180](https://gi
 
 ##### onchainRegistration
 
-> **onchainRegistration**: [`RegistrationProbe`](../../../../../server/_lib/erc8004Review.md#registrationprobe)
+> **onchainRegistration**: [`RegistrationProbe`](../../../../../server/_lib/agent/erc8004Review.md#registrationprobe)
 
 Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:178](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L178)
 
@@ -160,7 +160,7 @@ Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:176](https://gi
 
 ##### uriPolicy
 
-> **uriPolicy**: [`AgentUriPolicy`](../../../../../src/lib/erc8004AgentUriPolicy.md#agenturipolicy)
+> **uriPolicy**: [`AgentUriPolicy`](../../../../../src/lib/agent/erc8004AgentUriPolicy.md#agenturipolicy)
 
 Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:177](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L177)
 

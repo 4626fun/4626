@@ -42,6 +42,7 @@ import {
   resolvePortfolioAddresses,
   isEvmAddress,
 } from '@/features/portfolio/portfolioViewModel'
+import { PortfolioFirstActionsNudge } from '@/features/portfolio/FirstActionsNudge'
 
 function shortAddr(address: string): string {
   if (!address || address.length < 10) return address
@@ -670,6 +671,16 @@ export function Portfolio() {
 
       <section className="py-8 sm:py-10">
         <div className="mx-auto max-w-[1400px] px-3 sm:px-6">
+          {!isPublicMode ? (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3 }}
+              className="mb-4"
+            >
+              <PortfolioFirstActionsNudge />
+            </motion.div>
+          ) : null}
           <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.35 }}>
             <div className="vault-surface vault-hover-lift p-4">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

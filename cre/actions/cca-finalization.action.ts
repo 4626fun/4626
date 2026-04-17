@@ -1,15 +1,38 @@
 /**
- * CCA Finalization Action — onchain read/write logic.
+ * CCA Finalization Action — onchain read/write logic (NON-CANONICAL for
+ * settlement state).
  *
- * Monitors CCALaunchStrategy for graduated auctions and:
- *   1. Calls sweepCurrency() when isGraduated() == true (settles auction + configures V4 pool)
- *   2. Calls sweepUnsoldTokens() after settlement
+ * Monitors CCALaunchStrategy for graduated auctions and, per lifecycle flags,
+ * attempts these three onchain writes in order:
+ *   1. sweepCurrency()       — settles auction currency (initializes V4 pool input)
+ *   2. migrate()             — creates the V4 pool + mints the seeded LP position
+ *   3. sweepUnsoldTokens()   — best-effort cleanup of unsold auction tokens
  *
- * Note: sweepCurrency() and sweepUnsoldTokens() have no access modifier —
- * anyone can call them. No keeper role authorization needed.
+ * Failure path: calls finalizeFailedAuction() when the auction ended without
+ * graduating.
  *
- * Supports both single-vault mode (via CCA_STRATEGY_ADDRESS env) and multi-vault mode
- * (via registry API).
+ * Canonical completion truth lives in `/api/cre/keeper/sweep` (see
+ * `frontend/api/_handlers/cre/keeper/_sweep.ts`). That endpoint enforces the
+ * full multi-stage state machine:
+ *   sweep → migrate → hook fee-plane configuration → invariant gate → completed.
+ * It is the only path permitted to write DB `settledAt`.
+ *
+ * This action MUST NOT be treated as an alternate source of "fully settled"
+ * state. It does not:
+ *   - configure the hook fee plane,
+ *   - enforce deploy/completion invariants (see
+ *     `docs/audits/creatorvault-business-logic-core-structure-audit.md`
+ *     §5 "Deployment Invariant Checklist"),
+ *   - transition a vault to `completed` / `settledAt`.
+ *
+ * Callers using this file directly are expected to be non-canonical paths
+ * (manual tools, local dev) and should not mark DB settlement.
+ *
+ * Access: sweepCurrency(), migrate(), and sweepUnsoldTokens() have no access
+ * modifier — anyone can call them. No keeper role authorization needed.
+ *
+ * Supports both single-vault mode (via CCA_STRATEGY_ADDRESS env) and
+ * multi-vault mode (via registry API).
  */
 
 import {

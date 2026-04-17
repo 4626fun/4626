@@ -12,7 +12,7 @@
 
 > **Status**(): `Element`
 
-Defined in: [src/pages/status/Status.tsx:132](https://github.com/wenakita/4626/blob/main/frontend/src/pages/status/Status.tsx#L132)
+Defined in: [src/pages/status/Status.tsx:133](https://github.com/wenakita/4626/blob/main/frontend/src/pages/status/Status.tsx#L133)
 
 #### Returns
 
