@@ -5,4 +5,5 @@
 - [strategies](/contracts/vault/strategies)
 - [CreatorOVault](CreatorOVault.sol/contract.CreatorOVault.md)
 - [IShareOFT](CreatorOVaultWrapper.sol/interface.IShareOFT.md)
+- [IQueueAwareVault](CreatorOVaultWrapper.sol/interface.IQueueAwareVault.md)
 - [CreatorOVaultWrapper](CreatorOVaultWrapper.sol/contract.CreatorOVaultWrapper.md)

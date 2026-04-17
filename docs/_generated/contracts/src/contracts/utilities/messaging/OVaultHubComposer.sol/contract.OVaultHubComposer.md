@@ -66,6 +66,18 @@ mapping(address => bool) public allowedComposeSenders
 constructor(address _registry, address _owner) Ownable(_owner);
 ```
 
+### rescueETH
+
+Rescue ETH trapped in the composer from payable lzCompose calls.
+
+lzCompose is payable per ILayerZeroComposer interface; ETH sent with compose
+messages accumulates here with no other withdrawal path.
+
+
+```solidity
+function rescueETH(address payable to, uint256 amount) external onlyOwner;
+```
+
 ### setAllowedComposeSender
 
 
@@ -331,6 +343,24 @@ error CreatorMeshSrcEidMismatch(uint32 expected, uint32 actual);
 error CreatorMeshPeerMismatch(bytes32 expected, bytes32 actual);
 ```
 
+### ComposerNotBeneficiaryOperator
+
+```solidity
+error ComposerNotBeneficiaryOperator(address composer, address wrapper);
+```
+
+### CreatorMeshNotConfigured
+
+```solidity
+error CreatorMeshNotConfigured(address creatorToken);
+```
+
+### ReceiverIsComposer
+
+```solidity
+error ReceiverIsComposer();
+```
+
 ### InsufficientComposerBalance
 
 ```solidity
@@ -353,6 +383,12 @@ error OutputMintInvariantFailed(address token, uint256 beforeBalance, uint256 af
 
 ```solidity
 error ResidualBalanceInvariantFailed(address token, uint256 beforeBalance, uint256 afterBalance);
+```
+
+### ETHTransferFailed
+
+```solidity
+error ETHTransferFailed();
 ```
 
 ## Structs

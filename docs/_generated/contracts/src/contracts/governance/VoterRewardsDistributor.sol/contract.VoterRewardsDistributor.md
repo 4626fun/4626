@@ -58,6 +58,13 @@ mapping(address => address) public vaultRewardToken
 ```
 
 
+### epochRewardToken
+
+```solidity
+mapping(uint256 => mapping(address => address)) public epochRewardToken
+```
+
+
 ### epochVaultRewards
 epoch => vault => total rewards (in vault share tokens)
 
@@ -73,6 +80,13 @@ epoch => vault => user => claimed?
 
 ```solidity
 mapping(uint256 => mapping(address => mapping(address => bool))) public hasClaimed
+```
+
+
+### staleSweepGraceEpochs
+
+```solidity
+uint256 public staleSweepGraceEpochs = 26
 ```
 
 
@@ -95,7 +109,7 @@ function setProtocolTreasury(address _protocolTreasury) external onlyOwner;
 
 Owner recovery path for fixing an incorrect reward token mapping.
 
-Intended for emergency repair if a vault was initialized with the wrong token.
+FIX: G-10 — only affects future epochs; past epoch tokens are stored per-epoch.
 
 
 ```solidity
@@ -125,6 +139,17 @@ Your selected policy:
 
 ```solidity
 function sweepZeroVoteEpoch(address vault, uint256 epoch) external onlyOwner nonReentrant returns (uint256 amount);
+```
+
+### sweepStaleEpochRewards
+
+
+```solidity
+function sweepStaleEpochRewards(address vault, uint256 epoch)
+    external
+    onlyOwner
+    nonReentrant
+    returns (uint256 amount);
 ```
 
 ### previewClaim
@@ -192,6 +217,12 @@ event ProtocolTreasuryUpdated(address indexed oldTreasury, address indexed newTr
 event ZeroVoteEpochSwept(
     uint256 indexed epoch, address indexed vault, address indexed token, uint256 amount, address protocolTreasury
 );
+```
+
+### StaleEpochSwept
+
+```solidity
+event StaleEpochSwept(uint256 indexed epoch, address indexed vault, address indexed token, uint256 amount);
 ```
 
 ## Errors

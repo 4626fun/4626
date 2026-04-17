@@ -156,6 +156,22 @@ address public lotteryManager
 ```
 
 
+### defaultSwapFeeTier
+
+```solidity
+uint24 public defaultSwapFeeTier = 3000
+```
+
+
+### processedSolanaTxs
+Tracks processed Solana transaction signatures to prevent replay
+
+
+```solidity
+mapping(bytes32 => bool) public processedSolanaTxs
+```
+
+
 ## Functions
 ### constructor
 
@@ -592,6 +608,10 @@ function getTwinAddress(bytes32 solanaAddress) external view returns (address tw
 
 Store Twin mapping for reference
 
+FIX: L-4 — this mapping is never used in auth paths (onlyTwin uses
+bridge.getPredictedTwinAddress directly). Kept for off-chain reference
+only; do NOT rely on it for security decisions.
+
 
 ```solidity
 function mapTwin(bytes32 solanaAddress, address twinAddress) external onlyOwner;
@@ -635,8 +655,24 @@ function _bridgeToSolana(
     address token,
     uint256 amount,
     bytes32 solanaDestination,
-    IBaseSolanaBridge.Ix[] memory ixs
+    IBaseSolanaBridge.Ix[] calldata ixs
 ) internal;
+```
+
+### _bridgeToSolanaNoIxs
+
+
+```solidity
+function _bridgeToSolanaNoIxs(address token, uint256 amount, bytes32 solanaDestination) internal;
+```
+
+### _prepareBridgeTransfer
+
+
+```solidity
+function _prepareBridgeTransfer(address token, uint256 amount, bytes32 solanaDestination)
+    internal
+    returns (IBaseSolanaBridge.Transfer memory transfer);
 ```
 
 ### getSolanaMint
@@ -727,9 +763,14 @@ function setLotteryManager(address _lotteryManager) external onlyOwner;
 |`_lotteryManager`|`address`|The CreatorLotteryManager contract address|
 
 
-### emergencyWithdraw
+### setDefaultSwapFeeTier
 
-Emergency withdraw stuck tokens
+
+```solidity
+function setDefaultSwapFeeTier(uint24 _feeTier) external onlyOwner;
+```
+
+### emergencyWithdraw
 
 
 ```solidity
@@ -830,6 +871,20 @@ event EntryKeeperSet(bytes32 indexed keeperPubkey, bool allowed);
 
 ```solidity
 event LotteryManagerSet(address indexed lotteryManager);
+```
+
+### LotteryEntryFailed
+
+```solidity
+event LotteryEntryFailed(address indexed buyerTwin, address indexed shareOFT, uint256 amount, bytes reason);
+```
+
+### EmergencyWithdraw
+Emergency withdraw stuck tokens
+
+
+```solidity
+event EmergencyWithdraw(address indexed token, uint256 amount, address indexed to);
 ```
 
 ## Errors
@@ -933,6 +988,8 @@ struct LotteryEntry {
     bytes32 buyerSolanaPubkey;
     address shareOFT;
     uint256 amountSolanaUnits;
+    // FIX: M-1 — Solana tx signature for deduplication
+    bytes32 solanaTxSig;
 }
 ```
 

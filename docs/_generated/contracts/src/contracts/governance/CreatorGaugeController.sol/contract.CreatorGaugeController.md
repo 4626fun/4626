@@ -188,6 +188,13 @@ bool public useOracleSlippage = true
 ```
 
 
+### fallbackMinOutputBps
+
+```solidity
+uint256 public fallbackMinOutputBps = 0
+```
+
+
 ### vaultGaugeVoting
 VaultGaugeVoting for ve(3,3) probability direction
 
@@ -386,6 +393,20 @@ bool public autoProcessWethFees
 ```
 
 
+### accountedOFTBalance
+Account for OFT tokens that arrived via cross-chain fee flush
+
+When remote CreatorShareOFTs flush fees via OFT send(), the tokens
+are minted directly to this contract by LayerZero's _credit().
+This function sweeps the unaccounted balance into pendingFees.
+Permissionless — anyone can trigger this (keeper, owner, etc.)
+
+
+```solidity
+uint256 public accountedOFTBalance
+```
+
+
 ## Functions
 ### constructor
 
@@ -434,13 +455,6 @@ function deposit(uint256 amount) external nonReentrant;
 ```
 
 ### receiveBridgedFees
-
-Account for OFT tokens that arrived via cross-chain fee flush
-
-When remote CreatorShareOFTs flush fees via OFT send(), the tokens
-are minted directly to this contract by LayerZero's _credit().
-This function sweeps the unaccounted balance into pendingFees.
-Permissionless — anyone can trigger this (keeper, owner, etc.)
 
 
 ```solidity
@@ -549,6 +563,8 @@ function distribute() external nonReentrant;
 ### forceDistribute
 
 Force distribution (owner only, bypasses time check)
+
+EMERGENCY ONLY — bypasses distributionInterval. Should be behind timelock/multisig.
 
 
 ```solidity
@@ -779,6 +795,13 @@ function setOracleConfig(uint32 _twapDuration, bool _useOracle) external onlyOwn
 |`_twapDuration`|`uint32`|TWAP duration in seconds|
 |`_useOracle`|`bool`|Whether to use oracle for slippage protection|
 
+
+### setFallbackMinOutputBps
+
+
+```solidity
+function setFallbackMinOutputBps(uint256 _bps) external onlyOwner;
+```
 
 ### setVaultGaugeVoting
 
@@ -1119,6 +1142,12 @@ event WethFeeKeeperUpdated(address indexed oldKeeper, address indexed newKeeper)
 
 ```solidity
 event WethProcessingConfigUpdated(uint256 maxPermissionlessWethProcess, bool autoProcessWethFees);
+```
+
+### ForceDistributed
+
+```solidity
+event ForceDistributed(uint256 amount, uint256 timestamp);
 ```
 
 ## Errors

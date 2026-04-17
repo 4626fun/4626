@@ -310,6 +310,27 @@ uint8 private constant IGNORE_REASON_RATE_LIMITED = 4
 ```
 
 
+### pendingVrfCoordinator
+
+```solidity
+address public pendingVrfCoordinator
+```
+
+
+### vrfCoordinatorTimelockExpiry
+
+```solidity
+uint256 public vrfCoordinatorTimelockExpiry
+```
+
+
+### VRF_COORDINATOR_TIMELOCK
+
+```solidity
+uint256 public constant VRF_COORDINATOR_TIMELOCK = 2 days
+```
+
+
 ## Functions
 ### constructor
 
@@ -329,7 +350,23 @@ constructor(address _registry, address _owner)
 |`_owner`|`address`|Owner address|
 
 
+### queueVRFCoordinatorChange
+
+
+```solidity
+function queueVRFCoordinatorChange(address _vrfCoordinator) external onlyOwner;
+```
+
+### executeVRFCoordinatorChange
+
+
+```solidity
+function executeVRFCoordinatorChange() external onlyOwner;
+```
+
 ### setVRFCoordinator
+
+Kept for initial setup only (when coordinator is zero)
 
 
 ```solidity
@@ -541,6 +578,13 @@ function setDefaultGasLimit(uint32 _gasLimit) external onlyOwner;
 
 ```solidity
 function setTwapPeriod(uint32 _period) external onlyOwner;
+```
+
+### removePriceReportingChain
+
+
+```solidity
+function removePriceReportingChain(uint32 chainEid) external onlyOwner;
 ```
 
 ### fundContract
@@ -808,6 +852,18 @@ Reverting in `_lzReceive` can lock the LayerZero inbound lane for that srcEid.
 event CrossChainRequestIgnored(
     uint32 indexed srcEid, bytes32 indexed sender, uint64 indexed sequence, uint8 reason
 );
+```
+
+### VRFCoordinatorChangeQueued
+
+```solidity
+event VRFCoordinatorChangeQueued(address indexed newCoordinator, uint256 effectiveAt);
+```
+
+### VRFCoordinatorChangeExecuted
+
+```solidity
+event VRFCoordinatorChangeExecuted(address indexed newCoordinator);
 ```
 
 ## Errors

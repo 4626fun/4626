@@ -135,6 +135,13 @@ Unlock tokens after lock expires
 function unlock() external override nonReentrant returns (uint256 amount);
 ```
 
+### burnExpiredLock
+
+
+```solidity
+function burnExpiredLock(address user) external override nonReentrant;
+```
+
 ### _calculateVotingPower
 
 
@@ -261,10 +268,37 @@ function approve(address, uint256) public pure override returns (bool);
 function _update(address from, address to, uint256 value) internal override(ERC20, ERC20Votes);
 ```
 
+### getPastVotes
+
+
+```solidity
+function getPastVotes(address account, uint256 timepoint) public view override returns (uint256);
+```
+
+### getPastTotalSupply
+
+
+```solidity
+function getPastTotalSupply(
+    uint256 /* timepoint */
+)
+    public
+    view
+    override
+    returns (uint256);
+```
+
 ### nonces
 
 
 ```solidity
 function nonces(address owner) public view override(ERC20Permit, Nonces) returns (uint256);
+```
+
+## Events
+### ExpiredLockBurned
+
+```solidity
+event ExpiredLockBurned(address indexed user, uint256 burnedBalance);
 ```
 

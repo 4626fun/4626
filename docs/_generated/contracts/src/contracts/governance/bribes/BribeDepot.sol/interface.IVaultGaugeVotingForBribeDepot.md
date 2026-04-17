@@ -24,3 +24,10 @@ function getVaultWeightAtEpoch(uint256 epoch, address vault) external view retur
 function getUserVoteWeightAtEpoch(uint256 epoch, address user, address vault) external view returns (uint256);
 ```
 
+### canReceiveVotes
+
+
+```solidity
+function canReceiveVotes(address vault) external view returns (bool);
+```
+

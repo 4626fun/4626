@@ -64,7 +64,7 @@ Defined in: [src/app/accessShared.tsx:24](https://github.com/wenakita/4626/blob/
 
 ##### hostMode
 
-> **hostMode**: [`HostMode`](../lib/host.md#hostmode)
+> **hostMode**: [`HostMode`](../lib/env/host.md#hostmode)
 
 Defined in: [src/app/accessShared.tsx:26](https://github.com/wenakita/4626/blob/main/frontend/src/app/accessShared.tsx#L26)
 
@@ -194,22 +194,22 @@ Defined in: [src/app/accessShared.tsx:41](https://github.com/wenakita/4626/blob/
 
 ### getInitialTelegramMiniAppEntryResolution
 
-Re-exports [getInitialTelegramMiniAppEntryResolution](../lib/telegramMiniAppRouteGuard.md#getinitialtelegramminiappentryresolution)
+Re-exports [getInitialTelegramMiniAppEntryResolution](../lib/telegram/telegramMiniAppRouteGuard.md#getinitialtelegramminiappentryresolution)
 
 ***
 
 ### hasTelegramLinkEntryContext
 
-Re-exports [hasTelegramLinkEntryContext](../lib/telegramMiniAppRouteGuard.md#hastelegramlinkentrycontext)
+Re-exports [hasTelegramLinkEntryContext](../lib/telegram/telegramMiniAppRouteGuard.md#hastelegramlinkentrycontext)
 
 ***
 
 ### hasTelegramLinkQueryContext
 
-Re-exports [hasTelegramLinkQueryContext](../lib/telegramMiniAppRouteGuard.md#hastelegramlinkquerycontext)
+Re-exports [hasTelegramLinkQueryContext](../lib/telegram/telegramMiniAppRouteGuard.md#hastelegramlinkquerycontext)
 
 ***
 
 ### resolveTelegramMiniAppEntryBootstrap
 
-Re-exports [resolveTelegramMiniAppEntryBootstrap](../lib/telegramMiniAppRouteGuard.md#resolvetelegramminiappentrybootstrap)
+Re-exports [resolveTelegramMiniAppEntryBootstrap](../lib/telegram/telegramMiniAppRouteGuard.md#resolvetelegramminiappentrybootstrap)

@@ -93,15 +93,6 @@ uint24 public constant LP_RESERVE_SPLIT_MPS = 2_000_000
 ```
 
 
-### THURSDAY_EPOCH_SECONDS
-Unix epoch (1970-01-01 00:00 UTC) was a Thursday, so weekly boundaries align to Thursday 00:00 UTC.
-
-
-```solidity
-uint256 internal constant THURSDAY_EPOCH_SECONDS = 7 days
-```
-
-
 ### auctionToken
 Token being auctioned (e.g., ■AKITA)
 
@@ -414,6 +405,20 @@ bool public simpleLaunchEnabled
 ```
 
 
+### _configModule
+
+```solidity
+address private immutable _configModule
+```
+
+
+### _encodingHelper
+
+```solidity
+CCALaunchStrategyEncodingHelper private immutable _encodingHelper
+```
+
+
 ## Functions
 ### constructor
 
@@ -449,6 +454,13 @@ Only owner or approved launchers can call
 modifier onlyApprovedOrOwner() ;
 ```
 
+### _delegateConfig
+
+
+```solidity
+function _delegateConfig() internal;
+```
+
 ### setApprovedLauncher
 
 Approve or revoke launcher permissions
@@ -457,7 +469,7 @@ Only owner can manage approved launchers
 
 
 ```solidity
-function setApprovedLauncher(address launcher, bool approved) external onlyOwner;
+function setApprovedLauncher(address launcher, bool approved) external;
 ```
 **Parameters**
 
@@ -475,7 +487,7 @@ Allows migrating to newer Uniswap factory deployments without redeploying this s
 
 
 ```solidity
-function setCcaFactory(address newFactory) external onlyOwner;
+function setCcaFactory(address newFactory) external;
 ```
 
 ### setMigrationConfig
@@ -492,7 +504,7 @@ function setMigrationConfig(
     address _operator,
     uint64 _migrationDelayBlocks,
     uint64 _sweepDelayBlocks
-) external onlyOwner;
+) external;
 ```
 
 ### setBackingVault
@@ -503,7 +515,7 @@ This is non-blocking visibility only; no auction/migration gates depend on it.
 
 
 ```solidity
-function setBackingVault(address _backingVault) external onlyOwner;
+function setBackingVault(address _backingVault) external;
 ```
 
 ### setSimpleLaunchEnabled
@@ -512,7 +524,7 @@ Enable or disable simplified launch path.
 
 
 ```solidity
-function setSimpleLaunchEnabled(bool enabled) external onlyOwner;
+function setSimpleLaunchEnabled(bool enabled) external;
 ```
 
 ### _launchAuctionInternal
@@ -758,13 +770,6 @@ function _snapshotBackingTelemetry() internal;
 function _deriveScheduledStartBlock() internal view returns (uint64 startBlock);
 ```
 
-### _nextThursdayStartTimestamp
-
-
-```solidity
-function _nextThursdayStartTimestamp(uint256 currentTimestamp) internal pure returns (uint256);
-```
-
 ### _deriveLaunchPricing
 
 
@@ -782,30 +787,7 @@ function _deriveLaunchPricing()
 function _deriveLaunchTickSpacing(uint256 floorPriceQ96) internal view returns (uint256 tickSpacingQ96);
 ```
 
-### _currencyBalance
-
-
-```solidity
-function _currencyBalance(address holder) internal view returns (uint256);
-```
-
-### _requireOperatorSweep
-
-
-```solidity
-function _requireOperatorSweep() internal view;
-```
-
-### _buildPoolKey
-
-
-```solidity
-function _buildPoolKey() internal view returns (PoolKey memory key);
-```
-
 ### _encodeAuctionParams
-
-Encode auction parameters for CCA factory
 
 
 ```solidity
@@ -820,43 +802,25 @@ function _encodeAuctionParams(
 ) internal view returns (bytes memory);
 ```
 
-### _createLinearSteps
-
-Create linear auction steps (sell evenly over time)
-
-
-```solidity
-function _createLinearSteps(uint64 duration) internal pure returns (bytes memory);
-```
-**Parameters**
-
-|Name|Type|Description|
-|----|----|-----------|
-|`duration`|`uint64`|Total duration in blocks|
-
-
-### _createAcceleratingSteps
-
-Create accelerating auction steps (sell more towards end)
-
-Rewards early participants more
-
-
-```solidity
-function _createAcceleratingSteps(uint64 duration) internal pure returns (bytes memory);
-```
-
 ### _createUniswapSafeDefaultSteps
 
-Create a Uniswap-safe default schedule.
 
-Uniswap recommends the final block sells a significant amount of tokens because
-the final clearing price is used to initialize downstream liquidity.
-We allocate 20% over the first half, 45% over the middle, and the remainder in the final block.
+```solidity
+function _createUniswapSafeDefaultSteps(uint64 duration) internal view returns (bytes memory);
+```
+
+### _currencyBalance
 
 
 ```solidity
-function _createUniswapSafeDefaultSteps(uint64 duration) internal pure returns (bytes memory);
+function _currencyBalance(address holder) internal view returns (uint256);
+```
+
+### _buildPoolKey
+
+
+```solidity
+function _buildPoolKey() internal view returns (PoolKey memory key);
 ```
 
 ### setDefaultDuration
@@ -865,7 +829,7 @@ Update default auction duration
 
 
 ```solidity
-function setDefaultDuration(uint64 _duration) external onlyOwner;
+function setDefaultDuration(uint64 _duration) external;
 ```
 
 ### setDefaultClaimDelay
@@ -874,7 +838,7 @@ Update default claim delay
 
 
 ```solidity
-function setDefaultClaimDelay(uint64 _delay) external onlyOwner;
+function setDefaultClaimDelay(uint64 _delay) external;
 ```
 
 ### setLaunchBlockTimeSeconds
@@ -883,7 +847,7 @@ Update the block-time estimate used for Thursday UTC launch alignment.
 
 
 ```solidity
-function setLaunchBlockTimeSeconds(uint64 _secondsPerBlock) external onlyOwner;
+function setLaunchBlockTimeSeconds(uint64 _secondsPerBlock) external;
 ```
 
 ### setMigrationDelayBlocks
@@ -892,7 +856,7 @@ Update migration delay after auction end.
 
 
 ```solidity
-function setMigrationDelayBlocks(uint64 _delay) external onlyOwner;
+function setMigrationDelayBlocks(uint64 _delay) external;
 ```
 
 ### setDefaultSweepDelayBlocks
@@ -901,7 +865,7 @@ Update default post-claim sweep delay.
 
 
 ```solidity
-function setDefaultSweepDelayBlocks(uint64 _delay) external onlyOwner;
+function setDefaultSweepDelayBlocks(uint64 _delay) external;
 ```
 
 ### setDefaultTickSpacing
@@ -910,7 +874,7 @@ Update default tick spacing
 
 
 ```solidity
-function setDefaultTickSpacing(uint256 _spacing) external onlyOwner;
+function setDefaultTickSpacing(uint256 _spacing) external;
 ```
 
 ### setDefaultFloorPrice
@@ -921,7 +885,7 @@ Legacy fallback value retained for backwards compatibility. Launch flow derives 
 
 
 ```solidity
-function setDefaultFloorPrice(uint256 _price) external onlyOwner;
+function setDefaultFloorPrice(uint256 _price) external;
 ```
 
 ### setLaunchDiscountBps
@@ -930,7 +894,7 @@ Update launch floor discount applied to oracle price.
 
 
 ```solidity
-function setLaunchDiscountBps(uint16 _discountBps) external onlyOwner;
+function setLaunchDiscountBps(uint16 _discountBps) external;
 ```
 **Parameters**
 
@@ -945,7 +909,7 @@ Update launch tick spacing (as bps of derived launch floor).
 
 
 ```solidity
-function setLaunchTickSpacingBps(uint16 _tickSpacingBps) external onlyOwner;
+function setLaunchTickSpacingBps(uint16 _tickSpacingBps) external;
 ```
 **Parameters**
 
@@ -960,7 +924,7 @@ Update maximum accepted oracle staleness for launch pricing.
 
 
 ```solidity
-function setLaunchOracleMaxAge(uint64 _maxAge) external onlyOwner;
+function setLaunchOracleMaxAge(uint64 _maxAge) external;
 ```
 
 ### setRecipients
@@ -969,7 +933,7 @@ Update fund recipients
 
 
 ```solidity
-function setRecipients(address _fundsRecipient, address _tokensRecipient) external onlyOwner;
+function setRecipients(address _fundsRecipient, address _tokensRecipient) external;
 ```
 
 ### setOracleConfig
@@ -978,9 +942,7 @@ Configure oracle for V4 pool setup on graduation
 
 
 ```solidity
-function setOracleConfig(address _oracle, address _poolManager, address _taxHook, address _feeRecipient)
-    external
-    onlyOwner;
+function setOracleConfig(address _oracle, address _poolManager, address _taxHook, address _feeRecipient) external;
 ```
 **Parameters**
 
@@ -998,7 +960,7 @@ Update fee recipient (GaugeController)
 
 
 ```solidity
-function setFeeRecipient(address _feeRecipient) external onlyOwner;
+function setFeeRecipient(address _feeRecipient) external;
 ```
 **Parameters**
 
@@ -1013,7 +975,7 @@ Update tax rate
 
 
 ```solidity
-function setTaxRate(uint256 _taxRateBps) external onlyOwner;
+function setTaxRate(uint256 _taxRateBps) external;
 ```
 **Parameters**
 
@@ -1028,7 +990,7 @@ Update V4 pool fee tier
 
 
 ```solidity
-function setPoolFeeTier(uint24 _feeTier) external onlyOwner;
+function setPoolFeeTier(uint24 _feeTier) external;
 ```
 **Parameters**
 
@@ -1043,7 +1005,7 @@ Update V4 pool tick spacing
 
 
 ```solidity
-function setPoolTickSpacing(int24 _tickSpacing) external onlyOwner;
+function setPoolTickSpacing(int24 _tickSpacing) external;
 ```
 **Parameters**
 
@@ -1131,7 +1093,7 @@ Emergency withdraw tokens stuck in strategy
 
 
 ```solidity
-function emergencyWithdraw(address token, uint256 amount, address to) external onlyOwner;
+function emergencyWithdraw(address token, uint256 amount, address to) external;
 ```
 
 ### emergencyWithdrawETH
@@ -1140,7 +1102,7 @@ Emergency withdraw ETH
 
 
 ```solidity
-function emergencyWithdrawETH(address payable to) external onlyOwner;
+function emergencyWithdrawETH(address payable to) external;
 ```
 
 ### receive
@@ -1210,7 +1172,7 @@ event LaunchPricingResolved(
 ### ConfigUpdated
 
 ```solidity
-event ConfigUpdated(string param, uint256 value);
+event ConfigUpdated(bytes32 param, uint256 value);
 ```
 
 ### RecipientsUpdated
@@ -1398,6 +1360,12 @@ error InvalidConfig();
 
 ```solidity
 error Unauthorized();
+```
+
+### EthTransferFailed
+
+```solidity
+error EthTransferFailed();
 ```
 
 ## Structs

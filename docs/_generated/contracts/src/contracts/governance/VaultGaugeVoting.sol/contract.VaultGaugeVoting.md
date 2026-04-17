@@ -155,6 +155,20 @@ mapping(uint256 => bool) private _epochCheckpointed
 ```
 
 
+### _epochResetGeneration
+
+```solidity
+mapping(uint256 => uint256) private _epochResetGeneration
+```
+
+
+### _userVoteGeneration
+
+```solidity
+mapping(uint256 => mapping(address => uint256)) private _userVoteGeneration
+```
+
+
 ## Functions
 ### constructor
 
@@ -422,5 +436,23 @@ error EpochNotEnded();
 
 ```solidity
 error LockExpiresBeforeEpochEnd();
+```
+
+### VotingNotStarted
+
+```solidity
+error VotingNotStarted();
+```
+
+### LockTooRecent
+
+```solidity
+error LockTooRecent();
+```
+
+### NormalizedWeightZero
+
+```solidity
+error NormalizedWeightZero();
 ```
 

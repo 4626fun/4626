@@ -371,6 +371,12 @@ event EmergencyWithdraw(address indexed to, uint256 amount);
 event RescueConfigured(address indexed rescue, uint64 delay);
 ```
 
+### RescueDisabled
+
+```solidity
+event RescueDisabled();
+```
+
 ### RescueInitiated
 
 ```solidity

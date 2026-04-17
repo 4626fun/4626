@@ -36,7 +36,7 @@ Defined in: [server/commands/families/keepr.ts:771](https://github.com/wenakita/
 
 ###### vault
 
-[`KeeprVaultRow`](../../_lib/keeprRegistry.md#keeprvaultrow) \| `null`
+[`KeeprVaultRow`](../../_lib/keepr/keeprRegistry.md#keeprvaultrow) \| `null`
 
 #### Returns
 
@@ -104,7 +104,7 @@ Defined in: [server/commands/families/keepr.ts:628](https://github.com/wenakita/
 
 ###### vault?
 
-[`KeeprVaultRow`](../../_lib/keeprRegistry.md#keeprvaultrow) \| `null`
+[`KeeprVaultRow`](../../_lib/keepr/keeprRegistry.md#keeprvaultrow) \| `null`
 
 #### Returns
 
@@ -122,7 +122,7 @@ Defined in: [server/commands/families/keepr.ts:682](https://github.com/wenakita/
 
 ##### v
 
-[`KeeprVaultRow`](../../_lib/keeprRegistry.md#keeprvaultrow) | `null`
+[`KeeprVaultRow`](../../_lib/keepr/keeprRegistry.md#keeprvaultrow) | `null`
 
 #### Returns
 

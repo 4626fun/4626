@@ -12,7 +12,7 @@
 
 > **VaultCard**(`__namedParameters`): `Element`
 
-Defined in: [src/components/swap/VaultCard.tsx:126](https://github.com/wenakita/4626/blob/main/frontend/src/components/swap/VaultCard.tsx#L126)
+Defined in: [src/components/swap/VaultCard.tsx:124](https://github.com/wenakita/4626/blob/main/frontend/src/components/swap/VaultCard.tsx#L124)
 
 #### Parameters
 

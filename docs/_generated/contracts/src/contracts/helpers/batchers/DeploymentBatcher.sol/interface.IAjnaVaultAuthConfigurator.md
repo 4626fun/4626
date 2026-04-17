@@ -31,10 +31,17 @@ function setSwapper(address swapper) external;
 function setKeeper(address keeper, bool isKeeper) external;
 ```
 
-### setAdmin
+### transferAdmin
 
 
 ```solidity
-function setAdmin(address admin) external;
+function transferAdmin(address admin) external;
+```
+
+### isAdmin
+
+
+```solidity
+function isAdmin(address account) external view returns (bool);
 ```
 

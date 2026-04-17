@@ -26,6 +26,13 @@ address public admin
 ```
 
 
+### pendingAdmin
+
+```solidity
+address public pendingAdmin
+```
+
+
 ### swapper
 
 ```solidity
@@ -132,11 +139,18 @@ function isAdminOrKeeper(address account) external view returns (bool);
 function isAdminOrSwapper(address account) external view returns (bool);
 ```
 
-### setAdmin
+### transferAdmin
 
 
 ```solidity
-function setAdmin(address nextAdmin) external onlyAdmin;
+function transferAdmin(address nextAdmin) external onlyAdmin;
+```
+
+### acceptAdmin
+
+
+```solidity
+function acceptAdmin() external;
 ```
 
 ### setSwapper
@@ -204,6 +218,12 @@ function setMinBucketIndex(uint256 nextMinBucketIndex) external onlyAdmin;
 
 ### retrieveFees
 
+Withdraw accumulated fee tokens to admin.
+
+FIX: F-20 — accepts any ERC-20 token to handle multi-token fee scenarios.
+CAUTION: admin must ensure `token` is a fee token, not vault collateral.
+Only callable by admin; tokens always sent to the current admin address.
+
 
 ```solidity
 function retrieveFees(address token, uint256 amount) external onlyAdmin;
@@ -214,6 +234,12 @@ function retrieveFees(address token, uint256 amount) external onlyAdmin;
 
 ```solidity
 event AdminSet(address indexed admin);
+```
+
+### AdminTransferStarted
+
+```solidity
+event AdminTransferStarted(address indexed currentAdmin, address indexed pendingAdmin);
 ```
 
 ### SwapperSet
@@ -299,5 +325,11 @@ error BufferRatioTooHigh();
 
 ```solidity
 error InvalidMinBucketIndex();
+```
+
+### NotPendingAdmin
+
+```solidity
+error NotPendingAdmin();
 ```
 

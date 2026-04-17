@@ -10,9 +10,9 @@
 
 ### Modal()
 
-> **Modal**(`__namedParameters`): `ReactPortal`
+> **Modal**(`__namedParameters`): `Element`
 
-Defined in: [src/components/ui/Modal.tsx:32](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Modal.tsx#L32)
+Defined in: [src/components/ui/Modal.tsx:33](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Modal.tsx#L33)
 
 #### Parameters
 
@@ -22,4 +22,4 @@ Defined in: [src/components/ui/Modal.tsx:32](https://github.com/wenakita/4626/bl
 
 #### Returns
 
-`ReactPortal`
+`Element`

@@ -78,7 +78,7 @@ Defined in: [server/agent/core/resolveVaultRole.ts:14](https://github.com/wenaki
 
 ###### vault
 
-`Pick`\<[`KeeprVaultRow`](../../_lib/keeprRegistry.md#keeprvaultrow), `"config"` \| `"canonicalOwnerAddress"`\> \| `null` \| `undefined`
+`Pick`\<[`KeeprVaultRow`](../../_lib/keepr/keeprRegistry.md#keeprvaultrow), `"config"` \| `"canonicalOwnerAddress"`\> \| `null` \| `undefined`
 
 ###### wallet
 
