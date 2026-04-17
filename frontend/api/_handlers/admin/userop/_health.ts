@@ -177,13 +177,21 @@ async function loadWindow(
     timeoutCount += asNumber(payload.timeoutCount)
 
     // Prefer new generic fields, but fall back to the legacy flat shape so
-    // older telemetry rows still contribute.
+    // older telemetry rows still contribute. Use explicit presence checks
+    // rather than `||` so a legitimate zero in the new-shape row doesn't
+    // silently read the legacy field (which can be non-zero on rows that
+    // emit both shapes during the transition).
     const paymasterUsage =
       (payload.paymasterUsage as Record<string, unknown> | undefined) ?? null
     fallbackToSelfFundedCount +=
-      asNumber(payload.fallbackToSelfFundedCount) || asNumber(paymasterUsage?.fallbackToSelfFunded)
+      payload.fallbackToSelfFundedCount !== undefined
+        ? asNumber(payload.fallbackToSelfFundedCount)
+        : asNumber(paymasterUsage?.fallbackToSelfFunded)
     const ownerType = (payload.ownerType as Record<string, unknown> | undefined) ?? null
-    ownerIsContractCount += asNumber(payload.ownerIsContractCount) || asNumber(ownerType?.contract)
+    ownerIsContractCount +=
+      payload.ownerIsContractCount !== undefined
+        ? asNumber(payload.ownerIsContractCount)
+        : asNumber(ownerType?.contract)
 
     const p50 = asNumber(payload.p50Ms)
     const p95 = asNumber(payload.p95Ms)
