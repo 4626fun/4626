@@ -2,6 +2,7 @@ import { getKeeprVaultByGroupId } from '../_lib/keepr/keeprRegistry.js'
 import { resolveVaultAccessRoleFromVault } from '../agent/core/resolveVaultRole.js'
 import { toAgentError, toUserFacingAgentErrorMessage } from '../agent/eliza/_errors.js'
 import { getCommandFamily } from './registry.js'
+import { evaluateGroupAdminGate } from './telegramGroupAdminGate.js'
 import type { ExecuteCommandParams, KeeprCommandResult, KeeprRole } from './types.js'
 import { executeCoinCommandFamily } from './families/coin.js'
 import { executeConversationalCommandFamily, looksLikeConversationalCommand } from './families/conversation.js'
@@ -25,10 +26,19 @@ function resolveVaultRole(params: {
   })
 }
 
+
+
 export async function executeCommand(params: ExecuteCommandParams): Promise<KeeprCommandResult> {
   const raw = (params.text ?? '').trim()
 
   try {
+    const gate = await evaluateGroupAdminGate({
+      text: raw,
+      chatId: params.chatId,
+      userId: params.userId,
+    })
+    if (!gate.allowed) return { ok: false, response: gate.response }
+
     const family = getCommandFamily(raw)
     let vaultPromise: Promise<Awaited<ReturnType<typeof getKeeprVaultByGroupId>>> | null = null
     const getVault = () => {

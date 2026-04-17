@@ -679,6 +679,37 @@ export function formatAssistantOnlyBlocked(command: string): string {
   ].join('\n')
 }
 
+/**
+ * Shown when a non-admin group member invokes a setup command (/link, /linked,
+ * /unlink, /keepr). The command is still available to group owners and admins,
+ * and to all users in private DMs with the bot.
+ */
+export function formatAdminOnlyRefusal(command: string): string {
+  return [
+    '<b>Admins only</b>',
+    '',
+    `• <code>${escapeTelegramHtml(command)}</code> can only be run by the group owner or an admin`,
+    '• You can still use <code>/ai</code>, <code>/help</code>, <code>/whois</code>, and <code>/wallet</code>',
+    '• Ask an admin to run <code>/link</code> → <code>/linked</code> → scope a vault → <code>/keepr status</code>',
+    '• To link your own wallet, DM the bot and send <code>/link</code> there',
+  ].join('\n')
+}
+
+/**
+ * Shown when we could not determine the caller's role because getChatMember
+ * failed (network, rate limit, bot not admin in group). This is a "fail closed"
+ * refusal — we do not allow the action until we can verify.
+ */
+export function formatAdminCheckUnavailable(command: string): string {
+  return [
+    '<b>Couldn’t verify your role</b>',
+    '',
+    `• <code>${escapeTelegramHtml(command)}</code> is restricted to group owners/admins, and I couldn’t confirm yours right now`,
+    '• This usually means the bot lacks the permissions it needs in this group',
+    '• Ask a group admin to (re)add the bot as an admin, then try again',
+  ].join('\n')
+}
+
 export function formatVaultStatus(v: KeeprVaultRow): string {
   if (!v) {
     return [

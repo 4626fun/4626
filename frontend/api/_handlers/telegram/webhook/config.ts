@@ -53,6 +53,7 @@ const RawTelegramWebhookEnvSchema = z
     TELEGRAM_HOLDER_ROOMS_ENABLED: z.string().optional(),
     TELEGRAM_REQUIRE_TRADE_MEMBERSHIP: z.string().optional(),
     TELEGRAM_COPY_TEXT_BUTTONS: z.string().optional(),
+    TELEGRAM_SETUP_ROLE_GATE: z.string().optional(),
   })
   .passthrough()
 
@@ -99,6 +100,7 @@ export type TelegramWebhookConfig = {
   holderRoomsEnabled: boolean
   requireTradeMembership: boolean
   copyTextButtons: boolean
+  setupRoleGateEnabled: boolean
 }
 
 function buildConfig(raw: z.infer<typeof RawTelegramWebhookEnvSchema>): TelegramWebhookConfig {
@@ -181,6 +183,7 @@ function buildConfig(raw: z.infer<typeof RawTelegramWebhookEnvSchema>): Telegram
     holderRoomsEnabled: parseBoolean(raw.TELEGRAM_HOLDER_ROOMS_ENABLED, false),
     requireTradeMembership: parseBoolean(raw.TELEGRAM_REQUIRE_TRADE_MEMBERSHIP, false),
     copyTextButtons: parseBoolean(raw.TELEGRAM_COPY_TEXT_BUTTONS, true),
+    setupRoleGateEnabled: parseBoolean(raw.TELEGRAM_SETUP_ROLE_GATE, false),
   }
 }
 

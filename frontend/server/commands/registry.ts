@@ -232,6 +232,26 @@ export function matchesAnyCommandFamily(rawText: string, families: readonly Comm
   return family ? families.includes(family) : false
 }
 
+/**
+ * Command families that require Telegram group-admin privileges when invoked
+ * from a group chat. Private DMs are NOT affected — /link in a DM is the
+ * personal wallet-linking flow and must stay open to all users.
+ *
+ * Rationale: these commands either set up the group's 4626 vault connection
+ * or reveal/mutate its configuration. Allowing any member to run them lets
+ * them interfere with or pre-empt the group owner's setup.
+ */
+const GROUP_ADMIN_REQUIRED_FAMILIES: ReadonlySet<CommandFamily> = new Set<CommandFamily>([
+  'link',
+  'linked',
+  'unlink',
+  'keepr',
+])
+
+export function requiresGroupAdminForFamily(family: CommandFamily | null): boolean {
+  return family !== null && GROUP_ADMIN_REQUIRED_FAMILIES.has(family)
+}
+
 export function isKnownTelegramCommandHead(head: string): boolean {
   return telegramCommandHeads.includes(head)
 }
