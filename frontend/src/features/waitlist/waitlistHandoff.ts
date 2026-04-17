@@ -1,26 +1,32 @@
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/wallet/onboardingWallet'
 
-export type PrivyAuthSessionResponse = {
-  address: string
-  sessionToken: string
-  privyUserId?: string
-}
+/**
+ * Handoff helpers for the `/waitlist` → `app.4626.fun/swap` transition.
+ *
+ * Contract note (FINDING-02 security fix):
+ * `/api/auth/privy` and `/api/auth/handoff/create` now convey the 4626
+ * session via an HttpOnly `cv_auth_session` cookie only — the server no
+ * longer returns `sessionToken` in response JSON to prevent XSS
+ * exfiltration. These helpers therefore use `withCredentials: true` and
+ * rely on the cookie round-tripping between same-origin calls; no session
+ * token is plumbed through memory.
+ */
 
-export type HandoffCreateResponse = {
+type HandoffCreateResponse = {
   code: string
   expiresAt: string
 }
 
-function readSessionTokenFromPrivyAuthPayload(payload: ApiEnvelope<PrivyAuthSessionResponse> | null): string | null {
-  const token =
-    payload?.success && typeof payload.data?.sessionToken === 'string' ? payload.data.sessionToken.trim() : ''
-  return token || null
-}
-
-export async function bridgePrivySession(privyToken: string | null): Promise<string | null> {
+/**
+ * Exchange a Privy access token for a 4626 session on the current origin.
+ * The session itself lives in the HttpOnly `cv_auth_session` cookie; this
+ * function just signals whether that cookie was successfully established
+ * so the caller knows the next same-origin request will be authenticated.
+ */
+export async function bridgePrivySession(privyToken: string | null): Promise<boolean> {
   const token = typeof privyToken === 'string' ? privyToken.trim() : ''
-  if (!token) return null
+  if (!token) return false
 
   const authRes = await apiFetch('/api/auth/privy', {
     method: 'POST',
@@ -31,30 +37,26 @@ export async function bridgePrivySession(privyToken: string | null): Promise<str
     },
   }).catch(() => null)
 
-  const authJson = authRes
-    ? ((await authRes.json().catch(() => null)) as ApiEnvelope<PrivyAuthSessionResponse> | null)
-    : null
-
-  return authRes?.ok ? readSessionTokenFromPrivyAuthPayload(authJson) : null
+  return Boolean(authRes?.ok)
 }
 
-export async function createAuthHandoffCode(params: {
-  privyToken: string | null
-  sessionToken: string | null
-}): Promise<string> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    Accept: 'application/json',
-  }
-  const sessionToken = typeof params.sessionToken === 'string' ? params.sessionToken.trim() : ''
-  if (sessionToken) {
-    headers.Authorization = `Bearer ${sessionToken}`
-  }
-
+/**
+ * Ask the server for a one-time handoff code that the app origin can redeem
+ * to mint an equivalent session on its own host. Authentication flows via
+ * the `cv_auth_session` cookie (bridged by `bridgePrivySession` first);
+ * the caller does not need to pass a session token explicitly.
+ *
+ * `privyToken` is forwarded in the body so the redeem side can optionally
+ * also rebuild a Privy context on the app origin.
+ */
+export async function createAuthHandoffCode(params: { privyToken: string | null }): Promise<string> {
   const handoffRes = await apiFetch('/api/auth/handoff/create', {
     method: 'POST',
     withCredentials: true,
-    headers,
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+    },
     body: JSON.stringify({ privyToken: params.privyToken }),
   }).catch(() => null)
 
