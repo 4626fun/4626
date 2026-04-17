@@ -1002,6 +1002,79 @@ export function useAccountSetupController(params: {
               logger.warn('Sub-account backend registration failed', { error: registerErr })
             }
 
+            // ── Agent owner installation (batched into same ceremony) ──
+            // Provision the Privy-managed agent wallet and install it as
+            // a CSW owner so deploy-session/XMTP don't need a separate
+            // passkey ceremony later.
+            try {
+              const agentHeaders = await authHeaders()
+              const agentRes = await apiFetch('/api/onboarding/provision-agent-owner', {
+                method: 'POST',
+                headers: agentHeaders,
+              })
+              if (agentRes.ok) {
+                const agentJson = (await agentRes.json().catch(() => null)) as {
+                  success?: boolean
+                  data?: {
+                    alreadyOwner: boolean
+                    agentWalletAddress: string
+                    txRequest?: { chainId: number; to: string; data: string; value: string }
+                  }
+                } | null
+
+                if (agentJson?.success && agentJson.data && !agentJson.data.alreadyOwner && agentJson.data.txRequest) {
+                  // Send addOwnerAddress via the CSW provider — this triggers
+                  // a second passkey popup, but it's in the same session as the
+                  // sub-account creation so the user experiences them back-to-back.
+                  const cswProvider = await (async () => {
+                    const wallet = subAccount.baseAccountWallet as any
+                    if (wallet?.provider && typeof wallet.provider.request === 'function') return wallet.provider
+                    if (typeof wallet?.getEthereumProvider === 'function') return wallet.getEthereumProvider()
+                    return null
+                  })()
+
+                  if (cswProvider && typeof cswProvider.request === 'function') {
+                    try {
+                      // Use eth_sendTransaction instead of wallet_sendCalls.
+                      // addOwnerAddress is a self-call (from === to === CSW) and
+                      // the Coinbase popup's eGe function blocks wallet_sendCalls
+                      // when target === sender ("Self calls are not allowed").
+                      // eth_sendTransaction uses the standard transaction approval
+                      // UI which does NOT have the self-call guard.
+                      await cswProvider.request({
+                        method: 'eth_sendTransaction',
+                        params: [{
+                          from: canonicalCswAddress,
+                          to: agentJson.data.txRequest.to,
+                          data: agentJson.data.txRequest.data,
+                          value: '0x0',
+                        }],
+                      })
+                      logger.info('Agent wallet installed as CSW owner during account setup', {
+                        agentWalletAddress: agentJson.data.agentWalletAddress,
+                      })
+                    } catch (sendErr) {
+                      // Non-fatal: deploy-session will handle owner install on
+                      // first use if the user cancelled the popup here.
+                      logger.warn('Agent owner eth_sendTransaction failed during account setup', {
+                        error: sendErr instanceof Error ? sendErr.message : String(sendErr),
+                      })
+                    }
+                  }
+                } else if (agentJson?.success && agentJson.data?.alreadyOwner) {
+                  logger.info('Agent wallet already installed as CSW owner', {
+                    agentWalletAddress: agentJson.data.agentWalletAddress,
+                  })
+                }
+              }
+            } catch (agentErr) {
+              // Non-fatal: agent owner installation is an optimization.
+              // Deploy-session will handle this on first use if it fails here.
+              logger.warn('Agent owner provisioning failed during account setup', {
+                error: agentErr instanceof Error ? agentErr.message : String(agentErr),
+              })
+            }
+
             setNotice(
               result.created
                 ? '4626 sub-account created. Signing is enabled.'
