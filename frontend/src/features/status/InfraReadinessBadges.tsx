@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, CircleAlert, CircleSlash, Loader2 } from 'lucide-react'
 
 import { apiFetch } from '@/lib/api/apiBase'
+import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 
 /**
  * Public-facing, read-only infrastructure readiness badges shown at the top
@@ -39,17 +40,20 @@ type HealthResponse = {
   siwe: SiweHealth
 }
 
-type BadgeState = 'loading' | 'ok' | 'degraded' | 'offline'
+type BadgeState = 'loading' | 'ok' | 'degraded' | 'offline' | 'error'
 
-async function fetchInfraHealth(): Promise<HealthResponse | null> {
-  try {
-    const res = await apiFetch('/api/health')
-    if (!res.ok) return null
-    const json = (await res.json()) as HealthResponse
-    return json
-  } catch {
-    return null
+async function fetchInfraHealth(): Promise<HealthResponse> {
+  const res = await apiFetch('/api/health')
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`)
   }
+  // /api/health returns ApiEnvelope<HealthResponse>; unwrap the payload so
+  // consumers see the inner health shape directly.
+  const json = (await res.json()) as ApiEnvelope<HealthResponse>
+  if (!json.success || !json.data) {
+    throw new Error(typeof json.error === 'string' && json.error ? json.error : 'Health check failed')
+  }
+  return json.data
 }
 
 function toneClasses(state: BadgeState): string {
@@ -59,6 +63,7 @@ function toneClasses(state: BadgeState): string {
     case 'degraded':
       return 'border-amber-500/20 bg-amber-500/5 text-amber-200'
     case 'offline':
+    case 'error':
       return 'border-red-500/20 bg-red-500/5 text-red-200'
     case 'loading':
     default:
@@ -73,6 +78,7 @@ function stateIcon(state: BadgeState) {
     case 'degraded':
       return <CircleAlert className="w-3.5 h-3.5" />
     case 'offline':
+    case 'error':
       return <CircleSlash className="w-3.5 h-3.5" />
     case 'loading':
     default:
@@ -106,8 +112,19 @@ function formatTime(iso: string | undefined | null): string {
 /**
  * Map each health sub-object to a badge state. Errors = offline, configured
  * but not ok = degraded, not configured = degraded (informational), ok = ok.
+ *
+ * When `errored` is true the three pills surface an error state rather than
+ * staying in a perpetual "Checking…" — this matters when /api/health itself
+ * is unreachable (outage) rather than returning a populated failure payload.
  */
-function deriveBadges(health: HealthResponse | null | undefined) {
+function deriveBadges(health: HealthResponse | null | undefined, errored = false) {
+  if (errored) {
+    return {
+      paymaster: { state: 'error' as BadgeState, note: 'Health check failed' },
+      db: { state: 'error' as BadgeState, note: 'Health check failed' },
+      siwe: { state: 'error' as BadgeState, note: 'Health check failed' },
+    }
+  }
   if (!health) {
     return {
       paymaster: { state: 'loading' as BadgeState, note: 'Checking…' },
@@ -169,9 +186,15 @@ export function InfraReadinessBadges({ className = '' }: InfraReadinessBadgesPro
     staleTime: 60_000,
     refetchInterval: 60_000,
     refetchOnWindowFocus: false,
+    // Retry on transient failures so a single network blip doesn't lock the
+    // UI into the error state, but surface persistent outages after that.
+    retry: 1,
   })
 
-  const badges = useMemo(() => deriveBadges(query.data ?? null), [query.data])
+  const badges = useMemo(
+    () => deriveBadges(query.data ?? null, query.isError),
+    [query.data, query.isError],
+  )
   const checkedAt = formatTime(query.data?.time)
 
   return (
