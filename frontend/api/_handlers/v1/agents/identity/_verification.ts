@@ -38,13 +38,13 @@ type RegistrationRef = {
   registryAddress: string
 }
 
-type VerificationCheck = {
+export type VerificationCheck = {
   id: string
   passed: boolean
   detail: string
 }
 
-type TeeAttestationStatus = Awaited<ReturnType<typeof getTeeAttestationStatus>>
+export type TeeAttestationStatus = Awaited<ReturnType<typeof getTeeAttestationStatus>>
 
 function setPublicCors(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')

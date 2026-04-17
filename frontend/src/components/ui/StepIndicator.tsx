@@ -8,7 +8,7 @@ interface Step {
   status: StepStatus
 }
 
-interface StepIndicatorProps {
+export interface StepIndicatorProps {
   steps: Step[]
   className?: string
 }

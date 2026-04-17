@@ -23,7 +23,7 @@ const BLOCK_SIZE_MAP: Record<LoadingSize, number> = {
   lg: 28,
 }
 
-type BaseLoadingProps = {
+export type BaseLoadingProps = {
   intent?: LoadingIntent
   labelOverride?: string
   className?: string

@@ -10,11 +10,11 @@ import {
 
 declare const process: { env: Record<string, string | undefined> }
 
-type PreviewKind = 'creator' | 'content' | 'vault' | 'trends'
-type TrendsSort = 'volume' | 'marketCap' | 'priceChange' | 'new'
-type TrendsTime = '1d' | '1w' | '1y'
+export type PreviewKind = 'creator' | 'content' | 'vault' | 'trends'
+export type TrendsSort = 'volume' | 'marketCap' | 'priceChange' | 'new'
+export type TrendsTime = '1d' | '1w' | '1y'
 
-type PreviewPayload = {
+export type PreviewPayload = {
   title: string
   description: string
   imageUrl: string
@@ -189,7 +189,7 @@ function parsePathAndQuery(pathOrUrl: string): ParsedRouteInput | null {
   }
 }
 
-type SocialRewriteId =
+export type SocialRewriteId =
   | 'explore-creators-list'
   | 'explore-creator-detail'
   | 'explore-content-list'

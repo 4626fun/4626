@@ -153,14 +153,14 @@ export async function createSubAccount(params: {
 }
 
 /**
- * Configure the Base Account SDK to use the Privy embedded wallet as
- * the signer for sub-account operations.  After this call, all
- * transactions sent with `from: subAccountAddress` are signed by the
- * Privy embedded wallet — no passkey prompts.
+ * Configure the Base Account SDK to use the Privy embedded wallet as the
+ * signer for sub-account operations. After this call, all transactions sent
+ * with `from: subAccountAddress` are signed by the Privy embedded wallet —
+ * no passkey prompts.
  *
- * @param baseAccountSdk  The SDK instance from `useBaseAccountSdk()`.
- * @param toViemAccountFn The `toViemAccount` function from `@privy-io/react-auth`.
- * @param embeddedWallet  The Privy ConnectedWallet for the embedded EOA.
+ * `params` carries the Base Account SDK instance (from `useBaseAccountSdk()`),
+ * the `toViemAccount` function from `@privy-io/react-auth`, and the Privy
+ * `ConnectedWallet` for the embedded EOA.
  */
 export function configureSubAccountSigner(params: {
   baseAccountSdk: {

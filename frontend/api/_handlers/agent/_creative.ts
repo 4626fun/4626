@@ -120,7 +120,7 @@ type CreativeResultByMode = {
   metadata_bundle: MetadataBundleResult
 }
 
-type CreativeSuccessEnvelope<M extends CreativeMode = CreativeMode> = {
+export type CreativeSuccessEnvelope<M extends CreativeMode = CreativeMode> = {
   ok: true
   mode: M
   version: CreativeVersion
@@ -128,7 +128,7 @@ type CreativeSuccessEnvelope<M extends CreativeMode = CreativeMode> = {
   result: CreativeResultByMode[M]
 }
 
-type MissingContextEnvelope = {
+export type MissingContextEnvelope = {
   ok: false
   mode: CreativeMode | 'unknown'
   version: CreativeVersion

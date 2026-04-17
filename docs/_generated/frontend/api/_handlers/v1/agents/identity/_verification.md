@@ -48,7 +48,7 @@ Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:165](https://gi
 
 ##### checks
 
-> **checks**: `VerificationCheck`[]
+> **checks**: [`VerificationCheck`](#verificationcheck)[]
 
 Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:184](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L184)
 
@@ -136,7 +136,7 @@ Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:193](https://gi
 
 ##### teeAttestation
 
-> **teeAttestation**: `TeeAttestationStatus`
+> **teeAttestation**: [`TeeAttestationStatus`](#teeattestationstatus)
 
 Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:185](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L185)
 
@@ -255,6 +255,42 @@ Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:82](https://git
 > **url**: `string`
 
 Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:81](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L81)
+
+***
+
+### TeeAttestationStatus
+
+> **TeeAttestationStatus** = `Awaited`\<`ReturnType`\<*typeof* [`getTeeAttestationStatus`](../../../../../server/_lib/agent/teeAttestationGate.md#getteeattestationstatus)\>\>
+
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:47](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L47)
+
+***
+
+### VerificationCheck
+
+> **VerificationCheck** = `object`
+
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:41](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L41)
+
+#### Properties
+
+##### detail
+
+> **detail**: `string`
+
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:44](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L44)
+
+##### id
+
+> **id**: `string`
+
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:42](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L42)
+
+##### passed
+
+> **passed**: `boolean`
+
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:43](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L43)
 
 ## Functions
 

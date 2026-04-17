@@ -8,6 +8,80 @@
 
 ## Type Aliases
 
+### PaymasterModeStat
+
+> **PaymasterModeStat** = `object`
+
+Defined in: [api/\_handlers/admin/userop/\_health.ts:24](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L24)
+
+#### Properties
+
+##### count
+
+> **count**: `number`
+
+Defined in: [api/\_handlers/admin/userop/\_health.ts:24](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L24)
+
+##### mode
+
+> **mode**: `string`
+
+Defined in: [api/\_handlers/admin/userop/\_health.ts:24](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L24)
+
+***
+
+### SignatureModeStat
+
+> **SignatureModeStat** = `object`
+
+Defined in: [api/\_handlers/admin/userop/\_health.ts:23](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L23)
+
+Admin-only aggregate view of ERC-4337 UserOp telemetry submitted by the
+browser via POST /api/v1/chat/telemetry (event = 'xmtp_userop_submission_batch').
+
+Source: chat_command_center_events table. Telemetry is sampled + batched, so
+these numbers are indicative rather than exhaustive. Each batch payload
+already contains success/error/timeout counts and p50/p95/p99 durations,
+so we sum those across recent batches per window.
+
+#### Properties
+
+##### count
+
+> **count**: `number`
+
+Defined in: [api/\_handlers/admin/userop/\_health.ts:23](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L23)
+
+##### mode
+
+> **mode**: `string`
+
+Defined in: [api/\_handlers/admin/userop/\_health.ts:23](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L23)
+
+***
+
+### SubmissionPathStat
+
+> **SubmissionPathStat** = `object`
+
+Defined in: [api/\_handlers/admin/userop/\_health.ts:25](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L25)
+
+#### Properties
+
+##### count
+
+> **count**: `number`
+
+Defined in: [api/\_handlers/admin/userop/\_health.ts:25](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L25)
+
+##### path
+
+> **path**: `string`
+
+Defined in: [api/\_handlers/admin/userop/\_health.ts:25](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L25)
+
+***
+
 ### UserOpHealthResponse
 
 > **UserOpHealthResponse** = `object`
@@ -120,19 +194,19 @@ Defined in: [api/\_handlers/admin/userop/\_health.ts:35](https://github.com/wena
 
 ##### paymasterModeBreakdown
 
-> **paymasterModeBreakdown**: `PaymasterModeStat`[]
+> **paymasterModeBreakdown**: [`PaymasterModeStat`](#paymastermodestat)[]
 
 Defined in: [api/\_handlers/admin/userop/\_health.ts:40](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L40)
 
 ##### signatureModeBreakdown
 
-> **signatureModeBreakdown**: `SignatureModeStat`[]
+> **signatureModeBreakdown**: [`SignatureModeStat`](#signaturemodestat)[]
 
 Defined in: [api/\_handlers/admin/userop/\_health.ts:39](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L39)
 
 ##### submissionPathBreakdown
 
-> **submissionPathBreakdown**: `SubmissionPathStat`[]
+> **submissionPathBreakdown**: [`SubmissionPathStat`](#submissionpathstat)[]
 
 Defined in: [api/\_handlers/admin/userop/\_health.ts:41](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L41)
 
@@ -180,7 +254,7 @@ Defined in: [api/\_handlers/admin/userop/\_health.ts:28](https://github.com/wena
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:251](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L251)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:259](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L259)
 
 #### Parameters
 

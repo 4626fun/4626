@@ -43,14 +43,14 @@ interface Identifier {
   identifierKind: IdentifierKindEthereum
 }
 
-interface ScwSigner {
+export interface ScwSigner {
   type: 'SCW'
   getIdentifier: () => Identifier
   signMessage: (message: string) => Promise<Uint8Array>
   getChainId: () => bigint
 }
 
-interface EoaSigner {
+export interface EoaSigner {
   type: 'EOA'
   getIdentifier: () => Identifier
   signMessage: (message: string) => Promise<Uint8Array>
@@ -130,13 +130,14 @@ function toXmtpOwnerIndexResolutionError(error: unknown): Error {
 /**
  * Create an XMTP SCW signer that signs via Privy's wallet API.
  *
- * @param walletId     Privy wallet ID (for the signer/owner EOA, not the CSW itself)
- * @param cswAddress   The canonical Coinbase Smart Wallet address
- * @param ownerIndex   The index of the Privy wallet in the CSW's MultiOwnable owner list.
- *                     Query `ownerAtIndex(i)` on the CSW to find the correct index.
- *                     If not provided, defaults to 0.
- * @param chainId      Chain ID where the CSW is deployed (default: 8453 for Base)
- * @param rpcUrl       RPC URL for on-chain queries (default: public Base RPC)
+ * `params` carries:
+ * - `walletId`: Privy wallet ID (for the signer/owner EOA, not the CSW itself).
+ * - `cswAddress`: canonical Coinbase Smart Wallet address.
+ * - `ownerIndex` (optional): index of the Privy wallet in the CSW's
+ *   MultiOwnable owner list. Query `ownerAtIndex(i)` on the CSW to find the
+ *   correct index. Defaults to 0.
+ * - `chainId` (optional): chain ID where the CSW is deployed (default 8453).
+ * - `rpcUrl` (optional): RPC URL for on-chain queries (default: public Base RPC).
  */
 export function createPrivyScwSigner(params: {
   walletId: string

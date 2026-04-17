@@ -10,9 +10,9 @@
 
 ### BadgeState
 
-> **BadgeState** = `"loading"` \| `"ok"` \| `"degraded"` \| `"offline"`
+> **BadgeState** = `"loading"` \| `"ok"` \| `"degraded"` \| `"offline"` \| `"error"`
 
-Defined in: [src/features/status/InfraReadinessBadges.tsx:42](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L42)
+Defined in: [src/features/status/InfraReadinessBadges.tsx:43](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L43)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/features/status/InfraReadinessBadges.tsx:42](https://github.com
 
 > **HealthResponse** = `object`
 
-Defined in: [src/features/status/InfraReadinessBadges.tsx:34](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L34)
+Defined in: [src/features/status/InfraReadinessBadges.tsx:35](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L35)
 
 #### Properties
 
@@ -28,48 +28,56 @@ Defined in: [src/features/status/InfraReadinessBadges.tsx:34](https://github.com
 
 > **db**: `DbHealth`
 
-Defined in: [src/features/status/InfraReadinessBadges.tsx:38](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L38)
+Defined in: [src/features/status/InfraReadinessBadges.tsx:39](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L39)
 
 ##### ok
 
 > **ok**: `boolean`
 
-Defined in: [src/features/status/InfraReadinessBadges.tsx:35](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L35)
+Defined in: [src/features/status/InfraReadinessBadges.tsx:36](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L36)
 
 ##### paymaster
 
 > **paymaster**: `PaymasterHealth`
 
-Defined in: [src/features/status/InfraReadinessBadges.tsx:37](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L37)
+Defined in: [src/features/status/InfraReadinessBadges.tsx:38](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L38)
 
 ##### siwe
 
 > **siwe**: `SiweHealth`
 
-Defined in: [src/features/status/InfraReadinessBadges.tsx:39](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L39)
+Defined in: [src/features/status/InfraReadinessBadges.tsx:40](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L40)
 
 ##### time
 
 > **time**: `string`
 
-Defined in: [src/features/status/InfraReadinessBadges.tsx:36](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L36)
+Defined in: [src/features/status/InfraReadinessBadges.tsx:37](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L37)
 
 ## Functions
 
 ### deriveBadges()
 
-> **deriveBadges**(`health`): `object`
+> **deriveBadges**(`health`, `errored`): `object`
 
-Defined in: [src/features/status/InfraReadinessBadges.tsx:110](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L110)
+Defined in: [src/features/status/InfraReadinessBadges.tsx:120](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L120)
 
 Map each health sub-object to a badge state. Errors = offline, configured
 but not ok = degraded, not configured = degraded (informational), ok = ok.
+
+When `errored` is true the three pills surface an error state rather than
+staying in a perpetual "Checking…" — this matters when /api/health itself
+is unreachable (outage) rather than returning a populated failure payload.
 
 #### Parameters
 
 ##### health
 
 [`HealthResponse`](#healthresponse) | `null` | `undefined`
+
+##### errored
+
+`boolean` = `false`
 
 #### Returns
 
@@ -81,7 +89,7 @@ but not ok = degraded, not configured = degraded (informational), ok = ok.
 
 ###### db.note
 
-> **note**: `string` = `'Checking…'`
+> **note**: `string` = `'Health check failed'`
 
 ###### db.state
 
@@ -93,7 +101,7 @@ but not ok = degraded, not configured = degraded (informational), ok = ok.
 
 ###### paymaster.note
 
-> **note**: `string` = `'Checking…'`
+> **note**: `string` = `'Health check failed'`
 
 ###### paymaster.state
 
@@ -105,7 +113,7 @@ but not ok = degraded, not configured = degraded (informational), ok = ok.
 
 ###### siwe.note
 
-> **note**: `string` = `'Checking…'`
+> **note**: `string` = `'Health check failed'`
 
 ###### siwe.state
 
@@ -117,7 +125,7 @@ but not ok = degraded, not configured = degraded (informational), ok = ok.
 
 > **InfraReadinessBadges**(`__namedParameters`): `Element`
 
-Defined in: [src/features/status/InfraReadinessBadges.tsx:165](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L165)
+Defined in: [src/features/status/InfraReadinessBadges.tsx:182](https://github.com/wenakita/4626/blob/main/frontend/src/features/status/InfraReadinessBadges.tsx#L182)
 
 #### Parameters
 

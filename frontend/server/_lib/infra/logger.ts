@@ -4,7 +4,7 @@ type LogLevel = 'debug' | 'info' | 'warn' | 'error'
 
 type LogContext = Record<string, unknown>
 
-type Logger = {
+export type Logger = {
   debug: (msg: string, data?: unknown) => void
   info: (msg: string, data?: unknown) => void
   warn: (msg: string, data?: unknown) => void

@@ -1,4 +1,4 @@
-type TelegramInlineQueryPayload = {
+export type TelegramInlineQueryPayload = {
   inline_query_id: string
   results: unknown[]
   cache_time?: number
