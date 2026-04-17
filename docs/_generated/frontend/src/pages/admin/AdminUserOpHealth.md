@@ -12,7 +12,7 @@
 
 > **AdminUserOpHealth**(): `Element`
 
-Defined in: [src/pages/admin/AdminUserOpHealth.tsx:223](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AdminUserOpHealth.tsx#L223)
+Defined in: [src/pages/admin/AdminUserOpHealth.tsx:225](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AdminUserOpHealth.tsx#L225)
 
 #### Returns
 

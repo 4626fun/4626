@@ -6,11 +6,133 @@
 
 # server/\_lib/infra/logger
 
+## Type Aliases
+
+### Logger
+
+> **Logger** = `object`
+
+Defined in: [server/\_lib/infra/logger.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/logger.ts#L7)
+
+#### Properties
+
+##### child()
+
+> **child**: (`context`) => [`Logger`](#logger)
+
+Defined in: [server/\_lib/infra/logger.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/logger.ts#L12)
+
+###### Parameters
+
+###### context
+
+`LogContext`
+
+###### Returns
+
+[`Logger`](#logger)
+
+##### debug()
+
+> **debug**: (`msg`, `data?`) => `void`
+
+Defined in: [server/\_lib/infra/logger.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/logger.ts#L8)
+
+###### Parameters
+
+###### msg
+
+`string`
+
+###### data?
+
+`unknown`
+
+###### Returns
+
+`void`
+
+##### error()
+
+> **error**: (`msg`, `data?`) => `void`
+
+Defined in: [server/\_lib/infra/logger.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/logger.ts#L11)
+
+###### Parameters
+
+###### msg
+
+`string`
+
+###### data?
+
+`unknown`
+
+###### Returns
+
+`void`
+
+##### info()
+
+> **info**: (`msg`, `data?`) => `void`
+
+Defined in: [server/\_lib/infra/logger.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/logger.ts#L9)
+
+###### Parameters
+
+###### msg
+
+`string`
+
+###### data?
+
+`unknown`
+
+###### Returns
+
+`void`
+
+##### warn()
+
+> **warn**: (`msg`, `data?`) => `void`
+
+Defined in: [server/\_lib/infra/logger.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/logger.ts#L10)
+
+###### Parameters
+
+###### msg
+
+`string`
+
+###### data?
+
+`unknown`
+
+###### Returns
+
+`void`
+
+##### withCorrelationId()
+
+> **withCorrelationId**: (`correlationId`) => [`Logger`](#logger)
+
+Defined in: [server/\_lib/infra/logger.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/logger.ts#L13)
+
+###### Parameters
+
+###### correlationId
+
+`string`
+
+###### Returns
+
+[`Logger`](#logger)
+
 ## Variables
 
 ### logger
 
-> `const` **logger**: `Logger`
+> `const` **logger**: [`Logger`](#logger)
 
 Defined in: [server/\_lib/infra/logger.ts:96](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/logger.ts#L96)
 
@@ -60,4 +182,4 @@ Defined in: [server/\_lib/infra/logger.ts:102](https://github.com/wenakita/4626/
 
 ##### logger
 
-> **logger**: `Logger`
+> **logger**: [`Logger`](#logger)

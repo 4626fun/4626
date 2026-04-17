@@ -44,7 +44,7 @@ const fadeUp = {
 
 type LaunchStep = 'form' | 'uploading' | 'signing' | 'confirming' | 'done' | 'error'
 
-type LaunchCoinCardProps = {
+export type LaunchCoinCardProps = {
   /** UI mode: full form (default) or 1-click prefilled */
   mode?: 'form' | 'one-click'
   /** Prefill coin name (used in one-click mode) */
