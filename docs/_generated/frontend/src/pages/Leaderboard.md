@@ -12,7 +12,7 @@
 
 > **Leaderboard**(): `Element`
 
-Defined in: [src/pages/Leaderboard.tsx:42](https://github.com/wenakita/4626/blob/main/frontend/src/pages/Leaderboard.tsx#L42)
+Defined in: [src/pages/Leaderboard.tsx:45](https://github.com/wenakita/4626/blob/main/frontend/src/pages/Leaderboard.tsx#L45)
 
 #### Returns
 

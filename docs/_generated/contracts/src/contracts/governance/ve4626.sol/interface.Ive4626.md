@@ -43,6 +43,13 @@ function increaseLock(uint256 amount) external returns (uint256 newVotingPower);
 function unlock() external returns (uint256 amount);
 ```
 
+### burnExpiredLock
+
+
+```solidity
+function burnExpiredLock(address user) external;
+```
+
 ### getLock
 
 
@@ -140,6 +147,12 @@ error InvalidLockDuration();
 
 ```solidity
 error NoExistingLock();
+```
+
+### AlreadyLocked
+
+```solidity
+error AlreadyLocked();
 ```
 
 ### LockDurationTooShort

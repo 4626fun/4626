@@ -12,6 +12,7 @@
 - [IVoterRewardsDistributor](CreatorGaugeController.sol/interface.IVoterRewardsDistributor.md)
 - [CreatorGaugeController](CreatorGaugeController.sol/contract.CreatorGaugeController.md)
 - [Ive4626](VaultGaugeVoting.sol/interface.Ive4626.md)
+- [Ive4626Lock](VaultGaugeVoting.sol/struct.Ive4626Lock.md)
 - [ICreatorRegistry](VaultGaugeVoting.sol/interface.ICreatorRegistry.md)
 - [IVaultGaugeVoting](VaultGaugeVoting.sol/interface.IVaultGaugeVoting.md)
 - [VaultGaugeVoting](VaultGaugeVoting.sol/contract.VaultGaugeVoting.md)

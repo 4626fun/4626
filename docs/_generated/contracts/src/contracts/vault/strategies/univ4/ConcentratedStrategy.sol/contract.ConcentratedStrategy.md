@@ -182,10 +182,11 @@ int24 public maxTwapDeviation = 100
 
 ### twapDuration
 TWAP duration in seconds
+FIX: S-H05 — 60s TWAP is trivially manipulable; 900s is minimum safe window
 
 
 ```solidity
-uint32 public twapDuration = 60
+uint32 public twapDuration = 900
 ```
 
 
@@ -497,6 +498,10 @@ function _posmDecrease(uint256 tokenId, uint128 liquidityToRemove) internal;
 ```
 
 ### _posmBurn
+
+FIX: S-H05 — BURN_POSITION min amounts are zero because V4 burn always
+returns the full position value at current pool price. Manipulation is
+guarded by the TWAP deviation check in checkCanRebalance() (now 900s window).
 
 
 ```solidity

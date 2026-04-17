@@ -112,6 +112,20 @@ mapping(address => uint256) public userDustShares
 ```
 
 
+### lastWrapperDepositBlock
+
+```solidity
+mapping(address => uint256) public lastWrapperDepositBlock
+```
+
+
+### wrapperWithdrawDelayBlocks
+
+```solidity
+uint256 public wrapperWithdrawDelayBlocks = 1
+```
+
+
 ### wrapFee
 Fees (basis points) - 0 by default for simplicity
 
@@ -624,7 +638,9 @@ function oftToken() external view returns (address);
 
 Emergency verify - check balances match accounting
 
-With normalization + dust: actualLocked == totalLocked == (totalMinted * 1000 + dust)
+Uses >= instead of == to tolerate rounding dust or direct vault-share
+transfers (e.g. selfdestruct, coinbase) that can push the real balance
+above the bookkeeping value.
 
 
 ```solidity
@@ -661,6 +677,20 @@ function _requiredLockedBacking() internal view returns (uint256);
 
 ```solidity
 function _requireBeneficiaryOperator(address beneficiary) internal view;
+```
+
+### _requireWrapperCooldown
+
+
+```solidity
+function _requireWrapperCooldown(address user) internal view;
+```
+
+### _requireSynchronousRedemption
+
+
+```solidity
+function _requireSynchronousRedemption(uint256 vaultShares) internal view;
 ```
 
 ## Events
@@ -801,9 +831,21 @@ error SlippageExceeded();
 error AmountTooSmallToNormalize();
 ```
 
+### WrapperWithdrawTooSoon
+
+```solidity
+error WrapperWithdrawTooSoon(uint256 currentBlock, uint256 requiredBlock);
+```
+
 ### UnauthorizedBeneficiaryOperator
 
 ```solidity
 error UnauthorizedBeneficiaryOperator(address operator, address beneficiary);
+```
+
+### AsyncRedemptionRequired
+
+```solidity
+error AsyncRedemptionRequired(uint256 assets, uint256 threshold);
 ```
 

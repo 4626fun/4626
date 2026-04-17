@@ -822,6 +822,9 @@ function _requireModulesSet() internal view;
 
 ### _delegate
 
+Delegatecall is intentional: modules execute against this vault's storage root.
+Access control is enforced by the calling external functions before dispatch.
+
 
 ```solidity
 function _delegate(address module) internal;
@@ -832,6 +835,7 @@ function _delegate(address module) internal;
 Delegatecall helper that returns normally so modifiers can clean up.
 Do NOT use `_delegate()` from a function with a modifier that has an epilogue
 (e.g. OZ `nonReentrant`), since `_delegate()` uses an assembly `return`.
+Delegate targets are module addresses configured by owner-only `setModulesOnce`.
 
 
 ```solidity
@@ -1083,6 +1087,19 @@ Cancel a queued withdrawal and get shares back
 function cancelQueuedWithdrawal() external nonReentrant returns (uint256 shares);
 ```
 
+### previewRedeem
+
+Preview redeem (ERC-4626 override)
+
+FIX: S-C02 — cap preview at liquid assets minus queued withdrawals.
+OZ default uses totalAssets()/totalSupply() which overstates realisable value
+when totalQueuedWithdrawalShares > 0 (those shares claim assets at redemption).
+
+
+```solidity
+function previewRedeem(uint256 shares) public view override returns (uint256);
+```
+
 ### maxDeposit
 
 Max deposit (standard ERC4626)
@@ -1224,7 +1241,7 @@ Add a new strategy
 
 
 ```solidity
-function addStrategy(address strategy, uint256 weight) external onlyManagement;
+function addStrategy(address strategy, uint256 weight) external nonReentrant onlyManagement;
 ```
 **Parameters**
 
@@ -1242,7 +1259,7 @@ Based on Yearn V3: add_strategy pattern
 
 
 ```solidity
-function addStrategy(address strategy, uint256 weight, bool addToQueue) public onlyManagement;
+function addStrategy(address strategy, uint256 weight, bool addToQueue) public nonReentrant onlyManagement;
 ```
 **Parameters**
 
@@ -1261,7 +1278,14 @@ Withdraws all funds before removal
 
 
 ```solidity
-function removeStrategy(address strategy) external onlyManagement;
+function removeStrategy(address strategy) external nonReentrant onlyManagement;
+```
+
+### forceRemoveStrategy
+
+
+```solidity
+function forceRemoveStrategy(address strategy) external nonReentrant onlyManagement;
 ```
 
 ### _removeFromQueue
@@ -1281,7 +1305,7 @@ Update strategy weight
 
 
 ```solidity
-function updateStrategyWeight(address strategy, uint256 newWeight) external onlyManagement;
+function updateStrategyWeight(address strategy, uint256 newWeight) external nonReentrant onlyManagement;
 ```
 
 ### deployToStrategies
@@ -1385,7 +1409,7 @@ Burn shares to increase price (called by GaugeController)
 
 
 ```solidity
-function burnSharesForPriceIncrease(uint256 shares) external;
+function burnSharesForPriceIncrease(uint256 shares) external nonReentrant;
 ```
 
 ### injectCapital
@@ -1399,7 +1423,7 @@ security: Price change check prevents dramatic manipulation
 
 
 ```solidity
-function injectCapital(uint256 amount) external nonReentrant whenNotPaused;
+function injectCapital(uint256 amount) external nonReentrant whenNotPaused onlyManagement;
 ```
 
 ### setDefaultQueue
@@ -1501,14 +1525,14 @@ function shutdownVault() external onlyEmergencyAuthorized;
 
 
 ```solidity
-function emergencyWithdrawFromStrategies() external onlyEmergencyAuthorized;
+function emergencyWithdrawFromStrategies() external nonReentrant onlyEmergencyAuthorized;
 ```
 
 ### emergencyWithdraw
 
 
 ```solidity
-function emergencyWithdraw(uint256 amount, address to) external onlyEmergencyAuthorized;
+function emergencyWithdraw(uint256 amount, address to) external nonReentrant onlyEmergencyAuthorized;
 ```
 
 ### setPaused
@@ -2065,6 +2089,12 @@ event OperatorEpochBumped(uint256 newEpoch);
 event RescueConfigured(address indexed rescue, uint64 delay);
 ```
 
+### RescueDisabled
+
+```solidity
+event RescueDisabled();
+```
+
 ### RescueInitiated
 
 ```solidity
@@ -2242,6 +2272,12 @@ No queued withdrawal
 
 ```solidity
 error NoQueuedWithdrawal();
+```
+
+### QueuedWithdrawalReceiverMismatch
+
+```solidity
+error QueuedWithdrawalReceiverMismatch(address existing, address provided);
 ```
 
 ### StrategyHasUnrealisedLosses

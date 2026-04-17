@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/admin/waitlist/\_approve.ts:43](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/waitlist/_approve.ts#L43)
+Defined in: [api/\_handlers/admin/waitlist/\_approve.ts:42](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/waitlist/_approve.ts#L42)
 
 #### Parameters
 

@@ -76,4 +76,4 @@ Re-exports [AjnaAutomationOptInCard](../../components/deploy/DeploymentSuccess.m
 
 ### pickPrivyEmbeddedEoaWallet
 
-Re-exports [pickPrivyEmbeddedEoaWallet](../../lib/privyEmbeddedEoa.md#pickprivyembeddedeoawallet)
+Re-exports [pickPrivyEmbeddedEoaWallet](../../lib/privy/privyEmbeddedEoa.md#pickprivyembeddedeoawallet)

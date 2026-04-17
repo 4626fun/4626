@@ -2,6 +2,7 @@ import { encodeFunctionData } from 'viem'
 
 import { resolveCdpPaymasterUrl } from '@/lib/aa/cdp'
 import { sendCoinbaseSmartWalletUserOperation } from '@/lib/aa/coinbaseErc4337'
+import { recordUserOpTelemetry } from '@/lib/aa/coinbaseErc4337Telemetry'
 import { appendBuilderSuffixToHex } from '@/lib/base/baseBuilderCodes'
 import type { TransactionRequest } from '@/lib/uniswap/tradingApi'
 import type { AccountCapabilities, SignerType } from '@/wallet/accountContext'
@@ -434,6 +435,18 @@ async function waitForCallsStatus(params: {
   return { txHash: null }
 }
 
+function classifySendCallsErrorCode(error: unknown): string | null {
+  const raw = error instanceof Error ? error.message : String(error ?? '')
+  const lower = raw.toLowerCase()
+  if (!lower) return null
+  if (lower.includes('user rejected') || lower.includes('user denied')) return 'user_rejected'
+  if (lower.includes('unsupported') && lower.includes('wallet_sendcalls')) return 'wallet_sendcalls_unsupported'
+  if (lower.includes('timeout') || lower.includes('timed out')) return 'timeout'
+  if (lower.includes('insufficient funds')) return 'insufficient_funds'
+  if (lower.includes('no call bundle id')) return 'no_callsid'
+  return 'wallet_sendcalls_error'
+}
+
 async function sendViaSendCalls(params: {
   context: TxRouterContext
   decision: TxRoutingDecision
@@ -458,6 +471,10 @@ async function sendViaSendCalls(params: {
     sender,
     callTargets: calls.map((call) => call.to),
   })
+  const startedAt = Date.now()
+  let telemetryStatus: 'success' | 'error' | 'timeout' = 'error'
+  let telemetryErrorCode: string | null = null
+  let fellBackToAnotherMode = false
   try {
     const response = await wallet.request({
       method: 'wallet_sendCalls',
@@ -483,6 +500,15 @@ async function sendViaSendCalls(params: {
           : ''
     if (!callsId) throw new Error('wallet_sendCalls returned no call bundle id')
     const status = await waitForCallsStatus({ wallet, id: callsId })
+    // Count the sample as a timeout (not success) when the bundle never
+    // resolved to a tx hash within the polling window. Otherwise unresolved
+    // calls skew success-rate metrics upward.
+    if (status.txHash) {
+      telemetryStatus = 'success'
+    } else {
+      telemetryStatus = 'timeout'
+      telemetryErrorCode = 'timeout'
+    }
     context.debug?.({
       event: 'send_success',
       mode: decision.mode,
@@ -504,6 +530,8 @@ async function sendViaSendCalls(params: {
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error ?? '')
+    telemetryErrorCode = classifySendCallsErrorCode(error)
+    telemetryStatus = telemetryErrorCode === 'timeout' ? 'timeout' : 'error'
     context.debug?.({
       event: 'send_error',
       mode: decision.mode,
@@ -525,9 +553,27 @@ async function sendViaSendCalls(params: {
         callTargets: calls.map((call) => call.to),
         error: message,
       })
+      fellBackToAnotherMode = true
       return sendViaMode({ context, decision: { ...decision, mode: decision.fallbackMode }, calls })
     }
     throw error
+  } finally {
+    // Don't double-count a sample when we bounced to a sibling path — that
+    // path records its own telemetry.
+    if (!fellBackToAnotherMode) {
+      recordUserOpTelemetry({
+        status: telemetryStatus,
+        durationMs: Math.max(0, Date.now() - startedAt),
+        verificationGasLimit: null,
+        // The wallet decides sponsorship on its side; from 4626's perspective
+        // we're not the sponsor, so track this as self_funded.
+        paymasterMode: 'self_funded',
+        signatureMode: 'auto',
+        ownerIsContract: false,
+        errorCode: telemetryErrorCode,
+        submissionPath: 'wallet_sendCalls',
+      })
+    }
   }
 }
 

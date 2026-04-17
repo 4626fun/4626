@@ -9,3 +9,4 @@
 - [Ive4626BoostManager](CreatorLotteryManager.sol/interface.Ive4626BoostManager.md)
 - [IVaultGaugeVoting](CreatorLotteryManager.sol/interface.IVaultGaugeVoting.md)
 - [CreatorLotteryManager](CreatorLotteryManager.sol/contract.CreatorLotteryManager.md)
+- [CreatorLotteryManagerAdminModule](CreatorLotteryManager.sol/contract.CreatorLotteryManagerAdminModule.md)

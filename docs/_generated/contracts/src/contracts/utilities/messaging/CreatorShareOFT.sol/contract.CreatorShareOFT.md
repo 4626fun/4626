@@ -1070,6 +1070,13 @@ function isOwner(address account) external view returns (bool);
 |`<none>`|`bool`|True if account is owner or current trade-fee collector|
 
 
+### withdrawETH
+
+
+```solidity
+function withdrawETH(address payable to) external onlyOwner;
+```
+
 ### receive
 
 Accept native token transfers/refunds.

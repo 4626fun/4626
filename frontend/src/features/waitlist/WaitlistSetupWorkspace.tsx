@@ -3,6 +3,7 @@ import { AccountSetupWorkspaceView } from '@/features/accountSetup/AccountSetupW
 import type { AccountSetupMe } from '@/features/accountSetup/types'
 import { useAccountSetupController } from '@/features/accountSetup/useAccountSetupController'
 import { WalletProviders } from '@/web3/Web3Providers'
+import { WaitlistUnlocksPanel } from './WaitlistUnlocksPanel'
 
 type WaitlistSetupWorkspaceProps = {
   initialAccount: AccountSetupMe
@@ -36,7 +37,7 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
       context="waitlist"
       controller={controller}
       summaryActions={
-        <div className="w-full">
+        <div className="w-full space-y-4">
           <button
             type="button"
             onClick={() => void onEnterApp()}
@@ -64,6 +65,7 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
               </p>
             </div>
           ) : null}
+          <WaitlistUnlocksPanel score={initialAccount.score} email={initialAccount.email} />
         </div>
       }
     />

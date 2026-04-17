@@ -162,7 +162,7 @@ Defined in: [api/\_handlers/token/\_image.ts:2712](https://github.com/wenakita/4
 
 ##### resolveCreatorTokenArtwork()
 
-> **resolveCreatorTokenArtwork**: (`coinData`) => [`CreatorTokenArtwork`](../../../server/_lib/creatorTokenArtwork.md#creatortokenartwork) \| `null`
+> **resolveCreatorTokenArtwork**: (`coinData`) => [`CreatorTokenArtwork`](../../../server/_lib/image/creatorTokenArtwork.md#creatortokenartwork) \| `null`
 
 ###### Parameters
 
@@ -172,7 +172,7 @@ Defined in: [api/\_handlers/token/\_image.ts:2712](https://github.com/wenakita/4
 
 ###### Returns
 
-[`CreatorTokenArtwork`](../../../server/_lib/creatorTokenArtwork.md#creatortokenartwork) \| `null`
+[`CreatorTokenArtwork`](../../../server/_lib/image/creatorTokenArtwork.md#creatortokenartwork) \| `null`
 
 ##### resolveHeroCutoutLoadPolicy()
 

@@ -15,7 +15,10 @@ const CDS_VARIANT_MAP = {
 } as const
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
+  // `color` is a native HTMLButtonElement attribute that conflicts with CDS's
+  // Color enum on <CdsButton>. Swallow it to avoid the type mismatch.
   ({ variant = 'primary', size = 'md', loading = false, disabled, className, children, color: _color, ...props }, ref) => {
+    void _color
     return (
       <CdsButton
         ref={ref}

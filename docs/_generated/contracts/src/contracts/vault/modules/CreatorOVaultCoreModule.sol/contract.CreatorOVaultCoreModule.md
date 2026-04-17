@@ -472,6 +472,12 @@ error WithdrawalNotUnlocked(uint256 currentBlock, uint256 unlockBlock);
 error NoQueuedWithdrawal();
 ```
 
+### QueuedWithdrawalReceiverMismatch
+
+```solidity
+error QueuedWithdrawalReceiverMismatch(address existing, address provided);
+```
+
 ### StrategyValuationNotReady
 
 ```solidity

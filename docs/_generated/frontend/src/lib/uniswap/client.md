@@ -81,7 +81,7 @@ Finds pools where the token is either token0 or token1
 
 > **getPoolSwaps**(`poolId`, `first`): `Promise`\<[`UniswapSwap`](types.md#uniswapswap)[]\>
 
-Defined in: [src/lib/uniswap/client.ts:388](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/client.ts#L388)
+Defined in: [src/lib/uniswap/client.ts:389](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/client.ts#L389)
 
 Get recent swaps for a pool
 
@@ -129,7 +129,7 @@ Get aggregated volume/fees data for a specific timeframe
 
 > **getToken**(`tokenAddress`): `Promise`\<[`UniswapToken`](types.md#uniswaptoken) \| `null`\>
 
-Defined in: [src/lib/uniswap/client.ts:359](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/client.ts#L359)
+Defined in: [src/lib/uniswap/client.ts:360](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/client.ts#L360)
 
 Get token info from the subgraph
 

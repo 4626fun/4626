@@ -140,7 +140,7 @@ Defined in: [src/features/telegram-link/telegramLinkFlow.ts:42](https://github.c
 
 ### TelegramLinkState
 
-> **TelegramLinkState** = \{ `linkContext`: [`TelegramMiniAppLinkContext`](../../lib/telegramMiniAppLink.md#telegramminiapplinkcontext) \| `null`; `tag`: `"verify_telegram_session"`; \} \| \{ `email`: `string`; `emailError`: `string` \| `null`; `proof`: [`TelegramSessionProof`](#telegramsessionproof); `tag`: `"collect_email"`; \} \| \{ `email`: `string`; `proof`: [`TelegramSessionProof`](#telegramsessionproof); `tag`: `"sending_email_code"`; \} \| \{ `code`: `string`; `codeError`: `string` \| `null`; `email`: `string`; `proof`: [`TelegramSessionProof`](#telegramsessionproof); `resendAvailableAt`: `number` \| `null`; `tag`: `"enter_email_code"`; \} \| \{ `code`: `string`; `email`: `string`; `proof`: [`TelegramSessionProof`](#telegramsessionproof); `tag`: `"verifying_email_code"`; \} \| \{ `code`: `string`; `email`: `string`; `proof`: [`TelegramSessionProof`](#telegramsessionproof); `startedAt`: `number`; `tag`: `"wait_for_privy_sync"`; \} \| \{ `account`: [`TelegramLinkReadyAccount`](#telegramlinkreadyaccount); `proof`: [`TelegramSessionProof`](#telegramsessionproof); `step`: `"ensure_privy_link"` \| `"complete_backend"`; `tag`: `"bind_telegram"`; \} \| \{ `account`: [`TelegramLinkReadyAccount`](#telegramlinkreadyaccount); `link`: [`TelegramLinkResult`](#telegramlinkresult); `proof`: [`TelegramSessionProof`](#telegramsessionproof); `tag`: `"success"`; \} \| \{ `code?`: `string`; `email?`: `string`; `error`: [`FlowError`](#flowerror); `proof`: [`TelegramSessionProof`](#telegramsessionproof) \| `null`; `retryTarget?`: `RetryTarget`; `tag`: `"expired_or_error"`; \}
+> **TelegramLinkState** = \{ `linkContext`: [`TelegramMiniAppLinkContext`](../../lib/telegram/telegramMiniAppLink.md#telegramminiapplinkcontext) \| `null`; `tag`: `"verify_telegram_session"`; \} \| \{ `email`: `string`; `emailError`: `string` \| `null`; `proof`: [`TelegramSessionProof`](#telegramsessionproof); `tag`: `"collect_email"`; \} \| \{ `email`: `string`; `proof`: [`TelegramSessionProof`](#telegramsessionproof); `tag`: `"sending_email_code"`; \} \| \{ `code`: `string`; `codeError`: `string` \| `null`; `email`: `string`; `proof`: [`TelegramSessionProof`](#telegramsessionproof); `resendAvailableAt`: `number` \| `null`; `tag`: `"enter_email_code"`; \} \| \{ `code`: `string`; `email`: `string`; `proof`: [`TelegramSessionProof`](#telegramsessionproof); `tag`: `"verifying_email_code"`; \} \| \{ `code`: `string`; `email`: `string`; `proof`: [`TelegramSessionProof`](#telegramsessionproof); `startedAt`: `number`; `tag`: `"wait_for_privy_sync"`; \} \| \{ `account`: [`TelegramLinkReadyAccount`](#telegramlinkreadyaccount); `proof`: [`TelegramSessionProof`](#telegramsessionproof); `step`: `"ensure_privy_link"` \| `"complete_backend"`; `tag`: `"bind_telegram"`; \} \| \{ `account`: [`TelegramLinkReadyAccount`](#telegramlinkreadyaccount); `link`: [`TelegramLinkResult`](#telegramlinkresult); `proof`: [`TelegramSessionProof`](#telegramsessionproof); `tag`: `"success"`; \} \| \{ `code?`: `string`; `email?`: `string`; `error`: [`FlowError`](#flowerror); `proof`: [`TelegramSessionProof`](#telegramsessionproof) \| `null`; `retryTarget?`: `RetryTarget`; `tag`: `"expired_or_error"`; \}
 
 Defined in: [src/features/telegram-link/telegramLinkFlow.ts:66](https://github.com/wenakita/4626/blob/main/frontend/src/features/telegram-link/telegramLinkFlow.ts#L66)
 
@@ -186,7 +186,7 @@ Defined in: [src/features/telegram-link/telegramLinkFlow.ts:22](https://github.c
 
 ##### linkContext
 
-> **linkContext**: [`TelegramMiniAppLinkContext`](../../lib/telegramMiniAppLink.md#telegramminiapplinkcontext) \| `null`
+> **linkContext**: [`TelegramMiniAppLinkContext`](../../lib/telegram/telegramMiniAppLink.md#telegramminiapplinkcontext) \| `null`
 
 Defined in: [src/features/telegram-link/telegramLinkFlow.ts:30](https://github.com/wenakita/4626/blob/main/frontend/src/features/telegram-link/telegramLinkFlow.ts#L30)
 
@@ -254,7 +254,7 @@ Defined in: [src/features/telegram-link/telegramLinkFlow.ts:162](https://github.
 
 ##### linkContext
 
-[`TelegramMiniAppLinkContext`](../../lib/telegramMiniAppLink.md#telegramminiapplinkcontext) | `null`
+[`TelegramMiniAppLinkContext`](../../lib/telegram/telegramMiniAppLink.md#telegramminiapplinkcontext) | `null`
 
 #### Returns
 

@@ -12,7 +12,7 @@
 
 > **buildPortfolioImageProxyUrl**(`rawUrl`): `string` \| `null`
 
-Defined in: [src/features/portfolio/portfolioViewModel.ts:68](https://github.com/wenakita/4626/blob/main/frontend/src/features/portfolio/portfolioViewModel.ts#L68)
+Defined in: [src/features/portfolio/portfolioViewModel.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/features/portfolio/portfolioViewModel.ts#L69)
 
 #### Parameters
 

@@ -31,3 +31,10 @@ function depositFor(uint256 amount, uint256 minOut, address beneficiary) externa
 function withdrawFor(uint256 amount, uint256 minOut, address beneficiary) external returns (uint256 creatorCoinOut);
 ```
 
+### isBeneficiaryOperator
+
+
+```solidity
+function isBeneficiaryOperator(address operator) external view returns (bool);
+```
+

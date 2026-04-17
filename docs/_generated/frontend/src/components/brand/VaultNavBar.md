@@ -12,7 +12,7 @@
 
 > **VaultNavBar**(`props`): `Element`
 
-Defined in: [src/components/brand/VaultNavBar.tsx:50](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/VaultNavBar.tsx#L50)
+Defined in: [src/components/brand/VaultNavBar.tsx:52](https://github.com/wenakita/4626/blob/main/frontend/src/components/brand/VaultNavBar.tsx#L52)
 
 #### Parameters
 

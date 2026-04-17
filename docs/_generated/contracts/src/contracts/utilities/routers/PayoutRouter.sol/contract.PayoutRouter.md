@@ -77,6 +77,13 @@ address public keeper
 ```
 
 
+### swapDeadlineBuffer
+
+```solidity
+uint256 public swapDeadlineBuffer = 15 minutes
+```
+
+
 ### swapPathToCreator
 tokenIn => Uniswap V3 encoded path ending in `creatorCoin`.
 
@@ -140,6 +147,20 @@ receive() external payable;
 
 ```solidity
 function setKeeper(address newKeeper) external onlyOwner;
+```
+
+### removeKeeper
+
+
+```solidity
+function removeKeeper() external onlyOwner;
+```
+
+### setSwapDeadlineBuffer
+
+
+```solidity
+function setSwapDeadlineBuffer(uint256 _buffer) external onlyOwner;
 ```
 
 ### setSwapPath
@@ -227,6 +248,8 @@ function processBatch(BatchAction[] calldata actions)
 Emergency withdraw any token (including payouts) to a safe address.
 
 Intended for safety; does not attempt to preserve PPS semantics.
+FIX: PR-06 — NOTE: This is an intentional admin override that bypasses enforceability.
+It can drain WETH/creatorCoin held for pending processing. Use only for genuine emergencies.
 
 
 ```solidity

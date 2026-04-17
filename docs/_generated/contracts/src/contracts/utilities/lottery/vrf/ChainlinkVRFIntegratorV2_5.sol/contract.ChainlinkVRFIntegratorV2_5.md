@@ -41,6 +41,13 @@ uint32 public defaultGasLimit = 690420
 ```
 
 
+### deploymentNonce
+
+```solidity
+uint64 public immutable deploymentNonce
+```
+
+
 ### hubEid
 Hub chain EID for VRF requests (Base by default)
 
@@ -100,6 +107,13 @@ mapping(address => bool) public authorizedSponsoredCallers
 
 ```solidity
 uint256 public requestTimeout = 1 hours
+```
+
+
+### maxAcceptablePrice
+
+```solidity
+int256 public maxAcceptablePrice = 100_000_000_000 * 1e18
 ```
 
 
@@ -183,10 +197,13 @@ function requestRandomWords() external returns (MessagingReceipt memory receipt,
 ### requestRandomWordsPayable
 
 Request random words with caller-provided fee
+FIX: VRF-03 — targetEid parameter ignored (always routes to hubEid); kept for interface compat
 
 
 ```solidity
-function requestRandomWordsPayable(uint32 targetEid)
+function requestRandomWordsPayable(
+    uint32 /* targetEid */
+)
     external
     payable
     returns (MessagingReceipt memory receipt, uint64 requestId);
@@ -236,6 +253,13 @@ function setRequestTimeout(uint256 _timeout) external onlyOwner;
 
 ```solidity
 function setPriceOracle(address _oracle) external onlyOwner;
+```
+
+### setMaxAcceptablePrice
+
+
+```solidity
+function setMaxAcceptablePrice(int256 _maxPrice) external onlyOwner;
 ```
 
 ### setSponsoredCallerAuthorization
