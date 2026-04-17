@@ -41,7 +41,8 @@ The CSW never "becomes" a separate agent — the agent identity is layered onto 
 
 ### 3. Owner Delegation (batched during account setup)
 - During account setup, after `wallet_addSubAccount` creates the sub-account, the client calls `POST /api/onboarding/provision-agent-owner` to provision the agent wallet and receive `addOwnerAddress` calldata.
-- The client sends `addOwnerAddress(privyWalletAddress)` via `wallet_sendCalls` from the CSW provider — this is a passkey popup immediately following the sub-account creation popup.
+- The client sends `addOwnerAddress(privyWalletAddress)` via `eth_sendTransaction` from the CSW provider — this is a passkey popup immediately following the sub-account creation popup.
+- **Must use `eth_sendTransaction`, not `wallet_sendCalls`**: `addOwnerAddress` is a self-call (`from === to === CSW`) and the Coinbase popup's `eGe` function blocks `wallet_sendCalls` for self-calls. `eth_sendTransaction` uses the standard approval UI which has no self-call guard.
 - This adds the Privy wallet as an owner in the CSW's MultiOwnable contract.
 - The owner index is determined by querying `CSW.ownerAtIndex(i)` at execution time.
 - File: `frontend/src/features/accountSetup/useAccountSetupController.ts`, `frontend/api/_handlers/onboarding/_provision-agent-owner.ts`
