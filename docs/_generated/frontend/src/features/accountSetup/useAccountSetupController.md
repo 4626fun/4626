@@ -12,7 +12,7 @@
 
 > **readOptionalZoraStatus**(`params`): [`ZoraLinkStatusResponse`](types.md#zoralinkstatusresponse) \| `null`
 
-Defined in: [src/features/accountSetup/useAccountSetupController.ts:111](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L111)
+Defined in: [src/features/accountSetup/useAccountSetupController.ts:116](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L116)
 
 #### Parameters
 
@@ -20,7 +20,7 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:111](https:/
 
 ###### payload
 
-[`ApiEnvelope`](../../lib/apiEnvelope.md#apienvelope)\<[`ZoraLinkStatusResponse`](types.md#zoralinkstatusresponse)\> \| `null`
+[`ApiEnvelope`](../../lib/api/apiEnvelope.md#apienvelope)\<[`ZoraLinkStatusResponse`](types.md#zoralinkstatusresponse)\> \| `null`
 
 ###### responseOk
 
@@ -36,7 +36,7 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:111](https:/
 
 > **shouldRefreshAccountsOnForeground**(`input`): `boolean`
 
-Defined in: [src/features/accountSetup/useAccountSetupController.ts:99](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L99)
+Defined in: [src/features/accountSetup/useAccountSetupController.ts:104](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L104)
 
 #### Parameters
 
@@ -64,7 +64,7 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:99](https://
 
 > **useAccountSetupController**(`params`): `object`
 
-Defined in: [src/features/accountSetup/useAccountSetupController.ts:168](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L168)
+Defined in: [src/features/accountSetup/useAccountSetupController.ts:173](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L173)
 
 #### Parameters
 
@@ -221,6 +221,10 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:168](https:/
 ##### me
 
 > **me**: [`AccountSetupMe`](types.md#accountsetupme) \| `null`
+
+##### needsBaseAccountReconnect
+
+> **needsBaseAccountReconnect**: `boolean`
 
 ##### needsBaseAppSetup
 
@@ -398,7 +402,7 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:168](https:/
 
 ##### sendPreparedOwnerTx()
 
-> **sendPreparedOwnerTx**: (`txRequest`, `ownerAddress?`) => `Promise`\<`void`\>
+> **sendPreparedOwnerTx**: (`txRequest`, `ownerAddress?`, `ownerIndexLookupAddress?`, `opts?`) => `Promise`\<`void`\>
 
 ###### Parameters
 
@@ -423,6 +427,20 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:168](https:/
 ###### ownerAddress?
 
 `string` | `null`
+
+###### ownerIndexLookupAddress?
+
+`string` | `null`
+
+###### opts?
+
+###### approvalRunId?
+
+`string` \| `null`
+
+###### onStageEvent?
+
+(`event`) => `void` \| `null`
 
 ###### Returns
 
@@ -463,6 +481,26 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:168](https:/
 ##### signerClientReady
 
 > **signerClientReady**: `boolean`
+
+##### subAccountAddress
+
+> **subAccountAddress**: `` `0x${string}` `` \| `null` = `subAccount.subAccountAddress`
+
+##### subAccountError
+
+> **subAccountError**: `Error` \| `null` = `subAccount.error`
+
+##### subAccountReady
+
+> **subAccountReady**: `boolean`
+
+##### subAccountSettingUp
+
+> **subAccountSettingUp**: `boolean` = `subAccount.isSettingUp`
+
+##### subAccountStage
+
+> **subAccountStage**: [`SubAccountSetupStageEvent`](../../lib/wallet/subAccountSetup.md#subaccountsetupstageevent) \| `null` = `subAccount.lastStage`
 
 ##### switchChainAsync
 

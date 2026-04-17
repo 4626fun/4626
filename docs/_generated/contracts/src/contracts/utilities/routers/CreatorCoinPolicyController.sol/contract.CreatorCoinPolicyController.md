@@ -32,6 +32,13 @@ address public immutable payoutRouter
 ```
 
 
+### pendingCreatorCoinOwner
+
+```solidity
+address public pendingCreatorCoinOwner
+```
+
+
 ## Functions
 ### constructor
 
@@ -49,15 +56,25 @@ Enforce payout recipient to the configured payout router.
 function enforcePayoutRouter() external onlyOwner;
 ```
 
-### transferCreatorCoinOwnership
-
-Transfer CreatorCoin ownership to a new admin contract/address.
-
-Intended for controlled migrations/upgrades.
+### proposeCreatorCoinOwnershipTransfer
 
 
 ```solidity
-function transferCreatorCoinOwnership(address newOwner) external onlyOwner;
+function proposeCreatorCoinOwnershipTransfer(address newOwner) external onlyOwner;
+```
+
+### acceptCreatorCoinOwnership
+
+
+```solidity
+function acceptCreatorCoinOwnership() external;
+```
+
+### cancelCreatorCoinOwnershipTransfer
+
+
+```solidity
+function cancelCreatorCoinOwnershipTransfer() external onlyOwner;
 ```
 
 ## Events
@@ -73,10 +90,28 @@ event PayoutRecipientEnforced(address indexed creatorCoin, address indexed payou
 event CreatorCoinOwnershipTransferred(address indexed creatorCoin, address indexed newOwner);
 ```
 
+### CreatorCoinOwnershipTransferProposed
+
+```solidity
+event CreatorCoinOwnershipTransferProposed(address indexed creatorCoin, address indexed proposedOwner);
+```
+
 ## Errors
 ### ZeroAddress
 
 ```solidity
 error ZeroAddress();
+```
+
+### NoPendingTransfer
+
+```solidity
+error NoPendingTransfer();
+```
+
+### NotPendingOwner
+
+```solidity
+error NotPendingOwner();
 ```
 

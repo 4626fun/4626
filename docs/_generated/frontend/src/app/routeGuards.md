@@ -30,7 +30,7 @@ Defined in: [src/app/routeGuards.tsx:129](https://github.com/wenakita/4626/blob/
 
 ##### hostMode
 
-[`HostMode`](../lib/host.md#hostmode)
+[`HostMode`](../lib/env/host.md#hostmode)
 
 #### Returns
 

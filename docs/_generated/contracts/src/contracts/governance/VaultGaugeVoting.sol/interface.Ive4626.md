@@ -52,3 +52,17 @@ function hasActiveLock(address user) external view returns (bool);
 function getRemainingLockTime(address user) external view returns (uint256);
 ```
 
+### votingPowerAt
+
+
+```solidity
+function votingPowerAt(address user, uint256 timestamp) external view returns (uint256);
+```
+
+### getLock
+
+
+```solidity
+function getLock(address user) external view returns (Ive4626Lock memory);
+```
+

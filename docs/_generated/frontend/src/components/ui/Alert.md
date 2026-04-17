@@ -12,7 +12,7 @@
 
 > **Alert**(`__namedParameters`): `Element`
 
-Defined in: [src/components/ui/Alert.tsx:50](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Alert.tsx#L50)
+Defined in: [src/components/ui/Alert.tsx:29](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Alert.tsx#L29)
 
 #### Parameters
 

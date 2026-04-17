@@ -2,7 +2,7 @@
 [Git Source](https://github.com/wenakita/4626/blob/main/contracts/helpers/batchers/StrategyDeploymentBatcher.sol)
 
 **Inherits:**
-ReentrancyGuard
+ReentrancyGuard, Ownable2Step
 
 **Title:**
 StrategyDeploymentBatcher
@@ -71,13 +71,6 @@ address public immutable ajnaStrategyFactory
 ```
 
 
-### protocolOwner
-
-```solidity
-address public immutable protocolOwner
-```
-
-
 ### ADD_STRATEGY_SELECTOR
 
 ```solidity
@@ -99,6 +92,13 @@ uint24 private constant CHARM_EXPECTED_PROTOCOL_FEE_PIPS = 10_000
 ```
 
 
+### CHARM_MIN_TICK_MOVE
+
+```solidity
+int24 private constant CHARM_MIN_TICK_MOVE = 10
+```
+
+
 ### CHARM_MAX_TWAP_DEVIATION
 
 ```solidity
@@ -114,18 +114,11 @@ uint32 private constant CHARM_TWAP_DURATION = 300
 
 
 ## Functions
-### onlyProtocolOwner
-
-
-```solidity
-modifier onlyProtocolOwner() ;
-```
-
 ### constructor
 
 
 ```solidity
-constructor() ;
+constructor() Ownable(msg.sender);
 ```
 
 ### batchDeployStrategies
@@ -150,7 +143,8 @@ function batchDeployStrategies(
     address owner,
     string memory vaultName,
     string memory vaultSymbol
-) external nonReentrant onlyProtocolOwner returns (DeploymentResult memory result);
+    // FIX: F-14 — use Ownable2Step's onlyOwner instead of immutable protocolOwner
+) external nonReentrant onlyOwner returns (DeploymentResult memory result);
 ```
 **Parameters**
 
@@ -253,12 +247,6 @@ error ZeroQuote();
 
 ```solidity
 error ZeroVault();
-```
-
-### NotProtocolOwner
-
-```solidity
-error NotProtocolOwner();
 ```
 
 ### CharmFactoryGovernanceMismatch

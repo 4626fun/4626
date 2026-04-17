@@ -220,6 +220,13 @@ mapping(bytes32 => PendingAuction) public pendingAuctions
 ```
 
 
+### hasActivePendingAuction
+
+```solidity
+mapping(bytes32 => bool) public hasActivePendingAuction
+```
+
+
 ### phase1SplitStates
 Split phase-1 state keyed by creator/owner/version salt.
 
@@ -265,12 +272,30 @@ DeploymentBatcherPhase3Helper public immutable phase3Helper
 ```
 
 
+### phase2Module
+Dedicated phase-2 execution helper (delegatecall) to keep this contract under EIP-170 runtime limits.
+
+
+```solidity
+DeploymentBatcherPhase2Module public immutable phase2Module
+```
+
+
 ### uniV4Helper
 Dedicated UniV4 execution helper to keep this contract under EIP-170 runtime limits.
 
 
 ```solidity
 DeploymentBatcherUniV4Helper public immutable uniV4Helper
+```
+
+
+### utilsHelper
+String/salt/hash helper contract to keep this contract under EIP-170 runtime limits.
+
+
+```solidity
+DeploymentBatcherUtilsHelper public immutable utilsHelper
 ```
 
 
@@ -381,15 +406,6 @@ function launchDeferredAuction(DeferredAuctionParams calldata params)
     returns (address auction);
 ```
 
-### _deployPhase2Core
-
-
-```solidity
-function _deployPhase2Core(Phase2CoreParams memory params, CodeIds calldata codeIds)
-    internal
-    returns (Phase2Result memory out);
-```
-
 ### _finalizePhase2Internal
 
 
@@ -455,6 +471,13 @@ function setOVaultRuntimeConfig(address _hubComposer, uint32 _solanaEid, bool _e
 function getOVaultRuntimeConfig() external view returns (OVaultRuntimeConfig memory);
 ```
 
+### resetPhase1State
+
+
+```solidity
+function resetPhase1State(bytes32 baseSalt) external;
+```
+
 ### _requireOwner
 
 
@@ -503,18 +526,11 @@ function _requirePhase2CodeIds(CodeIds calldata codeIds) internal pure;
 function _requireUniV4CodeIds(UniV4CodeIds calldata codeIds) internal pure;
 ```
 
-### _phase1ParamsHash
+### _delegatePhase2
 
 
 ```solidity
-function _phase1ParamsHash(Phase1Params calldata params) internal pure returns (bytes32);
-```
-
-### _phase1CodeIdsHash
-
-
-```solidity
-function _phase1CodeIdsHash(CodeIds calldata codeIds) internal pure returns (bytes32);
+function _delegatePhase2(bytes memory callData) internal returns (bytes memory result);
 ```
 
 ### _deriveInitCodeHash
@@ -522,47 +538,6 @@ function _phase1CodeIdsHash(CodeIds calldata codeIds) internal pure returns (byt
 
 ```solidity
 function _deriveInitCodeHash(bytes32 codeId, bytes memory constructorArgs) internal view returns (bytes32);
-```
-
-### _deriveBaseSalt
-
-
-```solidity
-function _deriveBaseSalt(address creatorToken, address owner, string memory version)
-    internal
-    view
-    returns (bytes32);
-```
-
-### _saltFor
-
-
-```solidity
-function _saltFor(bytes32 baseSalt, string memory label) internal pure returns (bytes32);
-```
-
-### _deriveShareOftSalt
-
-
-```solidity
-function _deriveShareOftSalt(address owner, string memory shareSymbolLower, string memory version)
-    internal
-    pure
-    returns (bytes32);
-```
-
-### _toLower
-
-
-```solidity
-function _toLower(string memory input) internal pure returns (string memory);
-```
-
-### _toUpper
-
-
-```solidity
-function _toUpper(string memory input) internal pure returns (string memory);
 ```
 
 ## Events
@@ -778,6 +753,12 @@ error MissingInitialSqrtPriceX96();
 error AuctionAlreadyPending();
 ```
 
+### AuctionAlreadyPendingForToken
+
+```solidity
+error AuctionAlreadyPendingForToken(address creatorToken, address owner);
+```
+
 ### NoPendingAuction
 
 ```solidity
@@ -830,6 +811,24 @@ error PermitAmountTooLow();
 
 ```solidity
 error Phase1ShareOFTMissing();
+```
+
+### SymbolTooLong
+
+```solidity
+error SymbolTooLong();
+```
+
+### NotProtocolTreasury
+
+```solidity
+error NotProtocolTreasury();
+```
+
+### Phase1StateNotStuck
+
+```solidity
+error Phase1StateNotStuck();
 ```
 
 ### InvalidCreatorTreasury

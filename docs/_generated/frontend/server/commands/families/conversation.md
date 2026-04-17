@@ -32,7 +32,7 @@ Defined in: [server/commands/families/conversation.ts:18](https://github.com/wen
 
 ###### vault
 
-[`KeeprVaultRow`](../../_lib/keeprRegistry.md#keeprvaultrow) \| `null`
+[`KeeprVaultRow`](../../_lib/keepr/keeprRegistry.md#keeprvaultrow) \| `null`
 
 #### Returns
 

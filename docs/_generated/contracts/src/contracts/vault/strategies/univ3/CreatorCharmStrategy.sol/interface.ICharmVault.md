@@ -73,6 +73,13 @@ function baseUpper() external view returns (int24);
 function pool() external view returns (address);
 ```
 
+### rebalance
+
+
+```solidity
+function rebalance() external;
+```
+
 ### token0
 
 

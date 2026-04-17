@@ -23,7 +23,7 @@ uint256 public constant MAX_VE_BOOST = 25_000
 ### MIN_HOLDING_BLOCKS
 
 ```solidity
-uint256 public constant MIN_HOLDING_BLOCKS = 10
+uint256 public constant MIN_HOLDING_BLOCKS = 302_400
 ```
 
 
@@ -59,6 +59,34 @@ uint256 public minVotingPower = 0.1 ether
 
 ```solidity
 bool public boostParametersLocked
+```
+
+
+### BOOST_TIMELOCK_DURATION
+
+```solidity
+uint256 public constant BOOST_TIMELOCK_DURATION = 48 hours
+```
+
+
+### pendingBaseBoost
+
+```solidity
+uint256 public pendingBaseBoost
+```
+
+
+### pendingMaxBoost
+
+```solidity
+uint256 public pendingMaxBoost
+```
+
+
+### boostTimelockExpiry
+
+```solidity
+uint256 public boostTimelockExpiry
 ```
 
 
@@ -134,6 +162,13 @@ function updateBalanceTracking(address user) external;
 function setBoostParameters(uint256 _baseBoost, uint256 _maxBoost) external onlyOwner;
 ```
 
+### executeBoostParameterUpdate
+
+
+```solidity
+function executeBoostParameterUpdate() external onlyOwner;
+```
+
 ### setMinVotingPower
 
 
@@ -190,5 +225,17 @@ error InvalidBoostParameters();
 
 ```solidity
 error BoostParametersAreLocked();
+```
+
+### TimelockNotExpired
+
+```solidity
+error TimelockNotExpired();
+```
+
+### NoPendingBoostUpdate
+
+```solidity
+error NoPendingBoostUpdate();
 ```
 

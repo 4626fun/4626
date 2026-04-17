@@ -10,6 +10,8 @@
 - [IContinuousClearingAuction](CCALaunchStrategy.sol/interface.IContinuousClearingAuction.md)
 - [IVaultTelemetry](CCALaunchStrategy.sol/interface.IVaultTelemetry.md)
 - [CCALaunchStrategy](CCALaunchStrategy.sol/contract.CCALaunchStrategy.md)
+- [CCALaunchStrategyConfigModule](CCALaunchStrategyConfigModule.sol/contract.CCALaunchStrategyConfigModule.md)
+- [CCALaunchStrategyEncodingHelper](CCALaunchStrategyEncodingHelper.sol/contract.CCALaunchStrategyEncodingHelper.md)
 - [ICreatorOVaultLike](ERC4626StrategyAdapter.sol/interface.ICreatorOVaultLike.md)
 - [ERC4626StrategyAdapter](ERC4626StrategyAdapter.sol/contract.ERC4626StrategyAdapter.md)
 - [ISolanaBridgeAdapter](SolanaBridgeStrategy.sol/interface.ISolanaBridgeAdapter.md)

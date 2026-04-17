@@ -259,10 +259,11 @@ int24 public maxTwapDeviation = 100
 
 ### twapDuration
 TWAP duration in seconds
+FIX: S-H02 — 60s TWAP is trivially manipulable; 900s is minimum safe window
 
 
 ```solidity
-uint32 public twapDuration = 60
+uint32 public twapDuration = 900
 ```
 
 
@@ -281,6 +282,15 @@ Last tick at rebalance
 
 ```solidity
 int24 public lastTick
+```
+
+
+### maxRebalanceSlippageBps
+FIX: S-H02 — max allowed value loss during rebalance (basis points)
+
+
+```solidity
+uint256 public maxRebalanceSlippageBps = 500
 ```
 
 
@@ -759,6 +769,12 @@ error InvalidHook(address hook);
 
 ```solidity
 error HookNotApproved(address hook);
+```
+
+### RebalanceSlippageExceeded
+
+```solidity
+error RebalanceSlippageExceeded(uint256 valueBefore, uint256 valueAfter);
 ```
 
 ## Structs
