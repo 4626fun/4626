@@ -90,6 +90,7 @@ export function AccountSetupWorkspaceView(props: {
     ownerPrimaryCtaLabel,
     providerCollision,
     readableCswOwners,
+    subAccountAddress,
     zoraCrossAppCount,
     zoraHandoffUrl,
     zoraLinked,
@@ -119,7 +120,7 @@ export function AccountSetupWorkspaceView(props: {
 
   const zoraStepComplete = zoraLinked
   const walletStepComplete = Boolean(canonicalCswAddress)
-  const signingStepComplete = /4626 signing is enabled|already enabled/i.test(notice ?? '')
+  const signingStepComplete = Boolean(subAccountAddress) || Boolean(me.baseSubAccount) || /4626 signing is enabled|already enabled/i.test(notice ?? '')
   const sponsorshipDiagnostic = extractSponsorshipDiagnostic(error)
 
   if (context === 'waitlist') {
@@ -177,8 +178,8 @@ export function AccountSetupWorkspaceView(props: {
         {/* Heading — single line */}
         <div className="flex items-start justify-between gap-3">
           <div>
-          <h2 className="text-2xl font-semibold tracking-tight text-white">Activate your account</h2>
-          <p className="mt-1 text-sm text-zinc-500">{stepTwoStatus === 'done' ? 'Completed' : `Step ${resolvedOpen} of 2`}</p>
+          <h2 className="text-2xl font-semibold tracking-tight text-white">{allDone ? 'Account activated' : 'Activate your account'}</h2>
+          <p className="mt-1 text-sm text-zinc-500">{allDone ? 'All steps completed' : `Step ${resolvedOpen} of 2`}</p>
           </div>
         </div>
 
