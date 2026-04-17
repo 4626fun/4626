@@ -202,6 +202,7 @@ async function readBootstrapProfile(params: {
   email: string | null
   primaryWallet: string | null
   embeddedWallet: string | null
+  zoraHandle: string | null
 }> {
   const profile = await params.db.sql`
     SELECT id, referral_code, email, primary_wallet, embedded_wallet
@@ -215,7 +216,21 @@ async function readBootstrapProfile(params: {
   const primaryWallet = typeof profile?.rows?.[0]?.primary_wallet === 'string' ? String(profile.rows[0].primary_wallet).trim() || null : null
   const embeddedWallet =
     typeof profile?.rows?.[0]?.embedded_wallet === 'string' ? String(profile.rows[0].embedded_wallet).trim() || null : null
-  return { signupId, referralCode, email, primaryWallet, embeddedWallet }
+
+  // Read Zora handle for use as a referral code candidate
+  let zoraHandle: string | null = null
+  try {
+    const zoraResult = await params.db.sql`
+      SELECT zora_handle
+      FROM account_zora_signals
+      WHERE privy_user_id = ${params.privyUserId}
+      LIMIT 1;
+    `
+    const raw = zoraResult?.rows?.[0]?.zora_handle
+    zoraHandle = typeof raw === 'string' && raw.trim() ? raw.trim().replace(/^[@$]/, '') : null
+  } catch { /* table may not exist yet */ }
+
+  return { signupId, referralCode, email, primaryWallet, embeddedWallet, zoraHandle }
 }
 
 async function resolveCreatorCoinReferralCode(wallet: string | null | undefined): Promise<string | null> {
@@ -275,12 +290,44 @@ async function ensureBootstrapReferralCode(params: {
   email: string | null
   primaryWallet: string | null
   embeddedWallet: string | null
+  zoraHandle: string | null
 }): Promise<string | null> {
-  if (params.referralCode) return params.referralCode
   const creatorCoinCode =
     (await resolveCreatorCoinReferralCodeWithTimeout(params.primaryWallet)) ??
     (await resolveCreatorCoinReferralCodeWithTimeout(params.embeddedWallet))
+
+  // If a code is already set, check if we can upgrade a generated fallback
+  // (e.g. "CJ2") to a more memorable identity-based code.
+  if (params.referralCode) {
+    const generatedFallbackPattern = `C${Number(params.signupId).toString(36).toUpperCase()}`
+    const isGeneratedFallback = params.referralCode === generatedFallbackPattern
+    if (!isGeneratedFallback) return params.referralCode
+
+    // Try to upgrade to an identity-based code
+    const upgradeCandidates = dedupeReferralCodeCandidates([
+      params.zoraHandle,
+      creatorCoinCode,
+    ])
+    for (const desired of upgradeCandidates) {
+      if (desired === params.referralCode) continue
+      try {
+        const updated = await params.db.sql`
+          UPDATE profiles
+          SET referral_code = ${desired}
+          WHERE id = ${params.signupId} AND referral_code = ${params.referralCode}
+          RETURNING referral_code;
+        `
+        const claimed = typeof updated?.rows?.[0]?.referral_code === 'string' ? (updated.rows[0].referral_code as string) : null
+        if (claimed) return claimed
+      } catch {
+        continue
+      }
+    }
+    return params.referralCode
+  }
+
   const candidates = dedupeReferralCodeCandidates([
+    params.zoraHandle,
     creatorCoinCode,
     referralCodeFromEmail(params.email),
     `C${Number(params.signupId).toString(36).toUpperCase()}`,
@@ -491,6 +538,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           email: bootstrapProfile.email,
           primaryWallet: bootstrapProfile.primaryWallet,
           embeddedWallet: bootstrapProfile.embeddedWallet,
+          zoraHandle: bootstrapProfile.zoraHandle,
         })
         if (referralCode) {
           await applyBootstrapReferral({
