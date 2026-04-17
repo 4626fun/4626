@@ -21,6 +21,14 @@ describe('deriveBadges', () => {
     expect(badges.siwe.state).toBe('loading')
   })
 
+  it('returns error state when the health fetch failed', () => {
+    const badges = deriveBadges(null, true)
+    expect(badges.paymaster.state).toBe('error')
+    expect(badges.db.state).toBe('error')
+    expect(badges.siwe.state).toBe('error')
+    expect(badges.paymaster.note).toMatch(/Health check failed/)
+  })
+
   it('maps a fully healthy response to all-ok badges', () => {
     const badges = deriveBadges(baseHealth({}))
     expect(badges.paymaster.state).toBe('ok')

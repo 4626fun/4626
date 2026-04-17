@@ -67,8 +67,10 @@ async function fetchInfraHealth(): Promise<HealthResponse | null> {
   try {
     const res = await apiFetch('/api/health', { withCredentials: true })
     if (!res.ok) return null
-    const json = (await res.json()) as HealthResponse
-    return json
+    // /api/health returns ApiEnvelope<HealthResponse>; unwrap to the inner shape.
+    const json = (await res.json()) as ApiEnvelope<HealthResponse>
+    if (!json.success || !json.data) return null
+    return json.data
   } catch {
     return null
   }
