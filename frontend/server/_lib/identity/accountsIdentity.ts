@@ -35,6 +35,7 @@ export type AccountsMePayload = {
   email: string | null
   emailVerified: boolean
   appAccessStatus: string | null
+  baseSubAccount: string | null
   linkedMethods: Record<string, string[]>
   accountSignals: {
     linked: boolean
@@ -840,7 +841,7 @@ export async function buildAccountsMePayload(params: {
   `
   const accountRow = accountRowResult.rows?.[0] ?? null
   const profileStatusResult = await db.sql`
-    SELECT app_access_status
+    SELECT app_access_status, base_sub_account
     FROM profiles
     WHERE privy_user_id = ${privyUserId}
     ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
@@ -858,6 +859,7 @@ export async function buildAccountsMePayload(params: {
     email: normalizeEmail(accountRow?.email),
     emailVerified: accountRow?.email_verified === true,
     appAccessStatus: normalizeString(profileStatusRow?.app_access_status),
+    baseSubAccount: normalizeString(profileStatusRow?.base_sub_account),
     linkedMethods,
     accountSignals: {
       linked: zoraRow.zoraLinked,
