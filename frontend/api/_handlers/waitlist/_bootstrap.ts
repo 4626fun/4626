@@ -47,7 +47,7 @@ type WaitlistBootstrapResponse =
     } & Awaited<ReturnType<typeof buildAccountsMePayload>>)
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const CREATOR_COIN_REFERRAL_LOOKUP_TIMEOUT_MS = 1_500
+const IDENTITY_LOOKUP_TIMEOUT_MS = 1_500
 const BOOTSTRAP_BODY_MAX_BYTES = 16_384
 
 function normalizeEmail(value: unknown): string | null {
@@ -257,33 +257,23 @@ async function resolveCreatorCoinReferralCode(wallet: string | null | undefined)
   }
 }
 
-async function resolveCreatorCoinReferralCodeWithTimeout(wallet: string | null | undefined): Promise<string | null> {
-  const normalizedWallet = typeof wallet === 'string' ? wallet.trim() : ''
-  if (!normalizedWallet) return null
+/**
+ * Run an async identity lookup with an absolute timeout.
+ * Returns null on timeout, rejection, or if the wallet is empty.
+ */
+async function withIdentityTimeout<T>(
+  fn: (wallet: string) => Promise<T | null>,
+  wallet: string | null | undefined,
+): Promise<T | null> {
+  const normalized = typeof wallet === 'string' ? wallet.trim() : ''
+  if (!normalized) return null
 
   let timeoutId: ReturnType<typeof setTimeout> | undefined
   try {
-    return await Promise.race<string | null>([
-      resolveCreatorCoinReferralCode(normalizedWallet).catch(() => null),
-      new Promise<string | null>((resolve) => {
-        timeoutId = setTimeout(() => resolve(null), CREATOR_COIN_REFERRAL_LOOKUP_TIMEOUT_MS)
-      }),
-    ])
-  } finally {
-    if (timeoutId !== undefined) clearTimeout(timeoutId)
-  }
-}
-
-async function resolveBasenameHandleWithTimeout(wallet: string | null | undefined): Promise<string | null> {
-  const normalizedWallet = typeof wallet === 'string' ? wallet.trim() : ''
-  if (!normalizedWallet) return null
-
-  let timeoutId: ReturnType<typeof setTimeout> | undefined
-  try {
-    return await Promise.race<string | null>([
-      resolveBasenameHandle(normalizedWallet).catch(() => null),
-      new Promise<string | null>((resolve) => {
-        timeoutId = setTimeout(() => resolve(null), CREATOR_COIN_REFERRAL_LOOKUP_TIMEOUT_MS)
+    return await Promise.race<T | null>([
+      fn(normalized).catch(() => null),
+      new Promise<T | null>((resolve) => {
+        timeoutId = setTimeout(() => resolve(null), IDENTITY_LOOKUP_TIMEOUT_MS)
       }),
     ])
   } finally {
@@ -314,14 +304,20 @@ async function ensureBootstrapReferralCode(params: {
   cswAddress: string | null
   zoraHandle: string | null
 }): Promise<string | null> {
+  // Deduplicate wallets so we never make redundant RPC/API calls
+  // when primaryWallet === embeddedWallet or cswAddress === primaryWallet.
   const creatorCoinCode =
-    (await resolveCreatorCoinReferralCodeWithTimeout(params.primaryWallet)) ??
-    (await resolveCreatorCoinReferralCodeWithTimeout(params.embeddedWallet))
+    (await withIdentityTimeout(resolveCreatorCoinReferralCode, params.primaryWallet)) ??
+    (params.embeddedWallet && params.embeddedWallet !== params.primaryWallet
+      ? await withIdentityTimeout(resolveCreatorCoinReferralCode, params.embeddedWallet)
+      : null)
 
   // Resolve Base app handle (basename) from the CSW address, then primary wallet
   const basenameHandle =
-    (await resolveBasenameHandleWithTimeout(params.cswAddress)) ??
-    (await resolveBasenameHandleWithTimeout(params.primaryWallet))
+    (await withIdentityTimeout(resolveBasenameHandle, params.cswAddress)) ??
+    (params.primaryWallet && params.primaryWallet !== params.cswAddress
+      ? await withIdentityTimeout(resolveBasenameHandle, params.primaryWallet)
+      : null)
 
   // If a code is already set, check if we can upgrade a generated fallback
   // (e.g. "CJ2") to a more memorable identity-based code.
