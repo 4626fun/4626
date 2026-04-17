@@ -1,16 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Allow explicit preview branches through; skip other previews.
+# Only main builds. vercel.json enforces this at the platform level
+# (`git.deploymentEnabled: { main: true }`), so non-main refs normally
+# never reach this script — this case is a belt-and-suspenders guard for
+# manual CLI deploys or config drift.
 case "${VERCEL_GIT_COMMIT_REF:-}" in
   main|refs/heads/main|"")
     ;;
-  feat/cds-integration)
-    # Let this feature branch build previews
-    exit 1
-    ;;
   *)
-    # Skip all other preview / non-main builds
     exit 0
     ;;
 esac
