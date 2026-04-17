@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+
+# Sitemaps
+Sitemap: https://4626.fun/sitemap.xml
+
+# Disallow internal/API routes
+Disallow: /api/
+Disallow: /_next/
+Disallow: /auth/
