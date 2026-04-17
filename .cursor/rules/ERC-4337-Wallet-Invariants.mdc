@@ -7,9 +7,35 @@ alwaysApply: true
 
 This file is the authority for canonical wallet/account selection. Use `csw-agent-lifecycle.mdc` for delegated-signer and agent-identity mechanics, and use `AGENTS.md` for product-level onboarding and execution gating.
 
-- The user's originally created Zora Coinbase Smart Wallet is the canonical account.
-- This canonical wallet MUST be used as the sender/account for ERC-4337 UserOps, asset checks, and owner index resolution.
+## Identity Invariants
+
+- The user's originally created Zora Coinbase Smart Wallet (CSW) is the canonical account and universal identity.
 - Do not automatically create a new Coinbase Smart Wallet.
 - Do not silently switch the primary account to a Privy Smart Wallet.
 - Privy EOAs and Privy Smart Wallets are signer/owner identities only, not the canonical asset-holding account.
 - Deviation from the canonical wallet is allowed only with explicit product requirement or explicit user opt-in migration.
+
+## Execution Paths (User-Side vs Server-Side)
+
+The CSW has two distinct execution paths. Code changes must respect which path applies.
+
+### User-initiated frontend transactions (swaps, vaults, deposits)
+- Execution address: the **sub-account** derived from the CSW via `wallet_addSubAccount`.
+- Signer: the Privy embedded EOA (secp256k1, silent, no passkey popup after initial setup).
+- Transaction flow: `wallet_prepareCalls → owner.sign() → wallet_sendPreparedCalls`.
+- The sub-account is the `msg.sender` on-chain for user-initiated operations.
+- ERC-4337 UserOps for user-initiated transactions use the sub-account as sender.
+
+### Server-side agent operations (XMTP, ERC-8004, deploy-session)
+- Execution address: the **CSW directly** as the ERC-4337 sender.
+- Signer: a Privy server-managed wallet added as a CSW owner via `addOwnerAddress`.
+- The CSW is the `msg.sender` on-chain for agent operations.
+- See `csw-agent-lifecycle.mdc` for the full delegation model.
+
+## Owner Installation (Batched Ceremony)
+
+Both the sub-account and the agent server wallet are installed during account setup in a single session:
+1. `wallet_addSubAccount` — creates the sub-account (passkey popup 1).
+2. `addOwnerAddress(agentWalletAddress)` — installs the server wallet as a CSW owner (passkey popup 2).
+
+Both popups occur back-to-back during onboarding. Deploy-session and XMTP agent rely on the server wallet already being an owner; they do not prompt for separate installation.
