@@ -26,7 +26,7 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
     initialData: { me: initialAccount, zoraStatus: null },
     zoraReturnPath: '/waitlist',
   })
-  const signingStepComplete = /4626 signing is enabled|already enabled/i.test(controller.notice ?? '')
+  const signingStepComplete = Boolean(controller.subAccountAddress) || Boolean(initialAccount.baseSubAccount) || /4626 signing is enabled|already enabled/i.test(controller.notice ?? '')
   const setupComplete =
     controller.zoraLinked && Boolean(controller.canonicalCswAddress) && signingStepComplete
   const canEnterNow = canEnterApp && setupComplete
@@ -37,31 +37,31 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
       controller={controller}
       summaryActions={
         <div className="w-full">
-          <button
-            type="button"
-            onClick={() => void onEnterApp()}
-            disabled={completionBusy || !canEnterNow}
-            className="btn-accent btn-no-icon inline-flex w-full items-center justify-center sm:w-auto disabled:opacity-50 disabled:grayscale"
-            aria-disabled={completionBusy || !canEnterNow}
-            aria-describedby={!canEnterNow ? 'waitlist-enter-app-hint' : undefined}
-          >
-            {completionBusy ? 'Entering App...' : `${SHARE_SYMBOL_PREFIX} Enter App`}
-          </button>
-          {!canEnterNow ? (
+          {canEnterNow ? (
+            <button
+              type="button"
+              onClick={() => void onEnterApp()}
+              disabled={completionBusy}
+              className="btn-accent btn-no-icon inline-flex w-full items-center justify-center sm:w-auto disabled:opacity-50 disabled:grayscale"
+            >
+              {completionBusy ? 'Entering App...' : `${SHARE_SYMBOL_PREFIX} Enter App`}
+            </button>
+          ) : setupComplete && !canEnterApp ? (
             <div
-              id="waitlist-enter-app-hint"
               role="status"
               aria-live="polite"
-              className="bv-subpanel mt-3 px-4 py-3 ring-1 ring-brand-primary/20"
+              className="bv-subpanel space-y-3 px-4 py-4 ring-1 ring-brand-primary/20"
             >
-              <p className="bv-kicker text-brand-300">
-                {canEnterApp ? 'Finish setup first' : 'App access pending'}
+              <p className="bv-kicker text-brand-300">Waiting for admin approval</p>
+              <p className="text-sm text-zinc-300">
+                Your account setup is complete. Access will be granted once an admin approves your entry.
               </p>
-              <p className="mt-1 text-sm text-zinc-300">
-                {canEnterApp
-                  ? 'Complete all three setup steps above to unlock Enter App.'
-                  : 'Your setup is saved. Stay on this page while approval catches up.'}
-              </p>
+              <a
+                href="/leaderboard"
+                className="inline-flex h-9 items-center rounded-lg border border-white/10 bg-white/[0.04] px-4 text-sm font-medium text-zinc-300 hover:bg-white/[0.08] transition-colors"
+              >
+                View leaderboard
+              </a>
             </div>
           ) : null}
         </div>

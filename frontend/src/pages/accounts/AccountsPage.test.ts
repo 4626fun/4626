@@ -48,6 +48,7 @@ describe('AccountsPage', () => {
               email: 'user@example.com',
               emailVerified: true,
               appAccessStatus: 'approved',
+              baseSubAccount: null,
               linkedMethods: {
                 email: ['user@example.com'],
                 google: ['google-sub-1'],
@@ -108,6 +109,7 @@ describe('AccountsPage', () => {
               email: 'user@example.com',
               emailVerified: true,
               appAccessStatus: 'approved',
+              baseSubAccount: null,
               linkedMethods: {
                 email: ['user@example.com'],
               },
@@ -149,6 +151,7 @@ describe('AccountsPage', () => {
               email: 'user@example.com',
               emailVerified: true,
               appAccessStatus: 'approved',
+              baseSubAccount: null,
               linkedMethods: {
                 email: ['user@example.com'],
               },

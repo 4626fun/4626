@@ -33,6 +33,7 @@ export type AccountSetupMe = {
   email: string | null
   emailVerified: boolean
   appAccessStatus: string | null
+  baseSubAccount: string | null
   linkedMethods: Record<string, string[]>
   accountSignals: AccountSignals
   score: AccountScore
