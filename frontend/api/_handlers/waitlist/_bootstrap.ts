@@ -33,6 +33,7 @@ import {
   verifyPrivyForAccounts,
 } from '../../../server/_lib/identity/accountsIdentity.js'
 import { runWithOwnedEmailCollisionAdoption } from '../../../server/_lib/identity/emailCollisionAdoption.js'
+import { resolveBasenameHandle } from '../../../server/_lib/identity/basenameResolver.js'
 
 type BootstrapBody = { email?: string; referralCode?: string }
 type WaitlistBootstrapResponse =
@@ -202,10 +203,11 @@ async function readBootstrapProfile(params: {
   email: string | null
   primaryWallet: string | null
   embeddedWallet: string | null
+  cswAddress: string | null
   zoraHandle: string | null
 }> {
   const profile = await params.db.sql`
-    SELECT id, referral_code, email, primary_wallet, embedded_wallet
+    SELECT id, referral_code, email, primary_wallet, embedded_wallet, csw_address
     FROM profiles
     WHERE privy_user_id = ${params.privyUserId}
     LIMIT 1;
@@ -216,6 +218,8 @@ async function readBootstrapProfile(params: {
   const primaryWallet = typeof profile?.rows?.[0]?.primary_wallet === 'string' ? String(profile.rows[0].primary_wallet).trim() || null : null
   const embeddedWallet =
     typeof profile?.rows?.[0]?.embedded_wallet === 'string' ? String(profile.rows[0].embedded_wallet).trim() || null : null
+  const cswAddress =
+    typeof profile?.rows?.[0]?.csw_address === 'string' ? String(profile.rows[0].csw_address).trim() || null : null
 
   // Read Zora handle for use as a referral code candidate
   let zoraHandle: string | null = null
@@ -230,7 +234,7 @@ async function readBootstrapProfile(params: {
     zoraHandle = typeof raw === 'string' && raw.trim() ? raw.trim().replace(/^[@$]/, '') : null
   } catch { /* table may not exist yet */ }
 
-  return { signupId, referralCode, email, primaryWallet, embeddedWallet, zoraHandle }
+  return { signupId, referralCode, email, primaryWallet, embeddedWallet, cswAddress, zoraHandle }
 }
 
 async function resolveCreatorCoinReferralCode(wallet: string | null | undefined): Promise<string | null> {
@@ -270,6 +274,23 @@ async function resolveCreatorCoinReferralCodeWithTimeout(wallet: string | null |
   }
 }
 
+async function resolveBasenameHandleWithTimeout(wallet: string | null | undefined): Promise<string | null> {
+  const normalizedWallet = typeof wallet === 'string' ? wallet.trim() : ''
+  if (!normalizedWallet) return null
+
+  let timeoutId: ReturnType<typeof setTimeout> | undefined
+  try {
+    return await Promise.race<string | null>([
+      resolveBasenameHandle(normalizedWallet).catch(() => null),
+      new Promise<string | null>((resolve) => {
+        timeoutId = setTimeout(() => resolve(null), CREATOR_COIN_REFERRAL_LOOKUP_TIMEOUT_MS)
+      }),
+    ])
+  } finally {
+    if (timeoutId !== undefined) clearTimeout(timeoutId)
+  }
+}
+
 async function readCurrentBootstrapReferralCode(params: {
   db: { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
   signupId: number
@@ -290,11 +311,17 @@ async function ensureBootstrapReferralCode(params: {
   email: string | null
   primaryWallet: string | null
   embeddedWallet: string | null
+  cswAddress: string | null
   zoraHandle: string | null
 }): Promise<string | null> {
   const creatorCoinCode =
     (await resolveCreatorCoinReferralCodeWithTimeout(params.primaryWallet)) ??
     (await resolveCreatorCoinReferralCodeWithTimeout(params.embeddedWallet))
+
+  // Resolve Base app handle (basename) from the CSW address, then primary wallet
+  const basenameHandle =
+    (await resolveBasenameHandleWithTimeout(params.cswAddress)) ??
+    (await resolveBasenameHandleWithTimeout(params.primaryWallet))
 
   // If a code is already set, check if we can upgrade a generated fallback
   // (e.g. "CJ2") to a more memorable identity-based code.
@@ -306,6 +333,7 @@ async function ensureBootstrapReferralCode(params: {
     // Try to upgrade to an identity-based code
     const upgradeCandidates = dedupeReferralCodeCandidates([
       params.zoraHandle,
+      basenameHandle,
       creatorCoinCode,
     ])
     for (const desired of upgradeCandidates) {
@@ -328,6 +356,7 @@ async function ensureBootstrapReferralCode(params: {
 
   const candidates = dedupeReferralCodeCandidates([
     params.zoraHandle,
+    basenameHandle,
     creatorCoinCode,
     referralCodeFromEmail(params.email),
     `C${Number(params.signupId).toString(36).toUpperCase()}`,
@@ -538,6 +567,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           email: bootstrapProfile.email,
           primaryWallet: bootstrapProfile.primaryWallet,
           embeddedWallet: bootstrapProfile.embeddedWallet,
+          cswAddress: bootstrapProfile.cswAddress,
           zoraHandle: bootstrapProfile.zoraHandle,
         })
         if (referralCode) {
