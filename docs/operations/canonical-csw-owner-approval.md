@@ -125,6 +125,33 @@ Possible values:
 
 UI and retry behavior should use this state, not only `isOwner`.
 
+## Execution track (read via `/api/onboarding/bootstrap` or `/api/accounts/me`)
+
+For reading account state, prefer the `executionTrack` field returned by both
+endpoints over deriving the track from individual signals. Possible values:
+
+- `sub-account` — real sub-account is persisted (`profiles.base_sub_account`
+  is set and differs from `profiles.csw_address`), and the Privy embedded EOA
+  is NOT a direct owner of the parent CSW. This is the current-model shape
+  for new accounts.
+- `legacy-owner-install` — Privy embedded EOA IS a direct owner of the parent
+  CSW (the pre-migration path covered by this runbook), and no real
+  sub-account is persisted. Fully functional. Your account may be here if
+  it was activated before the sub-account migration landed.
+- `migration-pending` — both signals are present. A legacy account that
+  subsequently set up a sub-account. The client should prefer the
+  sub-account path for new transactions; cleanup of the redundant direct
+  ownership can be done later (and is non-urgent).
+- `none-yet` — neither signal is present. The account has authenticated but
+  has not completed user-facing activation on either track.
+
+Server-side agent / deploy-session delegation is an **orthogonal track**
+(see `.cursor/rules/csw-agent-lifecycle.mdc`). The `executionTrack` field
+here only describes the user-initiated frontend execution track.
+
+The classifier is pure and unit-tested in
+`frontend/server/_lib/wallet/executionTrack.ts`.
+
 ## Observability contract
 
 Owner approval emits one run-scoped telemetry stream using `approvalRunId`.
