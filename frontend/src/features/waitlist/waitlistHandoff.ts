@@ -1,5 +1,6 @@
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/wallet/onboardingWallet'
+import { writeStoredSessionToken } from '@/hooks/useSiweAuth'
 
 /**
  * Handoff helpers for the `/waitlist` → `app.4626.fun/swap` transition.
@@ -37,7 +38,18 @@ export async function bridgePrivySession(privyToken: string | null): Promise<boo
     },
   }).catch(() => null)
 
-  return Boolean(authRes?.ok)
+  const ok = Boolean(authRes?.ok)
+  if (ok) {
+    // FINDING-02: the 4626 session is now in the HttpOnly cv_auth_session
+    // cookie. Clear any stale cv_siwe_session_token in sessionStorage so
+    // apiBase.ts does not inject a mismatched Authorization header on
+    // subsequent /api/* calls. Server prefers Bearer over cookie, so a
+    // stale token would shadow the fresh cookie and surface as "logged
+    // out on /swap" after a same-origin navigation (where the cross-origin
+    // handoff redeem — which already clears sessionStorage — is skipped).
+    writeStoredSessionToken(null)
+  }
+  return ok
 }
 
 /**
