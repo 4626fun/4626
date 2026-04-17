@@ -1,5 +1,8 @@
 // @vitest-environment happy-dom
 
+// The production SwapConnectGate component still lives under
+// src/components/swap/ — only the test file has moved to respect the
+// features-first test-placement policy.
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 
@@ -28,7 +31,7 @@ vi.mock('@/components/ui/Button', () => ({
 
 import { deriveSwapConnectGate } from '@/lib/swap/connectGate'
 
-import { SwapConnectGate } from './SwapConnectGate'
+import { SwapConnectGate } from '@/components/swap/SwapConnectGate'
 
 describe('SwapConnectGate', () => {
   it('renders a spinner (no CTA) in the hydrating state', () => {
