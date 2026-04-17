@@ -676,7 +676,18 @@ export function useSiweAuth() {
       const allowPrivy = method === 'auto' || method === 'privy'
 
       if (allowPrivy) {
-        if (privyReady && !privyAuthenticated && typeof login === 'function') {
+        // Check if Privy already has a valid session before calling login().
+        // The `authenticated` flag can lag behind the actual session state,
+        // causing Privy to reject the login() call with "already logged in".
+        let alreadyHasPrivySession = privyAuthenticated
+        if (privyReady && !alreadyHasPrivySession && getPrivyAccessToken) {
+          try {
+            const existingToken = await getPrivyAccessToken()
+            if (existingToken) alreadyHasPrivySession = true
+          } catch { /* no existing session */ }
+        }
+
+        if (privyReady && !alreadyHasPrivySession && typeof login === 'function') {
           try {
             await login({ loginMethods: [...PRIVY_INTERACTIVE_LOGIN_METHODS] })
           } catch {
