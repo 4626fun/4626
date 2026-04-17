@@ -11,7 +11,7 @@
  * - Try Base L2 reverse resolution first as a best-effort fast path.
  */
 
-import { createPublicClient, getAddress, http, isAddress, toCoinType } from 'viem'
+import { createPublicClient, encodePacked, getAddress, http, isAddress, keccak256, namehash, toCoinType } from 'viem'
 import { base, mainnet } from 'viem/chains'
 import { getEnsName } from './ensResolver.js'
 
@@ -126,6 +126,30 @@ export function basenameToHandle(name: string | null | undefined): string | null
   return withoutSuffix.length > 0 ? withoutSuffix : null
 }
 
+// ── Base L2 Resolver (direct contract call) ──────────────────────────
+// viem's `getEnsName` does not work on Base because the chain config
+// lacks an ENS Universal Resolver.  Instead we call the L2 Resolver
+// contract directly using the ENSIP-19 reverse-node encoding for
+// Base (coinType 0x80002105).
+const BASENAME_L2_RESOLVER = '0xC6d566A56A1aFf6508b41f6c90ff131615583BCD' as const
+const BASE_CHAIN_COIN_TYPE_HEX = ((0x80000000 | base.id) >>> 0).toString(16).toUpperCase()
+const BASE_REVERSE_NODE = namehash(`${BASE_CHAIN_COIN_TYPE_HEX}.reverse`)
+
+const L2_RESOLVER_NAME_ABI = [
+  {
+    inputs: [{ name: 'node', type: 'bytes32' as const }],
+    name: 'name' as const,
+    outputs: [{ name: '', type: 'string' as const }],
+    stateMutability: 'view' as const,
+    type: 'function' as const,
+  },
+] as const
+
+function addressToBaseReverseNode(addr: `0x${string}`): `0x${string}` {
+  const addressNode = keccak256(encodePacked(['string'], [addr.replace('0x', '')]))
+  return keccak256(encodePacked(['bytes32', 'bytes32'], [BASE_REVERSE_NODE, addressNode]))
+}
+
 async function getBasenameNameOnBase(address: string): Promise<string | null> {
   const normalized = normalizeEvmAddress(address)
   if (!normalized) return null
@@ -134,12 +158,15 @@ async function getBasenameNameOnBase(address: string): Promise<string | null> {
       chain: base,
       transport: http(getBaseRpcUrl(), { timeout: 10_000 }),
     })
-    const name = await client.getEnsName({ address: normalized })
-    return name
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err ?? '')
-    // viem can throw before any RPC call if the chain config doesn't define ENS contracts.
-    if (msg.includes('does not support contract "ensUniversalResolver"')) return null
+    const node = addressToBaseReverseNode(normalized)
+    const name = await client.readContract({
+      address: BASENAME_L2_RESOLVER,
+      abi: L2_RESOLVER_NAME_ABI,
+      functionName: 'name',
+      args: [node],
+    })
+    return typeof name === 'string' && name.length > 0 ? name : null
+  } catch {
     return null
   }
 }
