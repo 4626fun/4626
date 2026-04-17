@@ -122,7 +122,7 @@ describe('buildAccountsMePayload', () => {
 
         if (query.includes('select app_access_status') && query.includes('from profiles')) {
           expect(String(values[0] ?? '')).toBe('did:privy:test-user')
-          return { rows: [{ app_access_status: 'approved' }] }
+          return { rows: [{ app_access_status: 'approved', base_sub_account: null }] }
         }
 
         return { rows: [] }
