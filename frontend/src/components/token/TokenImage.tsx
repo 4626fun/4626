@@ -11,7 +11,7 @@ import { useState, memo } from 'react'
 import { useTokenMetadata } from '@/hooks/useTokenMetadata'
 import { OrbBorder } from '@/components/brand/OrbBorder'
 
-interface TokenImageProps {
+export interface TokenImageProps {
   tokenAddress: `0x${string}`
   symbol: string
   size?: 'sm' | 'md' | 'lg' | 'xl' | '2xl'

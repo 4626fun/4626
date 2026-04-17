@@ -118,10 +118,14 @@ Defined in: [src/lib/wallet/subAccountSetup.ts:51](https://github.com/wenakita/4
 
 Defined in: [src/lib/wallet/subAccountSetup.ts:165](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/subAccountSetup.ts#L165)
 
-Configure the Base Account SDK to use the Privy embedded wallet as
-the signer for sub-account operations.  After this call, all
-transactions sent with `from: subAccountAddress` are signed by the
-Privy embedded wallet — no passkey prompts.
+Configure the Base Account SDK to use the Privy embedded wallet as the
+signer for sub-account operations. After this call, all transactions sent
+with `from: subAccountAddress` are signed by the Privy embedded wallet —
+no passkey prompts.
+
+`params` carries the Base Account SDK instance (from `useBaseAccountSdk()`),
+the `toViemAccount` function from `@privy-io/react-auth`, and the Privy
+`ConnectedWallet` for the embedded EOA.
 
 #### Parameters
 

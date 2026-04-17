@@ -20,9 +20,9 @@ import {
  * so we sum those across recent batches per window.
  */
 
-type SignatureModeStat = { mode: string; count: number }
-type PaymasterModeStat = { mode: string; count: number }
-type SubmissionPathStat = { path: string; count: number }
+export type SignatureModeStat = { mode: string; count: number }
+export type PaymasterModeStat = { mode: string; count: number }
+export type SubmissionPathStat = { path: string; count: number }
 type WindowStats = {
   batchCount: number
   totalSamples: number

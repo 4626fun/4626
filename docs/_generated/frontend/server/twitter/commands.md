@@ -8,9 +8,37 @@
 
 ## Type Aliases
 
+### TwitterCommandFailure
+
+> **TwitterCommandFailure** = `object`
+
+Defined in: [server/twitter/commands.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/commands.ts#L11)
+
+#### Properties
+
+##### action?
+
+> `optional` **action**: `any`
+
+Defined in: [server/twitter/commands.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/commands.ts#L11)
+
+##### ok
+
+> **ok**: `false`
+
+Defined in: [server/twitter/commands.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/commands.ts#L11)
+
+##### response
+
+> **response**: `string`
+
+Defined in: [server/twitter/commands.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/commands.ts#L11)
+
+***
+
 ### TwitterCommandResult
 
-> **TwitterCommandResult** = \{ `action?`: `any`; `ok`: `true`; `response`: `string`; \} \| `TwitterCommandFailure`
+> **TwitterCommandResult** = \{ `action?`: `any`; `ok`: `true`; `response`: `string`; \} \| [`TwitterCommandFailure`](#twittercommandfailure)
 
 Defined in: [server/twitter/commands.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/commands.ts#L13)
 

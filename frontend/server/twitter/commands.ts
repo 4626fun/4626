@@ -8,7 +8,7 @@ declare const process: { env: Record<string, string | undefined> }
 
 export type TwitterRole = 'OWNER' | 'ADMIN' | 'MEMBER'
 
-type TwitterCommandFailure = { ok: false; response: string; action?: any }
+export type TwitterCommandFailure = { ok: false; response: string; action?: any }
 
 export type TwitterCommandResult =
   | { ok: true; response: string; action?: any }

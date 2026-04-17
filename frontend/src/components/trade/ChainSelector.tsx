@@ -3,7 +3,7 @@ import { Select } from '@coinbase/cds-web/alpha/select'
 import type { SelectOption } from '@coinbase/cds-web/alpha/select'
 import { SUPPORTED_CHAINS, type SupportedChainId } from '@/config/chains'
 
-interface ChainSelectorProps {
+export interface ChainSelectorProps {
   selectedChainId: SupportedChainId
   walletChainId?: number | null
   onSelect: (chainId: SupportedChainId) => void
