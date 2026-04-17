@@ -116,27 +116,57 @@ If a user authenticates through Base or Zora but still has no verified email, th
 
 Account identity and execution wallet topology are separate concerns.
 
-The intended order is:
+Canonical architecture reference: `docs/4626-connection-methods.md`. Canonical wallet invariants: `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`. Server-side delegation mechanics: `.cursor/rules/csw-agent-lifecycle.mdc`.
+
+Shared prerequisites (apply to every connection method):
 
 1. authenticate / create account through Privy
 2. verify email OTP
 3. create or resolve the Privy embedded EOA
-4. resolve or create the canonical Coinbase Smart Wallet
-5. add the Privy embedded EOA as an owner on that CSW
-6. confirm owner status onchain
+4. resolve or create the canonical Coinbase Smart Wallet (or an external EOA; Telegram users defer wallet setup to the browser handoff)
+
+How the account becomes execution-ready then depends on the track — user-initiated frontend transactions and server-side automation use different paths, and must not be conflated.
+
+### User-initiated frontend execution (CSW path, `executionMode === 'canonical'`)
+
+This is the path used for swaps, vault interactions, and other user-triggered writes submitted from `app.4626.fun`.
+
+After the shared prerequisites above:
+
+5. create an app-scoped sub-account via `wallet_addSubAccount` (one passkey popup; the only WebAuthn interaction)
+6. configure the sub-account signer via `baseAccountSdk.subAccount.setToOwnerAccount()`, routing all future signing to the Privy embedded EOA
+7. persist the sub-account address through `POST /onboarding/register-sub-account` into `profiles.base_sub_account`
 
 Rules:
 
-- if the user has a canonical CSW, the Privy embedded EOA must be installed as an owner on it
-- if the user does not yet have a CSW, route them to Base app with the referral flow, then resume owner-installation when they return
-- do not make CSW existence a prerequisite for account creation
-- do not treat CSW linkage as complete until owner confirmation succeeds
-- features that require canonical CSW execution must stay gated until this owner-installation step is complete
+- the ERC-4337 `sender` / `msg.sender` for user-initiated frontend writes is the sub-account, **not** the parent CSW
+- the parent CSW remains the canonical asset-holding account (`profiles.csw_address`) — visible on Basescan / Zora / Coinbase app — but it is not the execution address
+- the Privy embedded EOA is **not** installed as a direct owner on the parent CSW on this track; it is the sub-account's signer via `setToOwnerAccount()`
+- if the user does not yet have a CSW, route them to Base app with the referral flow, then resume sub-account setup when they return
+- do not treat wallet setup as complete until the sub-account is created, signer-configured, and persisted
+- features that require canonical execution stay gated until this track is complete
 - after verified email, the default web setup surface is `/waitlist`; `/accounts` is reserved for advanced settings, recovery, and secondary identity controls
 
-### Canonical owner-install runtime policy
+### User-initiated frontend execution (external EOA path, `executionMode === 'eoa'`)
 
-For canonical self-auth approval (connected signer equals canonical CSW), the
+For users connecting with MetaMask / Rabby / WalletConnect:
+
+- no sub-account (EOAs are not smart contract wallets)
+- `msg.sender` is the user's EOA directly; `sendTransaction` is used
+- the Privy embedded EOA still exists but is unused for transaction signing on this track
+
+### Server-side automation (agent, ERC-8004 identity, deploy-session)
+
+Server-side automation is unchanged and uses direct owner delegation on the parent CSW:
+
+- ERC-4337 `sender` is the parent CSW
+- the delegated owner is a Privy **server** wallet (not the user's embedded EOA), added via `addOwnerAddress`
+- the fallback ladder, `/api/wallet/confirm-owner` semantics, and approval telemetry below apply to this track
+- full mechanics in `.cursor/rules/csw-agent-lifecycle.mdc`
+
+### Server-side owner-install runtime policy
+
+For server-side canonical self-auth approval (connected signer equals canonical CSW), the
 runtime fallback ladder is fixed:
 
 1. sponsored UserOp with typed-data signing
@@ -145,9 +175,9 @@ runtime fallback ladder is fixed:
 
 Do not reorder this sequence without a deliberate product/runtime decision.
 
-### Canonical owner confirmation semantics
+### Server-side owner confirmation semantics
 
-Owner install completion is evaluated by `/api/wallet/confirm-owner` using both:
+Owner-install completion on the server-side track is evaluated by `/api/wallet/confirm-owner` using both:
 
 - onchain owner check result
 - tx lifecycle classification across configured Base RPCs
@@ -159,25 +189,25 @@ Owner install completion is evaluated by `/api/wallet/confirm-owner` using both:
 - `owner_not_found_yet`: tx/indexing lag state (retry/backoff state)
 - `tx_failed`: tx reverted/failed (terminal failure)
 
-Features requiring canonical execution remain gated until `owner_confirmed`.
+Server-side features requiring canonical execution remain gated until `owner_confirmed`.
 
-### Owner-approval observability
+This endpoint is not part of the user-initiated frontend track — user-initiated frontend readiness is determined by sub-account persistence + signer configuration, not by `/api/wallet/confirm-owner`.
 
-Owner approval emits run-scoped stage telemetry with `approvalRunId` across:
+### Server-side owner-approval observability
+
+Server-side owner approval emits run-scoped stage telemetry with `approvalRunId` across:
 
 - account setup controller orchestration (`preflight`, `prepare`)
 - onboarding execution lanes (`userop_typed`, `userop_nontyped`, `send_calls`, `confirm_owner`)
 - ERC-4337 helper lane telemetry enrichment
 
-This telemetry is required for production diagnosis and should be preserved when
-refactoring account setup or wallet execution paths.
+This telemetry is required for production diagnosis of the server-side track and should be preserved when refactoring account setup or wallet execution paths.
 
-### Related owner-install docs
+### Related docs
 
-For the operational owner-install flow and support guidance, see:
-
-- `docs/operations/canonical-csw-owner-approval.md`
-- `docs/guides/troubleshooting/activate-account-signing.md`
+- User-initiated and server-side architecture overview: `docs/4626-connection-methods.md`
+- Server-side owner-install operational runbook (legacy direct-install banner applies to the user-facing flow): `docs/operations/canonical-csw-owner-approval.md`
+- User-initiated troubleshooting: `docs/guides/troubleshooting/activate-account-signing.md`
 
 ### Session implementation notes
 

@@ -8,7 +8,7 @@ This is the canonical product model for identity onboarding:
 - No account is fully created until email OTP verification completes.
 - Privy is the auth/session backend and should create the embedded EOA during signup/auth.
 - Every fully onboarded account must have a Privy embedded EOA.
-- After verified email + embedded EOA creation, signed-in users stay on `/waitlist` for the setup-first workspace: Zora linking, canonical CSW detection, owner-install status, and the gated `Enter App` handoff.
+- After verified email + embedded EOA creation, signed-in users stay on `/waitlist` for the setup-first workspace: Zora linking, canonical CSW detection, sub-account setup status (for CSW users — per [docs/4626-connection-methods.md](../../docs/4626-connection-methods.md) Section 2), and the gated `Enter App` handoff.
 - `frontend/src/pages/accounts/AccountsPage.tsx` is now the advanced settings and recovery backstop: linked identities, Telegram/browser escapes, secondary owner actions, and recovery-only tooling.
 - Accepted users who choose `Enter App` continue through `frontend/src/features/waitlist/WaitlistFlow.tsx` + `frontend/src/features/waitlist/waitlistHandoff.ts`, and `frontend/src/hooks/useSiweAuth.ts` redeems the `cv_handoff` code before routing to the canonical app landing route.
 - Telegram, Base app, and website must all converge into the same verified-email-based account model.
@@ -36,14 +36,17 @@ Telegram-specific rules:
 Wallet invariants:
 
 - The Privy embedded EOA is created during signup/auth and must exist for every fully onboarded account.
-- If the user has a canonical Coinbase Smart Wallet, the Privy embedded EOA must be installed as an owner on it.
-- If the user does not yet have a CSW, route them to Base app referral flow, then resume owner-installation on return.
-- Wallet-dependent execution should stay gated until CSW owner confirmation succeeds.
+- For user-initiated frontend execution (CSW users, `executionMode === 'canonical'`): the canonical path is **sub-account setup**, not direct owner delegation. The app creates an app-scoped sub-account via `wallet_addSubAccount`, configures its signer to the Privy embedded EOA via `setToOwnerAccount()`, and persists the address as `profiles.base_sub_account`. The parent CSW (`profiles.csw_address`) remains the canonical asset-holding account but is not the execution address.
+- For user-initiated frontend execution (external EOA users, `executionMode === 'eoa'`): no sub-account; the wallet signs transactions directly.
+- If the user does not yet have a CSW, route them to Base app referral flow, then resume sub-account setup on return.
+- Wallet-dependent execution should stay gated until the appropriate track's readiness check succeeds — sub-account persisted + signer configured for the CSW track, or connected EOA for the EOA track.
+- **Server-side delegation** (deploy-session, XMTP agent, ERC-8004 identity) is orthogonal — it uses direct owner delegation on the parent CSW per `.cursor/rules/csw-agent-lifecycle.mdc`.
 
-Owner-install references:
+Architecture and operational references:
 
-- `docs/operations/canonical-csw-owner-approval.md`
-- `docs/guides/troubleshooting/activate-account-signing.md`
+- Canonical architecture: [docs/4626-connection-methods.md](../../docs/4626-connection-methods.md)
+- Server-side owner-install operational runbook (carries a legacy banner for the user-facing flow): `docs/operations/canonical-csw-owner-approval.md`
+- User-initiated troubleshooting: `docs/guides/troubleshooting/activate-account-signing.md`
 
 Implementation posture:
 

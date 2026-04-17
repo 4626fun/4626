@@ -12,9 +12,9 @@ If you only keep one rule in mind: the canonical production path is the frontend
 
 The app is launchable when all of these are true:
 
-- Users can sign in, reach `/deploy`, and complete the one-time owner-install flow.
+- Users can sign in, reach `/deploy`, and complete the one-time **deploy-session** owner-install flow (the server-side delegation track — separate from the user-initiated sub-account track used for swaps / vault interactions; see [4626 Connection Methods](/4626-connection-methods)).
 - The deploy-session server can continue the deploy after the one user approval.
-- The canonical wallet invariants hold: the canonical Coinbase Smart Wallet stays the sender/account.
+- The canonical wallet invariants hold: the canonical Coinbase Smart Wallet stays the asset-holding account and — specifically for the deploy-session ERC-4337 sender — the transaction sender. User-initiated frontend writes route through the sub-account per `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
 - The frontend builds cleanly and the launch-critical tests pass.
 - Deploy-session infra env vars are present in production.
 - Post-launch verification can prove the deploy reached the expected onchain state.

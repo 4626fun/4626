@@ -7,7 +7,7 @@ description: Deploy and configure 4626 vault infrastructure (CreatorOVault, wrap
 
 - Determine target chain and deployment mode:
   - Foundry scripts (EOA / operator, infra only): `script/DeployInfrastructure.s.sol` and `script/deploy.sh`
-  - ERC-4337 / AA (smart account): use `frontend/src/pages/deploy/DeployVault.tsx` (CLI AA script is retired)
+  - ERC-4337 / AA (smart account): use `frontend/src/pages/deploy/DeployVault.tsx` (CLI AA script is retired). This is the **server-side deploy-session** track — the parent CSW is the ERC-4337 `sender` with a temporary delegated owner. Not the same as the user-initiated sub-account track used for swaps / vault interactions; see `docs/4626-connection-methods.md` and `.cursor/rules/csw-agent-lifecycle.mdc`.
   - Multi-phase orchestrator (Base code-deposit limits): `contracts/helpers/batchers/DeploymentBatcher.sol` (Phase 1–2; Phase 3 is strategies)
   - “Infra v2” deterministic deployment helpers: `./script/deploy.sh infra-v2` → `script/DeployBaseMainnetDeployer.s.sol`
   - Post-deploy batchers (strategies + activation): `contracts/helpers/batchers/StrategyDeploymentBatcher.sol`, `contracts/helpers/batchers/VaultActivationBatcher.sol`

@@ -113,6 +113,7 @@ Do not continue parsing as success when `error` is present.
 
 ## 4626 Repository Guardrails
 
-- Keep production user-facing trading on existing canonical CSW and Privy delegated signer flows.
+- Production user-facing trading uses the 4626 sub-account execution path: CSW users trade through their app-scoped sub-account signed by the Privy embedded EOA (per `docs/4626-connection-methods.md` Section 2). External EOA users sign directly. Do not route production user trading through this CLI.
 - Do not introduce direct `ZORA_PRIVATE_KEY` trading into production app/account paths.
 - Treat CLI trading as local tooling unless product requirements explicitly change signer policy.
+- Server-side automation (agent / deploy-session) continues to use direct owner delegation on the parent CSW per `.cursor/rules/csw-agent-lifecycle.mdc` — that is orthogonal to both user-facing sub-account trading and this CLI.

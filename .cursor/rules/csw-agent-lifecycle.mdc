@@ -18,13 +18,20 @@ globs:
 The user's Zora-created Coinbase Smart Wallet (CSW) is the canonical account AND the agent identity.
 The CSW never "becomes" a separate agent — the agent identity is layered onto the CSW through owner delegation.
 
+## Scope
+
+This file covers **server-side** delegation for the XMTP agent, ERC-8004 identity, and deploy-session automation — all of which use the parent CSW as the ERC-4337 `sender` with a Privy server wallet delegated via `addOwnerAddress`.
+
+**User-initiated frontend transactions** (swaps, vault interactions submitted from `app.4626.fun`) do NOT use this delegation path. They route through an app-scoped sub-account whose signer is the user's Privy embedded EOA. See `docs/4626-connection-methods.md` Section 2 and `.cursor/rules/ERC-4337-Wallet-Invariants.mdc` for the user-initiated track.
+
 ## Architecture Invariant
 
-- Wallet/account selection rules live in `ERC-4337-Wallet-Invariants.mdc`; this file defines how delegated signers and agent identity layer onto that canonical wallet.
+- Wallet/account selection rules live in `ERC-4337-Wallet-Invariants.mdc`; this file defines how delegated signers and agent identity layer onto that canonical wallet for the **server-side track**.
 - The CSW is the canonical asset-holding account (per `ERC-4337-Wallet-Invariants.mdc`).
 - Privy server wallets are delegated signers added to the CSW's MultiOwnable owner list.
 - The XMTP agent, ERC-8004 identity, and deploy-session automation all present as the CSW address.
 - No private key extraction ever occurs; Privy signs on behalf of the CSW via its API.
+- Do not repurpose this delegation path for user-initiated frontend transactions — those use sub-accounts, not parent-CSW owner delegation.
 
 ## Lifecycle (chronological)
 

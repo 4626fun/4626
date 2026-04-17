@@ -1,5 +1,25 @@
+/**
+ * Cross-app + canonical-CSW wallet utilities used by the waitlist /
+ * account setup flow.
+ *
+ * These helpers do not make write decisions themselves — they classify
+ * linked Privy accounts, resolve canonical CSW candidates, and pick the
+ * right Privy auth helper for Zora cross-app linking. The actual
+ * wallet-readiness gate for user-initiated frontend execution is the
+ * sub-account setup path in `useAccountSetupController.onEnable4626Signing`,
+ * which creates the app-scoped sub-account via `wallet_addSubAccount` and
+ * configures its signer to the Privy embedded EOA via `setToOwnerAccount()`.
+ * See `docs/4626-connection-methods.md` Section 2 and
+ * `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
+ *
+ * Replaces the previous `ownerInstallMapping.ts` module. The legacy
+ * `deriveOwnerInstallMappingStatus` state machine was removed because it
+ * had no production callers — the controller routes sub-account-first,
+ * and the legacy owner-install path is now server-side-only per
+ * `.cursor/rules/csw-agent-lifecycle.mdc`.
+ */
+
 import { getAddress, isAddress } from 'viem'
-import type { OwnerInstallMappingStatus } from './waitlistTypes'
 
 function normalizeLower(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
@@ -140,44 +160,4 @@ export async function resolveCanonicalCswCandidate(params: {
   }
 
   return null
-}
-
-export function deriveOwnerInstallMappingStatus(params: {
-  privyAuthed: boolean
-  walletsReady: boolean
-  embeddedEoaAddress: string | null
-  embeddedWalletCreating: boolean
-  walletSetupReady: boolean
-  walletSetupInProgress: boolean
-  canonicalCswAddress: string | null
-  canonicalResolving: boolean
-  embeddedEoaOwnerInstalled: boolean | null
-  ownerInstallBusy: boolean
-}): OwnerInstallMappingStatus {
-  const {
-    privyAuthed,
-    walletsReady,
-    embeddedEoaAddress,
-    embeddedWalletCreating,
-    walletSetupReady,
-    walletSetupInProgress,
-    canonicalCswAddress,
-    canonicalResolving,
-    embeddedEoaOwnerInstalled,
-    ownerInstallBusy,
-  } = params
-
-  if (!privyAuthed) return 'NEEDS_PRIVY_AUTH'
-  if (!walletsReady) return 'WAITING_FOR_WALLETS'
-  if (!embeddedEoaAddress) return embeddedWalletCreating ? 'EMBEDDED_WALLET_CREATING' : 'EMBEDDED_WALLET_MISSING'
-  // If we already have a canonical CSW from profile/wallet inference, proceed directly to owner install checks.
-  if (canonicalCswAddress) {
-    if (ownerInstallBusy) return 'OWNER_INSTALLING'
-    if (embeddedEoaOwnerInstalled === null) return 'OWNER_INSTALL_CHECKING'
-    if (!embeddedEoaOwnerInstalled) return 'OWNER_INSTALL_REQUIRED'
-    return 'READY_FOR_OWNER_INSTALL'
-  }
-  if (!walletSetupReady) return walletSetupInProgress ? 'BASE_SETUP_IN_PROGRESS' : 'BASE_SETUP_REQUIRED'
-  if (!canonicalCswAddress) return canonicalResolving ? 'CANONICAL_RESOLVING' : 'CANONICAL_UNRESOLVED'
-  return 'READY_FOR_OWNER_INSTALL'
 }

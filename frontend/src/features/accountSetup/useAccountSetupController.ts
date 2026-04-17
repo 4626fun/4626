@@ -31,7 +31,7 @@ import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 import { ensureWalletAlignedPaymasterSessionDetailed } from '@/lib/paymaster/paymasterSession'
 import { buildZoraHandoffUrl } from '@/lib/zora/referrals'
 import { isPrivyRedirectUrlNotAllowedError, sanitizeCrossAppRedirectUrlForAuth } from '@/hooks/siweAuthCrossApp'
-import { selectCrossAppAuthAction } from '@/features/waitlist/ownerInstallMapping'
+import { selectCrossAppAuthAction } from '@/features/waitlist/crossAppWalletUtils'
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import { checkEoaOwnershipOfCsw } from '@/wallet/accountContext/ownership'
 
