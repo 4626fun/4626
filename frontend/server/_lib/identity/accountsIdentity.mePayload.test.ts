@@ -137,5 +137,238 @@ describe('buildAccountsMePayload', () => {
 
     expect(payload.appAccessStatus).toBe('approved')
     expect(payload.score.tier).toBe(0)
+    // With no canonical CSW / no sub-account / no owner signal, the account
+    // is on the 'none-yet' execution track and all sub-account fields are empty.
+    expect(payload.accountSignals.executionTrack).toBe('none-yet')
+    expect(payload.accountSignals.baseSubAccount).toEqual({
+      address: null,
+      isDistinctFromCsw: false,
+      registered: false,
+    })
+    expect(payload.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw).toBeNull()
+  })
+
+  it("classifies an account as 'legacy-owner-install' when the embedded EOA is a cached CSW owner and no real sub-account exists", async () => {
+    const CANONICAL_CSW = '0x00000000000000000000000000000000000000aa'
+    const EMBEDDED_EOA = '0x00000000000000000000000000000000000000bb'
+
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const query = strings.join(' ').replace(/\s+/g, ' ').trim().toLowerCase()
+
+        // Schema probes — report everything as present so the real queries run.
+        if (query.includes('to_regclass')) {
+          return {
+            rows: [
+              {
+                has_accounts: true,
+                has_profiles: true,
+                has_account_linked_methods: true,
+                has_account_zora_signals: true,
+                has_canonical_csw_address: true,
+                has_referral_clicks: true,
+                has_referral_conversions: true,
+                has_points: true,
+                has_wallets: true,
+                has_profile_wallets: true,
+                has_app_access_status: true,
+                has_verifications: true,
+                has_profile_completed_at: true,
+                has_primary_smart_wallet: true,
+                has_primary_embedded_eoa: true,
+                has_privy_is_owner: true,
+                has_referral_status: true,
+                has_referral_qualified_at: true,
+                has_canonical_solana_wallet: true,
+                has_profile_wallets_canonical_solana: true,
+                has_profile_wallets_operational_solana: true,
+                has_profiles_referral_code: true,
+                has_profiles_referred_by_signup_id: true,
+              },
+            ],
+          }
+        }
+
+        if (query.includes('select email') && query.includes('from accounts')) {
+          return { rows: [{ email: 'legacy@example.com', email_verified: true }] }
+        }
+
+        if (query.includes('from account_linked_methods')) return { rows: [] }
+
+        if (query.includes('from account_zora_signals')) {
+          return {
+            rows: [
+              {
+                zora_linked: true,
+                canonical_csw_address: CANONICAL_CSW,
+                creator_coin_address: null,
+                zora_handle: null,
+                last_resolved_at: null,
+              },
+            ],
+          }
+        }
+
+        if (query.includes('select id') && query.includes('from profiles') && query.includes('where privy_user_id')) {
+          return { rows: [{ id: 77 }] }
+        }
+
+        if (query.includes('from points p') && query.includes('where p.signup_id in')) {
+          return { rows: [{ points: 0 }] }
+        }
+
+        if (query.includes('select app_access_status') && query.includes('from profiles')) {
+          // Legacy account: base_sub_account is null (no sub-account was ever set up).
+          return { rows: [{ app_access_status: 'approved', base_sub_account: null }] }
+        }
+
+        // Delegation state lookup: the embedded EOA IS a direct CSW owner (legacy install).
+        if (query.includes('from profile_wallets pw') && query.includes('privy_is_owner')) {
+          return {
+            rows: [
+              {
+                profile_id: 77,
+                chain_id: 8453,
+                canonical_csw_address: CANONICAL_CSW,
+                canonical_source: 'base_account',
+                privy_embedded_eoa_address: EMBEDDED_EOA,
+                privy_is_owner: true,
+                last_checked_at: new Date().toISOString(),
+                address: CANONICAL_CSW,
+                is_canonical_smart_wallet: true,
+              },
+            ],
+          }
+        }
+
+        return { rows: [] }
+      }),
+    }
+
+    const payload = await buildAccountsMePayload({
+      db: db as any,
+      privyUserId: 'did:privy:legacy-user',
+      privyUser: null,
+    })
+
+    expect(payload.accountSignals.executionTrack).toBe('legacy-owner-install')
+    expect(payload.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw).toBe(true)
+    expect(payload.accountSignals.baseSubAccount).toEqual({
+      address: null,
+      isDistinctFromCsw: false,
+      registered: false,
+    })
+  })
+
+  it("classifies an account as 'sub-account' when a distinct sub-account is persisted and the embedded EOA is not a CSW owner", async () => {
+    const CANONICAL_CSW = '0x00000000000000000000000000000000000000aa'
+    const EMBEDDED_EOA = '0x00000000000000000000000000000000000000bb'
+    const SUB_ACCOUNT = '0x00000000000000000000000000000000000000cc'
+
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const query = strings.join(' ').replace(/\s+/g, ' ').trim().toLowerCase()
+
+        if (query.includes('to_regclass')) {
+          return {
+            rows: [
+              {
+                has_accounts: true,
+                has_profiles: true,
+                has_account_linked_methods: true,
+                has_account_zora_signals: true,
+                has_canonical_csw_address: true,
+                has_referral_clicks: true,
+                has_referral_conversions: true,
+                has_points: true,
+                has_wallets: true,
+                has_profile_wallets: true,
+                has_app_access_status: true,
+                has_verifications: true,
+                has_profile_completed_at: true,
+                has_primary_smart_wallet: true,
+                has_primary_embedded_eoa: true,
+                has_privy_is_owner: true,
+                has_referral_status: true,
+                has_referral_qualified_at: true,
+                has_canonical_solana_wallet: true,
+                has_profile_wallets_canonical_solana: true,
+                has_profile_wallets_operational_solana: true,
+                has_profiles_referral_code: true,
+                has_profiles_referred_by_signup_id: true,
+              },
+            ],
+          }
+        }
+
+        if (query.includes('select email') && query.includes('from accounts')) {
+          return { rows: [{ email: 'subaccount@example.com', email_verified: true }] }
+        }
+
+        if (query.includes('from account_linked_methods')) return { rows: [] }
+
+        if (query.includes('from account_zora_signals')) {
+          return {
+            rows: [
+              {
+                zora_linked: true,
+                canonical_csw_address: CANONICAL_CSW,
+                creator_coin_address: null,
+                zora_handle: null,
+                last_resolved_at: null,
+              },
+            ],
+          }
+        }
+
+        if (query.includes('select id') && query.includes('from profiles') && query.includes('where privy_user_id')) {
+          return { rows: [{ id: 88 }] }
+        }
+
+        if (query.includes('from points p') && query.includes('where p.signup_id in')) {
+          return { rows: [{ points: 0 }] }
+        }
+
+        if (query.includes('select app_access_status') && query.includes('from profiles')) {
+          return {
+            rows: [{ app_access_status: 'approved', base_sub_account: SUB_ACCOUNT }],
+          }
+        }
+
+        if (query.includes('from profile_wallets pw') && query.includes('privy_is_owner')) {
+          return {
+            rows: [
+              {
+                profile_id: 88,
+                chain_id: 8453,
+                canonical_csw_address: CANONICAL_CSW,
+                canonical_source: 'base_account',
+                privy_embedded_eoa_address: EMBEDDED_EOA,
+                privy_is_owner: false,
+                last_checked_at: new Date().toISOString(),
+                address: CANONICAL_CSW,
+                is_canonical_smart_wallet: true,
+              },
+            ],
+          }
+        }
+
+        return { rows: [] }
+      }),
+    }
+
+    const payload = await buildAccountsMePayload({
+      db: db as any,
+      privyUserId: 'did:privy:sub-user',
+      privyUser: null,
+    })
+
+    expect(payload.accountSignals.executionTrack).toBe('sub-account')
+    expect(payload.accountSignals.privyEmbeddedEoaIsOwnerOfCanonicalCsw).toBe(false)
+    expect(payload.accountSignals.baseSubAccount).toEqual({
+      address: SUB_ACCOUNT,
+      isDistinctFromCsw: true,
+      registered: true,
+    })
   })
 })
