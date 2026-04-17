@@ -45,12 +45,33 @@ uint256 public released
 ```
 
 
+### totalAllocation
+
+```solidity
+uint256 public totalAllocation
+```
+
+
+### seeded
+
+```solidity
+bool public seeded
+```
+
+
 ## Functions
 ### constructor
 
 
 ```solidity
 constructor(address token_, address beneficiary_, uint64 startTimestamp_, uint64 durationSeconds_) ;
+```
+
+### seed
+
+
+```solidity
+function seed() external;
 ```
 
 ### vestedAmount
@@ -74,6 +95,26 @@ function releasable() public view returns (uint256);
 function release() external returns (uint256 amount);
 ```
 
+### release
+
+
+```solidity
+function release(address to) external returns (uint256 amount);
+```
+
+## Events
+### Released
+
+```solidity
+event Released(address indexed beneficiary, address indexed to, uint256 amount);
+```
+
+### Seeded
+
+```solidity
+event Seeded(uint256 totalAllocation);
+```
+
 ## Errors
 ### ZeroAddress
 
@@ -85,5 +126,23 @@ error ZeroAddress();
 
 ```solidity
 error ZeroDuration();
+```
+
+### NotBeneficiary
+
+```solidity
+error NotBeneficiary();
+```
+
+### AlreadySeeded
+
+```solidity
+error AlreadySeeded();
+```
+
+### NotSeeded
+
+```solidity
+error NotSeeded();
 ```
 

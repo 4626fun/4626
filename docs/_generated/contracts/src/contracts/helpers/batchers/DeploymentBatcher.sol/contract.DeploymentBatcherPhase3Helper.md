@@ -24,6 +24,13 @@ uint24 internal constant CHARM_DEFAULT_PROTOCOL_FEE_PIPS = 10_000
 ```
 
 
+### CHARM_MIN_TICK_MOVE
+
+```solidity
+int24 internal constant CHARM_MIN_TICK_MOVE = 10
+```
+
+
 ### CHARM_MAX_TWAP_DEVIATION
 
 ```solidity
@@ -197,5 +204,11 @@ error CharmFactoryProtocolFeeMismatch(uint256 expected, uint256 actual);
 
 ```solidity
 error CharmVaultManagerMismatch(address expected, address actual);
+```
+
+### Phase3HelperLostAdmin
+
+```solidity
+error Phase3HelperLostAdmin();
 ```
 

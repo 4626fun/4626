@@ -42,6 +42,13 @@ uint256 public constant DEFAULT_FEE_BPS = 690
 ```
 
 
+### MIN_FEE_BPS
+
+```solidity
+uint256 public constant MIN_FEE_BPS = 1
+```
+
+
 ## Functions
 ### constructor
 

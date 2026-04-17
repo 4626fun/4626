@@ -18,21 +18,9 @@ Defined in: [src/lib/auth/canonicalization.ts:19](https://github.com/wenakita/46
 
 ##### flags
 
-> **flags**: `object`
+> **flags**: `CanonicalizationFlags`
 
 Defined in: [src/lib/auth/canonicalization.ts:23](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/canonicalization.ts#L23)
-
-###### baseAppUrl
-
-> **baseAppUrl**: `string` \| `null`
-
-###### needsBaseAppSetup
-
-> **needsBaseAppSetup**: `boolean`
-
-###### needsEmbeddedWallet
-
-> **needsEmbeddedWallet**: `boolean`
 
 ##### onboarding
 
@@ -58,7 +46,7 @@ Defined in: [src/lib/auth/canonicalization.ts:20](https://github.com/wenakita/46
 
 > **runCanonicalizationPipeline**(`params`): `Promise`\<[`CanonicalizationResult`](#canonicalizationresult)\>
 
-Defined in: [src/lib/auth/canonicalization.ts:90](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/canonicalization.ts#L90)
+Defined in: [src/lib/auth/canonicalization.ts:125](https://github.com/wenakita/4626/blob/main/frontend/src/lib/auth/canonicalization.ts#L125)
 
 #### Parameters
 

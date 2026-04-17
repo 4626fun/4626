@@ -54,7 +54,7 @@ Defined in: [api/\_handlers/deploy/session/\_sessionAccess.ts:11](https://github
 
 ### loadAuthorizedDeploySession()
 
-> **loadAuthorizedDeploySession**(`params`): `Promise`\<\{ `auth`: \{ `address`: `` `0x${string}` ``; `type`: `"session"`; \} \| \{ `address`: `` `0x${string}` ``; `agentId`: `number`; `agentRegistry`: `string`; `chainId`: `number`; `type`: `"siwa"`; \}; `rec`: [`DeploySessionRecord`](../../../../server/_lib/deploySessions.md#deploysessionrecord); `sessionAddress`: `` `0x${string}` ``; \}\>
+> **loadAuthorizedDeploySession**(`params`): `Promise`\<\{ `auth`: \{ `address`: `` `0x${string}` ``; `type`: `"session"`; \} \| \{ `address`: `` `0x${string}` ``; `agentId`: `number`; `agentRegistry`: `string`; `chainId`: `number`; `type`: `"siwa"`; \}; `rec`: [`DeploySessionRecord`](../../../../server/_lib/deploy/deploySessions.md#deploysessionrecord); `sessionAddress`: `` `0x${string}` ``; \}\>
 
 Defined in: [api/\_handlers/deploy/session/\_sessionAccess.ts:26](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/session/_sessionAccess.ts#L26)
 
@@ -64,7 +64,7 @@ Defined in: [api/\_handlers/deploy/session/\_sessionAccess.ts:26](https://github
 
 ###### getDeploySessionById
 
-(`id`) => `Promise`\<[`DeploySessionRecord`](../../../../server/_lib/deploySessions.md#deploysessionrecord) \| `null`\>
+(`id`) => `Promise`\<[`DeploySessionRecord`](../../../../server/_lib/deploy/deploySessions.md#deploysessionrecord) \| `null`\>
 
 ###### req
 
@@ -76,7 +76,7 @@ Defined in: [api/\_handlers/deploy/session/\_sessionAccess.ts:26](https://github
 
 #### Returns
 
-`Promise`\<\{ `auth`: \{ `address`: `` `0x${string}` ``; `type`: `"session"`; \} \| \{ `address`: `` `0x${string}` ``; `agentId`: `number`; `agentRegistry`: `string`; `chainId`: `number`; `type`: `"siwa"`; \}; `rec`: [`DeploySessionRecord`](../../../../server/_lib/deploySessions.md#deploysessionrecord); `sessionAddress`: `` `0x${string}` ``; \}\>
+`Promise`\<\{ `auth`: \{ `address`: `` `0x${string}` ``; `type`: `"session"`; \} \| \{ `address`: `` `0x${string}` ``; `agentId`: `number`; `agentRegistry`: `string`; `chainId`: `number`; `type`: `"siwa"`; \}; `rec`: [`DeploySessionRecord`](../../../../server/_lib/deploy/deploySessions.md#deploysessionrecord); `sessionAddress`: `` `0x${string}` ``; \}\>
 
 ***
 

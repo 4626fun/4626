@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/creators/\_quickstart.ts:193](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/creators/_quickstart.ts#L193)
+Defined in: [api/\_handlers/v1/creators/\_quickstart.ts:194](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/creators/_quickstart.ts#L194)
 
 #### Parameters
 

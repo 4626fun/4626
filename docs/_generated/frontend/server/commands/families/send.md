@@ -36,7 +36,7 @@ Defined in: [server/commands/families/send.ts:7](https://github.com/wenakita/462
 
 ###### vault
 
-[`KeeprVaultRow`](../../_lib/keeprRegistry.md#keeprvaultrow)
+[`KeeprVaultRow`](../../_lib/keepr/keeprRegistry.md#keeprvaultrow)
 
 #### Returns
 

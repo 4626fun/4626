@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/telegram/\_metrics.ts:22](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/_metrics.ts#L22)
+Defined in: [api/\_handlers/telegram/\_metrics.ts:20](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/_metrics.ts#L20)
 
 #### Parameters
 

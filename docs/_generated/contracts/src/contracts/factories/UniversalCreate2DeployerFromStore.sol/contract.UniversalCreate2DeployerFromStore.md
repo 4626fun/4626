@@ -20,12 +20,33 @@ UniversalBytecodeStore public immutable store
 ```
 
 
+### owner
+
+```solidity
+address public immutable owner
+```
+
+
+### authorizedDeployers
+
+```solidity
+mapping(address => bool) public authorizedDeployers
+```
+
+
 ## Functions
 ### constructor
 
 
 ```solidity
 constructor(address _store) ;
+```
+
+### setAuthorizedDeployer
+
+
+```solidity
+function setAuthorizedDeployer(address deployer, bool allowed) external;
 ```
 
 ### deploy
@@ -49,6 +70,12 @@ function computeAddress(bytes32 salt, bytes32 initCodeHash) external view return
 event Deployed(address indexed addr, bytes32 indexed salt, bytes32 indexed codeId, bytes32 initCodeHash);
 ```
 
+### DeployerAuthorized
+
+```solidity
+event DeployerAuthorized(address indexed deployer, bool allowed);
+```
+
 ## Errors
 ### CodeNotFound
 
@@ -60,5 +87,11 @@ error CodeNotFound(bytes32 codeId);
 
 ```solidity
 error DeployFailed();
+```
+
+### NotAuthorizedDeployer
+
+```solidity
+error NotAuthorizedDeployer();
 ```
 

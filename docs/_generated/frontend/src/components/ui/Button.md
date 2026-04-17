@@ -10,7 +10,7 @@
 
 ### ButtonProps
 
-Defined in: [packages/brand-kit/src/components/Button.tsx:42](https://github.com/wenakita/4626/blob/main/frontend/packages/brand-kit/src/components/Button.tsx#L42)
+Defined in: [src/components/ui/Button.tsx:4](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Button.tsx#L4)
 
 #### Extends
 
@@ -22,19 +22,19 @@ Defined in: [packages/brand-kit/src/components/Button.tsx:42](https://github.com
 
 > `optional` **loading**: `boolean`
 
-Defined in: [packages/brand-kit/src/components/Button.tsx:45](https://github.com/wenakita/4626/blob/main/frontend/packages/brand-kit/src/components/Button.tsx#L45)
+Defined in: [src/components/ui/Button.tsx:7](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Button.tsx#L7)
 
 ##### size?
 
 > `optional` **size**: `"sm"` \| `"md"` \| `"lg"`
 
-Defined in: [packages/brand-kit/src/components/Button.tsx:44](https://github.com/wenakita/4626/blob/main/frontend/packages/brand-kit/src/components/Button.tsx#L44)
+Defined in: [src/components/ui/Button.tsx:6](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Button.tsx#L6)
 
 ##### variant?
 
 > `optional` **variant**: `"primary"` \| `"secondary"` \| `"ghost"` \| `"destructive"`
 
-Defined in: [packages/brand-kit/src/components/Button.tsx:43](https://github.com/wenakita/4626/blob/main/frontend/packages/brand-kit/src/components/Button.tsx#L43)
+Defined in: [src/components/ui/Button.tsx:5](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Button.tsx#L5)
 
 ## Variables
 
@@ -42,4 +42,4 @@ Defined in: [packages/brand-kit/src/components/Button.tsx:43](https://github.com
 
 > `const` **Button**: `ForwardRefExoticComponent`\<[`ButtonProps`](#buttonprops) & `RefAttributes`\<`HTMLButtonElement`\>\>
 
-Defined in: [packages/brand-kit/src/components/Button.tsx:65](https://github.com/wenakita/4626/blob/main/frontend/packages/brand-kit/src/components/Button.tsx#L65)
+Defined in: [src/components/ui/Button.tsx:17](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Button.tsx#L17)

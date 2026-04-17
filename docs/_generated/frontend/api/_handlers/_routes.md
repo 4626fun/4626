@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/\_routes.ts:27](https://github.com/wenakita/4626/blo
 
 > **getApiHandler**(`subpath`): `Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routes.ts:109](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.ts#L109)
+Defined in: [api/\_handlers/\_routes.ts:111](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.ts#L111)
 
 #### Parameters
 

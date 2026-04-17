@@ -12,7 +12,7 @@
 
 > **TelegramLink**(): `Element`
 
-Defined in: [src/pages/telegram/TelegramLink.tsx:540](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/TelegramLink.tsx#L540)
+Defined in: [src/pages/telegram/TelegramLink.tsx:106](https://github.com/wenakita/4626/blob/main/frontend/src/pages/telegram/TelegramLink.tsx#L106)
 
 #### Returns
 
