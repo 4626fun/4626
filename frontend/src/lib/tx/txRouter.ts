@@ -500,7 +500,15 @@ async function sendViaSendCalls(params: {
           : ''
     if (!callsId) throw new Error('wallet_sendCalls returned no call bundle id')
     const status = await waitForCallsStatus({ wallet, id: callsId })
-    telemetryStatus = 'success'
+    // Count the sample as a timeout (not success) when the bundle never
+    // resolved to a tx hash within the polling window. Otherwise unresolved
+    // calls skew success-rate metrics upward.
+    if (status.txHash) {
+      telemetryStatus = 'success'
+    } else {
+      telemetryStatus = 'timeout'
+      telemetryErrorCode = 'timeout'
+    }
     context.debug?.({
       event: 'send_success',
       mode: decision.mode,
