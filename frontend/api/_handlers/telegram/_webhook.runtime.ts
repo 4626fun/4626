@@ -69,6 +69,7 @@ import {
   type TelegramSenderWalletSource as SenderWalletSource,
 } from '../../../server/agent/core/resolveIdentityContext.js'
 import { executeDeterministicCommand } from '../../../server/agent/core/executeDeterministicCommand.js'
+import { evaluateGroupAdminGate } from '../../../server/commands/telegramGroupAdminGate.js'
 import { processTelegramAgentInput } from '../../../server/agent/core/processTelegramAgentInput.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
 
@@ -3297,6 +3298,20 @@ async function executeTelegramNativeCommand(params: {
   }
 }): Promise<TelegramCommandResponse | null> {
   if (!isTelegramNativeCommand(params.text)) return null
+
+  // Group-admin gate for setup commands (/link, /linked, /unlink, /keepr).
+  // Runs before any head-dispatched branches so the native fast-path can
+  // never bypass the gate. No-op for open commands, DMs, when flag is off,
+  // or when chatId/userId are missing (non-Telegram callers never hit this).
+  const adminGate = await evaluateGroupAdminGate({
+    text: params.text,
+    chatId: params.chatId,
+    userId: params.userId,
+  })
+  if (!adminGate.allowed) {
+    return { text: adminGate.response }
+  }
+
   const head = getCommandHead(params.text)
   const tradeIntent = parseTelegramTradeIntent(params.text)
   const deployIntent = parseTelegramDeployIntent(params.text)

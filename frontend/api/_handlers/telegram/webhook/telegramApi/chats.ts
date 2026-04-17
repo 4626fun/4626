@@ -53,18 +53,24 @@ export async function readTelegramChatMemberStatus(params: {
 }): Promise<string | null> {
   if (!params.botToken) return null
   const endpoint = `https://api.telegram.org/bot${params.botToken}/getChatMember`
-  const response = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      chat_id: params.chatId,
-      user_id: params.userId,
-    }),
-  })
-  if (!response.ok) return null
-  const payload = (await response.json().catch(() => null)) as any
-  const status = asTrimmed(payload?.result?.status ?? '').toLowerCase()
-  return status || null
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: params.chatId,
+        user_id: params.userId,
+      }),
+    })
+    if (!response.ok) return null
+    const payload = (await response.json().catch(() => null)) as any
+    const status = asTrimmed(payload?.result?.status ?? '').toLowerCase()
+    return status || null
+  } catch {
+    // Transport-layer failure (DNS, TLS, abort, connection reset). Treat as
+    // "couldn't determine status" so callers get the explicit unknown path.
+    return null
+  }
 }
 
 type CachedRole = { role: TelegramChatMemberRole; expiresAt: number }
@@ -111,7 +117,16 @@ export async function readTelegramChatMemberRole(params: {
   if (cached && cached.expiresAt > now()) return cached.role
 
   const fetchStatus = params.fetchStatus ?? readTelegramChatMemberStatus
-  const status = await fetchStatus({ botToken: params.botToken, chatId, userId })
+  // Belt-and-suspenders: even though readTelegramChatMemberStatus catches its
+  // own transport errors, a custom fetchStatus injected via the seam (or a
+  // future change to the default) could throw. Callers rely on fail-closed
+  // behavior, so we must never let an exception escape this function.
+  let status: string | null
+  try {
+    status = await fetchStatus({ botToken: params.botToken, chatId, userId })
+  } catch {
+    status = null
+  }
 
   let role: TelegramChatMemberRole
   if (status === 'creator' || status === 'administrator') {
