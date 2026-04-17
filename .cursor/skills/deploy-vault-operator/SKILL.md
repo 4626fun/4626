@@ -7,6 +7,12 @@ description: Operator runbook for 4626 1-click deployment (deploy-session + temp
 
 This skill is the canonical long-task workflow for 1-click 4626 deploys in this repo.
 
+## Scope
+
+This skill covers the **server-side deploy-session** execution track: the user approves a one-time `addOwnerAddress(sessionOwner)` on their canonical CSW, and the server continues the deploy as an ERC-4337 sender on the parent CSW. This is the direct-owner-delegation path defined in `.cursor/rules/csw-agent-lifecycle.mdc`.
+
+It is **separate from** the user-initiated frontend execution track (swaps, vault interactions), which uses app-scoped sub-accounts per `docs/4626-connection-methods.md` Section 2. Deploy-session temporary owners must be removed after deployment; sub-accounts persist.
+
 ## Goal
 
 Run deploys as a resilient workflow:

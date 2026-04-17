@@ -2,6 +2,8 @@
 
 This spec defines the canonical onboarding state machine used to keep identity and wallet outcomes deterministic across web, Base, Zora, Telegram, and mixed entry orders.
 
+Architecture reference: [4626 Connection Methods](/4626-connection-methods). Canonical wallet invariants: `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
+
 ## Core Invariants
 
 - Verified email is the canonical 4626 identity and recovery key.
@@ -12,7 +14,8 @@ This spec defines the canonical onboarding state machine used to keep identity a
 - All transitions are event-driven; no timer-based auto-advance.
 - Signer preflight is enforced only before signer-required actions.
 - A fully onboarded account must have a Privy embedded EOA.
-- If a canonical CSW exists, the Privy embedded EOA must be installed as an owner before wallet-dependent actions are allowed.
+- For CSW users, user-initiated frontend execution requires an app-scoped sub-account (`base_sub_account`) with its signer routed to the Privy embedded EOA via `setToOwnerAccount()`. The embedded EOA is **not** installed as a direct owner of the parent CSW on the user-initiated track.
+- Server-side automation (deploy-session, XMTP agent, ERC-8004) continues to delegate a Privy *server* wallet as a direct owner on the parent CSW per `.cursor/rules/csw-agent-lifecycle.mdc`; this is orthogonal to the user-initiated sub-account track.
 
 ## States
 
@@ -76,8 +79,9 @@ All supported entry orders must converge to the same final canonical identity fi
 
 Wallet setup must then converge to the same final canonical wallet fields:
 
-- `canonicalCswAddress`
-- `embeddedEoaAddress`
-- `embeddedEoaOwnerInstalled`
+- `canonicalCswAddress` (parent CSW, `profiles.csw_address`)
+- `embeddedEoaAddress` (`profiles.primary_embedded_eoa`)
+- `baseSubAccountAddress` (`profiles.base_sub_account`, user-initiated frontend execution address for CSW users)
+- `subAccountSignerConfigured` (embedded EOA routed as sub-account signer via `setToOwnerAccount()`; this supersedes `embeddedEoaOwnerInstalled` on the user-initiated track)
 
 The automated scenario matrix is covered by `frontend/src/wallet/canonicalStateMachine.test.ts`.

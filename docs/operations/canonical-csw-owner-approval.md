@@ -5,13 +5,26 @@ sidebar_position: 7
 
 # Canonical CSW Owner Approval
 
+:::caution Scope
+This runbook describes the **legacy direct owner-install** activation path.
+
+For **user-initiated frontend execution** (swaps, vault interactions) the current path is sub-account setup, not direct owner delegation — see [4626 Connection Methods](/4626-connection-methods) Section 2. Under the current model the embedded EOA is routed as the *sub-account's* signer via `setToOwnerAccount()` rather than installed as an owner on the parent CSW.
+
+This runbook still applies to:
+
+- The **server-side owner-delegation** track (deploy-session automation and agent identity per `.cursor/rules/csw-agent-lifecycle.mdc`). Note that for that track the delegated owner is a Privy *server wallet*, not the user's embedded EOA, and different endpoints apply.
+- Legacy debugging of any activation surface that has not yet migrated to sub-accounts.
+
+Canonical wallet invariants: `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
+:::
+
 This runbook describes the owner-install step used by the waitlist/account activation flow.
 
 The product model is fixed:
 
-- the Zora/Base Coinbase Smart Wallet (CSW) remains the canonical execution wallet
+- the Zora/Base Coinbase Smart Wallet (CSW) remains the canonical asset-holding account
 - the Privy embedded EOA is the account-scoped signer created by 4626
-- activation completes by adding the Privy embedded EOA as an owner on the canonical CSW
+- under the legacy model, activation completes by adding the Privy embedded EOA as an owner on the canonical CSW; under the current model, it completes by binding the embedded EOA as the sub-account signer per [4626 Connection Methods](/4626-connection-methods)
 - no flow may require exporting or recovering the private key / seed phrase for a Zora-created embedded wallet
 
 ## Outcome

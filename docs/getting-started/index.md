@@ -96,5 +96,6 @@ pnpm dev
 ## Next Steps
 
 - [Architecture](/architecture) - Learn how 4626 works
+- [4626 Connection Methods](/4626-connection-methods) - How users connect (CSW, external EOA, Telegram), the three-tier CSW address model, and the `executionMode` / send-mode routing table
 - [Tokenomics](/tokenomics) - Understand the fee structure and lottery
 - [Developer Guide](/developers) - Build on 4626

@@ -9,6 +9,12 @@ Technical guide to deploying a 4626.
 
 For the launch order and go-live checklist, use [Ship Checklist](/operations/deployment/launch/ship-checklist).
 
+:::note Execution track
+Vault deployment uses the **server-side deploy-session** track: the user approves a one-time `addOwnerAddress(sessionOwner)` on their canonical CSW, and the server submits the remaining ERC-4337 UserOps with that temporary owner (then cleans up). This is the direct owner-delegation path defined in `.cursor/rules/csw-agent-lifecycle.mdc`.
+
+It is **separate from** the user-initiated frontend execution track used for swaps and ongoing vault interactions, which routes through a per-app sub-account per [4626 Connection Methods](/4626-connection-methods). Do not conflate the two — deploy-session temporary owners must be removed after deployment; sub-accounts persist.
+:::
+
 ## Via Web UI (Recommended)
 
 Preferred setup is a **1-click deploy**:

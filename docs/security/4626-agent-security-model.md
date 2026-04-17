@@ -63,6 +63,11 @@ This rollout does not introduce a separate secure-agent service. The control pla
 
 ### Signing, deploy, bridge, payout, and config-changing paths
 
+Signing and execution split across two distinct tracks — see [4626 Connection Methods](/4626-connection-methods) for the full model:
+
+- **Server-side track** (covered by this security model): agent identity, deploy-session automation, and payout/bridge workers use the parent CSW as the ERC-4337 `sender` with a Privy *server* wallet delegated via `addOwnerAddress`. Rules in `.cursor/rules/csw-agent-lifecycle.mdc`.
+- **User-initiated frontend track** (orthogonal): swaps and vault interactions submitted from `app.4626.fun` route through a per-user, app-scoped sub-account whose signer is the user's Privy *embedded* EOA. This track does not share keys, capabilities, or audit state with the server-side track.
+
 - Privy and CSW signing:
   - [`frontend/server/_lib/wallet/privyWalletApi.ts`](../../frontend/server/_lib/wallet/privyWalletApi.ts)
   - [`frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts`](../../frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts)

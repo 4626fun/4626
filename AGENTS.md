@@ -74,6 +74,7 @@ Standard commands are documented in `frontend/package.json` scripts:
 - **`/swap` should not background-refresh idle quotes**: quote on input changes, then rebuild stale quotes during review/submit if needed. Avoid reintroducing timer-driven idle re-quote loops.
 - **Do not add new ad hoc session polling around `useSiweAuth()`**: session restoration already dedupes shared `/api/auth/me` work. New auth consumers should reuse the existing hook/provider path instead of layering separate refresh effects.
 - **Railway primary must fail fast if misconfigured**: standby mode or `AGENT_CONSUME_XMTP=false` on Railway is a startup error, not a healthy passive mode. When Postgres is configured, the DB-backed runtime lease lock is expected to stay enabled for the Railway primary.
+- **Transaction routing has two `executionMode` values and four send modes.** User-initiated frontend code paths branch on `executionMode: 'canonical' | 'eoa'` (exported from `frontend/src/lib/uniswap/walletMode.ts`). `txRouter` (`frontend/src/lib/tx/txRouter.ts`) selects one of: `sendCalls` (EIP-5792 atomic batching on CSW sub-account connectors), `canonical4337` (ERC-4337 UserOp via CDP paymaster — strongest fallback for CSW), `canonicalDirect` (direct `executeBatch` on the CSW contract), or `eoaDirect` (standard `eth_sendTransaction`, one tx at a time). Only `eoaDirect` is non-atomic (approval and swap sequential). Full routing table: Section 5 of `docs/4626-connection-methods.md`.
 
 ### Token identity invariants
 
@@ -91,6 +92,8 @@ These are product-level rules, not implementation suggestions. Future auth/onboa
 
 Canonical wallet/account selection is defined in `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`, and delegated signer / agent lifecycle mechanics are defined in `.cursor/rules/csw-agent-lifecycle.mdc`. This section defines the product-facing account states layered on top of those rules.
 
+Canonical architecture reference: `docs/4626-connection-methods.md` — describes the three connection methods (CSW, external EOA, Telegram), the three-tier CSW address model (`profiles.csw_address` → `profiles.base_sub_account` → `profiles.primary_embedded_eoa`), and the `executionMode` / send-mode routing table.
+
 - **Verified email is the canonical 4626 identity and recovery key.**
 - **No 4626 account is considered fully created until email OTP verification completes.**
 - **All entry points converge to the same account model**: website, Base app, and Telegram must resolve into one 4626 account model keyed by verified email.
@@ -107,9 +110,12 @@ Canonical wallet/account selection is defined in `.cursor/rules/ERC-4337-Wallet-
 - **Base and Zora are login/linking paths, not separate account systems.** They must still resolve into the same verified-email-based 4626 account model.
 - **The Base referral flow is an acquisition path into the same canonical-wallet policy, not a second canonical-wallet model.** If a user is routed through Base app to finish CSW setup, they still return to the single canonical wallet/account rules defined in `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
 - **`linked` / `waitlist-joined` is not the same as wallet-ready.** Verified email plus successful channel binding or waitlist join can complete without immediate CSW owner confirmation.
-- **`execution-ready` / wallet-ready requires canonical-wallet completion.** The account must have a Privy embedded EOA, and if the user already has a canonical Coinbase Smart Wallet, that embedded EOA must be installed as an owner on the CSW and confirmed onchain.
-- **Features that require canonical wallet execution must stay gated until the account is `execution-ready`.**
-- **If the user does not yet have a CSW, route them to Base app with the referral flow, then resume CSW owner-installation when they return.**
+- **`execution-ready` / wallet-ready is defined per execution track.** Product features that require wallet execution must check the right track for the user's connection method:
+  - **User-initiated frontend execution-ready (CSW path, `executionMode === 'canonical'`)**: canonical parent CSW recorded in `profiles.csw_address`, Privy embedded EOA present in `profiles.primary_embedded_eoa`, and an app-scoped sub-account created via `wallet_addSubAccount` with its signer configured to the embedded EOA via `setToOwnerAccount()` — persisted in `profiles.base_sub_account` through `POST /onboarding/register-sub-account`. The sub-account is the `msg.sender` for user-initiated swaps and vault interactions; the parent CSW remains the asset-holding account visible on Base/Zora.
+  - **User-initiated frontend execution-ready (external EOA path, `executionMode === 'eoa'`)**: external wallet connected via wagmi, `profiles.primary_wallet` populated, no sub-account (EOAs are not smart contract wallets). The EOA address is the execution address.
+  - **Server-side agent / deploy-session execution-ready**: unchanged — follows the direct owner delegation path in `.cursor/rules/csw-agent-lifecycle.mdc`. The parent CSW is the ERC-4337 sender with a Privy server wallet delegated via `addOwnerAddress`. This track is orthogonal to the user-initiated frontend path above.
+- **Features that require wallet execution must stay gated until the account is `execution-ready` on the correct track.**
+- **If the user does not yet have a CSW, route them to Base app with the referral flow, then resume user-initiated sub-account setup (or, for server-side automation, owner-installation) when they return.**
 - **Cross-account Telegram conflicts must not auto-merge silently.** If a Telegram identity is already attached elsewhere, force explicit recovery/merge UX.
 - **Website sign-in should use email OTP by default.** Do not assume Telegram is the primary website login flow unless product explicitly changes this rule later.
 - **Do not preserve legacy auth paths just for backward compatibility.** If an old path conflicts with these invariants, remove or migrate it.
@@ -195,7 +201,7 @@ Any simplification must keep this semantic order:
 
 `Link success` here means the account/channel link can complete and the user can continue the Telegram or waitlist flow.
 
-It does **not** mean the account is `execution-ready`. Features that require canonical wallet execution remain gated until CSW owner installation and onchain confirmation finish per the Account and auth invariants and `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
+It does **not** mean the account is `execution-ready`. Features that require wallet execution remain gated until the correct track completes per the Account and auth invariants and `.cursor/rules/ERC-4337-Wallet-Invariants.mdc` — sub-account setup for the user-initiated frontend CSW path, connected EOA for the user-initiated EOA path, or owner delegation for server-side agent/deploy-session automation per `.cursor/rules/csw-agent-lifecycle.mdc`.
 
 Do not replace this with hidden provider magic, modal auth, webhook-only
 binding, or a shortcut that binds Telegram before verified-email account
