@@ -1035,17 +1035,19 @@ export function useAccountSetupController(params: {
 
                   if (cswProvider && typeof cswProvider.request === 'function') {
                     try {
+                      // Use eth_sendTransaction instead of wallet_sendCalls.
+                      // addOwnerAddress is a self-call (from === to === CSW) and
+                      // the Coinbase popup's eGe function blocks wallet_sendCalls
+                      // when target === sender ("Self calls are not allowed").
+                      // eth_sendTransaction uses the standard transaction approval
+                      // UI which does NOT have the self-call guard.
                       await cswProvider.request({
-                        method: 'wallet_sendCalls',
+                        method: 'eth_sendTransaction',
                         params: [{
-                          chainId: `0x${(8453).toString(16)}`,
                           from: canonicalCswAddress,
-                          calls: [{
-                            to: agentJson.data.txRequest.to,
-                            data: agentJson.data.txRequest.data,
-                            value: '0x0',
-                          }],
-                          version: '2.0.0',
+                          to: agentJson.data.txRequest.to,
+                          data: agentJson.data.txRequest.data,
+                          value: '0x0',
                         }],
                       })
                       logger.info('Agent wallet installed as CSW owner during account setup', {
@@ -1054,7 +1056,7 @@ export function useAccountSetupController(params: {
                     } catch (sendErr) {
                       // Non-fatal: deploy-session will handle owner install on
                       // first use if the user cancelled the popup here.
-                      logger.warn('Agent owner wallet_sendCalls failed during account setup', {
+                      logger.warn('Agent owner eth_sendTransaction failed during account setup', {
                         error: sendErr instanceof Error ? sendErr.message : String(sendErr),
                       })
                     }

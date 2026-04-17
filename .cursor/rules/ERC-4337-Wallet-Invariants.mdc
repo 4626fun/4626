@@ -36,6 +36,10 @@ The CSW has two distinct execution paths. Code changes must respect which path a
 
 Both the sub-account and the agent server wallet are installed during account setup in a single session:
 1. `wallet_addSubAccount` — creates the sub-account (passkey popup 1).
-2. `addOwnerAddress(agentWalletAddress)` — installs the server wallet as a CSW owner (passkey popup 2).
+2. `addOwnerAddress(agentWalletAddress)` via `eth_sendTransaction` — installs the server wallet as a CSW owner (passkey popup 2).
 
 Both popups occur back-to-back during onboarding. Deploy-session and XMTP agent rely on the server wallet already being an owner; they do not prompt for separate installation.
+
+### Self-Call Constraint
+
+`addOwnerAddress` is a self-call (`from === to === CSW`). The Coinbase popup's `eGe` function blocks `wallet_sendCalls` when target equals sender ("Self calls are not allowed"). Use `eth_sendTransaction` instead — it routes through the popup's standard transaction approval UI which has no self-call guard. See `onboardingWallet.ts` for the full documented fallback chain.
