@@ -5,6 +5,12 @@ import { base } from 'viem/chains'
 
 import { resolveBaseAppInviteUrl } from '../onboarding/baseAppInvite.js'
 import { isOwner } from './coinbaseSmartWalletOwner.js'
+import {
+  resolveExecutionTrack,
+  summarizeBaseSubAccount,
+  type BaseSubAccountSummary,
+  type ExecutionTrack,
+} from './executionTrack.js'
 import { ensureWaitlistSchema } from '../onboarding/waitlistSchema.js'
 import { classifyLinkedAccounts, type PrivyUserLike } from './walletMapping.js'
 import { syncUserWallets } from './walletSync.js'
@@ -35,6 +41,8 @@ export type BootstrapDelegationState = {
   canonicalCswAddress: string
   privyEmbeddedEoaAddress: string
   privyIsOwner: boolean
+  baseSubAccount: BaseSubAccountSummary
+  executionTrack: ExecutionTrack
 }
 
 type StructuredDelegationError = Error & {
@@ -581,6 +589,26 @@ export async function bootstrapCanonicalDelegationState(params: {
     WHERE id = ${canonical.profileId};
   `
 
+  const subAccountResult = await db.sql`
+    SELECT base_sub_account
+    FROM profiles
+    WHERE id = ${canonical.profileId}
+    LIMIT 1;
+  `
+  const rawSubAccountAddress =
+    typeof subAccountResult.rows?.[0]?.base_sub_account === 'string'
+      ? subAccountResult.rows[0].base_sub_account
+      : null
+  const baseSubAccount = summarizeBaseSubAccount({
+    canonicalCswAddress: canonical.canonicalCswAddress,
+    baseSubAccountAddress: rawSubAccountAddress,
+  })
+  const executionTrack = resolveExecutionTrack({
+    canonicalCswAddress: canonical.canonicalCswAddress,
+    baseSubAccountAddress: rawSubAccountAddress,
+    privyEmbeddedEoaIsOwnerOfCanonicalCsw: privyIsOwner,
+  })
+
   return {
     chainId: 8453,
     profileId: canonical.profileId,
@@ -588,6 +616,8 @@ export async function bootstrapCanonicalDelegationState(params: {
     canonicalCswAddress: canonical.canonicalCswAddress,
     privyEmbeddedEoaAddress,
     privyIsOwner,
+    baseSubAccount,
+    executionTrack,
   }
 }
 

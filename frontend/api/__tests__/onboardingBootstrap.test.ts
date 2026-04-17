@@ -27,7 +27,7 @@ describe('POST /api/onboarding/bootstrap', () => {
     getDbInitErrorMock.mockReturnValue(null)
   })
 
-  it('returns canonical CSW + embedded EOA status', async () => {
+  it('returns canonical CSW + embedded EOA status + execution track (sub-account ready)', async () => {
     bootstrapCanonicalDelegationStateMock.mockResolvedValue({
       chainId: 8453,
       profileId: 11,
@@ -35,6 +35,12 @@ describe('POST /api/onboarding/bootstrap', () => {
       canonicalCswAddress: '0x00000000000000000000000000000000000000aa',
       privyEmbeddedEoaAddress: '0x00000000000000000000000000000000000000bb',
       privyIsOwner: false,
+      baseSubAccount: {
+        address: '0x00000000000000000000000000000000000000cc',
+        isDistinctFromCsw: true,
+        registered: true,
+      },
+      executionTrack: 'sub-account',
     })
 
     const req = createMockReq({
@@ -51,7 +57,101 @@ describe('POST /api/onboarding/bootstrap', () => {
       canonicalCswAddress: '0x00000000000000000000000000000000000000aa',
       privyEmbeddedEoaAddress: '0x00000000000000000000000000000000000000bb',
       privyIsOwner: false,
+      privyEmbeddedEoaIsOwnerOfCanonicalCsw: false,
+      baseSubAccount: {
+        address: '0x00000000000000000000000000000000000000cc',
+        isDistinctFromCsw: true,
+        registered: true,
+      },
+      executionTrack: 'sub-account',
     })
+  })
+
+  it('returns legacy-owner-install track when the embedded EOA is a direct CSW owner and no real sub-account is persisted', async () => {
+    bootstrapCanonicalDelegationStateMock.mockResolvedValue({
+      chainId: 8453,
+      profileId: 12,
+      privyUserId: 'did:privy:legacy-user',
+      canonicalCswAddress: '0x00000000000000000000000000000000000000aa',
+      privyEmbeddedEoaAddress: '0x00000000000000000000000000000000000000bb',
+      privyIsOwner: true,
+      baseSubAccount: {
+        address: null,
+        isDistinctFromCsw: false,
+        registered: false,
+      },
+      executionTrack: 'legacy-owner-install',
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-privy-token': 'test-token' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data).toMatchObject({
+      privyIsOwner: true,
+      privyEmbeddedEoaIsOwnerOfCanonicalCsw: true,
+      executionTrack: 'legacy-owner-install',
+      baseSubAccount: { address: null, registered: false, isDistinctFromCsw: false },
+    })
+  })
+
+  it('returns migration-pending track when both legacy owner install and a real sub-account are present', async () => {
+    bootstrapCanonicalDelegationStateMock.mockResolvedValue({
+      chainId: 8453,
+      profileId: 13,
+      privyUserId: 'did:privy:mixed-user',
+      canonicalCswAddress: '0x00000000000000000000000000000000000000aa',
+      privyEmbeddedEoaAddress: '0x00000000000000000000000000000000000000bb',
+      privyIsOwner: true,
+      baseSubAccount: {
+        address: '0x00000000000000000000000000000000000000cc',
+        isDistinctFromCsw: true,
+        registered: true,
+      },
+      executionTrack: 'migration-pending',
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-privy-token': 'test-token' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.executionTrack).toBe('migration-pending')
+    expect(res.body?.data?.privyEmbeddedEoaIsOwnerOfCanonicalCsw).toBe(true)
+  })
+
+  it('returns none-yet track for a fresh account with neither signal', async () => {
+    bootstrapCanonicalDelegationStateMock.mockResolvedValue({
+      chainId: 8453,
+      profileId: 14,
+      privyUserId: 'did:privy:fresh-user',
+      canonicalCswAddress: '0x00000000000000000000000000000000000000aa',
+      privyEmbeddedEoaAddress: '0x00000000000000000000000000000000000000bb',
+      privyIsOwner: false,
+      baseSubAccount: {
+        address: null,
+        isDistinctFromCsw: false,
+        registered: false,
+      },
+      executionTrack: 'none-yet',
+    })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { 'x-privy-token': 'test-token' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.executionTrack).toBe('none-yet')
   })
 
   it('returns Base setup flags with a soft 200 when canonical CSW is missing', async () => {

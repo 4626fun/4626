@@ -107,6 +107,11 @@ describe('confirmOwnerState', () => {
         if (text.includes('update profiles set privy_user_id = coalesce(privy_user_id,')) {
           return { rows: [] }
         }
+        // Sub-account lookup added by bootstrapCanonicalDelegationState for
+        // execution-track classification. Legacy fixture has no sub-account.
+        if (text.includes('select base_sub_account from profiles where id =')) {
+          return { rows: [{ base_sub_account: null }] }
+        }
 
         throw new Error(`Unhandled SQL in test: ${text}; values=${JSON.stringify(values)}`)
       }),

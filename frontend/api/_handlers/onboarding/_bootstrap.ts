@@ -17,12 +17,39 @@ import {
   bootstrapCanonicalDelegationState,
   extractDelegationFlags,
 } from '../../../server/_lib/wallet/canonicalCswDelegation.js'
+import type {
+  BaseSubAccountSummary,
+  ExecutionTrack,
+} from '../../../server/_lib/wallet/executionTrack.js'
 
 type BootstrapResponse = {
   chainId: 8453
   canonicalCswAddress: string
   privyEmbeddedEoaAddress: string
+  /**
+   * Legacy-track indicator: whether the Privy embedded EOA is installed as a
+   * direct owner of the parent CSW. Under the sub-account-first architecture
+   * this is expected to be `false` for new accounts; a `true` value means the
+   * account is on the legacy owner-install path. Kept for backward
+   * compatibility with existing clients; prefer `executionTrack` for
+   * new gating logic.
+   */
   privyIsOwner: boolean
+  /**
+   * Explicit alias for `privyIsOwner` whose name states its legacy-track
+   * semantics clearly. Same value; clients may use either.
+   */
+  privyEmbeddedEoaIsOwnerOfCanonicalCsw: boolean
+  /**
+   * Sub-account status (user-initiated frontend execution track). See
+   * `docs/4626-connection-methods.md` Section 2.
+   */
+  baseSubAccount: BaseSubAccountSummary
+  /**
+   * Derived execution track. Clients should prefer this single field over
+   * combining `privyIsOwner` + sub-account inference on their own.
+   */
+  executionTrack: ExecutionTrack
 }
 
 type BootstrapErrorEnvelope = ApiEnvelope<never> & {
@@ -85,6 +112,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       canonicalCswAddress: bootstrap.canonicalCswAddress,
       privyEmbeddedEoaAddress: bootstrap.privyEmbeddedEoaAddress,
       privyIsOwner: bootstrap.privyIsOwner,
+      privyEmbeddedEoaIsOwnerOfCanonicalCsw: bootstrap.privyIsOwner,
+      baseSubAccount: bootstrap.baseSubAccount,
+      executionTrack: bootstrap.executionTrack,
     }
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<BootstrapResponse>)
   } catch (error: unknown) {
