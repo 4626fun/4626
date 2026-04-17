@@ -724,14 +724,14 @@ export function WaitlistFlow(props: {
       throw new Error(STALE_PRIVY_SESSION_MESSAGE)
     }
 
-    const sessionToken = await bridgePrivySession(privyToken)
+    await bridgePrivySession(privyToken)
 
     let target = accountsUrl
     if (target.startsWith('http') && typeof window !== 'undefined') {
       try {
         const parsed = new URL(target)
         if (parsed.origin !== window.location.origin) {
-          const handoffCode = await createAuthHandoffCode({ privyToken, sessionToken })
+          const handoffCode = await createAuthHandoffCode({ privyToken })
           if (handoffCode) {
             parsed.searchParams.set(HANDOFF_QUERY_KEY, handoffCode)
             target = parsed.toString()
@@ -860,12 +860,15 @@ export function WaitlistFlow(props: {
     async (initialTarget: string) => {
       let target = initialTarget
       let privyToken: string | null = null
-      let sessionToken: string | null = null
 
       if (privyAuthed) {
         privyToken = await getAccessToken().catch(() => null)
         if (privyToken) {
-          sessionToken = await bridgePrivySession(privyToken)
+          // Establishes the cv_auth_session cookie on the marketing origin.
+          // We no longer receive a session token in JSON (FINDING-02); the
+          // subsequent createAuthHandoffCode call authenticates via that
+          // cookie via `withCredentials: true`.
+          await bridgePrivySession(privyToken)
         }
       }
 
@@ -873,7 +876,7 @@ export function WaitlistFlow(props: {
         try {
           const parsed = new URL(target)
           if (parsed.origin !== window.location.origin) {
-            const handoffCode = await createAuthHandoffCode({ privyToken, sessionToken })
+            const handoffCode = await createAuthHandoffCode({ privyToken })
             if (handoffCode) {
               parsed.searchParams.set(HANDOFF_QUERY_KEY, handoffCode)
               target = parsed.toString()

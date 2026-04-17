@@ -91,7 +91,9 @@ describe('auth handoff endpoints', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     restoreEnv = applyEnv({
-      AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
+      // getHandoffHashSecret() requires ≥32 chars; the prior value (31) was
+      // failing silently behind a try/catch → 503 response.
+      AUTH_SESSION_SECRET: 'test-auth-session-secret-1234567',
     })
   })
 
@@ -150,7 +152,11 @@ describe('auth handoff endpoints', () => {
     expect(replayRes.body?.error).toBe('Invalid or expired handoff code')
   })
 
-  it('returns privyToken on redeem when provided during creation', async () => {
+  it('does not leak privyToken in redeem response body (FINDING-02)', async () => {
+    // The Privy JWT is still accepted at create time (for server-side bookkeeping)
+    // but must never be echoed back to the browser on redeem — doing so would
+    // let JS read and exfiltrate the Privy token. Only `address` is returned;
+    // the 4626 session flows via the HttpOnly cv_auth_session cookie.
     const db = createHandoffDb()
     getDbMock.mockResolvedValue(db)
     readRequestPrincipalAddressMock.mockReturnValue('0x00000000000000000000000000000000000000bb')
@@ -166,7 +172,9 @@ describe('auth handoff endpoints', () => {
     await redeemHandoffHandler(redeemReq as any, redeemRes as any)
 
     expect(redeemRes.statusCode).toBe(200)
-    expect(redeemRes.body?.data?.privyToken).toBe('test-privy-jwt-abc123')
+    expect(redeemRes.body?.data?.address).toBe('0x00000000000000000000000000000000000000bb')
+    expect(redeemRes.body?.data?.privyToken).toBeUndefined()
+    expect(redeemRes.body?.data?.sessionToken).toBeUndefined()
   })
 
   it('rate-limits handoff creation requests', async () => {

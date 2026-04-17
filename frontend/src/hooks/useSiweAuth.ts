@@ -27,12 +27,11 @@ const SESSION_TOKEN_KEY = 'cv_siwe_session_token'
 const SESSION_TOKEN_CHANGED_EVENT = 'cv-siwe-session-token-change'
 const AUTH_HANDOFF_QUERY_KEY = 'cv_handoff'
 
-type PrivySessionResponse = { address: string; sessionToken: string; privyUserId?: string } | null
-type AuthHandoffRedeemResponse = {
-  address: string
-  sessionToken: string
-  privyToken: string | null
-}
+// FINDING-02 contract: auth endpoints convey session via HttpOnly cookie
+// only. Response bodies expose just `address` so JS cannot exfiltrate
+// session tokens. These types reflect the current server shape.
+type PrivySessionResponse = { address: string; privyUserId?: string } | null
+type AuthHandoffRedeemResponse = { address: string }
 
 /**
  * Explicit user-initiated Privy sign-in should prefer identity-first methods.
@@ -228,27 +227,22 @@ async function redeemAuthHandoffCode(code: string): Promise<AuthHandoffRedeemRes
   let requestPromise!: Promise<AuthHandoffRedeemResponse | null>
   requestPromise = (async () => {
     try {
+      // `withCredentials: true` so the Set-Cookie issued by the redeem
+      // response (which carries the 4626 session per FINDING-02) is
+      // accepted on this origin and included on subsequent /api/auth/me
+      // calls.
       const res = await apiFetch('/api/auth/handoff/redeem', {
         method: 'POST',
+        withCredentials: true,
         headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
         body: JSON.stringify({ code: normalized }),
       })
       const json = (await res.json().catch(() => null)) as ApiEnvelope<AuthHandoffRedeemResponse> | null
       if (!res.ok || !json?.success || !json.data) return null
 
-      const sessionToken =
-        typeof json.data.sessionToken === 'string' ? json.data.sessionToken.trim() : ''
       const address = typeof json.data.address === 'string' ? json.data.address.trim() : ''
-      const privyToken =
-        typeof json.data.privyToken === 'string' ? json.data.privyToken.trim() : ''
-
-      if (!sessionToken || !address) return null
-
-      return {
-        address,
-        sessionToken,
-        privyToken: privyToken || null,
-      }
+      if (!address) return null
+      return { address }
     } catch {
       return null
     } finally {
@@ -450,22 +444,19 @@ export function useSiweAuth() {
       if (handoffCode) {
         clearAuthHandoffCodeFromLocation()
         const redeemed = await redeemAuthHandoffCode(handoffCode)
-        if (redeemed?.sessionToken && redeemed?.address) {
-          writeStoredSessionToken(redeemed.sessionToken)
-          primeAuthMeCache(redeemed.sessionToken, redeemed.address)
+        if (redeemed?.address) {
+          // Cookie was issued by the redeem response. Clear any stale
+          // sessionStorage token from a prior session so apiBase.ts does
+          // not inject a mismatched Authorization header that would
+          // override the fresh cookie on subsequent /api/* calls.
+          writeStoredSessionToken(null)
+          // Prime the /api/auth/me cache keyed by the same null token
+          // that `fetchAuthMeAddress` will look up once the sessionStorage
+          // is cleared above.
+          primeAuthMeCache(null, redeemed.address)
           supersedePendingRefresh()
           setAuthAddress(redeemed.address)
           setCswOwnership(null)
-          if (redeemed.privyToken) {
-            await apiFetch('/api/auth/privy', {
-              method: 'POST',
-              withCredentials: true,
-              headers: {
-                Authorization: `Bearer ${redeemed.privyToken}`,
-                Accept: 'application/json',
-              },
-            }).catch(() => null)
-          }
           if (!cancelled) setSessionHydrated(true)
           return
         }
@@ -537,13 +528,16 @@ export function useSiweAuth() {
           throw new Error(message)
         }
 
-        const sessionToken =
-          json?.data && typeof (json.data as any)?.sessionToken === 'string' ? String((json.data as any).sessionToken) : ''
+        // FINDING-02 contract: /api/auth/privy returns only `address` and
+        // sets the session as an HttpOnly cookie. Drop any stale
+        // sessionStorage token so apiBase.ts doesn't inject a mismatched
+        // Authorization header that would override the fresh cookie on
+        // same-origin requests.
         const address = json?.data && typeof (json.data as any)?.address === 'string' ? String((json.data as any).address) : ''
-        if (!sessionToken || !address) throw new Error('Privy sign-in failed')
+        if (!address) throw new Error('Privy sign-in failed')
 
-        writeStoredSessionToken(sessionToken)
-        primeAuthMeCache(sessionToken, address)
+        writeStoredSessionToken(null)
+        primeAuthMeCache(null, address)
         supersedePendingRefresh()
         setAuthAddress(address)
         setCswOwnership(null)
@@ -764,9 +758,10 @@ export function useSiweAuth() {
           ...(attestCswAddress ? { cswAddress: attestCswAddress } : null),
         }),
       })
+      // FINDING-02 contract: /api/auth/verify conveys the session via
+      // HttpOnly cookie only; no sessionToken in JSON body.
       const verifyJson = (await verifyRes.json().catch(() => null)) as ApiEnvelope<{
         address: string
-        sessionToken: string
         cswOwnership?: CswOwnershipAttestation | null
       }> | null
       if (!verifyRes.ok || !verifyJson?.success) {
@@ -775,10 +770,9 @@ export function useSiweAuth() {
       }
 
       const signed = verifyJson?.data?.address
-      const sessionToken = verifyJson?.data?.sessionToken
-      if (typeof sessionToken === 'string' && sessionToken.trim().length > 0) {
-        writeStoredSessionToken(sessionToken.trim())
-      }
+      // Clear any stale sessionStorage so the fresh cookie isn't shadowed
+      // by a mismatched Authorization header on subsequent /api/* calls.
+      writeStoredSessionToken(null)
       const resolved = typeof signed === 'string' ? signed : null
       supersedePendingRefresh()
       setAuthAddress(resolved)
