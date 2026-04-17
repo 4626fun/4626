@@ -39,11 +39,13 @@ The CSW never "becomes" a separate agent — the agent identity is layered onto 
 - File: `frontend/server/_lib/privyWalletApi.ts`
 - Env: `PRIVY_APP_ID`, `PRIVY_APP_SECRET`, `PRIVY_WALLET_AUTHORIZATION_KEY`, `PRIVY_WALLET_OWNER_ID`
 
-### 3. Owner Delegation (user approval)
-- User approves `CoinbaseSmartWallet.addOwnerAddress(privyWalletAddress)` transaction.
+### 3. Owner Delegation (batched during account setup)
+- During account setup, after `wallet_addSubAccount` creates the sub-account, the client calls `POST /api/onboarding/provision-agent-owner` to provision the agent wallet and receive `addOwnerAddress` calldata.
+- The client sends `addOwnerAddress(privyWalletAddress)` via `wallet_sendCalls` from the CSW provider — this is a passkey popup immediately following the sub-account creation popup.
 - This adds the Privy wallet as an owner in the CSW's MultiOwnable contract.
-- The owner index is determined by querying `CSW.ownerAtIndex(i)`.
-- File: `frontend/api/_handlers/deploy/session/_status.ts`
+- The owner index is determined by querying `CSW.ownerAtIndex(i)` at execution time.
+- File: `frontend/src/features/accountSetup/useAccountSetupController.ts`, `frontend/api/_handlers/onboarding/_provision-agent-owner.ts`
+- Fallback: if the user cancels the popup or the call fails, deploy-session will prompt for owner installation on first use (non-blocking).
 
 ### 4. XMTP Agent Identity (server action)
 - `createPrivyScwSigner()` creates an XMTP signer that:
