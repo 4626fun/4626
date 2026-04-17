@@ -6,7 +6,10 @@
   "framework": "vite",
   "outputDirectory": "dist",
   "git": {
-    "deploymentEnabled": true
+    "deploymentEnabled": {
+      "*": false,
+      "main": true
+    }
   },
   "functions": {
     "api/agent-registration.ts": {
