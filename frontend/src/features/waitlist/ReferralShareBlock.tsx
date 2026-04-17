@@ -59,7 +59,7 @@ export function ReferralShareBlock({
   }
 
   return (
-    <div className={`rounded-xl border border-white/10 bg-black/25 p-4 space-y-3 ${className}`}>
+    <div className={`space-y-3 ${className}`}>
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <div className="bv-kicker text-brand-300 flex items-center gap-1.5">

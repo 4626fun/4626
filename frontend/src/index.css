@@ -241,65 +241,78 @@
     text-shadow: 0 0 40px rgba(0, 82, 255, 0.35);
   }
   
-  /* Shared primary CTA style across 4626.fun */
+  /* Shared primary CTA — refined, flat with subtle inset bezel */
   .btn-primary,
   .btn-accent {
-    @apply relative inline-flex items-center justify-center gap-2 rounded-2xl px-6 py-3 text-[14px] font-semibold text-white transition-all duration-200 ease-out;
-    min-height: 48px;
-    background: #0052ff;
+    @apply relative inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-[13.5px] font-medium text-white transition-[background,box-shadow,transform] duration-150 ease-out;
+    min-height: 42px;
+    letter-spacing: -0.005em;
+    background: linear-gradient(180deg, #1563ff 0%, #0050f8 100%);
     box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.1),
-      0 8px 32px -8px rgba(0, 82, 255, 0.5);
+      inset 0 1px 0 rgba(255, 255, 255, 0.16),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.18),
+      0 0 0 1px rgba(0, 82, 255, 0.35),
+      0 1px 2px rgba(0, 0, 0, 0.28);
   }
 
   .btn-primary::before,
   .btn-accent::before {
     content: '';
     display: inline-block;
-    width: 14px;
-    height: 14px;
+    width: 13px;
+    height: 13px;
     flex-shrink: 0;
     background-image: url('/base/base-square-white.svg');
     background-size: contain;
     background-position: center;
     background-repeat: no-repeat;
+    opacity: 0.92;
   }
 
   .btn-primary:hover,
   .btn-accent:hover {
-    background: #1a66ff;
+    background: linear-gradient(180deg, #2a74ff 0%, #0f59ff 100%);
     box-shadow:
-      0 0 0 1px rgba(255, 255, 255, 0.15),
-      0 12px 40px -8px rgba(0, 82, 255, 0.6);
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.16),
+      0 0 0 1px rgba(0, 82, 255, 0.45),
+      0 2px 6px rgba(0, 0, 0, 0.3);
   }
 
   .btn-primary:focus-visible,
   .btn-accent:focus-visible {
     outline: none;
     box-shadow:
-      0 0 0 2px rgba(0, 82, 255, 0.45),
-      0 0 0 1px rgba(255, 255, 255, 0.18),
-      0 12px 40px -8px rgba(0, 82, 255, 0.62);
+      inset 0 1px 0 rgba(255, 255, 255, 0.18),
+      0 0 0 2px rgba(0, 82, 255, 0.5),
+      0 0 0 4px rgba(0, 82, 255, 0.18);
   }
 
   .btn-primary:active,
   .btn-accent:active {
-    transform: scale(0.99);
+    transform: translateY(0.5px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.12),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.24),
+      0 0 0 1px rgba(0, 82, 255, 0.4);
   }
 
   .btn-primary:disabled,
   .btn-accent:disabled {
-    opacity: 0.55;
+    opacity: 0.5;
     cursor: not-allowed;
     transform: none;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.1),
+      0 0 0 1px rgba(0, 82, 255, 0.2);
   }
 
   .btn-compact {
-    min-height: 36px;
-    padding: 0.45rem 0.85rem;
+    min-height: 34px;
+    padding: 0.4rem 0.85rem;
     gap: 0.35rem;
     font-size: 12px;
-    border-radius: 0.75rem;
+    border-radius: 0.625rem;
   }
 
   .btn-compact::before {

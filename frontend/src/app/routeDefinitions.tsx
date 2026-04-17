@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Route } from 'react-router-dom'
+import { Navigate, Route, useLocation } from 'react-router-dom'
 
 import {
   AccountsPage,
@@ -65,9 +65,27 @@ export const MARKETING_ONLY_ROUTES: PathRouteDef[] = [
   { path: '/status', element: <Status /> },
 ]
 
+/**
+ * `/accounts` is now a compatibility redirect to `/waitlist`. The waitlist
+ * surface holds the setup flow, points panel, and the collapsible Advanced
+ * section that folded in the previous `/accounts` content. Query params
+ * (e.g. `?setup=owner-install&source=telegram`) are preserved so existing
+ * deep links from the Telegram handoff continue to land on the owner
+ * install step. `AccountsPage` is kept as an exported component for the
+ * lazy import surface but is no longer routed.
+ */
+function AccountsRedirect() {
+  const { search, hash } = useLocation()
+  return <Navigate to={`/waitlist${search}${hash}`} replace />
+}
+
 export const ACCOUNT_ROUTES: PathRouteDef[] = [
-  { path: '/accounts', element: <AccountsPage /> },
+  { path: '/accounts', element: <AccountsRedirect /> },
 ]
+
+// Keep the lazy import referenced so tree-shaking doesn't drop the page
+// definition while callers in tests still import `AccountsPage`.
+void AccountsPage
 
 export const EXPLORE_ROUTES: PathRouteDef[] = [
   { path: '/explore/creators', element: <ExploreCreators /> },

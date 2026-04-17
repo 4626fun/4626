@@ -4,7 +4,7 @@ import { Droplets, Plus, RefreshCw } from 'lucide-react'
 import { getAddress, isAddress, toHex, type Address, type Hex } from 'viem'
 import { useQuery } from '@tanstack/react-query'
 import { useAccount, useBalance, useConnect, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
-import { useLogin, usePrivy } from '@privy-io/react-auth'
+import { useConnectWallet, useLogin, usePrivy } from '@privy-io/react-auth'
 import { useDebounceValue } from 'usehooks-ts'
 
 import { META, PageMeta } from '@/components/seo/PageMeta'
@@ -218,6 +218,19 @@ function useSafeSwapLoginHook(enabled: boolean): { login: ((opts?: any) => Promi
   }
 }
 
+function useSafeSwapConnectWalletHook(enabled: boolean): {
+  connectWallet: ((opts?: any) => void) | null
+} {
+  try {
+    const value = useConnectWallet() as any
+    if (!enabled || typeof value?.connectWallet !== 'function') return { connectWallet: null }
+    return { connectWallet: value.connectWallet as (opts?: any) => void }
+  } catch (error) {
+    warnSwapPrivyHookFailure('useConnectWallet', error)
+    return { connectWallet: null }
+  }
+}
+
 function isHexSignature(value: unknown): value is Hex {
   return typeof value === 'string' && /^0x[0-9a-fA-F]+$/.test(value)
 }
@@ -421,6 +434,7 @@ export function Swap() {
     getAccessToken,
   } = useSafeSwapPrivyHook(privyHooksEnabled)
   const { login: privyLogin } = useSafeSwapLoginHook(privyHooksEnabled)
+  const { connectWallet: privyConnectWallet } = useSafeSwapConnectWalletHook(privyHooksEnabled)
   const { connectors: wagmiConnectors, connect: wagmiConnect } = useConnect()
   const privyWallets = useMemo(() => extractPrivyWalletsFromUser(privyUser), [privyUser])
   const auth = useSiweAuth()
@@ -822,16 +836,27 @@ export function Swap() {
     if (authBusy) return
 
     // `wallet-required`: user has a 4626 session but wagmi has no connected
-    // wallet on this device. Prefer the Privy-hosted wallet modal (same path
-    // /deploy/vault uses); if Privy is disabled for this env, fall back to
-    // wagmi's first usable connector so SIWE-only deployments still work.
+    // wallet on this device. Choose the correct Privy entry point:
+    //   - already authenticated -> `connectWallet()` (login() throws
+    //     "Attempted to log in, but user is already logged in")
+    //   - unauthenticated       -> `login({ loginMethods: ['wallet'] })`
+    // If Privy is disabled for this env, fall back to wagmi's first usable
+    // connector so SIWE-only deployments still work.
     if (connectGate.state === 'wallet-required') {
-      if (typeof privyLogin === 'function' && privyHooksEnabled) {
-        void privyLogin({ loginMethods: ['wallet'] }).catch(() => {
-          // Privy surfaces its own modal-level errors; re-entry on next click
-          // is fine if the user closes the modal without connecting.
-        })
-        return
+      if (privyHooksEnabled) {
+        if (privyAuthenticated === true && typeof privyConnectWallet === 'function') {
+          try {
+            privyConnectWallet()
+          } catch {
+            // Privy surfaces its own modal-level errors; re-entry on next
+            // click is fine if the user closes the modal.
+          }
+          return
+        }
+        if (privyAuthenticated !== true && typeof privyLogin === 'function') {
+          void privyLogin({ loginMethods: ['wallet'] }).catch(() => {})
+          return
+        }
       }
       const fallbackConnector =
         wagmiConnectors.find((c) => !String(c.id ?? '').toLowerCase().includes('injected')) ??
@@ -850,6 +875,8 @@ export function Swap() {
     canonicalSignInMethod,
     connectGate.state,
     executionMode,
+    privyAuthenticated,
+    privyConnectWallet,
     privyHooksEnabled,
     privyLogin,
     signIn,

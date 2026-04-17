@@ -1,8 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 
-import { NavigationBar } from '@coinbase/cds-web/navigation'
-
 import { ConnectButton } from '@/components/account/ConnectButton'
 import { useAdminStatus } from '@/hooks/useAdminStatus'
 import {
@@ -144,26 +142,33 @@ export function VaultNavBar(props: { interactive?: boolean }) {
       )
     })
 
+  // Plain edge-to-edge nav. AGENTS.md (line ~341) calls for "edge-to-edge
+  // layout over centered max-width, text-only links without hover
+  // backgrounds, and no visual separators between nav and content." The
+  // CDS NavigationBar wrapper was injecting a `borderedBottom-*` class and
+  // collapsing the header to ~34px; this replacement is a plain flex row
+  // with a proper 56px min-height and no divider between nav and page.
   return (
     <header className="hidden md:block sticky top-0 left-0 right-0 z-50">
-      <div className="absolute inset-0 bg-vault-bg/74 backdrop-blur-xl" />
+      <div aria-hidden="true" className="absolute inset-0 bg-vault-bg/74 backdrop-blur-xl" />
 
-      <div className="relative">
-        <NavigationBar
-          start={brandLogo}
-          end={showConnect ? (
-            <div className="shrink-0">
-              <ConnectButton variant="nav" />
-            </div>
-          ) : undefined}
-          accessibilityLabel="Main navigation"
+      <div className="relative flex min-h-14 items-center gap-4 px-4 lg:px-6">
+        {brandLogo}
+
+        <nav
+          aria-label="Main navigation"
+          className="min-w-0 flex-1"
         >
-          <nav className="min-w-0 flex-1">
-            <div className="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap scrollbar-hide">
-              {renderNavLinks()}
-            </div>
-          </nav>
-        </NavigationBar>
+          <div className="flex min-w-0 items-center gap-1 overflow-x-auto whitespace-nowrap scrollbar-hide">
+            {renderNavLinks()}
+          </div>
+        </nav>
+
+        {showConnect ? (
+          <div className="shrink-0">
+            <ConnectButton variant="nav" />
+          </div>
+        ) : null}
       </div>
     </header>
   )

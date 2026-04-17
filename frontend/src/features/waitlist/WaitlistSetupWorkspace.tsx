@@ -37,13 +37,14 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
       context="waitlist"
       controller={controller}
       summaryActions={
-        <div className="w-full">
+        <div className="w-full space-y-5">
+          <WaitlistUnlocksPanel score={initialAccount.score} email={initialAccount.email} />
           {canEnterNow ? (
             <button
               type="button"
               onClick={() => void onEnterApp()}
               disabled={completionBusy}
-              className="btn-accent btn-no-icon inline-flex w-full items-center justify-center sm:w-auto disabled:opacity-50 disabled:grayscale"
+              className="btn-accent btn-no-icon w-full disabled:opacity-50 disabled:grayscale"
             >
               {completionBusy ? 'Entering App...' : `${SHARE_SYMBOL_PREFIX} Enter App`}
             </button>
@@ -65,7 +66,6 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
               </a>
             </div>
           ) : null}
-          <WaitlistUnlocksPanel score={initialAccount.score} email={initialAccount.email} />
         </div>
       }
     />

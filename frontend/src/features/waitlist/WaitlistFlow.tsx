@@ -35,7 +35,6 @@ import { type WaitlistEmailUi, canEnterAppFromAccountState, deriveWaitlistAuthUi
 import { bridgePrivySession, createAuthHandoffCode } from './waitlistHandoff'
 import { WaitlistSetupWorkspace } from './WaitlistSetupWorkspace'
 import { ReferrerGreetingBanner } from './ReferrerGreetingBanner'
-import { LoadingInline } from '@/components/ui/LoadingState'
 
 type AccountsSummary = {
   privyUserId: string
@@ -300,16 +299,6 @@ function WaitlistAuthStep(props: {
       </div>
 
       <div className="relative z-10 w-full max-w-sm space-y-8 text-center">
-        {/* Brand loader intro */}
-        <motion.div
-          initial={{ opacity: 0, scale: 0.85 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.24, ease: WAITLIST_EASE }}
-          className="mx-auto flex items-center justify-center"
-        >
-          <PixelWaveLoader name="flow" size={44} color="rgb(var(--brand-primary))" />
-        </motion.div>
-
         {/* headline */}
         <motion.div {...stagger(0)} className="space-y-3">
           <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-[#3C8AFF]/80">
@@ -326,18 +315,32 @@ function WaitlistAuthStep(props: {
           </motion.div>
         ) : null}
 
-        {/* CTA */}
+        {/* CTA — uses the refined btn-accent base; full width on this
+            hero surface. We only hard-`disabled` the button while the
+            user's action is actively processing (`busy`). During Privy
+            boot (`!privyReady`), we keep the button at full brightness
+            and block interaction via aria-disabled + a click guard —
+            that way the hero reads as intentional, not grayed out.
+
+            Busy content uses PixelWaveLoader (not the CDS Spinner wrapper)
+            so the button stays at its canonical 42px height instead of
+            being stretched by an opinionated spinner container. */}
         <motion.div {...stagger(1)} className="space-y-3">
           <button
             type="button"
-            disabled={buttonsDisabled}
-            onClick={() => void onContinueAuth()}
-            className="btn-accent btn-no-icon inline-flex w-full items-center justify-center gap-2 rounded-xl border border-brand-primary/45 bg-linear-to-r from-[#0052FF] to-[#0033CC] py-3.5 text-[14px] font-medium text-white shadow-[0_16px_36px_-18px_rgba(0,0,255,0.7)] transition-all duration-200 hover:-translate-y-[1px] hover:shadow-[0_20px_40px_-16px_rgba(0,0,255,0.8)] disabled:translate-y-0 disabled:opacity-50"
+            disabled={busy}
+            aria-disabled={buttonsDisabled}
+            onClick={() => {
+              if (buttonsDisabled) return
+              void onContinueAuth()
+            }}
+            className="btn-accent btn-no-icon w-full"
           >
-            {busy ? (
-              <LoadingInline intent="session" size="sm" labelOverride={authUi.busyLabel} />
-            ) : !privyReady ? (
-              <LoadingInline intent="session" size="sm" labelOverride="Loading secure sign-in..." />
+            {busy || !privyReady ? (
+              <span className="inline-flex items-center gap-2 text-[13.5px] font-medium text-white/90">
+                <PixelWaveLoader name="wave-lr" size={14} color="rgba(255,255,255,0.92)" />
+                <span>{busy ? authUi.busyLabel : 'Loading secure sign-in…'}</span>
+              </span>
             ) : (
               authUi.ctaLabel
             )}

@@ -128,11 +128,38 @@ export type PointSuggestion = {
   to?: string
 }
 
+/**
+ * Mirrors server `LINK_POINTS` + event-point values in
+ * `frontend/server/_lib/identity/accountsIdentity.ts`. Keep this list
+ * deduplicated on the canonical actions: link Zora gives the biggest
+ * single jump; detecting a creator coin is automatic and not actionable,
+ * so it isn't surfaced here.
+ *
+ * Ordered highest-impact first so the UI's top 2-3 suggestions move the
+ * user the furthest in a single session.
+ */
 export const POINT_SUGGESTIONS: readonly PointSuggestion[] = [
-  { label: 'Link your Coinbase Smart Wallet', points: 10, hint: 'One-time', to: '/accounts' },
+  { label: 'Link Zora', points: 40, hint: 'One-time', to: '/waitlist' },
+  { label: 'Link Google or Apple', points: 20, hint: 'Per platform', to: '/waitlist' },
+  { label: 'Link X / Telegram / TikTok', points: 15, hint: 'Per platform', to: '/waitlist' },
+  { label: 'Connect Coinbase Smart Wallet', points: 10, hint: 'One-time', to: '/waitlist' },
+  { label: 'Verify email', points: 10, hint: 'One-time' },
   { label: 'Refer a friend who signs up', points: 2, hint: 'Per referral' },
-  { label: 'Referral links their CSW', points: 4, hint: 'Per qualified referral' },
-  { label: 'Referral completes profile', points: 6, hint: 'Per qualified referral' },
-  { label: 'Connect Zora', points: 2, to: '/accounts' },
-  { label: 'Connect X / Discord / Telegram', points: 2, hint: 'Per platform', to: '/accounts' },
 ] as const
+
+/**
+ * Per-provider point rewards. Mirrors server `LINK_POINTS` exactly so the
+ * row-level "+N" badges shown next to each provider in the waitlist
+ * Advanced section match the server state machine. Zora is authoritative
+ * via its own step 1; the rest are secondary identity links.
+ */
+export const PROVIDER_POINTS: Record<string, number> = {
+  email: 10,
+  google: 20,
+  apple: 20,
+  twitter: 15,
+  telegram: 15,
+  tiktok: 15,
+  external_eoa: 10,
+  zora_cross_app: 40,
+}

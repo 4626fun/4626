@@ -1,11 +1,59 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
-import { CheckCircle2, ExternalLink } from 'lucide-react'
+import {
+  Apple,
+  CheckCircle2,
+  ChevronRight,
+  ExternalLink,
+  Mail,
+  Music,
+  Send,
+  Twitter,
+  Wallet,
+  type LucideIcon,
+} from 'lucide-react'
 import { toast } from '@/components/ui/Toast'
 
 import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { LoadingText } from '@/components/ui/LoadingState'
+import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
 import { shortValue } from './shared'
+import type { AccountLinkProvider } from './types'
 import type { useAccountSetupController } from './useAccountSetupController'
+
+const PROVIDER_ICON: Record<AccountLinkProvider, LucideIcon | null> = {
+  email: Mail,
+  apple: Apple,
+  twitter: Twitter,
+  telegram: Send,
+  tiktok: Music,
+  external_eoa: Wallet,
+  // No official google icon in lucide — fall back to a styled letter badge.
+  google: null,
+  zora_cross_app: null,
+}
+
+function ProviderIconBadge({ provider }: { provider: AccountLinkProvider }) {
+  const Icon = PROVIDER_ICON[provider]
+  const commonClass =
+    'flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.03] text-zinc-400'
+  if (Icon) {
+    return (
+      <span className={commonClass} aria-hidden="true">
+        <Icon className="h-3 w-3" strokeWidth={1.75} />
+      </span>
+    )
+  }
+  // Letter fallback for providers without a clean lucide glyph (currently Google).
+  const letter = provider === 'google' ? 'G' : provider.charAt(0).toUpperCase()
+  return (
+    <span
+      className={`${commonClass} font-semibold text-[10px] text-zinc-300`}
+      aria-hidden="true"
+    >
+      {letter}
+    </span>
+  )
+}
 
 const BASESCAN_BASE = 'https://basescan.org/address/'
 const ZORA_PROFILE_BASE = 'https://zora.co/'
@@ -184,7 +232,7 @@ export function AccountSetupWorkspaceView(props: {
         </div>
 
         {/* Accordion steps */}
-        <div className="mx-auto w-full max-w-[560px] overflow-hidden rounded-[13px]">
+        <div className="w-full overflow-hidden rounded-[13px]">
 
           {/* ── Step 1 — Zora + wallet sync ── */}
           {(() => {
@@ -407,6 +455,9 @@ export function AccountSetupWorkspaceView(props: {
             )
           })()}
         </div>
+
+        {/* Advanced — identities + co-owner management. Collapsed by default. */}
+        <WaitlistAdvancedSection controller={controller} />
 
         {/* Enter App — only after all 3 steps */}
         {allDone && summaryActions ? (
@@ -828,6 +879,164 @@ export function AccountSetupWorkspaceView(props: {
           </div>
         </div>
       </section>
+    </div>
+  )
+}
+
+/**
+ * Collapsed "Advanced" disclosure inside the waitlist accordion.
+ *
+ * Consolidates the identity-linking grid and Rabby co-owner tools that
+ * used to live at `/accounts` into the single `/waitlist` surface. Kept
+ * minimal: one clean disclosure with two compact sub-sections; the
+ * advanced owner input is further nested behind its own disclosure to
+ * avoid surfacing destructive controls by default.
+ */
+function WaitlistAdvancedSection({
+  controller,
+}: {
+  controller: AccountSetupWorkspaceController
+}) {
+  const [open, setOpen] = useState(false)
+  const [rabbyOpen, setRabbyOpen] = useState(false)
+  const [rabbyAddress, setRabbyAddress] = useState('')
+  const {
+    advancedBusy,
+    busyProvider,
+    canShowAdvanced,
+    providerCards,
+    onLinkProvider,
+    onUnlinkProvider,
+    onAddRabbyCoOwner,
+    telegramLaunchParamsAvailable,
+  } = controller
+
+  return (
+    <div className="w-full">
+      <button
+        type="button"
+        onClick={() => setOpen((prev) => !prev)}
+        className="group flex w-full items-center justify-between gap-2 rounded-lg px-2 py-1.5 text-[11.5px] uppercase tracking-[0.14em] text-zinc-500 transition-colors hover:text-zinc-300"
+        aria-expanded={open}
+      >
+        <span>Advanced</span>
+        <ChevronRight
+          className={`h-3.5 w-3.5 transition-transform duration-150 ${open ? 'rotate-90' : ''}`}
+          aria-hidden="true"
+        />
+      </button>
+
+      {open ? (
+        <div className="mt-2 space-y-4">
+          {/* Linked identities — icon + status + points reward + action, per row */}
+          <div>
+            <div className="mb-2 flex items-center justify-between">
+              <span className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+                Earn points by linking
+              </span>
+              <span className="text-[10px] uppercase tracking-[0.14em] text-zinc-600">
+                {providerCards.filter((p) => p.linked).length}/{providerCards.length}
+              </span>
+            </div>
+            <ul className="divide-y divide-white/[0.04]">
+              {providerCards.map((provider) => {
+                const busy = busyProvider === provider.provider
+                const telegramBlocked =
+                  provider.provider === 'telegram' && !provider.linked && !telegramLaunchParamsAvailable
+                const points = PROVIDER_POINTS[provider.provider] ?? null
+                return (
+                  <li
+                    key={provider.provider}
+                    className="flex items-center gap-2.5 py-2 text-[11.5px] transition-colors"
+                  >
+                    <ProviderIconBadge provider={provider.provider} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-zinc-200">{provider.label}</div>
+                      <div
+                        className={`truncate text-[10.5px] ${
+                          provider.linked ? 'text-emerald-400/80' : 'text-zinc-600'
+                        }`}
+                      >
+                        {provider.linked
+                          ? provider.values.length > 0
+                            ? provider.values.map((value) => shortValue(value)).join(', ')
+                            : 'Linked'
+                          : telegramBlocked
+                            ? 'Open from Telegram'
+                            : 'Not linked'}
+                      </div>
+                    </div>
+                    {points !== null && !provider.linked ? (
+                      <span className="shrink-0 rounded-md border border-white/[0.06] bg-white/[0.02] px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-zinc-400">
+                        +{points}
+                      </span>
+                    ) : null}
+                    {provider.linked ? (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void onUnlinkProvider(provider.provider)}
+                        className="shrink-0 text-[10.5px] text-zinc-600 transition-colors hover:text-rose-300 disabled:opacity-50"
+                      >
+                        {busy ? '…' : 'Unlink'}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={busy || telegramBlocked}
+                        onClick={() => void onLinkProvider(provider.provider)}
+                        className="shrink-0 rounded-md border border-brand-primary/25 bg-brand-primary/[0.08] px-2 py-0.5 text-[10.5px] font-medium text-brand-200 transition-colors hover:border-brand-primary/40 hover:bg-brand-primary/[0.14] disabled:opacity-40"
+                      >
+                        {busy ? '…' : 'Link'}
+                      </button>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+          </div>
+
+          {/* Advanced owner actions — nested disclosure, gated on canonical CSW */}
+          {canShowAdvanced ? (
+            <div className="border-t border-white/[0.05] pt-3">
+              <button
+                type="button"
+                onClick={() => setRabbyOpen((prev) => !prev)}
+                className="group flex w-full items-center justify-between gap-2 text-[11px] uppercase tracking-[0.14em] text-zinc-500 transition-colors hover:text-zinc-300"
+                aria-expanded={rabbyOpen}
+              >
+                <span>Advanced owner actions</span>
+                <ChevronRight
+                  className={`h-3.5 w-3.5 transition-transform duration-150 ${rabbyOpen ? 'rotate-90' : ''}`}
+                  aria-hidden="true"
+                />
+              </button>
+              {rabbyOpen ? (
+                <div className="mt-2.5 space-y-2">
+                  <p className="text-[11px] leading-relaxed text-zinc-500">
+                    Add a second owner to your canonical CSW (e.g. a Rabby EOA). Requires a current
+                    owner signature. Never automatic.
+                  </p>
+                  <input
+                    value={rabbyAddress}
+                    onChange={(event) => setRabbyAddress(event.target.value)}
+                    placeholder="0x…"
+                    className="w-full rounded-md border border-white/10 bg-black/30 px-2.5 py-1.5 font-mono text-[11.5px] text-white placeholder:text-zinc-700 outline-none focus:border-brand-primary/40"
+                  />
+                  <button
+                    type="button"
+                    disabled={advancedBusy || rabbyAddress.trim().length === 0}
+                    onClick={() => void onAddRabbyCoOwner(rabbyAddress)}
+                    className="inline-flex h-8 items-center rounded-md border border-white/10 bg-white/[0.03] px-3 text-[11.5px] text-zinc-300 transition-colors hover:bg-white/[0.06] disabled:opacity-40"
+                  >
+                    {advancedBusy ? 'Preparing…' : 'Add co-owner'}
+                  </button>
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   )
 }
