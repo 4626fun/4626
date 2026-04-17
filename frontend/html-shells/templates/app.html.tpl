@@ -9,6 +9,7 @@
 {{> partials/head-shared-fonts.html}}
 {{> partials/head-shared-pwa.html}}
 {{> partials/head-shared-style.html}}
+{{> partials/head-app-jsonld.html}}
   </head>
   <body>
 {{> partials/body-root-main.html}}

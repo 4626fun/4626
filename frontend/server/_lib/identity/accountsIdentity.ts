@@ -2,12 +2,21 @@ import type { VercelRequest } from '@vercel/node'
 
 import { getAddress } from 'viem'
 
-import { verifyPrivyRequest } from '../wallet/canonicalCswDelegation.js'
+import {
+  loadCanonicalDelegationState,
+  verifyPrivyRequest,
+} from '../wallet/canonicalCswDelegation.js'
 import { assertNoEmailPrivyCollision } from './identityRecovery.js'
 import { extractPrivyVerifiedEmail } from '../infra/trust.js'
 import { ensureWaitlistSchema } from '../onboarding/waitlistSchema.js'
 import { classifyLinkedAccounts, type PrivyUserLike } from '../wallet/walletMapping.js'
 import { resolveCanonicalCsw } from '../wallet/canonicalCswDelegation.js'
+import {
+  resolveExecutionTrack,
+  summarizeBaseSubAccount,
+  type BaseSubAccountSummary,
+  type ExecutionTrack,
+} from '../wallet/executionTrack.js'
 import { fetchZoraProfile } from '../zora/zoraProfile.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -35,6 +44,11 @@ export type AccountsMePayload = {
   email: string | null
   emailVerified: boolean
   appAccessStatus: string | null
+  /**
+   * Raw `profiles.base_sub_account` column. May legitimately mirror the
+   * canonical CSW for legacy accounts; prefer `accountSignals.baseSubAccount`
+   * for distinctness + registration signal.
+   */
   baseSubAccount: string | null
   linkedMethods: Record<string, string[]>
   accountSignals: {
@@ -43,6 +57,26 @@ export type AccountsMePayload = {
     creatorCoin: { address: string } | null
     zoraHandle: string | null
     lastResolvedAt: string | null
+    /**
+     * Sub-account status on the user-initiated frontend execution track.
+     * See `docs/4626-connection-methods.md` Section 2.
+     */
+    baseSubAccount: BaseSubAccountSummary
+    /**
+     * Derived execution track. Values: `sub-account`, `legacy-owner-install`,
+     * `migration-pending`, `none-yet`. See `executionTrack.ts` for the
+     * classification rules. Prefer this field over deriving the track from
+     * individual signals on the client.
+     */
+    executionTrack: ExecutionTrack
+    /**
+     * Cached legacy-track signal. True iff the Privy embedded EOA is
+     * installed as a direct owner of the parent CSW. Read from
+     * `profile_wallets.privy_is_owner` (populated by
+     * `/api/onboarding/bootstrap`). Null when the cache has not been
+     * primed yet or the account has no canonical CSW.
+     */
+    privyEmbeddedEoaIsOwnerOfCanonicalCsw: boolean | null
   }
   score: AccountScore
 }
@@ -853,13 +887,29 @@ export async function buildAccountsMePayload(params: {
   const linkedMethods = mergeLinkedMethods(dbMethods, derivedMethods)
   const zoraRow = await readZoraSignals(db, privyUserId)
   const score = await readScore(db, privyUserId)
+  const delegationState = await loadCanonicalDelegationState({ db, privyUserId }).catch(() => null)
+
+  const rawBaseSubAccount = normalizeString(profileStatusRow?.base_sub_account)
+  const canonicalCswAddressForTrack = delegationState?.canonicalCswAddress ?? zoraRow.canonicalCswAddress
+  const privyEmbeddedEoaIsOwnerOfCanonicalCsw = canonicalCswAddressForTrack
+    ? delegationState?.privyIsOwner ?? null
+    : null
+  const baseSubAccountSummary = summarizeBaseSubAccount({
+    canonicalCswAddress: canonicalCswAddressForTrack,
+    baseSubAccountAddress: rawBaseSubAccount,
+  })
+  const executionTrack = resolveExecutionTrack({
+    canonicalCswAddress: canonicalCswAddressForTrack,
+    baseSubAccountAddress: rawBaseSubAccount,
+    privyEmbeddedEoaIsOwnerOfCanonicalCsw: privyEmbeddedEoaIsOwnerOfCanonicalCsw === true,
+  })
 
   return {
     privyUserId,
     email: normalizeEmail(accountRow?.email),
     emailVerified: accountRow?.email_verified === true,
     appAccessStatus: normalizeString(profileStatusRow?.app_access_status),
-    baseSubAccount: normalizeString(profileStatusRow?.base_sub_account),
+    baseSubAccount: rawBaseSubAccount,
     linkedMethods,
     accountSignals: {
       linked: zoraRow.zoraLinked,
@@ -867,6 +917,9 @@ export async function buildAccountsMePayload(params: {
       creatorCoin: zoraRow.creatorCoinAddress ? { address: zoraRow.creatorCoinAddress } : null,
       zoraHandle: zoraRow.zoraHandle,
       lastResolvedAt: zoraRow.lastResolvedAt,
+      baseSubAccount: baseSubAccountSummary,
+      executionTrack,
+      privyEmbeddedEoaIsOwnerOfCanonicalCsw,
     },
     score,
   }
