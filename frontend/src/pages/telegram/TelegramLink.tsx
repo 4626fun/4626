@@ -1360,7 +1360,16 @@ export function TelegramLink() {
                 <div className="text-[11px] leading-5 text-[#A9B9FF]">
                   Next step: continue into Accounts on phone or desktop, connect a current owner of your detected Zora Coinbase Smart Wallet, and run <span className="font-medium text-[#D7E0FF]">Enable 4626 signing</span>.
                 </div>
-                <div className="text-[11px] text-[#8FB0FF]">Use Continue setup below to open Accounts outside Telegram.</div>
+                <div className="text-[11px] text-[#8FB0FF]">
+                  <button
+                    type="button"
+                    onClick={() => openTelegramExternalLink('https://app.4626.fun/accounts?setup=owner-install&source=telegram')}
+                    className="underline underline-offset-2 text-[#A9B9FF] hover:text-white"
+                  >
+                    Open Accounts
+                  </button>{' '}
+                  to continue setup outside Telegram.
+                </div>
               </div>
             ) : null}
             <SuccessAccountSummary
@@ -1399,7 +1408,16 @@ export function TelegramLink() {
                 <div className="text-xs text-[#A9B9FF]">
                   Next step: continue into Accounts, connect a current owner of your Zora Coinbase Smart Wallet, and run <span className="font-medium text-[#D7E0FF]">Enable 4626 signing</span>.
                 </div>
-                <div className="text-xs text-[#8FB0FF]">Use the Continue setup button below to open the real Accounts flow outside Telegram.</div>
+                <div className="text-xs text-[#8FB0FF]">
+                  <button
+                    type="button"
+                    onClick={() => openTelegramExternalLink('https://app.4626.fun/accounts?setup=owner-install&source=telegram')}
+                    className="underline underline-offset-2 text-[#A9B9FF] hover:text-white"
+                  >
+                    Open Accounts
+                  </button>{' '}
+                  to continue setup outside Telegram.
+                </div>
               </div>
             </div>
           )
