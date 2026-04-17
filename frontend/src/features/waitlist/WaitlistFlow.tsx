@@ -34,6 +34,7 @@ import { buildWaitlistEmailLoginOptions, buildWaitlistRecoveryLoginOptions } fro
 import { type WaitlistEmailUi, canEnterAppFromAccountState, deriveWaitlistAuthUi } from './waitlistFlowUi'
 import { bridgePrivySession, createAuthHandoffCode } from './waitlistHandoff'
 import { WaitlistSetupWorkspace } from './WaitlistSetupWorkspace'
+import { ReferrerGreetingBanner } from './ReferrerGreetingBanner'
 import { LoadingInline } from '@/components/ui/LoadingState'
 
 type AccountsSummary = {
@@ -222,6 +223,7 @@ function WaitlistAuthStep(props: {
   privyClientStatus: 'disabled' | 'loading' | 'ready'
   error: string | null
   recoveryRequired: boolean
+  referralCode: string | null
   onContinueAuth: () => void | Promise<void>
   onRecoverAccount: () => void | Promise<void>
 }) {
@@ -232,6 +234,7 @@ function WaitlistAuthStep(props: {
     privyClientStatus,
     error,
     recoveryRequired,
+    referralCode,
     onContinueAuth,
     onRecoverAccount,
   } = props
@@ -315,6 +318,13 @@ function WaitlistAuthStep(props: {
           <h2 className="text-[2.6rem] font-light leading-tight tracking-tight text-white">{authUi.title}</h2>
           <p className="mx-auto max-w-xs text-sm leading-relaxed text-zinc-400">{progressLabel}</p>
         </motion.div>
+
+        {/* Referral greeting — only renders when a code is present and resolves. */}
+        {referralCode ? (
+          <motion.div {...stagger(0)} className="text-left">
+            <ReferrerGreetingBanner referralCode={referralCode} />
+          </motion.div>
+        ) : null}
 
         {/* CTA */}
         <motion.div {...stagger(1)} className="space-y-3">
@@ -1099,6 +1109,7 @@ export function WaitlistFlow(props: {
             privyClientStatus={privyClientStatus}
             error={error}
             recoveryRequired={recoveryRequired}
+            referralCode={activeReferralCode}
             onContinueAuth={onContinueAuth}
             onRecoverAccount={onRecoverAccount}
           />
