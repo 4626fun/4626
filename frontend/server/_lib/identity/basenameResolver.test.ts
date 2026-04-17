@@ -1,14 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { base } from 'viem/chains'
 
-const getEnsNameMock = vi.fn()
+const readContractMock = vi.fn()
 
 vi.mock('viem', async (importOriginal) => {
   const actual = await importOriginal<typeof import('viem')>()
   return {
     ...actual,
     createPublicClient: vi.fn(() => ({
-      getEnsName: getEnsNameMock,
+      readContract: readContractMock,
     })),
   }
 })
@@ -16,32 +15,63 @@ vi.mock('viem', async (importOriginal) => {
 describe('getBasenameName', () => {
   beforeEach(() => {
     vi.resetModules()
-    getEnsNameMock.mockReset()
+    readContractMock.mockReset()
   })
 
-  it('calls getEnsName with Base coinType + CCIP gatewayUrls', async () => {
-    getEnsNameMock.mockResolvedValueOnce('akita.base.eth')
+  it('calls L2 Resolver contract and returns *.base.eth name', async () => {
+    readContractMock.mockResolvedValueOnce('akita.base.eth')
 
     const { getBasenameName } = await import('./basenameResolver')
     const result = await getBasenameName('0x1111111111111111111111111111111111111111')
-    const { toCoinType } = await import('viem')
 
     expect(result).toBe('akita.base.eth')
-    expect(getEnsNameMock).toHaveBeenCalledTimes(1)
-    expect(getEnsNameMock).toHaveBeenCalledWith(
+    expect(readContractMock).toHaveBeenCalledTimes(1)
+    expect(readContractMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        coinType: toCoinType(base.id),
-        gatewayUrls: ['https://ccip.ens.xyz'],
+        address: '0xC6d566A56A1aFf6508b41f6c90ff131615583BCD',
+        functionName: 'name',
       }),
     )
   })
 
   it('returns null when resolution is not a *.base.eth name', async () => {
-    getEnsNameMock.mockResolvedValueOnce('someone.eth')
+    readContractMock.mockResolvedValueOnce('someone.eth')
 
     const { getBasenameName } = await import('./basenameResolver')
     const result = await getBasenameName('0x1111111111111111111111111111111111111111')
 
     expect(result).toBe(null)
+  })
+
+  it('returns null when contract returns empty string', async () => {
+    readContractMock.mockResolvedValueOnce('')
+
+    const { getBasenameName } = await import('./basenameResolver')
+    const result = await getBasenameName('0x1111111111111111111111111111111111111111')
+
+    expect(result).toBe(null)
+  })
+
+  it('returns null on contract call failure', async () => {
+    readContractMock.mockRejectedValueOnce(new Error('revert'))
+
+    const { getBasenameName } = await import('./basenameResolver')
+    const result = await getBasenameName('0x1111111111111111111111111111111111111111')
+
+    expect(result).toBe(null)
+  })
+})
+
+describe('basenameToHandle', () => {
+  it('strips .base.eth suffix', async () => {
+    const { basenameToHandle } = await import('./basenameResolver')
+    expect(basenameToHandle('akita.base.eth')).toBe('akita')
+  })
+
+  it('returns null for non-basename strings', async () => {
+    const { basenameToHandle } = await import('./basenameResolver')
+    expect(basenameToHandle('akita.eth')).toBe(null)
+    expect(basenameToHandle('')).toBe(null)
+    expect(basenameToHandle(null)).toBe(null)
   })
 })
