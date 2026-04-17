@@ -325,9 +325,11 @@ async function ensureBootstrapReferralCode(params: {
 
   // If a code is already set, check if we can upgrade a generated fallback
   // (e.g. "CJ2") to a more memorable identity-based code.
+  // Generated fallbacks follow the pattern C + base36(signupId) — short
+  // alphanumeric codes 2-5 chars starting with "C".  We match broadly so
+  // that ID-drift (re-insert, migration) doesn't prevent the upgrade.
   if (params.referralCode) {
-    const generatedFallbackPattern = `C${Number(params.signupId).toString(36).toUpperCase()}`
-    const isGeneratedFallback = params.referralCode === generatedFallbackPattern
+    const isGeneratedFallback = /^C[0-9A-Z]{1,4}$/.test(params.referralCode)
     if (!isGeneratedFallback) return params.referralCode
 
     // Try to upgrade to an identity-based code
