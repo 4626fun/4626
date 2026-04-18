@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useCallback, useMemo, useState } from 'react'
 import { motion } from 'framer-motion'
 import {
   Activity,
@@ -15,12 +15,14 @@ import { Link, Navigate, useParams } from 'react-router-dom'
 import { getAddress, isAddress } from 'viem'
 import { useQuery } from '@tanstack/react-query'
 
+import { BarChart, LineChart } from '@coinbase/cds-web-visualization/chart'
+
 import { PageMeta } from '@/components/seo/PageMeta'
 import { ExploreCopyButton, ExploreStatRow } from '@/components/explore/ExploreUiPrimitives'
 import { ExploreUnfurlDebugCopy } from '@/components/explore/ExploreUnfurlDebugCopy'
 import { LoadingBlock, LoadingText } from '@/components/ui/LoadingState'
 import { fetchZoraCoin } from '@/lib/zora/client'
-import { usePoolHistory } from '@/lib/uniswap/hooks'
+import { usePoolHistory, type PoolHistoryData } from '@/lib/uniswap/hooks'
 import { getPoolSwaps, getPoolsByToken } from '@/lib/uniswap/client'
 import type { UniswapPool, UniswapSwap } from '@/lib/uniswap/types'
 import {
@@ -88,66 +90,419 @@ function calcCoefficientOfVariation(values: number[]): number | null {
   return (std / mean) * 100
 }
 
-function MetricBarsChart({
+// Metric -> gradient stops. Uses Base Blue family for liquidity/volume and
+// the semantic green for fees to match product-standard dark theming.
+const METRIC_COLORS: Record<MetricKey, { primary: string; secondary: string }> = {
+  liquidity: { primary: '#38BDF8', secondary: '#0EA5E9' },
+  volume: { primary: '#A78BFA', secondary: '#7C3AED' },
+  fees: { primary: '#34D399', secondary: '#10B981' },
+  price: { primary: '#F4F4F5', secondary: '#A1A1AA' },
+}
+
+// Extracts the raw (absolute) value for a given metric from a history point.
+function extractMetricValue(point: PoolHistoryPoint, metric: MetricKey): number {
+  switch (metric) {
+    case 'liquidity':
+      return point.tvlUSD
+    case 'volume':
+      return point.volumeUSD
+    case 'fees':
+      return point.feesUSD
+    case 'price':
+      return point.close ?? 0
+  }
+}
+
+// Formats an absolute metric value for display. Price is sub-dollar so it
+// needs the small-number formatter; everything else is USD notional.
+function formatMetricValue(metric: MetricKey, value: number): string {
+  return metric === 'price' ? formatTokenPrice(value) : formatUsd(value)
+}
+
+/**
+ * Pick "nice" round tick values spanning the data range for a given target
+ * tick count. Uses the standard 1/2/5 × 10^n step family so tick values
+ * land on human-readable numbers (e.g. 0, 200K, 400K, 600K for TVL; or
+ * 0.094, 0.096, 0.098 for a tight price band).
+ *
+ * `includeZero` controls whether the domain is anchored at 0. Most series
+ * (volume, fees, liquidity) read more naturally when the floor is zero;
+ * price bands are better bounded by the data range so the line isn't
+ * pinned to the top of the card.
+ */
+function niceYTicks(
+  values: number[],
+  count: number = 4,
+  { includeZero = true }: { includeZero?: boolean } = {},
+): number[] {
+  const finite = values.filter((v) => Number.isFinite(v))
+  if (finite.length === 0) return []
+  const rawMin = Math.min(...finite)
+  const rawMax = Math.max(...finite)
+  const min = includeZero ? Math.min(0, rawMin) : rawMin
+  const max = Math.max(rawMax, min)
+  if (max <= min) return [min]
+
+  const span = max - min
+  const roughStep = span / Math.max(1, count)
+  const magnitude = Math.pow(10, Math.floor(Math.log10(Math.abs(roughStep))))
+  const normalized = roughStep / magnitude
+  const niceStep =
+    magnitude * (normalized < 1.5 ? 1 : normalized < 3 ? 2 : normalized < 7 ? 5 : 10)
+  const niceMin = Math.floor(min / niceStep) * niceStep
+  const niceMax = Math.ceil(max / niceStep) * niceStep
+
+  const ticks: number[] = []
+  for (let v = niceMin; v <= niceMax + niceStep * 0.0001; v += niceStep) {
+    ticks.push(Number(v.toFixed(10)))
+  }
+  return ticks
+}
+
+/**
+ * Pick up to `count` evenly-spaced label indices from a series so the
+ * external X-axis doesn't crowd the card. Always includes the first and
+ * last index so the user sees the full time window at a glance.
+ */
+function pickXTickIndices(totalPoints: number, count: number = 4): number[] {
+  if (totalPoints === 0) return []
+  if (totalPoints === 1) return [0]
+  const n = Math.max(2, Math.min(count, totalPoints))
+  const indices: number[] = []
+  for (let i = 0; i < n; i++) {
+    indices.push(Math.round((i * (totalPoints - 1)) / (n - 1)))
+  }
+  // Dedup in case two rounded values collided (short series).
+  return Array.from(new Set(indices))
+}
+
+type PoolHistoryPoint = {
+  timestamp: number
+  tvlUSD: number
+  volumeUSD: number
+  feesUSD: number
+  close?: number
+}
+
+/**
+ * Combined multi-series chart. Overlays liquidity / volume / fees / price
+ * on a single LineChart, normalized to percent-change-from-start so the
+ * wildly-different magnitudes share one Y axis. Each metric is independently
+ * toggleable via the chip row above the chart, and a live readout surfaces
+ * the absolute value + delta for every active metric at the hovered bucket.
+ */
+/**
+ * Per-metric chart with viz tuned to the metric's semantics:
+ *   - Price     \u2192 smooth LineChart (continuous spot movement)
+ *   - Volume    \u2192 BarChart (per-bucket USD notional)
+ *   - Fees      \u2192 BarChart of *cumulative* fees (monotonically growing)
+ *   - Liquidity \u2192 stacked BarChart split by the pool's two tokens
+ *
+ * Every metric shares the same scrubber readout so the bucket under the
+ * cursor (or the latest bucket when idle) is always legible.
+ */
+function MetricChart({
   points,
   metric,
+  pool,
+  period,
 }: {
-  points: Array<{ timestamp: number; tvlUSD: number; volumeUSD: number; feesUSD: number; close?: number }>
+  points: PoolHistoryPoint[]
   metric: MetricKey
+  pool: PoolHistoryData['pool']
+  period: string
 }) {
+  const labels = useMemo(() => points.map((p) => formatTimestamp(p.timestamp)), [points])
+
+  // Per-bucket raw values for the active metric. Fees gets transformed into
+  // a cumulative running sum so each bar represents total fees accrued up
+  // to and including that bucket.
   const values = useMemo(() => {
-    return points.map((p) => {
-      if (metric === 'liquidity') return p.tvlUSD
-      if (metric === 'volume') return p.volumeUSD
-      if (metric === 'fees') return p.feesUSD
-      return p.close ?? 0
-    })
+    const raw = points.map((p) => extractMetricValue(p, metric))
+    if (metric === 'fees') {
+      let running = 0
+      return raw.map((v) => (running += Number.isFinite(v) ? v : 0))
+    }
+    return raw
   }, [points, metric])
 
-  const max = Math.max(1, ...values)
+  const [hoverIndex, setHoverIndex] = useState<number | null>(null)
+  const handleScrub = useCallback<(index: number | undefined) => void>((index) => {
+    setHoverIndex(typeof index === 'number' && Number.isFinite(index) ? index : null)
+  }, [])
 
-  const formatValue = (v: number): string => {
-    if (metric === 'price') return formatTokenPrice(v)
-    return formatUsd(v)
+  if (points.length === 0) {
+    return (
+      <div className="flex h-[320px] items-center justify-center rounded-xl border border-white/8 bg-vault-bg text-sm text-zinc-600">
+        No historical pool data
+      </div>
+    )
   }
 
-  return (
-    <div className="h-[320px] rounded-xl border border-white/8 bg-vault-bg p-4">
-      <div className="h-full w-full flex items-end gap-[3px]">
-        {values.length === 0 ? (
-          <div className="w-full h-full flex items-center justify-center text-zinc-600 text-sm">No historical pool data</div>
-        ) : (
-          values.map((v, idx) => {
-            const h = Math.max(2, (v / max) * 100)
-            const older = idx < values.length / 2
-            const color =
-              metric === 'liquidity'
-                ? older
-                  ? 'bg-amber-500/55'
-                  : 'bg-sky-500/70'
-                : metric === 'volume'
-                  ? older
-                    ? 'bg-fuchsia-500/40'
-                    : 'bg-fuchsia-400/70'
-                  : metric === 'fees'
-                    ? older
-                      ? 'bg-emerald-500/40'
-                      : 'bg-emerald-400/70'
-                    : older
-                      ? 'bg-zinc-500/40'
-                      : 'bg-zinc-300/70'
+  const palette = METRIC_COLORS[metric]
+  const label = METRICS.find((m) => m.key === metric)?.label ?? metric
+  const readoutIndex =
+    hoverIndex != null && hoverIndex >= 0 && hoverIndex < points.length
+      ? hoverIndex
+      : points.length - 1
+  const readoutValue = values[readoutIndex] ?? 0
+  const readoutTimestamp = labels[readoutIndex] ?? ''
 
-            return (
-              <div
-                key={`${points[idx]?.timestamp ?? idx}-${idx}`}
-                className={`rounded-t-[3px] ${color} hover:opacity-100 opacity-90 transition-opacity`}
-                style={{ height: `${h}%`, width: `${100 / values.length}%` }}
-                title={`${formatTimestamp(points[idx]?.timestamp ?? 0)}\n${formatValue(v)}`}
+  // Liquidity decomposition: approximate historical per-token TVL by
+  // applying the *current* pool's token0/token1 USD shares to each
+  // bucket's `tvlUSD`. The approximation drifts whenever the pool's
+  // composition has shifted, but still gives users a clear read on which
+  // side of the pair the pool is weighted toward.
+  const composition = metric === 'liquidity' && pool ? pool : null
+  const token0Share = composition?.token0UsdShare ?? null
+  const token1Share = composition?.token1UsdShare ?? null
+  const hasStackedLiquidity =
+    composition != null &&
+    typeof token0Share === 'number' &&
+    typeof token1Share === 'number' &&
+    token0Share + token1Share > 0
+
+  // Zero chart insets: we draw our own axes *outside* the card, so CDS's
+  // internal axis margins would just waste pixels. Bars and lines fill the
+  // full card. A small right inset is kept so the last bar's rounded corner
+  // doesn't clip the card edge.
+  const chartInset = { top: 4, left: 2, right: 4, bottom: 2 }
+
+  // Bespoke Y-axis ticks and the domain they span. For stacked liquidity
+  // we compute ticks off the *total* tvlUSD (not each stack individually)
+  // so the Y ticks match what the eye sees for the full bar. Price is the
+  // only metric that doesn't anchor to zero — it usually trades in a
+  // narrow band well above 0 and pinning the floor to 0 would flatten
+  // all variation.
+  const yTicks = niceYTicks(values, 4, { includeZero: metric !== 'price' })
+  const yTickDomain =
+    yTicks.length > 0
+      ? { min: yTicks[0]!, max: yTicks[yTicks.length - 1]! }
+      : { min: 0, max: 1 }
+
+  // X-axis ticks: 4 evenly-spaced labels (first, 1/3, 2/3, last).
+  const xTickIndices = pickXTickIndices(labels.length, 4)
+
+  const showLiquidityBreakdown = metric === 'liquidity' && hasStackedLiquidity
+
+  return (
+    <div>
+      {/* Top row — chart card on the left, bespoke vertical Y-axis on the
+          right. The Y-axis column mirrors the card's flex-col layout with
+          invisible placeholders for the readout (and optional liquidity
+          breakdown) so the ticks naturally align with the plot area
+          regardless of which metric is active. */}
+      <div className="grid grid-cols-[1fr_auto] items-stretch gap-2">
+        <div className="flex h-[420px] flex-col rounded-xl border border-white/8 bg-vault-bg p-4">
+          <div className="flex items-baseline justify-between gap-3">
+            <div className="flex items-baseline gap-2">
+              <span
+                className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                style={{ background: palette.primary }}
+                aria-hidden="true"
               />
-            )
-          })
-        )}
+              <span className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">
+                {label}
+                {metric === 'fees' ? ' (cumulative)' : ''}
+              </span>
+            </div>
+            <div className="flex items-baseline gap-2">
+              <span className="tabular-nums text-sm font-semibold text-white">
+                {formatMetricValue(metric, readoutValue)}
+              </span>
+              <span className="text-[10px] tabular-nums text-zinc-500">{readoutTimestamp}</span>
+            </div>
+          </div>
+
+          {/* Per-token breakdown readout for the liquidity view. */}
+          {showLiquidityBreakdown && composition ? (
+            <div className="mt-2 grid grid-cols-2 gap-3 text-[11px] tabular-nums">
+              <LiquidityShareReadout
+                symbol={composition.token0Symbol}
+                usd={readoutValue * (token0Share ?? 0)}
+                share={token0Share ?? 0}
+                color={palette.primary}
+              />
+              <LiquidityShareReadout
+                symbol={composition.token1Symbol}
+                usd={readoutValue * (token1Share ?? 0)}
+                share={token1Share ?? 0}
+                color={palette.secondary}
+              />
+            </div>
+          ) : null}
+
+          <div className="mt-3 min-h-0 w-full flex-1">
+              {metric === 'price' ? (
+              <LineChart
+                height="100%"
+                width="100%"
+                animate
+                curve="monotone"
+                strokeWidth={2}
+                inset={chartInset}
+                enableScrubbing
+                onScrubberPositionChange={handleScrub}
+                series={[
+                  {
+                    id: 'price',
+                    label,
+                    data: values,
+                    color: palette.primary,
+                    stroke: palette.primary,
+                    strokeWidth: 2,
+                    strokeOpacity: 1,
+                    opacity: 1,
+                  },
+                ]}
+                showXAxis={false}
+                showYAxis={false}
+                yAxis={{ domain: yTickDomain }}
+                legend={false}
+              />
+            ) : metric === 'liquidity' && hasStackedLiquidity ? (
+              <BarChart
+                height="100%"
+                width="100%"
+                animate
+                stacked
+                barPadding={0.15}
+                borderRadius={3}
+                inset={chartInset}
+                enableScrubbing
+                onScrubberPositionChange={handleScrub}
+                series={[
+                  {
+                    id: 'tvl0',
+                    label: composition?.token0Symbol ?? 'Token 0',
+                    data: values.map((v) => v * (token0Share ?? 0)),
+                    color: palette.primary,
+                    stackId: 'tvl',
+                  },
+                  {
+                    id: 'tvl1',
+                    label: composition?.token1Symbol ?? 'Token 1',
+                    data: values.map((v) => v * (token1Share ?? 0)),
+                    color: palette.secondary,
+                    stackId: 'tvl',
+                  },
+                ]}
+                showXAxis={false}
+                showYAxis={false}
+                yAxis={{ domain: yTickDomain }}
+                legend={false}
+              />
+            ) : (
+              <BarChart
+                height="100%"
+                width="100%"
+                animate
+                barPadding={0.15}
+                borderRadius={3}
+                inset={chartInset}
+                enableScrubbing
+                onScrubberPositionChange={handleScrub}
+                series={[
+                  {
+                    id: metric,
+                    label,
+                    data: values,
+                    color: palette.primary,
+                    // Gradient stops must be in ASCENDING offset order per
+                    // CDS; reversing would spam "Gradient: stop offsets
+                    // must be in ascending order" on every render. Opacity
+                    // values keep the same visual (darker at top of bar).
+                    gradient: {
+                      axis: 'y',
+                      stops: (domain) => [
+                        { offset: domain.min, color: palette.secondary, opacity: 0.45 },
+                        { offset: domain.max, color: palette.primary, opacity: 0.95 },
+                      ],
+                    },
+                  },
+                ]}
+                showXAxis={false}
+                showYAxis={false}
+                yAxis={{ domain: yTickDomain }}
+                legend={false}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* Vertical Y-axis column. Mirrors the card's flex-col structure
+            (with invisible placeholders for the readout + optional liquidity
+            breakdown) so the tick labels line up with the plot area
+            top-to-bottom. Ticks are rendered high\u2192low since Y increases
+            upward on the chart. */}
+        {yTicks.length > 1 ? (
+          <div className="flex h-[420px] min-w-[56px] flex-col px-1 py-4 text-right">
+            <div
+              className="invisible flex items-baseline justify-between gap-3"
+              aria-hidden="true"
+            >
+              <span className="text-[11px]">{label}</span>
+              <span className="text-sm">.</span>
+            </div>
+            {showLiquidityBreakdown ? (
+              <div
+                className="invisible mt-2 grid grid-cols-2 gap-3 text-[11px]"
+                aria-hidden="true"
+              >
+                <span>placeholder</span>
+                <span>placeholder</span>
+              </div>
+            ) : null}
+            <div className="mt-3 flex flex-1 flex-col justify-between text-[10px] tabular-nums text-zinc-500">
+              {[...yTicks].reverse().map((t, i) => (
+                <span key={`${t}-${i}`}>{formatMetricValue(metric, t)}</span>
+              ))}
+            </div>
+          </div>
+        ) : null}
       </div>
+
+      {/* External X-axis — time labels at the bottom of the component,
+          OUTSIDE the card boundary. */}
+      {xTickIndices.length > 0 ? (
+        <div className="mt-2 flex items-center justify-between px-1 text-[10px] tabular-nums text-zinc-500">
+          {xTickIndices.map((i) => (
+            <span key={i}>{labels[i]}</span>
+          ))}
+        </div>
+      ) : null}
+
+      {/* Subtle caveat copy for the liquidity approximation. */}
+      {metric === 'liquidity' && hasStackedLiquidity ? (
+        <div className="mt-2 text-[10px] text-zinc-600">
+          Composition based on the pool's current token split, applied across {period}.
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function LiquidityShareReadout({
+  symbol,
+  usd,
+  share,
+  color,
+}: {
+  symbol: string | null
+  usd: number
+  share: number
+  color: string
+}) {
+  return (
+    <div className="flex min-w-0 items-baseline gap-1.5">
+      <span
+        className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+        style={{ background: color }}
+        aria-hidden="true"
+      />
+      <span className="truncate text-zinc-500">{symbol ?? '\u2014'}</span>
+      <span className="ml-auto text-white">{formatUsd(usd)}</span>
+      <span className="text-zinc-500">{(share * 100).toFixed(1)}%</span>
     </div>
   )
 }
@@ -175,7 +530,11 @@ export function ExploreContentDetail() {
   const contentCoinAddressRaw = String(params.contentCoinAddress ?? '').trim()
 
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodKey>('1D')
-  const [selectedMetric, setSelectedMetric] = useState<MetricKey>('liquidity')
+  // Single-metric view — each metric renders in its own specialised viz
+  // (line for price, bars for volume, cumulative bars for fees, stacked
+  // token-composition bars for liquidity). Defaults to `price` because
+  // that is the metric traders check first.
+  const [selectedMetric, setSelectedMetric] = useState<MetricKey>('price')
 
   const contentCoinAddress = isAddress(contentCoinAddressRaw) ? getAddress(contentCoinAddressRaw) : null
   const timeframe = PERIOD_TO_TIMEFRAME[selectedPeriod]
@@ -450,33 +809,55 @@ export function ExploreContentDetail() {
                 </div>
 
                 <div className="flex items-center gap-1.5 overflow-x-auto w-full sm:w-auto pb-1">
-                  {METRICS.map((m) => (
-                    <button
-                      key={m.key}
-                      type="button"
-                      onClick={() => setSelectedMetric(m.key)}
-                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-colors ${
-                        selectedMetric === m.key
-                          ? 'bg-zinc-700 text-white'
-                          : 'text-zinc-500 hover:text-white hover:bg-white/8'
-                      }`}
-                    >
-                      {m.icon}
-                      <span className="hidden sm:inline">{m.label}</span>
-                    </button>
-                  ))}
+                  {METRICS.map((m) => {
+                    const on = selectedMetric === m.key
+                    const color = METRIC_COLORS[m.key].primary
+                    return (
+                      <button
+                        key={m.key}
+                        type="button"
+                        onClick={() => setSelectedMetric(m.key)}
+                        aria-pressed={on}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-all border ${
+                          on
+                            ? 'border-white/10 bg-white/[0.06] text-white'
+                            : 'border-white/5 bg-transparent text-zinc-600 hover:text-zinc-300 hover:bg-white/[0.04]'
+                        }`}
+                        style={on ? { boxShadow: `inset 0 0 0 1px ${color}40` } : undefined}
+                      >
+                        <span
+                          className="inline-block h-1.5 w-1.5 shrink-0 rounded-full"
+                          style={{
+                            background: on ? color : 'transparent',
+                            border: `1px solid ${on ? color : 'rgba(255,255,255,0.15)'}`,
+                          }}
+                          aria-hidden="true"
+                        />
+                        {m.icon}
+                        <span className="hidden sm:inline">{m.label}</span>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
               {loading || historyLoading ? (
-                <LoadingBlock intent="processing" minHeightClassName="h-[320px]" className="rounded-xl bg-white/4" />
+                <LoadingBlock intent="processing" minHeightClassName="h-[420px]" className="rounded-xl bg-white/4" />
               ) : (
-                <MetricBarsChart points={points} metric={selectedMetric} />
+                <MetricChart
+                  points={points}
+                  metric={selectedMetric}
+                  pool={history?.pool ?? null}
+                  period={selectedPeriod}
+                />
               )}
 
               <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
                 <span>Oldest</span>
-                <span className="text-zinc-400">{METRICS.find((m) => m.key === selectedMetric)?.label} over {selectedPeriod}</span>
+                <span className="text-zinc-400">
+                  {METRICS.find((m) => m.key === selectedMetric)?.label}
+                  {selectedMetric === 'fees' ? ' (cumulative)' : ''} over {selectedPeriod}
+                </span>
                 <span>Latest</span>
               </div>
             </div>

@@ -2,6 +2,16 @@ import { useQuery } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api/apiBase'
 import { classifyUniswapRequestFailure, warnUniswapRequestOnce } from './requestDiagnostics'
 
+export type PoolTokenComposition = {
+  token0Symbol: string | null
+  token1Symbol: string | null
+  token0UsdShare: number | null
+  token1UsdShare: number | null
+  token0UsdTVL: number | null
+  token1UsdTVL: number | null
+  isQueriedTokenToken0: boolean
+}
+
 export type PoolHistoryData = {
   tokenAddress: string
   timeframe: string
@@ -20,6 +30,7 @@ export type PoolHistoryData = {
     low?: number
     close?: number
   }>
+  pool?: PoolTokenComposition | null
 }
 
 type ApiResponse = {
@@ -46,7 +57,7 @@ function toServiceReason(status: number | null): UniswapServiceReason {
   return 'error'
 }
 
-async function fetchPoolHistory(
+async function fetchUniswapPoolHistory(
   tokenAddress: string,
   timeframe: string
 ): Promise<PoolHistoryData | null> {
@@ -81,6 +92,48 @@ async function fetchPoolHistory(
     })
     return null
   }
+}
+
+/**
+ * Derives history from Zora swap activity. Used as a fallback when the
+ * Uniswap subgraph returns no data points for a recently-deployed coin.
+ * Note: liquidity/fees remain 0 from this source (Zora does not expose
+ * pool TVL or LP fees) — the chart will correctly render `price` and
+ * `volume` and show an empty state for the other two metrics.
+ */
+async function fetchZoraCoinHistory(
+  tokenAddress: string,
+  timeframe: string
+): Promise<PoolHistoryData | null> {
+  try {
+    const response = await apiFetch(
+      `/api/zora/coinHistory?token=${encodeURIComponent(tokenAddress)}&timeframe=${timeframe}`
+    )
+    if (!response.ok) return null
+    const result = (await response.json().catch(() => null)) as ApiResponse | null
+    if (!result?.success || !result.data) return null
+    return result.data ?? null
+  } catch {
+    return null
+  }
+}
+
+async function fetchPoolHistory(
+  tokenAddress: string,
+  timeframe: string
+): Promise<PoolHistoryData | null> {
+  const primary = await fetchUniswapPoolHistory(tokenAddress, timeframe)
+  if (primary && primary.dataPoints.length > 0) return primary
+
+  // Fallback: if the Uniswap subgraph has no history for this coin, try
+  // deriving candles from Zora swap activity. This covers brand-new coins
+  // that the 4626 subgraph hasn't indexed yet.
+  const fallback = await fetchZoraCoinHistory(tokenAddress, timeframe)
+  if (fallback && fallback.dataPoints.length > 0) return fallback
+
+  // Both empty — return whichever is non-null so callers still see pool
+  // metadata (e.g. subgraph-known pool id with zero history).
+  return primary ?? fallback ?? null
 }
 
 /**

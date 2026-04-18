@@ -42,6 +42,13 @@ overrides:
   '@coinbase/cds-icons>react-dom': ^19.2.4
   '@coinbase/cds-common>react': ^19.2.4
   '@coinbase/cds-common>react-dom': ^19.2.4
+  '@coinbase/cds-utils>react': ^19.2.4
+  '@coinbase/cds-utils>react-dom': ^19.2.4
+  '@coinbase/cds-lottie-files>react': ^19.2.4
+  '@coinbase/cds-lottie-files>react-dom': ^19.2.4
+  '@coinbase/cds-web-visualization>react': ^19.2.4
+  '@coinbase/cds-web-visualization>react-dom': ^19.2.4
+  '@coinbase/cds-web-visualization>framer-motion': ^12.33.0
   '@react-spring/web>react': ^19.2.4
   '@react-spring/web>react-dom': ^19.2.4
 
@@ -63,12 +70,24 @@ importers:
       '@buildersgarden/siwa':
         specifier: ^0.0.11
         version: 0.0.11(bufferutil@4.1.0)(express@5.2.1)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
+      '@coinbase/cds-common':
+        specifier: ^8.66.0
+        version: 8.66.0(@cfworker/json-schema@4.1.1)(@types/node@25.2.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@coinbase/cds-icons':
         specifier: ^5.13.0
         version: 5.13.0
+      '@coinbase/cds-lottie-files':
+        specifier: ^3.3.4
+        version: 3.3.4
+      '@coinbase/cds-utils':
+        specifier: ^2.3.5
+        version: 2.3.5
       '@coinbase/cds-web':
-        specifier: ^8.62.1
-        version: 8.62.1(@cfworker/json-schema@4.1.1)(@types/node@25.2.1)(@types/react@19.2.13)(framer-motion@12.33.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(immer@11.1.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(use-sync-external-store@1.4.0(react@19.2.4))
+        specifier: ^8.66.0
+        version: 8.66.0(@cfworker/json-schema@4.1.1)(@types/node@25.2.1)(@types/react@19.2.13)(framer-motion@12.33.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(immer@11.1.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(use-sync-external-store@1.4.0(react@19.2.4))
+      '@coinbase/cds-web-visualization':
+        specifier: ^3.6.1
+        version: 3.6.1(@coinbase/cds-common@8.66.0(@cfworker/json-schema@4.1.1)(@types/node@25.2.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@coinbase/cds-lottie-files@3.3.4)(@coinbase/cds-utils@2.3.5)(@coinbase/cds-web@8.66.0(@cfworker/json-schema@4.1.1)(@types/node@25.2.1)(@types/react@19.2.13)(framer-motion@12.33.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(immer@11.1.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(use-sync-external-store@1.4.0(react@19.2.4)))(framer-motion@12.33.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
       '@coinbase/wallet-sdk':
         specifier: 4.3.7
         version: 4.3.7(patch_hash=1ec6bfa3a1ef63d14c3e5863e99f766df4d1a4eb063d32b75530a3a62e21733a)(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
@@ -427,8 +446,8 @@ packages:
   '@coinbase/cdp-sdk@1.44.0':
     resolution: {integrity: sha512-0I5O1DzbchR91GAYQAU8lxx6q9DBvN0no9IBwrTKLHW8t5bABMg8dzQ/jrGRd6lr/QFJJW4L0ZSLGae5jsxGWw==}
 
-  '@coinbase/cds-common@8.62.1':
-    resolution: {integrity: sha512-XE8ggzpC7IAishFA7gzpKb6xxCMwkk/I7/51nK1H+V8MVgceuPVNJNBbP9jFNOP9KzKILGXr5kxaahV4NDScXg==}
+  '@coinbase/cds-common@8.66.0':
+    resolution: {integrity: sha512-gISnynzVU3Jpm1BsEKa4+AeocJvjVwHIdvQ7t3bwdtvMbaaLsqnnG5sMGZN4ldPh3351oViqyhBnJaeBB+7irQ==}
     peerDependencies:
       react: ^19.2.4
       react-dom: ^19.2.4
@@ -436,21 +455,35 @@ packages:
   '@coinbase/cds-icons@5.13.0':
     resolution: {integrity: sha512-Z3vEfDyRdmumQjyQEuUsq6cOkt0SfLOFxZzysCCxA1ULto8Y5QuMCIzGbOoOpmUqLe5zMZ+tqpP+slSLXIjhkQ==}
 
-  '@coinbase/cds-illustrations@4.36.0':
-    resolution: {integrity: sha512-PFybdJVxTa0IprvDr5Eslpd/jEVs4sFtIZNEDhRCObe6Mhxiwjy3GnrsYRtK/z5zDCiNc70z/MvHXEiIoUHdeQ==}
+  '@coinbase/cds-icons@5.15.0':
+    resolution: {integrity: sha512-kijRB8f1UxxD1Fl1I4q3K+fioDAAnHq0cU/Wtrm9ctsVLBnxgYwwe0cAG8xSWbRC7MyeLpw59VJ3evVrbH62Yw==}
+
+  '@coinbase/cds-illustrations@4.38.0':
+    resolution: {integrity: sha512-SSeBR5VZtYZ5xuCIi06nL5F8YBl88sIMfv20RH/wWuh5+JJxOjNZ+Kh+iI7c7Qm139GjVLZ+2crLiYKVPA7q4Q==}
 
   '@coinbase/cds-lottie-files@3.3.4':
     resolution: {integrity: sha512-SOWW97zwSgzrT7oKanwC/CfIB2MWJbyZduZzb3dSc8ACFy/qc5GN/IjH/Efty0p7zp+rUdEwOJj4d8/XhT/FKA==}
 
-  '@coinbase/cds-mcp-server@8.62.1':
-    resolution: {integrity: sha512-9669bQ66nj9yNzCua3jAOnp2Dlxy4+I4tBGrt4R3wDwR2QC5yoN/Oj/bUlqQJhoP9qcUYggp52acIfmOAUWy/w==}
+  '@coinbase/cds-mcp-server@8.66.0':
+    resolution: {integrity: sha512-UuDu4hbCPdKdvLhGObFSyj0CAMezoU+HCjdqPEOo5JWhTCboUOOr0BLDhdnar6NvXQPC6C8yCR5BH0hgG5jNiw==}
     hasBin: true
 
   '@coinbase/cds-utils@2.3.5':
     resolution: {integrity: sha512-wyAAm54HtslDzcXkrT0MnBd5dKmYWSrxEE7mpTBUzJRQeeBH3kmcYEEZIR2+K7Lrp5FpDE5TObR1DPleWNybFg==}
 
-  '@coinbase/cds-web@8.62.1':
-    resolution: {integrity: sha512-JYAjGGACZbDacGefml3LZU4/Q663H0224FSnTFWzv5G+257BRY5TouSdBjRCgmuA98MYFwQXBd/JLNjMUrR1kw==}
+  '@coinbase/cds-web-visualization@3.6.1':
+    resolution: {integrity: sha512-0QFbrBefmwZLP1VL4bM0ygltf5m2OeWRZgp/J3eB0OOzjF+ADmuIScgGIGScE1Qn7qH7FxwO9nSH2+tzcXVG2Q==}
+    peerDependencies:
+      '@coinbase/cds-common': ^8.66.0
+      '@coinbase/cds-lottie-files': ^3.3.4
+      '@coinbase/cds-utils': ^2.3.5
+      '@coinbase/cds-web': ^8.66.0
+      framer-motion: ^12.33.0
+      react: ^19.2.4
+      react-dom: ^19.2.4
+
+  '@coinbase/cds-web@8.66.0':
+    resolution: {integrity: sha512-bwlljrjyJ3nZopu7wvekMOIjmxVN8sTnxLMVHnbPjZJ9SQZMteK6OratbgORtx4vCW8Db6NnFYxQMEqNOq9fXw==}
     peerDependencies:
       framer-motion: ^12.33.0
       react: ^19.2.4
@@ -3772,6 +3805,14 @@ packages:
     resolution: {integrity: sha512-zg/chbXyeBtMQ1LbD/WSoW2DpC3I0mpmPdW+ynRTj/x2DAWYrIY7qeZIHidozwV24m4iavr15lNwIwLxRmOxhA==}
     engines: {node: '>=12'}
 
+  d3-dispatch@3.0.1:
+    resolution: {integrity: sha512-rzUyPU/S7rwUflMyLc1ETDeBj0NRuHKKAcvukozwhshr6g6c5d8zh4c2gQjY2bZ0dXeGLWc1PF174P2tVvKhfg==}
+    engines: {node: '>=12'}
+
+  d3-ease@3.0.1:
+    resolution: {integrity: sha512-wR/XK3D3XcLIZwpbvQwQ5fK+8Ykds1ip7A2Txe0yxncXSdq1L9skcG7blcedkOX+ZcgxGAmLX1FrRGbADwzi0w==}
+    engines: {node: '>=12'}
+
   d3-format@3.1.2:
     resolution: {integrity: sha512-AJDdYOdnyRDV5b6ArilzCPPwc1ejkHcoyFarqlPqT7zRYjhavcT3uSrqcMvsgh2CgoPbK3RCwyHaVyxYcP2Arg==}
     engines: {node: '>=12'}
@@ -3806,6 +3847,16 @@ packages:
   d3-time@3.1.0:
     resolution: {integrity: sha512-VqKjzBLejbSMT4IgbmVgDjpkYrNWUYJnbCGo874u7MMKIWsILRX+OpX/gTk8MqjpT1A/c6HY2dCA77ZN0lkQ2Q==}
     engines: {node: '>=12'}
+
+  d3-timer@3.0.1:
+    resolution: {integrity: sha512-ndfJ/JxxMd3nw31uyKoY2naivF+r29V+Lc0svZxe1JvvIRmi8hUsrMvdOwgS1o6uBHmiz91geQ0ylPP0aj1VUA==}
+    engines: {node: '>=12'}
+
+  d3-transition@3.0.1:
+    resolution: {integrity: sha512-ApKvfjsSR6tg06xrL434C0WydLr7JewBB3V+/39RMHsaXTOG0zmt/OAXeng5M5LBm0ojmxJrpomQVZ1aPvBL4w==}
+    engines: {node: '>=12'}
+    peerDependencies:
+      d3-selection: 2 - 3
 
   data-urls@7.0.0:
     resolution: {integrity: sha512-23XHcCF+coGYevirZceTVD7NdJOqVn+49IHyxgszm+JIiHLoB2TkmPtsYkNWT1pvRSGkc35L6NHs0yHkN2SumA==}
@@ -6957,11 +7008,11 @@ snapshots:
       - typescript
       - utf-8-validate
 
-  '@coinbase/cds-common@8.62.1(@cfworker/json-schema@4.1.1)(@types/node@25.2.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
+  '@coinbase/cds-common@8.66.0(@cfworker/json-schema@4.1.1)(@types/node@25.2.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
-      '@coinbase/cds-icons': 5.13.0
-      '@coinbase/cds-illustrations': 4.36.0
-      '@coinbase/cds-mcp-server': 8.62.1(@cfworker/json-schema@4.1.1)(@types/node@25.2.1)
+      '@coinbase/cds-icons': 5.15.0
+      '@coinbase/cds-illustrations': 4.38.0
+      '@coinbase/cds-mcp-server': 8.66.0(@cfworker/json-schema@4.1.1)(@types/node@25.2.1)
       '@coinbase/cds-utils': 2.3.5
       '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
       d3-array: 3.2.4
@@ -6982,11 +7033,13 @@ snapshots:
 
   '@coinbase/cds-icons@5.13.0': {}
 
-  '@coinbase/cds-illustrations@4.36.0': {}
+  '@coinbase/cds-icons@5.15.0': {}
+
+  '@coinbase/cds-illustrations@4.38.0': {}
 
   '@coinbase/cds-lottie-files@3.3.4': {}
 
-  '@coinbase/cds-mcp-server@8.62.1(@cfworker/json-schema@4.1.1)(@types/node@25.2.1)':
+  '@coinbase/cds-mcp-server@8.66.0(@cfworker/json-schema@4.1.1)(@types/node@25.2.1)':
     dependencies:
       '@inquirer/prompts': 7.10.1(@types/node@25.2.1)
       '@modelcontextprotocol/sdk': 1.29.0(@cfworker/json-schema@4.1.1)(zod@3.25.76)
@@ -7001,11 +7054,27 @@ snapshots:
       humps: 2.0.1
       type-fest: 2.19.0
 
-  '@coinbase/cds-web@8.62.1(@cfworker/json-schema@4.1.1)(@types/node@25.2.1)(@types/react@19.2.13)(framer-motion@12.33.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(immer@11.1.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(use-sync-external-store@1.4.0(react@19.2.4))':
+  '@coinbase/cds-web-visualization@3.6.1(@coinbase/cds-common@8.66.0(@cfworker/json-schema@4.1.1)(@types/node@25.2.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(@coinbase/cds-lottie-files@3.3.4)(@coinbase/cds-utils@2.3.5)(@coinbase/cds-web@8.66.0(@cfworker/json-schema@4.1.1)(@types/node@25.2.1)(@types/react@19.2.13)(framer-motion@12.33.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(immer@11.1.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(use-sync-external-store@1.4.0(react@19.2.4)))(framer-motion@12.33.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(react-dom@19.2.4(react@19.2.4))(react@19.2.4)':
     dependencies:
-      '@coinbase/cds-common': 8.62.1(@cfworker/json-schema@4.1.1)(@types/node@25.2.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
-      '@coinbase/cds-icons': 5.13.0
-      '@coinbase/cds-illustrations': 4.36.0
+      '@coinbase/cds-common': 8.66.0(@cfworker/json-schema@4.1.1)(@types/node@25.2.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@coinbase/cds-lottie-files': 3.3.4
+      '@coinbase/cds-utils': 2.3.5
+      '@coinbase/cds-web': 8.66.0(@cfworker/json-schema@4.1.1)(@types/node@25.2.1)(@types/react@19.2.13)(framer-motion@12.33.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(immer@11.1.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(use-sync-external-store@1.4.0(react@19.2.4))
+      d3-color: 3.1.0
+      d3-interpolate: 3.0.1
+      d3-interpolate-path: 2.3.0
+      d3-selection: 3.0.0
+      d3-transition: 3.0.1(d3-selection@3.0.0)
+      framer-motion: 12.33.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      lodash: 4.18.1
+      react: 19.2.4
+      react-dom: 19.2.4(react@19.2.4)
+
+  '@coinbase/cds-web@8.66.0(@cfworker/json-schema@4.1.1)(@types/node@25.2.1)(@types/react@19.2.13)(framer-motion@12.33.0(@emotion/is-prop-valid@1.4.0)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))(immer@11.1.3)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)(use-sync-external-store@1.4.0(react@19.2.4))':
+    dependencies:
+      '@coinbase/cds-common': 8.66.0(@cfworker/json-schema@4.1.1)(@types/node@25.2.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
+      '@coinbase/cds-icons': 5.15.0
+      '@coinbase/cds-illustrations': 4.38.0
       '@coinbase/cds-lottie-files': 3.3.4
       '@coinbase/cds-utils': 2.3.5
       '@floating-ui/react-dom': 2.1.7(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -12555,6 +12624,10 @@ snapshots:
 
   d3-color@3.1.0: {}
 
+  d3-dispatch@3.0.1: {}
+
+  d3-ease@3.0.1: {}
+
   d3-format@3.1.2: {}
 
   d3-interpolate-path@2.3.0: {}
@@ -12586,6 +12659,17 @@ snapshots:
   d3-time@3.1.0:
     dependencies:
       d3-array: 3.2.4
+
+  d3-timer@3.0.1: {}
+
+  d3-transition@3.0.1(d3-selection@3.0.0):
+    dependencies:
+      d3-color: 3.1.0
+      d3-dispatch: 3.0.1
+      d3-ease: 3.0.1
+      d3-interpolate: 3.0.1
+      d3-selection: 3.0.0
+      d3-timer: 3.0.1
 
   data-urls@7.0.0(@noble/hashes@1.8.0):
     dependencies:
@@ -14300,7 +14384,7 @@ snapshots:
       ox: 0.9.17(typescript@5.9.3)(zod@4.3.6)
       viem: 2.45.1(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@4.3.6)
       zod: 4.3.6
-      zustand: 5.0.11(@types/react@19.2.13)(immer@11.1.3)(react@19.2.4)(use-sync-external-store@1.4.0(react@19.2.4))
+      zustand: 5.0.12(@types/react@19.2.13)(immer@11.1.3)(react@19.2.4)(use-sync-external-store@1.4.0(react@19.2.4))
     optionalDependencies:
       '@tanstack/react-query': 5.90.20(react@19.2.4)
       react: 19.2.4
