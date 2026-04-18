@@ -30,6 +30,24 @@ import type { Address } from 'viem'
 import { getDb, isDbConfigured } from '../db/postgres.js'
 import { logger } from '../infra/logger.js'
 
+declare const process: { env: Record<string, string | undefined> }
+
+/**
+ * Read an environment variable as a positive bigint, returning `fallback` if
+ * the variable is absent, empty, non-numeric, or non-positive.
+ * Shared by user-facing arch-b handlers and the admin provisioning endpoint.
+ */
+export function envBigInt(key: string, fallback: bigint): bigint {
+  const raw = (process.env[key] ?? '').trim()
+  if (!raw) return fallback
+  try {
+    const v = BigInt(raw)
+    return v > 0n ? v : fallback
+  } catch {
+    return fallback
+  }
+}
+
 export type ExecutionReadiness = 'ready' | 'not_provisioned' | 'revoked' | 'db_unavailable'
 
 export type CommandIssuerContext = {

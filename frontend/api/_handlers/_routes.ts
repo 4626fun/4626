@@ -94,6 +94,10 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'admin/waitlist/deny': () => import('./admin/waitlist/_deny.js'),
   'admin/waitlist/delete': () => import('./admin/waitlist/_delete.js'),
   'admin/userop/health': () => import('./admin/userop/_health.js'),
+  'arch-b/enroll': () => import('./arch-b/_enroll.js'),
+  'arch-b/revoke': () => import('./arch-b/_revoke.js'),
+  'arch-b/status': () => import('./arch-b/_status.js'),
+
   'admin/arch-b/provision': () => import('./admin/arch-b/_provision.js'),
 
   ...prefixRouteLoaders('auth', authRouteLoaders),
