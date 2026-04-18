@@ -137,17 +137,24 @@ function Sparkline(props: { series: number[] }) {
             color: '#3B82F6',
             stroke: '#3B82F6',
             // CDS GradientStop.offset is in data space AND must be in
-            // ascending order — passing max first spams the console with
-            // "Gradient: stop offsets must be in ascending order" on every
-            // render, which backs up the browser and makes the page feel
-            // glitchy. Opacity is set per-stop so the visual (transparent
-            // at low values, blue fill near the top) stays the same.
+            // STRICTLY ascending order — passing max first, or passing
+            // equal offsets for a degenerate domain (min === max when
+            // the user has no holdings and the series is flat), spams
+            // the console with "Gradient: stop offsets must be in
+            // ascending order" on every render, which backs up the
+            // browser and makes the page feel glitchy. We nudge `max`
+            // above `min` whenever the domain collapses so the stops
+            // are always strictly ordered.
             gradient: {
               axis: 'y',
-              stops: (domain) => [
-                { offset: domain.min, color: '#3B82F6', opacity: 0 },
-                { offset: domain.max, color: '#3B82F6', opacity: 0.22 },
-              ],
+              stops: (domain) => {
+                const min = domain.min
+                const max = domain.max > domain.min ? domain.max : domain.min + 1
+                return [
+                  { offset: min, color: '#3B82F6', opacity: 0 },
+                  { offset: max, color: '#3B82F6', opacity: 0.22 },
+                ]
+              },
             },
           },
         ]}
