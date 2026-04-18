@@ -4,6 +4,11 @@ import { getAddress, isAddress } from 'viem'
 import { getOrCreateCreatorAgentWallet } from '../_lib/wallet/creatorAgentWallets.js'
 import { logger } from '../_lib/infra/logger.js'
 import { BASE_CAIP2, walletRpc } from '../_lib/wallet/privyWalletApi.js'
+import {
+  checkWalletBalancePreflight,
+  getBasePreflightPublicClient,
+  isInsufficientFundsError,
+} from '../_lib/wallet/walletBalancePreflight.js'
 import { markTrendOpFailed, markTrendOpFunnelCompleted, markTrendOpFunnelPending } from '../_lib/zora/zoraTrendOpsStore.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -323,6 +328,52 @@ export async function runTrendFunnel(params: {
       }
     }
 
+    // Preflight: the Privy agent EOA must hold enough native ETH to cover
+    // value + gas. Under the current EOA-per-creator model these wallets are
+    // not funded, so submissions fail with a raw Privy 400 that leaks to
+    // users. This check surfaces the failure with friendly copy and a
+    // structured log before we hit Privy.
+    const valueWei = actionQuote.call.value ? BigInt(actionQuote.call.value) : 0n
+    const preflight = await checkWalletBalancePreflight({
+      publicClient: getBasePreflightPublicClient(),
+      wallet: wallet.address,
+      valueWei,
+    })
+    if (preflight.sufficient === false) {
+      logger.warn('[zora/trend-funnel] insufficient_funds preflight', {
+        ticker: normalizedTicker,
+        tickerHash: params.tickerHash,
+        wallet: wallet.address,
+        balanceWei: preflight.balanceWei.toString(),
+        requiredWei: preflight.requiredWei.toString(),
+      })
+      if (params.tickerHash) {
+        await markTrendOpFailed({
+          tickerHash: params.tickerHash,
+          lastError: `insufficient_funds:balance=${preflight.balanceWei.toString()}:required=${preflight.requiredWei.toString()}`,
+        })
+      }
+      return {
+        status: 'failed',
+        reason: 'insufficient_funds',
+        routeability,
+        action: {
+          executed: false,
+          targetToken: config.targetToken,
+          amountInWei: boundedNotional.toString(),
+          txHash: null,
+        },
+      }
+    }
+    if (preflight.sufficient === null) {
+      logger.warn('[zora/trend-funnel] balance preflight skipped', {
+        ticker: normalizedTicker,
+        tickerHash: params.tickerHash,
+        wallet: wallet.address,
+        reason: preflight.reason,
+      })
+    }
+
     const tx = await walletRpc<any>({
       walletId: wallet.walletId,
       method: 'eth_sendTransaction',
@@ -402,21 +453,25 @@ export async function runTrendFunnel(params: {
       },
     }
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error)
+    const rawReason = error instanceof Error ? error.message : String(error)
+    // Map Privy's raw 'insufficient funds for gas' error to the same friendly
+    // refusal as preflight so users never see the wei-jargon leak.
+    const mappedReason = isInsufficientFundsError(error) ? 'insufficient_funds' : rawReason
     logger.error('[zora/trend-funnel] run failed', {
       ticker: normalizedTicker,
       tickerHash: params.tickerHash,
-      reason,
+      reason: mappedReason,
+      rawReason: mappedReason === rawReason ? undefined : rawReason.slice(0, 500),
     })
     if (params.tickerHash) {
       await markTrendOpFailed({
         tickerHash: params.tickerHash,
-        lastError: reason.slice(0, 500),
+        lastError: mappedReason.slice(0, 500),
       })
     }
     return {
       status: 'failed',
-      reason,
+      reason: mappedReason,
       routeability: withDefaultRouteability('funnel_exception'),
       action: {
         executed: false,

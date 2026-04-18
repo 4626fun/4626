@@ -4,6 +4,12 @@ import { base } from 'viem/chains'
 
 import { logger } from '../_lib/infra/logger.js'
 import { BASE_CAIP2, walletRpc } from '../_lib/wallet/privyWalletApi.js'
+import {
+  buildInsufficientFundsRefusal,
+  checkWalletBalancePreflight,
+  getBasePreflightPublicClient,
+  isInsufficientFundsError,
+} from '../_lib/wallet/walletBalancePreflight.js'
 import type { KeeprVaultRow } from '../_lib/keepr/keeprRegistry.js'
 import type { KeeprRole, KeeprCommandResult } from '../commands/types.js'
 
@@ -64,6 +70,42 @@ function recordExecution(groupId: string) {
 function getPublicClient() {
   const rpcUrl = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
   return createPublicClient({ chain: base, transport: http(rpcUrl) })
+}
+
+/**
+ * Preflight the agent-wallet balance before submitting an eth_sendTransaction.
+ * Returns a KeeprCommandResult refusal when the wallet can't cover value+gas;
+ * returns null when the transaction should proceed. Logs and proceeds on
+ * balance-lookup failure (fail-open).
+ *
+ * This is a defensive UX unblock while Architecture B migration is planned —
+ * see docs/architecture-b-design.md.
+ */
+async function preflightAgentWalletOrRefuse(params: {
+  agentWallet: Address
+  valueWei: bigint
+  context: string
+}): Promise<KeeprCommandResult | null> {
+  const preflight = await checkWalletBalancePreflight({
+    publicClient: getBasePreflightPublicClient(),
+    wallet: params.agentWallet,
+    valueWei: params.valueWei,
+  })
+  if (preflight.sufficient === false) {
+    logger.warn(`[${params.context}] insufficient_funds preflight`, {
+      wallet: params.agentWallet,
+      balanceWei: preflight.balanceWei.toString(),
+      requiredWei: preflight.requiredWei.toString(),
+    })
+    return { ok: false, response: buildInsufficientFundsRefusal(preflight) }
+  }
+  if (preflight.sufficient === null) {
+    logger.warn(`[${params.context}] balance preflight skipped`, {
+      wallet: params.agentWallet,
+      reason: preflight.reason,
+    })
+  }
+  return null
 }
 
 /**
@@ -300,6 +342,12 @@ async function handleCreate(params: {
     // Execute each call in sequence (usually one call)
     const txHashes: string[] = []
     for (const call of callResult.calls) {
+      const refusal = await preflightAgentWalletOrRefuse({
+        agentWallet: agentWalletAddress as Address,
+        valueWei: BigInt(call.value ?? 0n),
+        context: 'coin/create',
+      })
+      if (refusal) return refusal
       const result = await walletRpc<any>({
         walletId: agentWalletId,
         method: 'eth_sendTransaction',
@@ -347,6 +395,9 @@ async function handleCreate(params: {
     }
   } catch (err: any) {
     logger.error('[coin/create] Creation failed', err)
+    if (isInsufficientFundsError(err)) {
+      return { ok: false, response: buildInsufficientFundsRefusal({ balanceWei: 0n, requiredWei: 0n }) }
+    }
     return { ok: false, response: `Coin creation failed: ${(err?.message ?? '').slice(0, 200)}` }
   }
 }
@@ -414,6 +465,12 @@ async function handleBuy(params: {
     }
 
     // Execute the trade
+    const buyRefusal = await preflightAgentWalletOrRefuse({
+      agentWallet: agentWalletAddress as Address,
+      valueWei: call.value ? BigInt(call.value) : 0n,
+      context: 'coin/buy',
+    })
+    if (buyRefusal) return buyRefusal
     const result = await walletRpc<any>({
       walletId: agentWalletId,
       method: 'eth_sendTransaction',
@@ -454,6 +511,9 @@ async function handleBuy(params: {
     }
   } catch (err: any) {
     logger.error('[coin/buy] Buy failed', err)
+    if (isInsufficientFundsError(err)) {
+      return { ok: false, response: buildInsufficientFundsRefusal({ balanceWei: 0n, requiredWei: 0n }) }
+    }
     return { ok: false, response: `Buy failed: ${(err?.message ?? '').slice(0, 200)}` }
   }
 }
@@ -594,7 +654,13 @@ async function handleSell(params: {
       finalCall = reQuote.call
     }
 
-    // Execute the trade
+    // Execute the trade (sells typically have value=0, but gas still required)
+    const sellRefusal = await preflightAgentWalletOrRefuse({
+      agentWallet: agentWalletAddress as Address,
+      valueWei: finalCall.value ? BigInt(finalCall.value) : 0n,
+      context: 'coin/sell',
+    })
+    if (sellRefusal) return sellRefusal
     const result = await walletRpc<any>({
       walletId: agentWalletId,
       method: 'eth_sendTransaction',
@@ -635,6 +701,9 @@ async function handleSell(params: {
     }
   } catch (err: any) {
     logger.error('[coin/sell] Sell failed', err)
+    if (isInsufficientFundsError(err)) {
+      return { ok: false, response: buildInsufficientFundsRefusal({ balanceWei: 0n, requiredWei: 0n }) }
+    }
     return { ok: false, response: `Sell failed: ${(err?.message ?? '').slice(0, 200)}` }
   }
 }
@@ -885,6 +954,18 @@ async function handleTrend(params: {
 
     return { ok: false, response: `Unknown trend subcommand: ${sub}. Try \`/coin trend help\`.` }
   } catch (err: any) {
+    // Map insufficient-funds failures (either the typed error from trends.ts
+    // or a raw Privy 400 that slipped past preflight) to a friendly refusal
+    // instead of leaking raw gas-accounting errors to end users.
+    if (err?.code === 'insufficient_funds' || isInsufficientFundsError(err)) {
+      logger.warn('[coin/trend] insufficient funds refusal', { sub, message: err?.message })
+      return {
+        ok: false,
+        response:
+          "This trade can't be executed right now — the agent wallet needs funding before it can cover gas. " +
+          'Contact setup or try again after it is topped up.',
+      }
+    }
     logger.error('[coin/trend] command failed', { sub, err })
     return { ok: false, response: `Trend command failed: ${(err?.message ?? '').slice(0, 220)}` }
   }
