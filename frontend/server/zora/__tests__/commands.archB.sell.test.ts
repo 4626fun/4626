@@ -449,11 +449,59 @@ describe('handleCoinCommand -- /coin sell via Architecture B', () => {
   it('returns refusal when token amount exceeds 1e12 sanity cap', async () => {
     resolveContextMock.mockResolvedValue({ status: 'ready', context: READY_CONTEXT })
 
-    const result = await callSell({ amount: '2e12' })
+    // 2 * 10^12 tokens written in plain decimal (no `e` notation — see
+    // parseUnits in handler). Hits the bigint sanity cap check.
+    const result = await callSell({ amount: '2000000000000' })
 
     expect(result.ok).toBe(false)
     expect(result.response).toContain('maximum allowed')
     expect(submitUserOpMock).not.toHaveBeenCalled()
+  })
+
+  // -----------------------------------------------------------------------
+  // Exact-arithmetic parsing (Codex #297 P1)
+  // -----------------------------------------------------------------------
+
+  it('rejects scientific notation like 2e12 (parseUnits requires plain decimal)', async () => {
+    resolveContextMock.mockResolvedValue({ status: 'ready', context: READY_CONTEXT })
+
+    const result = await callSell({ amount: '2e12' })
+
+    expect(result.ok).toBe(false)
+    expect(result.response).toContain('Invalid amount')
+    expect(submitUserOpMock).not.toHaveBeenCalled()
+  })
+
+  it('rejects fractional amounts with more decimal places than the token supports', async () => {
+    resolveContextMock.mockResolvedValue({ status: 'ready', context: READY_CONTEXT })
+    // Handler falls back to decimals=18 when the on-chain read fails (the
+    // test harness doesn't stub the viem public client, so the decimals()
+    // readContract call throws and the catch {} branch runs). Feed 19 decimals
+    // against the default 18 to force parseUnits to throw.
+    const result = await callSell({ amount: '1.1234567890123456789' })
+
+    expect(result.ok).toBe(false)
+    expect(result.response).toContain('too many decimal places')
+    expect(submitUserOpMock).not.toHaveBeenCalled()
+  })
+
+  it('accepts 18-decimal fractional amounts without precision loss', async () => {
+    resolveContextMock.mockResolvedValue({ status: 'ready', context: READY_CONTEXT })
+    mockQuoteResponseNoPermits()
+    submitUserOpMock.mockResolvedValue({
+      ok: true, userOpHash: '0xuop', txHash: '0xtx', smartWallet: CSW,
+    })
+
+    // 18-decimal amount with many fractional digits that Number math would
+    // round. parseUnits preserves the exact integer.
+    const result = await callSell({ amount: '0.123456789012345678' })
+
+    expect(result.ok).toBe(true)
+    // Confirm amountIn sent to fetch is the exact base-unit integer, not a
+    // rounded/truncated value.
+    const lastFetchCall = fetchMock.mock.calls.at(-1)
+    const body = JSON.parse(lastFetchCall?.[1]?.body ?? '{}')
+    expect(body.amountIn).toBe('123456789012345678')
   })
 
   // -----------------------------------------------------------------------
@@ -501,13 +549,61 @@ describe('handleCoinCommand -- /coin sell via Architecture B', () => {
   // Privy signing failure
   // -----------------------------------------------------------------------
 
-  it('surfaces error and does NOT submit UserOp when Privy secp256k1_sign fails', async () => {
+  it('returns typed refusal and does NOT submit UserOp when Privy secp256k1_sign fails', async () => {
     resolveContextMock.mockResolvedValue({ status: 'ready', context: READY_CONTEXT })
     mockQuoteResponseWithPermits()
     secp256k1SignHashMock.mockRejectedValue(new Error('privy_secp256k1_sign_invalid_signature'))
 
-    await expect(callSell()).rejects.toThrow('privy_secp256k1_sign_invalid_signature')
+    const result = await callSell()
 
+    expect(result.ok).toBe(false)
+    expect(result.response).toContain('Permit2 authorization')
+    expect(submitUserOpMock).not.toHaveBeenCalled()
+  })
+
+  // -----------------------------------------------------------------------
+  // Upstream quote failures (Codex #297 P2)
+  // -----------------------------------------------------------------------
+
+  it('returns typed refusal when the initial Zora quote call throws', async () => {
+    resolveContextMock.mockResolvedValue({ status: 'ready', context: READY_CONTEXT })
+    fetchMock.mockRejectedValueOnce(new Error('network_error_upstream_timeout'))
+
+    const result = await callSell()
+
+    expect(result.ok).toBe(false)
+    expect(result.response).toContain('quote service is degraded')
+    expect(submitUserOpMock).not.toHaveBeenCalled()
+    expect(secp256k1SignHashMock).not.toHaveBeenCalled()
+  })
+
+  it('returns typed refusal when the re-quote call throws after signing', async () => {
+    resolveContextMock.mockResolvedValue({ status: 'ready', context: READY_CONTEXT })
+    // First fetch = initial quote with permits; second fetch throws.
+    let fetchCallCount = 0
+    fetchMock.mockImplementation(() => {
+      fetchCallCount += 1
+      if (fetchCallCount === 1) {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            call: { target: '0x6ff5693b99212da76ad316178a184ab56d299b43', data: '0xdead', value: '0' },
+            permits: [{
+              signature: '0x',
+              permit: { details: { token: COIN, amount: '0', expiration: 0, nonce: 0 }, spender: COIN, sigDeadline: 0 },
+            }],
+          }),
+          text: async () => '',
+        })
+      }
+      return Promise.reject(new Error('requote_timeout'))
+    })
+    secp256k1SignHashMock.mockResolvedValue(OWNER_SIG_65)
+
+    const result = await callSell()
+
+    expect(result.ok).toBe(false)
+    expect(result.response).toContain('finalize the quote after signing')
     expect(submitUserOpMock).not.toHaveBeenCalled()
   })
 })

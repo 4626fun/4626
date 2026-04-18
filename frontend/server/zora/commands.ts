@@ -1,5 +1,5 @@
 import type { Address } from 'viem'
-import { isAddress, getAddress, parseEther, hashTypedData, formatEther, formatUnits, createPublicClient, http, parseAbi } from 'viem'
+import { isAddress, getAddress, parseEther, parseUnits, hashTypedData, formatEther, formatUnits, createPublicClient, http, parseAbi } from 'viem'
 import { base } from 'viem/chains'
 
 import { logger } from '../_lib/infra/logger.js'
@@ -760,15 +760,13 @@ async function handleSellViaArchB(params: {
     }
   }
 
-  const amountNum = Number(amount)
-  if (!Number.isFinite(amountNum) || amountNum <= 0) {
+  // Validate shape only here. Numeric parsing happens below once we know
+  // the token decimals — we use parseUnits (exact integer arithmetic) instead
+  // of Number math to avoid IEEE-754 precision loss on 18-decimal tokens or
+  // values above 2^53.
+  const amountStr = String(amount).trim()
+  if (!/^[0-9]+(\.[0-9]+)?$/.test(amountStr) || amountStr === '0' || amountStr === '0.0') {
     return { ok: false, response: 'Invalid amount. Must be a positive number.' }
-  }
-
-  // Sanity cap: reject absurdly large token amounts (mirrors buy ETH cap semantics
-  // for tokens). 1e12 tokens is far beyond any realistic sell.
-  if (amountNum > 1e12) {
-    return { ok: false, response: 'Invalid amount. Token amount exceeds the maximum allowed (1e12).' }
   }
 
   // 2. Resolve execution context. Hard-fail if not ready.
@@ -840,20 +838,57 @@ async function handleSellViaArchB(params: {
     // Default to 18 if decimals() call fails.
   }
 
-  const amountIn = BigInt(Math.floor(amountNum * 10 ** decimals))
+  // Parse with exact arithmetic (Codex #297 P1). parseUnits handles fractional
+  // inputs up to `decimals` places and returns a bigint with no precision loss.
+  // It throws if the fractional part exceeds `decimals`.
+  let amountIn: bigint
+  try {
+    amountIn = parseUnits(amountStr as `${number}`, decimals)
+  } catch (err) {
+    return {
+      ok: false,
+      response: `Invalid amount. ${amountStr} has too many decimal places for this token (max ${decimals}).`,
+    }
+  }
+  if (amountIn <= 0n) {
+    return { ok: false, response: 'Invalid amount. Must be a positive number.' }
+  }
+
+  // Sanity cap in bigint space: reject absurdly large token amounts.
+  // 1e12 tokens * 10^decimals is the upper bound in base units.
+  const maxBaseUnits = 10n ** 12n * 10n ** BigInt(decimals)
+  if (amountIn > maxBaseUnits) {
+    return { ok: false, response: 'Invalid amount. Token amount exceeds the maximum allowed (1e12).' }
+  }
+
   const tradeReferrer = getPlatformReferrerAddress()
 
-  // 5. Get Zora quote with sender = issuer.smartWallet (the CSW itself).
-  //    This is the key semantic change: Zora sees the CSW as the seller,
-  //    so ETH from the sell flows to the CSW.
-  const quote = await getTradeQuoteWithReferrer({
-    tokenIn: { type: 'erc20', address: getAddress(coinAddress) },
-    tokenOut: { type: 'eth' },
-    amountIn: amountIn.toString(),
-    slippage: 0.03,
-    sender: issuer.smartWallet, // CSW — ETH flows here, not to an agent wallet
-    referrer: tradeReferrer,
-  })
+  // 5. Trade flow. Wrapped in try/catch (Codex #297 P2) so that upstream
+  //    failures (Zora quote/re-quote network errors, Privy signing errors)
+  //    return an explicit sell-specific typed refusal instead of bubbling to
+  //    the global executor as a generic upstream error.
+  let quote: any
+  try {
+    quote = await getTradeQuoteWithReferrer({
+      tokenIn: { type: 'erc20', address: getAddress(coinAddress) },
+      tokenOut: { type: 'eth' },
+      amountIn: amountIn.toString(),
+      slippage: 0.03,
+      sender: issuer.smartWallet, // CSW — ETH flows here, not to an agent wallet
+      referrer: tradeReferrer,
+    })
+  } catch (err) {
+    logger.warn('[coin/sell/arch-b] Zora quote call threw', {
+      groupId: params.groupId,
+      coinAddress,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return {
+      ok: false,
+      response:
+        'Sell failed: unable to fetch a quote for this coin right now. The coin may lack liquidity or the quote service is degraded. Please try again shortly.',
+    }
+  }
 
   const initialCall = quote?.call
   if (!initialCall?.target || !initialCall?.data) {
@@ -898,11 +933,30 @@ async function handleSellViaArchB(params: {
         })
 
         // Sign the digest with the CSW's owner EOA via Privy secp256k1_sign.
-        const ownerSig = await secp256k1SignHash({
-          walletId: issuer.privyOwnerWalletId,
-          hash: typedDataDigest,
-          idempotencyKey: `coin-sell-permit:${params.groupId}:${Date.now()}:${i}`,
-        })
+        //
+        // If the Privy call throws (network error, quorum policy rejection,
+        // invalid wallet id), surface as a sell-specific typed refusal instead
+        // of bubbling to the global executor.
+        let ownerSig: `0x${string}`
+        try {
+          ownerSig = await secp256k1SignHash({
+            walletId: issuer.privyOwnerWalletId,
+            hash: typedDataDigest,
+            idempotencyKey: `coin-sell-permit:${params.groupId}:${Date.now()}:${i}`,
+          })
+        } catch (err) {
+          logger.warn('[coin/sell/arch-b] Privy secp256k1_sign threw', {
+            groupId: params.groupId,
+            coinAddress,
+            permitIndex: i,
+            error: err instanceof Error ? err.message : String(err),
+          })
+          return {
+            ok: false,
+            response:
+              'Sell failed: could not sign the Permit2 authorization via the delegated signer. Please try again shortly.',
+          }
+        }
 
         // Wrap into ERC-1271 SignatureWrapper so Permit2's isValidSignature
         // call on the CSW will accept it.
@@ -914,16 +968,35 @@ async function handleSellViaArchB(params: {
     }
 
     // 7. Re-quote with signed permits to get calldata that includes the authorization.
-    const reQuote = await getTradeQuoteWithReferrer({
-      tokenIn: { type: 'erc20', address: getAddress(coinAddress) },
-      tokenOut: { type: 'eth' },
-      amountIn: amountIn.toString(),
-      slippage: 0.03,
-      sender: issuer.smartWallet,
-      referrer: tradeReferrer,
-      signatures: signedPermits,
-    })
-    finalCall = reQuote.call
+    try {
+      const reQuote = await getTradeQuoteWithReferrer({
+        tokenIn: { type: 'erc20', address: getAddress(coinAddress) },
+        tokenOut: { type: 'eth' },
+        amountIn: amountIn.toString(),
+        slippage: 0.03,
+        sender: issuer.smartWallet,
+        referrer: tradeReferrer,
+        signatures: signedPermits,
+      })
+      if (!reQuote?.call?.target || !reQuote?.call?.data) {
+        return {
+          ok: false,
+          response: 'Sell failed: re-quote returned no executable calldata. Please try again.',
+        }
+      }
+      finalCall = reQuote.call
+    } catch (err) {
+      logger.warn('[coin/sell/arch-b] Zora re-quote call threw', {
+        groupId: params.groupId,
+        coinAddress,
+        error: err instanceof Error ? err.message : String(err),
+      })
+      return {
+        ok: false,
+        response:
+          'Sell failed: unable to finalize the quote after signing the permit. Please try again shortly.',
+      }
+    }
   }
 
   // 8. Build a single-item calls array for the UserOp.
