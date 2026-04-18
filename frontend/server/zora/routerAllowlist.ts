@@ -45,8 +45,8 @@ declare const process: { env: Record<string, string | undefined> }
  *   target so it passes without noise in a green pilot.
  */
 const ROUTER_ALLOWLIST: ReadonlySet<string> = new Set([
-	'0x000000000022d473030f116ddee9f6b43ac78ba3', // Permit2 (deterministic)
-	'0x6ff5693b99212da76ad316178a184ab56d299b43', // Uniswap Universal Router on Base (provisional)
+  '0x000000000022d473030f116ddee9f6b43ac78ba3', // Permit2 (deterministic)
+  '0x6ff5693b99212da76ad316178a184ab56d299b43', // Uniswap Universal Router on Base (provisional)
 ])
 
 // ---------------------------------------------------------------------------
@@ -56,8 +56,8 @@ const ROUTER_ALLOWLIST: ReadonlySet<string> = new Set([
 type AllowlistMode = 'observe' | 'enforce'
 
 function resolveMode(): AllowlistMode {
-	const raw = (process.env.ARCH_B_ROUTER_ALLOWLIST_MODE ?? '').trim().toLowerCase()
-	return raw === 'enforce' ? 'enforce' : 'observe'
+  const raw = (process.env.ARCH_B_ROUTER_ALLOWLIST_MODE ?? '').trim().toLowerCase()
+  return raw === 'enforce' ? 'enforce' : 'observe'
 }
 
 // ---------------------------------------------------------------------------
@@ -65,8 +65,8 @@ function resolveMode(): AllowlistMode {
 // ---------------------------------------------------------------------------
 
 export type RouterAllowlistResult =
-	| { allowed: true; observed?: true }
-	| { allowed: false; reason: string }
+  | { allowed: true; observed?: true }
+  | { allowed: false; reason: string }
 
 /**
  * Check whether a Zora quote router target is in the allowlist.
@@ -81,33 +81,33 @@ export type RouterAllowlistResult =
  * in the allowlist.
  */
 export function checkRouterTarget(target: Address): RouterAllowlistResult {
-	if (!target || !isAddress(target, { strict: false })) {
-		return {
-			allowed: false,
-			reason: `Router target is not a valid address: ${String(target)}`,
-		}
-	}
+  if (!target || !isAddress(target, { strict: false })) {
+    return {
+      allowed: false,
+      reason: `Router target is not a valid address: ${String(target)}`,
+    }
+  }
 
-	const normalised = getAddress(target).toLowerCase()
-	const known = ROUTER_ALLOWLIST.has(normalised)
-	const mode = resolveMode()
+  const normalised = getAddress(target).toLowerCase()
+  const known = ROUTER_ALLOWLIST.has(normalised)
+  const mode = resolveMode()
 
-	if (known) {
-		return { allowed: true }
-	}
+  if (known) {
+    return { allowed: true }
+  }
 
-	if (mode === 'enforce') {
-		return {
-			allowed: false,
-			reason: `Router target ${target} is not on the allowlist. Coin buy blocked (enforce mode).`,
-		}
-	}
+  if (mode === 'enforce') {
+    return {
+      allowed: false,
+      reason: `Router target ${target} is not on the allowlist. Coin buy blocked (enforce mode).`,
+    }
+  }
 
-	// observe mode — log and allow
-	logger.warn('[arch-b/router-allowlist] Unknown router target observed', {
-		target,
-		mode: 'observe',
-		note: 'Trade allowed. Add to ROUTER_ALLOWLIST after empirical confirmation.',
-	})
-	return { allowed: true, observed: true }
+  // observe mode — log and allow
+  logger.warn('[arch-b/router-allowlist] Unknown router target observed', {
+    target,
+    mode: 'observe',
+    note: 'Trade allowed. Add to ROUTER_ALLOWLIST after empirical confirmation.',
+  })
+  return { allowed: true, observed: true }
 }
