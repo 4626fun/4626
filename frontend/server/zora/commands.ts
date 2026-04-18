@@ -666,13 +666,33 @@ async function handleBuyViaArchB(params: {
     }
   }
 
-  // 6. Build a single-item calls array for the UserOp.
+  // 6. Validate quote.call.value against the user-parsed amountIn.
+  //    Zora's quote is non-authoritative external data. For an ETH-in buy,
+  //    call.value is the exact ETH the CSW forwards to the router — it MUST
+  //    equal the user-typed amount. A mismatch means a compromised or
+  //    malformed quote is trying to make us spend more (or less) than the
+  //    user requested. Refuse before submitting the UserOp.
   const nativeValueWei = call.value ? BigInt(call.value) : 0n
+  if (nativeValueWei !== amountIn) {
+    logger.warn('[coin/buy/arch-b] quote value mismatch', {
+      groupId: params.groupId,
+      userAmountWei: amountIn.toString(),
+      quoteValueWei: nativeValueWei.toString(),
+      target: call.target,
+    })
+    return {
+      ok: false,
+      response:
+        "Coin buy blocked: the trade quote's ETH amount doesn't match the amount you requested. Please try again.",
+    }
+  }
+
+  // 7. Build a single-item calls array for the UserOp.
   const calls: CoinbaseSmartWalletCall[] = [
     { to: call.target as Address, value: nativeValueWei, data: call.data as `0x${string}` },
   ]
 
-  // 7. Submit via the shared choke point.
+  // 8. Submit via the shared choke point.
   //    Caps + preflight + daily ledger all handled inside submitUserOpOrRefuse
   //    exactly as /keepr send. UserOp nonce handles idempotency.
   const submission = await submitUserOpOrRefuse({

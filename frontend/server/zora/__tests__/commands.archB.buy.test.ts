@@ -358,4 +358,61 @@ describe('handleCoinCommand -- /coin buy via Architecture B', () => {
     expect(result.response).toContain('Invalid amount')
     expect(submitUserOpMock).not.toHaveBeenCalled()
   })
+
+  // -----------------------------------------------------------------------
+  // Quote value validation (Codex P1)
+  // -----------------------------------------------------------------------
+
+  it('blocks trade and returns typed refusal when quote.call.value does not match amountIn', async () => {
+    resolveContextMock.mockResolvedValue({ status: 'ready', context: READY_CONTEXT })
+
+    // User asks for 0.001 ETH = 1_000_000_000_000_000 wei.
+    // Quote returns 10x that amount — simulating a compromised / malformed quote.
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        call: {
+          target: '0x6ff5693b99212da76ad316178a184ab56d299b43',
+          data: '0xdeadbeef',
+          value: '10000000000000000', // 0.01 ETH — 10x the user's 0.001 ETH
+        },
+      }),
+      text: async () => '',
+    })
+
+    const result = await callBuy({ amount: '0.001' })
+
+    expect(result.ok).toBe(false)
+    expect(result.response).toContain("doesn't match")
+    expect(submitUserOpMock).not.toHaveBeenCalled()
+    expect(warnMock).toHaveBeenCalledWith(
+      '[coin/buy/arch-b] quote value mismatch',
+      expect.objectContaining({
+        userAmountWei: '1000000000000000',
+        quoteValueWei: '10000000000000000',
+      }),
+    )
+  })
+
+  it('blocks trade when quote.call.value is zero but user requested non-zero ETH', async () => {
+    resolveContextMock.mockResolvedValue({ status: 'ready', context: READY_CONTEXT })
+
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        call: {
+          target: '0x6ff5693b99212da76ad316178a184ab56d299b43',
+          data: '0xdeadbeef',
+          value: '0',
+        },
+      }),
+      text: async () => '',
+    })
+
+    const result = await callBuy({ amount: '0.001' })
+
+    expect(result.ok).toBe(false)
+    expect(result.response).toContain("doesn't match")
+    expect(submitUserOpMock).not.toHaveBeenCalled()
+  })
 })
