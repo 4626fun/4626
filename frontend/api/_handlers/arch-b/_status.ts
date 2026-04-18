@@ -97,6 +97,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Resolve execution readiness
   const ctxResolution = await resolveCommandIssuerContextByProfileId(profileId)
 
+  // db_unavailable is an operational incident — surface it explicitly via 503
+  // rather than misclassifying it as not_provisioned (which would drive users
+  // into re-enrollment UX during backend outages).
+  if (ctxResolution.status === 'db_unavailable') {
+    return res
+      .status(503)
+      .json({ success: false, error: 'db_unavailable' } satisfies ApiEnvelope<never>)
+  }
+
   let executionReady: 'ready' | 'revoked' | 'not_provisioned' = 'not_provisioned'
   let caps: { perTxCapWei: string; dailyCapWei: string } | null = null
   let revokedAt: string | null = null
