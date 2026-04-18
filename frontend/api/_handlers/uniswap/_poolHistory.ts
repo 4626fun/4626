@@ -70,6 +70,29 @@ type HistoricalData = {
   close?: number
 }
 
+/**
+ * Current-snapshot breakdown of the pool's two tokens.
+ *
+ * We emit USD shares (0..1) rather than raw token amounts so the client
+ * can multiply historical `tvlUSD` values by them to render a stacked
+ * composition view. Shares are a best-effort approximation: the subgraph
+ * only exposes current-state liquidity per token, so applying the current
+ * ratio historically will drift whenever the pool's composition shifted.
+ */
+type PoolTokenComposition = {
+  token0Symbol: string | null
+  token1Symbol: string | null
+  token0UsdShare: number | null
+  token1UsdShare: number | null
+  token0UsdTVL: number | null
+  token1UsdTVL: number | null
+  /**
+   * Whether `token0` corresponds to the `?token=` the caller asked about
+   * (vs `token1`). Lets the UI label the creator coin side consistently.
+   */
+  isQueriedTokenToken0: boolean
+}
+
 type PoolHistoryResponse = {
   success: boolean
   data?: {
@@ -81,6 +104,7 @@ type PoolHistoryResponse = {
     tvlUSD: number
     priceChangePercent: number
     dataPoints: HistoricalData[]
+    pool?: PoolTokenComposition | null
   }
   error?: string
 }
@@ -149,7 +173,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const subgraphUrl = getSubgraphUrl()
     const tokenLower = token.toLowerCase()
     
-    // Step 1: Find pools for this token
+    // Step 1: Find pools for this token. We request per-token liquidity and
+    // symbols so the client can render a composition view for liquidity,
+    // but the fragment is forgiving — if the subgraph variant is missing
+    // any of these optional fields, computeComposition() below falls back
+    // to null and the client degrades to a single TVL bar.
+    const POOL_FIELDS = `
+      id
+      totalValueLockedUSD
+      volumeUSD
+      feesUSD
+      token0Price
+      token1Price
+      totalValueLockedToken0
+      totalValueLockedToken1
+      token0 { id symbol decimals derivedETH }
+      token1 { id symbol decimals derivedETH }
+    `
     const poolsQuery = `
       query GetPoolsByToken($token: String!) {
         pools0: pools(
@@ -157,30 +197,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           orderBy: totalValueLockedUSD
           orderDirection: desc
           first: 5
-        ) {
-          id
-          totalValueLockedUSD
-          volumeUSD
-          feesUSD
-          token0Price
-          token1Price
-        }
+        ) { ${POOL_FIELDS} }
         pools1: pools(
           where: { token1: $token }
           orderBy: totalValueLockedUSD
           orderDirection: desc
           first: 5
-        ) {
-          id
-          totalValueLockedUSD
-          volumeUSD
-          feesUSD
-          token0Price
-          token1Price
-        }
+        ) { ${POOL_FIELDS} }
+        bundles(first: 1) { ethPriceUSD }
       }
     `
-    
+
+    type TokenMeta = {
+      id?: string | null
+      symbol?: string | null
+      decimals?: string | null
+      derivedETH?: string | null
+    }
+
     type PoolData = {
       id: string
       totalValueLockedUSD: string
@@ -188,13 +222,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       feesUSD: string
       token0Price: string
       token1Price: string
+      totalValueLockedToken0?: string | null
+      totalValueLockedToken1?: string | null
+      token0?: TokenMeta | null
+      token1?: TokenMeta | null
     }
     
-    const poolsData = await fetchGraphQL<{ pools0: PoolData[]; pools1: PoolData[] }>(
-      subgraphUrl,
-      poolsQuery,
-      { token: tokenLower }
-    )
+    const poolsData = await fetchGraphQL<{
+      pools0: PoolData[]
+      pools1: PoolData[]
+      bundles?: Array<{ ethPriceUSD?: string | null }>
+    }>(subgraphUrl, poolsQuery, { token: tokenLower })
 
     if (!poolsData) {
       return res.status(200).json({
@@ -345,9 +383,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const lastPrice = dataPoints[0]?.close ?? 0
     const priceChangePercent = firstPrice > 0 ? ((lastPrice - firstPrice) / firstPrice) * 100 : 0
 
+    // Current-snapshot pool composition (best-effort). Uses the subgraph's
+    // `totalValueLockedToken{0,1} * token{0,1}.derivedETH * bundle.ethPriceUSD`
+    // to derive per-side USD TVL. If any required field is missing we fall
+    // back to null so the client can render a simple (non-stacked) bar.
+    const ethPriceUSD = parseFloat(poolsData?.bundles?.[0]?.ethPriceUSD ?? '')
+    const t0 = primaryPool.token0
+    const t1 = primaryPool.token1
+    const t0Amount = parseFloat(primaryPool.totalValueLockedToken0 ?? '')
+    const t1Amount = parseFloat(primaryPool.totalValueLockedToken1 ?? '')
+    const t0DerivedETH = parseFloat(t0?.derivedETH ?? '')
+    const t1DerivedETH = parseFloat(t1?.derivedETH ?? '')
+    let pool: PoolTokenComposition | null = null
+    if (
+      t0 &&
+      t1 &&
+      Number.isFinite(ethPriceUSD) &&
+      ethPriceUSD > 0 &&
+      Number.isFinite(t0Amount) &&
+      Number.isFinite(t1Amount) &&
+      Number.isFinite(t0DerivedETH) &&
+      Number.isFinite(t1DerivedETH)
+    ) {
+      const t0UsdTVL = t0Amount * t0DerivedETH * ethPriceUSD
+      const t1UsdTVL = t1Amount * t1DerivedETH * ethPriceUSD
+      const totalUsd = t0UsdTVL + t1UsdTVL
+      if (totalUsd > 0) {
+        pool = {
+          token0Symbol: t0.symbol ?? null,
+          token1Symbol: t1.symbol ?? null,
+          token0UsdTVL: t0UsdTVL,
+          token1UsdTVL: t1UsdTVL,
+          token0UsdShare: t0UsdTVL / totalUsd,
+          token1UsdShare: t1UsdTVL / totalUsd,
+          isQueriedTokenToken0: (t0.id ?? '').toLowerCase() === tokenLower,
+        }
+      }
+    }
+
     return res.status(200).json({
       success: true,
       data: {
+        pool,
         tokenAddress: token,
         timeframe,
         poolId: primaryPool.id,

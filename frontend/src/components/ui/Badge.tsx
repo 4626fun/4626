@@ -12,12 +12,20 @@ type BadgeVariant =
   | 'eoa'
   | 'muted'
 
-const CDS_COLOR_MAP: Record<BadgeVariant, string> = {
+// CDS 8.66's Tag only ships 6 color schemes (green, blue, yellow, purple,
+// red, gray). Passing anything else — e.g. `teal` or `orange` — causes a
+// destructure crash inside `tagEmphasisColorMap[emphasis][colorScheme]`
+// that throws on every render, triggering the nearest error boundary
+// (`PrivyProviderSafetyBoundary`) which then rebuilds the tree and
+// re-crashes. That infinite crash/reboot loop is why `/portfolio` felt
+// glitchy and why WalletConnect re-initialized dozens of times. Keep
+// every variant mapped to a scheme CDS actually exports.
+const CDS_COLOR_MAP: Record<BadgeVariant, 'gray' | 'green' | 'yellow' | 'red' | 'blue' | 'purple'> = {
   default: 'gray',
   success: 'green',
-  warning: 'orange',
+  warning: 'yellow',
   error: 'red',
-  info: 'teal',
+  info: 'blue',
   canonical: 'blue',
   eoa: 'gray',
   muted: 'gray',
@@ -40,7 +48,7 @@ export function Badge({
 }: BadgeProps) {
   return (
     <Tag
-      colorScheme={CDS_COLOR_MAP[variant] as any}
+      colorScheme={CDS_COLOR_MAP[variant]}
       emphasis={variant === 'muted' ? 'low' : 'high'}
       className={cn(
         size === 'xs' && 'text-[9px]',

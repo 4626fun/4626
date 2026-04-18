@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { Link, useParams } from 'react-router-dom'
 import type { Address } from 'viem'
+import { AreaChart } from '@coinbase/cds-web-visualization/chart'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { Alert } from '@/components/ui/Alert'
@@ -115,34 +116,50 @@ function seededSeries(seed: string, base: number, points: number): number[] {
 
 function Sparkline(props: { series: number[] }) {
   const { series } = props
-  const width = 640
-  const height = 220
-  const padding = 10
-  const min = Math.min(...series)
-  const max = Math.max(...series)
-  const span = Math.max(1e-6, max - min)
-
-  const path = series
-    .map((value, index) => {
-      const x = padding + (index / Math.max(1, series.length - 1)) * (width - padding * 2)
-      const y = padding + (1 - (value - min) / span) * (height - padding * 2)
-      return `${index === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`
-    })
-    .join(' ')
-
-  const area = `${path} L ${width - padding} ${height - padding} L ${padding} ${height - padding} Z`
-
+  if (series.length === 0) {
+    return <div className="h-[220px] w-full" aria-hidden="true" />
+  }
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="h-[220px] w-full">
-      <defs>
-        <linearGradient id="portfolioSparkFill" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.18" />
-          <stop offset="100%" stopColor="#3B82F6" stopOpacity="0" />
-        </linearGradient>
-      </defs>
-      <path d={area} fill="url(#portfolioSparkFill)" />
-      <path d={path} fill="none" stroke="#3B82F6" strokeWidth="1.5" strokeLinejoin="round" strokeLinecap="round" />
-    </svg>
+    <div className="h-[220px] w-full">
+      <AreaChart
+        height="100%"
+        width="100%"
+        animate
+        curve="monotone"
+        strokeWidth={1.5}
+        showXAxis={false}
+        showYAxis={false}
+        legend={false}
+        series={[
+          {
+            id: 'portfolio',
+            data: series,
+            color: '#3B82F6',
+            stroke: '#3B82F6',
+            // CDS GradientStop.offset is in data space AND must be in
+            // STRICTLY ascending order — passing max first, or passing
+            // equal offsets for a degenerate domain (min === max when
+            // the user has no holdings and the series is flat), spams
+            // the console with "Gradient: stop offsets must be in
+            // ascending order" on every render, which backs up the
+            // browser and makes the page feel glitchy. We nudge `max`
+            // above `min` whenever the domain collapses so the stops
+            // are always strictly ordered.
+            gradient: {
+              axis: 'y',
+              stops: (domain) => {
+                const min = domain.min
+                const max = domain.max > domain.min ? domain.max : domain.min + 1
+                return [
+                  { offset: min, color: '#3B82F6', opacity: 0 },
+                  { offset: max, color: '#3B82F6', opacity: 0.22 },
+                ]
+              },
+            },
+          },
+        ]}
+      />
+    </div>
   )
 }
 

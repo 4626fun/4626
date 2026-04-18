@@ -262,6 +262,52 @@ export async function walletRpc<T>(params: {
   })
 }
 
+/**
+ * Full Privy wallet record including delegation state.
+ * Returned by GET /v1/wallets/{id}.
+ */
+export type PrivyWalletFull = {
+  id: string
+  address: string
+  chain_type: 'ethereum' | string
+  additional_signers: Array<{ signer_id?: string; id?: string } | string>
+  owner_id: string | null
+  policy_ids: string[]
+}
+
+/**
+ * Fetch the full Privy wallet record for `walletId`, including
+ * `additional_signers` which is needed to verify delegation quorum membership.
+ * Returns null if Privy responds with 404 (wallet not found).
+ */
+export async function fetchPrivyWalletFull(walletId: string): Promise<PrivyWalletFull | null> {
+  const normalized = String(walletId ?? '').trim()
+  if (!normalized) throw new Error('privy_wallet_id_missing')
+  const { appId, appSecret } = getPrivyAuth()
+  const url = `${PRIVY_API_ORIGIN}/v1/wallets/${encodeURIComponent(normalized)}`
+  const res = await fetch(url, {
+    method: 'GET',
+    headers: {
+      'privy-app-id': appId,
+      Authorization: basicAuthHeader(appId, appSecret),
+    },
+  })
+  if (res.status === 404) return null
+  const text = await res.text()
+  if (!res.ok) {
+    throw new Error(`privy_http_${res.status}: ${text.slice(0, 500)}`)
+  }
+  try {
+    const body = JSON.parse(text) as PrivyWalletFull
+    if (!body || typeof body !== 'object') throw new Error('privy_wallet_full_invalid_body')
+    if (!Array.isArray(body.additional_signers)) body.additional_signers = []
+    if (!Array.isArray(body.policy_ids)) body.policy_ids = []
+    return body
+  } catch {
+    throw new Error(`privy_non_json_response: ${text.slice(0, 500)}`)
+  }
+}
+
 export async function secp256k1SignHash(params: { walletId: string; hash: `0x${string}`; idempotencyKey?: string }): Promise<`0x${string}`> {
   const res = await walletRpc<any>({
     walletId: params.walletId,
