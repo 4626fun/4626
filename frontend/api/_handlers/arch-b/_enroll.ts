@@ -37,9 +37,8 @@ import {
   readBoundedJsonObjectBody,
   getDb,
   isDbConfigured,
+  resolveAuthorizedRequestPrincipal,
 } from '../../../packages/server-core/src/index.js'
-
-import { resolveAuthorizedRequestPrincipal } from '../../../server/_lib/auth/requestPrincipal.js'
 import {
   provisionCommandIssuerContext,
   envBigInt,

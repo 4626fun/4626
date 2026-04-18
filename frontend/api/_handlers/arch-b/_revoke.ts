@@ -29,9 +29,8 @@ import {
   checkRateLimit,
   rateLimitKey,
   readBoundedJsonObjectBody,
+  resolveAuthorizedRequestPrincipal,
 } from '../../../packages/server-core/src/index.js'
-
-import { resolveAuthorizedRequestPrincipal } from '../../../server/_lib/auth/requestPrincipal.js'
 import { revokeCommandIssuerContext } from '../../../server/_lib/wallet/commandIssuerContext.js'
 
 const REVOKE_BODY_MAX_BYTES = 8_192

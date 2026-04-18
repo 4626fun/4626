@@ -21,9 +21,8 @@ import {
   setNoStore,
   getDb,
   isDbConfigured,
+  resolveAuthorizedRequestPrincipal,
 } from '../../../packages/server-core/src/index.js'
-
-import { resolveAuthorizedRequestPrincipal } from '../../../server/_lib/auth/requestPrincipal.js'
 import { resolveCommandIssuerContextByProfileId } from '../../../server/_lib/wallet/commandIssuerContext.js'
 import {
   fetchPrivyWalletFull,
