@@ -2,21 +2,29 @@
 /**
  * Architecture B Phase 2 — Privy owner wallet-id resolver (operator-only).
  *
- * Resolves the Privy server wallet id for a given user's embedded EOA. That id
- * is what admin provisioning writes into
+ * Resolves the Privy server wallet id for a given user's embedded owner EOA.
+ * That id is what admin provisioning writes into
  * `command_issuer_execution_context.privy_owner_wallet_id`, and it's what
  * `sendPrivyCoinbaseSmartWalletUserOperation` later passes to `walletRpc` as
  * `walletId` to sign UserOperations on behalf of the owner EOA at index 0 of
  * a user-owned Coinbase Smart Wallet.
  *
- * This is **local/operator tooling only** (matches the `zora-cli`-style pattern
- * from the 4626-integrations skill). It is read-only against Privy, does not
- * mutate the DB, and never runs on the hot path. Server-held Privy credentials
- * are required.
+ * This is **local/operator tooling only** (matches the `zora-cli`-style
+ * pattern from the 4626-integrations skill). It is read-only against Privy,
+ * does not mutate the DB, and never runs on the hot path. Server-held Privy
+ * credentials are required.
+ *
+ * Surface coverage is handled by
+ * `server/_lib/wallet/privyOwnerWalletIdResolver.ts`, which walks
+ * `user.wallet`, `user.wallets`, `user.linkedAccounts`,
+ * `user.linked_accounts`, and nested
+ * `smartWallets`/`smart_wallets`/`embeddedWallets`/`embedded_wallets`
+ * arrays, accepting both camelCase and snake_case field names. That helper
+ * is also covered by unit tests under the same directory.
  *
  * Usage:
  *   pnpm -C frontend exec tsx scripts/arch-b-find-privy-owner-wallet-id.ts \
- *     --privy-user-id <did> \
+ *     --privy-user-id <did:privy:...> \
  *     --owner-eoa <0x...>
  *
  * Environment:
@@ -31,6 +39,8 @@
  */
 
 import { PrivyClient } from '@privy-io/server-auth'
+
+import { resolveOwnerWalletId } from '../server/_lib/wallet/privyOwnerWalletIdResolver.ts'
 
 declare const process: {
   argv: string[]
@@ -67,11 +77,6 @@ function requireEnv(key: string): string {
   return v
 }
 
-function normalizeAddress(value: string): string | null {
-  const out = String(value || '').trim().toLowerCase()
-  return /^0x[0-9a-f]{40}$/.test(out) ? out : null
-}
-
 async function main(): Promise<void> {
   if (process.argv.includes('--help') || process.argv.includes('-h')) {
     usage()
@@ -79,14 +84,13 @@ async function main(): Promise<void> {
   }
 
   const did = getArg('--privy-user-id')
-  const ownerEoaArg = getArg('--owner-eoa')
+  const ownerEoa = getArg('--owner-eoa')
   if (!did || !did.startsWith('did:privy:')) {
     console.error('[arch-b/resolve] --privy-user-id is required (must look like did:privy:...)')
     usage()
     process.exit(3)
   }
-  const ownerEoa = normalizeAddress(ownerEoaArg)
-  if (!ownerEoa) {
+  if (!ownerEoa || !/^0x[a-fA-F0-9]{40}$/i.test(ownerEoa.trim())) {
     console.error('[arch-b/resolve] --owner-eoa is required and must be a 0x address')
     usage()
     process.exit(3)
@@ -101,63 +105,69 @@ async function main(): Promise<void> {
   try {
     user = await client.getUserById(did)
   } catch (error) {
-    console.error('[arch-b/resolve] getUserById failed', error instanceof Error ? error.message : String(error))
+    console.error(
+      '[arch-b/resolve] getUserById failed',
+      error instanceof Error ? error.message : String(error),
+    )
     process.exit(3)
   }
 
-  const accounts = Array.isArray(user?.linkedAccounts) ? user.linkedAccounts : []
-  const walletAccounts = accounts.filter(
-    (a: any) => a && a.type === 'wallet' && typeof a.address === 'string',
-  )
+  const outcome = resolveOwnerWalletId(user, ownerEoa)
 
-  const matches = walletAccounts.filter(
-    (a: any) => normalizeAddress(String(a.address)) === ownerEoa,
-  )
-
-  if (matches.length === 0) {
+  if (outcome.status === 'no_match') {
     console.error(
-      `[arch-b/resolve] no wallet linked_account matches ownerEoa ${ownerEoa} under ${did}`,
+      `[arch-b/resolve] no wallet surface matches ownerEoa ${ownerEoa.toLowerCase()} under ${did}`,
     )
-    console.error('[arch-b/resolve] linked wallet addresses:')
-    for (const a of walletAccounts) {
+    console.error('[arch-b/resolve] inspected wallet surfaces:')
+    for (const w of outcome.inspected) {
       console.error(
-        `  - address=${a.address} chainType=${a.chainType} walletClientType=${a.walletClientType} delegated=${a.delegated} hdWalletIndex=${a.hdWalletIndex} id=${(a as any).id ?? 'null'}`,
+        `  - address=${w.address} chainType=${w.chainType} walletClientType=${w.walletClientType} rawType=${w.rawType} delegated=${w.delegated} hdWalletIndex=${w.hdWalletIndex} id=${w.id ?? 'null'}`,
       )
     }
     process.exit(2)
   }
 
-  // Prefer a Privy-embedded delegated wallet (has an `id`). Non-embedded
-  // or non-delegated matches cannot be used as the owner signer for
-  // Architecture B — surface them explicitly.
-  const matchWithId = matches.find((a: any) => typeof a.id === 'string' && a.id)
-  if (!matchWithId) {
+  if (outcome.status === 'no_server_id') {
     console.error('[arch-b/resolve] matched wallet exists but has no server wallet id')
     console.error(
       '[arch-b/resolve] this EOA must be a Privy embedded wallet that is delegated or on the unified wallets stack before provisioning',
     )
-    for (const a of matches) {
+    for (const w of outcome.matches) {
       console.error(
-        `  - address=${a.address} chainType=${a.chainType} walletClientType=${a.walletClientType} delegated=${a.delegated} hdWalletIndex=${a.hdWalletIndex}`,
+        `  - address=${w.address} chainType=${w.chainType} walletClientType=${w.walletClientType} rawType=${w.rawType} delegated=${w.delegated} hdWalletIndex=${w.hdWalletIndex}`,
       )
     }
     process.exit(1)
   }
 
+  const { candidate } = outcome
   const out = {
     privyUserId: did,
-    ownerEoa,
-    privyOwnerWalletId: (matchWithId as any).id,
-    chainType: (matchWithId as any).chainType,
-    walletClientType: (matchWithId as any).walletClientType ?? null,
-    hdWalletIndex: (matchWithId as any).hdWalletIndex ?? null,
-    delegated: (matchWithId as any).delegated ?? null,
+    ownerEoa: candidate.address,
+    privyOwnerWalletId: candidate.id,
+    chainType: candidate.chainType,
+    walletClientType: candidate.walletClientType,
+    hdWalletIndex: candidate.hdWalletIndex,
+    delegated: candidate.delegated,
   }
   // JSON to stdout; diagnostics go to stderr above.
   console.log(JSON.stringify(out, null, 2))
 }
 
-main().catch((error) => {
-  console.error('[arch-b/resolve] fatal', error instanceof Error ? error.stack || error.message : String(error))
-  process.exit(3)
-})
+// Only run as CLI when invoked directly. The importable helpers live in
+// `server/_lib/wallet/privyOwnerWalletIdResolver.ts` and are covered by
+// unit tests there.
+const invokedPath = (process.argv[1] ?? '').replace(/\\/g, '/')
+if (
+  invokedPath.endsWith('/arch-b-find-privy-owner-wallet-id.ts') ||
+  invokedPath.endsWith('/arch-b-find-privy-owner-wallet-id.js') ||
+  invokedPath.endsWith('/arch-b-find-privy-owner-wallet-id.mjs')
+) {
+  main().catch((error) => {
+    console.error(
+      '[arch-b/resolve] fatal',
+      error instanceof Error ? error.stack || error.message : String(error),
+    )
+    process.exit(3)
+  })
+}
