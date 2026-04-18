@@ -1,15 +1,26 @@
 import type { Address } from 'viem'
-import { isAddress, getAddress, parseEther, formatEther, formatUnits, createPublicClient, http, parseAbi } from 'viem'
+import { isAddress, getAddress, parseEther, hashTypedData, formatEther, formatUnits, createPublicClient, http, parseAbi } from 'viem'
 import { base } from 'viem/chains'
 
 import { logger } from '../_lib/infra/logger.js'
-import { BASE_CAIP2, walletRpc } from '../_lib/wallet/privyWalletApi.js'
+import { BASE_CAIP2, walletRpc, secp256k1SignHash } from '../_lib/wallet/privyWalletApi.js'
 import {
   buildInsufficientFundsRefusal,
   checkWalletBalancePreflight,
   getBasePreflightPublicClient,
   isInsufficientFundsError,
 } from '../_lib/wallet/walletBalancePreflight.js'
+import {
+  resolveCommandIssuerContextByAddress,
+  isExecutionReady,
+} from '../_lib/wallet/commandIssuerContext.js'
+import {
+  isArchBCoinSellViaUserOpEnabled,
+  submitUserOpOrRefuse,
+} from '../_lib/wallet/userOperationSubmitter.js'
+import type { CoinbaseSmartWalletCall } from '../_lib/wallet/privyCoinbaseSmartWallet.js'
+import { assertTeeAttestationOrThrow } from '../_lib/agent/teeAttestationGate.js'
+import { wrapCswOwnerSignature } from '../_lib/wallet/cswOwnerSignature.js'
 import type { KeeprVaultRow } from '../_lib/keepr/keeprRegistry.js'
 import type { KeeprRole, KeeprCommandResult } from '../commands/types.js'
 
@@ -709,6 +720,267 @@ async function handleSell(params: {
 }
 
 // ---------------------------------------------------------------------------
+// /coin sell — Architecture B path (ARCH_B_COIN_SELL_VIA_USEROP)
+// ---------------------------------------------------------------------------
+
+/**
+ * Route `/coin sell` through the command issuer's Coinbase Smart Wallet using
+ * the same UserOperation + paymaster choke point (submitUserOpOrRefuse) that
+ * Phase 2 built for /keepr send.
+ *
+ * Key differences from the legacy agent-wallet path:
+ * - `sender` in getTradeQuoteWithReferrer is the CSW (not an agent EOA).
+ *   ETH from the sell flows to the CSW.
+ * - Permit2 typed-data is signed by the CSW's owner EOA via Privy
+ *   `secp256k1_sign`, then wrapped with wrapCswOwnerSignature into the
+ *   ERC-1271 contract-signature envelope that Permit2 accepts.
+ * - No preflightAgentWalletOrRefuse — submitUserOpOrRefuse handles preflight
+ *   internally.
+ * - Router allowlist not wired in this PR.
+ *   TODO(phase-3c): route through checkRouterTarget once PR #296 lands on main.
+ */
+async function handleSellViaArchB(params: {
+  groupId: string
+  senderWallet: Address
+  args: string[]
+  vault: KeeprVaultRow
+}): Promise<KeeprCommandResult> {
+  // 1. Parse + validate (same as handleSell).
+  const [coinAddress, amount] = params.args
+
+  if (!coinAddress || !isAddress(coinAddress) || !amount) {
+    return {
+      ok: false,
+      response: [
+        'Usage: /coin sell <coin-address> <amount>',
+        '',
+        'Example: /coin sell 0xabc...def 1000',
+        '(amount is in token units)',
+      ].join('\n'),
+    }
+  }
+
+  const amountNum = Number(amount)
+  if (!Number.isFinite(amountNum) || amountNum <= 0) {
+    return { ok: false, response: 'Invalid amount. Must be a positive number.' }
+  }
+
+  // Sanity cap: reject absurdly large token amounts (mirrors buy ETH cap semantics
+  // for tokens). 1e12 tokens is far beyond any realistic sell.
+  if (amountNum > 1e12) {
+    return { ok: false, response: 'Invalid amount. Token amount exceeds the maximum allowed (1e12).' }
+  }
+
+  // 2. Resolve execution context. Hard-fail if not ready.
+  //    No silent fallback to the legacy agent-wallet path.
+  const resolution = await resolveCommandIssuerContextByAddress(params.senderWallet)
+  if (!isExecutionReady(resolution)) {
+    logger.warn('[coin/sell/arch-b] issuer not execution-ready; refusing', {
+      groupId: params.groupId,
+      senderWallet: params.senderWallet,
+      status: resolution.status,
+    })
+    if (resolution.status === 'db_unavailable') {
+      return {
+        ok: false,
+        response:
+          "This trade can't be executed right now — account readiness storage is temporarily unavailable. Please try again shortly.",
+      }
+    }
+    if (resolution.status === 'revoked') {
+      return {
+        ok: false,
+        response:
+          "This trade can't be executed — your execution context has been revoked. Contact setup to restore access.",
+      }
+    }
+    return {
+      ok: false,
+      response:
+        "This trade can't be executed — your account isn't provisioned for onchain execution yet. Contact setup to finish provisioning.",
+    }
+  }
+  const issuer = resolution.context
+
+  // 3. TEE attestation gate. Distinct action name from /keepr send and /coin buy.
+  try {
+    await assertTeeAttestationOrThrow({
+      action: 'zora.coin.sell',
+      actorAddress: params.senderWallet,
+      metadata: {
+        groupId: params.groupId,
+        vaultAddress: params.vault.vaultAddress,
+        coinAddress,
+        archBPhase: 3,
+      },
+    })
+  } catch (err) {
+    logger.warn('[coin/sell/arch-b] TEE attestation gate denied sell', {
+      groupId: params.groupId,
+      senderWallet: params.senderWallet,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return {
+      ok: false,
+      response:
+        'Coin sell denied: secure signer attestation is not verified. Please retry once attestation is healthy.',
+    }
+  }
+
+  // 4. Read coin decimals to parse the sell amount correctly.
+  const client = getPublicClient()
+  let decimals = 18
+  try {
+    decimals = await client.readContract({
+      address: getAddress(coinAddress) as Address,
+      abi: ERC20_BALANCE_ABI,
+      functionName: 'decimals',
+    })
+  } catch {
+    // Default to 18 if decimals() call fails.
+  }
+
+  const amountIn = BigInt(Math.floor(amountNum * 10 ** decimals))
+  const tradeReferrer = getPlatformReferrerAddress()
+
+  // 5. Get Zora quote with sender = issuer.smartWallet (the CSW itself).
+  //    This is the key semantic change: Zora sees the CSW as the seller,
+  //    so ETH from the sell flows to the CSW.
+  const quote = await getTradeQuoteWithReferrer({
+    tokenIn: { type: 'erc20', address: getAddress(coinAddress) },
+    tokenOut: { type: 'eth' },
+    amountIn: amountIn.toString(),
+    slippage: 0.03,
+    sender: issuer.smartWallet, // CSW — ETH flows here, not to an agent wallet
+    referrer: tradeReferrer,
+  })
+
+  const initialCall = quote?.call
+  if (!initialCall?.target || !initialCall?.data) {
+    return { ok: false, response: 'Failed to get sell quote. The coin may not have liquidity.' }
+  }
+
+  // 6. Handle Permit2 permits if the quote includes unsigned ones.
+  //    The CSW cannot produce a standard ECDSA signature; instead, the CSW's
+  //    owner EOA signs the Permit2 typed-data digest via Privy secp256k1_sign,
+  //    and we wrap it in the ERC-1271 SignatureWrapper format.
+  const permits = quote?.permits as any[] | undefined
+  let finalCall = initialCall
+
+  if (permits && permits.length > 0) {
+    const signedPermits: any[] = []
+    for (let i = 0; i < permits.length; i++) {
+      const permit = permits[i]
+      if (!permit.signature || permit.signature === '0x') {
+        // Compute the Permit2 typed-data digest off-chain using the same
+        // domain/types as the legacy handleSell path.
+        const typedDataDigest = hashTypedData({
+          types: {
+            PermitSingle: [
+              { name: 'details', type: 'PermitDetails' },
+              { name: 'spender', type: 'address' },
+              { name: 'sigDeadline', type: 'uint256' },
+            ],
+            PermitDetails: [
+              { name: 'token', type: 'address' },
+              { name: 'amount', type: 'uint160' },
+              { name: 'expiration', type: 'uint48' },
+              { name: 'nonce', type: 'uint48' },
+            ],
+          },
+          primaryType: 'PermitSingle',
+          domain: {
+            name: 'Permit2',
+            chainId: BASE_CHAIN_ID,
+            verifyingContract: '0x000000000022D473030F116dDEE9F6B43aC78BA3' as Address,
+          },
+          message: permit.permit as any,
+        })
+
+        // Sign the digest with the CSW's owner EOA via Privy secp256k1_sign.
+        const ownerSig = await secp256k1SignHash({
+          walletId: issuer.privyOwnerWalletId,
+          hash: typedDataDigest,
+          idempotencyKey: `coin-sell-permit:${params.groupId}:${Date.now()}:${i}`,
+        })
+
+        // Wrap into ERC-1271 SignatureWrapper so Permit2's isValidSignature
+        // call on the CSW will accept it.
+        const wrappedSig = wrapCswOwnerSignature(ownerSig, issuer.ownerIndex)
+        signedPermits.push({ signature: wrappedSig, permit: permit.permit })
+      } else {
+        signedPermits.push(permit)
+      }
+    }
+
+    // 7. Re-quote with signed permits to get calldata that includes the authorization.
+    const reQuote = await getTradeQuoteWithReferrer({
+      tokenIn: { type: 'erc20', address: getAddress(coinAddress) },
+      tokenOut: { type: 'eth' },
+      amountIn: amountIn.toString(),
+      slippage: 0.03,
+      sender: issuer.smartWallet,
+      referrer: tradeReferrer,
+      signatures: signedPermits,
+    })
+    finalCall = reQuote.call
+  }
+
+  // 8. Build a single-item calls array for the UserOp.
+  //    Sells typically have value=0 (ETH flows out from the router to the
+  //    CSW via the quote calldata, not as a native value parameter).
+  const nativeValueWei = finalCall.value ? BigInt(finalCall.value) : 0n
+  const calls: CoinbaseSmartWalletCall[] = [
+    { to: finalCall.target as Address, value: nativeValueWei, data: finalCall.data as `0x${string}` },
+  ]
+
+  // 9. Submit via the shared choke point.
+  //    Caps + preflight + daily ledger all handled inside submitUserOpOrRefuse.
+  const submission = await submitUserOpOrRefuse({
+    issuer,
+    calls,
+    valueWei: nativeValueWei,
+    correlationId: `coin/sell/arch-b:${params.groupId}`,
+  })
+  if (!submission.ok) return { ok: false, response: submission.response }
+
+  logger.info('[coin/sell/arch-b] coin sold via UserOp', {
+    groupId: params.groupId,
+    profileId: issuer.profileId,
+    coinAddress,
+    amount,
+    smartWallet: submission.smartWallet,
+    txHash: submission.txHash,
+    userOpHash: submission.userOpHash,
+    hadPermits: (permits?.length ?? 0) > 0,
+  })
+
+  recordExecution(params.groupId)
+  return {
+    ok: true,
+    response: [
+      'Coin sold',
+      '',
+      `- Coin: ${coinAddress}`,
+      `- Amount: ${amount} tokens`,
+      `- Slippage: 3%`,
+      `- Tx: https://basescan.org/tx/${submission.txHash}`,
+      `- Seller: ${submission.smartWallet} (your smart wallet)`,
+    ].join('\n'),
+    action: {
+      action: 'zora.coin.sold',
+      coinAddress,
+      amount,
+      txHash: submission.txHash,
+      userOpHash: submission.userOpHash,
+      seller: submission.smartWallet,
+      groupId: params.groupId,
+      routing: 'arch-b-userop',
+    },
+  }
+}
+
+// ---------------------------------------------------------------------------
 // /coin trend
 // ---------------------------------------------------------------------------
 
@@ -1037,6 +1309,9 @@ export async function handleCoinCommand(params: {
       })
 
     case 'sell':
+      if (isArchBCoinSellViaUserOpEnabled()) {
+        return handleSellViaArchB({ groupId: params.groupId, senderWallet: params.senderWallet, args, vault: params.vault })
+      }
       return handleSell({
         groupId: params.groupId,
         senderWallet: params.senderWallet,
