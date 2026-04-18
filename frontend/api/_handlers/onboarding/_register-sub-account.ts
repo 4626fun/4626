@@ -17,6 +17,10 @@ import {
   verifyPrivyRequest,
 } from '../../../server/_lib/wallet/canonicalCswDelegation.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
+import {
+  WAITLIST_POINTS,
+  awardWaitlistPoints,
+} from '../../../server/_lib/onboarding/waitlistPoints.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -104,6 +108,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updated_at = NOW()
       WHERE id = ${canonical.profileId};
     `
+
+    // Award waitlist points for enabling 4626 signing (sub-account registration).
+    // `awardWaitlistPoints` is idempotent on (source, signup_id) — the
+    // `csw_link` source has a hard one-per-signup cap inside the helper,
+    // so repeated calls are safe and never double-credit. Failures here
+    // must not block sub-account registration, so we wrap best-effort.
+    try {
+      await awardWaitlistPoints({
+        db: db as any,
+        signupId: canonical.profileId,
+        source: 'csw_link',
+        sourceId: `csw:${canonical.canonicalCswAddress.toLowerCase()}`,
+        amount: WAITLIST_POINTS.linkCsw,
+      })
+    } catch {
+      // Swallow — points are additive; sub-account registration already
+      // succeeded and must remain the source of truth for this endpoint.
+    }
 
     const data: RegisterSubAccountResponse = {
       subAccountAddress,

@@ -6,7 +6,12 @@ let waitlistPointsSchemaEnsurePromise: Promise<void> | null = null
 export const WAITLIST_POINTS = {
   // Core actions
   signup: 5,
-  linkCsw: 10,
+  // Sub-account registration (highest single-action reward). Awarded once
+  // per profile by `POST /api/onboarding/register-sub-account`. Source
+  // name remains `csw_link` for schema / query stability — the award is
+  // conceptually "user enabled 4626 signing on their canonical CSW via a
+  // sub-account", per docs/4626-connection-methods.md.
+  linkCsw: 50,
 
   // Referral points (awarded to referrer)
   referralSignup: 2, // When referred user signs up
