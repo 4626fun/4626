@@ -5,6 +5,8 @@ const walletRpcMock = vi.fn()
 const markTrendOpFunnelPendingMock = vi.fn()
 const markTrendOpFunnelCompletedMock = vi.fn()
 const markTrendOpFailedMock = vi.fn()
+const checkWalletBalancePreflightMock = vi.fn()
+const getBasePreflightPublicClientMock = vi.fn(() => ({ getBalance: vi.fn() }))
 const originalFetch = globalThis.fetch
 const TREND_ENV_KEYS = [
   'ZORA_TREND_AUTOMATION_ENABLED',
@@ -44,6 +46,17 @@ vi.mock('../_lib/zora/zoraTrendOpsStore.js', () => ({
   markTrendOpFunnelCompleted: markTrendOpFunnelCompletedMock,
   markTrendOpFailed: markTrendOpFailedMock,
 }))
+
+vi.mock('../_lib/wallet/walletBalancePreflight.js', async () => {
+  const actual = await vi.importActual<typeof import('../_lib/wallet/walletBalancePreflight.js')>(
+    '../_lib/wallet/walletBalancePreflight.js',
+  )
+  return {
+    ...actual,
+    checkWalletBalancePreflight: checkWalletBalancePreflightMock,
+    getBasePreflightPublicClient: getBasePreflightPublicClientMock,
+  }
+})
 
 describe('trend funnel config', () => {
   beforeEach(() => {
@@ -139,6 +152,58 @@ describe('runTrendFunnel', () => {
     expect(markTrendOpFunnelPendingMock).toHaveBeenCalledTimes(1)
   })
 
+  it('refuses with insufficient_funds reason when agent wallet cannot cover gas', async () => {
+    process.env.ZORA_TREND_AUTOMATION_ENABLED = 'true'
+    process.env.ZORA_TREND_FLYWHEEL_ENABLED = 'true'
+    process.env.ZORA_TREND_MAX_NOTIONAL_WEI = '1000000000000000'
+    process.env.ZORA_TREND_MAX_SLIPPAGE_BPS = '300'
+    process.env.ZORA_TREND_ROUTEABILITY_REQUIRED = 'true'
+    process.env.ZORA_TREND_FLYWHEEL_TARGET_TOKEN = '0x9999999999999999999999999999999999999999'
+
+    getOrCreateCreatorAgentWalletMock.mockResolvedValueOnce({
+      walletId: 'wallet_broke',
+      address: '0x3333333333333333333333333333333333333333',
+    })
+
+    const quoteResponse = {
+      call: {
+        target: '0x7777777777777777777777777777777777777777',
+        data: '0x1234',
+        value: '0x0',
+      },
+    }
+    ;(globalThis as any).fetch
+      .mockResolvedValueOnce({ ok: true, json: async () => quoteResponse })
+      .mockResolvedValueOnce({ ok: true, json: async () => quoteResponse })
+      .mockResolvedValueOnce({ ok: true, json: async () => quoteResponse })
+
+    // Preflight reports insufficient balance — walletRpc must NOT be called.
+    checkWalletBalancePreflightMock.mockResolvedValueOnce({
+      sufficient: false,
+      balanceWei: 0n,
+      requiredWei: 1_000_000_000_000_000n,
+      reason: 'insufficient_funds',
+      message:
+        "This trade can't be executed right now — the agent wallet needs funding before it can cover gas. " +
+        'Contact setup or try again after it is topped up.',
+    })
+
+    const { runTrendFunnel } = await import('./trendFunnel')
+    const result = await runTrendFunnel({
+      ticker: 'BASE',
+      tickerHash: '0xddd',
+      trendCoinAddress: '0x1111111111111111111111111111111111111111',
+      creatorToken: '0x2222222222222222222222222222222222222222',
+      groupId: 'g_broke',
+    })
+
+    expect(result.status).toBe('failed')
+    expect(result.reason).toBe('insufficient_funds')
+    // Never leak the raw Privy `have 0 want N` message to users.
+    expect(walletRpcMock).not.toHaveBeenCalled()
+    expect(markTrendOpFailedMock).toHaveBeenCalledTimes(1)
+  })
+
   it('executes guarded funnel action when checks pass', async () => {
     process.env.ZORA_TREND_AUTOMATION_ENABLED = 'true'
     process.env.ZORA_TREND_FLYWHEEL_ENABLED = 'true'
@@ -150,6 +215,13 @@ describe('runTrendFunnel', () => {
     getOrCreateCreatorAgentWalletMock.mockResolvedValueOnce({
       walletId: 'wallet_2',
       address: '0x3333333333333333333333333333333333333333',
+    })
+
+    // Preflight says wallet is funded so the existing success path runs.
+    checkWalletBalancePreflightMock.mockResolvedValueOnce({
+      sufficient: true,
+      balanceWei: 10_000_000_000_000_000n,
+      requiredWei: 4_000_000_000_000_000n,
     })
 
     const quoteResponse = {

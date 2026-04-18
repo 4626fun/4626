@@ -5,6 +5,27 @@ import { base } from 'viem/chains'
 import { getOrCreateCreatorAgentWallet } from '../_lib/wallet/creatorAgentWallets.js'
 import { logger } from '../_lib/infra/logger.js'
 import { BASE_CAIP2, walletRpc } from '../_lib/wallet/privyWalletApi.js'
+import {
+  checkWalletBalancePreflight,
+  getBasePreflightPublicClient,
+  isInsufficientFundsError,
+  type PreflightResult,
+} from '../_lib/wallet/walletBalancePreflight.js'
+
+/**
+ * Sentinel error thrown by `reserveTrendTicker` when the agent wallet cannot
+ * cover the trend-deploy gas cost. Callers (`commands.ts`, `_trendReserve.ts`,
+ * `trendLaunchSentinel.ts`) map this to a friendly user refusal. This is
+ * defensive: the underlying fix is Architecture B (smart-wallet UserOperation
+ * routing), tracked in docs/architecture-b-design.md.
+ */
+export class TrendInsufficientFundsError extends Error {
+  readonly code = 'insufficient_funds'
+  constructor(message: string) {
+    super(message)
+    this.name = 'TrendInsufficientFundsError'
+  }
+}
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -140,30 +161,73 @@ export async function reserveTrendTicker(params: {
     args: [preflight.ticker],
   })
 
+  // Defensive preflight: trend deploy sends value=0x0, so only a gas buffer is
+  // required. If the Privy-managed EOA can't cover gas, refuse early with a
+  // typed error instead of leaking the raw Privy 400. Fail-open on RPC errors.
+  let balancePreflight: PreflightResult | null = null
+  try {
+    balancePreflight = await checkWalletBalancePreflight({
+      publicClient: getBasePreflightPublicClient(),
+      wallet: wallet.address as Address,
+      valueWei: 0n,
+    })
+  } catch (error) {
+    logger.warn('[zora/trends] balance preflight threw unexpectedly; proceeding', {
+      ticker: preflight.ticker,
+      wallet: wallet.address,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+  if (balancePreflight && balancePreflight.sufficient === false) {
+    logger.warn('[zora/trends] agent wallet insufficient for trend deploy', {
+      ticker: preflight.ticker,
+      wallet: wallet.address,
+      balanceWei: balancePreflight.balanceWei.toString(),
+      requiredWei: balancePreflight.requiredWei.toString(),
+    })
+    throw new TrendInsufficientFundsError(balancePreflight.message)
+  }
+
   const idempotencyKey = `zora-trend-deploy:${params.groupId}:${preflight.tickerHash}`
-  const tx = await walletRpc<any>({
-    walletId: wallet.walletId,
-    method: 'eth_sendTransaction',
-    caip2: BASE_CAIP2,
-    rpcParams: {
-      transaction: {
-        to: factory,
-        data,
-        value: '0x0',
-        chain_id: BASE_CHAIN_ID,
+  let tx: any
+  try {
+    tx = await walletRpc<any>({
+      walletId: wallet.walletId,
+      method: 'eth_sendTransaction',
+      caip2: BASE_CAIP2,
+      rpcParams: {
+        transaction: {
+          to: factory,
+          data,
+          value: '0x0',
+          chain_id: BASE_CHAIN_ID,
+        },
       },
-    },
-    idempotencyKey,
-    teeContext: {
-      action: 'zora_trend_deploy',
-      actorAddress: wallet.address,
-      metadata: {
+      idempotencyKey,
+      teeContext: {
+        action: 'zora_trend_deploy',
+        actorAddress: wallet.address,
+        metadata: {
+          ticker: preflight.ticker,
+          tickerHash: preflight.tickerHash,
+          predictedAddress: preflight.predictedAddress,
+        },
+      },
+    })
+  } catch (error) {
+    if (isInsufficientFundsError(error)) {
+      logger.warn('[zora/trends] walletRpc returned insufficient-funds after preflight', {
         ticker: preflight.ticker,
-        tickerHash: preflight.tickerHash,
-        predictedAddress: preflight.predictedAddress,
-      },
-    },
-  })
+        wallet: wallet.address,
+        error: error instanceof Error ? error.message : String(error),
+      })
+      throw new TrendInsufficientFundsError(
+        "This trade can't be executed right now — the agent wallet needs funding before it can cover gas. " +
+          'Contact setup or try again after it is topped up.',
+      )
+    }
+    throw error
+  }
 
   const txHash = String(tx?.data?.hash ?? tx?.hash ?? '').trim()
   if (!txHash || !/^0x[a-fA-F0-9]+$/.test(txHash)) {

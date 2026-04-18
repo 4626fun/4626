@@ -3,6 +3,12 @@ import { encodeFunctionData, parseUnits, isAddress, getAddress } from 'viem'
 
 import { logger } from '../_lib/infra/logger.js'
 import { BASE_CAIP2, walletRpc } from '../_lib/wallet/privyWalletApi.js'
+import {
+  buildInsufficientFundsRefusal,
+  checkWalletBalancePreflight,
+  getBasePreflightPublicClient,
+  isInsufficientFundsError,
+} from '../_lib/wallet/walletBalancePreflight.js'
 import { assertTeeAttestationOrThrow } from '../_lib/agent/teeAttestationGate.js'
 import { checkDurableRateLimit } from '../_lib/infra/durableRateLimit.js'
 import { getDb, isDbConfigured } from '../_lib/db/postgres.js'
@@ -341,6 +347,47 @@ export async function handleSendCommand(params: {
     }
   }
 
+  // Defensive balance preflight: the Privy-managed agent EOA must cover
+  // `value + gas`. For ETH transfers value = parsed amount; for ERC-20
+  // transfers value = 0 (only gas matters). Fail-open on RPC errors.
+  {
+    const preflightValueWei = parsed.token === 'eth' ? parseUnits(parsed.amount, 18) : 0n
+    let preflight: Awaited<ReturnType<typeof checkWalletBalancePreflight>> | null = null
+    try {
+      preflight = await checkWalletBalancePreflight({
+        publicClient: getBasePreflightPublicClient(),
+        wallet: agentWalletAddress as Address,
+        valueWei: preflightValueWei,
+      })
+    } catch (error) {
+      logger.warn('[send] balance preflight threw unexpectedly; proceeding', {
+        groupId: params.groupId,
+        wallet: agentWalletAddress,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+    if (preflight && preflight.sufficient === false) {
+      logger.warn('[send] agent wallet insufficient for transfer', {
+        groupId: params.groupId,
+        wallet: agentWalletAddress,
+        token: parsed.token,
+        balanceWei: preflight.balanceWei.toString(),
+        requiredWei: preflight.requiredWei.toString(),
+      })
+      if (reservedDailySpend) {
+        try {
+          await recordDailySpend(params.vault.vaultAddress, parsed.token, -amountNum)
+        } catch (rollbackError) {
+          logger.error('[send] failed rolling back daily spend after preflight refusal', {
+            groupId: params.groupId,
+            error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
+          })
+        }
+      }
+      return { ok: false, response: preflight.message }
+    }
+  }
+
   try {
     let txHash: string
 
@@ -448,6 +495,21 @@ export async function handleSendCommand(params: {
           amount: amountNum,
           error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
         })
+      }
+    }
+    // Map raw insufficient-funds errors that slipped past preflight
+    // (e.g. preflight RPC failure, or gas estimation jumped above our buffer)
+    // to the same friendly refusal so we never leak raw Privy 400s.
+    if (isInsufficientFundsError(err)) {
+      logger.warn('[send] walletRpc returned insufficient-funds after preflight', {
+        groupId: params.groupId,
+        wallet: agentWalletAddress,
+        token: parsed.token,
+        error: err?.message,
+      })
+      return {
+        ok: false,
+        response: buildInsufficientFundsRefusal({ balanceWei: 0n, requiredWei: 0n }),
       }
     }
     const msg = err?.message ?? 'Transaction failed'
