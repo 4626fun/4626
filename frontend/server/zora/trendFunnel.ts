@@ -3,7 +3,7 @@ import { getAddress, isAddress } from 'viem'
 
 import { getOrCreateCreatorAgentWallet } from '../_lib/wallet/creatorAgentWallets.js'
 import { logger } from '../_lib/infra/logger.js'
-import { walletRpc } from '../_lib/wallet/privyWalletApi.js'
+import { BASE_CAIP2, walletRpc } from '../_lib/wallet/privyWalletApi.js'
 import { markTrendOpFailed, markTrendOpFunnelCompleted, markTrendOpFunnelPending } from '../_lib/zora/zoraTrendOpsStore.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -326,6 +326,7 @@ export async function runTrendFunnel(params: {
     const tx = await walletRpc<any>({
       walletId: wallet.walletId,
       method: 'eth_sendTransaction',
+      caip2: BASE_CAIP2,
       rpcParams: {
         transaction: {
           to: actionQuote.call.target,
