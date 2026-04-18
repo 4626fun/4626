@@ -57,8 +57,10 @@ vi.mock('@/components/ui/LoadingState', () => ({
 
 // ── Mock useArchBDelegation ───────────────────────────────────────────────────
 
-const mockEnable = vi.fn<() => Promise<void>>(async () => undefined)
-const mockDisable = vi.fn<() => Promise<void>>(async () => undefined)
+import type { ArchBActionResult } from './useArchBDelegation'
+
+const mockEnable = vi.fn<() => Promise<ArchBActionResult>>(async () => ({ ok: true }))
+const mockDisable = vi.fn<() => Promise<ArchBActionResult>>(async () => ({ ok: true }))
 const mockRefresh = vi.fn<() => void>()
 
 const delegationState: UseArchBDelegationReturn = {
@@ -153,7 +155,7 @@ describe('ArchBEnrollmentCard', () => {
 
   it('calls enable() when Enable button is clicked', async () => {
     setStatus('not_delegated')
-    mockEnable.mockResolvedValue(undefined)
+    mockEnable.mockResolvedValue({ ok: true })
     renderCard()
 
     fireEvent.click(screen.getByText('Enable'))

@@ -224,4 +224,98 @@ describe('useArchBDelegation', () => {
     await waitFor(() => expect(result.current.status).toBe('unlinked'))
     expect(mockApiFetch).not.toHaveBeenCalled()
   })
+
+  it('disable() returns { ok: false, error } when revoke backend fails (no silent success)', async () => {
+    mockApiFetch
+      .mockResolvedValueOnce(
+        statusResponse('ready', true, {
+          perTxCapWei: '10000000000000000',
+          dailyCapWei: '50000000000000000',
+        }),
+      ) // initial
+      .mockResolvedValueOnce(
+        jsonResponse({ success: false, error: 'db_unavailable' }, 503),
+      ) // revoke POST fails
+
+    const { result } = renderHook(() => useArchBDelegation())
+    await waitFor(() => expect(result.current.status).toBe('provisioned'))
+
+    let outcome: Awaited<ReturnType<typeof result.current.disable>> | undefined
+    await act(async () => {
+      outcome = await result.current.disable()
+    })
+
+    expect(outcome).toEqual({
+      ok: false,
+      error: expect.objectContaining({ code: 'db_unavailable' }),
+    })
+    expect(result.current.status).toBe('error')
+    // Privy revoke must NOT be called if backend revoke failed (hard-fail guard)
+    expect(mockRevokeWallets).not.toHaveBeenCalled()
+  })
+
+  it('disable() returns { ok: true } on success', async () => {
+    mockApiFetch
+      .mockResolvedValueOnce(
+        statusResponse('ready', true, {
+          perTxCapWei: '10000000000000000',
+          dailyCapWei: '50000000000000000',
+        }),
+      )
+      .mockResolvedValueOnce(jsonResponse({ success: true }))
+      .mockResolvedValueOnce(statusResponse('revoked', false))
+
+    mockRevokeWallets.mockResolvedValue(undefined)
+
+    const { result } = renderHook(() => useArchBDelegation())
+    await waitFor(() => expect(result.current.status).toBe('provisioned'))
+
+    let outcome: Awaited<ReturnType<typeof result.current.disable>> | undefined
+    await act(async () => {
+      outcome = await result.current.disable()
+    })
+
+    expect(outcome).toEqual({ ok: true })
+  })
+
+  it('enable() returns { ok: false, error } when delegation declined', async () => {
+    mockApiFetch.mockResolvedValueOnce(statusResponse('not_provisioned', false))
+    mockDelegateWallet.mockRejectedValue(new Error('User declined'))
+
+    const { result } = renderHook(() => useArchBDelegation())
+    await waitFor(() => expect(result.current.status).toBe('not_delegated'))
+
+    let outcome: Awaited<ReturnType<typeof result.current.enable>> | undefined
+    await act(async () => {
+      outcome = await result.current.enable()
+    })
+
+    expect(outcome).toEqual({
+      ok: false,
+      error: expect.objectContaining({ code: 'delegation_declined' }),
+    })
+  })
+
+  it('enable() returns { ok: true } on happy path', async () => {
+    mockApiFetch
+      .mockResolvedValueOnce(statusResponse('not_provisioned', false))
+      .mockResolvedValueOnce(jsonResponse({ success: true, data: { profileId: 'p1' } }))
+      .mockResolvedValueOnce(
+        statusResponse('ready', true, {
+          perTxCapWei: '10000000000000000',
+          dailyCapWei: '50000000000000000',
+        }),
+      )
+    mockDelegateWallet.mockResolvedValue(undefined)
+
+    const { result } = renderHook(() => useArchBDelegation())
+    await waitFor(() => expect(result.current.status).toBe('not_delegated'))
+
+    let outcome: Awaited<ReturnType<typeof result.current.enable>> | undefined
+    await act(async () => {
+      outcome = await result.current.enable()
+    })
+
+    expect(outcome).toEqual({ ok: true })
+  })
 })

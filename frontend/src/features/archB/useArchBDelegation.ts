@@ -58,14 +58,23 @@ export type ArchBDelegationError = {
   message: string
 }
 
+/**
+ * Result shape returned by enable()/disable(). Callers should inspect
+ * `ok` before claiming success to the user — the hook never throws for
+ * backend/network failures; it surfaces them via state and this result.
+ */
+export type ArchBActionResult =
+  | { ok: true }
+  | { ok: false; error: ArchBDelegationError }
+
 export type UseArchBDelegationReturn = {
   status: ArchBDelegationStatus
   caps: ArchBDelegationCaps | null
   error: ArchBDelegationError | null
   /** Trigger delegation consent + backend enroll. No-op if not ready. */
-  enable: () => Promise<void>
+  enable: () => Promise<ArchBActionResult>
   /** Backend revoke + Privy wallet revoke. No-op if not provisioned. */
-  disable: () => Promise<void>
+  disable: () => Promise<ArchBActionResult>
   /** Manually refresh status (e.g. after returning from external browser). */
   refresh: () => void
 }
@@ -233,20 +242,18 @@ export function useArchBDelegation(): UseArchBDelegationReturn {
 
   // ── enable() ──────────────────────────────────────────────────────────────
 
-  const enable = useCallback(async () => {
-    if (!readyRef.current) return
-    if (!authenticated) return
+  const enable = useCallback(async (): Promise<ArchBActionResult> => {
+    if (!readyRef.current) return { ok: false, error: toArchBError('not_ready', 'Privy not ready.') }
+    if (!authenticated) return { ok: false, error: toArchBError('unauthenticated', 'Not signed in.') }
 
     dispatch({ type: 'ENABLE_START' })
 
     // Step 1: Privy delegateWallet consent modal
     const address = ownerEoa
     if (!address) {
-      dispatch({
-        type: 'ERROR',
-        error: toArchBError('no_embedded_wallet', 'No embedded wallet found.'),
-      })
-      return
+      const error = toArchBError('no_embedded_wallet', 'No embedded wallet found.')
+      dispatch({ type: 'ERROR', error })
+      return { ok: false, error }
     }
 
     try {
@@ -255,11 +262,9 @@ export function useArchBDelegation(): UseArchBDelegationReturn {
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : 'Delegation declined or unavailable.'
-      dispatch({
-        type: 'ERROR',
-        error: toArchBError('delegation_declined', message),
-      })
-      return
+      const error = toArchBError('delegation_declined', message)
+      dispatch({ type: 'ERROR', error })
+      return { ok: false, error }
     }
 
     // Step 2: POST /api/arch-b/enroll
@@ -272,49 +277,43 @@ export function useArchBDelegation(): UseArchBDelegationReturn {
 
       if (res.status === 409) {
         // delegation_not_configured — delegation present but quorum mismatch
-        dispatch({
-          type: 'ERROR',
-          error: toArchBError(
-            'delegation_not_found',
-            'Delegation was not recognized. Please try again or contact support.',
-          ),
-        })
-        return
+        const error = toArchBError(
+          'delegation_not_found',
+          'Delegation was not recognized. Please try again or contact support.',
+        )
+        dispatch({ type: 'ERROR', error })
+        return { ok: false, error }
       }
 
       if (res.status === 400) {
         const body = await res.json().catch(() => ({ error: 'enroll_failed' })) as { error?: string }
-        dispatch({
-          type: 'ERROR',
-          error: toArchBError(body.error ?? 'enroll_failed', 'Enrollment failed. Please try again.'),
-        })
-        return
+        const error = toArchBError(body.error ?? 'enroll_failed', 'Enrollment failed. Please try again.')
+        dispatch({ type: 'ERROR', error })
+        return { ok: false, error }
       }
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({ error: 'enroll_failed' })) as { error?: string }
-        dispatch({
-          type: 'ERROR',
-          error: toArchBError(body.error ?? 'enroll_failed', 'Enrollment request failed.'),
-        })
-        return
+        const error = toArchBError(body.error ?? 'enroll_failed', 'Enrollment request failed.')
+        dispatch({ type: 'ERROR', error })
+        return { ok: false, error }
       }
 
       // Success — refetch canonical status
       await fetchStatus()
+      return { ok: true }
     } catch {
-      dispatch({
-        type: 'ERROR',
-        error: toArchBError('network_error', 'Could not reach the server during enrollment.'),
-      })
+      const error = toArchBError('network_error', 'Could not reach the server during enrollment.')
+      dispatch({ type: 'ERROR', error })
+      return { ok: false, error }
     }
   }, [authenticated, ownerEoa, delegateWallet, fetchStatus])
 
   // ── disable() ─────────────────────────────────────────────────────────────
 
-  const disable = useCallback(async () => {
-    if (!readyRef.current) return
-    if (!authenticated) return
+  const disable = useCallback(async (): Promise<ArchBActionResult> => {
+    if (!readyRef.current) return { ok: false, error: toArchBError('not_ready', 'Privy not ready.') }
+    if (!authenticated) return { ok: false, error: toArchBError('unauthenticated', 'Not signed in.') }
 
     dispatch({ type: 'DISABLE_START' })
 
@@ -328,18 +327,14 @@ export function useArchBDelegation(): UseArchBDelegationReturn {
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({ error: 'revoke_failed' })) as { error?: string }
-        dispatch({
-          type: 'ERROR',
-          error: toArchBError(body.error ?? 'revoke_failed', 'Revoke request failed.'),
-        })
-        return
+        const error = toArchBError(body.error ?? 'revoke_failed', 'Revoke request failed.')
+        dispatch({ type: 'ERROR', error })
+        return { ok: false, error }
       }
     } catch {
-      dispatch({
-        type: 'ERROR',
-        error: toArchBError('network_error', 'Could not reach the server during revoke.'),
-      })
-      return
+      const error = toArchBError('network_error', 'Could not reach the server during revoke.')
+      dispatch({ type: 'ERROR', error })
+      return { ok: false, error }
     }
 
     // Step 2: revoke Privy delegation (best-effort — context is already revoked)
@@ -350,6 +345,7 @@ export function useArchBDelegation(): UseArchBDelegationReturn {
     }
 
     await fetchStatus()
+    return { ok: true }
   }, [authenticated, revokeWallets, fetchStatus])
 
   // ── Effects ───────────────────────────────────────────────────────────────

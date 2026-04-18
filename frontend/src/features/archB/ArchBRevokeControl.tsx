@@ -21,14 +21,23 @@ export function ArchBRevokeControl() {
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [revoking, setRevoking] = useState(false)
 
-  if (status !== 'provisioned') return null
+  // Render when delegation is active OR when a prior revoke attempt failed
+  // (so the user retains a visible retry path). All other states hide the control.
+  if (status !== 'provisioned' && status !== 'error') return null
 
   async function handleConfirmRevoke() {
     setRevoking(true)
     try {
-      await disable()
-      setConfirmOpen(false)
-      toast.success('Bot-initiated transfers revoked. Your wallet will no longer be used for /keepr send commands.')
+      const result = await disable()
+      if (result.ok) {
+        setConfirmOpen(false)
+        toast.success(
+          'Bot-initiated transfers revoked. Your wallet will no longer be used for /keepr send commands.',
+        )
+      } else {
+        // Keep the modal open so the user sees the error and can retry or cancel.
+        toast.error(result.error.message)
+      }
     } finally {
       setRevoking(false)
     }
@@ -45,13 +54,17 @@ export function ArchBRevokeControl() {
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <Badge variant="success" size="sm">Enabled</Badge>
+          {status === 'error' ? (
+            <Badge variant="warning" size="sm">Revoke failed</Badge>
+          ) : (
+            <Badge variant="success" size="sm">Enabled</Badge>
+          )}
           <Button
             variant="secondary"
             size="sm"
             onClick={() => setConfirmOpen(true)}
           >
-            Revoke
+            {status === 'error' ? 'Retry revoke' : 'Revoke'}
           </Button>
         </div>
       </div>
