@@ -408,16 +408,23 @@ function MetricChart({
                     label,
                     data: values,
                     color: palette.primary,
-                    // Gradient stops must be in ASCENDING offset order per
-                    // CDS; reversing would spam "Gradient: stop offsets
-                    // must be in ascending order" on every render. Opacity
-                    // values keep the same visual (darker at top of bar).
+                    // Gradient stops must be in STRICTLY ascending offset
+                    // order per CDS. Reversing, or letting a degenerate
+                    // domain (min === max — e.g. all-zero volume/fees
+                    // series) through, spams "Gradient: stop offsets must
+                    // be in ascending order" on every render, which backs
+                    // up the browser. The nudge on `max` keeps the stops
+                    // strictly ordered even when the series is flat.
                     gradient: {
                       axis: 'y',
-                      stops: (domain) => [
-                        { offset: domain.min, color: palette.secondary, opacity: 0.45 },
-                        { offset: domain.max, color: palette.primary, opacity: 0.95 },
-                      ],
+                      stops: (domain) => {
+                        const min = domain.min
+                        const max = domain.max > domain.min ? domain.max : domain.min + 1
+                        return [
+                          { offset: min, color: palette.secondary, opacity: 0.45 },
+                          { offset: max, color: palette.primary, opacity: 0.95 },
+                        ]
+                      },
                     },
                   },
                 ]}
