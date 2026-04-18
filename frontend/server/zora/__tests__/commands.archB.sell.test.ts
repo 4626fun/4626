@@ -37,6 +37,7 @@ const wrapCswOwnerSignatureMock = vi.fn()
 const warnMock = vi.fn()
 const walletRpcMock = vi.fn()
 const fetchMock = vi.fn()
+const checkRouterTargetMock = vi.fn()
 
 vi.mock('../../_lib/wallet/commandIssuerContext.js', () => ({
   resolveCommandIssuerContextByAddress: (...args: unknown[]) => resolveContextMock(...args),
@@ -62,6 +63,10 @@ vi.mock('../../_lib/infra/logger.js', () => ({
     warn: (...args: unknown[]) => warnMock(...args),
     error: vi.fn(),
   },
+}))
+
+vi.mock('../routerAllowlist.js', () => ({
+  checkRouterTarget: (...args: unknown[]) => checkRouterTargetMock(...args),
 }))
 
 // Stub the legacy agent-wallet path -- should never be reached under Arch B.
@@ -199,7 +204,8 @@ describe('handleCoinCommand -- /coin sell via Architecture B', () => {
     // Patch global fetch so getTradeQuoteWithReferrer is controlled.
     vi.stubGlobal('fetch', fetchMock)
 
-    // Default: attestation passes, no permits, UserOp succeeds.
+    // Default: attestation passes, no permits, UserOp succeeds,
+    // router allowlist allows (observe mode semantics).
     attestationGateMock.mockResolvedValue(undefined)
     mockQuoteResponseNoPermits()
     submitUserOpMock.mockResolvedValue({
@@ -210,6 +216,7 @@ describe('handleCoinCommand -- /coin sell via Architecture B', () => {
     })
     secp256k1SignHashMock.mockResolvedValue(OWNER_SIG_65)
     wrapCswOwnerSignatureMock.mockReturnValue(WRAPPED_SIG)
+    checkRouterTargetMock.mockReturnValue({ allowed: true })
   })
 
   // -----------------------------------------------------------------------
@@ -604,6 +611,73 @@ describe('handleCoinCommand -- /coin sell via Architecture B', () => {
 
     expect(result.ok).toBe(false)
     expect(result.response).toContain('finalize the quote after signing')
+    expect(submitUserOpMock).not.toHaveBeenCalled()
+  })
+
+  // -----------------------------------------------------------------------
+  // Router allowlist guard (trust boundary on the sell path)
+  // -----------------------------------------------------------------------
+
+  it('blocks the sell when the initial-quote router target is not on the allowlist', async () => {
+    resolveContextMock.mockResolvedValue({ status: 'ready', context: READY_CONTEXT })
+    mockQuoteResponseNoPermits()
+    checkRouterTargetMock.mockReturnValueOnce({
+      allowed: false,
+      reason: 'Router target 0xbad is not on the allowlist.',
+    })
+
+    const result = await callSell()
+
+    expect(result.ok).toBe(false)
+    expect(result.response).toContain("isn't on the approved list")
+    // Must refuse BEFORE any Permit2 signing happens.
+    expect(secp256k1SignHashMock).not.toHaveBeenCalled()
+    expect(submitUserOpMock).not.toHaveBeenCalled()
+    // Warn log captured so we have telemetry on blocked routers.
+    expect(warnMock).toHaveBeenCalled()
+  })
+
+  it('blocks the sell when the re-quote router target is not on the allowlist', async () => {
+    resolveContextMock.mockResolvedValue({ status: 'ready', context: READY_CONTEXT })
+    // Initial quote has permits; re-quote returns a different target that the
+    // allowlist rejects on the second call.
+    mockQuoteResponseWithPermits({
+      target: '0x0000000000000000000000000000000000000bad',
+      data: '0xdead',
+      value: '0',
+    } as any)
+    checkRouterTargetMock
+      .mockReturnValueOnce({ allowed: true }) // initial OK
+      .mockReturnValueOnce({ allowed: false, reason: 'not on allowlist' }) // re-quote blocked
+    secp256k1SignHashMock.mockResolvedValue(OWNER_SIG_65)
+
+    const result = await callSell()
+
+    expect(result.ok).toBe(false)
+    expect(result.response).toContain('after signing the permit')
+    // Permit was signed (we had to, to reach the re-quote), but UserOp
+    // must NOT have been submitted.
+    expect(secp256k1SignHashMock).toHaveBeenCalled()
+    expect(submitUserOpMock).not.toHaveBeenCalled()
+  })
+
+  it('blocks the sell when the router target changes between initial quote and re-quote', async () => {
+    resolveContextMock.mockResolvedValue({ status: 'ready', context: READY_CONTEXT })
+    // Initial target = MOCK_CALL.target; re-quote returns a DIFFERENT (but
+    // still allowlisted) target. This is the mid-flow redirect defense.
+    mockQuoteResponseWithPermits({
+      target: '0x000000000022d473030f116ddee9f6b43ac78ba3', // Permit2 — allowlisted but not the same as initial
+      data: '0xdead',
+      value: '0',
+    } as any)
+    // Both allowlist checks allow; the target-consistency check is what blocks.
+    checkRouterTargetMock.mockReturnValue({ allowed: true })
+    secp256k1SignHashMock.mockResolvedValue(OWNER_SIG_65)
+
+    const result = await callSell()
+
+    expect(result.ok).toBe(false)
+    expect(result.response).toContain('router address changed after signing the permit')
     expect(submitUserOpMock).not.toHaveBeenCalled()
   })
 })
