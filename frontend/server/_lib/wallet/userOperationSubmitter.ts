@@ -472,3 +472,9 @@ export function isArchBSendViaUserOpEnabled(): boolean {
   const raw = (process.env.ARCH_B_SEND_VIA_USEROP ?? '').trim().toLowerCase()
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
 }
+
+/** True iff `ARCH_B_COIN_BUY_VIA_USEROP` is truthy in env. */
+export function isArchBCoinBuyViaUserOpEnabled(): boolean {
+  const raw = (process.env.ARCH_B_COIN_BUY_VIA_USEROP ?? '').trim().toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
+}
