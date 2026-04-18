@@ -16,6 +16,7 @@ import { toast } from '@/components/ui/Toast'
 import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
+import { ArchBEnrollmentCard } from '@/features/archB/ArchBEnrollmentCard'
 import { shortValue } from './shared'
 import type { AccountLinkProvider } from './types'
 import type { useAccountSetupController } from './useAccountSetupController'
@@ -455,6 +456,9 @@ export function AccountSetupWorkspaceView(props: {
             )
           })()}
         </div>
+
+        {/* Arch B enrollment — delegation consent card. Shown after linking, before execution-ready. */}
+        <ArchBEnrollmentCard hasCanonicalCsw={Boolean(canonicalCswAddress)} />
 
         {/* Advanced — identities + co-owner management. Collapsed by default. */}
         <WaitlistAdvancedSection controller={controller} />
