@@ -9,6 +9,15 @@ import {
   getBasePreflightPublicClient,
   isInsufficientFundsError,
 } from '../_lib/wallet/walletBalancePreflight.js'
+import {
+  resolveCommandIssuerContextByAddress,
+  isExecutionReady,
+} from '../_lib/wallet/commandIssuerContext.js'
+import {
+  isArchBSendViaUserOpEnabled,
+  submitUserOpOrRefuse,
+} from '../_lib/wallet/userOperationSubmitter.js'
+import type { CoinbaseSmartWalletCall } from '../_lib/wallet/privyCoinbaseSmartWallet.js'
 import { assertTeeAttestationOrThrow } from '../_lib/agent/teeAttestationGate.js'
 import { checkDurableRateLimit } from '../_lib/infra/durableRateLimit.js'
 import { getDb, isDbConfigured } from '../_lib/db/postgres.js'
@@ -291,6 +300,26 @@ export async function handleSendCommand(params: {
     return { ok: false, response: `Limit exceeded: ${limitsCheck.reason}` }
   }
 
+  // -------------------------------------------------------------------------
+  // Architecture B (Phase 2): route /keepr send through the issuer's Coinbase
+  // Smart Wallet via UserOperation when `ARCH_B_SEND_VIA_USEROP` is enabled.
+  // This branch resolves the command issuer's execution context, then hands
+  // off to the submitter which enforces caps + preflight on the CSW.
+  // Hard-fail if the issuer is not execution-ready — no silent fallback.
+  // -------------------------------------------------------------------------
+  if (isArchBSendViaUserOpEnabled()) {
+    const archBResult = await handleSendCommandViaArchB({
+      groupId: params.groupId,
+      senderWallet: params.senderWallet,
+      recipient,
+      parsed,
+      tokenInfo,
+      amountNum,
+      vault: params.vault,
+    })
+    return archBResult
+  }
+
   try {
     await assertTeeAttestationOrThrow({
       action: 'keepr.send.transfer',
@@ -515,5 +544,188 @@ export async function handleSendCommand(params: {
     const msg = err?.message ?? 'Transaction failed'
     logger.error('[send] Transfer failed', { error: msg, groupId: params.groupId })
     return { ok: false, response: `Transfer failed: ${msg.slice(0, 200)}` }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Architecture B (Phase 2) — /keepr send via UserOperation on issuer's CSW.
+// ---------------------------------------------------------------------------
+
+async function handleSendCommandViaArchB(params: {
+  groupId: string
+  senderWallet: Address
+  recipient: Address
+  parsed: { amount: string; token: string; recipient: string }
+  tokenInfo: { address: Address; decimals: number; name: string }
+  amountNum: number
+  vault: KeeprVaultRow
+}): Promise<KeeprCommandResult> {
+  // 1. Resolve the command issuer's execution context. Hard-fail if not
+  //    provisioned or revoked — no fallback to the legacy EOA path.
+  const resolution = await resolveCommandIssuerContextByAddress(params.senderWallet)
+  if (!isExecutionReady(resolution)) {
+    logger.warn('[send/arch-b] issuer not execution-ready; refusing', {
+      groupId: params.groupId,
+      senderWallet: params.senderWallet,
+      status: resolution.status,
+    })
+    if (resolution.status === 'db_unavailable') {
+      return {
+        ok: false,
+        response:
+          "This trade can't be executed right now — account readiness storage is temporarily unavailable. Please try again shortly.",
+      }
+    }
+    if (resolution.status === 'revoked') {
+      return {
+        ok: false,
+        response:
+          "This trade can't be executed — your execution context has been revoked. Contact setup to restore access.",
+      }
+    }
+    return {
+      ok: false,
+      response:
+        "This trade can't be executed — your account isn't provisioned for onchain execution yet. Contact setup to finish provisioning.",
+    }
+  }
+  const issuer = resolution.context
+
+  // 2. TEE attestation gate (same as legacy path).
+  try {
+    await assertTeeAttestationOrThrow({
+      action: 'keepr.send.transfer',
+      actorAddress: params.senderWallet,
+      metadata: {
+        groupId: params.groupId,
+        vaultAddress: params.vault.vaultAddress,
+        token: params.parsed.token,
+        archBPhase: 2,
+      },
+    })
+  } catch (err) {
+    logger.warn('[send/arch-b] TEE attestation gate denied send', {
+      groupId: params.groupId,
+      senderWallet: params.senderWallet,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return {
+      ok: false,
+      response:
+        'Transfer denied: secure signer attestation is not verified. Please retry once attestation is healthy.',
+    }
+  }
+
+  // 3. Reserve vault-scoped legacy daily spend first. The submitter handles
+  //    profile-scoped daily spend internally — keeping the vault ledger in
+  //    sync preserves audit trails across both routing paths.
+  let reservedLegacyDailySpend = false
+  try {
+    await recordDailySpend(params.vault.vaultAddress, params.parsed.token, params.amountNum)
+    reservedLegacyDailySpend = true
+  } catch (err) {
+    logger.error('[send/arch-b] failed reserving legacy daily spend', {
+      groupId: params.groupId,
+      vaultAddress: params.vault.vaultAddress,
+      token: params.parsed.token,
+      amount: params.amountNum,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return {
+      ok: false,
+      response:
+        'Transfer unavailable: durable daily limits are temporarily unavailable. Please retry shortly.',
+    }
+  }
+
+  // 4. Build calls + native valueWei for caps/preflight.
+  let calls: CoinbaseSmartWalletCall[]
+  let nativeValueWei: bigint
+  if (params.parsed.token === 'eth') {
+    nativeValueWei = parseUnits(params.parsed.amount, 18)
+    calls = [
+      {
+        to: params.recipient,
+        value: nativeValueWei,
+        data: '0x',
+      },
+    ]
+  } else {
+    nativeValueWei = 0n
+    const amountUnits = parseUnits(params.parsed.amount, params.tokenInfo.decimals)
+    const data = encodeFunctionData({
+      abi: ERC20_TRANSFER_ABI,
+      functionName: 'transfer',
+      args: [params.recipient, amountUnits],
+    })
+    calls = [
+      {
+        to: params.tokenInfo.address,
+        value: 0n,
+        data,
+      },
+    ]
+  }
+
+  // 5. Submit.
+  const submission = await submitUserOpOrRefuse({
+    issuer,
+    calls,
+    valueWei: nativeValueWei,
+    correlationId: `send/arch-b:${params.groupId}`,
+  })
+
+  if (!submission.ok) {
+    // Roll back the legacy vault ledger so a refused/failed submission
+    // doesn't consume the vault's daily budget.
+    if (reservedLegacyDailySpend) {
+      try {
+        await recordDailySpend(params.vault.vaultAddress, params.parsed.token, -params.amountNum)
+      } catch (rollbackError) {
+        logger.error('[send/arch-b] legacy daily-spend rollback failed', {
+          groupId: params.groupId,
+          error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
+        })
+      }
+    }
+    return { ok: false, response: submission.response }
+  }
+
+  logger.info('[send/arch-b] transfer sent via UserOp', {
+    groupId: params.groupId,
+    profileId: issuer.profileId,
+    token: params.tokenInfo.name,
+    amount: params.parsed.amount,
+    recipient: params.recipient,
+    smartWallet: submission.smartWallet,
+    userOpHash: submission.userOpHash,
+    txHash: submission.txHash,
+    sender: params.senderWallet,
+  })
+
+  return {
+    ok: true,
+    response: [
+      'Transfer sent',
+      '',
+      `- Amount: ${params.parsed.amount} ${params.tokenInfo.name}`,
+      `- To: ${params.recipient}`,
+      `- From: ${submission.smartWallet} (your smart wallet)`,
+      `- Tx: https://basescan.org/tx/${submission.txHash}`,
+      `- Requested by: ${params.senderWallet}`,
+    ].join('\n'),
+    action: {
+      action: 'keepr.send.transfer',
+      token: params.tokenInfo.name,
+      amount: params.parsed.amount,
+      recipient: params.recipient,
+      txHash: submission.txHash,
+      userOpHash: submission.userOpHash,
+      smartWallet: submission.smartWallet,
+      requestedBy: params.senderWallet,
+      vaultAddress: params.vault.vaultAddress,
+      groupId: params.groupId,
+      routing: 'arch-b-userop',
+    },
   }
 }
