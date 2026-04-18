@@ -506,7 +506,8 @@ describe('handleCoinCommand -- /coin sell via Architecture B', () => {
     expect(result.ok).toBe(true)
     // Confirm amountIn sent to fetch is the exact base-unit integer, not a
     // rounded/truncated value.
-    const lastFetchCall = fetchMock.mock.calls.at(-1)
+    const lastFetchCall =
+      fetchMock.mock.calls[fetchMock.mock.calls.length - 1]
     const body = JSON.parse(lastFetchCall?.[1]?.body ?? '{}')
     expect(body.amountIn).toBe('123456789012345678')
   })
