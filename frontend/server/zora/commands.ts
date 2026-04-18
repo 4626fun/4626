@@ -3,7 +3,7 @@ import { isAddress, getAddress, parseEther, formatEther, formatUnits, createPubl
 import { base } from 'viem/chains'
 
 import { logger } from '../_lib/infra/logger.js'
-import { walletRpc } from '../_lib/wallet/privyWalletApi.js'
+import { BASE_CAIP2, walletRpc } from '../_lib/wallet/privyWalletApi.js'
 import type { KeeprVaultRow } from '../_lib/keepr/keeprRegistry.js'
 import type { KeeprRole, KeeprCommandResult } from '../commands/types.js'
 
@@ -303,6 +303,7 @@ async function handleCreate(params: {
       const result = await walletRpc<any>({
         walletId: agentWalletId,
         method: 'eth_sendTransaction',
+        caip2: BASE_CAIP2,
         rpcParams: {
           transaction: {
             to: call.to,
@@ -416,6 +417,7 @@ async function handleBuy(params: {
     const result = await walletRpc<any>({
       walletId: agentWalletId,
       method: 'eth_sendTransaction',
+      caip2: BASE_CAIP2,
       rpcParams: {
         transaction: {
           to: call.target,
@@ -596,6 +598,7 @@ async function handleSell(params: {
     const result = await walletRpc<any>({
       walletId: agentWalletId,
       method: 'eth_sendTransaction',
+      caip2: BASE_CAIP2,
       rpcParams: {
         transaction: {
           to: finalCall.target,

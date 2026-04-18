@@ -5,6 +5,18 @@ declare const process: { env: Record<string, string | undefined> }
 
 const PRIVY_API_ORIGIN = 'https://api.privy.io'
 
+/**
+ * CAIP-2 chain identifiers for Privy wallet RPC calls.
+ *
+ * Privy's /v1/wallets/{id}/rpc endpoint requires a top-level `caip2` field for
+ * chain-action RPC methods (notably `eth_sendTransaction`). Raw signing methods
+ * (`secp256k1_sign`, `personal_sign`, `eth_signTypedData_v4`) do not require it.
+ *
+ * Docs: https://docs.privy.io/api-reference/wallets/ethereum/eth-send-transaction
+ */
+export const BASE_CAIP2 = 'eip155:8453' as const
+export type Caip2 = `eip155:${number}`
+
 type PrivyWallet = {
   id: string
   address: string
@@ -203,6 +215,14 @@ export async function walletRpc<T>(params: {
   walletId: string
   method: string
   rpcParams: any
+  /**
+   * CAIP-2 chain identifier (e.g. 'eip155:8453' for Base).
+   *
+   * REQUIRED by Privy for chain-action RPC methods such as `eth_sendTransaction`.
+   * Optional for raw signing methods (`secp256k1_sign`, `personal_sign`,
+   * `eth_signTypedData_v4`). When omitted, the field is not sent in the body.
+   */
+  caip2?: Caip2
   chainType?: 'ethereum' | 'solana'
   idempotencyKey?: string
   teeContext?: {
@@ -225,11 +245,15 @@ export async function walletRpc<T>(params: {
     },
   })
 
-  const body = {
+  const body: Record<string, unknown> = {
     method: params.method,
     params: params.rpcParams,
     chain_type: params.chainType ?? 'ethereum',
   }
+  // Only include caip2 when provided — Privy rejects requests missing it for
+  // chain-action methods (e.g. eth_sendTransaction), but signing methods must
+  // not send it. See Privy API reference linked above.
+  if (params.caip2) body.caip2 = params.caip2
   return await privyFetchJson<T>({
     method: 'POST',
     path: `/v1/wallets/${encodeURIComponent(params.walletId)}/rpc`,

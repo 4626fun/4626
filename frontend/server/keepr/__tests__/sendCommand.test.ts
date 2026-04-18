@@ -20,6 +20,7 @@ vi.mock('../../_lib/db/postgres.js', () => ({
 
 vi.mock('../../_lib/wallet/privyWalletApi.js', () => ({
   walletRpc: (...args: unknown[]) => walletRpcMock(...args),
+  BASE_CAIP2: 'eip155:8453',
 }))
 
 vi.mock('../../_lib/agent/teeAttestationGate.js', () => ({

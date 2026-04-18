@@ -4,7 +4,7 @@ import { base } from 'viem/chains'
 
 import { getOrCreateCreatorAgentWallet } from '../_lib/wallet/creatorAgentWallets.js'
 import { logger } from '../_lib/infra/logger.js'
-import { walletRpc } from '../_lib/wallet/privyWalletApi.js'
+import { BASE_CAIP2, walletRpc } from '../_lib/wallet/privyWalletApi.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -144,6 +144,7 @@ export async function reserveTrendTicker(params: {
   const tx = await walletRpc<any>({
     walletId: wallet.walletId,
     method: 'eth_sendTransaction',
+    caip2: BASE_CAIP2,
     rpcParams: {
       transaction: {
         to: factory,

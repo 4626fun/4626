@@ -36,6 +36,7 @@ vi.mock('../_lib/wallet/creatorAgentWallets.js', () => ({
 
 vi.mock('../_lib/wallet/privyWalletApi.js', () => ({
   walletRpc: walletRpcMock,
+  BASE_CAIP2: 'eip155:8453',
 }))
 
 vi.mock('../_lib/zora/zoraTrendOpsStore.js', () => ({
@@ -179,6 +180,10 @@ describe('runTrendFunnel', () => {
     expect(walletRpcMock).toHaveBeenCalledTimes(1)
     expect(walletRpcMock).toHaveBeenCalledWith(
       expect.objectContaining({
+        method: 'eth_sendTransaction',
+        // Privy requires top-level caip2 on chain-action RPC methods; omitting it
+        // returns a 400 ('caip2 is required'). Lock in the regression here.
+        caip2: 'eip155:8453',
         idempotencyKey:
           'trend-funnel:g3:0xccc:1000000000000000:0x9999999999999999999999999999999999999999',
       }),

@@ -20,6 +20,7 @@ vi.mock('viem', async (importOriginal) => {
 
 vi.mock('../_lib/wallet/privyWalletApi.js', () => ({
   walletRpc: walletRpcMock,
+  BASE_CAIP2: 'eip155:8453',
 }))
 
 vi.mock('../_lib/wallet/creatorAgentWallets.js', () => ({

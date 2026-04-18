@@ -2,7 +2,7 @@ import type { Address } from 'viem'
 import { encodeFunctionData, parseUnits, isAddress, getAddress } from 'viem'
 
 import { logger } from '../_lib/infra/logger.js'
-import { walletRpc } from '../_lib/wallet/privyWalletApi.js'
+import { BASE_CAIP2, walletRpc } from '../_lib/wallet/privyWalletApi.js'
 import { assertTeeAttestationOrThrow } from '../_lib/agent/teeAttestationGate.js'
 import { checkDurableRateLimit } from '../_lib/infra/durableRateLimit.js'
 import { getDb, isDbConfigured } from '../_lib/db/postgres.js'
@@ -350,6 +350,7 @@ export async function handleSendCommand(params: {
       const result = await walletRpc<any>({
         walletId: agentWalletId,
         method: 'eth_sendTransaction',
+        caip2: BASE_CAIP2,
         rpcParams: {
           transaction: {
             to: recipient,
@@ -380,6 +381,7 @@ export async function handleSendCommand(params: {
       const result = await walletRpc<any>({
         walletId: agentWalletId,
         method: 'eth_sendTransaction',
+        caip2: BASE_CAIP2,
         rpcParams: {
           transaction: {
             to: tokenInfo.address,
