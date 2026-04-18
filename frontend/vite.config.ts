@@ -225,6 +225,7 @@ function localApiRoutesPlugin(): Plugin {
         '/api/token/metadata': () => import('./api/_handlers/token/_metadata'),
         '/api/token/image': () => import('./api/_handlers/token/_image'),
         '/api/zora/coin': () => import('./api/_handlers/zora/_coin'),
+        '/api/zora/coinHistory': () => import('./api/_handlers/zora/_coinHistory'),
         [zoraCliRoutePaths.authStatus]: () => import('./api/_handlers/zora/cli/_authStatus'),
         [zoraCliRoutePaths.explore]: () => import('./api/_handlers/zora/cli/_explore'),
         [zoraCliRoutePaths.get]: () => import('./api/_handlers/zora/cli/_get'),

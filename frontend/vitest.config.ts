@@ -14,6 +14,16 @@ export default defineConfig({
     testTimeout: 30_000,
     restoreMocks: true,
     clearMocks: true,
+    // `@coinbase/cds-*` packages ship extension-less ESM imports (e.g.
+    // `export * from './Spinner'`). Node's strict ESM loader rejects these at
+    // test time, but Vite's transformer resolves them fine. Forcing these
+    // packages through Vite's resolver (`server.deps.inline`) restores parity
+    // with the dev/build pipeline.
+    server: {
+      deps: {
+        inline: [/@coinbase\/cds-/],
+      },
+    },
     // The suite mixes native-image tests and route-heavy module loading; keeping
     // fork concurrency low avoids cross-file timeout flakiness under full runs.
     pool: 'forks',

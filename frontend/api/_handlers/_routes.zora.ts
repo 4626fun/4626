@@ -4,6 +4,7 @@ import { zoraCliRouteSubpaths } from './zora/cli/_routes.js'
 
 export const zoraRouteLoaders: ApiRouteLoaders = {
   'coin': () => import('./zora/_coin.js'),
+  'coinHistory': () => import('./zora/_coinHistory.js'),
   [zoraCliRouteSubpaths.authStatus]: () => import('./zora/cli/_authStatus.js'),
   [zoraCliRouteSubpaths.explore]: () => import('./zora/cli/_explore.js'),
   [zoraCliRouteSubpaths.get]: () => import('./zora/cli/_get.js'),
