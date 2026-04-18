@@ -194,4 +194,16 @@ describe('GET /api/arch-b/status', () => {
     await handler(req, res)
     expect(res.statusCode).toBe(405)
   })
+
+  it('returns 503 db_unavailable when the context resolver reports db_unavailable', async () => {
+    mocks.resolveCommandIssuerContextByProfileId.mockResolvedValue({
+      status: 'db_unavailable',
+    })
+    const req = createMockReq({ method: 'GET' })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(503)
+    expect(res.body.success).toBe(false)
+    expect(res.body.error).toBe('db_unavailable')
+  })
 })
