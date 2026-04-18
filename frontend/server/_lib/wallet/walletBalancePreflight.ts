@@ -36,8 +36,15 @@ import { base } from 'viem/chains'
 
 declare const process: { env: Record<string, string | undefined> }
 
-/** Hard floor. If `wallet.balance < requiredValue + GAS_BUFFER_WEI`, refuse. */
-export const DEFAULT_GAS_BUFFER_WEI = 300_000n * 10_000_000n // ~300k gas @ 10 gwei
+/**
+ * Hard floor. If `wallet.balance < requiredValue + GAS_BUFFER_WEI`, refuse.
+ *
+ * Calibrated to ~300k gas at 10 gwei. 1 gwei = 1e9 wei, so 10 gwei = 1e10 wei,
+ * giving a buffer of 3e15 wei (~0.003 ETH). Previously this constant used 1e7
+ * (0.01 gwei), which under-reserved the buffer by 1000x and let wallets with
+ * only a few micro-ETH pass preflight and still fail inside Privy.
+ */
+export const DEFAULT_GAS_BUFFER_WEI = 300_000n * 10_000_000_000n // ~300k gas @ 10 gwei = 3e15 wei ≈ 0.003 ETH
 
 export type PreflightOutcome =
   | {
