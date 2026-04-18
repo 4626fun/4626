@@ -130,8 +130,8 @@ export async function getWaitlistLeaderboardData(params: {
           ROUND(
             SUM(
               CASE
-                WHEN l.source = 'amoe_entry_spend' THEN l.amount
-                WHEN l.source = 'amoe_twitter_daily' THEN l.amount * 1.00
+                WHEN l.source IN ('amoe_entry_spend', 'amoe_entry') THEN l.amount
+                WHEN l.source IN ('amoe_twitter_daily', 'amoe_checkin') THEN l.amount * 1.00
                 WHEN l.source = 'waitlist_signup' THEN l.amount * 1.00
                 WHEN l.source = 'csw_link' THEN l.amount * 1.00
                 WHEN l.source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN l.amount * 0.60
@@ -249,8 +249,8 @@ export async function getWaitlistLeaderboardData(params: {
               ROUND(
                 SUM(
                   CASE
-                    WHEN l.source = 'amoe_entry_spend' THEN l.amount
-                    WHEN l.source = 'amoe_twitter_daily' THEN l.amount * 1.00
+                    WHEN l.source IN ('amoe_entry_spend', 'amoe_entry') THEN l.amount
+                    WHEN l.source IN ('amoe_twitter_daily', 'amoe_checkin') THEN l.amount * 1.00
                     WHEN l.source = 'waitlist_signup' THEN l.amount * 1.00
                     WHEN l.source = 'csw_link' THEN l.amount * 1.00
                     WHEN l.source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN l.amount * 0.60

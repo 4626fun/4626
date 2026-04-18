@@ -511,8 +511,8 @@ async function readUnifiedScore(db: Db, privyUserId: string): Promise<AccountSco
       ROUND(
         SUM(
           CASE
-            WHEN p.source = 'amoe_entry_spend' THEN p.amount
-            WHEN p.source = 'amoe_twitter_daily' THEN p.amount * 1.00
+            WHEN p.source IN ('amoe_entry_spend', 'amoe_entry') THEN p.amount
+            WHEN p.source IN ('amoe_twitter_daily', 'amoe_checkin') THEN p.amount * 1.00
             WHEN p.source = 'waitlist_signup' THEN p.amount * 1.00
             WHEN p.source = 'csw_link' THEN p.amount * 1.00
             WHEN p.source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN p.amount * 0.60

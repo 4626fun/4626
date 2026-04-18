@@ -21,6 +21,8 @@ import {
   createAmoeAttestation,
   verifyAmoeEntryProof,
 } from '../../../../server/_lib/lottery/lotteryAmoe.js'
+import { awardAmoeEntryPoints } from '../../../../server/_lib/lottery/amoeWaitlistPoints.js'
+import { getDb } from '../../../../server/_lib/db/postgres.js'
 
 type SubmitBody = {
   creatorCoin?: string
@@ -287,6 +289,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       lotteryManager: String(lotteryManager).toLowerCase() as `0x${string}`,
     })
 
+    // Best-effort: credit the wallet's waitlist profile (if any) with
+    // `amoe_entry` points. Runs after the credit spend so failures here
+    // never block the lottery entry, and the credit-ledger write in
+    // `consumeAmoeCreditsForEntry` stays the source of truth for
+    // entry economics. Caps are enforced inside `awardAmoeEntryPoints`.
+    const awardAmoePoints = async () => {
+      try {
+        const db = await getDb()
+        if (!db) return
+        await awardAmoeEntryPoints({
+          db,
+          wallet: proof.wallet,
+          creatorCoin: proof.creatorCoin,
+          nonce: proof.nonce,
+        })
+      } catch {
+        // swallow — points are additive; lottery entry must succeed regardless
+      }
+    }
+
     if (relayRequested) {
       const creditSpend = await consumeAmoeCreditsForEntry({
         wallet: proof.wallet,
@@ -297,6 +319,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         to: attested.to,
         callData: attested.callData,
       })
+      await awardAmoePoints()
 
       return res.status(200).json({
         success: true,
@@ -316,6 +339,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       requiredCredits: AMOE_CREDITS_PER_ENTRY,
       refId: `${proof.creatorCoin}:${proof.nonce}`,
     })
+    await awardAmoePoints()
 
     return res.status(200).json({
       success: true,

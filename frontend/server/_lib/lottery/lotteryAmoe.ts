@@ -2,6 +2,7 @@ import { createHash, randomBytes } from 'node:crypto'
 
 import { getDb } from '../db/postgres.js'
 import { ensureWaitlistSchema } from '../onboarding/waitlistSchema.js'
+import { awardAmoeCheckinPoints } from './amoeWaitlistPoints.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -328,6 +329,16 @@ export async function claimDailyTwitterCheckin(params: { wallet: `0x${string}` }
       VALUES (${signupId}, ${'amoe_twitter_daily'}, ${dayKey}, ${AMOE_DAILY_TWITTER_CREDIT}, NOW())
       ON CONFLICT DO NOTHING;
     `
+    // Best-effort: if the wallet is linked to a Privy-backed waitlist
+    // profile, also credit that profile with `amoe_checkin` points so
+    // the activity counts toward tier progression. Failures here
+    // never block the check-in — the credit pool write above is the
+    // source of truth for AMOE economics.
+    try {
+      await awardAmoeCheckinPoints({ db, wallet, dayKey })
+    } catch {
+      // swallow — points are additive
+    }
   }
 
   const credits = await readUnifiedPointsForSignup(db, signupId)

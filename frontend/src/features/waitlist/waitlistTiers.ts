@@ -144,8 +144,26 @@ export const POINT_SUGGESTIONS: readonly PointSuggestion[] = [
   { label: 'Link X / Telegram / TikTok', points: 15, hint: 'Per platform', to: '/waitlist' },
   { label: 'Connect Coinbase Smart Wallet', points: 10, hint: 'One-time', to: '/waitlist' },
   { label: 'Verify email', points: 10, hint: 'One-time' },
+  { label: 'Submit a lottery entry', points: 10, hint: 'Up to 5 per day', to: '/portfolio' },
+  { label: 'Daily lottery check-in', points: 5, hint: 'Per day', to: '/portfolio' },
   { label: 'Refer a friend who signs up', points: 2, hint: 'Per referral' },
 ] as const
+
+/**
+ * AMOE (lottery) event rewards. Mirrors `AMOE_ENTRY_POINTS` /
+ * `AMOE_CHECKIN_POINTS` in
+ * `frontend/server/_lib/lottery/amoeWaitlistPoints.ts`. Surfaced so the
+ * AMOE entry card / portfolio can render a "+N points" hint without the
+ * UI guessing the server values.
+ */
+export const AMOE_POINTS = {
+  /** Points awarded per successful lottery entry submission. */
+  entry: 10,
+  /** Points awarded per daily check-in. */
+  checkin: 5,
+  /** Max `amoe_entry` awards credited per UTC day per profile. */
+  entryDailyCap: 5,
+} as const
 
 /**
  * Per-provider point rewards. Mirrors server `LINK_POINTS` exactly so the
