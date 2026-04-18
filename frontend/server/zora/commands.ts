@@ -423,6 +423,10 @@ async function handleBuy(params: {
   args: string[]
   vault: KeeprVaultRow
 }): Promise<KeeprCommandResult> {
+  if (isArchBCoinBuyViaUserOpEnabled()) {
+    return handleBuyViaArchB(params)
+  }
+
   const [coinAddress, ethAmount] = params.args
 
   if (!coinAddress || !isAddress(coinAddress) || !ethAmount) {
@@ -526,6 +530,211 @@ async function handleBuy(params: {
       return { ok: false, response: buildInsufficientFundsRefusal({ balanceWei: 0n, requiredWei: 0n }) }
     }
     return { ok: false, response: `Buy failed: ${(err?.message ?? '').slice(0, 200)}` }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// /coin buy — Architecture B path (ARCH_B_COIN_BUY_VIA_USEROP)
+// ---------------------------------------------------------------------------
+
+/**
+ * Route `/coin buy` through the command issuer's Coinbase Smart Wallet using
+ * the same UserOperation + paymaster choke point (submitUserOpOrRefuse) that
+ * Phase 2 built for /keepr send.
+ *
+ * Key differences from the legacy agent-wallet path:
+ * - `sender` in getTradeQuoteWithReferrer is the CSW (not an agent EOA).
+ *   Minted coins flow to the CSW.
+ * - No preflightAgentWalletOrRefuse — submitUserOpOrRefuse handles CSW
+ *   balance preflight internally.
+ * - No idempotency key — UserOp nonce on the CSW prevents double-execution.
+ * - Router target validated via checkRouterTarget before building calls.
+ */
+async function handleBuyViaArchB(params: {
+  groupId: string
+  senderWallet: Address
+  args: string[]
+  vault: KeeprVaultRow
+}): Promise<KeeprCommandResult> {
+  // 1. Parse + validate (same as handleBuy).
+  const [coinAddress, ethAmount] = params.args
+
+  if (!coinAddress || !isAddress(coinAddress) || !ethAmount) {
+    return {
+      ok: false,
+      response: [
+        'Usage: /coin buy <coin-address> <eth-amount>',
+        '',
+        'Example: /coin buy 0xabc...def 0.01',
+      ].join('\n'),
+    }
+  }
+
+  const amountNum = Number(ethAmount)
+  if (!Number.isFinite(amountNum) || amountNum <= 0 || amountNum > 10) {
+    return { ok: false, response: 'Invalid amount. Must be between 0 and 10 ETH.' }
+  }
+
+  // 2. Resolve execution context. Hard-fail if not ready.
+  //    No silent fallback to the legacy agent-wallet path.
+  const resolution = await resolveCommandIssuerContextByAddress(params.senderWallet)
+  if (!isExecutionReady(resolution)) {
+    logger.warn('[coin/buy/arch-b] issuer not execution-ready; refusing', {
+      groupId: params.groupId,
+      senderWallet: params.senderWallet,
+      status: resolution.status,
+    })
+    if (resolution.status === 'db_unavailable') {
+      return {
+        ok: false,
+        response:
+          "This trade can't be executed right now — account readiness storage is temporarily unavailable. Please try again shortly.",
+      }
+    }
+    if (resolution.status === 'revoked') {
+      return {
+        ok: false,
+        response:
+          "This trade can't be executed — your execution context has been revoked. Contact setup to restore access.",
+      }
+    }
+    return {
+      ok: false,
+      response:
+        "This trade can't be executed — your account isn't provisioned for onchain execution yet. Contact setup to finish provisioning.",
+    }
+  }
+  const issuer = resolution.context
+
+  // 3. TEE attestation gate. Distinct action name from /keepr send.
+  try {
+    await assertTeeAttestationOrThrow({
+      action: 'zora.coin.buy',
+      actorAddress: params.senderWallet,
+      metadata: {
+        groupId: params.groupId,
+        vaultAddress: params.vault.vaultAddress,
+        coinAddress,
+        archBPhase: 3,
+      },
+    })
+  } catch (err) {
+    logger.warn('[coin/buy/arch-b] TEE attestation gate denied buy', {
+      groupId: params.groupId,
+      senderWallet: params.senderWallet,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return {
+      ok: false,
+      response:
+        'Coin buy denied: secure signer attestation is not verified. Please retry once attestation is healthy.',
+    }
+  }
+
+  // 4. Get Zora quote with sender = issuer.smartWallet (the CSW itself).
+  //    This is the key semantic change: Zora sees the CSW as the buyer,
+  //    so minted coins flow to the CSW, not an agent wallet.
+  const amountIn = parseEther(ethAmount)
+  const quote = await getTradeQuoteWithReferrer({
+    tokenIn: { type: 'eth' },
+    tokenOut: { type: 'erc20', address: getAddress(coinAddress) },
+    amountIn: amountIn.toString(),
+    slippage: 0.03, // 3% slippage
+    sender: issuer.smartWallet, // CSW — coins flow here, not to an agent wallet
+    referrer: getPlatformReferrerAddress(),
+  })
+
+  const call = quote?.call
+  if (!call?.target || !call?.data) {
+    return { ok: false, response: 'Failed to get trade quote. The coin may not have liquidity.' }
+  }
+
+  // 5. Validate the router target before building the UserOp.
+  //    Zora Quote API is non-authoritative external data — a compromised
+  //    response could direct the CSW to call any contract.
+  const routerCheck = checkRouterTarget(call.target as Address)
+  if (!routerCheck.allowed) {
+    logger.warn('[coin/buy/arch-b] router target blocked by allowlist', {
+      groupId: params.groupId,
+      target: call.target,
+      reason: routerCheck.reason,
+    })
+    return {
+      ok: false,
+      response:
+        "Coin buy blocked: the trade router address returned by the quote service isn't on the approved list. Please try again or contact support.",
+    }
+  }
+
+  // 6. Validate quote.call.value against the user-parsed amountIn.
+  //    Zora's quote is non-authoritative external data. For an ETH-in buy,
+  //    call.value is the exact ETH the CSW forwards to the router — it MUST
+  //    equal the user-typed amount. A mismatch means a compromised or
+  //    malformed quote is trying to make us spend more (or less) than the
+  //    user requested. Refuse before submitting the UserOp.
+  const nativeValueWei = call.value ? BigInt(call.value) : 0n
+  if (nativeValueWei !== amountIn) {
+    logger.warn('[coin/buy/arch-b] quote value mismatch', {
+      groupId: params.groupId,
+      userAmountWei: amountIn.toString(),
+      quoteValueWei: nativeValueWei.toString(),
+      target: call.target,
+    })
+    return {
+      ok: false,
+      response:
+        "Coin buy blocked: the trade quote's ETH amount doesn't match the amount you requested. Please try again.",
+    }
+  }
+
+  // 7. Build a single-item calls array for the UserOp.
+  const calls: CoinbaseSmartWalletCall[] = [
+    { to: call.target as Address, value: nativeValueWei, data: call.data as `0x${string}` },
+  ]
+
+  // 8. Submit via the shared choke point.
+  //    Caps + preflight + daily ledger all handled inside submitUserOpOrRefuse
+  //    exactly as /keepr send. UserOp nonce handles idempotency.
+  const submission = await submitUserOpOrRefuse({
+    issuer,
+    calls,
+    valueWei: nativeValueWei,
+    correlationId: `coin/buy/arch-b:${params.groupId}`,
+  })
+  if (!submission.ok) return { ok: false, response: submission.response }
+
+  logger.info('[coin/buy/arch-b] coin purchased via UserOp', {
+    groupId: params.groupId,
+    profileId: issuer.profileId,
+    coinAddress,
+    ethAmount,
+    smartWallet: submission.smartWallet,
+    txHash: submission.txHash,
+    userOpHash: submission.userOpHash,
+  })
+
+  recordExecution(params.groupId)
+  return {
+    ok: true,
+    response: [
+      'Coin purchased',
+      '',
+      `- Coin: ${coinAddress}`,
+      `- Spent: ${ethAmount} ETH`,
+      `- Slippage: 3%`,
+      `- Tx: https://basescan.org/tx/${submission.txHash}`,
+      `- Buyer: ${submission.smartWallet} (your smart wallet)`,
+    ].join('\n'),
+    action: {
+      action: 'zora.coin.bought',
+      coinAddress,
+      ethAmount,
+      txHash: submission.txHash,
+      userOpHash: submission.userOpHash,
+      buyer: submission.smartWallet,
+      groupId: params.groupId,
+      routing: 'arch-b-userop',
+    },
   }
 }
 
