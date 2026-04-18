@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 
 import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import { PageMeta } from '@/components/seo/PageMeta'
+import { ArchBRevokeControl } from '@/features/archB/ArchBRevokeControl'
 import { AccountSetupWorkspaceView } from '@/features/accountSetup/AccountSetupWorkspaceView'
 import type { AccountSetupInitialData } from '@/features/accountSetup/types'
 import { shortValue } from '@/features/accountSetup/shared'
@@ -116,6 +117,9 @@ export function AccountsPage(props: {
                 </>
               }
             />
+
+            {/* Arch B revoke control — visible when provisioned for bot-initiated transfers */}
+            <ArchBRevokeControl />
 
             <section className="card rounded-2xl border border-white/10 bg-black/40 p-6 space-y-4">
               <div className="flex items-center justify-between gap-3">
