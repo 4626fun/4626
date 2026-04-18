@@ -144,22 +144,25 @@ export const POINT_SUGGESTIONS: readonly PointSuggestion[] = [
   { label: 'Link X / Telegram / TikTok', points: 15, hint: 'Per platform', to: '/waitlist' },
   { label: 'Connect Coinbase Smart Wallet', points: 10, hint: 'One-time', to: '/waitlist' },
   { label: 'Verify email', points: 10, hint: 'One-time' },
-  { label: 'Submit a lottery entry', points: 10, hint: 'Up to 5 per day', to: '/portfolio' },
-  { label: 'Daily lottery check-in', points: 5, hint: 'Per day', to: '/portfolio' },
+  { label: 'Share 4626 on X, Farcaster, or Telegram', points: 5, hint: 'Once per day', to: '/portfolio' },
   { label: 'Refer a friend who signs up', points: 2, hint: 'Per referral' },
 ] as const
 
 /**
- * AMOE (lottery) event rewards. Mirrors `AMOE_ENTRY_POINTS` /
- * `AMOE_CHECKIN_POINTS` in
- * `frontend/server/_lib/lottery/amoeWaitlistPoints.ts`. Surfaced so the
- * AMOE entry card / portfolio can render a "+N points" hint without the
- * UI guessing the server values.
+ * AMOE (lottery + daily share) event rewards. Mirrors `AMOE_ENTRY_POINTS`
+ * / `AMOE_CHECKIN_POINTS` in
+ * `frontend/server/_lib/lottery/amoeWaitlistPoints.ts`.
+ *
+ * UX framing: users see the **daily share** (X / Farcaster / Telegram) as
+ * the primary earn-points action. The lottery entry award is kept as a
+ * silent side-reward for onchain lottery participation — it still fires
+ * on the server when an entry is submitted, but we don't surface it in
+ * the earn-points menu because the base action users need is the share.
  */
 export const AMOE_POINTS = {
-  /** Points awarded per successful lottery entry submission. */
+  /** Points awarded per successful lottery entry submission (silent). */
   entry: 10,
-  /** Points awarded per daily check-in. */
+  /** Points awarded per daily social share (surfaced as earn action). */
   checkin: 5,
   /** Max `amoe_entry` awards credited per UTC day per profile. */
   entryDailyCap: 5,
