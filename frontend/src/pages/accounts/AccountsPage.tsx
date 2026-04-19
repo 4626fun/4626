@@ -4,6 +4,11 @@ import { Link } from 'react-router-dom'
 import { getMarketingWaitlistEntryUrl } from '@/lib/auth/waitlistEntry'
 import { PageMeta } from '@/components/seo/PageMeta'
 import { ArchBRevokeControl } from '@/features/archB/ArchBRevokeControl'
+import {
+  AdvancedDisclosure,
+  SignersSection,
+  YourIdentityHero,
+} from '@/components/account/YourIdentityHero'
 import { AccountSetupWorkspaceView } from '@/features/accountSetup/AccountSetupWorkspaceView'
 import type { AccountSetupInitialData } from '@/features/accountSetup/types'
 import { shortValue } from '@/features/accountSetup/shared'
@@ -78,11 +83,15 @@ export function AccountsPage(props: {
       <div className="mx-auto w-full max-w-4xl px-6 py-10 space-y-6">
         <div className="space-y-2">
           <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Accounts</div>
-          <h1 className="text-3xl font-semibold tracking-tight">Advanced account settings</h1>
+          <h1 className="text-3xl font-semibold tracking-tight">Your identity</h1>
           <p className="text-sm text-zinc-400">
-            `/waitlist` is now the primary setup-first workspace after verified email and embedded wallet creation. Keep this page for recovery flows, secondary identity tools, Telegram/browser escapes, and advanced owner actions.
+            Your canonical Coinbase Smart Wallet (CSW) + the signers currently able to act on its behalf.
           </p>
         </div>
+
+        {/* Canonical identity hero + signers — always surfaced at the top. */}
+        <YourIdentityHero />
+        <SignersSection />
 
         {!privyAuthed ? (
           <div className="card rounded-2xl border border-white/10 bg-black/40 p-6 space-y-3">
@@ -97,7 +106,11 @@ export function AccountsPage(props: {
         ) : null}
 
         {!controller.loading && privyAuthed && me ? (
-          <>
+          <AdvancedDisclosure
+            title="Advanced settings"
+            summary="Account setup workspace, linked providers, Arch B owner controls, recovery tools."
+          >
+          <div className="space-y-6 pt-4">
             <AccountSetupWorkspaceView
               context="accounts"
               controller={controller}
@@ -324,7 +337,8 @@ export function AccountsPage(props: {
                 </div>
               ) : null}
             </section>
-          </>
+          </div>
+          </AdvancedDisclosure>
         ) : null}
       </div>
     </div>
