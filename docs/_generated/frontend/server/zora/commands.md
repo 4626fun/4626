@@ -12,7 +12,7 @@
 
 > **handleCoinCommand**(`params`): `Promise`\<[`KeeprCommandResult`](../commands/types.md#keeprcommandresult)\>
 
-Defined in: [server/zora/commands.ts:1570](https://github.com/wenakita/4626/blob/main/frontend/server/zora/commands.ts#L1570)
+Defined in: [server/zora/commands.ts:1561](https://github.com/wenakita/4626/blob/main/frontend/server/zora/commands.ts#L1561)
 
 #### Parameters
 
