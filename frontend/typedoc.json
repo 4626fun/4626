@@ -58,7 +58,9 @@
     "**/*.test.tsx",
     "**/__tests__/**",
     "src/main.tsx",
-    "src/vite-env.d.ts"
+    "src/vite-env.d.ts",
+    "**/*.generated.ts",
+    "src/config/contracts.defaults.ts"
   ],
   "blockTags": [
     "@defaultValue",

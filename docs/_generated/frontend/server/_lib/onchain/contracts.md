@@ -18,193 +18,193 @@ Defined in: [server/\_lib/onchain/contracts.ts:15](https://github.com/wenakita/4
 
 ##### ajnaErc20Factory
 
-> **ajnaErc20Factory**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> **ajnaErc20Factory**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L38)
 
 ##### ajnaErc721Factory
 
-> **ajnaErc721Factory**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> **ajnaErc721Factory**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:39](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L39)
 
 ##### ajnaPoolInfoUtils
 
-> **ajnaPoolInfoUtils**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> **ajnaPoolInfoUtils**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L40)
 
 ##### ajnaPositionManager
 
-> **ajnaPositionManager**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> **ajnaPositionManager**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L41)
 
 ##### bribesFactory?
 
-> `optional` **bribesFactory**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> `optional` **bribesFactory**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L28)
 
 ##### chainlinkEthUsd
 
-> **chainlinkEthUsd**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> **chainlinkEthUsd**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L36)
 
 ##### charmAlphaVault?
 
-> `optional` **charmAlphaVault**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> `optional` **charmAlphaVault**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L42)
 
 ##### create2Deployer
 
-> **create2Deployer**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> **create2Deployer**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L20)
 
 ##### create2Factory
 
-> **create2Factory**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> **create2Factory**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L19)
 
 ##### creatorVaultBatcher?
 
-> `optional` **creatorVaultBatcher**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> `optional` **creatorVaultBatcher**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L24)
 
 ##### lotteryManager
 
-> **lotteryManager**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> **lotteryManager**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L17)
 
 ##### payoutRouterFactory
 
-> **payoutRouterFactory**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> **payoutRouterFactory**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L18)
 
 ##### permit2
 
-> **permit2**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> **permit2**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L46)
 
 ##### poolManager
 
-> **poolManager**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> **poolManager**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L31)
 
 ##### positionManager?
 
-> `optional` **positionManager**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> `optional` **positionManager**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L33)
 
 ##### protocolTreasury
 
-> **protocolTreasury**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> **protocolTreasury**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L25)
 
 ##### quoter?
 
-> `optional` **quoter**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> `optional` **quoter**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L35)
 
 ##### registry
 
-> **registry**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> **registry**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L16)
 
 ##### strategyDeploymentBatcher?
 
-> `optional` **strategyDeploymentBatcher**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> `optional` **strategyDeploymentBatcher**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L47)
 
 ##### swapRouter?
 
-> `optional` **swapRouter**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> `optional` **swapRouter**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L34)
 
 ##### taxHook
 
-> **taxHook**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> **taxHook**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L32)
 
 ##### uniswapV3Factory
 
-> **uniswapV3Factory**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> **uniswapV3Factory**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L43)
 
 ##### universalBytecodeStore?
 
-> `optional` **universalBytecodeStore**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> `optional` **universalBytecodeStore**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L21)
 
 ##### universalCreate2DeployerFromStore?
 
-> `optional` **universalCreate2DeployerFromStore**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> `optional` **universalCreate2DeployerFromStore**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L22)
 
 ##### usdc
 
-> **usdc**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> **usdc**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L45)
 
 ##### vaultActivationBatcher
 
-> **vaultActivationBatcher**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> **vaultActivationBatcher**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L23)
 
 ##### vaultGaugeVoting?
 
-> `optional` **vaultGaugeVoting**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> `optional` **vaultGaugeVoting**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L26)
 
 ##### ve4626?
 
-> `optional` **ve4626**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> `optional` **ve4626**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L29)
 
 ##### veBoostManager?
 
-> `optional` **veBoostManager**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> `optional` **veBoostManager**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L30)
 
 ##### voterRewardsDistributor?
 
-> `optional` **voterRewardsDistributor**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> `optional` **voterRewardsDistributor**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L27)
 
 ##### weth
 
-> **weth**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> **weth**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L37)
 
 ##### zora
 
-> **zora**: [`ContractAddress`](../../../src/config/contracts.defaults.md#contractaddress)
+> **zora**: `ContractAddress`
 
 Defined in: [server/\_lib/onchain/contracts.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/contracts.ts#L44)
 

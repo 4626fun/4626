@@ -243,9 +243,3 @@ Defined in: [src/config/contracts.ts:117](https://github.com/wenakita/4626/blob/
 ##### wrapper
 
 > `readonly` **wrapper**: `` `0x${string}` ``
-
-## References
-
-### ContractAddress
-
-Re-exports [ContractAddress](contracts.defaults.md#contractaddress)
