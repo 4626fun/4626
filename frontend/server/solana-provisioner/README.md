@@ -236,7 +236,6 @@ Optional but recommended:
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_ATTEMPTS=3`
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_RETRY_DELAY_MS=1200`
 - `SOLANA_DYNAMIC_ROUTE_PROVISIONER_TIMEOUT_MS=90000`
-- `SOLANA_BRIDGE_WRAP_SYMBOL_MODE=auto` (`auto` | `unicode` | `ascii`)
 - `SOLANA_BRIDGE_WRAP_METADATA_URI_ENABLED=0` (set to `1` only if your bridge CLI supports `--metadata-uri`)
 - `PROVISIONER_MIN_PAYER_SOL=0.05` (health guardrail; `/healthz` reports payer readiness)
 - Provisioner requests are capped at 64 KB per request body
