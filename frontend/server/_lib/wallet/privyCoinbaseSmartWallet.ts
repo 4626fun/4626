@@ -31,12 +31,38 @@ export type CoinbaseSmartWalletCall = {
 export class CoinbaseSmartWalletHelperError extends Error {
   code: string
   retryable: boolean
+  /**
+   * Optional original message from the underlying error that caused this
+   * helper error. Kept separate from `message` so `message` remains the
+   * stable short code callers match against, while operators still see the
+   * raw bundler/paymaster/RPC text in logs.
+   */
+  causeMessage?: string
 
-  constructor(code: string, retryable: boolean, message?: string) {
-    super(message ?? code)
+  constructor(
+    code: string,
+    retryable: boolean,
+    messageOrOptions?: string | { message?: string; causeMessage?: string; cause?: unknown },
+  ) {
+    const options =
+      typeof messageOrOptions === 'string'
+        ? { message: messageOrOptions }
+        : (messageOrOptions ?? {})
+    super(options.message ?? code)
     this.name = 'CoinbaseSmartWalletHelperError'
     this.code = code
     this.retryable = retryable
+    if (options.causeMessage) this.causeMessage = options.causeMessage
+    if (options.cause !== undefined) {
+      // Attach the original error for logging/debug without polluting the
+      // short `message`. Supported natively on Error via the `cause` option,
+      // but we also assign explicitly for older runtimes.
+      try {
+        ;(this as unknown as { cause?: unknown }).cause = options.cause
+      } catch {
+        // Some runtimes freeze Error instances; ignore.
+      }
+    }
   }
 }
 
@@ -54,7 +80,7 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function isRetryableInfraError(error: unknown): boolean {
+export function isRetryableInfraError(error: unknown): boolean {
   const message = getErrorMessage(error).toLowerCase()
   if (
     message.includes('timeout') ||
@@ -65,12 +91,33 @@ function isRetryableInfraError(error: unknown): boolean {
     message.includes('too many requests') ||
     message.includes('429') ||
     message.includes('503') ||
+    message.includes('502') ||
+    message.includes('504') ||
     message.includes('gateway') ||
     message.includes('socket hang up') ||
     message.includes('connection reset') ||
-    message.includes('fetch failed')
+    message.includes('fetch failed') ||
+    // Paymaster / bundler upstream transient failures. The CDP paymaster RPC
+    // surfaces `internal error - error communicating with paymaster` when the
+    // bundler cannot reach its paymaster backend; that's infrastructure, not
+    // a deterministic UserOp validation failure, so it should retry.
+    message.includes('error communicating with paymaster') ||
+    message.includes('paymaster service') ||
+    message.includes('paymaster unavailable') ||
+    // JSON-RPC generic internal error (-32000 / -32603) from bundler or RPC.
+    // Deterministic validation rejections use different codes (-32602, -32500
+    // range) which we keep as non-retryable.
+    message.includes('-32000') ||
+    message.includes('-32603')
   ) {
     return true
+  }
+
+  // Inspect structured JSON-RPC error codes if present on the thrown error
+  // (viem/ox attach `.code` or `.cause.code` on RpcRequestError).
+  const structuredCode = extractStructuredRpcErrorCode(error)
+  if (structuredCode !== null) {
+    if (structuredCode === -32000 || structuredCode === -32603) return true
   }
 
   const privyStatusMatch = message.match(/privy_http_(\d+)/)
@@ -80,18 +127,38 @@ function isRetryableInfraError(error: unknown): boolean {
   return status === 408 || status === 429 || status >= 500
 }
 
+/** Walks the error chain looking for a numeric JSON-RPC `code` field. */
+function extractStructuredRpcErrorCode(error: unknown): number | null {
+  const seen = new Set<unknown>()
+  let cursor: unknown = error
+  while (cursor && typeof cursor === 'object' && !seen.has(cursor)) {
+    seen.add(cursor)
+    const candidate = (cursor as { code?: unknown }).code
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) return candidate
+    cursor = (cursor as { cause?: unknown }).cause
+  }
+  return null
+}
+
 function toCoinbaseSmartWalletHelperError(params: {
   code: string
   retryable: boolean
+  causeMessage?: string
+  cause?: unknown
 }): CoinbaseSmartWalletHelperError {
-  return new CoinbaseSmartWalletHelperError(params.code, params.retryable)
+  return new CoinbaseSmartWalletHelperError(params.code, params.retryable, {
+    causeMessage: params.causeMessage,
+    cause: params.cause,
+  })
 }
 
-function wrapUnknownHelperError(code: string, error: unknown): CoinbaseSmartWalletHelperError {
+export function wrapUnknownHelperError(code: string, error: unknown): CoinbaseSmartWalletHelperError {
   if (isCoinbaseSmartWalletHelperError(error)) return error
   return toCoinbaseSmartWalletHelperError({
     code,
     retryable: isRetryableInfraError(error),
+    causeMessage: getErrorMessage(error),
+    cause: error,
   })
 }
 

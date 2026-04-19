@@ -27,9 +27,15 @@ vi.mock('./commandIssuerContext.js', () => ({
   rollbackIssuerDailySpend: (...args: unknown[]) => rollbackDailySpendMock(...args),
 }))
 
-vi.mock('./privyCoinbaseSmartWallet.js', () => ({
-  sendPrivyCoinbaseSmartWalletUserOperation: (...args: unknown[]) => sendUserOpMock(...args),
-}))
+vi.mock('./privyCoinbaseSmartWallet.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./privyCoinbaseSmartWallet.js')>()
+  return {
+    // Re-export real helpers so `isCoinbaseSmartWalletHelperError`
+    // and `CoinbaseSmartWalletHelperError` stay consistent with the SUT.
+    ...actual,
+    sendPrivyCoinbaseSmartWalletUserOperation: (...args: unknown[]) => sendUserOpMock(...args),
+  }
+})
 
 vi.mock('./walletBalancePreflight.js', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./walletBalancePreflight.js')>()
@@ -279,6 +285,73 @@ describe('submitUserOpOrRefuse — submission path', () => {
       expect(result.response).toContain('paymaster rejected')
     }
     expect(rollbackDailySpendMock).toHaveBeenCalled()
+  })
+
+  it('surfaces the underlying cause when the error is a CoinbaseSmartWalletHelperError', async () => {
+    // Simulate what privyCoinbaseSmartWallet.sendPrivyCoinbaseSmartWalletUserOperation
+    // throws when wrapUnknownHelperError wraps a paymaster -32000 failure.
+    const { CoinbaseSmartWalletHelperError } = await import('./privyCoinbaseSmartWallet.js')
+    const underlying = new Error('internal error - error communicating with paymaster')
+    ;(underlying as unknown as { code?: number }).code = -32000
+    const helperError = new CoinbaseSmartWalletHelperError('userop_submission_failed', true, {
+      causeMessage: underlying.message,
+      cause: underlying,
+    })
+    sendUserOpMock.mockRejectedValue(helperError)
+
+    const mod = await importModule()
+    const result = await mod.submitUserOpOrRefuse({
+      issuer: ISSUER,
+      calls: CALLS,
+      valueWei: 500n,
+      bundlerUrl: 'https://bundler.example',
+      publicClient: {} as any,
+    })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok && result.code === 'userop_failed') {
+      expect(result.retryable).toBe(true)
+      // The user-facing response must carry the human-readable paymaster text,
+      // not the opaque 'userop_submission_failed' short code.
+      expect(result.errorMessage).toBe(
+        'internal error - error communicating with paymaster',
+      )
+      // When retryable=true we return the generic retry copy (not the raw
+      // detailMessage). Assert both that copy AND that rollback ran.
+      expect(result.response).toMatch(/temporary bundler issue/i)
+    } else {
+      throw new Error(`expected userop_failed refusal, got code=${(result as { code?: string }).code}`)
+    }
+    expect(rollbackDailySpendMock).toHaveBeenCalled()
+  })
+
+  it('includes the paymaster detail in the user-facing response when non-retryable', async () => {
+    const { CoinbaseSmartWalletHelperError } = await import('./privyCoinbaseSmartWallet.js')
+    const helperError = new CoinbaseSmartWalletHelperError('userop_submission_failed', false, {
+      causeMessage: 'AA24 signature error',
+      cause: new Error('AA24 signature error'),
+    })
+    sendUserOpMock.mockRejectedValue(helperError)
+
+    const mod = await importModule()
+    const result = await mod.submitUserOpOrRefuse({
+      issuer: ISSUER,
+      calls: CALLS,
+      valueWei: 500n,
+      bundlerUrl: 'https://bundler.example',
+      publicClient: {} as any,
+    })
+
+    expect(result.ok).toBe(false)
+    if (!result.ok && result.code === 'userop_failed') {
+      expect(result.retryable).toBe(false)
+      expect(result.errorMessage).toBe('AA24 signature error')
+      expect(result.response).toContain('AA24 signature error')
+      // The opaque short code must not leak into the user-facing string.
+      expect(result.response).not.toContain('userop_submission_failed')
+    } else {
+      throw new Error(`expected userop_failed refusal, got code=${(result as { code?: string }).code}`)
+    }
   })
 
   it('does not reserve daily spend when valueWei is 0', async () => {
