@@ -12,7 +12,7 @@
  */
 
 import React from 'react'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { UseArchBDelegationReturn, ArchBDelegationStatus } from './useArchBDelegation'
@@ -133,10 +133,10 @@ describe('ArchBEnrollmentCard', () => {
     expect(screen.getByText(/Enabling delegation/i)).toBeTruthy()
   })
 
-  it('shows loading state when status is loading', () => {
+  it('is hidden when status is loading (initial fetch, avoids mount flash)', () => {
     setStatus('loading')
-    renderCard()
-    expect(screen.getAllByRole('status').length).toBeGreaterThan(0)
+    const { container } = renderCard()
+    expect(container.firstChild).toBeNull()
   })
 
   it('renders the enrollment prompt when status is not_delegated', () => {
@@ -208,5 +208,66 @@ describe('ArchBEnrollmentCard', () => {
     expect(screen.getByText(/Per-transfer cap/i)).toBeTruthy()
     // 0.01 ETH formatted to 4 decimal places
     expect(screen.getByText(/0\.0100 ETH/i)).toBeTruthy()
+  })
+
+  // ── Regression: success toast should NOT fire on every page load ──────────
+  // Previously, the effect fired on `loading → provisioned` (the normal
+  // mount-then-fetch sequence), which meant every page visit by an
+  // already-provisioned user re-surfaced the "Enabled" toast. The fix
+  // restricts the toast to the true enable() completion path:
+  // `delegated → provisioned`.
+  it('does NOT fire success toast on loading → provisioned (initial fetch)', () => {
+    setStatus('loading')
+    const { rerender } = renderCard()
+
+    // Simulate the hook resolving to `provisioned` after status fetch.
+    act(() => {
+      setStatus('provisioned')
+      rerender(<ArchBEnrollmentCard hasCanonicalCsw={true} />)
+    })
+
+    expect(mockToastSuccess).not.toHaveBeenCalled()
+  })
+
+  it('does NOT fire success toast on not_delegated → loading → provisioned (focus refetch)', () => {
+    setStatus('not_delegated')
+    const { rerender } = renderCard()
+
+    // Window focus triggers a refetch: FETCH_START moves status back to loading
+    act(() => {
+      setStatus('loading')
+      rerender(<ArchBEnrollmentCard hasCanonicalCsw={true} />)
+    })
+    // FETCH_DONE resolves to provisioned
+    act(() => {
+      setStatus('provisioned')
+      rerender(<ArchBEnrollmentCard hasCanonicalCsw={true} />)
+    })
+
+    expect(mockToastSuccess).not.toHaveBeenCalled()
+  })
+
+  it('fires success toast only on delegated → provisioned (user enable completion)', () => {
+    setStatus('not_delegated')
+    const { rerender } = renderCard()
+
+    // enable() sequence: not_delegated → delegating → delegated → provisioned
+    act(() => {
+      setStatus('delegating')
+      rerender(<ArchBEnrollmentCard hasCanonicalCsw={true} />)
+    })
+    act(() => {
+      setStatus('delegated')
+      rerender(<ArchBEnrollmentCard hasCanonicalCsw={true} />)
+    })
+    act(() => {
+      setStatus('provisioned')
+      rerender(<ArchBEnrollmentCard hasCanonicalCsw={true} />)
+    })
+
+    expect(mockToastSuccess).toHaveBeenCalledTimes(1)
+    expect(mockToastSuccess).toHaveBeenCalledWith(
+      expect.stringMatching(/^Enabled\. \/keepr send will route/),
+    )
   })
 })
