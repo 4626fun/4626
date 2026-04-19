@@ -146,14 +146,13 @@ export const POINT_SUGGESTIONS: readonly PointSuggestion[] = [
   { label: 'Enable 4626 signing', points: 50, hint: 'One-time', to: '/waitlist' },
   { label: 'Link Zora', points: 40, hint: 'One-time', to: '/waitlist' },
   { label: 'Link Google or Apple', points: 20, hint: 'Per platform', to: '/waitlist' },
-  { label: 'Link X / Telegram / TikTok', points: 15, hint: 'Per platform', to: '/waitlist' },
+  { label: 'Link X / Telegram / TikTok', points: 16, hint: 'Per platform', to: '/waitlist' },
   { label: 'Verify email', points: 10, hint: 'One-time' },
-  { label: 'Share 4626 on X, Farcaster, or Telegram', points: 5, hint: 'Once per day', to: '/portfolio' },
+  { label: 'Share 4626 on X, Farcaster, or Telegram', points: 6, hint: 'Once per day', to: '/portfolio' },
   // Referral reward is dynamic — referrer earns 50% of every point the
   // referee scores via `recordReferralPassthrough` on the server. The
-  // numeric `points` here is a conservative illustrative minimum
-  // (50% × signup=5); the real upside scales with the friend's
-  // activity, which the hint communicates.
+  // numeric `points` here is 0 because the amount is not fixed; any
+  // renderer should treat 0 as "see hint" rather than a literal zero.
   { label: 'Refer a friend', points: 0, hint: 'Earn 50% of every point they score' },
 ] as const
 
@@ -169,7 +168,7 @@ export const POINT_SUGGESTIONS: readonly PointSuggestion[] = [
  */
 export const AMOE_POINTS = {
   /** Points awarded per successful daily share (X / Farcaster / Telegram). */
-  checkin: 5,
+  checkin: 6,
 } as const
 
 /**
@@ -177,14 +176,17 @@ export const AMOE_POINTS = {
  * row-level "+N" badges shown next to each provider in the waitlist
  * Advanced section match the server state machine. Zora is authoritative
  * via its own step 1; the rest are secondary identity links.
+ *
+ * All values are even integers by convention so that referral passthrough
+ * (`floor(amount × 0.5)`) is exact — see `LINK_POINTS` on the server.
  */
 export const PROVIDER_POINTS: Record<string, number> = {
   email: 10,
   google: 20,
   apple: 20,
-  twitter: 15,
-  telegram: 15,
-  tiktok: 15,
+  twitter: 16,
+  telegram: 16,
+  tiktok: 16,
   external_eoa: 10,
   zora_cross_app: 40,
 }

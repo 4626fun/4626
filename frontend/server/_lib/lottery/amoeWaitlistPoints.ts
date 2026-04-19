@@ -39,7 +39,9 @@ type Db = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
 }
 
-export const AMOE_CHECKIN_POINTS = 5
+// Even integer by convention — referral passthrough writes
+// `floor(amount * 0.5)`, and an odd amount loses half a point to flooring.
+export const AMOE_CHECKIN_POINTS = 6
 export const AMOE_CHECKIN_SOURCE = 'amoe_checkin' as const
 
 export type AmoeWaitlistAwardResult = {

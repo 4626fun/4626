@@ -115,15 +115,20 @@ const ZORA_PRIVY_APP_ID = String(process.env.ZORA_PRIVY_APP_ID ?? 'clpgf04wn04hn
 const EVM_RE = /^0x[a-fA-F0-9]{40}$/
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
+// All values MUST be even integers. Referral passthrough writes
+// `Math.floor(amount * 0.5)` to the referrer's ledger, and any odd
+// amount loses half a point to flooring (e.g. 15 → 7 instead of 7.5).
+// Keeping amounts even guarantees the referrer always receives exactly
+// half of what the referee earned.
 const LINK_POINTS: Partial<Record<AccountLinkProvider, number>> = {
   email: 10,
   zora_cross_app: 40,
   google: 20,
   apple: 20,
   external_eoa: 10,
-  twitter: 15,
-  telegram: 15,
-  tiktok: 15,
+  twitter: 16,
+  telegram: 16,
+  tiktok: 16,
 }
 
 let accountsIdentitySchemaEnsured = false
