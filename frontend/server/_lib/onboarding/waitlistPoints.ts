@@ -43,9 +43,20 @@ export const WAITLIST_POINTS = {
 export type WaitlistPointSource =
   | 'waitlist_signup'
   | 'csw_link'
+  /** @deprecated Use `referral_passthrough` — the new model pays referrers
+   *  50% of every point their referee scores, rather than milestone
+   *  bonuses. Legacy rows keep their 0.60× scoring weight for backfill
+   *  compat, but no new `referral_*` rows are written. */
   | 'referral_signup'
+  /** @deprecated See `referral_signup`. */
   | 'referral_csw_link'
+  /** @deprecated See `referral_signup`. */
   | 'referral_qualified'
+  /** Mirrors 50% of a referee's scored point into the referrer's ledger.
+   *  Written by `recordReferralPassthrough` when any of the three
+   *  points-write helpers credit a referee. Weighted 1.00× in scoring
+   *  (the halving happens at insert time). */
+  | 'referral_passthrough'
   | 'social_base_app'
   | 'social_zora'
   | 'social_x'
@@ -67,6 +78,7 @@ const WAITLIST_POINT_SOURCE_SET: ReadonlySet<WaitlistPointSource> = new Set<Wait
   'referral_signup',
   'referral_csw_link',
   'referral_qualified',
+  'referral_passthrough',
   'social_base_app',
   'social_zora',
   'social_x',
@@ -81,6 +93,18 @@ const WAITLIST_POINT_SOURCE_SET: ReadonlySet<WaitlistPointSource> = new Set<Wait
   'lens_identity',
   'grove_proof',
   'task',
+])
+
+/** Fraction of a referee's earned points that mirrors to the referrer. */
+export const REFERRAL_PASSTHROUGH_FRACTION = 0.5 as const
+
+/** Sources that must NOT trigger another passthrough mirror (prevents
+ *  cascades and keeps the math referrer→referee only, one hop). */
+const PASSTHROUGH_EXEMPT_SOURCES: ReadonlySet<string> = new Set([
+  'referral_passthrough',
+  'referral_signup',
+  'referral_csw_link',
+  'referral_qualified',
 ])
 
 export function isWaitlistPointSource(value: string): value is WaitlistPointSource {
@@ -186,6 +210,86 @@ export async function awardWaitlistPoints(params: {
     VALUES (${signupId}, ${normalizedSource}, ${sourceIdForInsert}, ${Math.trunc(normalizedAmount)}, NOW())
     -- points_unique_source is a partial unique index in some envs, so a column-targeted
     -- ON CONFLICT can throw "no unique or exclusion constraint..." in Postgres.
+    ON CONFLICT DO NOTHING
+    RETURNING id;
+  `
+  const didInsert = Boolean(inserted?.rows?.[0]?.id)
+
+  // Mirror a fraction to the referrer (best-effort; never blocks the
+  // referee's award). See `recordReferralPassthrough` for the guarantees.
+  if (didInsert) {
+    try {
+      await recordReferralPassthrough({
+        db,
+        refereeSignupId: signupId,
+        originalSource: normalizedSource,
+        originalSourceId: normalizedSourceId,
+        amount: Math.trunc(normalizedAmount),
+      })
+    } catch {
+      // swallow — passthrough is additive
+    }
+  }
+
+  return didInsert
+}
+
+/**
+ * Credit a referrer with 50% of the points a referee just earned.
+ *
+ * Reads `profiles.referred_by_signup_id` to find the referrer; writes a
+ * single `referral_passthrough` row whose `source_id` uniquely encodes
+ * the triggering award (`<refereeSignupId>:<originalSource>:<originalSourceId>`).
+ * Idempotent via `ON CONFLICT DO NOTHING` on the `points` unique index.
+ *
+ * Safety rails:
+ *   - No-ops when `amount <= 0` (insert floors to 0 and isn't worth a row).
+ *   - No-ops when `originalSource` is a referral-family source
+ *     (`referral_passthrough`, `referral_signup`, etc.) — prevents
+ *     pyramids / cascades beyond one hop.
+ *   - No-ops when `referrer === referee` (shouldn't happen, but a cheap
+ *     guard against self-referral abuse or seed data anomalies).
+ *
+ * This is the only code path that writes `referral_passthrough` rows.
+ * The scoring query treats them at weight 1.00× since the halving
+ * already happened here at insert time.
+ */
+export async function recordReferralPassthrough(params: {
+  db: Db
+  refereeSignupId: number
+  originalSource: string
+  originalSourceId: string | null
+  amount: number
+}): Promise<boolean> {
+  const { db, refereeSignupId, originalSource, originalSourceId } = params
+
+  if (!Number.isFinite(refereeSignupId) || refereeSignupId <= 0) return false
+  if (PASSTHROUGH_EXEMPT_SOURCES.has(originalSource)) return false
+
+  const baseAmount = Number(params.amount)
+  if (!Number.isFinite(baseAmount) || baseAmount <= 0) return false
+
+  const passthroughAmount = Math.floor(baseAmount * REFERRAL_PASSTHROUGH_FRACTION)
+  if (passthroughAmount <= 0) return false
+
+  // Find the referrer for this referee (if any).
+  const referrerResult = await db.sql`
+    SELECT referred_by_signup_id
+    FROM profiles
+    WHERE id = ${refereeSignupId}
+    LIMIT 1;
+  `
+  const referrerRaw = referrerResult?.rows?.[0]?.referred_by_signup_id
+  const referrerId = typeof referrerRaw === 'number' ? referrerRaw : Number(referrerRaw)
+  if (!Number.isFinite(referrerId) || referrerId <= 0 || referrerId === refereeSignupId) {
+    return false
+  }
+
+  const sourceKey = `${refereeSignupId}:${originalSource}:${originalSourceId ?? ''}`.slice(0, 256)
+
+  const inserted = await db.sql`
+    INSERT INTO points (signup_id, source, source_id, amount, created_at)
+    VALUES (${referrerId}, 'referral_passthrough', ${sourceKey}, ${passthroughAmount}, NOW())
     ON CONFLICT DO NOTHING
     RETURNING id;
   `

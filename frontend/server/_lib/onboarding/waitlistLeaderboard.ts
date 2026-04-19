@@ -132,7 +132,7 @@ export async function getWaitlistLeaderboardData(params: {
               CASE
                 WHEN l.source = 'amoe_entry_spend' THEN l.amount
                 WHEN l.source IN ('amoe_twitter_daily', 'amoe_checkin') THEN l.amount * 1.00
-                WHEN l.source = 'waitlist_signup' THEN l.amount * 1.00
+                WHEN l.source IN ('waitlist_signup', 'referral_passthrough') THEN l.amount * 1.00
                 WHEN l.source = 'csw_link' THEN l.amount * 1.00
                 WHEN l.source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN l.amount * 0.60
                 WHEN l.source LIKE 'social_%' THEN l.amount * 0.50
@@ -251,7 +251,7 @@ export async function getWaitlistLeaderboardData(params: {
                   CASE
                     WHEN l.source = 'amoe_entry_spend' THEN l.amount
                     WHEN l.source IN ('amoe_twitter_daily', 'amoe_checkin') THEN l.amount * 1.00
-                    WHEN l.source = 'waitlist_signup' THEN l.amount * 1.00
+                    WHEN l.source IN ('waitlist_signup', 'referral_passthrough') THEN l.amount * 1.00
                     WHEN l.source = 'csw_link' THEN l.amount * 1.00
                     WHEN l.source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN l.amount * 0.60
                     WHEN l.source LIKE 'social_%' THEN l.amount * 0.50

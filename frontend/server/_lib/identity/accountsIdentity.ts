@@ -513,7 +513,7 @@ async function readUnifiedScore(db: Db, privyUserId: string): Promise<AccountSco
           CASE
             WHEN p.source = 'amoe_entry_spend' THEN p.amount
             WHEN p.source IN ('amoe_twitter_daily', 'amoe_checkin') THEN p.amount * 1.00
-            WHEN p.source = 'waitlist_signup' THEN p.amount * 1.00
+            WHEN p.source IN ('waitlist_signup', 'referral_passthrough') THEN p.amount * 1.00
             WHEN p.source = 'csw_link' THEN p.amount * 1.00
             WHEN p.source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN p.amount * 0.60
             WHEN p.source LIKE 'social_%' THEN p.amount * 0.50
@@ -585,6 +585,23 @@ export async function applyPointEvent(params: {
     RETURNING id;
   `
   const awarded = Array.isArray(inserted.rows) && inserted.rows.length > 0
+  // Mirror 50% of this award to the referee's referrer (if any). The
+  // helper handles no-ops (no referrer, zero amount, referral-family
+  // source) and is best-effort — never block the referee's event.
+  if (awarded) {
+    try {
+      const { recordReferralPassthrough } = await import('../onboarding/waitlistPoints.js')
+      await recordReferralPassthrough({
+        db,
+        refereeSignupId: canonicalProfileId,
+        originalSource: normalizedType,
+        originalSourceId: normalizedKey,
+        amount: Math.trunc(amount),
+      })
+    } catch {
+      // swallow — passthrough is additive
+    }
+  }
   const score = await refreshScore(db, privyUserId)
   return { awarded, score }
 }

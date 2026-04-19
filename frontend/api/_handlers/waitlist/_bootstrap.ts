@@ -24,7 +24,6 @@ import {
   referralCodeFromEmail,
 } from '../../../server/_lib/onboarding/referrals.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
-import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/onboarding/waitlistPoints.js'
 import {
   buildAccountsMePayload,
   ensureAccountsIdentitySchema,
@@ -433,15 +432,12 @@ async function applyBootstrapReferral(params: {
     RETURNING id;
   `
 
-  if (conversionResult?.rows?.[0]?.id) {
-    await awardWaitlistPoints({
-      db: params.db as any,
-      signupId: referrerId,
-      source: 'referral_signup',
-      sourceId: `invitee:${params.signupId}`,
-      amount: WAITLIST_POINTS.referralSignup,
-    })
-  }
+  // Note: no explicit `referral_signup` award here anymore. Under the
+  // passthrough model, the referrer instead earns 50% of every point
+  // the referee themselves scores (see `recordReferralPassthrough` in
+  // `server/_lib/onboarding/waitlistPoints.ts`). The conversion row
+  // above remains the canonical referrer<->referee link.
+  void conversionResult
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

@@ -121,7 +121,7 @@ export default async function handler(req: any, res: any) {
             CASE
               WHEN source = 'amoe_entry_spend' THEN amount
               WHEN source IN ('amoe_twitter_daily', 'amoe_checkin') THEN amount * 1.00
-              WHEN source = 'waitlist_signup' THEN amount * 1.00
+              WHEN source IN ('waitlist_signup', 'referral_passthrough') THEN amount * 1.00
               WHEN source = 'csw_link' THEN amount * 1.00
               WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
               WHEN source LIKE 'social_%' THEN amount * 0.50

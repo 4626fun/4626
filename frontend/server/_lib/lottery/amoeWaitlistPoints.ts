@@ -1,4 +1,5 @@
 import { ensureWaitlistSchema } from '../onboarding/waitlistSchema.js'
+import { recordReferralPassthrough } from '../onboarding/waitlistPoints.js'
 
 /**
  * AMOE ↔ waitlist points bridge.
@@ -38,7 +39,7 @@ type Db = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
 }
 
-export const AMOE_CHECKIN_POINTS = 15
+export const AMOE_CHECKIN_POINTS = 5
 export const AMOE_CHECKIN_SOURCE = 'amoe_checkin' as const
 
 export type AmoeWaitlistAwardResult = {
@@ -110,5 +111,19 @@ export async function awardAmoeCheckinPoints(params: {
     RETURNING id;
   `
   const awarded = Array.isArray(inserted.rows) && inserted.rows.length > 0
+  if (awarded) {
+    // Mirror 50% to the referee's referrer (if any). Best-effort.
+    try {
+      await recordReferralPassthrough({
+        db,
+        refereeSignupId: profileId,
+        originalSource: AMOE_CHECKIN_SOURCE,
+        originalSourceId: eventKey,
+        amount: AMOE_CHECKIN_POINTS,
+      })
+    } catch {
+      // swallow — passthrough is additive
+    }
+  }
   return { awarded, profileId }
 }

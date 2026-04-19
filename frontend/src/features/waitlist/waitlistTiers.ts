@@ -140,17 +140,21 @@ export type PointSuggestion = {
  */
 export const POINT_SUGGESTIONS: readonly PointSuggestion[] = [
   // Highest single-action reward: enabling 4626 signing (sub-account
-  // registration on the user's canonical Coinbase Smart Wallet). Labeled
-  // by intent rather than by the underlying primitive so users
-  // understand what they're doing — architecturally this is the
-  // sub-account flow described in docs/4626-connection-methods.md.
+  // registration on the user's canonical Coinbase Smart Wallet).
+  // Architecturally the sub-account flow described in
+  // docs/4626-connection-methods.md.
   { label: 'Enable 4626 signing', points: 50, hint: 'One-time', to: '/waitlist' },
   { label: 'Link Zora', points: 40, hint: 'One-time', to: '/waitlist' },
   { label: 'Link Google or Apple', points: 20, hint: 'Per platform', to: '/waitlist' },
-  { label: 'Share 4626 on X, Farcaster, or Telegram', points: 15, hint: 'Once per day', to: '/portfolio' },
   { label: 'Link X / Telegram / TikTok', points: 15, hint: 'Per platform', to: '/waitlist' },
   { label: 'Verify email', points: 10, hint: 'One-time' },
-  { label: 'Refer a friend who signs up', points: 2, hint: 'Per referral' },
+  { label: 'Share 4626 on X, Farcaster, or Telegram', points: 5, hint: 'Once per day', to: '/portfolio' },
+  // Referral reward is dynamic — referrer earns 50% of every point the
+  // referee scores via `recordReferralPassthrough` on the server. The
+  // numeric `points` here is a conservative illustrative minimum
+  // (50% × signup=5); the real upside scales with the friend's
+  // activity, which the hint communicates.
+  { label: 'Refer a friend', points: 0, hint: 'Earn 50% of every point they score' },
 ] as const
 
 /**
@@ -165,7 +169,7 @@ export const POINT_SUGGESTIONS: readonly PointSuggestion[] = [
  */
 export const AMOE_POINTS = {
   /** Points awarded per successful daily share (X / Farcaster / Telegram). */
-  checkin: 15,
+  checkin: 5,
 } as const
 
 /**
