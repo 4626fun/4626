@@ -178,6 +178,13 @@ export function hashSpendPermission(
  * amount)`. The manager short-circuits `approveWithSignature` when the
  * permission is already approved, so including it is harmless — we rely on
  * this property when `isSpendPermissionApproved` fails-open (returns false).
+ *
+ * The `spend(...)` call is skipped when `amountWei === 0n` because
+ * `SpendPermissionManager.spend` reverts with `ZeroValue` on a zero amount.
+ * ERC-20 sends, sells, trend-reserve ops — any userop with no native ETH
+ * value — must not prepend a `spend(0)` call. `approveWithSignature` is still
+ * emitted when not approved so first-time sub-accounts can register the
+ * permission even when the triggering op carries zero value.
  */
 export function buildSpendPermissionCalls(args: {
   permission: SpendPermissionPayload
@@ -198,15 +205,17 @@ export function buildSpendPermissionCalls(args: {
       }),
     })
   }
-  calls.push({
-    to: SPEND_PERMISSION_MANAGER_BASE,
-    value: 0n,
-    data: encodeFunctionData({
-      abi: spendPermissionManagerAbi,
-      functionName: 'spend',
-      args: [onchain, args.amountWei],
-    }),
-  })
+  if (args.amountWei > 0n) {
+    calls.push({
+      to: SPEND_PERMISSION_MANAGER_BASE,
+      value: 0n,
+      data: encodeFunctionData({
+        abi: spendPermissionManagerAbi,
+        functionName: 'spend',
+        args: [onchain, args.amountWei],
+      }),
+    })
+  }
   return calls
 }
 
