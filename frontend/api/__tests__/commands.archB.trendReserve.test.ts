@@ -39,12 +39,12 @@ const getTrendOpByTickerHashMock = vi.fn().mockResolvedValue(null)
 const walletRpcMock = vi.fn()
 const warnMock = vi.fn()
 
-vi.mock('../../_lib/wallet/commandIssuerContext.js', () => ({
+vi.mock('../../server/_lib/wallet/commandIssuerContext.js', () => ({
   resolveCommandIssuerContextByAddress: (...args: unknown[]) => resolveContextMock(...args),
   isExecutionReady: (resolution: { status: string }) => resolution.status === 'ready',
 }))
 
-vi.mock('../../_lib/wallet/userOperationSubmitter.js', () => ({
+vi.mock('../../server/_lib/wallet/userOperationSubmitter.js', () => ({
   isArchBCoinBuyViaUserOpEnabled: () => false,
   isArchBCoinSellViaUserOpEnabled: () => false,
   isArchBTrendReserveViaUserOpEnabled: () =>
@@ -52,13 +52,13 @@ vi.mock('../../_lib/wallet/userOperationSubmitter.js', () => ({
   submitUserOpOrRefuse: vi.fn(),
 }))
 
-vi.mock('../trends.js', () => ({
+vi.mock('../../server/zora/trends.js', () => ({
   preflightTrendTicker: (...args: unknown[]) => preflightTrendTickerMock(...args),
   reserveTrendTicker: (...args: unknown[]) => reserveTrendTickerMock(...args),
   reserveTrendTickerViaUserOp: (...args: unknown[]) => reserveTrendTickerViaUserOpMock(...args),
 }))
 
-vi.mock('../../_lib/zora/zoraTrendOpsStore.js', () => ({
+vi.mock('../../server/_lib/zora/zoraTrendOpsStore.js', () => ({
   upsertTrendPrediction: (...args: unknown[]) => upsertTrendPredictionMock(...args),
   markTrendOpDeployed: (...args: unknown[]) => markTrendOpDeployedMock(...args),
   markTrendOpDeploying: (...args: unknown[]) => markTrendOpDeployingMock(...args),
@@ -67,28 +67,28 @@ vi.mock('../../_lib/zora/zoraTrendOpsStore.js', () => ({
 }))
 
 // Legacy EOA path — stubbed; Arch B path must never hit this.
-vi.mock('../../_lib/wallet/privyWalletApi.js', () => ({
+vi.mock('../../server/_lib/wallet/privyWalletApi.js', () => ({
   walletRpc: (...args: unknown[]) => walletRpcMock(...args),
   BASE_CAIP2: 'eip155:8453',
   secp256k1SignHash: vi.fn(),
 }))
 
-vi.mock('../../_lib/agent/teeAttestationGate.js', () => ({
+vi.mock('../../server/_lib/agent/teeAttestationGate.js', () => ({
   assertTeeAttestationOrThrow: vi.fn(),
 }))
 
-vi.mock('../routerAllowlist.js', () => ({
+vi.mock('../../server/zora/routerAllowlist.js', () => ({
   checkRouterTarget: () => ({ allowed: true }),
 }))
 
-vi.mock('../../_lib/wallet/walletBalancePreflight.js', () => ({
+vi.mock('../../server/_lib/wallet/walletBalancePreflight.js', () => ({
   buildInsufficientFundsRefusal: () => 'friendly',
   checkWalletBalancePreflight: vi.fn(),
   getBasePreflightPublicClient: vi.fn(),
   isInsufficientFundsError: () => false,
 }))
 
-vi.mock('../../_lib/wallet/creatorAgentWallets.js', () => ({
+vi.mock('../../server/_lib/wallet/creatorAgentWallets.js', () => ({
   getOrCreateCreatorAgentWallet: vi.fn(),
 }))
 
@@ -99,7 +99,7 @@ vi.mock('@zoralabs/coins-sdk', () => ({
   createCoinCall: vi.fn(),
 }))
 
-vi.mock('../../_lib/infra/logger.js', () => ({
+vi.mock('../../server/_lib/infra/logger.js', () => ({
   logger: {
     info: vi.fn(),
     warn: (...args: unknown[]) => warnMock(...args),
@@ -109,7 +109,7 @@ vi.mock('../../_lib/infra/logger.js', () => ({
 }))
 
 // Import under test AFTER mocks are set.
-import { handleCoinCommand } from '../commands.js'
+import { handleCoinCommand } from '../../server/zora/commands.js'
 
 // ---------------------------------------------------------------------------
 // Shared fixtures
@@ -146,12 +146,21 @@ const BASE_PREFLIGHT = {
   deployedBytecode: null,
 }
 
-const BASE_COMMAND = {
-  groupId: 'group-1',
-  senderWallet: SENDER_WALLET,
-  role: 'ADMIN' as const,
-  vault: VAULT,
-  text: `/coin trend reserve ${TICKER}`,
+// Auto-incrementing group id to avoid handleCoinCommand's 60s per-group
+// cooldown from short-circuiting later test cases with "Rate limited".
+let _groupCounter = 0
+
+function callReserve(overrides: { ticker?: string; text?: string; role?: string } = {}) {
+  const ticker = overrides.ticker ?? TICKER
+  const text = overrides.text ?? `/coin trend reserve ${ticker}`
+  const groupId = `g-test-${++_groupCounter}`
+  return handleCoinCommand({
+    groupId,
+    senderWallet: SENDER_WALLET,
+    text,
+    role: (overrides.role ?? 'ADMIN') as any,
+    vault: VAULT,
+  })
 }
 
 function issuerReady() {
@@ -212,7 +221,7 @@ describe('/coin trend reserve — Arch B Phase 4', () => {
         status: 'deployed',
       })
 
-      const result = await handleCoinCommand(BASE_COMMAND)
+      const result = await callReserve()
 
       expect(result.ok).toBe(true)
       expect(reserveTrendTickerMock).toHaveBeenCalledTimes(1)
@@ -226,7 +235,7 @@ describe('/coin trend reserve — Arch B Phase 4', () => {
   it('refuses when issuer is not provisioned and records markTrendOpFailed', async () => {
     resolveContextMock.mockResolvedValue({ status: 'not_provisioned' })
 
-    const result = await handleCoinCommand(BASE_COMMAND)
+    const result = await callReserve()
 
     expect(result.ok).toBe(false)
     expect(String((result as any).response)).toContain("isn't provisioned for onchain execution yet")
@@ -242,7 +251,7 @@ describe('/coin trend reserve — Arch B Phase 4', () => {
   it('refuses when issuer is revoked and records markTrendOpFailed', async () => {
     resolveContextMock.mockResolvedValue({ status: 'revoked' })
 
-    const result = await handleCoinCommand(BASE_COMMAND)
+    const result = await callReserve()
 
     expect(result.ok).toBe(false)
     expect(String((result as any).response)).toContain('has been revoked')
@@ -256,7 +265,7 @@ describe('/coin trend reserve — Arch B Phase 4', () => {
   it('refuses when issuer readiness db is unavailable', async () => {
     resolveContextMock.mockResolvedValue({ status: 'db_unavailable' })
 
-    const result = await handleCoinCommand(BASE_COMMAND)
+    const result = await callReserve()
 
     expect(result.ok).toBe(false)
     expect(String((result as any).response)).toContain('account readiness storage is temporarily unavailable')
@@ -274,7 +283,7 @@ describe('/coin trend reserve — Arch B Phase 4', () => {
       response: 'Trend reserve denied: secure signer attestation is not verified.',
     })
 
-    const result = await handleCoinCommand(BASE_COMMAND)
+    const result = await callReserve()
 
     expect(result.ok).toBe(false)
     expect(String((result as any).response)).toContain('secure signer attestation')
@@ -290,7 +299,7 @@ describe('/coin trend reserve — Arch B Phase 4', () => {
       response: "Trend reserve blocked: the TrendCoin factory address didn't match the configured value.",
     })
 
-    const result = await handleCoinCommand(BASE_COMMAND)
+    const result = await callReserve()
 
     expect(result.ok).toBe(false)
     expect(String((result as any).response)).toContain('factory address')
@@ -306,7 +315,7 @@ describe('/coin trend reserve — Arch B Phase 4', () => {
       response: 'Daily cap reached.',
     })
 
-    const result = await handleCoinCommand(BASE_COMMAND)
+    const result = await callReserve()
 
     expect(result.ok).toBe(false)
     expect((result as any).response).toBe('Daily cap reached.')
@@ -316,13 +325,13 @@ describe('/coin trend reserve — Arch B Phase 4', () => {
   })
 
   it('happy path — deployed: calls markTrendOpDeployed and emits action routing=arch-b-userop', async () => {
-    const result = await handleCoinCommand(BASE_COMMAND)
+    const result = await callReserve()
 
     expect(result.ok).toBe(true)
     expect(reserveTrendTickerViaUserOpMock).toHaveBeenCalledWith(
       expect.objectContaining({
         ticker: TICKER,
-        groupId: 'group-1',
+        groupId: expect.stringMatching(/^g-test-\d+$/),
         issuer: expect.objectContaining({ smartWallet: CSW }),
         waitForReceipt: true,
       }),
@@ -353,7 +362,7 @@ describe('/coin trend reserve — Arch B Phase 4', () => {
       status: 'submitted',
     })
 
-    const result = await handleCoinCommand(BASE_COMMAND)
+    const result = await callReserve()
 
     expect(result.ok).toBe(true)
     // Two markTrendOpDeploying calls: the prelude one, and the post-submit one.
@@ -374,7 +383,7 @@ describe('/coin trend reserve — Arch B Phase 4', () => {
       deployedBytecode: '0x60',
     })
 
-    const result = await handleCoinCommand(BASE_COMMAND)
+    const result = await callReserve()
 
     expect(result.ok).toBe(true)
     expect(String((result as any).response)).toContain('Trend already deployed')
@@ -391,10 +400,7 @@ describe('/coin trend reserve — Arch B Phase 4', () => {
 
 describe('/coin create removal', () => {
   it('no longer accepts /coin create and returns an unknown-command error', async () => {
-    const result = await handleCoinCommand({
-      ...BASE_COMMAND,
-      text: '/coin create MyCoin MYC ipfs://Qm...',
-    })
+    const result = await callReserve({ text: '/coin create MyCoin MYC ipfs://Qm...' })
 
     expect(result.ok).toBe(false)
     expect(String((result as any).response)).toContain('Unknown coin command: create')
