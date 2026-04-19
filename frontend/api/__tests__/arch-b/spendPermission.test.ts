@@ -166,6 +166,46 @@ describe('buildSpendPermissionCalls', () => {
     expect(calls).toHaveLength(1)
     expect(calls[0].to).toBe(SPEND_PERMISSION_MANAGER_BASE)
   })
+
+  it('returns only [approveWithSignature] when amountWei is 0 and not approved', () => {
+    const calls = buildSpendPermissionCalls({
+      permission: PAYLOAD,
+      signature: SIGNATURE,
+      amountWei: 0n,
+      isApprovedOnChain: false,
+    })
+    expect(calls).toHaveLength(1)
+    expect(calls[0].to).toBe(SPEND_PERMISSION_MANAGER_BASE)
+    const expectedApproveData = encodeFunctionData({
+      abi: spendPermissionManagerAbi,
+      functionName: 'approveWithSignature',
+      args: [
+        {
+          account: PAYLOAD.account,
+          spender: PAYLOAD.spender,
+          token: PAYLOAD.token,
+          allowance: BigInt(PAYLOAD.allowance),
+          period: PAYLOAD.period,
+          start: PAYLOAD.start,
+          end: PAYLOAD.end,
+          salt: BigInt(PAYLOAD.salt),
+          extraData: PAYLOAD.extraData as `0x${string}`,
+        },
+        SIGNATURE,
+      ],
+    })
+    expect(calls[0].data).toBe(expectedApproveData)
+  })
+
+  it('returns an empty array when amountWei is 0 and already approved', () => {
+    const calls = buildSpendPermissionCalls({
+      permission: PAYLOAD,
+      signature: SIGNATURE,
+      amountWei: 0n,
+      isApprovedOnChain: true,
+    })
+    expect(calls).toEqual([])
+  })
 })
 
 describe('encodeSpendPermissionSpendCall', () => {
