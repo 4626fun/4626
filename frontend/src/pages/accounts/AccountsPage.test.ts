@@ -57,6 +57,10 @@ vi.mock('@/features/executionScope/ExecutionScopeCard', () => ({
   ExecutionScopeCard: () => null,
 }))
 
+vi.mock('@/features/executionScope/AutoProvisionMount', () => ({
+  AutoProvisionMount: () => null,
+}))
+
 describe('AccountsPage', () => {
   it('renders sections with mocked account API data', () => {
     const html = renderToStaticMarkup(

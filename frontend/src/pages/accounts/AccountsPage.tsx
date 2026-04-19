@@ -9,6 +9,7 @@ import {
   YourIdentityHero,
 } from '@/components/account/YourIdentityHero'
 import { ExecutionScopeCard } from '@/features/executionScope/ExecutionScopeCard'
+import { AutoProvisionMount } from '@/features/executionScope/AutoProvisionMount'
 import { AccountSetupWorkspaceView } from '@/features/accountSetup/AccountSetupWorkspaceView'
 import type { AccountSetupInitialData } from '@/features/accountSetup/types'
 import { shortValue } from '@/features/accountSetup/shared'
@@ -93,10 +94,11 @@ export function AccountsPage(props: {
         <YourIdentityHero />
         <SignersSection />
 
-        {/* App-scoped execution surface. Read-only in this iteration; revoke +
-            re-provision actions land in the next release. See
-            docs/design/sub-account-lifecycle-spec.md for the full 3-PR plan. */}
+        {/* App-scoped execution surface. Revoke + re-provision actions land
+            inside the card. Auto-provision fires once per session for eligible
+            creators — see docs/design/sub-account-lifecycle-spec.md § PR 3. */}
         <ExecutionScopeCard />
+        <AutoProvisionMount />
 
         {!privyAuthed ? (
           <div className="card rounded-2xl border border-white/10 bg-black/40 p-6 space-y-3">

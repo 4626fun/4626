@@ -151,19 +151,36 @@ what I'm consenting to").
    by the new card). `ArchBEnrollmentCard` stays in the waitlist flow
    for now — it will be obsoleted when PR 3 (auto-provisioning) lands.
 
-### PR 3 — Auto-provisioning on sign-in (~4–6 hrs)
+### PR 3 — Auto-provisioning on `/accounts` visit (shipped)
 
-1. New `useAutoProvisionSubAccount()` hook, called once per session from
-   a top-level auth-aware layout.
-2. Preconditions (all must hold):
-   - SIWE session active
-   - Canonical CSW resolved
-   - Privy embedded EOA is `CoinbaseSmartWallet.isOwner(csw, eoa)` ✓
-   - No existing `command_issuer_execution_context` row with `sub_account_address IS NOT NULL`
-3. Flow: prepare → sign (via Privy `signTypedData`, silent) → commit.
-4. On failure (non-owner, signature rejection, network error): fall back
-   silently to the opt-in `ExecutionScopeCard` CTA. No toast noise.
-5. Flip `ARCH_B_SUB_ACCOUNTS_ENABLED=1` in prod env.
+1. New `useAutoProvisionSubAccount()` hook + `AutoProvisionMount`
+   wrapper. Scoped to the `/accounts` route, NOT the root app shell,
+   because auto-triggering a wallet signature on any random page load
+   is hostile UX.
+2. Preconditions (all must hold before the hook fires):
+   - SIWE session active (`useSiweAuth().authAddress`)
+   - Canonical CSW resolved (`useCanonicalIdentity().cswAddress`)
+   - Privy embedded EOA present (`useCanonicalIdentity().privyEmbeddedAddress`)
+   - `CoinbaseSmartWallet.isOwnerAddress(embeddedEoa)` returns true on
+     chain
+   - No existing `command_issuer_execution_context` row with
+     `sub_account_address IS NOT NULL` (scope status = `not_provisioned`)
+3. Flow: prepare → `walletClient.signTypedData` → commit, reusing
+   `useReprovisionSubAccount()`. The signature modal is NOT bypassed
+   even for Privy-native users — SpendPermission is a financial consent
+   and deserves an explicit approval, not a silent sign. Users with
+   Privy's delegated-actions handshake will still see their wallet's
+   standard confirmation.
+4. Session-gated via `sessionStorage[\`4626:subacct:autoprov:${csw}\`] = '1'`
+   so repeated React renders / strict-mode double-fires / tab focus
+   events don't re-trigger.
+5. On failure (non-owner, signature rejection, network error): the hook
+   stays silent; the card's manual "Enable in-chat commands" CTA
+   remains the fallback. No red toast over a user-initiated rejection.
+6. On success: one-time success toast explaining what was just enabled,
+   plus `scope.refresh()` so the card flips immediately to the Active
+   state.
+7. Flip `ARCH_B_SUB_ACCOUNTS_ENABLED=1` in prod env (operator step).
 
 ## Out of scope for v1
 
