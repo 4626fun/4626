@@ -492,15 +492,19 @@ export async function provisionCommandIssuerContext(params: {
         revoked_at                  = NULL,
         revoked_reason              = NULL,
         updated_at                  = now(),
-        sub_account_address         = EXCLUDED.sub_account_address,
-        parent_csw_address          = EXCLUDED.parent_csw_address,
-        spend_permission_payload    = EXCLUDED.spend_permission_payload,
-        spend_permission_signature  = EXCLUDED.spend_permission_signature,
-        spend_permission_hash       = EXCLUDED.spend_permission_hash,
-        spend_allowance_wei         = EXCLUDED.spend_allowance_wei,
-        spend_period_seconds        = EXCLUDED.spend_period_seconds,
-        spend_permission_end_at     = EXCLUDED.spend_permission_end_at,
-        spend_permission_revoked_at = NULL
+        sub_account_address         = COALESCE(EXCLUDED.sub_account_address, command_issuer_execution_context.sub_account_address),
+        parent_csw_address          = COALESCE(EXCLUDED.parent_csw_address, command_issuer_execution_context.parent_csw_address),
+        spend_permission_payload    = COALESCE(EXCLUDED.spend_permission_payload, command_issuer_execution_context.spend_permission_payload),
+        spend_permission_signature  = COALESCE(EXCLUDED.spend_permission_signature, command_issuer_execution_context.spend_permission_signature),
+        spend_permission_hash       = COALESCE(EXCLUDED.spend_permission_hash, command_issuer_execution_context.spend_permission_hash),
+        spend_allowance_wei         = COALESCE(EXCLUDED.spend_allowance_wei, command_issuer_execution_context.spend_allowance_wei),
+        spend_period_seconds        = COALESCE(EXCLUDED.spend_period_seconds, command_issuer_execution_context.spend_period_seconds),
+        spend_permission_end_at     = COALESCE(EXCLUDED.spend_permission_end_at, command_issuer_execution_context.spend_permission_end_at),
+        spend_permission_revoked_at = CASE
+          WHEN EXCLUDED.sub_account_address IS NOT NULL
+            THEN NULL
+          ELSE command_issuer_execution_context.spend_permission_revoked_at
+        END
     `
     const reread = await resolveCommandIssuerContextByProfileId(params.profileId)
     if (reread.status !== 'ready') {
