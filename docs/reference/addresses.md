@@ -18,7 +18,7 @@ Deployed contract addresses for 4626.
 | VaultActivationBatcher | `0x7Cc0050842433968cc7A0884d192b61FD0b46F63` |
 | CreatorLotteryManager | `0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357` |
 | CreatorVRFConsumerV2_5 | `0xdd25Ed1b3D258Ccc6D306a9a325Af1A7F96C7F47` |
-| SolanaBridgeAdapter | `0x90F578A4e23c1cB8DDFE63fd496ED7F4474f2b00` |
+| SolanaBridgeAdapter | `0x653326dD0145656eC3b598943C0E84d7405aE6Ae` (v2, 2026-04-19) |
 | UniversalBytecodeStoreV2 | `0xA009B1Bf8cB711c115d832AEb392156BA6A4112e` |
 | UniversalCreate2DeployerFromStore | `0xFd2657b6f1905C3F0494942F618a68963CF792Ec` |
 | CreatorOVaultCoreModule | `0xeD728378f969f8e94a19fC081172D1e67B80412e` |

@@ -21,8 +21,13 @@ export const BASE_DEFAULTS = {
   vrfConsumer: addr('dd25Ed1b3D258Ccc6D306a9a325Af1A7F96C7F47'),
   payoutRouterFactory: addr('9C53cEaA15AdDB436c89A1F929fF12ED2BD26ea9'),
 
-  // Base↔Solana bridge integration
-  solanaBridgeAdapter: addr('90F578A4e23c1cB8DDFE63fd496ED7F4474f2b00'),
+  // Base↔Solana bridge integration.
+  // v2 adapter deployed 2026-04-19 (tx 0xfe49c9e2...fd5e). Maps creator coins to
+  // lowercase-parity Solana bridge mints (e.g. AKITA -> "akita"/"akita" at
+  // 9JWhbEAVpuHQdx1x5kSH62p6ZrWivqcBfARhvdLsLJdp). Supersedes v1 at
+  // 0x90F578A4e23c1cB8DDFE63fd496ED7F4474f2b00, which carried a one-off
+  // "ZORA"/"Zora Creator Coin" mapping for AKITA from the pre-strict-parity era.
+  solanaBridgeAdapter: addr('653326dD0145656eC3b598943C0E84d7405aE6Ae'),
 
   // CREATE2 infra
   create2Factory: addr('4e59b44847b379578588920cA78FbF26c0B4956C'),

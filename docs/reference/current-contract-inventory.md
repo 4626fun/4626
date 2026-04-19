@@ -25,7 +25,7 @@ Scope: current live Base infra addresses (from the `v1.8.3` broadcast) plus the 
 | `vaultActivationBatcher` | `0x7Cc0050842433968cc7A0884d192b61FD0b46F63` |
 | `lotteryManager` | `0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357` |
 | `vrfConsumer` | `0xdd25Ed1b3D258Ccc6D306a9a325Af1A7F96C7F47` |
-| `solanaBridgeAdapter` | `0x90F578A4e23c1cB8DDFE63fd496ED7F4474f2b00` |
+| `solanaBridgeAdapter` | `0x653326dD0145656eC3b598943C0E84d7405aE6Ae` (v2, 2026-04-19) |
 | `bytecodeStore` | `0xA009B1Bf8cB711c115d832AEb392156BA6A4112e` |
 | `create2DeployerFromStore` | `0xFd2657b6f1905C3F0494942F618a68963CF792Ec` |
 | `creatorOVaultCoreModule` | `0xeD728378f969f8e94a19fC081172D1e67B80412e` |
@@ -46,7 +46,7 @@ From `frontend/src/config/contracts.defaults.ts`:
 | `registry` | `0x9D86e8FAfA39527c4FE13AAa8FBD2B424f9f65Fb` |
 | `lotteryManager` | `0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357` |
 | `vrfConsumer` | `0xdd25Ed1b3D258Ccc6D306a9a325Af1A7F96C7F47` |
-| `solanaBridgeAdapter` | `0x90F578A4e23c1cB8DDFE63fd496ED7F4474f2b00` |
+| `solanaBridgeAdapter` | `0x653326dD0145656eC3b598943C0E84d7405aE6Ae` (v2) |
 | `universalBytecodeStore` | `0xA009B1Bf8cB711c115d832AEb392156BA6A4112e` |
 | `universalCreate2DeployerFromStore` | `0xFd2657b6f1905C3F0494942F618a68963CF792Ec` |
 | `vaultActivationBatcher` | `0x7Cc0050842433968cc7A0884d192b61FD0b46F63` |
