@@ -136,7 +136,7 @@ Users launch via the frontend AA flow, which now prefers Permit2 for the deposit
 2. The user installs the temporary session owner on the canonical smart wallet.
 3. Phase 2 finalize uses Permit2 when available, otherwise approval + `finalizePhase2(...)`.
 4. After phase 2 confirms, the server performs Solana preflight and registration.
-5. Phase 3 deploys Charm, Ajna, and `SolanaStrategy`, sets the idle reserve, and calls `vault.deployToStrategies()`.
+5. Phase 3 deploys the subset of `{Charm, Ajna, SolanaStrategy}` the creator has paid for via `creator_strategy_features` (strategies with `weightBps == 0` are skipped entirely — no deploy, no `addStrategy`), sets the idle reserve, and calls `vault.deployToStrategies()`. At least one strategy is required (`DeploymentBatcher.deployPhase3Strategies` reverts when the weight sum is zero). Until the updated batcher bytecode is seeded on mainnet, the live contract still requires all three weights to be non-zero — deploy-session clients keep sending the legacy 3-of-3 triple.
 6. Before phase 4 send, deploy-session runs the ShareOFT image gate (generate/compose/associate).
 7. Phase 4 launches the deferred auction only after image gate readiness succeeds.
 

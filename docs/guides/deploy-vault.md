@@ -129,12 +129,33 @@ Optional keeper setup (same script):
 
 ### Phase-3 strategy model (current)
 
-Phase 3 now uses a three-strategy accounting model on `CreatorOVault`:
+Phase 3 installs the subset of `{Charm, Ajna, SolanaStrategy}` the
+creator has paid for. Every productive strategy is a per-creator paid
+feature in `creator_strategy_features` (see
+[`docs/operations/creator-strategy-features.md`](../operations/creator-strategy-features.md)
+for pricing and activation). The server-side resolver
+(`resolveCreatorStrategyPlan` in
+`frontend/server/_lib/creatorStrategy/resolveWeights.ts`) splits a
+fixed 9_000 bps productive budget evenly across active strategies, so
+per-strategy weight depends on how many the creator activated:
 
-- Charm strategy: `30%` (`3_000` bps)
-- Ajna strategy sleeve: `30%` (`3_000` bps)
-- SolanaStrategy: `30%` (`3_000` bps)
-- Idle reserve: `10%` (`1_000` bps via `setMinimumTotalIdle`)
+| Paid strategies | Per-strategy weight | Example plan                       |
+|-----------------|---------------------|-------------------------------------|
+| 1               | `9_000` bps (90 %)  | Charm 9000 / unrouted 1000          |
+| 2               | `4_500` bps (45 % ea) | Charm 4500 / Ajna 4500 / unrouted 1000 |
+| 3               | `3_000` bps (30 % ea) | Charm 3000 / Ajna 3000 / Solana 3000 / unrouted 1000 |
+
+The unrouted remainder behaves like an idle reserve; the vault's
+`minimumTotalIdle` is set via `setMinimumTotalIdle` during Phase 3 to
+align with this 10 % convention. At least one strategy is required —
+`DeploymentBatcher.deployPhase3Strategies` reverts when all three
+weights are zero.
+
+Note: until the updated `DeploymentBatcher` bytecode is seeded on
+mainnet, the live contract still rejects any zero weight; deploy
+sessions keep sending the legacy 3_000 / 3_000 / 3_000 triple and the
+creator must have activated all three features. Mainnet rollout steps
+live in the creator-strategy-features doc.
 
 Canonical Ajna phase-3 deployment is now a nested bundle:
 

@@ -49,6 +49,11 @@ export const apiRouteLoaders: ApiRouteLoaders = {
 
   'creator-allowlist': () => import('./creator-access/_allowlist.js'),
   'creator-access/request': () => import('./creator-access/_request.js'),
+  'creator/strategy/activate': () => import('./creator/strategy/_activate.js'),
+  'creator/strategy/list': () => import('./creator/strategy/_list.js'),
+  'creator/strategy/x402-activate': () => import('./creator/strategy/_x402-activate.js'),
+  'creator/strategy/stripe/checkout': () => import('./creator/strategy/stripe/_checkout.js'),
+  'creator/strategy/stripe/webhook': () => import('./creator/strategy/stripe/_webhook.js'),
   'creator-access/status': () => import('./creator-access/_status.js'),
 
   'debank/totalBalanceBatch': () => import('./debank/_totalBalanceBatch.js'),

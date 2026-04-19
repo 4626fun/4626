@@ -5,6 +5,20 @@ sidebar_position: 6
 
 # 4626 Goes Multichain: Solana as a Spoke Chain
 
+:::note Product-model update (supersedes parts of this article)
+This piece was written when Charm, Ajna, and Solana were hard-wired as
+free baseline strategies on every vault. They're now all opt-in paid
+features ($100 USDC each via `creator_strategy_features`), so the
+"every creator gets native Solana liquidity automatically" framing and
+the fixed 30/30/30/10 vault split below only apply to creators who
+activate all three strategies before deploy. The Solana bridge,
+lottery, and fee-relay infrastructure described here is unchanged —
+it's still the routing layer that activates when a creator pays for
+`solana_bridge_strategy`. See
+[`docs/operations/creator-strategy-features.md`](../operations/creator-strategy-features.md)
+for the current product model.
+:::
+
 ## The Problem
 
 Creator tokens live on Base. The vault infrastructure, the lottery, the fee distribution, the CCA fair launch — it all runs on a single chain. That's fine until your audience is split across ecosystems.

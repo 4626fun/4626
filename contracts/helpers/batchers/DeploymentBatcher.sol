@@ -94,89 +94,114 @@ contract DeploymentBatcherPhase3Helper {
         }
         out.v3Pool = v3Pool;
 
-        _enforceCharmFactoryGovernance(params.expectedCharmProtocolFeePips);
-        out.charmVault = ICharmFactory(CHARM_FACTORY)
-            .createVault(
-                ICharmFactory.VaultParams({
-                pool: v3Pool,
-                manager: protocolTreasury,
-                managerFee: CHARM_MANAGER_FEE_PIPS,
-                rebalanceDelegate: protocolTreasury,
-                maxTotalSupply: type(uint256).max,
-                baseThreshold: 3000,
-                limitThreshold: 6000,
-                fullRangeWeight: 0,
-                period: 1800,
-                minTickMove: CHARM_MIN_TICK_MOVE,
-                maxTwapDeviation: CHARM_MAX_TWAP_DEVIATION,
-                twapDuration: CHARM_TWAP_DURATION,
-                name: params.charmVaultName,
-                symbol: params.charmVaultSymbol
-            })
+        // Charm active LP is an OPT-IN strategy gated behind the
+        // `charm_active_lp` creator-feature activation ($100 USDC, enforced
+        // off-chain by the deploy session). If the creator did not pay,
+        // the outer batcher passes `charmWeightBps == 0` and we skip the
+        // entire Charm pipeline (no factory call, no strategy deploy, no
+        // addStrategy on the vault). Return zero addresses so downstream
+        // callers can detect the skip. See docs/operations/creator-strategy-features.md.
+        if (params.charmWeightBps != 0) {
+            _enforceCharmFactoryGovernance(params.expectedCharmProtocolFeePips);
+            out.charmVault = ICharmFactory(CHARM_FACTORY)
+                .createVault(
+                    ICharmFactory.VaultParams({
+                    pool: v3Pool,
+                    manager: protocolTreasury,
+                    managerFee: CHARM_MANAGER_FEE_PIPS,
+                    rebalanceDelegate: protocolTreasury,
+                    maxTotalSupply: type(uint256).max,
+                    baseThreshold: 3000,
+                    limitThreshold: 6000,
+                    fullRangeWeight: 0,
+                    period: 1800,
+                    minTickMove: CHARM_MIN_TICK_MOVE,
+                    maxTwapDeviation: CHARM_MAX_TWAP_DEVIATION,
+                    twapDuration: CHARM_TWAP_DURATION,
+                    name: params.charmVaultName,
+                    symbol: params.charmVaultSymbol
+                })
+                );
+            _enforceCharmVaultManager(out.charmVault, protocolTreasury);
+
+            bytes32 charmStratSalt = _saltFor(baseSalt, "charmStrategyV3");
+            bytes memory charmStratArgs =
+                abi.encode(params.vault, params.creatorToken, usdc, uniswapRouter, out.charmVault, v3Pool, address(this));
+            out.charmStrategy =
+                create2Deployer.deploy(charmStratSalt, codeIds.creatorCharmStrategy, charmStratArgs);
+            ICreatorCharmStrategy(out.charmStrategy).initializeApprovals();
+            IOwnableTransfer(out.charmStrategy).transferOwnership(protocolTreasury);
+        }
+
+        // Ajna lending sleeve is an OPT-IN strategy gated behind the
+        // `ajna_sleeve` creator-feature activation. Same skip pattern
+        // as Charm above.
+        if (params.ajnaWeightBps != 0) {
+            bytes32 subsetHash = IAjnaPoolFactory(ajnaFactory).ERC20_NON_SUBSET_HASH();
+            address ajnaPool = IAjnaPoolFactory(ajnaFactory).deployedPools(subsetHash, usdc, params.creatorToken);
+            if (ajnaPool == address(0)) {
+                uint256 ajnaInterestRate = 5e16;
+                uint256 minRate = IAjnaPoolFactory(ajnaFactory).MIN_RATE();
+                uint256 maxRate = IAjnaPoolFactory(ajnaFactory).MAX_RATE();
+                if (ajnaInterestRate < minRate) ajnaInterestRate = minRate;
+                if (ajnaInterestRate > maxRate) ajnaInterestRate = maxRate;
+                ajnaPool = IAjnaPoolFactory(ajnaFactory).deployPool(usdc, params.creatorToken, ajnaInterestRate);
+            }
+
+            bytes32 ajnaAuthSalt = _saltFor(baseSalt, "ajnaVaultAuth");
+            out.ajnaVaultAuth =
+                create2Deployer.deploy(ajnaAuthSalt, codeIds.ajnaVaultAuth, abi.encode(address(this)));
+
+            if (params.ajnaBufferRatioBps != 0) {
+                IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setBufferRatio(params.ajnaBufferRatioBps);
+            }
+            if (params.ajnaMinBucketIndex != 0) {
+                IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setMinBucketIndex(params.ajnaMinBucketIndex);
+            }
+            if (params.ajnaKeeper != address(0)) {
+                IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setKeeper(params.ajnaKeeper, true);
+            }
+
+            bytes32 ajnaVaultSalt = _saltFor(baseSalt, "ajnaVault");
+            bytes memory ajnaVaultArgs = abi.encode(
+                ajnaPool, params.creatorToken, params.ajnaVaultName, params.ajnaVaultSymbol, out.ajnaVaultAuth
             );
-        _enforceCharmVaultManager(out.charmVault, protocolTreasury);
+            out.ajnaVault = create2Deployer.deploy(ajnaVaultSalt, codeIds.ajnaVault, ajnaVaultArgs);
 
-        bytes32 charmStratSalt = _saltFor(baseSalt, "charmStrategyV3");
-        bytes memory charmStratArgs =
-            abi.encode(params.vault, params.creatorToken, usdc, uniswapRouter, out.charmVault, v3Pool, address(this));
-        out.charmStrategy = create2Deployer.deploy(charmStratSalt, codeIds.creatorCharmStrategy, charmStratArgs);
-        ICreatorCharmStrategy(out.charmStrategy).initializeApprovals();
-        IOwnableTransfer(out.charmStrategy).transferOwnership(protocolTreasury);
-
-        bytes32 subsetHash = IAjnaPoolFactory(ajnaFactory).ERC20_NON_SUBSET_HASH();
-        address ajnaPool = IAjnaPoolFactory(ajnaFactory).deployedPools(subsetHash, usdc, params.creatorToken);
-        if (ajnaPool == address(0)) {
-            uint256 ajnaInterestRate = 5e16;
-            uint256 minRate = IAjnaPoolFactory(ajnaFactory).MIN_RATE();
-            uint256 maxRate = IAjnaPoolFactory(ajnaFactory).MAX_RATE();
-            if (ajnaInterestRate < minRate) ajnaInterestRate = minRate;
-            if (ajnaInterestRate > maxRate) ajnaInterestRate = maxRate;
-            ajnaPool = IAjnaPoolFactory(ajnaFactory).deployPool(usdc, params.creatorToken, ajnaInterestRate);
+            bytes32 ajnaSalt = _saltFor(baseSalt, "ajnaStrategyAdapter");
+            bytes memory ajnaArgs = abi.encode(params.vault, out.ajnaVault, address(this));
+            out.ajnaStrategy = create2Deployer.deploy(ajnaSalt, codeIds.erc4626StrategyAdapter, ajnaArgs);
+            IERC4626StrategyAdapterAdmin(out.ajnaStrategy).setIdleBufferBps(0);
+            IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setSwapper(out.ajnaStrategy);
+            IOwnableTransfer(out.ajnaStrategy).transferOwnership(protocolTreasury);
+            // FIX: F-21 — verify this helper is still admin before transferring, to fail explicitly
+            // instead of silently leaving auth locked to this helper address
+            if (!IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).isAdmin(address(this))) revert Phase3HelperLostAdmin();
+            // FIX: F-04 compatibility — use two-step admin transfer
+            IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).transferAdmin(protocolTreasury);
         }
 
-        bytes32 ajnaAuthSalt = _saltFor(baseSalt, "ajnaVaultAuth");
-        out.ajnaVaultAuth = create2Deployer.deploy(ajnaAuthSalt, codeIds.ajnaVaultAuth, abi.encode(address(this)));
-
-        if (params.ajnaBufferRatioBps != 0) {
-            IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setBufferRatio(params.ajnaBufferRatioBps);
+        // Solana bridge strategy is an OPT-IN paid feature
+        // (`solana_bridge_strategy`, $100 USDC). Skipping it at weight=0
+        // follows the same pattern as Charm/Ajna above — no deploy, no
+        // addStrategy, result address stays zero. Creators who skip this
+        // also cannot enable the post-deploy `solana_meteora_alpha_vault`
+        // add-on (there's no SolanaStrategy for Meteora to route through).
+        if (params.solanaWeightBps != 0) {
+            bytes32 solanaSalt = _saltFor(baseSalt, "solanaStrategy");
+            bytes memory solanaArgs = abi.encode(
+                params.vault,
+                params.creatorToken,
+                address(this),
+                params.solanaKeeper,
+                params.solanaMaxNavAge,
+                params.solanaMaxNavDeltaBpsPerUpdate,
+                params.solanaMinBaseLiquidityBps,
+                params.solanaBridgeAddress
+            );
+            out.solanaStrategy = create2Deployer.deploy(solanaSalt, codeIds.solanaStrategy, solanaArgs);
+            IOwnableTransfer(out.solanaStrategy).transferOwnership(protocolTreasury);
         }
-        if (params.ajnaMinBucketIndex != 0) {
-            IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setMinBucketIndex(params.ajnaMinBucketIndex);
-        }
-        if (params.ajnaKeeper != address(0)) {
-            IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setKeeper(params.ajnaKeeper, true);
-        }
-
-        bytes32 ajnaVaultSalt = _saltFor(baseSalt, "ajnaVault");
-        bytes memory ajnaVaultArgs =
-            abi.encode(ajnaPool, params.creatorToken, params.ajnaVaultName, params.ajnaVaultSymbol, out.ajnaVaultAuth);
-        out.ajnaVault = create2Deployer.deploy(ajnaVaultSalt, codeIds.ajnaVault, ajnaVaultArgs);
-
-        bytes32 ajnaSalt = _saltFor(baseSalt, "ajnaStrategyAdapter");
-        bytes memory ajnaArgs = abi.encode(params.vault, out.ajnaVault, address(this));
-        out.ajnaStrategy = create2Deployer.deploy(ajnaSalt, codeIds.erc4626StrategyAdapter, ajnaArgs);
-        IERC4626StrategyAdapterAdmin(out.ajnaStrategy).setIdleBufferBps(0);
-        IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).setSwapper(out.ajnaStrategy);
-        IOwnableTransfer(out.ajnaStrategy).transferOwnership(protocolTreasury);
-        // FIX: F-21 — verify this helper is still admin before transferring, to fail explicitly
-        // instead of silently leaving auth locked to this helper address
-        if (!IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).isAdmin(address(this))) revert Phase3HelperLostAdmin();
-        // FIX: F-04 compatibility — use two-step admin transfer
-        IAjnaVaultAuthConfigurator(out.ajnaVaultAuth).transferAdmin(protocolTreasury);
-
-        bytes32 solanaSalt = _saltFor(baseSalt, "solanaStrategy");
-        bytes memory solanaArgs = abi.encode(
-            params.vault,
-            params.creatorToken,
-            address(this),
-            params.solanaKeeper,
-            params.solanaMaxNavAge,
-            params.solanaMaxNavDeltaBpsPerUpdate,
-            params.solanaMinBaseLiquidityBps,
-            params.solanaBridgeAddress
-        );
-        out.solanaStrategy = create2Deployer.deploy(solanaSalt, codeIds.solanaStrategy, solanaArgs);
-        IOwnableTransfer(out.solanaStrategy).transferOwnership(protocolTreasury);
     }
 
     function _saltFor(bytes32 baseSalt, string memory label) internal pure returns (bytes32) {
@@ -1536,20 +1561,45 @@ contract DeploymentBatcher is ReentrancyGuard {
         // Bind caller auth to the actual vault owner onchain (not only user-supplied params.owner).
         if (IOwnableView(params.vault).owner() != params.owner) revert NotOwner();
         _requireOwner(params.owner);
-        if (params.charmWeightBps == 0 || params.charmWeightBps > 10_000) revert InvalidWeight();
-        if (params.ajnaWeightBps == 0 || params.ajnaWeightBps > 10_000) revert InvalidWeight();
-        if (params.solanaWeightBps == 0 || params.solanaWeightBps > 10_000) revert InvalidWeight();
-        if (params.charmWeightBps + params.ajnaWeightBps + params.solanaWeightBps > 10_000) revert InvalidWeight();
+        // All three productive strategies are OPT-IN paid features. A
+        // `weightBps == 0` means the creator did not activate that
+        // strategy; we skip the deploy AND the `addStrategy` call
+        // entirely. Sum-cap still applies (idle reserve absorbs the
+        // remainder). At least ONE strategy is required at deploy time —
+        // a vault with zero productive strategies would accrue no yield
+        // and is disallowed as a product invariant. Creators who want to
+        // start lean pick one strategy (e.g. Charm at 9_000 bps, 1_000
+        // idle) and can add more post-deploy via `addStrategy` +
+        // `setStrategyWeight` on the live vault.
+        if (params.charmWeightBps > 10_000) revert InvalidWeight();
+        if (params.ajnaWeightBps > 10_000) revert InvalidWeight();
+        if (params.solanaWeightBps > 10_000) revert InvalidWeight();
+        uint256 totalProductiveWeight =
+            params.charmWeightBps + params.ajnaWeightBps + params.solanaWeightBps;
+        if (totalProductiveWeight == 0) revert InvalidWeight();
+        if (totalProductiveWeight > 10_000) revert InvalidWeight();
 
-        if (
-            codeIds.charmAlphaVaultDeploy == bytes32(0) || codeIds.creatorCharmStrategy == bytes32(0)
-                || codeIds.ajnaVaultAuth == bytes32(0) || codeIds.ajnaVault == bytes32(0)
-                || codeIds.erc4626StrategyAdapter == bytes32(0) || codeIds.solanaStrategy == bytes32(0)
-        ) {
-            revert InvalidCodeId();
+        // codeIds are only required for the strategies actually being deployed
+        // this run. Skipping a strategy must not force callers to supply the
+        // respective bytecode ids when they're unused.
+        if (params.charmWeightBps != 0) {
+            if (codeIds.charmAlphaVaultDeploy == bytes32(0) || codeIds.creatorCharmStrategy == bytes32(0)) {
+                revert InvalidCodeId();
+            }
         }
-        if (params.solanaKeeper == address(0) || params.solanaBridgeAddress == address(0)) {
-            revert ZeroAddress();
+        if (params.ajnaWeightBps != 0) {
+            if (
+                codeIds.ajnaVaultAuth == bytes32(0) || codeIds.ajnaVault == bytes32(0)
+                    || codeIds.erc4626StrategyAdapter == bytes32(0)
+            ) {
+                revert InvalidCodeId();
+            }
+        }
+        if (params.solanaWeightBps != 0) {
+            if (codeIds.solanaStrategy == bytes32(0)) revert InvalidCodeId();
+            if (params.solanaKeeper == address(0) || params.solanaBridgeAddress == address(0)) {
+                revert ZeroAddress();
+            }
         }
 
         bytes32 baseSalt = utilsHelper.deriveBaseSalt(params.creatorToken, params.owner, block.chainid, params.version);
@@ -1557,10 +1607,17 @@ contract DeploymentBatcher is ReentrancyGuard {
 
         // ───────────────────────────────
         // 5) Register strategies on the vault (batcher remains `management` from Phase 1)
+        //    Skip addStrategy for any strategy the creator did not pay for.
         // ───────────────────────────────
-        ICreatorOVaultStrategyManager(params.vault).addStrategy(out.charmStrategy, params.charmWeightBps);
-        ICreatorOVaultStrategyManager(params.vault).addStrategy(out.ajnaStrategy, params.ajnaWeightBps);
-        ICreatorOVaultStrategyManager(params.vault).addStrategy(out.solanaStrategy, params.solanaWeightBps);
+        if (params.charmWeightBps != 0) {
+            ICreatorOVaultStrategyManager(params.vault).addStrategy(out.charmStrategy, params.charmWeightBps);
+        }
+        if (params.ajnaWeightBps != 0) {
+            ICreatorOVaultStrategyManager(params.vault).addStrategy(out.ajnaStrategy, params.ajnaWeightBps);
+        }
+        if (params.solanaWeightBps != 0) {
+            ICreatorOVaultStrategyManager(params.vault).addStrategy(out.solanaStrategy, params.solanaWeightBps);
+        }
         if (params.enableAutoAllocate) {
             ICreatorOVaultStrategyManager(params.vault).setAutoAllocate(true);
         }
