@@ -28,6 +28,9 @@ import {
   fetchPrivyWalletFull,
 } from '../../../server/_lib/wallet/privyWalletApi.js'
 import { resolveOwnerWalletId } from '../../../server/_lib/wallet/privyOwnerWalletIdResolver.js'
+import { getBasePublicClient } from '../../../server/_lib/wallet/subAccountProvisionVerify.js'
+import { readSpendPermissionCurrentPeriod } from '../../../server/_lib/wallet/spendPermissionPeriodRead.js'
+import type { CommandIssuerSubAccount } from '../../../server/_lib/wallet/commandIssuerContext.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -109,6 +112,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let caps: { perTxCapWei: string; dailyCapWei: string } | null = null
   let revokedAt: string | null = null
   let existingWalletId: string | null = null
+  let subAccountContext: CommandIssuerSubAccount | null = null
 
   if (ctxResolution.status === 'ready') {
     executionReady = 'ready'
@@ -117,6 +121,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       dailyCapWei: ctxResolution.context.dailyCapWei.toString(),
     }
     existingWalletId = ctxResolution.context.privyOwnerWalletId
+    subAccountContext = ctxResolution.context.subAccount
   } else if (ctxResolution.status === 'revoked') {
     executionReady = 'revoked'
     revokedAt = ctxResolution.revokedAt.toISOString()
@@ -157,6 +162,48 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const delegated = walletId ? await resolveDelegated(walletId, quorumId) : null
 
+  // Sub-account surface for the /accounts "Execution scopes" card. When
+  // sub_account_address is not populated, the legacy direct-CSW path is
+  // in effect — we return `subAccount: null` and the card shows a
+  // "not enabled" empty state. When present, we additionally read the
+  // SpendPermissionManager's current period window so the UI can show
+  // "0.18 ETH used · 0.32 ETH remaining" without a separate round trip.
+  let subAccountResponse: SubAccountStatusDto | null = null
+  if (subAccountContext) {
+    let currentPeriod: Awaited<ReturnType<typeof readSpendPermissionCurrentPeriod>> = null
+    try {
+      const publicClient = getBasePublicClient()
+      currentPeriod = await readSpendPermissionCurrentPeriod(
+        publicClient as unknown as Parameters<typeof readSpendPermissionCurrentPeriod>[0],
+        subAccountContext.spendPermission.payload,
+      )
+    } catch {
+      // Non-fatal: UI renders "usage unavailable" in that slot.
+      currentPeriod = null
+    }
+
+    subAccountResponse = {
+      address: subAccountContext.subAccountAddress,
+      parentCsw: subAccountContext.parentCswAddress,
+      spendPermission: {
+        allowanceWei: subAccountContext.spendPermission.allowanceWei.toString(),
+        periodSeconds: subAccountContext.spendPermission.periodSeconds,
+        endAt: subAccountContext.spendPermission.endAt.toISOString(),
+        revokedAt: subAccountContext.spendPermission.revokedAt
+          ? subAccountContext.spendPermission.revokedAt.toISOString()
+          : null,
+        currentPeriod: currentPeriod
+          ? {
+              startUnix: currentPeriod.start,
+              endUnix: currentPeriod.end,
+              spendWei: currentPeriod.spendWei,
+              remainingWei: currentPeriod.remainingWei,
+            }
+          : null,
+      },
+    }
+  }
+
   return res.status(200).json({
     success: true,
     data: {
@@ -166,6 +213,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       caps,
       revokedAt,
       quorumId,
+      subAccount: subAccountResponse,
     },
   } satisfies ApiEnvelope<unknown>)
+}
+
+type SubAccountStatusDto = {
+  address: string
+  parentCsw: string
+  spendPermission: {
+    allowanceWei: string
+    periodSeconds: number
+    endAt: string
+    revokedAt: string | null
+    currentPeriod: {
+      startUnix: number
+      endUnix: number
+      spendWei: string
+      remainingWei: string
+    } | null
+  }
 }

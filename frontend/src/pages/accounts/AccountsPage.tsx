@@ -9,6 +9,7 @@ import {
   SignersSection,
   YourIdentityHero,
 } from '@/components/account/YourIdentityHero'
+import { ExecutionScopeCard } from '@/features/executionScope/ExecutionScopeCard'
 import { AccountSetupWorkspaceView } from '@/features/accountSetup/AccountSetupWorkspaceView'
 import type { AccountSetupInitialData } from '@/features/accountSetup/types'
 import { shortValue } from '@/features/accountSetup/shared'
@@ -92,6 +93,11 @@ export function AccountsPage(props: {
         {/* Canonical identity hero + signers — always surfaced at the top. */}
         <YourIdentityHero />
         <SignersSection />
+
+        {/* App-scoped execution surface. Read-only in this iteration; revoke +
+            re-provision actions land in the next release. See
+            docs/design/sub-account-lifecycle-spec.md for the full 3-PR plan. */}
+        <ExecutionScopeCard />
 
         {!privyAuthed ? (
           <div className="card rounded-2xl border border-white/10 bg-black/40 p-6 space-y-3">
