@@ -66,6 +66,19 @@ function verifyGeneratedTargetsCommitted(targets) {
         env: process.env,
       },
     );
+    // Print the first 200 lines of the actual diff so CI logs show what
+    // differs, not just which file. Critical for diagnosing env-specific
+    // drift (e.g. a file generated locally but not in CI, or vice versa).
+    console.log('\n[docs] Generated docs drift detected (first 200 lines of diff):');
+    spawnSync(
+      'bash',
+      ['-c', `git --no-pager diff -- ${targets.map((t) => `'${t}'`).join(' ')} | head -n 200`],
+      {
+        stdio: 'inherit',
+        cwd: process.cwd(),
+        env: process.env,
+      },
+    );
     process.exit(diffCheck.status ?? 1);
   }
   console.log('[docs] Verify generated docs are committed OK');
