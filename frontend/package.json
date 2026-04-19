@@ -47,6 +47,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e:waitlist-handoff": "node scripts/e2e-waitlist-handoff-regression.mjs",
+    "test:e2e:waitlist-swap-bounce": "node scripts/e2e-waitlist-swap-bounce-regression.mjs",
     "test:e2e:deploy-session-resume": "node scripts/e2e-deploy-session-resume-regression.mjs",
     "dev:deploy-dry-run": "bash scripts/dev-deploy-dry-run.sh",
     "smoke:deploy-dry-run": "bash scripts/smoke-deploy-dry-run.sh",
