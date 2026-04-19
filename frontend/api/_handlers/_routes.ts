@@ -99,8 +99,14 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'arch-b/enroll': () => import('./arch-b/_enroll.js'),
   'arch-b/revoke': () => import('./arch-b/_revoke.js'),
   'arch-b/status': () => import('./arch-b/_status.js'),
+  'arch-b/sub-account/provision/prepare': () =>
+    import('./arch-b/_subAccountProvisionPrepare.js'),
+  'arch-b/sub-account/provision/commit': () =>
+    import('./arch-b/_subAccountProvisionCommit.js'),
 
   'admin/arch-b/provision': () => import('./admin/arch-b/_provision.js'),
+  'admin/arch-b/sub-account/provision': () =>
+    import('./admin/arch-b/_subAccountProvision.js'),
 
   ...prefixRouteLoaders('auth', authRouteLoaders),
   ...prefixRouteLoaders('cdp', cdpRouteLoaders),
