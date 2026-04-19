@@ -15,9 +15,9 @@ import {
   WRAP_TOKEN_NAME_MAX_LENGTH,
   WRAP_TOKEN_SYMBOL_MAX_LENGTH,
   isLikelyUnsupportedMetadataUriFlagError,
-  normalizeExactWrapTokenName,
-  normalizeExactWrapTokenSymbol,
   normalizeWrapTokenMetadataUri,
+  normalizeWrapTokenName,
+  normalizeWrapTokenSymbol,
   readBridgeTokenMetadata,
 } from '../_lib/solanaBridgeTokenMetadata.js'
 import {
@@ -628,14 +628,14 @@ async function handleProvision(req: IncomingMessage, res: ServerResponse): Promi
       error: 'Bridge token metadata unavailable. Name/symbol are required for strict Solana parity provisioning.',
     })
   }
-  const tokenName = normalizeExactWrapTokenName(bridgeTokenMetadata.name)
-  const tokenSymbol = normalizeExactWrapTokenSymbol(bridgeTokenMetadata.symbol)
+  const tokenName = normalizeWrapTokenName(bridgeTokenMetadata.name)
+  const tokenSymbol = normalizeWrapTokenSymbol(bridgeTokenMetadata.symbol)
   if (!tokenName || !tokenSymbol) {
     return json(res, 409, {
       success: false,
       error:
         `Bridge token metadata is incompatible with strict Solana parity requirements (name<=${WRAP_TOKEN_NAME_MAX_LENGTH}, ` +
-        `symbol<=${WRAP_TOKEN_SYMBOL_MAX_LENGTH}, exact casing preserved).`,
+        `symbol<=${WRAP_TOKEN_SYMBOL_MAX_LENGTH}, lowercase-coerced).`,
     })
   }
   const tokenMetadataUriRaw =

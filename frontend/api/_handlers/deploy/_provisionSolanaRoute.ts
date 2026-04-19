@@ -23,8 +23,8 @@ import { evaluateCanonicalBridgeTokenPolicy } from '../../../server/_lib/onchain
 import {
   WRAP_TOKEN_NAME_MAX_LENGTH,
   WRAP_TOKEN_SYMBOL_MAX_LENGTH,
-  normalizeExactWrapTokenName,
-  normalizeExactWrapTokenSymbol,
+  normalizeWrapTokenName,
+  normalizeWrapTokenSymbol,
   readBridgeTokenMetadata,
 } from '../../../server/_lib/onchain/solanaBridgeTokenMetadata.js'
 import { runWrapToken } from '../../../server/_lib/onchain/solanaBridgeCliRunner.js'
@@ -159,14 +159,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       error: 'Bridge token metadata unavailable. Name/symbol are required for Solana route provisioning.',
     } satisfies ApiEnvelope<never>)
   }
-  const tokenName = normalizeExactWrapTokenName(bridgeTokenMetadata.name)
-  const tokenSymbol = normalizeExactWrapTokenSymbol(bridgeTokenMetadata.symbol)
+  const tokenName = normalizeWrapTokenName(bridgeTokenMetadata.name)
+  const tokenSymbol = normalizeWrapTokenSymbol(bridgeTokenMetadata.symbol)
   if (!tokenName || !tokenSymbol) {
     return res.status(409).json({
       success: false,
       error:
         `Bridge token metadata is incompatible with strict Solana parity requirements (name<=${WRAP_TOKEN_NAME_MAX_LENGTH}, ` +
-        `symbol<=${WRAP_TOKEN_SYMBOL_MAX_LENGTH}, exact casing preserved).`,
+        `symbol<=${WRAP_TOKEN_SYMBOL_MAX_LENGTH}, lowercase-coerced).`,
     } satisfies ApiEnvelope<never>)
   }
 

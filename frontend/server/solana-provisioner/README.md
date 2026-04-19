@@ -48,15 +48,17 @@ Default 4626 Solana stack is **Meteora DLMM + Alpha Vault**.
 ```
 
 The provisioner runs in strict parity mode: it reads `name()` and `symbol()`
-directly from the `bridgeToken` ERC-20 on Base via `readBridgeTokenMetadata`
-and passes those exact values (case preserved, including lowercase) to
-`wrap-token` as `--name` / `--symbol`. The request body intentionally does
-NOT accept a `tokenName` / `tokenSymbol` override -- the Solana mint's
-identity is cryptographically bound to its metadata via the bridge program's
-wrapped-token PDA seeds, so metadata must match the Base ERC-20 verbatim.
-Provisioning fails closed (HTTP 409) if the Base metadata is missing,
-empty, or exceeds the wrap-token constraints (name<=32 bytes, symbol<=12
-bytes, no null bytes).
+directly from the `bridgeToken` ERC-20 on Base via `readBridgeTokenMetadata`,
+lowercase-coerces both values, and passes them to `wrap-token` as
+`--name` / `--symbol`. Lowercase is applied uniformly so every creator's
+Solana display (`"akita"` / `"akita"`) stays consistent regardless of how
+the Base token cased its own metadata (`"AKITA"`, `"MyCoin"`, etc). The
+request body intentionally does NOT accept a `tokenName` / `tokenSymbol`
+override -- the Solana mint's identity is cryptographically bound to its
+metadata via the bridge program's wrapped-token PDA seeds, so the lowercase
+form IS the on-chain identity on Solana. Provisioning fails closed
+(HTTP 409) if the Base metadata is missing, empty, or exceeds the
+wrap-token constraints (name<=32 bytes, symbol<=12 bytes, no null bytes).
 
 ## Response contract (success)
 

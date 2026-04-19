@@ -52,9 +52,9 @@ import {
   WRAP_TOKEN_NAME_MAX_LENGTH,
   WRAP_TOKEN_SYMBOL_MAX_LENGTH,
   isLikelyUnsupportedMetadataUriFlagError,
-  normalizeExactWrapTokenName,
-  normalizeExactWrapTokenSymbol,
   normalizeWrapTokenMetadataUri,
+  normalizeWrapTokenName,
+  normalizeWrapTokenSymbol,
   readBridgeTokenMetadata,
 } from '../../../server/_lib/onchain/solanaBridgeTokenMetadata.js'
 import {
@@ -450,10 +450,10 @@ function buildWrapTokenMetadata(metadata: { name: string; symbol: string }): {
 } {
   const originalName = String(metadata.name ?? '')
   const originalSymbol = String(metadata.symbol ?? '')
-  const tokenName = normalizeExactWrapTokenName(originalName)
-  const tokenSymbol = normalizeExactWrapTokenSymbol(originalSymbol)
-  const tokenNameSource = 'base_bridge_token_exact'
-  const tokenSymbolSource = 'base_bridge_token_exact'
+  const tokenName = normalizeWrapTokenName(originalName)
+  const tokenSymbol = normalizeWrapTokenSymbol(originalSymbol)
+  const tokenNameSource = 'base_bridge_token_lowercase'
+  const tokenSymbolSource = 'base_bridge_token_lowercase'
   return { tokenName, tokenSymbol, tokenNameSource, tokenSymbolSource }
 }
 
@@ -563,7 +563,7 @@ async function tryProvisionDynamicRoute(params: {
   if (!tokenName || !tokenSymbol) {
     throw new Error(
       `Bridge token metadata is incompatible with strict Solana parity requirements (name<=${WRAP_TOKEN_NAME_MAX_LENGTH}, ` +
-        `symbol<=${WRAP_TOKEN_SYMBOL_MAX_LENGTH}, exact casing preserved).`,
+        `symbol<=${WRAP_TOKEN_SYMBOL_MAX_LENGTH}, lowercase-coerced).`,
     )
   }
   const payForRelay = String(process.env.SOLANA_BRIDGE_PAY_FOR_RELAY ?? '1').trim() !== '0'

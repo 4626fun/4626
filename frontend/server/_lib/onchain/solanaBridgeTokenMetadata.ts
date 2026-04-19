@@ -62,23 +62,55 @@ export async function readBridgeTokenMetadata(params: {
   }
 }
 
-export function normalizeExactWrapTokenName(raw: string): string | null {
+/**
+ * Normalize a Base ERC-20 `name()` for use as a Solana bridge-wrapped mint
+ * name. Coerces to lowercase so every creator's Solana display is uniform
+ * regardless of how the Base token cased its name. Rejects empty, null-byte,
+ * and oversized inputs (fail-closed). The lowercase output is what flows
+ * into the bridge program's wrapped-token PDA seed, so the Solana mint's
+ * on-chain identity is bound to the lowercase form.
+ */
+export function normalizeWrapTokenName(raw: string): string | null {
   const value = String(raw ?? '')
   if (!value) return null
   if (value.includes('\u0000')) return null
   if (value.length > WRAP_TOKEN_NAME_MAX_LENGTH) return null
   if (Buffer.byteLength(value, 'utf8') > WRAP_TOKEN_NAME_MAX_LENGTH) return null
-  return value
+  const lowered = value.toLowerCase()
+  // Re-check byte length after lowercasing — Unicode case folding can change
+  // byte length (e.g. Turkish dotless i). Keep fail-closed if it overflows.
+  if (Buffer.byteLength(lowered, 'utf8') > WRAP_TOKEN_NAME_MAX_LENGTH) return null
+  return lowered
 }
 
-export function normalizeExactWrapTokenSymbol(raw: string): string | null {
+/**
+ * Normalize a Base ERC-20 `symbol()` for use as a Solana bridge-wrapped mint
+ * symbol. Same lowercase policy as the name normalizer: uniform lowercase
+ * display, fail-closed on empty/null-byte/oversized inputs.
+ */
+export function normalizeWrapTokenSymbol(raw: string): string | null {
   const value = String(raw ?? '')
   if (!value) return null
   if (value.includes('\u0000')) return null
   if (value.length > WRAP_TOKEN_SYMBOL_MAX_LENGTH) return null
   if (Buffer.byteLength(value, 'utf8') > WRAP_TOKEN_SYMBOL_MAX_LENGTH) return null
-  return value
+  const lowered = value.toLowerCase()
+  if (Buffer.byteLength(lowered, 'utf8') > WRAP_TOKEN_SYMBOL_MAX_LENGTH) return null
+  return lowered
 }
+
+/**
+ * @deprecated Renamed — use `normalizeWrapTokenName`. Kept as an alias so
+ * consumers that import the old name don't break at the import layer; the
+ * behavior changed at the same time (now lowercase-coerced, not exact-case).
+ */
+export const normalizeExactWrapTokenName = normalizeWrapTokenName
+
+/**
+ * @deprecated Renamed — use `normalizeWrapTokenSymbol`. Same aliasing
+ * rationale as `normalizeExactWrapTokenName`.
+ */
+export const normalizeExactWrapTokenSymbol = normalizeWrapTokenSymbol
 
 export function normalizeWrapTokenMetadataUri(raw: unknown): string | null {
   if (typeof raw !== 'string') return null
