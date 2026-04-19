@@ -194,7 +194,7 @@ index 53dd0effd3ff3f24d0bb5fd60e8290779d9da423..63509e094db9f8aaad8212222196d783
 +++ b/_esm/core/BinaryStateTree.js
 @@ -1,4 +1,4 @@
 -import { blake3 } from '@noble/hashes/blake3';
-+import { blake3 } from '@noble/hashes/esm/blake3.js';
++import { blake3 } from '@noble/hashes/blake3.js';
  import * as Bytes from './Bytes.js';
  /**
   * Creates a new Binary State Tree instance.
@@ -204,7 +204,7 @@ index 4522ff4558735044913d4494aa6cc7b2f2ddace6..dd9d8f21217316a09638ca745deac7f7
 +++ b/_esm/core/Bls.js
 @@ -1,4 +1,4 @@
 -import { bls12_381 as bls } from '@noble/curves/bls12-381';
-+import { bls12_381 as bls } from '@noble/curves/esm/bls12-381.js';
++import { bls12_381 as bls } from '@noble/curves/bls12-381.js';
  import * as Bytes from './Bytes.js';
  import * as Hex from './Hex.js';
  /** Re-export of noble/curves BLS12-381 utilities. */
@@ -214,7 +214,7 @@ index 482e0ad6d60a0e963e5c4ba26e852d016f21f280..efd7dec645a312b2f6caf674fbc31d26
 +++ b/_esm/core/BlsPoint.js
 @@ -1,4 +1,4 @@
 -import { bls12_381 as bls } from '@noble/curves/bls12-381';
-+import { bls12_381 as bls } from '@noble/curves/esm/bls12-381.js';
++import { bls12_381 as bls } from '@noble/curves/bls12-381.js';
  import * as Hex from './Hex.js';
  /**
   * Converts a BLS point to {@link ox#Bytes.Bytes}.
@@ -224,7 +224,7 @@ index 3430b7138bb9aec5b2889c6922bc32da37835f60..f0a525003108109d4e1e57b4a9ac2bf1
 +++ b/_esm/core/Bytes.js
 @@ -1,4 +1,4 @@
 -import { equalBytes } from '@noble/curves/abstract/utils';
-+import { equalBytes } from '@noble/curves/esm/abstract/utils.js';
++import { equalBytes } from '@noble/curves/abstract/utils.js';
  import * as Errors from './Errors.js';
  import * as Hex from './Hex.js';
  import * as internal from './internal/bytes.js';
@@ -234,7 +234,7 @@ index 5ef8e8645d0291cbe7f2f6aec9a506ec919f939c..04131828c40c9a915b357150ca0071a5
 +++ b/_esm/core/Ed25519.js
 @@ -1,4 +1,4 @@
 -import { ed25519 } from '@noble/curves/ed25519';
-+import { ed25519 } from '@noble/curves/esm/ed25519.js';
++import { ed25519 } from '@noble/curves/ed25519.js';
  import * as Bytes from './Bytes.js';
  import * as Hex from './Hex.js';
  /** Re-export of noble/curves Ed25519 utilities. */
@@ -246,9 +246,9 @@ index 831ece0c37d71d2b5fdc85a4903088c952b87f41..e48ef0aca92b1eb4566e854c12fcc916
 -import { ripemd160 as noble_ripemd160 } from '@noble/hashes/ripemd160';
 -import { keccak_256 as noble_keccak256 } from '@noble/hashes/sha3';
 -import { sha256 as noble_sha256 } from '@noble/hashes/sha256';
-+import { ripemd160 as noble_ripemd160 } from '@noble/hashes/esm/ripemd160.js';
-+import { keccak_256 as noble_keccak256 } from '@noble/hashes/esm/sha3.js';
-+import { sha256 as noble_sha256 } from '@noble/hashes/esm/sha256.js';
++import { ripemd160 as noble_ripemd160 } from '@noble/hashes/ripemd160.js';
++import { keccak_256 as noble_keccak256 } from '@noble/hashes/sha3.js';
++import { sha256 as noble_sha256 } from '@noble/hashes/sha256.js';
  import * as Bytes from './Bytes.js';
  import * as Hex from './Hex.js';
  /**
@@ -258,7 +258,7 @@ index 868baa70dfaea1b8257049ebe93a6e4a1ee2d7d7..58a5d860ac0a43955d294481b4eacccc
 +++ b/_esm/core/Hex.js
 @@ -1,4 +1,4 @@
 -import { equalBytes } from '@noble/curves/abstract/utils';
-+import { equalBytes } from '@noble/curves/esm/abstract/utils.js';
++import { equalBytes } from '@noble/curves/abstract/utils.js';
  import * as Bytes from './Bytes.js';
  import * as Errors from './Errors.js';
  import * as internal_bytes from './internal/bytes.js';
@@ -271,9 +271,9 @@ index d8a443ea2b78a106729d7660e1710f1d52a006d3..db631185a59d831641c217039398ca08
 -import { pbkdf2 as pbkdf2_noble, pbkdf2Async as pbkdf2Async_noble, } from '@noble/hashes/pbkdf2';
 -import { scrypt as scrypt_noble, scryptAsync as scryptAsync_noble, } from '@noble/hashes/scrypt';
 -import { sha256 } from '@noble/hashes/sha2';
-+import { pbkdf2 as pbkdf2_noble, pbkdf2Async as pbkdf2Async_noble, } from '@noble/hashes/esm/pbkdf2.js';
-+import { scrypt as scrypt_noble, scryptAsync as scryptAsync_noble, } from '@noble/hashes/esm/scrypt.js';
-+import { sha256 } from '@noble/hashes/esm/sha2.js';
++import { pbkdf2 as pbkdf2_noble, pbkdf2Async as pbkdf2Async_noble, } from '@noble/hashes/pbkdf2.js';
++import { scrypt as scrypt_noble, scryptAsync as scryptAsync_noble, } from '@noble/hashes/scrypt.js';
++import { sha256 } from '@noble/hashes/sha2.js';
  import * as Bytes from './Bytes.js';
  import * as Hash from './Hash.js';
  /**
@@ -283,7 +283,7 @@ index 856682b84c594d003169f03dd731038a7561ff12..2f1fd8e5169a3b88ef61b579013a713d
 +++ b/_esm/core/P256.js
 @@ -1,4 +1,4 @@
 -import { secp256r1 } from '@noble/curves/p256';
-+import { secp256r1 } from '@noble/curves/esm/p256.js';
++import { secp256r1 } from '@noble/curves/p256.js';
  import * as Bytes from './Bytes.js';
  import * as Hex from './Hex.js';
  import * as Entropy from './internal/entropy.js';
@@ -293,7 +293,7 @@ index 1732a5d78bb70d5e9c67c18a3c2267c0b5bdf117..d5e27b3157e374ed46111db082ba49ca
 +++ b/_esm/core/Secp256k1.js
 @@ -1,4 +1,4 @@
 -import { secp256k1 } from '@noble/curves/secp256k1';
-+import { secp256k1 } from '@noble/curves/esm/secp256k1.js';
++import { secp256k1 } from '@noble/curves/secp256k1.js';
  import * as Address from './Address.js';
  import * as Bytes from './Bytes.js';
  import * as Hex from './Hex.js';
@@ -303,7 +303,7 @@ index 989e029ebc6fb0c1b65a6f5d24ccad6e2d89ab11..2dc6f544b26cdae75e0f0a5fcad42c38
 +++ b/_esm/core/Signature.js
 @@ -1,4 +1,4 @@
 -import { secp256k1 } from '@noble/curves/secp256k1';
-+import { secp256k1 } from '@noble/curves/esm/secp256k1.js';
++import { secp256k1 } from '@noble/curves/secp256k1.js';
  import * as Bytes from './Bytes.js';
  import * as Errors from './Errors.js';
  import * as Hex from './Hex.js';
@@ -313,7 +313,7 @@ index 6211b69b8cb40dd99be5ddf8af85cfd04a80064e..8529e05c77ac977e76beaa7c11c334a0
 +++ b/_esm/core/WebCryptoP256.js
 @@ -1,4 +1,4 @@
 -import { p256 } from '@noble/curves/p256';
-+import { p256 } from '@noble/curves/esm/p256.js';
++import { p256 } from '@noble/curves/p256.js';
  import * as Bytes from './Bytes.js';
  import * as Hex from './Hex.js';
  import * as PublicKey from './PublicKey.js';
@@ -323,7 +323,7 @@ index 7aa3892f843232b0adfb986fe599f670afed1980..f92cc027abaf8b50007119f8aa8275ab
 +++ b/_esm/core/X25519.js
 @@ -1,4 +1,4 @@
 -import { x25519 } from '@noble/curves/ed25519';
-+import { x25519 } from '@noble/curves/esm/ed25519.js';
++import { x25519 } from '@noble/curves/ed25519.js';
  import * as Bytes from './Bytes.js';
  import * as Hex from './Hex.js';
  /** Re-export of noble/curves X25519 utilities. */
@@ -333,7 +333,7 @@ index 5620414096df11145e4c92d0fd2616690c1b1580..ba9f445ce34e8711954b3e74212ff1bb
 +++ b/_esm/core/internal/webauthn.js
 @@ -1,4 +1,4 @@
 -import { p256 } from '@noble/curves/p256';
-+import { p256 } from '@noble/curves/esm/p256.js';
++import { p256 } from '@noble/curves/p256.js';
  import * as Hex from '../Hex.js';
  import * as PublicKey from '../PublicKey.js';
  import { CredentialCreationFailedError } from '../WebAuthnP256.js';

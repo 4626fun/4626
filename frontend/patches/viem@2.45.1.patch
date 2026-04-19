@@ -160,7 +160,7 @@ index ef8fd973a4746efa4ee5986fd1808dd3962b0ace..f24d92d5d15c5d424cd769fa961b8bbb
 +++ b/_esm/accounts/generatePrivateKey.js
 @@ -1,4 +1,4 @@
 -import { secp256k1 } from '@noble/curves/secp256k1';
-+import { secp256k1 } from '@noble/curves/esm/secp256k1.js';
++import { secp256k1 } from '@noble/curves/secp256k1.js';
  import { toHex } from '../utils/encoding/toHex.js';
  /**
   * @description Generates a random private key.
@@ -170,7 +170,7 @@ index b78582991ab867e8bf5d5fad9458699711f32050..4fa18fdf4066a083d2a524729add6001
 +++ b/_esm/accounts/privateKeyToAccount.js
 @@ -1,4 +1,4 @@
 -import { secp256k1 } from '@noble/curves/secp256k1';
-+import { secp256k1 } from '@noble/curves/esm/secp256k1.js';
++import { secp256k1 } from '@noble/curves/secp256k1.js';
  import { toHex } from '../utils/encoding/toHex.js';
  import { toAccount } from './toAccount.js';
  import { publicKeyToAddress, } from './utils/publicKeyToAddress.js';
@@ -180,7 +180,7 @@ index 3a78ead25b0d49b89fe0a3bd8ca5323bbe71208c..da7a5dd096706446bb561e568363b590
 +++ b/_esm/accounts/utils/privateKeyToAddress.js
 @@ -1,4 +1,4 @@
 -import { secp256k1 } from '@noble/curves/secp256k1';
-+import { secp256k1 } from '@noble/curves/esm/secp256k1.js';
++import { secp256k1 } from '@noble/curves/secp256k1.js';
  import { bytesToHex, } from '../../utils/encoding/toHex.js';
  import { publicKeyToAddress, } from './publicKeyToAddress.js';
  /**
@@ -191,7 +191,7 @@ index 4eca8e21ed4dbb76dbe15e3f0855476f399600da..834bb5e5f3eb90e41b2720c9ca62b429
 @@ -1,5 +1,5 @@
  // TODO(v3): Convert to sync.
 -import { secp256k1 } from '@noble/curves/secp256k1';
-+import { secp256k1 } from '@noble/curves/esm/secp256k1.js';
++import { secp256k1 } from '@noble/curves/secp256k1.js';
  import { isHex } from '../../utils/data/isHex.js';
  import { hexToBytes, } from '../../utils/encoding/toBytes.js';
  import { numberToHex, } from '../../utils/encoding/toHex.js';
@@ -201,7 +201,7 @@ index ef566dc33af3268b7aa2826a846900d16d779ca1..4940f509cfc1215be0461894203214f5
 +++ b/_esm/utils/hash/keccak256.js
 @@ -1,4 +1,4 @@
 -import { keccak_256 } from '@noble/hashes/sha3';
-+import { keccak_256 } from '@noble/hashes/esm/sha3.js';
++import { keccak_256 } from '@noble/hashes/sha3.js';
  import { isHex } from '../data/isHex.js';
  import { toBytes } from '../encoding/toBytes.js';
  import { toHex } from '../encoding/toHex.js';
@@ -211,7 +211,7 @@ index 0dc795b48f32a2d0bd6f739c6b00c15c3404fbc7..1f0c95ea0b44c3aabdb7bb010b88b9dd
 +++ b/_esm/utils/hash/ripemd160.js
 @@ -1,4 +1,4 @@
 -import { ripemd160 as noble_ripemd160 } from '@noble/hashes/ripemd160';
-+import { ripemd160 as noble_ripemd160 } from '@noble/hashes/esm/ripemd160.js';
++import { ripemd160 as noble_ripemd160 } from '@noble/hashes/ripemd160.js';
  import { isHex } from '../data/isHex.js';
  import { toBytes } from '../encoding/toBytes.js';
  import { toHex } from '../encoding/toHex.js';
@@ -221,7 +221,7 @@ index f485d8dd365060c14b7c53c0668164499ea1b0d7..36d03b07c343151b63cac35747025403
 +++ b/_esm/utils/hash/sha256.js
 @@ -1,4 +1,4 @@
 -import { sha256 as noble_sha256 } from '@noble/hashes/sha256';
-+import { sha256 as noble_sha256 } from '@noble/hashes/esm/sha256.js';
++import { sha256 as noble_sha256 } from '@noble/hashes/sha256.js';
  import { isHex } from '../data/isHex.js';
  import { toBytes } from '../encoding/toBytes.js';
  import { toHex } from '../encoding/toHex.js';
@@ -231,7 +231,7 @@ index 7936e38b450f693e4dbc83127c712b7fd256deae..8f75fca000354d3be8a44746106849d1
 +++ b/_esm/utils/signature/parseCompactSignature.js
 @@ -1,4 +1,4 @@
 -import { secp256k1 } from '@noble/curves/secp256k1';
-+import { secp256k1 } from '@noble/curves/esm/secp256k1.js';
++import { secp256k1 } from '@noble/curves/secp256k1.js';
  import { numberToHex } from '../encoding/toHex.js';
  /**
   * @description Parses a hex formatted compact signature into a structured compact signature.
@@ -241,7 +241,7 @@ index 630c8c524e224eae4bb4550725bfd4e955f013f5..e67417198a9cd18486c663b26df29e04
 +++ b/_esm/utils/signature/parseSignature.js
 @@ -1,4 +1,4 @@
 -import { secp256k1 } from '@noble/curves/secp256k1';
-+import { secp256k1 } from '@noble/curves/esm/secp256k1.js';
++import { secp256k1 } from '@noble/curves/secp256k1.js';
  import { numberToHex, } from '../../utils/encoding/toHex.js';
  /**
   * @description Parses a hex formatted signature into a structured signature.
@@ -251,7 +251,7 @@ index 0d6bf5eb1b1168f078848ec7da1b618db1d59a2d..5b9daeaa3a8e65d7d660193d80fb3a12
 +++ b/_esm/utils/signature/serializeCompactSignature.js
 @@ -1,4 +1,4 @@
 -import { secp256k1 } from '@noble/curves/secp256k1';
-+import { secp256k1 } from '@noble/curves/esm/secp256k1.js';
++import { secp256k1 } from '@noble/curves/secp256k1.js';
  import { hexToBigInt } from '../encoding/fromHex.js';
  /**
   * @description Converts an [EIP-2098 compact signature](https://eips.ethereum.org/EIPS/eip-2098) into hex format.
@@ -261,7 +261,7 @@ index a727ffbaed209676ec978dd574d0558f087d855a..0d85eb081e608a3c2a88c63531f5571f
 +++ b/_esm/utils/signature/serializeSignature.js
 @@ -1,4 +1,4 @@
 -import { secp256k1 } from '@noble/curves/secp256k1';
-+import { secp256k1 } from '@noble/curves/esm/secp256k1.js';
++import { secp256k1 } from '@noble/curves/secp256k1.js';
  import { hexToBigInt } from '../encoding/fromHex.js';
  import { hexToBytes } from '../encoding/toBytes.js';
  /**
