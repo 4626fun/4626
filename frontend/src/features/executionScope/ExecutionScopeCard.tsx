@@ -1,7 +1,10 @@
-import { ExternalLink } from 'lucide-react'
+import { useState } from 'react'
+import { ExternalLink, ShieldOff, RefreshCw } from 'lucide-react'
 
 import { CopyableAddress } from '@/components/account/CopyableAddress'
 import { useExecutionScope, type ExecutionScopeStatus } from './useExecutionScope'
+import { useRevokeSubAccount } from './useRevokeSubAccount'
+import { useReprovisionSubAccount } from './useReprovisionSubAccount'
 
 /**
  * `/accounts` "Execution scopes" card.
@@ -23,6 +26,24 @@ import { useExecutionScope, type ExecutionScopeStatus } from './useExecutionScop
  */
 export function ExecutionScopeCard() {
   const scope = useExecutionScope()
+  const revoke = useRevokeSubAccount()
+  const reprovision = useReprovisionSubAccount()
+  const [confirmRevoke, setConfirmRevoke] = useState(false)
+
+  const onRevokeClick = async () => {
+    if (!confirmRevoke) {
+      setConfirmRevoke(true)
+      return
+    }
+    setConfirmRevoke(false)
+    const result = await revoke.revoke('user_clicked_revoke_in_card')
+    if (result.ok) scope.refresh()
+  }
+
+  const onReprovisionClick = async () => {
+    const result = await reprovision.reprovision()
+    if (result.ok) scope.refresh()
+  }
 
   if (scope.status === 'unauthenticated') return null
   if (scope.status === 'loading') return <SkeletonCard />
@@ -50,9 +71,21 @@ export function ExecutionScopeCard() {
           <code className="text-zinc-400">SpendPermissionManager</code> contract on Base. You can
           revoke at any time.
         </p>
-        <p className="mt-3 text-[11px] text-zinc-600">
-          Self-service provisioning lands in the next release. Until then, contact support to enable.
-        </p>
+
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onReprovisionClick}
+            disabled={reprovision.busy}
+            className="inline-flex items-center gap-2 rounded-lg bg-white text-black text-xs font-medium px-3 py-2 hover:bg-zinc-200 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${reprovision.busy ? 'animate-spin' : ''}`} />
+            {reprovision.busy ? provisionBusyLabel(reprovision.phase) : 'Enable in-chat commands'}
+          </button>
+        </div>
+        {reprovision.error ? (
+          <p className="mt-3 text-xs text-rose-300/80">{reprovision.error}</p>
+        ) : null}
       </CardShell>
     )
   }
@@ -131,24 +164,99 @@ export function ExecutionScopeCard() {
         </Row>
       </div>
 
-      {scope.status === 'active' ? (
-        <p className="mt-4 text-[11px] text-zinc-600">
-          Revoke + re-provision actions ship in the next release. Until then, contact support to
-          stop in-chat spending.
+      {/* Action row — revoke (when active) or re-provision (when revoked/expired). */}
+      <div className="mt-5 flex flex-wrap items-center gap-2">
+        {scope.status === 'active' ? (
+          <>
+            <button
+              type="button"
+              onClick={onRevokeClick}
+              disabled={revoke.busy}
+              className={`inline-flex items-center gap-2 rounded-lg text-xs font-medium px-3 py-2 disabled:opacity-60 disabled:cursor-not-allowed transition-colors ${
+                confirmRevoke
+                  ? 'bg-rose-500/90 text-white hover:bg-rose-500'
+                  : 'bg-white/5 text-zinc-200 hover:bg-white/10 border border-white/10'
+              }`}
+            >
+              <ShieldOff className="h-3.5 w-3.5" />
+              {revoke.busy ? 'Revoking…' : confirmRevoke ? 'Confirm revoke' : 'Revoke spend permission'}
+            </button>
+            {confirmRevoke ? (
+              <button
+                type="button"
+                onClick={() => setConfirmRevoke(false)}
+                className="text-xs text-zinc-500 hover:text-zinc-300"
+              >
+                Cancel
+              </button>
+            ) : null}
+          </>
+        ) : null}
+
+        {scope.status === 'revoked' || scope.status === 'expired' ? (
+          <button
+            type="button"
+            onClick={onReprovisionClick}
+            disabled={reprovision.busy}
+            className="inline-flex items-center gap-2 rounded-lg bg-white text-black text-xs font-medium px-3 py-2 hover:bg-zinc-200 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${reprovision.busy ? 'animate-spin' : ''}`} />
+            {reprovision.busy ? provisionBusyLabel(reprovision.phase) : 'Re-provision'}
+          </button>
+        ) : null}
+      </div>
+
+      {/* Inline status / error messaging. */}
+      {revoke.error ? (
+        <p className="mt-3 text-xs text-rose-300/80">{revoke.error}</p>
+      ) : revoke.lastResult && revoke.lastResult.ok ? (
+        <p className="mt-3 text-xs text-emerald-300/80">
+          {revoke.lastResult.alreadyRevoked
+            ? 'Spend permission was already revoked. No change.'
+            : 'Spend permission revoked. In-chat commands will refuse until you re-provision.'}
         </p>
-      ) : scope.status === 'revoked' ? (
+      ) : null}
+      {reprovision.error ? (
+        <p className="mt-3 text-xs text-rose-300/80">{reprovision.error}</p>
+      ) : reprovision.phase === 'done' ? (
+        <p className="mt-3 text-xs text-emerald-300/80">
+          Re-provisioned. In-chat commands are enabled again with fresh caps.
+        </p>
+      ) : null}
+
+      {/* Contextual footnotes per state. */}
+      {scope.status === 'revoked' ? (
         <p className="mt-4 text-[11px] text-amber-300/80">
-          This spend permission has been revoked. In-chat commands will refuse with{' '}
-          <code>spend_permission_revoked</code>. Contact support to re-provision.
+          In-chat commands will refuse with <code>spend_permission_revoked</code> until you
+          re-provision.
         </p>
       ) : scope.status === 'expired' ? (
         <p className="mt-4 text-[11px] text-amber-300/80">
-          The spend permission window ended. Re-provisioning is required before the next in-chat
-          command can execute.
+          The spend permission window ended. Re-provisioning will issue a fresh one with the same
+          caps.
+        </p>
+      ) : scope.status === 'active' ? (
+        <p className="mt-4 text-[11px] text-zinc-600">
+          Revoking is instant and free (database-only). Your sub-account stays registered — you can
+          re-provision a new spend permission at any time without going through the full Arch B
+          enrollment again.
         </p>
       ) : null}
     </CardShell>
   )
+}
+
+function provisionBusyLabel(phase: ReturnType<typeof useReprovisionSubAccount>['phase']): string {
+  switch (phase) {
+    case 'preparing':
+      return 'Preparing…'
+    case 'signing':
+      return 'Sign in wallet…'
+    case 'committing':
+      return 'Committing…'
+    default:
+      return 'Working…'
+  }
 }
 
 // ─── Internal primitives ───────────────────────────────────────────────────

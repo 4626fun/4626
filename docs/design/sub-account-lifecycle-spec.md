@@ -52,10 +52,20 @@ Found during this spec's scoping pass:
 
 ## Decisions (from design review, 2026-04-19)
 
-1. **Revoke semantics:** DB-first, on-chain optional. Primary button
-   flips `spend_permission_revoked_at` in DB. A secondary opt-in button
-   calls `SpendPermissionManager.revoke(permission)` on-chain for users
-   who want the strongest guarantee.
+1. **Revoke semantics:** DB-first, on-chain optional.
+   - v1 (PR 2, shipped): DB-only revoke via
+     `POST /api/arch-b/sub-account/revoke`. The submitter preflight
+     already refuses UserOps whose issuer has `spend_permission_revoked_at`
+     set, so the DB flip fully stops in-chat spending. Instant, free,
+     reversible via re-provision.
+   - v1.1 (follow-up): "Also revoke on-chain" secondary button. Because
+     `SpendPermissionManager.revoke(permission)` is access-controlled to
+     `msg.sender == permission.account || msg.sender == permission.spender`,
+     a plain relayer EOA cannot revoke directly; we'd need to submit a
+     UserOp from the sub-account (reusing the existing Arch B submitter
+     path). Deferred to keep PR 2 scoped. Users who want stronger-than-DB
+     revoke today can use the broader `/api/arch-b/revoke` endpoint,
+     which also kills the Privy quorum delegation.
 2. **Auto-provisioning trigger:** once per sign-in session, silently via
    Privy's headless `signTypedData`. Preconditions: authed CSW, embedded
    EOA is an owner of that CSW, and no existing sub-account row.
@@ -121,19 +131,25 @@ identity card).
 No write actions in PR 1. Low risk, immediate user value ("I can see
 what I'm consenting to").
 
-### PR 2 — Revoke + re-provision (~4–6 hrs)
+### PR 2 — Revoke + re-provision (shipped)
 
 1. New endpoint `POST /api/arch-b/sub-account/revoke`:
-   - SIWE-gated.
-   - Body: `{ onChain?: boolean }`.
-   - Always flips `spend_permission_revoked_at = NOW()` in DB.
-   - If `onChain: true`, broadcasts `SpendPermissionManager.revoke(permission)`
-     from the server-side relayer (reuses `X402_RELAYER_PRIVATE_KEY`).
-2. Wire revoke buttons into `ExecutionScopeCard`.
-3. Re-provision: reuses existing `/prepare` + `/commit` flow. New
-   `useReprovisionSubAccount()` hook handles the signature loop.
-4. Remove `ArchBEnrollmentCard` and `ArchBRevokeControl`; redirect all
-   their users to the new card via a migration note on `/accounts`.
+   - SIWE-gated, rate-limited.
+   - Body: `{ reason?: string }` (256-char cap for audit).
+   - Flips `spend_permission_revoked_at = NOW()` in DB via the new
+     `revokeSubAccountSpendPermission` helper in `commandIssuerContext.ts`.
+   - Idempotent: returns `{ alreadyRevoked: true }` on repeat calls.
+   - On-chain revoke deferred (see Decisions § 1 above).
+2. Revoke button wired into `ExecutionScopeCard`. Click-to-confirm UX:
+   first click turns the button red and changes copy to "Confirm revoke";
+   second click fires the request. Cancel is always one click away.
+3. Re-provision flow uses `/prepare` → `walletClient.signTypedData` →
+   `/commit`. New `useReprovisionSubAccount()` hook surfaces phase
+   (`preparing` / `signing` / `committing` / `done` / `error`) so the
+   button label tracks progress.
+4. `ArchBRevokeControl` removed from `/accounts` (its role is absorbed
+   by the new card). `ArchBEnrollmentCard` stays in the waitlist flow
+   for now — it will be obsoleted when PR 3 (auto-provisioning) lands.
 
 ### PR 3 — Auto-provisioning on sign-in (~4–6 hrs)
 

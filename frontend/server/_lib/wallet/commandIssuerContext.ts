@@ -650,6 +650,72 @@ export async function revokeCommandIssuerContext(params: {
 }
 
 /**
+ * Revoke JUST the sub-account spend permission on a context row.
+ *
+ * Distinct from `revokeCommandIssuerContext` above, which revokes the
+ * entire context (kills delegation + execution + sub-account together).
+ * This narrower revoke lets users turn off bot-initiated spending of
+ * their parent CSW's funds while keeping the Privy delegation and
+ * sub-account intact — they can re-provision a new spend permission
+ * later without re-enrolling Privy.
+ *
+ * Only flips `spend_permission_revoked_at`. The submitter preflight
+ * rejects any UserOp whose issuer context has this column set, which
+ * is what actually stops in-chat commands from debiting the parent.
+ *
+ * Returns 'not_provisioned' if the row exists but has no sub-account,
+ * or 'context_row_missing' if there's no row at all.
+ */
+export async function revokeSubAccountSpendPermission(params: {
+  profileId: number
+}): Promise<
+  | { ok: true; alreadyRevoked: boolean }
+  | {
+      ok: false
+      error: 'db_unavailable' | 'db_write_failed' | 'not_provisioned' | 'context_row_missing'
+    }
+> {
+  if (!isDbConfigured()) return { ok: false, error: 'db_unavailable' }
+  const db = await getDb()
+  if (!db) return { ok: false, error: 'db_unavailable' }
+
+  try {
+    const { rows } = await db.sql`
+      SELECT
+        sub_account_address,
+        spend_permission_revoked_at
+      FROM command_issuer_execution_context
+      WHERE profile_id = ${params.profileId}
+      LIMIT 1
+    `
+    const row = rows?.[0] as
+      | {
+          sub_account_address: string | null
+          spend_permission_revoked_at: string | Date | null
+        }
+      | undefined
+    if (!row) return { ok: false, error: 'context_row_missing' }
+    if (!row.sub_account_address) return { ok: false, error: 'not_provisioned' }
+    const alreadyRevoked = row.spend_permission_revoked_at !== null
+
+    await db.sql`
+      UPDATE command_issuer_execution_context
+      SET
+        spend_permission_revoked_at = COALESCE(spend_permission_revoked_at, now()),
+        updated_at                  = now()
+      WHERE profile_id = ${params.profileId}
+    `
+    return { ok: true, alreadyRevoked }
+  } catch (error) {
+    logger.error('[arch-b/context] revokeSubAccountSpendPermission failed', {
+      profileId: params.profileId,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return { ok: false, error: 'db_write_failed' }
+  }
+}
+
+/**
  * Durable per-profile daily spend: increments today's counter atomically
  * and returns the new total. Used by the submitter to enforce dailyCapWei
  * **across vaults**, whereas the legacy `recordDailySpend` in sendCommand.ts
