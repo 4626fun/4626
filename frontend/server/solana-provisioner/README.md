@@ -40,15 +40,23 @@ Default 4626 Solana stack is **Meteora DLMM + Alpha Vault**.
   "bridgeToken": "0x...",
   "deployEnv": "mainnet",
   "solanaDecimals": 9,
-  "tokenName": "CreatorShare-1234",
-  "tokenSymbol": "CS1234",
-  "tokenSymbolFallback": "CS1234",
   "tokenMetadataUri": "https://api.4626.fun/v1/token/0x.../metadata?chain=8453",
   "scalerExponent": 9,
   "payerKp": "config",
   "payForRelay": true
 }
 ```
+
+The provisioner runs in strict parity mode: it reads `name()` and `symbol()`
+directly from the `bridgeToken` ERC-20 on Base via `readBridgeTokenMetadata`
+and passes those exact values (case preserved, including lowercase) to
+`wrap-token` as `--name` / `--symbol`. The request body intentionally does
+NOT accept a `tokenName` / `tokenSymbol` override -- the Solana mint's
+identity is cryptographically bound to its metadata via the bridge program's
+wrapped-token PDA seeds, so metadata must match the Base ERC-20 verbatim.
+Provisioning fails closed (HTTP 409) if the Base metadata is missing,
+empty, or exceeds the wrap-token constraints (name<=32 bytes, symbol<=12
+bytes, no null bytes).
 
 ## Response contract (success)
 
@@ -67,7 +75,7 @@ Default 4626 Solana stack is **Meteora DLMM + Alpha Vault**.
 
 `/provision` may also return additional fields in `data`, including:
 - `runner` (which CLI runner executed)
-- `tokenSymbol` (resolved symbol used for wrap-token)
+- `tokenSymbol` (echo of the symbol used; equals `bridgeToken.symbol()` on Base)
 - `mintCompatibilityHints` (mint-compatibility diagnostics)
 - `pool` / `alphaVault` (when `SOLANA_AUTO_POOL=1`)
 
