@@ -483,3 +483,15 @@ export function isArchBCoinBuyViaUserOpEnabled(): boolean {
 export function isArchBCoinSellViaUserOpEnabled(): boolean {
   return String(process.env.ARCH_B_COIN_SELL_VIA_USEROP ?? '').trim() === '1'
 }
+
+/**
+ * True iff `ARCH_B_TREND_RESERVE_VIA_USEROP` is truthy in env.
+ *
+ * When on, `/coin trend reserve` routes the TrendCoin deploy through the
+ * command issuer's CSW via `submitUserOpOrRefuse` (Arch B Phase 4) instead
+ * of the legacy Privy-managed agent EOA path.
+ */
+export function isArchBTrendReserveViaUserOpEnabled(): boolean {
+  const raw = (process.env.ARCH_B_TREND_RESERVE_VIA_USEROP ?? '').trim().toLowerCase()
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
+}

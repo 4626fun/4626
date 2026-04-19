@@ -17,6 +17,7 @@ import {
 import {
   isArchBCoinBuyViaUserOpEnabled,
   isArchBCoinSellViaUserOpEnabled,
+  isArchBTrendReserveViaUserOpEnabled,
   submitUserOpOrRefuse,
 } from '../_lib/wallet/userOperationSubmitter.js'
 import { checkRouterTarget } from './routerAllowlist.js'
@@ -183,8 +184,6 @@ function formatCoinHelp(): string {
     '',
     '- /coin help — Show this help',
     '- /coin balance — Check agent wallet balances',
-    '- /coin create <name> <symbol> <metadataUri> [currency] — Create a Content Coin',
-    '  currencies: CREATOR_COIN (default), ETH, ZORA',
     '- /coin buy <coin-address> <eth-amount> — Buy a coin with ETH',
     '- /coin sell <coin-address> <amount> — Sell a coin for ETH',
     '- /coin info <coin-address> — Look up coin details',
@@ -277,141 +276,6 @@ async function handleInfo(coinAddress: string): Promise<KeeprCommandResult> {
   } catch (err: any) {
     logger.error('[coin/info] Lookup failed', err)
     return { ok: false, response: `Coin lookup failed: ${(err?.message ?? '').slice(0, 200)}` }
-  }
-}
-
-// ---------------------------------------------------------------------------
-// /coin create
-// ---------------------------------------------------------------------------
-
-async function handleCreate(params: {
-  groupId: string
-  senderWallet: Address
-  args: string[]
-  vault: KeeprVaultRow
-}): Promise<KeeprCommandResult> {
-  // /coin create <name> <symbol> <metadataUri> [currency]
-  const [name, symbol, metadataUri, currencyArg] = params.args
-
-  if (!name || !symbol || !metadataUri) {
-    return {
-      ok: false,
-      response: [
-        'Usage: /coin create <name> <symbol> <metadataUri> [currency]',
-        '',
-        'Example: /coin create "My Content" MYC ipfs://Qm... CREATOR_COIN',
-        '',
-        'Currencies: CREATOR_COIN (default), ETH, ZORA, CONTENT_COIN (alias for CREATOR_COIN)',
-      ].join('\n'),
-    }
-  }
-
-  const validCurrencies = ['CREATOR_COIN', 'ETH', 'ZORA', 'CREATOR_COIN_OR_ZORA'] as const
-  const validCurrencyInputs = [...validCurrencies, 'CONTENT_COIN'] as const
-  type Currency = (typeof validCurrencies)[number]
-  const currencyToken = (currencyArg ?? 'CREATOR_COIN').toUpperCase() as (typeof validCurrencyInputs)[number]
-  const currency: Currency =
-    currencyToken === 'CONTENT_COIN'
-      ? 'CREATOR_COIN'
-      : validCurrencies.includes(currencyToken as Currency)
-        ? (currencyToken as Currency)
-        : 'CREATOR_COIN'
-
-  // Get agent wallet
-  let agentWalletId: string
-  let agentWalletAddress: string
-  try {
-    const { getOrCreateCreatorAgentWallet } = await import('../_lib/wallet/creatorAgentWallets.js')
-    const wallet = await getOrCreateCreatorAgentWallet({ creatorToken: params.vault.creatorCoinAddress })
-    agentWalletId = wallet.walletId
-    agentWalletAddress = wallet.address
-  } catch (err) {
-    logger.error('[coin/create] Failed to get agent wallet', err)
-    return { ok: false, response: 'Agent wallet not available.' }
-  }
-
-  try {
-    const { createCoinCall } = await import('@zoralabs/coins-sdk')
-
-    // Platform referrer earns 0.2% of ALL future trades on this coin, forever
-    const platformReferrer = getPlatformReferrerAddress()
-
-    const callResult = await createCoinCall({
-      creator: agentWalletAddress,
-      name: name.replace(/^"|"$/g, ''), // strip quotes
-      symbol: symbol.replace(/^"|"$/g, ''),
-      metadata: { type: 'RAW_URI', uri: metadataUri },
-      currency,
-      chainId: BASE_CHAIN_ID,
-      platformReferrer: platformReferrer ?? agentWalletAddress,
-      payoutRecipientOverride: agentWalletAddress as Address,
-      skipMetadataValidation: true,
-    })
-
-    if (!callResult.calls || callResult.calls.length === 0) {
-      return { ok: false, response: 'Failed to build coin creation calldata.' }
-    }
-
-    // Execute each call in sequence (usually one call)
-    const txHashes: string[] = []
-    for (const call of callResult.calls) {
-      const refusal = await preflightAgentWalletOrRefuse({
-        agentWallet: agentWalletAddress as Address,
-        valueWei: BigInt(call.value ?? 0n),
-        context: 'coin/create',
-      })
-      if (refusal) return refusal
-      const result = await walletRpc<any>({
-        walletId: agentWalletId,
-        method: 'eth_sendTransaction',
-        caip2: BASE_CAIP2,
-        rpcParams: {
-          transaction: {
-            to: call.to,
-            data: call.data,
-            value: `0x${call.value.toString(16)}`,
-            chain_id: BASE_CHAIN_ID,
-          },
-        },
-        idempotencyKey: `coin-create:${params.groupId}:${Date.now()}`,
-      })
-      txHashes.push(String(result?.data?.hash ?? result?.hash ?? 'pending'))
-    }
-
-    recordExecution(params.groupId)
-
-    return {
-      ok: true,
-      response: [
-        'Content Coin created!',
-        '',
-        `- Name: ${name}`,
-        `- Symbol: ${symbol}`,
-        `- Currency: ${currency}`,
-        `- Predicted address: ${callResult.predictedCoinAddress}`,
-        `- Platform referrer: ${platformReferrer ?? agentWalletAddress}`,
-        `- Revenue: 0.2% of all future trades on this coin`,
-        `- Tx: https://basescan.org/tx/${txHashes[0]}`,
-        `- Creator: ${agentWalletAddress}`,
-      ].join('\n'),
-      action: {
-        action: 'zora.coin.created',
-        name,
-        symbol,
-        currency,
-        predictedAddress: callResult.predictedCoinAddress,
-        platformReferrer: platformReferrer ?? agentWalletAddress,
-        txHash: txHashes[0],
-        creator: agentWalletAddress,
-        groupId: params.groupId,
-      },
-    }
-  } catch (err: any) {
-    logger.error('[coin/create] Creation failed', err)
-    if (isInsufficientFundsError(err)) {
-      return { ok: false, response: buildInsufficientFundsRefusal({ balanceWei: 0n, requiredWei: 0n }) }
-    }
-    return { ok: false, response: `Coin creation failed: ${(err?.message ?? '').slice(0, 200)}` }
   }
 }
 
@@ -1369,7 +1233,7 @@ async function handleTrend(params: {
   }
 
   try {
-    const { preflightTrendTicker, reserveTrendTicker } = await import('./trends.js')
+    const { preflightTrendTicker, reserveTrendTicker, reserveTrendTickerViaUserOp } = await import('./trends.js')
     const {
       getTrendOpByTickerHash,
       markTrendOpDeployed,
@@ -1451,6 +1315,113 @@ async function handleTrend(params: {
 
       await markTrendOpDeploying({ tickerHash: preflight.tickerHash })
 
+      // Arch B Phase 4: route the TrendCoin deploy through the command
+      // issuer's CSW via submitUserOpOrRefuse. Hard-fail if the issuer is
+      // not execution-ready — no silent fallback to the legacy agent-EOA
+      // path.
+      if (isArchBTrendReserveViaUserOpEnabled()) {
+        const resolution = await resolveCommandIssuerContextByAddress(params.senderWallet)
+        if (!isExecutionReady(resolution)) {
+          logger.warn('[coin/trend/reserve/arch-b] issuer not execution-ready; refusing', {
+            groupId: params.groupId,
+            senderWallet: params.senderWallet,
+            status: resolution.status,
+          })
+          await markTrendOpFailed({
+            tickerHash: preflight.tickerHash,
+            lastError: `issuer_not_execution_ready:${resolution.status}`,
+          })
+          if (resolution.status === 'db_unavailable') {
+            return {
+              ok: false,
+              response:
+                "This trend reserve can't be executed right now — account readiness storage is temporarily unavailable. Please try again shortly.",
+            }
+          }
+          if (resolution.status === 'revoked') {
+            return {
+              ok: false,
+              response:
+                "This trend reserve can't be executed — your execution context has been revoked. Contact setup to restore access.",
+            }
+          }
+          return {
+            ok: false,
+            response:
+              "This trend reserve can't be executed — your account isn't provisioned for onchain execution yet. Contact setup to finish provisioning.",
+          }
+        }
+        const issuer = resolution.context
+
+        let reservation: Awaited<ReturnType<typeof reserveTrendTickerViaUserOp>>
+        try {
+          reservation = await reserveTrendTickerViaUserOp({
+            ticker: preflight.ticker,
+            issuer,
+            groupId: params.groupId,
+            waitForReceipt: true,
+          })
+        } catch (error: any) {
+          await markTrendOpFailed({
+            tickerHash: preflight.tickerHash,
+            lastError: String(error?.message ?? 'reserve_failed'),
+          })
+          throw error
+        }
+
+        if (!reservation.ok) {
+          await markTrendOpFailed({
+            tickerHash: preflight.tickerHash,
+            lastError: `arch_b_${reservation.code}`,
+          })
+          return { ok: false, response: reservation.response }
+        }
+
+        if (reservation.status === 'deployed' || reservation.status === 'already_deployed') {
+          await markTrendOpDeployed({
+            tickerHash: preflight.tickerHash,
+            deployedCoinAddress: reservation.deployedAddress,
+            txHash: reservation.txHash ?? undefined,
+            actorWallet: reservation.walletAddress ?? undefined,
+          })
+        } else {
+          await markTrendOpDeploying({
+            tickerHash: preflight.tickerHash,
+            txHash: reservation.txHash ?? undefined,
+            actorWallet: reservation.walletAddress ?? undefined,
+          })
+        }
+
+        recordExecution(params.groupId)
+        return {
+          ok: true,
+          response: [
+            reservation.status === 'deployed' ? 'Trend reserved + deployed' : 'Trend reserve submitted',
+            '',
+            `- Ticker: ${reservation.ticker}`,
+            `- Ticker hash: ${reservation.tickerHash}`,
+            `- Coin: ${reservation.deployedAddress}`,
+            `- Deployed: ${reservation.deployed ? 'yes' : 'pending'}`,
+            `- Tx: ${reservation.txHash ? `https://basescan.org/tx/${reservation.txHash}` : 'n/a'}`,
+            `- Deployer: ${reservation.smartWallet} (CSW)`,
+            `- UserOp: ${reservation.userOpHash}`,
+          ].join('\n'),
+          action: {
+            action: 'zora.trend.reserve',
+            ticker: reservation.ticker,
+            tickerHash: reservation.tickerHash,
+            coinAddress: reservation.deployedAddress,
+            txHash: reservation.txHash,
+            status: reservation.status,
+            groupId: params.groupId,
+            routing: 'arch-b-userop',
+            smartWallet: reservation.smartWallet,
+            userOpHash: reservation.userOpHash,
+          },
+        }
+      }
+
+      // Legacy path: Privy-managed agent EOA.
       try {
         const reservation = await reserveTrendTicker({
           ticker: preflight.ticker,
@@ -1631,14 +1602,6 @@ export async function handleCoinCommand(params: {
 
     case 'info':
       return handleInfo(args[0] ?? '')
-
-    case 'create':
-      return handleCreate({
-        groupId: params.groupId,
-        senderWallet: params.senderWallet,
-        args,
-        vault: params.vault,
-      })
 
     case 'buy':
       return handleBuy({
