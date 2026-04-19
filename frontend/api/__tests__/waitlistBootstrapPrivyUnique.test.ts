@@ -12,6 +12,7 @@ const {
   verifyPrivyForAccountsMock,
   buildAccountsMePayloadMock,
   assertNoEmailPrivyCollisionMock,
+  assertNoWalletPrivyCollisionMock,
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
@@ -41,6 +42,7 @@ const {
     score: { points: 0, tier: 0 },
   })),
   assertNoEmailPrivyCollisionMock: vi.fn(async () => {}),
+  assertNoWalletPrivyCollisionMock: vi.fn(async () => {}),
 }))
 
 vi.mock('../../server/_lib/db/postgres.js', () => ({
@@ -61,6 +63,7 @@ vi.mock('../../server/_lib/identity/accountsIdentity.js', () => ({
 
 vi.mock('../../server/_lib/identity/identityRecovery.js', () => ({
   assertNoEmailPrivyCollision: assertNoEmailPrivyCollisionMock,
+  assertNoWalletPrivyCollision: assertNoWalletPrivyCollisionMock,
   isIdentityRecoveryRequiredError: (error: any) => error?.code === 'IDENTITY_RECOVERY_REQUIRED',
 }))
 

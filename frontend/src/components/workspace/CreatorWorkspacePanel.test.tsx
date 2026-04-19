@@ -1,8 +1,11 @@
 import React from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { ThemeProvider as CdsThemeProvider, MediaQueryProvider as CdsMediaQueryProvider } from '@coinbase/cds-web/system'
+import { PortalProvider as CdsPortalProvider } from '@coinbase/cds-web/overlays'
 
 import { CreatorWorkspacePanel } from './CreatorWorkspacePanel'
+import { theme4626 } from '@/theme/cds-theme'
 
 const mocks = vi.hoisted(() => ({
   useCreatorWorkspace: vi.fn(),
@@ -77,10 +80,22 @@ describe('CreatorWorkspacePanel', () => {
     })
 
     const html = renderToStaticMarkup(
-      React.createElement(CreatorWorkspacePanel, {
-        vaultAddress: '0x1111111111111111111111111111111111111111',
-        initialTab: 'overview',
-      }),
+      React.createElement(
+        CdsMediaQueryProvider,
+        null,
+        React.createElement(
+          CdsThemeProvider,
+          { theme: theme4626, activeColorScheme: 'dark' },
+          React.createElement(
+            CdsPortalProvider,
+            null,
+            React.createElement(CreatorWorkspacePanel, {
+              vaultAddress: '0x1111111111111111111111111111111111111111',
+              initialTab: 'overview',
+            }),
+          ),
+        ),
+      ),
     )
 
     expect(html).toContain('Creator Workspace')

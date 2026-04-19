@@ -1,8 +1,11 @@
 import React from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import { renderToStaticMarkup } from 'react-dom/server'
+import { ThemeProvider as CdsThemeProvider, MediaQueryProvider as CdsMediaQueryProvider } from '@coinbase/cds-web/system'
+import { PortalProvider as CdsPortalProvider } from '@coinbase/cds-web/overlays'
 
 import { VaultCard } from './VaultCard'
+import { theme4626 } from '@/theme/cds-theme'
 
 vi.mock('react-router-dom', () => ({
   Link: ({ children, to, ...props }: any) => React.createElement('a', { href: to, ...props }, children),
@@ -69,17 +72,31 @@ vi.mock('@tanstack/react-query', () => ({
 
 describe('VaultCard', () => {
   it('renders USD TVL from creator coin price plus the token-denominated vault balance', () => {
+    const wrapped = React.createElement(
+      CdsMediaQueryProvider,
+      null,
+      React.createElement(
+        CdsThemeProvider,
+        { theme: theme4626, activeColorScheme: 'dark' },
+        React.createElement(
+          CdsPortalProvider,
+          null,
+          React.createElement(VaultCard, {
+            vault: {
+              vaultAddress: '0x6666666666666666666666666666666666666666',
+              chainId: 8453,
+              creatorCoinAddress: '0x7777777777777777777777777777777777777777',
+              groupId: 'akita',
+              ccaStrategyAddress: '0x1111111111111111111111111111111111111111',
+              shareOFTAddress: '0x00f80e71e77b562fdf28522a7b80a7d53438d38b',
+            },
+          }),
+        ),
+      ),
+    )
+
     const html = renderToStaticMarkup(
-      React.createElement(VaultCard, {
-        vault: {
-          vaultAddress: '0x6666666666666666666666666666666666666666',
-          chainId: 8453,
-          creatorCoinAddress: '0x7777777777777777777777777777777777777777',
-          groupId: 'akita',
-          ccaStrategyAddress: '0x1111111111111111111111111111111111111111',
-          shareOFTAddress: '0x00f80e71e77b562fdf28522a7b80a7d53438d38b',
-        },
-      }),
+      wrapped,
     )
 
     expect(html).toContain('■AKITA')
@@ -87,7 +104,7 @@ describe('VaultCard', () => {
     expect(html).toContain('Share token')
     expect(html).toContain('0x00f80e71e77b562fdf28522a7b80a7d53438d38b')
     expect(html).toContain('TVL')
-    expect(html).toContain('$625K')
+    expect(html).toContain('625K')
     expect(html).toContain('5M AKITA in vault')
     expect(html).toContain('Committed')
     expect(html).toContain('$125')

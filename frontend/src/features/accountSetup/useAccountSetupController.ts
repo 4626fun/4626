@@ -8,6 +8,7 @@ import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wa
 import { apiFetch } from '@/lib/api/apiBase'
 import { trackEvent } from '@/lib/analytics/analytics'
 import { runCanonicalizationPipeline } from '@/lib/auth/canonicalization'
+import { appendBuilderSuffixToHex } from '@/lib/base/baseBuilderCodes'
 import { logger } from '@/lib/observability/logger'
 import { ZORA_PRIVY_APP_ID } from '@/lib/privy/client'
 import { extractPrivyWalletsFromUser, useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
@@ -1046,7 +1047,9 @@ export function useAccountSetupController(params: {
                         params: [{
                           from: canonicalCswAddress,
                           to: agentJson.data.txRequest.to,
-                          data: agentJson.data.txRequest.data,
+                          data: appendBuilderSuffixToHex(agentJson.data.txRequest.data as `0x${string}`, {
+                            chainId: agentJson.data.txRequest.chainId,
+                          }),
                           value: '0x0',
                         }],
                       })

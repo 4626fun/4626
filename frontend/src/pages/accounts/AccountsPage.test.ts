@@ -20,6 +20,12 @@ vi.mock('@privy-io/react-auth', () => ({
   }),
   useActiveWallet: () => ({ wallet: undefined }),
   useWallets: () => ({ wallets: [] }),
+  useBaseAccountSdk: () => ({ baseAccountSdk: null }),
+  toViemAccount: () => null,
+  useDelegatedActions: () => ({
+    delegateWallet: async () => {},
+    revokeWallets: async () => {},
+  }),
   useCreateWallet: () => ({ createWallet: async () => ({ address: '0x4444444444444444444444444444444444444444' }) }),
 }))
 

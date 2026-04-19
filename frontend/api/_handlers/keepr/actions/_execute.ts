@@ -95,14 +95,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const effectiveActionType = resolveKeeprEffectiveActionType(actionType, action) ?? actionType
   const trustZone = resolveKeeprTrustZone(effectiveActionType)
   const trustZoneEnvKey = getKeeprTrustZoneEnvKey(trustZone)
-  if (
-    !requireOptionalHeaderEnvAuth(req, res, {
-      envKey: trustZoneEnvKey,
-      headerName: KEEPR_TRUST_ZONE_KEY_HEADER,
-      unauthorizedError: `Unauthorized trust zone: ${trustZone}`,
-    })
-  ) {
-    return
+  const trustZoneSecret = String(process.env[trustZoneEnvKey] ?? '').trim()
+  if (trustZoneSecret) {
+    if (
+      !requireOptionalHeaderEnvAuth(req, res, {
+        envKey: trustZoneEnvKey,
+        headerName: KEEPR_TRUST_ZONE_KEY_HEADER,
+        unauthorizedError: `Unauthorized trust zone: ${trustZone}`,
+      })
+    ) {
+      return
+    }
   }
   if (!isKeeprTrustZoneWriteEnabled(trustZone, process.env)) {
     return res.status(503).json({

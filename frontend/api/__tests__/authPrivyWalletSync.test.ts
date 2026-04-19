@@ -98,7 +98,7 @@ describe('auth privy wallet sync', () => {
     restoreEnv = applyEnv({
       PRIVY_APP_ID: 'test-privy-id',
       PRIVY_APP_SECRET: 'test-privy-secret',
-      AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
+      AUTH_SESSION_SECRET: 'test-auth-session-secret-1234567',
     })
   })
 
@@ -172,7 +172,7 @@ describe('auth privy wallet sync', () => {
     restoreEnv = applyEnv({
       PRIVY_APP_ID: 'test-privy-id',
       PRIVY_APP_SECRET: 'test-privy-secret',
-      AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
+      AUTH_SESSION_SECRET: 'test-auth-session-secret-1234567',
       PRIVY_AUTH_DB_SYNC_MIN_INTERVAL_MS: '9999999999999',
     })
 
@@ -219,7 +219,7 @@ describe('auth privy wallet sync', () => {
     restoreEnv = applyEnv({
       PRIVY_APP_ID: 'test-privy-id',
       PRIVY_APP_SECRET: 'test-privy-secret',
-      AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
+      AUTH_SESSION_SECRET: 'test-auth-session-secret-1234567',
       PRIVY_AUTH_DB_SYNC_MIN_INTERVAL_MS: '9999999999999',
     })
 
@@ -274,7 +274,7 @@ describe('auth privy wallet sync', () => {
     restoreEnv = applyEnv({
       PRIVY_APP_ID: 'test-privy-id',
       PRIVY_APP_SECRET: 'test-privy-secret',
-      AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
+      AUTH_SESSION_SECRET: 'test-auth-session-secret-1234567',
       PRIVY_AUTH_DB_SYNC_MIN_INTERVAL_MS: '9999999999999',
     })
 
@@ -329,7 +329,7 @@ describe('auth privy wallet sync', () => {
     restoreEnv = applyEnv({
       PRIVY_APP_ID: undefined,
       PRIVY_APP_SECRET: undefined,
-      AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
+      AUTH_SESSION_SECRET: 'test-auth-session-secret-1234567',
     })
 
     const req = createMockReq({

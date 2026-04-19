@@ -10,6 +10,7 @@ export default defineConfig({
   test: {
     include: ['api/__tests__/**/*.test.ts', 'src/**/*.test.ts', 'src/**/*.test.tsx', 'server/**/*.test.ts'],
     environment: 'node',
+    setupFiles: ['./vitest.setup.ts'],
     globals: true,
     testTimeout: 30_000,
     restoreMocks: true,
@@ -21,7 +22,12 @@ export default defineConfig({
     // with the dev/build pipeline.
     server: {
       deps: {
-        inline: [/@coinbase\/cds-/],
+        inline: [
+          /@coinbase\/cds-/,
+          /styled-components/,
+          /@privy-io\/react-auth/,
+          /@privy-io\/js-sdk-core/,
+        ],
       },
     },
     // The suite mixes native-image tests and route-heavy module loading; keeping

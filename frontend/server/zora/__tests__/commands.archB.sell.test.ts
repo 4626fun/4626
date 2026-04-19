@@ -38,6 +38,7 @@ const warnMock = vi.fn()
 const walletRpcMock = vi.fn()
 const fetchMock = vi.fn()
 const checkRouterTargetMock = vi.fn()
+const readContractMock = vi.fn()
 
 vi.mock('../../_lib/wallet/commandIssuerContext.js', () => ({
   resolveCommandIssuerContextByAddress: (...args: unknown[]) => resolveContextMock(...args),
@@ -68,6 +69,16 @@ vi.mock('../../_lib/infra/logger.js', () => ({
 vi.mock('../routerAllowlist.js', () => ({
   checkRouterTarget: (...args: unknown[]) => checkRouterTargetMock(...args),
 }))
+
+vi.mock('viem', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('viem')>()
+  return {
+    ...actual,
+    createPublicClient: vi.fn(() => ({
+      readContract: (...args: unknown[]) => readContractMock(...args),
+    })),
+  }
+})
 
 // Stub the legacy agent-wallet path -- should never be reached under Arch B.
 vi.mock('../../_lib/wallet/privyWalletApi.js', () => ({
@@ -217,6 +228,9 @@ describe('handleCoinCommand -- /coin sell via Architecture B', () => {
     secp256k1SignHashMock.mockResolvedValue(OWNER_SIG_65)
     wrapCswOwnerSignatureMock.mockReturnValue(WRAPPED_SIG)
     checkRouterTargetMock.mockReturnValue({ allowed: true })
+    // Keep sell tests deterministic: force decimals() read down the fallback
+    // branch instead of consuming the fetch mock queue.
+    readContractMock.mockRejectedValue(new Error('rpc_unavailable_for_test'))
   })
 
   // -----------------------------------------------------------------------

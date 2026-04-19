@@ -26,8 +26,16 @@ const { RESOLVED, ONCHAIN_AUCTION_STATUS, API_AUCTION_STATUS } = vi.hoisted(() =
 }))
 
 vi.mock('framer-motion', () => ({
+  AnimatePresence: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
   motion: new Proxy(
-    {},
+    ((component: any) => component) as any,
+    {
+      get: (_, tag: string) =>
+        ({ children, ...props }: any) => React.createElement(tag, props, children),
+    },
+  ),
+  m: new Proxy(
+    ((component: any) => component) as any,
     {
       get: (_, tag: string) =>
         ({ children, ...props }: any) => React.createElement(tag, props, children),
@@ -88,6 +96,11 @@ vi.mock('@/components/ui/Button', () => ({
     void loading
     return React.createElement('button', props, children)
   },
+}))
+
+vi.mock('@/components/ui/Tabs', () => ({
+  SegmentedTabs: ({ tabs = [], value }: { tabs?: string[]; value?: string }) =>
+    React.createElement('div', { 'data-testid': 'segmented-tabs' }, `${tabs.join('|')}|${value ?? ''}`),
 }))
 
 vi.mock('@/components/ui/Skeleton', () => ({
@@ -159,6 +172,11 @@ vi.mock('@/wallet/accountContext', () => ({
 
 vi.mock('@/components/lottery/ClaimPrizeToSolana', () => ({
   ClaimPrizeToSolana: () => null,
+}))
+
+vi.mock('@/components/share/ShareVaultButton', () => ({
+  ShareVaultButton: ({ label = 'Share', url }: { label?: string; url?: string }) =>
+    React.createElement('a', { href: url ?? '#', 'data-testid': 'share-vault-button' }, label),
 }))
 
 vi.mock('../config/contracts', () => ({

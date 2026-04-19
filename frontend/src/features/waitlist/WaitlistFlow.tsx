@@ -243,11 +243,19 @@ function WaitlistAuthStep(props: {
   const signedUpCount = Math.max(0, Number(waitlistStats?.signedUpCount ?? 0))
   const capacity = Math.max(0, Number(waitlistStats?.capacity ?? 0))
   const spotsRemaining = Math.max(0, Number(waitlistStats?.spotsRemaining ?? 0))
-  const progressLabel = `Waitlist progress ${signedUpCount.toLocaleString()} / ${capacity.toLocaleString()}`
-  const urgencyLabel =
-    spotsRemaining <= 0
+  // Only treat stats as real when the endpoint actually returned a non-zero
+  // capacity. When `/api/waitlist/stats` fails (500 / network error), we must
+  // NOT render `0 / 0` or the "Current round full" banner — that would lie
+  // to the user. Hide both lines until we have real data.
+  const hasWaitlistStats = waitlistStats != null && capacity > 0
+  const progressLabel = hasWaitlistStats
+    ? `Waitlist progress ${signedUpCount.toLocaleString()} / ${capacity.toLocaleString()}`
+    : null
+  const urgencyLabel = hasWaitlistStats
+    ? spotsRemaining <= 0
       ? 'Current round full. Next approvals unlock the next batch.'
       : `Only ${spotsRemaining.toLocaleString()} spots remaining!`
+    : null
 
   const stagger = (i: number) => ({
     initial: { opacity: 0, y: 12 },
@@ -305,7 +313,9 @@ function WaitlistAuthStep(props: {
             Secure onboarding
           </p>
           <h2 className="text-[2.6rem] font-light leading-tight tracking-tight text-white">{authUi.title}</h2>
-          <p className="mx-auto max-w-xs text-sm leading-relaxed text-zinc-400">{progressLabel}</p>
+          {progressLabel ? (
+            <p className="mx-auto max-w-xs text-sm leading-relaxed text-zinc-400">{progressLabel}</p>
+          ) : null}
         </motion.div>
 
         {/* Referral greeting — only renders when a code is present and resolves. */}
@@ -345,9 +355,11 @@ function WaitlistAuthStep(props: {
               authUi.ctaLabel
             )}
           </button>
-          <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
-            {urgencyLabel}
-          </p>
+          {urgencyLabel ? (
+            <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-zinc-500">
+              {urgencyLabel}
+            </p>
+          ) : null}
         </motion.div>
 
         {/* error */}

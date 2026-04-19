@@ -13,7 +13,7 @@ describe('session token precedence', () => {
   })
 
   it('prefers explicit bearer auth over ambient cookie session state', () => {
-    process.env.AUTH_SESSION_SECRET = 'test-auth-session-secret-123456'
+    process.env.AUTH_SESSION_SECRET = 'test-auth-session-secret-1234567'
     const bearerToken = makeSessionToken({ address: BEARER_ADDRESS })
     const cookieToken = makeSessionToken({ address: COOKIE_ADDRESS })
 
@@ -28,7 +28,7 @@ describe('session token precedence', () => {
   })
 
   it('falls back to the cookie session when the bearer token is invalid', () => {
-    process.env.AUTH_SESSION_SECRET = 'test-auth-session-secret-123456'
+    process.env.AUTH_SESSION_SECRET = 'test-auth-session-secret-1234567'
     const cookieToken = makeSessionToken({ address: COOKIE_ADDRESS })
 
     const req = {

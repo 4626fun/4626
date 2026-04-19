@@ -914,9 +914,18 @@ async function handleSellViaArchB(params: {
     // Default to 18 if decimals() call fails.
   }
 
-  // Parse with exact arithmetic (Codex #297 P1). parseUnits handles fractional
-  // inputs up to `decimals` places and returns a bigint with no precision loss.
-  // It throws if the fractional part exceeds `decimals`.
+  // Parse with exact arithmetic (Codex #297 P1). Enforce fractional precision
+  // ourselves before parseUnits so behavior stays strict across viem versions.
+  const fractionalPart = amountStr.split('.')[1]
+  if (fractionalPart && fractionalPart.length > decimals) {
+    return {
+      ok: false,
+      response: `Invalid amount. ${amountStr} has too many decimal places for this token (max ${decimals}).`,
+    }
+  }
+
+  // parseUnits returns a bigint in base units with no precision loss for
+  // inputs that fit the token's decimal precision.
   let amountIn: bigint
   try {
     amountIn = parseUnits(amountStr as `${number}`, decimals)

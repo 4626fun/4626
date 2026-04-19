@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import React from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
 import { render, screen } from '@testing-library/react'
 
@@ -42,6 +42,7 @@ vi.mock('@/components/seo/PageMeta', () => ({
 
 vi.mock('@/lib/env/host', () => ({
   getHostMode: () => 'marketing',
+  MARKETING_ORIGIN: 'https://4626.fun',
 }))
 
 vi.mock('@/features/home/vault-flow/VaultFlowScroll', () => ({
@@ -56,15 +57,21 @@ vi.mock('@/features/home/vault-flow/VaultFlowScroll', () => ({
 import { Home } from './Home'
 
 describe('Home', () => {
-  it('renders a link to /waitlist instead of opening an inline flow', () => {
-    render(React.createElement(MemoryRouter, null, React.createElement(Home)))
-
-    const link = screen.getByRole('link', { name: /join waitlist/i })
-    expect(link).toBeTruthy()
-    expect(link.getAttribute('href')).toBe('/waitlist')
+  afterEach(() => {
+    vi.restoreAllMocks()
   })
 
-  it('does not render any waitlist flow or providers on the home page', () => {
+  it('hard-redirects to the marketing origin on marketing host mode', () => {
+    const replaceSpy = vi.spyOn(window.location, 'replace').mockImplementation(() => {})
+
+    render(React.createElement(MemoryRouter, null, React.createElement(Home)))
+
+    expect(replaceSpy).toHaveBeenCalledWith('https://4626.fun')
+  })
+
+  it('does not render waitlist flow or providers when redirecting', () => {
+    vi.spyOn(window.location, 'replace').mockImplementation(() => {})
+
     render(React.createElement(MemoryRouter, null, React.createElement(Home)))
 
     expect(screen.queryByTestId('waitlist-flow')).toBeNull()
@@ -72,20 +79,21 @@ describe('Home', () => {
     expect(screen.queryByTestId('web3-providers')).toBeNull()
   })
 
-  it('does not show an inline waitlist button — the CTA is always a link', () => {
+  it('does not render the inline waitlist button during marketing redirect', () => {
+    vi.spyOn(window.location, 'replace').mockImplementation(() => {})
+
     render(React.createElement(MemoryRouter, null, React.createElement(Home)))
 
     expect(screen.queryByRole('button', { name: /join waitlist/i })).toBeNull()
   })
 
-  it('shows the current launch mechanics and token flow', () => {
+  it('does not render launch-flow content during marketing redirect', () => {
+    vi.spyOn(window.location, 'replace').mockImplementation(() => {})
+
     render(React.createElement(MemoryRouter, null, React.createElement(Home)))
 
-    expect(screen.getByTestId('vault-flow-scroll')).toBeTruthy()
-    expect(screen.getAllByText(/50,000,000 TOKEN/i).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/50,000,000\s*(?:■\s*)?TOKEN/i).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/CCA/i).length).toBeGreaterThan(0)
-    expect(screen.getAllByText(/Earn yield/i).length).toBeGreaterThan(0)
-    expect(screen.getByRole('link', { name: /Learn more about the launch flow/i })).toBeTruthy()
+    expect(screen.queryByTestId('vault-flow-scroll')).toBeNull()
+    expect(screen.queryByRole('link', { name: /join waitlist/i })).toBeNull()
+    expect(screen.queryByRole('link', { name: /Learn more about the launch flow/i })).toBeNull()
   })
 })

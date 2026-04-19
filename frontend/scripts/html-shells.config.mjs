@@ -36,7 +36,7 @@ const BASE_HTML_SHELL_CONFIG = {
   siteImageAlt: SHARED_SITE_META.siteImageAlt,
   siteKeywords:
     'creator vaults, DeFi, yield, ERC-4626, tokenized vaults, Base, creator coins',
-  siteAuthor: 'Akita LLC',
+  siteAuthor: 'AKITA, LLC',
   siteAuthorUrl: 'https://akita.llc',
   siteAuthorEmail: 'info@akita.llc',
   msTileColor: '#020617',

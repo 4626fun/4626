@@ -180,7 +180,7 @@ describe('api catch-all hardening', () => {
 
   it('blocks cookie-authenticated unsafe requests from untrusted origins before handler execution', async () => {
     const restoreEnv = applyEnv({
-      AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
+      AUTH_SESSION_SECRET: 'test-auth-session-secret-1234567',
       APP_ORIGIN: 'https://trusted.4626.fun',
       CORS_ALLOWED_ORIGINS: undefined,
     })

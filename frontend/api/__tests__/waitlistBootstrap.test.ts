@@ -13,6 +13,7 @@ const {
   upsertLinkedMethodMock,
   buildAccountsMePayloadMock,
   assertNoEmailPrivyCollisionMock,
+  assertNoWalletPrivyCollisionMock,
   classifyLinkedAccountsMock,
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
@@ -24,6 +25,7 @@ const {
   upsertLinkedMethodMock: vi.fn(),
   buildAccountsMePayloadMock: vi.fn(),
   assertNoEmailPrivyCollisionMock: vi.fn(),
+  assertNoWalletPrivyCollisionMock: vi.fn(),
   classifyLinkedAccountsMock: vi.fn(),
 }))
 
@@ -50,6 +52,7 @@ vi.mock('../../server/_lib/wallet/walletMapping.js', () => ({
 
 vi.mock('../../server/_lib/identity/identityRecovery.js', () => ({
   assertNoEmailPrivyCollision: assertNoEmailPrivyCollisionMock,
+  assertNoWalletPrivyCollision: assertNoWalletPrivyCollisionMock,
   isIdentityRecoveryRequiredError: (error: any) => error?.code === 'IDENTITY_RECOVERY_REQUIRED',
 }))
 
@@ -58,6 +61,7 @@ describe('POST /api/waitlist/bootstrap', () => {
     vi.clearAllMocks()
     getDbMock.mockResolvedValue({ sql: vi.fn(async () => ({ rows: [] })) })
     assertNoEmailPrivyCollisionMock.mockResolvedValue(undefined)
+    assertNoWalletPrivyCollisionMock.mockResolvedValue(undefined)
     verifyPrivyForAccountsMock.mockResolvedValue({
       privyUserId: 'did:privy:test-user',
       privyUser: { id: 'did:privy:test-user', email: { address: 'user@example.com' } },

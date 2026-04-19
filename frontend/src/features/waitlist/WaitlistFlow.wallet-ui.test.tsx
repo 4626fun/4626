@@ -22,7 +22,22 @@ const collisionStateRef = vi.hoisted(() => ({
 vi.mock('framer-motion', () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   motion: new Proxy(
-    {},
+    ((component: any) => component) as any,
+    {
+      get: (_, tag: string) =>
+        ({
+          children,
+          initial: _initial,
+          animate: _animate,
+          transition: _transition,
+          whileInView: _whileInView,
+          viewport: _viewport,
+          ...props
+        }: any) => React.createElement(tag, props, children),
+    },
+  ),
+  m: new Proxy(
+    ((component: any) => component) as any,
     {
       get: (_, tag: string) =>
         ({
@@ -72,6 +87,12 @@ vi.mock('@privy-io/react-auth', () => ({
   }),
   useActiveWallet: () => ({ wallet: mockPrivyHookState.wallet }),
   useWallets: () => ({ wallets: mockPrivyHookState.wallets }),
+  useBaseAccountSdk: () => ({ baseAccountSdk: null }),
+  toViemAccount: vi.fn(),
+  useDelegatedActions: () => ({
+    delegateWallet: async () => undefined,
+    revokeWallets: async () => undefined,
+  }),
 }))
 
 vi.mock('wagmi', async (importOriginal) => {
@@ -128,6 +149,10 @@ vi.mock('@/lib/wallet/providerCollision', () => ({
 
 vi.mock('@/components/ui/StepIndicator', () => ({
   StepIndicator: () => <div data-testid="step-indicator" />,
+}))
+
+vi.mock('@/features/archB/ArchBEnrollmentCard', () => ({
+  ArchBEnrollmentCard: () => null,
 }))
 
 function jsonResponse(body: unknown, ok = true, status = 200) {
@@ -262,7 +287,7 @@ describe('WaitlistFlow simplified completion UI', () => {
     expect(screen.getByText(/enable 4626 signing/i)).toBeTruthy()
     // Completed setup stage still displays the verified identity row.
     expect(screen.getByText(/0x1111…1111/i)).toBeTruthy()
-    expect(screen.getByRole('button', { name: /approve signing access|connect owner wallet/i })).toBeTruthy()
+    expect(screen.getByRole('button', { name: /reconnect via base account|approve signing access|connect owner wallet/i })).toBeTruthy()
     expect(screen.getByRole('button', { name: /^reset$/i })).toBeTruthy()
   })
 

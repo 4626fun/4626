@@ -12,7 +12,7 @@ describe('cookie origin guard', () => {
 
   beforeEach(() => {
     restoreEnv = applyEnv({
-      AUTH_SESSION_SECRET: 'test-auth-session-secret-123456',
+      AUTH_SESSION_SECRET: 'test-auth-session-secret-1234567890abcdef',
       APP_ORIGIN: 'https://trusted.4626.fun',
       CORS_ALLOWED_ORIGINS: undefined,
     })
@@ -94,7 +94,7 @@ describe('cookie origin guard', () => {
     expect(handled).toBe(false)
   })
 
-  it('skips the guard when explicit Privy auth is present', () => {
+  it('enforces trusted-origin guard even when explicit Privy auth is present', () => {
     const req = createMockReq({
       method: 'POST',
       headers: {
@@ -107,7 +107,8 @@ describe('cookie origin guard', () => {
 
     const handled = enforceCookieSessionTrustedOrigin(req, res)
 
-    expect(handled).toBe(false)
+    expect(handled).toBe(true)
+    expect(res.statusCode).toBe(403)
   })
 
   it('does not block safe methods', () => {
@@ -125,7 +126,7 @@ describe('cookie origin guard', () => {
     expect(handled).toBe(false)
   })
 
-  it('skips the guard when explicit bearer session auth is valid', () => {
+  it('enforces trusted-origin guard even when explicit bearer session auth is valid', () => {
     const bearerToken = makeSessionToken({ address: '0x00000000000000000000000000000000000000bb' })
     const req = createMockReq({
       method: 'POST',
@@ -139,6 +140,7 @@ describe('cookie origin guard', () => {
 
     const handled = enforceCookieSessionTrustedOrigin(req, res)
 
-    expect(handled).toBe(false)
+    expect(handled).toBe(true)
+    expect(res.statusCode).toBe(403)
   })
 })

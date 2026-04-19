@@ -10,7 +10,8 @@ const appHtmlPath = path.join(frontendRoot, 'app.html')
 const telegramLinkHtmlPath = path.join(frontendRoot, 'telegram-link.html')
 const htmlEntryPaths = [marketingHtmlPath, appHtmlPath]
 const MARKETING_SOCIAL_IMAGE_URL = 'https://4626.fun/app-hero.png?v=6'
-const APP_SOCIAL_IMAGE_URL = 'https://4626.fun/app-hero.png'
+const APP_SOCIAL_IMAGE_URL = 'https://4626.fun/og-image.png'
+const APP_TWITTER_IMAGE_URL = 'https://4626.fun/twitter-card.png'
 const MINIAPP_HERO_URL = 'https://4626.fun/miniapp-hero.png'
 const MINIAPP_SPLASH_URL = 'https://4626.fun/miniapp-splash.png'
 
@@ -87,7 +88,7 @@ describe('public manifest assets', () => {
     expect(marketingHtml).not.toContain('miniapp-splash.png')
 
     expect(appHtml).toContain(`<meta property="og:image" content="${APP_SOCIAL_IMAGE_URL}" />`)
-    expect(appHtml).toContain(`<meta name="twitter:image" content="${APP_SOCIAL_IMAGE_URL}" />`)
+    expect(appHtml).toContain(`<meta name="twitter:image" content="${APP_TWITTER_IMAGE_URL}" />`)
     expect(appHtml).toContain(`"imageUrl":"${MINIAPP_HERO_URL}"`)
     expect(appHtml).toContain(`"splashImageUrl":"${MINIAPP_SPLASH_URL}"`)
     expect(appHtml).not.toContain('https://app.4626.fun/app-hero.png')

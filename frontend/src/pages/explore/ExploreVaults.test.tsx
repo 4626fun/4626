@@ -12,8 +12,16 @@ const { useInfiniteQueryMock, apiFetchMock, searchParamsState, subnavPropsMock }
 }))
 
 vi.mock('framer-motion', () => ({
+  AnimatePresence: ({ children }: { children: React.ReactNode }) => React.createElement(React.Fragment, null, children),
   motion: new Proxy(
-    {},
+    ((component: any) => component) as any,
+    {
+      get: (_, tag: string) =>
+        ({ children, ...props }: any) => React.createElement(tag, props, children),
+    },
+  ),
+  m: new Proxy(
+    ((component: any) => component) as any,
     {
       get: (_, tag: string) =>
         ({ children, ...props }: any) => React.createElement(tag, props, children),

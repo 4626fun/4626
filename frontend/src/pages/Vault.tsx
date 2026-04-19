@@ -186,6 +186,8 @@ export function Vault() {
   const vaultAddress = (resolved?.info.vault ?? (akitaFallback ? (AKITA.vault as Address) : null)) as Address | null
   const ccaStrategy = (resolved?.ccaStrategy ?? (akitaFallback ? (AKITA.ccaStrategy as Address) : null)) as Address | null
   const socialPreviewPath = vaultAddress ? `/vault/${vaultAddress.toLowerCase()}` : null
+  const socialPreviewUrl =
+    socialPreviewPath && typeof window !== 'undefined' ? `${window.location.origin}${socialPreviewPath}` : undefined
 
   const underlyingSymbol = useMemo(() => {
     const s = (resolved?.info.symbol ?? '').trim()
@@ -654,7 +656,7 @@ export function Vault() {
 
                 <div className="mt-7 flex flex-col gap-3 border-t border-white/6 pt-5 sm:flex-row sm:flex-wrap sm:items-center sm:gap-4">
                   <ShareVaultButton
-                    url={socialPreviewPath ? `${window.location.origin}${socialPreviewPath}` : undefined}
+                    url={socialPreviewUrl}
                     text={`${shareSymbol || 'Vault'} on 4626 — deposit ${underlyingSymbol || ''} to mint shares`}
                     label="Share vault"
                     showLabel
