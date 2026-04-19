@@ -331,7 +331,8 @@ export function FaqHowItWorks() {
               <p className="mt-3 text-zinc-400 text-sm font-light leading-relaxed max-w-prose">
                 Deposit creator coins → receive <span className="mono text-brand-accent">{SHARE_TOKEN}</span> shares →
                 a portion distributed publicly via CCA over {defaultAuctionWindow} →
-                deposited tokens earn yield across Charm, Ajna, Solana, and an idle reserve →
+                the vault deploys the strategies you activate (Charm active-LP, Ajna lending,
+                Solana bridge — each a $100 opt-in) with idle balance as a fast-exit buffer →
                 hold <span className="mono text-brand-accent">{SHARE_TOKEN}</span> to earn, or burn to exit.
               </p>
               <div className="mt-6 flex flex-col sm:flex-row gap-3">

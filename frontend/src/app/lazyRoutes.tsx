@@ -112,6 +112,10 @@ export const DeployVault = lazyNamed(() => import('../pages/deploy/DeployVault')
 export const Leaderboard = lazyNamed(() => import('../pages/Leaderboard'), 'Leaderboard')
 export const CoinManage = lazyNamed(() => import('../pages/CoinManage'), 'CoinManage')
 export const CreatorEarnings = lazyNamed(() => import('../pages/CreatorEarnings'), 'CreatorEarnings')
+export const CreatorStrategyFeatures = lazyNamed(
+  () => import('../pages/CreatorStrategyFeatures'),
+  'CreatorStrategyFeatures',
+)
 export const Faq = lazyNamed(() => import('../pages/Faq'), 'Faq')
 export const FaqHowItWorks = lazyNamed(() => import('../pages/FaqHowItWorks'), 'FaqHowItWorks')
 export const DistributeCcaLaunch = lazyNamed(() => import('../pages/DistributeCcaLaunch'), 'DistributeCcaLaunch')

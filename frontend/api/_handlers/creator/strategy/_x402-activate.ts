@@ -35,6 +35,7 @@ import {
   settleX402Payment,
   validateX402Authorization,
 } from '../../../../server/_lib/creatorStrategy/x402.js'
+import { dispatchProvisioning } from '../../../../server/_lib/creatorStrategy/provisioner.js'
 
 const REQUEST_BODY_MAX_BYTES = 4_096
 
@@ -225,6 +226,20 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
+  let provisionerNote: string | null = null
+  try {
+    const provision = await dispatchProvisioning({
+      creatorToken,
+      featureKey: feature.key,
+      activationId: insertResult.row.id,
+      paymentSource: 'x402_base',
+      paymentRef: settlement.txHash,
+    })
+    provisionerNote = provision.ok ? provision.note : `dispatch failed: ${provision.reason}`
+  } catch (error) {
+    provisionerNote = `dispatch threw: ${error instanceof Error ? error.message : String(error)}`
+  }
+
   return res.status(200).json({
     success: true,
     data: {
@@ -240,6 +255,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         txHash: settlement.txHash,
         usdcAddress: getAddress(BASE_USDC_ADDRESS),
       },
+      provisionerNote,
     },
   } satisfies ApiEnvelope<{
     activation: ReturnType<typeof toActivationDto>
@@ -251,5 +267,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     priceOverrideId: number | null
     treasury: Address
     x402: { txHash: Hex; usdcAddress: Address }
+    provisionerNote: string | null
   }>)
 }
