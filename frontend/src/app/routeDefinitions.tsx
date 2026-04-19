@@ -5,6 +5,7 @@ import {
   AccountsPage,
   AdminAgentSetup,
   AdminCreatorAccess,
+  AdminCreatorStrategyProvisioning,
   AdminDeployStrategies,
   AdminImageGeneration,
   AdminOps,
@@ -157,6 +158,7 @@ export const APP_ACCEPTED_ROUTES: PathRouteDef[] = [
 
 export const ADMIN_CHILD_ROUTES: PathRouteDef[] = [
   { path: 'creator-access', element: <AdminCreatorAccess /> },
+  { path: 'creator-strategy-provisioning', element: <AdminCreatorStrategyProvisioning /> },
   { path: 'waitlist', element: <AdminWaitlist /> },
   { path: 'agent-setup', element: <AdminAgentSetup /> },
   { path: 'imagegen', element: <AdminImageGeneration /> },

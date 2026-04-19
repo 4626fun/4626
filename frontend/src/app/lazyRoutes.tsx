@@ -127,6 +127,10 @@ export const AdminDeployStrategies = lazyNamed(
   () => import('../pages/admin/AdminDeployStrategies'),
   'AdminDeployStrategies',
 )
+export const AdminCreatorStrategyProvisioning = lazyNamed(
+  () => import('../pages/admin/AdminCreatorStrategyProvisioning'),
+  'AdminCreatorStrategyProvisioning',
+)
 export const AdminAgentSetup = lazyNamed(() => import('../pages/admin/AdminAgentSetup'), 'AdminAgentSetup')
 export const AdminImageGeneration = lazyNamed(
   () => import('../pages/admin/AdminImageGeneration'),

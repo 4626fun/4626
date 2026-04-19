@@ -4,6 +4,8 @@ import { useAccount } from 'wagmi'
 import { isAddress, type Address } from 'viem'
 import { ArrowRight, Check, Clock, Info, X } from 'lucide-react'
 
+import { usePayWithX402 } from '@/lib/creatorStrategy/usePayWithX402'
+
 /**
  * Creator strategy features paywall page.
  *
@@ -124,6 +126,7 @@ export function CreatorStrategyFeatures() {
   const [loadError, setLoadError] = useState<string | null>(null)
   const [inflightFeature, setInflightFeature] = useState<string | null>(null)
   const [inflightMessage, setInflightMessage] = useState<string | null>(null)
+  const x402 = usePayWithX402()
 
   const loadFeatures = useCallback(async () => {
     if (!creatorToken) return
@@ -195,35 +198,26 @@ export function CreatorStrategyFeatures() {
             return
           }
           case 'x402': {
-            // Probe the 402 to get the exact payment requirements. The
-            // full signing flow requires a wallet that supports EIP-3009
-            // `TransferWithAuthorization` — Coinbase Wallet + Rainbow work
-            // today; Metamask needs a dapp-side helper we haven't shipped
-            // yet. For now show the creator the requirements so they can
-            // copy them into a supported wallet flow manually.
-            const res = await fetch(`${base}/api/creator/strategy/x402-activate`, {
-              method: 'POST',
-              credentials: 'include',
-              headers: { 'content-type': 'application/json' },
-              body: JSON.stringify({ creatorToken, featureKey: feature.key }),
+            // In-dapp wallet-signing flow: usePayWithX402 handles the full
+            // round-trip (fetch 402, build EIP-3009 typed data, sign via
+            // connected wallet, base64-encode into X-PAYMENT, re-POST).
+            // Works natively with Coinbase Wallet + Rainbow; older
+            // MetaMask will still sign but warns about unverified typed
+            // data.
+            setInflightMessage('Building payment authorization; please sign in your wallet…')
+            const result = await x402.pay({
+              creatorToken,
+              featureKey: feature.key,
+              endpoint: `${base}/api/creator/strategy/x402-activate`,
             })
-            if (res.status !== 402) {
-              throw new Error(`Expected 402 Payment Required, got HTTP ${res.status}`)
+            if (result.phase === 'success') {
+              setInflightMessage(
+                `Activated via x402. Settlement tx: ${result.txHash}. Reloading…`,
+              )
+              await loadFeatures()
+            } else if (result.phase === 'error') {
+              setInflightMessage(`x402 payment failed (${result.reason}): ${result.message}`)
             }
-            const reqs = await res.json()
-            const first = reqs?.accepts?.[0]
-            setInflightMessage(
-              [
-                'Copy these into an EIP-3009-compatible wallet to sign:',
-                `  pay_to: ${first?.pay_to ?? '?'}`,
-                `  asset:  ${first?.asset ?? '?'}`,
-                `  amount: ${first?.max_amount_required ?? '?'} USDC base units`,
-                `  network: ${first?.network ?? '?'}`,
-                '',
-                'Then POST the signed TransferWithAuthorization in the X-PAYMENT header.',
-                '(Full wallet integration is shipping soon.)',
-              ].join('\n'),
-            )
             return
           }
           case 'usdc_txhash': {

@@ -93,6 +93,8 @@ export const apiRouteLoaders: ApiRouteLoaders = {
   'admin/creator-access/deny': () => import('./admin/creator-access/_deny.js'),
   'admin/creator-access/list': () => import('./admin/creator-access/_list.js'),
   'admin/creator-access/revoke': () => import('./admin/creator-access/_revoke.js'),
+  'admin/creator-strategy/provisioning-queue': () =>
+    import('./admin/creator-strategy/_provisioningQueue.js'),
   'admin/waitlist/detail': () => import('./admin/waitlist/_detail.js'),
   'admin/waitlist/list': () => import('./admin/waitlist/_list.js'),
   'admin/waitlist/approve': () => import('./admin/waitlist/_approve.js'),
