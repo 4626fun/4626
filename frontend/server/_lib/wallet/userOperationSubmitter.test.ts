@@ -60,6 +60,7 @@ const ISSUER = {
   dailyCapWei: 50_000_000_000_000_000n, // 0.05 ETH
   provisionedAt: new Date('2026-04-17T00:00:00.000Z'),
   revokedAt: null,
+  subAccount: null,
 }
 
 const CALLS = [
