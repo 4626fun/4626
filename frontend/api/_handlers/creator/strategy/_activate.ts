@@ -30,6 +30,7 @@ import {
   applyPriceOverride,
   findActivePriceOverride,
 } from '../../../../server/_lib/creatorStrategy/priceOverrides.js'
+import { dispatchProvisioning } from '../../../../server/_lib/creatorStrategy/provisioner.js'
 
 const REQUEST_BODY_MAX_BYTES = 4_096
 
@@ -184,6 +185,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
+  // Kick the provisioning dispatcher (non-fatal). Operator picks up
+  // the `pending` row and runs the feature-specific script regardless.
+  let provisionerNote: string | null = null
+  try {
+    const provision = await dispatchProvisioning({
+      creatorToken,
+      featureKey: feature.key,
+      activationId: insertResult.row.id,
+      paymentSource: 'usdc_base',
+      paymentRef: verification.txHash,
+    })
+    provisionerNote = provision.ok ? provision.note : `dispatch failed: ${provision.reason}`
+  } catch (error) {
+    provisionerNote = `dispatch threw: ${error instanceof Error ? error.message : String(error)}`
+  }
+
   return res.status(200).json({
     success: true,
     data: {
@@ -195,6 +212,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       priceOverrideId: pricing.appliedOverrideId,
       treasury,
       estimatedActivationWindow: feature.estimatedActivationWindow,
+      provisionerNote,
     },
   } satisfies ApiEnvelope<{
     activation: ReturnType<typeof toActivationDto>
@@ -205,5 +223,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     priceOverrideId: number | null
     treasury: Address
     estimatedActivationWindow: string
+    provisionerNote: string | null
   }>)
 }

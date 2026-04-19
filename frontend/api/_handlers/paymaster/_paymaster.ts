@@ -54,6 +54,10 @@ import {
   resolvePayoutRouterExternalSwapApprovals,
   resolvePayoutRouterKeeperAddress,
 } from '../../../server/_lib/onchain/payoutRouterRuntime.js'
+import {
+  gateRequestedStrategyWeights,
+  resolveCreatorStrategyPlan,
+} from '../../../server/_lib/creatorStrategy/resolveWeights.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -2037,11 +2041,82 @@ async function validateInnerCalls(params: {
         if (isPhase3DeploySelector) {
           if (!expectedProtocolTreasury) throw new Error('protocol_treasury_not_configured')
 
+          // Resolve the paid-feature plan FIRST so we know which weights
+          // the caller is allowed to request. Unpaid-but-nonzero weights
+          // are rejected here (last line of defence; the UI also gates
+          // via /api/creator/strategy/list). Uses the same creator_token
+          // the Phase3Params references.
+          const phase3CreatorToken =
+            p && isAddress(p.creatorToken) ? getAddress(p.creatorToken) : null
+          if (!phase3CreatorToken) throw new Error('batcher_phase3_creator_token_decode_failed')
+
+          const charmWeightBpsBig = (() => {
+            try {
+              return BigInt((p.charmWeightBps ?? 0n) as bigint | string | number)
+            } catch {
+              return null
+            }
+          })()
+          const ajnaWeightBpsBig = (() => {
+            try {
+              return BigInt((p.ajnaWeightBps ?? 0n) as bigint | string | number)
+            } catch {
+              return null
+            }
+          })()
+          const solanaWeightBpsBig = (() => {
+            try {
+              return BigInt((p.solanaWeightBps ?? 0n) as bigint | string | number)
+            } catch {
+              return null
+            }
+          })()
+          if (charmWeightBpsBig === null || ajnaWeightBpsBig === null || solanaWeightBpsBig === null) {
+            throw new Error('batcher_phase3_weight_decode_failed')
+          }
+
+          if (!isDbConfigured()) {
+            // Security posture: refuse to sponsor paid-feature-gated Phase 3
+            // deploys when we can't consult the activations DB. Better to
+            // fail-closed and send the creator through the USDC-on-Base
+            // legacy path than sponsor a UserOp we can't verify.
+            throw new Error('paywall_db_not_configured')
+          }
+          const paywallDb = await getDb()
+          if (!paywallDb) throw new Error('paywall_db_unavailable')
+          const paywallPlan = await resolveCreatorStrategyPlan(
+            paywallDb as any,
+            phase3CreatorToken,
+          )
+          if (!paywallPlan.ok) {
+            throw new Error(`paywall_plan_not_found:${paywallPlan.reason}`)
+          }
+          const paywallGate = gateRequestedStrategyWeights(paywallPlan.plan, {
+            charmWeightBps: charmWeightBpsBig,
+            ajnaWeightBps: ajnaWeightBpsBig,
+            solanaWeightBps: solanaWeightBpsBig,
+          })
+          if (!paywallGate.ok) {
+            throw new Error(`paywall_weight_gate:${paywallGate.reason}`)
+          }
+
           const ajnaKeeperArg = p && isAddress(p.ajnaKeeper) ? getAddress(p.ajnaKeeper) : null
           const solanaKeeperArg = p && isAddress(p.solanaKeeper) ? getAddress(p.solanaKeeper) : null
-          if (!ajnaKeeperArg || !solanaKeeperArg) throw new Error('batcher_phase3_keeper_decode_failed')
-          if (ajnaKeeperArg !== expectedProtocolTreasury) throw new Error('batcher_ajna_keeper_mismatch')
-          if (solanaKeeperArg !== expectedProtocolTreasury) throw new Error('batcher_solana_keeper_mismatch')
+          // Keeper args are only required when the corresponding strategy
+          // is actually being deployed (weight > 0). Unpaid strategies pass
+          // weight=0 and can skip the keeper arg.
+          if (ajnaWeightBpsBig !== 0n && !ajnaKeeperArg) {
+            throw new Error('batcher_phase3_keeper_decode_failed')
+          }
+          if (solanaWeightBpsBig !== 0n && !solanaKeeperArg) {
+            throw new Error('batcher_phase3_keeper_decode_failed')
+          }
+          if (ajnaKeeperArg && ajnaKeeperArg !== expectedProtocolTreasury) {
+            throw new Error('batcher_ajna_keeper_mismatch')
+          }
+          if (solanaKeeperArg && solanaKeeperArg !== expectedProtocolTreasury) {
+            throw new Error('batcher_solana_keeper_mismatch')
+          }
 
           const expectedPhase3CodeIds = {
             charmAlphaVaultDeploy: CHARM_ALPHA_VAULT_DEPLOY_SENTINEL_CODE_ID,
@@ -2051,24 +2126,49 @@ async function validateInnerCalls(params: {
             erc4626StrategyAdapter: ERC4626_STRATEGY_ADAPTER_CODE_ID,
             solanaStrategy: SOLANA_STRATEGY_CODE_ID,
           } as const
+          // Skipped strategies can pass `bytes32(0)` for their codeId per
+          // the contract patch. Only require + validate the codeIds whose
+          // strategy will actually be deployed (weight > 0).
+          const ZERO_CODE_ID = '0x0000000000000000000000000000000000000000000000000000000000000000'
+          const codeIdMatches = (actual: unknown, expected: string, required: boolean): boolean => {
+            if (!isHexString(actual)) return false
+            const actualLower = String(actual).toLowerCase()
+            if (!required && actualLower === ZERO_CODE_ID) return true
+            return actualLower === String(expected).toLowerCase()
+          }
           const hasValidPhase3CodeIds =
             codeIds &&
             typeof codeIds === 'object' &&
-            isHexString(codeIds.charmAlphaVaultDeploy) &&
-            isHexString(codeIds.creatorCharmStrategy) &&
-            isHexString(codeIds.ajnaVaultAuth) &&
-            isHexString(codeIds.ajnaVault) &&
-            isHexString(codeIds.erc4626StrategyAdapter) &&
-            isHexString(codeIds.solanaStrategy) &&
-            String(codeIds.charmAlphaVaultDeploy).toLowerCase() ===
-              String(expectedPhase3CodeIds.charmAlphaVaultDeploy).toLowerCase() &&
-            String(codeIds.creatorCharmStrategy).toLowerCase() ===
-              String(expectedPhase3CodeIds.creatorCharmStrategy).toLowerCase() &&
-            String(codeIds.ajnaVaultAuth).toLowerCase() === String(expectedPhase3CodeIds.ajnaVaultAuth).toLowerCase() &&
-            String(codeIds.ajnaVault).toLowerCase() === String(expectedPhase3CodeIds.ajnaVault).toLowerCase() &&
-            String(codeIds.erc4626StrategyAdapter).toLowerCase() ===
-              String(expectedPhase3CodeIds.erc4626StrategyAdapter).toLowerCase() &&
-            String(codeIds.solanaStrategy).toLowerCase() === String(expectedPhase3CodeIds.solanaStrategy).toLowerCase()
+            codeIdMatches(
+              codeIds.charmAlphaVaultDeploy,
+              expectedPhase3CodeIds.charmAlphaVaultDeploy,
+              charmWeightBpsBig !== 0n,
+            ) &&
+            codeIdMatches(
+              codeIds.creatorCharmStrategy,
+              expectedPhase3CodeIds.creatorCharmStrategy,
+              charmWeightBpsBig !== 0n,
+            ) &&
+            codeIdMatches(
+              codeIds.ajnaVaultAuth,
+              expectedPhase3CodeIds.ajnaVaultAuth,
+              ajnaWeightBpsBig !== 0n,
+            ) &&
+            codeIdMatches(
+              codeIds.ajnaVault,
+              expectedPhase3CodeIds.ajnaVault,
+              ajnaWeightBpsBig !== 0n,
+            ) &&
+            codeIdMatches(
+              codeIds.erc4626StrategyAdapter,
+              expectedPhase3CodeIds.erc4626StrategyAdapter,
+              ajnaWeightBpsBig !== 0n,
+            ) &&
+            codeIdMatches(
+              codeIds.solanaStrategy,
+              expectedPhase3CodeIds.solanaStrategy,
+              solanaWeightBpsBig !== 0n,
+            )
           if (!hasValidPhase3CodeIds) throw new Error('batcher_phase3_codeids_mismatch')
         }
 

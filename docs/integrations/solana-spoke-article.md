@@ -5,18 +5,16 @@ sidebar_position: 6
 
 # 4626 Goes Multichain: Solana as a Spoke Chain
 
-:::note Product-model update (supersedes parts of this article)
-This piece was written when Charm, Ajna, and Solana were hard-wired as
-free baseline strategies on every vault. They're now all opt-in paid
-features ($100 USDC each via `creator_strategy_features`), so the
-"every creator gets native Solana liquidity automatically" framing and
-the fixed 30/30/30/10 vault split below only apply to creators who
-activate all three strategies before deploy. The Solana bridge,
-lottery, and fee-relay infrastructure described here is unchanged —
-it's still the routing layer that activates when a creator pays for
-`solana_bridge_strategy`. See
-[`docs/operations/creator-strategy-features.md`](../operations/creator-strategy-features.md)
-for the current product model.
+:::note Last updated 2026-04-19
+This article was originally drafted when Charm, Ajna, and Solana were
+hard-wired as baseline strategies. Under the current model every
+productive strategy is a $100 USDC opt-in (see
+[`docs/operations/creator-strategy-features.md`](../operations/creator-strategy-features.md)).
+Body copy has been updated to reflect that. The Solana-side
+architecture itself — bridge adapter, Twin contracts, keeper
+workflows, hub-and-spoke lottery routing — is unchanged; paying for
+`solana_bridge_strategy` is simply what switches on the Solana hop for
+a given creator.
 :::
 
 ## The Problem
@@ -50,12 +48,15 @@ One lottery. One jackpot. One gauge controller. Two chains of traders feeding in
 
 ## The Fair Launch: Parallel Across Chains
 
-When a creator launches, there are two fixed allocation layers:
+When a creator launches, there are two allocation layers:
 
-1. **Launch split (Phase 2, Base):** 40% CCA auction / 40% creator vesting / 20% LP reserve in the current deployment batcher flow.
-2. **Underlying vault target:** 30% Charm, 30% Ajna, 30% reserved for Solana execution, 10% idle buffer.
+1. **Launch split (Phase 2, Base):** 40% CCA auction / 40% creator vesting / 20% LP reserve in the current deployment batcher flow. This is fixed and happens for every deploy.
+2. **Underlying vault target:** depends on which strategies the creator paid to activate (see [creator strategy features](../operations/creator-strategy-features.md)). Each productive strategy is a $100 USDC opt-in:
+   - 1 strategy paid → that strategy gets the full 90 % productive budget, 10 % unrouted (idle buffer)
+   - 2 paid → 45 % each + 10 % unrouted
+   - 3 paid (Charm + Ajna + Solana) → 30 % each + 10 % unrouted
 
-The Solana reserve is executed out-of-band through the Solana provisioner + Meteora path (DLMM + Alpha Vault), while Base remains the canonical control plane for deployment, ownership, and settlement.
+The Solana portion — when paid — is executed out-of-band through the `SolanaStrategy` bridge. The optional Meteora DLMM + Alpha Vault routing (an additional `solana_meteora_alpha_vault` $100 add-on) layers on top. Base remains the canonical control plane for deployment, ownership, and settlement; Solana activity is the spoke that relays back.
 
 ### Why Meteora?
 
@@ -104,7 +105,7 @@ The existing Solana program at `EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU` wi
 
 ## What This Means
 
-Every creator who launches on 4626 gets native Solana liquidity automatically. No extra configuration. No second deployment. The 20% Solana allocation, the DLMM pool, the Alpha Vault, the fee relay, the lottery participation — it's all infrastructure-level. It just happens.
+Every creator who launches on 4626 can opt into native Solana liquidity for $100 USDC (the `solana_bridge_strategy` paid feature). Pay that and the vault installs a `SolanaStrategy` that bridges CREATOR to a wrapped Solana mint at the share price target, and Solana trades flow the same fee / lottery / gauge routes back to Base. Add the optional `solana_meteora_alpha_vault` feature for another $100 and the strategy also routes bridged supply through a Meteora DLMM pool + Alpha Vault for Solana-side concentrated liquidity. No second vault deploy, no fragmented jackpot, no duplicated gauge controller — the DLMM pool, Alpha Vault, fee relay, and lottery participation are all infrastructure-level once the opt-in lands.
 
 Solana traders enter the same lottery as Base traders. The jackpot doesn't fragment. The fees don't scatter. One hub, multiple spokes, unified economics.
 

@@ -10,6 +10,7 @@ import {
 import { getAddress } from 'viem'
 
 import { finalizeStripeCheckoutActivation } from '../../../../../server/_lib/creatorStrategy/activations.js'
+import { dispatchProvisioning } from '../../../../../server/_lib/creatorStrategy/provisioner.js'
 import {
   isStripeWebhookConfigured,
   verifyStripeWebhook,
@@ -177,6 +178,41 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
+  // Payment is verified and the row is in `pending`. Kick the
+  // provisioning dispatcher. For v1 this only logs intent + returns
+  // `enqueued`; operator still runs the provisioning script manually.
+  // Non-fatal: if dispatch fails we still return 200 to Stripe so the
+  // webhook isn't retried — the row's `pending` state is the source of
+  // truth and operators poll from there.
+  let provisionerNote: string | null = null
+  try {
+    const provision = await dispatchProvisioning({
+      creatorToken: finalize.row.creatorToken,
+      featureKey: finalize.row.featureKey,
+      activationId: finalize.row.id,
+      paymentSource: 'stripe',
+      paymentRef: paymentIntentId ?? session.id,
+    })
+    if (provision.ok) {
+      provisionerNote = provision.note
+    } else {
+      provisionerNote = `dispatch failed: ${provision.reason}`
+      console.warn('[stripe-webhook] provisioning dispatch returned error', {
+        sessionId: session.id,
+        activationId: finalize.row.id,
+        reason: provision.reason,
+        message: provision.message,
+      })
+    }
+  } catch (error) {
+    provisionerNote = `dispatch threw: ${error instanceof Error ? error.message : String(error)}`
+    console.error('[stripe-webhook] provisioning dispatch crashed', {
+      sessionId: session.id,
+      activationId: finalize.row.id,
+      error,
+    })
+  }
+
   return res.status(200).json({
     success: true,
     data: {
@@ -184,11 +220,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       eventType: event.type,
       activationId: finalize.row.id,
       sessionId: session.id,
+      provisionerNote,
     },
   } satisfies ApiEnvelope<{
     eventId: string
     eventType: string
     activationId: number
     sessionId: string
+    provisionerNote: string | null
   }>)
 }
