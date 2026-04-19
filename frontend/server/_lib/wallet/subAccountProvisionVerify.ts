@@ -80,7 +80,7 @@ export type SubAccountVerifyErr = {
 
 export function getBasePublicClient(): PublicClient {
   const rpcUrl = (process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').split(',')[0].trim()
-  return createPublicClient({ chain: base, transport: http(rpcUrl, { timeout: 10_000 }) }) as PublicClient
+  return createPublicClient({ chain: base, transport: http(rpcUrl, { timeout: 10_000 }) }) as unknown as PublicClient
 }
 
 /**
