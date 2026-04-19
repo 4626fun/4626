@@ -12,7 +12,7 @@
 
 > **PreflightOutcome** = \{ `balanceWei`: `bigint`; `requiredWei`: `bigint`; `sufficient`: `true`; \} \| \{ `balanceWei`: `bigint`; `message`: `string`; `reason`: `"insufficient_funds"`; `requiredWei`: `bigint`; `sufficient`: `false`; \}
 
-Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:49](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletBalancePreflight.ts#L49)
+Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:49](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/walletBalancePreflight.ts#L49)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:49](https://github.co
 
 > **PreflightResult** = [`PreflightOutcome`](#preflightoutcome) \| [`PreflightSkipped`](#preflightskipped)
 
-Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:69](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletBalancePreflight.ts#L69)
+Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:69](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/walletBalancePreflight.ts#L69)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:69](https://github.co
 
 > **PreflightSkipped** = `object`
 
-Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:63](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletBalancePreflight.ts#L63)
+Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:63](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/walletBalancePreflight.ts#L63)
 
 #### Properties
 
@@ -36,19 +36,19 @@ Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:63](https://github.co
 
 > **error**: `unknown`
 
-Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:66](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletBalancePreflight.ts#L66)
+Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:66](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/walletBalancePreflight.ts#L66)
 
 ##### reason
 
 > **reason**: `"balance_lookup_failed"`
 
-Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:65](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletBalancePreflight.ts#L65)
+Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:65](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/walletBalancePreflight.ts#L65)
 
 ##### sufficient
 
 > **sufficient**: `null`
 
-Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:64](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletBalancePreflight.ts#L64)
+Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:64](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/walletBalancePreflight.ts#L64)
 
 ***
 
@@ -56,7 +56,7 @@ Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:64](https://github.co
 
 > **PublicClientLike** = `object`
 
-Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:71](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletBalancePreflight.ts#L71)
+Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:71](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/walletBalancePreflight.ts#L71)
 
 #### Properties
 
@@ -64,7 +64,7 @@ Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:71](https://github.co
 
 > **getBalance**: (`args`) => `Promise`\<`bigint`\>
 
-Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:72](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletBalancePreflight.ts#L72)
+Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:72](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/walletBalancePreflight.ts#L72)
 
 ###### Parameters
 
@@ -88,7 +88,7 @@ Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:72](https://github.co
 
 > `const` **DEFAULT\_GAS\_BUFFER\_WEI**: `bigint`
 
-Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:47](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletBalancePreflight.ts#L47)
+Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:47](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/walletBalancePreflight.ts#L47)
 
 Hard floor. If `wallet.balance < requiredValue + GAS_BUFFER_WEI`, refuse.
 
@@ -103,7 +103,7 @@ only a few micro-ETH pass preflight and still fail inside Privy.
 
 > **buildInsufficientFundsRefusal**(`params`): `string`
 
-Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:127](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletBalancePreflight.ts#L127)
+Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:127](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/walletBalancePreflight.ts#L127)
 
 Friendly user-facing refusal string. Avoids raw Privy/wei jargon.
 Wei values are included for logs but the message itself is user-safe.
@@ -130,7 +130,7 @@ Wei values are included for logs but the message itself is user-safe.
 
 > **checkWalletBalancePreflight**(`params`): `Promise`\<[`PreflightResult`](#preflightresult)\>
 
-Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:90](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletBalancePreflight.ts#L90)
+Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:90](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/walletBalancePreflight.ts#L90)
 
 Check whether `wallet` has enough native ETH to cover `valueWei` plus a
 conservative gas buffer. Returns a structured outcome. On RPC failure,
@@ -166,7 +166,7 @@ returns `balance_lookup_failed` — callers should log and proceed (fail-open).
 
 > **getBasePreflightPublicClient**(): [`PublicClientLike`](#publicclientlike)
 
-Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:80](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletBalancePreflight.ts#L80)
+Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:80](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/walletBalancePreflight.ts#L80)
 
 Shared Base public client for balance preflight reads. Callers may pass
 their own client to `checkWalletBalancePreflight`; this factory is a
@@ -182,7 +182,7 @@ convenience for paths that don't already have one.
 
 > **isInsufficientFundsError**(`error`): `boolean`
 
-Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:147](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletBalancePreflight.ts#L147)
+Defined in: [server/\_lib/wallet/walletBalancePreflight.ts:147](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/walletBalancePreflight.ts#L147)
 
 Detect whether an error thrown from `walletRpc` (or any downstream
 submission path) looks like an insufficient-funds failure, so we can map

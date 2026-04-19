@@ -12,7 +12,7 @@
 
 > `const` **ERC20\_METADATA\_ABI**: readonly \[\{ `inputs`: readonly \[\]; `name`: `"name"`; `outputs`: readonly \[\{ `type`: `"string"`; \}\]; `stateMutability`: `"view"`; `type`: `"function"`; \}, \{ `inputs`: readonly \[\]; `name`: `"symbol"`; `outputs`: readonly \[\{ `type`: `"string"`; \}\]; `stateMutability`: `"view"`; `type`: `"function"`; \}, \{ `inputs`: readonly \[\]; `name`: `"decimals"`; `outputs`: readonly \[\{ `type`: `"uint8"`; \}\]; `stateMutability`: `"view"`; `type`: `"function"`; \}\]
 
-Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:7](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L7)
+Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:7](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L7)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:7](https://github
 
 > `const` **WRAP\_TOKEN\_METADATA\_URI\_MAX\_LENGTH**: `512` = `512`
 
-Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:5](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L5)
+Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:5](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L5)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:5](https://github
 
 > `const` **WRAP\_TOKEN\_NAME\_MAX\_LENGTH**: `32` = `32`
 
-Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:3](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L3)
+Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:3](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L3)
 
 ***
 
@@ -36,7 +36,7 @@ Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:3](https://github
 
 > `const` **WRAP\_TOKEN\_SYMBOL\_MAX\_LENGTH**: `12` = `12`
 
-Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:4](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L4)
+Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:4](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L4)
 
 ## Functions
 
@@ -44,7 +44,7 @@ Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:4](https://github
 
 > **isLikelyUnsupportedMetadataUriFlagError**(`message`): `boolean`
 
-Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:100](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L100)
+Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:100](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L100)
 
 #### Parameters
 
@@ -62,7 +62,7 @@ Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:100](https://gith
 
 > **normalizeExactWrapTokenName**(`raw`): `string` \| `null`
 
-Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:65](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L65)
+Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:65](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L65)
 
 #### Parameters
 
@@ -80,7 +80,7 @@ Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:65](https://githu
 
 > **normalizeExactWrapTokenSymbol**(`raw`): `string` \| `null`
 
-Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:74](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L74)
+Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:74](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L74)
 
 #### Parameters
 
@@ -98,7 +98,7 @@ Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:74](https://githu
 
 > **normalizeWrapTokenMetadataUri**(`raw`): `string` \| `null`
 
-Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:83](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L83)
+Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:83](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L83)
 
 #### Parameters
 
@@ -116,7 +116,7 @@ Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:83](https://githu
 
 > **readBridgeTokenMetadata**(`params`): `Promise`\<\{ `name`: `string`; `symbol`: `string`; \} \| `null`\>
 
-Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:39](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L39)
+Defined in: [server/\_lib/onchain/solanaBridgeTokenMetadata.ts:39](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onchain/solanaBridgeTokenMetadata.ts#L39)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **WaitlistReferrerResponse** = \{ `display`: `string`; `pointsTotal`: `number`; `rank`: `number` \| `null`; \} \| `null`
 
-Defined in: [api/\_handlers/waitlist/\_referrer.ts:30](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/waitlist/_referrer.ts#L30)
+Defined in: [api/\_handlers/waitlist/\_referrer.ts:30](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/waitlist/_referrer.ts#L30)
 
 Public lookup: referral code → referrer's public display name + signal.
 
@@ -34,7 +34,7 @@ Privacy:
 
 > **default**(`req`, `res`): `Promise`\<`any`\>
 
-Defined in: [api/\_handlers/waitlist/\_referrer.ts:58](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/waitlist/_referrer.ts#L58)
+Defined in: [api/\_handlers/waitlist/\_referrer.ts:58](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/waitlist/_referrer.ts#L58)
 
 #### Parameters
 

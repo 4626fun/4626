@@ -12,7 +12,7 @@
 
 > **CreatorCoinInfo** = `object`
 
-Defined in: [src/lib/onchain/vaultResolve.ts:80](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/onchain/vaultResolve.ts#L80)
+Defined in: [src/lib/onchain/vaultResolve.ts:80](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/vaultResolve.ts#L80)
 
 #### Properties
 
@@ -20,67 +20,67 @@ Defined in: [src/lib/onchain/vaultResolve.ts:80](https://github.com/wenakita/462
 
 > **creator**: `Address` \| `null`
 
-Defined in: [src/lib/onchain/vaultResolve.ts:89](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/onchain/vaultResolve.ts#L89)
+Defined in: [src/lib/onchain/vaultResolve.ts:89](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/vaultResolve.ts#L89)
 
 ##### gaugeController
 
 > **gaugeController**: `Address` \| `null`
 
-Defined in: [src/lib/onchain/vaultResolve.ts:88](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/onchain/vaultResolve.ts#L88)
+Defined in: [src/lib/onchain/vaultResolve.ts:88](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/vaultResolve.ts#L88)
 
 ##### isActive
 
 > **isActive**: `boolean`
 
-Defined in: [src/lib/onchain/vaultResolve.ts:90](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/onchain/vaultResolve.ts#L90)
+Defined in: [src/lib/onchain/vaultResolve.ts:90](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/vaultResolve.ts#L90)
 
 ##### name
 
 > **name**: `string`
 
-Defined in: [src/lib/onchain/vaultResolve.ts:82](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/onchain/vaultResolve.ts#L82)
+Defined in: [src/lib/onchain/vaultResolve.ts:82](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/vaultResolve.ts#L82)
 
 ##### oracle
 
 > **oracle**: `Address` \| `null`
 
-Defined in: [src/lib/onchain/vaultResolve.ts:87](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/onchain/vaultResolve.ts#L87)
+Defined in: [src/lib/onchain/vaultResolve.ts:87](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/vaultResolve.ts#L87)
 
 ##### registeredAt
 
 > **registeredAt**: `bigint` \| `null`
 
-Defined in: [src/lib/onchain/vaultResolve.ts:91](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/onchain/vaultResolve.ts#L91)
+Defined in: [src/lib/onchain/vaultResolve.ts:91](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/vaultResolve.ts#L91)
 
 ##### shareOFT
 
 > **shareOFT**: `Address` \| `null`
 
-Defined in: [src/lib/onchain/vaultResolve.ts:85](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/onchain/vaultResolve.ts#L85)
+Defined in: [src/lib/onchain/vaultResolve.ts:85](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/vaultResolve.ts#L85)
 
 ##### symbol
 
 > **symbol**: `string`
 
-Defined in: [src/lib/onchain/vaultResolve.ts:83](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/onchain/vaultResolve.ts#L83)
+Defined in: [src/lib/onchain/vaultResolve.ts:83](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/vaultResolve.ts#L83)
 
 ##### token
 
 > **token**: `Address`
 
-Defined in: [src/lib/onchain/vaultResolve.ts:81](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/onchain/vaultResolve.ts#L81)
+Defined in: [src/lib/onchain/vaultResolve.ts:81](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/vaultResolve.ts#L81)
 
 ##### vault
 
 > **vault**: `Address` \| `null`
 
-Defined in: [src/lib/onchain/vaultResolve.ts:84](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/onchain/vaultResolve.ts#L84)
+Defined in: [src/lib/onchain/vaultResolve.ts:84](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/vaultResolve.ts#L84)
 
 ##### wrapper
 
 > **wrapper**: `Address` \| `null`
 
-Defined in: [src/lib/onchain/vaultResolve.ts:86](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/onchain/vaultResolve.ts#L86)
+Defined in: [src/lib/onchain/vaultResolve.ts:86](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/vaultResolve.ts#L86)
 
 ***
 
@@ -88,7 +88,7 @@ Defined in: [src/lib/onchain/vaultResolve.ts:86](https://github.com/wenakita/462
 
 > **VaultResolved** = `object`
 
-Defined in: [src/lib/onchain/vaultResolve.ts:94](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/onchain/vaultResolve.ts#L94)
+Defined in: [src/lib/onchain/vaultResolve.ts:94](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/vaultResolve.ts#L94)
 
 #### Properties
 
@@ -96,19 +96,19 @@ Defined in: [src/lib/onchain/vaultResolve.ts:94](https://github.com/wenakita/462
 
 > **ccaStrategy**: `Address` \| `null`
 
-Defined in: [src/lib/onchain/vaultResolve.ts:97](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/onchain/vaultResolve.ts#L97)
+Defined in: [src/lib/onchain/vaultResolve.ts:97](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/vaultResolve.ts#L97)
 
 ##### info
 
 > **info**: [`CreatorCoinInfo`](#creatorcoininfo)
 
-Defined in: [src/lib/onchain/vaultResolve.ts:96](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/onchain/vaultResolve.ts#L96)
+Defined in: [src/lib/onchain/vaultResolve.ts:96](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/vaultResolve.ts#L96)
 
 ##### token
 
 > **token**: `Address`
 
-Defined in: [src/lib/onchain/vaultResolve.ts:95](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/onchain/vaultResolve.ts#L95)
+Defined in: [src/lib/onchain/vaultResolve.ts:95](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/vaultResolve.ts#L95)
 
 ## Functions
 
@@ -116,7 +116,7 @@ Defined in: [src/lib/onchain/vaultResolve.ts:95](https://github.com/wenakita/462
 
 > **fetchCreatorCoinInfo**\<`TTransport`, `TChain`\>(`publicClient`, `token`): `Promise`\<[`CreatorCoinInfo`](#creatorcoininfo) \| `null`\>
 
-Defined in: [src/lib/onchain/vaultResolve.ts:155](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/onchain/vaultResolve.ts#L155)
+Defined in: [src/lib/onchain/vaultResolve.ts:155](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/vaultResolve.ts#L155)
 
 #### Type Parameters
 
@@ -146,7 +146,7 @@ Defined in: [src/lib/onchain/vaultResolve.ts:155](https://github.com/wenakita/46
 
 > **resolveCreatorTokenFromAnyAddress**\<`TTransport`, `TChain`\>(`publicClient`, `addr`): `Promise`\<`` `0x${string}` `` \| `null`\>
 
-Defined in: [src/lib/onchain/vaultResolve.ts:112](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/onchain/vaultResolve.ts#L112)
+Defined in: [src/lib/onchain/vaultResolve.ts:112](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/vaultResolve.ts#L112)
 
 #### Type Parameters
 
@@ -176,7 +176,7 @@ Defined in: [src/lib/onchain/vaultResolve.ts:112](https://github.com/wenakita/46
 
 > **resolveCreatorTradeTokenAddress**\<`TTransport`, `TChain`\>(`publicClient`, `addressLike`): `Promise`\<`` `0x${string}` `` \| `null`\>
 
-Defined in: [src/lib/onchain/vaultResolve.ts:143](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/onchain/vaultResolve.ts#L143)
+Defined in: [src/lib/onchain/vaultResolve.ts:143](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/vaultResolve.ts#L143)
 
 #### Type Parameters
 
@@ -206,7 +206,7 @@ Defined in: [src/lib/onchain/vaultResolve.ts:143](https://github.com/wenakita/46
 
 > **resolveVaultByAnyAddress**\<`TTransport`, `TChain`\>(`publicClient`, `addressLike`): `Promise`\<[`VaultResolved`](#vaultresolved) \| `null`\>
 
-Defined in: [src/lib/onchain/vaultResolve.ts:381](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/onchain/vaultResolve.ts#L381)
+Defined in: [src/lib/onchain/vaultResolve.ts:381](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/vaultResolve.ts#L381)
 
 #### Type Parameters
 

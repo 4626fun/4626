@@ -12,7 +12,7 @@
 
 > **OwnersPublicClientLike** = `object` & `Record`\<`string`, `any`\>
 
-Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:32](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L32)
+Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:32](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L32)
 
 #### Type Declaration
 
@@ -44,7 +44,7 @@ Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:32](https://github.com/wenakita
 
 > **fetchCoinbaseSmartWalletOwners**(`params`): `Promise`\<`` `0x${string}` ``[]\>
 
-Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:160](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L160)
+Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:160](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L160)
 
 #### Parameters
 
@@ -72,7 +72,7 @@ Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:160](https://github.com/wenakit
 
 > **findCoinbaseSmartWalletOwnerIndex**(`params`): `Promise`\<\{ `ownerCount`: `number`; `ownerIndex`: `number` \| `null`; \}\>
 
-Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:76](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L76)
+Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:76](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L76)
 
 #### Parameters
 
@@ -108,7 +108,7 @@ Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:76](https://github.com/wenakita
 
 > **resetOwnerIndexCacheForTests**(): `void`
 
-Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:72](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L72)
+Defined in: [src/lib/aa/coinbaseErc4337Owners.ts:72](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/aa/coinbaseErc4337Owners.ts#L72)
 
 #### Returns
 

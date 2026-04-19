@@ -12,7 +12,7 @@
 
 > **clearStoredSiwaReceipt**(): `void`
 
-Defined in: [src/lib/auth/siwaReceiptStorage.ts:14](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/auth/siwaReceiptStorage.ts#L14)
+Defined in: [src/lib/auth/siwaReceiptStorage.ts:14](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/auth/siwaReceiptStorage.ts#L14)
 
 #### Returns
 
@@ -24,7 +24,7 @@ Defined in: [src/lib/auth/siwaReceiptStorage.ts:14](https://github.com/wenakita/
 
 > **getStoredSiwaReceipt**(): `string` \| `null`
 
-Defined in: [src/lib/auth/siwaReceiptStorage.ts:38](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/auth/siwaReceiptStorage.ts#L38)
+Defined in: [src/lib/auth/siwaReceiptStorage.ts:38](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/auth/siwaReceiptStorage.ts#L38)
 
 #### Returns
 
@@ -36,7 +36,7 @@ Defined in: [src/lib/auth/siwaReceiptStorage.ts:38](https://github.com/wenakita/
 
 > **setStoredSiwaReceipt**(`params`): `void`
 
-Defined in: [src/lib/auth/siwaReceiptStorage.ts:24](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/auth/siwaReceiptStorage.ts#L24)
+Defined in: [src/lib/auth/siwaReceiptStorage.ts:24](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/auth/siwaReceiptStorage.ts#L24)
 
 #### Parameters
 

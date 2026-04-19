@@ -10,7 +10,7 @@
 
 ### PixelWaveLoaderProps
 
-Defined in: [src/components/ui/PixelWaveLoader.tsx:12](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/ui/PixelWaveLoader.tsx#L12)
+Defined in: [src/components/ui/PixelWaveLoader.tsx:12](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/ui/PixelWaveLoader.tsx#L12)
 
 #### Properties
 
@@ -18,43 +18,43 @@ Defined in: [src/components/ui/PixelWaveLoader.tsx:12](https://github.com/wenaki
 
 > `optional` **className**: `string`
 
-Defined in: [src/components/ui/PixelWaveLoader.tsx:19](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/ui/PixelWaveLoader.tsx#L19)
+Defined in: [src/components/ui/PixelWaveLoader.tsx:19](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/ui/PixelWaveLoader.tsx#L19)
 
 ##### color?
 
 > `optional` **color**: `string`
 
-Defined in: [src/components/ui/PixelWaveLoader.tsx:15](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/ui/PixelWaveLoader.tsx#L15)
+Defined in: [src/components/ui/PixelWaveLoader.tsx:15](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/ui/PixelWaveLoader.tsx#L15)
 
 ##### delays?
 
 > `optional` **delays**: `number`[]
 
-Defined in: [src/components/ui/PixelWaveLoader.tsx:17](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/ui/PixelWaveLoader.tsx#L17)
+Defined in: [src/components/ui/PixelWaveLoader.tsx:17](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/ui/PixelWaveLoader.tsx#L17)
 
 ##### duration?
 
 > `optional` **duration**: `number`
 
-Defined in: [src/components/ui/PixelWaveLoader.tsx:16](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/ui/PixelWaveLoader.tsx#L16)
+Defined in: [src/components/ui/PixelWaveLoader.tsx:16](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/ui/PixelWaveLoader.tsx#L16)
 
 ##### gridSize?
 
 > `optional` **gridSize**: `number`
 
-Defined in: [src/components/ui/PixelWaveLoader.tsx:18](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/ui/PixelWaveLoader.tsx#L18)
+Defined in: [src/components/ui/PixelWaveLoader.tsx:18](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/ui/PixelWaveLoader.tsx#L18)
 
 ##### name?
 
 > `optional` **name**: [`PixelWavePreset`](#pixelwavepreset) \| `string` & `object`
 
-Defined in: [src/components/ui/PixelWaveLoader.tsx:13](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/ui/PixelWaveLoader.tsx#L13)
+Defined in: [src/components/ui/PixelWaveLoader.tsx:13](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/ui/PixelWaveLoader.tsx#L13)
 
 ##### size?
 
 > `optional` **size**: `string` \| `number`
 
-Defined in: [src/components/ui/PixelWaveLoader.tsx:14](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/ui/PixelWaveLoader.tsx#L14)
+Defined in: [src/components/ui/PixelWaveLoader.tsx:14](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/ui/PixelWaveLoader.tsx#L14)
 
 ## Type Aliases
 
@@ -62,7 +62,7 @@ Defined in: [src/components/ui/PixelWaveLoader.tsx:14](https://github.com/wenaki
 
 > **PixelWavePreset** = `"wave-lr"` \| `"wave-rl"` \| `"wave-tb"` \| `"wave-bt"` \| `"wave-diag"` \| `"wave-orbit-cw"`
 
-Defined in: [src/components/ui/PixelWaveLoader.tsx:10](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/ui/PixelWaveLoader.tsx#L10)
+Defined in: [src/components/ui/PixelWaveLoader.tsx:10](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/ui/PixelWaveLoader.tsx#L10)
 
 ## Functions
 
@@ -70,7 +70,7 @@ Defined in: [src/components/ui/PixelWaveLoader.tsx:10](https://github.com/wenaki
 
 > **PixelWaveLoader**(`__namedParameters`): `Element`
 
-Defined in: [src/components/ui/PixelWaveLoader.tsx:112](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/ui/PixelWaveLoader.tsx#L112)
+Defined in: [src/components/ui/PixelWaveLoader.tsx:112](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/ui/PixelWaveLoader.tsx#L112)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **TrendOpRow** = `object`
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:13](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L13)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:13](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L13)
 
 #### Properties
 
@@ -20,97 +20,97 @@ Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:13](https://github.com/wenak
 
 > **actorWallet**: `string` \| `null`
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:20](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L20)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:20](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L20)
 
 ##### createdAt
 
 > **createdAt**: `string`
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:28](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L28)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:28](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L28)
 
 ##### deployedCoinAddress
 
 > **deployedCoinAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:18](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L18)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:18](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L18)
 
 ##### funnelMetadata
 
 > **funnelMetadata**: `Record`\<`string`, `unknown`\>
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:25](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L25)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:25](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L25)
 
 ##### funnelMetrics
 
 > **funnelMetrics**: `Record`\<`string`, `unknown`\>
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:27](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L27)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:27](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L27)
 
 ##### groupId
 
 > **groupId**: `string` \| `null`
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:21](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L21)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:21](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L21)
 
 ##### id
 
 > **id**: `number`
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:14](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L14)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:14](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L14)
 
 ##### lastError
 
 > **lastError**: `string` \| `null`
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:24](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L24)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:24](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L24)
 
 ##### predictedCoinAddress
 
 > **predictedCoinAddress**: `string`
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:17](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L17)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:17](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L17)
 
 ##### routeability
 
 > **routeability**: `Record`\<`string`, `unknown`\>
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:26](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L26)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:26](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L26)
 
 ##### status
 
 > **status**: [`TrendOpStatus`](#trendopstatus)
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:23](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L23)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:23](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L23)
 
 ##### ticker
 
 > **ticker**: `string`
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:15](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L15)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:15](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L15)
 
 ##### tickerHash
 
 > **tickerHash**: `string`
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:16](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L16)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:16](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L16)
 
 ##### txHash
 
 > **txHash**: `string` \| `null`
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:19](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L19)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:19](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L19)
 
 ##### updatedAt
 
 > **updatedAt**: `string`
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:29](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L29)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:29](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L29)
 
 ##### vaultAddress
 
 > **vaultAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:22](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L22)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:22](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L22)
 
 ***
 
@@ -118,7 +118,7 @@ Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:22](https://github.com/wenak
 
 > **TrendOpStatus** = `"predicted"` \| `"deploying"` \| `"deployed"` \| `"funnel_pending"` \| `"funnel_completed"` \| `"failed"`
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:5](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L5)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:5](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L5)
 
 ## Functions
 
@@ -126,7 +126,7 @@ Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:5](https://github.com/wenaki
 
 > **applyTrendStatusTransition**(`current`, `next`): `object`
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:95](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L95)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:95](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L95)
 
 #### Parameters
 
@@ -156,7 +156,7 @@ Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:95](https://github.com/wenak
 
 > **ensureZoraTrendOpsSchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:115](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L115)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:115](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L115)
 
 #### Parameters
 
@@ -174,7 +174,7 @@ Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:115](https://github.com/wena
 
 > **getTrendOpByTicker**(`ticker`): `Promise`\<[`TrendOpRow`](#trendoprow) \| `null`\>
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:167](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L167)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:167](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L167)
 
 #### Parameters
 
@@ -192,7 +192,7 @@ Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:167](https://github.com/wena
 
 > **getTrendOpByTickerHash**(`tickerHash`): `Promise`\<[`TrendOpRow`](#trendoprow) \| `null`\>
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:154](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L154)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:154](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L154)
 
 #### Parameters
 
@@ -210,7 +210,7 @@ Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:154](https://github.com/wena
 
 > **getTrendOpsMetrics**(`hours`): `Promise`\<\{ `byStatus`: `Record`\<`string`, `number`\>; `total`: `number`; `updatedSince`: `string`; \}\>
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:356](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L356)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:356](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L356)
 
 #### Parameters
 
@@ -228,7 +228,7 @@ Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:356](https://github.com/wena
 
 > **listRecentTrendOps**(`limit`): `Promise`\<[`TrendOpRow`](#trendoprow)[]\>
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:343](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L343)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:343](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L343)
 
 #### Parameters
 
@@ -246,7 +246,7 @@ Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:343](https://github.com/wena
 
 > **markTrendOpDeployed**(`params`): `Promise`\<[`TrendOpRow`](#trendoprow) \| `null`\>
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:293](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L293)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:293](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L293)
 
 #### Parameters
 
@@ -278,7 +278,7 @@ Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:293](https://github.com/wena
 
 > **markTrendOpDeploying**(`params`): `Promise`\<[`TrendOpRow`](#trendoprow) \| `null`\>
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:280](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L280)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:280](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L280)
 
 #### Parameters
 
@@ -306,7 +306,7 @@ Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:280](https://github.com/wena
 
 > **markTrendOpFailed**(`params`): `Promise`\<[`TrendOpRow`](#trendoprow) \| `null`\>
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:308](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L308)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:308](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L308)
 
 #### Parameters
 
@@ -334,7 +334,7 @@ Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:308](https://github.com/wena
 
 > **markTrendOpFunnelCompleted**(`params`): `Promise`\<[`TrendOpRow`](#trendoprow) \| `null`\>
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:332](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L332)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:332](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L332)
 
 #### Parameters
 
@@ -358,7 +358,7 @@ Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:332](https://github.com/wena
 
 > **markTrendOpFunnelPending**(`params`): `Promise`\<[`TrendOpRow`](#trendoprow) \| `null`\>
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:321](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L321)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:321](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L321)
 
 #### Parameters
 
@@ -382,7 +382,7 @@ Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:321](https://github.com/wena
 
 > **transitionTrendOp**(`params`): `Promise`\<[`TrendOpRow`](#trendoprow) \| `null`\>
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:242](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L242)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:242](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L242)
 
 #### Parameters
 
@@ -430,7 +430,7 @@ Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:242](https://github.com/wena
 
 > **upsertTrendPrediction**(`params`): `Promise`\<[`TrendOpRow`](#trendoprow)\>
 
-Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:183](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L183)
+Defined in: [server/\_lib/zora/zoraTrendOpsStore.ts:183](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/zora/zoraTrendOpsStore.ts#L183)
 
 #### Parameters
 

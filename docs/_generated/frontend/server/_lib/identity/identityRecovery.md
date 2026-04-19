@@ -10,9 +10,9 @@
 
 ### IdentityRecoveryRequiredError
 
-> **IdentityRecoveryRequiredError** = `Error` & `object`
+> **IdentityRecoveryRequiredError** = `Error` & `object` & \{ `email`: `string`; `existingPrivyUserId`: `string`; `reason`: `"EMAIL_BOUND_TO_DIFFERENT_PRIVY_USER"`; `source`: `EmailCollisionSource`; \} \| \{ `canonicalEmail`: `string`; `canonicalProfileId`: `number`; `reason`: `"WALLET_BOUND_TO_CANONICAL_EMAIL_PROFILE"`; `wallet`: `string`; \}
 
-Defined in: [server/\_lib/identity/identityRecovery.ts:5](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/identity/identityRecovery.ts#L5)
+Defined in: [server/\_lib/identity/identityRecovery.ts:7](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/identity/identityRecovery.ts#L7)
 
 #### Type Declaration
 
@@ -20,25 +20,9 @@ Defined in: [server/\_lib/identity/identityRecovery.ts:5](https://github.com/wen
 
 > **code**: `"IDENTITY_RECOVERY_REQUIRED"`
 
-##### email
-
-> **email**: `string`
-
-##### existingPrivyUserId
-
-> **existingPrivyUserId**: `string`
-
-##### reason
-
-> **reason**: `"EMAIL_BOUND_TO_DIFFERENT_PRIVY_USER"`
-
 ##### requestedPrivyUserId
 
 > **requestedPrivyUserId**: `string`
-
-##### source
-
-> **source**: `EmailCollisionSource`
 
 ## Functions
 
@@ -46,7 +30,7 @@ Defined in: [server/\_lib/identity/identityRecovery.ts:5](https://github.com/wen
 
 > **assertNoEmailPrivyCollision**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/identity/identityRecovery.ts:82](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/identity/identityRecovery.ts#L82)
+Defined in: [server/\_lib/identity/identityRecovery.ts:118](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/identity/identityRecovery.ts#L118)
 
 #### Parameters
 
@@ -70,11 +54,66 @@ Defined in: [server/\_lib/identity/identityRecovery.ts:82](https://github.com/we
 
 ***
 
+### assertNoWalletPrivyCollision()
+
+> **assertNoWalletPrivyCollision**(`params`): `Promise`\<`void`\>
+
+Defined in: [server/\_lib/identity/identityRecovery.ts:168](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/identity/identityRecovery.ts#L168)
+
+Block wallet-only Privy sign-ins that would otherwise mint a fragmented
+profile for a human whose canonical account (verified email) already
+exists. This is the prevention counterpart to `assertNoEmailPrivyCollision`:
+that one catches "same email, different Privy user", this one catches
+"same EOA, no email on incoming, canonical email profile already owns
+that EOA."
+
+Runs even when the incoming Privy user has an email (in which case
+`assertNoEmailPrivyCollision` does the primary check); for the email-
+less case this is the ONLY guard against split-identity creation.
+
+No-op when:
+  - the incoming Privy user id is already aliased to the canonical
+    profile (expected re-auth after a prior merge),
+  - the incoming Privy user has no EVM wallets (nothing to collide),
+  - `privy_user_aliases` table does not exist yet (legacy envs — in
+    that case we can't safely distinguish expected re-auth from
+    fragmentation, so we err on the side of not blocking).
+
+#### Parameters
+
+##### params
+
+###### db
+
+`Db`
+
+###### evmAddresses?
+
+readonly `string`[]
+
+###### privyUser?
+
+[`PrivyUserLike`](../wallet/walletMapping.md#privyuserlike)
+
+Provide exactly one source of EVM addresses: a raw Privy user (we
+ extract via `classifyLinkedAccounts`), or a pre-computed list. The
+ pre-computed form lets callers like `walletSync` skip the re-parse.
+
+###### privyUserId
+
+`string`
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
 ### isIdentityRecoveryRequiredError()
 
 > **isIdentityRecoveryRequiredError**(`error`): `error is IdentityRecoveryRequiredError`
 
-Defined in: [server/\_lib/identity/identityRecovery.ts:112](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/identity/identityRecovery.ts#L112)
+Defined in: [server/\_lib/identity/identityRecovery.ts:272](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/identity/identityRecovery.ts#L272)
 
 #### Parameters
 

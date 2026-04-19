@@ -12,7 +12,7 @@
 
 > **ChatBar**(`__namedParameters`): `Element`
 
-Defined in: [src/components/chat/ChatBar.tsx:154](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/chat/ChatBar.tsx#L154)
+Defined in: [src/components/chat/ChatBar.tsx:154](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/chat/ChatBar.tsx#L154)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **ResolveOwnerWalletIdOutcome** = \{ `candidate`: [`WalletCandidate`](#walletcandidate); `status`: `"ready"`; \} \| \{ `matches`: [`WalletCandidate`](#walletcandidate)[]; `status`: `"no_server_id"`; \} \| \{ `inspected`: [`WalletCandidate`](#walletcandidate)[]; `status`: `"no_match"`; \}
 
-Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:148](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L148)
+Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:148](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L148)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:148](https://gith
 
 > **WalletCandidate** = `object`
 
-Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:21](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L21)
+Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:21](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L21)
 
 Architecture B Phase 2 — Privy owner wallet-id resolver helpers.
 
@@ -46,43 +46,43 @@ Not used on the hot path — this only drives operator provisioning for
 
 > **address**: `string`
 
-Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:22](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L22)
+Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:22](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L22)
 
 ##### chainType
 
 > **chainType**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:24](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L24)
+Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:24](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L24)
 
 ##### delegated
 
 > **delegated**: `boolean` \| `null`
 
-Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:27](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L27)
+Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:27](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L27)
 
 ##### hdWalletIndex
 
 > **hdWalletIndex**: `number` \| `null`
 
-Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:26](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L26)
+Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:26](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L26)
 
 ##### id
 
 > **id**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:23](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L23)
+Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:23](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L23)
 
 ##### rawType
 
 > **rawType**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:28](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L28)
+Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:28](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L28)
 
 ##### walletClientType
 
 > **walletClientType**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:25](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L25)
+Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:25](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L25)
 
 ## Functions
 
@@ -90,7 +90,7 @@ Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:25](https://githu
 
 > **collectWalletCandidates**(`user`): `any`[]
 
-Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:52](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L52)
+Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:52](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L52)
 
 #### Parameters
 
@@ -108,7 +108,7 @@ Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:52](https://githu
 
 > **mergeByAddress**(`entries`): [`WalletCandidate`](#walletcandidate)[]
 
-Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:126](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L126)
+Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:126](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L126)
 
 Merge candidates for the same address. Prefer entries that carry a server
 id or richer metadata — this avoids picking a sparse snake_case shim over
@@ -130,7 +130,7 @@ a fuller camelCase record for the same wallet.
 
 > **nestedWalletEntries**(`raw`): `any`[]
 
-Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:38](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L38)
+Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:38](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L38)
 
 #### Parameters
 
@@ -148,7 +148,7 @@ Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:38](https://githu
 
 > **normalizeAddress**(`value`): `string` \| `null`
 
-Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:31](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L31)
+Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:31](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L31)
 
 #### Parameters
 
@@ -166,7 +166,7 @@ Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:31](https://githu
 
 > **resolveOwnerWalletId**(`user`, `ownerEoa`): [`ResolveOwnerWalletIdOutcome`](#resolveownerwalletidoutcome)
 
-Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:158](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L158)
+Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:158](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L158)
 
 End-to-end: walk every wallet surface on `user`, dedupe by address,
 return the entry for `ownerEoa` plus a status indicating whether the
@@ -192,7 +192,7 @@ caller has a usable server wallet id.
 
 > **toCandidate**(`raw`): [`WalletCandidate`](#walletcandidate) \| `null`
 
-Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:107](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L107)
+Defined in: [server/\_lib/wallet/privyOwnerWalletIdResolver.ts:107](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyOwnerWalletIdResolver.ts#L107)
 
 #### Parameters
 

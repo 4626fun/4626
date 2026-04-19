@@ -12,7 +12,7 @@
 
 > **FunderHop** = `object`
 
-Defined in: [server/\_lib/lens/funderTrace.ts:33](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/funderTrace.ts#L33)
+Defined in: [server/\_lib/lens/funderTrace.ts:33](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/lens/funderTrace.ts#L33)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/lens/funderTrace.ts:33](https://github.com/wenakita/46
 
 > **address**: `string`
 
-Defined in: [server/\_lib/lens/funderTrace.ts:35](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/funderTrace.ts#L35)
+Defined in: [server/\_lib/lens/funderTrace.ts:35](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/lens/funderTrace.ts#L35)
 
 The address being traced at this hop.
 
@@ -28,7 +28,7 @@ The address being traced at this hop.
 
 > **blockNumber**: `number`
 
-Defined in: [server/\_lib/lens/funderTrace.ts:41](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/funderTrace.ts#L41)
+Defined in: [server/\_lib/lens/funderTrace.ts:41](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/lens/funderTrace.ts#L41)
 
 Block number of the funding tx.
 
@@ -36,7 +36,7 @@ Block number of the funding tx.
 
 > **chainId**: `number`
 
-Defined in: [server/\_lib/lens/funderTrace.ts:45](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/funderTrace.ts#L45)
+Defined in: [server/\_lib/lens/funderTrace.ts:45](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/lens/funderTrace.ts#L45)
 
 Chain ID where this funding occurred.
 
@@ -44,7 +44,7 @@ Chain ID where this funding occurred.
 
 > **funderAddress**: `string`
 
-Defined in: [server/\_lib/lens/funderTrace.ts:37](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/funderTrace.ts#L37)
+Defined in: [server/\_lib/lens/funderTrace.ts:37](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/lens/funderTrace.ts#L37)
 
 The address that funded it.
 
@@ -52,7 +52,7 @@ The address that funded it.
 
 > **funderTxHash**: `string`
 
-Defined in: [server/\_lib/lens/funderTrace.ts:39](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/funderTrace.ts#L39)
+Defined in: [server/\_lib/lens/funderTrace.ts:39](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/lens/funderTrace.ts#L39)
 
 Transaction hash of the funding tx.
 
@@ -60,7 +60,7 @@ Transaction hash of the funding tx.
 
 > **hop**: `number`
 
-Defined in: [server/\_lib/lens/funderTrace.ts:47](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/funderTrace.ts#L47)
+Defined in: [server/\_lib/lens/funderTrace.ts:47](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/lens/funderTrace.ts#L47)
 
 Depth of this hop (1 = direct funder of the target).
 
@@ -68,7 +68,7 @@ Depth of this hop (1 = direct funder of the target).
 
 > **timestamp**: `number`
 
-Defined in: [server/\_lib/lens/funderTrace.ts:43](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/funderTrace.ts#L43)
+Defined in: [server/\_lib/lens/funderTrace.ts:43](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/lens/funderTrace.ts#L43)
 
 Unix timestamp of the funding tx.
 
@@ -78,7 +78,7 @@ Unix timestamp of the funding tx.
 
 > **FunderTraceResult** = `object`
 
-Defined in: [server/\_lib/lens/funderTrace.ts:50](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/funderTrace.ts#L50)
+Defined in: [server/\_lib/lens/funderTrace.ts:50](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/lens/funderTrace.ts#L50)
 
 #### Properties
 
@@ -86,7 +86,7 @@ Defined in: [server/\_lib/lens/funderTrace.ts:50](https://github.com/wenakita/46
 
 > **chain**: [`FunderHop`](#funderhop)[]
 
-Defined in: [server/\_lib/lens/funderTrace.ts:54](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/funderTrace.ts#L54)
+Defined in: [server/\_lib/lens/funderTrace.ts:54](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/lens/funderTrace.ts#L54)
 
 Ordered chain of funders (hop 1 = direct funder, hop N = deepest ancestor).
 
@@ -94,7 +94,7 @@ Ordered chain of funders (hop 1 = direct funder, hop N = deepest ancestor).
 
 > **complete**: `boolean`
 
-Defined in: [server/\_lib/lens/funderTrace.ts:56](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/funderTrace.ts#L56)
+Defined in: [server/\_lib/lens/funderTrace.ts:56](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/lens/funderTrace.ts#L56)
 
 Whether the trace completed all requested hops (false if a hop failed or had no funder).
 
@@ -102,7 +102,7 @@ Whether the trace completed all requested hops (false if a hop failed or had no 
 
 > **requestedHops**: `number`
 
-Defined in: [server/\_lib/lens/funderTrace.ts:58](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/funderTrace.ts#L58)
+Defined in: [server/\_lib/lens/funderTrace.ts:58](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/lens/funderTrace.ts#L58)
 
 Number of hops requested.
 
@@ -110,7 +110,7 @@ Number of hops requested.
 
 > `optional` **stopReason**: `"no_funder"` \| `"api_error"` \| `"contract_address"` \| `"self_funded"` \| `"max_hops"`
 
-Defined in: [server/\_lib/lens/funderTrace.ts:60](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/funderTrace.ts#L60)
+Defined in: [server/\_lib/lens/funderTrace.ts:60](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/lens/funderTrace.ts#L60)
 
 If the trace stopped early, the reason.
 
@@ -118,7 +118,7 @@ If the trace stopped early, the reason.
 
 > **target**: `string`
 
-Defined in: [server/\_lib/lens/funderTrace.ts:52](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/funderTrace.ts#L52)
+Defined in: [server/\_lib/lens/funderTrace.ts:52](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/lens/funderTrace.ts#L52)
 
 The original target address.
 
@@ -128,7 +128,7 @@ The original target address.
 
 > **traceFunders**(`address`, `options`): `Promise`\<[`FunderTraceResult`](#fundertraceresult)\>
 
-Defined in: [server/\_lib/lens/funderTrace.ts:131](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/funderTrace.ts#L131)
+Defined in: [server/\_lib/lens/funderTrace.ts:131](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/lens/funderTrace.ts#L131)
 
 Trace the funding chain for a wallet address.
 
@@ -164,7 +164,7 @@ Number of hops to trace (default 3, max 5).
 
 > **traceFundersMultiChain**(`address`, `options`): `Promise`\<[`FunderTraceResult`](#fundertraceresult) & `object`\>
 
-Defined in: [server/\_lib/lens/funderTrace.ts:184](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/funderTrace.ts#L184)
+Defined in: [server/\_lib/lens/funderTrace.ts:184](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/lens/funderTrace.ts#L184)
 
 Trace funders across multiple chains and merge results.
 Returns the longest chain found across all requested chains.

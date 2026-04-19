@@ -12,7 +12,7 @@
 
 > **ExecuteKeeprActionInput** = `object`
 
-Defined in: [server/keepr/xmtpQueueExecutor.ts:122](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/keepr/xmtpQueueExecutor.ts#L122)
+Defined in: [server/keepr/xmtpQueueExecutor.ts:122](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/keepr/xmtpQueueExecutor.ts#L122)
 
 #### Properties
 
@@ -20,31 +20,31 @@ Defined in: [server/keepr/xmtpQueueExecutor.ts:122](https://github.com/wenakita/
 
 > **action**: `Record`\<`string`, `unknown`\>
 
-Defined in: [server/keepr/xmtpQueueExecutor.ts:127](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/keepr/xmtpQueueExecutor.ts#L127)
+Defined in: [server/keepr/xmtpQueueExecutor.ts:127](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/keepr/xmtpQueueExecutor.ts#L127)
 
 ##### actionType?
 
 > `optional` **actionType**: `string` \| `null`
 
-Defined in: [server/keepr/xmtpQueueExecutor.ts:126](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/keepr/xmtpQueueExecutor.ts#L126)
+Defined in: [server/keepr/xmtpQueueExecutor.ts:126](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/keepr/xmtpQueueExecutor.ts#L126)
 
 ##### groupId
 
 > **groupId**: `string`
 
-Defined in: [server/keepr/xmtpQueueExecutor.ts:125](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/keepr/xmtpQueueExecutor.ts#L125)
+Defined in: [server/keepr/xmtpQueueExecutor.ts:125](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/keepr/xmtpQueueExecutor.ts#L125)
 
 ##### id
 
 > **id**: `number`
 
-Defined in: [server/keepr/xmtpQueueExecutor.ts:123](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/keepr/xmtpQueueExecutor.ts#L123)
+Defined in: [server/keepr/xmtpQueueExecutor.ts:123](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/keepr/xmtpQueueExecutor.ts#L123)
 
 ##### vaultAddress
 
 > **vaultAddress**: `string`
 
-Defined in: [server/keepr/xmtpQueueExecutor.ts:124](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/keepr/xmtpQueueExecutor.ts#L124)
+Defined in: [server/keepr/xmtpQueueExecutor.ts:124](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/keepr/xmtpQueueExecutor.ts#L124)
 
 ***
 
@@ -52,7 +52,7 @@ Defined in: [server/keepr/xmtpQueueExecutor.ts:124](https://github.com/wenakita/
 
 > **ExecuteKeeprActionResult** = `object`
 
-Defined in: [server/keepr/xmtpQueueExecutor.ts:130](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/keepr/xmtpQueueExecutor.ts#L130)
+Defined in: [server/keepr/xmtpQueueExecutor.ts:130](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/keepr/xmtpQueueExecutor.ts#L130)
 
 #### Properties
 
@@ -60,31 +60,31 @@ Defined in: [server/keepr/xmtpQueueExecutor.ts:130](https://github.com/wenakita/
 
 > **actionType**: `SupportedActionType` \| `"unknown"`
 
-Defined in: [server/keepr/xmtpQueueExecutor.ts:133](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/keepr/xmtpQueueExecutor.ts#L133)
+Defined in: [server/keepr/xmtpQueueExecutor.ts:133](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/keepr/xmtpQueueExecutor.ts#L133)
 
 ##### details?
 
 > `optional` **details**: `Record`\<`string`, `unknown`\>
 
-Defined in: [server/keepr/xmtpQueueExecutor.ts:135](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/keepr/xmtpQueueExecutor.ts#L135)
+Defined in: [server/keepr/xmtpQueueExecutor.ts:135](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/keepr/xmtpQueueExecutor.ts#L135)
 
 ##### error?
 
 > `optional` **error**: `string`
 
-Defined in: [server/keepr/xmtpQueueExecutor.ts:134](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/keepr/xmtpQueueExecutor.ts#L134)
+Defined in: [server/keepr/xmtpQueueExecutor.ts:134](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/keepr/xmtpQueueExecutor.ts#L134)
 
 ##### retryable
 
 > **retryable**: `boolean`
 
-Defined in: [server/keepr/xmtpQueueExecutor.ts:132](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/keepr/xmtpQueueExecutor.ts#L132)
+Defined in: [server/keepr/xmtpQueueExecutor.ts:132](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/keepr/xmtpQueueExecutor.ts#L132)
 
 ##### success
 
 > **success**: `boolean`
 
-Defined in: [server/keepr/xmtpQueueExecutor.ts:131](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/keepr/xmtpQueueExecutor.ts#L131)
+Defined in: [server/keepr/xmtpQueueExecutor.ts:131](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/keepr/xmtpQueueExecutor.ts#L131)
 
 ## Functions
 
@@ -92,7 +92,7 @@ Defined in: [server/keepr/xmtpQueueExecutor.ts:131](https://github.com/wenakita/
 
 > **executeKeeprAction**(`input`): `Promise`\<[`ExecuteKeeprActionResult`](#executekeepractionresult)\>
 
-Defined in: [server/keepr/xmtpQueueExecutor.ts:944](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/keepr/xmtpQueueExecutor.ts#L944)
+Defined in: [server/keepr/xmtpQueueExecutor.ts:944](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/keepr/xmtpQueueExecutor.ts#L944)
 
 #### Parameters
 

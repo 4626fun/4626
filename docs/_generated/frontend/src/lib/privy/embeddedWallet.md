@@ -12,7 +12,7 @@
 
 > **extractPrivyWalletsFromUser**(`user`): `Record`\<`string`, `unknown`\>[]
 
-Defined in: [src/lib/privy/embeddedWallet.ts:62](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/privy/embeddedWallet.ts#L62)
+Defined in: [src/lib/privy/embeddedWallet.ts:62](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/privy/embeddedWallet.ts#L62)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/lib/privy/embeddedWallet.ts:62](https://github.com/wenakita/462
 
 > **pickPrivyEmbeddedEoaAddressFromUser**(`user`): `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/privy/embeddedWallet.ts:122](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/privy/embeddedWallet.ts#L122)
+Defined in: [src/lib/privy/embeddedWallet.ts:122](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/privy/embeddedWallet.ts#L122)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/privy/embeddedWallet.ts:122](https://github.com/wenakita/46
 
 > **pickPrivyEmbeddedEoaAddressFromWallets**(`wallets`): `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/privy/embeddedWallet.ts:112](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/privy/embeddedWallet.ts#L112)
+Defined in: [src/lib/privy/embeddedWallet.ts:112](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/privy/embeddedWallet.ts#L112)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [src/lib/privy/embeddedWallet.ts:112](https://github.com/wenakita/46
 
 > **useEnsurePrivyEmbeddedWallet**(): `object`
 
-Defined in: [src/lib/privy/embeddedWallet.ts:157](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/privy/embeddedWallet.ts#L157)
+Defined in: [src/lib/privy/embeddedWallet.ts:157](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/privy/embeddedWallet.ts#L157)
 
 #### Returns
 

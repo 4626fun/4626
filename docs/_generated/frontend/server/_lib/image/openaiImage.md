@@ -12,7 +12,7 @@
 
 > **ImageEvaluation** = `object`
 
-Defined in: [server/\_lib/image/openaiImage.ts:6](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/image/openaiImage.ts#L6)
+Defined in: [server/\_lib/image/openaiImage.ts:6](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/openaiImage.ts#L6)
 
 #### Properties
 
@@ -20,55 +20,55 @@ Defined in: [server/\_lib/image/openaiImage.ts:6](https://github.com/wenakita/46
 
 > **brandFit**: `number`
 
-Defined in: [server/\_lib/image/openaiImage.ts:12](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/image/openaiImage.ts#L12)
+Defined in: [server/\_lib/image/openaiImage.ts:12](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/openaiImage.ts#L12)
 
 ##### breakoutApplied?
 
 > `optional` **breakoutApplied**: `boolean`
 
-Defined in: [server/\_lib/image/openaiImage.ts:15](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/image/openaiImage.ts#L15)
+Defined in: [server/\_lib/image/openaiImage.ts:15](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/openaiImage.ts#L15)
 
 ##### cleanliness
 
 > **cleanliness**: `number`
 
-Defined in: [server/\_lib/image/openaiImage.ts:11](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/image/openaiImage.ts#L11)
+Defined in: [server/\_lib/image/openaiImage.ts:11](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/openaiImage.ts#L11)
 
 ##### frameProminence
 
 > **frameProminence**: `number`
 
-Defined in: [server/\_lib/image/openaiImage.ts:8](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/image/openaiImage.ts#L8)
+Defined in: [server/\_lib/image/openaiImage.ts:8](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/openaiImage.ts#L8)
 
 ##### insideFrame
 
 > **insideFrame**: `number`
 
-Defined in: [server/\_lib/image/openaiImage.ts:7](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/image/openaiImage.ts#L7)
+Defined in: [server/\_lib/image/openaiImage.ts:7](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/openaiImage.ts#L7)
 
 ##### modernElegantStyle
 
 > **modernElegantStyle**: `number`
 
-Defined in: [server/\_lib/image/openaiImage.ts:10](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/image/openaiImage.ts#L10)
+Defined in: [server/\_lib/image/openaiImage.ts:10](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/openaiImage.ts#L10)
 
 ##### pass
 
 > **pass**: `boolean`
 
-Defined in: [server/\_lib/image/openaiImage.ts:13](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/image/openaiImage.ts#L13)
+Defined in: [server/\_lib/image/openaiImage.ts:13](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/openaiImage.ts#L13)
 
 ##### reasons
 
 > **reasons**: `string`[]
 
-Defined in: [server/\_lib/image/openaiImage.ts:14](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/image/openaiImage.ts#L14)
+Defined in: [server/\_lib/image/openaiImage.ts:14](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/openaiImage.ts#L14)
 
 ##### subjectProminence
 
 > **subjectProminence**: `number`
 
-Defined in: [server/\_lib/image/openaiImage.ts:9](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/image/openaiImage.ts#L9)
+Defined in: [server/\_lib/image/openaiImage.ts:9](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/openaiImage.ts#L9)
 
 ## Functions
 
@@ -76,7 +76,7 @@ Defined in: [server/\_lib/image/openaiImage.ts:9](https://github.com/wenakita/46
 
 > **buildImageGenerationPrompt**(`input`): `string`
 
-Defined in: [server/\_lib/image/openaiImage.ts:110](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/image/openaiImage.ts#L110)
+Defined in: [server/\_lib/image/openaiImage.ts:110](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/openaiImage.ts#L110)
 
 #### Parameters
 
@@ -108,7 +108,7 @@ Defined in: [server/\_lib/image/openaiImage.ts:110](https://github.com/wenakita/
 
 > **evaluateImageGenerationOutput**(`params`): `Promise`\<[`ImageEvaluation`](#imageevaluation)\>
 
-Defined in: [server/\_lib/image/openaiImage.ts:215](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/image/openaiImage.ts#L215)
+Defined in: [server/\_lib/image/openaiImage.ts:215](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/openaiImage.ts#L215)
 
 #### Parameters
 
@@ -126,7 +126,7 @@ Defined in: [server/\_lib/image/openaiImage.ts:215](https://github.com/wenakita/
 
 > **generateImageWithOpenAi**(`params`): `Promise`\<\{ `imageBytes`: `Uint8Array`; `responseId`: `string`; `revisedPrompt`: `string` \| `null`; \}\>
 
-Defined in: [server/\_lib/image/openaiImage.ts:143](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/image/openaiImage.ts#L143)
+Defined in: [server/\_lib/image/openaiImage.ts:143](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/openaiImage.ts#L143)
 
 #### Parameters
 
@@ -144,7 +144,7 @@ Defined in: [server/\_lib/image/openaiImage.ts:143](https://github.com/wenakita/
 
 > **getRetryReasonsFromEvaluation**(`evaluation`): `string`[]
 
-Defined in: [server/\_lib/image/openaiImage.ts:254](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/image/openaiImage.ts#L254)
+Defined in: [server/\_lib/image/openaiImage.ts:254](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/openaiImage.ts#L254)
 
 #### Parameters
 
@@ -162,7 +162,7 @@ Defined in: [server/\_lib/image/openaiImage.ts:254](https://github.com/wenakita/
 
 > **shouldRunImageEvaluation**(): `boolean`
 
-Defined in: [server/\_lib/image/openaiImage.ts:57](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/image/openaiImage.ts#L57)
+Defined in: [server/\_lib/image/openaiImage.ts:57](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/openaiImage.ts#L57)
 
 #### Returns
 

@@ -12,7 +12,7 @@
 
 > **TokenAnalysisResultType** = *typeof* [`TOKEN_ANALYSIS_RESULT_ORDER`](#token_analysis_result_order)\[`number`\] \| `"unresolved"`
 
-Defined in: [api/\_handlers/telegram/webhook/inlineTokenFormatting.ts:21](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/inlineTokenFormatting.ts#L21)
+Defined in: [api/\_handlers/telegram/webhook/inlineTokenFormatting.ts:21](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/telegram/webhook/inlineTokenFormatting.ts#L21)
 
 ## Variables
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/telegram/webhook/inlineTokenFormatting.ts:21](https:
 
 > `const` **TOKEN\_ANALYSIS\_RESULT\_ORDER**: readonly \[`"snapshot"`, `"catchup"`, `"risk"`, `"holders"`, `"flow"`, `"conviction"`, `"vault"`\]
 
-Defined in: [api/\_handlers/telegram/webhook/inlineTokenFormatting.ts:11](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/inlineTokenFormatting.ts#L11)
+Defined in: [api/\_handlers/telegram/webhook/inlineTokenFormatting.ts:11](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/telegram/webhook/inlineTokenFormatting.ts#L11)
 
 ## Functions
 
@@ -28,7 +28,7 @@ Defined in: [api/\_handlers/telegram/webhook/inlineTokenFormatting.ts:11](https:
 
 > **buildInlineTokenAnalysisAnswer**(`params`): [`InlineQueryAnswer`](parsers/inline.md#inlinequeryanswer)
 
-Defined in: [api/\_handlers/telegram/webhook/inlineTokenFormatting.ts:605](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/inlineTokenFormatting.ts#L605)
+Defined in: [api/\_handlers/telegram/webhook/inlineTokenFormatting.ts:605](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/telegram/webhook/inlineTokenFormatting.ts#L605)
 
 #### Parameters
 
@@ -52,7 +52,7 @@ Defined in: [api/\_handlers/telegram/webhook/inlineTokenFormatting.ts:605](https
 
 > **parseTokenAnalysisResultId**(`resultId`): \{ `address`: `` `0x${string}` ``; `rankPosition`: `number` \| `null`; `resultType`: [`TokenAnalysisResultType`](#tokenanalysisresulttype); \} \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/inlineTokenFormatting.ts:174](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/inlineTokenFormatting.ts#L174)
+Defined in: [api/\_handlers/telegram/webhook/inlineTokenFormatting.ts:174](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/telegram/webhook/inlineTokenFormatting.ts#L174)
 
 #### Parameters
 
@@ -70,7 +70,7 @@ Defined in: [api/\_handlers/telegram/webhook/inlineTokenFormatting.ts:174](https
 
 > **renderCatchUpMessage**(`token`): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/inlineTokenFormatting.ts:454](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/inlineTokenFormatting.ts#L454)
+Defined in: [api/\_handlers/telegram/webhook/inlineTokenFormatting.ts:454](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/telegram/webhook/inlineTokenFormatting.ts#L454)
 
 #### Parameters
 
@@ -88,7 +88,7 @@ Defined in: [api/\_handlers/telegram/webhook/inlineTokenFormatting.ts:454](https
 
 > **renderRiskMessage**(`token`): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/inlineTokenFormatting.ts:467](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/inlineTokenFormatting.ts#L467)
+Defined in: [api/\_handlers/telegram/webhook/inlineTokenFormatting.ts:467](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/telegram/webhook/inlineTokenFormatting.ts#L467)
 
 #### Parameters
 
@@ -106,7 +106,7 @@ Defined in: [api/\_handlers/telegram/webhook/inlineTokenFormatting.ts:467](https
 
 > **renderTokenSnapshotMessage**(`token`, `nowMs`): `string`
 
-Defined in: [api/\_handlers/telegram/webhook/inlineTokenFormatting.ts:424](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/inlineTokenFormatting.ts#L424)
+Defined in: [api/\_handlers/telegram/webhook/inlineTokenFormatting.ts:424](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/telegram/webhook/inlineTokenFormatting.ts#L424)
 
 #### Parameters
 

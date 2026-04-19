@@ -10,7 +10,7 @@
 
 ### EpochInfo
 
-Defined in: [src/hooks/useVaultGaugeVoting.ts:51](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useVaultGaugeVoting.ts#L51)
+Defined in: [src/hooks/useVaultGaugeVoting.ts:51](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/useVaultGaugeVoting.ts#L51)
 
 #### Properties
 
@@ -18,37 +18,37 @@ Defined in: [src/hooks/useVaultGaugeVoting.ts:51](https://github.com/wenakita/46
 
 > **currentEpoch**: `number`
 
-Defined in: [src/hooks/useVaultGaugeVoting.ts:52](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useVaultGaugeVoting.ts#L52)
+Defined in: [src/hooks/useVaultGaugeVoting.ts:52](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/useVaultGaugeVoting.ts#L52)
 
 ##### epochDuration
 
 > **epochDuration**: `number`
 
-Defined in: [src/hooks/useVaultGaugeVoting.ts:56](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useVaultGaugeVoting.ts#L56)
+Defined in: [src/hooks/useVaultGaugeVoting.ts:56](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/useVaultGaugeVoting.ts#L56)
 
 ##### epochEndTime
 
 > **epochEndTime**: `Date`
 
-Defined in: [src/hooks/useVaultGaugeVoting.ts:54](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useVaultGaugeVoting.ts#L54)
+Defined in: [src/hooks/useVaultGaugeVoting.ts:54](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/useVaultGaugeVoting.ts#L54)
 
 ##### epochStartTime
 
 > **epochStartTime**: `Date`
 
-Defined in: [src/hooks/useVaultGaugeVoting.ts:53](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useVaultGaugeVoting.ts#L53)
+Defined in: [src/hooks/useVaultGaugeVoting.ts:53](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/useVaultGaugeVoting.ts#L53)
 
 ##### timeRemaining
 
 > **timeRemaining**: `number`
 
-Defined in: [src/hooks/useVaultGaugeVoting.ts:55](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useVaultGaugeVoting.ts#L55)
+Defined in: [src/hooks/useVaultGaugeVoting.ts:55](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/useVaultGaugeVoting.ts#L55)
 
 ***
 
 ### VaultVote
 
-Defined in: [src/hooks/useVaultGaugeVoting.ts:45](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useVaultGaugeVoting.ts#L45)
+Defined in: [src/hooks/useVaultGaugeVoting.ts:45](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/useVaultGaugeVoting.ts#L45)
 
 #### Properties
 
@@ -56,25 +56,25 @@ Defined in: [src/hooks/useVaultGaugeVoting.ts:45](https://github.com/wenakita/46
 
 > **vault**: `string`
 
-Defined in: [src/hooks/useVaultGaugeVoting.ts:46](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useVaultGaugeVoting.ts#L46)
+Defined in: [src/hooks/useVaultGaugeVoting.ts:46](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/useVaultGaugeVoting.ts#L46)
 
 ##### weight
 
 > **weight**: `bigint`
 
-Defined in: [src/hooks/useVaultGaugeVoting.ts:47](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useVaultGaugeVoting.ts#L47)
+Defined in: [src/hooks/useVaultGaugeVoting.ts:47](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/useVaultGaugeVoting.ts#L47)
 
 ##### weightBps
 
 > **weightBps**: `number`
 
-Defined in: [src/hooks/useVaultGaugeVoting.ts:48](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useVaultGaugeVoting.ts#L48)
+Defined in: [src/hooks/useVaultGaugeVoting.ts:48](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/useVaultGaugeVoting.ts#L48)
 
 ***
 
 ### VotingPowerInfo
 
-Defined in: [src/hooks/useVaultGaugeVoting.ts:59](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useVaultGaugeVoting.ts#L59)
+Defined in: [src/hooks/useVaultGaugeVoting.ts:59](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/useVaultGaugeVoting.ts#L59)
 
 #### Properties
 
@@ -82,25 +82,25 @@ Defined in: [src/hooks/useVaultGaugeVoting.ts:59](https://github.com/wenakita/46
 
 > **hasActiveLock**: `boolean`
 
-Defined in: [src/hooks/useVaultGaugeVoting.ts:62](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useVaultGaugeVoting.ts#L62)
+Defined in: [src/hooks/useVaultGaugeVoting.ts:62](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/useVaultGaugeVoting.ts#L62)
 
 ##### remainingLockTime
 
 > **remainingLockTime**: `number`
 
-Defined in: [src/hooks/useVaultGaugeVoting.ts:63](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useVaultGaugeVoting.ts#L63)
+Defined in: [src/hooks/useVaultGaugeVoting.ts:63](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/useVaultGaugeVoting.ts#L63)
 
 ##### totalPower
 
 > **totalPower**: `bigint`
 
-Defined in: [src/hooks/useVaultGaugeVoting.ts:61](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useVaultGaugeVoting.ts#L61)
+Defined in: [src/hooks/useVaultGaugeVoting.ts:61](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/useVaultGaugeVoting.ts#L61)
 
 ##### userPower
 
 > **userPower**: `bigint`
 
-Defined in: [src/hooks/useVaultGaugeVoting.ts:60](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useVaultGaugeVoting.ts#L60)
+Defined in: [src/hooks/useVaultGaugeVoting.ts:60](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/useVaultGaugeVoting.ts#L60)
 
 ## Functions
 
@@ -108,7 +108,7 @@ Defined in: [src/hooks/useVaultGaugeVoting.ts:60](https://github.com/wenakita/46
 
 > **formatVotingPower**(`power`, `decimals`): `string`
 
-Defined in: [src/hooks/useVaultGaugeVoting.ts:318](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useVaultGaugeVoting.ts#L318)
+Defined in: [src/hooks/useVaultGaugeVoting.ts:318](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/useVaultGaugeVoting.ts#L318)
 
 #### Parameters
 
@@ -130,7 +130,7 @@ Defined in: [src/hooks/useVaultGaugeVoting.ts:318](https://github.com/wenakita/4
 
 > **useTimeRemaining**(`seconds`): `string`
 
-Defined in: [src/hooks/useVaultGaugeVoting.ts:299](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useVaultGaugeVoting.ts#L299)
+Defined in: [src/hooks/useVaultGaugeVoting.ts:299](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/useVaultGaugeVoting.ts#L299)
 
 #### Parameters
 
@@ -148,7 +148,7 @@ Defined in: [src/hooks/useVaultGaugeVoting.ts:299](https://github.com/wenakita/4
 
 > **useVaultGaugeVoting**(`__namedParameters`): `object`
 
-Defined in: [src/hooks/useVaultGaugeVoting.ts:71](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useVaultGaugeVoting.ts#L71)
+Defined in: [src/hooks/useVaultGaugeVoting.ts:71](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/useVaultGaugeVoting.ts#L71)
 
 #### Parameters
 

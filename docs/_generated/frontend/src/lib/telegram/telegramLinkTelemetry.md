@@ -12,7 +12,7 @@
 
 > **createTelegramLinkFlowId**(): `string`
 
-Defined in: [src/lib/telegram/telegramLinkTelemetry.ts:25](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/telegram/telegramLinkTelemetry.ts#L25)
+Defined in: [src/lib/telegram/telegramLinkTelemetry.ts:25](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/telegram/telegramLinkTelemetry.ts#L25)
 
 #### Returns
 
@@ -24,7 +24,7 @@ Defined in: [src/lib/telegram/telegramLinkTelemetry.ts:25](https://github.com/we
 
 > **resetTelegramLinkTelemetryDeduper**(): `void`
 
-Defined in: [src/lib/telegram/telegramLinkTelemetry.ts:58](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/telegram/telegramLinkTelemetry.ts#L58)
+Defined in: [src/lib/telegram/telegramLinkTelemetry.ts:58](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/telegram/telegramLinkTelemetry.ts#L58)
 
 #### Returns
 
@@ -36,7 +36,7 @@ Defined in: [src/lib/telegram/telegramLinkTelemetry.ts:58](https://github.com/we
 
 > **trackTelegramLinkTelemetryEvent**(`input`): `void`
 
-Defined in: [src/lib/telegram/telegramLinkTelemetry.ts:62](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/telegram/telegramLinkTelemetry.ts#L62)
+Defined in: [src/lib/telegram/telegramLinkTelemetry.ts:62](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/telegram/telegramLinkTelemetry.ts#L62)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > `const` **BASE\_EASE**: readonly \[`0.4`, `0`, `0.2`, `1`\]
 
-Defined in: [src/components/brand/motion.ts:14](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/brand/motion.ts#L14)
+Defined in: [src/components/brand/motion.ts:14](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/brand/motion.ts#L14)
 
 Base brand motion constants.
 
@@ -31,7 +31,7 @@ Duration targets:
 
 > `const` **BASE\_EASE\_CSS**: `"cubic-bezier(0.4, 0, 0.2, 1)"` = `'cubic-bezier(0.4, 0, 0.2, 1)'`
 
-Defined in: [src/components/brand/motion.ts:25](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/brand/motion.ts#L25)
+Defined in: [src/components/brand/motion.ts:25](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/brand/motion.ts#L25)
 
 ***
 
@@ -39,7 +39,7 @@ Defined in: [src/components/brand/motion.ts:25](https://github.com/wenakita/4626
 
 > `const` **DURATION**: `object`
 
-Defined in: [src/components/brand/motion.ts:16](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/brand/motion.ts#L16)
+Defined in: [src/components/brand/motion.ts:16](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/brand/motion.ts#L16)
 
 #### Type Declaration
 
@@ -65,4 +65,4 @@ Defined in: [src/components/brand/motion.ts:16](https://github.com/wenakita/4626
 
 > `const` **STAGGER\_STEP**: `0.06` = `0.06`
 
-Defined in: [src/components/brand/motion.ts:23](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/brand/motion.ts#L23)
+Defined in: [src/components/brand/motion.ts:23](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/brand/motion.ts#L23)

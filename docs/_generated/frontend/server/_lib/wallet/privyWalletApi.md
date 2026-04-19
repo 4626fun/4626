@@ -12,7 +12,7 @@
 
 > **Caip2** = `` `eip155:${number}` ``
 
-Defined in: [server/\_lib/wallet/privyWalletApi.ts:18](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyWalletApi.ts#L18)
+Defined in: [server/\_lib/wallet/privyWalletApi.ts:18](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyWalletApi.ts#L18)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/wallet/privyWalletApi.ts:18](https://github.com/wenaki
 
 > **PrivyWalletFull** = `object`
 
-Defined in: [server/\_lib/wallet/privyWalletApi.ts:269](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyWalletApi.ts#L269)
+Defined in: [server/\_lib/wallet/privyWalletApi.ts:269](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyWalletApi.ts#L269)
 
 Full Privy wallet record including delegation state.
 Returned by GET /v1/wallets/{id}.
@@ -31,37 +31,37 @@ Returned by GET /v1/wallets/{id}.
 
 > **additional\_signers**: (\{ `id?`: `string`; `signer_id?`: `string`; \} \| `string`)[]
 
-Defined in: [server/\_lib/wallet/privyWalletApi.ts:273](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyWalletApi.ts#L273)
+Defined in: [server/\_lib/wallet/privyWalletApi.ts:273](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyWalletApi.ts#L273)
 
 ##### address
 
 > **address**: `string`
 
-Defined in: [server/\_lib/wallet/privyWalletApi.ts:271](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyWalletApi.ts#L271)
+Defined in: [server/\_lib/wallet/privyWalletApi.ts:271](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyWalletApi.ts#L271)
 
 ##### chain\_type
 
 > **chain\_type**: `"ethereum"` \| `string`
 
-Defined in: [server/\_lib/wallet/privyWalletApi.ts:272](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyWalletApi.ts#L272)
+Defined in: [server/\_lib/wallet/privyWalletApi.ts:272](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyWalletApi.ts#L272)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [server/\_lib/wallet/privyWalletApi.ts:270](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyWalletApi.ts#L270)
+Defined in: [server/\_lib/wallet/privyWalletApi.ts:270](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyWalletApi.ts#L270)
 
 ##### owner\_id
 
 > **owner\_id**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/privyWalletApi.ts:274](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyWalletApi.ts#L274)
+Defined in: [server/\_lib/wallet/privyWalletApi.ts:274](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyWalletApi.ts#L274)
 
 ##### policy\_ids
 
 > **policy\_ids**: `string`[]
 
-Defined in: [server/\_lib/wallet/privyWalletApi.ts:275](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyWalletApi.ts#L275)
+Defined in: [server/\_lib/wallet/privyWalletApi.ts:275](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyWalletApi.ts#L275)
 
 ## Variables
 
@@ -69,7 +69,7 @@ Defined in: [server/\_lib/wallet/privyWalletApi.ts:275](https://github.com/wenak
 
 > `const` **BASE\_CAIP2**: `"eip155:8453"`
 
-Defined in: [server/\_lib/wallet/privyWalletApi.ts:17](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyWalletApi.ts#L17)
+Defined in: [server/\_lib/wallet/privyWalletApi.ts:17](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyWalletApi.ts#L17)
 
 CAIP-2 chain identifiers for Privy wallet RPC calls.
 
@@ -85,7 +85,7 @@ Docs: https://docs.privy.io/api-reference/wallets/ethereum/eth-send-transaction
 
 > **createAgentWallet**(`params?`): `Promise`\<\{ `address`: `` `0x${string}` ``; `walletId`: `string`; \}\>
 
-Defined in: [server/\_lib/wallet/privyWalletApi.ts:183](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyWalletApi.ts#L183)
+Defined in: [server/\_lib/wallet/privyWalletApi.ts:183](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyWalletApi.ts#L183)
 
 #### Parameters
 
@@ -105,7 +105,7 @@ Defined in: [server/\_lib/wallet/privyWalletApi.ts:183](https://github.com/wenak
 
 > **fetchPrivyWalletFull**(`walletId`): `Promise`\<[`PrivyWalletFull`](#privywalletfull) \| `null`\>
 
-Defined in: [server/\_lib/wallet/privyWalletApi.ts:283](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyWalletApi.ts#L283)
+Defined in: [server/\_lib/wallet/privyWalletApi.ts:283](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyWalletApi.ts#L283)
 
 Fetch the full Privy wallet record for `walletId`, including
 `additional_signers` which is needed to verify delegation quorum membership.
@@ -127,7 +127,7 @@ Returns null if Privy responds with 404 (wallet not found).
 
 > **getWalletById**(`walletId`): `Promise`\<\{ `address`: `` `0x${string}` ``; `walletId`: `string`; \}\>
 
-Defined in: [server/\_lib/wallet/privyWalletApi.ts:205](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyWalletApi.ts#L205)
+Defined in: [server/\_lib/wallet/privyWalletApi.ts:205](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyWalletApi.ts#L205)
 
 #### Parameters
 
@@ -145,7 +145,7 @@ Defined in: [server/\_lib/wallet/privyWalletApi.ts:205](https://github.com/wenak
 
 > **secp256k1SignHash**(`params`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [server/\_lib/wallet/privyWalletApi.ts:311](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyWalletApi.ts#L311)
+Defined in: [server/\_lib/wallet/privyWalletApi.ts:311](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyWalletApi.ts#L311)
 
 #### Parameters
 
@@ -173,7 +173,7 @@ Defined in: [server/\_lib/wallet/privyWalletApi.ts:311](https://github.com/wenak
 
 > **walletRpc**\<`T`\>(`params`): `Promise`\<`T`\>
 
-Defined in: [server/\_lib/wallet/privyWalletApi.ts:214](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/privyWalletApi.ts#L214)
+Defined in: [server/\_lib/wallet/privyWalletApi.ts:214](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/privyWalletApi.ts#L214)
 
 #### Type Parameters
 

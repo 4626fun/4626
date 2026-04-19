@@ -12,7 +12,7 @@
 
 > **WaitlistPointSource** = `"waitlist_signup"` \| `"csw_link"` \| `"referral_signup"` \| `"referral_csw_link"` \| `"referral_qualified"` \| `"referral_passthrough"` \| `"social_base_app"` \| `"social_zora"` \| `"social_x"` \| `"social_discord"` \| `"social_telegram"` \| `"bonus_github"` \| `"bonus_tiktok"` \| `"bonus_instagram"` \| `"bonus_reddit"` \| `"agent_feedback"` \| `"agent_reputation"` \| `"lens_identity"` \| `"grove_proof"` \| `"task"`
 
-Defined in: [server/\_lib/onboarding/waitlistPoints.ts:54](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onboarding/waitlistPoints.ts#L54)
+Defined in: [server/\_lib/onboarding/waitlistPoints.ts:54](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistPoints.ts#L54)
 
 ## Variables
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/onboarding/waitlistPoints.ts:54](https://github.com/we
 
 > `const` **REFERRAL\_PASSTHROUGH\_FRACTION**: `0.5`
 
-Defined in: [server/\_lib/onboarding/waitlistPoints.ts:110](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onboarding/waitlistPoints.ts#L110)
+Defined in: [server/\_lib/onboarding/waitlistPoints.ts:110](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistPoints.ts#L110)
 
 Fraction of a referee's earned points that mirrors to the referrer.
 
@@ -30,7 +30,7 @@ Fraction of a referee's earned points that mirrors to the referrer.
 
 > `const` **WAITLIST\_POINTS**: `object`
 
-Defined in: [server/\_lib/onboarding/waitlistPoints.ts:17](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onboarding/waitlistPoints.ts#L17)
+Defined in: [server/\_lib/onboarding/waitlistPoints.ts:17](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistPoints.ts#L17)
 
 #### Type Declaration
 
@@ -112,7 +112,7 @@ Defined in: [server/\_lib/onboarding/waitlistPoints.ts:17](https://github.com/we
 
 > **awardWaitlistPoints**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/onboarding/waitlistPoints.ts:202](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onboarding/waitlistPoints.ts#L202)
+Defined in: [server/\_lib/onboarding/waitlistPoints.ts:202](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistPoints.ts#L202)
 
 #### Parameters
 
@@ -148,7 +148,7 @@ Defined in: [server/\_lib/onboarding/waitlistPoints.ts:202](https://github.com/w
 
 > **buildPassthroughSourceKey**(`refereeSignupId`, `originalSource`, `originalSourceId`): `string`
 
-Defined in: [server/\_lib/onboarding/waitlistPoints.ts:281](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onboarding/waitlistPoints.ts#L281)
+Defined in: [server/\_lib/onboarding/waitlistPoints.ts:281](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistPoints.ts#L281)
 
 Build a collision-safe `source_id` for a passthrough row. If the natural
  composite key fits in the column, use it verbatim. Otherwise keep a
@@ -179,7 +179,7 @@ Build a collision-safe `source_id` for a passthrough row. If the natural
 
 > **ensureWaitlistPointsSchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/onboarding/waitlistPoints.ts:140](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onboarding/waitlistPoints.ts#L140)
+Defined in: [server/\_lib/onboarding/waitlistPoints.ts:140](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistPoints.ts#L140)
 
 #### Parameters
 
@@ -197,7 +197,7 @@ Defined in: [server/\_lib/onboarding/waitlistPoints.ts:140](https://github.com/w
 
 > **isWaitlistPointSource**(`value`): `value is WaitlistPointSource`
 
-Defined in: [server/\_lib/onboarding/waitlistPoints.ts:136](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onboarding/waitlistPoints.ts#L136)
+Defined in: [server/\_lib/onboarding/waitlistPoints.ts:136](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistPoints.ts#L136)
 
 #### Parameters
 
@@ -215,7 +215,7 @@ Defined in: [server/\_lib/onboarding/waitlistPoints.ts:136](https://github.com/w
 
 > **recordReferralPassthrough**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/onboarding/waitlistPoints.ts:326](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onboarding/waitlistPoints.ts#L326)
+Defined in: [server/\_lib/onboarding/waitlistPoints.ts:326](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistPoints.ts#L326)
 
 Credit a referrer with 50% of the points a referee just earned.
 

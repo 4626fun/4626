@@ -12,7 +12,7 @@
 
 > **getStringQuery**(`req`, `key`): `string` \| `null`
 
-Defined in: [server/debank/\_shared.ts:29](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/debank/_shared.ts#L29)
+Defined in: [server/debank/\_shared.ts:29](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/debank/_shared.ts#L29)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [server/debank/\_shared.ts:29](https://github.com/wenakita/4626/blob
 
 > **getTrustedClientIp**(`req`): `string`
 
-Defined in: [server/debank/\_shared.ts:58](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/debank/_shared.ts#L58)
+Defined in: [server/debank/\_shared.ts:58](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/debank/_shared.ts#L58)
 
 Resolve the client IP using trusted proxy headers first.
 
@@ -58,7 +58,7 @@ rate-limit key spoofing. Local dev can still fall back to `x-forwarded-for`.
 
 > **handleOptions**(`req`, `res`): `boolean`
 
-Defined in: [server/debank/\_shared.ts:10](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/debank/_shared.ts#L10)
+Defined in: [server/debank/\_shared.ts:10](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/debank/_shared.ts#L10)
 
 #### Parameters
 
@@ -80,7 +80,7 @@ Defined in: [server/debank/\_shared.ts:10](https://github.com/wenakita/4626/blob
 
 > **isAddressLike**(`value`): `boolean`
 
-Defined in: [server/debank/\_shared.ts:35](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/debank/_shared.ts#L35)
+Defined in: [server/debank/\_shared.ts:35](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/debank/_shared.ts#L35)
 
 #### Parameters
 
@@ -98,7 +98,7 @@ Defined in: [server/debank/\_shared.ts:35](https://github.com/wenakita/4626/blob
 
 > **requireDebankAccessKey**(): `string` \| `null`
 
-Defined in: [server/debank/\_shared.ts:23](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/debank/_shared.ts#L23)
+Defined in: [server/debank/\_shared.ts:23](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/debank/_shared.ts#L23)
 
 #### Returns
 
@@ -110,7 +110,7 @@ Defined in: [server/debank/\_shared.ts:23](https://github.com/wenakita/4626/blob
 
 > **setCache**(`res`, `seconds`): `void`
 
-Defined in: [server/debank/\_shared.ts:19](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/debank/_shared.ts#L19)
+Defined in: [server/debank/\_shared.ts:19](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/debank/_shared.ts#L19)
 
 #### Parameters
 
@@ -132,7 +132,7 @@ Defined in: [server/debank/\_shared.ts:19](https://github.com/wenakita/4626/blob
 
 > **setCors**(`req`, `res`): `void`
 
-Defined in: [server/debank/\_shared.ts:6](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/debank/_shared.ts#L6)
+Defined in: [server/debank/\_shared.ts:6](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/debank/_shared.ts#L6)
 
 #### Parameters
 

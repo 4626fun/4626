@@ -12,7 +12,7 @@
 
 > **TxMethod** = `"wallet_sendCalls"` \| `"eth_sendUserOperation"` \| `"walletClient.sendTransaction"` \| `"eth_sendTransaction"`
 
-Defined in: [src/lib/tx/txRouter.ts:37](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L37)
+Defined in: [src/lib/tx/txRouter.ts:37](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L37)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/tx/txRouter.ts:37](https://github.com/wenakita/4626/blob/07
 
 > **TxRouterContext** = `object`
 
-Defined in: [src/lib/tx/txRouter.ts:43](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L43)
+Defined in: [src/lib/tx/txRouter.ts:43](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L43)
 
 #### Properties
 
@@ -28,37 +28,37 @@ Defined in: [src/lib/tx/txRouter.ts:43](https://github.com/wenakita/4626/blob/07
 
 > **canonicalAddress**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/tx/txRouter.ts:48](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L48)
+Defined in: [src/lib/tx/txRouter.ts:48](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L48)
 
 ##### capabilities?
 
 > `optional` **capabilities**: [`AccountCapabilities`](../../wallet/accountContext/types.md#accountcapabilities) \| `null`
 
-Defined in: [src/lib/tx/txRouter.ts:54](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L54)
+Defined in: [src/lib/tx/txRouter.ts:54](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L54)
 
 ##### chainId
 
 > **chainId**: `number`
 
-Defined in: [src/lib/tx/txRouter.ts:44](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L44)
+Defined in: [src/lib/tx/txRouter.ts:44](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L44)
 
 ##### connectorId?
 
 > `optional` **connectorId**: `string` \| `null`
 
-Defined in: [src/lib/tx/txRouter.ts:52](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L52)
+Defined in: [src/lib/tx/txRouter.ts:52](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L52)
 
 ##### connectorName?
 
 > `optional` **connectorName**: `string` \| `null`
 
-Defined in: [src/lib/tx/txRouter.ts:53](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L53)
+Defined in: [src/lib/tx/txRouter.ts:53](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L53)
 
 ##### debug()?
 
 > `optional` **debug**: (`event`) => `void`
 
-Defined in: [src/lib/tx/txRouter.ts:55](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L55)
+Defined in: [src/lib/tx/txRouter.ts:55](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L55)
 
 ###### Parameters
 
@@ -74,37 +74,37 @@ Defined in: [src/lib/tx/txRouter.ts:55](https://github.com/wenakita/4626/blob/07
 
 > **executionAddress**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/tx/txRouter.ts:50](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L50)
+Defined in: [src/lib/tx/txRouter.ts:50](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L50)
 
 ##### executionMode
 
 > **executionMode**: `"canonical"` \| `"eoa"`
 
-Defined in: [src/lib/tx/txRouter.ts:45](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L45)
+Defined in: [src/lib/tx/txRouter.ts:45](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L45)
 
 ##### publicClient
 
 > **publicClient**: `unknown`
 
-Defined in: [src/lib/tx/txRouter.ts:47](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L47)
+Defined in: [src/lib/tx/txRouter.ts:47](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L47)
 
 ##### signerAddress
 
 > **signerAddress**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/tx/txRouter.ts:49](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L49)
+Defined in: [src/lib/tx/txRouter.ts:49](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L49)
 
 ##### signerType?
 
 > `optional` **signerType**: [`SignerType`](../../wallet/accountContext/types.md#signertype-1)
 
-Defined in: [src/lib/tx/txRouter.ts:51](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L51)
+Defined in: [src/lib/tx/txRouter.ts:51](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L51)
 
 ##### walletClient
 
 > **walletClient**: `unknown`
 
-Defined in: [src/lib/tx/txRouter.ts:46](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L46)
+Defined in: [src/lib/tx/txRouter.ts:46](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L46)
 
 ***
 
@@ -112,7 +112,7 @@ Defined in: [src/lib/tx/txRouter.ts:46](https://github.com/wenakita/4626/blob/07
 
 > **TxRouterDebugEvent** = `object`
 
-Defined in: [src/lib/tx/txRouter.ts:66](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L66)
+Defined in: [src/lib/tx/txRouter.ts:66](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L66)
 
 #### Properties
 
@@ -120,91 +120,91 @@ Defined in: [src/lib/tx/txRouter.ts:66](https://github.com/wenakita/4626/blob/07
 
 > `optional` **callsId**: `string` \| `null`
 
-Defined in: [src/lib/tx/txRouter.ts:80](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L80)
+Defined in: [src/lib/tx/txRouter.ts:80](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L80)
 
 ##### callTargets
 
 > **callTargets**: `string`[]
 
-Defined in: [src/lib/tx/txRouter.ts:73](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L73)
+Defined in: [src/lib/tx/txRouter.ts:73](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L73)
 
 ##### chainId
 
 > **chainId**: `number`
 
-Defined in: [src/lib/tx/txRouter.ts:71](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L71)
+Defined in: [src/lib/tx/txRouter.ts:71](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L71)
 
 ##### connectorId?
 
 > `optional` **connectorId**: `string` \| `null`
 
-Defined in: [src/lib/tx/txRouter.ts:75](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L75)
+Defined in: [src/lib/tx/txRouter.ts:75](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L75)
 
 ##### connectorName?
 
 > `optional` **connectorName**: `string` \| `null`
 
-Defined in: [src/lib/tx/txRouter.ts:76](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L76)
+Defined in: [src/lib/tx/txRouter.ts:76](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L76)
 
 ##### error?
 
 > `optional` **error**: `string`
 
-Defined in: [src/lib/tx/txRouter.ts:81](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L81)
+Defined in: [src/lib/tx/txRouter.ts:81](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L81)
 
 ##### event
 
 > **event**: `"route_selected"` \| `"send_attempt"` \| `"send_success"` \| `"send_error"` \| `"send_fallback"`
 
-Defined in: [src/lib/tx/txRouter.ts:67](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L67)
+Defined in: [src/lib/tx/txRouter.ts:67](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L67)
 
 ##### fallbackMode?
 
 > `optional` **fallbackMode**: [`TxSendMode`](#txsendmode)
 
-Defined in: [src/lib/tx/txRouter.ts:69](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L69)
+Defined in: [src/lib/tx/txRouter.ts:69](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L69)
 
 ##### method?
 
 > `optional` **method**: [`TxMethod`](#txmethod)
 
-Defined in: [src/lib/tx/txRouter.ts:70](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L70)
+Defined in: [src/lib/tx/txRouter.ts:70](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L70)
 
 ##### mode
 
 > **mode**: [`TxSendMode`](#txsendmode)
 
-Defined in: [src/lib/tx/txRouter.ts:68](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L68)
+Defined in: [src/lib/tx/txRouter.ts:68](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L68)
 
 ##### reason?
 
 > `optional` **reason**: `string`
 
-Defined in: [src/lib/tx/txRouter.ts:74](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L74)
+Defined in: [src/lib/tx/txRouter.ts:74](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L74)
 
 ##### sender
 
 > **sender**: `string` \| `null`
 
-Defined in: [src/lib/tx/txRouter.ts:72](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L72)
+Defined in: [src/lib/tx/txRouter.ts:72](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L72)
 
 ##### smartWalletDetected?
 
 > `optional` **smartWalletDetected**: `boolean`
 
-Defined in: [src/lib/tx/txRouter.ts:77](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L77)
+Defined in: [src/lib/tx/txRouter.ts:77](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L77)
 
 ##### supportsSendCallsHint?
 
 > `optional` **supportsSendCallsHint**: `boolean`
 
-Defined in: [src/lib/tx/txRouter.ts:78](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L78)
+Defined in: [src/lib/tx/txRouter.ts:78](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L78)
 
 ##### txHash?
 
 > `optional` **txHash**: `string` \| `null`
 
-Defined in: [src/lib/tx/txRouter.ts:79](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L79)
+Defined in: [src/lib/tx/txRouter.ts:79](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L79)
 
 ***
 
@@ -212,7 +212,7 @@ Defined in: [src/lib/tx/txRouter.ts:79](https://github.com/wenakita/4626/blob/07
 
 > **TxRouterSendResult** = `object`
 
-Defined in: [src/lib/tx/txRouter.ts:84](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L84)
+Defined in: [src/lib/tx/txRouter.ts:84](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L84)
 
 #### Properties
 
@@ -220,37 +220,37 @@ Defined in: [src/lib/tx/txRouter.ts:84](https://github.com/wenakita/4626/blob/07
 
 > **callsId**: `string` \| `null`
 
-Defined in: [src/lib/tx/txRouter.ts:89](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L89)
+Defined in: [src/lib/tx/txRouter.ts:89](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L89)
 
 ##### method
 
 > **method**: [`TxMethod`](#txmethod)
 
-Defined in: [src/lib/tx/txRouter.ts:86](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L86)
+Defined in: [src/lib/tx/txRouter.ts:86](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L86)
 
 ##### mode
 
 > **mode**: [`TxSendMode`](#txsendmode)
 
-Defined in: [src/lib/tx/txRouter.ts:85](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L85)
+Defined in: [src/lib/tx/txRouter.ts:85](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L85)
 
 ##### sender
 
 > **sender**: `` `0x${string}` `` \| `null`
 
-Defined in: [src/lib/tx/txRouter.ts:87](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L87)
+Defined in: [src/lib/tx/txRouter.ts:87](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L87)
 
 ##### transactionHash
 
 > **transactionHash**: `string` \| `null`
 
-Defined in: [src/lib/tx/txRouter.ts:88](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L88)
+Defined in: [src/lib/tx/txRouter.ts:88](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L88)
 
 ##### txHashes
 
 > **txHashes**: `string`[]
 
-Defined in: [src/lib/tx/txRouter.ts:90](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L90)
+Defined in: [src/lib/tx/txRouter.ts:90](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L90)
 
 ***
 
@@ -258,7 +258,7 @@ Defined in: [src/lib/tx/txRouter.ts:90](https://github.com/wenakita/4626/blob/07
 
 > **TxRoutingDecision** = `object`
 
-Defined in: [src/lib/tx/txRouter.ts:58](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L58)
+Defined in: [src/lib/tx/txRouter.ts:58](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L58)
 
 #### Properties
 
@@ -266,31 +266,31 @@ Defined in: [src/lib/tx/txRouter.ts:58](https://github.com/wenakita/4626/blob/07
 
 > **fallbackMode**: [`TxSendMode`](#txsendmode)
 
-Defined in: [src/lib/tx/txRouter.ts:60](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L60)
+Defined in: [src/lib/tx/txRouter.ts:60](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L60)
 
 ##### mode
 
 > **mode**: [`TxSendMode`](#txsendmode)
 
-Defined in: [src/lib/tx/txRouter.ts:59](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L59)
+Defined in: [src/lib/tx/txRouter.ts:59](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L59)
 
 ##### reason
 
 > **reason**: `string`
 
-Defined in: [src/lib/tx/txRouter.ts:63](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L63)
+Defined in: [src/lib/tx/txRouter.ts:63](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L63)
 
 ##### smartWalletDetected
 
 > **smartWalletDetected**: `boolean`
 
-Defined in: [src/lib/tx/txRouter.ts:61](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L61)
+Defined in: [src/lib/tx/txRouter.ts:61](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L61)
 
 ##### supportsSendCallsHint
 
 > **supportsSendCallsHint**: `boolean`
 
-Defined in: [src/lib/tx/txRouter.ts:62](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L62)
+Defined in: [src/lib/tx/txRouter.ts:62](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L62)
 
 ***
 
@@ -298,7 +298,7 @@ Defined in: [src/lib/tx/txRouter.ts:62](https://github.com/wenakita/4626/blob/07
 
 > **TxSendMode** = `"sendCalls"` \| `"canonical4337"` \| `"canonicalDirect"` \| `"eoaDirect"`
 
-Defined in: [src/lib/tx/txRouter.ts:36](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L36)
+Defined in: [src/lib/tx/txRouter.ts:36](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L36)
 
 ## Functions
 
@@ -306,7 +306,7 @@ Defined in: [src/lib/tx/txRouter.ts:36](https://github.com/wenakita/4626/blob/07
 
 > **buildAndSendApproval**(`params`): `Promise`\<\{ `routing`: [`TxRoutingDecision`](#txroutingdecision); `send`: [`TxRouterSendResult`](#txroutersendresult); \}\>
 
-Defined in: [src/lib/tx/txRouter.ts:932](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L932)
+Defined in: [src/lib/tx/txRouter.ts:932](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L932)
 
 #### Parameters
 
@@ -374,7 +374,7 @@ The quantity of ETH tokens approved for spending by the transaction, denominated
 
 > **buildAndSendSwap**(`params`): `Promise`\<\{ `routing`: [`TxRoutingDecision`](#txroutingdecision); `send`: [`TxRouterSendResult`](#txroutersendresult); \}\>
 
-Defined in: [src/lib/tx/txRouter.ts:946](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L946)
+Defined in: [src/lib/tx/txRouter.ts:946](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L946)
 
 #### Parameters
 
@@ -446,7 +446,7 @@ The quantity of ETH tokens approved for spending by the transaction, denominated
 
 > **detectTxSendMode**(`context`): [`TxRoutingDecision`](#txroutingdecision)
 
-Defined in: [src/lib/tx/txRouter.ts:319](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L319)
+Defined in: [src/lib/tx/txRouter.ts:319](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L319)
 
 #### Parameters
 
@@ -464,7 +464,7 @@ Defined in: [src/lib/tx/txRouter.ts:319](https://github.com/wenakita/4626/blob/0
 
 > **normalizeCanonicalSendError**(`error`): `Error`
 
-Defined in: [src/lib/tx/txRouter.ts:216](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/tx/txRouter.ts#L216)
+Defined in: [src/lib/tx/txRouter.ts:216](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tx/txRouter.ts#L216)
 
 #### Parameters
 

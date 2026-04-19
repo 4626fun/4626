@@ -12,7 +12,7 @@
 
 > **Skeleton**(`__namedParameters`): `Element`
 
-Defined in: [src/components/ui/Skeleton.tsx:8](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/ui/Skeleton.tsx#L8)
+Defined in: [src/components/ui/Skeleton.tsx:8](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/ui/Skeleton.tsx#L8)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/components/ui/Skeleton.tsx:8](https://github.com/wenakita/4626/
 
 > **SkeletonRows**(`__namedParameters`): `Element`
 
-Defined in: [src/components/ui/Skeleton.tsx:31](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/ui/Skeleton.tsx#L31)
+Defined in: [src/components/ui/Skeleton.tsx:31](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/ui/Skeleton.tsx#L31)
 
 #### Parameters
 
@@ -54,7 +54,7 @@ Defined in: [src/components/ui/Skeleton.tsx:31](https://github.com/wenakita/4626
 
 > **SkeletonText**(`__namedParameters`): `Element`
 
-Defined in: [src/components/ui/Skeleton.tsx:16](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/ui/Skeleton.tsx#L16)
+Defined in: [src/components/ui/Skeleton.tsx:16](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/ui/Skeleton.tsx#L16)
 
 #### Parameters
 

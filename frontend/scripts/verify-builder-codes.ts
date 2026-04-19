@@ -9,7 +9,7 @@ import {
   payloadEndsWithDataSuffix,
   resolveBuilderCodes,
   resolveDataSuffix,
-} from '../src/lib/baseBuilderCodes'
+} from '../src/lib/base/baseBuilderCodes'
 
 type CliArgs = {
   payload: string | null

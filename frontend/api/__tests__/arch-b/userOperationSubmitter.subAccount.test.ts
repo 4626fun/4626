@@ -309,8 +309,6 @@ describe('submitUserOpOrRefuse — sub-account path', () => {
     expect(buildArgs.isApprovedOnChain).toBe(true)
   })
 
-<<<<<<< HEAD
-=======
   it('does not prepend spend call when valueWei is 0 for an already-approved permission', async () => {
     setFlag(true)
     vi.resetModules()
@@ -337,7 +335,7 @@ describe('submitUserOpOrRefuse — sub-account path', () => {
     expect(buildArgs.isApprovedOnChain).toBe(true)
   })
 
->>>>>>> 28968a5c (feat(arch-b): implement sub-account execution and profile merge infrastructure)
+
   it('fails open to include approveWithSignature when isSpendPermissionApproved throws', async () => {
     setFlag(true)
     vi.resetModules()

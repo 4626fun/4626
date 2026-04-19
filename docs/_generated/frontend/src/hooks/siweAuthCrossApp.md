@@ -12,7 +12,7 @@
 
 > **getCrossAppSafeRedirectPath**(`location`): `object`
 
-Defined in: [src/hooks/siweAuthCrossApp.ts:24](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/siweAuthCrossApp.ts#L24)
+Defined in: [src/hooks/siweAuthCrossApp.ts:24](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/siweAuthCrossApp.ts#L24)
 
 #### Parameters
 
@@ -38,7 +38,7 @@ Defined in: [src/hooks/siweAuthCrossApp.ts:24](https://github.com/wenakita/4626/
 
 > **isPrivyRedirectUrlNotAllowedError**(`error`): `boolean`
 
-Defined in: [src/hooks/siweAuthCrossApp.ts:1](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/siweAuthCrossApp.ts#L1)
+Defined in: [src/hooks/siweAuthCrossApp.ts:1](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/siweAuthCrossApp.ts#L1)
 
 #### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [src/hooks/siweAuthCrossApp.ts:1](https://github.com/wenakita/4626/b
 
 > **sanitizeCrossAppRedirectUrlForAuth**(): () => `void` \| `null`
 
-Defined in: [src/hooks/siweAuthCrossApp.ts:38](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/siweAuthCrossApp.ts#L38)
+Defined in: [src/hooks/siweAuthCrossApp.ts:38](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/siweAuthCrossApp.ts#L38)
 
 #### Returns
 

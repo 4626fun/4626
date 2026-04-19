@@ -12,7 +12,7 @@
 
 > `const` **BURN\_STREAM\_SALT\_TAG**: `"4626:VaultShareBurnStream"`
 
-Defined in: [shared/deploy/create2Salts.ts:5](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/shared/deploy/create2Salts.ts#L5)
+Defined in: [shared/deploy/create2Salts.ts:5](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/shared/deploy/create2Salts.ts#L5)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [shared/deploy/create2Salts.ts:5](https://github.com/wenakita/4626/b
 
 > `const` **CREATOR\_COIN\_POLICY\_CONTROLLER\_SALT\_TAG**: `"4626:CreatorCoinPolicyController"`
 
-Defined in: [shared/deploy/create2Salts.ts:6](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/shared/deploy/create2Salts.ts#L6)
+Defined in: [shared/deploy/create2Salts.ts:6](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/shared/deploy/create2Salts.ts#L6)
 
 ***
 
@@ -28,7 +28,7 @@ Defined in: [shared/deploy/create2Salts.ts:6](https://github.com/wenakita/4626/b
 
 > `const` **PAYOUT\_ROUTER\_SALT\_TAG**: `"4626:PayoutRouter"`
 
-Defined in: [shared/deploy/create2Salts.ts:4](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/shared/deploy/create2Salts.ts#L4)
+Defined in: [shared/deploy/create2Salts.ts:4](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/shared/deploy/create2Salts.ts#L4)
 
 ## Functions
 
@@ -36,7 +36,7 @@ Defined in: [shared/deploy/create2Salts.ts:4](https://github.com/wenakita/4626/b
 
 > **deriveCreatorCoinPolicyControllerSalt**(`params`): `` `0x${string}` ``
 
-Defined in: [shared/deploy/create2Salts.ts:20](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/shared/deploy/create2Salts.ts#L20)
+Defined in: [shared/deploy/create2Salts.ts:20](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/shared/deploy/create2Salts.ts#L20)
 
 #### Parameters
 
@@ -60,7 +60,7 @@ Defined in: [shared/deploy/create2Salts.ts:20](https://github.com/wenakita/4626/
 
 > **derivePayoutRouterSalt**(`params`): `` `0x${string}` ``
 
-Defined in: [shared/deploy/create2Salts.ts:8](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/shared/deploy/create2Salts.ts#L8)
+Defined in: [shared/deploy/create2Salts.ts:8](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/shared/deploy/create2Salts.ts#L8)
 
 #### Parameters
 
@@ -84,7 +84,7 @@ Defined in: [shared/deploy/create2Salts.ts:8](https://github.com/wenakita/4626/b
 
 > **deriveVaultShareBurnStreamSalt**(`params`): `` `0x${string}` ``
 
-Defined in: [shared/deploy/create2Salts.ts:14](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/shared/deploy/create2Salts.ts#L14)
+Defined in: [shared/deploy/create2Salts.ts:14](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/shared/deploy/create2Salts.ts#L14)
 
 #### Parameters
 

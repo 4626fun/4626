@@ -12,7 +12,7 @@
 
 > **getUniswapApiKey**(): `string`
 
-Defined in: [server/uniswap/trading.ts:17](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/uniswap/trading.ts#L17)
+Defined in: [server/uniswap/trading.ts:17](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/uniswap/trading.ts#L17)
 
 #### Returns
 
@@ -24,7 +24,7 @@ Defined in: [server/uniswap/trading.ts:17](https://github.com/wenakita/4626/blob
 
 > **isObject**(`value`): `value is JsonObject`
 
-Defined in: [server/uniswap/trading.ts:21](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/uniswap/trading.ts#L21)
+Defined in: [server/uniswap/trading.ts:21](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/uniswap/trading.ts#L21)
 
 #### Parameters
 
@@ -42,7 +42,7 @@ Defined in: [server/uniswap/trading.ts:21](https://github.com/wenakita/4626/blob
 
 > **readJsonObjectBody**(`req`): `Promise`\<`JsonObject` \| `null`\>
 
-Defined in: [server/uniswap/trading.ts:27](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/uniswap/trading.ts#L27)
+Defined in: [server/uniswap/trading.ts:27](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/uniswap/trading.ts#L27)
 
 #### Parameters
 
@@ -60,7 +60,7 @@ Defined in: [server/uniswap/trading.ts:27](https://github.com/wenakita/4626/blob
 
 > **toCleanErrorMessage**(`value`, `fallback`): `string`
 
-Defined in: [server/uniswap/trading.ts:33](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/uniswap/trading.ts#L33)
+Defined in: [server/uniswap/trading.ts:33](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/uniswap/trading.ts#L33)
 
 #### Parameters
 
@@ -82,7 +82,7 @@ Defined in: [server/uniswap/trading.ts:33](https://github.com/wenakita/4626/blob
 
 > **uniswapTradeFetch**(`params`): `Promise`\<\{ `payload`: `unknown`; `status`: `number`; \}\>
 
-Defined in: [server/uniswap/trading.ts:56](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/uniswap/trading.ts#L56)
+Defined in: [server/uniswap/trading.ts:56](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/uniswap/trading.ts#L56)
 
 #### Parameters
 

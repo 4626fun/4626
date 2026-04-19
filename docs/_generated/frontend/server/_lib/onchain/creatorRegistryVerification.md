@@ -12,7 +12,7 @@
 
 > **CreatorRegistryBindingInput** = `object`
 
-Defined in: [server/\_lib/onchain/creatorRegistryVerification.ts:41](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/creatorRegistryVerification.ts#L41)
+Defined in: [server/\_lib/onchain/creatorRegistryVerification.ts:41](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onchain/creatorRegistryVerification.ts#L41)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [server/\_lib/onchain/creatorRegistryVerification.ts:41](https://git
 
 > **creatorCoinAddress**: `string`
 
-Defined in: [server/\_lib/onchain/creatorRegistryVerification.ts:42](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/creatorRegistryVerification.ts#L42)
+Defined in: [server/\_lib/onchain/creatorRegistryVerification.ts:42](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onchain/creatorRegistryVerification.ts#L42)
 
 ##### shareTokenAddress?
 
 > `optional` **shareTokenAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/onchain/creatorRegistryVerification.ts:44](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/creatorRegistryVerification.ts#L44)
+Defined in: [server/\_lib/onchain/creatorRegistryVerification.ts:44](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onchain/creatorRegistryVerification.ts#L44)
 
 ##### vaultAddress
 
 > **vaultAddress**: `string`
 
-Defined in: [server/\_lib/onchain/creatorRegistryVerification.ts:43](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/creatorRegistryVerification.ts#L43)
+Defined in: [server/\_lib/onchain/creatorRegistryVerification.ts:43](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onchain/creatorRegistryVerification.ts#L43)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [server/\_lib/onchain/creatorRegistryVerification.ts:43](https://git
 
 > **CreatorRegistryValidationResult** = \{ `ok`: `true`; \} \| \{ `ok`: `false`; `reason`: `CreatorRegistryValidationReason`; \}
 
-Defined in: [server/\_lib/onchain/creatorRegistryVerification.ts:37](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/creatorRegistryVerification.ts#L37)
+Defined in: [server/\_lib/onchain/creatorRegistryVerification.ts:37](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onchain/creatorRegistryVerification.ts#L37)
 
 ## Functions
 
@@ -48,7 +48,7 @@ Defined in: [server/\_lib/onchain/creatorRegistryVerification.ts:37](https://git
 
 > **validateCreatorRegistryBinding**(`input`): `Promise`\<[`CreatorRegistryValidationResult`](#creatorregistryvalidationresult)\>
 
-Defined in: [server/\_lib/onchain/creatorRegistryVerification.ts:76](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/creatorRegistryVerification.ts#L76)
+Defined in: [server/\_lib/onchain/creatorRegistryVerification.ts:76](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onchain/creatorRegistryVerification.ts#L76)
 
 #### Parameters
 

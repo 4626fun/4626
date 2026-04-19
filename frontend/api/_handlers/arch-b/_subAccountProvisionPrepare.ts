@@ -34,6 +34,7 @@ import {
   getDb,
   isDbConfigured,
   resolveAuthorizedRequestPrincipal,
+  logger,
 } from '../../../packages/server-core/src/index.js'
 import {
   NATIVE_TOKEN_SENTINEL,
@@ -43,7 +44,6 @@ import {
 } from '../../../server/_lib/wallet/spendPermission.js'
 import { computeSubAccountAddress } from '../../../server/_lib/wallet/subAccountAddress.js'
 import { resolveOwnerWalletId } from '../../../server/_lib/wallet/privyOwnerWalletIdResolver.js'
-import { logger } from '../../../server/_lib/infra/logger.js'
 import type { Address } from 'viem'
 import { createPublicClient, http } from 'viem'
 import { base } from 'viem/chains'

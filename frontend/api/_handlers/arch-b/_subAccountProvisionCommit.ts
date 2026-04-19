@@ -44,6 +44,7 @@ import {
   getDb,
   isDbConfigured,
   resolveAuthorizedRequestPrincipal,
+  logger,
 } from '../../../packages/server-core/src/index.js'
 import { provisionCommandIssuerContext } from '../../../server/_lib/wallet/commandIssuerContext.js'
 import type { SpendPermissionPayload } from '../../../server/_lib/wallet/commandIssuerContext.js'
@@ -54,7 +55,6 @@ import {
   verifySubAccountProvision,
 } from '../../../server/_lib/wallet/subAccountProvisionVerify.js'
 import { resolveOwnerWalletId } from '../../../server/_lib/wallet/privyOwnerWalletIdResolver.js'
-import { logger } from '../../../server/_lib/infra/logger.js'
 
 declare const process: { env: Record<string, string | undefined> }
 

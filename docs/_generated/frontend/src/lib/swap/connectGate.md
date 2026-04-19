@@ -12,7 +12,7 @@
 
 > **SwapConnectGateInput** = `object`
 
-Defined in: [src/lib/swap/connectGate.ts:22](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/swap/connectGate.ts#L22)
+Defined in: [src/lib/swap/connectGate.ts:22](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/swap/connectGate.ts#L22)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/swap/connectGate.ts:22](https://github.com/wenakita/4626/bl
 
 > `optional` **authBusy**: `boolean`
 
-Defined in: [src/lib/swap/connectGate.ts:39](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/swap/connectGate.ts#L39)
+Defined in: [src/lib/swap/connectGate.ts:39](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/swap/connectGate.ts#L39)
 
 True while a `signIn` / Privy login request is in flight. Keeps the
 gate in a stable "signing-in" state during the short window between
@@ -31,7 +31,7 @@ session creation and wagmi attaching the wallet, avoiding a transient
 
 > **executionAddress**: `string` \| `null` \| `undefined`
 
-Defined in: [src/lib/swap/connectGate.ts:32](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/swap/connectGate.ts#L32)
+Defined in: [src/lib/swap/connectGate.ts:32](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/swap/connectGate.ts#L32)
 
 The canonical execution address resolved by `useAccountContext`.
 Null/undefined means there is no signer wagmi can talk to yet, so
@@ -41,7 +41,7 @@ quote and swap endpoints would reject the request.
 
 > **hasSession**: `boolean`
 
-Defined in: [src/lib/swap/connectGate.ts:26](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/swap/connectGate.ts#L26)
+Defined in: [src/lib/swap/connectGate.ts:26](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/swap/connectGate.ts#L26)
 
 True when a 4626 session cookie is active for this principal.
 
@@ -49,7 +49,7 @@ True when a 4626 session cookie is active for this principal.
 
 > **sessionHydrated**: `boolean`
 
-Defined in: [src/lib/swap/connectGate.ts:24](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/swap/connectGate.ts#L24)
+Defined in: [src/lib/swap/connectGate.ts:24](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/swap/connectGate.ts#L24)
 
 True once useSiweAuth has finished its initial /api/auth/me probe.
 
@@ -59,7 +59,7 @@ True once useSiweAuth has finished its initial /api/auth/me probe.
 
 > **SwapConnectGateResult** = `object`
 
-Defined in: [src/lib/swap/connectGate.ts:42](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/swap/connectGate.ts#L42)
+Defined in: [src/lib/swap/connectGate.ts:42](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/swap/connectGate.ts#L42)
 
 #### Properties
 
@@ -67,7 +67,7 @@ Defined in: [src/lib/swap/connectGate.ts:42](https://github.com/wenakita/4626/bl
 
 > **actionLabel**: `string`
 
-Defined in: [src/lib/swap/connectGate.ts:50](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/swap/connectGate.ts#L50)
+Defined in: [src/lib/swap/connectGate.ts:50](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/swap/connectGate.ts#L50)
 
 Primary CTA label; empty when state has no actionable button.
 
@@ -75,13 +75,13 @@ Primary CTA label; empty when state has no actionable button.
 
 > **message**: `string`
 
-Defined in: [src/lib/swap/connectGate.ts:48](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/swap/connectGate.ts#L48)
+Defined in: [src/lib/swap/connectGate.ts:48](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/swap/connectGate.ts#L48)
 
 ##### ready
 
 > **ready**: `boolean`
 
-Defined in: [src/lib/swap/connectGate.ts:45](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/swap/connectGate.ts#L45)
+Defined in: [src/lib/swap/connectGate.ts:45](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/swap/connectGate.ts#L45)
 
 True when the swap form should render.
 
@@ -89,7 +89,7 @@ True when the swap form should render.
 
 > **showSpinner**: `boolean`
 
-Defined in: [src/lib/swap/connectGate.ts:52](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/swap/connectGate.ts#L52)
+Defined in: [src/lib/swap/connectGate.ts:52](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/swap/connectGate.ts#L52)
 
 True when the gate should show a spinner instead of a CTA.
 
@@ -97,7 +97,7 @@ True when the gate should show a spinner instead of a CTA.
 
 > **spinnerLabel**: `string`
 
-Defined in: [src/lib/swap/connectGate.ts:54](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/swap/connectGate.ts#L54)
+Defined in: [src/lib/swap/connectGate.ts:54](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/swap/connectGate.ts#L54)
 
 Accessible label for the spinner when shown.
 
@@ -105,13 +105,13 @@ Accessible label for the spinner when shown.
 
 > **state**: [`SwapConnectGateState`](#swapconnectgatestate)
 
-Defined in: [src/lib/swap/connectGate.ts:43](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/swap/connectGate.ts#L43)
+Defined in: [src/lib/swap/connectGate.ts:43](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/swap/connectGate.ts#L43)
 
 ##### title
 
 > **title**: `string`
 
-Defined in: [src/lib/swap/connectGate.ts:47](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/swap/connectGate.ts#L47)
+Defined in: [src/lib/swap/connectGate.ts:47](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/swap/connectGate.ts#L47)
 
 Human copy intended for the gate card.
 
@@ -121,7 +121,7 @@ Human copy intended for the gate card.
 
 > **SwapConnectGateState** = `"hydrating"` \| `"signing-in"` \| `"signed-out"` \| `"wallet-required"` \| `"ready"`
 
-Defined in: [src/lib/swap/connectGate.ts:15](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/swap/connectGate.ts#L15)
+Defined in: [src/lib/swap/connectGate.ts:15](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/swap/connectGate.ts#L15)
 
 Pure state machine for the /swap route-level connect gate.
 
@@ -141,7 +141,7 @@ UI, and `Swap.tsx` maps states to actions.
 
 > **deriveSwapConnectGate**(`input`): [`SwapConnectGateResult`](#swapconnectgateresult)
 
-Defined in: [src/lib/swap/connectGate.ts:105](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/swap/connectGate.ts#L105)
+Defined in: [src/lib/swap/connectGate.ts:105](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/swap/connectGate.ts#L105)
 
 #### Parameters
 

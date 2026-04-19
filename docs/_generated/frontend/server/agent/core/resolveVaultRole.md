@@ -12,7 +12,7 @@
 
 > **VaultAccessRole** = `"OWNER"` \| `"ADMIN"` \| `"MEMBER"`
 
-Defined in: [server/agent/core/resolveVaultRole.ts:6](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/agent/core/resolveVaultRole.ts#L6)
+Defined in: [server/agent/core/resolveVaultRole.ts:6](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/agent/core/resolveVaultRole.ts#L6)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [server/agent/core/resolveVaultRole.ts:6](https://github.com/wenakit
 
 > **normalizeRoleAddress**(`value`): `` `0x${string}` `` \| `null`
 
-Defined in: [server/agent/core/resolveVaultRole.ts:8](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/agent/core/resolveVaultRole.ts#L8)
+Defined in: [server/agent/core/resolveVaultRole.ts:8](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/agent/core/resolveVaultRole.ts#L8)
 
 #### Parameters
 
@@ -38,7 +38,7 @@ Defined in: [server/agent/core/resolveVaultRole.ts:8](https://github.com/wenakit
 
 > **resolveVaultAccessRoleByGroupId**(`params`): `Promise`\<[`VaultAccessRole`](#vaultaccessrole)\>
 
-Defined in: [server/agent/core/resolveVaultRole.ts:40](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/agent/core/resolveVaultRole.ts#L40)
+Defined in: [server/agent/core/resolveVaultRole.ts:40](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/agent/core/resolveVaultRole.ts#L40)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [server/agent/core/resolveVaultRole.ts:40](https://github.com/wenaki
 
 > **resolveVaultAccessRoleFromVault**(`params`): [`VaultAccessRole`](#vaultaccessrole)
 
-Defined in: [server/agent/core/resolveVaultRole.ts:14](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/agent/core/resolveVaultRole.ts#L14)
+Defined in: [server/agent/core/resolveVaultRole.ts:14](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/agent/core/resolveVaultRole.ts#L14)
 
 #### Parameters
 

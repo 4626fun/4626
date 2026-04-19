@@ -12,7 +12,7 @@
 
 > **LiquidityAction** = `"positions"` \| `"quote-create"` \| `"create"` \| `"add"` \| `"remove"` \| `"claim"` \| `"migrate"`
 
-Defined in: [src/lib/uniswap/liquidityApi.ts:4](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/uniswap/liquidityApi.ts#L4)
+Defined in: [src/lib/uniswap/liquidityApi.ts:4](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/uniswap/liquidityApi.ts#L4)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/uniswap/liquidityApi.ts:4](https://github.com/wenakita/4626
 
 > **LiquidityRequest**\<`T`\> = `object`
 
-Defined in: [src/lib/uniswap/liquidityApi.ts:6](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/uniswap/liquidityApi.ts#L6)
+Defined in: [src/lib/uniswap/liquidityApi.ts:6](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/uniswap/liquidityApi.ts#L6)
 
 #### Type Parameters
 
@@ -34,13 +34,13 @@ Defined in: [src/lib/uniswap/liquidityApi.ts:6](https://github.com/wenakita/4626
 
 > **action**: [`LiquidityAction`](#liquidityaction)
 
-Defined in: [src/lib/uniswap/liquidityApi.ts:7](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/uniswap/liquidityApi.ts#L7)
+Defined in: [src/lib/uniswap/liquidityApi.ts:7](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/uniswap/liquidityApi.ts#L7)
 
 ##### payload
 
 > **payload**: `T`
 
-Defined in: [src/lib/uniswap/liquidityApi.ts:8](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/uniswap/liquidityApi.ts#L8)
+Defined in: [src/lib/uniswap/liquidityApi.ts:8](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/uniswap/liquidityApi.ts#L8)
 
 ## Functions
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/uniswap/liquidityApi.ts:8](https://github.com/wenakita/4626
 
 > **addLiquidity**(`payload`): `Promise`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/lib/uniswap/liquidityApi.ts:42](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/uniswap/liquidityApi.ts#L42)
+Defined in: [src/lib/uniswap/liquidityApi.ts:42](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/uniswap/liquidityApi.ts#L42)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [src/lib/uniswap/liquidityApi.ts:42](https://github.com/wenakita/462
 
 > **callLiquidityApi**\<`T`\>(`body`): `Promise`\<`T`\>
 
-Defined in: [src/lib/uniswap/liquidityApi.ts:11](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/uniswap/liquidityApi.ts#L11)
+Defined in: [src/lib/uniswap/liquidityApi.ts:11](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/uniswap/liquidityApi.ts#L11)
 
 #### Type Parameters
 
@@ -90,7 +90,7 @@ Defined in: [src/lib/uniswap/liquidityApi.ts:11](https://github.com/wenakita/462
 
 > **claimLiquidityFees**(`payload`): `Promise`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/lib/uniswap/liquidityApi.ts:50](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/uniswap/liquidityApi.ts#L50)
+Defined in: [src/lib/uniswap/liquidityApi.ts:50](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/uniswap/liquidityApi.ts#L50)
 
 #### Parameters
 
@@ -108,7 +108,7 @@ Defined in: [src/lib/uniswap/liquidityApi.ts:50](https://github.com/wenakita/462
 
 > **createPosition**(`payload`): `Promise`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/lib/uniswap/liquidityApi.ts:38](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/uniswap/liquidityApi.ts#L38)
+Defined in: [src/lib/uniswap/liquidityApi.ts:38](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/uniswap/liquidityApi.ts#L38)
 
 #### Parameters
 
@@ -126,7 +126,7 @@ Defined in: [src/lib/uniswap/liquidityApi.ts:38](https://github.com/wenakita/462
 
 > **fetchLiquidityPositions**(`walletAddress`, `chainId`): `Promise`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/lib/uniswap/liquidityApi.ts:30](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/uniswap/liquidityApi.ts#L30)
+Defined in: [src/lib/uniswap/liquidityApi.ts:30](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/uniswap/liquidityApi.ts#L30)
 
 #### Parameters
 
@@ -148,7 +148,7 @@ Defined in: [src/lib/uniswap/liquidityApi.ts:30](https://github.com/wenakita/462
 
 > **quoteCreatePosition**(`payload`): `Promise`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/lib/uniswap/liquidityApi.ts:34](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/uniswap/liquidityApi.ts#L34)
+Defined in: [src/lib/uniswap/liquidityApi.ts:34](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/uniswap/liquidityApi.ts#L34)
 
 #### Parameters
 
@@ -166,7 +166,7 @@ Defined in: [src/lib/uniswap/liquidityApi.ts:34](https://github.com/wenakita/462
 
 > **removeLiquidity**(`payload`): `Promise`\<`Record`\<`string`, `unknown`\>\>
 
-Defined in: [src/lib/uniswap/liquidityApi.ts:46](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/uniswap/liquidityApi.ts#L46)
+Defined in: [src/lib/uniswap/liquidityApi.ts:46](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/uniswap/liquidityApi.ts#L46)
 
 #### Parameters
 

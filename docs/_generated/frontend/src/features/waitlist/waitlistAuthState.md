@@ -12,7 +12,7 @@
 
 > **clearStoredWaitlistSessionToken**(): `void`
 
-Defined in: [src/features/waitlist/waitlistAuthState.ts:6](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/features/waitlist/waitlistAuthState.ts#L6)
+Defined in: [src/features/waitlist/waitlistAuthState.ts:6](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/waitlist/waitlistAuthState.ts#L6)
 
 #### Returns
 
@@ -24,7 +24,7 @@ Defined in: [src/features/waitlist/waitlistAuthState.ts:6](https://github.com/we
 
 > **isAlreadyLoggedInAuthError**(`error`): `boolean`
 
-Defined in: [src/features/waitlist/waitlistAuthState.ts:68](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/features/waitlist/waitlistAuthState.ts#L68)
+Defined in: [src/features/waitlist/waitlistAuthState.ts:68](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/waitlist/waitlistAuthState.ts#L68)
 
 #### Parameters
 
@@ -42,7 +42,7 @@ Defined in: [src/features/waitlist/waitlistAuthState.ts:68](https://github.com/w
 
 > **isEmailAlreadyLinkedAuthError**(`error`): `boolean`
 
-Defined in: [src/features/waitlist/waitlistAuthState.ts:56](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/features/waitlist/waitlistAuthState.ts#L56)
+Defined in: [src/features/waitlist/waitlistAuthState.ts:56](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/waitlist/waitlistAuthState.ts#L56)
 
 #### Parameters
 
@@ -60,7 +60,7 @@ Defined in: [src/features/waitlist/waitlistAuthState.ts:56](https://github.com/w
 
 > **isRecoveryRequiredAuthError**(`error`): `boolean`
 
-Defined in: [src/features/waitlist/waitlistAuthState.ts:29](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/features/waitlist/waitlistAuthState.ts#L29)
+Defined in: [src/features/waitlist/waitlistAuthState.ts:29](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/waitlist/waitlistAuthState.ts#L29)
 
 #### Parameters
 
@@ -78,7 +78,7 @@ Defined in: [src/features/waitlist/waitlistAuthState.ts:29](https://github.com/w
 
 > **runWaitlistPrivyLogout**(`params`): `Promise`\<`void`\>
 
-Defined in: [src/features/waitlist/waitlistAuthState.ts:89](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/features/waitlist/waitlistAuthState.ts#L89)
+Defined in: [src/features/waitlist/waitlistAuthState.ts:89](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/waitlist/waitlistAuthState.ts#L89)
 
 #### Parameters
 
@@ -106,7 +106,7 @@ Defined in: [src/features/waitlist/waitlistAuthState.ts:89](https://github.com/w
 
 > **shouldStopWaitlistAutoAuthRetry**(`params`): `boolean`
 
-Defined in: [src/features/waitlist/waitlistAuthState.ts:82](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/features/waitlist/waitlistAuthState.ts#L82)
+Defined in: [src/features/waitlist/waitlistAuthState.ts:82](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/waitlist/waitlistAuthState.ts#L82)
 
 #### Parameters
 

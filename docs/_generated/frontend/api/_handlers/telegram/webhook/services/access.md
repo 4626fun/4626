@@ -12,7 +12,7 @@
 
 > **isTelegramContextAllowed**(`params`): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/services/access.ts:16](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/services/access.ts#L16)
+Defined in: [api/\_handlers/telegram/webhook/services/access.ts:16](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/telegram/webhook/services/access.ts#L16)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/access.ts:16](https://gith
 
 > **isTelegramMiniAppSessionEnabled**(`params`): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/services/access.ts:48](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/services/access.ts#L48)
+Defined in: [api/\_handlers/telegram/webhook/services/access.ts:48](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/telegram/webhook/services/access.ts#L48)
 
 #### Parameters
 
@@ -72,7 +72,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/access.ts:48](https://gith
 
 > **verifyBotConfigSecret**(`req`): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/services/access.ts:34](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/services/access.ts#L34)
+Defined in: [api/\_handlers/telegram/webhook/services/access.ts:34](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/telegram/webhook/services/access.ts#L34)
 
 #### Parameters
 
@@ -90,7 +90,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/access.ts:34](https://gith
 
 > **verifyTelegramLinkApiSecret**(`req`): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/services/access.ts:41](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/services/access.ts#L41)
+Defined in: [api/\_handlers/telegram/webhook/services/access.ts:41](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/telegram/webhook/services/access.ts#L41)
 
 #### Parameters
 

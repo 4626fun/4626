@@ -12,7 +12,7 @@
 
 > **ProfileWalletUpsertInput** = `object`
 
-Defined in: [server/\_lib/identity/profileSync.ts:25](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/identity/profileSync.ts#L25)
+Defined in: [server/\_lib/identity/profileSync.ts:25](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/identity/profileSync.ts#L25)
 
 #### Properties
 
@@ -20,49 +20,49 @@ Defined in: [server/\_lib/identity/profileSync.ts:25](https://github.com/wenakit
 
 > `optional` **baseSubAccount**: `string` \| `null`
 
-Defined in: [server/\_lib/identity/profileSync.ts:33](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/identity/profileSync.ts#L33)
+Defined in: [server/\_lib/identity/profileSync.ts:33](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/identity/profileSync.ts#L33)
 
 ##### cswAddress?
 
 > `optional` **cswAddress**: `string` \| `null`
 
-Defined in: [server/\_lib/identity/profileSync.ts:32](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/identity/profileSync.ts#L32)
+Defined in: [server/\_lib/identity/profileSync.ts:32](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/identity/profileSync.ts#L32)
 
 ##### email?
 
 > `optional` **email**: `string` \| `null`
 
-Defined in: [server/\_lib/identity/profileSync.ts:26](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/identity/profileSync.ts#L26)
+Defined in: [server/\_lib/identity/profileSync.ts:26](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/identity/profileSync.ts#L26)
 
 ##### embeddedWallet?
 
 > `optional` **embeddedWallet**: `string` \| `null`
 
-Defined in: [server/\_lib/identity/profileSync.ts:28](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/identity/profileSync.ts#L28)
+Defined in: [server/\_lib/identity/profileSync.ts:28](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/identity/profileSync.ts#L28)
 
 ##### embeddedWalletChain?
 
 > `optional` **embeddedWalletChain**: `string` \| `null`
 
-Defined in: [server/\_lib/identity/profileSync.ts:29](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/identity/profileSync.ts#L29)
+Defined in: [server/\_lib/identity/profileSync.ts:29](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/identity/profileSync.ts#L29)
 
 ##### embeddedWalletClientType?
 
 > `optional` **embeddedWalletClientType**: `string` \| `null`
 
-Defined in: [server/\_lib/identity/profileSync.ts:30](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/identity/profileSync.ts#L30)
+Defined in: [server/\_lib/identity/profileSync.ts:30](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/identity/profileSync.ts#L30)
 
 ##### primaryWallet?
 
 > `optional` **primaryWallet**: `string` \| `null`
 
-Defined in: [server/\_lib/identity/profileSync.ts:27](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/identity/profileSync.ts#L27)
+Defined in: [server/\_lib/identity/profileSync.ts:27](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/identity/profileSync.ts#L27)
 
 ##### privyUserId?
 
 > `optional` **privyUserId**: `string` \| `null`
 
-Defined in: [server/\_lib/identity/profileSync.ts:31](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/identity/profileSync.ts#L31)
+Defined in: [server/\_lib/identity/profileSync.ts:31](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/identity/profileSync.ts#L31)
 
 ## Functions
 
@@ -70,7 +70,7 @@ Defined in: [server/\_lib/identity/profileSync.ts:31](https://github.com/wenakit
 
 > **upsertProfileByWallet**(`db`, `input`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/identity/profileSync.ts:36](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/identity/profileSync.ts#L36)
+Defined in: [server/\_lib/identity/profileSync.ts:36](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/identity/profileSync.ts#L36)
 
 #### Parameters
 

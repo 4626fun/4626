@@ -12,7 +12,7 @@
 
 > **CrossAppAuthAction** = `"link"` \| `"login"`
 
-Defined in: [src/features/waitlist/crossAppWalletUtils.ts:56](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/features/waitlist/crossAppWalletUtils.ts#L56)
+Defined in: [src/features/waitlist/crossAppWalletUtils.ts:56](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/waitlist/crossAppWalletUtils.ts#L56)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/features/waitlist/crossAppWalletUtils.ts:56](https://github.com
 
 > **ZoraCrossAppAddressSet** = `object`
 
-Defined in: [src/features/waitlist/crossAppWalletUtils.ts:50](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/features/waitlist/crossAppWalletUtils.ts#L50)
+Defined in: [src/features/waitlist/crossAppWalletUtils.ts:50](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/waitlist/crossAppWalletUtils.ts#L50)
 
 #### Properties
 
@@ -28,19 +28,19 @@ Defined in: [src/features/waitlist/crossAppWalletUtils.ts:50](https://github.com
 
 > **embeddedWalletAddresses**: `string`[]
 
-Defined in: [src/features/waitlist/crossAppWalletUtils.ts:53](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/features/waitlist/crossAppWalletUtils.ts#L53)
+Defined in: [src/features/waitlist/crossAppWalletUtils.ts:53](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/waitlist/crossAppWalletUtils.ts#L53)
 
 ##### providerAddresses
 
 > **providerAddresses**: `string`[]
 
-Defined in: [src/features/waitlist/crossAppWalletUtils.ts:51](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/features/waitlist/crossAppWalletUtils.ts#L51)
+Defined in: [src/features/waitlist/crossAppWalletUtils.ts:51](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/waitlist/crossAppWalletUtils.ts#L51)
 
 ##### smartWalletAddresses
 
 > **smartWalletAddresses**: `string`[]
 
-Defined in: [src/features/waitlist/crossAppWalletUtils.ts:52](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/features/waitlist/crossAppWalletUtils.ts#L52)
+Defined in: [src/features/waitlist/crossAppWalletUtils.ts:52](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/waitlist/crossAppWalletUtils.ts#L52)
 
 ## Functions
 
@@ -48,7 +48,7 @@ Defined in: [src/features/waitlist/crossAppWalletUtils.ts:52](https://github.com
 
 > **extractCrossAppWalletAddresses**(`accounts`): [`ZoraCrossAppAddressSet`](#zoracrossappaddressset)
 
-Defined in: [src/features/waitlist/crossAppWalletUtils.ts:116](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/features/waitlist/crossAppWalletUtils.ts#L116)
+Defined in: [src/features/waitlist/crossAppWalletUtils.ts:116](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/waitlist/crossAppWalletUtils.ts#L116)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [src/features/waitlist/crossAppWalletUtils.ts:116](https://github.co
 
 > **extractZoraCrossAppAccounts**(`user`, `zoraPrivyAppId`): `any`[]
 
-Defined in: [src/features/waitlist/crossAppWalletUtils.ts:96](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/features/waitlist/crossAppWalletUtils.ts#L96)
+Defined in: [src/features/waitlist/crossAppWalletUtils.ts:96](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/waitlist/crossAppWalletUtils.ts#L96)
 
 #### Parameters
 
@@ -88,7 +88,7 @@ Defined in: [src/features/waitlist/crossAppWalletUtils.ts:96](https://github.com
 
 > **readLinkedAccounts**(`user`): `any`[]
 
-Defined in: [src/features/waitlist/crossAppWalletUtils.ts:77](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/features/waitlist/crossAppWalletUtils.ts#L77)
+Defined in: [src/features/waitlist/crossAppWalletUtils.ts:77](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/waitlist/crossAppWalletUtils.ts#L77)
 
 #### Parameters
 
@@ -106,7 +106,7 @@ Defined in: [src/features/waitlist/crossAppWalletUtils.ts:77](https://github.com
 
 > **resolveCanonicalCswCandidate**(`params`): `Promise`\<`string` \| `null`\>
 
-Defined in: [src/features/waitlist/crossAppWalletUtils.ts:133](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/features/waitlist/crossAppWalletUtils.ts#L133)
+Defined in: [src/features/waitlist/crossAppWalletUtils.ts:133](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/waitlist/crossAppWalletUtils.ts#L133)
 
 #### Parameters
 
@@ -142,7 +142,7 @@ Defined in: [src/features/waitlist/crossAppWalletUtils.ts:133](https://github.co
 
 > **selectCrossAppAuthAction**(`params`): [`CrossAppAuthAction`](#crossappauthaction) \| `null`
 
-Defined in: [src/features/waitlist/crossAppWalletUtils.ts:58](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/features/waitlist/crossAppWalletUtils.ts#L58)
+Defined in: [src/features/waitlist/crossAppWalletUtils.ts:58](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/waitlist/crossAppWalletUtils.ts#L58)
 
 #### Parameters
 

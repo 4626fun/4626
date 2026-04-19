@@ -51,6 +51,10 @@ vi.mock('../../../packages/server-core/src/index.js', () => ({
   rateLimitKey: mocks.rateLimitKey,
   resolveAuthorizedRequestPrincipal: mocks.resolveAuthorizedRequestPrincipal,
   RATE_LIMITS: { adminAction: { windowMs: 60_000, maxRequests: 30 } },
+  // arch-b handlers now import `logger` from server-core (per the
+  // server-core-boundary guard). Stub it as no-ops so tests don't crash
+  // on `logger.warn(...)` paths.
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }))
 
 vi.mock('../../../server/_lib/wallet/commandIssuerContext.js', () => ({

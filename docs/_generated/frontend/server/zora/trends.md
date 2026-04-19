@@ -10,7 +10,7 @@
 
 ### TrendInsufficientFundsError
 
-Defined in: [server/zora/trends.ts:22](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L22)
+Defined in: [server/zora/trends.ts:26](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L26)
 
 Sentinel error thrown by `reserveTrendTicker` when the agent wallet cannot
 cover the trend-deploy gas cost. Callers (`commands.ts`, `_trendReserve.ts`,
@@ -28,7 +28,7 @@ routing), tracked in docs/architecture-b-design.md.
 
 > **new TrendInsufficientFundsError**(`message`): [`TrendInsufficientFundsError`](#trendinsufficientfundserror)
 
-Defined in: [server/zora/trends.ts:24](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L24)
+Defined in: [server/zora/trends.ts:28](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L28)
 
 ###### Parameters
 
@@ -50,7 +50,7 @@ Defined in: [server/zora/trends.ts:24](https://github.com/wenakita/4626/blob/078
 
 > `readonly` **code**: `"insufficient_funds"` = `'insufficient_funds'`
 
-Defined in: [server/zora/trends.ts:23](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L23)
+Defined in: [server/zora/trends.ts:27](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L27)
 
 ## Type Aliases
 
@@ -58,7 +58,7 @@ Defined in: [server/zora/trends.ts:23](https://github.com/wenakita/4626/blob/078
 
 > **TrendPreflightResult** = `object`
 
-Defined in: [server/zora/trends.ts:45](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L45)
+Defined in: [server/zora/trends.ts:49](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L49)
 
 #### Properties
 
@@ -66,31 +66,71 @@ Defined in: [server/zora/trends.ts:45](https://github.com/wenakita/4626/blob/078
 
 > **deployed**: `boolean`
 
-Defined in: [server/zora/trends.ts:49](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L49)
+Defined in: [server/zora/trends.ts:53](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L53)
 
 ##### deployedBytecode
 
 > **deployedBytecode**: `` `0x${string}` `` \| `null`
 
-Defined in: [server/zora/trends.ts:50](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L50)
+Defined in: [server/zora/trends.ts:54](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L54)
 
 ##### predictedAddress
 
 > **predictedAddress**: `` `0x${string}` ``
 
-Defined in: [server/zora/trends.ts:48](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L48)
+Defined in: [server/zora/trends.ts:52](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L52)
 
 ##### ticker
 
 > **ticker**: `string`
 
-Defined in: [server/zora/trends.ts:46](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L46)
+Defined in: [server/zora/trends.ts:50](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L50)
 
 ##### tickerHash
 
 > **tickerHash**: `` `0x${string}` ``
 
-Defined in: [server/zora/trends.ts:47](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L47)
+Defined in: [server/zora/trends.ts:51](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L51)
+
+***
+
+### TrendReserveArchBRefusal
+
+> **TrendReserveArchBRefusal** = `object`
+
+Defined in: [server/zora/trends.ts:283](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L283)
+
+Typed refusal surfaced when `reserveTrendTickerViaUserOp` cannot proceed
+(TEE attestation denied, factory address mismatch, UserOp submitter
+refusal). Callers (`commands.ts`) map `.response` straight to the user.
+
+#### Properties
+
+##### code
+
+> **code**: `"tee_attestation_denied"` \| `"factory_target_mismatch"` \| `"userop_refused"`
+
+Defined in: [server/zora/trends.ts:285](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L285)
+
+##### ok
+
+> **ok**: `false`
+
+Defined in: [server/zora/trends.ts:284](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L284)
+
+##### response
+
+> **response**: `string`
+
+Defined in: [server/zora/trends.ts:289](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L289)
+
+***
+
+### TrendReserveArchBResult
+
+> **TrendReserveArchBResult** = `object` & [`TrendReserveResult`](#trendreserveresult) & `object` \| [`TrendReserveArchBRefusal`](#trendreservearchbrefusal)
+
+Defined in: [server/zora/trends.ts:292](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L292)
 
 ***
 
@@ -98,7 +138,7 @@ Defined in: [server/zora/trends.ts:47](https://github.com/wenakita/4626/blob/078
 
 > **TrendReserveResult** = `object`
 
-Defined in: [server/zora/trends.ts:53](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L53)
+Defined in: [server/zora/trends.ts:57](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L57)
 
 #### Properties
 
@@ -106,55 +146,55 @@ Defined in: [server/zora/trends.ts:53](https://github.com/wenakita/4626/blob/078
 
 > **deployed**: `boolean`
 
-Defined in: [server/zora/trends.ts:58](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L58)
+Defined in: [server/zora/trends.ts:62](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L62)
 
 ##### deployedAddress
 
 > **deployedAddress**: `` `0x${string}` ``
 
-Defined in: [server/zora/trends.ts:57](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L57)
+Defined in: [server/zora/trends.ts:61](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L61)
 
 ##### predictedAddress
 
 > **predictedAddress**: `` `0x${string}` ``
 
-Defined in: [server/zora/trends.ts:56](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L56)
+Defined in: [server/zora/trends.ts:60](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L60)
 
 ##### status
 
 > **status**: `"already_deployed"` \| `"submitted"` \| `"deployed"`
 
-Defined in: [server/zora/trends.ts:62](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L62)
+Defined in: [server/zora/trends.ts:66](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L66)
 
 ##### ticker
 
 > **ticker**: `string`
 
-Defined in: [server/zora/trends.ts:54](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L54)
+Defined in: [server/zora/trends.ts:58](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L58)
 
 ##### tickerHash
 
 > **tickerHash**: `` `0x${string}` ``
 
-Defined in: [server/zora/trends.ts:55](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L55)
+Defined in: [server/zora/trends.ts:59](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L59)
 
 ##### txHash
 
 > **txHash**: `string` \| `null`
 
-Defined in: [server/zora/trends.ts:59](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L59)
+Defined in: [server/zora/trends.ts:63](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L63)
 
 ##### walletAddress
 
 > **walletAddress**: `` `0x${string}` `` \| `null`
 
-Defined in: [server/zora/trends.ts:60](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L60)
+Defined in: [server/zora/trends.ts:64](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L64)
 
 ##### walletId
 
 > **walletId**: `string` \| `null`
 
-Defined in: [server/zora/trends.ts:61](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L61)
+Defined in: [server/zora/trends.ts:65](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L65)
 
 ***
 
@@ -162,7 +202,7 @@ Defined in: [server/zora/trends.ts:61](https://github.com/wenakita/4626/blob/078
 
 > **TrendValidationResult** = \{ `ok`: `true`; `ticker`: `string`; `tickerHash`: `` `0x${string}` ``; \} \| \{ `error`: `string`; `ok`: `false`; \}
 
-Defined in: [server/zora/trends.ts:41](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L41)
+Defined in: [server/zora/trends.ts:45](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L45)
 
 ## Functions
 
@@ -170,7 +210,7 @@ Defined in: [server/zora/trends.ts:41](https://github.com/wenakita/4626/blob/078
 
 > **normalizeTrendTicker**(`input`): `string` \| `null`
 
-Defined in: [server/zora/trends.ts:87](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L87)
+Defined in: [server/zora/trends.ts:91](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L91)
 
 #### Parameters
 
@@ -188,7 +228,7 @@ Defined in: [server/zora/trends.ts:87](https://github.com/wenakita/4626/blob/078
 
 > **preflightTrendTicker**(`params`): `Promise`\<[`TrendPreflightResult`](#trendpreflightresult)\>
 
-Defined in: [server/zora/trends.ts:104](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L104)
+Defined in: [server/zora/trends.ts:108](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L108)
 
 #### Parameters
 
@@ -208,7 +248,7 @@ Defined in: [server/zora/trends.ts:104](https://github.com/wenakita/4626/blob/07
 
 > **reserveTrendTicker**(`params`): `Promise`\<[`TrendReserveResult`](#trendreserveresult)\>
 
-Defined in: [server/zora/trends.ts:133](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L133)
+Defined in: [server/zora/trends.ts:137](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L137)
 
 #### Parameters
 
@@ -236,11 +276,55 @@ Defined in: [server/zora/trends.ts:133](https://github.com/wenakita/4626/blob/07
 
 ***
 
+### reserveTrendTickerViaUserOp()
+
+> **reserveTrendTickerViaUserOp**(`params`): `Promise`\<[`TrendReserveArchBResult`](#trendreservearchbresult)\>
+
+Defined in: [server/zora/trends.ts:312](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L312)
+
+Route a TrendCoin deploy through the command issuer's Coinbase Smart
+Wallet via `submitUserOpOrRefuse` (Phase 4).
+
+Key differences from the legacy agent-EOA path:
+- Deployer is the CSW, not a Privy-managed EOA. No agent-wallet funding
+  is required.
+- Caps + preflight + daily ledger are enforced inside `submitUserOpOrRefuse`.
+- No custom idempotency key; the CSW UserOp nonce prevents double-execution.
+- TEE attestation is required before the UserOp is built.
+- Factory target is re-checked against env/default before dispatch
+  (defense in depth against env drift).
+
+#### Parameters
+
+##### params
+
+###### groupId
+
+`string`
+
+###### issuer
+
+[`CommandIssuerContext`](../_lib/wallet/commandIssuerContext.md#commandissuercontext)
+
+###### ticker
+
+`string`
+
+###### waitForReceipt?
+
+`boolean`
+
+#### Returns
+
+`Promise`\<[`TrendReserveArchBResult`](#trendreservearchbresult)\>
+
+***
+
 ### validateTrendTicker()
 
 > **validateTrendTicker**(`input`): [`TrendValidationResult`](#trendvalidationresult)
 
-Defined in: [server/zora/trends.ts:95](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trends.ts#L95)
+Defined in: [server/zora/trends.ts:99](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/trends.ts#L99)
 
 #### Parameters
 

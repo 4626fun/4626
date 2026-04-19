@@ -12,7 +12,7 @@
 
 > **bridgePrivySession**(`privyToken`): `Promise`\<`boolean`\>
 
-Defined in: [src/features/waitlist/waitlistHandoff.ts:28](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/features/waitlist/waitlistHandoff.ts#L28)
+Defined in: [src/features/waitlist/waitlistHandoff.ts:28](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/waitlist/waitlistHandoff.ts#L28)
 
 Exchange a Privy access token for a 4626 session on the current origin.
 The session itself lives in the HttpOnly `cv_auth_session` cookie; this
@@ -35,7 +35,7 @@ so the caller knows the next same-origin request will be authenticated.
 
 > **createAuthHandoffCode**(`params`): `Promise`\<`string`\>
 
-Defined in: [src/features/waitlist/waitlistHandoff.ts:64](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/features/waitlist/waitlistHandoff.ts#L64)
+Defined in: [src/features/waitlist/waitlistHandoff.ts:64](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/waitlist/waitlistHandoff.ts#L64)
 
 Ask the server for a one-time handoff code that the app origin can redeem
 to mint an equivalent session on its own host. Authentication flows via
