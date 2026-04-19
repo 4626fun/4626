@@ -1,13 +1,19 @@
 type PrivyAppearanceOptions = {
   showWalletLoginFirst?: boolean
-  walletCollisionDetected?: boolean
 }
 
 export function createPrivyAppearance(options?: PrivyAppearanceOptions) {
   const showWalletLoginFirst = options?.showWalletLoginFirst ?? false
-  const walletList = options?.walletCollisionDetected
-    ? ['coinbase_wallet', 'base_account']
-    : ['metamask', 'coinbase_wallet', 'base_account', 'detected_ethereum_wallets']
+  // `detected_ethereum_wallets` is Privy's EIP-6963 bucket (covers Rabby,
+  // Phantom EVM, Frame, Trust, and any other 6963-advertised wallet);
+  // `wallet_connect` covers mobile wallets (Rainbow, Zerion, etc.) via WC v2.
+  const walletList = [
+    'metamask',
+    'coinbase_wallet',
+    'base_account',
+    'wallet_connect',
+    'detected_ethereum_wallets',
+  ]
 
   return {
     showWalletLoginFirst,

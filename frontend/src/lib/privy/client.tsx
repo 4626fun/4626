@@ -105,6 +105,7 @@ export function PrivyClientProvider(props: {
       // auth email-first, but do not disable connectors entirely because Step 3 owner
       // install requires external wallet connection on this page.
       walletConnect: { enabled: true },
+      coinbaseWallet: { connectionOptions: 'all' as const },
       crossApp: {
         providerAppIds: [ZORA_PRIVY_APP_ID],
       },
@@ -119,8 +120,6 @@ export function PrivyClientProvider(props: {
 
   const appearance = createPrivyAppearance({
     showWalletLoginFirst,
-    // Waitlist stays email-first and should avoid wallet enumeration side-effects.
-    walletCollisionDetected: mode === 'waitlist-email-only',
   })
   // Keep generic web login methods aligned with the canonical account model:
   // verified email first, wallet-native Base second. Zora uses cross-app auth.
