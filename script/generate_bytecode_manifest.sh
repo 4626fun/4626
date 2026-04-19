@@ -4,7 +4,7 @@ set -euo pipefail
 # Generates deployments/base/<release>-bytecode-manifest.json from Foundry artifacts.
 #
 # Usage:
-#   ./script/generate_bytecode_manifest.sh v1.8.3
+#   ./script/generate_bytecode_manifest.sh v1.9.1
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RELEASE_TAG="${1:-}"

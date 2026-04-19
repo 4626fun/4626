@@ -100,7 +100,7 @@ contract DeployInfrastructure is Script {
     function run() external {
         uint256 deployerPrivateKey = vm.envUint("PRIVATE_KEY");
         address deployer = vm.addr(deployerPrivateKey);
-        string memory releaseTag = vm.envOr("DEPLOYMENT_EPOCH_TAG", string("v1.8.3"));
+        string memory releaseTag = vm.envOr("DEPLOYMENT_EPOCH_TAG", string("v1.9.1"));
         string memory outputPath = vm.envOr(
             "BASE_SHARED_GLOBAL_OUTPUT_PATH", string.concat("./tmp/base-", releaseTag, "-shared-global.json")
         );
