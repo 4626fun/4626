@@ -1,0 +1,267 @@
+diff --git a/_cjs/accounts/generatePrivateKey.js b/_cjs/accounts/generatePrivateKey.js
+index 7aa44b3959b60b66b4b602d219b8913d1d3a6a6a..b0e22585c9d07481421843925381f74e81b0931b 100644
+--- a/_cjs/accounts/generatePrivateKey.js
++++ b/_cjs/accounts/generatePrivateKey.js
+@@ -1,7 +1,7 @@
+ "use strict";
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.generatePrivateKey = generatePrivateKey;
+-const secp256k1_1 = require("@noble/curves/secp256k1");
++const secp256k1_1 = require("@noble/curves/secp256k1.js");
+ const toHex_js_1 = require("../utils/encoding/toHex.js");
+ function generatePrivateKey() {
+     return (0, toHex_js_1.toHex)(secp256k1_1.secp256k1.utils.randomPrivateKey());
+diff --git a/_cjs/accounts/privateKeyToAccount.js b/_cjs/accounts/privateKeyToAccount.js
+index a453437ce3876e355090d0342824f44be3338dad..5cea87e628c66b6900ae41ac9c5d69cc79d62c90 100644
+--- a/_cjs/accounts/privateKeyToAccount.js
++++ b/_cjs/accounts/privateKeyToAccount.js
+@@ -1,7 +1,7 @@
+ "use strict";
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.privateKeyToAccount = privateKeyToAccount;
+-const secp256k1_1 = require("@noble/curves/secp256k1");
++const secp256k1_1 = require("@noble/curves/secp256k1.js");
+ const toHex_js_1 = require("../utils/encoding/toHex.js");
+ const toAccount_js_1 = require("./toAccount.js");
+ const publicKeyToAddress_js_1 = require("./utils/publicKeyToAddress.js");
+diff --git a/_cjs/accounts/utils/privateKeyToAddress.js b/_cjs/accounts/utils/privateKeyToAddress.js
+index 2a2049d92d4f4b78da6c303c9a4da657f3a94028..d98cbe79ebe4711a18f771f9944ef7d07fbd7f87 100644
+--- a/_cjs/accounts/utils/privateKeyToAddress.js
++++ b/_cjs/accounts/utils/privateKeyToAddress.js
+@@ -1,7 +1,7 @@
+ "use strict";
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.privateKeyToAddress = privateKeyToAddress;
+-const secp256k1_1 = require("@noble/curves/secp256k1");
++const secp256k1_1 = require("@noble/curves/secp256k1.js");
+ const toHex_js_1 = require("../../utils/encoding/toHex.js");
+ const publicKeyToAddress_js_1 = require("./publicKeyToAddress.js");
+ function privateKeyToAddress(privateKey) {
+diff --git a/_cjs/accounts/utils/sign.js b/_cjs/accounts/utils/sign.js
+index fa142cb8726c5d2088162bcfc50c12e61ca3b8de..e61892ea241b4a7194422c095d871a1cc00ca8f9 100644
+--- a/_cjs/accounts/utils/sign.js
++++ b/_cjs/accounts/utils/sign.js
+@@ -2,7 +2,7 @@
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.setSignEntropy = setSignEntropy;
+ exports.sign = sign;
+-const secp256k1_1 = require("@noble/curves/secp256k1");
++const secp256k1_1 = require("@noble/curves/secp256k1.js");
+ const isHex_js_1 = require("../../utils/data/isHex.js");
+ const toBytes_js_1 = require("../../utils/encoding/toBytes.js");
+ const toHex_js_1 = require("../../utils/encoding/toHex.js");
+diff --git a/_cjs/utils/hash/keccak256.js b/_cjs/utils/hash/keccak256.js
+index 1ee898d99280509f694b286693a76579077cea3a..1602daf05fa3126a8455a61383a6f177abf0298d 100644
+--- a/_cjs/utils/hash/keccak256.js
++++ b/_cjs/utils/hash/keccak256.js
+@@ -1,7 +1,7 @@
+ "use strict";
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.keccak256 = keccak256;
+-const sha3_1 = require("@noble/hashes/sha3");
++const sha3_1 = require("@noble/hashes/sha3.js");
+ const isHex_js_1 = require("../data/isHex.js");
+ const toBytes_js_1 = require("../encoding/toBytes.js");
+ const toHex_js_1 = require("../encoding/toHex.js");
+diff --git a/_cjs/utils/hash/ripemd160.js b/_cjs/utils/hash/ripemd160.js
+index afab9c08cc98c3a4df83b5dcf4faffe92c0ce2a4..97cff9a1818fc223849c35190333883751c4b8d2 100644
+--- a/_cjs/utils/hash/ripemd160.js
++++ b/_cjs/utils/hash/ripemd160.js
+@@ -1,7 +1,7 @@
+ "use strict";
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.ripemd160 = ripemd160;
+-const ripemd160_1 = require("@noble/hashes/ripemd160");
++const ripemd160_1 = require("@noble/hashes/ripemd160.js");
+ const isHex_js_1 = require("../data/isHex.js");
+ const toBytes_js_1 = require("../encoding/toBytes.js");
+ const toHex_js_1 = require("../encoding/toHex.js");
+diff --git a/_cjs/utils/hash/sha256.js b/_cjs/utils/hash/sha256.js
+index a50e9c4d560418ee3b2245c4ecf5c4ce10818760..7c5fde8c74aec70703563fc3a8c1719eb5286076 100644
+--- a/_cjs/utils/hash/sha256.js
++++ b/_cjs/utils/hash/sha256.js
+@@ -1,7 +1,7 @@
+ "use strict";
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.sha256 = sha256;
+-const sha256_1 = require("@noble/hashes/sha256");
++const sha256_1 = require("@noble/hashes/sha256.js");
+ const isHex_js_1 = require("../data/isHex.js");
+ const toBytes_js_1 = require("../encoding/toBytes.js");
+ const toHex_js_1 = require("../encoding/toHex.js");
+diff --git a/_cjs/utils/signature/parseCompactSignature.js b/_cjs/utils/signature/parseCompactSignature.js
+index 431f94bb144f9138c8d375a3de158b1c93a7073b..e8431448bb59c8e4e21167e45b2e8b1c9b12744d 100644
+--- a/_cjs/utils/signature/parseCompactSignature.js
++++ b/_cjs/utils/signature/parseCompactSignature.js
+@@ -1,7 +1,7 @@
+ "use strict";
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.parseCompactSignature = parseCompactSignature;
+-const secp256k1_1 = require("@noble/curves/secp256k1");
++const secp256k1_1 = require("@noble/curves/secp256k1.js");
+ const toHex_js_1 = require("../encoding/toHex.js");
+ function parseCompactSignature(signatureHex) {
+     const { r, s } = secp256k1_1.secp256k1.Signature.fromCompact(signatureHex.slice(2, 130));
+diff --git a/_cjs/utils/signature/parseSignature.js b/_cjs/utils/signature/parseSignature.js
+index ac82ea79bb3e8fd42714071343830ce885e9247f..78fa0b24a4fef49e68ef36a9bb1ac1ee6c7c6f2e 100644
+--- a/_cjs/utils/signature/parseSignature.js
++++ b/_cjs/utils/signature/parseSignature.js
+@@ -1,7 +1,7 @@
+ "use strict";
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.parseSignature = parseSignature;
+-const secp256k1_1 = require("@noble/curves/secp256k1");
++const secp256k1_1 = require("@noble/curves/secp256k1.js");
+ const toHex_js_1 = require("../../utils/encoding/toHex.js");
+ function parseSignature(signatureHex) {
+     const { r, s } = secp256k1_1.secp256k1.Signature.fromCompact(signatureHex.slice(2, 130));
+diff --git a/_cjs/utils/signature/recoverPublicKey.js b/_cjs/utils/signature/recoverPublicKey.js
+index 73ce61f638269d566bbe0d956b99475ae354c322..c1319e4781dfa487b022ece9113fc20c4abc2812 100644
+--- a/_cjs/utils/signature/recoverPublicKey.js
++++ b/_cjs/utils/signature/recoverPublicKey.js
+@@ -7,7 +7,7 @@ const fromHex_js_1 = require("../encoding/fromHex.js");
+ const toHex_js_1 = require("../encoding/toHex.js");
+ async function recoverPublicKey({ hash, signature, }) {
+     const hashHex = (0, isHex_js_1.isHex)(hash) ? hash : (0, toHex_js_1.toHex)(hash);
+-    const { secp256k1 } = await Promise.resolve().then(() => require('@noble/curves/secp256k1'));
++    const { secp256k1 } = await Promise.resolve().then(() => require('@noble/curves/secp256k1.js'));
+     const signature_ = (() => {
+         if (typeof signature === 'object' && 'r' in signature && 's' in signature) {
+             const { r, s, v, yParity } = signature;
+diff --git a/_cjs/utils/signature/serializeCompactSignature.js b/_cjs/utils/signature/serializeCompactSignature.js
+index d101eaa792b8e6375a6d40e8c80d5848b712b64a..4aae5ed80b0acfe2014237e8c2d5b8022d402193 100644
+--- a/_cjs/utils/signature/serializeCompactSignature.js
++++ b/_cjs/utils/signature/serializeCompactSignature.js
+@@ -1,7 +1,7 @@
+ "use strict";
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.serializeCompactSignature = serializeCompactSignature;
+-const secp256k1_1 = require("@noble/curves/secp256k1");
++const secp256k1_1 = require("@noble/curves/secp256k1.js");
+ const fromHex_js_1 = require("../encoding/fromHex.js");
+ function serializeCompactSignature({ r, yParityAndS, }) {
+     return `0x${new secp256k1_1.secp256k1.Signature((0, fromHex_js_1.hexToBigInt)(r), (0, fromHex_js_1.hexToBigInt)(yParityAndS)).toCompactHex()}`;
+diff --git a/_cjs/utils/signature/serializeSignature.js b/_cjs/utils/signature/serializeSignature.js
+index 4ecb1f7ec6bbc09c184c50827a0dbef66c7530b3..cdd23499f2cb2b9a96e9f8f94a30c534e2b362a8 100644
+--- a/_cjs/utils/signature/serializeSignature.js
++++ b/_cjs/utils/signature/serializeSignature.js
+@@ -1,7 +1,7 @@
+ "use strict";
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.serializeSignature = serializeSignature;
+-const secp256k1_1 = require("@noble/curves/secp256k1");
++const secp256k1_1 = require("@noble/curves/secp256k1.js");
+ const fromHex_js_1 = require("../encoding/fromHex.js");
+ const toBytes_js_1 = require("../encoding/toBytes.js");
+ function serializeSignature({ r, s, to = 'hex', v, yParity, }) {
+diff --git a/_esm/accounts/generatePrivateKey.js b/_esm/accounts/generatePrivateKey.js
+index ef8fd973a4746efa4ee5986fd1808dd3962b0ace..f24d92d5d15c5d424cd769fa961b8bbbbe3d36d6 100644
+--- a/_esm/accounts/generatePrivateKey.js
++++ b/_esm/accounts/generatePrivateKey.js
+@@ -1,4 +1,4 @@
+-import { secp256k1 } from '@noble/curves/secp256k1';
++import { secp256k1 } from '@noble/curves/esm/secp256k1.js';
+ import { toHex } from '../utils/encoding/toHex.js';
+ /**
+  * @description Generates a random private key.
+diff --git a/_esm/accounts/privateKeyToAccount.js b/_esm/accounts/privateKeyToAccount.js
+index b78582991ab867e8bf5d5fad9458699711f32050..4fa18fdf4066a083d2a524729add6001c9f5c9f1 100644
+--- a/_esm/accounts/privateKeyToAccount.js
++++ b/_esm/accounts/privateKeyToAccount.js
+@@ -1,4 +1,4 @@
+-import { secp256k1 } from '@noble/curves/secp256k1';
++import { secp256k1 } from '@noble/curves/esm/secp256k1.js';
+ import { toHex } from '../utils/encoding/toHex.js';
+ import { toAccount } from './toAccount.js';
+ import { publicKeyToAddress, } from './utils/publicKeyToAddress.js';
+diff --git a/_esm/accounts/utils/privateKeyToAddress.js b/_esm/accounts/utils/privateKeyToAddress.js
+index 3a78ead25b0d49b89fe0a3bd8ca5323bbe71208c..da7a5dd096706446bb561e568363b59016f5f923 100644
+--- a/_esm/accounts/utils/privateKeyToAddress.js
++++ b/_esm/accounts/utils/privateKeyToAddress.js
+@@ -1,4 +1,4 @@
+-import { secp256k1 } from '@noble/curves/secp256k1';
++import { secp256k1 } from '@noble/curves/esm/secp256k1.js';
+ import { bytesToHex, } from '../../utils/encoding/toHex.js';
+ import { publicKeyToAddress, } from './publicKeyToAddress.js';
+ /**
+diff --git a/_esm/accounts/utils/sign.js b/_esm/accounts/utils/sign.js
+index 4eca8e21ed4dbb76dbe15e3f0855476f399600da..834bb5e5f3eb90e41b2720c9ca62b429d25af5aa 100644
+--- a/_esm/accounts/utils/sign.js
++++ b/_esm/accounts/utils/sign.js
+@@ -1,5 +1,5 @@
+ // TODO(v3): Convert to sync.
+-import { secp256k1 } from '@noble/curves/secp256k1';
++import { secp256k1 } from '@noble/curves/esm/secp256k1.js';
+ import { isHex } from '../../utils/data/isHex.js';
+ import { hexToBytes, } from '../../utils/encoding/toBytes.js';
+ import { numberToHex, } from '../../utils/encoding/toHex.js';
+diff --git a/_esm/utils/hash/keccak256.js b/_esm/utils/hash/keccak256.js
+index ef566dc33af3268b7aa2826a846900d16d779ca1..4940f509cfc1215be0461894203214f57b7f66ff 100644
+--- a/_esm/utils/hash/keccak256.js
++++ b/_esm/utils/hash/keccak256.js
+@@ -1,4 +1,4 @@
+-import { keccak_256 } from '@noble/hashes/sha3';
++import { keccak_256 } from '@noble/hashes/esm/sha3.js';
+ import { isHex } from '../data/isHex.js';
+ import { toBytes } from '../encoding/toBytes.js';
+ import { toHex } from '../encoding/toHex.js';
+diff --git a/_esm/utils/hash/ripemd160.js b/_esm/utils/hash/ripemd160.js
+index 0dc795b48f32a2d0bd6f739c6b00c15c3404fbc7..1f0c95ea0b44c3aabdb7bb010b88b9dd27fa8004 100644
+--- a/_esm/utils/hash/ripemd160.js
++++ b/_esm/utils/hash/ripemd160.js
+@@ -1,4 +1,4 @@
+-import { ripemd160 as noble_ripemd160 } from '@noble/hashes/ripemd160';
++import { ripemd160 as noble_ripemd160 } from '@noble/hashes/esm/ripemd160.js';
+ import { isHex } from '../data/isHex.js';
+ import { toBytes } from '../encoding/toBytes.js';
+ import { toHex } from '../encoding/toHex.js';
+diff --git a/_esm/utils/hash/sha256.js b/_esm/utils/hash/sha256.js
+index f485d8dd365060c14b7c53c0668164499ea1b0d7..36d03b07c343151b63cac3574702540325f01f3d 100644
+--- a/_esm/utils/hash/sha256.js
++++ b/_esm/utils/hash/sha256.js
+@@ -1,4 +1,4 @@
+-import { sha256 as noble_sha256 } from '@noble/hashes/sha256';
++import { sha256 as noble_sha256 } from '@noble/hashes/esm/sha256.js';
+ import { isHex } from '../data/isHex.js';
+ import { toBytes } from '../encoding/toBytes.js';
+ import { toHex } from '../encoding/toHex.js';
+diff --git a/_esm/utils/signature/parseCompactSignature.js b/_esm/utils/signature/parseCompactSignature.js
+index 7936e38b450f693e4dbc83127c712b7fd256deae..8f75fca000354d3be8a44746106849d12eeace9b 100644
+--- a/_esm/utils/signature/parseCompactSignature.js
++++ b/_esm/utils/signature/parseCompactSignature.js
+@@ -1,4 +1,4 @@
+-import { secp256k1 } from '@noble/curves/secp256k1';
++import { secp256k1 } from '@noble/curves/esm/secp256k1.js';
+ import { numberToHex } from '../encoding/toHex.js';
+ /**
+  * @description Parses a hex formatted compact signature into a structured compact signature.
+diff --git a/_esm/utils/signature/parseSignature.js b/_esm/utils/signature/parseSignature.js
+index 630c8c524e224eae4bb4550725bfd4e955f013f5..e67417198a9cd18486c663b26df29e042840211f 100644
+--- a/_esm/utils/signature/parseSignature.js
++++ b/_esm/utils/signature/parseSignature.js
+@@ -1,4 +1,4 @@
+-import { secp256k1 } from '@noble/curves/secp256k1';
++import { secp256k1 } from '@noble/curves/esm/secp256k1.js';
+ import { numberToHex, } from '../../utils/encoding/toHex.js';
+ /**
+  * @description Parses a hex formatted signature into a structured signature.
+diff --git a/_esm/utils/signature/serializeCompactSignature.js b/_esm/utils/signature/serializeCompactSignature.js
+index 0d6bf5eb1b1168f078848ec7da1b618db1d59a2d..5b9daeaa3a8e65d7d660193d80fb3a12d1889fef 100644
+--- a/_esm/utils/signature/serializeCompactSignature.js
++++ b/_esm/utils/signature/serializeCompactSignature.js
+@@ -1,4 +1,4 @@
+-import { secp256k1 } from '@noble/curves/secp256k1';
++import { secp256k1 } from '@noble/curves/esm/secp256k1.js';
+ import { hexToBigInt } from '../encoding/fromHex.js';
+ /**
+  * @description Converts an [EIP-2098 compact signature](https://eips.ethereum.org/EIPS/eip-2098) into hex format.
+diff --git a/_esm/utils/signature/serializeSignature.js b/_esm/utils/signature/serializeSignature.js
+index a727ffbaed209676ec978dd574d0558f087d855a..0d85eb081e608a3c2a88c63531f5571ffc518856 100644
+--- a/_esm/utils/signature/serializeSignature.js
++++ b/_esm/utils/signature/serializeSignature.js
+@@ -1,4 +1,4 @@
+-import { secp256k1 } from '@noble/curves/secp256k1';
++import { secp256k1 } from '@noble/curves/esm/secp256k1.js';
+ import { hexToBigInt } from '../encoding/fromHex.js';
+ import { hexToBytes } from '../encoding/toBytes.js';
+ /**

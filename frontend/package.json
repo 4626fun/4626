@@ -209,7 +209,9 @@
     },
     "patchedDependencies": {
       "elliptic@6.6.1": "patches/elliptic@6.6.1.patch",
-      "@coinbase/wallet-sdk@4.3.7": "patches/@coinbase__wallet-sdk@4.3.7.patch"
+      "@coinbase/wallet-sdk@4.3.7": "patches/@coinbase__wallet-sdk@4.3.7.patch",
+      "viem@2.45.1": "patches/viem@2.45.1.patch",
+      "ox@0.11.3": "patches/ox@0.11.3.patch"
     }
   }
 }
