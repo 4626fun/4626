@@ -54,6 +54,12 @@ type HealthResponse = {
     latencyMs: number | null
     error: string | null
   }
+  adminToken: {
+    configured: boolean
+    length: number
+    ok: boolean
+    error: string | null
+  }
 }
 
 async function checkDb(db: { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<any> }): Promise<{
@@ -299,6 +305,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       ok: supabaseStatus.ok,
       latencyMs: supabaseStatus.latencyMs,
       error: supabaseStatus.error,
+    },
+    adminToken: {
+      configured: Boolean((process.env.ADMIN_API_TOKEN ?? '').trim()),
+      length: (process.env.ADMIN_API_TOKEN ?? '').trim().length,
+      ok: Boolean((process.env.ADMIN_API_TOKEN ?? '').trim()),
+      error: null,
     },
   }
 
