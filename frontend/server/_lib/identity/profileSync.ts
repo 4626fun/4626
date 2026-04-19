@@ -46,59 +46,82 @@ export async function upsertProfileByWallet(db: Db, input: ProfileWalletUpsertIn
   await assertNoEmailPrivyCollision({ db, email, privyUserId })
 
   let existing: { id: number; email?: string | null } | null = null
+  // Every lookup below follows tombstone pointers so wallet/privy matches
+  // on a merged-away profile row resolve to the canonical survivor, not
+  // the tombstone. Same pattern as walletSync.findExistingProfile.
+  //
   // Check privy_user_id first — it's the strongest identity signal.
   if (!existing && privyUserId) {
     const res = await db.sql`
-      SELECT id, email
-      FROM profiles
-      WHERE privy_user_id = ${privyUserId}
-      LIMIT 1;
+      WITH matched AS (
+        SELECT id, email, merged_into_profile_id FROM profiles
+        WHERE privy_user_id = ${privyUserId} LIMIT 1
+      )
+      SELECT p.id, p.email FROM matched m
+      JOIN profiles p ON p.id = COALESCE(m.merged_into_profile_id, m.id)
+      WHERE p.merged_into_profile_id IS NULL LIMIT 1;
     `
     existing = (res?.rows?.[0] as { id: number; email?: string | null } | undefined) ?? null
   }
   if (!existing && primaryWallet) {
     const res = await db.sql`
-      SELECT id, email
-      FROM profiles
-      WHERE LOWER(primary_wallet) = ${primaryWallet}
-      LIMIT 1;
+      WITH matched AS (
+        SELECT id, email, merged_into_profile_id FROM profiles
+        WHERE LOWER(primary_wallet) = ${primaryWallet} LIMIT 1
+      )
+      SELECT p.id, p.email FROM matched m
+      JOIN profiles p ON p.id = COALESCE(m.merged_into_profile_id, m.id)
+      WHERE p.merged_into_profile_id IS NULL LIMIT 1;
     `
     existing = (res?.rows?.[0] as { id: number; email?: string | null } | undefined) ?? null
   }
   if (!existing && embeddedWallet) {
     const res = await db.sql`
-      SELECT id, email
-      FROM profiles
-      WHERE LOWER(embedded_wallet) = ${embeddedWallet}
-      LIMIT 1;
+      WITH matched AS (
+        SELECT id, email, merged_into_profile_id FROM profiles
+        WHERE LOWER(embedded_wallet) = ${embeddedWallet} LIMIT 1
+      )
+      SELECT p.id, p.email FROM matched m
+      JOIN profiles p ON p.id = COALESCE(m.merged_into_profile_id, m.id)
+      WHERE p.merged_into_profile_id IS NULL LIMIT 1;
     `
     existing = (res?.rows?.[0] as { id: number; email?: string | null } | undefined) ?? null
   }
   if (!existing && cswAddress) {
     const res = await db.sql`
-      SELECT id, email
-      FROM profiles
-      WHERE LOWER(csw_address) = ${cswAddress}
-         OR LOWER(primary_smart_wallet) = ${cswAddress}
-      LIMIT 1;
+      WITH matched AS (
+        SELECT id, email, merged_into_profile_id FROM profiles
+        WHERE LOWER(csw_address) = ${cswAddress}
+           OR LOWER(primary_smart_wallet) = ${cswAddress}
+        LIMIT 1
+      )
+      SELECT p.id, p.email FROM matched m
+      JOIN profiles p ON p.id = COALESCE(m.merged_into_profile_id, m.id)
+      WHERE p.merged_into_profile_id IS NULL LIMIT 1;
     `
     existing = (res?.rows?.[0] as { id: number; email?: string | null } | undefined) ?? null
   }
   if (!existing && embeddedWallet) {
     const res = await db.sql`
-      SELECT id, email
-      FROM profiles
-      WHERE LOWER(primary_embedded_eoa) = ${embeddedWallet}
-      LIMIT 1;
+      WITH matched AS (
+        SELECT id, email, merged_into_profile_id FROM profiles
+        WHERE LOWER(primary_embedded_eoa) = ${embeddedWallet} LIMIT 1
+      )
+      SELECT p.id, p.email FROM matched m
+      JOIN profiles p ON p.id = COALESCE(m.merged_into_profile_id, m.id)
+      WHERE p.merged_into_profile_id IS NULL LIMIT 1;
     `
     existing = (res?.rows?.[0] as { id: number; email?: string | null } | undefined) ?? null
   }
   if (!existing && baseSubAccount) {
     const res = await db.sql`
-      SELECT id, email
-      FROM profiles
-      WHERE LOWER(base_sub_account) = ${baseSubAccount}
-      LIMIT 1;
+      WITH matched AS (
+        SELECT id, email, merged_into_profile_id FROM profiles
+        WHERE LOWER(base_sub_account) = ${baseSubAccount} LIMIT 1
+      )
+      SELECT p.id, p.email FROM matched m
+      JOIN profiles p ON p.id = COALESCE(m.merged_into_profile_id, m.id)
+      WHERE p.merged_into_profile_id IS NULL LIMIT 1;
     `
     existing = (res?.rows?.[0] as { id: number; email?: string | null } | undefined) ?? null
   }

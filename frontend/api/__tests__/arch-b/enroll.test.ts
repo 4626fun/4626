@@ -44,11 +44,8 @@ vi.mock('../../../packages/server-core/src/index.js', () => ({
   getClientIp: mocks.getClientIp,
   checkRateLimit: mocks.checkRateLimit,
   rateLimitKey: mocks.rateLimitKey,
-  RATE_LIMITS: { adminAction: { windowMs: 60_000, maxRequests: 30 } },
-}))
-
-vi.mock('../../../server/_lib/auth/requestPrincipal.js', () => ({
   resolveAuthorizedRequestPrincipal: mocks.resolveAuthorizedRequestPrincipal,
+  RATE_LIMITS: { adminAction: { windowMs: 60_000, maxRequests: 30 } },
 }))
 
 vi.mock('../../../server/_lib/wallet/commandIssuerContext.js', () => ({

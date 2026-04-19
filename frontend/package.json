@@ -30,6 +30,7 @@
     "report:footprint": "node scripts/report-footprint.mjs",
     "guard:generated-output": "node scripts/check-generated-output.mjs",
     "guard:runtime-boundaries": "node scripts/check-runtime-boundaries.mjs",
+    "guard:arch-b-subaccount-alignment": "node scripts/check-arch-b-subaccount-alignment.mjs",
     "guard:test-file-placement": "node scripts/check-test-file-placement.mjs",
     "guard:api-readjsonbody-maxbytes": "node scripts/check-readjsonbody-maxbytes.mjs",
     "guard:api-rate-limit-guards": "node scripts/check-guard-rate-limit.mjs",

@@ -357,7 +357,44 @@ export async function executeProfileMerge(
   `
   const refereesRepointed = Array.isArray(refereesRes.rows) ? refereesRes.rows.length : 0
 
-  // 7. Adopt `from`'s referral code if `to` doesn't have one.
+  // 7a. Arch-B execution context. Only one row per profile (UNIQUE on
+  //     profile_id); if `to` already has one we prefer its config and
+  //     drop `from`'s. If `to` doesn't, we re-key `from`'s onto `to`.
+  try {
+    const existingOnTo = await db.sql`
+      SELECT 1 FROM command_issuer_execution_context WHERE profile_id = ${to.id} LIMIT 1;
+    `
+    if (existingOnTo.rows?.length) {
+      await db.sql`DELETE FROM command_issuer_execution_context WHERE profile_id = ${from.id};`
+    } else {
+      await db.sql`
+        UPDATE command_issuer_execution_context
+        SET profile_id = ${to.id}, updated_at = NOW()
+        WHERE profile_id = ${from.id};
+      `
+    }
+  } catch {
+    // Table may not exist in some envs (legacy). Ignore.
+  }
+
+  // 7b. Arch-B daily spend ledger. Compound PK (profile_id, ymd); if both
+  //     sides have a row for the same day we sum them onto `to`.
+  try {
+    await db.sql`
+      INSERT INTO command_issuer_daily_spend (profile_id, ymd, spent_wei, updated_at)
+      SELECT ${to.id}, ymd, spent_wei, NOW()
+      FROM command_issuer_daily_spend
+      WHERE profile_id = ${from.id}
+      ON CONFLICT (profile_id, ymd) DO UPDATE
+        SET spent_wei = command_issuer_daily_spend.spent_wei + EXCLUDED.spent_wei,
+            updated_at = NOW();
+    `
+    await db.sql`DELETE FROM command_issuer_daily_spend WHERE profile_id = ${from.id};`
+  } catch {
+    // Table may not exist in some envs.
+  }
+
+  // 7c. Adopt `from`'s referral code if `to` doesn't have one.
   let referralCodeCopied = false
   if (from.referralCode && !to.referralCode) {
     try {

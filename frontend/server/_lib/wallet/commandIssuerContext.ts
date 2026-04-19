@@ -289,13 +289,22 @@ export async function resolveCommandIssuerContextByAddress(
   if (!db) return { status: 'db_unavailable' }
 
   try {
+    // Tombstone-aware: excludes execution contexts whose profile has been
+    // merged away. If a stranded context exists on a tombstoned profile
+    // (shouldn't happen post-merge-primitive extension, but defensive),
+    // the JOIN on `profiles.merged_into_profile_id IS NULL` drops it
+    // rather than returning it as a live authority.
     const { rows } = await db.sql`
       SELECT ctx.*
       FROM command_issuer_execution_context ctx
+      JOIN profiles p ON p.id = ctx.profile_id
       JOIN profile_wallets pw ON pw.profile_id = ctx.profile_id
-      WHERE LOWER(pw.address) = ${normalized}
-         OR LOWER(pw.canonical_csw_address) = ${normalized}
-         OR LOWER(ctx.smart_wallet_address) = ${normalized}
+      WHERE p.merged_into_profile_id IS NULL
+        AND (
+          LOWER(pw.address) = ${normalized}
+          OR LOWER(pw.canonical_csw_address) = ${normalized}
+          OR LOWER(ctx.smart_wallet_address) = ${normalized}
+        )
       ORDER BY ctx.provisioned_at DESC
       LIMIT 1
     `
@@ -336,9 +345,20 @@ export async function resolveCommandIssuerContextByProfileId(
   if (!db) return { status: 'db_unavailable' }
 
   try {
+    // Tombstone-aware: if the caller passes a merged-away profile id,
+    // follow `merged_into_profile_id` to the canonical survivor before
+    // reading the context. Caller-side code that tracked a stale id
+    // (pre-merge) resolves correctly.
     const { rows } = await db.sql`
-      SELECT * FROM command_issuer_execution_context
-      WHERE profile_id = ${profileId}
+      WITH target AS (
+        SELECT COALESCE(p.merged_into_profile_id, p.id) AS live_id
+        FROM profiles p
+        WHERE p.id = ${profileId}
+        LIMIT 1
+      )
+      SELECT ctx.*
+      FROM command_issuer_execution_context ctx
+      JOIN target t ON t.live_id = ctx.profile_id
       LIMIT 1
     `
     if (!rows || rows.length === 0) {

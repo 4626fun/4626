@@ -1,7 +1,10 @@
 import { type ClassifiedLinkedAccounts, classifyLinkedAccounts, type MappedWallet, type PrivyUserLike } from './walletMapping.js'
 import { ensureCanonicalWalletsSchema } from './canonicalWalletsSchema.js'
 import { fetchZoraProfile } from '../zora/zoraProfile.js'
-import { assertNoEmailPrivyCollision } from '../identity/identityRecovery.js'
+import {
+  assertNoEmailPrivyCollision,
+  assertNoWalletPrivyCollision,
+} from '../identity/identityRecovery.js'
 import { extractPrivyVerifiedEmail } from '../infra/trust.js'
 
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
@@ -610,6 +613,22 @@ async function insertOrUpdateProfile(params: {
 }): Promise<number> {
   const { db, existing, privyUserId, email, classification } = params
   await assertNoEmailPrivyCollision({ db, email, privyUserId })
+  // Only guard new INSERT paths — existing matches already resolved
+  // through the tombstone-aware lookup above. Without this, a wallet-only
+  // Privy auth can still mint a fragment even when a canonical-email
+  // profile owns the same EOA (caught for bootstrap in _bootstrap.ts,
+  // but this function is also reached by wallet-sync paths that skip
+  // bootstrap).
+  if (!existing && privyUserId) {
+    const evmAddresses = classification.allWallets
+      .filter((w) => w.chain === 'evm')
+      .map((w) => w.address)
+    await assertNoWalletPrivyCollision({
+      db,
+      privyUserId,
+      evmAddresses,
+    })
+  }
   const canonical = classification.canonicalSmartWallet?.address ?? null
   const activeOwner = classification.activeOwnerWallet?.address ?? null
   const canonicalSolana = classification.canonicalSolanaWallet?.address ?? null

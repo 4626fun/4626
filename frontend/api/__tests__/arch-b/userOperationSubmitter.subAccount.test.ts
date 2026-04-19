@@ -309,6 +309,35 @@ describe('submitUserOpOrRefuse — sub-account path', () => {
     expect(buildArgs.isApprovedOnChain).toBe(true)
   })
 
+<<<<<<< HEAD
+=======
+  it('does not prepend spend call when valueWei is 0 for an already-approved permission', async () => {
+    setFlag(true)
+    vi.resetModules()
+    isApprovedMock.mockResolvedValue(true)
+    buildSpendCallsMock.mockImplementation(
+      (args: { isApprovedOnChain: boolean; amountWei: bigint }) => {
+        if (args.isApprovedOnChain && args.amountWei === 0n) return []
+        return args.isApprovedOnChain ? [SPEND_CALL_SPEND] : [SPEND_CALL_APPROVE, SPEND_CALL_SPEND]
+      },
+    )
+    const mod = await importModule()
+    const result = await mod.submitUserOpOrRefuse({
+      issuer: makeIssuer(),
+      calls: [INPUT_CALL],
+      valueWei: 0n,
+      bundlerUrl: 'https://bundler.example',
+      publicClient: {} as any,
+    })
+    expect(result.ok).toBe(true)
+    const args = sendUserOpMock.mock.calls[0][0]
+    expect(args.calls).toEqual([INPUT_CALL])
+    const buildArgs = buildSpendCallsMock.mock.calls[0][0]
+    expect(buildArgs.amountWei).toBe(0n)
+    expect(buildArgs.isApprovedOnChain).toBe(true)
+  })
+
+>>>>>>> 28968a5c (feat(arch-b): implement sub-account execution and profile merge infrastructure)
   it('fails open to include approveWithSignature when isSpendPermissionApproved throws', async () => {
     setFlag(true)
     vi.resetModules()

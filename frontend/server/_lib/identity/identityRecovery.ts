@@ -168,17 +168,26 @@ export async function assertNoEmailPrivyCollision(params: {
 export async function assertNoWalletPrivyCollision(params: {
   db: Db
   privyUserId: string
-  privyUser: PrivyUserLike
+  /** Provide exactly one source of EVM addresses: a raw Privy user (we
+   *  extract via `classifyLinkedAccounts`), or a pre-computed list. The
+   *  pre-computed form lets callers like `walletSync` skip the re-parse. */
+  privyUser?: PrivyUserLike
+  evmAddresses?: readonly string[]
 }): Promise<void> {
   const requestedPrivyUserId = normalizeLower(params.privyUserId)
   if (!requestedPrivyUserId) return
 
-  const classification = classifyLinkedAccounts(params.privyUser)
+  const sourceAddresses = params.evmAddresses
+    ? params.evmAddresses
+    : params.privyUser
+      ? classifyLinkedAccounts(params.privyUser).allWallets
+          .filter((w) => w.chain === 'evm')
+          .map((w) => w.address)
+      : []
   const evmAddresses = Array.from(
     new Set(
-      classification.allWallets
-        .filter((w) => w.chain === 'evm')
-        .map((w) => normalizeLower(w.address))
+      sourceAddresses
+        .map((a) => normalizeLower(a))
         .filter((a) => /^0x[a-f0-9]{40}$/.test(a)),
     ),
   )

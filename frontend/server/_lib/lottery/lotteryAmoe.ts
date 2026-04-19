@@ -165,22 +165,46 @@ function normalizeRefId(value: string | null | undefined): string | null {
 
 async function resolveOrCreateProfileForWallet(db: Db, wallet: `0x${string}`): Promise<number> {
   const normalizedWallet = wallet.toLowerCase()
+  // Tombstone-aware: if the wallet matches a merged-away profile, follow
+  // `merged_into_profile_id` to the canonical survivor. Prefer profiles
+  // with a real (non-synthetic) email so AMOE claims always attach to
+  // the canonical account when one exists — satisfies the AGENTS.md
+  // identity invariant that verified email wins.
   const existing = await db.sql`
-    SELECT p.id
-    FROM profiles p
-    WHERE LOWER(p.primary_wallet) = ${normalizedWallet}
-       OR LOWER(p.embedded_wallet) = ${normalizedWallet}
-       OR LOWER(p.primary_embedded_eoa) = ${normalizedWallet}
-       OR LOWER(p.csw_address) = ${normalizedWallet}
-       OR LOWER(p.primary_smart_wallet) = ${normalizedWallet}
-       OR LOWER(p.base_sub_account) = ${normalizedWallet}
-       OR EXISTS (
-         SELECT 1
-         FROM profile_wallets pw
-         WHERE pw.profile_id = p.id
-           AND LOWER(pw.address) = ${normalizedWallet}
-       )
-    ORDER BY p.updated_at DESC NULLS LAST, p.created_at DESC NULLS LAST, p.id DESC
+    WITH matched AS (
+      SELECT p.id, p.merged_into_profile_id, p.email, p.updated_at, p.created_at
+      FROM profiles p
+      WHERE LOWER(p.primary_wallet) = ${normalizedWallet}
+         OR LOWER(p.embedded_wallet) = ${normalizedWallet}
+         OR LOWER(p.primary_embedded_eoa) = ${normalizedWallet}
+         OR LOWER(p.csw_address) = ${normalizedWallet}
+         OR LOWER(p.primary_smart_wallet) = ${normalizedWallet}
+         OR LOWER(p.base_sub_account) = ${normalizedWallet}
+         OR EXISTS (
+           SELECT 1
+           FROM profile_wallets pw
+           WHERE pw.profile_id = p.id
+             AND LOWER(pw.address) = ${normalizedWallet}
+         )
+    ),
+    resolved AS (
+      SELECT p2.id, p2.email,
+             -- Score: canonical (real email) first, then most-recently-updated.
+             CASE
+               WHEN p2.email IS NOT NULL AND p2.email <> ''
+                 AND LOWER(p2.email) NOT LIKE '%@wallet.4626.fun'
+                 AND LOWER(p2.email) NOT LIKE '%@noemail.4626.fun'
+               THEN 0
+               ELSE 1
+             END AS bucket,
+             COALESCE(p2.updated_at, p2.created_at) AS ranked_at
+      FROM matched m
+      JOIN profiles p2 ON p2.id = COALESCE(m.merged_into_profile_id, m.id)
+      WHERE p2.merged_into_profile_id IS NULL
+    )
+    SELECT DISTINCT id
+    FROM resolved
+    ORDER BY bucket ASC, ranked_at DESC NULLS LAST
     LIMIT 1;
   `
   const existingIdRaw = existing.rows?.[0]?.id

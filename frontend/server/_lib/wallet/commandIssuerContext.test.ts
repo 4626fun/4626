@@ -272,8 +272,14 @@ describe('provisionCommandIssuerContext UPSERT — legacy reprovision', () => {
 
     function sqlImpl(strings: TemplateStringsArray, ...values: unknown[]) {
       const sql = strings.join('?')
+<<<<<<< HEAD
 
       if (sql.includes('INSERT INTO command_issuer_execution_context')) {
+=======
+      const lower = sql.toLowerCase()
+
+      if (lower.includes('insert into command_issuer_execution_context')) {
+>>>>>>> 28968a5c (feat(arch-b): implement sub-account execution and profile merge infrastructure)
         // Positional bind order must match the INSERT in commandIssuerContext.ts:
         //   profile_id, smart_wallet_address, privy_owner_wallet_id, owner_eoa_address,
         //   owner_index, paymaster_policy, per_tx_cap_wei, daily_cap_wei,
@@ -389,7 +395,14 @@ describe('provisionCommandIssuerContext UPSERT — legacy reprovision', () => {
         return Promise.resolve({ rows: [] })
       }
 
+<<<<<<< HEAD
       if (sql.includes('SELECT * FROM command_issuer_execution_context')) {
+=======
+      if (
+        lower.includes('select * from command_issuer_execution_context') ||
+        lower.includes('from command_issuer_execution_context ctx')
+      ) {
+>>>>>>> 28968a5c (feat(arch-b): implement sub-account execution and profile merge infrastructure)
         return Promise.resolve({ rows: current ? [current] : [] })
       }
 

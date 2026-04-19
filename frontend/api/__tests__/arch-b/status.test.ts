@@ -28,11 +28,8 @@ vi.mock('../../../packages/server-core/src/index.js', () => ({
   setNoStore: mocks.setNoStore,
   getDb: mocks.getDb,
   isDbConfigured: mocks.isDbConfigured,
-  RATE_LIMITS: { adminAction: { windowMs: 60_000, maxRequests: 30 } },
-}))
-
-vi.mock('../../../server/_lib/auth/requestPrincipal.js', () => ({
   resolveAuthorizedRequestPrincipal: mocks.resolveAuthorizedRequestPrincipal,
+  RATE_LIMITS: { adminAction: { windowMs: 60_000, maxRequests: 30 } },
 }))
 
 vi.mock('../../../server/_lib/wallet/commandIssuerContext.js', () => ({

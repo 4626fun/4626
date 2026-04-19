@@ -100,6 +100,9 @@ jobs:
       - name: Guard new test file placement
         run: pnpm --dir frontend guard:test-file-placement
 
+      - name: Guard Arch-B sub-account alignment
+        run: pnpm --dir frontend guard:arch-b-subaccount-alignment
+
       - name: Frontend TypeScript
         run: pnpm --dir frontend typecheck
 

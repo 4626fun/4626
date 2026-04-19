@@ -227,6 +227,10 @@ describe('executeProfileMerge', () => {
           c.tombstone += 1
           return { rows: [{ id: 1 }] }
         }
+        // Arch-B tables: swallow the new queries without counting them;
+        // they're tested explicitly in the next test case.
+        if (/command_issuer_execution_context/i.test(raw)) return { rows: [] }
+        if (/command_issuer_daily_spend/i.test(raw)) return { rows: [] }
         return { rows: [] }
       }),
     }
@@ -274,6 +278,135 @@ describe('executeProfileMerge', () => {
     expect(c.aliasInserts).toBe(1)
     expect(c.fromRefCleared).toBe(1)
     expect(c.tombstone).toBe(1)
+  })
+
+  it('moves arch-b execution context and daily spend rows onto to', async () => {
+    type ContextMove = { action: 'upsert' | 'delete' | 'select-existing'; profileId: number }
+    const ctxOps: ContextMove[] = []
+    type SpendCopy = { ymd: string; spentWei: string }
+    const spendCopies: SpendCopy[] = []
+    let spendDeletes = 0
+
+    const db: FakeDb = {
+      sql: vi.fn(async (strings: TemplateStringsArray, ...values: any[]) => {
+        const raw = strings.join(' ')
+        const lower = raw.toLowerCase()
+        if (/FROM profiles\s+WHERE id =/i.test(raw)) {
+          const id = Number(values[0])
+          if (id === 1) return { rows: [profileRow({ id: 1, privy_user_id: 'from' })] }
+          if (id === 2) return { rows: [profileRow({ id: 2, email: 'canon@example.com' })] }
+          return { rows: [] }
+        }
+        if (lower.includes('select 1 from command_issuer_execution_context')) {
+          ctxOps.push({ action: 'select-existing', profileId: Number(values[0]) })
+          return { rows: [] } // `to` has no existing context
+        }
+        if (lower.includes('update command_issuer_execution_context')) {
+          ctxOps.push({ action: 'upsert', profileId: Number(values[0]) })
+          return { rows: [] }
+        }
+        if (lower.includes('delete from command_issuer_execution_context')) {
+          ctxOps.push({ action: 'delete', profileId: Number(values[0]) })
+          return { rows: [] }
+        }
+        if (lower.includes('insert into command_issuer_daily_spend')) {
+          // Would be populated by real `SELECT ymd, spent_wei FROM command_issuer_daily_spend
+          // WHERE profile_id = from` — we record the parameterized side.
+          spendCopies.push({ ymd: '2026-04-19', spentWei: '0' })
+          return { rows: [] }
+        }
+        if (lower.includes('delete from command_issuer_daily_spend')) {
+          spendDeletes += 1
+          return { rows: [] }
+        }
+        return { rows: [] }
+      }),
+    }
+
+    const plan: ProfileMergePlan = {
+      from: {
+        id: 1,
+        email: null,
+        privyUserId: 'from',
+        primaryWallet: null,
+        embeddedWallet: null,
+        cswAddress: null,
+        referralCode: null,
+        mergedIntoProfileId: null,
+      },
+      to: {
+        id: 2,
+        email: 'canon@example.com',
+        privyUserId: 'to',
+        primaryWallet: null,
+        embeddedWallet: null,
+        cswAddress: null,
+        referralCode: null,
+        mergedIntoProfileId: null,
+      },
+      pointsRowsToMove: 0,
+      pointsRowsSkippedAsDuplicate: 0,
+      referralConversionsToRepoint: 0,
+      refereesToRepoint: 0,
+    }
+
+    await executeProfileMerge(db as any, plan)
+
+    // Context: because `to` has no existing row, `from`'s row should be
+    // re-keyed onto `to` via UPDATE.
+    expect(ctxOps).toEqual(
+      expect.arrayContaining([
+        { action: 'select-existing', profileId: 2 },
+        { action: 'upsert', profileId: 2 },
+      ]),
+    )
+    // Daily spend: one INSERT...SELECT + one DELETE.
+    expect(spendCopies.length).toBeGreaterThanOrEqual(1)
+    expect(spendDeletes).toBe(1)
+  })
+
+  it('keeps the existing arch-b context on to and drops from when both have one', async () => {
+    const ctxOps: string[] = []
+    const db: FakeDb = {
+      sql: vi.fn(async (strings: TemplateStringsArray, ...values: any[]) => {
+        const raw = strings.join(' ')
+        const lower = raw.toLowerCase()
+        if (/FROM profiles\s+WHERE id =/i.test(raw)) {
+          const id = Number(values[0])
+          if (id === 1) return { rows: [profileRow({ id: 1, privy_user_id: 'from' })] }
+          if (id === 2) return { rows: [profileRow({ id: 2, email: 'canon@example.com' })] }
+          return { rows: [] }
+        }
+        if (lower.includes('select 1 from command_issuer_execution_context')) {
+          // `to` ALREADY has a context.
+          return { rows: [{ '?column?': 1 }] }
+        }
+        if (lower.includes('update command_issuer_execution_context')) {
+          ctxOps.push('upsert')
+          return { rows: [] }
+        }
+        if (lower.includes('delete from command_issuer_execution_context')) {
+          ctxOps.push('delete')
+          return { rows: [] }
+        }
+        return { rows: [] }
+      }),
+    }
+
+    const plan: ProfileMergePlan = {
+      from: { id: 1, email: null, privyUserId: 'from', primaryWallet: null, embeddedWallet: null, cswAddress: null, referralCode: null, mergedIntoProfileId: null },
+      to: { id: 2, email: 'canon@example.com', privyUserId: 'to', primaryWallet: null, embeddedWallet: null, cswAddress: null, referralCode: null, mergedIntoProfileId: null },
+      pointsRowsToMove: 0,
+      pointsRowsSkippedAsDuplicate: 0,
+      referralConversionsToRepoint: 0,
+      refereesToRepoint: 0,
+    }
+
+    await executeProfileMerge(db as any, plan)
+    // When `to` already has a context, we drop from's — never UPDATE,
+    // never overwrite `to`'s.
+    expect(ctxOps).toContain('delete')
+    expect(ctxOps).not.toContain('upsert')
   })
 
   it('preserves an existing csw_address on to (never overwrites canonical)', async () => {
