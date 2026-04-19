@@ -68,10 +68,19 @@ function useResolvedAccessState(): AccessState {
   })
   const accepted = computeAcceptedFromAppAccessStatus(acceptedStateQuery.data?.appAccessStatus ?? null)
 
+  // Keep the route guard in a loading state while the session is hydrated but
+  // the waitlist-me query has not yet produced data. react-query's `isLoading`
+  // only reports `true` while actively fetching, so there is a render window
+  // right after `hasSession` flips true where `isLoading === false` and
+  // `data === undefined`. Treating that window as "not loading" causes an
+  // erroneous redirect back to the marketing waitlist page (bounce) before the
+  // first fetch resolves. Guard on `data === undefined` to close the race.
+  const acceptedUnknown =
+    hasSession && !screenshotMode && acceptedStateQuery.data === undefined && !acceptedStateQuery.isError
   const loading =
     !siwe.sessionHydrated ||
     siwe.busy ||
-    (hasSession && acceptedStateQuery.isLoading) ||
+    acceptedUnknown ||
     (hasSession && adminStatus.isLoading)
 
   if (screenshotMode) {
