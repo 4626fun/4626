@@ -64,6 +64,12 @@ function isPrivyUserIdUniqueViolation(error: unknown): boolean {
   )
 }
 
+function isMissingRelationError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const lower = message.toLowerCase()
+  return lower.includes('does not exist') && lower.includes('relation')
+}
+
 async function findProfileByProfileColumns(db: Db, params: {
   address: string
   privyUserId: string | null
@@ -127,22 +133,55 @@ async function findProfileByProfileColumns(db: Db, params: {
 async function findExistingProfile(db: Db, privyUserId: string | null, wallets: MappedWallet[]): Promise<ExistingProfile | null> {
   // Every lookup below follows tombstone pointers so wallet-matches on a
   // merged-away row resolve to the canonical survivor, not the tombstone.
+  //
+  // Privy resolver cascade (mirrors `accountsIdentity.listProfileIdsForPrivyUser`):
+  //   1. `privy_user_aliases` is the authoritative post-merge mapping.
+  //      Prior merges add alias rows so repeat sign-ins from the same
+  //      human-but-different-Privy-account land on the canonical survivor.
+  //   2. Direct `profiles.privy_user_id` catches envs that have not run
+  //      the alias migration yet.
+  //   3. Tombstone pointers are chased so an alias → tombstone → canonical
+  //      still resolves to the live profile.
   if (privyUserId) {
-    const byPrivy = await db.sql`
-      WITH matched AS (
-        SELECT id, email, merged_into_profile_id
-        FROM profiles
-        WHERE privy_user_id = ${privyUserId}
-        LIMIT 1
-      )
-      SELECT p.id, p.email
-      FROM matched m
-      JOIN profiles p ON p.id = COALESCE(m.merged_into_profile_id, m.id)
-      WHERE p.merged_into_profile_id IS NULL
-      LIMIT 1;
-    `
-    const row = byPrivy.rows?.[0] as { id?: number; email?: string | null } | undefined
-    if (row?.id) return { id: Number(row.id), email: row.email ?? null }
+    try {
+      const byPrivy = await db.sql`
+        WITH direct AS (
+          SELECT id, email, merged_into_profile_id
+          FROM profiles
+          WHERE id IN (
+            SELECT profile_id FROM privy_user_aliases WHERE privy_user_id = ${privyUserId}
+          )
+             OR privy_user_id = ${privyUserId}
+          LIMIT 1
+        )
+        SELECT p.id, p.email
+        FROM direct d
+        JOIN profiles p ON p.id = COALESCE(d.merged_into_profile_id, d.id)
+        WHERE p.merged_into_profile_id IS NULL
+        LIMIT 1;
+      `
+      const row = byPrivy.rows?.[0] as { id?: number; email?: string | null } | undefined
+      if (row?.id) return { id: Number(row.id), email: row.email ?? null }
+    } catch (error) {
+      // Legacy envs without `privy_user_aliases` fall back to the direct
+      // column. Any other error propagates.
+      if (!isMissingRelationError(error)) throw error
+      const byPrivyDirect = await db.sql`
+        WITH matched AS (
+          SELECT id, email, merged_into_profile_id
+          FROM profiles
+          WHERE privy_user_id = ${privyUserId}
+          LIMIT 1
+        )
+        SELECT p.id, p.email
+        FROM matched m
+        JOIN profiles p ON p.id = COALESCE(m.merged_into_profile_id, m.id)
+        WHERE p.merged_into_profile_id IS NULL
+        LIMIT 1;
+      `
+      const row = byPrivyDirect.rows?.[0] as { id?: number; email?: string | null } | undefined
+      if (row?.id) return { id: Number(row.id), email: row.email ?? null }
+    }
   }
 
   for (const wallet of wallets) {

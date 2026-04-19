@@ -113,6 +113,13 @@ export type ProfileMergePlan = {
 export type ProfileMergeResult = {
   aliasInserted: boolean
   walletsLinked: number
+  /** Rows swept from `profile_wallets` on `from` onto `to`. Distinct from
+   *  `walletsLinked` which copies the single `primary_wallet`/`embedded_wallet`
+   *  columns. This sweep catches every wallet row previously attached to
+   *  `from` (via the many-to-many `profile_wallets` table) so a tombstone
+   *  is never left with dangling wallet rows that a later lookup could
+   *  resurrect. See `AGENTS.md` → "Profile merge moves arch-b tables too". */
+  walletRowsSwept: number
   pointsMoved: number
   pointsDroppedAsDuplicate: number
   referralConversionsRepointed: number
@@ -302,6 +309,52 @@ export async function executeProfileMerge(
     }
   }
 
+  // 3b. Sweep every `profile_wallets` row currently attached to `from` onto
+  // `to`, then delete the originals. This preserves wallets that landed on
+  // `from` after the merge infrastructure first linked it (step 3 above only
+  // covers the single primary/embedded columns on the `profiles` row).
+  //
+  // Role flags are forced FALSE on the sweep because `to` enforces partial
+  // unique indexes (`profile_wallets_one_canonical`, `_one_embedded_eoa`,
+  // `_one_primary`, etc.) that must not be displaced by a tombstone's
+  // secondary attachments. The canonical wallet on `to` is authoritative.
+  let walletRowsSwept = 0
+  try {
+    const sweptRes = await db.sql`
+      INSERT INTO profile_wallets (
+        profile_id, address,
+        is_primary, is_canonical_smart_wallet, is_embedded_eoa,
+        is_canonical_solana_wallet, is_operational_solana_wallet,
+        verified_at, metadata, created_at, updated_at,
+        chain_id, canonical_csw_address, canonical_source,
+        privy_embedded_eoa_address, privy_is_owner, last_checked_at,
+        canonical_zora_csw_address
+      )
+      SELECT
+        ${to.id}, address,
+        FALSE, FALSE, FALSE, FALSE, FALSE,
+        verified_at,
+        COALESCE(metadata, '{}'::jsonb)
+          || jsonb_build_object(
+               'salvagedFromTombstoneId', profile_id,
+               'salvagedAt', NOW()::text
+             ),
+        created_at, NOW(),
+        chain_id, canonical_csw_address, canonical_source,
+        privy_embedded_eoa_address, privy_is_owner, last_checked_at,
+        canonical_zora_csw_address
+      FROM profile_wallets
+      WHERE profile_id = ${from.id}
+      ON CONFLICT (profile_id, address) DO NOTHING
+      RETURNING profile_id;
+    `
+    walletRowsSwept = Array.isArray(sweptRes.rows) ? sweptRes.rows.length : 0
+    await db.sql`DELETE FROM profile_wallets WHERE profile_id = ${from.id};`
+  } catch {
+    // profile_wallets schema may vary across envs; ignore column mismatches
+    // (mirrors the step-3 try/catch rationale).
+  }
+
   // 4. Copy `from`'s novel points rows onto `to`, drop duplicates.
   const movedRes = await db.sql`
     INSERT INTO points (signup_id, source, source_id, amount, created_at)
@@ -435,6 +488,7 @@ export async function executeProfileMerge(
   return {
     aliasInserted,
     walletsLinked,
+    walletRowsSwept,
     pointsMoved,
     pointsDroppedAsDuplicate,
     referralConversionsRepointed,
