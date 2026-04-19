@@ -403,6 +403,33 @@ describe('POST /api/arch-b/sub-account/provision/commit', () => {
     await handler(req, res)
     expect(res.statusCode).toBe(503)
   })
+
+  it('returns 400 invalid_token when permission.token is not the native-ETH sentinel', async () => {
+    mocks.verifySubAccountProvision.mockResolvedValue({ ok: false, code: 'invalid_token' })
+    const req = createMockReq({ method: 'POST' })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(400)
+    expect(res.body.error).toBe('invalid_token')
+  })
+
+  it('returns 400 permission_not_yet_active when permission.start is in the future', async () => {
+    mocks.verifySubAccountProvision.mockResolvedValue({ ok: false, code: 'permission_not_yet_active' })
+    const req = createMockReq({ method: 'POST' })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(400)
+    expect(res.body.error).toBe('permission_not_yet_active')
+  })
+
+  it('returns 400 invalid_window when permission.start >= permission.end', async () => {
+    mocks.verifySubAccountProvision.mockResolvedValue({ ok: false, code: 'invalid_window' })
+    const req = createMockReq({ method: 'POST' })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(400)
+    expect(res.body.error).toBe('invalid_window')
+  })
 })
 
 // ---------------------------------------------------------------------------
@@ -518,5 +545,41 @@ describe('POST /api/admin/arch-b/sub-account/provision', () => {
     const res = createMockRes()
     await handler(req, res)
     expect(res.statusCode).toBe(405)
+  })
+
+  it('returns 400 invalid_token when verify rejects non-native token', async () => {
+    mocks.verifySubAccountProvision.mockResolvedValue({ ok: false, code: 'invalid_token' })
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer super-secret-admin-token' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(400)
+    expect(res.body.error).toBe('invalid_token')
+  })
+
+  it('returns 400 permission_not_yet_active when verify rejects future-start permission', async () => {
+    mocks.verifySubAccountProvision.mockResolvedValue({ ok: false, code: 'permission_not_yet_active' })
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer super-secret-admin-token' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(400)
+    expect(res.body.error).toBe('permission_not_yet_active')
+  })
+
+  it('returns 400 invalid_window when verify rejects start >= end', async () => {
+    mocks.verifySubAccountProvision.mockResolvedValue({ ok: false, code: 'invalid_window' })
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer super-secret-admin-token' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(400)
+    expect(res.body.error).toBe('invalid_window')
   })
 })

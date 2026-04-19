@@ -18,7 +18,7 @@
  *
  * Responses:
  *   200 { success: true, data: { profileId, subAccountAddress, status: 'ready' } }
- *   400 invalid_body | invalid_hash | invalid_spender | invalid_caps | permission_expired
+ *   400 invalid_body | invalid_hash | invalid_spender | invalid_caps | invalid_token | invalid_window | permission_not_yet_active | permission_expired
  *   401 unauthenticated
  *   403 signer_not_owner | invalid_signature
  *   409 profile_not_ready | missing_privy_wallet
@@ -245,6 +245,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       verified.code === 'invalid_caps' ||
       verified.code === 'invalid_hash' ||
       verified.code === 'invalid_spender' ||
+      verified.code === 'invalid_token' ||
+      verified.code === 'invalid_window' ||
+      verified.code === 'permission_not_yet_active' ||
       verified.code === 'permission_expired'
         ? 400
         : verified.code === 'signer_not_owner' || verified.code === 'invalid_signature'

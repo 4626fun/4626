@@ -13,6 +13,7 @@ import { base } from 'viem/chains'
 
 import type { SpendPermissionPayload } from './commandIssuerContext.js'
 import {
+  NATIVE_TOKEN_SENTINEL,
   SPEND_PERMISSION_EIP712_DOMAIN,
   SPEND_PERMISSION_TYPES,
   hashSpendPermission,
@@ -65,6 +66,9 @@ export type SubAccountVerifyErrCode =
   | 'signer_not_owner'
   | 'invalid_spender'
   | 'invalid_caps'
+  | 'invalid_token'
+  | 'invalid_window'
+  | 'permission_not_yet_active'
   | 'permission_expired'
   | 'signature_verification_failed'
 
@@ -167,8 +171,19 @@ export async function verifySubAccountProvision(
     return { ok: false, code: 'invalid_caps', message: 'caps exceed server ceiling' }
   }
 
-  // Expiry
+  // Token sentinel: must be native ETH
+  if (permission.token.toLowerCase() !== NATIVE_TOKEN_SENTINEL.toLowerCase()) {
+    return { ok: false, code: 'invalid_token', message: 'permission.token must be native ETH sentinel' }
+  }
+
+  // Validity window: start <= now < end, and start < end
   const nowSec = Math.floor(Date.now() / 1000)
+  if (permission.start >= permission.end) {
+    return { ok: false, code: 'invalid_window', message: 'permission.start must be < permission.end' }
+  }
+  if (permission.start > nowSec) {
+    return { ok: false, code: 'permission_not_yet_active', message: 'permission.start is in the future' }
+  }
   if (permission.end <= nowSec) {
     return { ok: false, code: 'permission_expired' }
   }
