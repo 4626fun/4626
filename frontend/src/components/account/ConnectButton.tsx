@@ -4,9 +4,14 @@ import { Wallet, ChevronDown } from 'lucide-react'
 import { Link } from 'react-router-dom'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useIdentity } from '@/hooks/useIdentity'
+import { useCanonicalIdentity } from '@/hooks/useCanonicalIdentity'
 import { getAgentIdentity } from '@/components/chat/agentIdentity'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 import { usePrivyClientStatus } from '@/lib/privy/client'
+import {
+  CanonicalIdentityCard,
+  CanonicalIdentityDropdown,
+} from '@/components/account/CanonicalIdentityCard'
 
 type ConnectButtonStateInput = {
   sessionHydrated: boolean
@@ -237,6 +242,7 @@ export function ConnectButton({
   const { address, isConnected } = useAccount()
   const { disconnect } = useDisconnect()
   const auth = useSiweAuth()
+  const canonicalIdentity = useCanonicalIdentity()
   const privyStatus = usePrivyClientStatus()
   const prefersPrivyWalletLogin = privyStatus === 'ready'
   const [showMenu, setShowMenu] = useState(false)
@@ -303,14 +309,37 @@ export function ConnectButton({
       miniAvatarUrl: unifiedAvatar,
     })
 
+    const showCanonicalCard = auth.hasSession && Boolean(canonicalIdentity.cswAddress)
+
     return (
       <div className="relative">
-        <IdentityButton presentation={presentation} connected menuOpen={showMenu} onToggle={toggleMenu} />
+        {showCanonicalCard ? (
+          <CanonicalIdentityCard
+            identity={canonicalIdentity}
+            menuOpen={showMenu}
+            onToggle={toggleMenu}
+            variant="nav"
+          />
+        ) : (
+          <IdentityButton presentation={presentation} connected menuOpen={showMenu} onToggle={toggleMenu} />
+        )}
 
         {showMenu && (
           <DropdownLayer onClose={() => setShowMenu(false)} panelClassName={menuPanelClassName}>
+              {showCanonicalCard ? (
+                <>
+                  <CanonicalIdentityDropdown
+                    identity={canonicalIdentity}
+                    onRequestConnectWallet={() => {
+                      setShowMenu(false)
+                      setShowOptions(true)
+                    }}
+                  />
+                  <div className="h-px bg-white/8 my-2" />
+                </>
+              ) : null}
               <a
-                href={`https://basescan.org/address/${address}`}
+                href={`https://basescan.org/address/${canonicalIdentity.cswAddress ?? address}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="block w-full py-3 px-4 hover:bg-white/4 transition-colors"
@@ -318,6 +347,7 @@ export function ConnectButton({
                 <span className="label block">View on Basescan</span>
               </a>
               <div className="h-px bg-white/8 my-2" />
+                
               {!auth.hasSession ? (
                 <button
                   type="button"
@@ -393,16 +423,40 @@ export function ConnectButton({
       miniAvatarUrl: unifiedAvatar,
     })
 
+    const showCanonicalCard = Boolean(canonicalIdentity.cswAddress)
+
     return (
       <div className="relative">
-        <IdentityButton presentation={presentation} connected={false} menuOpen={showMenu} onToggle={toggleMenu} />
+        {showCanonicalCard ? (
+          <CanonicalIdentityCard
+            identity={canonicalIdentity}
+            menuOpen={showMenu}
+            onToggle={toggleMenu}
+            variant="nav"
+          />
+        ) : (
+          <IdentityButton presentation={presentation} connected={false} menuOpen={showMenu} onToggle={toggleMenu} />
+        )}
 
         {showMenu && (
           <DropdownLayer onClose={() => setShowMenu(false)} panelClassName={menuPanelClassName}>
-              <div className="px-4 py-3">
-                <div className="label text-emerald-200">Signed in</div>
-                <div className="app-meta-value text-zinc-600 mt-1">4626 session is active.</div>
-              </div>
+              {showCanonicalCard ? (
+                <>
+                  <CanonicalIdentityDropdown
+                    identity={canonicalIdentity}
+                    onRequestConnectWallet={() => {
+                      setShowMenu(false)
+                      setShowOptions(true)
+                    }}
+                  />
+                  <div className="h-px bg-white/8 my-2" />
+                </>
+              ) : (
+                <div className="px-4 py-3">
+                  <div className="label text-emerald-200">Signed in</div>
+                  <div className="app-meta-value text-zinc-600 mt-1">4626 session is active.</div>
+                </div>
+              )}
               <Link
                 to="/accounts"
                 onClick={() => setShowMenu(false)}
