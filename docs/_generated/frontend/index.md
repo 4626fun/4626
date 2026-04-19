@@ -723,7 +723,6 @@
 - [src/lib/base/baseBuilderCodes](src/lib/base/baseBuilderCodes.md)
 - [src/lib/base/baseReadRpcPolicy](src/lib/base/baseReadRpcPolicy.md)
 - [src/lib/basename/basename-api](src/lib/basename/basename-api.md)
-- [src/lib/build/viteManualChunks](src/lib/build/viteManualChunks.md)
 - [src/lib/cca/marketFloor](src/lib/cca/marketFloor.md)
 - [src/lib/cca/q96](src/lib/cca/q96.md)
 - [src/lib/creator/creator-coin-resolver](src/lib/creator/creator-coin-resolver.md)
