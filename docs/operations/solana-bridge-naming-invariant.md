@@ -198,6 +198,106 @@ apply the same migration pattern: deploy a new adapter (or reuse v2 if
 the creator's coin was registered there), re-register on the new
 adapter, update the frontend default.
 
+## Meteora integration runbook
+
+Bridging to Solana is independent from depositing bridged tokens into a
+Meteora DLMM / Alpha Vault. The bridge is set up for every creator
+automatically (via `wrap-token` + `SolanaBridgeAdapter.registerToken`),
+but Meteora infrastructure for a creator's specific mint is NOT. Setting
+up Meteora is an operator-side per-creator step, handled via two CRE
+scripts plus a DB row.
+
+### When to do it
+
+Create new Meteora infra for a creator when:
+
+- The vault activation flow should seed a starting DLMM position on
+  Solana (handled by `bridgeToSolanaWithIxs` at activation), OR
+- Keeper-driven ongoing rebalance from Base should park into a DLMM
+  position rather than a custody wallet (handled by the
+  `keepr-solana-rebalance` workflow when it's moved out of stub state).
+
+Creators who don't need either can ship without Meteora. The bridge
+itself works regardless — tokens just land in a Solana custody wallet
+instead of an Alpha Vault.
+
+### Cost and access
+
+- ~1.5 SOL for DLMM pool creation + bin array rent
+- ~1.5 SOL for Alpha Vault creation
+- Needs the Solana keeper keypair at `SOLANA_PRIVATE_KEY` (base58)
+- Needs `SOLANA_RPC_URL` pointing at a working mainnet RPC
+
+Total ≈ 3.5 SOL per creator who opts into Meteora.
+
+### Commands
+
+```bash
+# 0. Source env so CRE scripts pick up keys and RPC
+export $(grep -E '^(SOLANA_RPC_URL|SOLANA_PRIVATE_KEY|BASE_RPC_URL)=' \
+  /path/to/repo/frontend/.env | xargs)
+
+# 1. Derive the creator's strict-parity Solana mint address and
+#    confirm it already exists on-chain (wrap-token was already run at
+#    creator coin launch time).
+pnpm -C frontend exec tsx scripts/verify-solana-mint-parity.ts \
+  --creator 0x<creator-base-erc20> --json
+
+# 2. Create the Meteora DLMM pool paired against the creator's mint
+#    and wrapped SOL.
+pnpm -C cre exec tsx scripts/solana/launch/create-dlmm-pool.ts \
+  --creator-token 0x<creator-base-erc20>
+
+# 3. Create the Meteora Alpha Vault on top of the pool.
+pnpm -C cre exec tsx scripts/solana/launch/create-alpha-vault.ts \
+  --creator-token 0x<creator-base-erc20>
+
+# 4. Register the mapping in the DB so the deploy-session flow and
+#    `keepr-solana-rebalance` workflow can find it.
+pnpm -C cre exec tsx scripts/solana/launch/register-meteora-vault.ts \
+  --creator-token 0x<creator-base-erc20> \
+  --meteora-alpha-vault <vault-pubkey> \
+  --alpha-vault-program-id vaU6kP7iNEGkbmPkLmZfGwiGxd4Mob24QQCie5R9kd2
+
+# 5. Verify end-to-end parity.
+pnpm -C frontend exec tsx scripts/verify-solana-mint-parity.ts \
+  --creator 0x<creator-base-erc20>
+```
+
+Or run `pnpm -C cre exec tsx scripts/solana/launch/bootstrap-solana-side.ts`
+which chains steps 2-4 and performs a smoke-build of the Phase-2 Solana
+ix payload.
+
+### When NOT to run this runbook
+
+- If the creator's Base ERC-20 doesn't pass strict-parity
+  normalization (name > 32 bytes, symbol > 12 bytes, null bytes, empty
+  after lowercasing). Fix the creator coin first.
+- If the creator's mint was wrapped under legacy (non-lowercase)
+  metadata. That mint is immutable; the DLMM pool + Alpha Vault have
+  to be created against the lowercase-parity mint, and the
+  `SolanaBridgeAdapter` registration has to point at that same mint.
+  The AKITA v1→v2 migration is the canonical example.
+- If the `creator_meteora_alpha_vaults` row for this creator is
+  already `enabled=true`. Re-running destroys existing liquidity; migrate
+  an existing pool with a dedicated LP migration script instead.
+
+### Current AKITA state
+
+AKITA's Meteora row is `enabled=false` with `supersededReason =
+v2-adapter-migration-2026-04-19`. To re-enable Meteora for AKITA after
+the v2 migration:
+
+1. Fund the Solana keeper `7Qi3WW7q4kmqXcMBca76b3WjNMdRmjjjrpG5FTc8htxY`
+   with ~4 SOL.
+2. Run steps 2-4 above against the AKITA creator token
+   `0x5b674196812451b7cec024fe9d22d2c0b172fa75`.
+3. Update the existing row's `enabled=true` and point it at the new
+   Meteora pool/vault pubkeys.
+
+Without this, AKITA's vault works normally on Base; bridged value on
+the Solana side lands in a custody wallet rather than an Alpha Vault.
+
 ## Invariants summary
 
 Put these on the wall:
@@ -224,3 +324,6 @@ Put these on the wall:
 - [`contracts/vault/strategies/SolanaStrategy.sol`](../../contracts/vault/strategies/SolanaStrategy.sol) — creator vault's Solana strategy
 - [`frontend/server/solana-provisioner/index.ts`](../../frontend/server/solana-provisioner/index.ts) — provisioner host that dispatches `wrap-token`
 - [`frontend/scripts/mine-solana-mint-vanity.ts`](../../frontend/scripts/mine-solana-mint-vanity.ts) — dev tool for vanity mint addresses
+- [`cre/actions/keepr-solana-rebalance.action.ts`](../../cre/actions/keepr-solana-rebalance.action.ts) — keeper action that bridges adapter-held CREATOR tokens to Solana (stub: routing/config wired, onchain dispatch intentionally gated behind `KEEPR_SOLANA_REBALANCE_EXECUTE=1`)
+- [`cre/scripts/solana/launch/create-dlmm-pool.ts`](../../cre/scripts/solana/launch/create-dlmm-pool.ts), [`create-alpha-vault.ts`](../../cre/scripts/solana/launch/create-alpha-vault.ts), [`register-meteora-vault.ts`](../../cre/scripts/solana/launch/register-meteora-vault.ts) — per-creator Meteora setup (see [Meteora integration runbook](#meteora-integration-runbook))
+- [`cre/scripts/solana/launch/bootstrap-solana-side.ts`](../../cre/scripts/solana/launch/bootstrap-solana-side.ts) — chains pool + vault + DB registration for a creator

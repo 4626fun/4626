@@ -66,7 +66,7 @@ Current live Base defaults still come from the `2026-04-11` `v1.8.3` infra broad
 - `UniversalBytecodeStoreV2`: `0xA009B1Bf8cB711c115d832AEb392156BA6A4112e`
 - `UniversalCreate2DeployerFromStore`: `0xFd2657b6f1905C3F0494942F618a68963CF792Ec`
 - `VaultActivationBatcher`: `0x7Cc0050842433968cc7A0884d192b61FD0b46F63`
-- `SolanaBridgeAdapter`: `0x653326dD0145656eC3b598943C0E84d7405aE6Ae` (v2, 2026-04-19; v1 `0x90F578A4e23c1cB8DDFE63fd496ED7F4474f2b00` retained for historical AKITA mapping)
+- `SolanaBridgeAdapter`: `0x653326dD0145656eC3b598943C0E84d7405aE6Ae`
 
 Mainnet deploy order:
 
