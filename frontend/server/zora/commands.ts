@@ -15,9 +15,11 @@ import {
   isExecutionReady,
 } from '../_lib/wallet/commandIssuerContext.js'
 import {
+  isArchBCoinBuyViaUserOpEnabled,
   isArchBCoinSellViaUserOpEnabled,
   submitUserOpOrRefuse,
 } from '../_lib/wallet/userOperationSubmitter.js'
+import { checkRouterTarget } from './routerAllowlist.js'
 import type { CoinbaseSmartWalletCall } from '../_lib/wallet/privyCoinbaseSmartWallet.js'
 import { assertTeeAttestationOrThrow } from '../_lib/agent/teeAttestationGate.js'
 import { wrapCswOwnerSignature } from '../_lib/wallet/cswOwnerSignature.js'
@@ -945,8 +947,9 @@ async function handleSell(params: {
  *   ERC-1271 contract-signature envelope that Permit2 accepts.
  * - No preflightAgentWalletOrRefuse — submitUserOpOrRefuse handles preflight
  *   internally.
- * - Router allowlist not wired in this PR.
- *   TODO(phase-3c): route through checkRouterTarget once PR #296 lands on main.
+ * - Router target validated via checkRouterTarget before building calls
+ *   (both on the initial quote and on the re-quote after permits are
+ *   signed). Also asserts the target does not change across the two calls.
  */
 async function handleSellViaArchB(params: {
   groupId: string
@@ -1104,6 +1107,27 @@ async function handleSellViaArchB(params: {
     return { ok: false, response: 'Failed to get sell quote. The coin may not have liquidity.' }
   }
 
+  // 5b. Validate the router target on the INITIAL quote before we commit to
+  //     signing any Permit2 authorization for it. Zora's Quote API is
+  //     non-authoritative external data — a compromised or malformed quote
+  //     could direct the CSW to call any contract. For a sell, the permit
+  //     we're about to sign authorizes Permit2 to move the user's tokens;
+  //     we must know the router it ends up calling is on our allowlist
+  //     BEFORE we produce that signature.
+  const initialRouterCheck = checkRouterTarget(initialCall.target as Address)
+  if (!initialRouterCheck.allowed) {
+    logger.warn('[coin/sell/arch-b] initial-quote router target blocked by allowlist', {
+      groupId: params.groupId,
+      target: initialCall.target,
+      reason: initialRouterCheck.reason,
+    })
+    return {
+      ok: false,
+      response:
+        "Coin sell blocked: the trade router address returned by the quote service isn't on the approved list. Please try again or contact support.",
+    }
+  }
+
   // 6. Handle Permit2 permits if the quote includes unsigned ones.
   //    The CSW cannot produce a standard ECDSA signature; instead, the CSW's
   //    owner EOA signs the Permit2 typed-data digest via Privy secp256k1_sign,
@@ -1193,6 +1217,40 @@ async function handleSellViaArchB(params: {
           response: 'Sell failed: re-quote returned no executable calldata. Please try again.',
         }
       }
+
+      // 7a. Validate the re-quote's router target against the allowlist,
+      //     and assert it is the SAME target as the initial quote. Signing
+      //     the Permit2 authorization for router A and then executing
+      //     against router B would let a compromised re-quote redirect the
+      //     user's approved token movement to an unapproved contract.
+      const reQuoteRouterCheck = checkRouterTarget(reQuote.call.target as Address)
+      if (!reQuoteRouterCheck.allowed) {
+        logger.warn('[coin/sell/arch-b] re-quote router target blocked by allowlist', {
+          groupId: params.groupId,
+          target: reQuote.call.target,
+          reason: reQuoteRouterCheck.reason,
+        })
+        return {
+          ok: false,
+          response:
+            "Coin sell blocked: the trade router address returned after signing the permit isn't on the approved list. Please try again or contact support.",
+        }
+      }
+      const initialTargetLower = String(initialCall.target).toLowerCase()
+      const reQuoteTargetLower = String(reQuote.call.target).toLowerCase()
+      if (initialTargetLower !== reQuoteTargetLower) {
+        logger.warn('[coin/sell/arch-b] router target changed between initial quote and re-quote', {
+          groupId: params.groupId,
+          initialTarget: initialCall.target,
+          reQuoteTarget: reQuote.call.target,
+        })
+        return {
+          ok: false,
+          response:
+            'Coin sell blocked: the trade router address changed after signing the permit. Please try again.',
+        }
+      }
+
       finalCall = reQuote.call
     } catch (err) {
       logger.warn('[coin/sell/arch-b] Zora re-quote call threw', {
