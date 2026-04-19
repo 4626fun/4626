@@ -85,6 +85,80 @@ describe('resolveCommandIssuerContextByAddress', () => {
       expect(result.context.perTxCapWei).toBe(10_000_000_000_000_000n)
       expect(result.context.dailyCapWei).toBe(50_000_000_000_000_000n)
       expect(result.context.revokedAt).toBeNull()
+      expect(result.context.subAccount).toBeNull()
+    }
+  })
+
+  it('returns ready context with subAccount populated when sub-account columns are set', async () => {
+    const subRow = {
+      ...BASE_ROW,
+      sub_account_address: '0x1111111111111111111111111111111111111111',
+      parent_csw_address: '0xAB6D5C10B03300326CD7FAB7267AE192842967B5',
+      spend_permission_payload: {
+        account: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+        spender: '0x1111111111111111111111111111111111111111',
+        token: '0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE',
+        allowance: '500000000000000000',
+        period: 86400,
+        start: 1_700_000_000,
+        end: 4_700_000_000,
+        salt: '0x0000000000000000000000000000000000000000000000000000000000000001',
+        extraData: '0x',
+      },
+      spend_permission_signature: '0xabcd',
+      spend_permission_hash: '0xdeadbeef',
+      spend_allowance_wei: '500000000000000000',
+      spend_period_seconds: 86400,
+      spend_permission_end_at: '2099-01-01T00:00:00.000Z',
+      spend_permission_revoked_at: null,
+    }
+    getDbMock.mockResolvedValue(makeDb(async () => ({ rows: [subRow] })))
+    const mod = await importModule()
+    const result = await mod.resolveCommandIssuerContextByAddress(
+      '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+    )
+    expect(result.status).toBe('ready')
+    if (result.status === 'ready') {
+      expect(result.context.subAccount).not.toBeNull()
+      if (result.context.subAccount) {
+        expect(result.context.subAccount.subAccountAddress).toBe(
+          '0x1111111111111111111111111111111111111111',
+        )
+        expect(result.context.subAccount.parentCswAddress).toBe(
+          '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+        )
+        expect(result.context.subAccount.spendPermission.allowanceWei).toBe(
+          500_000_000_000_000_000n,
+        )
+        expect(result.context.subAccount.spendPermission.periodSeconds).toBe(86400)
+        expect(result.context.subAccount.spendPermission.revokedAt).toBeNull()
+        expect(result.context.subAccount.spendPermission.signature).toBe('0xabcd')
+        expect(result.context.subAccount.spendPermission.hash).toBe('0xdeadbeef')
+      }
+    }
+  })
+
+  it('falls back to subAccount=null when sub-account columns are partially populated', async () => {
+    const badRow = {
+      ...BASE_ROW,
+      sub_account_address: '0x1111111111111111111111111111111111111111',
+      parent_csw_address: null,
+      spend_permission_payload: null,
+      spend_permission_signature: null,
+      spend_permission_hash: null,
+      spend_allowance_wei: null,
+      spend_period_seconds: null,
+      spend_permission_end_at: null,
+      spend_permission_revoked_at: null,
+    }
+    getDbMock.mockResolvedValue(makeDb(async () => ({ rows: [badRow] })))
+    const mod = await importModule()
+    const result = await mod.resolveCommandIssuerContextByAddress(
+      '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+    )
+    expect(result.status).toBe('ready')
+    if (result.status === 'ready') {
+      expect(result.context.subAccount).toBeNull()
     }
   })
 
@@ -166,6 +240,7 @@ describe('isExecutionReady', () => {
         dailyCapWei: 2n,
         provisionedAt: new Date(),
         revokedAt: null,
+        subAccount: null,
       },
     }
     expect(mod.isExecutionReady(ready)).toBe(true)

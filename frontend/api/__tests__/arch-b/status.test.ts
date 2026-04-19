@@ -84,6 +84,7 @@ const PROVISIONED_CONTEXT = {
   dailyCapWei: 50_000_000_000_000_000n,
   provisionedAt: new Date('2025-01-01T00:00:00.000Z'),
   revokedAt: null,
+  subAccount: null,
 }
 
 // ---------------------------------------------------------------------------
