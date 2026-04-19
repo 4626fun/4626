@@ -31,12 +31,38 @@ export type CoinbaseSmartWalletCall = {
 export class CoinbaseSmartWalletHelperError extends Error {
   code: string
   retryable: boolean
+  /**
+   * Optional original message from the underlying error that caused this
+   * helper error. Kept separate from `message` so `message` remains the
+   * stable short code callers match against, while operators still see the
+   * raw bundler/paymaster/RPC text in logs.
+   */
+  causeMessage?: string
 
-  constructor(code: string, retryable: boolean, message?: string) {
-    super(message ?? code)
+  constructor(
+    code: string,
+    retryable: boolean,
+    messageOrOptions?: string | { message?: string; causeMessage?: string; cause?: unknown },
+  ) {
+    const options =
+      typeof messageOrOptions === 'string'
+        ? { message: messageOrOptions }
+        : (messageOrOptions ?? {})
+    super(options.message ?? code)
     this.name = 'CoinbaseSmartWalletHelperError'
     this.code = code
     this.retryable = retryable
+    if (options.causeMessage) this.causeMessage = options.causeMessage
+    if (options.cause !== undefined) {
+      // Attach the original error for logging/debug without polluting the
+      // short `message`. Supported natively on Error via the `cause` option,
+      // but we also assign explicitly for older runtimes.
+      try {
+        ;(this as unknown as { cause?: unknown }).cause = options.cause
+      } catch {
+        // Some runtimes freeze Error instances; ignore.
+      }
+    }
   }
 }
 
@@ -54,8 +80,16 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-function isRetryableInfraError(error: unknown): boolean {
+export function isRetryableInfraError(error: unknown): boolean {
   const message = getErrorMessage(error).toLowerCase()
+
+  // Deterministic ERC-4337 validation failures must NEVER be retried, even
+  // when bundlers wrap them in generic JSON-RPC codes like -32000 / -32603.
+  // AAxx codes come from the EntryPoint and indicate a specific, reproducible
+  // problem (bad signature, bad nonce, bad init code, out of gas). Retrying
+  // would waste credits and hide the real cause from operators.
+  if (hasDeterministicValidationSignal(message)) return false
+
   if (
     message.includes('timeout') ||
     message.includes('timed out') ||
@@ -65,11 +99,35 @@ function isRetryableInfraError(error: unknown): boolean {
     message.includes('too many requests') ||
     message.includes('429') ||
     message.includes('503') ||
+    message.includes('502') ||
+    message.includes('504') ||
     message.includes('gateway') ||
     message.includes('socket hang up') ||
     message.includes('connection reset') ||
-    message.includes('fetch failed')
+    message.includes('fetch failed') ||
+    // Paymaster / bundler upstream transient failures. The CDP paymaster RPC
+    // surfaces `internal error - error communicating with paymaster` when the
+    // bundler cannot reach its paymaster backend; that's infrastructure, not
+    // a deterministic UserOp validation failure, so it should retry.
+    message.includes('error communicating with paymaster') ||
+    message.includes('paymaster service') ||
+    message.includes('paymaster unavailable')
   ) {
+    return true
+  }
+
+  // Structured JSON-RPC error codes from viem/ox RpcRequestError. `-32000`
+  // and `-32603` are JSON-RPC generic "server error" codes — bundlers use
+  // them both for CDP-side infrastructure failures AND for deterministic
+  // EntryPoint validation reverts (AAxx wrapped). The AAxx guard above
+  // already short-circuits the deterministic branch, so reaching this
+  // point means we have a numeric internal-error code with no validation
+  // signal in the message — treat it as transient. For everything else
+  // (incl. -32602 INVALID_ARGUMENT, -32500 REJECTED_BY_EP_OR_ACCOUNT, and
+  // -32501 REJECTED_BY_PAYMASTER policy rejections) we keep it as non-
+  // retryable so operators still see the actionable cause.
+  const structuredCode = extractStructuredRpcErrorCode(error)
+  if (structuredCode === -32000 || structuredCode === -32603) {
     return true
   }
 
@@ -80,18 +138,65 @@ function isRetryableInfraError(error: unknown): boolean {
   return status === 408 || status === 429 || status >= 500
 }
 
+/**
+ * True iff the lowercased error message contains a signal that the failure
+ * is a deterministic ERC-4337 validation / execution revert. These must
+ * never be retried — retrying will reproduce the same failure and burn
+ * paymaster credits.
+ *
+ * - `aaNN` codes come from the EntryPoint (AA10, AA13, AA14, AA15, AA20,
+ *   AA21, AA23, AA24, AA25, AA40, AA41, AA50, AA51). See CDP docs.
+ * - `execution reverted` covers bundler-surfaced EXECUTION_REVERTED (-32521)
+ *   and viem-wrapped onchain reverts.
+ * - `invalid signature` / `signature error` covers INVALID_SIGNATURE (-32507)
+ *   wrapped as -32000 by some bundlers.
+ * - `nonce too low` / `invalid nonce` covers deterministic nonce errors that
+ *   occasionally surface as -32000 when the bundler normalizes error codes.
+ */
+function hasDeterministicValidationSignal(lowerMessage: string): boolean {
+  if (/\baa\d{2}\b/.test(lowerMessage)) return true
+  if (lowerMessage.includes('execution reverted')) return true
+  if (lowerMessage.includes('invalid signature')) return true
+  if (lowerMessage.includes('signature error')) return true
+  if (lowerMessage.includes('invalid nonce')) return true
+  if (lowerMessage.includes('nonce too low')) return true
+  if (lowerMessage.includes('nonce too high')) return true
+  if (lowerMessage.includes('banned opcode')) return true
+  return false
+}
+
+/** Walks the error chain looking for a numeric JSON-RPC `code` field. */
+function extractStructuredRpcErrorCode(error: unknown): number | null {
+  const seen = new Set<unknown>()
+  let cursor: unknown = error
+  while (cursor && typeof cursor === 'object' && !seen.has(cursor)) {
+    seen.add(cursor)
+    const candidate = (cursor as { code?: unknown }).code
+    if (typeof candidate === 'number' && Number.isFinite(candidate)) return candidate
+    cursor = (cursor as { cause?: unknown }).cause
+  }
+  return null
+}
+
 function toCoinbaseSmartWalletHelperError(params: {
   code: string
   retryable: boolean
+  causeMessage?: string
+  cause?: unknown
 }): CoinbaseSmartWalletHelperError {
-  return new CoinbaseSmartWalletHelperError(params.code, params.retryable)
+  return new CoinbaseSmartWalletHelperError(params.code, params.retryable, {
+    causeMessage: params.causeMessage,
+    cause: params.cause,
+  })
 }
 
-function wrapUnknownHelperError(code: string, error: unknown): CoinbaseSmartWalletHelperError {
+export function wrapUnknownHelperError(code: string, error: unknown): CoinbaseSmartWalletHelperError {
   if (isCoinbaseSmartWalletHelperError(error)) return error
   return toCoinbaseSmartWalletHelperError({
     code,
     retryable: isRetryableInfraError(error),
+    causeMessage: getErrorMessage(error),
+    cause: error,
   })
 }
 

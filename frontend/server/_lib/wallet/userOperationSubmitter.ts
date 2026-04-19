@@ -53,6 +53,7 @@ import {
 } from './commandIssuerContext.js'
 import {
   type CoinbaseSmartWalletCall,
+  isCoinbaseSmartWalletHelperError,
   sendPrivyCoinbaseSmartWalletUserOperation,
 } from './privyCoinbaseSmartWallet.js'
 import {
@@ -562,22 +563,34 @@ export async function submitUserOpOrRefuse(
         ? Boolean((error as { retryable?: boolean }).retryable)
         : false
 
+    // When the underlying failure is a CoinbaseSmartWalletHelperError, the
+    // public `message` is an opaque code (e.g. `userop_submission_failed`).
+    // The original RPC/paymaster/bundler error lives on `.causeMessage`
+    // (and optionally `.cause`). Surface both so the failure is diagnosable
+    // from logs and the user-facing response isn't just "Transfer failed:
+    // userop_submission_failed".
+    const helperCode = isCoinbaseSmartWalletHelperError(error) ? error.code : undefined
+    const causeMessage = isCoinbaseSmartWalletHelperError(error) ? error.causeMessage : undefined
+    const detailMessage = causeMessage && causeMessage.length > 0 ? causeMessage : errorMessage
+
     logger.error('[arch-b/userop] submission failed', {
       correlationId,
       profileId: issuer.profileId,
       smartWallet: issuer.smartWallet,
       retryable,
       error: errorMessage,
+      ...(helperCode !== undefined ? { code: helperCode } : {}),
+      ...(causeMessage !== undefined ? { causeMessage } : {}),
     })
 
     return {
       ok: false,
       code: 'userop_failed',
       retryable,
-      errorMessage,
+      errorMessage: detailMessage,
       response: retryable
         ? "This trade can't be executed right now — a temporary bundler issue occurred. Please try again shortly."
-        : `Transfer failed: ${errorMessage.slice(0, 180)}`,
+        : `Transfer failed: ${detailMessage.slice(0, 180)}`,
     }
   }
 }
