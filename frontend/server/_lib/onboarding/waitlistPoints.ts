@@ -1,7 +1,18 @@
+import { createHash } from 'node:crypto'
+
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
 let waitlistPointsSchemaEnsured = false
 let waitlistPointsSchemaEnsurePromise: Promise<void> | null = null
+
+/** Upper bound on a single award amount. Anything above this is treated as a
+ *  caller bug and rejected — keeps economy integrity / integer math safe. */
+const MAX_AWARD_AMOUNT = 10_000
+
+/** Max length for the `points.source_id` column we reliably support. Anything
+ *  longer gets suffix-hashed instead of truncated, so two distinct awards
+ *  can't accidentally dedupe to the same key under `ON CONFLICT DO NOTHING`. */
+const MAX_SOURCE_KEY_LEN = 256
 
 export const WAITLIST_POINTS = {
   // Core actions
@@ -98,14 +109,29 @@ const WAITLIST_POINT_SOURCE_SET: ReadonlySet<WaitlistPointSource> = new Set<Wait
 /** Fraction of a referee's earned points that mirrors to the referrer. */
 export const REFERRAL_PASSTHROUGH_FRACTION = 0.5 as const
 
-/** Sources that must NOT trigger another passthrough mirror (prevents
- *  cascades and keeps the math referrer→referee only, one hop). */
-const PASSTHROUGH_EXEMPT_SOURCES: ReadonlySet<string> = new Set([
-  'referral_passthrough',
-  'referral_signup',
-  'referral_csw_link',
-  'referral_qualified',
-])
+/** Compile-time exhaustiveness: every `referral_*` source in the union must
+ *  have a truthy entry here. If a new `referral_*` source lands in the type
+ *  union without being listed, TypeScript refuses to compile this file —
+ *  forcing an explicit cascade-vs-one-hop decision. */
+const REFERRAL_FAMILY_EXEMPT: Record<
+  Extract<WaitlistPointSource, `referral_${string}`>,
+  true
+> = {
+  referral_passthrough: true,
+  referral_signup: true,
+  referral_csw_link: true,
+  referral_qualified: true,
+}
+
+/** Sources that must NOT trigger another passthrough mirror. Derived from
+ *  the exhaustive map above so it can never drift out of sync. */
+const PASSTHROUGH_EXEMPT_SOURCES: ReadonlySet<string> = new Set(
+  Object.keys(REFERRAL_FAMILY_EXEMPT),
+)
+
+function isPassthroughExempt(source: string): boolean {
+  return PASSTHROUGH_EXEMPT_SOURCES.has(source)
+}
 
 export function isWaitlistPointSource(value: string): value is WaitlistPointSource {
   return WAITLIST_POINT_SOURCE_SET.has(value as WaitlistPointSource)
@@ -185,8 +211,15 @@ export async function awardWaitlistPoints(params: {
   if (!isWaitlistPointSource(normalizedSource)) {
     throw new Error('invalid_waitlist_point_source')
   }
+  if (!Number.isInteger(signupId) || signupId <= 0) {
+    throw new Error('invalid_waitlist_point_signup_id')
+  }
   const normalizedAmount = Number(amount)
-  if (!Number.isFinite(normalizedAmount) || normalizedAmount < 0) {
+  if (
+    !Number.isFinite(normalizedAmount) ||
+    normalizedAmount < 0 ||
+    normalizedAmount > MAX_AWARD_AMOUNT
+  ) {
     throw new Error('invalid_waitlist_point_amount')
   }
   const normalizedSourceId = params.sourceId == null ? null : String(params.sourceId).trim() || null
@@ -226,12 +259,36 @@ export async function awardWaitlistPoints(params: {
         originalSourceId: normalizedSourceId,
         amount: Math.trunc(normalizedAmount),
       })
-    } catch {
-      // swallow — passthrough is additive
+    } catch (err) {
+      // Never block the referee's award. But don't swallow silently —
+      // a persistent failure here drains the referral economy, so
+      // surface it in logs with enough structure to alert on.
+      console.warn('waitlist_points.passthrough_failed', {
+        refereeSignupId: signupId,
+        source: normalizedSource,
+        message: err instanceof Error ? err.message : String(err),
+      })
     }
   }
 
   return didInsert
+}
+
+/** Build a collision-safe `source_id` for a passthrough row. If the natural
+ *  composite key fits in the column, use it verbatim. Otherwise keep a
+ *  readable prefix and append a sha256 suffix so two distinct awards can't
+ *  accidentally dedupe to the same row under `ON CONFLICT DO NOTHING`. */
+export function buildPassthroughSourceKey(
+  refereeSignupId: number,
+  originalSource: string,
+  originalSourceId: string | null,
+): string {
+  const raw = `${refereeSignupId}:${originalSource}:${originalSourceId ?? ''}`
+  if (raw.length <= MAX_SOURCE_KEY_LEN) return raw
+  // Hash suffix is 64 hex chars; leave room for a prefix + separator.
+  const hash = createHash('sha256').update(raw).digest('hex')
+  const prefix = raw.slice(0, MAX_SOURCE_KEY_LEN - 1 - hash.length)
+  return `${prefix}#${hash}`
 }
 
 /**
@@ -239,20 +296,32 @@ export async function awardWaitlistPoints(params: {
  *
  * Reads `profiles.referred_by_signup_id` to find the referrer; writes a
  * single `referral_passthrough` row whose `source_id` uniquely encodes
- * the triggering award (`<refereeSignupId>:<originalSource>:<originalSourceId>`).
- * Idempotent via `ON CONFLICT DO NOTHING` on the `points` unique index.
+ * the triggering award via `buildPassthroughSourceKey`. Idempotent via
+ * `ON CONFLICT DO NOTHING` on the `points` unique index.
  *
- * Safety rails:
+ * Safety rails (all enforced, not advisory):
+ *   - No-ops when `refereeSignupId` is not a positive integer.
  *   - No-ops when `amount <= 0` (insert floors to 0 and isn't worth a row).
+ *   - No-ops when `amount > MAX_AWARD_AMOUNT` (treats it as caller bug).
  *   - No-ops when `originalSource` is a referral-family source
- *     (`referral_passthrough`, `referral_signup`, etc.) — prevents
+ *     (`referral_passthrough`, `referral_signup`, etc., enforced by the
+ *     compile-time exhaustive `REFERRAL_FAMILY_EXEMPT` map) — prevents
  *     pyramids / cascades beyond one hop.
- *   - No-ops when `referrer === referee` (shouldn't happen, but a cheap
- *     guard against self-referral abuse or seed data anomalies).
+ *   - No-ops when `referrerId` is not a positive integer, which also
+ *     covers the no-referrer and self-referral edges.
+ *   - Source key is collision-safe: natural composite if it fits, else
+ *     prefix + sha256 suffix. Plain `slice()` is forbidden here because
+ *     two distinct awards could dedupe to the same row.
  *
  * This is the only code path that writes `referral_passthrough` rows.
  * The scoring query treats them at weight 1.00× since the halving
  * already happened here at insert time.
+ *
+ * Reciprocal referrals (A refers B, B refers A) are ALLOWED by design:
+ * each direction pays out independently on the other's organic earns,
+ * but never on the other's `referral_passthrough` rows (exempt above),
+ * so there is no compounding. If product wants to block reciprocals,
+ * the hook point is at referral-code claim time, not here.
  */
 export async function recordReferralPassthrough(params: {
   db: Db
@@ -263,11 +332,12 @@ export async function recordReferralPassthrough(params: {
 }): Promise<boolean> {
   const { db, refereeSignupId, originalSource, originalSourceId } = params
 
-  if (!Number.isFinite(refereeSignupId) || refereeSignupId <= 0) return false
-  if (PASSTHROUGH_EXEMPT_SOURCES.has(originalSource)) return false
+  if (!Number.isInteger(refereeSignupId) || refereeSignupId <= 0) return false
+  if (isPassthroughExempt(originalSource)) return false
 
   const baseAmount = Number(params.amount)
   if (!Number.isFinite(baseAmount) || baseAmount <= 0) return false
+  if (baseAmount > MAX_AWARD_AMOUNT) return false
 
   const passthroughAmount = Math.floor(baseAmount * REFERRAL_PASSTHROUGH_FRACTION)
   if (passthroughAmount <= 0) return false
@@ -281,11 +351,11 @@ export async function recordReferralPassthrough(params: {
   `
   const referrerRaw = referrerResult?.rows?.[0]?.referred_by_signup_id
   const referrerId = typeof referrerRaw === 'number' ? referrerRaw : Number(referrerRaw)
-  if (!Number.isFinite(referrerId) || referrerId <= 0 || referrerId === refereeSignupId) {
+  if (!Number.isInteger(referrerId) || referrerId <= 0 || referrerId === refereeSignupId) {
     return false
   }
 
-  const sourceKey = `${refereeSignupId}:${originalSource}:${originalSourceId ?? ''}`.slice(0, 256)
+  const sourceKey = buildPassthroughSourceKey(refereeSignupId, originalSource, originalSourceId)
 
   const inserted = await db.sql`
     INSERT INTO points (signup_id, source, source_id, amount, created_at)

@@ -12,7 +12,7 @@
 
 > **executeConversationalCommandFamily**(`params`): `Promise`\<[`KeeprCommandResult`](../types.md#keeprcommandresult)\>
 
-Defined in: [server/commands/families/conversation.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/conversation.ts#L18)
+Defined in: [server/commands/families/conversation.ts:18](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/commands/families/conversation.ts#L18)
 
 #### Parameters
 
@@ -44,7 +44,7 @@ Defined in: [server/commands/families/conversation.ts:18](https://github.com/wen
 
 > **looksLikeConversationalCommand**(`text`): `boolean`
 
-Defined in: [server/commands/families/conversation.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/conversation.ts#L13)
+Defined in: [server/commands/families/conversation.ts:13](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/commands/families/conversation.ts#L13)
 
 #### Parameters
 

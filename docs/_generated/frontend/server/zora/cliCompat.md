@@ -10,7 +10,7 @@
 
 ### ZoraCliCompatError
 
-Defined in: [server/zora/cliCompat.ts:103](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L103)
+Defined in: [server/zora/cliCompat.ts:103](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L103)
 
 #### Extends
 
@@ -22,7 +22,7 @@ Defined in: [server/zora/cliCompat.ts:103](https://github.com/wenakita/4626/blob
 
 > **new ZoraCliCompatError**(`message`, `options?`): [`ZoraCliCompatError`](#zoraclicompaterror)
 
-Defined in: [server/zora/cliCompat.ts:107](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L107)
+Defined in: [server/zora/cliCompat.ts:107](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L107)
 
 ###### Parameters
 
@@ -54,13 +54,13 @@ Defined in: [server/zora/cliCompat.ts:107](https://github.com/wenakita/4626/blob
 
 > **status**: `number`
 
-Defined in: [server/zora/cliCompat.ts:104](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L104)
+Defined in: [server/zora/cliCompat.ts:104](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L104)
 
 ##### suggestion?
 
 > `optional` **suggestion**: `string`
 
-Defined in: [server/zora/cliCompat.ts:105](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L105)
+Defined in: [server/zora/cliCompat.ts:105](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L105)
 
 ## Type Aliases
 
@@ -68,7 +68,7 @@ Defined in: [server/zora/cliCompat.ts:105](https://github.com/wenakita/4626/blob
 
 > **ZoraCliAuthStatusResult** = `object`
 
-Defined in: [server/zora/cliCompat.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L94)
+Defined in: [server/zora/cliCompat.ts:94](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L94)
 
 #### Properties
 
@@ -76,7 +76,7 @@ Defined in: [server/zora/cliCompat.ts:94](https://github.com/wenakita/4626/blob/
 
 > **authenticated**: `boolean`
 
-Defined in: [server/zora/cliCompat.ts:95](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L95)
+Defined in: [server/zora/cliCompat.ts:95](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L95)
 
 ***
 
@@ -84,7 +84,7 @@ Defined in: [server/zora/cliCompat.ts:95](https://github.com/wenakita/4626/blob/
 
 > **ZoraCliCoin** = `object`
 
-Defined in: [server/zora/cliCompat.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L40)
+Defined in: [server/zora/cliCompat.ts:40](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L40)
 
 #### Properties
 
@@ -92,55 +92,55 @@ Defined in: [server/zora/cliCompat.ts:40](https://github.com/wenakita/4626/blob/
 
 > **address**: `string`
 
-Defined in: [server/zora/cliCompat.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L42)
+Defined in: [server/zora/cliCompat.ts:42](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L42)
 
 ##### coinType
 
 > **coinType**: [`ZoraCliType`](#zoraclitype)
 
-Defined in: [server/zora/cliCompat.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L43)
+Defined in: [server/zora/cliCompat.ts:43](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L43)
 
 ##### createdAt
 
 > **createdAt**: `string` \| `null`
 
-Defined in: [server/zora/cliCompat.ts:48](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L48)
+Defined in: [server/zora/cliCompat.ts:48](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L48)
 
 ##### creatorHandle
 
 > **creatorHandle**: `string` \| `null`
 
-Defined in: [server/zora/cliCompat.ts:49](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L49)
+Defined in: [server/zora/cliCompat.ts:49](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L49)
 
 ##### marketCap
 
 > **marketCap**: `string` \| `null`
 
-Defined in: [server/zora/cliCompat.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L45)
+Defined in: [server/zora/cliCompat.ts:45](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L45)
 
 ##### name
 
 > **name**: `string`
 
-Defined in: [server/zora/cliCompat.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L41)
+Defined in: [server/zora/cliCompat.ts:41](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L41)
 
 ##### symbol
 
 > **symbol**: `string` \| `null`
 
-Defined in: [server/zora/cliCompat.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L44)
+Defined in: [server/zora/cliCompat.ts:44](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L44)
 
 ##### uniqueHolders
 
 > **uniqueHolders**: `number` \| `null`
 
-Defined in: [server/zora/cliCompat.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L47)
+Defined in: [server/zora/cliCompat.ts:47](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L47)
 
 ##### volume24h
 
 > **volume24h**: `string` \| `null`
 
-Defined in: [server/zora/cliCompat.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L46)
+Defined in: [server/zora/cliCompat.ts:46](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L46)
 
 ***
 
@@ -148,7 +148,7 @@ Defined in: [server/zora/cliCompat.ts:46](https://github.com/wenakita/4626/blob/
 
 > **ZoraCliErrorPayload** = `object`
 
-Defined in: [server/zora/cliCompat.ts:98](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L98)
+Defined in: [server/zora/cliCompat.ts:98](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L98)
 
 #### Properties
 
@@ -156,13 +156,13 @@ Defined in: [server/zora/cliCompat.ts:98](https://github.com/wenakita/4626/blob/
 
 > **error**: `string`
 
-Defined in: [server/zora/cliCompat.ts:99](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L99)
+Defined in: [server/zora/cliCompat.ts:99](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L99)
 
 ##### suggestion?
 
 > `optional` **suggestion**: `string`
 
-Defined in: [server/zora/cliCompat.ts:100](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L100)
+Defined in: [server/zora/cliCompat.ts:100](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L100)
 
 ***
 
@@ -170,7 +170,7 @@ Defined in: [server/zora/cliCompat.ts:100](https://github.com/wenakita/4626/blob
 
 > **ZoraCliExploreResult** = `object`
 
-Defined in: [server/zora/cliCompat.ts:52](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L52)
+Defined in: [server/zora/cliCompat.ts:52](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L52)
 
 #### Properties
 
@@ -178,13 +178,13 @@ Defined in: [server/zora/cliCompat.ts:52](https://github.com/wenakita/4626/blob/
 
 > **coins**: [`ZoraCliCoin`](#zoraclicoin)[]
 
-Defined in: [server/zora/cliCompat.ts:53](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L53)
+Defined in: [server/zora/cliCompat.ts:53](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L53)
 
 ##### nextCursor
 
 > **nextCursor**: `string` \| `null`
 
-Defined in: [server/zora/cliCompat.ts:54](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L54)
+Defined in: [server/zora/cliCompat.ts:54](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L54)
 
 ***
 
@@ -192,7 +192,7 @@ Defined in: [server/zora/cliCompat.ts:54](https://github.com/wenakita/4626/blob/
 
 > **ZoraCliGetResult** = [`ZoraCliCoin`](#zoraclicoin)
 
-Defined in: [server/zora/cliCompat.ts:57](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L57)
+Defined in: [server/zora/cliCompat.ts:57](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L57)
 
 ***
 
@@ -200,7 +200,7 @@ Defined in: [server/zora/cliCompat.ts:57](https://github.com/wenakita/4626/blob/
 
 > **ZoraCliInterval** = `"1h"` \| `"24h"` \| `"1w"` \| `"1m"` \| `"ALL"`
 
-Defined in: [server/zora/cliCompat.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L38)
+Defined in: [server/zora/cliCompat.ts:38](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L38)
 
 ***
 
@@ -208,7 +208,7 @@ Defined in: [server/zora/cliCompat.ts:38](https://github.com/wenakita/4626/blob/
 
 > **ZoraCliPriceHistoryResult** = `object`
 
-Defined in: [server/zora/cliCompat.ts:81](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L81)
+Defined in: [server/zora/cliCompat.ts:81](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L81)
 
 #### Properties
 
@@ -216,13 +216,13 @@ Defined in: [server/zora/cliCompat.ts:81](https://github.com/wenakita/4626/blob/
 
 > **change**: `number` \| `null`
 
-Defined in: [server/zora/cliCompat.ts:90](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L90)
+Defined in: [server/zora/cliCompat.ts:90](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L90)
 
 ##### coin
 
 > **coin**: `object`
 
-Defined in: [server/zora/cliCompat.ts:82](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L82)
+Defined in: [server/zora/cliCompat.ts:82](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L82)
 
 ###### address
 
@@ -240,25 +240,25 @@ Defined in: [server/zora/cliCompat.ts:82](https://github.com/wenakita/4626/blob/
 
 > **high**: `number` \| `null`
 
-Defined in: [server/zora/cliCompat.ts:88](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L88)
+Defined in: [server/zora/cliCompat.ts:88](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L88)
 
 ##### interval
 
 > **interval**: [`ZoraCliInterval`](#zoracliinterval)
 
-Defined in: [server/zora/cliCompat.ts:87](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L87)
+Defined in: [server/zora/cliCompat.ts:87](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L87)
 
 ##### low
 
 > **low**: `number` \| `null`
 
-Defined in: [server/zora/cliCompat.ts:89](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L89)
+Defined in: [server/zora/cliCompat.ts:89](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L89)
 
 ##### prices
 
 > **prices**: [`ZoraCliPricePoint`](#zoraclipricepoint)[]
 
-Defined in: [server/zora/cliCompat.ts:91](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L91)
+Defined in: [server/zora/cliCompat.ts:91](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L91)
 
 ***
 
@@ -266,7 +266,7 @@ Defined in: [server/zora/cliCompat.ts:91](https://github.com/wenakita/4626/blob/
 
 > **ZoraCliPricePoint** = `object`
 
-Defined in: [server/zora/cliCompat.ts:76](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L76)
+Defined in: [server/zora/cliCompat.ts:76](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L76)
 
 #### Properties
 
@@ -274,13 +274,13 @@ Defined in: [server/zora/cliCompat.ts:76](https://github.com/wenakita/4626/blob/
 
 > **price**: `number`
 
-Defined in: [server/zora/cliCompat.ts:78](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L78)
+Defined in: [server/zora/cliCompat.ts:78](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L78)
 
 ##### timestamp
 
 > **timestamp**: `string`
 
-Defined in: [server/zora/cliCompat.ts:77](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L77)
+Defined in: [server/zora/cliCompat.ts:77](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L77)
 
 ***
 
@@ -288,7 +288,7 @@ Defined in: [server/zora/cliCompat.ts:77](https://github.com/wenakita/4626/blob/
 
 > **ZoraCliProfilePost** = `object`
 
-Defined in: [server/zora/cliCompat.ts:59](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L59)
+Defined in: [server/zora/cliCompat.ts:59](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L59)
 
 #### Properties
 
@@ -296,25 +296,25 @@ Defined in: [server/zora/cliCompat.ts:59](https://github.com/wenakita/4626/blob/
 
 > **address**: `string`
 
-Defined in: [server/zora/cliCompat.ts:61](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L61)
+Defined in: [server/zora/cliCompat.ts:61](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L61)
 
 ##### marketCap
 
 > **marketCap**: `string` \| `null`
 
-Defined in: [server/zora/cliCompat.ts:62](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L62)
+Defined in: [server/zora/cliCompat.ts:62](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L62)
 
 ##### name
 
 > **name**: `string`
 
-Defined in: [server/zora/cliCompat.ts:60](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L60)
+Defined in: [server/zora/cliCompat.ts:60](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L60)
 
 ##### volume24h
 
 > **volume24h**: `string` \| `null`
 
-Defined in: [server/zora/cliCompat.ts:63](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L63)
+Defined in: [server/zora/cliCompat.ts:63](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L63)
 
 ***
 
@@ -322,7 +322,7 @@ Defined in: [server/zora/cliCompat.ts:63](https://github.com/wenakita/4626/blob/
 
 > **ZoraCliProfileResult** = `object`
 
-Defined in: [server/zora/cliCompat.ts:66](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L66)
+Defined in: [server/zora/cliCompat.ts:66](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L66)
 
 #### Properties
 
@@ -330,19 +330,19 @@ Defined in: [server/zora/cliCompat.ts:66](https://github.com/wenakita/4626/blob/
 
 > **nextCursor**: `string` \| `null`
 
-Defined in: [server/zora/cliCompat.ts:73](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L73)
+Defined in: [server/zora/cliCompat.ts:73](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L73)
 
 ##### posts
 
 > **posts**: [`ZoraCliProfilePost`](#zoracliprofilepost)[]
 
-Defined in: [server/zora/cliCompat.ts:72](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L72)
+Defined in: [server/zora/cliCompat.ts:72](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L72)
 
 ##### profile
 
 > **profile**: \{ `creatorCoinAddress`: `string` \| `null`; `handle`: `string` \| `null`; `id`: `string` \| `null`; \} \| `null`
 
-Defined in: [server/zora/cliCompat.ts:67](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L67)
+Defined in: [server/zora/cliCompat.ts:67](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L67)
 
 ***
 
@@ -350,7 +350,7 @@ Defined in: [server/zora/cliCompat.ts:67](https://github.com/wenakita/4626/blob/
 
 > **ZoraCliSort** = `"mcap"` \| `"volume"` \| `"new"` \| `"trending"` \| `"featured"`
 
-Defined in: [server/zora/cliCompat.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L36)
+Defined in: [server/zora/cliCompat.ts:36](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L36)
 
 ***
 
@@ -358,7 +358,7 @@ Defined in: [server/zora/cliCompat.ts:36](https://github.com/wenakita/4626/blob/
 
 > **ZoraCliType** = `"all"` \| `"creator-coin"` \| `"post"` \| `"trend"`
 
-Defined in: [server/zora/cliCompat.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L37)
+Defined in: [server/zora/cliCompat.ts:37](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L37)
 
 ## Functions
 
@@ -366,7 +366,7 @@ Defined in: [server/zora/cliCompat.ts:37](https://github.com/wenakita/4626/blob/
 
 > **authStatusCli**(): [`ZoraCliAuthStatusResult`](#zoracliauthstatusresult)
 
-Defined in: [server/zora/cliCompat.ts:501](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L501)
+Defined in: [server/zora/cliCompat.ts:501](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L501)
 
 #### Returns
 
@@ -378,7 +378,7 @@ Defined in: [server/zora/cliCompat.ts:501](https://github.com/wenakita/4626/blob
 
 > **exploreCli**(`params`): `Promise`\<[`ZoraCliExploreResult`](#zoracliexploreresult)\>
 
-Defined in: [server/zora/cliCompat.ts:319](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L319)
+Defined in: [server/zora/cliCompat.ts:319](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L319)
 
 #### Parameters
 
@@ -414,7 +414,7 @@ Defined in: [server/zora/cliCompat.ts:319](https://github.com/wenakita/4626/blob
 
 > **getCliCoin**(`params`): `Promise`\<[`ZoraCliCoin`](#zoraclicoin)\>
 
-Defined in: [server/zora/cliCompat.ts:346](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L346)
+Defined in: [server/zora/cliCompat.ts:346](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L346)
 
 #### Parameters
 
@@ -442,7 +442,7 @@ Defined in: [server/zora/cliCompat.ts:346](https://github.com/wenakita/4626/blob
 
 > **priceHistoryCli**(`params`): `Promise`\<[`ZoraCliPriceHistoryResult`](#zoraclipricehistoryresult)\>
 
-Defined in: [server/zora/cliCompat.ts:426](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L426)
+Defined in: [server/zora/cliCompat.ts:426](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L426)
 
 #### Parameters
 
@@ -474,7 +474,7 @@ Defined in: [server/zora/cliCompat.ts:426](https://github.com/wenakita/4626/blob
 
 > **profileCli**(`params`): `Promise`\<[`ZoraCliProfileResult`](#zoracliprofileresult)\>
 
-Defined in: [server/zora/cliCompat.ts:371](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L371)
+Defined in: [server/zora/cliCompat.ts:371](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L371)
 
 #### Parameters
 
@@ -506,7 +506,7 @@ Defined in: [server/zora/cliCompat.ts:371](https://github.com/wenakita/4626/blob
 
 > **toCliErrorPayload**(`error`, `fallbackSuggestion?`): `object`
 
-Defined in: [server/zora/cliCompat.ts:299](https://github.com/wenakita/4626/blob/main/frontend/server/zora/cliCompat.ts#L299)
+Defined in: [server/zora/cliCompat.ts:299](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/cliCompat.ts#L299)
 
 #### Parameters
 

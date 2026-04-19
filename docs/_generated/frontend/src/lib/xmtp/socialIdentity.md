@@ -12,7 +12,7 @@
 
 > **DmRecipientResolution** = `object`
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:50](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L50)
+Defined in: [src/lib/xmtp/socialIdentity.ts:50](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/xmtp/socialIdentity.ts#L50)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/xmtp/socialIdentity.ts:50](https://github.com/wenakita/4626
 
 > **address**: `` `0x${string}` ``
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:52](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L52)
+Defined in: [src/lib/xmtp/socialIdentity.ts:52](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/xmtp/socialIdentity.ts#L52)
 
 Final recipient used for DM creation (after canonical wallet mapping).
 
@@ -28,19 +28,19 @@ Final recipient used for DM creation (after canonical wallet mapping).
 
 > **avatarUrl**: `string` \| `null`
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:58](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L58)
+Defined in: [src/lib/xmtp/socialIdentity.ts:58](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/xmtp/socialIdentity.ts#L58)
 
 ##### basenameHint
 
 > **basenameHint**: `string` \| `null`
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:57](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L57)
+Defined in: [src/lib/xmtp/socialIdentity.ts:57](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/xmtp/socialIdentity.ts#L57)
 
 ##### inputAddress
 
 > **inputAddress**: `` `0x${string}` ``
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:54](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L54)
+Defined in: [src/lib/xmtp/socialIdentity.ts:54](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/xmtp/socialIdentity.ts#L54)
 
 Direct address resolved from the user input before canonical mapping.
 
@@ -48,7 +48,7 @@ Direct address resolved from the user input before canonical mapping.
 
 > **wasCanonicalRemap**: `boolean`
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:56](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L56)
+Defined in: [src/lib/xmtp/socialIdentity.ts:56](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/xmtp/socialIdentity.ts#L56)
 
 True when recipient address was remapped to a canonical smart wallet.
 
@@ -58,7 +58,7 @@ True when recipient address was remapped to a canonical smart wallet.
 
 > **getBasenameAutocompleteCandidate**(`input`): `string` \| `null`
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:61](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L61)
+Defined in: [src/lib/xmtp/socialIdentity.ts:61](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/xmtp/socialIdentity.ts#L61)
 
 #### Parameters
 
@@ -76,7 +76,7 @@ Defined in: [src/lib/xmtp/socialIdentity.ts:61](https://github.com/wenakita/4626
 
 > **getBasenameName**(`address`): `Promise`\<`string` \| `null`\>
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:42](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L42)
+Defined in: [src/lib/xmtp/socialIdentity.ts:42](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/xmtp/socialIdentity.ts#L42)
 
 Chat identity helpers.
 
@@ -100,7 +100,7 @@ under CORS). This wrapper keeps the logic in one place.
 
 > **resolveDmRecipient**(`input`): `Promise`\<[`DmRecipientResolution`](#dmrecipientresolution) \| `null`\>
 
-Defined in: [src/lib/xmtp/socialIdentity.ts:139](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/socialIdentity.ts#L139)
+Defined in: [src/lib/xmtp/socialIdentity.ts:139](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/xmtp/socialIdentity.ts#L139)
 
 Resolve a "new DM" recipient input into an EVM address.
 Supports raw addresses and basename handles (e.g. "akita", "@akita", "akita.base.eth").

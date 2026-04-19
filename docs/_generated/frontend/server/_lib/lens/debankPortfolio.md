@@ -12,7 +12,7 @@
 
 > **PortfolioChain** = `object`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L24)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:24](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L24)
 
 #### Properties
 
@@ -20,25 +20,25 @@ Defined in: [server/\_lib/lens/debankPortfolio.ts:24](https://github.com/wenakit
 
 > **id**: `string`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L25)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:25](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L25)
 
 ##### logoUrl?
 
 > `optional` **logoUrl**: `string`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L27)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:27](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L27)
 
 ##### name
 
 > **name**: `string`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L26)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:26](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L26)
 
 ##### usdValue
 
 > **usdValue**: `number`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L28)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:28](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L28)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [server/\_lib/lens/debankPortfolio.ts:28](https://github.com/wenakit
 
 > **PortfolioProtocol** = `object`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L31)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:31](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L31)
 
 #### Properties
 
@@ -54,37 +54,37 @@ Defined in: [server/\_lib/lens/debankPortfolio.ts:31](https://github.com/wenakit
 
 > **chain**: `string`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L34)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:34](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L34)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L32)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:32](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L32)
 
 ##### logoUrl?
 
 > `optional` **logoUrl**: `string`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L35)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:35](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L35)
 
 ##### name
 
 > **name**: `string`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L33)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:33](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L33)
 
 ##### netUsdValue
 
 > **netUsdValue**: `number`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L37)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:37](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L37)
 
 ##### siteUrl?
 
 > `optional` **siteUrl**: `string`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L36)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:36](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L36)
 
 ***
 
@@ -92,7 +92,7 @@ Defined in: [server/\_lib/lens/debankPortfolio.ts:36](https://github.com/wenakit
 
 > **PortfolioToken** = `object`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L13)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:13](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L13)
 
 #### Properties
 
@@ -100,49 +100,49 @@ Defined in: [server/\_lib/lens/debankPortfolio.ts:13](https://github.com/wenakit
 
 > **amount**: `number`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L19)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:19](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L19)
 
 ##### chain
 
 > **chain**: `string`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L15)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:15](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L15)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L14)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:14](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L14)
 
 ##### logoUrl?
 
 > `optional` **logoUrl**: `string`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L18)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:18](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L18)
 
 ##### name
 
 > **name**: `string`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L16)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:16](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L16)
 
 ##### price
 
 > **price**: `number`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L20)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:20](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L20)
 
 ##### symbol
 
 > **symbol**: `string`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L17)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:17](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L17)
 
 ##### usdValue
 
 > **usdValue**: `number`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L21)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:21](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L21)
 
 ***
 
@@ -150,7 +150,7 @@ Defined in: [server/\_lib/lens/debankPortfolio.ts:21](https://github.com/wenakit
 
 > **WalletPortfolio** = `object`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L40)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:40](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L40)
 
 #### Properties
 
@@ -158,7 +158,7 @@ Defined in: [server/\_lib/lens/debankPortfolio.ts:40](https://github.com/wenakit
 
 > **activeChains**: [`PortfolioChain`](#portfoliochain)[]
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L46)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:46](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L46)
 
 All chains the wallet has been active on.
 
@@ -166,19 +166,19 @@ All chains the wallet has been active on.
 
 > **address**: `string`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L41)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:41](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L41)
 
 ##### asOf
 
 > **asOf**: `number`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:49](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L49)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:49](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L49)
 
 ##### protocols
 
 > **protocols**: [`PortfolioProtocol`](#portfolioprotocol)[]
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:48](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L48)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:48](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L48)
 
 DeFi protocol positions.
 
@@ -186,7 +186,7 @@ DeFi protocol positions.
 
 > **topTokens**: [`PortfolioToken`](#portfoliotoken)[]
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:44](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L44)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:44](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L44)
 
 Top token holdings sorted by USD value.
 
@@ -194,7 +194,7 @@ Top token holdings sorted by USD value.
 
 > **totalUsdValue**: `number`
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L42)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:42](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L42)
 
 ## Functions
 
@@ -202,7 +202,7 @@ Defined in: [server/\_lib/lens/debankPortfolio.ts:42](https://github.com/wenakit
 
 > **getWalletPortfolio**(`address`, `options`): `Promise`\<[`WalletPortfolio`](#walletportfolio) \| `null`\>
 
-Defined in: [server/\_lib/lens/debankPortfolio.ts:80](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/lens/debankPortfolio.ts#L80)
+Defined in: [server/\_lib/lens/debankPortfolio.ts:80](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/lens/debankPortfolio.ts#L80)
 
 Fetch a comprehensive portfolio snapshot for a wallet address.
 

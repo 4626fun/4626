@@ -114,7 +114,10 @@ export async function awardAmoeCheckinPoints(params: {
   `
   const awarded = Array.isArray(inserted.rows) && inserted.rows.length > 0
   if (awarded) {
-    // Mirror 50% to the referee's referrer (if any). Best-effort.
+    // Mirror 50% to the referee's referrer (if any). Best-effort — the
+    // referee's award must never be blocked by a passthrough failure, but
+    // persistent failures should surface in logs rather than be silently
+    // swallowed (they drain the referral economy).
     try {
       await recordReferralPassthrough({
         db,
@@ -123,8 +126,12 @@ export async function awardAmoeCheckinPoints(params: {
         originalSourceId: eventKey,
         amount: AMOE_CHECKIN_POINTS,
       })
-    } catch {
-      // swallow — passthrough is additive
+    } catch (err) {
+      console.warn('waitlist_points.passthrough_failed', {
+        refereeSignupId: profileId,
+        source: AMOE_CHECKIN_SOURCE,
+        message: err instanceof Error ? err.message : String(err),
+      })
     }
   }
   return { awarded, profileId }

@@ -12,7 +12,7 @@
 
 > **logAgentApiRequest**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/agent/agentAudit.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/agentAudit.ts#L36)
+Defined in: [server/\_lib/agent/agentAudit.ts:36](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/agent/agentAudit.ts#L36)
 
 #### Parameters
 

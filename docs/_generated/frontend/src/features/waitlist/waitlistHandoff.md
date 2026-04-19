@@ -6,63 +6,18 @@
 
 # src/features/waitlist/waitlistHandoff
 
-## Type Aliases
-
-### HandoffCreateResponse
-
-> **HandoffCreateResponse** = `object`
-
-Defined in: [src/features/waitlist/waitlistHandoff.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistHandoff.ts#L10)
-
-#### Properties
-
-##### code
-
-> **code**: `string`
-
-Defined in: [src/features/waitlist/waitlistHandoff.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistHandoff.ts#L11)
-
-##### expiresAt
-
-> **expiresAt**: `string`
-
-Defined in: [src/features/waitlist/waitlistHandoff.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistHandoff.ts#L12)
-
-***
-
-### PrivyAuthSessionResponse
-
-> **PrivyAuthSessionResponse** = `object`
-
-Defined in: [src/features/waitlist/waitlistHandoff.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistHandoff.ts#L4)
-
-#### Properties
-
-##### address
-
-> **address**: `string`
-
-Defined in: [src/features/waitlist/waitlistHandoff.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistHandoff.ts#L5)
-
-##### privyUserId?
-
-> `optional` **privyUserId**: `string`
-
-Defined in: [src/features/waitlist/waitlistHandoff.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistHandoff.ts#L7)
-
-##### sessionToken
-
-> **sessionToken**: `string`
-
-Defined in: [src/features/waitlist/waitlistHandoff.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistHandoff.ts#L6)
-
 ## Functions
 
 ### bridgePrivySession()
 
-> **bridgePrivySession**(`privyToken`): `Promise`\<`string` \| `null`\>
+> **bridgePrivySession**(`privyToken`): `Promise`\<`boolean`\>
 
-Defined in: [src/features/waitlist/waitlistHandoff.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistHandoff.ts#L21)
+Defined in: [src/features/waitlist/waitlistHandoff.ts:28](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/features/waitlist/waitlistHandoff.ts#L28)
+
+Exchange a Privy access token for a 4626 session on the current origin.
+The session itself lives in the HttpOnly `cv_auth_session` cookie; this
+function just signals whether that cookie was successfully established
+so the caller knows the next same-origin request will be authenticated.
 
 #### Parameters
 
@@ -72,7 +27,7 @@ Defined in: [src/features/waitlist/waitlistHandoff.ts:21](https://github.com/wen
 
 #### Returns
 
-`Promise`\<`string` \| `null`\>
+`Promise`\<`boolean`\>
 
 ***
 
@@ -80,17 +35,21 @@ Defined in: [src/features/waitlist/waitlistHandoff.ts:21](https://github.com/wen
 
 > **createAuthHandoffCode**(`params`): `Promise`\<`string`\>
 
-Defined in: [src/features/waitlist/waitlistHandoff.ts:41](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/waitlistHandoff.ts#L41)
+Defined in: [src/features/waitlist/waitlistHandoff.ts:64](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/features/waitlist/waitlistHandoff.ts#L64)
+
+Ask the server for a one-time handoff code that the app origin can redeem
+to mint an equivalent session on its own host. Authentication flows via
+the `cv_auth_session` cookie (bridged by `bridgePrivySession` first);
+the caller does not need to pass a session token explicitly.
+
+`privyToken` is forwarded in the body so the redeem side can optionally
+also rebuild a Privy context on the app origin.
 
 #### Parameters
 
 ##### params
 
 ###### privyToken
-
-`string` \| `null`
-
-###### sessionToken
 
 `string` \| `null`
 

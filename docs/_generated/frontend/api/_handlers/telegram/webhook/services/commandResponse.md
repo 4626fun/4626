@@ -12,7 +12,7 @@
 
 > **TelegramCommandResponseMedia** = `object`
 
-Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:1](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L1)
+Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:1](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L1)
 
 #### Properties
 
@@ -20,43 +20,43 @@ Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:1](http
 
 > **bytes**: `Uint8Array`
 
-Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:3](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L3)
+Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:3](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L3)
 
 ##### caption?
 
 > `optional` **caption**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:6](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L6)
+Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:6](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L6)
 
 ##### contentType?
 
 > `optional` **contentType**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:4](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L4)
+Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:4](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L4)
 
 ##### filename?
 
 > `optional` **filename**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:5](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L5)
+Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:5](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L5)
 
 ##### kind
 
 > **kind**: `"photo"`
 
-Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:2](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L2)
+Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:2](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L2)
 
 ##### replyMarkup?
 
 > `optional` **replyMarkup**: `Record`\<`string`, `unknown`\>
 
-Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:7](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L7)
+Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:7](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L7)
 
 ##### suppressText?
 
 > `optional` **suppressText**: `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:8](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L8)
+Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:8](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L8)
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:8](http
 
 > **TelegramProcessedCommandResult** = `object`
 
-Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:11](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L11)
+Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:11](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L11)
 
 #### Properties
 
@@ -72,13 +72,13 @@ Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:11](htt
 
 > `optional` **action**: `unknown`
 
-Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:13](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L13)
+Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:13](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L13)
 
 ##### responseText
 
 > **responseText**: `string`
 
-Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:12](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L12)
+Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:12](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L12)
 
 ## Functions
 
@@ -86,7 +86,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:12](htt
 
 > **buildTelegramProcessedCommandResponse**(`params`): `object`
 
-Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:16](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L16)
+Defined in: [api/\_handlers/telegram/webhook/services/commandResponse.ts:16](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/services/commandResponse.ts#L16)
 
 #### Parameters
 

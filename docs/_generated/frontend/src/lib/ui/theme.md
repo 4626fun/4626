@@ -12,7 +12,7 @@
 
 > **ThemePreference** = `"light"` \| `"dark"` \| `"system"`
 
-Defined in: [src/lib/ui/theme.tsx:3](https://github.com/wenakita/4626/blob/main/frontend/src/lib/ui/theme.tsx#L3)
+Defined in: [src/lib/ui/theme.tsx:3](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/ui/theme.tsx#L3)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/ui/theme.tsx:3](https://github.com/wenakita/4626/blob/main/
 
 > **ThemeProvider**(`props`): `Element`
 
-Defined in: [src/lib/ui/theme.tsx:20](https://github.com/wenakita/4626/blob/main/frontend/src/lib/ui/theme.tsx#L20)
+Defined in: [src/lib/ui/theme.tsx:20](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/ui/theme.tsx#L20)
 
 #### Parameters
 
@@ -40,7 +40,7 @@ Defined in: [src/lib/ui/theme.tsx:20](https://github.com/wenakita/4626/blob/main
 
 > **useTheme**(): `ThemeState`
 
-Defined in: [src/lib/ui/theme.tsx:48](https://github.com/wenakita/4626/blob/main/frontend/src/lib/ui/theme.tsx#L48)
+Defined in: [src/lib/ui/theme.tsx:48](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/ui/theme.tsx#L48)
 
 #### Returns
 

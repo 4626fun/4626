@@ -12,7 +12,7 @@
 
 > **CachedWalletIntelligence** = `object`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:186](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L186)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:186](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L186)
 
 #### Properties
 
@@ -20,31 +20,31 @@ Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:186](https://github.
 
 > **address**: `string`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:187](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L187)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:187](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L187)
 
 ##### createdAt
 
 > **createdAt**: `string`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:190](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L190)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:190](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L190)
 
 ##### expiresAt
 
 > **expiresAt**: `string`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:191](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L191)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:191](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L191)
 
 ##### graph
 
 > **graph**: `unknown`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:188](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L188)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:188](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L188)
 
 ##### groveUri
 
 > **groveUri**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:189](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L189)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:189](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L189)
 
 ***
 
@@ -52,7 +52,7 @@ Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:189](https://github.
 
 > **FeedbackIndexEntry** = `object`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:336](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L336)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:336](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L336)
 
 #### Properties
 
@@ -60,97 +60,97 @@ Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:336](https://github.
 
 > **agentId**: `number`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:338](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L338)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:338](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L338)
 
 ##### clientAddress
 
 > **clientAddress**: `string`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:339](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L339)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:339](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L339)
 
 ##### createdAt
 
 > **createdAt**: `string`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:351](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L351)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:351](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L351)
 
 ##### endpoint
 
 > **endpoint**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:345](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L345)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:345](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L345)
 
 ##### feedbackHash
 
 > **feedbackHash**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:347](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L347)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:347](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L347)
 
 ##### feedbackIndex
 
 > **feedbackIndex**: `number`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:340](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L340)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:340](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L340)
 
 ##### feedbackUri
 
 > **feedbackUri**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:346](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L346)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:346](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L346)
 
 ##### groveUri
 
 > **groveUri**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:348](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L348)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:348](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L348)
 
 ##### id
 
 > **id**: `number`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:337](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L337)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:337](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L337)
 
 ##### isRevoked
 
 > **isRevoked**: `boolean`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:349](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L349)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:349](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L349)
 
 ##### reasoning
 
 > **reasoning**: `string` \| `null`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:350](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L350)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:350](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L350)
 
 ##### tag1
 
 > **tag1**: `string`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:343](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L343)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:343](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L343)
 
 ##### tag2
 
 > **tag2**: `string`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:344](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L344)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:344](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L344)
 
 ##### updatedAt
 
 > **updatedAt**: `string`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:352](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L352)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:352](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L352)
 
 ##### value
 
 > **value**: `number`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:341](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L341)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:341](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L341)
 
 ##### valueDecimals
 
 > **valueDecimals**: `number`
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:342](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L342)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:342](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L342)
 
 ## Functions
 
@@ -158,7 +158,7 @@ Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:342](https://github.
 
 > **cacheEntityLabels**(`result`, `chainId`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:305](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L305)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:305](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L305)
 
 Write entity labels to cache.
 
@@ -182,7 +182,7 @@ Write entity labels to cache.
 
 > **cacheWalletIntelligence**(`address`, `graph`, `groveUri`, `hops`, `chainIds`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:233](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L233)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:233](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L233)
 
 Write a wallet intelligence graph to cache.
 
@@ -218,7 +218,7 @@ Write a wallet intelligence graph to cache.
 
 > **ensureWalletIntelligenceSchema**(): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L28)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:28](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L28)
 
 #### Returns
 
@@ -230,7 +230,7 @@ Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:28](https://github.c
 
 > **getCachedEntityLabels**(`address`, `chainId`): `Promise`\<[`WalletLabelResult`](walletLabels.md#walletlabelresult) \| `null`\>
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:275](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L275)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:275](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L275)
 
 Read cached entity labels for an address.
 
@@ -254,7 +254,7 @@ Read cached entity labels for an address.
 
 > **getCachedWalletIntelligence**(`address`, `hops`, `chainIds`): `Promise`\<[`CachedWalletIntelligence`](#cachedwalletintelligence) \| `null`\>
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:198](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L198)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:198](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L198)
 
 Read a cached wallet intelligence graph.
 Returns null if not cached or expired.
@@ -283,7 +283,7 @@ Returns null if not cached or expired.
 
 > **indexFeedback**(`entry`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:358](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L358)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:358](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L358)
 
 Index a feedback entry in Supabase for queryability.
 
@@ -349,7 +349,7 @@ Index a feedback entry in Supabase for queryability.
 
 > **purgeExpiredCache**(): `Promise`\<\{ `entityLabels`: `number`; `walletIntelligence`: `number`; \}\>
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:539](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L539)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:539](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L539)
 
 Purge expired cache entries. Safe to call frequently.
 
@@ -363,7 +363,7 @@ Purge expired cache entries. Safe to call frequently.
 
 > **queryFeedbackIndex**(`params`): `Promise`\<\{ `entries`: [`FeedbackIndexEntry`](#feedbackindexentry)[]; `total`: `number`; \}\>
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:442](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L442)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:442](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L442)
 
 Query feedback entries with filtering, sorting, and pagination.
 
@@ -417,7 +417,7 @@ Query feedback entries with filtering, sorting, and pagination.
 
 > **revokeFeedbackIndex**(`agentId`, `clientAddress`, `feedbackIndex`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:416](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L416)
+Defined in: [server/\_lib/wallet/walletIntelligenceCache.ts:416](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/wallet/walletIntelligenceCache.ts#L416)
 
 Mark a feedback entry as revoked.
 

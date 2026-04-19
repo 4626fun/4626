@@ -1,0 +1,25 @@
+[**4626-app**](../../../index.md)
+
+***
+
+[4626-app](../../../index.md) / src/features/archB/ArchBEnrollmentCard
+
+# src/features/archB/ArchBEnrollmentCard
+
+## Functions
+
+### ArchBEnrollmentCard()
+
+> **ArchBEnrollmentCard**(`__namedParameters`): `Element` \| `null`
+
+Defined in: [src/features/archB/ArchBEnrollmentCard.tsx:65](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/features/archB/ArchBEnrollmentCard.tsx#L65)
+
+#### Parameters
+
+##### \_\_namedParameters
+
+`ArchBEnrollmentCardProps`
+
+#### Returns
+
+`Element` \| `null`

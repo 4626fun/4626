@@ -12,7 +12,7 @@
 
 > **ScreenshotMode** = `object`
 
-Defined in: [src/lib/ui/screenshotMode.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/ui/screenshotMode.ts#L8)
+Defined in: [src/lib/ui/screenshotMode.ts:8](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/ui/screenshotMode.ts#L8)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [src/lib/ui/screenshotMode.ts:8](https://github.com/wenakita/4626/bl
 
 > **demo**: `string` \| `null`
 
-Defined in: [src/lib/ui/screenshotMode.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/lib/ui/screenshotMode.ts#L10)
+Defined in: [src/lib/ui/screenshotMode.ts:10](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/ui/screenshotMode.ts#L10)
 
 ##### enabled
 
 > **enabled**: `boolean`
 
-Defined in: [src/lib/ui/screenshotMode.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/ui/screenshotMode.ts#L9)
+Defined in: [src/lib/ui/screenshotMode.ts:9](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/ui/screenshotMode.ts#L9)
 
 ## Variables
 
@@ -34,7 +34,7 @@ Defined in: [src/lib/ui/screenshotMode.ts:9](https://github.com/wenakita/4626/bl
 
 > `const` **SCREENSHOT\_DEMO\_QUERY\_PARAM**: `"demo"` = `'demo'`
 
-Defined in: [src/lib/ui/screenshotMode.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/ui/screenshotMode.ts#L5)
+Defined in: [src/lib/ui/screenshotMode.ts:5](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/ui/screenshotMode.ts#L5)
 
 ***
 
@@ -42,7 +42,7 @@ Defined in: [src/lib/ui/screenshotMode.ts:5](https://github.com/wenakita/4626/bl
 
 > `const` **SCREENSHOT\_HIDE\_ATTR**: `"data-screenshot-hide"` = `'data-screenshot-hide'`
 
-Defined in: [src/lib/ui/screenshotMode.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/ui/screenshotMode.ts#L6)
+Defined in: [src/lib/ui/screenshotMode.ts:6](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/ui/screenshotMode.ts#L6)
 
 ***
 
@@ -50,7 +50,7 @@ Defined in: [src/lib/ui/screenshotMode.ts:6](https://github.com/wenakita/4626/bl
 
 > `const` **SCREENSHOT\_QUERY\_PARAM**: `"screenshot"` = `'screenshot'`
 
-Defined in: [src/lib/ui/screenshotMode.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/lib/ui/screenshotMode.ts#L4)
+Defined in: [src/lib/ui/screenshotMode.ts:4](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/ui/screenshotMode.ts#L4)
 
 ## Functions
 
@@ -58,7 +58,7 @@ Defined in: [src/lib/ui/screenshotMode.ts:4](https://github.com/wenakita/4626/bl
 
 > **clearAppScreenshotReady**(): `void`
 
-Defined in: [src/lib/ui/screenshotMode.ts:46](https://github.com/wenakita/4626/blob/main/frontend/src/lib/ui/screenshotMode.ts#L46)
+Defined in: [src/lib/ui/screenshotMode.ts:46](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/ui/screenshotMode.ts#L46)
 
 #### Returns
 
@@ -70,7 +70,7 @@ Defined in: [src/lib/ui/screenshotMode.ts:46](https://github.com/wenakita/4626/b
 
 > **isScreenshotMode**(`input`): `boolean`
 
-Defined in: [src/lib/ui/screenshotMode.ts:42](https://github.com/wenakita/4626/blob/main/frontend/src/lib/ui/screenshotMode.ts#L42)
+Defined in: [src/lib/ui/screenshotMode.ts:42](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/ui/screenshotMode.ts#L42)
 
 #### Parameters
 
@@ -88,7 +88,7 @@ Defined in: [src/lib/ui/screenshotMode.ts:42](https://github.com/wenakita/4626/b
 
 > **parseScreenshotMode**(`input`): [`ScreenshotMode`](#screenshotmode)
 
-Defined in: [src/lib/ui/screenshotMode.ts:32](https://github.com/wenakita/4626/blob/main/frontend/src/lib/ui/screenshotMode.ts#L32)
+Defined in: [src/lib/ui/screenshotMode.ts:32](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/ui/screenshotMode.ts#L32)
 
 #### Parameters
 
@@ -106,7 +106,7 @@ Defined in: [src/lib/ui/screenshotMode.ts:32](https://github.com/wenakita/4626/b
 
 > **setAppScreenshotReady**(`ready`): `void`
 
-Defined in: [src/lib/ui/screenshotMode.ts:51](https://github.com/wenakita/4626/blob/main/frontend/src/lib/ui/screenshotMode.ts#L51)
+Defined in: [src/lib/ui/screenshotMode.ts:51](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/ui/screenshotMode.ts#L51)
 
 #### Parameters
 
@@ -124,7 +124,7 @@ Defined in: [src/lib/ui/screenshotMode.ts:51](https://github.com/wenakita/4626/b
 
 > **useScreenshotMode**(): [`ScreenshotMode`](#screenshotmode)
 
-Defined in: [src/lib/ui/screenshotMode.ts:56](https://github.com/wenakita/4626/blob/main/frontend/src/lib/ui/screenshotMode.ts#L56)
+Defined in: [src/lib/ui/screenshotMode.ts:56](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/ui/screenshotMode.ts#L56)
 
 #### Returns
 
@@ -136,7 +136,7 @@ Defined in: [src/lib/ui/screenshotMode.ts:56](https://github.com/wenakita/4626/b
 
 > **useScreenshotReady**(`ready`): `void`
 
-Defined in: [src/lib/ui/screenshotMode.ts:61](https://github.com/wenakita/4626/blob/main/frontend/src/lib/ui/screenshotMode.ts#L61)
+Defined in: [src/lib/ui/screenshotMode.ts:61](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/ui/screenshotMode.ts#L61)
 
 #### Parameters
 

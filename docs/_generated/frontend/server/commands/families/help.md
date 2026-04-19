@@ -12,7 +12,7 @@
 
 > **executeHelpCommandFamily**(`text`): [`KeeprCommandResult`](../types.md#keeprcommandresult) \| `null`
 
-Defined in: [server/commands/families/help.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/help.ts#L6)
+Defined in: [server/commands/families/help.ts:6](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/commands/families/help.ts#L6)
 
 #### Parameters
 

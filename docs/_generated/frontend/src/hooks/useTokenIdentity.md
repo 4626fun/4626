@@ -12,7 +12,7 @@
 
 > **useTokenIdentity**(`params`): `object`
 
-Defined in: [src/hooks/useTokenIdentity.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useTokenIdentity.ts#L9)
+Defined in: [src/hooks/useTokenIdentity.ts:9](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useTokenIdentity.ts#L9)
 
 #### Parameters
 

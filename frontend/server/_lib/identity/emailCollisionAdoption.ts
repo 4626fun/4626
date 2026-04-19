@@ -16,6 +16,10 @@ async function adoptOwnedEmailCollision(params: {
   privyUser: PrivyUserLike
 }): Promise<boolean> {
   const { collision, db, email, privyUserId, privyUser } = params
+  // Wallet-collision recovery is intentionally not auto-adopted here — the
+  // product surface for that case is "sign in with email," not a silent
+  // wallet re-bind. Narrow to the email-bound variant only.
+  if (collision.reason !== 'EMAIL_BOUND_TO_DIFFERENT_PRIVY_USER') return false
   const classification = classifyLinkedAccounts(privyUser)
   const ownedAddresses = new Set<string>()
 
@@ -136,6 +140,9 @@ function isMatchingEmailCollision(params: {
   email: string
   privyUserId: string
 }): boolean {
+  // Only the email-bound variant exposes `email` — wallet collisions are
+  // routed through a different recovery UX and must not be adopted here.
+  if (params.error.reason !== 'EMAIL_BOUND_TO_DIFFERENT_PRIVY_USER') return false
   const errorEmail = normalizeLower(params.error.email)
   const requestedPrivyUserId = normalizeLower(params.error.requestedPrivyUserId)
   const currentPrivyUserId = normalizeLower(params.privyUserId)

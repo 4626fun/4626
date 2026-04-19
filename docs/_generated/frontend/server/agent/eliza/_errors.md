@@ -10,7 +10,7 @@
 
 ### AgentError
 
-Defined in: [server/agent/eliza/\_errors.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_errors.ts#L16)
+Defined in: [server/agent/eliza/\_errors.ts:16](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/agent/eliza/_errors.ts#L16)
 
 #### Extends
 
@@ -22,7 +22,7 @@ Defined in: [server/agent/eliza/\_errors.ts:16](https://github.com/wenakita/4626
 
 > **new AgentError**(`code`, `message`, `options?`): [`AgentError`](#agenterror)
 
-Defined in: [server/agent/eliza/\_errors.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_errors.ts#L21)
+Defined in: [server/agent/eliza/\_errors.ts:21](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/agent/eliza/_errors.ts#L21)
 
 ###### Parameters
 
@@ -62,19 +62,19 @@ Defined in: [server/agent/eliza/\_errors.ts:21](https://github.com/wenakita/4626
 
 > `readonly` **code**: [`AgentErrorCode`](#agenterrorcode-1)
 
-Defined in: [server/agent/eliza/\_errors.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_errors.ts#L17)
+Defined in: [server/agent/eliza/\_errors.ts:17](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/agent/eliza/_errors.ts#L17)
 
 ##### details?
 
 > `readonly` `optional` **details**: `Record`\<`string`, `unknown`\>
 
-Defined in: [server/agent/eliza/\_errors.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_errors.ts#L19)
+Defined in: [server/agent/eliza/\_errors.ts:19](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/agent/eliza/_errors.ts#L19)
 
 ##### retryable
 
 > `readonly` **retryable**: `boolean`
 
-Defined in: [server/agent/eliza/\_errors.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_errors.ts#L18)
+Defined in: [server/agent/eliza/\_errors.ts:18](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/agent/eliza/_errors.ts#L18)
 
 ## Type Aliases
 
@@ -82,7 +82,7 @@ Defined in: [server/agent/eliza/\_errors.ts:18](https://github.com/wenakita/4626
 
 > **AgentErrorCode** = `"INVALID_ENV"` \| `"STARTUP_FAILED"` \| `"DEPENDENCY_UNAVAILABLE"` \| `"UNAUTHORIZED"` \| `"RATE_LIMITED"` \| `"BUDGET_EXCEEDED"` \| `"UPSTREAM_TIMEOUT"` \| `"UPSTREAM_ERROR"` \| `"ACTION_FAILED"` \| `"QUEUE_ERROR"` \| `"SESSION_ERROR"` \| `"RUNTIME_ERROR"` \| `"UNKNOWN"`
 
-Defined in: [server/agent/eliza/\_errors.ts:1](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_errors.ts#L1)
+Defined in: [server/agent/eliza/\_errors.ts:1](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/agent/eliza/_errors.ts#L1)
 
 ## Functions
 
@@ -90,7 +90,7 @@ Defined in: [server/agent/eliza/\_errors.ts:1](https://github.com/wenakita/4626/
 
 > **isRetryableAgentError**(`error`): `boolean`
 
-Defined in: [server/agent/eliza/\_errors.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_errors.ts#L41)
+Defined in: [server/agent/eliza/\_errors.ts:41](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/agent/eliza/_errors.ts#L41)
 
 #### Parameters
 
@@ -108,7 +108,7 @@ Defined in: [server/agent/eliza/\_errors.ts:41](https://github.com/wenakita/4626
 
 > **toAgentError**(`error`, `fallbackCode`, `fallbackMessage`): [`AgentError`](#agenterror)
 
-Defined in: [server/agent/eliza/\_errors.ts:64](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_errors.ts#L64)
+Defined in: [server/agent/eliza/\_errors.ts:64](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/agent/eliza/_errors.ts#L64)
 
 #### Parameters
 
@@ -134,7 +134,7 @@ Defined in: [server/agent/eliza/\_errors.ts:64](https://github.com/wenakita/4626
 
 > **toErrorDetails**(`error`): `Record`\<`string`, `unknown`\>
 
-Defined in: [server/agent/eliza/\_errors.ts:45](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_errors.ts#L45)
+Defined in: [server/agent/eliza/\_errors.ts:45](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/agent/eliza/_errors.ts#L45)
 
 #### Parameters
 
@@ -152,7 +152,7 @@ Defined in: [server/agent/eliza/\_errors.ts:45](https://github.com/wenakita/4626
 
 > **toUserFacingAgentErrorMessage**(`error`): `string`
 
-Defined in: [server/agent/eliza/\_errors.ts:96](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_errors.ts#L96)
+Defined in: [server/agent/eliza/\_errors.ts:96](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/agent/eliza/_errors.ts#L96)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > `const` **toast**: (`text`, `options?`) => `void` & `object`
 
-Defined in: [src/components/ui/Toast.tsx:87](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Toast.tsx#L87)
+Defined in: [src/components/ui/Toast.tsx:87](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/ui/Toast.tsx#L87)
 
 Drop-in replacement for `import { toast } from 'sonner'`.
 
@@ -155,7 +155,7 @@ toast('Plain message')
 
 > **CdsToastBridge**(): `null`
 
-Defined in: [src/components/ui/Toast.tsx:39](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Toast.tsx#L39)
+Defined in: [src/components/ui/Toast.tsx:39](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/ui/Toast.tsx#L39)
 
 Render this once near the app root (inside CDS PortalProvider) to connect
 the imperative `toast` singleton to the CDS toast context.

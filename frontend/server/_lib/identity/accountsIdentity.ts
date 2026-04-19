@@ -473,18 +473,40 @@ export async function removeLinkedMethod(params: {
 }
 
 async function listProfileIdsForPrivyUser(db: Db, privyUserId: string): Promise<number[]> {
+  // Resolver cascade:
+  //   1. `privy_user_aliases` is the post-merge authoritative mapping.
+  //   2. Direct `profiles.privy_user_id` catches rows from envs that
+  //      haven't run the alias migration yet.
+  //   3. Tombstoned rows (merged_into_profile_id IS NOT NULL) are chased
+  //      through to their canonical target so a stale alias pointing at a
+  //      tombstone still returns the correct live profile.
   const rows = await db.sql`
-    SELECT id
-    FROM profiles
-    WHERE privy_user_id = ${privyUserId}
+    WITH direct AS (
+      SELECT p.id, p.merged_into_profile_id, p.updated_at, p.created_at
+      FROM profiles p
+      WHERE p.id IN (SELECT profile_id FROM privy_user_aliases WHERE privy_user_id = ${privyUserId})
+         OR p.privy_user_id = ${privyUserId}
+    ),
+    resolved AS (
+      SELECT p2.id, p2.updated_at, p2.created_at
+      FROM direct d
+      JOIN profiles p2
+        ON p2.id = COALESCE(d.merged_into_profile_id, d.id)
+      WHERE p2.merged_into_profile_id IS NULL
+    )
+    SELECT DISTINCT id, updated_at, created_at FROM resolved
     ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC;
   `
   const ids: number[] = []
+  const seen = new Set<number>()
   for (const row of rows.rows ?? []) {
     const idRaw = row?.id
     const id = typeof idRaw === 'number' ? idRaw : Number(idRaw)
     if (!Number.isFinite(id) || id <= 0) continue
-    ids.push(Math.floor(id))
+    const floored = Math.floor(id)
+    if (seen.has(floored)) continue
+    seen.add(floored)
+    ids.push(floored)
   }
   return ids
 }
@@ -500,6 +522,19 @@ async function resolveOrCreateCanonicalProfileIdForPrivyUser(db: Db, privyUserId
     `
   } catch (error) {
     if (!isPrivyUserIdUniqueViolation(error)) throw error
+  }
+  // Seed `privy_user_aliases` so future resolvers take the fast path.
+  // Idempotent via the PK on privy_user_id; any prior seed row wins.
+  try {
+    await db.sql`
+      INSERT INTO privy_user_aliases (privy_user_id, profile_id, source, created_at)
+      SELECT ${privyUserId}, id, 'signup', NOW()
+      FROM profiles
+      WHERE privy_user_id = ${privyUserId} AND merged_into_profile_id IS NULL
+      ON CONFLICT (privy_user_id) DO NOTHING;
+    `
+  } catch {
+    // privy_user_aliases may not exist in legacy envs — safe to ignore.
   }
   const created = await listProfileIdsForPrivyUser(db, privyUserId)
   if (created.length > 0) return created[0]
@@ -534,9 +569,19 @@ async function readUnifiedScore(db: Db, privyUserId: string): Promise<AccountSco
     )::INT AS points
     FROM points p
     WHERE p.signup_id IN (
-      SELECT id
-      FROM profiles
-      WHERE privy_user_id = ${privyUserId}
+      -- Resolver mirrors listProfileIdsForPrivyUser: alias first, then
+      -- direct privy_user_id, chased through tombstone pointers.
+      WITH direct AS (
+        SELECT p3.id, p3.merged_into_profile_id
+        FROM profiles p3
+        WHERE p3.id IN (SELECT profile_id FROM privy_user_aliases WHERE privy_user_id = ${privyUserId})
+           OR p3.privy_user_id = ${privyUserId}
+      )
+      SELECT p4.id
+      FROM direct d
+      JOIN profiles p4
+        ON p4.id = COALESCE(d.merged_into_profile_id, d.id)
+      WHERE p4.merged_into_profile_id IS NULL
     );
   `
   const total = Number(totalResult.rows?.[0]?.points ?? 0) || 0
@@ -592,7 +637,8 @@ export async function applyPointEvent(params: {
   const awarded = Array.isArray(inserted.rows) && inserted.rows.length > 0
   // Mirror 50% of this award to the referee's referrer (if any). The
   // helper handles no-ops (no referrer, zero amount, referral-family
-  // source) and is best-effort — never block the referee's event.
+  // source) and is best-effort — never block the referee's event, but
+  // surface persistent failures in logs so they're alertable.
   if (awarded) {
     try {
       const { recordReferralPassthrough } = await import('../onboarding/waitlistPoints.js')
@@ -603,8 +649,12 @@ export async function applyPointEvent(params: {
         originalSourceId: normalizedKey,
         amount: Math.trunc(amount),
       })
-    } catch {
-      // swallow — passthrough is additive
+    } catch (err) {
+      console.warn('waitlist_points.passthrough_failed', {
+        refereeSignupId: canonicalProfileId,
+        source: normalizedType,
+        message: err instanceof Error ? err.message : String(err),
+      })
     }
   }
   const score = await refreshScore(db, privyUserId)

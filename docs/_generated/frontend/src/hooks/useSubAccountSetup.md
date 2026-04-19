@@ -12,7 +12,7 @@
 
 > **useSubAccountSetup**(): `object`
 
-Defined in: [src/hooks/useSubAccountSetup.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSubAccountSetup.ts#L35)
+Defined in: [src/hooks/useSubAccountSetup.ts:35](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useSubAccountSetup.ts#L35)
 
 #### Returns
 

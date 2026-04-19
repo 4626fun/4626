@@ -12,7 +12,7 @@
 
 > **BlobHead** = `object`
 
-Defined in: [server/\_lib/infra/blob.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/blob.ts#L9)
+Defined in: [server/\_lib/infra/blob.ts:9](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/infra/blob.ts#L9)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [server/\_lib/infra/blob.ts:9](https://github.com/wenakita/4626/blob
 
 > **contentType**: `string` \| `null`
 
-Defined in: [server/\_lib/infra/blob.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/blob.ts#L9)
+Defined in: [server/\_lib/infra/blob.ts:9](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/infra/blob.ts#L9)
 
 ##### size
 
 > **size**: `number`
 
-Defined in: [server/\_lib/infra/blob.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/blob.ts#L9)
+Defined in: [server/\_lib/infra/blob.ts:9](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/infra/blob.ts#L9)
 
 ##### url
 
 > **url**: `string`
 
-Defined in: [server/\_lib/infra/blob.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/blob.ts#L9)
+Defined in: [server/\_lib/infra/blob.ts:9](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/infra/blob.ts#L9)
 
 ## Functions
 
@@ -40,7 +40,7 @@ Defined in: [server/\_lib/infra/blob.ts:9](https://github.com/wenakita/4626/blob
 
 > **blobHeadOrNull**(`pathname`): `Promise`\<[`BlobHead`](#blobhead) \| `null`\>
 
-Defined in: [server/\_lib/infra/blob.ts:163](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/blob.ts#L163)
+Defined in: [server/\_lib/infra/blob.ts:163](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/infra/blob.ts#L163)
 
 #### Parameters
 
@@ -58,7 +58,7 @@ Defined in: [server/\_lib/infra/blob.ts:163](https://github.com/wenakita/4626/bl
 
 > **blobPutBytes**(`params`): `Promise`\<\{ `url`: `string`; \}\>
 
-Defined in: [server/\_lib/infra/blob.ts:243](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/blob.ts#L243)
+Defined in: [server/\_lib/infra/blob.ts:243](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/infra/blob.ts#L243)
 
 #### Parameters
 
@@ -90,7 +90,7 @@ Defined in: [server/\_lib/infra/blob.ts:243](https://github.com/wenakita/4626/bl
 
 > **fetchBytes**(`url`, `options`): `Promise`\<\{ `bytes`: `Uint8Array`; `contentType`: `string` \| `null`; \}\>
 
-Defined in: [server/\_lib/infra/blob.ts:176](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/blob.ts#L176)
+Defined in: [server/\_lib/infra/blob.ts:176](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/infra/blob.ts#L176)
 
 #### Parameters
 
@@ -112,7 +112,7 @@ Defined in: [server/\_lib/infra/blob.ts:176](https://github.com/wenakita/4626/bl
 
 > **requireBlobToken**(): `string`
 
-Defined in: [server/\_lib/infra/blob.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/blob.ts#L23)
+Defined in: [server/\_lib/infra/blob.ts:23](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/infra/blob.ts#L23)
 
 #### Returns
 
@@ -124,7 +124,7 @@ Defined in: [server/\_lib/infra/blob.ts:23](https://github.com/wenakita/4626/blo
 
 > **sha256Hex**(`input`): `string`
 
-Defined in: [server/\_lib/infra/blob.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/blob.ts#L29)
+Defined in: [server/\_lib/infra/blob.ts:29](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/infra/blob.ts#L29)
 
 #### Parameters
 

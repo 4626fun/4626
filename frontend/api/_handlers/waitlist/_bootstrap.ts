@@ -14,7 +14,11 @@ import {
 } from '../../../packages/server-core/src/index.js'
 
 
-import { assertNoEmailPrivyCollision, isIdentityRecoveryRequiredError } from '../../../server/_lib/identity/identityRecovery.js'
+import {
+  assertNoEmailPrivyCollision,
+  assertNoWalletPrivyCollision,
+  isIdentityRecoveryRequiredError,
+} from '../../../server/_lib/identity/identityRecovery.js'
 import {
   dedupeReferralCodeCandidates,
   getClientIp,
@@ -24,6 +28,7 @@ import {
   referralCodeFromEmail,
 } from '../../../server/_lib/onboarding/referrals.js'
 import { ensureWaitlistSchema } from '../../../server/_lib/onboarding/waitlistSchema.js'
+import { awardWaitlistPoints, WAITLIST_POINTS } from '../../../server/_lib/onboarding/waitlistPoints.js'
 import {
   buildAccountsMePayload,
   ensureAccountsIdentitySchema,
@@ -508,6 +513,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const context = await verifyPrivyForAccounts(req)
     await ensureAccountsIdentitySchema(db as any)
 
+    // Block wallet-only Privy sign-ins for humans who already have a
+    // canonical (email-verified) profile owning one of the incoming
+    // wallets. Without this, a wallet login for an EOA that's already
+    // linked to a canonical account mints a fragmented second profile
+    // with no email — the exact failure mode that produced the 728↔1
+    // split we just merged. Runs BEFORE any profile upsert so no DB
+    // state is written on collision.
+    await assertNoWalletPrivyCollision({
+      db: db as any,
+      privyUserId: context.privyUserId,
+      privyUser: context.privyUser,
+    })
+
     const privyEmail = normalizeEmail((context.privyUser as any)?.email?.address)
     await runWithOwnedEmailCollisionAdoption({
       db: db as any,
@@ -573,6 +591,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             uaHash,
           })
         }
+        // Mint the baseline `waitlist_signup` award. Idempotent via the
+        // `points_unique_source_full` index on (signup_id, source, source_id):
+        // after the first successful write, repeat calls hit ON CONFLICT
+        // DO NOTHING and return false. Never blocks bootstrap on failure.
+        try {
+          await awardWaitlistPoints({
+            db: db as any,
+            signupId: bootstrapProfile.signupId,
+            source: 'waitlist_signup',
+            sourceId: 'signup',
+            amount: WAITLIST_POINTS.signup,
+          })
+        } catch (err) {
+          console.warn('waitlist_bootstrap.signup_award_failed', {
+            signupId: bootstrapProfile.signupId,
+            message: err instanceof Error ? err.message : String(err),
+          })
+        }
       }
     }
 
@@ -591,6 +627,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<WaitlistBootstrapResponse>)
   } catch (error: any) {
     if (isIdentityRecoveryRequiredError(error)) {
+      if (error.reason === 'WALLET_BOUND_TO_CANONICAL_EMAIL_PROFILE') {
+        return res.status(200).json({
+          success: false,
+          error: `Recovery required: this wallet is already linked to ${error.canonicalEmail}. Sign in with email to continue.`,
+          code: 'RECOVERY_REQUIRED_WALLET_BOUND',
+          recoveryRequired: true,
+          canonicalEmail: error.canonicalEmail,
+        } as ApiEnvelope<never> & {
+          code: string
+          recoveryRequired: true
+          canonicalEmail: string
+        })
+      }
       return res.status(200).json({
         success: false,
         error: 'Recovery required: this email is already linked to another account. Use account recovery to continue.',

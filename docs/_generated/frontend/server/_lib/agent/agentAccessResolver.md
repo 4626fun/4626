@@ -12,7 +12,7 @@
 
 > **resolveAgentCapabilityResponse**(`params`): `Promise`\<\{ `chainId`: `number`; `issuedAt`: `string`; `memberships`: `object`[]; `resolverVersion`: `number`; `schema`: `"4626-agent-capability-response-v1"`; `wallet`: `string`; \}\>
 
-Defined in: [server/\_lib/agent/agentAccessResolver.ts:178](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/agentAccessResolver.ts#L178)
+Defined in: [server/\_lib/agent/agentAccessResolver.ts:178](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/agent/agentAccessResolver.ts#L178)
 
 #### Parameters
 
@@ -46,9 +46,9 @@ Defined in: [server/\_lib/agent/agentAccessResolver.ts:178](https://github.com/w
 
 ### resolveMembershipForRoom()
 
-> **resolveMembershipForRoom**(`params`): `Promise`\<\{ `accessTokenRequired?`: `boolean`; `actualBalance`: `string`; `gracePeriodSeconds?`: `number`; `minBalance`: `string`; `minHoldSeconds?`: `number`; `qualified`: `boolean`; `qualifiedSince?`: `number`; `roomKey`: `string`; `shareToken`: `string`; `statusReason?`: `"not_found"` \| `"qualified"` \| `"insufficient_balance"` \| `"insufficient_hold_time"` \| `"revoked"` \| `"unsupported_chain"`; `type`: `"telegram"` \| `"xmtp"` \| `"vault-ui"` \| `"governance"`; `vault?`: `string`; \} \| `null`\>
+> **resolveMembershipForRoom**(`params`): `Promise`\<\{ `accessTokenRequired?`: `boolean`; `actualBalance`: `string`; `gracePeriodSeconds?`: `number`; `minBalance`: `string`; `minHoldSeconds?`: `number`; `qualified`: `boolean`; `qualifiedSince?`: `number`; `roomKey`: `string`; `shareToken`: `string`; `statusReason?`: `"revoked"` \| `"not_found"` \| `"qualified"` \| `"insufficient_balance"` \| `"insufficient_hold_time"` \| `"unsupported_chain"`; `type`: `"telegram"` \| `"xmtp"` \| `"vault-ui"` \| `"governance"`; `vault?`: `string`; \} \| `null`\>
 
-Defined in: [server/\_lib/agent/agentAccessResolver.ts:308](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/agentAccessResolver.ts#L308)
+Defined in: [server/\_lib/agent/agentAccessResolver.ts:308](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/agent/agentAccessResolver.ts#L308)
 
 #### Parameters
 
@@ -72,4 +72,4 @@ Defined in: [server/\_lib/agent/agentAccessResolver.ts:308](https://github.com/w
 
 #### Returns
 
-`Promise`\<\{ `accessTokenRequired?`: `boolean`; `actualBalance`: `string`; `gracePeriodSeconds?`: `number`; `minBalance`: `string`; `minHoldSeconds?`: `number`; `qualified`: `boolean`; `qualifiedSince?`: `number`; `roomKey`: `string`; `shareToken`: `string`; `statusReason?`: `"not_found"` \| `"qualified"` \| `"insufficient_balance"` \| `"insufficient_hold_time"` \| `"revoked"` \| `"unsupported_chain"`; `type`: `"telegram"` \| `"xmtp"` \| `"vault-ui"` \| `"governance"`; `vault?`: `string`; \} \| `null`\>
+`Promise`\<\{ `accessTokenRequired?`: `boolean`; `actualBalance`: `string`; `gracePeriodSeconds?`: `number`; `minBalance`: `string`; `minHoldSeconds?`: `number`; `qualified`: `boolean`; `qualifiedSince?`: `number`; `roomKey`: `string`; `shareToken`: `string`; `statusReason?`: `"revoked"` \| `"not_found"` \| `"qualified"` \| `"insufficient_balance"` \| `"insufficient_hold_time"` \| `"unsupported_chain"`; `type`: `"telegram"` \| `"xmtp"` \| `"vault-ui"` \| `"governance"`; `vault?`: `string`; \} \| `null`\>

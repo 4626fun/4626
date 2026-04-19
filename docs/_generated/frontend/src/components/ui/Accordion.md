@@ -10,7 +10,7 @@
 
 ### AccordionItemData
 
-Defined in: [src/components/ui/Accordion.tsx:16](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L16)
+Defined in: [src/components/ui/Accordion.tsx:16](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/ui/Accordion.tsx#L16)
 
 #### Properties
 
@@ -18,19 +18,19 @@ Defined in: [src/components/ui/Accordion.tsx:16](https://github.com/wenakita/462
 
 > **children**: `ReactNode`
 
-Defined in: [src/components/ui/Accordion.tsx:19](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L19)
+Defined in: [src/components/ui/Accordion.tsx:19](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/ui/Accordion.tsx#L19)
 
 ##### key
 
 > **key**: `string`
 
-Defined in: [src/components/ui/Accordion.tsx:17](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L17)
+Defined in: [src/components/ui/Accordion.tsx:17](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/ui/Accordion.tsx#L17)
 
 ##### title
 
 > **title**: `string`
 
-Defined in: [src/components/ui/Accordion.tsx:18](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L18)
+Defined in: [src/components/ui/Accordion.tsx:18](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/ui/Accordion.tsx#L18)
 
 ## Functions
 
@@ -38,7 +38,7 @@ Defined in: [src/components/ui/Accordion.tsx:18](https://github.com/wenakita/462
 
 > **FaqAccordion**(`__namedParameters`): `Element`
 
-Defined in: [src/components/ui/Accordion.tsx:38](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L38)
+Defined in: [src/components/ui/Accordion.tsx:38](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/ui/Accordion.tsx#L38)
 
 Multi-open accordion backed by CDS AccordionItem.
 
@@ -62,7 +62,7 @@ single-open.
 
 > **SingleAccordion**(`__namedParameters`): `Element`
 
-Defined in: [src/components/ui/Accordion.tsx:70](https://github.com/wenakita/4626/blob/main/frontend/src/components/ui/Accordion.tsx#L70)
+Defined in: [src/components/ui/Accordion.tsx:70](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/ui/Accordion.tsx#L70)
 
 Single-open accordion backed by CDS Accordion (standard mode).
 

@@ -12,7 +12,7 @@
 
 > **basenameToHandle**(`name`): `string` \| `null`
 
-Defined in: [server/\_lib/identity/basenameResolver.ts:120](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/basenameResolver.ts#L120)
+Defined in: [server/\_lib/identity/basenameResolver.ts:51](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/identity/basenameResolver.ts#L51)
 
 #### Parameters
 
@@ -30,10 +30,10 @@ Defined in: [server/\_lib/identity/basenameResolver.ts:120](https://github.com/w
 
 > **getBasenameName**(`address`): `Promise`\<`string` \| `null`\>
 
-Defined in: [server/\_lib/identity/basenameResolver.ts:76](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/basenameResolver.ts#L76)
+Defined in: [server/\_lib/identity/basenameResolver.ts:66](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/identity/basenameResolver.ts#L66)
 
-Resolve a wallet address to its Basename (e.g. "akita.base.eth") using
-ENSIP-19 reverse resolution on Ethereum mainnet.
+Resolve a wallet address to its full Basename (e.g. "akita.base.eth")
+by calling the L2 Resolver on Base.
 
 Returns null when no Basename is configured or on lookup failure.
 
@@ -53,14 +53,10 @@ Returns null when no Basename is configured or on lookup failure.
 
 > **resolveBasenameHandle**(`address`): `Promise`\<`string` \| `null`\>
 
-Defined in: [server/\_lib/identity/basenameResolver.ts:155](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/basenameResolver.ts#L155)
+Defined in: [server/\_lib/identity/basenameResolver.ts:94](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/identity/basenameResolver.ts#L94)
 
-Resolve a "Basename handle" (e.g. "akita" from "akita.base.eth") for a wallet address.
-
-Best-effort:
-- try Base L2 ENS reverse resolution
-- fall back to ENSIP-19 reverse resolution on mainnet
-- fall back to plain mainnet ENS reverse resolution when it returns a `.base.eth` name
+Resolve a "Basename handle" (e.g. "akita" from "akita.base.eth")
+for a wallet address via the Base L2 Resolver.
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **MeteoraAccountMeta** = `object`
 
-Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L9)
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:9](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L9)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:9](https://github.c
 
 > **isSigner**: `boolean`
 
-Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L11)
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:11](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L11)
 
 ##### isWritable
 
 > **isWritable**: `boolean`
 
-Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L12)
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:12](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L12)
 
 ##### pubkey
 
 > **pubkey**: `string`
 
-Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L10)
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:10](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L10)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:10](https://github.
 
 > **MeteoraAlphaVaultConfig** = `object`
 
-Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L15)
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:15](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L15)
 
 #### Properties
 
@@ -48,37 +48,37 @@ Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:15](https://github.
 
 > **alphaVaultProgramId**: `string`
 
-Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L18)
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:18](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L18)
 
 ##### creatorToken
 
 > **creatorToken**: `Address`
 
-Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L16)
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:16](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L16)
 
 ##### depositAccounts
 
 > **depositAccounts**: [`MeteoraAccountMeta`](#meteoraaccountmeta)[]
 
-Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L19)
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:19](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L19)
 
 ##### meteoraAlphaVault
 
 > **meteoraAlphaVault**: `string`
 
-Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L17)
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:17](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L17)
 
 ##### quoteMint
 
 > **quoteMint**: `string` \| `null`
 
-Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L20)
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:20](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L20)
 
 ##### source
 
 > **source**: `"db"` \| `"env"`
 
-Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L21)
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:21](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L21)
 
 ## Variables
 
@@ -86,7 +86,7 @@ Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:21](https://github.
 
 > `const` **SOLANA\_NATIVE\_MINT**: `"So11111111111111111111111111111111111111112"` = `'So11111111111111111111111111111111111111112'`
 
-Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L7)
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:7](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L7)
 
 ## Functions
 
@@ -94,7 +94,7 @@ Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:7](https://github.c
 
 > **resolveMeteoraAlphaVaultConfig**(`params`): `Promise`\<[`MeteoraAlphaVaultConfig`](#meteoraalphavaultconfig) \| `null`\>
 
-Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:216](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L216)
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:216](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L216)
 
 #### Parameters
 

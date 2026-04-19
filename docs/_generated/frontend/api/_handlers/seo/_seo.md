@@ -12,7 +12,7 @@
 
 > **handleRobots**(`req`, `res`): `Promise`\<`void`\>
 
-Defined in: [api/\_handlers/seo/\_seo.ts:124](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/seo/_seo.ts#L124)
+Defined in: [api/\_handlers/seo/\_seo.ts:124](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/seo/_seo.ts#L124)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [api/\_handlers/seo/\_seo.ts:124](https://github.com/wenakita/4626/b
 
 > **handleSitemap**(`req`, `res`): `Promise`\<`void`\>
 
-Defined in: [api/\_handlers/seo/\_seo.ts:110](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/seo/_seo.ts#L110)
+Defined in: [api/\_handlers/seo/\_seo.ts:110](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/seo/_seo.ts#L110)
 
 #### Parameters
 

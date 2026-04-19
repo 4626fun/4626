@@ -12,7 +12,7 @@
 
 > `const` **waitlistRouteLoaders**: [`ApiRouteLoaders`](_routeLoader.md#apirouteloaders)
 
-Defined in: [api/\_handlers/\_routes.waitlist.ts:4](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.waitlist.ts#L4)
+Defined in: [api/\_handlers/\_routes.waitlist.ts:4](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/_routes.waitlist.ts#L4)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/\_routes.waitlist.ts:4](https://github.com/wenakita/
 
 > **getWaitlistApiHandler**(`subpath`): `Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routes.waitlist.ts:12](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.waitlist.ts#L12)
+Defined in: [api/\_handlers/\_routes.waitlist.ts:13](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/_routes.waitlist.ts#L13)
 
 #### Parameters
 

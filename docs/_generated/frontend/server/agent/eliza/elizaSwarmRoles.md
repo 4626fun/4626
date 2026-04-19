@@ -12,7 +12,7 @@
 
 > **AgentSwarmRole** = `"general"` \| `"trader"` \| `"social"` \| `"knowledge"`
 
-Defined in: [server/agent/eliza/elizaSwarmRoles.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/elizaSwarmRoles.ts#L9)
+Defined in: [server/agent/eliza/elizaSwarmRoles.ts:9](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/agent/eliza/elizaSwarmRoles.ts#L9)
 
 ## Variables
 
@@ -20,7 +20,7 @@ Defined in: [server/agent/eliza/elizaSwarmRoles.ts:9](https://github.com/wenakit
 
 > `const` **DEFAULT\_SWARM\_CAPABILITIES**: `Record`\<[`AgentSwarmRole`](#agentswarmrole), `string`[]\>
 
-Defined in: [server/agent/eliza/elizaSwarmRoles.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/elizaSwarmRoles.ts#L11)
+Defined in: [server/agent/eliza/elizaSwarmRoles.ts:11](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/agent/eliza/elizaSwarmRoles.ts#L11)
 
 ## Functions
 
@@ -28,7 +28,7 @@ Defined in: [server/agent/eliza/elizaSwarmRoles.ts:11](https://github.com/wenaki
 
 > **inferSwarmRoleFromAgentKey**(`agentKey`): [`AgentSwarmRole`](#agentswarmrole)
 
-Defined in: [server/agent/eliza/elizaSwarmRoles.ts:69](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/elizaSwarmRoles.ts#L69)
+Defined in: [server/agent/eliza/elizaSwarmRoles.ts:69](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/agent/eliza/elizaSwarmRoles.ts#L69)
 
 #### Parameters
 
@@ -46,7 +46,7 @@ Defined in: [server/agent/eliza/elizaSwarmRoles.ts:69](https://github.com/wenaki
 
 > **normalizeSwarmRole**(`raw`): [`AgentSwarmRole`](#agentswarmrole) \| `null`
 
-Defined in: [server/agent/eliza/elizaSwarmRoles.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/elizaSwarmRoles.ts#L18)
+Defined in: [server/agent/eliza/elizaSwarmRoles.ts:18](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/agent/eliza/elizaSwarmRoles.ts#L18)
 
 #### Parameters
 
@@ -64,7 +64,7 @@ Defined in: [server/agent/eliza/elizaSwarmRoles.ts:18](https://github.com/wenaki
 
 > **parseSwarmCapabilityMap**(`raw`): `Partial`\<`Record`\<[`AgentSwarmRole`](#agentswarmrole), `string`[]\>\>
 
-Defined in: [server/agent/eliza/elizaSwarmRoles.ts:49](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/elizaSwarmRoles.ts#L49)
+Defined in: [server/agent/eliza/elizaSwarmRoles.ts:49](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/agent/eliza/elizaSwarmRoles.ts#L49)
 
 #### Parameters
 
@@ -82,7 +82,7 @@ Defined in: [server/agent/eliza/elizaSwarmRoles.ts:49](https://github.com/wenaki
 
 > **parseSwarmRoleMap**(`raw`): `Record`\<`string`, [`AgentSwarmRole`](#agentswarmrole)\>
 
-Defined in: [server/agent/eliza/elizaSwarmRoles.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/elizaSwarmRoles.ts#L31)
+Defined in: [server/agent/eliza/elizaSwarmRoles.ts:31](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/agent/eliza/elizaSwarmRoles.ts#L31)
 
 #### Parameters
 
@@ -100,7 +100,7 @@ Defined in: [server/agent/eliza/elizaSwarmRoles.ts:31](https://github.com/wenaki
 
 > **resolveSwarmProfile**(`agentKey`, `roleMap`, `capabilityOverrides`): `object`
 
-Defined in: [server/agent/eliza/elizaSwarmRoles.ts:77](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/elizaSwarmRoles.ts#L77)
+Defined in: [server/agent/eliza/elizaSwarmRoles.ts:77](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/agent/eliza/elizaSwarmRoles.ts#L77)
 
 #### Parameters
 

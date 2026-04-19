@@ -12,7 +12,7 @@
 
 > **IdentityRecoveryRequiredError** = `Error` & `object`
 
-Defined in: [server/\_lib/identity/identityRecovery.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/identityRecovery.ts#L5)
+Defined in: [server/\_lib/identity/identityRecovery.ts:5](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/identity/identityRecovery.ts#L5)
 
 #### Type Declaration
 
@@ -46,7 +46,7 @@ Defined in: [server/\_lib/identity/identityRecovery.ts:5](https://github.com/wen
 
 > **assertNoEmailPrivyCollision**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/identity/identityRecovery.ts:82](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/identityRecovery.ts#L82)
+Defined in: [server/\_lib/identity/identityRecovery.ts:82](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/identity/identityRecovery.ts#L82)
 
 #### Parameters
 
@@ -74,7 +74,7 @@ Defined in: [server/\_lib/identity/identityRecovery.ts:82](https://github.com/we
 
 > **isIdentityRecoveryRequiredError**(`error`): `error is IdentityRecoveryRequiredError`
 
-Defined in: [server/\_lib/identity/identityRecovery.ts:112](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/identity/identityRecovery.ts#L112)
+Defined in: [server/\_lib/identity/identityRecovery.ts:112](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/identity/identityRecovery.ts#L112)
 
 #### Parameters
 

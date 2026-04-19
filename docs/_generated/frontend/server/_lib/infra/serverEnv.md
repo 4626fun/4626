@@ -12,7 +12,7 @@
 
 > **readServerEnvVar**(`key`): `string`
 
-Defined in: [server/\_lib/infra/serverEnv.ts:132](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/serverEnv.ts#L132)
+Defined in: [server/\_lib/infra/serverEnv.ts:132](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/infra/serverEnv.ts#L132)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [server/\_lib/infra/serverEnv.ts:132](https://github.com/wenakita/46
 
 > **resetServerEnvCacheForTests**(): `void`
 
-Defined in: [server/\_lib/infra/serverEnv.ts:140](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/serverEnv.ts#L140)
+Defined in: [server/\_lib/infra/serverEnv.ts:140](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/infra/serverEnv.ts#L140)
 
 #### Returns
 

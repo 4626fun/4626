@@ -12,7 +12,7 @@
 
 > **RouteabilityLeg** = `object`
 
-Defined in: [server/zora/trendFunnel.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L28)
+Defined in: [server/zora/trendFunnel.ts:33](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L33)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [server/zora/trendFunnel.ts:28](https://github.com/wenakita/4626/blo
 
 > `optional` **error**: `string`
 
-Defined in: [server/zora/trendFunnel.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L30)
+Defined in: [server/zora/trendFunnel.ts:35](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L35)
 
 ##### ok
 
 > **ok**: `boolean`
 
-Defined in: [server/zora/trendFunnel.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L29)
+Defined in: [server/zora/trendFunnel.ts:34](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L34)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [server/zora/trendFunnel.ts:29](https://github.com/wenakita/4626/blo
 
 > **TrendFunnelConfig** = `object`
 
-Defined in: [server/zora/trendFunnel.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L18)
+Defined in: [server/zora/trendFunnel.ts:23](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L23)
 
 #### Properties
 
@@ -42,43 +42,43 @@ Defined in: [server/zora/trendFunnel.ts:18](https://github.com/wenakita/4626/blo
 
 > **allowedTickers**: `Set`\<`string`\> \| `null`
 
-Defined in: [server/zora/trendFunnel.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L25)
+Defined in: [server/zora/trendFunnel.ts:30](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L30)
 
 ##### automationEnabled
 
 > **automationEnabled**: `boolean`
 
-Defined in: [server/zora/trendFunnel.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L19)
+Defined in: [server/zora/trendFunnel.ts:24](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L24)
 
 ##### flywheelEnabled
 
 > **flywheelEnabled**: `boolean`
 
-Defined in: [server/zora/trendFunnel.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L20)
+Defined in: [server/zora/trendFunnel.ts:25](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L25)
 
 ##### maxNotionalWei
 
 > **maxNotionalWei**: `bigint`
 
-Defined in: [server/zora/trendFunnel.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L21)
+Defined in: [server/zora/trendFunnel.ts:26](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L26)
 
 ##### maxSlippageBps
 
 > **maxSlippageBps**: `number`
 
-Defined in: [server/zora/trendFunnel.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L22)
+Defined in: [server/zora/trendFunnel.ts:27](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L27)
 
 ##### routeabilityRequired
 
 > **routeabilityRequired**: `boolean`
 
-Defined in: [server/zora/trendFunnel.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L23)
+Defined in: [server/zora/trendFunnel.ts:28](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L28)
 
 ##### targetToken
 
 > **targetToken**: `` `0x${string}` `` \| `null`
 
-Defined in: [server/zora/trendFunnel.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L24)
+Defined in: [server/zora/trendFunnel.ts:29](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L29)
 
 ***
 
@@ -86,7 +86,7 @@ Defined in: [server/zora/trendFunnel.ts:24](https://github.com/wenakita/4626/blo
 
 > **TrendFunnelRunResult** = `object`
 
-Defined in: [server/zora/trendFunnel.ts:39](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L39)
+Defined in: [server/zora/trendFunnel.ts:44](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L44)
 
 #### Properties
 
@@ -94,7 +94,7 @@ Defined in: [server/zora/trendFunnel.ts:39](https://github.com/wenakita/4626/blo
 
 > **action**: `object`
 
-Defined in: [server/zora/trendFunnel.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L43)
+Defined in: [server/zora/trendFunnel.ts:48](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L48)
 
 ###### amountInWei
 
@@ -116,19 +116,19 @@ Defined in: [server/zora/trendFunnel.ts:43](https://github.com/wenakita/4626/blo
 
 > `optional` **reason**: `string`
 
-Defined in: [server/zora/trendFunnel.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L41)
+Defined in: [server/zora/trendFunnel.ts:46](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L46)
 
 ##### routeability
 
 > **routeability**: [`TrendRouteabilityResult`](#trendrouteabilityresult)
 
-Defined in: [server/zora/trendFunnel.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L42)
+Defined in: [server/zora/trendFunnel.ts:47](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L47)
 
 ##### status
 
 > **status**: `"skipped_disabled"` \| `"skipped_guardrail"` \| `"blocked_routeability"` \| `"failed"` \| `"executed"`
 
-Defined in: [server/zora/trendFunnel.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L40)
+Defined in: [server/zora/trendFunnel.ts:45](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L45)
 
 ***
 
@@ -136,7 +136,7 @@ Defined in: [server/zora/trendFunnel.ts:40](https://github.com/wenakita/4626/blo
 
 > **TrendRouteabilityResult** = `object`
 
-Defined in: [server/zora/trendFunnel.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L33)
+Defined in: [server/zora/trendFunnel.ts:38](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L38)
 
 #### Properties
 
@@ -144,19 +144,19 @@ Defined in: [server/zora/trendFunnel.ts:33](https://github.com/wenakita/4626/blo
 
 > **buy**: [`RouteabilityLeg`](#routeabilityleg)
 
-Defined in: [server/zora/trendFunnel.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L35)
+Defined in: [server/zora/trendFunnel.ts:40](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L40)
 
 ##### passed
 
 > **passed**: `boolean`
 
-Defined in: [server/zora/trendFunnel.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L34)
+Defined in: [server/zora/trendFunnel.ts:39](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L39)
 
 ##### sell
 
 > **sell**: [`RouteabilityLeg`](#routeabilityleg)
 
-Defined in: [server/zora/trendFunnel.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L36)
+Defined in: [server/zora/trendFunnel.ts:41](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L41)
 
 ## Functions
 
@@ -164,7 +164,7 @@ Defined in: [server/zora/trendFunnel.ts:36](https://github.com/wenakita/4626/blo
 
 > **readTrendFunnelConfig**(): [`TrendFunnelConfig`](#trendfunnelconfig)
 
-Defined in: [server/zora/trendFunnel.ts:119](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L119)
+Defined in: [server/zora/trendFunnel.ts:124](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L124)
 
 #### Returns
 
@@ -176,7 +176,7 @@ Defined in: [server/zora/trendFunnel.ts:119](https://github.com/wenakita/4626/bl
 
 > **runTrendFunnel**(`params`): `Promise`\<[`TrendFunnelRunResult`](#trendfunnelrunresult)\>
 
-Defined in: [server/zora/trendFunnel.ts:221](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L221)
+Defined in: [server/zora/trendFunnel.ts:226](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L226)
 
 #### Parameters
 
@@ -216,7 +216,7 @@ Defined in: [server/zora/trendFunnel.ts:221](https://github.com/wenakita/4626/bl
 
 > **runTrendRouteabilityChecks**(`params`): `Promise`\<[`TrendRouteabilityResult`](#trendrouteabilityresult)\>
 
-Defined in: [server/zora/trendFunnel.ts:182](https://github.com/wenakita/4626/blob/main/frontend/server/zora/trendFunnel.ts#L182)
+Defined in: [server/zora/trendFunnel.ts:187](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/zora/trendFunnel.ts#L187)
 
 #### Parameters
 

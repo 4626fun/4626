@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/deploy/\_config.ts:42](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/deploy/_config.ts#L42)
+Defined in: [api/\_handlers/deploy/\_config.ts:42](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/deploy/_config.ts#L42)
 
 #### Parameters
 

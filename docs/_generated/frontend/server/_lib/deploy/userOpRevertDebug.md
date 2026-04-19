@@ -12,7 +12,7 @@
 
 > **UserOpCallLike** = `object`
 
-Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/userOpRevertDebug.ts#L3)
+Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:3](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/deploy/userOpRevertDebug.ts#L3)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:3](https://github.com/wena
 
 > `optional` **data**: `Hex`
 
-Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/userOpRevertDebug.ts#L6)
+Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:6](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/deploy/userOpRevertDebug.ts#L6)
 
 ##### to
 
 > **to**: `Address`
 
-Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:4](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/userOpRevertDebug.ts#L4)
+Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:4](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/deploy/userOpRevertDebug.ts#L4)
 
 ##### value?
 
 > `optional` **value**: `bigint`
 
-Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/userOpRevertDebug.ts#L5)
+Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:5](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/deploy/userOpRevertDebug.ts#L5)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:5](https://github.com/wena
 
 > **UserOpErrorDebug** = `object`
 
-Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/userOpRevertDebug.ts#L9)
+Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:9](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/deploy/userOpRevertDebug.ts#L9)
 
 #### Properties
 
@@ -48,13 +48,13 @@ Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:9](https://github.com/wena
 
 > **at**: `string`
 
-Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/userOpRevertDebug.ts#L10)
+Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:10](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/deploy/userOpRevertDebug.ts#L10)
 
 ##### callSummary?
 
 > `optional` **callSummary**: `object`[]
 
-Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/userOpRevertDebug.ts#L21)
+Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:21](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/deploy/userOpRevertDebug.ts#L21)
 
 ###### selector
 
@@ -68,61 +68,61 @@ Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:21](https://github.com/wen
 
 > `optional` **details**: `string`
 
-Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/userOpRevertDebug.ts#L16)
+Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:16](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/deploy/userOpRevertDebug.ts#L16)
 
 ##### errorName?
 
 > `optional` **errorName**: `string`
 
-Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/userOpRevertDebug.ts#L20)
+Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:20](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/deploy/userOpRevertDebug.ts#L20)
 
 ##### errorType?
 
 > `optional` **errorType**: `string`
 
-Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/userOpRevertDebug.ts#L13)
+Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:13](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/deploy/userOpRevertDebug.ts#L13)
 
 ##### message?
 
 > `optional` **message**: `string`
 
-Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/userOpRevertDebug.ts#L14)
+Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:14](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/deploy/userOpRevertDebug.ts#L14)
 
 ##### metaMessages?
 
 > `optional` **metaMessages**: `string`[]
 
-Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/userOpRevertDebug.ts#L17)
+Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:17](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/deploy/userOpRevertDebug.ts#L17)
 
 ##### revertData?
 
 > `optional` **revertData**: `Hex`
 
-Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/userOpRevertDebug.ts#L18)
+Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:18](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/deploy/userOpRevertDebug.ts#L18)
 
 ##### selector?
 
 > `optional` **selector**: `Hex`
 
-Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/userOpRevertDebug.ts#L19)
+Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:19](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/deploy/userOpRevertDebug.ts#L19)
 
 ##### sessionId?
 
 > `optional` **sessionId**: `string`
 
-Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/userOpRevertDebug.ts#L11)
+Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:11](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/deploy/userOpRevertDebug.ts#L11)
 
 ##### shortMessage?
 
 > `optional` **shortMessage**: `string`
 
-Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/userOpRevertDebug.ts#L15)
+Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:15](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/deploy/userOpRevertDebug.ts#L15)
 
 ##### stage?
 
 > `optional` **stage**: `string`
 
-Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/userOpRevertDebug.ts#L12)
+Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:12](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/deploy/userOpRevertDebug.ts#L12)
 
 ## Functions
 
@@ -130,7 +130,7 @@ Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:12](https://github.com/wen
 
 > **buildUserOpErrorDebug**(`params`): [`UserOpErrorDebug`](#useroperrordebug)
 
-Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:133](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/userOpRevertDebug.ts#L133)
+Defined in: [server/\_lib/deploy/userOpRevertDebug.ts:133](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/deploy/userOpRevertDebug.ts#L133)
 
 #### Parameters
 

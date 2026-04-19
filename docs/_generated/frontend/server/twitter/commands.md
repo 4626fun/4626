@@ -12,7 +12,7 @@
 
 > **TwitterCommandFailure** = `object`
 
-Defined in: [server/twitter/commands.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/commands.ts#L11)
+Defined in: [server/twitter/commands.ts:11](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/twitter/commands.ts#L11)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [server/twitter/commands.ts:11](https://github.com/wenakita/4626/blo
 
 > `optional` **action**: `any`
 
-Defined in: [server/twitter/commands.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/commands.ts#L11)
+Defined in: [server/twitter/commands.ts:11](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/twitter/commands.ts#L11)
 
 ##### ok
 
 > **ok**: `false`
 
-Defined in: [server/twitter/commands.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/commands.ts#L11)
+Defined in: [server/twitter/commands.ts:11](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/twitter/commands.ts#L11)
 
 ##### response
 
 > **response**: `string`
 
-Defined in: [server/twitter/commands.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/commands.ts#L11)
+Defined in: [server/twitter/commands.ts:11](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/twitter/commands.ts#L11)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [server/twitter/commands.ts:11](https://github.com/wenakita/4626/blo
 
 > **TwitterCommandResult** = \{ `action?`: `any`; `ok`: `true`; `response`: `string`; \} \| [`TwitterCommandFailure`](#twittercommandfailure)
 
-Defined in: [server/twitter/commands.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/commands.ts#L13)
+Defined in: [server/twitter/commands.ts:13](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/twitter/commands.ts#L13)
 
 ***
 
@@ -48,7 +48,7 @@ Defined in: [server/twitter/commands.ts:13](https://github.com/wenakita/4626/blo
 
 > **TwitterRole** = `"OWNER"` \| `"ADMIN"` \| `"MEMBER"`
 
-Defined in: [server/twitter/commands.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/commands.ts#L9)
+Defined in: [server/twitter/commands.ts:9](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/twitter/commands.ts#L9)
 
 ## Functions
 
@@ -56,7 +56,7 @@ Defined in: [server/twitter/commands.ts:9](https://github.com/wenakita/4626/blob
 
 > **handleTwitterCommand**(`params`): `Promise`\<[`TwitterCommandResult`](#twittercommandresult)\>
 
-Defined in: [server/twitter/commands.ts:422](https://github.com/wenakita/4626/blob/main/frontend/server/twitter/commands.ts#L422)
+Defined in: [server/twitter/commands.ts:422](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/twitter/commands.ts#L422)
 
 Handle Twitter/X commands from Keepr chats.
 

@@ -12,7 +12,7 @@
 
 > `const` **PRIVY\_INTERACTIVE\_LOGIN\_METHODS**: readonly \[`"email"`, `"wallet"`\]
 
-Defined in: [src/hooks/useSiweAuth.ts:42](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L42)
+Defined in: [src/hooks/useSiweAuth.ts:41](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useSiweAuth.ts#L41)
 
 Explicit user-initiated Privy sign-in should prefer identity-first methods.
 Wallet-first in this path can accidentally create a new Privy identity and
@@ -24,7 +24,7 @@ then collide with an existing email-bound account.
 
 > **deriveSiweSessionState**(`input`): `DerivedSiweSessionState`
 
-Defined in: [src/hooks/useSiweAuth.ts:108](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L108)
+Defined in: [src/hooks/useSiweAuth.ts:107](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useSiweAuth.ts#L107)
 
 #### Parameters
 
@@ -42,7 +42,7 @@ Defined in: [src/hooks/useSiweAuth.ts:108](https://github.com/wenakita/4626/blob
 
 > **shouldAutoBridgeConnectedPrivySession**(`input`): `boolean`
 
-Defined in: [src/hooks/useSiweAuth.ts:138](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L138)
+Defined in: [src/hooks/useSiweAuth.ts:137](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useSiweAuth.ts#L137)
 
 #### Parameters
 
@@ -60,7 +60,7 @@ Defined in: [src/hooks/useSiweAuth.ts:138](https://github.com/wenakita/4626/blob
 
 > **shouldAutoBridgeRestoredPrivySession**(`input`): `boolean`
 
-Defined in: [src/hooks/useSiweAuth.ts:163](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L163)
+Defined in: [src/hooks/useSiweAuth.ts:162](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useSiweAuth.ts#L162)
 
 #### Parameters
 
@@ -78,7 +78,7 @@ Defined in: [src/hooks/useSiweAuth.ts:163](https://github.com/wenakita/4626/blob
 
 > **shouldResetPrivyBridgeState**(`message`): `boolean`
 
-Defined in: [src/hooks/useSiweAuth.ts:97](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L97)
+Defined in: [src/hooks/useSiweAuth.ts:96](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useSiweAuth.ts#L96)
 
 #### Parameters
 
@@ -96,7 +96,7 @@ Defined in: [src/hooks/useSiweAuth.ts:97](https://github.com/wenakita/4626/blob/
 
 > **useSiweAuth**(): `object`
 
-Defined in: [src/hooks/useSiweAuth.ts:397](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L397)
+Defined in: [src/hooks/useSiweAuth.ts:391](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useSiweAuth.ts#L391)
 
 #### Returns
 
@@ -196,7 +196,7 @@ Defined in: [src/hooks/useSiweAuth.ts:397](https://github.com/wenakita/4626/blob
 
 > **writeStoredSessionToken**(`token`): `void`
 
-Defined in: [src/hooks/useSiweAuth.ts:333](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useSiweAuth.ts#L333)
+Defined in: [src/hooks/useSiweAuth.ts:327](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/hooks/useSiweAuth.ts#L327)
 
 #### Parameters
 

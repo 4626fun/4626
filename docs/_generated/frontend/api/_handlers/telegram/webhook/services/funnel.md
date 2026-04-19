@@ -12,7 +12,7 @@
 
 > **emitTelegramFunnelEvent**(`params`): `void`
 
-Defined in: [api/\_handlers/telegram/webhook/services/funnel.ts:3](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/funnel.ts#L3)
+Defined in: [api/\_handlers/telegram/webhook/services/funnel.ts:3](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/api/_handlers/telegram/webhook/services/funnel.ts#L3)
 
 #### Parameters
 

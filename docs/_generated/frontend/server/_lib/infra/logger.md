@@ -12,7 +12,7 @@
 
 > **Logger** = `object`
 
-Defined in: [server/\_lib/infra/logger.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/logger.ts#L7)
+Defined in: [server/\_lib/infra/logger.ts:7](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/infra/logger.ts#L7)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/infra/logger.ts:7](https://github.com/wenakita/4626/bl
 
 > **child**: (`context`) => [`Logger`](#logger)
 
-Defined in: [server/\_lib/infra/logger.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/logger.ts#L12)
+Defined in: [server/\_lib/infra/logger.ts:12](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/infra/logger.ts#L12)
 
 ###### Parameters
 
@@ -36,7 +36,7 @@ Defined in: [server/\_lib/infra/logger.ts:12](https://github.com/wenakita/4626/b
 
 > **debug**: (`msg`, `data?`) => `void`
 
-Defined in: [server/\_lib/infra/logger.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/logger.ts#L8)
+Defined in: [server/\_lib/infra/logger.ts:8](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/infra/logger.ts#L8)
 
 ###### Parameters
 
@@ -56,7 +56,7 @@ Defined in: [server/\_lib/infra/logger.ts:8](https://github.com/wenakita/4626/bl
 
 > **error**: (`msg`, `data?`) => `void`
 
-Defined in: [server/\_lib/infra/logger.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/logger.ts#L11)
+Defined in: [server/\_lib/infra/logger.ts:11](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/infra/logger.ts#L11)
 
 ###### Parameters
 
@@ -76,7 +76,7 @@ Defined in: [server/\_lib/infra/logger.ts:11](https://github.com/wenakita/4626/b
 
 > **info**: (`msg`, `data?`) => `void`
 
-Defined in: [server/\_lib/infra/logger.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/logger.ts#L9)
+Defined in: [server/\_lib/infra/logger.ts:9](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/infra/logger.ts#L9)
 
 ###### Parameters
 
@@ -96,7 +96,7 @@ Defined in: [server/\_lib/infra/logger.ts:9](https://github.com/wenakita/4626/bl
 
 > **warn**: (`msg`, `data?`) => `void`
 
-Defined in: [server/\_lib/infra/logger.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/logger.ts#L10)
+Defined in: [server/\_lib/infra/logger.ts:10](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/infra/logger.ts#L10)
 
 ###### Parameters
 
@@ -116,7 +116,7 @@ Defined in: [server/\_lib/infra/logger.ts:10](https://github.com/wenakita/4626/b
 
 > **withCorrelationId**: (`correlationId`) => [`Logger`](#logger)
 
-Defined in: [server/\_lib/infra/logger.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/logger.ts#L13)
+Defined in: [server/\_lib/infra/logger.ts:13](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/infra/logger.ts#L13)
 
 ###### Parameters
 
@@ -134,7 +134,7 @@ Defined in: [server/\_lib/infra/logger.ts:13](https://github.com/wenakita/4626/b
 
 > `const` **logger**: [`Logger`](#logger)
 
-Defined in: [server/\_lib/infra/logger.ts:96](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/logger.ts#L96)
+Defined in: [server/\_lib/infra/logger.ts:96](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/infra/logger.ts#L96)
 
 ## Functions
 
@@ -142,7 +142,7 @@ Defined in: [server/\_lib/infra/logger.ts:96](https://github.com/wenakita/4626/b
 
 > **createCorrelationId**(`prefix`): `string`
 
-Defined in: [server/\_lib/infra/logger.ts:98](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/logger.ts#L98)
+Defined in: [server/\_lib/infra/logger.ts:98](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/infra/logger.ts#L98)
 
 #### Parameters
 
@@ -160,7 +160,7 @@ Defined in: [server/\_lib/infra/logger.ts:98](https://github.com/wenakita/4626/b
 
 > **createCorrelationLogger**(`prefix`, `baseContext`): `object`
 
-Defined in: [server/\_lib/infra/logger.ts:102](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/infra/logger.ts#L102)
+Defined in: [server/\_lib/infra/logger.ts:102](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/infra/logger.ts#L102)
 
 #### Parameters
 

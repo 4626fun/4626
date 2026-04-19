@@ -12,7 +12,7 @@
 
 > **CreatorMetricsSyncResult** = `object`
 
-Defined in: [server/\_lib/zora/creatorMetricsSync.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSync.ts#L17)
+Defined in: [server/\_lib/zora/creatorMetricsSync.ts:17](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/creatorMetricsSync.ts#L17)
 
 #### Properties
 
@@ -20,79 +20,79 @@ Defined in: [server/\_lib/zora/creatorMetricsSync.ts:17](https://github.com/wena
 
 > **backfillComplete**: `boolean`
 
-Defined in: [server/\_lib/zora/creatorMetricsSync.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSync.ts#L25)
+Defined in: [server/\_lib/zora/creatorMetricsSync.ts:25](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/creatorMetricsSync.ts#L25)
 
 ##### coinsUpserted
 
 > **coinsUpserted**: `number`
 
-Defined in: [server/\_lib/zora/creatorMetricsSync.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSync.ts#L23)
+Defined in: [server/\_lib/zora/creatorMetricsSync.ts:23](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/creatorMetricsSync.ts#L23)
 
 ##### deadLetters
 
 > **deadLetters**: `number`
 
-Defined in: [server/\_lib/zora/creatorMetricsSync.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSync.ts#L29)
+Defined in: [server/\_lib/zora/creatorMetricsSync.ts:29](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/creatorMetricsSync.ts#L29)
 
 ##### driftEstimateTotal
 
 > **driftEstimateTotal**: `number` \| `null`
 
-Defined in: [server/\_lib/zora/creatorMetricsSync.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSync.ts#L27)
+Defined in: [server/\_lib/zora/creatorMetricsSync.ts:27](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/creatorMetricsSync.ts#L27)
 
 ##### driftPct
 
 > **driftPct**: `number` \| `null`
 
-Defined in: [server/\_lib/zora/creatorMetricsSync.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSync.ts#L28)
+Defined in: [server/\_lib/zora/creatorMetricsSync.ts:28](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/creatorMetricsSync.ts#L28)
 
 ##### error?
 
 > `optional` **error**: `string`
 
-Defined in: [server/\_lib/zora/creatorMetricsSync.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSync.ts#L30)
+Defined in: [server/\_lib/zora/creatorMetricsSync.ts:30](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/creatorMetricsSync.ts#L30)
 
 ##### mode
 
 > **mode**: `SyncMode`
 
-Defined in: [server/\_lib/zora/creatorMetricsSync.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSync.ts#L20)
+Defined in: [server/\_lib/zora/creatorMetricsSync.ts:20](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/creatorMetricsSync.ts#L20)
 
 ##### nextCursor
 
 > **nextCursor**: `string` \| `null`
 
-Defined in: [server/\_lib/zora/creatorMetricsSync.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSync.ts#L24)
+Defined in: [server/\_lib/zora/creatorMetricsSync.ts:24](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/creatorMetricsSync.ts#L24)
 
 ##### ok
 
 > **ok**: `boolean`
 
-Defined in: [server/\_lib/zora/creatorMetricsSync.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSync.ts#L18)
+Defined in: [server/\_lib/zora/creatorMetricsSync.ts:18](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/creatorMetricsSync.ts#L18)
 
 ##### pagesProcessed
 
 > **pagesProcessed**: `number`
 
-Defined in: [server/\_lib/zora/creatorMetricsSync.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSync.ts#L21)
+Defined in: [server/\_lib/zora/creatorMetricsSync.ts:21](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/creatorMetricsSync.ts#L21)
 
 ##### runId
 
 > **runId**: `string`
 
-Defined in: [server/\_lib/zora/creatorMetricsSync.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSync.ts#L19)
+Defined in: [server/\_lib/zora/creatorMetricsSync.ts:19](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/creatorMetricsSync.ts#L19)
 
 ##### sampledCreators
 
 > **sampledCreators**: `number`
 
-Defined in: [server/\_lib/zora/creatorMetricsSync.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSync.ts#L22)
+Defined in: [server/\_lib/zora/creatorMetricsSync.ts:22](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/creatorMetricsSync.ts#L22)
 
 ##### syncStatus
 
 > **syncStatus**: `SyncStatus`
 
-Defined in: [server/\_lib/zora/creatorMetricsSync.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSync.ts#L26)
+Defined in: [server/\_lib/zora/creatorMetricsSync.ts:26](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/creatorMetricsSync.ts#L26)
 
 ## Functions
 
@@ -100,7 +100,7 @@ Defined in: [server/\_lib/zora/creatorMetricsSync.ts:26](https://github.com/wena
 
 > **ensureCreatorMetricsSchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/zora/creatorMetricsSync.ts:208](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSync.ts#L208)
+Defined in: [server/\_lib/zora/creatorMetricsSync.ts:208](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/creatorMetricsSync.ts#L208)
 
 #### Parameters
 
@@ -118,7 +118,7 @@ Defined in: [server/\_lib/zora/creatorMetricsSync.ts:208](https://github.com/wen
 
 > **runCreatorMetricsSync**(`options`): `Promise`\<[`CreatorMetricsSyncResult`](#creatormetricssyncresult)\>
 
-Defined in: [server/\_lib/zora/creatorMetricsSync.ts:433](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/zora/creatorMetricsSync.ts#L433)
+Defined in: [server/\_lib/zora/creatorMetricsSync.ts:433](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/zora/creatorMetricsSync.ts#L433)
 
 #### Parameters
 

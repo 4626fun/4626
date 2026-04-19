@@ -12,7 +12,7 @@
 
 > **applyBuilderDataSuffixToCalls**(`calls`, `chainId`, `dataSuffix`, `debug`, `smartWallet?`): `object`[]
 
-Defined in: [src/lib/aa/coinbaseErc4337BuilderSuffix.ts:59](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337BuilderSuffix.ts#L59)
+Defined in: [src/lib/aa/coinbaseErc4337BuilderSuffix.ts:59](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/lib/aa/coinbaseErc4337BuilderSuffix.ts#L59)
 
 #### Parameters
 

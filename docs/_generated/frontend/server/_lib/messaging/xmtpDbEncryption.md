@@ -12,7 +12,7 @@
 
 > **fileLooksLikePlainSqlite**(`filePath`): `boolean`
 
-Defined in: [server/\_lib/messaging/xmtpDbEncryption.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/xmtpDbEncryption.ts#L8)
+Defined in: [server/\_lib/messaging/xmtpDbEncryption.ts:8](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/messaging/xmtpDbEncryption.ts#L8)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [server/\_lib/messaging/xmtpDbEncryption.ts:8](https://github.com/we
 
 > **hasLegacyMigrationBackupForFile**(`filePath`): `boolean`
 
-Defined in: [server/\_lib/messaging/xmtpDbEncryption.ts:39](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/xmtpDbEncryption.ts#L39)
+Defined in: [server/\_lib/messaging/xmtpDbEncryption.ts:39](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/messaging/xmtpDbEncryption.ts#L39)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [server/\_lib/messaging/xmtpDbEncryption.ts:39](https://github.com/w
 
 > **hasLegacyPlaintextDbInDir**(`rootDir`): `boolean`
 
-Defined in: [server/\_lib/messaging/xmtpDbEncryption.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/messaging/xmtpDbEncryption.ts#L28)
+Defined in: [server/\_lib/messaging/xmtpDbEncryption.ts:28](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/server/_lib/messaging/xmtpDbEncryption.ts#L28)
 
 #### Parameters
 

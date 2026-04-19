@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 
-import { awardWaitlistPoints, isWaitlistPointSource } from './waitlistPoints'
+import {
+  awardWaitlistPoints,
+  buildPassthroughSourceKey,
+  isWaitlistPointSource,
+  recordReferralPassthrough,
+} from './waitlistPoints'
 
 describe('waitlist points source hardening', () => {
   it('accepts referral_qualified as a valid source', () => {
@@ -171,5 +176,197 @@ describe('waitlist points source hardening', () => {
     expect(profileSelects).toBe(0)
     expect(inserts).toHaveLength(1)
     expect(inserts[0]).toMatchObject({ amount: 6 })
+  })
+
+  it.each([
+    'referral_passthrough',
+    'referral_signup',
+    'referral_csw_link',
+    'referral_qualified',
+  ] as const)('blocks cascade for exempt source %s', async (source) => {
+    let profileSelects = 0
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const query = strings.join(' ').toLowerCase()
+        if (query.includes('from profiles') && query.includes('referred_by_signup_id')) {
+          profileSelects += 1
+          return { rows: [{ referred_by_signup_id: 42 }] }
+        }
+        return { rows: [] }
+      }),
+    }
+
+    const mirrored = await recordReferralPassthrough({
+      db: db as any,
+      refereeSignupId: 99,
+      originalSource: source,
+      originalSourceId: 'x',
+      amount: 100,
+    })
+
+    expect(mirrored).toBe(false)
+    expect(profileSelects).toBe(0)
+  })
+
+  it('rejects non-integer signupId in awardWaitlistPoints', async () => {
+    const db = { sql: vi.fn(async () => ({ rows: [] })) }
+    await expect(
+      awardWaitlistPoints({
+        db: db as any,
+        signupId: 1.5,
+        source: 'waitlist_signup',
+        amount: 5,
+      }),
+    ).rejects.toThrow('invalid_waitlist_point_signup_id')
+  })
+
+  it('rejects amount above MAX_AWARD_AMOUNT in awardWaitlistPoints', async () => {
+    const db = { sql: vi.fn(async () => ({ rows: [] })) }
+    await expect(
+      awardWaitlistPoints({
+        db: db as any,
+        signupId: 1,
+        source: 'waitlist_signup',
+        amount: 999_999,
+      }),
+    ).rejects.toThrow('invalid_waitlist_point_amount')
+  })
+
+  it('recordReferralPassthrough rejects non-integer refereeSignupId', async () => {
+    const db = { sql: vi.fn(async () => ({ rows: [] })) }
+    const mirrored = await recordReferralPassthrough({
+      db: db as any,
+      refereeSignupId: 1.5,
+      originalSource: 'waitlist_signup',
+      originalSourceId: 'x',
+      amount: 10,
+    })
+    expect(mirrored).toBe(false)
+    expect(db.sql).not.toHaveBeenCalled()
+  })
+
+  it('recordReferralPassthrough rejects amount above MAX_AWARD_AMOUNT', async () => {
+    const db = { sql: vi.fn(async () => ({ rows: [] })) }
+    const mirrored = await recordReferralPassthrough({
+      db: db as any,
+      refereeSignupId: 99,
+      originalSource: 'waitlist_signup',
+      originalSourceId: 'x',
+      amount: 999_999,
+    })
+    expect(mirrored).toBe(false)
+    expect(db.sql).not.toHaveBeenCalled()
+  })
+
+  it('recordReferralPassthrough no-ops when referee has no referrer', async () => {
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const query = strings.join(' ').toLowerCase()
+        if (query.includes('from profiles')) return { rows: [] }
+        return { rows: [] }
+      }),
+    }
+    const mirrored = await recordReferralPassthrough({
+      db: db as any,
+      refereeSignupId: 99,
+      originalSource: 'waitlist_signup',
+      originalSourceId: 'x',
+      amount: 10,
+    })
+    expect(mirrored).toBe(false)
+    // Exactly one SELECT, zero INSERTs.
+    expect(db.sql).toHaveBeenCalledTimes(1)
+  })
+
+  it('recordReferralPassthrough no-ops on self-referral', async () => {
+    const inserts: unknown[] = []
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const query = strings.join(' ').toLowerCase()
+        if (query.includes('from profiles')) {
+          // profiles row lists the referee as their own referrer
+          return { rows: [{ referred_by_signup_id: 99 }] }
+        }
+        if (query.includes('insert into points')) {
+          inserts.push('unexpected')
+        }
+        return { rows: [] }
+      }),
+    }
+    const mirrored = await recordReferralPassthrough({
+      db: db as any,
+      refereeSignupId: 99,
+      originalSource: 'waitlist_signup',
+      originalSourceId: 'x',
+      amount: 10,
+    })
+    expect(mirrored).toBe(false)
+    expect(inserts).toHaveLength(0)
+  })
+
+  it('passthrough failure does not block the referee award and is logged', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
+    let insertCount = 0
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const raw = strings.join(' ')
+        const query = raw.toLowerCase()
+        if (query.includes('from points') && query.includes("source = 'csw_link'")) {
+          return { rows: [] }
+        }
+        if (query.includes('from profiles')) {
+          throw new Error('boom_profiles_select')
+        }
+        if (query.includes('insert into points')) {
+          insertCount += 1
+          return { rows: [{ id: insertCount }] }
+        }
+        return { rows: [] }
+      }),
+    }
+
+    const awarded = await awardWaitlistPoints({
+      db: db as any,
+      signupId: 99,
+      source: 'waitlist_signup',
+      sourceId: 'tx:1',
+      amount: 10,
+    })
+
+    expect(awarded).toBe(true)
+    expect(warn).toHaveBeenCalledWith(
+      'waitlist_points.passthrough_failed',
+      expect.objectContaining({
+        refereeSignupId: 99,
+        source: 'waitlist_signup',
+        message: 'boom_profiles_select',
+      }),
+    )
+    warn.mockRestore()
+  })
+
+  describe('buildPassthroughSourceKey', () => {
+    it('returns the natural composite when it fits', () => {
+      const key = buildPassthroughSourceKey(42, 'waitlist_signup', 'short-id')
+      expect(key).toBe('42:waitlist_signup:short-id')
+    })
+
+    it('stays within MAX_SOURCE_KEY_LEN and is collision-resistant for long ids', () => {
+      const longA = 'a'.repeat(500)
+      const longB = longA.slice(0, -1) + 'b'
+      const keyA = buildPassthroughSourceKey(42, 'waitlist_signup', longA)
+      const keyB = buildPassthroughSourceKey(42, 'waitlist_signup', longB)
+      expect(keyA).not.toBe(keyB)
+      expect(keyA.length).toBeLessThanOrEqual(256)
+      expect(keyB.length).toBeLessThanOrEqual(256)
+      // Both keys end with a sha256-hex suffix separated by '#'
+      expect(keyA).toMatch(/#[0-9a-f]{64}$/)
+      expect(keyB).toMatch(/#[0-9a-f]{64}$/)
+    })
+
+    it('treats null and empty source_id equivalently', () => {
+      expect(buildPassthroughSourceKey(1, 'waitlist_signup', null)).toBe('1:waitlist_signup:')
+      expect(buildPassthroughSourceKey(1, 'waitlist_signup', '')).toBe('1:waitlist_signup:')
+    })
   })
 })

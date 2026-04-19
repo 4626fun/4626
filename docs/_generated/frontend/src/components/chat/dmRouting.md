@@ -12,7 +12,7 @@
 
 > **DmRouteDecision** = `object`
 
-Defined in: [src/components/chat/dmRouting.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/dmRouting.ts#L3)
+Defined in: [src/components/chat/dmRouting.ts:3](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/chat/dmRouting.ts#L3)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [src/components/chat/dmRouting.ts:3](https://github.com/wenakita/462
 
 > **notice**: `string` \| `null`
 
-Defined in: [src/components/chat/dmRouting.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/dmRouting.ts#L5)
+Defined in: [src/components/chat/dmRouting.ts:5](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/chat/dmRouting.ts#L5)
 
 ##### recipient
 
 > **recipient**: [`DmRecipientResolution`](../../lib/xmtp/socialIdentity.md#dmrecipientresolution)
 
-Defined in: [src/components/chat/dmRouting.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/dmRouting.ts#L4)
+Defined in: [src/components/chat/dmRouting.ts:4](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/chat/dmRouting.ts#L4)
 
 ##### reroutedToAgent
 
 > **reroutedToAgent**: `boolean`
 
-Defined in: [src/components/chat/dmRouting.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/dmRouting.ts#L6)
+Defined in: [src/components/chat/dmRouting.ts:6](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/chat/dmRouting.ts#L6)
 
 ## Functions
 
@@ -40,7 +40,7 @@ Defined in: [src/components/chat/dmRouting.ts:6](https://github.com/wenakita/462
 
 > **resolveDmRoute**(`params`): [`DmRouteDecision`](#dmroutedecision)
 
-Defined in: [src/components/chat/dmRouting.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/components/chat/dmRouting.ts#L9)
+Defined in: [src/components/chat/dmRouting.ts:9](https://github.com/wenakita/4626/blob/0784d648d0f6e26c4308970d2a195bd0b0ff1619/frontend/src/components/chat/dmRouting.ts#L9)
 
 #### Parameters
 
