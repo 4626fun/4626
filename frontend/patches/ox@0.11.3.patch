@@ -1,0 +1,339 @@
+diff --git a/_cjs/core/BinaryStateTree.js b/_cjs/core/BinaryStateTree.js
+index b3b808bc7c3cf8951fa4df1e03e2f699cb4464e2..961fdb82025e06c98bbe1bce9e6e6496dbf2783a 100644
+--- a/_cjs/core/BinaryStateTree.js
++++ b/_cjs/core/BinaryStateTree.js
+@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.create = create;
+ exports.insert = insert;
+ exports.merkelize = merkelize;
+-const blake3_1 = require("@noble/hashes/blake3");
++const blake3_1 = require("@noble/hashes/blake3.js");
+ const Bytes = require("./Bytes.js");
+ function create() {
+     return {
+diff --git a/_cjs/core/Bls.js b/_cjs/core/Bls.js
+index 1741584beb5d0d42048cf6f04f12fe219865a7f7..addd45dc6d5828a5e385c5075ae13490a28b3740 100644
+--- a/_cjs/core/Bls.js
++++ b/_cjs/core/Bls.js
+@@ -7,7 +7,7 @@ exports.getPublicKey = getPublicKey;
+ exports.randomPrivateKey = randomPrivateKey;
+ exports.sign = sign;
+ exports.verify = verify;
+-const bls12_381_1 = require("@noble/curves/bls12-381");
++const bls12_381_1 = require("@noble/curves/bls12-381.js");
+ const Bytes = require("./Bytes.js");
+ const Hex = require("./Hex.js");
+ exports.noble = bls12_381_1.bls12_381;
+diff --git a/_cjs/core/BlsPoint.js b/_cjs/core/BlsPoint.js
+index 012c470095a1d46fa54d017ec7a9980073172f28..ed6ae9d0cbcec3fcba78158871e673f5b2c97213 100644
+--- a/_cjs/core/BlsPoint.js
++++ b/_cjs/core/BlsPoint.js
+@@ -4,7 +4,7 @@ exports.toBytes = toBytes;
+ exports.toHex = toHex;
+ exports.fromBytes = fromBytes;
+ exports.fromHex = fromHex;
+-const bls12_381_1 = require("@noble/curves/bls12-381");
++const bls12_381_1 = require("@noble/curves/bls12-381.js");
+ const Hex = require("./Hex.js");
+ function toBytes(point) {
+     const group = typeof point.z === 'bigint' ? bls12_381_1.bls12_381.G1 : bls12_381_1.bls12_381.G2;
+diff --git a/_cjs/core/Bytes.js b/_cjs/core/Bytes.js
+index 746298a6c895e84f3bd54dfa55570fea4fa5849d..d6ef89bcd0e48268209a084d55fd0718df6990b9 100644
+--- a/_cjs/core/Bytes.js
++++ b/_cjs/core/Bytes.js
+@@ -23,7 +23,7 @@ exports.toString = toString;
+ exports.trimLeft = trimLeft;
+ exports.trimRight = trimRight;
+ exports.validate = validate;
+-const utils_1 = require("@noble/curves/abstract/utils");
++const utils_1 = require("@noble/curves/abstract/utils.js");
+ const Errors = require("./Errors.js");
+ const Hex = require("./Hex.js");
+ const internal = require("./internal/bytes.js");
+diff --git a/_cjs/core/Ed25519.js b/_cjs/core/Ed25519.js
+index 82c503ba1417809934d0683a8c1c418c3065ddbf..ee71a0ae91f27692252f3aa96eb7adb29e7e139a 100644
+--- a/_cjs/core/Ed25519.js
++++ b/_cjs/core/Ed25519.js
+@@ -6,7 +6,7 @@ exports.getPublicKey = getPublicKey;
+ exports.randomPrivateKey = randomPrivateKey;
+ exports.sign = sign;
+ exports.verify = verify;
+-const ed25519_1 = require("@noble/curves/ed25519");
++const ed25519_1 = require("@noble/curves/ed25519.js");
+ const Bytes = require("./Bytes.js");
+ const Hex = require("./Hex.js");
+ exports.noble = ed25519_1.ed25519;
+diff --git a/_cjs/core/Hash.js b/_cjs/core/Hash.js
+index d0e3edec36674c6414a0c122c42dd88a60cd374e..d1699b8589b6f315ba98841f670fcc1028bebd1a 100644
+--- a/_cjs/core/Hash.js
++++ b/_cjs/core/Hash.js
+@@ -4,9 +4,9 @@ exports.keccak256 = keccak256;
+ exports.ripemd160 = ripemd160;
+ exports.sha256 = sha256;
+ exports.validate = validate;
+-const ripemd160_1 = require("@noble/hashes/ripemd160");
+-const sha3_1 = require("@noble/hashes/sha3");
+-const sha256_1 = require("@noble/hashes/sha256");
++const ripemd160_1 = require("@noble/hashes/ripemd160.js");
++const sha3_1 = require("@noble/hashes/sha3.js");
++const sha256_1 = require("@noble/hashes/sha256.js");
+ const Bytes = require("./Bytes.js");
+ const Hex = require("./Hex.js");
+ function keccak256(value, options = {}) {
+diff --git a/_cjs/core/Hex.js b/_cjs/core/Hex.js
+index 8ce050caa52fdf4db61c40d3549c5292f569612e..183f8814ec1c1f27651ba94e140a29ff646227b2 100644
+--- a/_cjs/core/Hex.js
++++ b/_cjs/core/Hex.js
+@@ -22,7 +22,7 @@ exports.toBytes = toBytes;
+ exports.toNumber = toNumber;
+ exports.toString = toString;
+ exports.validate = validate;
+-const utils_1 = require("@noble/curves/abstract/utils");
++const utils_1 = require("@noble/curves/abstract/utils.js");
+ const Bytes = require("./Bytes.js");
+ const Errors = require("./Errors.js");
+ const internal_bytes = require("./internal/bytes.js");
+diff --git a/_cjs/core/Keystore.js b/_cjs/core/Keystore.js
+index f3cb2d5d3db632a46c672fa5d61f5a2c73e0e8bf..a0ee4e64cbcbaa70a32b5c39a68e6823c43cc9e2 100644
+--- a/_cjs/core/Keystore.js
++++ b/_cjs/core/Keystore.js
+@@ -9,9 +9,9 @@ exports.scryptAsync = scryptAsync;
+ exports.toKey = toKey;
+ exports.toKeyAsync = toKeyAsync;
+ const aes_1 = require("@noble/ciphers/aes");
+-const pbkdf2_1 = require("@noble/hashes/pbkdf2");
+-const scrypt_1 = require("@noble/hashes/scrypt");
+-const sha2_1 = require("@noble/hashes/sha2");
++const pbkdf2_1 = require("@noble/hashes/pbkdf2.js");
++const scrypt_1 = require("@noble/hashes/scrypt.js");
++const sha2_1 = require("@noble/hashes/sha2.js");
+ const Bytes = require("./Bytes.js");
+ const Hash = require("./Hash.js");
+ function decrypt(keystore, key, options = {}) {
+diff --git a/_cjs/core/P256.js b/_cjs/core/P256.js
+index 6a85750d0c5343fc536be6bb1accb109ff93bb72..3d6cf85e18dec6b459b0429525623962fd216c3c 100644
+--- a/_cjs/core/P256.js
++++ b/_cjs/core/P256.js
+@@ -8,7 +8,7 @@ exports.randomPrivateKey = randomPrivateKey;
+ exports.recoverPublicKey = recoverPublicKey;
+ exports.sign = sign;
+ exports.verify = verify;
+-const p256_1 = require("@noble/curves/p256");
++const p256_1 = require("@noble/curves/p256.js");
+ const Bytes = require("./Bytes.js");
+ const Hex = require("./Hex.js");
+ const Entropy = require("./internal/entropy.js");
+diff --git a/_cjs/core/Secp256k1.js b/_cjs/core/Secp256k1.js
+index 7f9cad6dafc9ffda24fa63d4927808bfbb31db57..ad8ebbbcde11fcd2651692ce8282d52086dc22ed 100644
+--- a/_cjs/core/Secp256k1.js
++++ b/_cjs/core/Secp256k1.js
+@@ -9,7 +9,7 @@ exports.recoverAddress = recoverAddress;
+ exports.recoverPublicKey = recoverPublicKey;
+ exports.sign = sign;
+ exports.verify = verify;
+-const secp256k1_1 = require("@noble/curves/secp256k1");
++const secp256k1_1 = require("@noble/curves/secp256k1.js");
+ const Address = require("./Address.js");
+ const Bytes = require("./Bytes.js");
+ const Hex = require("./Hex.js");
+diff --git a/_cjs/core/Signature.js b/_cjs/core/Signature.js
+index 1664712b82212df100523778d9e7cde14f4e359c..6295ee09bce6627984693d4e95618ab175c7639d 100644
+--- a/_cjs/core/Signature.js
++++ b/_cjs/core/Signature.js
+@@ -21,7 +21,7 @@ exports.toTuple = toTuple;
+ exports.validate = validate;
+ exports.vToYParity = vToYParity;
+ exports.yParityToV = yParityToV;
+-const secp256k1_1 = require("@noble/curves/secp256k1");
++const secp256k1_1 = require("@noble/curves/secp256k1.js");
+ const Bytes = require("./Bytes.js");
+ const Errors = require("./Errors.js");
+ const Hex = require("./Hex.js");
+diff --git a/_cjs/core/WebCryptoP256.js b/_cjs/core/WebCryptoP256.js
+index 42ab1c55d976a84a9579b9f98a6a5f911f2716bc..3dd3ca9711c856278d7340805bb0df0260ad8411 100644
+--- a/_cjs/core/WebCryptoP256.js
++++ b/_cjs/core/WebCryptoP256.js
+@@ -5,7 +5,7 @@ exports.createKeyPairECDH = createKeyPairECDH;
+ exports.getSharedSecret = getSharedSecret;
+ exports.sign = sign;
+ exports.verify = verify;
+-const p256_1 = require("@noble/curves/p256");
++const p256_1 = require("@noble/curves/p256.js");
+ const Bytes = require("./Bytes.js");
+ const Hex = require("./Hex.js");
+ const PublicKey = require("./PublicKey.js");
+diff --git a/_cjs/core/X25519.js b/_cjs/core/X25519.js
+index 0a1aabe594289d925b4d8f2cafa91f1e95646fb3..5134a6e2c8f1889e79b9bfe33aeb32781c415194 100644
+--- a/_cjs/core/X25519.js
++++ b/_cjs/core/X25519.js
+@@ -5,7 +5,7 @@ exports.createKeyPair = createKeyPair;
+ exports.getPublicKey = getPublicKey;
+ exports.getSharedSecret = getSharedSecret;
+ exports.randomPrivateKey = randomPrivateKey;
+-const ed25519_1 = require("@noble/curves/ed25519");
++const ed25519_1 = require("@noble/curves/ed25519.js");
+ const Bytes = require("./Bytes.js");
+ const Hex = require("./Hex.js");
+ exports.noble = ed25519_1.x25519;
+diff --git a/_cjs/core/internal/webauthn.js b/_cjs/core/internal/webauthn.js
+index 242460ecbcc876b35a1f63b579755999d8bde51e..811d65bade726c378cbe514ae26c5e2782e8886e 100644
+--- a/_cjs/core/internal/webauthn.js
++++ b/_cjs/core/internal/webauthn.js
+@@ -2,7 +2,7 @@
+ Object.defineProperty(exports, "__esModule", { value: true });
+ exports.parseAsn1Signature = parseAsn1Signature;
+ exports.parseCredentialPublicKey = parseCredentialPublicKey;
+-const p256_1 = require("@noble/curves/p256");
++const p256_1 = require("@noble/curves/p256.js");
+ const Hex = require("../Hex.js");
+ const PublicKey = require("../PublicKey.js");
+ const WebAuthnP256_js_1 = require("../WebAuthnP256.js");
+diff --git a/_esm/core/BinaryStateTree.js b/_esm/core/BinaryStateTree.js
+index 53dd0effd3ff3f24d0bb5fd60e8290779d9da423..63509e094db9f8aaad8212222196d78302bdd4d8 100644
+--- a/_esm/core/BinaryStateTree.js
++++ b/_esm/core/BinaryStateTree.js
+@@ -1,4 +1,4 @@
+-import { blake3 } from '@noble/hashes/blake3';
++import { blake3 } from '@noble/hashes/blake3.js';
+ import * as Bytes from './Bytes.js';
+ /**
+  * Creates a new Binary State Tree instance.
+diff --git a/_esm/core/Bls.js b/_esm/core/Bls.js
+index 4522ff4558735044913d4494aa6cc7b2f2ddace6..dd9d8f21217316a09638ca745deac7f7d0fbc456 100644
+--- a/_esm/core/Bls.js
++++ b/_esm/core/Bls.js
+@@ -1,4 +1,4 @@
+-import { bls12_381 as bls } from '@noble/curves/bls12-381';
++import { bls12_381 as bls } from '@noble/curves/bls12-381.js';
+ import * as Bytes from './Bytes.js';
+ import * as Hex from './Hex.js';
+ /** Re-export of noble/curves BLS12-381 utilities. */
+diff --git a/_esm/core/BlsPoint.js b/_esm/core/BlsPoint.js
+index 482e0ad6d60a0e963e5c4ba26e852d016f21f280..efd7dec645a312b2f6caf674fbc31d26ef0028d9 100644
+--- a/_esm/core/BlsPoint.js
++++ b/_esm/core/BlsPoint.js
+@@ -1,4 +1,4 @@
+-import { bls12_381 as bls } from '@noble/curves/bls12-381';
++import { bls12_381 as bls } from '@noble/curves/bls12-381.js';
+ import * as Hex from './Hex.js';
+ /**
+  * Converts a BLS point to {@link ox#Bytes.Bytes}.
+diff --git a/_esm/core/Bytes.js b/_esm/core/Bytes.js
+index 3430b7138bb9aec5b2889c6922bc32da37835f60..f0a525003108109d4e1e57b4a9ac2bf192f1da75 100644
+--- a/_esm/core/Bytes.js
++++ b/_esm/core/Bytes.js
+@@ -1,4 +1,4 @@
+-import { equalBytes } from '@noble/curves/abstract/utils';
++import { equalBytes } from '@noble/curves/abstract/utils.js';
+ import * as Errors from './Errors.js';
+ import * as Hex from './Hex.js';
+ import * as internal from './internal/bytes.js';
+diff --git a/_esm/core/Ed25519.js b/_esm/core/Ed25519.js
+index 5ef8e8645d0291cbe7f2f6aec9a506ec919f939c..04131828c40c9a915b357150ca0071a512ee05ff 100644
+--- a/_esm/core/Ed25519.js
++++ b/_esm/core/Ed25519.js
+@@ -1,4 +1,4 @@
+-import { ed25519 } from '@noble/curves/ed25519';
++import { ed25519 } from '@noble/curves/ed25519.js';
+ import * as Bytes from './Bytes.js';
+ import * as Hex from './Hex.js';
+ /** Re-export of noble/curves Ed25519 utilities. */
+diff --git a/_esm/core/Hash.js b/_esm/core/Hash.js
+index 831ece0c37d71d2b5fdc85a4903088c952b87f41..e48ef0aca92b1eb4566e854c12fcc916a7e798ce 100644
+--- a/_esm/core/Hash.js
++++ b/_esm/core/Hash.js
+@@ -1,6 +1,6 @@
+-import { ripemd160 as noble_ripemd160 } from '@noble/hashes/ripemd160';
+-import { keccak_256 as noble_keccak256 } from '@noble/hashes/sha3';
+-import { sha256 as noble_sha256 } from '@noble/hashes/sha256';
++import { ripemd160 as noble_ripemd160 } from '@noble/hashes/ripemd160.js';
++import { keccak_256 as noble_keccak256 } from '@noble/hashes/sha3.js';
++import { sha256 as noble_sha256 } from '@noble/hashes/sha256.js';
+ import * as Bytes from './Bytes.js';
+ import * as Hex from './Hex.js';
+ /**
+diff --git a/_esm/core/Hex.js b/_esm/core/Hex.js
+index 868baa70dfaea1b8257049ebe93a6e4a1ee2d7d7..58a5d860ac0a43955d294481b4eacccc62f5c637 100644
+--- a/_esm/core/Hex.js
++++ b/_esm/core/Hex.js
+@@ -1,4 +1,4 @@
+-import { equalBytes } from '@noble/curves/abstract/utils';
++import { equalBytes } from '@noble/curves/abstract/utils.js';
+ import * as Bytes from './Bytes.js';
+ import * as Errors from './Errors.js';
+ import * as internal_bytes from './internal/bytes.js';
+diff --git a/_esm/core/Keystore.js b/_esm/core/Keystore.js
+index d8a443ea2b78a106729d7660e1710f1d52a006d3..db631185a59d831641c217039398ca083d72465f 100644
+--- a/_esm/core/Keystore.js
++++ b/_esm/core/Keystore.js
+@@ -1,7 +1,7 @@
+ import { ctr } from '@noble/ciphers/aes';
+-import { pbkdf2 as pbkdf2_noble, pbkdf2Async as pbkdf2Async_noble, } from '@noble/hashes/pbkdf2';
+-import { scrypt as scrypt_noble, scryptAsync as scryptAsync_noble, } from '@noble/hashes/scrypt';
+-import { sha256 } from '@noble/hashes/sha2';
++import { pbkdf2 as pbkdf2_noble, pbkdf2Async as pbkdf2Async_noble, } from '@noble/hashes/pbkdf2.js';
++import { scrypt as scrypt_noble, scryptAsync as scryptAsync_noble, } from '@noble/hashes/scrypt.js';
++import { sha256 } from '@noble/hashes/sha2.js';
+ import * as Bytes from './Bytes.js';
+ import * as Hash from './Hash.js';
+ /**
+diff --git a/_esm/core/P256.js b/_esm/core/P256.js
+index 856682b84c594d003169f03dd731038a7561ff12..2f1fd8e5169a3b88ef61b579013a713d2250641b 100644
+--- a/_esm/core/P256.js
++++ b/_esm/core/P256.js
+@@ -1,4 +1,4 @@
+-import { secp256r1 } from '@noble/curves/p256';
++import { secp256r1 } from '@noble/curves/p256.js';
+ import * as Bytes from './Bytes.js';
+ import * as Hex from './Hex.js';
+ import * as Entropy from './internal/entropy.js';
+diff --git a/_esm/core/Secp256k1.js b/_esm/core/Secp256k1.js
+index 1732a5d78bb70d5e9c67c18a3c2267c0b5bdf117..d5e27b3157e374ed46111db082ba49ca5245091f 100644
+--- a/_esm/core/Secp256k1.js
++++ b/_esm/core/Secp256k1.js
+@@ -1,4 +1,4 @@
+-import { secp256k1 } from '@noble/curves/secp256k1';
++import { secp256k1 } from '@noble/curves/secp256k1.js';
+ import * as Address from './Address.js';
+ import * as Bytes from './Bytes.js';
+ import * as Hex from './Hex.js';
+diff --git a/_esm/core/Signature.js b/_esm/core/Signature.js
+index 989e029ebc6fb0c1b65a6f5d24ccad6e2d89ab11..2dc6f544b26cdae75e0f0a5fcad42c380456ef8c 100644
+--- a/_esm/core/Signature.js
++++ b/_esm/core/Signature.js
+@@ -1,4 +1,4 @@
+-import { secp256k1 } from '@noble/curves/secp256k1';
++import { secp256k1 } from '@noble/curves/secp256k1.js';
+ import * as Bytes from './Bytes.js';
+ import * as Errors from './Errors.js';
+ import * as Hex from './Hex.js';
+diff --git a/_esm/core/WebCryptoP256.js b/_esm/core/WebCryptoP256.js
+index 6211b69b8cb40dd99be5ddf8af85cfd04a80064e..8529e05c77ac977e76beaa7c11c334a00d0769db 100644
+--- a/_esm/core/WebCryptoP256.js
++++ b/_esm/core/WebCryptoP256.js
+@@ -1,4 +1,4 @@
+-import { p256 } from '@noble/curves/p256';
++import { p256 } from '@noble/curves/p256.js';
+ import * as Bytes from './Bytes.js';
+ import * as Hex from './Hex.js';
+ import * as PublicKey from './PublicKey.js';
+diff --git a/_esm/core/X25519.js b/_esm/core/X25519.js
+index 7aa3892f843232b0adfb986fe599f670afed1980..f92cc027abaf8b50007119f8aa8275aba576e013 100644
+--- a/_esm/core/X25519.js
++++ b/_esm/core/X25519.js
+@@ -1,4 +1,4 @@
+-import { x25519 } from '@noble/curves/ed25519';
++import { x25519 } from '@noble/curves/ed25519.js';
+ import * as Bytes from './Bytes.js';
+ import * as Hex from './Hex.js';
+ /** Re-export of noble/curves X25519 utilities. */
+diff --git a/_esm/core/internal/webauthn.js b/_esm/core/internal/webauthn.js
+index 5620414096df11145e4c92d0fd2616690c1b1580..ba9f445ce34e8711954b3e74212ff1bb2c564e36 100644
+--- a/_esm/core/internal/webauthn.js
++++ b/_esm/core/internal/webauthn.js
+@@ -1,4 +1,4 @@
+-import { p256 } from '@noble/curves/p256';
++import { p256 } from '@noble/curves/p256.js';
+ import * as Hex from '../Hex.js';
+ import * as PublicKey from '../PublicKey.js';
+ import { CredentialCreationFailedError } from '../WebAuthnP256.js';
