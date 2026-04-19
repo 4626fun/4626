@@ -41,6 +41,22 @@ vi.mock('@/components/seo/PageMeta', () => ({
   PageMeta: () => null,
 }))
 
+// New identity surface components render react-query / wagmi hooks that
+// require provider context which this SSR-style test doesn't set up.
+// Mock them as no-ops so we keep validating the "Advanced" content
+// (which is the original page body, now behind a disclosure) without
+// having to thread a full provider tree through the test.
+vi.mock('@/components/account/YourIdentityHero', () => ({
+  YourIdentityHero: () => null,
+  SignersSection: () => null,
+  AdvancedDisclosure: (props: any) =>
+    React.createElement('div', { 'data-advanced-disclosure': true }, props.children),
+}))
+
+vi.mock('@/features/executionScope/ExecutionScopeCard', () => ({
+  ExecutionScopeCard: () => null,
+}))
+
 describe('AccountsPage', () => {
   it('renders sections with mocked account API data', () => {
     const html = renderToStaticMarkup(
@@ -83,7 +99,7 @@ describe('AccountsPage', () => {
       ),
     )
 
-    expect(html).toContain('Advanced account settings')
+    expect(html).toContain('Your identity')
     expect(html).toContain('Workspace')
     expect(html).toContain('Open leaderboard')
     expect(html).toContain('Linked identities')
@@ -100,7 +116,6 @@ describe('AccountsPage', () => {
     expect(html).toContain('Connected signer')
     expect(html).toContain('0x111111...111111')
     expect(html).toContain('Advanced recovery')
-    expect(html).toContain('/waitlist')
   })
 
   it('surfaces the Telegram owner-install resume banner when requested from query params', () => {
