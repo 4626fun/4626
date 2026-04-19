@@ -13,37 +13,29 @@
   },
   "functions": {
     "api/agent-registration.ts": {
-      "runtime": "nodejs20.x",
       "includeFiles": "public/.well-known/agent-registration.json"
     },
     "api/keepr/actions/execute.ts": {
-      "runtime": "nodejs20.x",
       "maxDuration": 60,
       "excludeFiles": "{node_modules/.pnpm/**/bindings_node.darwin*.node,node_modules/.pnpm/**/bindings_node.win32*.node,node_modules/.pnpm/**/bindings_node.linux-arm64*.node,node_modules/.pnpm/**/bindings_node.linux-x64-musl.node}"
     },
     "api/agent/process.ts": {
-      "runtime": "nodejs20.x",
       "maxDuration": 60,
       "excludeFiles": "{node_modules/.pnpm/**/bindings_node.darwin*.node,node_modules/.pnpm/**/bindings_node.win32*.node,node_modules/.pnpm/**/bindings_node.linux-arm64*.node,node_modules/.pnpm/**/bindings_node.linux-x64-musl.node}"
     },
     "api/[...path].ts": {
-      "runtime": "nodejs20.x",
       "maxDuration": 60
     },
     "api/social-preview.ts": {
-      "runtime": "nodejs20.x",
       "maxDuration": 10
     },
     "api/social-preview-debug.ts": {
-      "runtime": "nodejs20.x",
       "maxDuration": 10
     },
     "api/robots.txt.ts": {
-      "runtime": "nodejs20.x",
       "maxDuration": 10
     },
     "api/sitemap.xml.ts": {
-      "runtime": "nodejs20.x",
       "maxDuration": 10
     }
   },

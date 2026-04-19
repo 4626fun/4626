@@ -2,6 +2,9 @@
   "name": "4626-app",
   "private": true,
   "version": "1.8.1",
+  "engines": {
+    "node": "20.x"
+  },
   "type": "module",
   "scripts": {
     "generate:html-shells": "node scripts/generate-html-shells.mjs",
