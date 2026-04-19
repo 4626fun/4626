@@ -11,6 +11,10 @@ import {
   isInsufficientFundsError,
   type PreflightResult,
 } from '../_lib/wallet/walletBalancePreflight.js'
+import type { CommandIssuerContext } from '../_lib/wallet/commandIssuerContext.js'
+import { submitUserOpOrRefuse } from '../_lib/wallet/userOperationSubmitter.js'
+import { assertTeeAttestationOrThrow } from '../_lib/agent/teeAttestationGate.js'
+import type { CoinbaseSmartWalletCall } from '../_lib/wallet/privyCoinbaseSmartWallet.js'
 
 /**
  * Sentinel error thrown by `reserveTrendTicker` when the agent wallet cannot
@@ -267,3 +271,212 @@ export async function reserveTrendTicker(params: {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Architecture B — reserveTrendTickerViaUserOp
+// ---------------------------------------------------------------------------
+
+/**
+ * Typed refusal surfaced when `reserveTrendTickerViaUserOp` cannot proceed
+ * (TEE attestation denied, factory address mismatch, UserOp submitter
+ * refusal). Callers (`commands.ts`) map `.response` straight to the user.
+ */
+export type TrendReserveArchBRefusal = {
+  ok: false
+  code:
+    | 'tee_attestation_denied'
+    | 'factory_target_mismatch'
+    | 'userop_refused'
+  response: string
+}
+
+export type TrendReserveArchBResult =
+  | ({ ok: true } & TrendReserveResult & {
+      userOpHash: `0x${string}`
+      smartWallet: `0x${string}`
+    })
+  | TrendReserveArchBRefusal
+
+/**
+ * Route a TrendCoin deploy through the command issuer's Coinbase Smart
+ * Wallet via `submitUserOpOrRefuse` (Phase 4).
+ *
+ * Key differences from the legacy agent-EOA path:
+ * - Deployer is the CSW, not a Privy-managed EOA. No agent-wallet funding
+ *   is required.
+ * - Caps + preflight + daily ledger are enforced inside `submitUserOpOrRefuse`.
+ * - No custom idempotency key; the CSW UserOp nonce prevents double-execution.
+ * - TEE attestation is required before the UserOp is built.
+ * - Factory target is re-checked against env/default before dispatch
+ *   (defense in depth against env drift).
+ */
+export async function reserveTrendTickerViaUserOp(params: {
+  ticker: string
+  issuer: CommandIssuerContext
+  groupId: string
+  waitForReceipt?: boolean
+}): Promise<TrendReserveArchBResult> {
+  // 1. Ticker preflight (shared with legacy path).
+  const preflight = await preflightTrendTicker({ ticker: params.ticker })
+  if (preflight.deployed) {
+    return {
+      ok: true,
+      ticker: preflight.ticker,
+      tickerHash: preflight.tickerHash,
+      predictedAddress: preflight.predictedAddress,
+      deployedAddress: preflight.predictedAddress,
+      deployed: true,
+      txHash: null,
+      walletAddress: null,
+      walletId: null,
+      status: 'already_deployed',
+      userOpHash: '0x' as `0x${string}`,
+      smartWallet: params.issuer.smartWallet,
+    }
+  }
+
+  // 2. TEE attestation gate. Distinct action name so auditors can filter
+  //    trend-deploys from coin-trades in attestation logs.
+  try {
+    await assertTeeAttestationOrThrow({
+      action: 'zora.trend.reserve',
+      actorAddress: params.issuer.smartWallet,
+      metadata: {
+        groupId: params.groupId,
+        ticker: preflight.ticker,
+        tickerHash: preflight.tickerHash,
+        predictedAddress: preflight.predictedAddress,
+        archBPhase: 4,
+      },
+    })
+  } catch (err) {
+    logger.warn('[zora/trends/arch-b] TEE attestation gate denied reserve', {
+      groupId: params.groupId,
+      ticker: preflight.ticker,
+      smartWallet: params.issuer.smartWallet,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return {
+      ok: false,
+      code: 'tee_attestation_denied',
+      response:
+        'Trend reserve denied: secure signer attestation is not verified. Please retry once attestation is healthy.',
+    }
+  }
+
+  // 3. Build the deploy calldata against the configured factory.
+  const factory = getFactoryAddress()
+  const data = encodeFunctionData({
+    abi: TREND_FACTORY_ABI,
+    functionName: 'deployTrendCoin',
+    args: [preflight.ticker],
+  })
+
+  // 4. Defensive factory-target re-check. `getFactoryAddress` already
+  //    normalizes via `getAddress`, but we re-read the canonical source of
+  //    truth and fail closed if anything looks off. The TrendCoinFactory is
+  //    the ONLY contract this path should ever invoke.
+  const configuredFactory = getAddress(
+    String(process.env.ZORA_FACTORY_ADDRESS ?? '').trim() || DEFAULT_ZORA_FACTORY_ADDRESS,
+  )
+  if (getAddress(factory) !== configuredFactory) {
+    logger.error('[zora/trends/arch-b] factory target mismatch', {
+      groupId: params.groupId,
+      ticker: preflight.ticker,
+      resolved: factory,
+      configured: configuredFactory,
+    })
+    return {
+      ok: false,
+      code: 'factory_target_mismatch',
+      response:
+        "Trend reserve blocked: the TrendCoin factory address didn't match the configured value. Please contact support.",
+    }
+  }
+
+  // 5. Build the single-call array. TrendCoinFactory.deployTrendCoin is
+  //    non-payable, so value is always 0n.
+  const calls: CoinbaseSmartWalletCall[] = [
+    {
+      to: factory,
+      value: 0n,
+      data: data as `0x${string}`,
+    },
+  ]
+
+  // 6. Submit via the shared choke point. Caps + CSW preflight + daily
+  //    ledger are all handled inside `submitUserOpOrRefuse`.
+  const submission = await submitUserOpOrRefuse({
+    issuer: params.issuer,
+    calls,
+    valueWei: 0n,
+    correlationId: `zora/trend/reserve/arch-b:${params.groupId}:${preflight.tickerHash}`,
+  })
+  if (!submission.ok) {
+    return {
+      ok: false,
+      code: 'userop_refused',
+      response: submission.response,
+    }
+  }
+
+  // 7. Optional receipt wait (the UserOp submitter already waits for bundler
+  //    inclusion; this is an additional safety wait on the execution tx
+  //    itself). Defaults match the legacy path's ZORA_TREND_WAIT_FOR_RECEIPT.
+  const shouldWait = params.waitForReceipt ?? parseBooleanEnv('ZORA_TREND_WAIT_FOR_RECEIPT', true)
+  if (shouldWait) {
+    try {
+      await getPublicClient().waitForTransactionReceipt({
+        hash: submission.txHash,
+        timeout: DEFAULT_DEPLOY_WAIT_TIMEOUT_MS,
+      })
+    } catch (error) {
+      logger.warn('[zora/trends/arch-b] receipt wait failed; continuing', {
+        groupId: params.groupId,
+        ticker: preflight.ticker,
+        txHash: submission.txHash,
+        error: error instanceof Error ? error.message : String(error),
+      })
+    }
+  }
+
+  // 8. Postflight to confirm the TrendCoin is live.
+  let deployed = false
+  try {
+    const postflight = await preflightTrendTicker({ ticker: preflight.ticker })
+    deployed = postflight.deployed
+  } catch (error) {
+    logger.warn('[zora/trends/arch-b] postflight failed after UserOp', {
+      groupId: params.groupId,
+      ticker: preflight.ticker,
+      txHash: submission.txHash,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+
+  logger.info('[zora/trends/arch-b] trend reserved via UserOp', {
+    groupId: params.groupId,
+    profileId: params.issuer.profileId,
+    ticker: preflight.ticker,
+    tickerHash: preflight.tickerHash,
+    predictedAddress: preflight.predictedAddress,
+    smartWallet: submission.smartWallet,
+    txHash: submission.txHash,
+    userOpHash: submission.userOpHash,
+    deployed,
+  })
+
+  return {
+    ok: true,
+    ticker: preflight.ticker,
+    tickerHash: preflight.tickerHash,
+    predictedAddress: preflight.predictedAddress,
+    deployedAddress: preflight.predictedAddress,
+    deployed,
+    txHash: submission.txHash,
+    walletAddress: submission.smartWallet,
+    walletId: null,
+    status: deployed ? 'deployed' : 'submitted',
+    userOpHash: submission.userOpHash,
+    smartWallet: submission.smartWallet,
+  }
+}
