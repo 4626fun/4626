@@ -12,7 +12,7 @@
 
 > **AgentApiAuthContext** = \{ `address`: `string`; `type`: `"session"`; \} \| \{ `address`: `string`; `agentId`: `number`; `agentRegistry`: `string`; `chainId`: `number`; `type`: `"siwa"`; \}
 
-Defined in: [server/\_lib/agent/agentApiGuard.ts:16](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/agent/agentApiGuard.ts#L16)
+Defined in: [server/\_lib/agent/agentApiGuard.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/agentApiGuard.ts#L16)
 
 ## Variables
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/agent/agentApiGuard.ts:16](https://github.com/wenakita
 
 > `const` **AGENT\_RATE\_LIMITS**: `object`
 
-Defined in: [server/\_lib/agent/agentApiGuard.ts:9](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/agent/agentApiGuard.ts#L9)
+Defined in: [server/\_lib/agent/agentApiGuard.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/agentApiGuard.ts#L9)
 
 #### Type Declaration
 
@@ -78,7 +78,7 @@ Defined in: [server/\_lib/agent/agentApiGuard.ts:9](https://github.com/wenakita/
 
 > **guardAgentApiRequest**(`params`): `Promise`\<\{ `auth`: [`AgentApiAuthContext`](#agentapiauthcontext) \| `null`; `ip`: `string`; `ok`: `true`; \} \| \{ `ip`: `string`; `ok`: `false`; \}\>
 
-Defined in: [server/\_lib/agent/agentApiGuard.ts:26](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/agent/agentApiGuard.ts#L26)
+Defined in: [server/\_lib/agent/agentApiGuard.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/agentApiGuard.ts#L26)
 
 #### Parameters
 

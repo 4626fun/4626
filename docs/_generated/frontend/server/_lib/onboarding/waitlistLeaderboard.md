@@ -12,7 +12,7 @@
 
 > **WaitlistLeaderboardPointsType** = `"total"` \| `"invite"` \| `"agent"`
 
-Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:3](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L3)
+Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L3)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:3](https://github.co
 
 > **WaitlistLeaderboardResponse** = `object`
 
-Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:18](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L18)
+Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L18)
 
 #### Properties
 
@@ -28,49 +28,49 @@ Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:18](https://github.c
 
 > **hasMore**: `boolean`
 
-Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:24](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L24)
+Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L24)
 
 ##### leaderboard
 
 > **leaderboard**: [`WaitlistLeaderboardRow`](#waitlistleaderboardrow)[]
 
-Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:25](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L25)
+Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L25)
 
 ##### limit
 
 > **limit**: `number`
 
-Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:20](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L20)
+Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L20)
 
 ##### me
 
 > **me**: [`WaitlistLeaderboardRow`](#waitlistleaderboardrow) \| `null`
 
-Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:26](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L26)
+Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L26)
 
 ##### page
 
 > **page**: `number`
 
-Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:19](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L19)
+Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L19)
 
 ##### pointsType
 
 > **pointsType**: [`WaitlistLeaderboardPointsType`](#waitlistleaderboardpointstype)
 
-Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:21](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L21)
+Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L21)
 
 ##### totalCount
 
 > **totalCount**: `number`
 
-Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:22](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L22)
+Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:22](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L22)
 
 ##### totalPages
 
 > **totalPages**: `number`
 
-Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:23](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L23)
+Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L23)
 
 ***
 
@@ -78,7 +78,7 @@ Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:23](https://github.c
 
 > **WaitlistLeaderboardRow** = `object`
 
-Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:7](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L7)
+Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L7)
 
 #### Properties
 
@@ -86,49 +86,49 @@ Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:7](https://github.co
 
 > **borderTier**: `number`
 
-Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:15](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L15)
+Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L15)
 
 ##### display
 
 > **display**: `string`
 
-Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:10](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L10)
+Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L10)
 
 ##### pointsAgent
 
 > **pointsAgent**: `number`
 
-Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:14](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L14)
+Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L14)
 
 ##### pointsInvite
 
 > **pointsInvite**: `number`
 
-Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:13](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L13)
+Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L13)
 
 ##### pointsTotal
 
 > **pointsTotal**: `number`
 
-Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:12](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L12)
+Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L12)
 
 ##### rank
 
 > **rank**: `number`
 
-Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:8](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L8)
+Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L8)
 
 ##### referralCode
 
 > **referralCode**: `string` \| `null`
 
-Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:11](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L11)
+Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L11)
 
 ##### signupId
 
 > **signupId**: `number`
 
-Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:9](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L9)
+Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L9)
 
 ## Functions
 
@@ -136,7 +136,7 @@ Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:9](https://github.co
 
 > **getWaitlistLeaderboardData**(`params`): `Promise`\<[`WaitlistLeaderboardResponse`](#waitlistleaderboardresponse)\>
 
-Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:59](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L59)
+Defined in: [server/\_lib/onboarding/waitlistLeaderboard.ts:59](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onboarding/waitlistLeaderboard.ts#L59)
 
 #### Parameters
 

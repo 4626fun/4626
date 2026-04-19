@@ -12,7 +12,7 @@
 
 > `const` **theme4626**: `object`
 
-Defined in: [src/theme/cds-theme.ts:17](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/theme/cds-theme.ts#L17)
+Defined in: [src/theme/cds-theme.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/theme/cds-theme.ts#L17)
 
 Custom 4626 dark theme extending the CDS default theme.
 

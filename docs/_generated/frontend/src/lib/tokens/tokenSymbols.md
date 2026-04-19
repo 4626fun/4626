@@ -12,7 +12,7 @@
 
 > `const` **SHARE\_SYMBOL\_PREFIX**: `"■"` = `'■'`
 
-Defined in: [src/lib/tokens/tokenSymbols.ts:5](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tokens/tokenSymbols.ts#L5)
+Defined in: [src/lib/tokens/tokenSymbols.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenSymbols.ts#L5)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/tokens/tokenSymbols.ts:5](https://github.com/wenakita/4626/
 
 > `const` **VAULT\_SYMBOL\_PREFIX**: `"▢"` = `'▢'`
 
-Defined in: [src/lib/tokens/tokenSymbols.ts:6](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tokens/tokenSymbols.ts#L6)
+Defined in: [src/lib/tokens/tokenSymbols.ts:6](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenSymbols.ts#L6)
 
 ## Functions
 
@@ -28,7 +28,7 @@ Defined in: [src/lib/tokens/tokenSymbols.ts:6](https://github.com/wenakita/4626/
 
 > **normalizeUnderlyingSymbol**(`raw`): `string`
 
-Defined in: [src/lib/tokens/tokenSymbols.ts:17](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tokens/tokenSymbols.ts#L17)
+Defined in: [src/lib/tokens/tokenSymbols.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenSymbols.ts#L17)
 
 Strip current Unicode badge prefixes to recover the underlying ticker.
 
@@ -48,7 +48,7 @@ Strip current Unicode badge prefixes to recover the underlying ticker.
 
 > **toCharmVaultSymbol**(`rawUnderlying`): `string`
 
-Defined in: [src/lib/tokens/tokenSymbols.ts:46](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tokens/tokenSymbols.ts#L46)
+Defined in: [src/lib/tokens/tokenSymbols.ts:46](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenSymbols.ts#L46)
 
 Charm vault symbols should stay creator-centric and avoid quote symbols
 (e.g. USDC/WETH), which can get visually filtered on some explorers.
@@ -70,7 +70,7 @@ Example: AKITA -> charmAKITA
 
 > **toShareName**(`rawUnderlying`, `creatorName?`): `string`
 
-Defined in: [src/lib/tokens/tokenSymbols.ts:52](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tokens/tokenSymbols.ts#L52)
+Defined in: [src/lib/tokens/tokenSymbols.ts:52](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenSymbols.ts#L52)
 
 #### Parameters
 
@@ -92,7 +92,7 @@ Defined in: [src/lib/tokens/tokenSymbols.ts:52](https://github.com/wenakita/4626
 
 > **toShareSymbol**(`rawUnderlying`): `string`
 
-Defined in: [src/lib/tokens/tokenSymbols.ts:31](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tokens/tokenSymbols.ts#L31)
+Defined in: [src/lib/tokens/tokenSymbols.ts:31](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenSymbols.ts#L31)
 
 #### Parameters
 
@@ -110,7 +110,7 @@ Defined in: [src/lib/tokens/tokenSymbols.ts:31](https://github.com/wenakita/4626
 
 > **toVaultName**(`rawUnderlying`, `creatorName?`): `string`
 
-Defined in: [src/lib/tokens/tokenSymbols.ts:58](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tokens/tokenSymbols.ts#L58)
+Defined in: [src/lib/tokens/tokenSymbols.ts:58](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenSymbols.ts#L58)
 
 #### Parameters
 
@@ -132,7 +132,7 @@ Defined in: [src/lib/tokens/tokenSymbols.ts:58](https://github.com/wenakita/4626
 
 > **toVaultSymbol**(`rawUnderlying`): `string`
 
-Defined in: [src/lib/tokens/tokenSymbols.ts:36](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tokens/tokenSymbols.ts#L36)
+Defined in: [src/lib/tokens/tokenSymbols.ts:36](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenSymbols.ts#L36)
 
 #### Parameters
 
@@ -150,7 +150,7 @@ Defined in: [src/lib/tokens/tokenSymbols.ts:36](https://github.com/wenakita/4626
 
 > **underlyingSymbolUpper**(`raw`): `string`
 
-Defined in: [src/lib/tokens/tokenSymbols.ts:26](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/tokens/tokenSymbols.ts#L26)
+Defined in: [src/lib/tokens/tokenSymbols.ts:26](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tokens/tokenSymbols.ts#L26)
 
 #### Parameters
 

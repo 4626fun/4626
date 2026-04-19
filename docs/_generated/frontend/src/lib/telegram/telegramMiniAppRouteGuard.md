@@ -12,7 +12,7 @@
 
 > **getInitialTelegramMiniAppEntryResolution**(`search`): `"ready"` \| `"checking"`
 
-Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:21](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/telegram/telegramMiniAppRouteGuard.ts#L21)
+Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppRouteGuard.ts#L21)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:21](https://github.co
 
 > **hasTelegramLinkEntryContext**(`search`): `boolean`
 
-Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:12](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/telegram/telegramMiniAppRouteGuard.ts#L12)
+Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:12](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppRouteGuard.ts#L12)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:12](https://github.co
 
 > **hasTelegramLinkQueryContext**(`search`): `boolean`
 
-Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:4](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/telegram/telegramMiniAppRouteGuard.ts#L4)
+Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:4](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppRouteGuard.ts#L4)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:4](https://github.com
 
 > **resolveTelegramMiniAppEntryBootstrap**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:25](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/telegram/telegramMiniAppRouteGuard.ts#L25)
+Defined in: [src/lib/telegram/telegramMiniAppRouteGuard.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppRouteGuard.ts#L25)
 
 #### Parameters
 

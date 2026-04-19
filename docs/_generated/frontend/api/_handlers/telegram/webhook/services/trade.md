@@ -12,7 +12,7 @@
 
 > **checkTelegramTradeRateLimit**(`params`): \{ `ok`: `true`; \} \| \{ `ok`: `false`; `reason`: `"rate_limit_user"` \| `"rate_limit_chat"`; `retryAfterSeconds`: `number`; \}
 
-Defined in: [api/\_handlers/telegram/webhook/services/trade.ts:23](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/telegram/webhook/services/trade.ts#L23)
+Defined in: [api/\_handlers/telegram/webhook/services/trade.ts:23](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/trade.ts#L23)
 
 #### Parameters
 
@@ -40,7 +40,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/trade.ts:23](https://githu
 
 > **readTradeLimitFromEnv**(`key`, `fallback`): `number`
 
-Defined in: [api/\_handlers/telegram/webhook/services/trade.ts:4](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/telegram/webhook/services/trade.ts#L4)
+Defined in: [api/\_handlers/telegram/webhook/services/trade.ts:4](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/trade.ts#L4)
 
 #### Parameters
 
@@ -62,7 +62,7 @@ Defined in: [api/\_handlers/telegram/webhook/services/trade.ts:4](https://github
 
 > **tradeRateLimitForAction**(`actionType`): `object`
 
-Defined in: [api/\_handlers/telegram/webhook/services/trade.ts:10](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/telegram/webhook/services/trade.ts#L10)
+Defined in: [api/\_handlers/telegram/webhook/services/trade.ts:10](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/services/trade.ts#L10)
 
 #### Parameters
 

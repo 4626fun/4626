@@ -12,7 +12,7 @@
 
 > **PaymasterModeStat** = `object`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:24](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L24)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:24](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L24)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [api/\_handlers/admin/userop/\_health.ts:24](https://github.com/wena
 
 > **count**: `number`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:24](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L24)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:24](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L24)
 
 ##### mode
 
 > **mode**: `string`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:24](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L24)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:24](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L24)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [api/\_handlers/admin/userop/\_health.ts:24](https://github.com/wena
 
 > **SignatureModeStat** = `object`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:23](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L23)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:23](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L23)
 
 Admin-only aggregate view of ERC-4337 UserOp telemetry submitted by the
 browser via POST /api/v1/chat/telemetry (event = 'xmtp_userop_submission_batch').
@@ -50,13 +50,13 @@ so we sum those across recent batches per window.
 
 > **count**: `number`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:23](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L23)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:23](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L23)
 
 ##### mode
 
 > **mode**: `string`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:23](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L23)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:23](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L23)
 
 ***
 
@@ -64,7 +64,7 @@ Defined in: [api/\_handlers/admin/userop/\_health.ts:23](https://github.com/wena
 
 > **SubmissionPathStat** = `object`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:25](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L25)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:25](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L25)
 
 #### Properties
 
@@ -72,13 +72,13 @@ Defined in: [api/\_handlers/admin/userop/\_health.ts:25](https://github.com/wena
 
 > **count**: `number`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:25](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L25)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:25](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L25)
 
 ##### path
 
 > **path**: `string`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:25](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L25)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:25](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L25)
 
 ***
 
@@ -86,7 +86,7 @@ Defined in: [api/\_handlers/admin/userop/\_health.ts:25](https://github.com/wena
 
 > **UserOpHealthResponse** = `object`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:47](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L47)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:47](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L47)
 
 #### Properties
 
@@ -94,25 +94,25 @@ Defined in: [api/\_handlers/admin/userop/\_health.ts:47](https://github.com/wena
 
 > **admin**: `string`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:48](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L48)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:48](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L48)
 
 ##### event
 
 > **event**: `"xmtp_userop_submission_batch"`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:50](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L50)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:50](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L50)
 
 ##### source
 
 > **source**: `"chat_command_center_events"`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:49](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L49)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:49](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L49)
 
 ##### windows
 
 > **windows**: `object`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:51](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L51)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:51](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L51)
 
 ###### last24h
 
@@ -128,7 +128,7 @@ Defined in: [api/\_handlers/admin/userop/\_health.ts:51](https://github.com/wena
 
 > **WindowStats** = `object`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:26](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L26)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:26](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L26)
 
 #### Properties
 
@@ -136,103 +136,103 @@ Defined in: [api/\_handlers/admin/userop/\_health.ts:26](https://github.com/wena
 
 > **avgP50Ms**: `number` \| `null`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:36](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L36)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:36](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L36)
 
 ##### avgP95Ms
 
 > **avgP95Ms**: `number` \| `null`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:37](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L37)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:37](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L37)
 
 ##### avgP99Ms
 
 > **avgP99Ms**: `number` \| `null`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:38](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L38)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:38](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L38)
 
 ##### batchCount
 
 > **batchCount**: `number`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:27](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L27)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:27](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L27)
 
 ##### errorCount
 
 > **errorCount**: `number`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:30](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L30)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:30](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L30)
 
 ##### fallbackRate
 
 > **fallbackRate**: `number` \| `null`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:34](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L34)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:34](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L34)
 
 ##### fallbackToSelfFundedCount
 
 > **fallbackToSelfFundedCount**: `number`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:33](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L33)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:33](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L33)
 
 ##### firstEventAt
 
 > **firstEventAt**: `string` \| `null`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:43](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L43)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:43](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L43)
 
 ##### lastEventAt
 
 > **lastEventAt**: `string` \| `null`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:44](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L44)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:44](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L44)
 
 ##### ownerIsContractCount
 
 > **ownerIsContractCount**: `number`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:35](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L35)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:35](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L35)
 
 ##### paymasterModeBreakdown
 
 > **paymasterModeBreakdown**: [`PaymasterModeStat`](#paymastermodestat)[]
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:40](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L40)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:40](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L40)
 
 ##### signatureModeBreakdown
 
 > **signatureModeBreakdown**: [`SignatureModeStat`](#signaturemodestat)[]
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:39](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L39)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:39](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L39)
 
 ##### submissionPathBreakdown
 
 > **submissionPathBreakdown**: [`SubmissionPathStat`](#submissionpathstat)[]
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:41](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L41)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:41](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L41)
 
 ##### successCount
 
 > **successCount**: `number`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:29](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L29)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:29](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L29)
 
 ##### successRate
 
 > **successRate**: `number` \| `null`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:32](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L32)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:32](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L32)
 
 ##### timeoutCount
 
 > **timeoutCount**: `number`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:31](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L31)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:31](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L31)
 
 ##### topErrorCodes
 
 > **topErrorCodes**: `object`[]
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:42](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L42)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:42](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L42)
 
 ###### code
 
@@ -246,7 +246,7 @@ Defined in: [api/\_handlers/admin/userop/\_health.ts:42](https://github.com/wena
 
 > **totalSamples**: `number`
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:28](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L28)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:28](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L28)
 
 ## Functions
 
@@ -254,7 +254,7 @@ Defined in: [api/\_handlers/admin/userop/\_health.ts:28](https://github.com/wena
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/admin/userop/\_health.ts:259](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/admin/userop/_health.ts#L259)
+Defined in: [api/\_handlers/admin/userop/\_health.ts:259](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/admin/userop/_health.ts#L259)
 
 #### Parameters
 

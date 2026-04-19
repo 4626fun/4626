@@ -12,7 +12,7 @@
 
 > **StoredSignerType** = `"SCW"` \| `"EOA"` \| `null`
 
-Defined in: [src/lib/xmtp/signerUtils.ts:1](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/xmtp/signerUtils.ts#L1)
+Defined in: [src/lib/xmtp/signerUtils.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/signerUtils.ts#L1)
 
 ## Variables
 
@@ -20,7 +20,7 @@ Defined in: [src/lib/xmtp/signerUtils.ts:1](https://github.com/wenakita/4626/blo
 
 > `const` **CANONICAL\_SCW\_CHAIN\_ID**: `8453` = `8453`
 
-Defined in: [src/lib/xmtp/signerUtils.ts:3](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/xmtp/signerUtils.ts#L3)
+Defined in: [src/lib/xmtp/signerUtils.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/signerUtils.ts#L3)
 
 ## Functions
 
@@ -28,7 +28,7 @@ Defined in: [src/lib/xmtp/signerUtils.ts:3](https://github.com/wenakita/4626/blo
 
 > **decideXmtpSignerType**(`params`): `object`
 
-Defined in: [src/lib/xmtp/signerUtils.ts:24](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/xmtp/signerUtils.ts#L24)
+Defined in: [src/lib/xmtp/signerUtils.ts:24](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/signerUtils.ts#L24)
 
 #### Parameters
 
@@ -83,7 +83,7 @@ Sanitized chain id of the connected wallet (defaults applied).
 
 > **isCoinbaseWalletConnector**(`connector`): `boolean`
 
-Defined in: [src/lib/xmtp/signerUtils.ts:15](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/xmtp/signerUtils.ts#L15)
+Defined in: [src/lib/xmtp/signerUtils.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/signerUtils.ts#L15)
 
 #### Parameters
 
@@ -101,7 +101,7 @@ Defined in: [src/lib/xmtp/signerUtils.ts:15](https://github.com/wenakita/4626/bl
 
 > **resolveXmtpChainId**(`walletChainId`): `number`
 
-Defined in: [src/lib/xmtp/signerUtils.ts:5](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/xmtp/signerUtils.ts#L5)
+Defined in: [src/lib/xmtp/signerUtils.ts:5](https://github.com/wenakita/4626/blob/main/frontend/src/lib/xmtp/signerUtils.ts#L5)
 
 #### Parameters
 

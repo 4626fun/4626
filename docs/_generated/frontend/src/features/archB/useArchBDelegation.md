@@ -12,7 +12,7 @@
 
 > **ArchBActionResult** = \{ `ok`: `true`; \} \| \{ `error`: [`ArchBDelegationError`](#archbdelegationerror); `ok`: `false`; \}
 
-Defined in: [src/features/archB/useArchBDelegation.ts:66](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/archB/useArchBDelegation.ts#L66)
+Defined in: [src/features/archB/useArchBDelegation.ts:66](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L66)
 
 Result shape returned by enable()/disable(). Callers should inspect
 `ok` before claiming success to the user — the hook never throws for
@@ -24,7 +24,7 @@ backend/network failures; it surfaces them via state and this result.
 
 > **ArchBDelegationCaps** = `object`
 
-Defined in: [src/features/archB/useArchBDelegation.ts:49](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/archB/useArchBDelegation.ts#L49)
+Defined in: [src/features/archB/useArchBDelegation.ts:49](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L49)
 
 #### Properties
 
@@ -32,13 +32,13 @@ Defined in: [src/features/archB/useArchBDelegation.ts:49](https://github.com/wen
 
 > **dailyCapWei**: `string`
 
-Defined in: [src/features/archB/useArchBDelegation.ts:52](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/archB/useArchBDelegation.ts#L52)
+Defined in: [src/features/archB/useArchBDelegation.ts:52](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L52)
 
 ##### perTxCapWei
 
 > **perTxCapWei**: `string`
 
-Defined in: [src/features/archB/useArchBDelegation.ts:51](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/archB/useArchBDelegation.ts#L51)
+Defined in: [src/features/archB/useArchBDelegation.ts:51](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L51)
 
 Wei, as string to preserve precision.
 
@@ -48,7 +48,7 @@ Wei, as string to preserve precision.
 
 > **ArchBDelegationError** = `object`
 
-Defined in: [src/features/archB/useArchBDelegation.ts:55](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/archB/useArchBDelegation.ts#L55)
+Defined in: [src/features/archB/useArchBDelegation.ts:55](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L55)
 
 #### Properties
 
@@ -56,7 +56,7 @@ Defined in: [src/features/archB/useArchBDelegation.ts:55](https://github.com/wen
 
 > **code**: `string`
 
-Defined in: [src/features/archB/useArchBDelegation.ts:57](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/archB/useArchBDelegation.ts#L57)
+Defined in: [src/features/archB/useArchBDelegation.ts:57](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L57)
 
 Machine-readable code from backend or Privy.
 
@@ -64,7 +64,7 @@ Machine-readable code from backend or Privy.
 
 > **message**: `string`
 
-Defined in: [src/features/archB/useArchBDelegation.ts:58](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/archB/useArchBDelegation.ts#L58)
+Defined in: [src/features/archB/useArchBDelegation.ts:58](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L58)
 
 ***
 
@@ -72,7 +72,7 @@ Defined in: [src/features/archB/useArchBDelegation.ts:58](https://github.com/wen
 
 > **ArchBDelegationStatus** = `"loading"` \| `"unlinked"` \| `"not_delegated"` \| `"delegating"` \| `"delegated"` \| `"provisioned"` \| `"revoked"` \| `"error"`
 
-Defined in: [src/features/archB/useArchBDelegation.ts:39](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/archB/useArchBDelegation.ts#L39)
+Defined in: [src/features/archB/useArchBDelegation.ts:39](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L39)
 
 Maps one-to-one with backend `GET /api/arch-b/status` outcomes plus
 client-side transient states.
@@ -92,7 +92,7 @@ client-side transient states.
 
 > **UseArchBDelegationReturn** = `object`
 
-Defined in: [src/features/archB/useArchBDelegation.ts:70](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/archB/useArchBDelegation.ts#L70)
+Defined in: [src/features/archB/useArchBDelegation.ts:70](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L70)
 
 #### Properties
 
@@ -100,13 +100,13 @@ Defined in: [src/features/archB/useArchBDelegation.ts:70](https://github.com/wen
 
 > **caps**: [`ArchBDelegationCaps`](#archbdelegationcaps) \| `null`
 
-Defined in: [src/features/archB/useArchBDelegation.ts:72](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/archB/useArchBDelegation.ts#L72)
+Defined in: [src/features/archB/useArchBDelegation.ts:72](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L72)
 
 ##### disable()
 
 > **disable**: () => `Promise`\<[`ArchBActionResult`](#archbactionresult)\>
 
-Defined in: [src/features/archB/useArchBDelegation.ts:77](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/archB/useArchBDelegation.ts#L77)
+Defined in: [src/features/archB/useArchBDelegation.ts:77](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L77)
 
 Backend revoke + Privy wallet revoke. No-op if not provisioned.
 
@@ -118,7 +118,7 @@ Backend revoke + Privy wallet revoke. No-op if not provisioned.
 
 > **enable**: () => `Promise`\<[`ArchBActionResult`](#archbactionresult)\>
 
-Defined in: [src/features/archB/useArchBDelegation.ts:75](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/archB/useArchBDelegation.ts#L75)
+Defined in: [src/features/archB/useArchBDelegation.ts:75](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L75)
 
 Trigger delegation consent + backend enroll. No-op if not ready.
 
@@ -130,13 +130,13 @@ Trigger delegation consent + backend enroll. No-op if not ready.
 
 > **error**: [`ArchBDelegationError`](#archbdelegationerror) \| `null`
 
-Defined in: [src/features/archB/useArchBDelegation.ts:73](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/archB/useArchBDelegation.ts#L73)
+Defined in: [src/features/archB/useArchBDelegation.ts:73](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L73)
 
 ##### refresh()
 
 > **refresh**: () => `void`
 
-Defined in: [src/features/archB/useArchBDelegation.ts:79](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/archB/useArchBDelegation.ts#L79)
+Defined in: [src/features/archB/useArchBDelegation.ts:79](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L79)
 
 Manually refresh status (e.g. after returning from external browser).
 
@@ -148,7 +148,7 @@ Manually refresh status (e.g. after returning from external browser).
 
 > **status**: [`ArchBDelegationStatus`](#archbdelegationstatus)
 
-Defined in: [src/features/archB/useArchBDelegation.ts:71](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/archB/useArchBDelegation.ts#L71)
+Defined in: [src/features/archB/useArchBDelegation.ts:71](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L71)
 
 ## Functions
 
@@ -156,7 +156,7 @@ Defined in: [src/features/archB/useArchBDelegation.ts:71](https://github.com/wen
 
 > **useArchBDelegation**(): [`UseArchBDelegationReturn`](#usearchbdelegationreturn)
 
-Defined in: [src/features/archB/useArchBDelegation.ts:151](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/archB/useArchBDelegation.ts#L151)
+Defined in: [src/features/archB/useArchBDelegation.ts:151](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L151)
 
 #### Returns
 

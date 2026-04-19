@@ -12,7 +12,7 @@
 
 > **isTelegramNativeCommand**(`rawText`): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/command.ts:7](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/telegram/webhook/parsers/command.ts#L7)
+Defined in: [api/\_handlers/telegram/webhook/parsers/command.ts:7](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/command.ts#L7)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [api/\_handlers/telegram/webhook/parsers/command.ts:7](https://githu
 
 > **shouldAutoRouteToAi**(`params`): `boolean`
 
-Defined in: [api/\_handlers/telegram/webhook/parsers/command.ts:11](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/telegram/webhook/parsers/command.ts#L11)
+Defined in: [api/\_handlers/telegram/webhook/parsers/command.ts:11](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/parsers/command.ts#L11)
 
 #### Parameters
 

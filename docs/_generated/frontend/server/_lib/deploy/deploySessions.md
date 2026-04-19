@@ -12,7 +12,7 @@
 
 > **DeploySessionRecord** = `object`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:28](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L28)
+Defined in: [server/\_lib/deploy/deploySessions.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L28)
 
 #### Properties
 
@@ -20,85 +20,85 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:28](https://github.com/wenaki
 
 > **createdAt**: `string`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:38](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L38)
+Defined in: [server/\_lib/deploy/deploySessions.ts:38](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L38)
 
 ##### deployToken
 
 > **deployToken**: `string`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:34](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L34)
+Defined in: [server/\_lib/deploy/deploySessions.ts:34](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L34)
 
 ##### expiresAt
 
 > **expiresAt**: `string`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:37](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L37)
+Defined in: [server/\_lib/deploy/deploySessions.ts:37](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L37)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:29](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L29)
+Defined in: [server/\_lib/deploy/deploySessions.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L29)
 
 ##### lastError
 
 > **lastError**: `string` \| `null`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:40](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L40)
+Defined in: [server/\_lib/deploy/deploySessions.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L40)
 
 ##### lastTxHash
 
 > **lastTxHash**: `string` \| `null`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:42](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L42)
+Defined in: [server/\_lib/deploy/deploySessions.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L42)
 
 ##### lastUserOpHash
 
 > **lastUserOpHash**: `string` \| `null`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:41](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L41)
+Defined in: [server/\_lib/deploy/deploySessions.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L41)
 
 ##### payload
 
 > **payload**: `any`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:35](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L35)
+Defined in: [server/\_lib/deploy/deploySessions.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L35)
 
 ##### sessionAddress
 
 > **sessionAddress**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:31](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L31)
+Defined in: [server/\_lib/deploy/deploySessions.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L31)
 
 ##### sessionSigner
 
 > **sessionSigner**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:33](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L33)
+Defined in: [server/\_lib/deploy/deploySessions.ts:33](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L33)
 
 ##### smartWallet
 
 > **smartWallet**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:32](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L32)
+Defined in: [server/\_lib/deploy/deploySessions.ts:32](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L32)
 
 ##### step
 
 > **step**: [`DeploySessionStep`](#deploysessionstep)
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:36](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L36)
+Defined in: [server/\_lib/deploy/deploySessions.ts:36](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L36)
 
 ##### tokenHash
 
 > **tokenHash**: `string`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:30](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L30)
+Defined in: [server/\_lib/deploy/deploySessions.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L30)
 
 ##### updatedAt
 
 > **updatedAt**: `string`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:39](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L39)
+Defined in: [server/\_lib/deploy/deploySessions.ts:39](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L39)
 
 ***
 
@@ -106,7 +106,7 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:39](https://github.com/wenaki
 
 > **DeploySessionStep** = `"created"` \| `"phase1_sent"` \| `"phase1_confirmed"` \| `"phase1_finalize_sent"` \| `"phase1_finalize_confirmed"` \| `"phase2_core_sent"` \| `"phase2_core_confirmed"` \| `"phase2_sent"` \| `"phase2_confirmed"` \| `"ovault_mesh_sent"` \| `"ovault_mesh_confirmed"` \| `"phase3_sent"` \| `"phase3_confirmed"` \| `"phase4_sent"` \| `"phase4_confirmed"` \| `"cleanup_sent"` \| `"cancelled"` \| `"completed"` \| `"failed"`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:7](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L7)
+Defined in: [server/\_lib/deploy/deploySessions.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L7)
 
 ## Functions
 
@@ -114,7 +114,7 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:7](https://github.com/wenakit
 
 > **ensureDeploySessionsSchema**(): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:47](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L47)
+Defined in: [server/\_lib/deploy/deploySessions.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L47)
 
 #### Returns
 
@@ -126,7 +126,7 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:47](https://github.com/wenaki
 
 > **getActiveDeploySessionForSender**(`params`): `Promise`\<[`DeploySessionRecord`](#deploysessionrecord) \| `null`\>
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:217](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L217)
+Defined in: [server/\_lib/deploy/deploySessions.ts:217](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L217)
 
 #### Parameters
 
@@ -164,7 +164,7 @@ Intended for cleanup-only flows (removing the temporary owner).
 
 > **getDeploySessionById**(`id`): `Promise`\<[`DeploySessionRecord`](#deploysessionrecord) \| `null`\>
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:199](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L199)
+Defined in: [server/\_lib/deploy/deploySessions.ts:199](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L199)
 
 #### Parameters
 
@@ -182,7 +182,7 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:199](https://github.com/wenak
 
 > **getDeploySessionByTokenHash**(`tokenHash`): `Promise`\<[`DeploySessionRecord`](#deploysessionrecord) \| `null`\>
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:208](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L208)
+Defined in: [server/\_lib/deploy/deploySessions.ts:208](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L208)
 
 #### Parameters
 
@@ -200,7 +200,7 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:208](https://github.com/wenak
 
 > **hashDeployToken**(`token`): `string`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:127](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L127)
+Defined in: [server/\_lib/deploy/deploySessions.ts:127](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L127)
 
 #### Parameters
 
@@ -218,7 +218,7 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:127](https://github.com/wenak
 
 > **insertDeploySession**(`params`): `Promise`\<[`DeploySessionRecord`](#deploysessionrecord)\>
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:137](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L137)
+Defined in: [server/\_lib/deploy/deploySessions.ts:137](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L137)
 
 #### Parameters
 
@@ -266,7 +266,7 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:137](https://github.com/wenak
 
 > **randomDeployToken**(): `string`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:123](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L123)
+Defined in: [server/\_lib/deploy/deploySessions.ts:123](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L123)
 
 #### Returns
 
@@ -278,7 +278,7 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:123](https://github.com/wenak
 
 > **randomId**(`prefix`): `string`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:119](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L119)
+Defined in: [server/\_lib/deploy/deploySessions.ts:119](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L119)
 
 #### Parameters
 
@@ -296,7 +296,7 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:119](https://github.com/wenak
 
 > **signDeployToken**(`token`): `string`
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:131](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L131)
+Defined in: [server/\_lib/deploy/deploySessions.ts:131](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L131)
 
 #### Parameters
 
@@ -314,7 +314,7 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:131](https://github.com/wenak
 
 > **transitionDeploySession**(`params`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:327](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L327)
+Defined in: [server/\_lib/deploy/deploySessions.ts:327](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L327)
 
 #### Parameters
 
@@ -358,7 +358,7 @@ Defined in: [server/\_lib/deploy/deploySessions.ts:327](https://github.com/wenak
 
 > **updateDeploySession**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/deploy/deploySessions.ts:282](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/deploy/deploySessions.ts#L282)
+Defined in: [server/\_lib/deploy/deploySessions.ts:282](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/deploy/deploySessions.ts#L282)
 
 #### Parameters
 

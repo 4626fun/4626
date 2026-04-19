@@ -12,7 +12,7 @@
 
 > **executeWhoisCommandFamily**(`params`): `Promise`\<[`KeeprCommandResult`](../types.md#keeprcommandresult)\>
 
-Defined in: [server/commands/families/whois.ts:4](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/commands/families/whois.ts#L4)
+Defined in: [server/commands/families/whois.ts:4](https://github.com/wenakita/4626/blob/main/frontend/server/commands/families/whois.ts#L4)
 
 #### Parameters
 

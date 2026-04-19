@@ -12,7 +12,7 @@
 
 > **SignatureExtraction** = `object`
 
-Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:46](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L46)
+Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:46](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L46)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:46](https://github.co
 
 > **signature**: `Hex` \| `null`
 
-Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:46](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L46)
+Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:46](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L46)
 
 ##### source
 
 > **source**: `string` \| `null`
 
-Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:46](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L46)
+Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:46](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L46)
 
 ***
 
@@ -34,7 +34,7 @@ Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:46](https://github.co
 
 > **SignatureMeta** = `object`
 
-Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:18](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L18)
+Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L18)
 
 #### Properties
 
@@ -42,25 +42,25 @@ Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:18](https://github.co
 
 > **byteLength**: `number` \| `null`
 
-Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:20](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L20)
+Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L20)
 
 ##### is64Bytes
 
 > **is64Bytes**: `boolean`
 
-Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:21](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L21)
+Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L21)
 
 ##### is65Bytes
 
 > **is65Bytes**: `boolean`
 
-Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:22](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L22)
+Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:22](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L22)
 
 ##### signatureLength
 
 > **signatureLength**: `number`
 
-Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:19](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L19)
+Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L19)
 
 ## Functions
 
@@ -68,7 +68,7 @@ Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:19](https://github.co
 
 > **debugSignatureReady**(`context`, `signature`, `details?`): `void`
 
-Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:95](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L95)
+Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:95](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L95)
 
 #### Parameters
 
@@ -94,7 +94,7 @@ Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:95](https://github.co
 
 > **ensureSignatureHex**(`value`, `context`): `` `0x${string}` ``
 
-Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:81](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L81)
+Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:81](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L81)
 
 #### Parameters
 
@@ -116,7 +116,7 @@ Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:81](https://github.co
 
 > **errorMessage**(`error`): `string`
 
-Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:120](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L120)
+Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:120](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L120)
 
 #### Parameters
 
@@ -134,7 +134,7 @@ Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:120](https://github.c
 
 > **extractSignatureHex**(`value`, `depth`): [`SignatureExtraction`](#signatureextraction)
 
-Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:48](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L48)
+Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:48](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L48)
 
 #### Parameters
 
@@ -156,7 +156,7 @@ Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:48](https://github.co
 
 > **isTransientRpcFailure**(`error`): `boolean`
 
-Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:125](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L125)
+Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:125](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L125)
 
 #### Parameters
 
@@ -174,7 +174,7 @@ Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:125](https://github.c
 
 > **isUserRejectedErrorMessage**(`error`): `boolean`
 
-Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:108](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L108)
+Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:108](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L108)
 
 #### Parameters
 
@@ -192,7 +192,7 @@ Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:108](https://github.c
 
 > **logNonEoaSignature**(`signature`, `context`): [`SignatureMeta`](#signaturemeta)
 
-Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:35](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L35)
+Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L35)
 
 #### Parameters
 
@@ -214,7 +214,7 @@ Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:35](https://github.co
 
 > **setAaDebugMode**(`enabled`): `void`
 
-Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:14](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L14)
+Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L14)
 
 Host component calls this once at init to route debug logs through the shared logger.
 
@@ -234,7 +234,7 @@ Host component calls this once at init to route debug logs through the shared lo
 
 > **signatureMeta**(`signature`): [`SignatureMeta`](#signaturemeta)
 
-Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:25](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L25)
+Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L25)
 
 #### Parameters
 
@@ -252,7 +252,7 @@ Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:25](https://github.co
 
 > **withTimeout**\<`T`\>(`promise`, `ms`, `label`): `Promise`\<`T`\>
 
-Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:148](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L148)
+Defined in: [src/pages/deploy/deployVaultSignatureUtils.ts:148](https://github.com/wenakita/4626/blob/main/frontend/src/pages/deploy/deployVaultSignatureUtils.ts#L148)
 
 #### Type Parameters
 

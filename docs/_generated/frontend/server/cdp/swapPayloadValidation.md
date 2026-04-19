@@ -12,7 +12,7 @@
 
 > **extractCdpTransactionPayload**(`payload`): `Record`\<`string`, `unknown`\> \| `null`
 
-Defined in: [server/cdp/swapPayloadValidation.ts:8](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/cdp/swapPayloadValidation.ts#L8)
+Defined in: [server/cdp/swapPayloadValidation.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/cdp/swapPayloadValidation.ts#L8)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [server/cdp/swapPayloadValidation.ts:8](https://github.com/wenakita/
 
 > **validateCdpSwapTransactionPayload**(`payload`): `string` \| `null`
 
-Defined in: [server/cdp/swapPayloadValidation.ts:27](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/cdp/swapPayloadValidation.ts#L27)
+Defined in: [server/cdp/swapPayloadValidation.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/cdp/swapPayloadValidation.ts#L27)
 
 #### Parameters
 

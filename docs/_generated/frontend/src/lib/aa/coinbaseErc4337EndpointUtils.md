@@ -12,7 +12,7 @@
 
 > **isPaymasterProxyUrl**(`value`): `boolean`
 
-Defined in: [src/lib/aa/coinbaseErc4337EndpointUtils.ts:23](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/aa/coinbaseErc4337EndpointUtils.ts#L23)
+Defined in: [src/lib/aa/coinbaseErc4337EndpointUtils.ts:23](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337EndpointUtils.ts#L23)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/lib/aa/coinbaseErc4337EndpointUtils.ts:23](https://github.com/w
 
 > **isSameOriginUrl**(`value`): `boolean`
 
-Defined in: [src/lib/aa/coinbaseErc4337EndpointUtils.ts:13](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/aa/coinbaseErc4337EndpointUtils.ts#L13)
+Defined in: [src/lib/aa/coinbaseErc4337EndpointUtils.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337EndpointUtils.ts#L13)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/aa/coinbaseErc4337EndpointUtils.ts:13](https://github.com/w
 
 > **normalizeUrl**(`value`): `string`
 
-Defined in: [src/lib/aa/coinbaseErc4337EndpointUtils.ts:1](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/aa/coinbaseErc4337EndpointUtils.ts#L1)
+Defined in: [src/lib/aa/coinbaseErc4337EndpointUtils.ts:1](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337EndpointUtils.ts#L1)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [src/lib/aa/coinbaseErc4337EndpointUtils.ts:1](https://github.com/we
 
 > **resolveBundlerUrlForNonPaymaster**(`bundlerUrl`, `envBundlerUrl`): `string`
 
-Defined in: [src/lib/aa/coinbaseErc4337EndpointUtils.ts:33](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/aa/coinbaseErc4337EndpointUtils.ts#L33)
+Defined in: [src/lib/aa/coinbaseErc4337EndpointUtils.ts:33](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337EndpointUtils.ts#L33)
 
 #### Parameters
 

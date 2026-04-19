@@ -12,7 +12,7 @@
 
 > **ImageGenerationJob** = `object`
 
-Defined in: [server/\_lib/image/imageGenerationJobs.ts:9](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/imageGenerationJobs.ts#L9)
+Defined in: [server/\_lib/image/imageGenerationJobs.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageGenerationJobs.ts#L9)
 
 #### Properties
 
@@ -20,73 +20,73 @@ Defined in: [server/\_lib/image/imageGenerationJobs.ts:9](https://github.com/wen
 
 > **attempts**: `number`
 
-Defined in: [server/\_lib/image/imageGenerationJobs.ts:15](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/imageGenerationJobs.ts#L15)
+Defined in: [server/\_lib/image/imageGenerationJobs.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageGenerationJobs.ts#L15)
 
 ##### completedAt
 
 > **completedAt**: `string` \| `null`
 
-Defined in: [server/\_lib/image/imageGenerationJobs.ts:21](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/imageGenerationJobs.ts#L21)
+Defined in: [server/\_lib/image/imageGenerationJobs.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageGenerationJobs.ts#L21)
 
 ##### createdAt
 
 > **createdAt**: `string`
 
-Defined in: [server/\_lib/image/imageGenerationJobs.ts:19](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/imageGenerationJobs.ts#L19)
+Defined in: [server/\_lib/image/imageGenerationJobs.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageGenerationJobs.ts#L19)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [server/\_lib/image/imageGenerationJobs.ts:10](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/imageGenerationJobs.ts#L10)
+Defined in: [server/\_lib/image/imageGenerationJobs.ts:10](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageGenerationJobs.ts#L10)
 
 ##### kind
 
 > **kind**: [`ImageGenerationJobKind`](#imagegenerationjobkind-1)
 
-Defined in: [server/\_lib/image/imageGenerationJobs.ts:12](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/imageGenerationJobs.ts#L12)
+Defined in: [server/\_lib/image/imageGenerationJobs.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageGenerationJobs.ts#L12)
 
 ##### latestError
 
 > **latestError**: `string` \| `null`
 
-Defined in: [server/\_lib/image/imageGenerationJobs.ts:17](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/imageGenerationJobs.ts#L17)
+Defined in: [server/\_lib/image/imageGenerationJobs.ts:17](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageGenerationJobs.ts#L17)
 
 ##### maxAttempts
 
 > **maxAttempts**: `number`
 
-Defined in: [server/\_lib/image/imageGenerationJobs.ts:16](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/imageGenerationJobs.ts#L16)
+Defined in: [server/\_lib/image/imageGenerationJobs.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageGenerationJobs.ts#L16)
 
 ##### projectId
 
 > **projectId**: `string`
 
-Defined in: [server/\_lib/image/imageGenerationJobs.ts:11](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/imageGenerationJobs.ts#L11)
+Defined in: [server/\_lib/image/imageGenerationJobs.ts:11](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageGenerationJobs.ts#L11)
 
 ##### refineInstruction
 
 > **refineInstruction**: `string` \| `null`
 
-Defined in: [server/\_lib/image/imageGenerationJobs.ts:14](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/imageGenerationJobs.ts#L14)
+Defined in: [server/\_lib/image/imageGenerationJobs.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageGenerationJobs.ts#L14)
 
 ##### result
 
 > **result**: `Record`\<`string`, `unknown`\> \| `null`
 
-Defined in: [server/\_lib/image/imageGenerationJobs.ts:18](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/imageGenerationJobs.ts#L18)
+Defined in: [server/\_lib/image/imageGenerationJobs.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageGenerationJobs.ts#L18)
 
 ##### status
 
 > **status**: [`ImageGenerationJobStatus`](#imagegenerationjobstatus-1)
 
-Defined in: [server/\_lib/image/imageGenerationJobs.ts:13](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/imageGenerationJobs.ts#L13)
+Defined in: [server/\_lib/image/imageGenerationJobs.ts:13](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageGenerationJobs.ts#L13)
 
 ##### updatedAt
 
 > **updatedAt**: `string`
 
-Defined in: [server/\_lib/image/imageGenerationJobs.ts:20](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/imageGenerationJobs.ts#L20)
+Defined in: [server/\_lib/image/imageGenerationJobs.ts:20](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageGenerationJobs.ts#L20)
 
 ***
 
@@ -94,7 +94,7 @@ Defined in: [server/\_lib/image/imageGenerationJobs.ts:20](https://github.com/we
 
 > **ImageGenerationJobKind** = `"generate"` \| `"refine"`
 
-Defined in: [server/\_lib/image/imageGenerationJobs.ts:6](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/imageGenerationJobs.ts#L6)
+Defined in: [server/\_lib/image/imageGenerationJobs.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageGenerationJobs.ts#L6)
 
 ***
 
@@ -102,7 +102,7 @@ Defined in: [server/\_lib/image/imageGenerationJobs.ts:6](https://github.com/wen
 
 > **ImageGenerationJobStatus** = `"pending"` \| `"processing"` \| `"completed"` \| `"failed"`
 
-Defined in: [server/\_lib/image/imageGenerationJobs.ts:7](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/imageGenerationJobs.ts#L7)
+Defined in: [server/\_lib/image/imageGenerationJobs.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageGenerationJobs.ts#L7)
 
 ## Functions
 
@@ -110,7 +110,7 @@ Defined in: [server/\_lib/image/imageGenerationJobs.ts:7](https://github.com/wen
 
 > **enqueueImageGenerationJob**(`input`): `Promise`\<[`ImageGenerationJob`](#imagegenerationjob)\>
 
-Defined in: [server/\_lib/image/imageGenerationJobs.ts:47](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/imageGenerationJobs.ts#L47)
+Defined in: [server/\_lib/image/imageGenerationJobs.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageGenerationJobs.ts#L47)
 
 #### Parameters
 
@@ -138,7 +138,7 @@ Defined in: [server/\_lib/image/imageGenerationJobs.ts:47](https://github.com/we
 
 > **getImageGenerationJob**(`jobId`): `Promise`\<[`ImageGenerationJob`](#imagegenerationjob) \| `null`\>
 
-Defined in: [server/\_lib/image/imageGenerationJobs.ts:79](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/imageGenerationJobs.ts#L79)
+Defined in: [server/\_lib/image/imageGenerationJobs.ts:79](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageGenerationJobs.ts#L79)
 
 #### Parameters
 
@@ -156,7 +156,7 @@ Defined in: [server/\_lib/image/imageGenerationJobs.ts:79](https://github.com/we
 
 > **leaseImageGenerationJob**(`jobId`, `workerId`): `Promise`\<[`ImageGenerationJob`](#imagegenerationjob) \| `null`\>
 
-Defined in: [server/\_lib/image/imageGenerationJobs.ts:95](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/imageGenerationJobs.ts#L95)
+Defined in: [server/\_lib/image/imageGenerationJobs.ts:95](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageGenerationJobs.ts#L95)
 
 #### Parameters
 
@@ -178,7 +178,7 @@ Defined in: [server/\_lib/image/imageGenerationJobs.ts:95](https://github.com/we
 
 > **updateImageGenerationJob**(`input`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/image/imageGenerationJobs.ts:116](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/image/imageGenerationJobs.ts#L116)
+Defined in: [server/\_lib/image/imageGenerationJobs.ts:116](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/image/imageGenerationJobs.ts#L116)
 
 #### Parameters
 

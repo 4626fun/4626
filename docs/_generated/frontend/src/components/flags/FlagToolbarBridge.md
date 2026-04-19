@@ -12,7 +12,7 @@
 
 > **FlagToolbarBridge**(): `Element`
 
-Defined in: [src/components/flags/FlagToolbarBridge.tsx:14](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/flags/FlagToolbarBridge.tsx#L14)
+Defined in: [src/components/flags/FlagToolbarBridge.tsx:14](https://github.com/wenakita/4626/blob/main/frontend/src/components/flags/FlagToolbarBridge.tsx#L14)
 
 Renders the Vercel Flags SDK script tags so the Flags Explorer
 (Vercel Toolbar) can discover and display flag state.

@@ -12,7 +12,7 @@
 
 > **resolveAgentCapabilityResponse**(`params`): `Promise`\<\{ `chainId`: `number`; `issuedAt`: `string`; `memberships`: `object`[]; `resolverVersion`: `number`; `schema`: `"4626-agent-capability-response-v1"`; `wallet`: `string`; \}\>
 
-Defined in: [server/\_lib/agent/agentAccessResolver.ts:178](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/agent/agentAccessResolver.ts#L178)
+Defined in: [server/\_lib/agent/agentAccessResolver.ts:178](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/agentAccessResolver.ts#L178)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [server/\_lib/agent/agentAccessResolver.ts:178](https://github.com/w
 
 > **resolveMembershipForRoom**(`params`): `Promise`\<\{ `accessTokenRequired?`: `boolean`; `actualBalance`: `string`; `gracePeriodSeconds?`: `number`; `minBalance`: `string`; `minHoldSeconds?`: `number`; `qualified`: `boolean`; `qualifiedSince?`: `number`; `roomKey`: `string`; `shareToken`: `string`; `statusReason?`: `"revoked"` \| `"not_found"` \| `"qualified"` \| `"insufficient_balance"` \| `"insufficient_hold_time"` \| `"unsupported_chain"`; `type`: `"telegram"` \| `"xmtp"` \| `"vault-ui"` \| `"governance"`; `vault?`: `string`; \} \| `null`\>
 
-Defined in: [server/\_lib/agent/agentAccessResolver.ts:308](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/agent/agentAccessResolver.ts#L308)
+Defined in: [server/\_lib/agent/agentAccessResolver.ts:308](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/agentAccessResolver.ts#L308)
 
 #### Parameters
 

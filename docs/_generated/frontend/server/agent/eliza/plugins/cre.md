@@ -12,7 +12,7 @@
 
 > `const` **CRE\_WRITE\_SUBCOMMAND\_PREFIXES**: readonly \[`"tend"`, `"report"`, `"settle"`, `"settle-fees"`, `"relay-entries"`, `"relay-winners"`, `"graduate"`, `"queue"`\]
 
-Defined in: [server/agent/eliza/plugins/cre/index.ts:146](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/agent/eliza/plugins/cre/index.ts#L146)
+Defined in: [server/agent/eliza/plugins/cre/index.ts:146](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/plugins/cre/index.ts#L146)
 
 ***
 
@@ -20,7 +20,7 @@ Defined in: [server/agent/eliza/plugins/cre/index.ts:146](https://github.com/wen
 
 > `const` **crePlugin**: `Plugin`
 
-Defined in: [server/agent/eliza/plugins/cre/index.ts:819](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/agent/eliza/plugins/cre/index.ts#L819)
+Defined in: [server/agent/eliza/plugins/cre/index.ts:819](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/plugins/cre/index.ts#L819)
 
 ## Functions
 
@@ -28,7 +28,7 @@ Defined in: [server/agent/eliza/plugins/cre/index.ts:819](https://github.com/wen
 
 > **isCreWriteCommandText**(`text`): `boolean`
 
-Defined in: [server/agent/eliza/plugins/cre/index.ts:157](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/agent/eliza/plugins/cre/index.ts#L157)
+Defined in: [server/agent/eliza/plugins/cre/index.ts:157](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/plugins/cre/index.ts#L157)
 
 #### Parameters
 

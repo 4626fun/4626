@@ -10,7 +10,7 @@
 
 ### TelegramSummaryTransport
 
-Defined in: [server/\_lib/workspace/telegramTransport.ts:24](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/workspace/telegramTransport.ts#L24)
+Defined in: [server/\_lib/workspace/telegramTransport.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/telegramTransport.ts#L24)
 
 #### Methods
 
@@ -18,7 +18,7 @@ Defined in: [server/\_lib/workspace/telegramTransport.ts:24](https://github.com/
 
 > **sendSummary**(`payload`): `Promise`\<[`WorkspaceTelegramSummaryResult`](#workspacetelegramsummaryresult)\>
 
-Defined in: [server/\_lib/workspace/telegramTransport.ts:25](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/workspace/telegramTransport.ts#L25)
+Defined in: [server/\_lib/workspace/telegramTransport.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/telegramTransport.ts#L25)
 
 ###### Parameters
 
@@ -36,7 +36,7 @@ Defined in: [server/\_lib/workspace/telegramTransport.ts:25](https://github.com/
 
 > **WorkspaceTelegramSummaryPayload** = `object`
 
-Defined in: [server/\_lib/workspace/telegramTransport.ts:3](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/workspace/telegramTransport.ts#L3)
+Defined in: [server/\_lib/workspace/telegramTransport.ts:3](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/telegramTransport.ts#L3)
 
 #### Properties
 
@@ -44,37 +44,37 @@ Defined in: [server/\_lib/workspace/telegramTransport.ts:3](https://github.com/w
 
 > **chatId**: `string`
 
-Defined in: [server/\_lib/workspace/telegramTransport.ts:7](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/workspace/telegramTransport.ts#L7)
+Defined in: [server/\_lib/workspace/telegramTransport.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/telegramTransport.ts#L7)
 
 ##### disableWebPagePreview?
 
 > `optional` **disableWebPagePreview**: `boolean`
 
-Defined in: [server/\_lib/workspace/telegramTransport.ts:9](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/workspace/telegramTransport.ts#L9)
+Defined in: [server/\_lib/workspace/telegramTransport.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/telegramTransport.ts#L9)
 
 ##### lines
 
 > **lines**: `string`[]
 
-Defined in: [server/\_lib/workspace/telegramTransport.ts:6](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/workspace/telegramTransport.ts#L6)
+Defined in: [server/\_lib/workspace/telegramTransport.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/telegramTransport.ts#L6)
 
 ##### messageThreadId?
 
 > `optional` **messageThreadId**: `string` \| `number` \| `null`
 
-Defined in: [server/\_lib/workspace/telegramTransport.ts:8](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/workspace/telegramTransport.ts#L8)
+Defined in: [server/\_lib/workspace/telegramTransport.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/telegramTransport.ts#L8)
 
 ##### title
 
 > **title**: `string`
 
-Defined in: [server/\_lib/workspace/telegramTransport.ts:5](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/workspace/telegramTransport.ts#L5)
+Defined in: [server/\_lib/workspace/telegramTransport.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/telegramTransport.ts#L5)
 
 ##### vaultAddress
 
 > **vaultAddress**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/workspace/telegramTransport.ts:4](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/workspace/telegramTransport.ts#L4)
+Defined in: [server/\_lib/workspace/telegramTransport.ts:4](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/telegramTransport.ts#L4)
 
 ***
 
@@ -82,7 +82,7 @@ Defined in: [server/\_lib/workspace/telegramTransport.ts:4](https://github.com/w
 
 > **WorkspaceTelegramSummaryResult** = \{ `messageId`: `number` \| `null`; `raw`: `Record`\<`string`, `unknown`\>; `sent`: `true`; \} \| \{ `error?`: `string`; `reason`: `string`; `sent`: `false`; \}
 
-Defined in: [server/\_lib/workspace/telegramTransport.ts:12](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/workspace/telegramTransport.ts#L12)
+Defined in: [server/\_lib/workspace/telegramTransport.ts:12](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/telegramTransport.ts#L12)
 
 ## Functions
 
@@ -90,7 +90,7 @@ Defined in: [server/\_lib/workspace/telegramTransport.ts:12](https://github.com/
 
 > **createTelegramSummaryTransport**(): [`TelegramSummaryTransport`](#telegramsummarytransport)
 
-Defined in: [server/\_lib/workspace/telegramTransport.ts:118](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/workspace/telegramTransport.ts#L118)
+Defined in: [server/\_lib/workspace/telegramTransport.ts:118](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/workspace/telegramTransport.ts#L118)
 
 #### Returns
 

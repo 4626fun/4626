@@ -12,7 +12,7 @@
 
 > **KeeprConfigV1** = `object`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:6](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L6)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:6](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L6)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/keepr/keeprRegistry.ts:6](https://github.com/wenakita/
 
 > `optional` **behavior**: `object`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:35](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L35)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L35)
 
 ###### dmDenials?
 
@@ -42,13 +42,13 @@ Defined in: [server/\_lib/keepr/keeprRegistry.ts:35](https://github.com/wenakita
 
 > **chainId**: `number`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:8](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L8)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:8](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L8)
 
 ##### contracts?
 
 > `optional` **contracts**: `object`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:47](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L47)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:47](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L47)
 
 Optional contract addresses for CRE automation workflows
 
@@ -84,7 +84,7 @@ Optional contract addresses for CRE automation workflows
 
 > **gating**: `object`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:23](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L23)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:23](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L23)
 
 ###### enabled
 
@@ -114,7 +114,7 @@ Defined in: [server/\_lib/keepr/keeprRegistry.ts:23](https://github.com/wenakita
 
 > `optional` **lens**: `object`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:19](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L19)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:19](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L19)
 
 ###### groupAddress?
 
@@ -128,7 +128,7 @@ Defined in: [server/\_lib/keepr/keeprRegistry.ts:19](https://github.com/wenakita
 
 > `optional` **rateLimits**: `object`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:41](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L41)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L41)
 
 ###### commandCooldownMs?
 
@@ -146,7 +146,7 @@ Defined in: [server/\_lib/keepr/keeprRegistry.ts:41](https://github.com/wenakita
 
 > **roles**: `object`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:30](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L30)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L30)
 
 ###### admins?
 
@@ -164,7 +164,7 @@ Defined in: [server/\_lib/keepr/keeprRegistry.ts:30](https://github.com/wenakita
 
 > **vault**: `object`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:9](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L9)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:9](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L9)
 
 ###### canonicalOwnerAddress
 
@@ -186,13 +186,13 @@ Defined in: [server/\_lib/keepr/keeprRegistry.ts:9](https://github.com/wenakita/
 
 > **version**: `number`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:7](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L7)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:7](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L7)
 
 ##### xmtp
 
 > **xmtp**: `object`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:15](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L15)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L15)
 
 ###### agentInboxId?
 
@@ -208,7 +208,7 @@ Defined in: [server/\_lib/keepr/keeprRegistry.ts:15](https://github.com/wenakita
 
 > **KeeprVaultRow** = `object`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:80](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L80)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:80](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L80)
 
 #### Properties
 
@@ -216,91 +216,91 @@ Defined in: [server/\_lib/keepr/keeprRegistry.ts:80](https://github.com/wenakita
 
 > **canonicalOwnerAddress**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:86](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L86)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:86](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L86)
 
 ##### chainId
 
 > **chainId**: `number`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:82](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L82)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:82](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L82)
 
 ##### config
 
 > **config**: [`KeeprConfigV1`](#keeprconfigv1)
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:95](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L95)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:95](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L95)
 
 ##### configHash
 
 > **configHash**: `string`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:94](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L94)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:94](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L94)
 
 ##### configVersion
 
 > **configVersion**: `number`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:93](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L93)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:93](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L93)
 
 ##### creatorCoinAddress
 
 > **creatorCoinAddress**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:85](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L85)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:85](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L85)
 
 ##### failClosed
 
 > **failClosed**: `boolean`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:92](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L92)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:92](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L92)
 
 ##### gatingEnabled
 
 > **gatingEnabled**: `boolean`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:88](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L88)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:88](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L88)
 
 ##### gatingMode
 
 > **gatingMode**: `string`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:90](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L90)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:90](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L90)
 
 ##### groupId
 
 > **groupId**: `string`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:83](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L83)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:83](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L83)
 
 ##### joinLocked
 
 > **joinLocked**: `boolean`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:89](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L89)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:89](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L89)
 
 ##### lensGroupAddress
 
 > **lensGroupAddress**: `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:84](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L84)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:84](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L84)
 
 ##### minShares
 
 > **minShares**: `string` \| `null`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:91](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L91)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:91](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L91)
 
 ##### shareTokenAddress
 
 > **shareTokenAddress**: `` `0x${string}` `` \| `null`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:87](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L87)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:87](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L87)
 
 ##### vaultAddress
 
 > **vaultAddress**: `` `0x${string}` ``
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:81](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L81)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:81](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L81)
 
 ## Functions
 
@@ -308,7 +308,7 @@ Defined in: [server/\_lib/keepr/keeprRegistry.ts:81](https://github.com/wenakita
 
 > **computeConfigHash**(`config`): `string`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:75](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L75)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:75](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L75)
 
 #### Parameters
 
@@ -326,7 +326,7 @@ Defined in: [server/\_lib/keepr/keeprRegistry.ts:75](https://github.com/wenakita
 
 > **enqueueKeeprAction**(`params`): `Promise`\<\{ `id`: `number`; \}\>
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:295](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L295)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:295](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L295)
 
 #### Parameters
 
@@ -362,7 +362,7 @@ Defined in: [server/\_lib/keepr/keeprRegistry.ts:295](https://github.com/wenakit
 
 > **getKeeprVaultByGroupId**(`groupId`): `Promise`\<[`KeeprVaultRow`](#keeprvaultrow) \| `null`\>
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:265](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L265)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:265](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L265)
 
 #### Parameters
 
@@ -380,7 +380,7 @@ Defined in: [server/\_lib/keepr/keeprRegistry.ts:265](https://github.com/wenakit
 
 > **getKeeprVaultByVaultAddress**(`vaultAddress`): `Promise`\<[`KeeprVaultRow`](#keeprvaultrow) \| `null`\>
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:256](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L256)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:256](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L256)
 
 #### Parameters
 
@@ -398,7 +398,7 @@ Defined in: [server/\_lib/keepr/keeprRegistry.ts:256](https://github.com/wenakit
 
 > **isKeeprJoinLocked**(`vault`): `boolean`
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:98](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L98)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:98](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L98)
 
 #### Parameters
 
@@ -416,7 +416,7 @@ Defined in: [server/\_lib/keepr/keeprRegistry.ts:98](https://github.com/wenakita
 
 > **setKeeprJoinLocked**(`params`): `Promise`\<`void`\>
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:357](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L357)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:357](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L357)
 
 #### Parameters
 
@@ -444,7 +444,7 @@ Defined in: [server/\_lib/keepr/keeprRegistry.ts:357](https://github.com/wenakit
 
 > **upsertKeeprVault**(`params`): `Promise`\<[`KeeprVaultRow`](#keeprvaultrow)\>
 
-Defined in: [server/\_lib/keepr/keeprRegistry.ts:153](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/keepr/keeprRegistry.ts#L153)
+Defined in: [server/\_lib/keepr/keeprRegistry.ts:153](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/keepr/keeprRegistry.ts#L153)
 
 #### Parameters
 

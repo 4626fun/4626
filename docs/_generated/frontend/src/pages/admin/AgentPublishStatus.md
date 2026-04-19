@@ -12,7 +12,7 @@
 
 > **AgentPublishData** = `object`
 
-Defined in: [src/pages/admin/AgentPublishStatus.tsx:3](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/admin/AgentPublishStatus.tsx#L3)
+Defined in: [src/pages/admin/AgentPublishStatus.tsx:3](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AgentPublishStatus.tsx#L3)
 
 #### Properties
 
@@ -20,7 +20,7 @@ Defined in: [src/pages/admin/AgentPublishStatus.tsx:3](https://github.com/wenaki
 
 > `optional` **grove**: `object`
 
-Defined in: [src/pages/admin/AgentPublishStatus.tsx:14](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/admin/AgentPublishStatus.tsx#L14)
+Defined in: [src/pages/admin/AgentPublishStatus.tsx:14](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AgentPublishStatus.tsx#L14)
 
 ###### gatewayUrl
 
@@ -42,13 +42,13 @@ Defined in: [src/pages/admin/AgentPublishStatus.tsx:14](https://github.com/wenak
 
 > **groveStatus**: `"stored"` \| `"unavailable"` \| `"skipped"`
 
-Defined in: [src/pages/admin/AgentPublishStatus.tsx:13](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/admin/AgentPublishStatus.tsx#L13)
+Defined in: [src/pages/admin/AgentPublishStatus.tsx:13](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AgentPublishStatus.tsx#L13)
 
 ##### uriPolicy
 
 > **uriPolicy**: `object`
 
-Defined in: [src/pages/admin/AgentPublishStatus.tsx:4](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/admin/AgentPublishStatus.tsx#L4)
+Defined in: [src/pages/admin/AgentPublishStatus.tsx:4](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AgentPublishStatus.tsx#L4)
 
 ###### compatibilityFallbackUrl
 
@@ -84,7 +84,7 @@ Defined in: [src/pages/admin/AgentPublishStatus.tsx:4](https://github.com/wenaki
 
 > **AgentPublishStatusView** = `object`
 
-Defined in: [src/pages/admin/AgentPublishStatus.tsx:22](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/admin/AgentPublishStatus.tsx#L22)
+Defined in: [src/pages/admin/AgentPublishStatus.tsx:22](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AgentPublishStatus.tsx#L22)
 
 #### Properties
 
@@ -92,37 +92,37 @@ Defined in: [src/pages/admin/AgentPublishStatus.tsx:22](https://github.com/wenak
 
 > **canonicalMessage**: `string`
 
-Defined in: [src/pages/admin/AgentPublishStatus.tsx:27](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/admin/AgentPublishStatus.tsx#L27)
+Defined in: [src/pages/admin/AgentPublishStatus.tsx:27](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AgentPublishStatus.tsx#L27)
 
 ##### canonicalUriReady
 
 > **canonicalUriReady**: `boolean`
 
-Defined in: [src/pages/admin/AgentPublishStatus.tsx:23](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/admin/AgentPublishStatus.tsx#L23)
+Defined in: [src/pages/admin/AgentPublishStatus.tsx:23](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AgentPublishStatus.tsx#L23)
 
 ##### groveMessage
 
 > **groveMessage**: `string`
 
-Defined in: [src/pages/admin/AgentPublishStatus.tsx:28](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/admin/AgentPublishStatus.tsx#L28)
+Defined in: [src/pages/admin/AgentPublishStatus.tsx:28](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AgentPublishStatus.tsx#L28)
 
 ##### groveSkipped
 
 > **groveSkipped**: `boolean`
 
-Defined in: [src/pages/admin/AgentPublishStatus.tsx:26](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/admin/AgentPublishStatus.tsx#L26)
+Defined in: [src/pages/admin/AgentPublishStatus.tsx:26](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AgentPublishStatus.tsx#L26)
 
 ##### groveStored
 
 > **groveStored**: `boolean`
 
-Defined in: [src/pages/admin/AgentPublishStatus.tsx:24](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/admin/AgentPublishStatus.tsx#L24)
+Defined in: [src/pages/admin/AgentPublishStatus.tsx:24](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AgentPublishStatus.tsx#L24)
 
 ##### groveUnavailable
 
 > **groveUnavailable**: `boolean`
 
-Defined in: [src/pages/admin/AgentPublishStatus.tsx:25](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/admin/AgentPublishStatus.tsx#L25)
+Defined in: [src/pages/admin/AgentPublishStatus.tsx:25](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AgentPublishStatus.tsx#L25)
 
 ## Functions
 
@@ -130,7 +130,7 @@ Defined in: [src/pages/admin/AgentPublishStatus.tsx:25](https://github.com/wenak
 
 > **AgentPublishStatus**(`__namedParameters`): `Element`
 
-Defined in: [src/pages/admin/AgentPublishStatus.tsx:59](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/admin/AgentPublishStatus.tsx#L59)
+Defined in: [src/pages/admin/AgentPublishStatus.tsx:59](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AgentPublishStatus.tsx#L59)
 
 #### Parameters
 
@@ -148,7 +148,7 @@ Defined in: [src/pages/admin/AgentPublishStatus.tsx:59](https://github.com/wenak
 
 > **getAgentPublishStatusView**(`publish`): [`AgentPublishStatusView`](#agentpublishstatusview)
 
-Defined in: [src/pages/admin/AgentPublishStatus.tsx:31](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/pages/admin/AgentPublishStatus.tsx#L31)
+Defined in: [src/pages/admin/AgentPublishStatus.tsx:31](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/AgentPublishStatus.tsx#L31)
 
 #### Parameters
 

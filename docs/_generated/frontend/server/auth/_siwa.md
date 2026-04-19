@@ -12,7 +12,7 @@
 
 > **consumeSiwaNonce**(`db`, `params`): `Promise`\<\{ `ownerAddress`: `string`; \} \| `null`\>
 
-Defined in: [server/auth/\_siwa.ts:183](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/auth/_siwa.ts#L183)
+Defined in: [server/auth/\_siwa.ts:183](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L183)
 
 #### Parameters
 
@@ -44,7 +44,7 @@ Defined in: [server/auth/\_siwa.ts:183](https://github.com/wenakita/4626/blob/c3
 
 > **createSiwaReceiptToken**(`payload`, `opts`): `ReceiptResult` \| `null`
 
-Defined in: [server/auth/\_siwa.ts:79](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/auth/_siwa.ts#L79)
+Defined in: [server/auth/\_siwa.ts:79](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L79)
 
 #### Parameters
 
@@ -68,7 +68,7 @@ Defined in: [server/auth/\_siwa.ts:79](https://github.com/wenakita/4626/blob/c35
 
 > **ensureSiwaNonceSchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/auth/\_siwa.ts:88](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/auth/_siwa.ts#L88)
+Defined in: [server/auth/\_siwa.ts:88](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L88)
 
 #### Parameters
 
@@ -86,7 +86,7 @@ Defined in: [server/auth/\_siwa.ts:88](https://github.com/wenakita/4626/blob/c35
 
 > **getSiwaReceiptSecret**(): `string` \| `null`
 
-Defined in: [server/auth/\_siwa.ts:59](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/auth/_siwa.ts#L59)
+Defined in: [server/auth/\_siwa.ts:59](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L59)
 
 #### Returns
 
@@ -98,7 +98,7 @@ Defined in: [server/auth/\_siwa.ts:59](https://github.com/wenakita/4626/blob/c35
 
 > **isAddressLike**(`value`): `boolean`
 
-Defined in: [server/auth/\_siwa.ts:14](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/auth/_siwa.ts#L14)
+Defined in: [server/auth/\_siwa.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L14)
 
 #### Parameters
 
@@ -116,7 +116,7 @@ Defined in: [server/auth/\_siwa.ts:14](https://github.com/wenakita/4626/blob/c35
 
 > **parseAgentRegistryRef**(`value`): \{ `chainId`: `number`; `registryAddress`: `string`; \} \| `null`
 
-Defined in: [server/auth/\_siwa.ts:18](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/auth/_siwa.ts#L18)
+Defined in: [server/auth/\_siwa.ts:18](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L18)
 
 #### Parameters
 
@@ -134,7 +134,7 @@ Defined in: [server/auth/\_siwa.ts:18](https://github.com/wenakita/4626/blob/c35
 
 > **parseSiwaMessageSafe**(`message`): `SIWAMessageFields` \| `null`
 
-Defined in: [server/auth/\_siwa.ts:28](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/auth/_siwa.ts#L28)
+Defined in: [server/auth/\_siwa.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L28)
 
 #### Parameters
 
@@ -152,7 +152,7 @@ Defined in: [server/auth/\_siwa.ts:28](https://github.com/wenakita/4626/blob/c35
 
 > **readSiwaAgentFromRequest**(`req`): `ReceiptPayload` \| `null`
 
-Defined in: [server/auth/\_siwa.ts:71](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/auth/_siwa.ts#L71)
+Defined in: [server/auth/\_siwa.ts:71](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L71)
 
 #### Parameters
 
@@ -170,7 +170,7 @@ Defined in: [server/auth/\_siwa.ts:71](https://github.com/wenakita/4626/blob/c35
 
 > **readSiwaReceiptFromRequest**(`req`): `string` \| `null`
 
-Defined in: [server/auth/\_siwa.ts:41](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/auth/_siwa.ts#L41)
+Defined in: [server/auth/\_siwa.ts:41](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L41)
 
 #### Parameters
 
@@ -188,7 +188,7 @@ Defined in: [server/auth/\_siwa.ts:41](https://github.com/wenakita/4626/blob/c35
 
 > **storeSiwaNonce**(`db`, `params`): `Promise`\<`void`\>
 
-Defined in: [server/auth/\_siwa.ts:144](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/auth/_siwa.ts#L144)
+Defined in: [server/auth/\_siwa.ts:144](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L144)
 
 #### Parameters
 

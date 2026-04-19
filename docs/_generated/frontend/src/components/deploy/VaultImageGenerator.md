@@ -12,7 +12,7 @@
 
 > **VaultImageGenerator**(`__namedParameters`): `Element`
 
-Defined in: [src/components/deploy/VaultImageGenerator.tsx:30](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/deploy/VaultImageGenerator.tsx#L30)
+Defined in: [src/components/deploy/VaultImageGenerator.tsx:30](https://github.com/wenakita/4626/blob/main/frontend/src/components/deploy/VaultImageGenerator.tsx#L30)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **ExploreCopyButton**(`__namedParameters`): `Element`
 
-Defined in: [src/components/explore/ExploreUiPrimitives.tsx:13](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/explore/ExploreUiPrimitives.tsx#L13)
+Defined in: [src/components/explore/ExploreUiPrimitives.tsx:13](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ExploreUiPrimitives.tsx#L13)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/components/explore/ExploreUiPrimitives.tsx:13](https://github.c
 
 > **ExploreLoadingMoreRows**(`__namedParameters`): `Element` \| `null`
 
-Defined in: [src/components/explore/ExploreUiPrimitives.tsx:158](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/explore/ExploreUiPrimitives.tsx#L158)
+Defined in: [src/components/explore/ExploreUiPrimitives.tsx:158](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ExploreUiPrimitives.tsx#L158)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [src/components/explore/ExploreUiPrimitives.tsx:158](https://github.
 
 > **ExploreLoadMoreButton**(`__namedParameters`): `Element` \| `null`
 
-Defined in: [src/components/explore/ExploreUiPrimitives.tsx:186](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/explore/ExploreUiPrimitives.tsx#L186)
+Defined in: [src/components/explore/ExploreUiPrimitives.tsx:186](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ExploreUiPrimitives.tsx#L186)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [src/components/explore/ExploreUiPrimitives.tsx:186](https://github.
 
 > **ExploreStatRow**(`__namedParameters`): `Element`
 
-Defined in: [src/components/explore/ExploreUiPrimitives.tsx:69](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/explore/ExploreUiPrimitives.tsx#L69)
+Defined in: [src/components/explore/ExploreUiPrimitives.tsx:69](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ExploreUiPrimitives.tsx#L69)
 
 #### Parameters
 
@@ -84,7 +84,7 @@ Defined in: [src/components/explore/ExploreUiPrimitives.tsx:69](https://github.c
 
 > **ExploreTableMessage**(`__namedParameters`): `Element`
 
-Defined in: [src/components/explore/ExploreUiPrimitives.tsx:103](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/explore/ExploreUiPrimitives.tsx#L103)
+Defined in: [src/components/explore/ExploreUiPrimitives.tsx:103](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ExploreUiPrimitives.tsx#L103)
 
 #### Parameters
 
@@ -102,7 +102,7 @@ Defined in: [src/components/explore/ExploreUiPrimitives.tsx:103](https://github.
 
 > **ExploreTableRowMessage**(`__namedParameters`): `Element`
 
-Defined in: [src/components/explore/ExploreUiPrimitives.tsx:133](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/components/explore/ExploreUiPrimitives.tsx#L133)
+Defined in: [src/components/explore/ExploreUiPrimitives.tsx:133](https://github.com/wenakita/4626/blob/main/frontend/src/components/explore/ExploreUiPrimitives.tsx#L133)
 
 #### Parameters
 

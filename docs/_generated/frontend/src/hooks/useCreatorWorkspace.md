@@ -12,7 +12,7 @@
 
 > **useCreatorWorkspace**(`options`): `object`
 
-Defined in: [src/hooks/useCreatorWorkspace.ts:25](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/hooks/useCreatorWorkspace.ts#L25)
+Defined in: [src/hooks/useCreatorWorkspace.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/hooks/useCreatorWorkspace.ts#L25)
 
 #### Parameters
 

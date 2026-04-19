@@ -12,7 +12,7 @@
 
 > **buildPortfolioImageProxyUrl**(`rawUrl`): `string` \| `null`
 
-Defined in: [src/features/portfolio/portfolioViewModel.ts:69](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/portfolio/portfolioViewModel.ts#L69)
+Defined in: [src/features/portfolio/portfolioViewModel.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/features/portfolio/portfolioViewModel.ts#L69)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/features/portfolio/portfolioViewModel.ts:69](https://github.com
 
 > **deriveCreatorCoinOptions**(`addresses`): `` `0x${string}` ``[]
 
-Defined in: [src/features/portfolio/portfolioViewModel.ts:31](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/portfolio/portfolioViewModel.ts#L31)
+Defined in: [src/features/portfolio/portfolioViewModel.ts:31](https://github.com/wenakita/4626/blob/main/frontend/src/features/portfolio/portfolioViewModel.ts#L31)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [src/features/portfolio/portfolioViewModel.ts:31](https://github.com
 
 > **isEvmAddress**(`value`): `` value is `0x${string}` ``
 
-Defined in: [src/features/portfolio/portfolioViewModel.ts:3](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/portfolio/portfolioViewModel.ts#L3)
+Defined in: [src/features/portfolio/portfolioViewModel.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/features/portfolio/portfolioViewModel.ts#L3)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [src/features/portfolio/portfolioViewModel.ts:3](https://github.com/
 
 > **normalizeAddress**(`value`): `` `0x${string}` `` \| `null`
 
-Defined in: [src/features/portfolio/portfolioViewModel.ts:7](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/portfolio/portfolioViewModel.ts#L7)
+Defined in: [src/features/portfolio/portfolioViewModel.ts:7](https://github.com/wenakita/4626/blob/main/frontend/src/features/portfolio/portfolioViewModel.ts#L7)
 
 #### Parameters
 
@@ -84,7 +84,7 @@ Defined in: [src/features/portfolio/portfolioViewModel.ts:7](https://github.com/
 
 > **resolvePortfolioAddresses**(`input`): `object`
 
-Defined in: [src/features/portfolio/portfolioViewModel.ts:13](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/portfolio/portfolioViewModel.ts#L13)
+Defined in: [src/features/portfolio/portfolioViewModel.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/features/portfolio/portfolioViewModel.ts#L13)
 
 #### Parameters
 

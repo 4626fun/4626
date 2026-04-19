@@ -12,7 +12,7 @@
 
 > **buildZoraHandoffUrl**(`params`): `string`
 
-Defined in: [src/lib/zora/referrals.ts:32](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/zora/referrals.ts#L32)
+Defined in: [src/lib/zora/referrals.ts:32](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/referrals.ts#L32)
 
 #### Parameters
 
@@ -36,7 +36,7 @@ Defined in: [src/lib/zora/referrals.ts:32](https://github.com/wenakita/4626/blob
 
 > **getZoraInviteUrl**(): `string`
 
-Defined in: [src/lib/zora/referrals.ts:25](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/zora/referrals.ts#L25)
+Defined in: [src/lib/zora/referrals.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/referrals.ts#L25)
 
 #### Returns
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/zora/referrals.ts:25](https://github.com/wenakita/4626/blob
 
 > **getZoraPlatformReferrerAddress**(): `` `0x${string}` ``
 
-Defined in: [src/lib/zora/referrals.ts:19](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/zora/referrals.ts#L19)
+Defined in: [src/lib/zora/referrals.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/zora/referrals.ts#L19)
 
 #### Returns
 

@@ -12,7 +12,7 @@
 
 > **fetchProtocolRewardsBalance**(`account`): `Promise`\<`bigint`\>
 
-Defined in: [src/lib/onchain/protocolRewards.ts:46](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/protocolRewards.ts#L46)
+Defined in: [src/lib/onchain/protocolRewards.ts:46](https://github.com/wenakita/4626/blob/main/frontend/src/lib/onchain/protocolRewards.ts#L46)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [src/lib/onchain/protocolRewards.ts:46](https://github.com/wenakita/
 
 > **fetchProtocolRewardsBalances**(`accounts`): `Promise`\<`Record`\<`string`, `bigint`\>\>
 
-Defined in: [src/lib/onchain/protocolRewards.ts:56](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/protocolRewards.ts#L56)
+Defined in: [src/lib/onchain/protocolRewards.ts:56](https://github.com/wenakita/4626/blob/main/frontend/src/lib/onchain/protocolRewards.ts#L56)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/onchain/protocolRewards.ts:56](https://github.com/wenakita/
 
 > **fetchProtocolRewardsBalancesFromApi**(`accounts`): `Promise`\<`Record`\<`string`, `bigint`\>\>
 
-Defined in: [src/lib/onchain/protocolRewards.ts:73](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/protocolRewards.ts#L73)
+Defined in: [src/lib/onchain/protocolRewards.ts:73](https://github.com/wenakita/4626/blob/main/frontend/src/lib/onchain/protocolRewards.ts#L73)
 
 #### Parameters
 
@@ -66,7 +66,7 @@ Defined in: [src/lib/onchain/protocolRewards.ts:73](https://github.com/wenakita/
 
 > **fetchProtocolRewardsWithdrawnFromApi**(`accounts`): `Promise`\<`Record`\<`string`, `bigint`\>\>
 
-Defined in: [src/lib/onchain/protocolRewards.ts:108](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/onchain/protocolRewards.ts#L108)
+Defined in: [src/lib/onchain/protocolRewards.ts:108](https://github.com/wenakita/4626/blob/main/frontend/src/lib/onchain/protocolRewards.ts#L108)
 
 #### Parameters
 

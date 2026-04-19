@@ -12,7 +12,7 @@
 
 > **AgentVerificationData** = `object`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:164](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L164)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:164](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L164)
 
 #### Properties
 
@@ -20,55 +20,55 @@ Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:164](https://gi
 
 > **agentId**: `number`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:167](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L167)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:167](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L167)
 
 ##### agentRegistered
 
 > **agentRegistered**: `boolean`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:172](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L172)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:172](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L172)
 
 ##### agentWallet
 
 > **agentWallet**: `string` \| `null`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:170](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L170)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:170](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L170)
 
 ##### canonicalCsw
 
 > **canonicalCsw**: `string` \| `null`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:168](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L168)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:168](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L168)
 
 ##### chainId
 
 > **chainId**: `number`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:165](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L165)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:165](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L165)
 
 ##### checks
 
 > **checks**: [`VerificationCheck`](#verificationcheck)[]
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:184](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L184)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:184](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L184)
 
 ##### discoverabilityReady
 
 > **discoverabilityReady**: `boolean`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:174](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L174)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:174](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L174)
 
 ##### endpoint
 
 > **endpoint**: `Awaited`\<`ReturnType`\<*typeof* [`probeEndpoint`](../../../../../server/_lib/agent/erc8004Review.md#probeendpoint)\>\>
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:179](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L179)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:179](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L179)
 
 ##### links
 
 > **links**: `object`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:186](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L186)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:186](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L186)
 
 ###### agentWallet
 
@@ -94,7 +94,7 @@ Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:186](https://gi
 
 > **mirrors**: `object`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:180](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L180)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:180](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L180)
 
 ###### domainVerification
 
@@ -108,67 +108,67 @@ Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:180](https://gi
 
 > **onchainRegistration**: [`RegistrationProbe`](../../../../../server/_lib/agent/erc8004Review.md#registrationprobe)
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:178](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L178)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:178](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L178)
 
 ##### ownerAddress
 
 > **ownerAddress**: `string` \| `null`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:169](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L169)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:169](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L169)
 
 ##### registryAddress
 
 > **registryAddress**: `string`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:166](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L166)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:166](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L166)
 
 ##### rpcErrorCount
 
 > **rpcErrorCount**: `number`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:194](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L194)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:194](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L194)
 
 ##### rpcHealthy
 
 > **rpcHealthy**: `boolean`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:193](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L193)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:193](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L193)
 
 ##### teeAttestation
 
 > **teeAttestation**: [`TeeAttestationStatus`](#teeattestationstatus)
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:185](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L185)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:185](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L185)
 
 ##### tokenUri
 
 > **tokenUri**: `string` \| `null`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:171](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L171)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:171](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L171)
 
 ##### tokenUriIsStrictImmutable
 
 > **tokenUriIsStrictImmutable**: `boolean`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:175](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L175)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:175](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L175)
 
 ##### tokenUriMatchesCanonical
 
 > **tokenUriMatchesCanonical**: `boolean`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:176](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L176)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:176](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L176)
 
 ##### uriPolicy
 
 > **uriPolicy**: [`AgentUriPolicy`](../../../../../src/lib/agent/erc8004AgentUriPolicy.md#agenturipolicy)
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:177](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L177)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:177](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L177)
 
 ##### walletBoundToCanonical
 
 > **walletBoundToCanonical**: `boolean`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:173](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L173)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:173](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L173)
 
 ***
 
@@ -176,7 +176,7 @@ Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:173](https://gi
 
 > **DomainVerificationProbe** = `object`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:156](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L156)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:156](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L156)
 
 #### Properties
 
@@ -184,31 +184,31 @@ Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:156](https://gi
 
 > **error**: `string` \| `null`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:161](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L161)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:161](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L161)
 
 ##### finalUrl
 
 > **finalUrl**: `string` \| `null`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:159](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L159)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:159](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L159)
 
 ##### matchesCanonical
 
 > **matchesCanonical**: `boolean`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:160](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L160)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:160](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L160)
 
 ##### reachable
 
 > **reachable**: `boolean`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:158](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L158)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:158](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L158)
 
 ##### url
 
 > **url**: `string`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:157](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L157)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:157](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L157)
 
 ***
 
@@ -216,7 +216,7 @@ Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:157](https://gi
 
 > **MirrorProbe** = `object`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:80](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L80)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:80](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L80)
 
 #### Properties
 
@@ -224,37 +224,37 @@ Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:80](https://git
 
 > **agentIdMatches**: `boolean`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:85](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L85)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:85](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L85)
 
 ##### error
 
 > **error**: `string` \| `null`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:86](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L86)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:86](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L86)
 
 ##### finalUrl
 
 > **finalUrl**: `string` \| `null`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:83](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L83)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:83](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L83)
 
 ##### matchesCanonical
 
 > **matchesCanonical**: `boolean`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:84](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L84)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:84](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L84)
 
 ##### reachable
 
 > **reachable**: `boolean`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:82](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L82)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:82](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L82)
 
 ##### url
 
 > **url**: `string`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:81](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L81)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:81](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L81)
 
 ***
 
@@ -262,7 +262,7 @@ Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:81](https://git
 
 > **TeeAttestationStatus** = `Awaited`\<`ReturnType`\<*typeof* [`getTeeAttestationStatus`](../../../../../server/_lib/agent/teeAttestationGate.md#getteeattestationstatus)\>\>
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:47](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L47)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:47](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L47)
 
 ***
 
@@ -270,7 +270,7 @@ Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:47](https://git
 
 > **VerificationCheck** = `object`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:41](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L41)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:41](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L41)
 
 #### Properties
 
@@ -278,19 +278,19 @@ Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:41](https://git
 
 > **detail**: `string`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:44](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L44)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:44](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L44)
 
 ##### id
 
 > **id**: `string`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:42](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L42)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:42](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L42)
 
 ##### passed
 
 > **passed**: `boolean`
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:43](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L43)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:43](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L43)
 
 ## Functions
 
@@ -298,7 +298,7 @@ Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:43](https://git
 
 > **buildAgentVerificationData**(`req?`): `Promise`\<[`AgentVerificationData`](#agentverificationdata)\>
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:336](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L336)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:336](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L336)
 
 #### Parameters
 
@@ -316,7 +316,7 @@ Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:336](https://gi
 
 > **buildExpectedVerifiedEndpoints**(`origin`): `string`[]
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:205](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L205)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:205](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L205)
 
 #### Parameters
 
@@ -334,7 +334,7 @@ Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:205](https://gi
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:471](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/v1/agents/identity/_verification.ts#L471)
+Defined in: [api/\_handlers/v1/agents/identity/\_verification.ts:471](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/v1/agents/identity/_verification.ts#L471)
 
 #### Parameters
 

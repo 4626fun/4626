@@ -12,7 +12,7 @@
 
 > `const` **PROVIDER\_ROWS**: [`ProviderRow`](types.md#providerrow)[]
 
-Defined in: [src/features/accountSetup/shared.ts:3](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/accountSetup/shared.ts#L3)
+Defined in: [src/features/accountSetup/shared.ts:3](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/shared.ts#L3)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [src/features/accountSetup/shared.ts:3](https://github.com/wenakita/
 
 > **deriveOwnerAuthorityState**(`input`): [`OwnerAuthorityState`](types.md#ownerauthoritystate)
 
-Defined in: [src/features/accountSetup/shared.ts:41](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/accountSetup/shared.ts#L41)
+Defined in: [src/features/accountSetup/shared.ts:41](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/shared.ts#L41)
 
 #### Parameters
 
@@ -60,7 +60,7 @@ Defined in: [src/features/accountSetup/shared.ts:41](https://github.com/wenakita
 
 > **hasResolvedZoraSignals**(`data`): `boolean`
 
-Defined in: [src/features/accountSetup/shared.ts:25](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/accountSetup/shared.ts#L25)
+Defined in: [src/features/accountSetup/shared.ts:25](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/shared.ts#L25)
 
 #### Parameters
 
@@ -78,7 +78,7 @@ Defined in: [src/features/accountSetup/shared.ts:25](https://github.com/wenakita
 
 > **isMobileWalletEnvironment**(): `boolean`
 
-Defined in: [src/features/accountSetup/shared.ts:35](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/accountSetup/shared.ts#L35)
+Defined in: [src/features/accountSetup/shared.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/shared.ts#L35)
 
 #### Returns
 
@@ -90,7 +90,7 @@ Defined in: [src/features/accountSetup/shared.ts:35](https://github.com/wenakita
 
 > **normalizeAddress**(`value`): `string` \| `null`
 
-Defined in: [src/features/accountSetup/shared.ts:13](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/accountSetup/shared.ts#L13)
+Defined in: [src/features/accountSetup/shared.ts:13](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/shared.ts#L13)
 
 #### Parameters
 
@@ -108,7 +108,7 @@ Defined in: [src/features/accountSetup/shared.ts:13](https://github.com/wenakita
 
 > **shortValue**(`value`): `string`
 
-Defined in: [src/features/accountSetup/shared.ts:19](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/accountSetup/shared.ts#L19)
+Defined in: [src/features/accountSetup/shared.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/shared.ts#L19)
 
 #### Parameters
 
@@ -126,7 +126,7 @@ Defined in: [src/features/accountSetup/shared.ts:19](https://github.com/wenakita
 
 > **sleep**(`ms`): `Promise`\<`void`\>
 
-Defined in: [src/features/accountSetup/shared.ts:31](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/features/accountSetup/shared.ts#L31)
+Defined in: [src/features/accountSetup/shared.ts:31](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/shared.ts#L31)
 
 #### Parameters
 

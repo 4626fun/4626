@@ -12,7 +12,7 @@
 
 > `const` **COINBASE\_SMART\_WALLET\_ABI**: readonly \[\{ `inputs`: readonly \[\{ `internalType`: `"address"`; `name`: `"owner"`; `type`: `"address"`; \}\]; `name`: `"addOwnerAddress"`; `outputs`: readonly \[\]; `stateMutability`: `"nonpayable"`; `type`: `"function"`; \}, \{ `inputs`: readonly \[\{ `internalType`: `"address"`; `name`: `"account"`; `type`: `"address"`; \}\]; `name`: `"isOwnerAddress"`; `outputs`: readonly \[\{ `internalType`: `"bool"`; `name`: `""`; `type`: `"bool"`; \}\]; `stateMutability`: `"view"`; `type`: `"function"`; \}\]
 
-Defined in: [server/\_lib/wallet/coinbaseSmartWalletOwner.ts:5](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/coinbaseSmartWalletOwner.ts#L5)
+Defined in: [server/\_lib/wallet/coinbaseSmartWalletOwner.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/coinbaseSmartWalletOwner.ts#L5)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [server/\_lib/wallet/coinbaseSmartWalletOwner.ts:5](https://github.c
 
 > **isOwner**(`publicClient`, `cswAddress`, `ownerAddress`): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/wallet/coinbaseSmartWalletOwner.ts:30](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/coinbaseSmartWalletOwner.ts#L30)
+Defined in: [server/\_lib/wallet/coinbaseSmartWalletOwner.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/coinbaseSmartWalletOwner.ts#L30)
 
 #### Parameters
 
@@ -46,7 +46,7 @@ Defined in: [server/\_lib/wallet/coinbaseSmartWalletOwner.ts:30](https://github.
 
 > **prepareAddOwnerTx**(`cswAddress`, `ownerToAdd`): `object`
 
-Defined in: [server/\_lib/wallet/coinbaseSmartWalletOwner.ts:46](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/_lib/wallet/coinbaseSmartWalletOwner.ts#L46)
+Defined in: [server/\_lib/wallet/coinbaseSmartWalletOwner.ts:46](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/coinbaseSmartWalletOwner.ts#L46)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **RouterAllowlistResult** = \{ `allowed`: `true`; `observed?`: `true`; \} \| \{ `allowed`: `false`; `reason`: `string`; \}
 
-Defined in: [server/zora/routerAllowlist.ts:67](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/routerAllowlist.ts#L67)
+Defined in: [server/zora/routerAllowlist.ts:67](https://github.com/wenakita/4626/blob/main/frontend/server/zora/routerAllowlist.ts#L67)
 
 ## Functions
 
@@ -20,7 +20,7 @@ Defined in: [server/zora/routerAllowlist.ts:67](https://github.com/wenakita/4626
 
 > **checkRouterTarget**(`target`): [`RouterAllowlistResult`](#routerallowlistresult)
 
-Defined in: [server/zora/routerAllowlist.ts:83](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/server/zora/routerAllowlist.ts#L83)
+Defined in: [server/zora/routerAllowlist.ts:83](https://github.com/wenakita/4626/blob/main/frontend/server/zora/routerAllowlist.ts#L83)
 
 Check whether a Zora quote router target is in the allowlist.
 

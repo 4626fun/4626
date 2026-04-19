@@ -12,7 +12,7 @@
 
 > **Permit2TransferPermit** = `object`
 
-Defined in: [src/lib/deploy/permit2.ts:8](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/deploy/permit2.ts#L8)
+Defined in: [src/lib/deploy/permit2.ts:8](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/permit2.ts#L8)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [src/lib/deploy/permit2.ts:8](https://github.com/wenakita/4626/blob/
 
 > **deadline**: `bigint`
 
-Defined in: [src/lib/deploy/permit2.ts:11](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/deploy/permit2.ts#L11)
+Defined in: [src/lib/deploy/permit2.ts:11](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/permit2.ts#L11)
 
 ##### nonce
 
 > **nonce**: `bigint`
 
-Defined in: [src/lib/deploy/permit2.ts:10](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/deploy/permit2.ts#L10)
+Defined in: [src/lib/deploy/permit2.ts:10](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/permit2.ts#L10)
 
 ##### permitted
 
 > **permitted**: `Permit2TokenPermissions`
 
-Defined in: [src/lib/deploy/permit2.ts:9](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/deploy/permit2.ts#L9)
+Defined in: [src/lib/deploy/permit2.ts:9](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/permit2.ts#L9)
 
 ***
 
@@ -40,7 +40,7 @@ Defined in: [src/lib/deploy/permit2.ts:9](https://github.com/wenakita/4626/blob/
 
 > **Permit2TypedData** = `object`
 
-Defined in: [src/lib/deploy/permit2.ts:14](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/deploy/permit2.ts#L14)
+Defined in: [src/lib/deploy/permit2.ts:14](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/permit2.ts#L14)
 
 #### Properties
 
@@ -48,7 +48,7 @@ Defined in: [src/lib/deploy/permit2.ts:14](https://github.com/wenakita/4626/blob
 
 > **domain**: `object`
 
-Defined in: [src/lib/deploy/permit2.ts:15](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/deploy/permit2.ts#L15)
+Defined in: [src/lib/deploy/permit2.ts:15](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/permit2.ts#L15)
 
 ###### chainId
 
@@ -66,7 +66,7 @@ Defined in: [src/lib/deploy/permit2.ts:15](https://github.com/wenakita/4626/blob
 
 > **message**: `object`
 
-Defined in: [src/lib/deploy/permit2.ts:30](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/deploy/permit2.ts#L30)
+Defined in: [src/lib/deploy/permit2.ts:30](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/permit2.ts#L30)
 
 ###### deadline
 
@@ -88,13 +88,13 @@ Defined in: [src/lib/deploy/permit2.ts:30](https://github.com/wenakita/4626/blob
 
 > **primaryType**: `"PermitTransferFrom"`
 
-Defined in: [src/lib/deploy/permit2.ts:29](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/deploy/permit2.ts#L29)
+Defined in: [src/lib/deploy/permit2.ts:29](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/permit2.ts#L29)
 
 ##### types
 
 > **types**: `object`
 
-Defined in: [src/lib/deploy/permit2.ts:20](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/deploy/permit2.ts#L20)
+Defined in: [src/lib/deploy/permit2.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/permit2.ts#L20)
 
 ###### PermitTransferFrom
 
@@ -110,7 +110,7 @@ Defined in: [src/lib/deploy/permit2.ts:20](https://github.com/wenakita/4626/blob
 
 > **buildPermit2SignatureTransfer**(`args`): `object`
 
-Defined in: [src/lib/deploy/permit2.ts:48](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/deploy/permit2.ts#L48)
+Defined in: [src/lib/deploy/permit2.ts:48](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/permit2.ts#L48)
 
 #### Parameters
 
@@ -162,7 +162,7 @@ Defined in: [src/lib/deploy/permit2.ts:48](https://github.com/wenakita/4626/blob
 
 > **createPermit2Deadline**(`params?`): `bigint`
 
-Defined in: [src/lib/deploy/permit2.ts:42](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/deploy/permit2.ts#L42)
+Defined in: [src/lib/deploy/permit2.ts:42](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/permit2.ts#L42)
 
 #### Parameters
 
@@ -186,7 +186,7 @@ Defined in: [src/lib/deploy/permit2.ts:42](https://github.com/wenakita/4626/blob
 
 > **createPermit2Nonce**(`nowMs`): `bigint`
 
-Defined in: [src/lib/deploy/permit2.ts:38](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/src/lib/deploy/permit2.ts#L38)
+Defined in: [src/lib/deploy/permit2.ts:38](https://github.com/wenakita/4626/blob/main/frontend/src/lib/deploy/permit2.ts#L38)
 
 #### Parameters
 

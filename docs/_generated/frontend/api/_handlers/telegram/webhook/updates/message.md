@@ -12,7 +12,7 @@
 
 > **extractSharedSelection**(`message`): \{ `kind`: `"users"`; `requestId`: `number` \| `null`; `users`: `object`[]; \} \| \{ `chatId`: `string`; `kind`: `"chat"`; `requestId`: `number` \| `null`; `title`: `string`; `username`: `string`; \} \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/updates/message.ts:31](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/telegram/webhook/updates/message.ts#L31)
+Defined in: [api/\_handlers/telegram/webhook/updates/message.ts:31](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/updates/message.ts#L31)
 
 #### Parameters
 
@@ -30,7 +30,7 @@ Defined in: [api/\_handlers/telegram/webhook/updates/message.ts:31](https://gith
 
 > **extractUpdateMessage**(`update`): [`TelegramMessage`](../types.md#telegrammessage) \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/updates/message.ts:4](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/telegram/webhook/updates/message.ts#L4)
+Defined in: [api/\_handlers/telegram/webhook/updates/message.ts:4](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/updates/message.ts#L4)
 
 #### Parameters
 
@@ -48,7 +48,7 @@ Defined in: [api/\_handlers/telegram/webhook/updates/message.ts:4](https://githu
 
 > **normalizeMessageContext**(`message`): \{ `chatId`: `string`; `fromBot`: `boolean`; `messageId?`: `number`; `text`: `string`; `userId`: `string`; \} \| `null`
 
-Defined in: [api/\_handlers/telegram/webhook/updates/message.ts:14](https://github.com/wenakita/4626/blob/c357a10b6f5509ab0bdf7d1d5237d52e95f3962e/frontend/api/_handlers/telegram/webhook/updates/message.ts#L14)
+Defined in: [api/\_handlers/telegram/webhook/updates/message.ts:14](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/telegram/webhook/updates/message.ts#L14)
 
 #### Parameters
 
