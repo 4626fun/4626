@@ -69,23 +69,16 @@ describe('isRetryableInfraError', () => {
     expect(isRetryableInfraError(err)).toBe(true)
   })
 
-  it('classifies messages mentioning -32000 as retryable', () => {
-    expect(isRetryableInfraError(new Error('JSON-RPC error -32000: internal error'))).toBe(true)
-  })
-
-  it('classifies messages mentioning -32603 as retryable', () => {
-    expect(isRetryableInfraError(new Error('JSON-RPC -32603 internal error'))).toBe(true)
-  })
-
   it('classifies structured JSON-RPC code -32000 on the error object as retryable', () => {
-    // viem/ox attach `.code` directly on the thrown RpcRequestError. The text
-    // may not contain the code, so we must also look at structured fields.
+    // viem/ox attach `.code` directly on the thrown RpcRequestError. When the
+    // bundler surfaces a bare infrastructure failure with no validation
+    // signal in the message, the structured code alone is enough to retry.
     const rpcErr: Error & { code?: number } = new Error('paymaster request failed')
     rpcErr.code = -32000
     expect(isRetryableInfraError(rpcErr)).toBe(true)
   })
 
-  it('walks the .cause chain for a structured code', () => {
+  it('walks the .cause chain for a structured -32603 code', () => {
     const inner: Error & { code?: number } = new Error('upstream')
     inner.code = -32603
     const outer = new Error('wrapper')
@@ -94,20 +87,98 @@ describe('isRetryableInfraError', () => {
     expect(isRetryableInfraError(outer)).toBe(true)
   })
 
-  it('treats deterministic UserOp validation errors (AA24 signature) as non-retryable', () => {
-    // AA24 is the ERC-4337 validation signature-error code; must not retry.
+  // --- Deterministic validation failures must NEVER retry, even when
+  // wrapped in a -32000 / -32603 envelope. This is the regression the
+  // ChatGPT Codex bot flagged on PR #311: bundlers commonly surface AAxx
+  // validation reverts inside a generic JSON-RPC internal error code,
+  // and retrying them would reproduce the same failure and burn credits.
+
+  it('treats AA24 signature error as non-retryable', () => {
     const err = new Error('UserOperation reverted during simulation with reason: AA24 signature error')
     expect(isRetryableInfraError(err)).toBe(false)
   })
 
-  it('treats an unrelated deterministic revert as non-retryable', () => {
+  it('treats AA24 wrapped in a -32000 structured code as non-retryable', () => {
+    // Real-world shape: bundler returns { code: -32000, message: "AA24 signature error" }.
+    // The structured code alone would falsely suggest retry; the AAxx text guard must win.
+    const rpcErr: Error & { code?: number } = new Error('AA24 signature error')
+    rpcErr.code = -32000
+    expect(isRetryableInfraError(rpcErr)).toBe(false)
+  })
+
+  it('treats AA24 wrapped in a -32603 structured code as non-retryable', () => {
+    const rpcErr: Error & { code?: number } = new Error('AA24 signature error')
+    rpcErr.code = -32603
+    expect(isRetryableInfraError(rpcErr)).toBe(false)
+  })
+
+  it('treats AA25 invalid nonce wrapped in -32000 as non-retryable', () => {
+    const rpcErr: Error & { code?: number } = new Error('AA25 invalid account nonce')
+    rpcErr.code = -32000
+    expect(isRetryableInfraError(rpcErr)).toBe(false)
+  })
+
+  it('treats execution reverted wrapped in -32000 as non-retryable', () => {
+    // EXECUTION_REVERTED (-32521) sometimes gets normalized to -32000 by proxies.
+    const rpcErr: Error & { code?: number } = new Error('execution reverted: insufficient balance')
+    rpcErr.code = -32000
+    expect(isRetryableInfraError(rpcErr)).toBe(false)
+  })
+
+  it('treats an unrelated deterministic revert (no structured code) as non-retryable', () => {
     expect(isRetryableInfraError(new Error('execution reverted: insufficient balance'))).toBe(false)
+  })
+
+  it('treats banned opcode as non-retryable even with -32000 code', () => {
+    const rpcErr: Error & { code?: number } = new Error('banned opcode detected in factory')
+    rpcErr.code = -32000
+    expect(isRetryableInfraError(rpcErr)).toBe(false)
+  })
+
+  it('treats invalid signature wrapped in -32000 as non-retryable', () => {
+    const rpcErr: Error & { code?: number } = new Error('invalid signature')
+    rpcErr.code = -32000
+    expect(isRetryableInfraError(rpcErr)).toBe(false)
+  })
+
+  // --- True transient errors remain retryable even with ambiguous codes.
+
+  it('retries paymaster backend text even when wrapped in -32000', () => {
+    const rpcErr: Error & { code?: number } = new Error(
+      'internal error - error communicating with paymaster',
+    )
+    rpcErr.code = -32000
+    expect(isRetryableInfraError(rpcErr)).toBe(true)
   })
 
   it('still retries classic transient signals (timeout, 502, rate limit)', () => {
     expect(isRetryableInfraError(new Error('request timeout'))).toBe(true)
     expect(isRetryableInfraError(new Error('bad gateway 502'))).toBe(true)
     expect(isRetryableInfraError(new Error('rate limit exceeded'))).toBe(true)
+  })
+
+  // --- Deterministic CDP policy / EntryPoint rejections with their own
+  // dedicated codes must stay non-retryable and NOT be caught by the
+  // generic -32000/-32603 branch.
+
+  it('treats -32602 INVALID_ARGUMENT as non-retryable', () => {
+    const rpcErr: Error & { code?: number } = new Error('Invalid userOperation parameters')
+    rpcErr.code = -32602
+    expect(isRetryableInfraError(rpcErr)).toBe(false)
+  })
+
+  it('treats -32500 REJECTED_BY_EP_OR_ACCOUNT as non-retryable', () => {
+    const rpcErr: Error & { code?: number } = new Error('rejected by EntryPoint or smart account')
+    rpcErr.code = -32500
+    expect(isRetryableInfraError(rpcErr)).toBe(false)
+  })
+
+  it('treats -32501 REJECTED_BY_PAYMASTER (policy) as non-retryable', () => {
+    // Policy rejections (allowlist, spend limit) are deterministic — retrying
+    // would just hit the same policy again and hide the real cause.
+    const rpcErr: Error & { code?: number } = new Error('paymaster refused to sponsor')
+    rpcErr.code = -32501
+    expect(isRetryableInfraError(rpcErr)).toBe(false)
   })
 })
 

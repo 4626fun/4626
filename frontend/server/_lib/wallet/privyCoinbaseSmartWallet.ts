@@ -82,6 +82,14 @@ function getErrorMessage(error: unknown): string {
 
 export function isRetryableInfraError(error: unknown): boolean {
   const message = getErrorMessage(error).toLowerCase()
+
+  // Deterministic ERC-4337 validation failures must NEVER be retried, even
+  // when bundlers wrap them in generic JSON-RPC codes like -32000 / -32603.
+  // AAxx codes come from the EntryPoint and indicate a specific, reproducible
+  // problem (bad signature, bad nonce, bad init code, out of gas). Retrying
+  // would waste credits and hide the real cause from operators.
+  if (hasDeterministicValidationSignal(message)) return false
+
   if (
     message.includes('timeout') ||
     message.includes('timed out') ||
@@ -103,21 +111,24 @@ export function isRetryableInfraError(error: unknown): boolean {
     // a deterministic UserOp validation failure, so it should retry.
     message.includes('error communicating with paymaster') ||
     message.includes('paymaster service') ||
-    message.includes('paymaster unavailable') ||
-    // JSON-RPC generic internal error (-32000 / -32603) from bundler or RPC.
-    // Deterministic validation rejections use different codes (-32602, -32500
-    // range) which we keep as non-retryable.
-    message.includes('-32000') ||
-    message.includes('-32603')
+    message.includes('paymaster unavailable')
   ) {
     return true
   }
 
-  // Inspect structured JSON-RPC error codes if present on the thrown error
-  // (viem/ox attach `.code` or `.cause.code` on RpcRequestError).
+  // Structured JSON-RPC error codes from viem/ox RpcRequestError. `-32000`
+  // and `-32603` are JSON-RPC generic "server error" codes — bundlers use
+  // them both for CDP-side infrastructure failures AND for deterministic
+  // EntryPoint validation reverts (AAxx wrapped). The AAxx guard above
+  // already short-circuits the deterministic branch, so reaching this
+  // point means we have a numeric internal-error code with no validation
+  // signal in the message — treat it as transient. For everything else
+  // (incl. -32602 INVALID_ARGUMENT, -32500 REJECTED_BY_EP_OR_ACCOUNT, and
+  // -32501 REJECTED_BY_PAYMASTER policy rejections) we keep it as non-
+  // retryable so operators still see the actionable cause.
   const structuredCode = extractStructuredRpcErrorCode(error)
-  if (structuredCode !== null) {
-    if (structuredCode === -32000 || structuredCode === -32603) return true
+  if (structuredCode === -32000 || structuredCode === -32603) {
+    return true
   }
 
   const privyStatusMatch = message.match(/privy_http_(\d+)/)
@@ -125,6 +136,33 @@ export function isRetryableInfraError(error: unknown): boolean {
 
   const status = Number(privyStatusMatch[1])
   return status === 408 || status === 429 || status >= 500
+}
+
+/**
+ * True iff the lowercased error message contains a signal that the failure
+ * is a deterministic ERC-4337 validation / execution revert. These must
+ * never be retried — retrying will reproduce the same failure and burn
+ * paymaster credits.
+ *
+ * - `aaNN` codes come from the EntryPoint (AA10, AA13, AA14, AA15, AA20,
+ *   AA21, AA23, AA24, AA25, AA40, AA41, AA50, AA51). See CDP docs.
+ * - `execution reverted` covers bundler-surfaced EXECUTION_REVERTED (-32521)
+ *   and viem-wrapped onchain reverts.
+ * - `invalid signature` / `signature error` covers INVALID_SIGNATURE (-32507)
+ *   wrapped as -32000 by some bundlers.
+ * - `nonce too low` / `invalid nonce` covers deterministic nonce errors that
+ *   occasionally surface as -32000 when the bundler normalizes error codes.
+ */
+function hasDeterministicValidationSignal(lowerMessage: string): boolean {
+  if (/\baa\d{2}\b/.test(lowerMessage)) return true
+  if (lowerMessage.includes('execution reverted')) return true
+  if (lowerMessage.includes('invalid signature')) return true
+  if (lowerMessage.includes('signature error')) return true
+  if (lowerMessage.includes('invalid nonce')) return true
+  if (lowerMessage.includes('nonce too low')) return true
+  if (lowerMessage.includes('nonce too high')) return true
+  if (lowerMessage.includes('banned opcode')) return true
+  return false
 }
 
 /** Walks the error chain looking for a numeric JSON-RPC `code` field. */
