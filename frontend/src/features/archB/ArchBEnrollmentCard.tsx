@@ -68,13 +68,17 @@ export function ArchBEnrollmentCard({ hasCanonicalCsw }: ArchBEnrollmentCardProp
 
   const prevStatusRef = useRef<ArchBDelegationStatus | null>(null)
 
-  // Fire a success toast on transition to provisioned
+  // Fire a success toast only when the user's enable() call completes.
+  // The meaningful transition is `delegated` (enroll POST in flight) → `provisioned`.
+  // We intentionally do NOT toast on `loading` → `provisioned` (initial fetch,
+  // window-focus refetch, or post-disable refetch), which would re-fire the
+  // toast on every page load for already-provisioned users.
   useEffect(() => {
     const prev = prevStatusRef.current
     const curr = delegation.status
     prevStatusRef.current = curr
 
-    if (prev !== null && prev !== 'provisioned' && curr === 'provisioned') {
+    if (prev === 'delegated' && curr === 'provisioned') {
       toast.success('Enabled. /keepr send will route through your smart wallet. Revoke any time in Settings.')
     }
   }, [delegation.status])
@@ -89,8 +93,13 @@ export function ArchBEnrollmentCard({ hasCanonicalCsw }: ArchBEnrollmentCardProp
   if (dismissed) return null
   if (status === 'unlinked') return null
   if (status === 'provisioned') return null
-  if (status === 'delegating' || status === 'delegated' || status === 'loading') {
-    // Show loading state while in-flight
+  // Only show the "Enabling delegation…" placeholder when the user is
+  // actively progressing through the consent/enroll flow. The generic
+  // `loading` status also covers initial-mount fetch and window-focus
+  // refetch — in those cases nothing is actually being enabled, so we
+  // hide the card to avoid a misleading flash on every page visit.
+  if (status === 'delegating' || status === 'delegated') {
+    // Show loading state while enable() is in-flight
     return (
       <div
         role="status"
@@ -101,6 +110,12 @@ export function ArchBEnrollmentCard({ hasCanonicalCsw }: ArchBEnrollmentCardProp
         <LoadingInline intent="processing" size="sm" labelOverride="Enabling delegation…" />
       </div>
     )
+  }
+  if (status === 'loading') {
+    // Initial fetch or refetch — render nothing to avoid mount flash. The
+    // card will surface again if the resolved status is `not_delegated`
+    // or `revoked`.
+    return null
   }
 
   if (status === 'error' && !isPromptState) {
