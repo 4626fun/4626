@@ -77,9 +77,20 @@ describe('accounts identity points ledger', () => {
           }
         }
 
-        if (query.includes('select id from profiles') && query.includes('where privy_user_id')) {
+        // Resolver now reaches profiles through `privy_user_aliases` with a
+        // tombstone-chasing CTE; any profile select that references the
+        // aliases table is treated as the canonical Privy-user lookup.
+        if (
+          query.includes('select') &&
+          query.includes('from profiles') &&
+          query.includes('privy_user_aliases') &&
+          !query.includes('insert into privy_user_aliases')
+        ) {
           return { rows: [{ id: 101 }] }
         }
+        // Tolerate the seed insert the resolver does after creating a
+        // profile — no-op in test.
+        if (query.includes('insert into privy_user_aliases')) return { rows: [] }
 
         if (query.includes('insert into points')) {
           const signupId = Number(values[0] ?? 0)

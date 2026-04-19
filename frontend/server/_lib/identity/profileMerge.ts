@@ -77,6 +77,11 @@ export async function ensureProfileMergeSchema(db: Db): Promise<void> {
       AND merged_into_profile_id IS NULL
     ON CONFLICT (privy_user_id) DO NOTHING;
   `
+  // Enable RLS so PostgREST (`anon` / `authenticated` roles) can't reach
+  // the identity-routing metadata. Server handlers connect as `postgres`
+  // via the pooler and bypass RLS — reads/writes stay unaffected.
+  // Idempotent: re-running this DDL is a no-op if RLS is already on.
+  await db.sql`ALTER TABLE privy_user_aliases ENABLE ROW LEVEL SECURITY;`
   profileMergeSchemaEnsured = true
 }
 

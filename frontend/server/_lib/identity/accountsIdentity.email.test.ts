@@ -182,7 +182,17 @@ describe('accountsIdentity verified email handling', () => {
 
     db.sql.mockImplementation(async (strings: TemplateStringsArray, ...values: any[]): Promise<RecordingQueryResult> => {
       const text = normalizeSql(strings)
-      if (text.includes('select id from profiles where privy_user_id =')) {
+      // Resolver's privy-user lookup now routes through privy_user_aliases
+      // with a tombstone-chasing CTE. Any SELECT that touches
+      // `privy_user_aliases` in the WHERE is treated as the Privy-user
+      // resolution path. The seed INSERT into privy_user_aliases is
+      // ignored here so it doesn't count as a lookup.
+      if (
+        text.includes('select') &&
+        text.includes('from profiles') &&
+        text.includes('privy_user_aliases') &&
+        !text.includes('insert into privy_user_aliases')
+      ) {
         profileLookupCount += 1
         if (profileLookupCount === 1) return { rows: [] }
         return { rows: [{ id: 42 }] }
@@ -191,6 +201,9 @@ describe('accountsIdentity verified email handling', () => {
         profileInsertCount += 1
         throw new Error('duplicate key value violates unique constraint "profiles_privy_user_id_unique"')
       }
+      // Tolerate the seed insert into privy_user_aliases that the resolver
+      // now fires after a successful profile insert — treat as a no-op.
+      if (text.includes('insert into privy_user_aliases')) return { rows: [] }
       if (originalSql) return await originalSql(strings, ...values)
       return { rows: [] }
     })

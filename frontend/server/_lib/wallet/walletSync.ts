@@ -66,12 +66,40 @@ async function findProfileByProfileColumns(db: Db, params: {
   privyUserId: string | null
 }): Promise<ExistingProfile | null> {
   const { address, privyUserId } = params
+  // Follow tombstone pointers (merged_into_profile_id) to the live
+  // canonical profile. Without this, wallet-matching can target a
+  // merged-away row and walletSync ends up writing privy_user_id onto
+  // the tombstone, resurrecting a merged fragment.
   const result = privyUserId
     ? await db.sql`
-        SELECT id, email
-        FROM profiles
-        WHERE (
-          LOWER(primary_wallet) = ${address}
+        WITH matched AS (
+          SELECT id, email, merged_into_profile_id
+          FROM profiles
+          WHERE (
+            LOWER(primary_wallet) = ${address}
+               OR LOWER(embedded_wallet) = ${address}
+               OR LOWER(csw_address) = ${address}
+               OR LOWER(base_sub_account) = ${address}
+               OR LOWER(primary_smart_wallet) = ${address}
+               OR LOWER(primary_embedded_eoa) = ${address}
+               OR solana_wallet = ${address}
+               OR canonical_solana_wallet = ${address}
+               OR operational_solana_wallet = ${address}
+          )
+            AND (privy_user_id IS NULL OR privy_user_id = ${privyUserId})
+          LIMIT 1
+        )
+        SELECT p.id, p.email
+        FROM matched m
+        JOIN profiles p ON p.id = COALESCE(m.merged_into_profile_id, m.id)
+        WHERE p.merged_into_profile_id IS NULL
+        LIMIT 1;
+      `
+    : await db.sql`
+        WITH matched AS (
+          SELECT id, email, merged_into_profile_id
+          FROM profiles
+          WHERE LOWER(primary_wallet) = ${address}
              OR LOWER(embedded_wallet) = ${address}
              OR LOWER(csw_address) = ${address}
              OR LOWER(base_sub_account) = ${address}
@@ -80,22 +108,12 @@ async function findProfileByProfileColumns(db: Db, params: {
              OR solana_wallet = ${address}
              OR canonical_solana_wallet = ${address}
              OR operational_solana_wallet = ${address}
+          LIMIT 1
         )
-          AND (privy_user_id IS NULL OR privy_user_id = ${privyUserId})
-        LIMIT 1;
-      `
-    : await db.sql`
-        SELECT id, email
-        FROM profiles
-        WHERE LOWER(primary_wallet) = ${address}
-           OR LOWER(embedded_wallet) = ${address}
-           OR LOWER(csw_address) = ${address}
-           OR LOWER(base_sub_account) = ${address}
-           OR LOWER(primary_smart_wallet) = ${address}
-           OR LOWER(primary_embedded_eoa) = ${address}
-           OR solana_wallet = ${address}
-           OR canonical_solana_wallet = ${address}
-           OR operational_solana_wallet = ${address}
+        SELECT p.id, p.email
+        FROM matched m
+        JOIN profiles p ON p.id = COALESCE(m.merged_into_profile_id, m.id)
+        WHERE p.merged_into_profile_id IS NULL
         LIMIT 1;
       `
   const row = result.rows?.[0] as { id?: number; email?: string | null } | undefined
@@ -104,11 +122,20 @@ async function findProfileByProfileColumns(db: Db, params: {
 }
 
 async function findExistingProfile(db: Db, privyUserId: string | null, wallets: MappedWallet[]): Promise<ExistingProfile | null> {
+  // Every lookup below follows tombstone pointers so wallet-matches on a
+  // merged-away row resolve to the canonical survivor, not the tombstone.
   if (privyUserId) {
     const byPrivy = await db.sql`
-      SELECT id, email
-      FROM profiles
-      WHERE privy_user_id = ${privyUserId}
+      WITH matched AS (
+        SELECT id, email, merged_into_profile_id
+        FROM profiles
+        WHERE privy_user_id = ${privyUserId}
+        LIMIT 1
+      )
+      SELECT p.id, p.email
+      FROM matched m
+      JOIN profiles p ON p.id = COALESCE(m.merged_into_profile_id, m.id)
+      WHERE p.merged_into_profile_id IS NULL
       LIMIT 1;
     `
     const row = byPrivy.rows?.[0] as { id?: number; email?: string | null } | undefined
@@ -118,32 +145,46 @@ async function findExistingProfile(db: Db, privyUserId: string | null, wallets: 
   for (const wallet of wallets) {
     const byWalletJoin = privyUserId
       ? await db.sql`
-          SELECT p.id, p.email
-          FROM profile_wallets pw
-          JOIN profiles p ON p.id = pw.profile_id
-          WHERE LOWER(pw.address) = ${wallet.address}
-            AND (
-              pw.is_primary = true
-              OR pw.is_canonical_smart_wallet = true
-              OR pw.is_embedded_eoa = true
-              OR pw.is_canonical_solana_wallet = true
-              OR pw.is_operational_solana_wallet = true
-            )
-            AND (p.privy_user_id IS NULL OR p.privy_user_id = ${privyUserId})
+          WITH matched AS (
+            SELECT p.id, p.email, p.merged_into_profile_id
+            FROM profile_wallets pw
+            JOIN profiles p ON p.id = pw.profile_id
+            WHERE LOWER(pw.address) = ${wallet.address}
+              AND (
+                pw.is_primary = true
+                OR pw.is_canonical_smart_wallet = true
+                OR pw.is_embedded_eoa = true
+                OR pw.is_canonical_solana_wallet = true
+                OR pw.is_operational_solana_wallet = true
+              )
+              AND (p.privy_user_id IS NULL OR p.privy_user_id = ${privyUserId})
+            LIMIT 1
+          )
+          SELECT p2.id, p2.email
+          FROM matched m
+          JOIN profiles p2 ON p2.id = COALESCE(m.merged_into_profile_id, m.id)
+          WHERE p2.merged_into_profile_id IS NULL
           LIMIT 1;
         `
       : await db.sql`
-          SELECT p.id, p.email
-          FROM profile_wallets pw
-          JOIN profiles p ON p.id = pw.profile_id
-          WHERE LOWER(pw.address) = ${wallet.address}
-            AND (
-              pw.is_primary = true
-              OR pw.is_canonical_smart_wallet = true
-              OR pw.is_embedded_eoa = true
-              OR pw.is_canonical_solana_wallet = true
-              OR pw.is_operational_solana_wallet = true
-            )
+          WITH matched AS (
+            SELECT p.id, p.email, p.merged_into_profile_id
+            FROM profile_wallets pw
+            JOIN profiles p ON p.id = pw.profile_id
+            WHERE LOWER(pw.address) = ${wallet.address}
+              AND (
+                pw.is_primary = true
+                OR pw.is_canonical_smart_wallet = true
+                OR pw.is_embedded_eoa = true
+                OR pw.is_canonical_solana_wallet = true
+                OR pw.is_operational_solana_wallet = true
+              )
+            LIMIT 1
+          )
+          SELECT p2.id, p2.email
+          FROM matched m
+          JOIN profiles p2 ON p2.id = COALESCE(m.merged_into_profile_id, m.id)
+          WHERE p2.merged_into_profile_id IS NULL
           LIMIT 1;
         `
     const row = byWalletJoin.rows?.[0] as { id?: number; email?: string | null } | undefined
