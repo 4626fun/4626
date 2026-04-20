@@ -39,21 +39,16 @@ function isActiveLink(location: { pathname: string }, item: NavItem): boolean {
   return prefixes.some((p) => (p === '/' ? pathname === '/' : pathname === p || pathname.startsWith(`${p}/`)))
 }
 
-function useSafeAdminStatus(enabled: boolean) {
-  try {
-    return useAdminStatus({ enabled })
-  } catch {
-    return { isAdmin: false }
-  }
+type VaultNavBarContentProps = {
+  interactive: boolean
+  location: { pathname: string }
+  publicMode: boolean
+  hostMode: ReturnType<typeof getHostMode>
+  isAdmin: boolean
 }
 
-export function VaultNavBar(props: { interactive?: boolean }) {
-  const interactive = props.interactive ?? true
-  const location = useLocation()
-  const publicMode = isPublicSiteMode()
-  const hostMode = getHostMode()
-  const shouldLoadAdminStatus = interactive && hostMode !== 'marketing' && !publicMode
-  const { isAdmin } = useSafeAdminStatus(shouldLoadAdminStatus)
+function VaultNavBarContent(props: VaultNavBarContentProps) {
+  const { interactive, location, publicMode, hostMode, isAdmin } = props
   const [brandHovered, setBrandHovered] = useState(false)
   const canonicalMarketingWaitlistHref =
     hostMode === 'marketing'
@@ -171,5 +166,43 @@ export function VaultNavBar(props: { interactive?: boolean }) {
         ) : null}
       </div>
     </header>
+  )
+}
+
+function VaultNavBarWithAdminStatus(props: {
+  interactive: boolean
+  location: { pathname: string }
+  publicMode: boolean
+  hostMode: ReturnType<typeof getHostMode>
+}) {
+  const { isAdmin } = useAdminStatus({ enabled: true })
+  return <VaultNavBarContent {...props} isAdmin={isAdmin} />
+}
+
+export function VaultNavBar(props: { interactive?: boolean }) {
+  const interactive = props.interactive ?? true
+  const location = useLocation()
+  const publicMode = isPublicSiteMode()
+  const hostMode = getHostMode()
+  const shouldLoadAdminStatus = interactive && hostMode !== 'marketing' && !publicMode
+  if (shouldLoadAdminStatus) {
+    return (
+      <VaultNavBarWithAdminStatus
+        interactive={interactive}
+        location={location}
+        publicMode={publicMode}
+        hostMode={hostMode}
+      />
+    )
+  }
+
+  return (
+    <VaultNavBarContent
+      interactive={interactive}
+      location={location}
+      publicMode={publicMode}
+      hostMode={hostMode}
+      isAdmin={false}
+    />
   )
 }

@@ -35,10 +35,11 @@
       "name": "erc8004-review",
       "endpoint": "https://4626.fun/api/v1/agents/feedback/review",
       "version": "1.0.0",
-      "description": "x402-gated ERC-8004 technical review service that returns a scored review, Lens feedback payload, and unsigned giveFeedback calldata.",
+      "description": "Pay $1 USDC over x402 to receive a Keepr-signed wallet/agent review: scored ERC-8004 feedback, Lens post payload, and unsigned giveFeedback calldata. Useful for vetting traders, creators, or counterparties on Base.",
       "paymentProtocol": "x402",
       "paymentNetwork": "base",
-      "priceUsd": "1.00"
+      "priceUsd": "1.00",
+      "inputSchema": "https://4626.fun/api/v1/spec.json#/paths/~1api~1v1~1agents~1feedback~1review"
     },
     {
       "name": "reputation-graph",

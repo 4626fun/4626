@@ -116,6 +116,27 @@ function formatIntelSummary(graph: any): string {
     }
   }
 
+  // AlfaClub holdings (FriendDotSpace on Base)
+  const alfaclub = graph.sources?.alfaclub
+  if (alfaclub?.isHolder && Array.isArray(alfaclub.holdings) && alfaclub.holdings.length > 0) {
+    const count = alfaclub.holdings.length
+    const role = alfaclub.isCreator ? 'creator' : 'keyholder'
+    lines.push('')
+    lines.push(`**AlfaClub (${role}):** keys in ${count} room${count !== 1 ? 's' : ''}`)
+    for (const h of alfaclub.holdings.slice(0, 5)) {
+      const creator = String(h.creator ?? '')
+      const creatorShort = creator
+        ? `${creator.slice(0, 10)}...${creator.slice(-6)}`
+        : 'unknown'
+      const balance = typeof h.balance === 'bigint' ? h.balance.toString() : String(h.balance ?? '?')
+      const tokenId = typeof h.tokenId === 'bigint' ? h.tokenId.toString() : String(h.tokenId ?? '?')
+      lines.push(`  • room #${tokenId} (creator \`${creatorShort}\`) — ${balance} key${balance === '1' ? '' : 's'}`)
+    }
+    if (alfaclub.holdings.length > 5) {
+      lines.push(`  • … +${alfaclub.holdings.length - 5} more`)
+    }
+  }
+
   return lines.join('\n')
 }
 

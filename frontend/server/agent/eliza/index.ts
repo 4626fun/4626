@@ -47,6 +47,7 @@
 import { keeprPlugin } from './plugins/keepr/index.js'
 import { lensPlugin } from './plugins/lens/index.js'
 import { walletIntelPlugin } from './plugins/walletIntel/index.js'
+import { alfaclubPlugin } from './plugins/alfaclub/index.js'
 import { reputationPlugin } from './plugins/reputation/index.js'
 import { crePlugin } from './plugins/cre/index.js'
 import { zoraPlugin } from './plugins/zora/index.js'
@@ -350,6 +351,7 @@ const corePlugins = [
   uniswapPlugin,
   lensPlugin,
   walletIntelPlugin,
+  alfaclubPlugin,
   reputationPlugin,
   crePlugin,
   knowledgePlugin,
@@ -418,6 +420,7 @@ export {
   uniswapPlugin,
   lensPlugin,
   walletIntelPlugin,
+  alfaclubPlugin,
   reputationPlugin,
   crePlugin,
   knowledgePlugin,
@@ -464,6 +467,7 @@ type RuntimeLeaseState = {
 
 let latestEnvValidation: EnvValidationResult = { errors: [], warnings: [] }
 let backgroundWorker: { stop: () => void } | null = null
+let alfaclubRelayerStop: (() => void) | null = null
 let queueEnabled = false
 let dbRequiredForRuntime = false
 let stderrNoiseFilterInstalled = false
@@ -1487,6 +1491,13 @@ async function shutdown() {
     backgroundWorker = null
   }
 
+  if (alfaclubRelayerStop) {
+    try {
+      alfaclubRelayerStop()
+    } catch {}
+    alfaclubRelayerStop = null
+  }
+
   logger.info(`[eliza] All ${runningAgents.size} agents stopped`)
   runningAgents.clear()
   await releaseRuntimeLease()
@@ -1991,6 +2002,52 @@ async function main() {
 
     // Fire-and-forget: upload enriched agent registration to Lens Grove
     void uploadRegistrationToGrove()
+
+    // AlfaClub Integrity Vigilante — Railway-side feedback relayer that
+    // forwards queued ERC-8004 giveFeedback calldata onchain as UserOps
+    // through the canonical CSW. Opt-in via
+    // ALFACLUB_VIGILANTE_RELAYER_ENABLED=1; defaults to dormant.
+    //
+    // Dynamic import + try/catch by design: a bug anywhere in the alfaclub
+    // module graph (import-time throw, missing env, broken dep) must NEVER
+    // prevent `agentBooted = true` below, which would otherwise keep
+    // /readyz returning 503 and fail the Railway healthcheck. This hook is
+    // strictly additive to the core XMTP agent.
+    void (async () => {
+      try {
+        const mod = await import('../../_lib/alfaclub/feedbackRelayer.js')
+        const relayerStart = mod.startAlfaClubFeedbackRelayer({
+          onTick: (result) => {
+            if (result.skipped || result.picked === 0) return
+            logger.info('[alfaclub-relayer] tick', {
+              picked: result.picked,
+              submitted: result.submitted,
+              failed: result.failed,
+              abandoned: result.abandoned,
+              dryRun: result.dryRun,
+              txHashes: result.txHashes.slice(0, 5),
+            })
+          },
+          onError: (err) => {
+            logger.warn('[alfaclub-relayer] tick error', {
+              error: err instanceof Error ? err.message : String(err),
+            })
+          },
+        })
+        if (relayerStart.started) {
+          alfaclubRelayerStop = relayerStart.stop
+          logger.info('[alfaclub-relayer] started', { intervalMs: relayerStart.intervalMs })
+        } else {
+          logger.info('[alfaclub-relayer] not started', {
+            reason: relayerStart.reason ?? 'unknown',
+          })
+        }
+      } catch (err) {
+        logger.warn('[alfaclub-relayer] boot failed — continuing without relayer', {
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    })()
 
     // Graceful shutdown
     process.on('SIGINT', () => void shutdown())

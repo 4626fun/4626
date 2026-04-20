@@ -134,4 +134,71 @@ describe('walletIntel plugin sender defaults', () => {
     })
     expect(buildWalletIntelligenceMock).toHaveBeenCalledWith(explicit)
   })
+
+  it('renders an AlfaClub holdings block in /intel output when the target holds keys', async () => {
+    buildWalletIntelligenceMock.mockResolvedValue({
+      target: explicit,
+      summary: {},
+      nodes: [],
+      edges: [],
+      sources: {
+        funderTrace: null,
+        labels: {},
+        portfolio: null,
+        ens: null,
+        lens: null,
+        basename: null,
+        alfaclub: {
+          address: explicit,
+          isHolder: true,
+          isCreator: false,
+          holdings: [
+            { tokenId: 12n, balance: 2n, creator: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd' },
+            { tokenId: 87n, balance: 1n, creator: '0x1234567890123456789012345678901234567890' },
+          ],
+        },
+      },
+    })
+
+    const action = getAction('WALLET_INTELLIGENCE')
+    const outputs = await runAction({
+      action,
+      text: `/intel ${explicit}`,
+      senderAddress: sender,
+    })
+
+    const text = outputs.join('\n')
+    expect(text).toContain('AlfaClub (keyholder)')
+    expect(text).toContain('keys in 2 rooms')
+    expect(text).toContain('room #12')
+    expect(text).toContain('room #87')
+  })
+
+  it('renders AlfaClub labels in /labels output so keyholders and creators are visible to chat', async () => {
+    getWalletLabelsBatchMock.mockResolvedValue({
+      [explicit]: {
+        address: explicit,
+        isKnownEntity: true,
+        labels: [
+          {
+            name: 'AlfaClub keyholder (3 rooms)',
+            category: 'social',
+            subcategory: 'alfaclub',
+            source: 'alfaclub',
+          },
+        ],
+      },
+    })
+
+    const action = getAction('WALLET_ENTITY_LABELS')
+    const outputs = await runAction({
+      action,
+      text: `/labels ${explicit}`,
+      senderAddress: sender,
+    })
+
+    const text = outputs.join('\n')
+    expect(text).toContain('AlfaClub keyholder (3 rooms)')
+    expect(text).toContain('(social)')
+  })
 })

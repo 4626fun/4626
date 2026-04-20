@@ -958,16 +958,41 @@ export function Swap() {
 
     // `wallet-required`: user has a 4626 session but wagmi has no connected
     // wallet on this device. Choose the correct Privy entry point:
-    //   - already authenticated -> `connectWallet()` (login() throws
-    //     "Attempted to log in, but user is already logged in")
-    //   - unauthenticated       -> `login({ loginMethods: ['wallet'] })`
+    //   - already authenticated -> `connectWallet({ walletList })`
+    //     (login() throws "Attempted to log in, but user is already logged in")
+    //   - unauthenticated       -> `login({ loginMethods: ['wallet'], walletList })`
+    //
+    // `walletList` is REQUIRED here. Without it, Privy falls back to its
+    // default modal populated from `PrivyClientProvider.externalWallets`,
+    // which only lists Coinbase Wallet + WalletConnect + Zora cross-app.
+    // Rabby / MetaMask extensions never appear in that default picker, so
+    // Rabby users who land on /swap hit an apparent dead end even though
+    // they're set up correctly. Passing `detected_ethereum_wallets`
+    // surfaces every EIP-6963 provider (Rabby, Frame, OKX, etc.), matching
+    // the behavior of `useAccountSetupController.connectOwnerWallet`.
+    //
     // If Privy is disabled for this env, fall back to wagmi's first usable
     // connector so SIWE-only deployments still work.
+    const externalWalletList = [
+      'coinbase_wallet',
+      'base_account',
+      'wallet_connect',
+      'detected_ethereum_wallets',
+      'metamask',
+    ] as const
+
     if (connectGate.state === 'wallet-required') {
       if (privyHooksEnabled) {
         if (privyAuthenticated === true && typeof privyConnectWallet === 'function') {
           try {
-            privyConnectWallet()
+            // Privy's TS types for `walletList` lag behind the runtime
+            // implementation, so we cast. Known-good shape verified in
+            // `useAccountSetupController.connectOwnerWallet` where the
+            // same options are passed to the same underlying hook.
+            privyConnectWallet({
+              walletList: externalWalletList as unknown as string[],
+              walletChainType: 'ethereum-only',
+            } as any)
           } catch {
             // Privy surfaces its own modal-level errors; re-entry on next
             // click is fine if the user closes the modal.
@@ -975,15 +1000,27 @@ export function Swap() {
           return
         }
         if (privyAuthenticated !== true && typeof privyLogin === 'function') {
-          void privyLogin({ loginMethods: ['wallet'] }).catch(() => {})
+          void privyLogin({
+            loginMethods: ['wallet'],
+            walletList: externalWalletList as unknown as string[],
+          } as any).catch(() => {})
           return
         }
       }
-      const fallbackConnector =
-        wagmiConnectors.find((c) => !String(c.id ?? '').toLowerCase().includes('injected')) ??
+      // Non-Privy fallback: prefer a non-generic-injected connector. We
+      // reach for Rabby first if registered (its wagmi connector id is
+      // `'rabby'`, not `'injected'`), then any other registered connector
+      // that isn't the generic multi-wallet `injected` catch-all. Finally
+      // fall through to whatever's available.
+      const preferred =
+        wagmiConnectors.find((c) => String(c.id ?? '').toLowerCase() === 'rabby') ??
+        wagmiConnectors.find((c) => {
+          const id = String(c.id ?? '').toLowerCase()
+          return id !== 'injected' && !id.endsWith('.injected')
+        }) ??
         wagmiConnectors[0]
-      if (fallbackConnector) {
-        wagmiConnect({ connector: fallbackConnector })
+      if (preferred) {
+        wagmiConnect({ connector: preferred })
         return
       }
       // No connector available — fall through to the SIWE path which will

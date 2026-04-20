@@ -12,6 +12,11 @@ import { getEnsProfile, type EnsProfile } from '../identity/ensResolver.js'
 import { getWalletPortfolio, type WalletPortfolio } from '../lens/debankPortfolio.js'
 import { resolveCanonicalSmartWalletAddress } from './canonicalWalletResolver.js'
 import { resolveLensUserByOwner } from '../identity/lensAccounts.js'
+import {
+  getAlfaClubHoldings,
+  getAlfaClubPublicClient,
+  type AlfaClubHoldingsResult,
+} from './alfaclub.js'
 
 // ---------------------------------------------------------------------------
 // Graph types
@@ -77,6 +82,11 @@ export type WalletIntelligenceGraph = {
       ownerAddress: string | null
     } | null
     basename: string | null
+    /**
+     * AlfaClub (FriendDotSpace) on-chain holdings for the target wallet.
+     * null when disabled via options or when the RPC read failed.
+     */
+    alfaclub: AlfaClubHoldingsResult | null
   }
   generatedAt: string
   source: string
@@ -99,6 +109,8 @@ export type WalletIntelligenceOptions = {
   includeLens?: boolean
   /** Whether to include entity labels (default true). */
   includeLabels?: boolean
+  /** Whether to include AlfaClub on-chain holdings lookup (default true). */
+  includeAlfaClub?: boolean
 }
 
 // ---------------------------------------------------------------------------
@@ -116,6 +128,7 @@ export async function buildWalletIntelligence(
     includeEns = true,
     includeLens = true,
     includeLabels = true,
+    includeAlfaClub = true,
   } = options
 
   const addr = address.toLowerCase()
@@ -124,11 +137,16 @@ export async function buildWalletIntelligence(
   const canonicalWallet = (await resolveCanonicalSmartWalletAddress(addr)) ?? addr
 
   // Step 2: Kick off all independent data fetches in parallel.
-  const [funderResult, portfolio, ens, lensUser] = await Promise.all([
+  const [funderResult, portfolio, ens, lensUser, alfaclub] = await Promise.all([
     traceFundersMultiChain(canonicalWallet, { hops, chainIds }),
     includePortfolio ? getWalletPortfolio(canonicalWallet) : null,
     includeEns ? getEnsProfile(canonicalWallet) : null,
     includeLens ? resolveLensUserByOwner(canonicalWallet) : null,
+    includeAlfaClub
+      ? getAlfaClubPublicClient()
+          .then((client) => getAlfaClubHoldings(canonicalWallet as `0x${string}`, client))
+          .catch(() => null)
+      : null,
   ])
 
   // Step 3: Collect all addresses that need labels (target + funders).
@@ -358,6 +376,7 @@ export async function buildWalletIntelligence(
           }
         : null,
       basename,
+      alfaclub,
     },
     generatedAt: new Date().toISOString(),
     source: 'wallet-intelligence.v1',

@@ -10,6 +10,7 @@ import {
   AdminImageGeneration,
   AdminOps,
   AdminUserOpHealth,
+  AlfaClubVigilante,
   AdminWaitlist,
   AgentDirectory,
   AgentRegister,
@@ -194,4 +195,12 @@ export const ADMIN_CHILD_ROUTES: PathRouteDef[] = [
     ),
   },
   { path: 'userop-health', element: <AdminUserOpHealth /> },
+  {
+    path: 'alfaclub-vigilante',
+    element: (
+      <SmartWalletRoute>
+        <AlfaClubVigilante />
+      </SmartWalletRoute>
+    ),
+  },
 ]
