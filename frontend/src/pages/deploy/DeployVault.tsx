@@ -6384,7 +6384,7 @@ function DeployVaultBatcher({
             <div className="px-4 py-4">
               <div className="text-[10px] font-medium text-zinc-500 mb-2">Phase 1</div>
               <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
-                <div className={phaseProgressTone(1)}>Phase 1: deploy vault core (vault, wrapper, share token)</div>
+                <div className={phaseProgressTone(1)}>Deploy vault core (vault, wrapper, share token)</div>
                 {href1 ? (
                   <a className="font-mono text-zinc-300 hover:text-white" href={href1} target="_blank" rel="noreferrer">
                     view tx
@@ -6403,7 +6403,7 @@ function DeployVaultBatcher({
             <div className="px-4 py-4">
               <div className="text-[10px] font-medium text-zinc-500 mb-2">Phase 2</div>
               <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
-                <div className={phaseProgressTone(2)}>Phase 2: deploy + configure gauge, CCA, oracle, payout contracts</div>
+                <div className={phaseProgressTone(2)}>Deploy + configure gauge, CCA, oracle, payout contracts</div>
                 {href2 ? (
                   <a className="font-mono text-zinc-300 hover:text-white" href={href2} target="_blank" rel="noreferrer">
                     view tx
@@ -6457,7 +6457,7 @@ function DeployVaultBatcher({
             <div className="px-4 py-4">
               <div className="text-[10px] font-medium text-zinc-500 mb-2">Phase 3</div>
               <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
-                <div className={phaseProgressTone(3)}>Phase 3: deploy + register strategies (Charm, Ajna, Solana)</div>
+                <div className={phaseProgressTone(3)}>Deploy + register strategies (Charm, Ajna, Solana)</div>
                 {href3 ? (
                   <a className="font-mono text-zinc-300 hover:text-white" href={href3} target="_blank" rel="noreferrer">
                     view tx
@@ -6512,7 +6512,7 @@ function DeployVaultBatcher({
             <div className="px-4 py-4">
               <div className="text-[10px] font-medium text-zinc-500 mb-2">Phase 4</div>
               <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
-                <div className={phaseProgressTone(4)}>Phase 4: launch deferred auction</div>
+                <div className={phaseProgressTone(4)}>Launch deferred auction</div>
                 {href4 ? (
                   <a className="font-mono text-zinc-300 hover:text-white" href={href4} target="_blank" rel="noreferrer">
                     view tx
@@ -8528,125 +8528,86 @@ function DeployVaultMain() {
               </div>
             ) : null}
 
-            {/* Review */}
-          {!alreadyDeployed && tokenIsValid && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                className="overflow-hidden"
-              >
-                {symbolLoading || zoraLoading ? (
-                  <LoadingText intent="processing" labelOverride="Loading coin details..." />
-                ) : !zoraCoin ? (
-                  <div className="text-sm text-red-400/80">
-                    This token does not appear to be a Zora Coin. Creator Vaults can only be created for Zora{' '}
-                    <span className="text-zinc-200">Creator Coins</span>.
-                  </div>
-                ) : baseSymbol ? (
-                  <div className="vault-surface vault-hover-lift p-7 sm:p-8 space-y-6">
-                    {/* Token card */}
-                    <div className="flex items-start justify-between gap-6">
-                      <div className="flex items-center gap-4 min-w-0">
-                        {zoraCoin?.mediaContent?.previewImage?.medium ? (
-                          <img
-                            src={zoraCoin.mediaContent.previewImage.medium}
-                            alt={zoraCoin.symbol ? String(zoraCoin.symbol) : 'Coin'}
-                            className="w-14 h-14 rounded-full object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-14 h-14 rounded-full bg-linear-to-br from-brand-primary/20 to-brand-accent/20 flex items-center justify-center text-sm font-medium text-brand-accent">
-                            {String(baseSymbol).slice(0, 2).toUpperCase()}
-                          </div>
-                        )}
+            {!alreadyDeployed && (
+            <div className="vault-surface vault-hover-lift p-7 sm:p-8 space-y-6">
+              {/* Review */}
+              {tokenIsValid ? (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="overflow-hidden"
+                >
+                  {symbolLoading || zoraLoading ? (
+                    <LoadingText intent="processing" labelOverride="Loading coin details..." />
+                  ) : !zoraCoin ? (
+                    <div className="text-sm text-red-400/80">
+                      This token does not appear to be a Zora Coin. Creator Vaults can only be created for Zora{' '}
+                      <span className="text-zinc-200">Creator Coins</span>.
+                    </div>
+                  ) : baseSymbol ? (
+                    <div className="space-y-4">
+                      <div className="flex items-start justify-between gap-6">
+                        <div className="flex items-center gap-4 min-w-0">
+                          {zoraCoin?.mediaContent?.previewImage?.medium ? (
+                            <img
+                              src={zoraCoin.mediaContent.previewImage.medium}
+                              alt={zoraCoin.symbol ? String(zoraCoin.symbol) : 'Coin'}
+                              className="w-14 h-14 rounded-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="w-14 h-14 rounded-full bg-linear-to-br from-brand-primary/20 to-brand-accent/20 flex items-center justify-center text-sm font-medium text-brand-accent">
+                              {String(baseSymbol).slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
 
-                        <div className="min-w-0">
-                          <div className="text-white font-light text-xl">
-                            {zoraCoin?.name
-                              ? String(zoraCoin.name)
-                              : tokenName
-                                ? String(tokenName)
-                                : String(baseSymbol)}
-                            {baseSymbol && showSymbolInReviewHeading ? (
-                              <span className="text-zinc-500"> ({`$${String(baseSymbol)}`})</span>
-                            ) : null}
+                          <div className="min-w-0">
+                            <div className="text-white font-light text-xl">
+                              {zoraCoin?.name
+                                ? String(zoraCoin.name)
+                                : tokenName
+                                  ? String(tokenName)
+                                  : String(baseSymbol)}
+                              {baseSymbol && showSymbolInReviewHeading ? (
+                                <span className="text-zinc-500"> ({`$${String(baseSymbol)}`})</span>
+                              ) : null}
+                            </div>
+                            <div className="text-xs text-zinc-600 font-mono mt-1">{String(creatorToken)}</div>
                           </div>
-                          <div className="text-xs text-zinc-600 font-mono mt-1">{String(creatorToken)}</div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-medium ${coinTypePillClass}`}>
+                            {coinTypeLabel}
+                          </span>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-medium ${coinTypePillClass}`}>
-                          {coinTypeLabel}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Key rows */}
-                    <div className="rounded-lg border border-zinc-900/60 bg-black/20 px-4">
-                      {payoutRecipient && (
-                        <div className="data-row">
-                          <div className="label">Creator coin payout recipient</div>
-                          <div className="text-xs text-zinc-300 font-mono">{shortAddress(payoutRecipient)}</div>
+                      {String(zoraCoin?.coinType ?? '').toUpperCase() === 'CONTENT' && (
+                        <div className="text-xs text-amber-300/90">
+                          This is a <span className="font-mono">Content Coin</span>. Creator Vaults can only be created for{' '}
+                          <span className="font-mono">Creator Coins</span>.
                         </div>
                       )}
 
-                      <div className="data-row">
-                        <div className="label">Chain</div>
-                        <div className="text-xs text-zinc-300 inline-flex items-center gap-2">
-                          <img
-                            src="/protocols/base.png"
-                            alt=""
-                            aria-hidden="true"
-                            loading="lazy"
-                            className="w-3.5 h-3.5 opacity-90"
-                          />
-                          Base
+                      {hasWallet && zoraCoin?.creatorAddress && !isAuthorizedDeployerOrOperator && (
+                        <div className="text-xs text-red-400/90">
+                          You are connected as{' '}
+                          <span className="font-mono">
+                            {effectiveWalletAddress?.slice(0, 6)}…{effectiveWalletAddress?.slice(-4)}
+                          </span>
+                          . Only the coin creator or current payout recipient can deploy this vault.
                         </div>
-                      </div>
-
-                      <div className={`data-row ${!marketFloorText ? 'border-b-0' : ''}`}>
-                        <div className="label">Initial deposit</div>
-                        <div className="text-xs text-zinc-300 font-mono">
-                          {minFirstDepositDisplay} {underlyingSymbolUpper || 'TOKENS'}
-                        </div>
-                      </div>
-
-                      {marketFloorText ? (
-                        <div className="data-row border-b-0">
-                          <div className="label">CCA floor (reference)</div>
-                          <div className="text-xs text-zinc-300">{marketFloorText}</div>
-                        </div>
-                      ) : null}
+                      )}
                     </div>
+                  ) : (
+                    <div className="text-sm text-red-400/80">Could not read token. Is this a valid ERC-20?</div>
+                  )}
+                </motion.div>
+              ) : null}
 
-                    {String(zoraCoin?.coinType ?? '').toUpperCase() === 'CONTENT' && (
-                      <div className="text-xs text-amber-300/90 pt-4 border-t border-zinc-900/50">
-                        This is a <span className="font-mono">Content Coin</span>. Creator Vaults can only be created for{' '}
-                        <span className="font-mono">Creator Coins</span>.
-                      </div>
-                    )}
-
-                    {hasWallet && zoraCoin?.creatorAddress && !isAuthorizedDeployerOrOperator && (
-                      <div className="text-xs text-red-400/90">
-                        You are connected as{' '}
-                        <span className="font-mono">
-                          {effectiveWalletAddress?.slice(0, 6)}…{effectiveWalletAddress?.slice(-4)}
-                        </span>
-                        . Only the coin creator or current payout recipient can deploy this vault.
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-sm text-red-400/80">Could not read token. Is this a valid ERC-20?</div>
-                )}
-              </motion.div>
-            )}
-
-          {!alreadyDeployed && (
-            <>
             {/* Deploy */}
-            <div className="vault-surface vault-hover-lift p-7 sm:p-8 space-y-5">
+            <div className={`space-y-5 ${tokenIsValid ? 'pt-5 border-t border-zinc-900/50' : ''}`}>
               <div className="space-y-1.5">
                 <div className="label">Deploy</div>
                 <div className="text-xs text-zinc-500">Review the plan, optionally run dry-run, then submit.</div>
@@ -8842,7 +8803,7 @@ function DeployVaultMain() {
                 Requires a {minFirstDepositDisplay} {underlyingSymbolUpper || 'TOKENS'} deposit. Some wallets may prompt multiple confirmations.
               </div>
             </div>
-            </>
+            </div>
           )}
 
           </div>

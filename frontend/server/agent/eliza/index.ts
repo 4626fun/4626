@@ -47,7 +47,10 @@
 import { keeprPlugin } from './plugins/keepr/index.js'
 import { lensPlugin } from './plugins/lens/index.js'
 import { walletIntelPlugin } from './plugins/walletIntel/index.js'
-import { alfaclubPlugin } from './plugins/alfaclub/index.js'
+// AlfaClub plugin is loaded dynamically below (see `optionalPlugins`) so a
+// module-load failure in its dep graph cannot prevent agent boot. The
+// previous static import at this position could cascade a Railway
+// healthcheck timeout via silent eliza/index.ts parse failure.
 import { reputationPlugin } from './plugins/reputation/index.js'
 import { crePlugin } from './plugins/cre/index.js'
 import { zoraPlugin } from './plugins/zora/index.js'
@@ -345,13 +348,42 @@ export type { Erc8004Identity } from './identity.js'
 // Plugins & Actions
 // ---------------------------------------------------------------------------
 
+/**
+ * Dynamically load the AlfaClub plugin so that a module-load failure in its
+ * dep graph (Lens storage client, Supabase, viem, etc.) can never block the
+ * agent from booting. Fails open: if the import throws, we log and continue
+ * without the plugin; the agent still serves XMTP + other plugins.
+ *
+ * Optional opt-out: set `ALFACLUB_PLUGIN_DISABLED=1` to skip the load entirely.
+ */
+type CorePlugin = typeof keeprPlugin
+const optionalCorePlugins: CorePlugin[] = await (async () => {
+  const loaded: CorePlugin[] = []
+  const disabled = parseEnvBoolean(process.env.ALFACLUB_PLUGIN_DISABLED, false)
+  if (!disabled) {
+    try {
+      const mod = await import('./plugins/alfaclub/index.js')
+      if (mod?.alfaclubPlugin) {
+        loaded.push(mod.alfaclubPlugin as CorePlugin)
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      // Use console directly since logger may not be initialized yet at this
+      // module-top-level evaluation point.
+      // eslint-disable-next-line no-console
+      console.warn('[eliza] alfaclub plugin load skipped:', message)
+    }
+  }
+  return loaded
+})()
+
 const corePlugins = [
   keeprPlugin,
   zoraPlugin,
   uniswapPlugin,
   lensPlugin,
   walletIntelPlugin,
-  alfaclubPlugin,
+  ...optionalCorePlugins,
   reputationPlugin,
   crePlugin,
   knowledgePlugin,
@@ -420,7 +452,6 @@ export {
   uniswapPlugin,
   lensPlugin,
   walletIntelPlugin,
-  alfaclubPlugin,
   reputationPlugin,
   crePlugin,
   knowledgePlugin,
