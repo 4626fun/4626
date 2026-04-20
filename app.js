@@ -753,6 +753,33 @@ if (audioToggle) {
       };
 
       // Apply grid-locked tilt + mouse to each scene-pin
+      // Narrow-phone mobile scale: the JS writes to .scene-pin.style.transform
+      // on every tick, so CSS `transform: scale()` media queries never stick.
+      // We compose the scale INTO the transform string here so both the camera
+      // rig (tilt + depth parallax) AND the mobile compression survive. Hero
+      // is exempt — it uses responsive clamps for its headline already.
+      const vwNow = window.innerWidth;
+      function chScale(chId) {
+        if (chId === 'ch-hero') return 1;
+        // With the tighter spread floor on narrow phones (coin/share cards
+        // now sit closer together), scene-pin only needs a light shrink to
+        // keep non-card chapters (vaults stat column, close finale) comfy.
+        if (vwNow <= 380) {
+          if (chId === 'ch-cca') return 0.74;          // CCA intro card + auction pill span full width
+          if (chId === 'ch-dual-overview') return 0.82; // vertical stack + headline collision
+          if (chId === 'ch-token') return 0.82;         // desc card still bleeds left at 0.88; tighten
+          if (chId === 'ch-close') return 0.86;         // token pill at finale
+          return 0.88;
+        }
+        if (vwNow <= 430) {
+          if (chId === 'ch-cca') return 0.86;
+          if (chId === 'ch-dual-overview') return 0.9;
+          if (chId === 'ch-token') return 0.94;
+          if (chId === 'ch-vaults') return 0.94;
+          return 1;
+        }
+        return 1;
+      }
       scenePins.forEach(({ el, chId }) => {
         // Extra rotateX per chapter pushes deeper into the grid surface
         let extraRx = 0;
@@ -769,7 +796,9 @@ if (audioToggle) {
         const depth = (chDepth[chId] || 14) * tiltScale;
         const mx = dm.x * depth * mActive;
         const my = dm.y * depth * 0.5 * mActive;
-        el.style.transform = `perspective(${perspVal}px) rotateX(${rx}deg) rotateY(${ry}deg) rotateZ(${rz}deg) translateX(${mx}px) translateY(${-shift + my}px)`;
+        const s = chScale(chId);
+        const scalePart = (s === 1) ? '' : ` scale(${s})`;
+        el.style.transform = `perspective(${perspVal}px) rotateX(${rx}deg) rotateY(${ry}deg) rotateZ(${rz}deg) translateX(${mx}px) translateY(${-shift + my}px)${scalePart}`;
       });
     }
   });
@@ -1628,7 +1657,14 @@ window.__Continuity = Continuity;
       const iconHalf = isMobile ? 38 : 48;
       const centerY = vh / 2 - iconHalf;
       const centerX = vw / 2;
-      const spread = isMobile ? Math.max(rm, 0.55) : rm;
+      // Narrow phones: the previous Math.max(rm, 0.55) forced ±121px offsets at
+      // 320px viewport, which (after the absolute 170px-wide description
+      // cards) ran off both edges. Tighten the floor so cards+descriptions
+      // stay inside. rm at 320 = 0.267; spread ~0.38 keeps the coin center at
+      // ±84px from center, so the card (±85px) only just kisses the viewport
+      // edge — fully legible within 320px.
+      const spreadFloor = vw <= 380 ? 0.30 : (vw <= 430 ? 0.44 : 0.55);
+      const spread = isMobile ? Math.max(rm, spreadFloor) : rm;
 
       const coinOffsetX = multiMapSmooth(p,
         [0.018, 0.045, 0.055, 0.08, 0.12, 0.14, 0.165, 0.30, 0.51, 0.60],
