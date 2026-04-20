@@ -215,6 +215,29 @@ export const injectedConnectorFlag = defineFlag<boolean>({
   },
 })
 
+/**
+ * Probe flag: registers `@privy-io/cross-app-connect` as a wagmi connector so
+ * the Zora CBSW can be connected via Privy's Connect-mode cross-app popup.
+ *
+ * Off by default — this is a diagnostic. When on, the connector appears in
+ * the wallet picker so a tester can classify which bucket Zora has the 4626
+ * appId in (full transactional / read-only / not authorized).
+ *
+ * Requires `@privy-io/cross-app-connect` to be installed. Keep disabled in
+ * production until the bucket is confirmed and the UX is finalized.
+ */
+export const zoraGlobalWalletConnectorFlag = defineFlag<boolean>({
+  key: 'zora-global-wallet-connector',
+  description:
+    'Register @privy-io/cross-app-connect wagmi connector for the Zora Coinbase Smart Wallet (diagnostic probe).',
+  category: 'operational',
+  defaultValue: false,
+  options: [{ value: false, label: 'Disabled' }, { value: true, label: 'Enabled' }],
+  decide() {
+    return isTruthyEnv(import.meta.env.VITE_ZORA_GLOBAL_WALLET_CONNECTOR)
+  },
+})
+
 // ---------------------------------------------------------------------------
 // UI / product flags (candidates for remote targeting later)
 // ---------------------------------------------------------------------------
@@ -310,6 +333,7 @@ export const allFlags: FeatureFlag<unknown>[] = [
   publicSiteModeFlag,
   swapProviderFlag,
   injectedConnectorFlag,
+  zoraGlobalWalletConnectorFlag,
   lensGroveFlag,
   debugLogsFlag,
   xmtpDebugFlag,

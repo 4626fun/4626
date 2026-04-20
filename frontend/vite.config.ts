@@ -226,6 +226,8 @@ function localApiRoutesPlugin(): Plugin {
         '/api/token/image': () => import('./api/_handlers/token/_image'),
         '/api/zora/coin': () => import('./api/_handlers/zora/_coin'),
         '/api/zora/coinHistory': () => import('./api/_handlers/zora/_coinHistory'),
+        '/api/zora/csw-entry': () => import('./api/_handlers/zora/_cswEntry'),
+        '/api/zora/csw-entry/telegram-verify': () => import('./api/_handlers/zora/_cswEntryTelegramVerify'),
         [zoraCliRoutePaths.authStatus]: () => import('./api/_handlers/zora/cli/_authStatus'),
         [zoraCliRoutePaths.explore]: () => import('./api/_handlers/zora/cli/_explore'),
         [zoraCliRoutePaths.get]: () => import('./api/_handlers/zora/cli/_get'),

@@ -174,3 +174,7 @@ export const Swap = lazyNamed(() => import('../pages/Swap'), 'Swap')
 export const Positions = lazyNamed(() => import('../pages/Positions'), 'Positions')
 export const Portfolio = lazyNamed(() => import('../pages/Portfolio'), 'Portfolio')
 export const AccountsPage = lazyNamed(() => import('../pages/accounts/AccountsPage'), 'AccountsPage')
+export const ZoraConnectorProbe = lazyNamed(
+  () => import('../pages/dev/ZoraConnectorProbe'),
+  'ZoraConnectorProbe',
+)

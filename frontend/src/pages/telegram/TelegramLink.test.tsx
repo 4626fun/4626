@@ -1103,4 +1103,85 @@ describe('TelegramLink UI flow', () => {
       }),
     )
   })
+
+  it('supports zora gate verification mode without entering the email OTP flow', async () => {
+    telegramWebAppState.hasClose = true
+    apiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/zora/csw-entry/telegram-verify') {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            data: {
+              verified: true,
+              cswAddress: CANONICAL_CSW_ADDRESS,
+              telegramUserId: '42',
+              telegramUsername: 'akita',
+              verifiedAt: '2026-04-20T00:00:00.000Z',
+            },
+          }),
+        } as Response
+      }
+      throw new Error(`Unexpected apiFetch path: ${path}`)
+    })
+
+    renderFlow('/telegram/link?zoraGateToken=gate-token-1&zoraGateCsw=0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
+
+    await screen.findByText('Verification Complete')
+    expect(screen.queryByTestId('telegram-link-progress')).toBeNull()
+    expect(screen.queryByLabelText('Email Address')).toBeNull()
+    expect(screen.getByText('Verified @akita for 0x1234…5678.')).toBeTruthy()
+
+    const verifyCall = apiFetchMock.mock.calls.find(([path]) => path === '/api/zora/csw-entry/telegram-verify')
+    expect(verifyCall).toBeTruthy()
+    const verifyBody = JSON.parse(String((verifyCall?.[1] as any)?.body ?? '{}'))
+    expect(verifyBody).toMatchObject({
+      verificationToken: 'gate-token-1',
+      sessionToken: 'mini-session-token',
+    })
+  })
+
+  it('allows retrying zora gate verification failures from the same Mini App session', async () => {
+    const user = userEvent.setup()
+    let verifyAttempt = 0
+    apiFetchMock.mockImplementation(async (path: string) => {
+      if (path === '/api/zora/csw-entry/telegram-verify') {
+        verifyAttempt += 1
+        if (verifyAttempt === 1) {
+          return {
+            ok: false,
+            status: 409,
+            json: async () => ({
+              success: false,
+              error: 'Verification token already used',
+            }),
+          } as Response
+        }
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            data: {
+              verified: true,
+              cswAddress: CANONICAL_CSW_ADDRESS,
+              telegramUserId: '42',
+              telegramUsername: 'akita',
+              verifiedAt: '2026-04-20T00:00:00.000Z',
+            },
+          }),
+        } as Response
+      }
+      throw new Error(`Unexpected apiFetch path: ${path}`)
+    })
+
+    renderFlow('/telegram/link?zoraGateToken=gate-token-retry')
+
+    await screen.findByText('Verification token already used')
+    await user.click(screen.getByRole('button', { name: 'Retry verification' }))
+
+    await screen.findByText('Verification Complete')
+    expect(verifyAttempt).toBe(2)
+  })
 })

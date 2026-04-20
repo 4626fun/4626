@@ -3,6 +3,8 @@ import { loadHandlerFromMap } from './_routeLoader.js'
 import { zoraCliRouteSubpaths } from './zora/cli/_routes.js'
 
 export const zoraRouteLoaders: ApiRouteLoaders = {
+  'csw-entry': () => import('./zora/_cswEntry.js'),
+  'csw-entry/telegram-verify': () => import('./zora/_cswEntryTelegramVerify.js'),
   'coin': () => import('./zora/_coin.js'),
   'coinHistory': () => import('./zora/_coinHistory.js'),
   [zoraCliRouteSubpaths.authStatus]: () => import('./zora/cli/_authStatus.js'),

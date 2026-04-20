@@ -72,6 +72,8 @@ describe('telegramMiniAppLink', () => {
       tgUsername: 'akita',
       tgZoraBranch: 'need',
       tgCswIntent: 'need',
+      zoraGateToken: 'gate-token',
+      zoraGateCsw: '0x1234567890123456789012345678901234567890',
       token: '0x1234',
       share: '0xabcd',
     })
@@ -81,6 +83,8 @@ describe('telegramMiniAppLink', () => {
     expect(cleaned.get('tgLinkToken')).toBeNull()
     expect(cleaned.get('tgZoraBranch')).toBeNull()
     expect(cleaned.get('tgCswIntent')).toBeNull()
+    expect(cleaned.get('zoraGateToken')).toBeNull()
+    expect(cleaned.get('zoraGateCsw')).toBeNull()
     expect(cleaned.get('token')).toBe('0x1234')
     expect(cleaned.get('share')).toBe('0xabcd')
   })

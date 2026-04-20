@@ -3,19 +3,25 @@ import { base, mainnet, arbitrum, optimism, polygon } from 'wagmi/chains'
 import { coinbaseWallet, injected, metaMask } from 'wagmi/connectors'
 import { DATA_SUFFIX, warnGlobalWagmiDataSuffixBehavior } from '@/lib/base/baseBuilderCodes'
 import { BASE_RPC_PROXY_PATH, isBrowserRestrictedBaseRpc } from '@/lib/base/baseReadRpcPolicy'
-import { injectedConnectorFlag } from '@/lib/flags/featureFlags'
+import { injectedConnectorFlag, zoraGlobalWalletConnectorFlag } from '@/lib/flags/featureFlags'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
+import { zoraGlobalWalletConnector } from '@/lib/wallet/zoraGlobalWalletConnector'
 
 /**
  * Minimal Wagmi Config
- * 
- * Two connection paths:
+ *
+ * Connection paths:
  * 1. Coinbase Wallet (includes Smart Wallet)
- * 2. Injected (browser extension fallback)
- * 
- * Note: Zora wallet integration uses Privy SDK's useCrossAppAccounts
- * hook directly, not a wagmi connector, because cross-app transactions
- * must go through Privy's popup flow on Zora's domain.
+ * 2. Injected (browser extension fallback, incl. Rabby targeted connector)
+ * 3. [flagged] Zora Global Wallet — Privy Connect-mode cross-app connector.
+ *
+ * Historical note: Zora identity (Privy Auth-mode `useCrossAppAccounts`) is
+ * wired via `PrivyClientProvider.externalWallets.crossApp` for login/link
+ * only. That path is read-only by construction — it does not surface a
+ * signer. Path #3 above is the transactional complement (Connect mode,
+ * `@privy-io/cross-app-connect`) and is gated behind
+ * `zoraGlobalWalletConnectorFlag` while we verify Zora's provider-side
+ * config permits it. See `frontend/src/lib/wallet/zoraGlobalWalletConnector.ts`.
  */
 
 const BASE_RPC_URL_RAW =
@@ -205,13 +211,23 @@ function buildConnectors() {
   // connect via Coinbase Wallet / Base app, MetaMask, or targeted connectors like Rabby.
   const providerCollision = detectEthereumProviderCollision()
   const shouldUseInjected = ENABLE_INJECTED_CONNECTOR && !providerCollision.shouldDisableInjectedConnector
-  if (!shouldUseInjected) return baseConnectors as any
-  return [
-    ...baseConnectors,
-    injected({
-      shimDisconnect: true,
-    }),
-  ] as any
+  const connectors = shouldUseInjected
+    ? [...baseConnectors, injected({ shimDisconnect: true })]
+    : baseConnectors
+
+  // Zora Global Wallet (Privy Connect-mode) — flagged probe. Any failure to
+  // instantiate is non-fatal; the other connectors remain usable.
+  if (zoraGlobalWalletConnectorFlag()) {
+    try {
+      connectors.push(zoraGlobalWalletConnector())
+    } catch (err) {
+      if (IS_BROWSER) {
+        console.warn('[wagmi] Zora global wallet connector failed to initialize:', err)
+      }
+    }
+  }
+
+  return connectors as any
 }
 
 /**

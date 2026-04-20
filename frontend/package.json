@@ -90,6 +90,7 @@
     "@google/model-viewer": "3.5.0",
     "@lens-chain/storage-client": "^1.0.6",
     "@lens-protocol/client": "0.0.0-canary-20250430134539",
+    "@privy-io/cross-app-connect": "^0.5.7",
     "@privy-io/react-auth": "^3.13.1",
     "@privy-io/server-auth": "^1.32.5",
     "@privy-io/wagmi": "^4.0.1",

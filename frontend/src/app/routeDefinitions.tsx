@@ -42,6 +42,7 @@ import {
   Status,
   Swap,
   Vault,
+  ZoraConnectorProbe,
 } from './lazyRoutes'
 import { SmartWalletRoute } from './routeGuards'
 
@@ -92,6 +93,14 @@ export const ACCOUNT_ROUTES: PathRouteDef[] = [
         <AccountsPage />
       </SmartWalletRoute>
     ),
+  },
+  // Dev probe for Privy Connect-mode cross-app capability with Zora.
+  // The connector itself is flag-gated in `wagmi.ts`; the page renders a
+  // "probe disabled" panel when the flag is off, so it's safe to leave this
+  // route live even in production.
+  {
+    path: '/dev/zora-connector-probe',
+    element: <ZoraConnectorProbe />,
   },
 ]
 

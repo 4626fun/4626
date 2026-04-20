@@ -28,6 +28,7 @@ import {
   isTelegramLaunchParamError,
   normalizeEmailCandidate,
   telegramLinkReducer,
+  type TelegramSessionProof,
   type TelegramLinkState,
 } from '@/features/telegram-link/telegramLinkFlow'
 
@@ -80,6 +81,46 @@ type PrivyWithTelegramLink = ReturnType<typeof usePrivy> & {
   linkTelegram?: (params?: LinkTelegramParams) => Promise<unknown> | unknown
 }
 
+type ZoraGateQueryContext = {
+  verificationToken: string
+  expectedCswAddress: string | null
+}
+
+type ZoraGateVerificationState =
+  | { tag: 'idle' }
+  | { tag: 'verifying_session' }
+  | { tag: 'verifying_entry' }
+  | {
+      tag: 'success'
+      cswAddress: string
+      telegramUserId: string
+      telegramUsername: string | null
+      verifiedAt: string
+    }
+  | { tag: 'error'; message: string }
+
+type ZoraGateVerifyEnvelope = {
+  success: boolean
+  data?: {
+    verified: boolean
+    cswAddress: string
+    telegramUserId: string
+    telegramUsername: string | null
+    verifiedAt: string
+  }
+  error?: string
+}
+
+function resolveZoraGateQueryContext(search: string): ZoraGateQueryContext {
+  const params = new URLSearchParams(search)
+  const verificationToken = String(params.get('zoraGateToken') ?? '').trim().slice(0, 256)
+  const expectedCswAddress = String(params.get('zoraGateCsw') ?? '').trim().slice(0, 128) || null
+  return {
+    verificationToken,
+    expectedCswAddress,
+  }
+}
+
 const TG_VIEWPORT_STYLE: CSSProperties = {
   boxSizing: 'border-box',
   height: 'var(--cv-tg-viewport-stable-height, 100dvh)',
@@ -106,12 +147,20 @@ const TELEGRAM_LINK_PROGRESS_STEPS = [
 export function TelegramLink() {
   const location = useLocation()
   const navigate = useNavigate()
+  const zoraGateQueryRef = useRef<ZoraGateQueryContext>(resolveZoraGateQueryContext(location.search))
+  const zoraGateQuery = zoraGateQueryRef.current
+  const isZoraGateVerificationFlow = zoraGateQuery.verificationToken.length > 0
 
   const [state, dispatch] = useReducer(
     telegramLinkReducer,
     location.search,
     (initialSearch) => createInitialTelegramLinkState(resolveTelegramMiniAppLinkContext(new URLSearchParams(initialSearch))),
   )
+  const [zoraGateState, setZoraGateState] = useState<ZoraGateVerificationState>(() =>
+    isZoraGateVerificationFlow ? { tag: 'verifying_session' } : { tag: 'idle' },
+  )
+  const [zoraGateProof, setZoraGateProof] = useState<TelegramSessionProof | null>(null)
+  const [zoraGateAttempt, setZoraGateAttempt] = useState(0)
   const [nowMs, setNowMs] = useState(() => Date.now())
   const [ownerSetupHandoffBusy, setOwnerSetupHandoffBusy] = useState(false)
   const [ownerSetupHandoffError, setOwnerSetupHandoffError] = useState<string | null>(null)
@@ -377,6 +426,7 @@ export function TelegramLink() {
   }, [emailIsValid, emailSubmitDisabledReason, emitTelemetry, normalizedCollectEmail, state])
 
   useEffect(() => {
+    if (isZoraGateVerificationFlow) return
     if (state.tag !== 'verify_telegram_session') return
 
     let cancelled = false
@@ -452,7 +502,135 @@ export function TelegramLink() {
     return () => {
       cancelled = true
     }
-  }, [dispatch, emitTelemetry, location.hash, location.pathname, location.search, navigate, state])
+  }, [dispatch, emitTelemetry, isZoraGateVerificationFlow, location.hash, location.pathname, location.search, navigate, state])
+
+  useEffect(() => {
+    if (!isZoraGateVerificationFlow) return
+
+    let cancelled = false
+    void (async () => {
+      const startedAt = Date.now()
+      setZoraGateState({ tag: 'verifying_session' })
+      emitTelemetry('telegram_zora_gate_verify_started', {
+        status: 'started',
+        hasExpectedCsw: Boolean(zoraGateQuery.expectedCswAddress),
+      })
+
+      const verified = await ensureTelegramMiniAppSession({
+        flowId: flowIdRef.current,
+      })
+      if (cancelled) return
+
+      if (!verified.ok) {
+        const flowError = buildTelegramSessionError(verified.error, verified.statusCode)
+        emitTelemetry('telegram_zora_gate_verify_failed', {
+          status: 'failed',
+          durationMs: Date.now() - startedAt,
+          phase: 'verify_telegram_session',
+          statusCode: verified.statusCode,
+          errorCode: flowError.code,
+        })
+        setZoraGateState({
+          tag: 'error',
+          message: flowError.message,
+        })
+        return
+      }
+
+      const proof: TelegramSessionProof = {
+        sessionToken: verified.session.sessionToken,
+        initDataRaw: verified.session.initData,
+        telegramUserId: verified.session.telegramUserId,
+        telegramUsername: verified.session.telegramUsername,
+        chatId: verified.session.chatId,
+        chatType: verified.session.chatType,
+        chatInstance: verified.session.chatInstance,
+        expiresAt: verified.session.expiresAt,
+        verifiedAt: Date.now(),
+        linkContext: null,
+      }
+      setZoraGateProof(proof)
+      setZoraGateState({ tag: 'verifying_entry' })
+
+      try {
+        const response = await apiFetch('/api/zora/csw-entry/telegram-verify', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Accept: 'application/json',
+          },
+          body: JSON.stringify({
+            verificationToken: zoraGateQuery.verificationToken,
+            sessionToken: verified.session.sessionToken,
+          }),
+        })
+        const json = (await response.json().catch(() => null)) as ZoraGateVerifyEnvelope | null
+        if (!response.ok || !json?.success || !json.data?.verified) {
+          const message = typeof json?.error === 'string' && json.error.trim().length > 0
+            ? json.error
+            : 'Could not verify this Telegram account for the CSW entry.'
+          throw new Error(message)
+        }
+
+        emitTelemetry('telegram_zora_gate_verify_succeeded', {
+          status: 'succeeded',
+          durationMs: Date.now() - startedAt,
+          responseStatus: response.status,
+          cswAddress: json.data.cswAddress,
+          telegramUserId: json.data.telegramUserId,
+          telegramUsername: json.data.telegramUsername,
+        })
+        setZoraGateState({
+          tag: 'success',
+          cswAddress: json.data.cswAddress,
+          telegramUserId: json.data.telegramUserId,
+          telegramUsername: json.data.telegramUsername,
+          verifiedAt: json.data.verifiedAt,
+        })
+      } catch (error) {
+        const message = coerceErrorMessage(error, 'Could not verify this Telegram account for the CSW entry.')
+        emitTelemetry('telegram_zora_gate_verify_failed', {
+          status: 'failed',
+          durationMs: Date.now() - startedAt,
+          phase: 'verify_gate_token',
+          errorCode: 'BIND_TELEGRAM_FAILED',
+          message,
+        })
+        setZoraGateState({
+          tag: 'error',
+          message,
+        })
+      } finally {
+        const currentParams = new URLSearchParams(location.search)
+        const stripped = stripTelegramMiniAppLinkParams(currentParams)
+        if (currentParams.toString() !== stripped.toString()) {
+          const nextSearch = stripped.toString()
+          navigate(
+            {
+              pathname: location.pathname,
+              search: nextSearch ? `?${nextSearch}` : '',
+              hash: location.hash,
+            },
+            { replace: true },
+          )
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    emitTelemetry,
+    isZoraGateVerificationFlow,
+    location.hash,
+    location.pathname,
+    location.search,
+    navigate,
+    zoraGateAttempt,
+    zoraGateQuery.expectedCswAddress,
+    zoraGateQuery.verificationToken,
+  ])
 
   useEffect(() => {
     if (state.tag !== 'sending_email_code') return
@@ -1228,14 +1406,15 @@ export function TelegramLink() {
       ? Math.ceil((state.resendAvailableAt - nowMs) / 1_000)
       : 0
 
-  const proof =
-    state.tag === 'collect_email' ||
-    state.tag === 'sending_email_code' ||
-    state.tag === 'enter_email_code' ||
-    state.tag === 'verifying_email_code' ||
-    state.tag === 'wait_for_privy_sync' ||
-    state.tag === 'bind_telegram' ||
-    state.tag === 'success'
+  const proof = isZoraGateVerificationFlow
+    ? zoraGateProof
+    : state.tag === 'collect_email' ||
+        state.tag === 'sending_email_code' ||
+        state.tag === 'enter_email_code' ||
+        state.tag === 'verifying_email_code' ||
+        state.tag === 'wait_for_privy_sync' ||
+        state.tag === 'bind_telegram' ||
+        state.tag === 'success'
       ? state.proof
       : state.tag === 'expired_or_error'
         ? state.proof
@@ -1251,6 +1430,48 @@ export function TelegramLink() {
       : null
 
   const renderContent = () => {
+    if (isZoraGateVerificationFlow) {
+      switch (zoraGateState.tag) {
+        case 'verifying_session':
+          return <StatusBlock icon={ShieldCheck} tone="info" body="Checking Telegram Mini App session proof." />
+        case 'verifying_entry':
+          return <StatusBlock icon={LoaderCircle} tone="info" body="Verifying your Telegram account for this holder entry." spinning />
+        case 'success': {
+          const expected = zoraGateQuery.expectedCswAddress ? shortAddress(zoraGateQuery.expectedCswAddress) : null
+          const verified = shortAddress(zoraGateState.cswAddress)
+          const accountLabel = formatTelegramHandle(zoraGateState.telegramUsername, zoraGateState.telegramUserId)
+          return (
+            <div className="space-y-3">
+              <StatusBlock
+                icon={CheckCircle2}
+                tone="success"
+                body={`Verified ${accountLabel} for ${verified}.`}
+              />
+              <div className="rounded-[18px] border border-white/[0.06] bg-white/[0.025] p-3">
+                <div className="text-[9px] font-medium uppercase tracking-[0.2em] text-[#666666]">Holder Entry</div>
+                <div className="mt-2.5 space-y-2">
+                  <CompactSummaryRow label="CSW" value={verified} title={zoraGateState.cswAddress} mono />
+                  {expected ? (
+                    <CompactSummaryRow label="Expected CSW" value={expected} title={zoraGateQuery.expectedCswAddress ?? undefined} mono />
+                  ) : null}
+                  <CompactSummaryRow
+                    label="Verified At"
+                    value={new Date(zoraGateState.verifiedAt).toLocaleString()}
+                    title={zoraGateState.verifiedAt}
+                  />
+                </div>
+              </div>
+            </div>
+          )
+        }
+        case 'error':
+          return <InlineError message={zoraGateState.message} />
+        case 'idle':
+        default:
+          return <StatusBlock icon={LoaderCircle} tone="info" body="Preparing Telegram verification." spinning />
+      }
+    }
+
     switch (state.tag) {
       case 'verify_telegram_session':
         return <StatusBlock icon={ShieldCheck} tone="info" body="Checking Telegram Mini App session proof." />
@@ -1440,6 +1661,33 @@ export function TelegramLink() {
   }
 
   const renderFooterActions = () => {
+    if (isZoraGateVerificationFlow) {
+      if (zoraGateState.tag === 'success') {
+        if (!canCloseTelegramMiniApp) return null
+        return (
+          <button type="button" onClick={handleCloseTelegramMiniApp} className={PRIMARY_ACTION_BUTTON_CLASS}>
+            <X className="h-4 w-4" />
+            Close
+          </button>
+        )
+      }
+
+      if (zoraGateState.tag === 'error') {
+        return (
+          <button
+            type="button"
+            onClick={() => setZoraGateAttempt((attempt) => attempt + 1)}
+            className={PRIMARY_ACTION_BUTTON_CLASS}
+          >
+            <RefreshCw className="h-4 w-4" />
+            Retry verification
+          </button>
+        )
+      }
+
+      return null
+    }
+
     switch (state.tag) {
       case 'collect_email':
         if (hasTelegramMainButton) return null
@@ -1588,17 +1836,26 @@ export function TelegramLink() {
   const footerActions = renderFooterActions()
   const ownerSetupHandoffState = isOwnerSetupHandoffState(state) ? state : null
   const ownerSetupHandoffLinkedCopy = ownerSetupHandoffState ? prefersLinkedHandoffCopy(ownerSetupHandoffState) : false
-  const compactMiniAppLayout = state.tag === 'success' || ownerSetupHandoffState !== null
-  const panelHeadline = ownerSetupHandoffState
-    ? ownerSetupHandoffLinkedCopy
-      ? 'Telegram Linked'
-      : 'Continue Setup'
-    : getFlowHeadline(state.tag)
-  const panelDescription = ownerSetupHandoffState
-    ? ownerSetupHandoffLinkedCopy
-      ? 'Linked. Finish owner setup in Accounts.'
-      : 'Verified. Continue in Accounts to finish setup.'
-    : getFlowDescription(state.tag)
+  const compactMiniAppLayout =
+    isZoraGateVerificationFlow || state.tag === 'success' || ownerSetupHandoffState !== null
+  const panelHeadline = isZoraGateVerificationFlow
+    ? zoraGateState.tag === 'success'
+      ? 'Verification Complete'
+      : 'Verify Telegram'
+    : ownerSetupHandoffState
+      ? ownerSetupHandoffLinkedCopy
+        ? 'Telegram Linked'
+        : 'Continue Setup'
+      : getFlowHeadline(state.tag)
+  const panelDescription = isZoraGateVerificationFlow
+    ? zoraGateState.tag === 'success'
+      ? 'Your Telegram account is verified for this holder entry.'
+      : 'Confirm this Telegram account to finish your CSW holder entry.'
+    : ownerSetupHandoffState
+      ? ownerSetupHandoffLinkedCopy
+        ? 'Linked. Finish owner setup in Accounts.'
+        : 'Verified. Continue in Accounts to finish setup.'
+      : getFlowDescription(state.tag)
 
   return (
     <div
@@ -1631,7 +1888,7 @@ export function TelegramLink() {
             </div>
           </div>
 
-          <FlowProgress currentTag={state.tag} compact={compactMiniAppLayout} />
+          {!isZoraGateVerificationFlow ? <FlowProgress currentTag={state.tag} compact={compactMiniAppLayout} /> : null}
 
           {proof ? (
             <div className={`grid grid-cols-3 gap-x-2 gap-y-2 border-t border-white/[0.05] text-sm ${compactMiniAppLayout ? 'mt-2 pt-2' : 'mt-3 pt-2.5'}`}>

@@ -8,6 +8,8 @@ const TELEGRAM_LINK_QUERY_KEYS = [
   'tgUsername',
   'tgZoraBranch',
   'tgCswIntent',
+  'zoraGateToken',
+  'zoraGateCsw',
 ] as const
 
 const TELEGRAM_LINK_CONTEXT_STORAGE_KEY = 'cv_tg_link_context_v1'
@@ -122,4 +124,3 @@ export function stripTelegramMiniAppLinkParams(searchParams: URLSearchParams): U
   }
   return next
 }
-

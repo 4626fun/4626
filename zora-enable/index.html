@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>something is coming</title>
+  <style>
+    :root {
+      --bg: #0a0a0a;
+      --fg: #fafafa;
+      --muted: #8b8b8b;
+      --dim: #444;
+      --rule: #1a1a1a;
+      --accent: #c89a2b;
+      --info: #6aa3ee;
+      --pos: #6bd392;
+      --neg: #ee6a6a;
+      color-scheme: dark;
+    }
+
+    html, body {
+      margin: 0;
+      width: 100%;
+      min-height: 100%;
+      background: var(--bg);
+    }
+
+    body {
+      font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+      color: var(--fg);
+      box-sizing: border-box;
+      min-height: 100dvh;
+      padding: max(14px, env(safe-area-inset-top)) max(10px, env(safe-area-inset-right))
+        max(14px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+      overflow-x: hidden;
+      overflow-y: auto;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      background-image:
+        radial-gradient(#141414 1px, transparent 1px),
+        radial-gradient(#141414 1px, transparent 1px);
+      background-size: 48px 48px;
+      background-position: 0 0, 24px 24px;
+    }
+
+    @supports not (height: 100dvh) {
+      body { min-height: 100vh; }
+    }
+
+    .shell {
+      width: min(96vw, 620px);
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .card {
+      border: 1px solid var(--rule);
+      background: linear-gradient(180deg, #0f0f0f 0%, #070707 100%);
+      border-radius: 2px;
+      padding: 20px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .kicker {
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+
+    .title {
+      margin: 0;
+      font-family: "Instrument Serif", ui-serif, Georgia, serif;
+      font-size: clamp(24px, 8.6vw, 42px);
+      line-height: 1.06;
+      letter-spacing: -0.01em;
+    }
+
+    .title em { color: var(--accent); font-style: italic; }
+
+    .sub {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .panel {
+      border: 1px solid var(--rule);
+      background: #080808;
+      border-radius: 2px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .k {
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    .v {
+      font-size: 11px;
+      color: var(--fg);
+      text-align: right;
+      word-break: break-all;
+      line-height: 1.45;
+    }
+
+    .status {
+      border: 1px solid var(--rule);
+      background: #0b0b0b;
+      border-radius: 2px;
+      padding: 10px 12px;
+      font-size: 11px;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .status.ok {
+      color: var(--pos);
+      border-color: #1f5b38;
+      background: #0a1a10;
+    }
+
+    .status.err {
+      color: var(--neg);
+      border-color: #5c2020;
+      background: #1a0a0a;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    button,
+    .btn-link {
+      border: 1px solid #2a2a2a;
+      border-radius: 2px;
+      background: #111;
+      color: var(--fg);
+      font-family: inherit;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 10px 12px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+
+    button.primary {
+      background: var(--fg);
+      color: #000;
+      border-color: var(--fg);
+      min-width: 120px;
+    }
+
+    button:hover,
+    .btn-link:hover { border-color: var(--accent); }
+
+    button.primary:hover { background: #e5e5e5; border-color: #e5e5e5; }
+
+    button:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+    }
+
+    .field {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .label {
+      color: var(--muted);
+      font-size: 10px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+    }
+
+    input[type="text"] {
+      background: #070707;
+      border: 1px solid var(--rule);
+      color: var(--fg);
+      font-family: inherit;
+      font-size: 12px;
+      border-radius: 2px;
+      padding: 10px 12px;
+      box-sizing: border-box;
+      width: 100%;
+    }
+
+    input[type="text"]:focus {
+      outline: 0;
+      border-color: var(--accent);
+    }
+
+    input.error { border-color: var(--neg); }
+
+    .hint {
+      color: var(--dim);
+      font-size: 10px;
+      line-height: 1.5;
+    }
+
+    .entry-result {
+      border: 1px solid var(--rule);
+      background: #070707;
+      border-radius: 2px;
+      padding: 8px 10px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+      display: none;
+    }
+
+    .entry-result.show { display: block; }
+
+    .entry-result.ok {
+      color: var(--pos);
+      border-color: #1f5b38;
+      background: #0a1a10;
+    }
+
+    .entry-result.err {
+      color: var(--neg);
+      border-color: #5c2020;
+      background: #1a0a0a;
+    }
+
+    .unlock {
+      border: 1px solid #1f3a5c;
+      background: #0a1220;
+      color: var(--info);
+      border-radius: 2px;
+      padding: 9px 11px;
+      font-size: 11px;
+      line-height: 1.5;
+    }
+
+    .reveal {
+      border-color: #1f3a5c;
+      background: linear-gradient(180deg, #0c1422 0%, #070b12 100%);
+    }
+
+    .reveal-image {
+      width: 100%;
+      border: 1px solid #1b2f4c;
+      border-radius: 2px;
+      background: #090f18;
+      display: block;
+    }
+
+    .hidden { display: none !important; }
+
+    .spin {
+      width: 11px;
+      height: 11px;
+      border: 2px solid var(--dim);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      display: inline-block;
+      vertical-align: middle;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <div class="card" id="gate-card">
+      <div class="kicker">4626 · SIGNAL LOCK · BASE</div>
+      <h1 class="title">something is <em>coming</em>.</h1>
+      <p class="sub" id="gate-subtitle">Acquire 69,420 $AKITA to view.</p>
+
+      <div class="panel">
+        <div class="row"><span class="k">token contract</span></div>
+        <div class="v" id="token-contract">—</div>
+      </div>
+
+      <div class="panel">
+        <div class="field">
+          <label class="label" for="check-address">wallet/csw address to check</label>
+          <input id="check-address" type="text" placeholder="0x..." autocomplete="off" spellcheck="false" />
+        </div>
+        <div class="row"><span class="k">checked address</span><span class="v" id="wallet-line">not set</span></div>
+        <div class="row"><span class="k">balance</span><span class="v" id="balance-line">—</span></div>
+      </div>
+
+      <div id="gate-status" class="status">Paste an address to verify token ownership (auto-detect runs if available).</div>
+
+      <div class="actions">
+        <button id="action-btn" class="primary" type="button">check balance</button>
+        <a id="buy-link" class="btn-link" href="#" target="_blank" rel="noopener">buy coin ↗</a>
+      </div>
+
+      <div id="unlock-line" class="unlock">Unlocks: something is coming.</div>
+      <div class="hint">No token transfer required. This page only reads your balance on Base.</div>
+    </div>
+
+    <div class="card reveal hidden" id="reveal-card">
+      <div class="kicker">UNLOCKED</div>
+      <h2 class="title" style="font-size: clamp(22px, 6.8vw, 34px);">signal <em>revealed</em></h2>
+      <p class="sub" id="reveal-text">Welcome through the gate.</p>
+      <img id="reveal-image" class="reveal-image hidden" alt="revealed content" />
+
+      <div class="panel">
+        <div class="kicker" style="font-size:10px; letter-spacing:0.12em;">holder entry</div>
+        <div class="field">
+          <label class="label" for="entry-address">zora csw address</label>
+          <input id="entry-address" type="text" placeholder="0x..." autocomplete="off" spellcheck="false" />
+        </div>
+        <div class="field">
+          <label class="label" for="entry-telegram">telegram username</label>
+          <input id="entry-telegram" type="text" placeholder="@yourname" autocomplete="off" spellcheck="false" />
+        </div>
+
+        <div class="actions">
+          <button id="entry-submit" class="primary" type="button">enter</button>
+          <a id="entry-verify" class="btn-link hidden" href="#" target="_blank" rel="noopener">verify on telegram ↗</a>
+        </div>
+        <div id="entry-result" class="entry-result">—</div>
+        <div id="entry-endpoint" class="hint">Submitting against Zora CSW registry…</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    (function installStorageShim() {
+      const makeStorage = (map) => ({
+        get length() { return map.size; },
+        clear() { map.clear(); },
+        getItem(k) { return map.has(k) ? String(map.get(k)) : null; },
+        setItem(k, v) { map.set(String(k), String(v)); },
+        removeItem(k) { map.delete(String(k)); },
+        key(i) { return [...map.keys()][i] ?? null; },
+      });
+
+      const install = (name) => {
+        try {
+          const existing = window[name];
+          if (existing && typeof existing.setItem === "function") return;
+        } catch {}
+        try {
+          Object.defineProperty(window, name, {
+            value: makeStorage(new Map()),
+            configurable: true,
+            writable: false,
+          });
+        } catch {}
+      };
+
+      install("localStorage");
+      install("sessionStorage");
+    })();
+
+    const API_BASE = "https://4626.fun";
+    const BASE_CHAIN_ID = 8453;
+    const BASE_RPC_ENDPOINTS = [
+      "https://mainnet.base.org",
+      "https://base-rpc.publicnode.com",
+      "https://base.llamarpc.com",
+    ];
+
+    const params = new URLSearchParams(window.location.search);
+    const DEFAULT_HOLDER_GATE_TOKEN = "0x5b674196812451b7cec024fe9d22d2c0b172fa75";
+
+    const HOLDER_GATE_TOKEN = (params.get("token") || DEFAULT_HOLDER_GATE_TOKEN).trim();
+    const HOLDER_GATE_SYMBOL = (params.get("symbol") || "AKITA").trim().toUpperCase() || "AKITA";
+    const HOLDER_GATE_DECIMALS = (() => {
+      const n = Number(params.get("decimals") || "18");
+      return Number.isInteger(n) && n >= 0 && n <= 30 ? n : 18;
+    })();
+    const HOLDER_GATE_MIN_TOKENS = (() => {
+      const value = (params.get("minTokens") || "69420").trim();
+      if (/^\d+$/.test(value)) return BigInt(value);
+      return 69420n;
+    })();
+    const HOLDER_GATE_MIN_RAW = (() => {
+      if (params.has("minRaw")) {
+        try {
+          const parsed = BigInt(params.get("minRaw") || "0");
+          return parsed > 0n ? parsed : 1n;
+        } catch {
+          return 1n;
+        }
+      }
+      return HOLDER_GATE_MIN_TOKENS * (10n ** BigInt(HOLDER_GATE_DECIMALS));
+    })();
+
+    const HOLDER_GATE_BUY_URL = params.get("buy") || "https://zora.co/@akita";
+    const HOLDER_GATE_UNLOCK_TEXT = (params.get("unlock") || "something is coming").trim();
+    const REVEAL_IMAGE_URL = (params.get("image") || "").trim();
+    const PREFILL_CHECK_ADDRESS = (params.get("address") || params.get("addr") || "").trim();
+    const ENTRY_ENDPOINT = (params.get("entryEndpoint") || `${API_BASE}/api/zora/csw-entry`).trim();
+    const HAS_ENTRY_ENDPOINT = /^https?:\/\//i.test(ENTRY_ENDPOINT);
+
+    const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/;
+
+    const state = {
+      address: isValidAddress(PREFILL_CHECK_ADDRESS) ? PREFILL_CHECK_ADDRESS : null,
+      checking: false,
+      eligible: false,
+      balanceRaw: 0n,
+      error: "",
+      entrySubmitting: false,
+      entryMessage: "",
+      entryError: false,
+      entryVerifyUrl: "",
+    };
+
+    const els = {
+      gateSubtitle: document.getElementById("gate-subtitle"),
+      tokenContract: document.getElementById("token-contract"),
+      checkAddress: document.getElementById("check-address"),
+      walletLine: document.getElementById("wallet-line"),
+      balanceLine: document.getElementById("balance-line"),
+      gateStatus: document.getElementById("gate-status"),
+      actionBtn: document.getElementById("action-btn"),
+      buyLink: document.getElementById("buy-link"),
+      unlockLine: document.getElementById("unlock-line"),
+      revealCard: document.getElementById("reveal-card"),
+      revealText: document.getElementById("reveal-text"),
+      revealImage: document.getElementById("reveal-image"),
+      entryAddress: document.getElementById("entry-address"),
+      entryTelegram: document.getElementById("entry-telegram"),
+      entrySubmit: document.getElementById("entry-submit"),
+      entryVerify: document.getElementById("entry-verify"),
+      entryResult: document.getElementById("entry-result"),
+      entryEndpoint: document.getElementById("entry-endpoint"),
+    };
+
+    function isValidAddress(value) {
+      return ADDRESS_RE.test(String(value || "").trim());
+    }
+
+    function shortAddr(a) {
+      return a ? `${a.slice(0, 6)}…${a.slice(-4)}` : "";
+    }
+
+    function formatInt(n) {
+      return String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+    }
+
+    function formatWholeTokens(raw) {
+      const base = 10n ** BigInt(HOLDER_GATE_DECIMALS);
+      return formatInt(raw / base);
+    }
+
+    function normalizeTelegramUsername(raw) {
+      if (typeof raw !== "string") return null;
+      let value = raw.trim();
+      if (!value) return null;
+      if (value.startsWith("@")) value = value.slice(1);
+      if (!/^[A-Za-z0-9_]{5,32}$/.test(value)) return null;
+      return value.toLowerCase();
+    }
+
+    function friendlyErr(err) {
+      if (!err) return "unknown error";
+      const msg = String(err.message || err.toString());
+      if (/user (rejected|denied)/i.test(msg)) return "request rejected";
+      if (/network|fetch|timeout/i.test(msg)) return "network error";
+      if (/rate limit/i.test(msg)) return "rate limit";
+      return msg.slice(0, 220);
+    }
+
+    function encodeBalanceOfCalldata(address) {
+      return "0x70a08231" + address.toLowerCase().replace(/^0x/, "").padStart(64, "0");
+    }
+
+    async function rpcCallBase(method, paramsList) {
+      let lastErr = null;
+      for (const rpcUrl of BASE_RPC_ENDPOINTS) {
+        try {
+          const resp = await fetch(rpcUrl, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ jsonrpc: "2.0", id: Date.now(), method, params: paramsList }),
+          });
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const payload = await resp.json();
+          if (payload.error) throw new Error(payload.error.message || "rpc error");
+          return payload.result;
+        } catch (err) {
+          lastErr = err;
+        }
+      }
+      throw lastErr || new Error("No Base RPC endpoint available");
+    }
+
+    function renderEntryPanel() {
+      els.entrySubmit.disabled = state.entrySubmitting;
+      els.entrySubmit.textContent = state.entrySubmitting ? "entering..." : "enter";
+      els.entryEndpoint.textContent = HAS_ENTRY_ENDPOINT
+        ? `Entries submit to: ${ENTRY_ENDPOINT}`
+        : "No entry endpoint configured.";
+
+      if (state.entryVerifyUrl) {
+        els.entryVerify.href = state.entryVerifyUrl;
+        els.entryVerify.classList.remove("hidden");
+      } else {
+        els.entryVerify.classList.add("hidden");
+      }
+
+      if (!state.entryMessage) {
+        els.entryResult.className = "entry-result";
+        els.entryResult.textContent = "—";
+        return;
+      }
+
+      els.entryResult.className = `entry-result show ${state.entryError ? "err" : "ok"}`;
+      els.entryResult.textContent = state.entryMessage;
+    }
+
+    function render() {
+      const minTokenLabel = `${formatInt(HOLDER_GATE_MIN_TOKENS)} ${HOLDER_GATE_SYMBOL}`;
+
+      els.gateSubtitle.textContent = `Acquire ${minTokenLabel} to view.`;
+      els.tokenContract.textContent = HOLDER_GATE_TOKEN;
+      els.unlockLine.textContent = `Unlocks: ${HOLDER_GATE_UNLOCK_TEXT}.`;
+      els.buyLink.href = HOLDER_GATE_BUY_URL;
+
+      if (REVEAL_IMAGE_URL) {
+        els.revealImage.src = REVEAL_IMAGE_URL;
+        els.revealImage.classList.remove("hidden");
+      } else {
+        els.revealImage.classList.add("hidden");
+      }
+
+      if (!state.address) {
+        els.walletLine.textContent = "not set";
+        els.balanceLine.textContent = "—";
+        els.gateStatus.className = "status";
+        els.gateStatus.textContent = `Paste an address to verify you hold at least ${minTokenLabel}.`;
+        els.actionBtn.textContent = "check balance";
+        els.actionBtn.disabled = false;
+        state.eligible = false;
+      } else if (state.checking) {
+        els.walletLine.textContent = shortAddr(state.address);
+        els.balanceLine.innerHTML = '<span class="spin"></span> checking...';
+        els.gateStatus.className = "status";
+        els.gateStatus.innerHTML = '<span class="spin"></span> checking token balance on Base...';
+        els.actionBtn.textContent = "checking...";
+        els.actionBtn.disabled = true;
+      } else if (state.eligible) {
+        els.walletLine.textContent = shortAddr(state.address);
+        els.balanceLine.textContent = `${formatWholeTokens(state.balanceRaw)} ${HOLDER_GATE_SYMBOL}`;
+        els.gateStatus.className = "status ok";
+        els.gateStatus.textContent = `Unlocked. You hold ${formatWholeTokens(state.balanceRaw)} ${HOLDER_GATE_SYMBOL} (minimum ${minTokenLabel}).`;
+        els.actionBtn.textContent = "unlocked ✓";
+        els.actionBtn.disabled = true;
+      } else {
+        els.walletLine.textContent = shortAddr(state.address);
+        els.balanceLine.textContent = `${formatWholeTokens(state.balanceRaw)} ${HOLDER_GATE_SYMBOL}`;
+        els.gateStatus.className = state.error ? "status err" : "status";
+        els.gateStatus.textContent = state.error || `Need at least ${minTokenLabel}. Current: ${formatWholeTokens(state.balanceRaw)} ${HOLDER_GATE_SYMBOL}.`;
+        els.actionBtn.textContent = "re-check";
+        els.actionBtn.disabled = false;
+      }
+
+      els.revealCard.classList.toggle("hidden", !state.eligible);
+      els.revealText.textContent = state.eligible
+        ? `Unlocked by hold requirement: ${minTokenLabel}.`
+        : "";
+
+      renderEntryPanel();
+    }
+
+    async function checkAccessFromInput() {
+      const raw = String(els.checkAddress.value || "").trim();
+      if (!isValidAddress(raw)) {
+        state.address = null;
+        state.eligible = false;
+        state.balanceRaw = 0n;
+        state.error = "Enter a valid Base wallet or CSW address.";
+        render();
+        return;
+      }
+      state.address = raw;
+      await checkAccess();
+    }
+
+    function normalizeAddressCandidate(value) {
+      const raw = String(value || "").trim();
+      return isValidAddress(raw) ? raw : null;
+    }
+
+    async function tryAutoDetectConnectedAddress() {
+      if (state.address) return;
+
+      let provider = null;
+      try {
+        provider = window.ethereum || null;
+      } catch {
+        provider = null;
+      }
+      if (!provider) return;
+
+      let candidate = null;
+      try {
+        candidate = normalizeAddressCandidate(provider.selectedAddress);
+      } catch {}
+
+      if (!candidate) {
+        try {
+          const accounts = provider.accounts;
+          if (Array.isArray(accounts) && accounts.length > 0) {
+            candidate = normalizeAddressCandidate(accounts[0]);
+          }
+        } catch {}
+      }
+
+      if (!candidate && typeof provider.request === "function") {
+        try {
+          const accounts = await provider.request({ method: "eth_accounts" });
+          if (Array.isArray(accounts) && accounts.length > 0) {
+            candidate = normalizeAddressCandidate(accounts[0]);
+          }
+        } catch {}
+      }
+
+      if (!candidate) return;
+
+      state.address = candidate;
+      state.error = "";
+      if (!String(els.checkAddress.value || "").trim()) {
+        els.checkAddress.value = candidate;
+      }
+      render();
+      if (isValidAddress(HOLDER_GATE_TOKEN)) {
+        await checkAccess();
+      }
+    }
+
+    async function checkAccess() {
+      if (!state.address || !isValidAddress(HOLDER_GATE_TOKEN)) {
+        state.error = "Invalid gate token configuration.";
+        render();
+        return;
+      }
+
+      state.error = "";
+      state.checking = true;
+      state.eligible = false;
+      state.balanceRaw = 0n;
+      render();
+
+      try {
+        const data = encodeBalanceOfCalldata(state.address);
+        const result = await rpcCallBase("eth_call", [{ to: HOLDER_GATE_TOKEN, data }, "latest"]);
+        const balance = BigInt(result || "0x0");
+        state.balanceRaw = balance;
+        state.eligible = balance >= HOLDER_GATE_MIN_RAW;
+      } catch (err) {
+        state.error = `Balance check failed: ${friendlyErr(err)}`;
+      } finally {
+        state.checking = false;
+        render();
+      }
+    }
+
+    async function submitEntry() {
+      if (!state.eligible) {
+        state.entryError = true;
+        state.entryMessage = "Unlock the gate first.";
+        renderEntryPanel();
+        return;
+      }
+
+      const csw = String(els.entryAddress.value || "").trim();
+      if (!isValidAddress(csw)) {
+        state.entryError = true;
+        state.entryMessage = "Enter a valid Zora CSW address.";
+        renderEntryPanel();
+        return;
+      }
+
+      const telegramUsername = normalizeTelegramUsername(els.entryTelegram.value || "");
+      if (!telegramUsername) {
+        state.entryError = true;
+        state.entryMessage = "Enter a valid Telegram username (5-32 chars).";
+        renderEntryPanel();
+        return;
+      }
+
+      state.entrySubmitting = true;
+      state.entryError = false;
+      state.entryMessage = "";
+      state.entryVerifyUrl = "";
+      renderEntryPanel();
+
+      try {
+        if (!HAS_ENTRY_ENDPOINT) throw new Error("Entry endpoint missing.");
+
+        const resp = await fetch(ENTRY_ENDPOINT, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            cswAddress: csw,
+            telegramUsername,
+            connectedAddress: state.address || null,
+            chainId: BASE_CHAIN_ID,
+            symbol: HOLDER_GATE_SYMBOL,
+            minTokens: HOLDER_GATE_MIN_TOKENS.toString(),
+            tokenAddress: HOLDER_GATE_TOKEN,
+            source: window.location.href,
+            timestamp: new Date().toISOString(),
+          }),
+        });
+
+        const text = await resp.text();
+        let parsed = null;
+        try { parsed = JSON.parse(text); } catch {}
+
+        if (!resp.ok || !parsed || parsed.success === false) {
+          const msg = parsed && parsed.error ? parsed.error : `Entry rejected (${resp.status})`;
+          throw new Error(msg);
+        }
+
+        const verification = parsed.data && parsed.data.telegramVerification ? parsed.data.telegramVerification : null;
+        const verifyUrl =
+          verification && typeof verification.botStartUrl === "string" && verification.botStartUrl
+            ? verification.botStartUrl
+            : verification && typeof verification.miniAppUrl === "string"
+              ? verification.miniAppUrl
+              : "";
+
+        state.entryVerifyUrl = verifyUrl;
+        state.entryError = false;
+        state.entryMessage = (parsed.data && parsed.data.message) || "Entry accepted. Continue verification on Telegram.";
+      } catch (err) {
+        state.entryError = true;
+        state.entryMessage = "Could not submit entry: " + friendlyErr(err);
+      } finally {
+        state.entrySubmitting = false;
+        renderEntryPanel();
+      }
+    }
+
+    els.actionBtn.addEventListener("click", () => {
+      void checkAccessFromInput();
+    });
+
+    els.checkAddress.addEventListener("input", () => {
+      const raw = String(els.checkAddress.value || "").trim();
+      const valid = raw.length === 0 || isValidAddress(raw);
+      els.checkAddress.classList.toggle("error", !valid);
+      if (!raw) {
+        state.address = null;
+        state.eligible = false;
+        state.balanceRaw = 0n;
+        state.error = "";
+        render();
+        return;
+      }
+      if (state.address && raw.toLowerCase() !== state.address.toLowerCase()) {
+        state.eligible = false;
+        state.balanceRaw = 0n;
+        state.error = "";
+        render();
+      }
+    });
+
+    els.checkAddress.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      void checkAccessFromInput();
+    });
+
+    els.entryAddress.addEventListener("input", () => {
+      const raw = els.entryAddress.value.trim();
+      els.entryAddress.classList.toggle("error", raw.length > 0 && !isValidAddress(raw));
+    });
+
+    els.entryTelegram.addEventListener("input", () => {
+      const raw = els.entryTelegram.value.trim();
+      const valid = normalizeTelegramUsername(raw) !== null;
+      els.entryTelegram.classList.toggle("error", raw.length > 0 && !valid);
+    });
+
+    els.entrySubmit.addEventListener("click", () => {
+      void submitEntry();
+    });
+
+    if (state.address) {
+      els.checkAddress.value = state.address;
+    }
+
+    if (!isValidAddress(HOLDER_GATE_TOKEN)) {
+      state.error = "Invalid token config. Set ?token=0x5b674196812451b7cec024fe9d22d2c0b172fa75.";
+    }
+
+    render();
+    if (state.address && isValidAddress(HOLDER_GATE_TOKEN)) {
+      void checkAccess();
+    }
+    void tryAutoDetectConnectedAddress();
+  </script>
+</body>
+</html>
