@@ -9,6 +9,13 @@ export const TARGET_ALLOWED_OWNER_EOA_ADDRESSES = [
   '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
   '0x6c0ea422aa7bb7e1e17c5257f7023c8f05ddf9b3',
   '0xd1780fc23f810b52d8cf277e54842dd8803c9361',
+  // Privy embedded EOA owner of the canonical CSW. Verified on-chain via
+  // isOwnerAddress() on 0xab6d...67b5 — this EOA signs UserOps that are
+  // executed by the canonical CBSW. Without it, the swap page's
+  // `isReady` gate stays false in canonical mode (handleQuote returns
+  // before even attempting fetchTradeQuote) even though the embedded
+  // wallet is a real, registered owner of the CSW.
+  '0xceca13f2686ed061c57620ecdf67e1b8c0f285e9',
 ] as const satisfies readonly PolicyAddress[]
 
 const TARGET_ALLOWED_OWNER_EOA_SET = new Set<string>(TARGET_ALLOWED_OWNER_EOA_ADDRESSES)

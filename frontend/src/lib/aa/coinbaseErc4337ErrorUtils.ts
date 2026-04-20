@@ -176,7 +176,26 @@ export function isPaymasterUnavailableError(error: unknown): boolean {
 export function isPaymasterPolicyError(error: unknown): boolean {
   const msg = getErrorDiagnosticMessage(error)
   const lc = msg.toLowerCase()
-  return lc.includes('request denied') || lc.includes('not authenticated')
+  return (
+    lc.includes('request denied') ||
+    lc.includes('not authenticated') ||
+    // CDP paymaster returns this when a sender hits its daily USD
+    // sponsorship cap. Treat it as a policy rejection so the caller can
+    // fall back to a self-funded UserOp (when the CSW has ETH) — same
+    // remediation we'd apply for any other "paymaster said no" case.
+    lc.includes('sponsorship limit exceeded') ||
+    lc.includes('exceeds defined limit') ||
+    // Local paymaster-proxy validator denials (see
+    // `frontend/api/_handlers/paymaster/_paymaster.ts`). Each represents
+    // a class of UserOp shape the proxy refuses to sponsor (e.g. native
+    // ETH swaps via Universal Router, multiple swap-router calls in one
+    // UserOp). Fall back to self-funded rather than dead-ending — the
+    // bundler call that follows bypasses the `pm_*` validation path.
+    lc.includes('swap_router_value_not_allowed') ||
+    lc.includes('swap_router_call_count_not_allowed') ||
+    // Broader catch for other `_not_allowed` tags our proxy may add.
+    /\b[a-z_]+_not_allowed\b/.test(lc)
+  )
 }
 
 export function isPaymasterAuthPolicyError(error: unknown): boolean {

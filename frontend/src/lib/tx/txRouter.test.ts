@@ -243,6 +243,47 @@ describe('txRouter', () => {
     expect(payloadEndsWithDataSuffix(forwardedData, TEST_DATA_SUFFIX!)).toBe(false)
   })
 
+  it('falls back from canonical ERC-4337 to canonical direct when sponsorship limit is exceeded', async () => {
+    sendCoinbaseSmartWalletUserOperationMock.mockRejectedValueOnce(
+      new Error(
+        'An error occurred while executing user operation: Request exceeds defined limit. Details: Sponsorship limit exceeded for this sender',
+      ),
+    )
+    const sendTransaction = vi.fn(async () => HASH_B)
+    const context = makeContext({
+      connectorId: 'injected',
+      connectorName: 'Injected',
+      capabilities: {
+        paymasterService: false,
+        atomicStatus: 'unknown',
+        supports5792: false,
+      },
+      walletClient: {
+        request: vi.fn(),
+        sendTransaction,
+      },
+    })
+
+    const result = await buildAndSendApproval({
+      context,
+      approvalTx: {
+        to: ADDRESS_C,
+        from: ADDRESS_B,
+        data: '0x1234',
+        value: '0',
+        chainId: 8453,
+      },
+    })
+
+    expect(result.routing.mode).toBe('canonical4337')
+    expect(result.routing.fallbackMode).toBe('canonicalDirect')
+    expect(result.send.mode).toBe('canonicalDirect')
+    expect(result.send.method).toBe('walletClient.sendTransaction')
+    expect(result.send.transactionHash).toBe(HASH_B)
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
+    expect(sendTransaction).toHaveBeenCalledTimes(1)
+  })
+
   it('locks canonical approval+swap sendCalls fallback to ERC-4337', async () => {
     const sendTransaction = vi.fn(async () => HASH_A)
     const context = makeContext({

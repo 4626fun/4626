@@ -4,7 +4,7 @@ import { Droplets, Plus, RefreshCw } from 'lucide-react'
 import { getAddress, isAddress, toHex, type Address, type Hex } from 'viem'
 import { useQuery } from '@tanstack/react-query'
 import { useAccount, useBalance, useConnect, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
-import { useConnectWallet, useLogin, usePrivy } from '@privy-io/react-auth'
+import { useActiveWallet, useConnectWallet, useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
 import { useDebounceValue } from 'usehooks-ts'
 
 import { META, PageMeta } from '@/components/seo/PageMeta'
@@ -436,7 +436,44 @@ export function Swap() {
   const { login: privyLogin } = useSafeSwapLoginHook(privyHooksEnabled)
   const { connectWallet: privyConnectWallet } = useSafeSwapConnectWalletHook(privyHooksEnabled)
   const { connectors: wagmiConnectors, connect: wagmiConnect } = useConnect()
-  const privyWallets = useMemo(() => extractPrivyWalletsFromUser(privyUser), [privyUser])
+  // `extractPrivyWalletsFromUser` returns ADDRESS-ONLY metadata parsed from
+  // `privy.user` (`linkedAccounts` / `user.wallets`). Those records do NOT
+  // carry provider methods like `getEthereumProvider` — so the earlier
+  // `embedded-wallet-cannot-sign` gate was unreachable by design.
+  //
+  // Privy's live `useWallets()` hook returns the same wallets but WITH
+  // provider-access methods attached. Merge the two sources with live
+  // wallets taking precedence per-address, so the resolution below sees
+  // the callable wallet object when one exists.
+  const { wallets: privyLiveWallets } = useWallets()
+  const privyWallets = useMemo(() => {
+    const metadataWallets = extractPrivyWalletsFromUser(privyUser)
+    const liveByAddress = new Map<string, any>()
+    for (const w of (privyLiveWallets ?? []) as any[]) {
+      const addr = typeof w?.address === 'string' ? w.address.toLowerCase() : ''
+      if (addr) liveByAddress.set(addr, w)
+    }
+    // Prefer the live wallet object (with provider methods) when addresses
+    // match; otherwise keep the metadata record so legacy linkedAccount
+    // discovery still works for cross-app EOAs.
+    const merged: any[] = []
+    const seen = new Set<string>()
+    for (const w of metadataWallets) {
+      const addr = typeof (w as any)?.address === 'string' ? String((w as any).address).toLowerCase() : ''
+      if (addr && liveByAddress.has(addr)) {
+        merged.push(liveByAddress.get(addr))
+        seen.add(addr)
+      } else {
+        merged.push(w)
+        if (addr) seen.add(addr)
+      }
+    }
+    // Append any live wallets that weren't in the metadata set.
+    for (const [addr, w] of liveByAddress.entries()) {
+      if (!seen.has(addr)) merged.push(w)
+    }
+    return merged
+  }, [privyLiveWallets, privyUser])
   const auth = useSiweAuth()
   const {
     authAddress,
@@ -655,6 +692,79 @@ export function Swap() {
     return null
   }, [privyEmbeddedEoaWallet])
 
+  // ── Embedded-wallet hydration recovery ────────────────────────────────
+  // Privy's `useWallets()` can briefly return the embedded wallet entry
+  // before its EIP-1193 provider has been attached. In that window
+  // `privyEmbeddedEoaCanSign` is false even though the wallet exists with
+  // the right address and is on-chain registered as an owner of the CSW —
+  // so canonical mode dead-ends at the gate's #7 check
+  // (`embedded-wallet-cannot-sign`) before the on-chain owner check runs.
+  //
+  // Fix: when we detect that situation, promote the embedded wallet to
+  // active (`setActiveWallet`) and explicitly request its provider
+  // (`getEthereumProvider`). Both are no-ops once a provider is already
+  // attached. We track the wallet identity in a ref so we only attempt
+  // recovery once per wallet object change — this prevents render loops if
+  // recovery genuinely doesn't apply.
+  const { setActiveWallet: setActivePrivyWallet } = useActiveWallet()
+  const hydrationRecoveryRef = useRef<{ walletId: unknown; status: 'idle' | 'pending' | 'attempted' }>({
+    walletId: null,
+    status: 'idle',
+  })
+  const [hydrationRecoveryBusy, setHydrationRecoveryBusy] = useState(false)
+
+  const recoverEmbeddedWalletProvider = useCallback(async () => {
+    const walletAny: any = privyEmbeddedEoaWallet as any
+    if (!walletAny) return false
+    setHydrationRecoveryBusy(true)
+    try {
+      // 1) Make sure Privy treats this wallet as the active one. Some
+      //    SDK versions only attach providers to the active wallet.
+      if (typeof setActivePrivyWallet === 'function') {
+        try {
+          await Promise.resolve(setActivePrivyWallet(walletAny as any))
+        } catch (err) {
+          console.warn('[swap] setActiveWallet on embedded wallet failed:', err)
+        }
+      }
+      // 2) Lazy-attach the provider. Many Privy versions only materialize
+      //    `.provider` after the first explicit `getEthereumProvider()`.
+      if (typeof walletAny.getEthereumProvider === 'function') {
+        try {
+          await walletAny.getEthereumProvider()
+        } catch (err) {
+          console.warn('[swap] getEthereumProvider on embedded wallet failed:', err)
+          return false
+        }
+      }
+      return true
+    } finally {
+      setHydrationRecoveryBusy(false)
+    }
+  }, [privyEmbeddedEoaWallet, setActivePrivyWallet])
+
+  useEffect(() => {
+    // Reset recovery state every time the wallet object identity changes —
+    // a new wallet entry deserves its own attempt.
+    if (hydrationRecoveryRef.current.walletId !== privyEmbeddedEoaWallet) {
+      hydrationRecoveryRef.current = { walletId: privyEmbeddedEoaWallet, status: 'idle' }
+    }
+    // Auto-recover any time an embedded wallet object is present but its
+    // signer surface is missing. Not gated on `executionMode` because:
+    //  1) it couldn't be — `executionMode` is declared later in this file,
+    //     and relocating just for this gate would reorder a lot of code; and
+    //  2) hydrating the wallet provider is harmless regardless of mode —
+    //     the only cost is one extra `setActiveWallet` + `getEthereumProvider`
+    //     at page load, and even that only runs when `!privyEmbeddedEoaCanSign`.
+    if (!privyEmbeddedEoaWallet) return
+    if (privyEmbeddedEoaCanSign) return
+    if (hydrationRecoveryRef.current.status !== 'idle') return
+    hydrationRecoveryRef.current = { walletId: privyEmbeddedEoaWallet, status: 'pending' }
+    void recoverEmbeddedWalletProvider().finally(() => {
+      hydrationRecoveryRef.current = { walletId: privyEmbeddedEoaWallet, status: 'attempted' }
+    })
+  }, [privyEmbeddedEoaCanSign, privyEmbeddedEoaWallet, recoverEmbeddedWalletProvider])
+
   const privyEmbeddedEoaCanOperateCanonicalQuery = useQuery({
     queryKey: ['swap', 'privy-embedded-can-operate-canonical', canonicalAddress, privyEmbeddedEoaAddress, swapChainId],
     enabled: Boolean(canonicalAddress && privyEmbeddedEoaAddress && publicClient && swapChainId === BASE_CHAIN_ID),
@@ -814,8 +924,19 @@ export function Swap() {
       executionMode === 'canonical' &&
       privyClientStatus === 'ready' &&
       (canonicalSignerGate.code === 'privy-auth-required' ||
-        canonicalSignerGate.code === 'embedded-wallet-missing' ||
-        canonicalSignerGate.code === 'embedded-wallet-cannot-sign'),
+        canonicalSignerGate.code === 'embedded-wallet-missing'),
+    [canonicalSignerGate.code, executionMode, privyClientStatus],
+  )
+  // Separate from `needsPrivyCanonicalAuth` because the remediation is
+  // different — the user is already signed in; the embedded wallet object
+  // just hasn't been hydrated with an EIP-1193 provider yet. Auto-recovery
+  // already runs in an effect above; this surface offers the user a manual
+  // retry if the auto path didn't take.
+  const needsEmbeddedWalletReconnect = useMemo(
+    () =>
+      executionMode === 'canonical' &&
+      privyClientStatus === 'ready' &&
+      canonicalSignerGate.code === 'embedded-wallet-cannot-sign',
     [canonicalSignerGate.code, executionMode, privyClientStatus],
   )
   const showPrivyClientDisabledHint =
@@ -1536,6 +1657,36 @@ export function Swap() {
           >
             Canonical mode uses your Privy embedded EOA as the owner signer. Sign in with Privy, then retry the swap.
             {authError ? <div className="mt-2 text-rose-300">{authError}</div> : null}
+          </Alert>
+        </div>
+      ) : null}
+
+      {activePanel === 'swap' && needsEmbeddedWalletReconnect ? (
+        <div data-screenshot-hide="true" className="mx-auto mt-4 max-w-4xl">
+          <Alert
+            variant="warning"
+            title="Reconnect embedded wallet to sign"
+            action={{
+              label: hydrationRecoveryBusy ? 'Reconnecting…' : 'Reconnect wallet',
+              onClick: () => {
+                if (hydrationRecoveryBusy) return
+                // Don't touch the auto-recovery ref — that could double-fire
+                // with the effect. The busy flag already serializes calls;
+                // user can click again if this attempt doesn't flip the gate.
+                void recoverEmbeddedWalletProvider()
+              },
+            }}
+          >
+            Your Privy embedded wallet is detected but its signer hasn&rsquo;t fully attached
+            in this session. This usually clears in a moment — tap reconnect if it doesn&rsquo;t.
+            {privyEmbeddedEoaAddress ? (
+              <div className="mt-2 font-mono text-xs text-zinc-300">
+                Embedded EOA: {shortAddress(privyEmbeddedEoaAddress)}
+                {privyEmbeddedEoaAddressSource ? (
+                  <span className="ml-1 text-zinc-500">({privyEmbeddedEoaAddressSource})</span>
+                ) : null}
+              </div>
+            ) : null}
           </Alert>
         </div>
       ) : null}

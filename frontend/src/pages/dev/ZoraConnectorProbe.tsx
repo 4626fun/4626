@@ -204,6 +204,19 @@ export function ZoraConnectorProbe() {
           4626 appId. Three steps, each isolates one Privy capability — so we can tell
           transactional-ok from read-only-refused from not-authorized.
         </p>
+        <div className="rounded border border-zinc-800 bg-zinc-950/60 p-3 text-[11px] leading-relaxed text-zinc-400">
+          <span className="font-mono uppercase tracking-wide text-zinc-300">
+            Last result on file:
+          </span>{' '}
+          Bucket 2 (read-only) <em>and</em> the surfaced signer is a Privy embedded EOA
+          that is not on the CBSW owner list. Conclusion: this connector is{' '}
+          <strong className="text-zinc-200">not viable</strong> for adding 4626 as a CBSW
+          owner. The right path for Zora users is the{' '}
+          <code className="rounded bg-zinc-900 px-1">subAccount.canSetup</code> branch in{' '}
+          <code className="rounded bg-zinc-900 px-1">useAccountSetupController</code>{' '}
+          (Base Account SDK). Re-run this probe only if Privy/Zora change their cross-app
+          config.
+        </div>
       </header>
 
       {!flagOn ? (

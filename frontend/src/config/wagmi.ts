@@ -11,17 +11,29 @@ import { zoraGlobalWalletConnector } from '@/lib/wallet/zoraGlobalWalletConnecto
  * Minimal Wagmi Config
  *
  * Connection paths:
- * 1. Coinbase Wallet (includes Smart Wallet)
- * 2. Injected (browser extension fallback, incl. Rabby targeted connector)
- * 3. [flagged] Zora Global Wallet — Privy Connect-mode cross-app connector.
+ * 1. Coinbase Wallet / Base Account (includes Smart Wallet — primary path
+ *    for adding 4626 as a CBSW owner via the sub-account flow).
+ * 2. Injected (browser extension fallback, incl. Rabby targeted connector).
+ * 3. [flagged, OFF] Zora Global Wallet — Privy Connect-mode cross-app
+ *    connector. Diagnostic only. Empirically verified non-viable for
+ *    adding owners to a Zora CBSW; see
+ *    `frontend/src/lib/wallet/zoraGlobalWalletConnector.ts` for the
+ *    detailed write-up of why (read-only mode + signer mismatch).
  *
- * Historical note: Zora identity (Privy Auth-mode `useCrossAppAccounts`) is
- * wired via `PrivyClientProvider.externalWallets.crossApp` for login/link
- * only. That path is read-only by construction — it does not surface a
- * signer. Path #3 above is the transactional complement (Connect mode,
- * `@privy-io/cross-app-connect`) and is gated behind
- * `zoraGlobalWalletConnectorFlag` while we verify Zora's provider-side
- * config permits it. See `frontend/src/lib/wallet/zoraGlobalWalletConnector.ts`.
+ * Cross-app Privy is split across two SDKs and they do different things:
+ *   - `@privy-io/react-auth` Auth-mode (`useCrossAppAccounts`): identity
+ *     linking via OAuth2. Wired in `PrivyClientProvider.externalWallets.crossApp`.
+ *     Surfaces the user's Zora handle + canonical CBSW address but provides
+ *     no signer. This is appropriate and what we use today.
+ *   - `@privy-io/cross-app-connect` Connect-mode: full EIP-1193 wagmi
+ *     connector. Probe-tested. Returns a Privy-side EOA that is NOT on the
+ *     CBSW owner list (owners are passkeys in Coinbase Wallet / Base Account),
+ *     so it cannot satisfy CBSW UserOp validation. Kept behind the flag
+ *     for future re-testing if Privy/Zora change their config.
+ *
+ * For users whose CBSW is exclusively passkey-controlled, the only working
+ * onboarding path is to reconnect through Base Account SDK and use the
+ * sub-account derivation in `useAccountSetupController.onEnable4626Signing`.
  */
 
 const BASE_RPC_URL_RAW =

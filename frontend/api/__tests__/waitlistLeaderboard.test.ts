@@ -39,13 +39,17 @@ describe('waitlist/leaderboard', () => {
         if (text.includes('select count(*)::int as c')) {
           return { rows: [{ c: 2 }] }
         }
-        if (text.includes('select rank, signup_id, primary_wallet, referral_code')) {
+        if (text.includes('select rank, signup_id, primary_wallet, primary_smart_wallet, referral_code')) {
           return {
             rows: [
               {
                 rank: 1,
                 signup_id: 42,
                 primary_wallet: '0x00000000000000000000000000000000000000aa',
+                // Row 1 has a registered CSW — the display should prefer
+                // the CSW shortened address and the row should expose the
+                // full `cswAddress` to the client.
+                primary_smart_wallet: '0x00000000000000000000000000000000000000cc',
                 referral_code: 'C2',
                 border_tier: 0,
                 total_points: 150,
@@ -56,6 +60,9 @@ describe('waitlist/leaderboard', () => {
                 rank: 2,
                 signup_id: 43,
                 primary_wallet: '0x00000000000000000000000000000000000000bb',
+                // Row 2 has no CSW registered — falls back to the rolled-up
+                // primary wallet for `display`, with `cswAddress = null`.
+                primary_smart_wallet: null,
                 referral_code: 'AKITA',
                 border_tier: 1,
                 total_points: 90,
@@ -82,5 +89,17 @@ describe('waitlist/leaderboard', () => {
     expect(res.body?.data?.leaderboard?.[0]?.display).toContain('0x0000')
     expect(res.body?.data?.leaderboard?.[1]?.display).toContain('0x0000')
     expect(res.body?.data?.leaderboard?.[0]?.referralCode).toBeNull()
+    // Row 1 has a CSW → `cswAddress` is the full address.
+    expect(res.body?.data?.leaderboard?.[0]?.cswAddress).toBe(
+      '0x00000000000000000000000000000000000000cc',
+    )
+    // And the `display` short label points at the CSW (last 4: 00cc), not
+    // the rolled-up primary_wallet (last 4: 00aa).
+    expect(res.body?.data?.leaderboard?.[0]?.display).toContain('00cc')
+    expect(res.body?.data?.leaderboard?.[0]?.display).not.toContain('00aa')
+    // Row 2 has no CSW → `cswAddress` is null and display falls back to
+    // the primary wallet's short form.
+    expect(res.body?.data?.leaderboard?.[1]?.cswAddress).toBeNull()
+    expect(res.body?.data?.leaderboard?.[1]?.display).toContain('00bb')
   })
 })

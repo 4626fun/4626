@@ -8,6 +8,8 @@
     "poc": "tsx src/runPoc.ts",
     "index:full": "tsx src/runFull.ts",
     "enrich": "tsx src/runEnrich.ts",
+    "classify": "tsx src/classifyOwners.ts",
+    "farcaster": "tsx src/crossReferenceFarcaster.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

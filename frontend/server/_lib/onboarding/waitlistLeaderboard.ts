@@ -7,7 +7,22 @@ const MAX_LEADERBOARD_USERS = 1000
 export type WaitlistLeaderboardRow = {
   rank: number
   signupId: number
+  /**
+   * Short, human-readable identity label. Today this resolves to the same
+   * shortened address as `cswAddress` when a canonical smart wallet is
+   * recorded for the profile, falling back to the rolled-up primary wallet
+   * (CSW or embedded EOA) and finally to `user#<signupId>`. Kept distinct
+   * from `cswAddress` so the UI can render a chip / badge only when it
+   * truly knows it has a Coinbase Smart Wallet to point at.
+   */
   display: string
+  /**
+   * The profile's canonical Coinbase Smart Wallet address when one is
+   * registered (column `profiles.primary_smart_wallet`). Always full
+   * (non-shortened) so the UI can format it for display, link to Basescan,
+   * etc. `null` when the user hasn't completed CSW onboarding.
+   */
+  cswAddress: string | null
   referralCode: string | null
   pointsTotal: number
   pointsInvite: number
@@ -41,13 +56,22 @@ function shortAddr(a: string | null): string | null {
 function toLeaderboardRow(raw: any, options?: { includeReferralCode?: boolean }): WaitlistLeaderboardRow {
   const signupId = safeInt(raw?.signup_id)
   const referralCodeRaw = typeof raw?.referral_code === 'string' ? String(raw.referral_code) : null
-  const wallet = shortAddr(typeof raw?.primary_wallet === 'string' ? raw.primary_wallet : null)
-  const display = wallet ?? `user#${signupId}`
+  const cswRaw = typeof raw?.primary_smart_wallet === 'string' && raw.primary_smart_wallet
+    ? String(raw.primary_smart_wallet)
+    : null
+  const fallbackRaw = typeof raw?.primary_wallet === 'string' ? raw.primary_wallet : null
+  // Prefer the canonical CSW for the display label when available so the
+  // leaderboard cell consistently points at the smart wallet that holds
+  // the user's identity / coin / fees, not just whichever address signed up
+  // first. Fall back to the rolled-up primary wallet (which may be an EOA)
+  // for legacy profiles that haven't recorded a CSW yet.
+  const display = shortAddr(cswRaw) ?? shortAddr(fallbackRaw) ?? `user#${signupId}`
   const referralCode = options?.includeReferralCode ? referralCodeRaw : null
   return {
     rank: safeInt(raw?.rank),
     signupId,
     display,
+    cswAddress: cswRaw,
     referralCode,
     pointsTotal: safeInt(raw?.total_points),
     pointsInvite: safeInt(raw?.invite_points),
@@ -96,7 +120,7 @@ export async function getWaitlistLeaderboardData(params: {
 
   const rows = await db.sql`
     WITH eligible AS (
-      SELECT id, primary_wallet, embedded_wallet, referral_code, border_tier
+      SELECT id, primary_wallet, embedded_wallet, primary_smart_wallet, referral_code, border_tier
       FROM profiles
       WHERE profile_completed_at IS NOT NULL
       ORDER BY id ASC
@@ -106,6 +130,7 @@ export async function getWaitlistLeaderboardData(params: {
       SELECT
         id,
         COALESCE(NULLIF(primary_wallet, ''), NULLIF(embedded_wallet, '')) AS wallet_key,
+        NULLIF(primary_smart_wallet, '') AS primary_smart_wallet,
         referral_code,
         border_tier
       FROM eligible
@@ -114,6 +139,10 @@ export async function getWaitlistLeaderboardData(params: {
       SELECT
         wallet_key,
         MIN(id)::bigint AS canonical_signup_id,
+        -- Pick a single CSW for the rolled-up identity. MIN() is
+        -- deterministic across reruns; in practice each profile only
+        -- registers one CSW so rollup collisions are rare.
+        MIN(primary_smart_wallet) FILTER (WHERE primary_smart_wallet IS NOT NULL) AS primary_smart_wallet,
         MAX(referral_code) FILTER (WHERE referral_code IS NOT NULL) AS referral_code,
         COALESCE(MAX(border_tier), 0)::int AS border_tier
       FROM eligible_with_key
@@ -124,6 +153,7 @@ export async function getWaitlistLeaderboardData(params: {
       SELECT
         w.canonical_signup_id::bigint AS signup_id,
         w.wallet_key AS primary_wallet,
+        w.primary_smart_wallet,
         w.referral_code,
         w.border_tier,
         COALESCE(
@@ -159,12 +189,13 @@ export async function getWaitlistLeaderboardData(params: {
       FROM wallet_rollup w
       LEFT JOIN eligible_with_key e ON e.wallet_key = w.wallet_key
       LEFT JOIN points l ON l.signup_id = e.id
-      GROUP BY w.canonical_signup_id, w.wallet_key, w.referral_code, w.border_tier
+      GROUP BY w.canonical_signup_id, w.wallet_key, w.primary_smart_wallet, w.referral_code, w.border_tier
     ),
     ranked AS (
       SELECT
         signup_id,
         primary_wallet,
+        primary_smart_wallet,
         referral_code,
         border_tier,
         total_points,
@@ -191,7 +222,7 @@ export async function getWaitlistLeaderboardData(params: {
         )::int AS rank
       FROM scored
     )
-    SELECT rank, signup_id, primary_wallet, referral_code, border_tier, total_points, invite_points, agent_points
+    SELECT rank, signup_id, primary_wallet, primary_smart_wallet, referral_code, border_tier, total_points, invite_points, agent_points
     FROM ranked
     ORDER BY rank ASC
     OFFSET ${offset}
@@ -215,7 +246,7 @@ export async function getWaitlistLeaderboardData(params: {
     if (walletKey) {
       const meQuery = await db.sql`
         WITH eligible AS (
-          SELECT id, primary_wallet, embedded_wallet, referral_code, border_tier
+          SELECT id, primary_wallet, embedded_wallet, primary_smart_wallet, referral_code, border_tier
           FROM profiles
           WHERE profile_completed_at IS NOT NULL
           ORDER BY id ASC
@@ -225,6 +256,7 @@ export async function getWaitlistLeaderboardData(params: {
           SELECT
             id,
             COALESCE(NULLIF(primary_wallet, ''), NULLIF(embedded_wallet, '')) AS wallet_key,
+            NULLIF(primary_smart_wallet, '') AS primary_smart_wallet,
             referral_code,
             border_tier
           FROM eligible
@@ -233,6 +265,7 @@ export async function getWaitlistLeaderboardData(params: {
           SELECT
             wallet_key,
             MIN(id)::bigint AS canonical_signup_id,
+            MIN(primary_smart_wallet) FILTER (WHERE primary_smart_wallet IS NOT NULL) AS primary_smart_wallet,
             MAX(referral_code) FILTER (WHERE referral_code IS NOT NULL) AS referral_code,
             COALESCE(MAX(border_tier), 0)::int AS border_tier
           FROM eligible_with_key
@@ -243,6 +276,7 @@ export async function getWaitlistLeaderboardData(params: {
       SELECT
         w.canonical_signup_id::bigint AS signup_id,
         w.wallet_key AS primary_wallet,
+        w.primary_smart_wallet,
         w.referral_code,
         w.border_tier,
             COALESCE(
@@ -278,12 +312,13 @@ export async function getWaitlistLeaderboardData(params: {
           FROM wallet_rollup w
           LEFT JOIN eligible_with_key e ON e.wallet_key = w.wallet_key
           LEFT JOIN points l ON l.signup_id = e.id
-          GROUP BY w.canonical_signup_id, w.wallet_key, w.referral_code, w.border_tier
+          GROUP BY w.canonical_signup_id, w.wallet_key, w.primary_smart_wallet, w.referral_code, w.border_tier
         ),
         ranked AS (
           SELECT
             signup_id,
             primary_wallet,
+            primary_smart_wallet,
             referral_code,
             border_tier,
             total_points,
@@ -310,7 +345,7 @@ export async function getWaitlistLeaderboardData(params: {
             )::int AS rank
           FROM scored
         )
-        SELECT rank, signup_id, primary_wallet, referral_code, border_tier, total_points, invite_points, agent_points
+        SELECT rank, signup_id, primary_wallet, primary_smart_wallet, referral_code, border_tier, total_points, invite_points, agent_points
         FROM ranked
         WHERE LOWER(primary_wallet) = LOWER(${walletKey})
         LIMIT 1;

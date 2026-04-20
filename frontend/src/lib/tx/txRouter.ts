@@ -243,6 +243,28 @@ export function normalizeCanonicalSendError(error: unknown): Error {
   return error instanceof Error ? error : new Error(message || 'Canonical swap send failed.')
 }
 
+function isCanonicalSponsorshipLimitError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  const details =
+    typeof (error as any)?.details === 'string'
+      ? String((error as any).details)
+      : typeof (error as any)?.cause?.details === 'string'
+        ? String((error as any).cause.details)
+        : ''
+  const diagnostic = [message, details]
+    .filter((part) => typeof part === 'string' && part.trim().length > 0)
+    .join(' | ')
+    .toLowerCase()
+
+  return (
+    diagnostic.includes('sponsorship limit exceeded') ||
+    diagnostic.includes('request exceeds defined limit') ||
+    diagnostic.includes('max sponsorship cost') ||
+    diagnostic.includes('sponsorship cost per user op exceeded') ||
+    diagnostic.includes('insufficient sponsorship funds')
+  )
+}
+
 function toRoutedCalls(params: { swapTx: TransactionRequest; approvalTx?: TransactionRequest | null }): RoutedCall[] {
   const calls: RoutedCall[] = []
   if (params.approvalTx) calls.push(normalizeTx(params.approvalTx))
@@ -352,9 +374,10 @@ export function detectTxSendMode(context: TxRouterContext): TxRoutingDecision {
       !smartWalletDetected && context.publicClient && context.canonicalAddress && context.signerAddress
         ? 'canonical4337'
         : 'canonicalDirect'
+    const fallbackMode: TxSendMode = mode === 'canonical4337' ? 'canonicalDirect' : mode
     const decision: TxRoutingDecision = {
       mode,
-      fallbackMode: mode,
+      fallbackMode,
       smartWalletDetected,
       supportsSendCallsHint: sendCallsHint,
       reason: mode === 'canonical4337' ? 'canonical owner signer path' : 'canonical connector-native direct path',
@@ -618,7 +641,27 @@ async function sendViaCanonical4337(params: {
       version: '1',
     })
   } catch (error) {
-    throw normalizeCanonicalSendError(error)
+    const normalized = normalizeCanonicalSendError(error)
+    const shouldFallbackToCanonicalDirect =
+      params.decision.fallbackMode === 'canonicalDirect' && isCanonicalSponsorshipLimitError(error)
+    if (shouldFallbackToCanonicalDirect) {
+      context.debug?.({
+        event: 'send_fallback',
+        mode: decision.mode,
+        fallbackMode: 'canonicalDirect',
+        method: 'eth_sendUserOperation',
+        chainId: context.chainId,
+        sender,
+        callTargets: calls.map((call) => call.to),
+        error: normalized.message,
+      })
+      return sendViaMode({
+        context,
+        decision: { ...decision, mode: 'canonicalDirect', fallbackMode: 'canonicalDirect' },
+        calls,
+      })
+    }
+    throw normalized
   }
   context.debug?.({
     event: 'send_success',

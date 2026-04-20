@@ -171,6 +171,16 @@ export function AccountSetupWorkspaceView(props: {
   const walletStepComplete = Boolean(canonicalCswAddress)
   const signingStepComplete = Boolean(subAccountAddress) || Boolean(me.baseSubAccount) || /4626 signing is enabled|already enabled/i.test(notice ?? '')
   const sponsorshipDiagnostic = extractSponsorshipDiagnostic(error)
+  // Zora-controlled CBSWs are passkey-owned (P256 keys held in Coinbase
+  // Wallet / Base Account), not EOA-owned. The cross-app login surfaces the
+  // CBSW address but cannot expose a transactional signer (verified
+  // empirically — see `zoraGlobalWalletConnector.ts`). For these users the
+  // ONLY working onboarding is to reconnect via the Base Account SDK and
+  // use sub-account derivation. Show this hint up front, before they pick
+  // a wallet, so they don't burn a connection attempt on Coinbase Wallet
+  // or an EOA wallet that has no chance of being on the owner list.
+  const shouldHintBaseAccountForZora =
+    zoraLinked && Boolean(canonicalCswAddress) && !connectedOwnerReady && !needsBaseAccountReconnect
 
   if (context === 'waitlist') {
     const stepOneComplete = zoraStepComplete && walletStepComplete
@@ -414,6 +424,14 @@ export function AccountSetupWorkspaceView(props: {
 
                 {isOpen ? (
                   <div className="space-y-2.5 px-4 pb-4 pl-[52px]">
+                    {shouldHintBaseAccountForZora ? (
+                      <div className="rounded-lg bg-brand-primary/10 px-3 py-2.5 text-xs leading-relaxed text-brand-100 ring-1 ring-brand-primary/25">
+                        <span className="font-semibold">Pick &ldquo;Base Account&rdquo;</span>{' '}
+                        in the wallet connector. Your Zora smart wallet is passkey-controlled,
+                        so 4626 adds itself as a sub-account owner via Base Account&mdash;no
+                        EOA owner approval is required.
+                      </div>
+                    ) : null}
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
@@ -774,6 +792,21 @@ export function AccountSetupWorkspaceView(props: {
                 {needsEmbeddedWallet ? (
                   <div className="mt-4 rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-100 ring-1 ring-amber-400/20">
                     Privy embedded wallet provisioning is still settling. Retry signer setup in a moment.
+                  </div>
+                ) : null}
+                {shouldHintBaseAccountForZora ? (
+                  <div className="mt-4 rounded-xl bg-brand-primary/10 px-3 py-3 text-xs leading-relaxed text-brand-100 ring-1 ring-brand-primary/25">
+                    <div className="text-[11px] uppercase tracking-[0.14em] text-brand-200">Recommended</div>
+                    <div className="mt-1 text-sm font-medium text-white">
+                      Connect using &ldquo;Base Account&rdquo;
+                    </div>
+                    <p className="mt-1 text-zinc-300">
+                      Your Zora Coinbase Smart Wallet is passkey-controlled. Connecting via
+                      Base Account lets 4626 add itself as a sub-account owner without
+                      requiring an EOA owner to sign <code>addOwnerAddress</code>. Other
+                      wallet types (Coinbase Wallet, MetaMask, Rabby) can&rsquo;t bootstrap
+                      this for a Zora-provisioned wallet.
+                    </p>
                   </div>
                 ) : null}
                 <div className="mt-4 flex flex-wrap items-start gap-3">

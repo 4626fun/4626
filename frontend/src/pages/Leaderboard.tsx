@@ -15,6 +15,13 @@ type LeaderboardRow = {
   rank: number
   signupId: number
   display: string
+  /**
+   * Full canonical Coinbase Smart Wallet address for this profile, when
+   * registered. Server already shortens the `display` label; the full
+   * `cswAddress` is sent so the client can show a Basescan link / copy
+   * button if we want to surface that later.
+   */
+  cswAddress: string | null
   referralCode: string | null
   pointsTotal: number
   pointsInvite: number
@@ -143,7 +150,15 @@ export function Leaderboard() {
             </div>
             {subtitle ? <div className="text-[11px] text-zinc-700 mt-2">{subtitle}</div> : null}
           </div>
-          <div className="flex items-center gap-3 h-fit">
+          {/*
+            Right-side actions: keep Share + Invite on one line at all
+            screen sizes. `flex-nowrap shrink-0 whitespace-nowrap` defends
+            against the parent flex deciding to wrap when the title column
+            grows; `self-center` aligns this group against the centerline
+            of the title block (which is `items-start` — without this, the
+            button group floats to the visual top of that row).
+          */}
+          <div className="flex flex-nowrap items-center gap-3 shrink-0 self-center whitespace-nowrap">
             {myRankShare ? (
               <ShareVaultButton
                 url={myRankShare.url}
@@ -154,7 +169,7 @@ export function Leaderboard() {
             ) : null}
             <Link
               to={getCanonicalMarketingWaitlistPath()}
-              className="btn-accent btn-compact inline-flex items-center"
+              className="btn-accent btn-compact inline-flex items-center whitespace-nowrap"
             >
               Invite friends
             </Link>
@@ -204,6 +219,14 @@ export function Leaderboard() {
                         <div className="text-sm text-zinc-200">
                           <div className="flex items-center gap-2 min-w-0">
                             <div className="font-mono truncate">{r.display}</div>
+                            {r.cswAddress ? (
+                              <div
+                                title={r.cswAddress}
+                                className="shrink-0 inline-flex items-center rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-200"
+                              >
+                                CSW
+                              </div>
+                            ) : null}
                             {isMe ? (
                               <div className="shrink-0 inline-flex items-center rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
                                 You
@@ -250,6 +273,14 @@ export function Leaderboard() {
                     <div className="text-sm text-zinc-200">
                       <div className="flex items-center gap-2 min-w-0">
                         <div className="font-mono truncate">{data.me.display}</div>
+                        {data.me.cswAddress ? (
+                          <div
+                            title={data.me.cswAddress}
+                            className="shrink-0 inline-flex items-center rounded-full border border-emerald-400/25 bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-200"
+                          >
+                            CSW
+                          </div>
+                        ) : null}
                         <div className="shrink-0 inline-flex items-center rounded-full border border-brand-primary/30 bg-brand-primary/10 px-2 py-0.5 text-[10px] font-medium text-brand-300">
                           You
                         </div>

@@ -58,6 +58,9 @@ importers:
       '@openzeppelin/contracts':
         specifier: ^5.4.0
         version: 5.4.0
+      '@privy-io/cross-app-connect':
+        specifier: ^0.5.7
+        version: 0.5.7(viem@2.47.12(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))
       '@uniswap/v4-core':
         specifier: ^1.0.2
         version: 1.0.2
@@ -716,6 +719,24 @@ packages:
     resolution: {integrity: sha512-+1VkjdD0QBLPodGrJUeqarH8VAIvQODIbwh9XpP5Syisf7YoQgsJKPNFoqqLQlu+VQ/tVSshMR6loPMn8U+dPg==}
     engines: {node: '>=14'}
 
+  '@privy-io/cross-app-connect@0.5.7':
+    resolution: {integrity: sha512-YzueieKEQm1jrvBXyzFzsRugMFjT59qAw/PGQHuzl1YyppmI+Rc2Bni2RDt2xl1Tw/eJcgsQ9HmbATcuLfwr1Q==}
+    peerDependencies:
+      '@rainbow-me/rainbowkit': ^2.2.3
+      '@wagmi/core': ^2.16.4
+      viem: 2.47.4
+    peerDependenciesMeta:
+      '@rainbow-me/rainbowkit':
+        optional: true
+      '@wagmi/core':
+        optional: true
+
+  '@privy-io/encoding@0.1.2':
+    resolution: {integrity: sha512-gCGVP5IRqCAmPJgHxWsrxNLcgN2nYUjLqa0TxbZ8I77hY5wKUgpleZJnWqayRjp1BZok0zdttYCN4l0NwNWfKA==}
+
+  '@privy-io/popup@0.0.3':
+    resolution: {integrity: sha512-wmh0uv87pRre832JFaVjbaJlzA4ogoz8sTrvGjpUa3ye/1ZJzR2W4qAJieXXPeHubaak9k45JfWwu4uVMIkKLw==}
+
   '@rocketh/core@0.19.0':
     resolution: {integrity: sha512-pCauA7HP/5k0uyTgjOYApJGcNuVx61+o6AuvFUIR3DIaWyKgmSHB3oTmTe1CHZBWWBUurDf9SIYyAFS2qhTWJQ==}
 
@@ -1304,6 +1325,9 @@ packages:
 
   fastq@1.20.1:
     resolution: {integrity: sha512-GGToxJ/w1x32s/D2EKND7kTil4n8OVk/9mycTc4VDza13lOvpUZTGX3mFSCtV9ksdGBVzvsyAVLM6mHFThxXxw==}
+
+  fflate@0.8.2:
+    resolution: {integrity: sha512-cPJU47OaAoCbg0pBvzsgpTPhmhqI5eJjh/JIu8tPj5q+T7iLvW/JAYUqmE7KOB4R1ZyEhzBaIQpQpardBF5z8A==}
 
   file-uri-to-path@1.0.0:
     resolution: {integrity: sha512-0Zt+s3L7Vf1biwWZ29aARiVYLx7iMGnEUl9x33fbB/j3jR81u/O2LbqK+Bm1CDSNDKVtJ/YjwY7TUd5SkeLQLw==}
@@ -3084,6 +3108,22 @@ snapshots:
   '@pkgjs/parseargs@0.11.0':
     optional: true
 
+  '@privy-io/cross-app-connect@0.5.7(viem@2.47.12(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76))':
+    dependencies:
+      '@noble/curves': 1.9.7
+      '@noble/hashes': 1.8.0
+      '@privy-io/encoding': 0.1.2
+      '@privy-io/popup': 0.0.3
+      '@scure/base': 1.1.9
+      fflate: 0.8.2
+      viem: 2.47.12(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)
+
+  '@privy-io/encoding@0.1.2':
+    dependencies:
+      '@scure/base': 1.2.6
+
+  '@privy-io/popup@0.0.3': {}
+
   '@rocketh/core@0.19.0(bufferutil@4.1.0)(typescript@5.9.3)(utf-8-validate@5.0.10)(zod@3.25.76)':
     dependencies:
       abitype: 1.2.3(typescript@5.9.3)(zod@3.25.76)
@@ -3766,6 +3806,8 @@ snapshots:
   fastq@1.20.1:
     dependencies:
       reusify: 1.1.0
+
+  fflate@0.8.2: {}
 
   file-uri-to-path@1.0.0: {}
 
