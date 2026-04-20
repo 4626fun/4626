@@ -4308,8 +4308,8 @@ window.__Continuity = Continuity;
       // Audio
       AudioEngine.setDroneLevel(multiMap(p, [0, 0.06, 0.60, 1.0], [0.02, 0.06, 0.06, 0]));
       // Crescendo chime fires as line 4 begins its structural lock-in.
-      if (p >= 0.856 && !closeSoundPlayed) { AudioEngine.playChime(2.0); closeSoundPlayed = true; }
-      if (p < 0.78) closeSoundPlayed = false;
+      if (p >= 0.770 && !closeSoundPlayed) { AudioEngine.playChime(2.0); closeSoundPlayed = true; }
+      if (p < 0.68) closeSoundPlayed = false;
 
       // Scene holds at full opacity through the entire scrollable range so
       // the crescendo poster stays lit; the prior [0.92, 1] fade-out drove
@@ -4407,63 +4407,61 @@ window.__Continuity = Continuity;
       ringOpacity = 0;
       stopRings();
 
-      // ═══ PHASE F (p 0.68 → ~0.80): Final brand close ═══
-      // Phase F reveals partners / brand / hairline / tag, then dissolves
-      // so Phase G (crescendo) can own the final frame. The page's max
-      // achievable scroll progress is ~0.90 due to the footer element
-      // below the scroll-container, so both F and G must complete within
-      // that budget. CTA stays lit into G so the call to action remains
-      // reachable below the crescendo poster.
-      // finalOp drives the whole Phase F brand block (logo + partners + brand +
-      // rule + tag). It must fade out before Phase G (crescendo) starts so the
-      // crescendo stage is empty when Line 1 arrives.
-      const finalOp    = multiMapSmooth(p, [0.68, 0.72, 0.75, 0.78], [0, 1, 1, 0]);
-      // Phase F brand-block fade-outs end BEFORE the crescendo (Phase G) begins
-      // at p=0.78, so the stage is empty before Line 1 arrives. Without this
-      // the brand/tag overlaps Line 1's inward-compression reveal.
-      const partnersOp = multiMapSmooth(p, [0.69, 0.73, 0.75, 0.78], [0, 1, 1, 0]);
-      const brandOp    = multiMapSmooth(p, [0.71, 0.74, 0.75, 0.78], [0, 1, 1, 0]);
-      // Horizontal hairline: draws from 0 → 220px width under the brand.
-      const lineW      = Math.max(0, mapRange(p, 0.72, 0.75, 0, 220));
-      const lineOp     = multiMapSmooth(p, [0.72, 0.74, 0.75, 0.78], [0, 1, 1, 0]);
-      const tagOp      = multiMapSmooth(p, [0.73, 0.75, 0.76, 0.78], [0, 1, 1, 0]);
-      // CTA holds off until the crescendo's final poster (L4 "4626.fun")
-      // is in place, so each earlier beat owns the stage alone.
-      const ctaOp      = multiMapSmooth(p, [0.870, 0.885], [0, 1]);
-      const logoConverge = multiMapSmooth(p, [0.74, 0.84], [0, 1]);
-
-      // ═══ PHASE G (p 0.78 → 0.90): Crescendo finale — ONE LINE AT A TIME ═══
-      // Four-line typographic poster, revealed SEQUENTIALLY. Every line shares
-      // the same center stage (via CSS grid-area), and each fades in → holds
-      // → fades out before the next arrives. Only line 4 ("4626.fun") stays
-      // lit as the final frame. Each beat uses a distinct motion family so
-      // adjacent reveals never share a dominant direction:
+      // ═══ PHASE G (p 0.70 → 0.80): Crescendo overture — ONE LINE AT A TIME ═══
+      // Four-line typographic poster, revealed SEQUENTIALLY and then DISMISSED
+      // so Phase F (brand + CTA) can own the true finale. Every line shares
+      // the same center stage (via CSS grid-area); each fades in → holds →
+      // fades out before the next arrives. L4 ("4626.fun") lingers briefly
+      // with its hairline rules, then fades to reveal the brand close.
+      // Each beat uses a distinct motion family so adjacent reveals never
+      // share a dominant direction:
       //   L1 "One vault."  inward compression (letter-spread tightens)
       //   L2 "Two tokens." horizontal split    (halves meet at center)
       //   L3 "(3, 3)"      depth recession     (forward from blur+scale)
       //   L4 "4626.fun"    structural lock-in  (rules draw outward)
-      // BRISK SEQUENTIAL PACING: each beat spans ~0.020 of progress so the
-      // four lines land quickly without lingering. Beats are adjacent with a
-      // 0.002 crossfade so lines hand off cleanly instead of flashing to black.
-      //   L1  in 0.800→0.808, hold, out 0.814→0.820
-      //   L2  in 0.818→0.826, hold, out 0.832→0.838
-      //   L3  in 0.836→0.844, hold, out 0.850→0.856
-      //   L4  in 0.856→0.870 (stays — final poster)
-      const cresContainerOp = multiMapSmooth(p, [0.795, 0.805], [0, 1]);
-      // Line 1 — in 0.800→0.808, hold, out 0.814→0.820.
-      const cres1Op    = multiMapSmooth(p, [0.800, 0.808, 0.814, 0.820], [0, 1, 1, 0]);
-      const cres1Prog  = multiMapSmooth(p, [0.800, 0.812], [0, 1]); // 0=wide, 1=tight
-      // Line 2 — in 0.818→0.826, hold, out 0.832→0.838.
-      const cres2Op    = multiMapSmooth(p, [0.818, 0.826, 0.832, 0.838], [0, 1, 1, 0]);
-      const cres2Prog  = multiMapSmooth(p, [0.818, 0.830], [0, 1]); // 0=apart, 1=met
-      // Line 3 — in 0.836→0.844, hold, out 0.850→0.856.
-      const cres3Op    = multiMapSmooth(p, [0.836, 0.844, 0.850, 0.856], [0, 1, 1, 0]);
-      const cres3Prog  = multiMapSmooth(p, [0.836, 0.848], [0, 1]); // 0=recessed, 1=forward
-      // Line 4 — in 0.856→0.870 and STAYS lit. Slightly longer reveal window
-      // so the hairlines have room to draw out around the final wordmark.
-      const cres4Op    = multiMapSmooth(p, [0.856, 0.870], [0, 1]);
-      const cresRuleW  = Math.max(0, mapRange(p, 0.860, 0.875, 0, 260));
-      const cresRuleOp = multiMapSmooth(p, [0.860, 0.875], [0, 1]);
+      // BRISK PACING: each earlier beat spans ~0.020 of progress so the
+      // four lines land quickly without lingering. L4 holds a bit longer
+      // before handing off to the brand finale.
+      //   L1  in 0.700→0.708, hold, out 0.714→0.720
+      //   L2  in 0.718→0.726, hold, out 0.732→0.738
+      //   L3  in 0.736→0.744, hold, out 0.750→0.756
+      //   L4  in 0.756→0.770, hold, out 0.790→0.800 (clears for brand)
+      const cresContainerOp = multiMapSmooth(p, [0.695, 0.705, 0.795, 0.810], [0, 1, 1, 0]);
+      // Line 1 — in 0.700→0.708, hold, out 0.714→0.720.
+      const cres1Op    = multiMapSmooth(p, [0.700, 0.708, 0.714, 0.720], [0, 1, 1, 0]);
+      const cres1Prog  = multiMapSmooth(p, [0.700, 0.712], [0, 1]); // 0=wide, 1=tight
+      // Line 2 — in 0.718→0.726, hold, out 0.732→0.738.
+      const cres2Op    = multiMapSmooth(p, [0.718, 0.726, 0.732, 0.738], [0, 1, 1, 0]);
+      const cres2Prog  = multiMapSmooth(p, [0.718, 0.730], [0, 1]); // 0=apart, 1=met
+      // Line 3 — in 0.736→0.744, hold, out 0.750→0.756.
+      const cres3Op    = multiMapSmooth(p, [0.736, 0.744, 0.750, 0.756], [0, 1, 1, 0]);
+      const cres3Prog  = multiMapSmooth(p, [0.736, 0.748], [0, 1]); // 0=recessed, 1=forward
+      // Line 4 — in 0.756→0.770, HOLDS through 0.790, then fades out by 0.800
+      // so the brand close can own the final frame.
+      const cres4Op    = multiMapSmooth(p, [0.756, 0.770, 0.790, 0.800], [0, 1, 1, 0]);
+      const cresRuleW  = Math.max(0, mapRange(p, 0.760, 0.775, 0, 260));
+      const cresRuleOp = multiMapSmooth(p, [0.760, 0.775, 0.790, 0.800], [0, 1, 1, 0]);
+
+      // ═══ PHASE F (p 0.81 → end): Final brand close — TRUE FINALE ═══
+      // After the crescendo overture hands off, the brand block (partners /
+      // brand / hairline / tag) fades in and STAYS lit through to the end of
+      // the page. CTA follows so the call to action is the last thing the
+      // viewer reads. Page's max achievable scroll progress is ~0.90 due to
+      // the footer below the scroll-container, so everything must complete
+      // within that budget.
+      // finalOp drives the whole Phase F brand block (logo + partners + brand
+      // + rule + tag). It now fades IN AFTER the crescendo clears and holds
+      // to end — no fade-out, this is the true finale.
+      const finalOp    = multiMapSmooth(p, [0.810, 0.850], [0, 1]);
+      const partnersOp = multiMapSmooth(p, [0.815, 0.855], [0, 1]);
+      const brandOp    = multiMapSmooth(p, [0.820, 0.860], [0, 1]);
+      // Horizontal hairline: draws from 0 → 220px width under the brand.
+      const lineW      = Math.max(0, mapRange(p, 0.830, 0.865, 0, 220));
+      const lineOp     = multiMapSmooth(p, [0.830, 0.865], [0, 1]);
+      const tagOp      = multiMapSmooth(p, [0.835, 0.870], [0, 1]);
+      // CTA fades in last so it reads as the final prompt.
+      const ctaOp      = multiMapSmooth(p, [0.860, 0.900], [0, 1]);
+      const logoConverge = multiMapSmooth(p, [0.820, 0.880], [0, 1]);
 
       WriteBatch.write(() => {
         section.querySelector('.scene-pin').style.opacity = sceneOp;
