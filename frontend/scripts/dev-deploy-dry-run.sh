@@ -32,6 +32,34 @@ if ! command -v curl >/dev/null 2>&1; then
   exit 1
 fi
 
+port_in_use() {
+  local port="$1"
+  if command -v lsof >/dev/null 2>&1; then
+    lsof -iTCP:"$port" -sTCP:LISTEN -n -P >/dev/null 2>&1
+    return $?
+  fi
+  if command -v ss >/dev/null 2>&1; then
+    ss -ltn 2>/dev/null | awk '{print $4}' | grep -qE "[:.]${port}$"
+    return $?
+  fi
+  return 1
+}
+
+replace_local_origin_port() {
+  local origin="$1"
+  local from_port="$2"
+  local to_port="$3"
+  if [[ "$origin" == "http://localhost:${from_port}"* ]]; then
+    echo "${origin/http:\/\/localhost:${from_port}/http:\/\/localhost:${to_port}}"
+    return 0
+  fi
+  if [[ "$origin" == "http://127.0.0.1:${from_port}"* ]]; then
+    echo "${origin/http:\/\/127.0.0.1:${from_port}/http:\/\/127.0.0.1:${to_port}}"
+    return 0
+  fi
+  echo "$origin"
+}
+
 USE_LOCAL_BATCHER="${DEPLOY_DRY_RUN_USE_LOCAL_BATCHER:-1}"
 if [[ "$USE_LOCAL_BATCHER" == "1" ]]; then
   if ! command -v forge >/dev/null 2>&1; then
@@ -54,11 +82,7 @@ set +a
 FORK_HOST="${DEPLOY_DRY_RUN_FORK_HOST:-127.0.0.1}"
 FORK_PORT="${DEPLOY_DRY_RUN_FORK_PORT:-8545}"
 FORK_CHAIN_ID="${DEPLOY_DRY_RUN_FORK_CHAIN_ID:-8453}"
-LOCAL_RPC_URL="http://${FORK_HOST}:${FORK_PORT}"
 ANVIL_LOG_FILE="${TMPDIR:-/tmp}/4626-deploy-dry-run-anvil.log"
-
-export BASE_RPC_URL="${BASE_RPC_URL:-$LOCAL_RPC_URL}"
-export VITE_BASE_RPC="${VITE_BASE_RPC:-$LOCAL_RPC_URL}"
 export VITE_ALLOW_CONTRACT_OVERRIDES="${VITE_ALLOW_CONTRACT_OVERRIDES:-0}"
 export ALLOW_API_CONTRACT_OVERRIDES="${ALLOW_API_CONTRACT_OVERRIDES:-0}"
 # Use a dedicated deterministic namespace on local forks so dry-runs do not
@@ -75,6 +99,28 @@ cleanup() {
 }
 
 trap cleanup EXIT INT TERM
+
+ORIG_FORK_PORT="$FORK_PORT"
+if port_in_use "$FORK_PORT"; then
+  for candidate in 8546 8547 8548 8549; do
+    if [[ "$candidate" != "$ORIG_FORK_PORT" ]] && ! port_in_use "$candidate"; then
+      FORK_PORT="$candidate"
+      break
+    fi
+  done
+  if [[ "$FORK_PORT" != "$ORIG_FORK_PORT" ]]; then
+    echo "Fork port ${ORIG_FORK_PORT} is busy; using ${FORK_PORT}."
+  else
+    echo "Fork port ${ORIG_FORK_PORT} is already in use and no fallback port (8546-8549) is available." >&2
+    exit 1
+  fi
+fi
+
+LOCAL_RPC_URL="http://${FORK_HOST}:${FORK_PORT}"
+# Always point server + browser RPC reads to the selected local fork port.
+export BASE_RPC_URL="$LOCAL_RPC_URL"
+export VITE_BASE_RPC="$LOCAL_RPC_URL"
+export DEPLOY_DRY_RUN_FORK_PORT="$FORK_PORT"
 
 echo "Starting Base fork on ${LOCAL_RPC_URL}..."
 anvil \
@@ -105,6 +151,28 @@ for _ in $(seq 1 40); do
       echo "Using local DeploymentBatcher at ${LOCAL_BATCHER_ADDRESS}"
     fi
     DEV_PORT="${DEPLOY_DRY_RUN_PORT:-5174}"
+    ORIG_DEV_PORT="$DEV_PORT"
+    if port_in_use "$DEV_PORT"; then
+      for candidate in 5174 5175 5176 5177; do
+        if [[ "$candidate" != "$ORIG_DEV_PORT" ]] && ! port_in_use "$candidate"; then
+          DEV_PORT="$candidate"
+          break
+        fi
+      done
+      if [[ "$DEV_PORT" != "$ORIG_DEV_PORT" ]]; then
+        echo "Port ${ORIG_DEV_PORT} is busy; using ${DEV_PORT} for deploy dry-run."
+      else
+        echo "Port ${ORIG_DEV_PORT} is already in use and no fallback port (5174-5177) is available." >&2
+        exit 1
+      fi
+    fi
+    export DEPLOY_DRY_RUN_PORT="$DEV_PORT"
+    if [[ -n "${APP_ORIGIN:-}" ]]; then
+      export APP_ORIGIN="$(replace_local_origin_port "$APP_ORIGIN" "$ORIG_DEV_PORT" "$DEV_PORT")"
+    fi
+    if [[ -n "${VITE_APP_ORIGIN:-}" ]]; then
+      export VITE_APP_ORIGIN="$(replace_local_origin_port "$VITE_APP_ORIGIN" "$ORIG_DEV_PORT" "$DEV_PORT")"
+    fi
     echo "Starting frontend dev server on port ${DEV_PORT} with BASE_RPC_URL=${BASE_RPC_URL} and VITE_BASE_RPC=${VITE_BASE_RPC}"
     cd "$FRONTEND_DIR"
     exec pnpm exec vite --port "$DEV_PORT"

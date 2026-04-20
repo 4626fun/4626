@@ -550,6 +550,10 @@ const AGENT_CONSUME_XMTP = parseEnvBoolean(
   AGENT_RUNTIME_ROLE === 'primary',
 )
 const RUNNING_ON_RAILWAY = isRailwayRuntime()
+const ELIZA_READYZ_LIVENESS_MODE = parseEnvBoolean(
+  process.env.ELIZA_READYZ_LIVENESS_MODE,
+  RUNNING_ON_RAILWAY,
+)
 const AGENT_RUNTIME_LOCK_EXPLICITLY_CONFIGURED = (() => {
   const raw = (process.env.AGENT_RUNTIME_LOCK_REQUIRED ?? '').trim()
   return raw.length > 0
@@ -2273,7 +2277,9 @@ function startHealthServer() {
       agentBooted,
       agentCount,
       xmtpReady,
+      readyzAsLiveness: ELIZA_READYZ_LIVENESS_MODE,
     })
+    const strictReadinessProbe = probePath === '/readyz' && !ELIZA_READYZ_LIVENESS_MODE
     const payload = detailedHealthAccess
       ? {
           probe: probePath,
@@ -2309,20 +2315,20 @@ function startHealthServer() {
             },
           },
           validation: latestEnvValidation,
+          readyzLivenessMode: ELIZA_READYZ_LIVENESS_MODE,
         }
       : {
           probe: probePath,
           detailed: false,
-          status:
-            probePath === '/readyz'
-              ? ready
-                ? 'ready'
-                : 'not_ready'
-              : statusCode >= 500
-                ? 'degraded'
-                : agentBooted
-                  ? 'alive'
-                  : 'booting',
+          status: strictReadinessProbe
+            ? ready
+              ? 'ready'
+              : 'not_ready'
+            : statusCode >= 500
+              ? 'degraded'
+              : agentBooted
+                ? 'alive'
+                : 'booting',
           uptimeMs: Date.now() - runtimeStartedAtMs,
         }
     res.writeHead(statusCode, { 'Content-Type': 'application/json' })

@@ -50,4 +50,17 @@ describe('getHealthProbeStatusCode', () => {
 
     expect(statusCode).toBe(503)
   })
+
+  it('can treat /readyz as liveness when explicitly configured', () => {
+    const statusCode = getHealthProbeStatusCode({
+      probe: '/readyz',
+      ready: false,
+      agentBooted: true,
+      agentCount: 1,
+      xmtpReady: true,
+      readyzAsLiveness: true,
+    })
+
+    expect(statusCode).toBe(200)
+  })
 })
