@@ -87,6 +87,10 @@ export function CanonicalIdentityCard({
               CSW
             </span>
           </span>
+        ) : identity.loadingCsw ? (
+          <span className="text-[10px] text-zinc-600">Linking smart wallet…</span>
+        ) : identity.cswMissing ? (
+          <span className="text-[10px] text-amber-300/80">No CSW linked yet</span>
         ) : (
           <span className="text-[10px] text-zinc-500">not signed in</span>
         )}
@@ -129,7 +133,10 @@ export function CanonicalIdentityDropdown({
 
   return (
     <div className="flex flex-col">
-      {/* Canonical identity section */}
+      {/* Canonical identity section — always rendered when a session exists
+          so users aren't confused by a missing CSW slot. Falls back to
+          loading / missing-CSW copy when the canonical address hasn't
+          resolved yet. */}
       {identity.cswAddress ? (
         <div className="px-4 pt-3 pb-2">
           <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">Canonical</div>
@@ -170,6 +177,35 @@ export function CanonicalIdentityDropdown({
               {coinBadge.name ? <span className="text-zinc-500">{coinBadge.name}</span> : null}
             </div>
           ) : null}
+        </div>
+      ) : identity.loadingCsw ? (
+        <div className="px-4 pt-3 pb-2">
+          <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+            Canonical
+          </div>
+          <div className="mt-1.5 flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-full bg-white/5 animate-pulse" />
+            <div className="min-w-0 flex-1">
+              <div className="h-3 w-32 rounded bg-white/10 animate-pulse" />
+              <div className="mt-1.5 h-2 w-40 rounded bg-white/5 animate-pulse" />
+            </div>
+          </div>
+          <div className="mt-2 ml-10 text-[10px] text-zinc-600">
+            Resolving your canonical smart wallet…
+          </div>
+        </div>
+      ) : identity.cswMissing ? (
+        <div className="px-4 pt-3 pb-2">
+          <div className="text-[10px] uppercase tracking-wider text-amber-300/80 font-medium">
+            Canonical · needs setup
+          </div>
+          <div className="mt-1.5 text-xs text-zinc-300">
+            No Coinbase Smart Wallet linked to this profile yet.
+          </div>
+          <div className="mt-1 text-[11px] text-zinc-500">
+            Finish the Zora / Base App handoff in{' '}
+            <span className="underline decoration-dotted">Accounts</span> to link your CSW.
+          </div>
         </div>
       ) : null}
 

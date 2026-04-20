@@ -4,6 +4,7 @@ import { createPublicClient, http, isAddress, type Address } from 'viem'
 import { base } from 'viem/chains'
 
 import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { useAccountMe } from '@/hooks/useAccountMe'
 import { useEnsurePrivyEmbeddedWallet } from '@/lib/privy/embeddedWallet'
 import { BASE_DEFAULTS } from '@/config/contracts.defaults'
 
@@ -11,14 +12,20 @@ import { BASE_DEFAULTS } from '@/config/contracts.defaults'
  * Consolidated identity snapshot for the signed-in user. Composes:
  *   - Privy user state (the human login)
  *   - wagmi connection (optional external EOA)
- *   - SIWE session (what the server treats as the canonical auth address)
+ *   - `/api/accounts/me` → `accountSignals.canonicalCswAddress` (the
+ *     authoritative parent Coinbase Smart Wallet for this profile)
+ *   - SIWE session (confirms auth + as a fallback when `/accounts/me`
+ *     hasn't loaded yet)
  *   - On-chain read: CreatorRegistry.getTokenForVault(csw) → creator coin addr
  *
  * Design notes:
- *   - `cswAddress` is the authoritative onchain identity — what owns the
- *     creator's vault, coins, lottery entries, etc. We treat `authAddress`
- *     from the SIWE session as the canonical CSW (that's how the server
- *     resolves the user; see `wallet/walletSync.ts` → canonical resolver).
+ *   - `cswAddress` is the PARENT CSW — what owns the creator's vault,
+ *     coin, lottery entries, and settles balances. For Privy-native
+ *     flows the SIWE authAddress is the embedded EOA that signed the
+ *     challenge, NOT the CSW; relying on authAddress alone would show
+ *     the wrong address in the identity card (bug seen 2026-04-19).
+ *     We read `profile.accountSignals.canonicalCswAddress` from the
+ *     authoritative server-resolved source instead.
  *   - `externalEoaAddress` is populated only when wagmi reports a
  *     non-Privy external wallet as connected. Privy's embedded wallet
  *     shows up through the Privy SDK, not wagmi.
@@ -30,6 +37,25 @@ import { BASE_DEFAULTS } from '@/config/contracts.defaults'
 export type CanonicalIdentity = {
   /** The user's Coinbase Smart Wallet — primary identity. */
   cswAddress: Address | null
+  /**
+   * True while `/api/accounts/me` is still fetching the profile's
+   * canonical CSW. Useful for rendering a "Linking…" placeholder in
+   * the card instead of falsely showing "not signed in" when the user
+   * is in fact signed in and the CSW just hasn't arrived yet.
+   */
+  loadingCsw: boolean
+  /**
+   * True when the server confirms the profile is authed but no
+   * `canonicalCswAddress` is linked yet (user signed in but hasn't
+   * completed Zora / Base App setup). The card uses this to prompt
+   * setup instead of leaving an empty CSW row.
+   */
+  cswMissing: boolean
+  /**
+   * Whether a SIWE session exists at all. When false the card
+   * should not render.
+   */
+  hasSession: boolean
   /**
    * External EOA (Rabby / MetaMask / injected) if one is actively
    * connected via wagmi. Null when only the Privy embedded EOA is
@@ -134,6 +160,7 @@ export function useCanonicalIdentity(): CanonicalIdentity {
   const { address: wagmiAddress, isConnected, connector } = useAccount()
   const auth = useSiweAuth()
   const privyEmbedded = useEnsurePrivyEmbeddedWallet()
+  const accountMe = useAccountMe()
 
   // wagmi's `address` could be Privy's embedded wallet OR an external
   // wallet. Distinguish by inspecting the connector id — Privy's
@@ -153,11 +180,21 @@ export function useCanonicalIdentity(): CanonicalIdentity {
   })()
 
   const csw = (() => {
-    // SIWE session's authAddress is the canonical server-side identity.
-    // For Privy flows, this is set to the CSW on sign-in (see
-    // server/_lib/wallet/walletSync.ts → canonical resolver).
-    const auth_addr = typeof auth.authAddress === 'string' ? auth.authAddress : null
-    if (auth_addr && isAddress(auth_addr)) return auth_addr as Address
+    // PRIMARY source: the server-resolved canonical CSW attached to the
+    // profile. This is the parent CSW (e.g. 0xab6d…67b5 for profile 1),
+    // NOT the SIWE authAddress (which is the embedded EOA that signed
+    // the challenge on Privy flows). See module docstring for why.
+    const canonical = accountMe.me?.accountSignals?.canonicalCswAddress
+    if (typeof canonical === 'string' && isAddress(canonical)) {
+      return canonical as Address
+    }
+
+    // FALLBACK: while `/api/accounts/me` is loading on a fresh sign-in,
+    // we still want *something* to render in the card slot. We DO NOT
+    // fall back to authAddress here because for Privy flows that value
+    // is the embedded EOA and would once again show the wrong address
+    // in the CSW slot. Returning null is correct: the card gracefully
+    // renders "signed in" copy until the canonical CSW resolves.
     return null
   })()
 
@@ -199,8 +236,16 @@ export function useCanonicalIdentity(): CanonicalIdentity {
     }
   }, [csw])
 
+  const hasSession = Boolean(auth.hasSession && auth.authAddress)
+  const loadingCsw = hasSession && accountMe.loading && !csw
+  const cswMissing =
+    hasSession && !accountMe.loading && !csw && accountMe.me !== null
+
   return {
     cswAddress: csw,
+    loadingCsw,
+    cswMissing,
+    hasSession,
     externalEoaAddress: externalEoa,
     privyEmbeddedAddress,
     activeSigner,

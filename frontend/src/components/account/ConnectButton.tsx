@@ -309,7 +309,16 @@ export function ConnectButton({
       miniAvatarUrl: unifiedAvatar,
     })
 
-    const showCanonicalCard = auth.hasSession && Boolean(canonicalIdentity.cswAddress)
+    // Show the canonical card as long as a SIWE session is active. The
+    // card handles `cswAddress === null` internally (shows a "Linking
+    // smart wallet…" state while /api/accounts/me resolves, and a
+    // "No CSW linked yet" state when the profile hasn't linked one).
+    // Previously this was gated on cswAddress being non-null, which
+    // caused the card to fall back to the legacy IdentityButton — and
+    // the legacy button displays the Privy embedded EOA as the primary
+    // address, which for Privy-native flows is NOT the CSW. Users saw
+    // 0xceca… (embedded EOA) in place of 0xab6d… (actual CSW).
+    const showCanonicalCard = auth.hasSession
 
     return (
       <div className="relative">
@@ -423,7 +432,10 @@ export function ConnectButton({
       miniAvatarUrl: unifiedAvatar,
     })
 
-    const showCanonicalCard = Boolean(canonicalIdentity.cswAddress)
+    // Same rationale as the connected-wallet branch above: show the
+    // canonical card whenever a session exists and let the card handle
+    // loading / missing-CSW states internally.
+    const showCanonicalCard = true
 
     return (
       <div className="relative">

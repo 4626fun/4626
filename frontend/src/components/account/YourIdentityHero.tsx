@@ -32,9 +32,33 @@ export function YourIdentityHero() {
         <div className="text-[11px] uppercase tracking-wider text-zinc-500 font-medium">
           Your canonical identity
         </div>
-        <p className="mt-3 text-sm text-zinc-400">
-          Sign in to see your Coinbase Smart Wallet address + creator coin.
-        </p>
+        {identity.loadingCsw ? (
+          <div className="mt-4 flex items-center gap-4">
+            <div className="h-12 w-12 rounded-full bg-white/5 animate-pulse" />
+            <div className="flex-1">
+              <div className="h-4 w-48 rounded bg-white/10 animate-pulse" />
+              <div className="mt-2 h-3 w-36 rounded bg-white/5 animate-pulse" />
+            </div>
+          </div>
+        ) : identity.cswMissing ? (
+          <>
+            <p className="mt-3 text-sm text-zinc-300">
+              No Coinbase Smart Wallet linked to this profile yet.
+            </p>
+            <p className="mt-2 text-xs text-zinc-500">
+              Finish the Zora / Base App handoff from the Advanced setup workspace below to
+              resolve your canonical CSW.
+            </p>
+          </>
+        ) : !identity.hasSession ? (
+          <p className="mt-3 text-sm text-zinc-400">
+            Sign in to see your Coinbase Smart Wallet address + creator coin.
+          </p>
+        ) : (
+          <p className="mt-3 text-sm text-zinc-400">
+            Loading your identity…
+          </p>
+        )}
       </section>
     )
   }
