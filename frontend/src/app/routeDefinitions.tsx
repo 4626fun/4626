@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { Navigate, Route, useLocation } from 'react-router-dom'
+import { Route } from 'react-router-dom'
 
 import {
   AccountsPage,
@@ -68,26 +68,32 @@ export const MARKETING_ONLY_ROUTES: PathRouteDef[] = [
 ]
 
 /**
- * `/accounts` is now a compatibility redirect to `/waitlist`. The waitlist
- * surface holds the setup flow, points panel, and the collapsible Advanced
- * section that folded in the previous `/accounts` content. Query params
- * (e.g. `?setup=owner-install&source=telegram`) are preserved so existing
- * deep links from the Telegram handoff continue to land on the owner
- * install step. `AccountsPage` is kept as an exported component for the
- * lazy import surface but is no longer routed.
+ * `/accounts` is the identity + execution-scope surface (canonical CSW,
+ * signers, sub-account state, advanced owner recovery).
+ *
+ * Previously this route redirected to `/waitlist` because the waitlist
+ * flow had absorbed the old `/accounts` content. Reinstated 2026-04-19
+ * so the new identity card + ExecutionScopeCard + AutoProvisionMount
+ * actually render somewhere users can reach them. `/waitlist` stays
+ * focused on net-new onboarding (Zora link, owner install, points)
+ * while `/accounts` handles day-two operations on an already-linked
+ * identity.
+ *
+ * Wrapped in `SmartWalletRoute` so `useSmartWallets()` is available —
+ * the sub-account SpendPermission flow signs via Privy's ERC-1271
+ * smart-wallet client for Zora-cross-app profiles whose Privy embedded
+ * EOA isn't on the parent CSW owner list.
  */
-function AccountsRedirect() {
-  const { search, hash } = useLocation()
-  return <Navigate to={`/waitlist${search}${hash}`} replace />
-}
-
 export const ACCOUNT_ROUTES: PathRouteDef[] = [
-  { path: '/accounts', element: <AccountsRedirect /> },
+  {
+    path: '/accounts',
+    element: (
+      <SmartWalletRoute>
+        <AccountsPage />
+      </SmartWalletRoute>
+    ),
+  },
 ]
-
-// Keep the lazy import referenced so tree-shaking doesn't drop the page
-// definition while callers in tests still import `AccountsPage`.
-void AccountsPage
 
 export const EXPLORE_ROUTES: PathRouteDef[] = [
   { path: '/explore/creators', element: <ExploreCreators /> },

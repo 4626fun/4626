@@ -35,7 +35,20 @@ export const COINBASE_SMART_WALLET_OWNER_CHECK_ABI = [
 ] as const
 
 export type CswOwnerCandidate = {
-  label: 'embedded' | 'external'
+  /**
+   * - `smart_wallet` — 4626's own Privy app smart wallet (via
+   *   `useSmartWallets`). ERC-4337 account; when it is on the CSW owner
+   *   list (installed by the waitlist "Enable 4626 signing" step), its
+   *   `signTypedData` produces an ERC-1271 signature that the commit
+   *   endpoint validates via `parentCsw.isValidSignature`.
+   * - `external` — a connected browser EOA (Rabby / MetaMask / CBW).
+   *   Relevant for power users who manually add their own EOA as an
+   *   owner of the CSW.
+   * - `embedded` — the 4626 Privy embedded EOA. Almost never an owner
+   *   of a Zora-cross-app CSW; kept as a low-priority candidate so the
+   *   few rare cases still work.
+   */
+  label: 'smart_wallet' | 'external' | 'embedded'
   address: Address
 }
 
@@ -80,19 +93,25 @@ export async function checkCswOwners(args: {
 }
 
 /**
- * Pick the preferred signer to use for a fresh SpendPermission
- * signature. Preference order:
+ * Pick the preferred signer for a fresh SpendPermission signature.
  *
- *   1. External EOA (Rabby / MetaMask / CBW) that is a CSW owner —
- *      prefer this because it's what Zora-cross-app users already use
- *      to interact with their CSW, and it avoids any Privy embedded
- *      wallet side effects.
- *   2. Privy embedded EOA if it is a CSW owner.
- *   3. null — nothing available to sign with; the card should prompt
- *      the user to connect an owner wallet.
+ * Preference order (highest first):
+ *   1. 4626 Privy app smart wallet (ERC-1271) — the universal path for
+ *      Zora-cross-app users who completed the waitlist owner-install
+ *      step. Works without any external wallet connection, no passkey
+ *      popup, consistent UX.
+ *   2. External EOA (Rabby / MetaMask / CBW) that is a CSW owner —
+ *      for power users like profile 1 who manually added their own
+ *      EOA to the CSW owner list.
+ *   3. Privy embedded EOA if it is a CSW owner — extremely rare path,
+ *      only applies to accounts created directly through 4626 Privy
+ *      without cross-app (not the normal production flow).
+ *   4. null — nothing available to sign with; the card should prompt
+ *      the user to complete owner install or connect an owner wallet.
  */
 export function pickOwnerSigner(results: CswOwnerResult[]): CswOwnerResult | null {
   return (
+    results.find((r) => r.label === 'smart_wallet' && r.isOwner) ??
     results.find((r) => r.label === 'external' && r.isOwner) ??
     results.find((r) => r.label === 'embedded' && r.isOwner) ??
     null

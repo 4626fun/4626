@@ -1,8 +1,11 @@
 import { useCallback, useState } from 'react'
 import type { Address, Hex } from 'viem'
+import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 import { useWalletClient } from 'wagmi'
 
 import { apiFetch } from '@/lib/api/apiBase'
+
+import { useCswOwnerSigner } from './useCswOwnerSigner'
 
 /**
  * Client-side hook that drives the full sub-account re-provision
@@ -67,6 +70,8 @@ export type UseReprovisionReturn = {
 
 export function useReprovisionSubAccount(): UseReprovisionReturn {
   const { data: walletClient } = useWalletClient()
+  const { client: smartWalletClient } = useSmartWallets()
+  const ownerCheck = useCswOwnerSigner()
   const [phase, setPhase] = useState<UseReprovisionReturn['phase']>('idle')
   const [error, setError] = useState<string | null>(null)
 
@@ -74,11 +79,33 @@ export function useReprovisionSubAccount(): UseReprovisionReturn {
     async (caps?: {
       perTxCapWei?: string
       dailyCapWei?: string
-    }): Promise<ReprovisionResult> => {
+    }    ): Promise<ReprovisionResult> => {
       setError(null)
 
-      if (!walletClient) {
-        const msg = 'Connect a wallet that owns your CSW before re-provisioning.'
+      // Decide up-front which signer path we'll use so we can log the
+      // choice + surface it in telemetry when the commit succeeds.
+      // Priority order is enforced by `pickOwnerSigner` in
+      // `cswOwnerCheck.ts`: smart_wallet > external > embedded.
+      const signerPath = ownerCheck.preferredSigner?.label ?? null
+
+      if (!signerPath) {
+        const msg =
+          'No wallet that owns your CSW is available. Finish the waitlist owner-install step, or connect an owner wallet (Rabby / MetaMask / Coinbase Wallet), then retry.'
+        setError(msg)
+        setPhase('error')
+        return { ok: false, code: 'no_owner_signer', message: msg }
+      }
+
+      if (signerPath === 'smart_wallet' && !smartWalletClient) {
+        const msg =
+          'Smart-wallet signer is the expected path for your account but Privy has not initialized it yet. Refresh the page and retry.'
+        setError(msg)
+        setPhase('error')
+        return { ok: false, code: 'smart_wallet_not_ready', message: msg }
+      }
+
+      if (signerPath !== 'smart_wallet' && !walletClient) {
+        const msg = 'Connect the wallet that owns your CSW before re-provisioning.'
         setError(msg)
         setPhase('error')
         return { ok: false, code: 'no_wallet_client', message: msg }
@@ -109,21 +136,65 @@ export function useReprovisionSubAccount(): UseReprovisionReturn {
       setPhase('signing')
       let signature: Hex
       try {
-        // `signTypedData` has an overloaded signature whose types collapse
-        // to `never` when `types` is a loose `Record<string, unknown>` from
-        // the API response. The payload is validated server-side and we
-        // re-verify the recovered signer on commit, so a local `any` cast
-        // here is safe and avoids a large generic shim.
-        const signArgs = {
-          account: walletClient.account?.address as Address,
-          domain: prep.eip712.domain,
-          types: prep.eip712.types,
-          primaryType: prep.eip712.primaryType,
-          message: prep.eip712.message,
+        // The Privy smart-wallet client (useSmartWallets) signs via its
+        // account's ERC-1271 path — the resulting signature validates
+        // against `parentCsw.isValidSignature(hash, sig)` on-chain,
+        // which is exactly the fallback the commit endpoint's
+        // `verifyParentCswSignature` tries second after EOA recovery.
+        // That's the universal path for Zora-cross-app profiles.
+        //
+        // The EOA path (`walletClient.signTypedData`) produces a plain
+        // 65-byte secp256k1 signature and only validates when the
+        // signing EOA is itself a current CSW owner — which is the
+        // profile-1 / power-user shape.
+        //
+        // The `signTypedData` overload collapses `types` to `never`
+        // when passed loose JSON, so we cast the call once. The server
+        // re-verifies everything regardless of which path signed.
+        if (signerPath === 'smart_wallet') {
+          const client = smartWalletClient as unknown as {
+            signTypedData: (args: {
+              account: Address
+              domain: unknown
+              types: unknown
+              primaryType: string
+              message: unknown
+            }) => Promise<Hex>
+            account: { address: Address }
+          }
+          signature = await client.signTypedData({
+            account: client.account.address,
+            domain: prep.eip712.domain,
+            types: prep.eip712.types,
+            primaryType: prep.eip712.primaryType,
+            message: prep.eip712.message,
+          })
+          // Telemetry: narrow console marker so we can grep this path
+          // in production frontend logs and see how often ERC-1271
+          // signatures are being produced + validated.
+          // eslint-disable-next-line no-console
+          console.info('[arch-b/subacct/reprovision] signed via smart_wallet (ERC-1271)', {
+            csw: prep.parentCswAddress,
+            sigLen: signature?.length,
+          })
+        } else {
+          const client = walletClient as unknown as NonNullable<typeof walletClient>
+          const signArgs = {
+            account: client.account?.address as Address,
+            domain: prep.eip712.domain,
+            types: prep.eip712.types,
+            primaryType: prep.eip712.primaryType,
+            message: prep.eip712.message,
+          }
+          signature = await (
+            client.signTypedData as unknown as (args: typeof signArgs) => Promise<Hex>
+          )(signArgs)
+          // eslint-disable-next-line no-console
+          console.info(
+            `[arch-b/subacct/reprovision] signed via ${signerPath} EOA (secp256k1)`,
+            { csw: prep.parentCswAddress, signer: signArgs.account, sigLen: signature?.length },
+          )
         }
-        signature = await (walletClient.signTypedData as unknown as (args: typeof signArgs) => Promise<Hex>)(
-          signArgs,
-        )
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         setError(rejectionMessage(message))

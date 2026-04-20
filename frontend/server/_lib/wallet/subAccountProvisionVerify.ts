@@ -121,7 +121,13 @@ export async function verifyParentCswSignature(args: {
       signature: args.signature,
     })
     const isOwner = await isCswOwner(recovered, args.parentCsw)
-    if (isOwner) return { ok: true }
+    if (isOwner) {
+      logger.info('[arch-b/subacct/verify] signature validated via EOA owner path', {
+        parentCsw: args.parentCsw,
+        recovered,
+      })
+      return { ok: true }
+    }
   } catch (err) {
     logger.warn('[arch-b/subacct/verify] EOA path failed; falling back to 1271', {
       parentCsw: args.parentCsw,
@@ -138,10 +144,21 @@ export async function verifyParentCswSignature(args: {
       args: [args.permissionHash, args.signature],
     })) as Hex
     if (String(result).toLowerCase() === ERC1271_MAGIC.toLowerCase()) {
+      logger.info('[arch-b/subacct/verify] signature validated via ERC-1271 path', {
+        parentCsw: args.parentCsw,
+      })
       return { ok: true }
     }
+    logger.warn('[arch-b/subacct/verify] ERC-1271 returned non-magic value', {
+      parentCsw: args.parentCsw,
+      magic: String(result),
+    })
     return { ok: false, code: 'signer_not_owner' }
   } catch (err) {
+    logger.warn('[arch-b/subacct/verify] ERC-1271 read reverted', {
+      parentCsw: args.parentCsw,
+      error: err instanceof Error ? err.message : String(err),
+    })
     return {
       ok: false,
       code: 'signature_verification_failed',

@@ -108,21 +108,22 @@ export function useAutoProvisionSubAccount(): {
 
     const signer = ownerCheck.preferredSigner
     if (!signer) {
-      // Neither the Privy embedded EOA nor the connected external EOA
-      // is a current owner of the parent CSW. This is expected on
-      // first visit before the user connects their owner wallet
-      // (typically Rabby / MetaMask for Zora-cross-app profiles).
-      // Leave auto-provisioning inert; the manual CTA on the card
-      // explains the situation and prompts them to connect.
+      // None of the user's available signers (4626 Privy smart wallet,
+      // Privy embedded EOA, connected external EOA) is a current owner
+      // of the parent CSW. For Zora-cross-app profiles this means the
+      // waitlist "Enable 4626 signing" step hasn't been completed —
+      // once that installs 4626's smart wallet as a CSW owner, the
+      // hook re-evaluates and fires automatically.
+      //
+      // Leave auto-provisioning inert; the card's manual CTA explains
+      // the situation and deep-links to the owner-install flow.
       setStatus('ineligible')
       setReason(
-        identity.externalEoaAddress
-          ? 'Neither the embedded signer nor the connected wallet is an owner of your CSW. Connect the wallet you used to create your smart wallet.'
-          : 'Connect the wallet you used to create your smart wallet (Rabby / MetaMask / Coinbase Wallet) before enabling in-chat commands.',
+        'None of your signers owns your CSW yet. Finish the waitlist owner-install step (or connect the wallet you used to create the CSW) and it will enable automatically.',
       )
       // Intentionally do NOT stamp the session key here — we want
-      // auto-provision to fire the moment the user connects an owner
-      // wallet during this session.
+      // auto-provision to fire the moment the user completes owner
+      // install or connects an owner wallet during this session.
       return
     }
 
@@ -143,8 +144,14 @@ export function useAutoProvisionSubAccount(): {
         if (result.ok) {
           setStatus('succeeded')
           scope.refresh()
+          const signerLabel =
+            signer.label === 'smart_wallet'
+              ? 'your 4626 signer'
+              : signer.label === 'external'
+                ? 'your connected wallet'
+                : 'your embedded signer'
           toast.success(
-            `In-chat commands enabled via your ${signer.label === 'external' ? 'connected wallet' : 'embedded signer'}. 4626 can now execute /coin buy, /coin sell, /keepr send within your signed caps. Manage this any time in Accounts.`,
+            `In-chat commands enabled via ${signerLabel}. 4626 can now execute /coin buy, /coin sell, /keepr send within your signed caps. Manage this any time in Accounts.`,
           )
         } else {
           setStatus('failed')
