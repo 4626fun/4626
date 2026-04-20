@@ -5,6 +5,7 @@ import { CopyableAddress } from '@/components/account/CopyableAddress'
 import { useExecutionScope, type ExecutionScopeStatus } from './useExecutionScope'
 import { useRevokeSubAccount } from './useRevokeSubAccount'
 import { useReprovisionSubAccount } from './useReprovisionSubAccount'
+import { useCswOwnerSigner } from './useCswOwnerSigner'
 
 /**
  * `/accounts` "Execution scopes" card.
@@ -28,6 +29,7 @@ export function ExecutionScopeCard() {
   const scope = useExecutionScope()
   const revoke = useRevokeSubAccount()
   const reprovision = useReprovisionSubAccount()
+  const ownerCheck = useCswOwnerSigner()
   const [confirmRevoke, setConfirmRevoke] = useState(false)
 
   const onRevokeClick = async () => {
@@ -59,6 +61,8 @@ export function ExecutionScopeCard() {
   }
 
   if (scope.status === 'not_provisioned') {
+    const signer = ownerCheck.preferredSigner
+    const hasOwnerSigner = Boolean(signer)
     return (
       <CardShell>
         <Header
@@ -72,11 +76,39 @@ export function ExecutionScopeCard() {
           revoke at any time.
         </p>
 
+        {/* Owner-status hint so users know which wallet will sign (or that
+            they need to connect one first). Covers the Zora-cross-app case
+            where the Privy embedded EOA isn't on the CSW owner list — the
+            SpendPermission must be signed by a parent-CSW owner (typically
+            the user's external Rabby / MetaMask / Coinbase Wallet). */}
+        {ownerCheck.loading ? (
+          <p className="mt-3 text-[11px] text-zinc-600">Checking which wallet can sign…</p>
+        ) : hasOwnerSigner ? (
+          <p className="mt-3 text-[11px] text-emerald-300/80">
+            Signing with your{' '}
+            {signer!.label === 'external' ? (
+              <>
+                connected wallet <code className="text-zinc-400">{shortAddr(signer!.address)}</code>
+              </>
+            ) : (
+              <>embedded signer</>
+            )}
+            . Expect one wallet popup to approve the spend permission.
+          </p>
+        ) : (
+          <p className="mt-3 text-[11px] text-amber-300/80">
+            Connect the wallet that owns your smart wallet (Rabby, MetaMask, or Coinbase Wallet)
+            before enabling — the spend permission has to be signed by a CSW owner, and your
+            embedded signer isn't one.
+          </p>
+        )}
+
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <button
             type="button"
             onClick={onReprovisionClick}
-            disabled={reprovision.busy}
+            disabled={reprovision.busy || !hasOwnerSigner}
+            title={hasOwnerSigner ? undefined : 'Connect an owner wallet first'}
             className="inline-flex items-center gap-2 rounded-lg bg-white text-black text-xs font-medium px-3 py-2 hover:bg-zinc-200 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
           >
             <RefreshCw className={`h-3.5 w-3.5 ${reprovision.busy ? 'animate-spin' : ''}`} />
@@ -370,6 +402,12 @@ function SkeletonCard() {
 }
 
 // ─── Formatters ────────────────────────────────────────────────────────────
+
+function shortAddr(address: string): string {
+  if (!address) return ''
+  if (address.length <= 10) return address
+  return `${address.slice(0, 6)}…${address.slice(-4)}`
+}
 
 function formatEth(wei: string): string {
   try {

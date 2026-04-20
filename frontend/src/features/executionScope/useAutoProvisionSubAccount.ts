@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Address } from 'viem'
-import { base } from 'viem/chains'
-import { usePublicClient } from 'wagmi'
 
 import { toast } from '@/components/ui/Toast'
 import { useCanonicalIdentity } from '@/hooks/useCanonicalIdentity'
 
+import { useCswOwnerSigner } from './useCswOwnerSigner'
 import { useExecutionScope } from './useExecutionScope'
 import { useReprovisionSubAccount } from './useReprovisionSubAccount'
 
@@ -16,19 +15,29 @@ import { useReprovisionSubAccount } from './useReprovisionSubAccount'
  * `/accounts` page) with:
  *   1. An authenticated SIWE session,
  *   2. A canonical Coinbase Smart Wallet resolved,
- *   3. A Privy embedded EOA present, AND
- *   4. That EOA is ALREADY an owner of the CSW (via `isOwnerAddress`),
+ *   3. At least one of their currently-available signers — Privy
+ *      embedded EOA OR connected external EOA (Rabby / MetaMask /
+ *      Coinbase Wallet) — is a current owner of that CSW, AND
+ *   4. No sub-account has been provisioned yet,
  *
- * and no sub-account has been provisioned yet, this hook kicks off the
- * prepare → signTypedData → commit flow automatically. The user still
- * sees the wallet's signature modal — we DO NOT attempt truly silent
- * signing, because:
+ * this hook kicks off the prepare → signTypedData → commit flow
+ * automatically. The user still sees the wallet's signature modal —
+ * we DO NOT attempt truly silent signing, because:
  *
  *   - SpendPermission is a financial consent; a modal makes that
  *     explicit and auditable.
  *   - Privy's headless signing path requires a separate delegation
  *     handshake. Users who haven't gone through that flow would
  *     otherwise see an unexpected popup on every sign-in.
+ *
+ * Multi-signer rationale (updated 2026-04-19): for Zora-cross-app
+ * profiles, the Privy embedded EOA is NOT on the parent CSW owner
+ * list — that's the exact scenario Arch B was designed for. In those
+ * cases the user's Rabby / MetaMask IS on the owner list. We honor
+ * that by auto-firing whenever any available signer is an owner, and
+ * `useReprovisionSubAccount` signs via `wagmi.useWalletClient()` which
+ * is already wired to the active connector, so Rabby will sign when
+ * it's the active wagmi wallet.
  *
  * By scoping the mount to `/accounts` (not the root app shell), we
  * guarantee users only see the auto-provision modal on a page whose
@@ -40,16 +49,6 @@ import { useReprovisionSubAccount } from './useReprovisionSubAccount'
  * they can re-attempt via the manual "Enable in-chat commands" button
  * on the card.
  */
-
-const COINBASE_SMART_WALLET_OWNER_CHECK_ABI = [
-  {
-    type: 'function',
-    name: 'isOwnerAddress',
-    stateMutability: 'view',
-    inputs: [{ name: 'account', type: 'address' }],
-    outputs: [{ name: '', type: 'bool' }],
-  },
-] as const
 
 function sessionKeyFor(csw: Address | null | undefined): string | null {
   if (!csw) return null
@@ -76,7 +75,7 @@ export function useAutoProvisionSubAccount(): {
   const identity = useCanonicalIdentity()
   const scope = useExecutionScope()
   const reprovision = useReprovisionSubAccount()
-  const publicClient = usePublicClient({ chainId: base.id })
+  const ownerCheck = useCswOwnerSigner()
   const [status, setStatus] = useState<AutoProvisionStatus>('inert')
   const [reason, setReason] = useState<string | null>(null)
 
@@ -87,9 +86,10 @@ export function useAutoProvisionSubAccount(): {
   useEffect(() => {
     if (attemptedRef.current) return
 
-    // Wait for scope + identity to finish resolving before deciding.
+    // Wait for scope + identity + owner-check to finish resolving before deciding.
     if (scope.status === 'loading') return
-    if (!identity.cswAddress || !identity.privyEmbeddedAddress) return
+    if (!identity.cswAddress) return
+    if (ownerCheck.loading) return
 
     // If there's already a sub-account row (active, revoked, or expired),
     // the manual card actions are the right surface — don't auto-retrigger.
@@ -106,52 +106,45 @@ export function useAutoProvisionSubAccount(): {
       return
     }
 
-    if (!publicClient) return
+    const signer = ownerCheck.preferredSigner
+    if (!signer) {
+      // Neither the Privy embedded EOA nor the connected external EOA
+      // is a current owner of the parent CSW. This is expected on
+      // first visit before the user connects their owner wallet
+      // (typically Rabby / MetaMask for Zora-cross-app profiles).
+      // Leave auto-provisioning inert; the manual CTA on the card
+      // explains the situation and prompts them to connect.
+      setStatus('ineligible')
+      setReason(
+        identity.externalEoaAddress
+          ? 'Neither the embedded signer nor the connected wallet is an owner of your CSW. Connect the wallet you used to create your smart wallet.'
+          : 'Connect the wallet you used to create your smart wallet (Rabby / MetaMask / Coinbase Wallet) before enabling in-chat commands.',
+      )
+      // Intentionally do NOT stamp the session key here — we want
+      // auto-provision to fire the moment the user connects an owner
+      // wallet during this session.
+      return
+    }
+
+    // Preconditions satisfied — kick off the signature flow.
+    attemptedRef.current = true
+    setStatus('triggering')
+    if (key && typeof window !== 'undefined') {
+      // Stamp the session key BEFORE the modal opens so a quick
+      // re-render or React strict-mode double-fire can't retrigger.
+      window.sessionStorage.setItem(key, '1')
+    }
 
     let cancelled = false
-    attemptedRef.current = true
-
     ;(async () => {
       try {
-        const isOwner = (await publicClient.readContract({
-          address: identity.cswAddress as Address,
-          abi: COINBASE_SMART_WALLET_OWNER_CHECK_ABI,
-          functionName: 'isOwnerAddress',
-          args: [identity.privyEmbeddedAddress as Address],
-        })) as boolean
-
-        if (cancelled) return
-
-        if (!isOwner) {
-          // Embedded EOA is not a current owner of the CSW (e.g. Zora
-          // cross-app flows where ownership structure differs). Leave
-          // auto-provisioning inert; the manual CTA on the card still
-          // lets the user proceed with an external owner wallet.
-          setStatus('ineligible')
-          setReason(
-            'Privy embedded signer is not a current owner of the parent CSW. Use the manual enable flow with an owner wallet.',
-          )
-          if (key && typeof window !== 'undefined') {
-            window.sessionStorage.setItem(key, '1')
-          }
-          return
-        }
-
-        // Preconditions satisfied — kick off the signature flow.
-        setStatus('triggering')
-        if (key && typeof window !== 'undefined') {
-          // Stamp the session key BEFORE the modal opens so a quick
-          // re-render or React strict-mode double-fire can't retrigger.
-          window.sessionStorage.setItem(key, '1')
-        }
-
         const result = await reprovision.reprovision()
         if (cancelled) return
         if (result.ok) {
           setStatus('succeeded')
           scope.refresh()
           toast.success(
-            'In-chat commands are enabled. 4626 can now execute /coin buy, /coin sell, /keepr send within your signed caps. Manage this any time in Accounts.',
+            `In-chat commands enabled via your ${signer.label === 'external' ? 'connected wallet' : 'embedded signer'}. 4626 can now execute /coin buy, /coin sell, /keepr send within your signed caps. Manage this any time in Accounts.`,
           )
         } else {
           setStatus('failed')
@@ -172,8 +165,9 @@ export function useAutoProvisionSubAccount(): {
     }
   }, [
     identity.cswAddress,
-    identity.privyEmbeddedAddress,
-    publicClient,
+    identity.externalEoaAddress,
+    ownerCheck.loading,
+    ownerCheck.preferredSigner,
     reprovision,
     scope,
   ])
