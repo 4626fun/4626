@@ -27,7 +27,7 @@ describe('getHealthProbeStatusCode', () => {
     expect(statusCode).toBe(200)
   })
 
-  it('returns liveness failure only when started agents are not running', () => {
+  it('keeps liveness healthy even when runtime agents are degraded', () => {
     const statusCode = getHealthProbeStatusCode({
       probe: '/healthz',
       ready: false,
@@ -36,7 +36,7 @@ describe('getHealthProbeStatusCode', () => {
       xmtpReady: false,
     })
 
-    expect(statusCode).toBe(503)
+    expect(statusCode).toBe(200)
   })
 
   it('keeps readiness strict', () => {

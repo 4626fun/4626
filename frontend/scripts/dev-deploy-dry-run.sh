@@ -121,65 +121,96 @@ LOCAL_RPC_URL="http://${FORK_HOST}:${FORK_PORT}"
 export BASE_RPC_URL="$LOCAL_RPC_URL"
 export VITE_BASE_RPC="$LOCAL_RPC_URL"
 export DEPLOY_DRY_RUN_FORK_PORT="$FORK_PORT"
+FALLBACK_FORK_UPSTREAM_RPC_URL="${DEPLOY_DRY_RUN_FORK_FALLBACK_RPC_URL:-https://mainnet.base.org}"
 
-echo "Starting Base fork on ${LOCAL_RPC_URL}..."
-anvil \
-  --host "$FORK_HOST" \
-  --port "$FORK_PORT" \
-  --chain-id "$FORK_CHAIN_ID" \
-  --code-size-limit "${DEPLOY_DRY_RUN_FORK_CODE_SIZE_LIMIT:-393216}" \
-  --fork-url "$BASE_FORK_UPSTREAM_RPC_URL" \
-  >"$ANVIL_LOG_FILE" 2>&1 &
-ANVIL_PID="$!"
-
-for _ in $(seq 1 40); do
-  if curl -sSf \
-    -H 'Content-Type: application/json' \
-    -d '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' \
-    "$LOCAL_RPC_URL" >/dev/null 2>&1; then
-    echo "Base fork ready. Logs: $ANVIL_LOG_FILE"
-    if [[ "$USE_LOCAL_BATCHER" == "1" ]]; then
-      echo "Deploying local DeploymentBatcher override onto the fork..."
-      LOCAL_BATCHER_ADDRESS="$(
-        cd "$FRONTEND_DIR"
-        BASE_RPC_URL="$LOCAL_RPC_URL" \
-        VITE_BASE_RPC="$LOCAL_RPC_URL" \
-        pnpm exec tsx "scripts/deploy-local-batcher.ts"
-      )"
-      export VITE_CREATOR_VAULT_BATCHER="$LOCAL_BATCHER_ADDRESS"
-      export CREATOR_VAULT_BATCHER="$LOCAL_BATCHER_ADDRESS"
-      echo "Using local DeploymentBatcher at ${LOCAL_BATCHER_ADDRESS}"
-    fi
-    DEV_PORT="${DEPLOY_DRY_RUN_PORT:-5174}"
-    ORIG_DEV_PORT="$DEV_PORT"
-    if port_in_use "$DEV_PORT"; then
-      for candidate in 5174 5175 5176 5177; do
-        if [[ "$candidate" != "$ORIG_DEV_PORT" ]] && ! port_in_use "$candidate"; then
-          DEV_PORT="$candidate"
-          break
-        fi
-      done
-      if [[ "$DEV_PORT" != "$ORIG_DEV_PORT" ]]; then
-        echo "Port ${ORIG_DEV_PORT} is busy; using ${DEV_PORT} for deploy dry-run."
-      else
-        echo "Port ${ORIG_DEV_PORT} is already in use and no fallback port (5174-5177) is available." >&2
-        exit 1
-      fi
-    fi
-    export DEPLOY_DRY_RUN_PORT="$DEV_PORT"
-    if [[ -n "${APP_ORIGIN:-}" ]]; then
-      export APP_ORIGIN="$(replace_local_origin_port "$APP_ORIGIN" "$ORIG_DEV_PORT" "$DEV_PORT")"
-    fi
-    if [[ -n "${VITE_APP_ORIGIN:-}" ]]; then
-      export VITE_APP_ORIGIN="$(replace_local_origin_port "$VITE_APP_ORIGIN" "$ORIG_DEV_PORT" "$DEV_PORT")"
-    fi
-    echo "Starting frontend dev server on port ${DEV_PORT} with BASE_RPC_URL=${BASE_RPC_URL} and VITE_BASE_RPC=${VITE_BASE_RPC}"
-    cd "$FRONTEND_DIR"
-    exec pnpm exec vite --port "$DEV_PORT"
+stop_anvil() {
+  if [[ -n "$ANVIL_PID" ]] && kill -0 "$ANVIL_PID" >/dev/null 2>&1; then
+    kill "$ANVIL_PID" >/dev/null 2>&1 || true
+    wait "$ANVIL_PID" 2>/dev/null || true
   fi
-  sleep 0.5
-done
+  ANVIL_PID=""
+}
 
-echo "Timed out waiting for Anvil fork to start. Recent log output:" >&2
-tail -n 40 "$ANVIL_LOG_FILE" >&2 || true
-exit 1
+start_anvil_with_fork_url() {
+  local fork_url="$1"
+  echo "Starting Base fork on ${LOCAL_RPC_URL}..."
+  anvil \
+    --host "$FORK_HOST" \
+    --port "$FORK_PORT" \
+    --chain-id "$FORK_CHAIN_ID" \
+    --code-size-limit "${DEPLOY_DRY_RUN_FORK_CODE_SIZE_LIMIT:-393216}" \
+    --fork-url "$fork_url" \
+    >"$ANVIL_LOG_FILE" 2>&1 &
+  ANVIL_PID="$!"
+}
+
+wait_for_anvil_ready() {
+  for _ in $(seq 1 40); do
+    if curl -sSf \
+      -H 'Content-Type: application/json' \
+      -d '{"jsonrpc":"2.0","id":1,"method":"eth_chainId","params":[]}' \
+      "$LOCAL_RPC_URL" >/dev/null 2>&1; then
+      return 0
+    fi
+    sleep 0.5
+  done
+  return 1
+}
+
+start_anvil_with_fork_url "$BASE_FORK_UPSTREAM_RPC_URL"
+if ! wait_for_anvil_ready; then
+  echo "Primary fork RPC did not become ready. Recent Anvil log output:" >&2
+  tail -n 40 "$ANVIL_LOG_FILE" >&2 || true
+  if [[ -n "$FALLBACK_FORK_UPSTREAM_RPC_URL" ]] && [[ "$FALLBACK_FORK_UPSTREAM_RPC_URL" != "$BASE_FORK_UPSTREAM_RPC_URL" ]]; then
+    echo "Retrying with fallback fork RPC..." >&2
+    stop_anvil
+    start_anvil_with_fork_url "$FALLBACK_FORK_UPSTREAM_RPC_URL"
+    if ! wait_for_anvil_ready; then
+      echo "Timed out waiting for Anvil fork to start (fallback RPC). Recent log output:" >&2
+      tail -n 40 "$ANVIL_LOG_FILE" >&2 || true
+      exit 1
+    fi
+  else
+    exit 1
+  fi
+fi
+
+echo "Base fork ready. Logs: $ANVIL_LOG_FILE"
+if [[ "$USE_LOCAL_BATCHER" == "1" ]]; then
+  echo "Deploying local DeploymentBatcher override onto the fork..."
+  LOCAL_BATCHER_ADDRESS="$(
+    cd "$FRONTEND_DIR"
+    BASE_RPC_URL="$LOCAL_RPC_URL" \
+    VITE_BASE_RPC="$LOCAL_RPC_URL" \
+    pnpm exec tsx "scripts/deploy-local-batcher.ts"
+  )"
+  export VITE_CREATOR_VAULT_BATCHER="$LOCAL_BATCHER_ADDRESS"
+  export CREATOR_VAULT_BATCHER="$LOCAL_BATCHER_ADDRESS"
+  echo "Using local DeploymentBatcher at ${LOCAL_BATCHER_ADDRESS}"
+fi
+DEV_PORT="${DEPLOY_DRY_RUN_PORT:-5174}"
+ORIG_DEV_PORT="$DEV_PORT"
+if port_in_use "$DEV_PORT"; then
+  for candidate in 5174 5175 5176 5177; do
+    if [[ "$candidate" != "$ORIG_DEV_PORT" ]] && ! port_in_use "$candidate"; then
+      DEV_PORT="$candidate"
+      break
+    fi
+  done
+  if [[ "$DEV_PORT" != "$ORIG_DEV_PORT" ]]; then
+    echo "Port ${ORIG_DEV_PORT} is busy; using ${DEV_PORT} for deploy dry-run."
+  else
+    echo "Port ${ORIG_DEV_PORT} is already in use and no fallback port (5174-5177) is available." >&2
+    exit 1
+  fi
+fi
+export DEPLOY_DRY_RUN_PORT="$DEV_PORT"
+if [[ -n "${APP_ORIGIN:-}" ]]; then
+  export APP_ORIGIN="$(replace_local_origin_port "$APP_ORIGIN" "$ORIG_DEV_PORT" "$DEV_PORT")"
+fi
+if [[ -n "${VITE_APP_ORIGIN:-}" ]]; then
+  export VITE_APP_ORIGIN="$(replace_local_origin_port "$VITE_APP_ORIGIN" "$ORIG_DEV_PORT" "$DEV_PORT")"
+fi
+echo "Starting frontend dev server on port ${DEV_PORT} with BASE_RPC_URL=${BASE_RPC_URL} and VITE_BASE_RPC=${VITE_BASE_RPC}"
+cd "$FRONTEND_DIR"
+exec pnpm exec vite --port "$DEV_PORT"

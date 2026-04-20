@@ -6448,8 +6448,10 @@ function DeployVaultBatcher({
               {payoutMismatch ? (
                 <div className="mt-2 text-[11px] text-amber-300/80">
                   Creator coin payout recipient will update to{' '}
-                  <span className="font-mono text-amber-200">{shortAddress(expectedGauge!)}</span> during deploy. Continue only if this
-                  is intended.
+                  <span className="font-mono text-amber-200">
+                    {expectedPayoutRouter ? shortAddress(expectedPayoutRouter) : 'the configured payout router'}
+                  </span>{' '}
+                  during deploy. Continue only if this is intended.
                 </div>
               ) : null}
             </div>

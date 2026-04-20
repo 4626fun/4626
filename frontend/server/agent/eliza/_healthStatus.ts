@@ -23,5 +23,8 @@ export function getHealthProbeStatusCode(args: HealthStatusArgs): number {
     return args.ready ? 200 : 503
   }
 
-  return runtimeAgentsStopped ? 503 : 200
+  // Liveness should only answer "is the process up?" so deploy orchestrators
+  // do not flap while downstream services (XMTP/DB/etc.) are converging.
+  // Keep strict dependency health on /readyz.
+  return 200
 }
