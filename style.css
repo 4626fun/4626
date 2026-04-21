@@ -3674,8 +3674,15 @@ body {
   }
 }
 
-/* ─── Dual Overview Mobile overrides ─── */
-@media (max-width: 768px) {
+/* ─── Dual Overview Mobile / Tablet overrides ─── */
+/* The dual-overview desktop layout is a 1100px-wide row: 220 (strategies left)
+   + 60 (gap) + 88 (share node) + 120 (divider) + 88 (underlying node) + 60 +
+   220 (strategies right) + 40+40 side padding ≈ 1100. At any viewport under
+   ~1180px the row clips both ends (pills slide off left/right, names chopped).
+   So the stacked-column mobile layout must engage all the way up to 1024px
+   — not just at phone widths. The existing per-chapter scene-pin scale (JS
+   chScale()) handles overall shrink on top of this. */
+@media (max-width: 1024px) {
   /* Headline lifts above the stacked graph so the two no longer layer.
      The graph's ~520px column already near-fills the viewport centered at
      50%, so the headline has to clear that top edge (y ≈ 40% of viewport). */
