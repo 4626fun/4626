@@ -17,6 +17,7 @@
     "fix-profile-metadata": "tsx src/fixProfileMetadata.ts",
     "polish-profiles": "tsx src/polishProfiles.ts",
     "install-plan": "tsx src/computeInstallPlan.ts",
+    "classify-profile-wallets": "tsx src/classifyProfileWallets.ts",
     "scan-coin-holders": "tsx src/scanCoinHolders.ts",
     "flag-holder-contracts": "tsx src/flagHolderContracts.ts",
     "export:outreach": "tsx src/exportOutreach.ts",

@@ -145,6 +145,19 @@ type ClassifiedOwnerApprovalError = {
   code: OwnerApprovalErrorCode
 }
 
+function extractOwnerApprovalDebugTag(message: string): string | null {
+  const match = message.match(/\[oa-debug:([^\]]+)\]/i)
+  if (!match) return null
+  const details = String(match[1] ?? '').replace(/\s+/g, ' ').trim()
+  return details || null
+}
+
+function appendOwnerApprovalDebug(base: string, classified: ClassifiedOwnerApprovalError): string {
+  const debugDetails = extractOwnerApprovalDebugTag(classified.message)
+  if (!debugDetails) return base
+  return `${base} Debug: ${debugDetails}`
+}
+
 function classifyOwnerApprovalError(error: unknown): ClassifiedOwnerApprovalError {
   const message = error instanceof Error ? String(error.message || '').trim() : String(error ?? '').trim()
   const lower = message.toLowerCase()
@@ -196,22 +209,34 @@ export function normalizeOwnerApprovalError(error: unknown): Error {
   const classified = classifyOwnerApprovalError(error)
   if (classified.code === 'aa23_validation') {
     return new Error(
-      'Smart wallet signature validation failed during sponsorship (AA23). Reconnect the same Base smart wallet session and retry.',
+      appendOwnerApprovalDebug(
+        'Smart wallet signature validation failed during sponsorship (AA23). Reconnect the same Base smart wallet session and retry.',
+        classified,
+      ),
     )
   }
   if (classified.code === 'submission_timeout') {
     return new Error(
-      'Smart wallet approval is taking too long after signature confirmation. Retry once; if this keeps happening, reconnect the same Coinbase wallet session.',
+      appendOwnerApprovalDebug(
+        'Smart wallet approval is taking too long after signature confirmation. Retry once; if this keeps happening, reconnect the same Coinbase wallet session.',
+        classified,
+      ),
     )
   }
   if (classified.code === 'typed_data_timeout') {
     return new Error(
-      'Coinbase Smart Wallet signature confirmation timed out. Retry once; if it repeats, reconnect the same Base wallet session and approve again.',
+      appendOwnerApprovalDebug(
+        'Coinbase Smart Wallet signature confirmation timed out. Retry once; if it repeats, reconnect the same Base wallet session and approve again.',
+        classified,
+      ),
     )
   }
   if (classified.code === 'paymaster_internal') {
     return new Error(
-      '4626 could not initialize Base gas sponsorship. Retry in a few seconds. If it persists, use Not you? Switch and reconnect the same Base wallet.',
+      appendOwnerApprovalDebug(
+        '4626 could not initialize Base gas sponsorship. Retry in a few seconds. If it persists, use Not you? Switch and reconnect the same Base wallet.',
+        classified,
+      ),
     )
   }
   if (classified.code === 'paymaster_rejected') {
@@ -220,35 +245,60 @@ export function normalizeOwnerApprovalError(error: unknown): Error {
       .trim()
     const normalizedReason = reason ? reason.replace(/\s+/g, ' ').trim() : ''
     return new Error(
-      normalizedReason
-        ? `Gas sponsorship was rejected for this approval (${normalizedReason}). Retry in Base app after reconnecting the same wallet session.`
-        : 'Gas sponsorship was rejected for this approval. Retry in Base app after reconnecting the same wallet session.',
+      appendOwnerApprovalDebug(
+        normalizedReason
+          ? `Gas sponsorship was rejected for this approval (${normalizedReason}). Retry in Base app after reconnecting the same wallet session.`
+          : 'Gas sponsorship was rejected for this approval. Retry in Base app after reconnecting the same wallet session.',
+        classified,
+      ),
     )
   }
   if (classified.code === 'paymaster_insufficient') {
     return new Error(
-      'Gas sponsorship failed due to paymaster funding limits. This is a sponsor-side budget/policy issue, not your wallet ETH balance.',
+      appendOwnerApprovalDebug(
+        'Gas sponsorship failed due to paymaster funding limits. This is a sponsor-side budget/policy issue, not your wallet ETH balance.',
+        classified,
+      ),
     )
   }
   if (classified.code === 'wallet_generation_insufficient') {
     return new Error(
-      'Wallet could not generate the Coinbase Smart Wallet signature/approval. Retry from the same Base/Zora smart wallet, and reconnect it if the sponsor session has gone stale.',
+      appendOwnerApprovalDebug(
+        'Wallet could not generate the Coinbase Smart Wallet signature/approval. Retry from the same Base/Zora smart wallet, and reconnect it if the sponsor session has gone stale.',
+        classified,
+      ),
     )
   }
   if (classified.code === 'missing_session_token') {
-    return new Error('4626 could not start the smart-wallet sponsor session. Sign in again and retry.')
+    return new Error(
+      appendOwnerApprovalDebug('4626 could not start the smart-wallet sponsor session. Sign in again and retry.', classified),
+    )
   }
   if (classified.code === 'request_denied') {
-    return new Error('4626 sponsor session was rejected. Sign in again and retry the smart-wallet approval.')
+    return new Error(
+      appendOwnerApprovalDebug('4626 sponsor session was rejected. Sign in again and retry the smart-wallet approval.', classified),
+    )
   }
   if (classified.code === 'not_owner') {
-    return new Error('The current 4626 session is not authorized for this canonical smart wallet. Reconnect the same Base/Zora wallet and retry.')
+    return new Error(
+      appendOwnerApprovalDebug(
+        'The current 4626 session is not authorized for this canonical smart wallet. Reconnect the same Base/Zora wallet and retry.',
+        classified,
+      ),
+    )
   }
   if (classified.code === 'not_onchain_owner') {
-    return new Error('The connected signer is not an onchain owner of this Coinbase Smart Wallet. Reconnect a current owner and retry.')
+    return new Error(
+      appendOwnerApprovalDebug(
+        'The connected signer is not an onchain owner of this Coinbase Smart Wallet. Reconnect a current owner and retry.',
+        classified,
+      ),
+    )
   }
-  if (error instanceof Error) return error
-  return new Error('Failed to submit the owner approval transaction.')
+  if (error instanceof Error) {
+    return new Error(appendOwnerApprovalDebug(error.message, classified))
+  }
+  return new Error(appendOwnerApprovalDebug('Failed to submit the owner approval transaction.', classified))
 }
 
 function isRetryablePaymasterSessionError(error: unknown): boolean {
@@ -896,22 +946,11 @@ export async function sendPreparedOwnerTx(params: {
                 return
               } catch (nonTypedUserOpError) {
                 if (isUserRejectedWalletAction(nonTypedUserOpError)) throw nonTypedUserOpError
-                try {
-                  txHash = await runDirectSendTx()
-                } catch (sendTxError) {
-                  if (isUserRejectedWalletAction(sendTxError)) throw sendTxError
-                  emitOwnerApprovalStage(onStageEvent, {
-                    runId: effectiveApprovalRunId,
-                    stage: 'send_calls',
-                    status: 'error',
-                    executionMode,
-                    signerAddress,
-                    canonicalCswAddress: canonicalSmartWalletAddress,
-                    code: classifyOwnerApprovalError(sendTxError).code,
-                    message: sendTxError instanceof Error ? sendTxError.message : String(sendTxError ?? ''),
-                  })
-                  throw nonTypedUserOpError
-                }
+                // Sponsored-first mode is intentionally strict: do not fall back
+                // to direct eth_sendTransaction, because that path surfaces the
+                // wallet's own "insufficient funds" popup and hides the actual
+                // sponsor/UserOp failure reason we need to fix.
+                throw nonTypedUserOpError
               }
             }
           }

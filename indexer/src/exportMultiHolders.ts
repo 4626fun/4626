@@ -58,6 +58,7 @@ type MultiHolderRow = {
   holder_address: string;
   owner_handle: string | null;
   is_zora_profile: boolean;
+  holder_kind: "eoa" | "cbsw_proxy" | null;
   creators_held: number;
   creator_handles: string[];
   avatar_url: string | null;
@@ -122,6 +123,7 @@ async function main() {
     holder_address: string;
     owner_handle: string | null;
     is_zora_profile: boolean;
+    holder_kind: "eoa" | "cbsw_proxy" | null;
     creators_held: number;
     creator_handles: string[];
     avatar_url: string | null;
@@ -159,6 +161,7 @@ async function main() {
       owner_is_profile: boolean;
       owner_avatar_url: string | null;
       balance_raw: string;
+      holder_contract_kind: string | null;
     };
     const holdersAll: HolderRowRaw[] = [];
     const PAGE = 1000;
@@ -168,8 +171,12 @@ async function main() {
       let q = supabase
         .from("zora_coin_holders")
         .select(
-          "coin_address, holder_address, owner_handle, owner_is_profile, owner_avatar_url, balance_raw",
+          "coin_address, holder_address, owner_handle, owner_is_profile, owner_avatar_url, balance_raw, holder_contract_kind",
         )
+        // Exclude protocol contracts (large_contract like Uniswap V4
+        // PoolManager, generic_contract like vaults/Safes/splitters).
+        // CBSW proxies and EOAs both represent real end users.
+        .in("holder_contract_kind", ["eoa", "cbsw_proxy"])
         .order("coin_address", { ascending: true })
         .order("holder_address", { ascending: true })
         .limit(PAGE);
@@ -218,12 +225,13 @@ async function main() {
       holder_address: string;
       owner_handle: string | null;
       is_zora_profile: boolean;
+      holder_kind: "eoa" | "cbsw_proxy" | null;
       creators: Set<string>;
       balance_total: bigint;
       avatar_url: string | null;
     };
     const agg = new Map<string, Aggregated>();
-    for (const row of (holders ?? []) as HolderRow[]) {
+    for (const row of (holders ?? []) as HolderRowRaw[]) {
       const creator = coinToHandle.get(row.coin_address.toLowerCase());
       if (!creator) continue;
       const key = row.holder_address.toLowerCase();
@@ -235,17 +243,23 @@ async function main() {
           return 0n;
         }
       })();
+      const kindFromRow: "eoa" | "cbsw_proxy" | null =
+        row.holder_contract_kind === "eoa" || row.holder_contract_kind === "cbsw_proxy"
+          ? row.holder_contract_kind
+          : null;
       if (existing) {
         existing.creators.add(creator);
         existing.balance_total += balanceBig;
         if (!existing.avatar_url && row.owner_avatar_url) existing.avatar_url = row.owner_avatar_url;
         if (!existing.is_zora_profile && row.owner_is_profile) existing.is_zora_profile = row.owner_is_profile;
         if (!existing.owner_handle && row.owner_handle) existing.owner_handle = row.owner_handle;
+        if (!existing.holder_kind && kindFromRow) existing.holder_kind = kindFromRow;
       } else {
         agg.set(key, {
           holder_address: row.holder_address.toLowerCase(),
           owner_handle: row.owner_handle,
           is_zora_profile: row.owner_is_profile,
+          holder_kind: kindFromRow,
           creators: new Set([creator]),
           balance_total: balanceBig,
           avatar_url: row.owner_avatar_url,
@@ -262,6 +276,7 @@ async function main() {
         holder_address: a.holder_address,
         owner_handle: a.owner_handle,
         is_zora_profile: a.is_zora_profile,
+        holder_kind: a.holder_kind,
         creators_held: a.creators.size,
         creator_handles: [...a.creators].sort(),
         avatar_url: a.avatar_url,
@@ -311,6 +326,7 @@ async function main() {
       holder_address: r.holder_address,
       owner_handle: r.owner_handle,
       is_zora_profile: r.is_zora_profile,
+      holder_kind: r.holder_kind,
       creators_held: r.creators_held,
       creator_handles: r.creator_handles,
       avatar_url: r.avatar_url,

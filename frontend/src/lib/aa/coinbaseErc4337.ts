@@ -238,6 +238,31 @@ function formatGasValue(value: unknown): string | null {
   return null
 }
 
+function compactOwnerApprovalDebugValue(value: string, maxLen = 180): string {
+  const compact = value.replace(/\s+/g, ' ').trim()
+  if (!compact) return ''
+  return compact.length > maxLen ? `${compact.slice(0, maxLen)}...` : compact
+}
+
+function buildOwnerApprovalDebugTag(params: {
+  approvalRunId?: string | null
+  stage?: string | null
+  attempt?: number | null
+  errorCode?: string | null
+  rpcDetails?: string | null
+}): string {
+  if (!params.approvalRunId) return ''
+  const parts = [
+    `runId=${compactOwnerApprovalDebugValue(String(params.approvalRunId), 80)}`,
+    `stage=${compactOwnerApprovalDebugValue(String(params.stage ?? 'unknown'), 40)}`,
+    `attempt=${params.attempt ?? 'na'}`,
+    `code=${compactOwnerApprovalDebugValue(String(params.errorCode ?? 'unknown'), 48)}`,
+  ]
+  const rpcDetails = compactOwnerApprovalDebugValue(String(params.rpcDetails ?? ''), 220)
+  if (rpcDetails) parts.push(`rpc=${rpcDetails}`)
+  return `[oa-debug:${parts.join(';')}]`
+}
+
 function formatGasEstimate(estimate: any) {
   return {
     preVerificationGas: formatGasValue(estimate?.preVerificationGas),
@@ -1446,9 +1471,14 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
   ) => {
     const sameOrigin = isSameOriginUrl(url)
     const sendSession = options.includeSession && sameOrigin
+    const ownerApprovalDebugMode = Boolean(ownerApprovalContext?.approvalRunId)
+    const shouldIncludePaymasterDebugHeader =
+      sendSession &&
+      options.includeDebug &&
+      (PAYMASTER_DEBUG_HEADER_ENABLED || ownerApprovalDebugMode)
     const headers: Record<string, string> = {
       ...(sendSession && sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
-      ...(sendSession && options.includeDebug && PAYMASTER_DEBUG_HEADER_ENABLED ? { 'X-CV-Paymaster-Debug': '1' } : {}),
+      ...(shouldIncludePaymasterDebugHeader ? { 'X-CV-Paymaster-Debug': '1' } : {}),
     }
     return http(url, {
       fetchOptions: {
@@ -1750,6 +1780,14 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     const errorDetails = getRpcErrorDetails(lastError)
     const metaDetail = formatMetaMessages(lastError)
     const metaSuffix = metaDetail ? ` (CDP: ${metaDetail})` : ''
+    const ownerApprovalDebugTag = buildOwnerApprovalDebugTag({
+      approvalRunId: ownerApprovalContext?.approvalRunId ?? null,
+      stage: ownerApprovalContext?.stage ?? null,
+      attempt: ownerApprovalContext?.attempt ?? null,
+      errorCode: classifyUserOpErrorCode(lastError),
+      rpcDetails: errorDetails || errMsg,
+    })
+    const debugSuffix = ownerApprovalDebugTag ? ` ${ownerApprovalDebugTag}` : ''
     const isPrefundError =
       lc.includes('sender balance and deposit together') ||
       lc.includes('prefund') ||
@@ -1903,11 +1941,11 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     if (isPrefundError) {
       throw new Error(
         'Smart wallet does not have enough ETH for gas. ' +
-          'Add ETH to the canonical CSW or enable gas sponsorship.'
+          `Add ETH to the canonical CSW or enable gas sponsorship.${debugSuffix}`
       )
     }
     if (lc.includes('insufficient funds') || lc.includes('insufficient balance')) {
-      throw new Error('Paymaster rejected: insufficient sponsorship funds. Contact support.')
+      throw new Error(`Paymaster rejected: insufficient sponsorship funds. Contact support.${debugSuffix}`)
     }
     if (lc.includes('max sponsorship cost') || lc.includes('sponsorship cost per user op exceeded')) {
       // Extract the cost and limit from the error if possible
@@ -1915,11 +1953,11 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       if (costMatch) {
         throw new Error(
           `Gas sponsorship limit exceeded: this operation costs $${costMatch[1]} but the limit is $${costMatch[2]}. ` +
-          'Increase your per-UserOp limit in the CDP Dashboard (portal.cdp.coinbase.com).'
+          `Increase your per-UserOp limit in the CDP Dashboard (portal.cdp.coinbase.com).${debugSuffix}`
         )
       }
       throw new Error(
-        'Gas sponsorship limit exceeded. Increase your per-UserOp limit in the CDP Dashboard (portal.cdp.coinbase.com).'
+        `Gas sponsorship limit exceeded. Increase your per-UserOp limit in the CDP Dashboard (portal.cdp.coinbase.com).${debugSuffix}`
       )
     }
     if (lc.includes('total gas used by the user operation') && lc.includes('allowed limit')) {
@@ -1927,27 +1965,27 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       if (gasCapMatch) {
         throw new Error(
           `Sponsored UserOp exceeds paymaster total gas cap: used ${gasCapMatch[1]}, limit ${gasCapMatch[2]}. ` +
-            'Increase the paymaster per-UserOp gas limit in CDP, or use a lower-gas deploy path.'
+            `Increase the paymaster per-UserOp gas limit in CDP, or use a lower-gas deploy path.${debugSuffix}`
         )
       }
       throw new Error(
         'Sponsored UserOp exceeds paymaster total gas cap. ' +
-          'Increase the paymaster per-UserOp gas limit in CDP, or use a lower-gas deploy path.'
+          `Increase the paymaster per-UserOp gas limit in CDP, or use a lower-gas deploy path.${debugSuffix}`
       )
     }
     if (lc.includes('invalid signature') || lc.includes('signature check failed')) {
       throw new Error(
         'UserOp signature verification failed. This usually means the signer is not a valid owner. ' +
-          'Try reconnecting your wallet or adding it as an owner of the smart wallet.'
+          `Try reconnecting your wallet or adding it as an owner of the smart wallet.${debugSuffix}`
       )
     }
     if (lc.includes('aa21') || lc.includes('didn\'t pay prefund')) {
       if (attemptedWithoutPaymaster) {
         throw new Error(
-          'Smart wallet could not pay gas (no prefund). Add ETH to the smart wallet or re-enable gas sponsorship.'
+          `Smart wallet could not pay gas (no prefund). Add ETH to the smart wallet or re-enable gas sponsorship.${debugSuffix}`
         )
       }
-      throw new Error(`Paymaster did not sponsor this operation. Check paymaster configuration.${metaSuffix}`)
+      throw new Error(`Paymaster did not sponsor this operation. Check paymaster configuration.${metaSuffix}${debugSuffix}`)
     }
     if (lc.includes('aa25') || lc.includes('invalid account nonce')) {
       throw new Error('Account nonce mismatch. A pending transaction may exist. Wait and retry.')
@@ -1958,52 +1996,52 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     if (lc.includes('request denied -')) {
       const reason = errMsg.replace(/^.*request denied -\s*/i, '').trim()
       if (reason.includes('not authenticated')) {
-        throw new Error(`Session expired or missing. Reconnect your wallet and try again.${metaSuffix}`)
+        throw new Error(`Session expired or missing. Reconnect your wallet and try again.${metaSuffix}${debugSuffix}`)
       }
       if (reason.includes('creator not approved')) {
         throw new Error(
-          `Creator not approved for gas sponsorship. Request access or join the allowlist, then retry.${metaSuffix}`,
+          `Creator not approved for gas sponsorship. Request access or join the allowlist, then retry.${metaSuffix}${debugSuffix}`,
         )
       }
       if (reason.includes('allowlist unavailable')) {
-        throw new Error(`Paymaster allowlist is unavailable. Please retry shortly.${metaSuffix}`)
+        throw new Error(`Paymaster allowlist is unavailable. Please retry shortly.${metaSuffix}${debugSuffix}`)
       }
       if (reason.includes('unsupported chainid')) {
-        throw new Error(`Paymaster rejected this chain. Switch to Base mainnet and retry.${metaSuffix}`)
+        throw new Error(`Paymaster rejected this chain. Switch to Base mainnet and retry.${metaSuffix}${debugSuffix}`)
       }
       if (reason.includes('unsupported entrypoint')) {
-        throw new Error(`Paymaster rejected the EntryPoint version. Please retry.${metaSuffix}`)
+        throw new Error(`Paymaster rejected the EntryPoint version. Please retry.${metaSuffix}${debugSuffix}`)
       }
-      throw new Error(`Paymaster rejected this request: ${reason}.${metaSuffix}`)
+      throw new Error(`Paymaster rejected this request: ${reason}.${metaSuffix}${debugSuffix}`)
     }
     if (isPaymasterUnavailableError(lastError)) {
       if (typeof smartWalletBalance === 'bigint' && smartWalletBalance <= 0n) {
         throw new Error(
           'Paymaster unavailable and smart wallet has no ETH for fallback. ' +
-            'Add ETH to the smart wallet or fix the paymaster configuration.'
+            `Add ETH to the smart wallet or fix the paymaster configuration.${debugSuffix}`
         )
       }
       throw new Error(
-        `Paymaster unavailable. Check CDP paymaster configuration, sponsorship limits, and allowlist, then retry.${metaSuffix}`
+        `Paymaster unavailable. Check CDP paymaster configuration, sponsorship limits, and allowlist, then retry.${metaSuffix}${debugSuffix}`
       )
     }
     if (isLikelyVerificationGasLimitError(errMsg)) {
       throw new Error(
         'Signature verification used more gas than estimated. ' +
-        'This can happen with smart wallet signers (EIP-1271). Please try again.'
+        `This can happen with smart wallet signers (EIP-1271). Please try again.${debugSuffix}`
       )
     }
     if (lc.includes('aa41') || lc.includes('over paymasterverificationgaslimit')) {
-      throw new Error('Paymaster verification gas limit exceeded. Please try again.')
+      throw new Error(`Paymaster verification gas limit exceeded. Please try again.${debugSuffix}`)
     }
     if (lc.includes('banned opcode') || lc.includes('stake/unstake delay') || lc.includes('unstake delay too low')) {
       throw new Error(
         'Bundler rejected sponsored UserOp: paymaster stake/unstake delay too low. ' +
-          'Retry with a funded smart wallet or contact support to fix paymaster stake.'
+          `Retry with a funded smart wallet or contact support to fix paymaster stake.${debugSuffix}`
       )
     }
     
-    throw new Error(`UserOperation failed: ${errMsg}`)
+    throw new Error(`UserOperation failed: ${errMsg}${debugSuffix}`)
   }
 
   // Wait for on-chain confirmation with extended timeout
