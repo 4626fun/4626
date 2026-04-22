@@ -20,6 +20,7 @@ type Config = {
 }
 
 type WebhookPayload = {
+  authToken?: string
   event?: {
     data?: {
       block?: {
@@ -162,6 +163,10 @@ function sinkSummary(
 
 const onHttpTrigger = (runtime: Runtime<Config>, payload: HTTPPayload): string => {
   const parsedPayload = parseWebhookPayload(payload)
+  const expectedToken = runtime.getSecret({ id: "CRE_RUNTIME_WEBHOOK_HMAC_SECRET" }).result().value
+  if (!parsedPayload.authToken || parsedPayload.authToken !== expectedToken) {
+    throw new Error("unauthorized_webhook")
+  }
   const summary = buildSummary(runtime.config, parsedPayload)
 
   runtime.log(

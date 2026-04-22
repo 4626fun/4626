@@ -15,7 +15,7 @@ jobs:
     name: Gitleaks (incremental)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
 
@@ -51,38 +51,38 @@ jobs:
             --log-opts "${{ github.sha }}^!"
 
   dependency-audit:
-    name: pnpm audit (report-only)
+    name: pnpm audit (blocking on high+critical)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
-      - uses: pnpm/action-setup@v5
+      - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
 
-      - uses: actions/setup-node@v6
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
           node-version: '20'
 
+      # Audit finding M-35 / 4626-344: `pnpm audit` must be blocking.
+      # `--audit-level high` exits non-zero only when a high or critical advisory
+      # is found; informational/low/moderate advisories continue to appear in the
+      # job summary but do not fail CI.
       - name: Root lockfile audit
-        run: pnpm install --frozen-lockfile && pnpm audit 2>&1 | tee "$RUNNER_TEMP/root-audit.txt"
-        continue-on-error: true
+        run: pnpm install --frozen-lockfile && pnpm audit --audit-level high 2>&1 | tee "$RUNNER_TEMP/root-audit.txt"
 
       - name: Frontend lockfile audit
-        run: pnpm --dir frontend install --frozen-lockfile && pnpm --dir frontend audit 2>&1 | tee "$RUNNER_TEMP/frontend-audit.txt"
-        continue-on-error: true
+        run: pnpm --dir frontend install --frozen-lockfile && pnpm --dir frontend audit --audit-level high 2>&1 | tee "$RUNNER_TEMP/frontend-audit.txt"
 
       - name: CRE lockfile audit
-        run: pnpm --dir cre install --frozen-lockfile && pnpm --dir cre audit 2>&1 | tee "$RUNNER_TEMP/cre-audit.txt"
-        continue-on-error: true
+        run: pnpm --dir cre install --frozen-lockfile && pnpm --dir cre audit --audit-level high 2>&1 | tee "$RUNNER_TEMP/cre-audit.txt"
 
       - name: Docs site lockfile audit
-        run: pnpm --dir apps/docs-site install --frozen-lockfile && pnpm --dir apps/docs-site audit 2>&1 | tee "$RUNNER_TEMP/docs-site-audit.txt"
-        continue-on-error: true
+        run: pnpm --dir apps/docs-site install --frozen-lockfile && pnpm --dir apps/docs-site audit --audit-level high 2>&1 | tee "$RUNNER_TEMP/docs-site-audit.txt"
 
       - name: Write summary
         if: always()
         run: |
-          echo "## pnpm audit (informational)" >> "$GITHUB_STEP_SUMMARY"
-          echo "These steps use \`continue-on-error\`; failures do not fail the job. Remediate high-impact advisories in the production dependency graph." >> "$GITHUB_STEP_SUMMARY"
+          echo "## pnpm audit (blocking on high+critical)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Any high or critical advisory fails the job. Moderate / low / info are surfaced here but do not block." >> "$GITHUB_STEP_SUMMARY"
           echo "### Root (\`pnpm-lock.yaml\`)" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           tail -60 "$RUNNER_TEMP/root-audit.txt" 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || echo "(no output)" >> "$GITHUB_STEP_SUMMARY"
@@ -104,7 +104,7 @@ jobs:
     name: Semgrep (frontend API surfaces)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
       - name: Pull Semgrep image
         run: docker pull semgrep/semgrep:latest
@@ -131,39 +131,58 @@ jobs:
           echo '```' >> "$GITHUB_STEP_SUMMARY"
 
   slither-contracts:
-    name: Slither (Foundry, report-only)
+    # Audit findings M-34, M-37 / 4626-343, 4626-346:
+    # Slither now fails on high-impact findings on every branch, and
+    # `forge build --sizes` is no longer swallowed with `|| true` so
+    # contracts that exceed the EIP-170 24 KB limit break CI.
+    name: Slither (Foundry, blocking on high impact)
     runs-on: ubuntu-latest
-    continue-on-error: true
     env:
       FOUNDRY_PROFILE: ci
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           submodules: recursive
 
-      - uses: foundry-rs/foundry-toolchain@v1
+      - uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1
         with:
           version: nightly
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
 
       - name: Install Slither
         run: pip install slither-analyzer
 
-      - name: Forge build
-        run: forge build --sizes || true
+      - name: Forge build (EIP-170 size check)
+        run: forge build --sizes
 
-      - name: Run Slither
+      - name: Run Slither (JSON)
+        run: slither . --fail-none --json "$RUNNER_TEMP/slither.json" 2>&1 | tee "$RUNNER_TEMP/slither.txt"
+
+      - name: Fail on high-impact Slither findings
         run: |
-          slither . --fail-none 2>&1 | tee "$RUNNER_TEMP/slither.txt"
+          python - <<'PY'
+          import json, os, sys
+          path = os.path.join(os.environ["RUNNER_TEMP"], "slither.json")
+          with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+          detectors = ((data or {}).get("results") or {}).get("detectors") or []
+          highs = [d for d in detectors if str(d.get("impact", "")).lower() == "high"]
+          if highs:
+            print("High-impact Slither findings detected:")
+            for d in highs:
+              print(f"- {d.get('check', '<unknown>')} (impact={d.get('impact')}, confidence={d.get('confidence')})")
+            sys.exit(1)
+          print("No high-impact Slither findings.")
+          PY
 
       - name: Slither summary
         if: always()
         run: |
-          echo "## Slither (informational)" >> "$GITHUB_STEP_SUMMARY"
-          echo "Full static analysis with \`--fail-none\` (exit 0); review detectors in logs. Typical run reports many low-signal items across vendored + first-party contracts." >> "$GITHUB_STEP_SUMMARY"
+          echo "## Slither (blocking on high impact)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Full static analysis; any high-impact finding fails the job. Medium/low detectors are surfaced in logs." >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
           tail -80 "$RUNNER_TEMP/slither.txt" 2>/dev/null >> "$GITHUB_STEP_SUMMARY" || echo "(no slither output)" >> "$GITHUB_STEP_SUMMARY"
           echo '```' >> "$GITHUB_STEP_SUMMARY"
@@ -177,15 +196,15 @@ jobs:
     env:
       FOUNDRY_PROFILE: ci
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           submodules: recursive
 
-      - uses: foundry-rs/foundry-toolchain@v1
+      - uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1
         with:
           version: nightly
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: '3.12'
 

@@ -140,10 +140,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const body: Partial<DecisionBody> = (await readBoundedJsonObjectBody<DecisionBody>(req, { maxBytes: 131_072 })) ?? {}
-  const enforceHmac = (process.env.CRE_RUNTIME_ENFORCE_HMAC ?? "false").toLowerCase() === "true"
-  const auth = await authenticateRuntimeRequest(req, body, {
-    allowUnsignedWhenHmacConfigured: !enforceHmac,
-  })
+  // H-08 / 4626-300: HMAC enforcement is no longer opt-in.
+  const auth = await authenticateRuntimeRequest(req, body)
   if (!auth.ok) {
     return res.status(auth.status).json({
       success: false,

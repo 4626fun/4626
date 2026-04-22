@@ -23,6 +23,7 @@ import {
   isDbConfigured,
   getDb,
   checkRateLimit,
+  checkDurableRateLimit,
   RATE_LIMITS,
   rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
@@ -1455,9 +1456,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const preflightOnly = body.preflightOnly === true
 
   // Split throttles: preflight should not consume create quota, but it still must be limited.
+  // H-07 / 4626-299: the full deploy-create path must use the durable
+  // Postgres-backed limiter with failClosed=true so it cannot be multiplied
+  // across warm serverless instances. Preflight remains on the in-memory
+  // limiter because it is idempotent and low-risk.
   const rateLimit = preflightOnly
     ? checkRateLimit(rateLimitKey('deploy-preflight', auth.address.toLowerCase()), { windowMs: 60_000, maxRequests: 20 })
-    : checkRateLimit(rateLimitKey('deploy', auth.address.toLowerCase()), RATE_LIMITS.deployCreate)
+    : await checkDurableRateLimit(
+        rateLimitKey('deploy', auth.address.toLowerCase()),
+        RATE_LIMITS.deployCreate,
+        { failClosed: true },
+      )
   if (!rateLimit.allowed) {
     res.setHeader('Retry-After', Math.ceil((rateLimit.resetAt - Date.now()) / 1000).toString())
     return res.status(429).json({

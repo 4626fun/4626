@@ -34,7 +34,9 @@ production-settings:
   cre-cli:
     don-family: "zone-a"
   rpcs:
+    # Audit H-09 / 4626-301: inject Infura project id via ${INFURA_PROJECT_ID} from
+    # CRE Secrets rather than committing a placeholder that ships literal text.
     - chain-name: ethereum-mainnet
-      url: https://mainnet.infura.io/v3/YOUR_API_KEY
+      url: https://mainnet.infura.io/v3/${INFURA_PROJECT_ID}
     - chain-name: ethereum-mainnet-base-1
-      url: https://base-mainnet.infura.io/v3/YOUR_API_KEY
+      url: https://base-mainnet.infura.io/v3/${INFURA_PROJECT_ID}

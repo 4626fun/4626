@@ -10,12 +10,11 @@ This document defines the minimal app bridge contract for CRE orchestration work
 ## Authentication
 
 - Base auth: `Authorization: Bearer <KEEPR_API_KEY>`
-- Hardened auth (enable strict mode with `CRE_RUNTIME_ENFORCE_HMAC=true`):
+- HMAC auth (mandatory whenever `CRE_RUNTIME_WEBHOOK_HMAC_SECRET` is configured, which is the production default):
   - `x-cre-timestamp`: Unix epoch milliseconds
   - `x-cre-nonce`: unique nonce
   - `x-cre-signature`: hex HMAC-SHA256 over `${timestamp}.${nonce}.${stableJsonBody}`
-- Transitional compatibility override (not recommended for production):
-  - `CRE_RUNTIME_ALLOW_UNSIGNED_WHEN_HMAC_CONFIGURED=true`
+- Per audit finding H-08 / 4626-300, the `CRE_RUNTIME_ENFORCE_HMAC` and `CRE_RUNTIME_ALLOW_UNSIGNED_WHEN_HMAC_CONFIGURED` env vars are no longer recognized. They previously allowed the signature check to be bypassed silently.
 
 Replay protection:
 - Nonce tracking table: `cre_runtime_replay_nonces`

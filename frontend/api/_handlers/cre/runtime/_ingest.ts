@@ -76,10 +76,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const body: Partial<IngestBody> = req.method === "POST"
     ? ((await readBoundedJsonObjectBody<IngestBody>(req, { maxBytes: 131_072 })) ?? {})
     : {}
-  const enforceHmac = (process.env.CRE_RUNTIME_ENFORCE_HMAC ?? "false").toLowerCase() === "true"
-  const auth = await authenticateRuntimeRequest(req, body, {
-    allowUnsignedWhenHmacConfigured: req.method === "GET" || !enforceHmac,
-  })
+  // H-08 / 4626-300: HMAC enforcement is no longer opt-in. GET requests sign an empty body.
+  const auth = await authenticateRuntimeRequest(req, body)
   if (!auth.ok) {
     return res.status(auth.status).json({
       success: false,

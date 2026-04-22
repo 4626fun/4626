@@ -32,6 +32,7 @@ type Config = {
 }
 
 type ManualPayload = {
+  authToken?: string
   checkpointKey?: string
   latestBlockNumber?: number
   matchedTransactions?: number
@@ -293,6 +294,10 @@ const onCronTrigger = (runtime: Runtime<Config>): string => {
 
 const onHttpTrigger = (runtime: Runtime<Config>, payload: HTTPPayload): string => {
   const manual = parseManualPayload(payload)
+  const apiKey = runtime.getSecret({ id: "KEEPR_API_KEY" }).result().value
+  if (!manual.authToken || manual.authToken !== apiKey) {
+    throw new Error("unauthorized_manual_trigger")
+  }
   const result = runOrchestration(runtime, "http", manual)
   return JSON.stringify(result, null, 2)
 }

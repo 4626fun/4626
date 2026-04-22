@@ -1,6 +1,10 @@
 # Active Vercel root is `frontend/`.
 # Keep generated output, local caches, and secrets out of every upload.
 
+# Developer diagnostic pages must never ship to production (see audit M-25, M-27 / 4626-334, 4626-336).
+public/csw-diag.html
+public/*-diag.html
+
 # Dependencies
 node_modules
 **/node_modules

@@ -80,7 +80,9 @@ export type RuntimeAuthResult =
   | { ok: false; status: number; error: string; correlationId: string }
 
 type RuntimeAuthOptions = {
-  allowUnsignedWhenHmacConfigured?: boolean
+  // Deprecated: the allowUnsignedWhenHmacConfigured bypass has been removed.
+  // If CRE_RUNTIME_WEBHOOK_HMAC_SECRET is configured, HMAC is mandatory.
+  // See audit finding H-08 / 4626-300.
 }
 
 type ExecuteWorkflowInput = {
@@ -89,7 +91,17 @@ type ExecuteWorkflowInput = {
   requestId?: string
 }
 
-const localReplayNonceStore = new Map<string, number>()
+// M-18 / 4626-327: the process-local nonce store was removed. Nonce replay
+// protection now requires a durable Postgres store; if the DB is unreachable
+// we fail closed with a RuntimeNonceStoreUnavailableError, which surfaces as
+// a 503 to the caller. This prevents cross-instance/cold-start replay in the
+// serverless environment.
+export class RuntimeNonceStoreUnavailableError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "RuntimeNonceStoreUnavailableError"
+  }
+}
 
 function toIso(value: string | Date): string {
   return value instanceof Date ? value.toISOString() : new Date(value).toISOString()
@@ -129,28 +141,21 @@ function base64UrlEncode(input: string | Uint8Array): string {
   return bytes.toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "")
 }
 
-function cleanupLocalReplayStore(nowMs: number) {
-  for (const [nonce, expiresAt] of localReplayNonceStore.entries()) {
-    if (expiresAt <= nowMs) localReplayNonceStore.delete(nonce)
-  }
-}
-
 async function registerReplayNonce(nonce: string, expiresAt: Date): Promise<boolean> {
-  const nowMs = Date.now()
+  // No in-memory fallback — a process-local Map cannot prevent replay across
+  // concurrent serverless instances or cold-starts (M-18 / 4626-327).
   if (!isDbConfigured()) {
-    cleanupLocalReplayStore(nowMs)
-    if (localReplayNonceStore.has(nonce)) return false
-    localReplayNonceStore.set(nonce, expiresAt.getTime())
-    return true
+    throw new RuntimeNonceStoreUnavailableError(
+      "CRE runtime nonce store unavailable: database is not configured",
+    )
   }
 
   await ensureCreRuntimeSchema()
   const db = await getDb()
   if (!db) {
-    cleanupLocalReplayStore(nowMs)
-    if (localReplayNonceStore.has(nonce)) return false
-    localReplayNonceStore.set(nonce, expiresAt.getTime())
-    return true
+    throw new RuntimeNonceStoreUnavailableError(
+      "CRE runtime nonce store unavailable: getDb() returned null",
+    )
   }
 
   const result = await db.sql`
@@ -225,23 +230,13 @@ export async function authenticateRuntimeRequest(
     return { ok: true, correlationId }
   }
 
-  const allowUnsignedDefault =
-    (process.env.CRE_RUNTIME_ALLOW_UNSIGNED_WHEN_HMAC_CONFIGURED ?? "false").toLowerCase() === "true"
-  const allowUnsignedWhenHmacConfigured =
-    options.allowUnsignedWhenHmacConfigured ?? allowUnsignedDefault
-
+  // H-08 / 4626-300: HMAC is mandatory when the secret is configured.
+  // Previously CRE_RUNTIME_ALLOW_UNSIGNED_WHEN_HMAC_CONFIGURED and a per-handler
+  // override could silently drop the signature check; both are now removed.
   const tsRaw = parseHeader(req, "x-cre-timestamp")
   const nonce = parseHeader(req, "x-cre-nonce")
   const signatureRaw = parseHeader(req, "x-cre-signature")
   if (!tsRaw || !nonce || !signatureRaw) {
-    if (allowUnsignedWhenHmacConfigured) {
-      logger.warn("CRE runtime request accepted without HMAC signature", {
-        correlationId,
-        method: req.method,
-        path: req.url,
-      })
-      return { ok: true, correlationId }
-    }
     return { ok: false, status: 401, error: "Missing runtime request signature headers", correlationId }
   }
 
@@ -257,7 +252,22 @@ export async function authenticateRuntimeRequest(
   }
 
   const expiresAt = new Date(timestampMs + allowedSkewMs)
-  const nonceAccepted = await registerReplayNonce(nonce, expiresAt)
+  let nonceAccepted: boolean
+  try {
+    nonceAccepted = await registerReplayNonce(nonce, expiresAt)
+  } catch (err) {
+    if (err instanceof RuntimeNonceStoreUnavailableError) {
+      // M-18 / 4626-327: fail closed rather than silently degrading to a
+      // process-local map that cannot prevent cross-instance replay.
+      return {
+        ok: false,
+        status: 503,
+        error: "CRE runtime nonce store unavailable",
+        correlationId,
+      }
+    }
+    throw err
+  }
   if (!nonceAccepted) {
     return { ok: false, status: 409, error: "Replay nonce already used", correlationId }
   }

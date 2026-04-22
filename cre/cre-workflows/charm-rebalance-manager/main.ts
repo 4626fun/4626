@@ -20,8 +20,14 @@ type Config = CharmManagerConfig & {
 const onCronTrigger = (runtime: Runtime<Config>): CharmWorkflowResult =>
   evaluateAndEnqueueCharmActions(runtime)
 
-const onHttpTrigger = (runtime: Runtime<Config>, payload: HTTPPayload): CharmWorkflowResult =>
-  evaluateAndEnqueueCharmActions(runtime, parseCharmManualPayload(payload.input))
+const onHttpTrigger = (runtime: Runtime<Config>, payload: HTTPPayload): CharmWorkflowResult => {
+  const manual = parseCharmManualPayload(payload.input)
+  const apiKey = runtime.getSecret({ id: "KEEPR_API_KEY" }).result().value
+  if (!manual.authToken || manual.authToken !== apiKey) {
+    throw new Error("unauthorized_manual_trigger")
+  }
+  return evaluateAndEnqueueCharmActions(runtime, manual)
+}
 
 const initWorkflow = (config: Config) => {
   const cron = new CronCapability()

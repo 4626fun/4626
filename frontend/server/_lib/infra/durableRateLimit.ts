@@ -51,21 +51,48 @@ function windowResetAtMs(id: bigint, windowMs: number): number {
   return Number((id + 1n) * BigInt(w))
 }
 
-export type DurableRateLimitResult = RateLimitResult & { source: 'db' | 'memory' }
+export type DurableRateLimitResult = RateLimitResult & { source: 'db' | 'memory' | 'fail-closed' }
+
+export type DurableRateLimitOptions = {
+  /**
+   * When true, do NOT fall back to the in-memory limiter if Postgres is
+   * unavailable or the query fails — instead deny the request. This is
+   * mandatory for security-sensitive gates (auth, deploy-create, agent
+   * writes) where a memory fallback is trivially bypassed across serverless
+   * instances (H-07 / 4626-299).
+   */
+  failClosed?: boolean
+}
+
+function failClosedResult(config: RateLimitConfig, now: number): DurableRateLimitResult {
+  return {
+    allowed: false,
+    remaining: 0,
+    resetAt: now + config.windowMs,
+    source: 'fail-closed',
+  }
+}
 
 /**
  * Durable rate limit using Postgres when configured.
- * Falls back to in-memory limiter if DB is unavailable.
+ * Falls back to in-memory limiter if DB is unavailable, unless the caller
+ * passes `failClosed: true` — in which case we deny the request.
  */
-export async function checkDurableRateLimit(key: string, config: RateLimitConfig): Promise<DurableRateLimitResult> {
+export async function checkDurableRateLimit(
+  key: string,
+  config: RateLimitConfig,
+  options: DurableRateLimitOptions = {},
+): Promise<DurableRateLimitResult> {
   const now = Date.now()
 
   if (!isDbConfigured()) {
+    if (options.failClosed) return failClosedResult(config, now)
     return { ...checkRateLimit(key, config), source: 'memory' }
   }
 
   const db = await getDb()
   if (!db) {
+    if (options.failClosed) return failClosedResult(config, now)
     return { ...checkRateLimit(key, config), source: 'memory' }
   }
 
@@ -100,7 +127,8 @@ export async function checkDurableRateLimit(key: string, config: RateLimitConfig
     }
 
     if (!Number.isFinite(count as any)) {
-      // Unexpected shape; fall back to memory limiter.
+      // Unexpected shape; fall back to memory limiter (or fail-closed).
+      if (options.failClosed) return failClosedResult(config, now)
       return { ...checkRateLimit(key, config), source: 'memory' }
     }
 
@@ -108,6 +136,7 @@ export async function checkDurableRateLimit(key: string, config: RateLimitConfig
     const remaining = Math.max(0, config.maxRequests - (count as number))
     return { allowed, remaining, resetAt, source: 'db' }
   } catch {
+    if (options.failClosed) return failClosedResult(config, now)
     return { ...checkRateLimit(key, config), source: 'memory' }
   }
 }

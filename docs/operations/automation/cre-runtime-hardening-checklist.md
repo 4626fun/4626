@@ -14,12 +14,9 @@ sidebar_position: 5
   - `AWS_SECRET_ACCESS_KEY`
 - Keep local-only simulation values in `cre/cre-workflows/.env` (never commit real values).
 - Require `Authorization: Bearer ${KEEPR_API_KEY}` for all bridge endpoints.
-- Enable strict HMAC verification for runtime ingest/decision endpoints:
-  - `CRE_RUNTIME_ENFORCE_HMAC=true`
+- HMAC verification is mandatory for all runtime ingest/decision/trigger endpoints whenever `CRE_RUNTIME_WEBHOOK_HMAC_SECRET` is configured:
   - Request headers: `x-cre-timestamp`, `x-cre-nonce`, `x-cre-signature`
-- If temporary backward-compatibility is needed while onboarding clients, set:
-  - `CRE_RUNTIME_ALLOW_UNSIGNED_WHEN_HMAC_CONFIGURED=true`
-  - Remove this override before production launch.
+  - Audit finding H-08 / 4626-300 removed both `CRE_RUNTIME_ENFORCE_HMAC` and `CRE_RUNTIME_ALLOW_UNSIGNED_WHEN_HMAC_CONFIGURED`. The previous behavior let any bearer-token holder forge workflow records whenever either flag was set to `true`, which was the production default.
 - Rotate `CRE_HTTP_TRIGGER_PRIVATE_KEY` on a regular schedule and after incidents.
 
 ## 2) Replay protection and idempotency

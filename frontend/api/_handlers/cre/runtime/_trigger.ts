@@ -81,9 +81,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const body: Partial<TriggerBody> = (await readBoundedJsonObjectBody<TriggerBody>(req, { maxBytes: 65_536 })) ?? {}
-  const auth = await authenticateRuntimeRequest(req, body, {
-    allowUnsignedWhenHmacConfigured: true,
-  })
+  // H-08 / 4626-300: hardcoded HMAC bypass removed. Trigger now requires a valid signature when the secret is configured.
+  const auth = await authenticateRuntimeRequest(req, body)
   if (!auth.ok) {
     return res.status(auth.status).json({
       success: false,
