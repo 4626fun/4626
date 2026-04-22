@@ -773,20 +773,24 @@ function deriveOftBootstrapSalt(): Hex {
   return keccak256(encodePacked(['string'], ['4626:OFTBootstrapRegistry:v1']))
 }
 
-async function findDeploymentVersionForVaultPrefix(params: {
+async function findDeploymentVersionForVanityTargets(params: {
   create2Deployer: Address
   creatorToken: Address
   owner: Address
   chainId: number
   baseVersion: string
-  prefix: string
+  vaultPrefix?: string | null
+  shareSuffix?: string | null
   maxTries: number
   vaultInitCode: Hex
+  shareOftInitCode: Hex
+  shareSymbol: string
   isAddressDeployed?: (addr: Address) => Promise<boolean>
   yieldEvery?: number
 }): Promise<string | null> {
-  const prefix = normalizeHexSuffix(params.prefix)
-  if (!prefix) return null
+  const vaultPrefix = normalizeHexSuffix(params.vaultPrefix ?? null)
+  const shareSuffix = normalizeHexSuffix(params.shareSuffix ?? null)
+  if (!vaultPrefix && !shareSuffix) return null
   const maxTries = Math.max(1, Math.floor(params.maxTries))
   const yieldEvery = Math.max(256, Math.floor(params.yieldEvery ?? 4096))
 
@@ -798,23 +802,46 @@ async function findDeploymentVersionForVaultPrefix(params: {
       chainId: params.chainId,
       version: candidateVersion,
     })
-    const vaultSalt = saltFor(baseSalt, 'vault')
-    const addr = predictCreate2Address({
-      create2Deployer: params.create2Deployer,
-      salt: vaultSalt,
-      initCode: params.vaultInitCode,
-    })
-    if (addr.slice(2, 2 + prefix.length).toLowerCase() === prefix) {
-      if (params.isAddressDeployed) {
+
+    let vaultAddress: Address | null = null
+    if (vaultPrefix) {
+      const vaultSalt = saltFor(baseSalt, 'vault')
+      vaultAddress = predictCreate2Address({
+        create2Deployer: params.create2Deployer,
+        salt: vaultSalt,
+        initCode: params.vaultInitCode,
+      })
+      if (vaultAddress.slice(2, 2 + vaultPrefix.length).toLowerCase() !== vaultPrefix) continue
+    }
+
+    let shareAddress: Address | null = null
+    if (shareSuffix) {
+      const shareSalt = deriveShareOftSalt({
+        owner: params.owner,
+        shareSymbol: params.shareSymbol,
+        version: candidateVersion,
+      })
+      shareAddress = predictCreate2Address({
+        create2Deployer: params.create2Deployer,
+        salt: shareSalt,
+        initCode: params.shareOftInitCode,
+      })
+      if (!shareAddress.toLowerCase().endsWith(shareSuffix)) continue
+    }
+
+    if (params.isAddressDeployed) {
+      const toCheck = [vaultAddress, shareAddress].filter((v): v is Address => Boolean(v))
+      if (toCheck.length > 0) {
         try {
-          const deployed = await params.isAddressDeployed(addr)
-          if (deployed) continue
+          const deployedStates = await Promise.all(toCheck.map((addr) => params.isAddressDeployed!(addr)))
+          if (deployedStates.some(Boolean)) continue
         } catch {
           // ignore deployed-check failures; allow candidate version
         }
       }
-      return candidateVersion
     }
+    return candidateVersion
+
     if (i > 0 && i % yieldEvery === 0) {
       await new Promise((resolve) => setTimeout(resolve, 0))
     }
@@ -3135,44 +3162,71 @@ function DeployVaultBatcher({
       const vaultInitCode = concatHex([DEPLOY_BYTECODE.CreatorOVault as Hex, vaultArgs])
 
       let deploymentVersionUsed = deploymentVersion
-      if (vaultVanityPrefix) {
-        const vaultVanityKey = [
+      const needsVersionSearchForShareSuffix =
+        !supportsPhase1WithSalt && Boolean(shareOftVanitySuffix) && !shareVanityIsCustom
+      if (vaultVanityPrefix || needsVersionSearchForShareSuffix) {
+        const vanityTargetsKey = [
           create2Deployer.toLowerCase(),
           creatorToken.toLowerCase(),
           owner.toLowerCase(),
           String(base.id),
           vaultName,
           vaultSymbol,
+          shareName,
+          shareSymbol,
           deploymentVersion,
-          vaultVanityPrefix,
+          vaultVanityPrefix ?? '',
+          needsVersionSearchForShareSuffix ? shareOftVanitySuffix : '',
           String(vaultVanityMaxTries),
+          String(shareOftVanityMaxTries),
         ].join(':')
         const cached = vaultVanityVersionCacheRef.current
-        if (cached?.key === vaultVanityKey) {
+        if (cached?.key === vanityTargetsKey) {
           deploymentVersionUsed = cached.version
         } else {
-          const foundVersion = await findDeploymentVersionForVaultPrefix({
+          const versionSearchMaxTries = vaultVanityPrefix && needsVersionSearchForShareSuffix
+            ? Math.max(vaultVanityMaxTries, shareOftVanityMaxTries)
+            : vaultVanityPrefix
+              ? vaultVanityMaxTries
+              : shareOftVanityMaxTries
+          const foundVersion = await findDeploymentVersionForVanityTargets({
             create2Deployer,
             creatorToken,
             owner,
             chainId: base.id,
             baseVersion: deploymentVersion,
-            prefix: vaultVanityPrefix,
-            maxTries: vaultVanityMaxTries,
+            vaultPrefix: vaultVanityPrefix,
+            shareSuffix: needsVersionSearchForShareSuffix ? shareOftVanitySuffix : null,
+            maxTries: versionSearchMaxTries,
             vaultInitCode,
+            shareOftInitCode,
+            shareSymbol,
             isAddressDeployed: async (addr) => {
               const bc = await publicClient!.getBytecode({ address: addr })
               return !!bc && bc !== '0x'
             },
           })
           if (!foundVersion) {
+            if (vaultVanityPrefix && needsVersionSearchForShareSuffix) {
+              throw new Error(
+                `Unable to satisfy both vault vanity prefix "0x${vaultVanityPrefix}" and ShareOFT suffix "${shareOftVanitySuffix}" ` +
+                  `in ${versionSearchMaxTries.toLocaleString()} deployment-version tries. Increase ` +
+                  '`VITE_VAULT_VANITY_MAX_TRIES` and `VITE_SHARE_OFT_VANITY_MAX_TRIES`, then retry.',
+              )
+            }
+            if (vaultVanityPrefix) {
+              throw new Error(
+                `Unable to find vault vanity prefix "0x${vaultVanityPrefix}" in ${versionSearchMaxTries.toLocaleString()} deployment-version tries. ` +
+                  'Increase VITE_VAULT_VANITY_MAX_TRIES and retry.',
+              )
+            }
             throw new Error(
-              `Unable to find vault vanity prefix "0x${vaultVanityPrefix}" in ${vaultVanityMaxTries.toLocaleString()} deployment-version tries. ` +
-                'Increase VITE_VAULT_VANITY_MAX_TRIES and retry.',
+              `Unable to satisfy ShareOFT suffix "${shareOftVanitySuffix}" in ${versionSearchMaxTries.toLocaleString()} ` +
+                'deployment-version tries with the active batcher. Increase VITE_SHARE_OFT_VANITY_MAX_TRIES and retry.',
             )
           }
           deploymentVersionUsed = foundVersion
-          vaultVanityVersionCacheRef.current = { key: vaultVanityKey, version: foundVersion }
+          vaultVanityVersionCacheRef.current = { key: vanityTargetsKey, version: foundVersion }
         }
       }
 
@@ -3198,22 +3252,24 @@ function DeployVaultBatcher({
           })
           throw new Error(blockingMessage)
         }
-        const skipLogKey = buildShareVanitySkipLogKey({
-          batcher: batcherAddress,
-          suffix: shareOftVanitySuffix,
-          reason: 'phase1_salt_overrides_not_supported',
-        })
-        if (shouldEmitShareVanitySkipLog({ lastKey: shareOftVanitySkipLogKeyRef.current, nextKey: skipLogKey })) {
-          shareOftVanitySkipLogKeyRef.current = skipLogKey
-          logger.debug('[DeployVault] share_oft_vanity_suffix_skipped_default', {
+        if (!needsVersionSearchForShareSuffix) {
+          const skipLogKey = buildShareVanitySkipLogKey({
             batcher: batcherAddress,
             suffix: shareOftVanitySuffix,
             reason: 'phase1_salt_overrides_not_supported',
           })
+          if (shouldEmitShareVanitySkipLog({ lastKey: shareOftVanitySkipLogKeyRef.current, nextKey: skipLogKey })) {
+            shareOftVanitySkipLogKeyRef.current = skipLogKey
+            logger.debug('[DeployVault] share_oft_vanity_suffix_skipped_default', {
+              batcher: batcherAddress,
+              suffix: shareOftVanitySuffix,
+              reason: 'phase1_salt_overrides_not_supported',
+            })
+          }
+          shareOftVanityWarning =
+            `Active batcher ${batcherDisplay} does not support Phase-1 salt overrides, so default share suffix ` +
+            `"${shareOftVanitySuffix}" is not guaranteed for this deploy.`
         }
-        shareOftVanityWarning =
-          `Active batcher ${batcherDisplay} does not support Phase-1 salt overrides, so default share suffix ` +
-          `"${shareOftVanitySuffix}" is not guaranteed for this deploy.`
       }
 
       const derivedShareOftSalt = deriveShareOftSalt({ owner, shareSymbol, version: deploymentVersionUsed })

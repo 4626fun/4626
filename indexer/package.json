@@ -18,7 +18,9 @@
     "polish-profiles": "tsx src/polishProfiles.ts",
     "install-plan": "tsx src/computeInstallPlan.ts",
     "scan-coin-holders": "tsx src/scanCoinHolders.ts",
+    "flag-holder-contracts": "tsx src/flagHolderContracts.ts",
     "export:outreach": "tsx src/exportOutreach.ts",
+    "export:multi-holders": "tsx src/exportMultiHolders.ts",
     "export:top-creators": "tsx src/exportTopCreators.ts",
     "typecheck": "tsc --noEmit"
   },

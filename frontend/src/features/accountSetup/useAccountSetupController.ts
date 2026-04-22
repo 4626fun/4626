@@ -825,7 +825,11 @@ export function useAccountSetupController(params: {
       txRequest: { chainId: 8453; to: `0x${string}`; data: `0x${string}`; value: '0x0' },
       ownerAddress?: string | null,
       ownerIndexLookupAddress?: string | null,
-      opts?: { approvalRunId?: string | null; onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null },
+      opts?: {
+        approvalRunId?: string | null
+        onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null
+        preferSponsoredFirst?: boolean
+      },
     ) => {
       let effectiveWalletClient = walletClient
       let effectiveChainId = chainId
@@ -863,6 +867,7 @@ export function useAccountSetupController(params: {
         ensurePaymasterSession,
         approvalRunId: opts?.approvalRunId ?? null,
         onStageEvent: opts?.onStageEvent ?? null,
+        preferSponsoredFirst: opts?.preferSponsoredFirst === true,
       })
     },
     [
@@ -1366,7 +1371,9 @@ export function useAccountSetupController(params: {
         setNotice('Rabby address is already an owner.')
         return
       }
-      await sendPreparedOwnerTx(preparePayload.data.txRequest, normalized, preflightOwnerLookupAddress)
+      await sendPreparedOwnerTx(preparePayload.data.txRequest, normalized, preflightOwnerLookupAddress, {
+        preferSponsoredFirst: connectedCanonicalWalletSelected && isMobileWalletEnvironment(),
+      })
       setNotice('Rabby co-owner added.')
       await loadMe({ showSpinner: false })
     } catch (rabbyError: any) {
