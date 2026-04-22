@@ -2829,11 +2829,7 @@ async function validateInnerCalls(params: {
 
       if (decodedSelf.functionName === 'addOwnerAddress') {
         const ownerArg = getAddress(decodedSelf.args[0] as Address)
-        if (deploySessionSigner) {
-          if (ownerArg !== deploySessionSigner) throw new Error('deploy_session_owner_mismatch')
-        } else if (canonicalEmbeddedOwner) {
-          if (ownerArg !== canonicalEmbeddedOwner) throw new Error('canonical_embedded_owner_mismatch')
-        } else if (params.customOwnerSponsorship) {
+        if (params.customOwnerSponsorship) {
           if (params.customOwnerSponsorship.sessionAddress !== params.sessionAddress) {
             throw new Error('custom_owner_policy_session_mismatch')
           }
@@ -2843,6 +2839,10 @@ async function validateInnerCalls(params: {
           if (ownerArg !== params.customOwnerSponsorship.ownerToAdd) {
             throw new Error('custom_owner_policy_owner_mismatch')
           }
+        } else if (deploySessionSigner) {
+          if (ownerArg !== deploySessionSigner) throw new Error('deploy_session_owner_mismatch')
+        } else if (canonicalEmbeddedOwner) {
+          if (ownerArg !== canonicalEmbeddedOwner) throw new Error('canonical_embedded_owner_mismatch')
         } else {
           throw new Error('deploy_session_missing')
         }

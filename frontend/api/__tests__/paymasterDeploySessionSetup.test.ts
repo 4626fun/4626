@@ -332,6 +332,82 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     expect(errMsg).not.toMatch(/custom_owner_policy/i)
   })
 
+  it('accepts custom-owner policy token even when canonical embedded owner resolves', async () => {
+    getActiveDeploySessionMock.mockResolvedValue(null)
+    const customOwner = getAddress('0x6666666666666666666666666666666666666666')
+    resolvePersistedWalletIdentityMock.mockResolvedValue({
+      canonicalSmartWallet: sender,
+      embeddedEoa: sessionSigner,
+      profileId: 42,
+    })
+    mockGetBytecode.mockImplementation(async ({ address }: { address: string }) => {
+      if (String(address).toLowerCase() === customOwner.toLowerCase()) return '0x'
+      return '0x1234'
+    })
+
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+        outputs: [],
+      },
+    ] as const
+    const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
+      {
+        type: 'function',
+        name: 'addOwnerAddress',
+        stateMutability: 'nonpayable',
+        inputs: [{ name: 'owner', type: 'address' }],
+        outputs: [],
+      },
+    ] as const
+    const policyToken = issueCustomOwnerSponsorshipToken({
+      sessionAddress,
+      smartWalletAddress: sender,
+      ownerToAdd: customOwner,
+      profileId: 42,
+    })
+
+    const innerData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+      functionName: 'addOwnerAddress',
+      args: [customOwner],
+    })
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'execute',
+      args: [sender, 0n, innerData],
+    })
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [{ sender, callData, initCode: '0x' }, ENTRYPOINT_V06, 8453],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: {
+        'content-type': 'application/json',
+        'x-cv-custom-owner-policy': policyToken,
+      },
+    })
+    const res = createMockRes()
+    await paymasterHandler(req as any, res as any)
+
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).not.toMatch(/canonical_embedded_owner_mismatch/i)
+    expect(errMsg).not.toMatch(/request denied/i)
+  })
+
   it('rejects custom-owner policy token when owner arg does not match bound token owner', async () => {
     getActiveDeploySessionMock.mockResolvedValue(null)
     const customOwner = getAddress('0x4444444444444444444444444444444444444444')
