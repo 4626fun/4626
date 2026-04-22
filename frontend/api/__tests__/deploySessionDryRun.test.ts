@@ -265,6 +265,47 @@ describe('deploy session dry run', () => {
     expect(String(res.getHeader('retry-after') ?? '')).not.toBe('')
   })
 
+  it('requires paid vanity entitlement when dry-run requests custom vanity deploy options', async () => {
+    const { default: handler } = await import('../_handlers/deploy/session/_dryRun.ts')
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        ...makeRequestBody(),
+        vanity: {
+          vaultPrefix: '0xface',
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(402)
+    expect(String(res.body?.error ?? '')).toContain('Vanity deploy requires paid feature activation')
+    expect(String(res.body?.error ?? '')).toContain('deploy_vanity_vault_prefix_len_4')
+  })
+
+  it('allows dry-run with free default vanity patterns without paid entitlement', async () => {
+    const { default: handler } = await import('../_handlers/deploy/session/_dryRun.ts')
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        ...makeRequestBody(),
+        vanity: {
+          vaultPrefix: '0x4626',
+          shareSuffix: '4626',
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data?.ok).toBe(true)
+  })
+
   it('returns a phase summary without persisting session state or sending user operations', async () => {
     const { default: handler } = await import('../_handlers/deploy/session/_dryRun.ts')
     const req = createMockReq({ method: 'POST', body: makeRequestBody() })

@@ -483,6 +483,93 @@ describe('deploy session ownership guardrails', () => {
     expect(insertArgs.payload?.persistSessionOwner).toBe(false)
   })
 
+  it('requires paid vanity entitlement when custom vanity deploy options are requested', async () => {
+    getDbMock.mockResolvedValue(makeCanonicalDb())
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        ...makeRequestBody(),
+        vanity: {
+          vaultPrefix: '0xface',
+          shareSuffix: '0xbeef',
+        },
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(402)
+    expect(String(res.body?.error ?? '')).toContain('Vanity deploy requires paid feature activation')
+    expect(String(res.body?.error ?? '')).toContain('deploy_vanity_vault_prefix_len_4')
+    expect(String(res.body?.error ?? '')).toContain('deploy_vanity_share_suffix_len_4')
+    expect(insertDeploySessionMock).not.toHaveBeenCalled()
+  })
+
+  it('allows free default vanity without paid entitlement', async () => {
+    getDbMock.mockResolvedValue(makeCanonicalDb())
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        ...makeRequestBody(),
+        vanity: {
+          vaultPrefix: '0x4626',
+          shareSuffix: '4626',
+        },
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(insertDeploySessionMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('rejects custom vanity longer than configured max hex length', async () => {
+    getDbMock.mockResolvedValue(makeCanonicalDb())
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        ...makeRequestBody(),
+        vanity: {
+          vaultPrefix: 'abcdef',
+        },
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(String(res.body?.error ?? '')).toContain('supports up to 5 hex characters')
+    expect(insertDeploySessionMock).not.toHaveBeenCalled()
+  })
+
+  it('requires share vanity entitlement when phase1 salt-override selectors are used', async () => {
+    getDbMock.mockResolvedValue(makeCanonicalDb())
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        ...makeRequestBody(),
+        phase1Calls: [
+          {
+            to: '0x0000000000000000000000000000000000000010',
+            value: '0',
+            data: '0x4154f24e',
+          },
+        ],
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(402)
+    expect(String(res.body?.error ?? '')).toContain('deploy_vanity_share_suffix_len_5')
+    expect(insertDeploySessionMock).not.toHaveBeenCalled()
+  })
+
   it('prepends creatorToken approval before phase2 finalize and whitelists selector', async () => {
     getDbMock.mockResolvedValue(makeCanonicalDb())
     const finalizeData = makeFinalizePhase2Data()

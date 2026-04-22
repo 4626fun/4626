@@ -123,6 +123,10 @@ export const Status = lazyNamed(() => import('../pages/status/Status'), 'Status'
 export const AdminCreatorAccess = lazyNamed(() => import('../pages/admin/AdminCreatorAccess'), 'AdminCreatorAccess')
 export const AdminWaitlist = lazyNamed(() => import('../pages/admin/AdminWaitlist'), 'AdminWaitlist')
 export const AdminOps = lazyNamed(() => import('../pages/admin/AdminOps'), 'AdminOps')
+export const AlfaClubVigilante = lazyNamed(
+  () => import('../pages/admin/AlfaClubVigilante'),
+  'AlfaClubVigilante',
+)
 export const AdminDeployStrategies = lazyNamed(
   () => import('../pages/admin/AdminDeployStrategies'),
   'AdminDeployStrategies',

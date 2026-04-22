@@ -5,9 +5,16 @@
  *   1. Etherscan v2 Nametag API (works if your key has Pro Plus tier)
  *   2. Built-in known-address map (~200 well-known addresses)
  *   3. WalletLabels API (optional, if WALLET_LABELS_API_KEY is set)
+ *   4. AlfaClub on-chain holder/creator detector (Base only, no external API)
  *
  * All sources degrade gracefully — if one fails, the next is tried.
  */
+
+import {
+  ALFACLUB,
+  getAlfaClubHoldings,
+  getAlfaClubPublicClient,
+} from './alfaclub.js'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -21,7 +28,7 @@ export type WalletLabel = {
   /** Subcategory for finer granularity. */
   subcategory?: string
   /** Source of the label. */
-  source: 'etherscan' | 'known-address' | 'walletlabels'
+  source: 'etherscan' | 'known-address' | 'walletlabels' | 'alfaclub'
 }
 
 export type WalletLabelResult = {
@@ -250,6 +257,11 @@ const KNOWN_ADDRESSES: Record<string, KnownEntry> = {
   '0x4200000000000000000000000000000000000016': { name: 'L2 To L1 Message Passer (Base)', category: 'infrastructure', subcategory: 'system' },
   '0x420000000000000000000000000000000000001a': { name: 'Fee Vault (Base)', category: 'infrastructure', subcategory: 'system' },
 
+  // ── Social / SocialFi ──
+  '0xaf0bf8593dc6ca973df2132731b0f9b5f974fa9f': { name: 'AlfaClub Keys (FriendKey)', category: 'social', subcategory: 'alfaclub' },
+  '0x53bdefb3e2faeb90b766b459af96f3e357d3c3f9': { name: 'AlfaClub Stake Beacon (FriendStake)', category: 'social', subcategory: 'alfaclub' },
+  '0xa1bf9bb17c283cf17f01516f78f3127d2c84c79d': { name: 'AlfaClub Pool (FriendPool)', category: 'social', subcategory: 'alfaclub' },
+
   // ── Notable Individuals ──
   '0xd8da6bf26964af9d7eed9e03e53415d37aa96045': { name: 'vitalik.eth', category: 'notable', subcategory: 'individual' },
   '0xab5801a7d398351b8be11c439e05c5b3259aec9b': { name: 'Vitalik Buterin (old)', category: 'notable', subcategory: 'individual' },
@@ -333,6 +345,65 @@ async function fetchWalletLabels(
 }
 
 // ---------------------------------------------------------------------------
+// Source 4: AlfaClub on-chain detector (Base only)
+// ---------------------------------------------------------------------------
+
+/**
+ * Detect AlfaClub keyholders and creators by reading FriendKey on-chain.
+ *
+ * Intentionally no external API call — AlfaClub's own docs disallow third-party
+ * API use, so this source is strictly onchain. Only runs on Base (chain 8453);
+ * returns [] everywhere else. Fail-open on any error.
+ *
+ * We skip the detector for the three core contract addresses themselves;
+ * they are already covered by the known-address map and should never be
+ * tagged as keyholders.
+ */
+async function fetchAlfaClubLabels(
+  address: string,
+  chainId: number,
+): Promise<WalletLabel[]> {
+  if (chainId !== ALFACLUB.chainId) return []
+  const addr = address.toLowerCase()
+  if (
+    addr === ALFACLUB.friendKey.toLowerCase() ||
+    addr === ALFACLUB.friendStakeBeacon.toLowerCase() ||
+    addr === ALFACLUB.friendPool.toLowerCase()
+  ) {
+    return []
+  }
+
+  try {
+    const client = await getAlfaClubPublicClient()
+    const result = await getAlfaClubHoldings(address as `0x${string}`, client)
+    if (!result.isHolder) return []
+
+    const roomCount = result.holdings.length
+    const suffix = roomCount === 1 ? 'room' : 'rooms'
+    if (result.isCreator) {
+      return [
+        {
+          name: `AlfaClub creator (${roomCount} ${suffix})`,
+          category: 'social',
+          subcategory: 'alfaclub',
+          source: 'alfaclub',
+        },
+      ]
+    }
+    return [
+      {
+        name: `AlfaClub keyholder (${roomCount} ${suffix})`,
+        category: 'social',
+        subcategory: 'alfaclub',
+        source: 'alfaclub',
+      },
+    ]
+  } catch {
+    return []
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
 
@@ -385,6 +456,13 @@ async function resolveLabelsFromSources(addr: string, chainId: number): Promise<
   const walletLabelsResult = await fetchWalletLabels(addr, chainId)
   if (walletLabelsResult.length > 0) {
     labels.push(...walletLabelsResult)
+    return { address: addr, labels, isKnownEntity: true }
+  }
+
+  // 4. AlfaClub on-chain detector (Base only). No external API, safe last step.
+  const alfaClubLabels = await fetchAlfaClubLabels(addr, chainId)
+  if (alfaClubLabels.length > 0) {
+    labels.push(...alfaClubLabels)
     return { address: addr, labels, isKnownEntity: true }
   }
 

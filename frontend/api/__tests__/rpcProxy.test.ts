@@ -15,14 +15,14 @@ async function loadHandler() {
   return mod.default
 }
 
-function createRpcReq() {
+function createRpcReq(method = 'eth_blockNumber') {
   return createMockReq({
     method: 'POST',
     query: { chain: 'base' },
     body: {
       jsonrpc: '2.0',
       id: 1,
-      method: 'eth_blockNumber',
+      method,
       params: [],
     },
   })
@@ -184,6 +184,68 @@ describe('/api/rpc proxy rate-limit contract', () => {
       expect(res.statusCode).toBe(200)
       expect(typeof res.body).toBe('string')
       expect(String(res.body)).toContain('"result":"0x123"')
+      expect(fetchMock).toHaveBeenCalledTimes(3)
+    } finally {
+      restoreEnv()
+    }
+  })
+
+  it('fast-paths eth_getCode with one attempt per upstream endpoint', async () => {
+    const restoreEnv = applyEnv({
+      BASE_READ_RPC_URL: 'https://env-rpc.example',
+    })
+    const fetchMock = vi.fn().mockImplementation((input: unknown, init?: RequestInit) => {
+      const url = String(input)
+      const bodyRaw = typeof init?.body === 'string' ? init.body : ''
+      const method =
+        bodyRaw && bodyRaw.includes('"method"')
+          ? String((JSON.parse(bodyRaw) as { method?: string }).method ?? '')
+          : ''
+
+      if (url.includes('env-rpc.example') && method === 'eth_chainId') {
+        return new Response(
+          JSON.stringify({
+            jsonrpc: '2.0',
+            id: 1,
+            result: '0x2105',
+          }),
+          {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          },
+        )
+      }
+
+      if (url.includes('env-rpc.example') && method === 'eth_getCode') {
+        return new Response('temporary upstream failure', {
+          status: 500,
+          headers: { 'Content-Type': 'text/plain' },
+        })
+      }
+
+      return new Response(
+        JSON.stringify({
+          jsonrpc: '2.0',
+          id: 1,
+          result: '0x6000',
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        },
+      )
+    })
+    vi.stubGlobal('fetch', fetchMock as unknown as typeof fetch)
+
+    try {
+      const handler = await loadHandler()
+      const req = createRpcReq('eth_getCode')
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(String(res.body)).toContain('"result":"0x6000"')
+      // 1 chain-id check + 1 failed env eth_getCode + 1 successful default eth_getCode.
       expect(fetchMock).toHaveBeenCalledTimes(3)
     } finally {
       restoreEnv()

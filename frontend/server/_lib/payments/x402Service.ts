@@ -19,7 +19,7 @@ declare const process: { env: Record<string, string | undefined> }
 const DEFAULT_NETWORK = 'base' as const
 const DEFAULT_PRICE_USD = 1
 const DEFAULT_MAX_TIMEOUT_SECONDS = 300
-const DEFAULT_PAY_TO = '0xAb6d5C10b03300326CD7fAb7267Ae192842967b5'
+const DEFAULT_PAY_TO = '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef'
 const X402_VERSION = 1
 const PAYMENT_ALLOW_HEADERS = [
   'PAYMENT-SIGNATURE',

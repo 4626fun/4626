@@ -7,6 +7,7 @@ import type { ExecuteCommandParams, KeeprCommandResult, KeeprRole } from './type
 import { executeCoinCommandFamily } from './families/coin.js'
 import { executeConversationalCommandFamily, looksLikeConversationalCommand } from './families/conversation.js'
 import { executeHelpCommandFamily } from './families/help.js'
+import { executeAlfaclubCommandFamily } from './families/alfaclub.js'
 import {
   executeKeeprCommandFamily,
   formatAssistantOnlyBlocked,
@@ -101,6 +102,11 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
           vault,
         })
       }
+      case 'alfaclub':
+        return executeAlfaclubCommandFamily({
+          text: raw,
+          senderWallet: params.senderWallet,
+        })
     }
 
     const vault = await getVault()

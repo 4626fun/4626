@@ -47,6 +47,10 @@
 import { keeprPlugin } from './plugins/keepr/index.js'
 import { lensPlugin } from './plugins/lens/index.js'
 import { walletIntelPlugin } from './plugins/walletIntel/index.js'
+// AlfaClub plugin is loaded dynamically below (see `optionalPlugins`) so a
+// module-load failure in its dep graph cannot prevent agent boot. The
+// previous static import at this position could cascade a Railway
+// healthcheck timeout via silent eliza/index.ts parse failure.
 import { reputationPlugin } from './plugins/reputation/index.js'
 import { crePlugin } from './plugins/cre/index.js'
 import { zoraPlugin } from './plugins/zora/index.js'
@@ -344,12 +348,42 @@ export type { Erc8004Identity } from './identity.js'
 // Plugins & Actions
 // ---------------------------------------------------------------------------
 
+/**
+ * Dynamically load the AlfaClub plugin so that a module-load failure in its
+ * dep graph (Lens storage client, Supabase, viem, etc.) can never block the
+ * agent from booting. Fails open: if the import throws, we log and continue
+ * without the plugin; the agent still serves XMTP + other plugins.
+ *
+ * Optional opt-out: set `ALFACLUB_PLUGIN_DISABLED=1` to skip the load entirely.
+ */
+type CorePlugin = typeof keeprPlugin
+const optionalCorePlugins: CorePlugin[] = await (async () => {
+  const loaded: CorePlugin[] = []
+  const disabled = parseEnvBoolean(process.env.ALFACLUB_PLUGIN_DISABLED, false)
+  if (!disabled) {
+    try {
+      const mod = await import('./plugins/alfaclub/index.js')
+      if (mod?.alfaclubPlugin) {
+        loaded.push(mod.alfaclubPlugin as CorePlugin)
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err)
+      // Use console directly since logger may not be initialized yet at this
+      // module-top-level evaluation point.
+      // eslint-disable-next-line no-console
+      console.warn('[eliza] alfaclub plugin load skipped:', message)
+    }
+  }
+  return loaded
+})()
+
 const corePlugins = [
   keeprPlugin,
   zoraPlugin,
   uniswapPlugin,
   lensPlugin,
   walletIntelPlugin,
+  ...optionalCorePlugins,
   reputationPlugin,
   crePlugin,
   knowledgePlugin,
@@ -464,6 +498,8 @@ type RuntimeLeaseState = {
 
 let latestEnvValidation: EnvValidationResult = { errors: [], warnings: [] }
 let backgroundWorker: { stop: () => void } | null = null
+let alfaclubRelayerStop: (() => void) | null = null
+let alfaclubChatBridgeStop: (() => void) | null = null
 let queueEnabled = false
 let dbRequiredForRuntime = false
 let stderrNoiseFilterInstalled = false
@@ -515,6 +551,10 @@ const AGENT_CONSUME_XMTP = parseEnvBoolean(
   AGENT_RUNTIME_ROLE === 'primary',
 )
 const RUNNING_ON_RAILWAY = isRailwayRuntime()
+const ELIZA_READYZ_LIVENESS_MODE = parseEnvBoolean(
+  process.env.ELIZA_READYZ_LIVENESS_MODE,
+  RUNNING_ON_RAILWAY,
+)
 const AGENT_RUNTIME_LOCK_EXPLICITLY_CONFIGURED = (() => {
   const raw = (process.env.AGENT_RUNTIME_LOCK_REQUIRED ?? '').trim()
   return raw.length > 0
@@ -1487,6 +1527,20 @@ async function shutdown() {
     backgroundWorker = null
   }
 
+  if (alfaclubRelayerStop) {
+    try {
+      alfaclubRelayerStop()
+    } catch {}
+    alfaclubRelayerStop = null
+  }
+
+  if (alfaclubChatBridgeStop) {
+    try {
+      alfaclubChatBridgeStop()
+    } catch {}
+    alfaclubChatBridgeStop = null
+  }
+
   logger.info(`[eliza] All ${runningAgents.size} agents stopped`)
   runningAgents.clear()
   await releaseRuntimeLease()
@@ -1992,6 +2046,104 @@ async function main() {
     // Fire-and-forget: upload enriched agent registration to Lens Grove
     void uploadRegistrationToGrove()
 
+    // AlfaClub Integrity Vigilante — Railway-side feedback relayer that
+    // forwards queued ERC-8004 giveFeedback calldata onchain as UserOps
+    // through the canonical CSW. Opt-in via
+    // ALFACLUB_VIGILANTE_RELAYER_ENABLED=1; defaults to dormant.
+    //
+    // Dynamic import + try/catch by design: a bug anywhere in the alfaclub
+    // module graph (import-time throw, missing env, broken dep) must NEVER
+    // prevent `agentBooted = true` below, which would otherwise keep
+    // /readyz returning 503 and fail the Railway healthcheck. This hook is
+    // strictly additive to the core XMTP agent.
+    void (async () => {
+      try {
+        const mod = await import('../../_lib/alfaclub/feedbackRelayer.js')
+        const relayerStart = mod.startAlfaClubFeedbackRelayer({
+          onTick: (result) => {
+            if (result.skipped || result.picked === 0) return
+            logger.info('[alfaclub-relayer] tick', {
+              picked: result.picked,
+              submitted: result.submitted,
+              failed: result.failed,
+              abandoned: result.abandoned,
+              dryRun: result.dryRun,
+              txHashes: result.txHashes.slice(0, 5),
+            })
+          },
+          onError: (err) => {
+            logger.warn('[alfaclub-relayer] tick error', {
+              error: err instanceof Error ? err.message : String(err),
+            })
+          },
+        })
+        if (relayerStart.started) {
+          alfaclubRelayerStop = relayerStart.stop
+          logger.info('[alfaclub-relayer] started', { intervalMs: relayerStart.intervalMs })
+        } else {
+          logger.info('[alfaclub-relayer] not started', {
+            reason: relayerStart.reason ?? 'unknown',
+          })
+        }
+      } catch (err) {
+        logger.warn('[alfaclub-relayer] boot failed — continuing without relayer', {
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    })()
+
+    // AlfaClub in-app chat bridge — polls room history for `/alfa` commands
+    // and responds in-room via AlfaClub websocket frames.
+    //
+    // Dynamic import + fail-open behavior mirror the relayer safeguards above:
+    // this optional integration must never block core XMTP agent readiness.
+    void (async () => {
+      try {
+        const mod = await import('../../_lib/alfaclub/chatBridge.js')
+        const bridgeStart = mod.startAlfaClubChatBridge({
+          onTick: (result) => {
+            if (result.seeded) {
+              logger.info('[alfaclub-chat] seeded', {
+                roomId: result.roomId,
+                fetched: result.fetched,
+                unseen: result.unseen,
+              })
+              return
+            }
+            if (result.processed === 0 && result.errors.length === 0) return
+            logger.info('[alfaclub-chat] tick', {
+              roomId: result.roomId,
+              fetched: result.fetched,
+              unseen: result.unseen,
+              processed: result.processed,
+              replied: result.replied,
+              errors: result.errors.slice(0, 3),
+            })
+          },
+          onError: (err) => {
+            logger.warn('[alfaclub-chat] tick error', {
+              error: err instanceof Error ? err.message : String(err),
+            })
+          },
+        })
+        if (bridgeStart.started) {
+          alfaclubChatBridgeStop = bridgeStart.stop
+          logger.info('[alfaclub-chat] started', {
+            roomId: bridgeStart.roomId,
+            intervalMs: bridgeStart.intervalMs,
+          })
+        } else {
+          logger.info('[alfaclub-chat] not started', {
+            reason: bridgeStart.reason ?? 'unknown',
+          })
+        }
+      } catch (err) {
+        logger.warn('[alfaclub-chat] boot failed — continuing without chat bridge', {
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    })()
+
     // Graceful shutdown
     process.on('SIGINT', () => void shutdown())
     process.on('SIGTERM', () => void shutdown())
@@ -2185,7 +2337,9 @@ function startHealthServer() {
       agentBooted,
       agentCount,
       xmtpReady,
+      readyzAsLiveness: ELIZA_READYZ_LIVENESS_MODE,
     })
+    const strictReadinessProbe = probePath === '/readyz' && !ELIZA_READYZ_LIVENESS_MODE
     const payload = detailedHealthAccess
       ? {
           probe: probePath,
@@ -2221,20 +2375,20 @@ function startHealthServer() {
             },
           },
           validation: latestEnvValidation,
+          readyzLivenessMode: ELIZA_READYZ_LIVENESS_MODE,
         }
       : {
           probe: probePath,
           detailed: false,
-          status:
-            probePath === '/readyz'
-              ? ready
-                ? 'ready'
-                : 'not_ready'
-              : statusCode >= 500
-                ? 'degraded'
-                : agentBooted
-                  ? 'alive'
-                  : 'booting',
+          status: strictReadinessProbe
+            ? ready
+              ? 'ready'
+              : 'not_ready'
+            : statusCode >= 500
+              ? 'degraded'
+              : agentBooted
+                ? 'alive'
+                : 'booting',
           uptimeMs: Date.now() - runtimeStartedAtMs,
         }
     res.writeHead(statusCode, { 'Content-Type': 'application/json' })

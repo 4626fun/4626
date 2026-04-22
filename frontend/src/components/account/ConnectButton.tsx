@@ -247,7 +247,7 @@ export function ConnectButton({
   const prefersPrivyWalletLogin = privyStatus === 'ready'
   const [showMenu, setShowMenu] = useState(false)
   const [showOptions, setShowOptions] = useState(false)
-  const menuPanelClassName = 'absolute right-0 top-full mt-4 w-56 card p-4 z-50 space-y-2'
+  const menuPanelClassName = 'absolute right-0 top-full mt-4 w-72 max-w-[calc(100vw-1.5rem)] card p-4 z-50 space-y-2'
   const optionsPanelClassName = 'absolute right-0 top-full mt-3 w-64 card p-3 z-50 space-y-1'
 
   const providerCollision = useMemo(() => detectEthereumProviderCollision(), [])

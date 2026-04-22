@@ -53,8 +53,11 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/package.json ./package.json
 
-# Copy server + config source (agent code + shared _lib)
+# Copy server + API + config source used by agent runtime.
+# Some agent command modules import Telegram webhook helpers from `api/_handlers/*`,
+# so `frontend/api` must be present in the image.
 COPY frontend/server ./server
+COPY frontend/api ./api
 COPY frontend/src/config ./src/config
 COPY frontend/src/lib ./src/lib
 COPY frontend/src/wallet ./src/wallet

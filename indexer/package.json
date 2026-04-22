@@ -10,10 +10,21 @@
     "enrich": "tsx src/runEnrich.ts",
     "classify": "tsx src/classifyOwners.ts",
     "farcaster": "tsx src/crossReferenceFarcaster.ts",
+    "names": "tsx src/enrichNames.ts",
+    "zora-profiles": "tsx src/enrichZoraProfiles.ts",
+    "scan-top-coins": "tsx src/scanTopCoins.ts",
+    "enrich-profiles": "tsx src/enrichProfiles.ts",
+    "fix-profile-metadata": "tsx src/fixProfileMetadata.ts",
+    "polish-profiles": "tsx src/polishProfiles.ts",
+    "install-plan": "tsx src/computeInstallPlan.ts",
+    "scan-coin-holders": "tsx src/scanCoinHolders.ts",
+    "export:outreach": "tsx src/exportOutreach.ts",
+    "export:top-creators": "tsx src/exportTopCreators.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
+    "@zoralabs/coins-sdk": "^0.3.3",
     "dotenv": "^16.4.5",
     "viem": "^2.21.0"
   },

@@ -284,6 +284,133 @@ describe('txRouter', () => {
     expect(sendTransaction).toHaveBeenCalledTimes(1)
   })
 
+  it('falls back from canonical ERC-4337 to canonical direct on paymaster router policy denial', async () => {
+    sendCoinbaseSmartWalletUserOperationMock.mockRejectedValueOnce(
+      new Error('request denied - swap_router_value_not_allowed'),
+    )
+    const sendTransaction = vi.fn(async () => HASH_B)
+    const context = makeContext({
+      connectorId: 'injected',
+      connectorName: 'Injected',
+      capabilities: {
+        paymasterService: false,
+        atomicStatus: 'unknown',
+        supports5792: false,
+      },
+      walletClient: {
+        request: vi.fn(),
+        sendTransaction,
+      },
+    })
+
+    const result = await buildAndSendApproval({
+      context,
+      approvalTx: {
+        to: ADDRESS_C,
+        from: ADDRESS_B,
+        data: '0x1234',
+        value: '0',
+        chainId: 8453,
+      },
+    })
+
+    expect(result.routing.mode).toBe('canonical4337')
+    expect(result.routing.fallbackMode).toBe('canonicalDirect')
+    expect(result.send.mode).toBe('canonicalDirect')
+    expect(result.send.method).toBe('walletClient.sendTransaction')
+    expect(result.send.transactionHash).toBe(HASH_B)
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
+    expect(sendTransaction).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back to canonical direct even when canonical swap routing locked sendCalls fallback to 4337', async () => {
+    sendCoinbaseSmartWalletUserOperationMock.mockRejectedValueOnce(
+      new Error('request denied - swap_router_value_not_allowed'),
+    )
+    const request = vi.fn(async ({ method }: { method: string }) => {
+      if (method === 'wallet_sendCalls') throw new Error('Method not found')
+      throw new Error(`unexpected method: ${method}`)
+    })
+    const sendTransaction = vi.fn(async () => HASH_B)
+    const context = makeContext({
+      executionMode: 'canonical',
+      signerType: 'SMART_WALLET',
+      connectorId: 'coinbaseWalletSDK',
+      connectorName: 'Coinbase Wallet',
+      capabilities: {
+        paymasterService: true,
+        atomicStatus: 'supported',
+        supports5792: true,
+      },
+      walletClient: {
+        request,
+        sendTransaction,
+      },
+      publicClient: {},
+    })
+
+    const result = await buildAndSendSwap({
+      context,
+      approvalTx: {
+        to: ADDRESS_C,
+        from: ADDRESS_B,
+        data: '0xaaaa',
+        value: '0',
+        chainId: 8453,
+      },
+      swapTx: {
+        to: ADDRESS_A,
+        from: ADDRESS_B,
+        data: '0xbbbb',
+        value: '123',
+        chainId: 8453,
+      },
+    })
+
+    expect(result.routing.mode).toBe('sendCalls')
+    expect(result.routing.fallbackMode).toBe('canonical4337')
+    expect(result.send.mode).toBe('canonicalDirect')
+    expect(result.send.method).toBe('walletClient.sendTransaction')
+    expect(result.send.transactionHash).toBe(HASH_B)
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
+    expect(sendTransaction).toHaveBeenCalledTimes(1)
+  })
+
+  it('bypasses canonical ERC-4337 for swap-router native-value calls and uses canonical direct', async () => {
+    const sendTransaction = vi.fn(async () => HASH_B)
+    const context = makeContext({
+      connectorId: 'injected',
+      connectorName: 'Injected',
+      capabilities: {
+        paymasterService: false,
+        atomicStatus: 'unknown',
+        supports5792: false,
+      },
+      walletClient: {
+        request: vi.fn(),
+        sendTransaction,
+      },
+    })
+
+    const result = await buildAndSendSwap({
+      context,
+      swapTx: {
+        to: ADDRESS_A,
+        from: ADDRESS_B,
+        data: '0x3593564c',
+        value: '123',
+        chainId: 8453,
+      },
+    })
+
+    expect(result.routing.mode).toBe('canonical4337')
+    expect(result.send.mode).toBe('canonicalDirect')
+    expect(result.send.method).toBe('walletClient.sendTransaction')
+    expect(result.send.transactionHash).toBe(HASH_B)
+    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+    expect(sendTransaction).toHaveBeenCalledTimes(1)
+  })
+
   it('locks canonical approval+swap sendCalls fallback to ERC-4337', async () => {
     const sendTransaction = vi.fn(async () => HASH_A)
     const context = makeContext({

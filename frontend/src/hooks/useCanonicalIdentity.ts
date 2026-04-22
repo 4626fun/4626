@@ -117,7 +117,7 @@ function getBaseReadClient() {
     chain: base,
     transport: http(isBrowser ? '/api/rpc?chain=base' : 'https://mainnet.base.org', {
       retryCount: 1,
-      timeout: 10_000,
+      timeout: 20_000,
     }),
   })
 }
@@ -204,42 +204,48 @@ export function useCanonicalIdentity(): CanonicalIdentity {
     return null
   })()
 
+  const cswKey = csw ? csw.toLowerCase() : null
+  const hasCachedCoin = cswKey ? coinAddressCache.has(cswKey) : false
+  const cachedCoin = cswKey ? (coinAddressCache.get(cswKey) ?? null) : null
   // Async load of the creator coin address for the CSW.
-  const [coin, setCoin] = useState<Address | null>(csw ? coinAddressCache.get(csw.toLowerCase()) ?? null : null)
-  const [loadingCoin, setLoadingCoin] = useState<boolean>(false)
+  const [coinAsync, setCoinAsync] = useState<{ key: string; value: Address | null } | null>(
+    cswKey && hasCachedCoin ? { key: cswKey, value: cachedCoin } : null,
+  )
 
   useEffect(() => {
     let cancelled = false
-    if (!csw) {
-      setCoin(null)
+    if (!csw || !cswKey) {
       return () => {
         cancelled = true
       }
     }
-    const cacheKey = csw.toLowerCase()
-    if (coinAddressCache.has(cacheKey)) {
-      setCoin(coinAddressCache.get(cacheKey) ?? null)
+    if (coinAddressCache.has(cswKey)) {
       return () => {
         cancelled = true
       }
     }
-    setLoadingCoin(true)
     fetchCreatorCoinForCsw(csw)
       .then((result) => {
-        if (!cancelled) setCoin(result)
-      })
-      .finally(() => {
-        if (!cancelled) setLoadingCoin(false)
+        if (!cancelled) setCoinAsync({ key: cswKey, value: result })
       })
     return () => {
       cancelled = true
     }
-  }, [csw])
+  }, [csw, cswKey])
 
   const hasSession = Boolean(auth.hasSession && auth.authAddress)
   const loadingCsw = hasSession && accountMe.loading && !csw
   const cswMissing =
     hasSession && !accountMe.loading && !csw && accountMe.me !== null
+
+  const creatorCoinAddress = csw
+    ? hasCachedCoin
+      ? cachedCoin
+      : coinAsync?.key === cswKey
+        ? coinAsync.value
+        : null
+    : null
+  const loadingCoin = Boolean(csw && !hasCachedCoin && coinAsync?.key !== cswKey)
 
   return {
     cswAddress: csw,
@@ -249,7 +255,7 @@ export function useCanonicalIdentity(): CanonicalIdentity {
     externalEoaAddress: externalEoa,
     privyEmbeddedAddress,
     activeSigner,
-    creatorCoinAddress: coin,
+    creatorCoinAddress,
     loadingCoin,
   }
 }

@@ -10,16 +10,16 @@
     },
     {
       "name": "XMTP",
-      "endpoint": "https://xmtp.chat/dm/0xAb6d5C10b03300326CD7fAb7267Ae192842967b5",
+      "endpoint": "https://xmtp.chat/dm/0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef",
       "version": "production",
-      "address": "0xAb6d5C10b03300326CD7fAb7267Ae192842967b5",
+      "address": "0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef",
       "description": "XMTP messaging endpoint — DM or group chat with the agent. Identity is a Coinbase Smart Wallet on Base (chain 8453)."
     },
     {
       "name": "agentWallet",
-      "endpoint": "eip155:8453:0xab6d5c10b03300326cd7fab7267ae192842967b5",
-      "account": "eip155:8453:0xab6d5c10b03300326cd7fab7267ae192842967b5",
-      "explorer": "https://basescan.org/address/0xab6d5c10b03300326cd7fab7267ae192842967b5"
+      "endpoint": "eip155:8453:0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef",
+      "account": "eip155:8453:0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef",
+      "explorer": "https://basescan.org/address/0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef"
     },
     {
       "name": "api",
@@ -35,10 +35,11 @@
       "name": "erc8004-review",
       "endpoint": "https://4626.fun/api/v1/agents/feedback/review",
       "version": "1.0.0",
-      "description": "x402-gated ERC-8004 technical review service that returns a scored review, Lens feedback payload, and unsigned giveFeedback calldata.",
+      "description": "Pay $1 USDC over x402 to receive a Keepr-signed wallet/agent review: scored ERC-8004 feedback, Lens post payload, and unsigned giveFeedback calldata. Useful for vetting traders, creators, or counterparties on Base.",
       "paymentProtocol": "x402",
       "paymentNetwork": "base",
-      "priceUsd": "1.00"
+      "priceUsd": "1.00",
+      "inputSchema": "https://4626.fun/api/v1/spec.json#/paths/~1api~1v1~1agents~1feedback~1review"
     },
     {
       "name": "reputation-graph",

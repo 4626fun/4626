@@ -98,12 +98,10 @@ export function useAccountMe(): {
   useEffect(() => {
     let cancelled = false
     if (cached !== undefined && refreshCounter === 0) {
-      setLoading(false)
       return () => {
         cancelled = true
       }
     }
-    setLoading(true)
     fetchAccountMe(getAccessToken).then((result) => {
       if (cancelled) return
       cached = result
@@ -119,6 +117,7 @@ export function useAccountMe(): {
     if (typeof window === 'undefined') return
     const onFocus = () => {
       clearAccountMeCache()
+      setLoading(true)
       setRefreshCounter((c) => c + 1)
     }
     window.addEventListener('focus', onFocus)
@@ -130,6 +129,7 @@ export function useAccountMe(): {
     loading,
     refresh: () => {
       clearAccountMeCache()
+      setLoading(true)
       setRefreshCounter((c) => c + 1)
     },
   }

@@ -23,35 +23,44 @@ const MODE = (process.env.ENRICH_MODE ?? "newest") as
   | "oldest-unsynced"
   | "random";
 
-type PendingRow = { csw_address: string };
+type PendingRow = { csw_address: string; creation_block: number };
 
 /**
- * Pull a page of CSW addresses that need enrichment. Only rows where
- * `last_owner_sync_at IS NULL` are considered — callers who want to
- * refresh already-enriched rows should set their own watermark via a
- * separate script.
+ * Pull a page of CSW addresses that need enrichment.
+ *
+ * Uses keyset pagination on `creation_block` instead of OFFSET because
+ * the "last_owner_sync_at IS NULL" filter hits 1M+ rows once the POC
+ * seed has been enriched. OFFSET-based paging forces Postgres to
+ * re-sort the whole filtered set for every page, blowing past Supabase
+ * statement timeouts. Keyset is O(1) per page.
+ *
+ * The `cursor` is the last creation_block we saw — the next page
+ * returns rows strictly less-than (newest mode) or greater-than
+ * (oldest mode) that block. Returning ties would require a compound
+ * cursor on (creation_block, csw_address); in practice ties are rare
+ * enough that we tolerate the theoretical skip.
  */
 async function fetchPage(
   supabase: ReturnType<typeof createIndexerSupabase>,
-  offset: number,
+  cursor: number | null,
   limit: number,
 ): Promise<PendingRow[]> {
   let query = supabase
     .from("zora_csw_owners")
-    .select("csw_address")
+    .select("csw_address, creation_block")
     .is("last_owner_sync_at", null)
-    .range(offset, offset + limit - 1);
+    .limit(limit);
 
   if (MODE === "newest") {
     query = query.order("creation_block", { ascending: false });
+    if (cursor !== null) query = query.lt("creation_block", cursor);
   } else if (MODE === "oldest-unsynced") {
-    // With last_owner_sync_at IS NULL filter, this falls back to
-    // creation_block ascending (oldest-created-first).
     query = query.order("creation_block", { ascending: true });
+    if (cursor !== null) query = query.gt("creation_block", cursor);
   } else if (MODE === "random") {
-    // Postgres doesn't have a native index for random sorts, so this
-    // does a seq scan on the page — fine for small pages but should
-    // not be used for full-table enrichment. Acceptable for a POC.
+    // Random mode doesn't support keyset — fall back to a single
+    // page's worth. Acceptable because random mode is only used for
+    // small POC samples.
     query = query.order("csw_address", { ascending: true });
   }
 
@@ -67,18 +76,19 @@ async function main() {
 
   console.log(`[enrich] target: ${TARGET_COUNT} rows, concurrency: ${CONCURRENCY}, mode: ${MODE}`);
 
-  // Pull the target addresses up front in pages of 1k. We don't stream
-  // the query because Supabase's REST API caps rows per request, and
-  // paging after a partial update shifts offsets unpredictably.
+  // Pull the target addresses using keyset pagination on creation_block.
+  // `cursor` tracks the last block we saw; the next page returns rows
+  // strictly past it. Exhaustion is detected when a page returns fewer
+  // rows than requested.
   const addresses: Address[] = [];
-  let offset = 0;
+  let cursor: number | null = null;
   while (addresses.length < TARGET_COUNT) {
     const remaining = TARGET_COUNT - addresses.length;
     const pageLimit = Math.min(PAGE_SIZE, remaining);
-    const page = await fetchPage(supabase, offset, pageLimit);
+    const page = await fetchPage(supabase, cursor, pageLimit);
     if (page.length === 0) break;
     for (const row of page) addresses.push(row.csw_address as Address);
-    offset += page.length;
+    cursor = page[page.length - 1].creation_block;
     if (page.length < pageLimit) break; // exhausted
   }
 

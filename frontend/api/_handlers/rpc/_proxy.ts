@@ -16,10 +16,10 @@ type JsonRpcRequest = { jsonrpc?: string; id?: unknown; method?: unknown; params
 
 const DEFAULT_CHAIN_RPCS = {
   base: [
+    'https://mainnet.base.org',
     'https://base.llamarpc.com',
     'https://base-mainnet.public.blastapi.io',
     'https://base.meowrpc.com',
-    'https://mainnet.base.org',
   ],
   mainnet: [
     'https://ethereum-rpc.publicnode.com',
@@ -66,8 +66,15 @@ const ENV_RPC_FAILOVER_STATUS = new Set([401, 403, 404, 405])
 const MAX_ATTEMPTS_PER_RPC = 2
 const RETRY_BACKOFF_MS = [0, 150]
 const RPC_CHAIN_ID_CACHE_TTL_MS = 5 * 60_000
-const RPC_CHAIN_ID_TIMEOUT_MS = 1_500
+const RPC_CHAIN_ID_TIMEOUT_MS = 750
 const RPC_FORWARD_TIMEOUT_MS = 5_000
+const RPC_FORWARD_TOTAL_BUDGET_MS = 8_500
+// `eth_getCode` is used heavily by deploy preflight/status checks.
+// Keep this path responsive, but less brittle under brief upstream latency spikes.
+const RPC_FORWARD_TIMEOUT_FAST_READ_MS = 2_500
+const RPC_FORWARD_TOTAL_BUDGET_FAST_READ_MS = 9_000
+const RPC_FORWARD_MAX_URLS_FAST_READ = 4
+const FAST_READ_METHODS = new Set(['eth_getCode'])
 const RPC_RATE_LIMIT_WINDOW_MS = 60_000
 const RPC_RATE_LIMIT_MAX_REQUESTS = clampInteger(
   process.env.RPC_PROXY_RATE_LIMIT_MAX_REQUESTS,
@@ -547,6 +554,30 @@ function sanitizeUpstreamRpcError(status: number, detail: string | null): string
   return fallback
 }
 
+function resolveForwardPolicy(methods: string[]): {
+  maxAttemptsPerRpc: number
+  perAttemptTimeoutMs: number
+  totalBudgetMs: number
+  maxRpcUrls: number
+} {
+  const normalized = methods.map((method) => method.trim())
+  const onlyFastReads = normalized.length > 0 && normalized.every((method) => FAST_READ_METHODS.has(method))
+  if (onlyFastReads) {
+    return {
+      maxAttemptsPerRpc: 1,
+      perAttemptTimeoutMs: RPC_FORWARD_TIMEOUT_FAST_READ_MS,
+      totalBudgetMs: RPC_FORWARD_TOTAL_BUDGET_FAST_READ_MS,
+      maxRpcUrls: RPC_FORWARD_MAX_URLS_FAST_READ,
+    }
+  }
+  return {
+    maxAttemptsPerRpc: MAX_ATTEMPTS_PER_RPC,
+    perAttemptTimeoutMs: RPC_FORWARD_TIMEOUT_MS,
+    totalBudgetMs: RPC_FORWARD_TOTAL_BUDGET_MS,
+    maxRpcUrls: Number.POSITIVE_INFINITY,
+  }
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -651,6 +682,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const payload = body
     const requestedMethods = extractRpcMethods(payload)
     telemetry.methods = requestedMethods
+    const forwardPolicy = resolveForwardPolicy(requestedMethods)
+    const forwardDeadlineAt = Date.now() + forwardPolicy.totalBudgetMs
     if (requestedMethods.length === 0) {
       logger.warn('[rpc-proxy][local-guard] missing method in request', { chain })
       finalizeTelemetry(400, 'missing_method')
@@ -667,11 +700,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const rpcUrls = getRpcUrls(chain)
     const envRpcUrls = new Set(readChainRpcUrlsFromEnv(chain))
     const expectedChainId = EXPECTED_CHAIN_ID_HEX[chain]
+    const candidateRpcUrls =
+      Number.isFinite(forwardPolicy.maxRpcUrls) && forwardPolicy.maxRpcUrls > 0
+        ? rpcUrls.slice(0, forwardPolicy.maxRpcUrls)
+        : rpcUrls
     let lastStatus = 502
     let lastError: string | null = null
     let lastRetryAfterSeconds: number | null = null
 
-    for (const rpc of rpcUrls) {
+    rpcLoop: for (const rpc of candidateRpcUrls) {
       if (envRpcUrls.has(rpc) && expectedChainId) {
         const actualChainId = await readRpcChainIdCached(rpc)
         if (actualChainId && actualChainId !== expectedChainId) {
@@ -681,7 +718,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
 
-      for (let attempt = 0; attempt < MAX_ATTEMPTS_PER_RPC; attempt++) {
+      for (let attempt = 0; attempt < forwardPolicy.maxAttemptsPerRpc; attempt++) {
+        const remainingBudgetMs = forwardDeadlineAt - Date.now()
+        if (remainingBudgetMs <= 0) {
+          lastStatus = 504
+          lastError = 'RPC proxy deadline exceeded'
+          break rpcLoop
+        }
         if (attempt > 0) {
           const delay = RETRY_BACKOFF_MS[attempt] ?? 250
           if (delay > 0) await sleep(delay)
@@ -696,7 +739,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify(payload),
             },
-            RPC_FORWARD_TIMEOUT_MS,
+            Math.max(100, Math.min(forwardPolicy.perAttemptTimeoutMs, remainingBudgetMs)),
           )
 
           if (response.ok) {
@@ -716,7 +759,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             }
             lastStatus = status
             lastError = text || `Upstream RPC error (${status})`
-            if (attempt + 1 < MAX_ATTEMPTS_PER_RPC) continue
+            if (attempt + 1 < forwardPolicy.maxAttemptsPerRpc) continue
             break
           }
 
@@ -751,7 +794,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
             lastError = 'RPC proxy error'
           }
           lastStatus = 502
-          if (attempt + 1 < MAX_ATTEMPTS_PER_RPC) continue
+          if (attempt + 1 < forwardPolicy.maxAttemptsPerRpc) continue
           break
         }
       }

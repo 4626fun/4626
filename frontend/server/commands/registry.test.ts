@@ -22,6 +22,8 @@ describe('command registry', () => {
     expect(getCommandFamily('tweet gm')).toBe('twitter')
     expect(getCommandFamily('/coin buy 0xabc 0.1')).toBe('coin')
     expect(getCommandFamily('/get_id')).toBe('id')
+    expect(getCommandFamily('/alfa')).toBe('alfaclub')
+    expect(getCommandFamily('/alfaclub status')).toBe('alfaclub')
   })
 
   it('matches one or more command families', () => {

@@ -11,6 +11,7 @@ dockerfilePath = "frontend/Dockerfile.agent"
 watchPatterns = [
   "/frontend/Dockerfile.agent",
   "/frontend/server/**",
+  "/frontend/api/**",
   "/frontend/src/config/**",
   "/frontend/src/wallet/**",
   "/frontend/package.json",
@@ -27,7 +28,7 @@ numReplicas = 1
 
 # Health check: worker-style runtime (no user HTTP traffic), so use liveness
 # to avoid deploy flaps during long XMTP cold starts / installation sync.
-healthcheckPath = "/readyz"
+healthcheckPath = "/healthz"
 # XMTP cold starts + first-run installation sync can exceed 2 minutes.
 # Keep a generous warmup window for first-run XMTP initialization.
 healthcheckTimeout = 300

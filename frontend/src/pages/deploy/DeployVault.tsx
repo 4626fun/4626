@@ -89,6 +89,11 @@ import {
   resumeAndPollDeploySession,
   type DeploySessionStatusData,
 } from '@/lib/deploy/sessionClient'
+import {
+  buildShareVanitySkipLogKey,
+  isProviderCollisionErrorMessage,
+  shouldEmitShareVanitySkipLog,
+} from './deployVaultSignals'
 import { 
   sendCoinbaseSmartWalletUserOperation, 
   simulateSmartWalletCalls,
@@ -106,6 +111,7 @@ const BASE_SWAP_ROUTER = addr('2626664c2603336E57B271c5C0b26F421741e481')
 const BASE_WETH = addr('4200000000000000000000000000000000000006')
 const BASE_USDC = addr('833589fCD6eDb6E08f4c7C32D4f71b54bdA02913')
 const BASE_CHAINLINK_ETH_USD = addr('71041dddad3595F9CEd3DcCFBe3D1F4b0a16Bb70')
+const CHARM_FACTORY = addr('5B7B8b487D05F77977b7ABEec5F922925B9b2aFa')
 const DEFAULT_PAYOUT_ROUTER_ZORA_WETH_FEE = 10_000
 const DEFAULT_PAYOUT_ROUTER_WETH_CREATOR_FEE = 10_000
 const DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE = 3_000
@@ -132,6 +138,9 @@ const DEFAULT_CHARM_EXPECTED_PROTOCOL_FEE_PIPS = 10_000 // 1% in Charm 1e6 preci
 const DEFAULT_CCA_DURATION_BLOCKS = 302_400n // ~7 days on Base at ~2s blocks (must match CCALaunchStrategy defaultDuration)
 const DEFAULT_SHARE_OFT_VANITY_SUFFIX = '4626'
 const DEFAULT_SHARE_OFT_VANITY_MAX_TRIES = 1_000_000
+const DEFAULT_VAULT_VANITY_PREFIX = '4626'
+const DEFAULT_VAULT_VANITY_MAX_TRIES = 250_000
+const DEFAULT_DEPLOY_VANITY_CUSTOM_MAX_HEX = 5
 const BATCHER_PHASE1_WITH_SALT_SELECTOR = '297cb1e6'
 const BATCHER_PHASE1_CORE_SELECTOR = '1331378b'
 const BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR = '4154f24e'
@@ -374,6 +383,10 @@ type ServerDeployResponse = {
   }
 }
 type DeploySessionCall = { to: Address; value: string; data: Hex }
+type DeploySessionVanityRequest = {
+  vaultPrefix?: string
+  shareSuffix?: string
+}
 type DeploySessionCreateRequest = {
   smartWallet: Address
   creatorToken: Address
@@ -384,6 +397,7 @@ type DeploySessionCreateRequest = {
   phase2FinalizeCalls: DeploySessionCall[]
   phase3Calls: DeploySessionCall[]
   phase4Calls: DeploySessionCall[]
+  vanity?: DeploySessionVanityRequest
   version: string
 }
 type DeploySessionDryRunPhase = {
@@ -402,6 +416,70 @@ type DeploySessionDryRunResponse = {
   forkMode: string
   phases: DeploySessionDryRunPhase[]
   failure?: DeploySessionDryRunFailure
+}
+
+const DRY_RUN_PHASE_NAMES = new Set<DeploySessionDryRunPhase['name']>([
+  'phase1',
+  'phase2Core',
+  'phase2Finalize',
+  'phase3',
+  'phase4',
+])
+
+function normalizeDryRunResponse(data: unknown): DeploySessionDryRunResponse | null {
+  if (!data || typeof data !== 'object') return null
+  const raw = data as Record<string, unknown>
+  const forkMode =
+    typeof raw.forkMode === 'string' && raw.forkMode.trim().length > 0
+      ? raw.forkMode.trim()
+      : 'unknown'
+  const ok = raw.ok === true
+  const phasesRaw = Array.isArray(raw.phases) ? raw.phases : []
+  const phases: DeploySessionDryRunPhase[] = []
+  for (const entry of phasesRaw) {
+    if (!entry || typeof entry !== 'object') continue
+    const phase = entry as Record<string, unknown>
+    const name = String(phase.name ?? '').trim() as DeploySessionDryRunPhase['name']
+    if (!DRY_RUN_PHASE_NAMES.has(name)) continue
+    const status = phase.status === 'failed' ? 'failed' : 'passed'
+    const parsedCallCount = Number(phase.callCount ?? 0)
+    const callCount = Number.isFinite(parsedCallCount) && parsedCallCount >= 0
+      ? Math.floor(parsedCallCount)
+      : 0
+    phases.push({ name, status, callCount })
+  }
+
+  let failure: DeploySessionDryRunFailure | undefined
+  const failureRaw = raw.failure
+  if (failureRaw && typeof failureRaw === 'object') {
+    const parsed = failureRaw as Record<string, unknown>
+    const phase = String(parsed.phase ?? '').trim() as DeploySessionDryRunFailure['phase']
+    const to = String(parsed.to ?? '').trim()
+    if (DRY_RUN_PHASE_NAMES.has(phase) && to) {
+      const parsedCallIndex = Number(parsed.callIndex ?? 0)
+      const callIndex = Number.isFinite(parsedCallIndex) && parsedCallIndex >= 0
+        ? Math.floor(parsedCallIndex)
+        : 0
+      const error =
+        typeof parsed.error === 'string' && parsed.error.trim().length > 0
+          ? parsed.error.trim()
+          : 'Dry-run simulation failed'
+      failure = {
+        phase,
+        callIndex,
+        to: to as Address,
+        error,
+      }
+    }
+  }
+
+  const out: DeploySessionDryRunResponse = {
+    ok,
+    forkMode,
+    phases,
+  }
+  if (failure) out.failure = failure
+  return out
 }
 
 function isLocalForkRpcUrl(rpcUrl: string): boolean {
@@ -639,8 +717,24 @@ class DeployVaultErrorBoundary extends Component<
 export function DeployVault() {
   const privyClientStatus = usePrivyClientStatus()
 
-  // Privy is used for auth/session - if not configured, show setup hint
-  if (privyClientStatus !== 'ready') {
+  if (privyClientStatus === 'loading') {
+    return (
+      <div className="vault-shell min-h-screen bg-vault-bg text-white">
+        <section className="max-w-[1400px] mx-auto px-6 py-16">
+          <div className="text-[10px] font-medium text-zinc-500 mb-4">Deploy</div>
+          <div className="vault-surface vault-hover-lift p-8 space-y-3">
+            <div className="text-lg font-medium">Initializing authentication</div>
+            <div className="text-sm text-zinc-400 leading-relaxed">
+              Waiting for Privy client readiness before loading deploy controls.
+            </div>
+          </div>
+        </section>
+      </div>
+    )
+  }
+
+  // Privy is used for auth/session - if disabled, show setup hint.
+  if (privyClientStatus === 'disabled') {
     return (
       <div className="vault-shell min-h-screen bg-vault-bg text-white">
         <section className="max-w-[1400px] mx-auto px-6 py-16">
@@ -677,6 +771,55 @@ function deriveShareOftSalt(params: { owner: Address; shareSymbol: string; versi
 
 function deriveOftBootstrapSalt(): Hex {
   return keccak256(encodePacked(['string'], ['4626:OFTBootstrapRegistry:v1']))
+}
+
+async function findDeploymentVersionForVaultPrefix(params: {
+  create2Deployer: Address
+  creatorToken: Address
+  owner: Address
+  chainId: number
+  baseVersion: string
+  prefix: string
+  maxTries: number
+  vaultInitCode: Hex
+  isAddressDeployed?: (addr: Address) => Promise<boolean>
+  yieldEvery?: number
+}): Promise<string | null> {
+  const prefix = normalizeHexSuffix(params.prefix)
+  if (!prefix) return null
+  const maxTries = Math.max(1, Math.floor(params.maxTries))
+  const yieldEvery = Math.max(256, Math.floor(params.yieldEvery ?? 4096))
+
+  for (let i = 0; i < maxTries; i += 1) {
+    const candidateVersion = i === 0 ? params.baseVersion : `${params.baseVersion}-v${i.toString(36)}`
+    const baseSalt = deriveBaseSalt({
+      creatorToken: params.creatorToken,
+      owner: params.owner,
+      chainId: params.chainId,
+      version: candidateVersion,
+    })
+    const vaultSalt = saltFor(baseSalt, 'vault')
+    const addr = predictCreate2Address({
+      create2Deployer: params.create2Deployer,
+      salt: vaultSalt,
+      initCode: params.vaultInitCode,
+    })
+    if (addr.slice(2, 2 + prefix.length).toLowerCase() === prefix) {
+      if (params.isAddressDeployed) {
+        try {
+          const deployed = await params.isAddressDeployed(addr)
+          if (deployed) continue
+        } catch {
+          // ignore deployed-check failures; allow candidate version
+        }
+      }
+      return candidateVersion
+    }
+    if (i > 0 && i % yieldEvery === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+  }
+  return null
 }
 
 function predictCreate2Address(params: { create2Deployer: Address; salt: Hex; initCode: Hex }): Address {
@@ -725,15 +868,15 @@ function tryAutoRecoverStaleDeployConfig(params: {
       return false
     }
     window.sessionStorage.setItem(STALE_DEPLOY_CONFIG_RELOAD_KEY, String(now))
-    logger.warn('[DeployVault] stale_runtime_config_detected_auto_reload', {
+    logger.info('[DeployVault] stale_runtime_config_detected', {
       reason: params.reason,
       clientValue: params.clientValue,
       runtimeValue: params.runtimeValue,
       href: window.location.href,
     })
-    // Force a hard navigation to refresh import.meta.env-backed config after local fork restart.
-    window.location.reload()
-    return true
+    // Do not force a client reload here. In environments with many injected wallets, reload can
+    // repeatedly re-trigger provider-injection races and look like a crash loop.
+    return false
   } catch {
     return false
   }
@@ -867,6 +1010,121 @@ const UNISWAP_V3_FACTORY_ABI = [
       { name: 'fee', type: 'uint24' },
     ],
     outputs: [{ name: 'pool', type: 'address' }],
+  },
+] as const
+
+const BATCHER_PHASE3_CONFIG_ABI = [
+  {
+    type: 'function',
+    name: 'phase3Helper',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'usdc',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'uniswapRouter',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'uniswapV3Factory',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'ajnaFactory',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
+const AJNA_FACTORY_ABI = [
+  {
+    type: 'function',
+    name: 'ERC20_NON_SUBSET_HASH',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'bytes32' }],
+  },
+  {
+    type: 'function',
+    name: 'deployedPools',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'subsetHash', type: 'bytes32' },
+      { name: 'quoteToken', type: 'address' },
+      { name: 'collateralToken', type: 'address' },
+    ],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'MIN_RATE',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'MAX_RATE',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'uint256' }],
+  },
+  {
+    type: 'function',
+    name: 'deployPool',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'quoteToken', type: 'address' },
+      { name: 'collateralToken', type: 'address' },
+      { name: 'interestRate', type: 'uint256' },
+    ],
+    outputs: [{ type: 'address' }],
+  },
+] as const
+
+const CHARM_FACTORY_ABI = [
+  {
+    type: 'function',
+    name: 'createVault',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'pool', type: 'address' },
+          { name: 'manager', type: 'address' },
+          { name: 'managerFee', type: 'uint24' },
+          { name: 'rebalanceDelegate', type: 'address' },
+          { name: 'maxTotalSupply', type: 'uint256' },
+          { name: 'baseThreshold', type: 'int24' },
+          { name: 'limitThreshold', type: 'int24' },
+          { name: 'fullRangeWeight', type: 'uint24' },
+          { name: 'period', type: 'uint32' },
+          { name: 'minTickMove', type: 'int24' },
+          { name: 'maxTwapDeviation', type: 'int24' },
+          { name: 'twapDuration', type: 'uint32' },
+          { name: 'name', type: 'string' },
+          { name: 'symbol', type: 'string' },
+        ],
+      },
+    ],
+    outputs: [{ name: 'vault', type: 'address' }],
   },
 ] as const
 
@@ -1636,14 +1894,30 @@ const CREATE2_DEPLOYER_STORE_ABI = [
   },
 ] as const
 
-function AddressRow({ label, address }: { label: string; address: Address | null | undefined }) {
+function AddressRow({
+  label,
+  address,
+  deployed,
+}: {
+  label: string
+  address: Address | null | undefined
+  deployed?: boolean | null
+}) {
   const a = address ? String(address) : ''
   const ok = a && a !== String(ZERO_ADDRESS)
   const href = ok ? `https://basescan.org/address/${a}` : null
   return (
     <div className="flex items-center justify-between gap-4 text-[11px]">
       <div className="text-zinc-500">{label}</div>
-      {ok && href ? (
+      {ok && deployed === false ? (
+        <div className="font-mono text-zinc-400">
+          {shortAddress(a)} <span className="text-zinc-600">(pending)</span>
+        </div>
+      ) : ok && deployed === null ? (
+        <div className="font-mono text-zinc-500">
+          {shortAddress(a)} <span className="text-zinc-600">(checking…)</span>
+        </div>
+      ) : ok && href ? (
         <a
           href={href}
           target="_blank"
@@ -1669,12 +1943,11 @@ function DeployVaultBatcher({
   shareName,
   vaultSymbol,
   vaultName,
-  deploymentVersion,
+  deploymentVersion: deploymentVersionProp,
   shareOftSaltOverride,
   currentPayoutRecipient,
+  marketFloorText,
   floorPriceQ96Aligned,
-  marketFloorTwapDurationSec,
-  marketFloorDiscountBps,
   getAccessToken,
   signInWithPrivyToken,
   onSuccess,
@@ -1707,9 +1980,8 @@ function DeployVaultBatcher({
   deploymentVersion: string
   shareOftSaltOverride: Hex | null
   currentPayoutRecipient: Address | null
+  marketFloorText: string | null
   floorPriceQ96Aligned: bigint | null
-  marketFloorTwapDurationSec: number | null
-  marketFloorDiscountBps: number | null
   getAccessToken?: (() => Promise<string | null>) | null
   signInWithPrivyToken?: ((token: string) => Promise<string | null>) | null
   onSuccess: (addresses: ServerDeployResponse['addresses']) => void
@@ -1735,6 +2007,9 @@ function DeployVaultBatcher({
   const chainId = useChainId()
   const { switchChainAsync } = useSwitchChain()
   const publicClient = usePublicClient({ chainId: base.id })
+  const [batcherOverride, setBatcherOverride] = useState<Address | null>(null)
+  const [deploymentVersionOverride, setDeploymentVersionOverride] = useState<string | null>(null)
+  const deploymentVersion = deploymentVersionOverride ?? deploymentVersionProp
   // Legacy ShareOFT Solana overrides are intentionally unused in main deploy flow now.
   void solanaMintOverride
   void solanaDecimalsOverride
@@ -1968,6 +2243,8 @@ function DeployVaultBatcher({
     }
   }, [legacyDeploySessionStorageKey])
   const shareOftVanityCacheRef = useRef<{ key: string; salt: Hex } | null>(null)
+  const vaultVanityVersionCacheRef = useRef<{ key: string; version: string } | null>(null)
+  const shareOftVanitySkipLogKeyRef = useRef<string | null>(null)
   const ensurePaymasterSession = useCallback(async () => {
     if (!getAccessToken || typeof signInWithPrivyToken !== 'function') return
     try {
@@ -1995,6 +2272,18 @@ function DeployVaultBatcher({
     [ensurePaymasterSession],
   )
   const switchAuthLabel = typeof switchAuthCta?.label === 'string' && switchAuthCta.label.trim().length > 0 ? switchAuthCta.label.trim() : null
+  const creatorStrategyFeaturesHref = useMemo(
+    () => `/creator/strategy/features?creator=${creatorToken}`,
+    [creatorToken],
+  )
+  const isVanityPaidFeatureError = useCallback((message: string | null | undefined): boolean => {
+    const lower = String(message ?? '').toLowerCase()
+    if (!lower) return false
+    return (
+      lower.includes('vanity deploy requires paid feature activation') ||
+      lower.includes('deploy_vanity_')
+    )
+  }, [])
 
   const lastAuthAtMs = useMemo(() => {
     if (typeof window === 'undefined') return null
@@ -2061,11 +2350,9 @@ function DeployVaultBatcher({
       return 'Please switch your wallet to Base and retry.'
     }
     if (
-      lower.includes('metamask') &&
-      (lower.includes('not found') ||
-        lower.includes('failed to connect') ||
-        lower.includes('cannot set property ethereum') ||
-        lower.includes('only a getter'))
+      isProviderCollisionErrorMessage(msg) ||
+      (lower.includes('metamask') &&
+        (lower.includes('not found') || lower.includes('failed to connect')))
     ) {
       return 'MetaMask failed to initialize because another wallet extension already controls window.ethereum. Disable one extension (MetaMask/Coinbase/Rabby), or use Coinbase Wallet/Privy sign-in.'
     }
@@ -2162,6 +2449,13 @@ function DeployVaultBatcher({
         'Approve the one-time add-owner transaction from an owner EOA (for example Coinbase Wallet), then retry deploy.'
       )
     }
+    if (isVanityPaidFeatureError(lower)) {
+      return (
+        'Custom vanity deploy options are a paid feature. ' +
+        'Default vanity remains free (vault prefix 0x4626, share suffix 4626). ' +
+        `Activate vanity access in Creator Strategy features (${creatorStrategyFeaturesHref}), then retry.`
+      )
+    }
     if (
       lower.includes('user rejected') ||
       lower.includes('rejected the request') ||
@@ -2211,7 +2505,7 @@ function DeployVaultBatcher({
       return 'Deployment is not configured: missing `VITE_CREATOR_VAULT_BATCHER` / `CONTRACTS.creatorVaultBatcher`.'
     }
     return msg
-  }, [switchAuthLabel])
+  }, [creatorStrategyFeaturesHref, isVanityPaidFeatureError, switchAuthLabel])
 
   const ensureDeploySessionSignerInstalled = useCallback(async (sessionSigner: Address): Promise<void> => {
     let installed = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: sessionSigner })
@@ -2587,34 +2881,34 @@ function DeployVaultBatcher({
   const href3 = hrefForTx(phaseTxs.tx3 ?? null)
   const href4 = hrefForTx(phaseTxs.tx4 ?? null)
 
-  const batcherAddress = (CONTRACTS.creatorVaultBatcher ?? null) as Address | null
+  const batcherAddress = useMemo(() => {
+    if (batcherOverride) return batcherOverride
+    const configured = CONTRACTS.creatorVaultBatcher ?? null
+    if (!configured) return null
+    try {
+      return getAddress(configured as Address) as Address
+    } catch {
+      return null
+    }
+  }, [batcherOverride])
+
+  const vaultVanityPrefix = useMemo(() => {
+    const raw = (import.meta.env.VITE_VAULT_VANITY_PREFIX as string | undefined) ?? DEFAULT_VAULT_VANITY_PREFIX
+    return normalizeHexSuffix(raw)
+  }, [])
+
+  const vaultVanityMaxTries = useMemo(() => {
+    const raw = import.meta.env.VITE_VAULT_VANITY_MAX_TRIES as string | undefined
+    const parsed = raw ? Number(raw) : NaN
+    if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_VAULT_VANITY_MAX_TRIES
+    return Math.floor(parsed)
+  }, [])
 
   const marketFloorWeiPerTokenAligned = useMemo(() => {
     if (!floorPriceQ96Aligned || floorPriceQ96Aligned <= 0n) return null
     // ShareOFT (■token) uses 18 decimals, so convert Q96 → wei/token using 18.
     return q96ToCurrencyPerTokenBaseUnits(floorPriceQ96Aligned, 18)
   }, [floorPriceQ96Aligned])
-
-  const marketFloorText = useMemo(() => {
-    if (!marketFloorWeiPerTokenAligned) return null
-    const ethShort = formatEthPerTokenForUi(marketFloorWeiPerTokenAligned)
-
-    const duration = typeof marketFloorTwapDurationSec === 'number' ? marketFloorTwapDurationSec : null
-    const mins = duration && duration > 0 ? Math.round(duration / 60) : null
-
-    const discount = typeof marketFloorDiscountBps === 'number' ? marketFloorDiscountBps : null
-    const bufferBps = discount !== null ? Math.max(0, 10_000 - discount) : null
-    const bufferPct = bufferBps !== null ? Math.round(bufferBps / 100) : null
-
-    const meta = [
-      mins ? `TWAP ${mins}m` : null,
-      bufferPct !== null ? `-${bufferPct}% buffer` : null,
-    ]
-      .filter(Boolean)
-      .join(', ')
-
-    return meta ? `${ethShort} ETH / ${shareSymbol} (${meta})` : `${ethShort} ETH / ${shareSymbol}`
-  }, [marketFloorWeiPerTokenAligned, marketFloorTwapDurationSec, marketFloorDiscountBps, shareSymbol])
 
   // ERC-4337 deploy requires the initial deposit to be owned by the smart wallet sender.
   const { data: smartWalletTokenBalance } = useReadContract({
@@ -2648,6 +2942,43 @@ function DeployVaultBatcher({
     if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_SHARE_OFT_VANITY_MAX_TRIES
     return Math.floor(parsed)
   }, [])
+
+  const vanityCustomMaxHex = useMemo(() => {
+    const raw = import.meta.env.VITE_DEPLOY_VANITY_CUSTOM_MAX_HEX as string | undefined
+    const parsed = raw ? Number(raw) : NaN
+    if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_DEPLOY_VANITY_CUSTOM_MAX_HEX
+    return Math.max(1, Math.min(5, Math.floor(parsed)))
+  }, [])
+  const vaultVanityIsDefault = vaultVanityPrefix === DEFAULT_VAULT_VANITY_PREFIX
+  const shareVanityIsDefault = shareOftVanitySuffix === DEFAULT_SHARE_OFT_VANITY_SUFFIX
+  const vaultVanityIsCustom = Boolean(vaultVanityPrefix) && !vaultVanityIsDefault
+  const shareVanityIsCustom = Boolean(shareOftVanitySuffix) && !shareVanityIsDefault
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const runtimeConfig = await fetchDeployRuntimeConfig().catch(() => null)
+      if (cancelled || !runtimeConfig) return
+      const runtimeBatcher = runtimeConfig?.creatorVaultBatcher ? normalizeAddressLike(runtimeConfig.creatorVaultBatcher) : null
+      if (runtimeBatcher && (!batcherAddress || !sameAddress(runtimeBatcher, batcherAddress))) {
+        setBatcherOverride(runtimeBatcher)
+      }
+      const hasDeploymentVersionOverride =
+        typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('deploymentVersion')?.trim()
+      const runtimeDeploymentVersion = runtimeConfig?.deploymentVersion?.trim() ?? ''
+      if (
+        !hasDeploymentVersionOverride &&
+        !vaultVanityIsCustom &&
+        runtimeDeploymentVersion &&
+        runtimeDeploymentVersion !== deploymentVersion
+      ) {
+        setDeploymentVersionOverride(runtimeDeploymentVersion)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [batcherAddress, deploymentVersion, vaultVanityIsCustom])
 
   const payoutRouterCodeId = useMemo(() => {
     return keccak256(DEPLOY_BYTECODE.PayoutRouter as Hex)
@@ -2689,6 +3020,8 @@ function DeployVaultBatcher({
       shareOftSaltOverride,
       shareOftVanitySuffix,
       shareOftVanityMaxTries,
+      vaultVanityPrefix,
+      vaultVanityMaxTries,
     ],
     enabled: !!publicClient && !!batcherAddress && !!creatorToken && !!owner && !!shareSymbol && !!shareName && !!vaultName && !!vaultSymbol,
     staleTime: 30_000,
@@ -2773,26 +3106,18 @@ function DeployVaultBatcher({
         return supportsLegacySalt || supportsSplitSalt
       })()
 
-      const baseSalt = deriveBaseSalt({ creatorToken, owner, chainId: base.id, version: deploymentVersion })
-      const vaultSalt = saltFor(baseSalt, 'vault')
-      const wrapperSalt = saltFor(baseSalt, 'wrapper')
-      const gaugeSalt = saltFor(baseSalt, 'gauge')
-      const ccaSalt = saltFor(baseSalt, 'cca')
-      const oracleSalt = saltFor(baseSalt, 'oracle')
-
-      const oftBootstrapSalt = deriveOftBootstrapSalt()
-
-      const oftBootstrapRegistry = predictCreate2Address({
-        create2Deployer,
-        salt: oftBootstrapSalt,
-        initCode: DEPLOY_BYTECODE.OFTBootstrapRegistry as Hex,
-      })
-
       // IMPORTANT: The onchain deployment batcher uses *lowercase* symbols for salts + oracle wiring,
       // but uses *uppercase* symbols for ShareOFT metadata. We must mirror both to keep expected
       // addresses deterministic (especially for ShareOFT + gauge + oracle predictions).
       const shareSymbolLower = shareSymbol.toLowerCase()
       const shareSymbolUpper = shareSymbol.toUpperCase()
+
+      const oftBootstrapSalt = deriveOftBootstrapSalt()
+      const oftBootstrapRegistry = predictCreate2Address({
+        create2Deployer,
+        salt: oftBootstrapSalt,
+        initCode: DEPLOY_BYTECODE.OFTBootstrapRegistry as Hex,
+      })
 
       const shareOftArgs = encodeAbiParameters(parseAbiParameters('string,string,address,address'), [
         shareName,
@@ -2801,22 +3126,106 @@ function DeployVaultBatcher({
         tempOwner,
       ])
       const shareOftInitCode = concatHex([DEPLOY_BYTECODE.CreatorShareOFT as Hex, shareOftArgs])
-      const derivedShareOftSalt = deriveShareOftSalt({ owner, shareSymbol, version: deploymentVersion })
-      let shareOftSaltOverrideUsed = shareOftSaltOverride
-      if (shareOftSaltOverrideUsed && !supportsPhase1WithSalt) {
-        logger.warn('[DeployVault] Batcher lacks vanity salt support; ignoring ShareOFT override', {
-          batcher: batcherAddress,
-        })
-        shareOftSaltOverrideUsed = null
+      const vaultArgs = encodeAbiParameters(parseAbiParameters('address,address,string,string'), [
+        creatorToken,
+        tempOwner,
+        vaultName,
+        vaultSymbol,
+      ])
+      const vaultInitCode = concatHex([DEPLOY_BYTECODE.CreatorOVault as Hex, vaultArgs])
+
+      let deploymentVersionUsed = deploymentVersion
+      if (vaultVanityPrefix) {
+        const vaultVanityKey = [
+          create2Deployer.toLowerCase(),
+          creatorToken.toLowerCase(),
+          owner.toLowerCase(),
+          String(base.id),
+          vaultName,
+          vaultSymbol,
+          deploymentVersion,
+          vaultVanityPrefix,
+          String(vaultVanityMaxTries),
+        ].join(':')
+        const cached = vaultVanityVersionCacheRef.current
+        if (cached?.key === vaultVanityKey) {
+          deploymentVersionUsed = cached.version
+        } else {
+          const foundVersion = await findDeploymentVersionForVaultPrefix({
+            create2Deployer,
+            creatorToken,
+            owner,
+            chainId: base.id,
+            baseVersion: deploymentVersion,
+            prefix: vaultVanityPrefix,
+            maxTries: vaultVanityMaxTries,
+            vaultInitCode,
+            isAddressDeployed: async (addr) => {
+              const bc = await publicClient!.getBytecode({ address: addr })
+              return !!bc && bc !== '0x'
+            },
+          })
+          if (!foundVersion) {
+            throw new Error(
+              `Unable to find vault vanity prefix "0x${vaultVanityPrefix}" in ${vaultVanityMaxTries.toLocaleString()} deployment-version tries. ` +
+                'Increase VITE_VAULT_VANITY_MAX_TRIES and retry.',
+            )
+          }
+          deploymentVersionUsed = foundVersion
+          vaultVanityVersionCacheRef.current = { key: vaultVanityKey, version: foundVersion }
+        }
       }
-      if (!shareOftSaltOverrideUsed && shareOftVanitySuffix && supportsPhase1WithSalt) {
+
+      const baseSalt = deriveBaseSalt({ creatorToken, owner, chainId: base.id, version: deploymentVersionUsed })
+      const vaultSalt = saltFor(baseSalt, 'vault')
+      const wrapperSalt = saltFor(baseSalt, 'wrapper')
+      const gaugeSalt = saltFor(baseSalt, 'gauge')
+      const ccaSalt = saltFor(baseSalt, 'cca')
+      const oracleSalt = saltFor(baseSalt, 'oracle')
+
+      const shareOftVanityUnsupportedByBatcher = !supportsPhase1WithSalt && Boolean(shareOftVanitySuffix)
+      const batcherDisplay = batcherAddress ? shortAddress(batcherAddress) : 'unknown'
+      let shareOftVanityWarning: string | null = null
+      if (shareOftVanityUnsupportedByBatcher) {
+        if (shareVanityIsCustom) {
+          const blockingMessage =
+            `Active batcher ${batcherDisplay} does not support Phase-1 salt overrides. ` +
+            `Custom share token vanity suffix "${shareOftVanitySuffix}" is blocked for this deploy.`
+          logger.warn('[DeployVault] share_oft_vanity_suffix_blocked', {
+            batcher: batcherAddress,
+            suffix: shareOftVanitySuffix,
+            reason: 'phase1_salt_overrides_not_supported',
+          })
+          throw new Error(blockingMessage)
+        }
+        const skipLogKey = buildShareVanitySkipLogKey({
+          batcher: batcherAddress,
+          suffix: shareOftVanitySuffix,
+          reason: 'phase1_salt_overrides_not_supported',
+        })
+        if (shouldEmitShareVanitySkipLog({ lastKey: shareOftVanitySkipLogKeyRef.current, nextKey: skipLogKey })) {
+          shareOftVanitySkipLogKeyRef.current = skipLogKey
+          logger.debug('[DeployVault] share_oft_vanity_suffix_skipped_default', {
+            batcher: batcherAddress,
+            suffix: shareOftVanitySuffix,
+            reason: 'phase1_salt_overrides_not_supported',
+          })
+        }
+        shareOftVanityWarning =
+          `Active batcher ${batcherDisplay} does not support Phase-1 salt overrides, so default share suffix ` +
+          `"${shareOftVanitySuffix}" is not guaranteed for this deploy.`
+      }
+
+      const derivedShareOftSalt = deriveShareOftSalt({ owner, shareSymbol, version: deploymentVersionUsed })
+      let shareOftSaltOverrideUsed = shareOftSaltOverride
+      if (!shareOftSaltOverrideUsed && shareOftVanitySuffix && !shareOftVanityUnsupportedByBatcher) {
         const initCodeHash = keccak256(shareOftInitCode)
         const vanitySeed = keccak256(
           encodePacked(['string', 'address', 'address', 'string'], [
             'CreatorShareOFT:vanity',
             creatorToken,
             owner,
-            deploymentVersion,
+            deploymentVersionUsed,
           ]),
         )
         const vanityStart = BigInt(vanitySeed)
@@ -2825,7 +3234,7 @@ function DeployVaultBatcher({
           initCodeHash.toLowerCase(),
           shareOftVanitySuffix,
           String(shareOftVanityMaxTries),
-          deploymentVersion,
+          deploymentVersionUsed,
           creatorToken.toLowerCase(),
           owner.toLowerCase(),
         ].join(':')
@@ -2856,14 +3265,6 @@ function DeployVaultBatcher({
       }
       const shareOftSalt = shareOftSaltOverrideUsed ?? derivedShareOftSalt
       const shareOftAddress = predictCreate2Address({ create2Deployer, salt: shareOftSalt, initCode: shareOftInitCode })
-
-      const vaultArgs = encodeAbiParameters(parseAbiParameters('address,address,string,string'), [
-        creatorToken,
-        tempOwner,
-        vaultName,
-        vaultSymbol,
-      ])
-      const vaultInitCode = concatHex([DEPLOY_BYTECODE.CreatorOVault as Hex, vaultArgs])
       const vaultAddress = predictCreate2Address({ create2Deployer, salt: vaultSalt, initCode: vaultInitCode })
 
       const wrapperArgs = encodeAbiParameters(parseAbiParameters('address,address,address'), [creatorToken, vaultAddress, tempOwner])
@@ -3015,7 +3416,9 @@ function DeployVaultBatcher({
       return {
         create2Deployer,
         protocolTreasury,
+        deploymentVersion: deploymentVersionUsed,
         shareOftSaltOverride: shareOftSaltOverrideUsed ?? null,
+        shareOftVanityWarning,
         expected: {
           vault: vaultAddress,
           wrapper: wrapperAddress,
@@ -3034,11 +3437,440 @@ function DeployVaultBatcher({
   const expected = expectedQuery.data?.expected ?? null
   const expectedCreate2Deployer = expectedQuery.data?.create2Deployer ?? null
   const expectedProtocolTreasury = normalizeAddressLike(expectedQuery.data?.protocolTreasury ?? CONTRACTS.protocolTreasury)
+  const expectedDeploymentVersion = expectedQuery.data?.deploymentVersion ?? deploymentVersion
   const expectedShareOftSaltOverride = expectedQuery.data?.shareOftSaltOverride ?? null
+  const expectedShareOftVanityWarning = expectedQuery.data?.shareOftVanityWarning ?? null
   const expectedGauge = expected?.gaugeController ?? null
   const expectedBurnStream = expected?.burnStream ?? null
   const expectedPayoutRouter = expected?.payoutRouter ?? null
   const expectedCreatorCoinPolicyController = expected?.creatorCoinPolicyController ?? null
+
+  useEffect(() => {
+    if (expectedDeploymentVersion && expectedDeploymentVersion !== deploymentVersion) {
+      setDeploymentVersionOverride(expectedDeploymentVersion)
+    }
+  }, [deploymentVersion, expectedDeploymentVersion])
+
+  const phase3ExpectedQuery = useQuery({
+    queryKey: [
+      'creatorVaultBatcher',
+      'phase3Expected',
+      batcherAddress,
+      expectedCreate2Deployer,
+      expectedProtocolTreasury,
+      expected?.vault,
+      creatorToken,
+      owner,
+      deploymentVersion,
+      depositSymbol,
+      phase,
+    ],
+    enabled:
+      !!publicClient &&
+      !!batcherAddress &&
+      !!expected &&
+      !!expectedCreate2Deployer &&
+      !!expectedProtocolTreasury,
+    staleTime: 15_000,
+    retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
+    retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 5_000),
+    queryFn: async () => {
+      const expectedPhase = expected!
+      const fallbackUsdc = normalizeAddressLike((CONTRACTS as any).usdc ?? BASE_USDC)
+      const fallbackUniswapRouter = normalizeAddressLike((CONTRACTS as any).swapRouter ?? BASE_SWAP_ROUTER)
+      const fallbackUniswapV3Factory = normalizeAddressLike((CONTRACTS as any).uniswapV3Factory ?? null)
+      const fallbackAjnaFactory = normalizeAddressLike((CONTRACTS as any).ajnaErc20Factory ?? null)
+      const fallbackSolanaBridge = normalizeAddressLike((CONTRACTS as any).solanaBridgeAdapter ?? null)
+
+      const [phase3HelperRaw, usdcRaw, uniswapRouterRaw, uniswapV3FactoryRaw, ajnaFactoryRaw] = await Promise.all([
+        publicClient!
+          .readContract({
+            address: batcherAddress as Address,
+            abi: BATCHER_PHASE3_CONFIG_ABI,
+            functionName: 'phase3Helper',
+          })
+          .catch(() => null),
+        publicClient!
+          .readContract({
+            address: batcherAddress as Address,
+            abi: BATCHER_PHASE3_CONFIG_ABI,
+            functionName: 'usdc',
+          })
+          .catch(() => null),
+        publicClient!
+          .readContract({
+            address: batcherAddress as Address,
+            abi: BATCHER_PHASE3_CONFIG_ABI,
+            functionName: 'uniswapRouter',
+          })
+          .catch(() => null),
+        publicClient!
+          .readContract({
+            address: batcherAddress as Address,
+            abi: BATCHER_PHASE3_CONFIG_ABI,
+            functionName: 'uniswapV3Factory',
+          })
+          .catch(() => null),
+        publicClient!
+          .readContract({
+            address: batcherAddress as Address,
+            abi: BATCHER_PHASE3_CONFIG_ABI,
+            functionName: 'ajnaFactory',
+          })
+          .catch(() => null),
+      ])
+
+      const phase3HelperAddress = normalizeAddressLike(phase3HelperRaw)
+      const usdcAddress = normalizeAddressLike(usdcRaw) ?? fallbackUsdc
+      const uniswapRouterAddress = normalizeAddressLike(uniswapRouterRaw) ?? fallbackUniswapRouter
+      const uniswapV3FactoryAddress = normalizeAddressLike(uniswapV3FactoryRaw) ?? fallbackUniswapV3Factory
+      const ajnaFactoryAddress = normalizeAddressLike(ajnaFactoryRaw) ?? fallbackAjnaFactory
+      const solanaBridgeAddress = fallbackSolanaBridge
+
+      let v3PoolAddress: Address | null = null
+      if (uniswapV3FactoryAddress && usdcAddress) {
+        try {
+          const pool = (await publicClient!.readContract({
+            address: uniswapV3FactoryAddress,
+            abi: UNISWAP_V3_FACTORY_ABI,
+            functionName: 'getPool',
+            args: [creatorToken, usdcAddress, 3_000],
+          })) as Address
+          const normalizedPool = normalizeAddressLike(pool)
+          if (normalizedPool && !sameAddress(normalizedPool, ZERO_ADDRESS)) {
+            v3PoolAddress = normalizedPool
+          }
+        } catch {
+          v3PoolAddress = null
+        }
+      }
+
+      let ajnaPoolAddress: Address | null = null
+      if (ajnaFactoryAddress && usdcAddress) {
+        try {
+          const subsetHash = (await publicClient!.readContract({
+            address: ajnaFactoryAddress,
+            abi: AJNA_FACTORY_ABI,
+            functionName: 'ERC20_NON_SUBSET_HASH',
+          })) as Hex
+          const deployedPool = (await publicClient!.readContract({
+            address: ajnaFactoryAddress,
+            abi: AJNA_FACTORY_ABI,
+            functionName: 'deployedPools',
+            args: [subsetHash, usdcAddress, creatorToken],
+          })) as Address
+          const normalizedPool = normalizeAddressLike(deployedPool)
+          if (normalizedPool && !sameAddress(normalizedPool, ZERO_ADDRESS)) {
+            ajnaPoolAddress = normalizedPool
+          } else {
+            try {
+              const [minRate, maxRate] = (await Promise.all([
+                publicClient!.readContract({
+                  address: ajnaFactoryAddress,
+                  abi: AJNA_FACTORY_ABI,
+                  functionName: 'MIN_RATE',
+                }),
+                publicClient!.readContract({
+                  address: ajnaFactoryAddress,
+                  abi: AJNA_FACTORY_ABI,
+                  functionName: 'MAX_RATE',
+                }),
+              ])) as [bigint, bigint]
+              let interestRate = 50_000_000_000_000_000n
+              if (interestRate < minRate) interestRate = minRate
+              if (interestRate > maxRate) interestRate = maxRate
+              const simulatedPool = (await publicClient!.simulateContract({
+                address: ajnaFactoryAddress,
+                abi: AJNA_FACTORY_ABI,
+                functionName: 'deployPool',
+                args: [usdcAddress, creatorToken, interestRate],
+                account: owner,
+              }).then((v) => v.result)) as Address
+              const normalizedSimulatedPool = normalizeAddressLike(simulatedPool)
+              if (normalizedSimulatedPool && !sameAddress(normalizedSimulatedPool, ZERO_ADDRESS)) {
+                ajnaPoolAddress = normalizedSimulatedPool
+              }
+            } catch {
+              ajnaPoolAddress = null
+            }
+          }
+        } catch {
+          ajnaPoolAddress = null
+        }
+      }
+
+      let charmVaultAddress: Address | null = null
+      if (v3PoolAddress && expectedProtocolTreasury) {
+        const charmLabel = (depositSymbol || '').toLowerCase()
+        const charmVaultName = charmLabel ? `4626: ${charmLabel}/USDC` : '4626: CREATOR/USDC'
+        const charmVaultSymbol = charmLabel ? `CV-${charmLabel}-USDC` : 'CV-CREATOR-USDC'
+        try {
+          const simulatedCharmVault = (await publicClient!.simulateContract({
+            address: CHARM_FACTORY,
+            abi: CHARM_FACTORY_ABI,
+            functionName: 'createVault',
+            args: [
+              {
+                pool: v3PoolAddress,
+                manager: expectedProtocolTreasury,
+                managerFee: 160_000,
+                rebalanceDelegate: expectedProtocolTreasury,
+                maxTotalSupply: (1n << 256n) - 1n,
+                baseThreshold: 3_000,
+                limitThreshold: 6_000,
+                fullRangeWeight: 0,
+                period: 1_800,
+                minTickMove: 10,
+                maxTwapDeviation: 500,
+                twapDuration: 300,
+                name: charmVaultName,
+                symbol: charmVaultSymbol,
+              },
+            ],
+            account: owner,
+          }).then((v) => v.result)) as Address
+          const normalizedCharmVault = normalizeAddressLike(simulatedCharmVault)
+          if (normalizedCharmVault && !sameAddress(normalizedCharmVault, ZERO_ADDRESS)) {
+            charmVaultAddress = normalizedCharmVault
+          }
+        } catch {
+          charmVaultAddress = null
+        }
+      }
+
+      const baseSalt = deriveBaseSalt({ creatorToken, owner, chainId: base.id, version: deploymentVersion })
+      const ajnaVaultAuthSalt = saltFor(baseSalt, 'ajnaVaultAuth')
+      const ajnaVaultSalt = saltFor(baseSalt, 'ajnaVault')
+      const ajnaStrategySalt = saltFor(baseSalt, 'ajnaStrategyAdapter')
+      const solanaStrategySalt = saltFor(baseSalt, 'solanaStrategy')
+      const charmStrategySalt = saltFor(baseSalt, 'charmStrategyV3')
+
+      let creatorCharmStrategyAddress: Address | null = null
+      let ajnaVaultAuthAddress: Address | null = null
+      let ajnaVaultAddress: Address | null = null
+      let erc4626StrategyAdapterAddress: Address | null = null
+      let solanaStrategyAddress: Address | null = null
+
+      if (phase3HelperAddress && expectedCreate2Deployer) {
+        const ajnaAuthArgs = encodeAbiParameters(parseAbiParameters('address'), [phase3HelperAddress])
+        const ajnaAuthInitCode = concatHex([DEPLOY_BYTECODE.AjnaVaultAuth as Hex, ajnaAuthArgs])
+        ajnaVaultAuthAddress = predictCreate2Address({
+          create2Deployer: expectedCreate2Deployer,
+          salt: ajnaVaultAuthSalt,
+          initCode: ajnaAuthInitCode,
+        })
+
+        if (ajnaPoolAddress && ajnaVaultAuthAddress) {
+          const charmLabel = (depositSymbol || '').toLowerCase()
+          const ajnaVaultName = charmLabel ? `Ajna 4626: ${charmLabel}/USDC` : 'Ajna 4626: CREATOR/USDC'
+          const ajnaVaultSymbol = charmLabel ? `AJ-${charmLabel}-USDC` : 'AJ-CREATOR-USDC'
+          const ajnaVaultArgs = encodeAbiParameters(parseAbiParameters('address,address,string,string,address'), [
+            ajnaPoolAddress,
+            creatorToken,
+            ajnaVaultName,
+            ajnaVaultSymbol,
+            ajnaVaultAuthAddress,
+          ])
+          const ajnaVaultInitCode = concatHex([DEPLOY_BYTECODE.AjnaERC4626Vault as Hex, ajnaVaultArgs])
+          ajnaVaultAddress = predictCreate2Address({
+            create2Deployer: expectedCreate2Deployer,
+            salt: ajnaVaultSalt,
+            initCode: ajnaVaultInitCode,
+          })
+
+          const ajnaStrategyArgs = encodeAbiParameters(parseAbiParameters('address,address,address'), [
+            expectedPhase.vault,
+            ajnaVaultAddress,
+            phase3HelperAddress,
+          ])
+          const ajnaStrategyInitCode = concatHex([DEPLOY_BYTECODE.ERC4626StrategyAdapter as Hex, ajnaStrategyArgs])
+          erc4626StrategyAdapterAddress = predictCreate2Address({
+            create2Deployer: expectedCreate2Deployer,
+            salt: ajnaStrategySalt,
+            initCode: ajnaStrategyInitCode,
+          })
+        }
+
+        if (solanaBridgeAddress && expectedProtocolTreasury) {
+          const solanaStrategyArgs = encodeAbiParameters(
+            parseAbiParameters('address,address,address,address,uint64,uint16,uint16,address'),
+            [
+              expectedPhase.vault,
+              creatorToken,
+              phase3HelperAddress,
+              expectedProtocolTreasury,
+              DEFAULT_SOLANA_MAX_NAV_AGE,
+              DEFAULT_SOLANA_MAX_NAV_DELTA_BPS,
+              DEFAULT_SOLANA_MIN_BASE_LIQUIDITY_BPS,
+              solanaBridgeAddress,
+            ],
+          )
+          const solanaStrategyInitCode = concatHex([DEPLOY_BYTECODE.SolanaStrategy as Hex, solanaStrategyArgs])
+          solanaStrategyAddress = predictCreate2Address({
+            create2Deployer: expectedCreate2Deployer,
+            salt: solanaStrategySalt,
+            initCode: solanaStrategyInitCode,
+          })
+        }
+
+        if (usdcAddress && uniswapRouterAddress && charmVaultAddress && v3PoolAddress) {
+          const charmStrategyArgs = encodeAbiParameters(
+            parseAbiParameters('address,address,address,address,address,address,address'),
+            [
+              expectedPhase.vault,
+              creatorToken,
+              usdcAddress,
+              uniswapRouterAddress,
+              charmVaultAddress,
+              v3PoolAddress,
+              phase3HelperAddress,
+            ],
+          )
+          const charmStrategyInitCode = concatHex([DEPLOY_BYTECODE.CreatorCharmStrategy as Hex, charmStrategyArgs])
+          creatorCharmStrategyAddress = predictCreate2Address({
+            create2Deployer: expectedCreate2Deployer,
+            salt: charmStrategySalt,
+            initCode: charmStrategyInitCode,
+          })
+        }
+      }
+
+      return {
+        v3Pool: v3PoolAddress,
+        charmVault: charmVaultAddress,
+        creatorCharmStrategy: creatorCharmStrategyAddress,
+        ajnaPool: ajnaPoolAddress,
+        ajnaVaultAuth: ajnaVaultAuthAddress,
+        ajnaVault: ajnaVaultAddress,
+        erc4626StrategyAdapter: erc4626StrategyAdapterAddress,
+        solanaStrategy: solanaStrategyAddress,
+      }
+    },
+  })
+
+  const phase3Expected = phase3ExpectedQuery.data ?? null
+
+  const phase3ExpectedAddressDeploymentQuery = useQuery({
+    queryKey: [
+      'creatorVaultBatcher',
+      'phase3ExpectedAddressDeployment',
+      phase3Expected?.v3Pool,
+      phase3Expected?.charmVault,
+      phase3Expected?.creatorCharmStrategy,
+      phase3Expected?.ajnaPool,
+      phase3Expected?.ajnaVaultAuth,
+      phase3Expected?.ajnaVault,
+      phase3Expected?.erc4626StrategyAdapter,
+      phase3Expected?.solanaStrategy,
+      phase,
+    ],
+    enabled: !!publicClient && !!phase3Expected,
+    staleTime: 5_000,
+    retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
+    retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 5_000),
+    refetchInterval: (query) => {
+      const data = query.state.data as
+        | {
+            v3Pool: boolean | null
+            charmVault: boolean | null
+            creatorCharmStrategy: boolean | null
+            ajnaPool: boolean | null
+            ajnaVaultAuth: boolean | null
+            ajnaVault: boolean | null
+            erc4626StrategyAdapter: boolean | null
+            solanaStrategy: boolean | null
+          }
+        | undefined
+      if (!data) return 5_000
+      const known = Object.values(data).filter((value): value is boolean => typeof value === 'boolean')
+      if (known.length === 0) return false
+      const allDeployed = known.every(Boolean)
+      if (allDeployed) return false
+      return busy ? 3_000 : 5_000
+    },
+    queryFn: async () => {
+      const out: {
+        v3Pool: boolean | null
+        charmVault: boolean | null
+        creatorCharmStrategy: boolean | null
+        ajnaPool: boolean | null
+        ajnaVaultAuth: boolean | null
+        ajnaVault: boolean | null
+        erc4626StrategyAdapter: boolean | null
+        solanaStrategy: boolean | null
+      } = {
+        v3Pool: null,
+        charmVault: null,
+        creatorCharmStrategy: null,
+        ajnaPool: null,
+        ajnaVaultAuth: null,
+        ajnaVault: null,
+        erc4626StrategyAdapter: null,
+        solanaStrategy: null,
+      }
+
+      const entries = Object.entries(phase3Expected ?? {}) as Array<[keyof typeof out, Address | null]>
+      const known = entries.filter(([, address]) => !!address) as Array<[keyof typeof out, Address]>
+      if (known.length === 0) return out
+
+      const codes = await Promise.all(known.map(([, address]) => publicClient!.getBytecode({ address })))
+      for (let i = 0; i < known.length; i += 1) {
+        const [key] = known[i]!
+        out[key] = Boolean(codes[i] && codes[i] !== '0x')
+      }
+      return out
+    },
+  })
+
+  const phase3ExpectedAddressDeployment = phase3ExpectedAddressDeploymentQuery.data
+  const phase3LikelyMissingHelperConfig = useMemo(() => {
+    if (!phase3Expected) return false
+    const hasPools = Boolean(phase3Expected.v3Pool || phase3Expected.ajnaPool || phase3Expected.charmVault)
+    const missingHelperDependent =
+      !phase3Expected.creatorCharmStrategy &&
+      !phase3Expected.ajnaVaultAuth &&
+      !phase3Expected.ajnaVault &&
+      !phase3Expected.erc4626StrategyAdapter &&
+      !phase3Expected.solanaStrategy
+    return hasPools && missingHelperDependent
+  }, [phase3Expected])
+
+  const phase4AuctionAddressQuery = useQuery({
+    queryKey: ['creatorVaultBatcher', 'phase4AuctionAddress', expected?.ccaStrategy, phase],
+    enabled: !!publicClient && !!expected?.ccaStrategy,
+    staleTime: 5_000,
+    retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
+    retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 5_000),
+    queryFn: async () => {
+      const status = (await publicClient!.readContract({
+        address: expected!.ccaStrategy,
+        abi: CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI,
+        functionName: 'getAuctionStatus',
+      })) as readonly [Address, boolean, boolean, bigint, bigint]
+      const auction = normalizeAddressLike(status?.[0] ?? null)
+      if (!auction || sameAddress(auction, ZERO_ADDRESS)) return null
+      return auction
+    },
+  })
+
+  const phase4AuctionAddress = phase4AuctionAddressQuery.data ?? null
+  const phase4AuctionDeploymentQuery = useQuery({
+    queryKey: ['creatorVaultBatcher', 'phase4AuctionDeployment', phase4AuctionAddress, phase],
+    enabled: !!publicClient && !!phase4AuctionAddress,
+    staleTime: 5_000,
+    retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
+    retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 5_000),
+    refetchInterval: (query) => {
+      const deployed = query.state.data as boolean | undefined
+      if (deployed === true) return false
+      return busy ? 3_000 : 5_000
+    },
+    queryFn: async () => {
+      const code = await publicClient!.getBytecode({ address: phase4AuctionAddress as Address })
+      return Boolean(code && code !== '0x')
+    },
+  })
+  const phase4AuctionDeployment = phase4AuctionAddress ? (phase4AuctionDeploymentQuery.data ?? null) : null
 
   useEffect(() => {
     expectedRef.current = expected
@@ -3063,6 +3895,77 @@ function DeployVaultBatcher({
       return { anyDeployed: deployed.some(Boolean), allDeployed: deployed.every(Boolean) } as const
     },
   })
+
+  const expectedAddressDeploymentQuery = useQuery({
+    queryKey: [
+      'creatorVaultBatcher',
+      'expectedAddressDeployment',
+      expected?.vault,
+      expected?.wrapper,
+      expected?.shareOFT,
+      expected?.gaugeController,
+      expected?.ccaStrategy,
+      expected?.oracle,
+      expected?.burnStream,
+      expected?.payoutRouter,
+      expected?.creatorCoinPolicyController,
+      phase,
+    ],
+    enabled: !!publicClient && !!expected,
+    staleTime: 5_000,
+    retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
+    retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 5_000),
+    refetchInterval: (query) => {
+      const data = query.state.data as
+        | {
+            vault: boolean
+            wrapper: boolean
+            shareOFT: boolean
+            gaugeController: boolean
+            ccaStrategy: boolean
+            oracle: boolean
+            burnStream: boolean
+            payoutRouter: boolean
+            creatorCoinPolicyController: boolean
+          }
+        | undefined
+      if (!data) return 5_000
+      const allDeployed = Object.values(data).every(Boolean)
+      if (allDeployed) return false
+      return busy ? 3_000 : 5_000
+    },
+    queryFn: async () => {
+      const addresses = {
+        vault: expected!.vault,
+        wrapper: expected!.wrapper,
+        shareOFT: expected!.shareOFT,
+        gaugeController: expected!.gaugeController,
+        ccaStrategy: expected!.ccaStrategy,
+        oracle: expected!.oracle,
+        burnStream: expected!.burnStream,
+        payoutRouter: expected!.payoutRouter,
+        creatorCoinPolicyController: expected!.creatorCoinPolicyController,
+      } as const
+
+      const entries = Object.entries(addresses) as Array<[keyof typeof addresses, Address]>
+      const codes = await Promise.all(entries.map(([, address]) => publicClient!.getBytecode({ address })))
+      return Object.fromEntries(
+        entries.map(([key], index) => [key, Boolean(codes[index] && codes[index] !== '0x')]),
+      ) as {
+        vault: boolean
+        wrapper: boolean
+        shareOFT: boolean
+        gaugeController: boolean
+        ccaStrategy: boolean
+        oracle: boolean
+        burnStream: boolean
+        payoutRouter: boolean
+        creatorCoinPolicyController: boolean
+      }
+    },
+  })
+
+  const expectedAddressDeployment = expectedAddressDeploymentQuery.data
 
   const payoutMismatch =
     !!expectedPayoutRouter &&
@@ -3115,37 +4018,47 @@ function DeployVaultBatcher({
       if (!batcherAddress) throw new Error('Deployment batcher is not configured. Set VITE_CREATOR_VAULT_BATCHER.')
       const runtimeBatcher = runtimeConfig?.creatorVaultBatcher ? getAddress(runtimeConfig.creatorVaultBatcher) : null
       if (runtimeBatcher && !sameAddress(runtimeBatcher, batcherAddress)) {
-        if (
-          tryAutoRecoverStaleDeployConfig({
-            reason: 'batcher',
-            clientValue: batcherAddress,
-            runtimeValue: runtimeBatcher,
-          })
-        ) {
-          setError('Local dry-run config changed after restart. Reloading deploy page...')
-          return null
-        }
-        throw new Error(
-          `Deploy page is stale after a local restart. Client batcher ${batcherAddress} does not match server batcher ${runtimeBatcher}. Hard refresh the page and confirm you are on the dry-run origin (http://localhost:5174).`,
+        const recovered = tryAutoRecoverStaleDeployConfig({
+          reason: 'batcher',
+          clientValue: batcherAddress,
+          runtimeValue: runtimeBatcher,
+        })
+        setBatcherOverride(runtimeBatcher)
+        setError(
+          recovered
+            ? 'Deploy runtime changed. Syncing to server batcher…'
+            : `Deploy runtime changed. Synced batcher to ${shortAddress(runtimeBatcher)}. Click Run dry-run again.`,
         )
+        return null
       }
       const hasDeploymentVersionOverride =
         typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('deploymentVersion')?.trim()
       const runtimeDeploymentVersion = runtimeConfig?.deploymentVersion?.trim() ?? ''
-      if (!hasDeploymentVersionOverride && runtimeDeploymentVersion && runtimeDeploymentVersion !== deploymentVersion) {
-        if (
-          tryAutoRecoverStaleDeployConfig({
-            reason: 'deploymentVersion',
-            clientValue: deploymentVersion,
-            runtimeValue: runtimeDeploymentVersion,
-          })
-        ) {
-          setError('Local dry-run deployment version changed after restart. Reloading deploy page...')
-          return null
-        }
-        throw new Error(
-          `Deploy page is stale after a local restart. Client deployment version ${deploymentVersion} does not match server deployment version ${runtimeDeploymentVersion}. Hard refresh the page and confirm you are on the dry-run origin (http://localhost:5174).`,
+      const clientRuntimeDeploymentVersion = deploymentVersionProp
+      if (
+        !hasDeploymentVersionOverride &&
+        !vaultVanityIsCustom &&
+        runtimeDeploymentVersion &&
+        runtimeDeploymentVersion !== clientRuntimeDeploymentVersion
+      ) {
+        const recovered = tryAutoRecoverStaleDeployConfig({
+          reason: 'deploymentVersion',
+          clientValue: clientRuntimeDeploymentVersion,
+          runtimeValue: runtimeDeploymentVersion,
+        })
+        setDeploymentVersionOverride(runtimeDeploymentVersion)
+        setError(
+          recovered
+            ? 'Deploy runtime changed. Syncing to server deployment version…'
+            : `Deploy runtime changed. Synced deployment version to ${runtimeDeploymentVersion}. Click Run dry-run again.`,
         )
+        return null
+      }
+      if (vaultVanityIsCustom && (vaultVanityPrefix ?? '').length > vanityCustomMaxHex) {
+        throw new Error(`Custom vault vanity supports up to ${vanityCustomMaxHex} hex characters (0-9, a-f).`)
+      }
+      if (shareVanityIsCustom && (shareOftVanitySuffix ?? '').length > vanityCustomMaxHex) {
+        throw new Error(`Custom share vanity supports up to ${vanityCustomMaxHex} hex characters (0-9, a-f).`)
       }
       const payoutRouterKeeperAddress = normalizeAddressLike(runtimeConfig?.payoutRouterKeeperAddress)
       const payoutRouterApprovedExternalSwapTargets = normalizeAddressArray(
@@ -3265,146 +4178,149 @@ function DeployVaultBatcher({
         return !!bc && bc !== '0x'
       })()
 
+      const senderCanAdminPayoutRouter = sameAddress(owner, expectedProtocolTreasury)
       const payoutRouterDesiredSwapPaths: Array<{ tokenIn: Address; path: Hex; label: 'WETH' | 'ZORA' }> = []
-      const uniswapV3Factory = normalizeAddressLike(CONTRACTS.uniswapV3Factory)
-      const hasV3Pool = async (tokenA: Address, tokenB: Address, fee: number): Promise<boolean> => {
-        if (!uniswapV3Factory) return false
-        if (sameAddress(tokenA, tokenB)) return false
-        try {
-          const pool = await publicClient.readContract({
-            address: uniswapV3Factory,
-            abi: UNISWAP_V3_FACTORY_ABI,
-            functionName: 'getPool',
-            args: [tokenA, tokenB, fee],
-          })
-          return typeof pool === 'string' && isAddress(pool) && !sameAddress(pool as Address, ZERO_ADDRESS)
-        } catch {
-          return false
+      if (senderCanAdminPayoutRouter) {
+        const uniswapV3Factory = normalizeAddressLike(CONTRACTS.uniswapV3Factory)
+        const hasV3Pool = async (tokenA: Address, tokenB: Address, fee: number): Promise<boolean> => {
+          if (!uniswapV3Factory) return false
+          if (sameAddress(tokenA, tokenB)) return false
+          try {
+            const pool = await publicClient.readContract({
+              address: uniswapV3Factory,
+              abi: UNISWAP_V3_FACTORY_ABI,
+              functionName: 'getPool',
+              args: [tokenA, tokenB, fee],
+            })
+            return typeof pool === 'string' && isAddress(pool) && !sameAddress(pool as Address, ZERO_ADDRESS)
+          } catch {
+            return false
+          }
         }
-      }
-      const candidateV3Fees = (preferredFee: number): number[] => {
-        const common = [preferredFee, DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE, 500, 3_000, 10_000, 100]
-        const out: number[] = []
-        for (const fee of common) {
-          if (!Number.isInteger(fee) || fee <= 0 || fee > 1_000_000) continue
-          if (!out.includes(fee)) out.push(fee)
+        const candidateV3Fees = (preferredFee: number): number[] => {
+          const common = [preferredFee, DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE, 500, 3_000, 10_000, 100]
+          const out: number[] = []
+          for (const fee of common) {
+            if (!Number.isInteger(fee) || fee <= 0 || fee > 1_000_000) continue
+            if (!out.includes(fee)) out.push(fee)
+          }
+          return out
         }
-        return out
-      }
-      const resolveV3Fee = async (tokenA: Address, tokenB: Address, preferredFee: number): Promise<number | null> => {
-        for (const fee of candidateV3Fees(preferredFee)) {
-          if (await hasV3Pool(tokenA, tokenB, fee)) return fee
+        const resolveV3Fee = async (tokenA: Address, tokenB: Address, preferredFee: number): Promise<number | null> => {
+          for (const fee of candidateV3Fees(preferredFee)) {
+            if (await hasV3Pool(tokenA, tokenB, fee)) return fee
+          }
+          return null
         }
-        return null
-      }
-      const usdcCreatorFee = !sameAddress(usdc, creatorToken)
-        ? await resolveV3Fee(usdc, creatorToken, DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE)
-        : null
+        const usdcCreatorFee = !sameAddress(usdc, creatorToken)
+          ? await resolveV3Fee(usdc, creatorToken, DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE)
+          : null
 
-      if (!sameAddress(weth, creatorToken)) {
-        const directWethCreatorFee = await resolveV3Fee(weth, creatorToken, payoutRouterWethCreatorFee)
-        if (directWethCreatorFee !== null) {
-          payoutRouterDesiredSwapPaths.push({
-            tokenIn: weth,
-            path: encodeUniswapV3Path([weth, creatorToken], [directWethCreatorFee]),
-            label: 'WETH',
-          })
-        } else {
-          const wethUsdcFee = await resolveV3Fee(weth, usdc, DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE)
-          if (wethUsdcFee !== null && usdcCreatorFee !== null) {
+        if (!sameAddress(weth, creatorToken)) {
+          const directWethCreatorFee = await resolveV3Fee(weth, creatorToken, payoutRouterWethCreatorFee)
+          if (directWethCreatorFee !== null) {
             payoutRouterDesiredSwapPaths.push({
               tokenIn: weth,
-              path: encodeUniswapV3Path(
-                [weth, usdc, creatorToken],
-                [wethUsdcFee, usdcCreatorFee],
-              ),
+              path: encodeUniswapV3Path([weth, creatorToken], [directWethCreatorFee]),
               label: 'WETH',
             })
           } else {
-            logger.warn('[DeployVault] No viable WETH->creator V3 route found; skipping WETH swap-path auto-config', {
-              directWethCreatorFee,
-              wethUsdcFee,
-              usdcCreatorFee,
-              creatorToken,
-            })
+            const wethUsdcFee = await resolveV3Fee(weth, usdc, DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE)
+            if (wethUsdcFee !== null && usdcCreatorFee !== null) {
+              payoutRouterDesiredSwapPaths.push({
+                tokenIn: weth,
+                path: encodeUniswapV3Path(
+                  [weth, usdc, creatorToken],
+                  [wethUsdcFee, usdcCreatorFee],
+                ),
+                label: 'WETH',
+              })
+            } else {
+              logger.warn('[DeployVault] No viable WETH->creator V3 route found; skipping WETH swap-path auto-config', {
+                directWethCreatorFee,
+                wethUsdcFee,
+                usdcCreatorFee,
+                creatorToken,
+              })
+            }
           }
         }
-      }
-      if (payoutRouterZoraToken) {
-        if (
-          !sameAddress(payoutRouterZoraToken, creatorToken) &&
-          !sameAddress(payoutRouterZoraToken, weth) &&
-          !sameAddress(payoutRouterZoraToken, usdc)
-        ) {
-          const directZoraCreatorFee = await resolveV3Fee(
-            payoutRouterZoraToken,
-            creatorToken,
-            DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE,
-          )
-          if (directZoraCreatorFee !== null) {
-            payoutRouterDesiredSwapPaths.push({
-              tokenIn: payoutRouterZoraToken,
-              path: encodeUniswapV3Path(
-                [payoutRouterZoraToken, creatorToken],
-                [directZoraCreatorFee],
-              ),
-              label: 'ZORA',
-            })
-          } else {
-            const zoraWethFee = await resolveV3Fee(payoutRouterZoraToken, weth, payoutRouterZoraWethFee)
-            const wethCreatorFee = await resolveV3Fee(weth, creatorToken, payoutRouterWethCreatorFee)
-            if (zoraWethFee !== null && wethCreatorFee !== null) {
+        if (payoutRouterZoraToken) {
+          if (
+            !sameAddress(payoutRouterZoraToken, creatorToken) &&
+            !sameAddress(payoutRouterZoraToken, weth) &&
+            !sameAddress(payoutRouterZoraToken, usdc)
+          ) {
+            const directZoraCreatorFee = await resolveV3Fee(
+              payoutRouterZoraToken,
+              creatorToken,
+              DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE,
+            )
+            if (directZoraCreatorFee !== null) {
               payoutRouterDesiredSwapPaths.push({
                 tokenIn: payoutRouterZoraToken,
                 path: encodeUniswapV3Path(
-                  [payoutRouterZoraToken, weth, creatorToken],
-                  [zoraWethFee, wethCreatorFee],
+                  [payoutRouterZoraToken, creatorToken],
+                  [directZoraCreatorFee],
                 ),
                 label: 'ZORA',
               })
             } else {
-              const zoraUsdcFee = await resolveV3Fee(
-                payoutRouterZoraToken,
-                usdc,
-                DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE,
-              )
-              if (zoraUsdcFee !== null && usdcCreatorFee !== null) {
+              const zoraWethFee = await resolveV3Fee(payoutRouterZoraToken, weth, payoutRouterZoraWethFee)
+              const wethCreatorFee = await resolveV3Fee(weth, creatorToken, payoutRouterWethCreatorFee)
+              if (zoraWethFee !== null && wethCreatorFee !== null) {
                 payoutRouterDesiredSwapPaths.push({
                   tokenIn: payoutRouterZoraToken,
                   path: encodeUniswapV3Path(
-                    [payoutRouterZoraToken, usdc, creatorToken],
-                    [zoraUsdcFee, usdcCreatorFee],
+                    [payoutRouterZoraToken, weth, creatorToken],
+                    [zoraWethFee, wethCreatorFee],
                   ),
                   label: 'ZORA',
                 })
               } else {
-                logger.warn('[DeployVault] No viable ZORA->creator V3 route found; skipping ZORA swap-path auto-config', {
-                  directZoraCreatorFee,
-                  zoraWethFee,
-                  wethCreatorFee,
-                  zoraUsdcFee,
-                  usdcCreatorFee,
-                  zoraToken: payoutRouterZoraToken,
-                  creatorToken,
-                })
+                const zoraUsdcFee = await resolveV3Fee(
+                  payoutRouterZoraToken,
+                  usdc,
+                  DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE,
+                )
+                if (zoraUsdcFee !== null && usdcCreatorFee !== null) {
+                  payoutRouterDesiredSwapPaths.push({
+                    tokenIn: payoutRouterZoraToken,
+                    path: encodeUniswapV3Path(
+                      [payoutRouterZoraToken, usdc, creatorToken],
+                      [zoraUsdcFee, usdcCreatorFee],
+                    ),
+                    label: 'ZORA',
+                  })
+                } else {
+                  logger.warn('[DeployVault] No viable ZORA->creator V3 route found; skipping ZORA swap-path auto-config', {
+                    directZoraCreatorFee,
+                    zoraWethFee,
+                    wethCreatorFee,
+                    zoraUsdcFee,
+                    usdcCreatorFee,
+                    zoraToken: payoutRouterZoraToken,
+                    creatorToken,
+                  })
+                }
               }
             }
           }
+        } else {
+          logger.warn('[DeployVault] Missing runtime ZORA token address; skipping payout router ZORA swap-path auto-config')
         }
-      } else {
-        logger.warn('[DeployVault] Missing runtime ZORA token address; skipping payout router ZORA swap-path auto-config')
-      }
-      if (payoutRouterZoraToken) {
-        const isCreatorToken = sameAddress(payoutRouterZoraToken, creatorToken)
-        const isWethToken = sameAddress(payoutRouterZoraToken, weth)
-        const isUsdcToken = sameAddress(payoutRouterZoraToken, usdc)
-        if (isCreatorToken || isWethToken || isUsdcToken) {
-          logger.warn('[DeployVault] Runtime ZORA token overlaps with creator/WETH/USDC; skipping ZORA swap-path auto-config', {
-            zoraToken: payoutRouterZoraToken,
-            creatorToken,
-            weth,
-            usdc,
-          })
+        if (payoutRouterZoraToken) {
+          const isCreatorToken = sameAddress(payoutRouterZoraToken, creatorToken)
+          const isWethToken = sameAddress(payoutRouterZoraToken, weth)
+          const isUsdcToken = sameAddress(payoutRouterZoraToken, usdc)
+          if (isCreatorToken || isWethToken || isUsdcToken) {
+            logger.warn('[DeployVault] Runtime ZORA token overlaps with creator/WETH/USDC; skipping ZORA swap-path auto-config', {
+              zoraToken: payoutRouterZoraToken,
+              creatorToken,
+              weth,
+              usdc,
+            })
+          }
         }
       }
 
@@ -3490,8 +4406,6 @@ function DeployVaultBatcher({
         return out
       })()
 
-      const senderCanAdminPayoutRouter = sameAddress(owner, expectedProtocolTreasury)
-
       const payoutRouterSetKeeperCall =
         senderCanAdminPayoutRouter &&
         payoutRouterKeeperAddress &&
@@ -3564,8 +4478,8 @@ function DeployVaultBatcher({
           payoutRouterApprovedExternalSwapTargets.length > 0 ||
           payoutRouterApprovedExternalSwapSpenders.length > 0)
       ) {
-        logger.warn(
-          '[DeployVault] PayoutRouter owner is protocol treasury; skipping creator-side setKeeper/setSwapPath/setExternalSwap* auto-config',
+        logger.info(
+          '[DeployVault] PayoutRouter owner is protocol treasury; creator-side setKeeper/setSwapPath/setExternalSwap* auto-config intentionally skipped',
         )
       }
 
@@ -4434,6 +5348,14 @@ function DeployVaultBatcher({
         ]
         assertSafe(phase3Calls)
 
+        const sessionVanityRequest: DeploySessionVanityRequest | undefined =
+          vaultVanityPrefix || shareOftVanitySuffix
+            ? {
+                ...(vaultVanityPrefix ? { vaultPrefix: `0x${vaultVanityPrefix}` } : {}),
+                ...(shareOftVanitySuffix ? { shareSuffix: shareOftVanitySuffix } : {}),
+              }
+            : undefined
+
         const sessionCreatePayload: DeploySessionCreateRequest = {
           smartWallet: owner,
           creatorToken,
@@ -4445,6 +5367,7 @@ function DeployVaultBatcher({
           phase2FinalizeCalls: serializeSessionCalls(phase2FinalizeCalls),
           phase3Calls: serializeSessionCalls(phase3Calls),
           phase4Calls: serializeSessionCalls(phase4Calls),
+          ...(sessionVanityRequest ? { vanity: sessionVanityRequest } : {}),
           version: deploymentVersion,
         }
         const deployPlanExport: DeployPlanExport = {
@@ -5686,8 +6609,9 @@ function DeployVaultBatcher({
         body: plan.sessionCreateRequest,
         label: 'deploy session dry-run',
       })
-      if (!json.data) throw new Error('Dry-run failed')
-      setDryRunResult(json.data)
+      const normalized = normalizeDryRunResponse(json.data)
+      if (!normalized) throw new Error('Dry-run failed (invalid response)')
+      setDryRunResult(normalized)
       return
     } catch (e) {
       setDryRunError(formatDeployError(e))
@@ -5699,6 +6623,18 @@ function DeployVaultBatcher({
   const expectedError = expectedQuery.isError
     ? ((expectedQuery.error as any)?.message || 'Failed to compute deployment addresses.')
     : null
+  const vanityCustomPaidNotice =
+    vaultVanityIsCustom || shareVanityIsCustom
+      ? `Custom vanity requested (paid):${
+          vaultVanityIsCustom ? ` vault prefix 0x${vaultVanityPrefix}` : ''
+        }${
+          shareVanityIsCustom ? `${vaultVanityIsCustom ? ',' : ''} share suffix ${shareOftVanitySuffix}` : ''
+        }`
+      : null
+  const vanityDefaultNotice =
+    !vanityCustomPaidNotice && (vaultVanityPrefix || shareOftVanitySuffix)
+      ? `Default vanity active: vault prefix 0x${DEFAULT_VAULT_VANITY_PREFIX}, share suffix ${DEFAULT_SHARE_OFT_VANITY_SUFFIX}.`
+      : null
 
   const disabledReason =
     busy
@@ -5715,19 +6651,30 @@ function DeployVaultBatcher({
   const hasDeploySignerPath = strictNoEoaEnforced
     ? hasPrivyEmbeddedOwnerSigner || hasPrivySmartWalletOwnerSigner
     : isCoinbaseWalletDirect || connectedEoaOwnerReady || hasPrivyEmbeddedOwnerSigner || hasPrivySmartWalletOwnerSigner
+  const phaseRank: Record<typeof phase, number> = { idle: 0, phase1: 1, phase2: 2, phase3: 3, phase4: 4, done: 5 }
+  const currentPhaseRank = phaseRank[phase]
+  const phaseProgressText = (rank: number) => {
+    if (rank === currentPhaseRank && phase !== 'idle' && phase !== 'done') return 'pending…'
+    if (currentPhaseRank > rank || phase === 'done') return 'done'
+    return '—'
+  }
+  const phaseProgressTone = (rank: number) => {
+    if (rank === currentPhaseRank && phase !== 'idle' && phase !== 'done') return 'text-zinc-100'
+    if (phase === 'idle') return 'text-zinc-500'
+    return 'text-zinc-300'
+  }
 
   return (
     <div className="space-y-3">
-      <div className="text-[11px] text-zinc-500 leading-relaxed">
+      <div className="text-[11px] text-zinc-400 leading-relaxed">
         {useServerContinue ? (
           <>
-            One click will ask you to approve <span className="text-zinc-200">one</span> setup transaction. After that, the server
-            submits Phases 1–4 via your smart wallet and cleans up the temporary owner. Progress is tracked below.
+            Approve <span className="text-zinc-200">one</span> setup transaction, then the server submits Phases 1–4 through your
+            smart wallet and removes the temporary owner.
           </>
         ) : (
           <>
-            One click will submit <span className="text-zinc-200">up to 4</span> onchain operations (Phases 1–4) via your smart wallet.
-            Progress is tracked below.
+            One click submits <span className="text-zinc-200">up to 4</span> onchain operations (Phases 1–4) through your smart wallet.
           </>
         )}
       </div>
@@ -5736,102 +6683,35 @@ function DeployVaultBatcher({
           You’re signed in from an earlier session. Clicking deploy will submit transactions immediately.
         </div>
       ) : null}
-
-      <div className="vault-surface-muted rounded-lg p-4 space-y-2">
-        <div className="text-[10px] font-medium text-zinc-500">Progress</div>
-        <div className="grid grid-cols-1 gap-2 text-[11px]">
-          <div className="flex items-center justify-between gap-4">
-            <div className={phase === 'phase1' ? 'text-zinc-100' : phase === 'idle' ? 'text-zinc-500' : 'text-zinc-300'}>
-              Phase 1: deploy core contracts
-            </div>
-            {href1 ? (
-              <a className="font-mono text-zinc-300 hover:text-white" href={href1} target="_blank" rel="noreferrer">
-                tx
-              </a>
-            ) : (
-              <div className="text-zinc-700">{phase === 'phase1' ? 'pending…' : phase === 'idle' ? '—' : 'done'}</div>
-            )}
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <div className={phase === 'phase2' ? 'text-zinc-100' : phase === 'idle' ? 'text-zinc-500' : 'text-zinc-300'}>
-              Phase 2: configure + reserve auction
-            </div>
-            {href2 ? (
-              <a className="font-mono text-zinc-300 hover:text-white" href={href2} target="_blank" rel="noreferrer">
-                tx
-              </a>
-            ) : (
-              <div className="text-zinc-700">
-                {phase === 'phase2'
-                  ? 'pending…'
-                  : phase === 'idle' || phase === 'phase1'
-                    ? '—'
-                    : 'done'}
-              </div>
-            )}
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <div className={phase === 'phase3' ? 'text-zinc-100' : phase === 'idle' ? 'text-zinc-500' : 'text-zinc-300'}>
-              Phase 3: strategies
-            </div>
-            {href3 ? (
-              <a className="font-mono text-zinc-300 hover:text-white" href={href3} target="_blank" rel="noreferrer">
-                tx
-              </a>
-            ) : (
-              <div className="text-zinc-700">
-                {phase === 'phase3'
-                  ? 'pending…'
-                  : phase === 'idle' || phase === 'phase1' || phase === 'phase2'
-                    ? '—'
-                    : 'done'}
-              </div>
-            )}
-          </div>
-          <div className="flex items-center justify-between gap-4">
-            <div className={phase === 'phase4' ? 'text-zinc-100' : phase === 'idle' ? 'text-zinc-500' : 'text-zinc-300'}>
-              Phase 4: launch auction
-            </div>
-            {href4 ? (
-              <a className="font-mono text-zinc-300 hover:text-white" href={href4} target="_blank" rel="noreferrer">
-                tx
-              </a>
-            ) : (
-              <div className="text-zinc-700">
-                {phase === 'phase4'
-                  ? 'pending…'
-                  : phase === 'idle' || phase === 'phase1' || phase === 'phase2' || phase === 'phase3'
-                    ? '—'
-                    : phase === 'done'
-                      ? 'done'
-                      : '—'}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {payoutMismatch ? (
-        <div className="text-[11px] text-amber-300/80">
-          External revenue recipient will update to{' '}
-          <span className="font-mono text-amber-200">{shortAddress(expectedGauge!)}</span> during deploy. Continue only if this is
-          intended.
-        </div>
+      {vanityCustomPaidNotice ? (
+        <div className="text-[11px] text-zinc-500">{vanityCustomPaidNotice}</div>
+      ) : null}
+      {vanityDefaultNotice ? (
+        <div className="text-[11px] text-zinc-600">{vanityDefaultNotice}</div>
+      ) : null}
+      {expectedShareOftVanityWarning ? (
+        <div className="text-[11px] text-amber-300/80">{expectedShareOftVanityWarning}</div>
       ) : null}
 
       <details className="vault-surface-muted group rounded-lg">
-        <summary className="cursor-pointer select-none list-none px-4 py-3 flex items-center justify-between gap-3">
+        <summary className="cursor-pointer select-none list-none px-5 sm:px-6 py-4 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[11px] font-medium text-zinc-500">Deployment plan</div>
-            <div className="text-[12px] text-zinc-200 truncate">Phases 1–4 · deterministic addresses</div>
+            <div className="text-[12px] text-zinc-200 truncate">Phases 1–4 · deterministic addresses on Base</div>
           </div>
           <ChevronDown className="w-4 h-4 text-zinc-500 transition-transform group-open:rotate-180" />
         </summary>
-        <div className="px-4 pb-4 pt-1">
+        <div className="px-5 sm:px-6 pb-5 pt-2">
           <div className="text-[11px] text-zinc-600 mb-3">
-            Addresses are deterministic on Base. Click to view on BaseScan.
+            Addresses are deterministic on Base. BaseScan links activate once each contract is live onchain.
           </div>
-          <div className="rounded-md border border-white/10 bg-white/4 px-3 py-2 mb-3 space-y-1 backdrop-blur-sm">
+          <div className="rounded-md border border-white/10 bg-white/4 px-4 py-3 mb-3 space-y-2 backdrop-blur-sm">
+            <div className="flex items-center justify-between gap-4 text-[11px]">
+              <div className="text-zinc-500">Initial deposit</div>
+              <div className="font-mono text-zinc-200/90">
+                {formatDeposit(minFirstDeposit)} {depositSymbol}
+              </div>
+            </div>
             <AddressRow label="Active batcher" address={batcherAddress} />
             <div className="flex items-center justify-between gap-4 text-[11px]">
               <div className="text-zinc-500">Deploy mode</div>
@@ -5840,42 +6720,167 @@ function DeployVaultBatcher({
           </div>
 
           <div className="rounded-md border border-white/10 bg-white/4 divide-y divide-white/8 backdrop-blur-sm">
-            <div className="py-3">
+            <div className="px-4 py-4">
               <div className="text-[10px] font-medium text-zinc-500 mb-2">Phase 1</div>
+              <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
+                <div className={phaseProgressTone(1)}>Deploy vault core (vault, wrapper, share token)</div>
+                {href1 ? (
+                  <a className="font-mono text-zinc-300 hover:text-white" href={href1} target="_blank" rel="noreferrer">
+                    view tx
+                  </a>
+                ) : (
+                  <div className="text-zinc-700">{phaseProgressText(1)}</div>
+                )}
+              </div>
               <div className="space-y-2">
-                <AddressRow label="Vault" address={expected?.vault} />
-                <AddressRow label="Wrapper" address={expected?.wrapper} />
-                <AddressRow label="Share token" address={expected?.shareOFT} />
+                <AddressRow label="Vault" address={expected?.vault} deployed={expectedAddressDeployment?.vault ?? null} />
+                <AddressRow label="Wrapper" address={expected?.wrapper} deployed={expectedAddressDeployment?.wrapper ?? null} />
+                <AddressRow label="Share token" address={expected?.shareOFT} deployed={expectedAddressDeployment?.shareOFT ?? null} />
               </div>
             </div>
 
-            <div className="py-3">
+            <div className="px-4 py-4">
               <div className="text-[10px] font-medium text-zinc-500 mb-2">Phase 2</div>
-              <div className="space-y-2">
-                <AddressRow label="Gauge controller" address={expected?.gaugeController} />
-                <AddressRow label="CCA strategy" address={expected?.ccaStrategy} />
-                <AddressRow label="Burn stream" address={expected?.burnStream} />
-                <AddressRow label="Payout router" address={expected?.payoutRouter} />
-                <div className="flex items-center justify-between gap-4 text-[11px]">
-                  <div className="text-zinc-500">Initial deposit</div>
-                  <div className="font-mono text-zinc-200/90">
-                    {formatDeposit(minFirstDeposit)} {depositSymbol}
-                  </div>
-                </div>
-                {marketFloorText ? (
-                  <div className="flex items-center justify-between gap-4 text-[11px]">
-                    <div className="text-zinc-500">CCA floor (reference)</div>
-                    <div className="text-zinc-200/90">{marketFloorText}</div>
-                  </div>
-                ) : null}
+              <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
+                <div className={phaseProgressTone(2)}>Deploy + configure gauge, CCA, oracle, payout contracts</div>
+                {href2 ? (
+                  <a className="font-mono text-zinc-300 hover:text-white" href={href2} target="_blank" rel="noreferrer">
+                    view tx
+                  </a>
+                ) : (
+                  <div className="text-zinc-700">{phaseProgressText(2)}</div>
+                )}
               </div>
+              <div className="space-y-2">
+                <AddressRow
+                  label="Gauge controller"
+                  address={expected?.gaugeController}
+                  deployed={expectedAddressDeployment?.gaugeController ?? null}
+                />
+                <AddressRow
+                  label="CCA strategy"
+                  address={expected?.ccaStrategy}
+                  deployed={expectedAddressDeployment?.ccaStrategy ?? null}
+                />
+                <AddressRow
+                  label="Oracle"
+                  address={expected?.oracle}
+                  deployed={expectedAddressDeployment?.oracle ?? null}
+                />
+                <AddressRow
+                  label="Burn stream"
+                  address={expected?.burnStream}
+                  deployed={expectedAddressDeployment?.burnStream ?? null}
+                />
+                <AddressRow
+                  label="Payout router"
+                  address={expected?.payoutRouter}
+                  deployed={expectedAddressDeployment?.payoutRouter ?? null}
+                />
+                <AddressRow
+                  label="Creator coin policy controller"
+                  address={expected?.creatorCoinPolicyController}
+                  deployed={expectedAddressDeployment?.creatorCoinPolicyController ?? null}
+                />
+                <AddressRow label="Creator coin payout recipient" address={currentPayoutRecipient} />
+              </div>
+              {payoutMismatch ? (
+                <div className="mt-2 text-[11px] text-amber-300/80">
+                  Creator coin payout recipient will update to{' '}
+                  <span className="font-mono text-amber-200">
+                    {expectedPayoutRouter ? shortAddress(expectedPayoutRouter) : 'the configured payout router'}
+                  </span>{' '}
+                  during deploy. Continue only if this is intended.
+                </div>
+              ) : null}
             </div>
 
-            <div className="py-3">
+            <div className="px-4 py-4">
               <div className="text-[10px] font-medium text-zinc-500 mb-2">Phase 3</div>
-              <div className="text-[11px] text-zinc-600">
-                Strategy deployments + registrations (Charm CREATOR/USDC + Ajna).
+              <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
+                <div className={phaseProgressTone(3)}>Deploy + register strategies (Charm, Ajna, Solana)</div>
+                {href3 ? (
+                  <a className="font-mono text-zinc-300 hover:text-white" href={href3} target="_blank" rel="noreferrer">
+                    view tx
+                  </a>
+                ) : (
+                  <div className="text-zinc-700">{phaseProgressText(3)}</div>
+                )}
               </div>
+              <div className="space-y-2">
+                <AddressRow
+                  label="Uniswap v3 pool (CREATOR/USDC)"
+                  address={phase3Expected?.v3Pool}
+                  deployed={phase3ExpectedAddressDeployment?.v3Pool ?? null}
+                />
+                <AddressRow
+                  label="Charm alpha vault"
+                  address={phase3Expected?.charmVault}
+                  deployed={phase3ExpectedAddressDeployment?.charmVault ?? null}
+                />
+                <AddressRow
+                  label="CreatorCharmStrategy"
+                  address={phase3Expected?.creatorCharmStrategy}
+                  deployed={phase3ExpectedAddressDeployment?.creatorCharmStrategy ?? null}
+                />
+                <AddressRow label="Ajna pool" address={phase3Expected?.ajnaPool} deployed={phase3ExpectedAddressDeployment?.ajnaPool ?? null} />
+                <AddressRow
+                  label="AjnaVaultAuth"
+                  address={phase3Expected?.ajnaVaultAuth}
+                  deployed={phase3ExpectedAddressDeployment?.ajnaVaultAuth ?? null}
+                />
+                <AddressRow
+                  label="AjnaERC4626Vault"
+                  address={phase3Expected?.ajnaVault}
+                  deployed={phase3ExpectedAddressDeployment?.ajnaVault ?? null}
+                />
+                <AddressRow
+                  label="ERC4626StrategyAdapter"
+                  address={phase3Expected?.erc4626StrategyAdapter}
+                  deployed={phase3ExpectedAddressDeployment?.erc4626StrategyAdapter ?? null}
+                />
+                <AddressRow
+                  label="SolanaStrategy"
+                  address={phase3Expected?.solanaStrategy}
+                  deployed={phase3ExpectedAddressDeployment?.solanaStrategy ?? null}
+                />
+              </div>
+              <div className="mt-2 text-[11px] text-zinc-600">
+                Phase-3 addresses are projected from current factory state and CREATE2 salts.
+              </div>
+              {phase3LikelyMissingHelperConfig ? (
+                <div className="mt-1 text-[11px] text-amber-300/80">
+                  Some Phase-3 predicted addresses require batcher helper/runtime config that is unavailable on the
+                  current deployment batcher, so they remain hidden until runtime config is complete in the server
+                  deploy runtime config source (`/api/deploy/config`).
+                </div>
+              ) : null}
+            </div>
+
+            <div className="px-4 py-4">
+              <div className="text-[10px] font-medium text-zinc-500 mb-2">Phase 4</div>
+              <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
+                <div className={phaseProgressTone(4)}>Launch deferred auction</div>
+                {href4 ? (
+                  <a className="font-mono text-zinc-300 hover:text-white" href={href4} target="_blank" rel="noreferrer">
+                    view tx
+                  </a>
+                ) : (
+                  <div className="text-zinc-700">{phaseProgressText(4)}</div>
+                )}
+              </div>
+              <div className="space-y-2">
+                <AddressRow label="Deferred auction" address={phase4AuctionAddress} deployed={phase4AuctionDeployment} />
+              </div>
+              <div className="mt-2 text-[11px] text-zinc-600">
+                Auction address resolves after Phase 4 launch writes CCA auction state.
+              </div>
+              {marketFloorText ? (
+                <div className="mt-2 flex items-center justify-between gap-4 text-[11px]">
+                  <div className="text-zinc-500">CCA floor (reference)</div>
+                  <div className="text-zinc-300">{marketFloorText}</div>
+                </div>
+              ) : null}
             </div>
           </div>
           <div className="mt-3 flex items-center justify-between gap-3">
@@ -5900,13 +6905,22 @@ function DeployVaultBatcher({
               ) : (
                 <div className="text-[11px] text-zinc-500">
                   Dry-run is local-fork-only. Start local mode with{' '}
-                  <span className="font-mono text-zinc-300">pnpm -C frontend dev:deploy-dry-run</span>.
+                  <span className="font-mono text-zinc-300">pnpm run dev:deploy-dry-run</span>.
                 </div>
               )}
             </div>
             {exportStatus ? <div className="text-[11px] text-zinc-500">{exportStatus}</div> : null}
           </div>
-          {dryRunError ? <div className="mt-2 text-[11px] text-amber-300/80">{dryRunError}</div> : null}
+          {dryRunError ? (
+            <div className="mt-2 space-y-2">
+              <div className="text-[11px] text-amber-300/80">{dryRunError}</div>
+              {isVanityPaidFeatureError(dryRunError) ? (
+                <Link to={creatorStrategyFeaturesHref} className="inline-flex text-[11px] text-blue-300 hover:text-blue-200">
+                  Activate vanity feature access
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
           {dryRunResult ? (
             <div className="mt-3 rounded-lg border border-white/10 bg-white/4 p-3 space-y-2 backdrop-blur-sm">
               <div className="flex items-center justify-between gap-3">
@@ -5916,7 +6930,7 @@ function DeployVaultBatcher({
                 </div>
               </div>
               <div className="space-y-1 text-[11px]">
-                {dryRunResult.phases.map((phaseEntry) => (
+                {(Array.isArray(dryRunResult.phases) ? dryRunResult.phases : []).map((phaseEntry) => (
                   <div key={phaseEntry.name} className="flex items-center justify-between gap-3">
                     <div className="text-zinc-400">{phaseEntry.name}</div>
                     <div className={phaseEntry.status === 'passed' ? 'text-green-400/80' : 'text-amber-300/80'}>
@@ -5940,7 +6954,7 @@ function DeployVaultBatcher({
         </div>
       </details>
 
-      <div className="vault-surface-muted rounded-lg p-4 space-y-2">
+      <div className="vault-surface-muted rounded-lg p-5 sm:p-6 space-y-2">
         <div className="text-[11px] text-zinc-400">
           Deploy runs as <span className="text-white">ERC‑4337 UserOperations</span> from{' '}
           <span className="font-mono text-zinc-200">{shortAddress(owner)}</span>.
@@ -6002,12 +7016,6 @@ function DeployVaultBatcher({
         <div className="text-[11px] text-amber-300/80">{disabledReason}</div>
       ) : null}
 
-      {marketFloorText ? (
-        <div className="text-[11px] text-zinc-500">
-          Market floor (reference): {marketFloorText}. Final auction floor is enforced onchain from oracle data.
-        </div>
-      ) : null}
-
       {error ? (
         <div className="space-y-2">
           <div className="text-[11px] text-red-400/90 whitespace-pre-wrap">
@@ -6035,6 +7043,17 @@ function DeployVaultBatcher({
             <button type="button" className="btn-primary w-full" onClick={switchAuthCta.onClick}>
               {switchAuthCta.label}
             </button>
+          ) : null}
+          {isVanityPaidFeatureError(error) ? (
+            <Link to={creatorStrategyFeaturesHref} className="inline-flex text-[11px] text-blue-300 hover:text-blue-200">
+              Activate vanity feature access
+            </Link>
+          ) : null}
+          {isProviderCollisionErrorMessage(error) ? (
+            <div className="text-[11px] text-amber-300/80">
+              Wallet extension collision detected around `window.ethereum`. Keep only one EVM wallet extension enabled
+              in this browser profile (or use Coinbase Wallet / Privy sign-in), then retry.
+            </div>
           ) : null}
         </div>
       ) : null}
@@ -6274,7 +7293,7 @@ function DeployVaultMain() {
     const query = normalizeBytes32(params.get('shareOftSaltOverride'))
     return query ?? env
   }, [])
-  const [solanaMintOverrideInput, setSolanaMintOverrideInput] = useState<string>(() => {
+  const [solanaMintOverrideInput] = useState<string>(() => {
     const env = normalizeBytes32(import.meta.env.VITE_SOLANA_DEFAULT_MINT_BYTES32 as string | undefined)
     if (typeof window === 'undefined') return String(env ?? '')
     try {
@@ -6287,7 +7306,7 @@ function DeployVaultMain() {
     const query = normalizeBytes32(params.get('solanaMint'))
     return String(query ?? env ?? '')
   })
-  const [solanaDecimalsOverrideInput, setSolanaDecimalsOverrideInput] = useState<string>(() => {
+  const [solanaDecimalsOverrideInput] = useState<string>(() => {
     const env = parseUint8(import.meta.env.VITE_SOLANA_DEFAULT_MINT_DECIMALS as string | undefined)
     if (typeof window === 'undefined') return env !== null ? String(env) : ''
     try {
@@ -6313,48 +7332,33 @@ function DeployVaultMain() {
   const solanaDecimalsOverrideInvalid =
     solanaDecimalsOverrideInput.trim().length > 0 && solanaDecimalsOverride === null
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      const v = solanaMintOverrideInput.trim()
-      if (v.length > 0) {
-        window.localStorage.setItem('cv:deploy:solanaMintOverride', v)
-      } else {
-        window.localStorage.removeItem('cv:deploy:solanaMintOverride')
-      }
-    } catch {
-      // ignore
-    }
-  }, [solanaMintOverrideInput])
-
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-    try {
-      const v = solanaDecimalsOverrideInput.trim()
-      if (v.length > 0) {
-        window.localStorage.setItem('cv:deploy:solanaDecimalsOverride', v)
-      } else {
-        window.localStorage.removeItem('cv:deploy:solanaDecimalsOverride')
-      }
-    } catch {
-      // ignore
-    }
-  }, [solanaDecimalsOverrideInput])
-
   const switchAuthCta = useMemo(() => {
     if (!privyReady) return undefined
     const run = async () => {
-      // If we're already authenticated, `login()` can no-op in some Privy configurations.
-      // Force a re-auth flow so the user can switch to a wallet session if needed.
+      const loginOptions: { loginMethods: Array<'email' | 'wallet'> } = {
+        loginMethods: ['email', 'wallet'],
+      }
+      // Prefer in-session re-auth first to avoid unnecessary identity churn.
+      // Some Privy states still require a full logout/login cycle to switch.
       try {
-        if (privyAuthenticated && typeof logout === 'function') {
-          await logout()
-        }
+        await login(loginOptions)
+        return
+      } catch (error) {
+        const msg = String((error as any)?.message ?? '').toLowerCase()
+        const likelyAlreadyLoggedIn =
+          msg.includes('already logged in') ||
+          msg.includes('already authenticated') ||
+          msg.includes('session already exists')
+        if (!privyAuthenticated || !likelyAlreadyLoggedIn || typeof logout !== 'function') return
+      }
+
+      try {
+        await logout()
       } catch {
         // ignore
       }
       try {
-        await login({ loginMethods: ['email', 'wallet'] })
+        await login(loginOptions)
       } catch {
         // ignore
       }
@@ -6385,24 +7389,21 @@ function DeployVaultMain() {
 
   const [searchParams, setSearchParams] = useSearchParams()
   const initialQueryRef = useRef<{
-    prefillToken: string
     debugEnabledFromQuery: boolean
   } | null>(null)
 
   if (!initialQueryRef.current) {
     initialQueryRef.current = {
-      prefillToken: searchParams.get('token') ?? '',
       debugEnabledFromQuery: (searchParams.get('debug') ?? '').trim() === '1',
     }
   }
 
-  const prefillToken = initialQueryRef.current.prefillToken
   const debugEnabledFromQuery = initialQueryRef.current.debugEnabledFromQuery
 
   useEffect(() => {
     const next = new URLSearchParams(searchParams)
     let changed = false
-    for (const key of ['shareOftSaltOverride', 'debug']) {
+    for (const key of ['shareOftSaltOverride', 'debug', 'token']) {
       if (next.has(key)) {
         next.delete(key)
         changed = true
@@ -6425,12 +7426,6 @@ function DeployVaultMain() {
       return { ok: true, hint: 'configured' }
     }
   }, [cdpPaymasterUrl])
-
-  useEffect(() => {
-    if (!prefillToken) return
-    if (creatorToken.length > 0) return
-    setCreatorToken(prefillToken)
-  }, [prefillToken, creatorToken.length])
 
 
   // Detect "your" creator coin + smart wallet from your Zora profile and prefill inputs once.
@@ -6505,26 +7500,24 @@ function DeployVaultMain() {
 
   useEffect(() => {
     if (!isConnected || !addressLc) return
-    if (prefillToken) return
     if (creatorToken.trim().length > 0) return
     if (!detectedCreatorCoin) return
     if (autofillRef.current.tokenFor === addressLc) return
 
     setCreatorToken(detectedCreatorCoin)
     autofillRef.current.tokenFor = addressLc
-  }, [isConnected, addressLc, prefillToken, creatorToken, detectedCreatorCoin])
+  }, [isConnected, addressLc, creatorToken, detectedCreatorCoin])
 
   // Privy-first: auto-fill creator coin from Privy smart wallet's Zora profile
   useEffect(() => {
     if (!privyAuthenticated || !privySmartWalletAddress) return
-    if (prefillToken) return
     if (creatorToken.trim().length > 0) return
     if (!detectedCreatorCoinFromPrivy) return
     const key = `privy:${privySmartWalletAddress.toLowerCase()}`
     if (autofillRef.current.tokenFor === key) return
     setCreatorToken(detectedCreatorCoinFromPrivy)
     autofillRef.current.tokenFor = key
-  }, [privyAuthenticated, privySmartWalletAddress, prefillToken, creatorToken, detectedCreatorCoinFromPrivy])
+  }, [privyAuthenticated, privySmartWalletAddress, creatorToken, detectedCreatorCoinFromPrivy])
 
   const tokenIsValid = isAddress(creatorToken)
 
@@ -6568,6 +7561,12 @@ function DeployVaultMain() {
   // Auto-derive ShareOFT symbol and name (preserve original case)
   const baseSymbol = tokenSymbol ?? zoraCoin?.symbol ?? ''
   const baseName = (tokenName ? String(tokenName) : zoraCoin?.name ?? '').trim()
+  const showSymbolInReviewHeading = useMemo(() => {
+    const normalizedName = baseName.replace(/\$/g, '').trim().toLowerCase()
+    const normalizedSymbol = String(baseSymbol).replace(/\$/g, '').trim().toLowerCase()
+    if (!normalizedName || !normalizedSymbol) return Boolean(baseSymbol)
+    return normalizedName !== normalizedSymbol
+  }, [baseName, baseSymbol])
 
   const underlyingSymbol = useMemo(() => {
     if (!baseSymbol) return ''
@@ -7097,6 +8096,21 @@ function DeployVaultMain() {
     staleTime: 60_000,
     retry: 0,
   })
+
+  const marketFloorText = useMemo(() => {
+    const weiPerToken = marketFloorQuery.data?.weiPerToken
+    if (typeof weiPerToken !== 'bigint' || weiPerToken <= 0n) return null
+    const ethShort = formatEthPerTokenForUi(weiPerToken)
+    const durationSec = marketFloorQuery.data?.creatorZora?.durationSec
+    const mins = typeof durationSec === 'number' && durationSec > 0 ? Math.round(durationSec / 60) : null
+    const discount = marketFloorQuery.data?.zoraEth?.discountBps
+    const bufferBps = typeof discount === 'number' ? Math.max(0, 10_000 - discount) : null
+    const bufferPct = bufferBps !== null ? Math.round(bufferBps / 100) : null
+    const meta = [mins ? `TWAP ${mins}m` : null, bufferPct !== null ? `-${bufferPct}% buffer` : null]
+      .filter(Boolean)
+      .join(', ')
+    return meta ? `${ethShort} ETH / ${derivedShareSymbol} (${meta})` : `${ethShort} ETH / ${derivedShareSymbol}`
+  }, [derivedShareSymbol, marketFloorQuery.data])
 
   const creatorVaultBatcherAddress = (() => {
     const v = String((CONTRACTS as any).creatorVaultBatcher ?? '')
@@ -7882,217 +8896,90 @@ function DeployVaultMain() {
               </div>
             ) : null}
 
-            {/* Review */}
-          {!alreadyDeployed && tokenIsValid && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                className="overflow-hidden"
-              >
-                {symbolLoading || zoraLoading ? (
-                  <LoadingText intent="processing" labelOverride="Loading coin details..." />
-                ) : !zoraCoin ? (
-                  <div className="text-sm text-red-400/80">
-                    This token does not appear to be a Zora Coin. Creator Vaults can only be created for Zora{' '}
-                    <span className="text-zinc-200">Creator Coins</span>.
-                  </div>
-                ) : baseSymbol ? (
-                  <div className="vault-surface vault-hover-lift p-8 space-y-6">
-                    {/* Token card */}
-                    <div className="flex items-start justify-between gap-6">
-                      <div className="flex items-center gap-4 min-w-0">
-                        {zoraCoin?.mediaContent?.previewImage?.medium ? (
-                          <img
-                            src={zoraCoin.mediaContent.previewImage.medium}
-                            alt={zoraCoin.symbol ? String(zoraCoin.symbol) : 'Coin'}
-                            className="w-14 h-14 rounded-full object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="w-14 h-14 rounded-full bg-linear-to-br from-brand-primary/20 to-brand-accent/20 flex items-center justify-center text-sm font-medium text-brand-accent">
-                            {String(baseSymbol).slice(0, 2).toUpperCase()}
-                          </div>
-                        )}
+            {!alreadyDeployed && (
+            <div className="vault-surface vault-hover-lift p-7 sm:p-8 space-y-6">
+              {/* Review */}
+              {tokenIsValid ? (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  className="overflow-hidden"
+                >
+                  {symbolLoading || zoraLoading ? (
+                    <LoadingText intent="processing" labelOverride="Loading coin details..." />
+                  ) : !zoraCoin ? (
+                    <div className="text-sm text-red-400/80">
+                      This token does not appear to be a Zora Coin. Creator Vaults can only be created for Zora{' '}
+                      <span className="text-zinc-200">Creator Coins</span>.
+                    </div>
+                  ) : baseSymbol ? (
+                    <div className="space-y-4">
+                      <div className="flex items-start justify-between gap-6">
+                        <div className="flex items-center gap-4 min-w-0">
+                          {zoraCoin?.mediaContent?.previewImage?.medium ? (
+                            <img
+                              src={zoraCoin.mediaContent.previewImage.medium}
+                              alt={zoraCoin.symbol ? String(zoraCoin.symbol) : 'Coin'}
+                              className="w-14 h-14 rounded-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="w-14 h-14 rounded-full bg-linear-to-br from-brand-primary/20 to-brand-accent/20 flex items-center justify-center text-sm font-medium text-brand-accent">
+                              {String(baseSymbol).slice(0, 2).toUpperCase()}
+                            </div>
+                          )}
 
-                        <div className="min-w-0">
-                          <div className="text-white font-light text-xl">
-                            {zoraCoin?.name
-                              ? String(zoraCoin.name)
-                              : tokenName
-                                ? String(tokenName)
-                                : String(baseSymbol)}
-                            {baseSymbol ? (
-                              <span className="text-zinc-500"> ({`$${String(baseSymbol)}`})</span>
-                            ) : null}
+                          <div className="min-w-0">
+                            <div className="text-white font-light text-xl">
+                              {zoraCoin?.name
+                                ? String(zoraCoin.name)
+                                : tokenName
+                                  ? String(tokenName)
+                                  : String(baseSymbol)}
+                              {baseSymbol && showSymbolInReviewHeading ? (
+                                <span className="text-zinc-500"> ({`$${String(baseSymbol)}`})</span>
+                              ) : null}
+                            </div>
+                            <div className="text-xs text-zinc-600 font-mono mt-1">{String(creatorToken)}</div>
                           </div>
-                          <div className="text-xs text-zinc-600 font-mono mt-1">{String(creatorToken)}</div>
+                        </div>
+
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-medium ${coinTypePillClass}`}>
+                            {coinTypeLabel}
+                          </span>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-[10px] font-medium ${coinTypePillClass}`}>
-                          {coinTypeLabel}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Key rows */}
-                    <div className="space-y-0">
-                      {payoutRecipient && (
-                        <div className="data-row">
-                          <div className="label">External revenue recipient</div>
-                          <div className="text-xs text-zinc-300 font-mono">{shortAddress(payoutRecipient)}</div>
+                      {String(zoraCoin?.coinType ?? '').toUpperCase() === 'CONTENT' && (
+                        <div className="text-xs text-amber-300/90">
+                          This is a <span className="font-mono">Content Coin</span>. Creator Vaults can only be created for{' '}
+                          <span className="font-mono">Creator Coins</span>.
                         </div>
                       )}
 
-                      <div className="data-row">
-                        <div className="label">Chain</div>
-                        <div className="text-xs text-zinc-300 inline-flex items-center gap-2">
-                          <img
-                            src="/protocols/base.png"
-                            alt=""
-                            aria-hidden="true"
-                            loading="lazy"
-                            className="w-3.5 h-3.5 opacity-90"
-                          />
-                          Base
+                      {hasWallet && zoraCoin?.creatorAddress && !isAuthorizedDeployerOrOperator && (
+                        <div className="text-xs text-red-400/90">
+                          You are connected as{' '}
+                          <span className="font-mono">
+                            {effectiveWalletAddress?.slice(0, 6)}…{effectiveWalletAddress?.slice(-4)}
+                          </span>
+                          . Only the coin creator or current payout recipient can deploy this vault.
                         </div>
-                      </div>
+                      )}
                     </div>
-
-                    {String(zoraCoin?.coinType ?? '').toUpperCase() === 'CONTENT' && (
-                      <div className="text-xs text-amber-300/90 pt-4 border-t border-zinc-900/50">
-                        This is a <span className="font-mono">Content Coin</span>. Creator Vaults can only be created for{' '}
-                        <span className="font-mono">Creator Coins</span>.
-                      </div>
-                    )}
-
-                    {hasWallet && zoraCoin?.creatorAddress && !isAuthorizedDeployerOrOperator && (
-                      <div className="text-xs text-red-400/90">
-                        You are connected as{' '}
-                        <span className="font-mono">
-                          {effectiveWalletAddress?.slice(0, 6)}…{effectiveWalletAddress?.slice(-4)}
-                        </span>
-                        . Only the coin creator or current payout recipient can deploy this vault.
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-sm text-red-400/80">Could not read token. Is this a valid ERC-20?</div>
-                )}
-              </motion.div>
-            )}
-
-          {!alreadyDeployed && (
-            <>
-          {/* Essentials */}
-            <div className="vault-surface vault-hover-lift p-6 space-y-6">
-              <div className="flex items-start justify-between gap-6">
-                <div className="space-y-1">
-                  <div className="label">Launch</div>
-                  <div className="text-xs text-zinc-600">Minimal launch details for your Creator Coin.</div>
-                </div>
-              </div>
-
-              {/* Creator Coin */}
-            <div className="space-y-2">
-                <label className="label">Creator Coin</label>
-
-                {!hasWallet ? (
-                  tokenIsValid ? (
-                    <input
-                      value={creatorToken}
-                      disabled
-                      className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-500 placeholder:text-zinc-700 outline-none font-mono opacity-70 cursor-not-allowed"
-                    />
                   ) : (
-                    <>
-                      <input
-                        value=""
-                        disabled
-                        placeholder="Sign in to detect your creator coin"
-                        className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-500 placeholder:text-zinc-700 outline-none font-mono opacity-70 cursor-not-allowed"
-                      />
-                      <div className="text-xs text-zinc-600">Sign in to continue.</div>
-                    </>
-                  )
-                ) : (
-                  <>
-                    <input
-                      value={creatorToken}
-                      onChange={(e) => setCreatorToken(e.target.value)}
-                      placeholder="0x..."
-                      className="w-full bg-black border border-zinc-800 rounded-lg px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-700 outline-none focus:border-cyan-500/50 transition-colors font-mono"
-                    />
-                    <div className="text-xs text-zinc-600">
-                      {tokenIsValid ? (
-                        <>
-                          {detectedCreatorCoin && creatorToken.toLowerCase() === detectedCreatorCoin.toLowerCase()
-                            ? 'Prefilled for this wallet.'
-                            : prefillToken
-                              ? 'Set from a link.'
-                              : 'Set manually.'}{' '}
-                          Edit to deploy a different coin.
-                        </>
-                      ) : myProfileQuery.isLoading || myProfileQuery.isFetching ? (
-                        'Detecting your creator coin…'
-                      ) : detectedCreatorCoin ? (
-                        'Detected a creator coin for this wallet. You can use it or paste another address.'
-                      ) : (
-                        'Paste a Creator Coin address to deploy.'
-                      )}
-                    </div>
-                    {hasWallet && detectedCreatorCoin ? (
-                      <button
-                        type="button"
-                        onClick={() => setCreatorToken(detectedCreatorCoin)}
-                        className="text-[10px] text-zinc-600 hover:text-zinc-300 transition-colors"
-                      >
-                        Use my coin
-                      </button>
-                    ) : null}
-                  </>
-                )}
-            </div>
-
-              <div className="space-y-2">
-                <label className="label">Solana Mint (Optional)</label>
-                <input
-                  value={solanaMintOverrideInput}
-                  onChange={(e) => setSolanaMintOverrideInput(e.target.value)}
-                  placeholder="0x<32-byte solana mint pubkey>"
-                  className={`w-full bg-black border rounded-lg px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-700 outline-none transition-colors font-mono ${
-                    solanaMintOverrideInvalid ? 'border-red-500/50 focus:border-red-400/70' : 'border-zinc-800 focus:border-cyan-500/50'
-                  }`}
-                />
-                <input
-                  value={solanaDecimalsOverrideInput}
-                  onChange={(e) => setSolanaDecimalsOverrideInput(e.target.value)}
-                  placeholder="Decimals (default 9)"
-                  inputMode="numeric"
-                  className={`w-full bg-black border rounded-lg px-4 py-3 text-sm text-zinc-200 placeholder:text-zinc-700 outline-none transition-colors font-mono ${
-                    solanaDecimalsOverrideInvalid ? 'border-red-500/50 focus:border-red-400/70' : 'border-zinc-800 focus:border-cyan-500/50'
-                  }`}
-                />
-                <div className="text-xs text-zinc-600">
-                  Used for automatic ShareOFT registration on the Solana adapter when bridging is enabled. If empty, server defaults are used.
-                </div>
-                {solanaMintOverrideInvalid ? (
-                  <div className="text-[11px] text-red-400/90">
-                    Mint must be a bytes32 hex value (`0x` + 64 hex chars).
-                  </div>
-                ) : null}
-                {solanaDecimalsOverrideInvalid ? (
-                  <div className="text-[11px] text-red-400/90">
-                    Decimals must be an integer between 0 and 255.
-                  </div>
-                ) : null}
-              </div>
-          </div>
+                    <div className="text-sm text-red-400/80">Could not read token. Is this a valid ERC-20?</div>
+                  )}
+                </motion.div>
+              ) : null}
 
             {/* Deploy */}
-            <div className="vault-surface vault-hover-lift p-8 space-y-4">
-              <div className="label">Deploy</div>
+            <div className={`space-y-5 ${tokenIsValid ? 'pt-5 border-t border-zinc-900/50' : ''}`}>
+              <div className="space-y-1.5">
+                <div className="label">Deploy</div>
+                <div className="text-xs text-zinc-500">Review the plan, optionally run dry-run, then submit.</div>
+              </div>
               {/* Auth flow */}
               {!privyReady ? (
                 <div className="text-sm text-zinc-500 text-center py-4">
@@ -8192,13 +9079,6 @@ function DeployVaultMain() {
                 </button>
               ) : canDeploy ? (
                 <>
-                  {privySmartWalletIsCanonicalOwner ? (
-                    <div className="flex items-center gap-2 text-[11px] text-green-400 mb-2">
-                      <span>✓</span>
-                      <span>Smart wallet signer ready</span>
-                    </div>
-                  ) : null}
-
                   <DeployVaultBatcher
                     creatorToken={creatorToken as Address}
                     owner={identity.canonicalIdentity.address as Address}
@@ -8214,9 +9094,8 @@ function DeployVaultMain() {
                     signInWithPrivyToken={siwe?.signInWithPrivyToken}
                     shareOftSaltOverride={shareOftSaltOverride}
                     currentPayoutRecipient={payoutRecipient}
+                    marketFloorText={marketFloorText}
                     floorPriceQ96Aligned={marketFloorQuery.data?.floorPriceQ96Aligned ?? null}
-                    marketFloorTwapDurationSec={marketFloorQuery.data?.creatorZora.durationSec ?? null}
-                    marketFloorDiscountBps={marketFloorQuery.data?.zoraEth.discountBps ?? null}
                     onSuccess={handleDeploymentSuccess}
                     switchAuthCta={switchAuthCta}
                     smartWalletClient={smartWalletClient}
@@ -8292,7 +9171,7 @@ function DeployVaultMain() {
                 Requires a {minFirstDepositDisplay} {underlyingSymbolUpper || 'TOKENS'} deposit. Some wallets may prompt multiple confirmations.
               </div>
             </div>
-            </>
+            </div>
           )}
 
           </div>

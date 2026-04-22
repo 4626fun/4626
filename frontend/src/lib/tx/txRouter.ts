@@ -97,6 +97,8 @@ type RoutedCall = {
   tx: TransactionRequest
 }
 
+const UNISWAP_UNIVERSAL_ROUTER_EXECUTE_SELECTOR = '0x3593564c'
+
 function asBigInt(value: unknown): bigint {
   if (typeof value === 'bigint') return value
   if (typeof value === 'number' && Number.isFinite(value)) return BigInt(Math.floor(value))
@@ -213,6 +215,14 @@ function normalizeTx(tx: TransactionRequest): RoutedCall {
   }
 }
 
+function shouldBypassCanonical4337ForSwapRouterValue(calls: RoutedCall[]): boolean {
+  return calls.some((call) => {
+    if (call.value <= 0n) return false
+    const data = typeof call.data === 'string' ? call.data.toLowerCase() : ''
+    return data.startsWith(UNISWAP_UNIVERSAL_ROUTER_EXECUTE_SELECTOR)
+  })
+}
+
 export function normalizeCanonicalSendError(error: unknown): Error {
   const message = error instanceof Error ? error.message : String(error ?? '')
   const details =
@@ -243,7 +253,7 @@ export function normalizeCanonicalSendError(error: unknown): Error {
   return error instanceof Error ? error : new Error(message || 'Canonical swap send failed.')
 }
 
-function isCanonicalSponsorshipLimitError(error: unknown): boolean {
+function isCanonicalPaymasterPolicyFallbackError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error ?? '')
   const details =
     typeof (error as any)?.details === 'string'
@@ -261,7 +271,10 @@ function isCanonicalSponsorshipLimitError(error: unknown): boolean {
     diagnostic.includes('request exceeds defined limit') ||
     diagnostic.includes('max sponsorship cost') ||
     diagnostic.includes('sponsorship cost per user op exceeded') ||
-    diagnostic.includes('insufficient sponsorship funds')
+    diagnostic.includes('insufficient sponsorship funds') ||
+    diagnostic.includes('swap_router_value_not_allowed') ||
+    diagnostic.includes('swap_router_call_count_not_allowed') ||
+    /\brequest denied - [a-z_]+_not_allowed\b/.test(diagnostic)
   )
 }
 
@@ -612,6 +625,23 @@ async function sendViaCanonical4337(params: {
     throw new Error('Canonical smart wallet or owner signer is not ready for ERC-4337 execution')
   }
   const sender = canonicalIdentity
+  if (shouldBypassCanonical4337ForSwapRouterValue(calls)) {
+    context.debug?.({
+      event: 'send_fallback',
+      mode: decision.mode,
+      fallbackMode: 'canonicalDirect',
+      method: 'eth_sendUserOperation',
+      chainId: context.chainId,
+      sender,
+      callTargets: calls.map((call) => call.to),
+      error: 'Bypassing paymaster path for swap-router native-value call',
+    })
+    return sendViaMode({
+      context,
+      decision: { ...decision, mode: 'canonicalDirect', fallbackMode: 'canonicalDirect' },
+      calls,
+    })
+  }
   context.debug?.({
     event: 'send_attempt',
     mode: decision.mode,
@@ -642,8 +672,7 @@ async function sendViaCanonical4337(params: {
     })
   } catch (error) {
     const normalized = normalizeCanonicalSendError(error)
-    const shouldFallbackToCanonicalDirect =
-      params.decision.fallbackMode === 'canonicalDirect' && isCanonicalSponsorshipLimitError(error)
+    const shouldFallbackToCanonicalDirect = isCanonicalPaymasterPolicyFallbackError(error)
     if (shouldFallbackToCanonicalDirect) {
       context.debug?.({
         event: 'send_fallback',

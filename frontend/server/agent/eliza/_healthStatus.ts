@@ -6,6 +6,7 @@ type HealthStatusArgs = {
   agentBooted: boolean
   agentCount: number
   xmtpReady: boolean
+  readyzAsLiveness?: boolean
 }
 
 /**
@@ -13,10 +14,17 @@ type HealthStatusArgs = {
  * /readyz is strict readiness for traffic routing and monitoring.
  */
 export function getHealthProbeStatusCode(args: HealthStatusArgs): number {
+  const runtimeAgentsStopped = args.agentBooted && args.agentCount > 0 && !args.xmtpReady
+
   if (args.probe === '/readyz') {
+    if (args.readyzAsLiveness) {
+      return runtimeAgentsStopped ? 503 : 200
+    }
     return args.ready ? 200 : 503
   }
 
-  const runtimeAgentsStopped = args.agentBooted && args.agentCount > 0 && !args.xmtpReady
-  return runtimeAgentsStopped ? 503 : 200
+  // Liveness should only answer "is the process up?" so deploy orchestrators
+  // do not flap while downstream services (XMTP/DB/etc.) are converging.
+  // Keep strict dependency health on /readyz.
+  return 200
 }

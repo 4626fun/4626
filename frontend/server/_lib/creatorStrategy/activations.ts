@@ -93,6 +93,29 @@ export async function listActivationsForCreator(
   return (result.rows ?? []).map(rowToModel)
 }
 
+/**
+ * True when the creator has a live entitlement row for the feature.
+ * We treat both `pending` and `active` as entitled because payment
+ * verification is authoritative and provisioning can lag.
+ */
+export async function hasLiveActivationForFeature(
+  db: Db,
+  params: { creatorToken: Address; featureKey: string },
+): Promise<boolean> {
+  const creatorKey = params.creatorToken.toLowerCase()
+  const featureKey = String(params.featureKey ?? '').trim()
+  if (!featureKey) return false
+  const result = await db.sql`
+    SELECT 1
+    FROM creator_strategy_features
+    WHERE creator_token = ${creatorKey}
+      AND feature_key = ${featureKey}
+      AND status IN ('pending', 'active')
+    LIMIT 1;
+  `
+  return Array.isArray(result.rows) && result.rows.length > 0
+}
+
 export type InsertActivationInput = {
   creatorToken: Address
   featureKey: string

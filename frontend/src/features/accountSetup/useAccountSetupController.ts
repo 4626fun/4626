@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useActiveWallet, useConnectWallet, useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
-import { createWalletClient, custom, type Address } from 'viem'
+import { createWalletClient, custom, getAddress, type Address } from 'viem'
 import { base } from 'viem/chains'
 import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 
@@ -36,7 +36,7 @@ import { selectCrossAppAuthAction } from '@/features/waitlist/crossAppWalletUtil
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import { checkEoaOwnershipOfCsw } from '@/wallet/accountContext/ownership'
 
-import { PROVIDER_ROWS, deriveOwnerAuthorityState, hasResolvedZoraSignals, isMobileWalletEnvironment, normalizeAddress, shortValue, sleep } from './shared'
+import { PROVIDER_ROWS, deriveOwnerAuthorityState, hasResolvedZoraSignals, isMobileWalletEnvironment, shortValue, sleep } from './shared'
 import type {
   AccountSetupInitialData,
   AccountSetupMe,
@@ -1309,15 +1309,26 @@ export function useAccountSetupController(params: {
   }, [retryOwnerCheck])
 
   const onAddRabbyCoOwner = useCallback(async (advancedOwnerAddress: string) => {
-    const normalized = normalizeAddress(advancedOwnerAddress)
-    if (!normalized) {
+    const raw = String(advancedOwnerAddress ?? '').trim()
+    if (!/^0x[a-fA-F0-9]{40}$/.test(raw)) {
       setError('Enter a valid Rabby EOA address.')
       return
     }
-    const confirmed = typeof window !== 'undefined'
-      ? window.confirm('Add this Rabby EOA as a co-owner? This is advanced and never automatic.')
-      : true
-    if (!confirmed) return
+    let normalized: `0x${string}`
+    try {
+      normalized = getAddress(raw) as `0x${string}`
+    } catch {
+      setError('Enter a valid Rabby EOA address.')
+      return
+    }
+    // In mobile in-app browsers (Base App / Telegram WebView), native confirm
+    // dialogs can be suppressed or auto-cancelled, which makes this button look
+    // like a no-op. Keep the explicit confirmation on desktop browsers only.
+    const requireDesktopConfirm = typeof window !== 'undefined' && !isMobileWalletEnvironment()
+    if (requireDesktopConfirm) {
+      const confirmed = window.confirm('Add this Rabby EOA as a co-owner? This is advanced and never automatic.')
+      if (!confirmed) return
+    }
 
     setAdvancedBusy(true)
     setError(null)
@@ -1330,10 +1341,14 @@ export function useAccountSetupController(params: {
         headers,
         body: JSON.stringify({}),
       })
-      const preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<unknown> | null
+      const preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<OnboardingBootstrapResponse> | null
       if (!preflightRes.ok || !preflightPayload?.success) {
         throw buildOwnerDelegationError(preflightPayload, 'Signer preflight failed.')
       }
+      const preflightOwnerLookupAddress =
+        connectedCanonicalWalletSelected && preflightPayload?.data?.privyIsOwner === true
+          ? preflightPayload?.data?.privyEmbeddedEoaAddress ?? null
+          : null
 
       const prepareRes = await apiFetch('/api/wallet/prepare-add-rabby-owner', {
         method: 'POST',
@@ -1351,7 +1366,7 @@ export function useAccountSetupController(params: {
         setNotice('Rabby address is already an owner.')
         return
       }
-      await sendPreparedOwnerTx(preparePayload.data.txRequest, normalized, null)
+      await sendPreparedOwnerTx(preparePayload.data.txRequest, normalized, preflightOwnerLookupAddress)
       setNotice('Rabby co-owner added.')
       await loadMe({ showSpinner: false })
     } catch (rabbyError: any) {

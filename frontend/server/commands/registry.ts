@@ -21,6 +21,7 @@ type CommandFamily =
   | 'rooms'
   | 'eligibility'
   | 'wallet'
+  | 'alfaclub'
   | 'vaults'
   | 'auctions'
   | 'mybids'
@@ -116,6 +117,11 @@ const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
       private: 'Your wallet, positions, and actions',
       admin: 'Linked wallet activity',
     },
+  },
+  {
+    head: 'alfa',
+    family: 'alfaclub',
+    aliases: ['alfaclub'],
   },
   {
     head: 'vaults',

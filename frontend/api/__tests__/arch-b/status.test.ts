@@ -204,4 +204,21 @@ describe('GET /api/arch-b/status', () => {
     expect(res.body.success).toBe(false)
     expect(res.body.error).toBe('db_unavailable')
   })
+
+  it('does not throw when quorum env is missing in production; returns quorumConfigured=false', async () => {
+    process.env.VERCEL = '1'
+    delete process.env.ARCH_B_SIGNER_QUORUM_ID
+    mocks.resolveCommandIssuerContextByProfileId.mockResolvedValue({
+      status: 'ready',
+      context: PROVISIONED_CONTEXT,
+    })
+    const req = createMockReq({ method: 'GET' })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(res.body.success).toBe(true)
+    expect(res.body.data.quorumConfigured).toBe(false)
+    expect(res.body.data.quorumId).toBe('')
+    expect(res.body.data.delegated).toBeNull()
+  })
 })
