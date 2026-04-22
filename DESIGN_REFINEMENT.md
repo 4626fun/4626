@@ -1,4 +1,4 @@
-# Beauty Pass — 4626.fun
+# Design Refinement — 4626.fun
 
 *An overlay-only refinement of the existing cinematic scroll experience.  
 The arc, the components, and the motion direction are unchanged. What changed
@@ -7,8 +7,8 @@ one voice.*
 
 The pass is delivered as two additive files loaded after the originals:
 
-- `beauty.css` — the overlay stylesheet (15 sections, ~820 lines)
-- `beauty.js` — a minimal runtime shader proxy that dims the starfield
+- `refinement.css` — the overlay stylesheet (15 sections, ~820 lines)
+- `refinement.js` — a minimal runtime shader proxy that dims the starfield
   per-chapter without overwriting the chapter system's own `uBrightness` writes
 
 No edits were made to `style.css`, `app.js`, the scene structure, or the
@@ -123,13 +123,13 @@ Two files wired into `index.html`:
 
 ```html
 <link rel="stylesheet" href="./style.css">
-<link rel="stylesheet" href="./beauty.css">        <!-- overlay (new) -->
+<link rel="stylesheet" href="./refinement.css">        <!-- overlay (new) -->
 ...
 <script type="module" src="./app.js"></script>
-<script src="./beauty.js" defer></script>          <!-- shader proxy -->
+<script src="./refinement.js" defer></script>          <!-- shader proxy -->
 ```
 
-### `beauty.css` · 15 sections
+### `refinement.css` · 15 sections
 
 0. **Font polish** — antialiased, geometric precision, optical feature-settings,
    soft body vignette
@@ -157,10 +157,10 @@ Two files wired into `index.html`:
     keyframes neutralised
 15. **Mobile breathing** — tighter kicker/headline spacing at ≤720 px
 
-### `beauty.js` · runtime shader proxy
+### `refinement.js` · runtime shader proxy
 
 Rather than compete with the chapter system's writes to
-`material.uniforms.uBrightness`, `beauty.js` proxies that uniform. Each
+`material.uniforms.uBrightness`, `refinement.js` proxies that uniform. Each
 chapter's natural brightness value gets multiplied by a beauty coefficient:
 
 ```js
@@ -249,7 +249,7 @@ The site already *had* the components, the motion, and the story. What it
 didn't have was restraint — a single voice telling you which element to
 care about in any given 200 ms.
 
-The beauty pass delivered that voice through four decisions:
+The design refinement delivered that voice through four decisions:
 
 1. **One material language.** Two radii (2 px for hairlines, 10 px for
    objects, 14 px for plates). One glass recipe — `rgba(9, 13, 24, 0.55)` +

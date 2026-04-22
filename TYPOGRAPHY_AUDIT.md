@@ -1,4 +1,4 @@
-# Typography-only audit — 4626.fun beauty pass
+# Typography-only audit — 4626.fun design refinement
 ### Mobile verification · iPhone SE (375) · iPhone 14 (390) · iPhone 14 Plus (414)
 ### Method
 21 captures (7 scenes × 3 widths) + `getComputedStyle` probes on the italic `em`, the `.ed-kicker-num`, the four CSS ink variables, and representative body text. Horizontal-overflow scan at each viewport. Runtime: `http://localhost:5000/index.html?v=audit*`. Evidence: `/_snaps/type-audit/*.png`, `probe.json`, `probe_redo.json`.
@@ -7,7 +7,7 @@
 
 ## Executive summary
 
-The three beauty-pass typography systems render **correctly and identically at all three mobile widths**.
+The three design-refinement typography systems render **correctly and identically at all three mobile widths**.
 
 | System | Status | Evidence |
 |---|---|---|
@@ -25,7 +25,7 @@ The hero, tokenize, accrue, share-token, dual, vaults, and close scenes all stay
 
 ### 1 · Champagne italic — `#EDE5CB → #8F8163`
 
-Rule lives at `beauty.css:218`, `:424`, `:460`, `:497`, `:601`, `:673`, `:730` and the hero's per-character variant at `beauty.css:215`. Every occurrence uses the same two stops. Verified inline on:
+Rule lives at `refinement.css:218`, `:424`, `:460`, `:497`, `:601`, `:673`, `:730` and the hero's per-character variant at `refinement.css:215`. Every occurrence uses the same two stops. Verified inline on:
 
 | Scene | Italic word | Render at 375 / 390 / 414 |
 |---|---|---|
@@ -46,7 +46,7 @@ Even the darkest stop of the gradient comfortably clears AA for normal text (4.5
 
 ### 2 · Roman-serif numeral — `.ed-kicker-num`
 
-Rule at `beauty.css:160-168`:
+Rule at `refinement.css:160-168`:
 
 ```css
 .ed-kicker-num {
@@ -92,7 +92,7 @@ Ink-hi and ink-mid are unambiguously safe. Ink-lo and ink-xlo are where the edit
 
 **Impact:** WCAG 2.2 requires 4.5 : 1 for text under 18 pt (24 px) and 3 : 1 for large text ([W3C WCAG 2.2 mobile guidance](https://www.w3.org/TR/wcag2mobile-22/), [A11y Collective on minimum font size](https://www.a11y-collective.com/blog/wcag-minimum-font-size/)). At 1.90 : 1 the kicker labels are below even the large-text threshold.
 
-**Why it looks intentional:** editorial publications (*Apartamento*, *Monocle*, *032c*) regularly set masthead kickers at this weight precisely because they're supposed to recede. The whole beauty-pass thesis is "restraint over volume". Raising the alpha will measurably reduce the sense of atmosphere.
+**Why it looks intentional:** editorial publications (*Apartamento*, *Monocle*, *032c*) regularly set masthead kickers at this weight precisely because they're supposed to recede. The whole design-refinement thesis is "restraint over volume". Raising the alpha will measurably reduce the sense of atmosphere.
 
 **Recommended options, in order of preference:**
 
@@ -120,7 +120,7 @@ The four-step shape is preserved; every rung gets a small upward nudge.
 
 ### Issue 3 — mobile breakpoint is thin
 
-`beauty.css:844-848` contains three rules. It adjusts `.ed-kicker` gap, `.hero-headline` size, and `.vault-featured` padding. There is **no mobile-specific rule** for the body text base size. Screens at 375 inherit the same 14.4 px / 14.72 px / 15.2 px sizing as desktop.
+`refinement.css:844-848` contains three rules. It adjusts `.ed-kicker` gap, `.hero-headline` size, and `.vault-featured` padding. There is **no mobile-specific rule** for the body text base size. Screens at 375 inherit the same 14.4 px / 14.72 px / 15.2 px sizing as desktop.
 
 iOS HIG recommends 17 pt body; web consensus is 16-18 px for mobile body ([Learn UI Design](https://learnui.design/blog/mobile-desktop-website-font-size-guidelines.html), [Bliss Drive](https://www.blissdrive.com/people-also-asked/what-font-sizes-are-optimal-for-mobile-readability/)). The current body sits one step below the recommended floor.
 
@@ -147,7 +147,7 @@ This keeps the scale ratio intact and nudges the body text one optical step towa
 
 Not a typography issue — surfacing it as peripheral evidence. The `.ng-strat-column` / `.strategy-card-inner` children (Ajna, Charm, Solana, etc.) extend well past the right edge. `document.scrollWidth` still equals `window.innerWidth` because the outer scroll root clips them, so there is no visible horizontal scroll, but on a phone those nodes are painted off-viewport and users can't read them.
 
-**Recommendation:** wrap the CCA card column in a horizontally scrollable strip at `max-width: 720px`, or stack the cards vertically on mobile. This is a pre-existing layout concern (not introduced by the beauty pass) and outside typography scope.
+**Recommendation:** wrap the CCA card column in a horizontally scrollable strip at `max-width: 720px`, or stack the cards vertically on mobile. This is a pre-existing layout concern (not introduced by the design refinement) and outside typography scope.
 
 ---
 
@@ -167,7 +167,7 @@ Not a typography issue — surfacing it as peripheral evidence. The `.ng-strat-c
 
 ## What changes if you want to ship these refinements
 
-A single, tight patch to `beauty.css`:
+A single, tight patch to `refinement.css`:
 
 ```css
 /* Lift the ink scale one step to safely cross AA large-text on the lower rungs */
@@ -193,7 +193,7 @@ A single, tight patch to `beauty.css`:
 }
 ```
 
-That's it. 10 lines. No new tokens, no new rules, no motion changes. The three beauty-pass systems are already cleanly authored — these are tightening screws, not structural repairs.
+That's it. 10 lines. No new tokens, no new rules, no motion changes. The three design-refinement systems are already cleanly authored — these are tightening screws, not structural repairs.
 
 ---
 
