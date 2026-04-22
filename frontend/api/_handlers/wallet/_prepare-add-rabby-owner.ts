@@ -46,9 +46,7 @@ function parseChecksummedAddress(value: unknown): `0x${string}` | null {
   const raw = typeof value === 'string' ? value.trim() : ''
   if (!ADDRESS_RE.test(raw)) return null
   try {
-    const checksummed = getAddress(raw) as `0x${string}`
-    if (checksummed !== raw) return null
-    return checksummed
+    return getAddress(raw) as `0x${string}`
   } catch {
     return null
   }
@@ -103,7 +101,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!rabbyAddress) {
     return res.status(400).json({
       success: false,
-      error: 'Invalid Rabby address. Provide a checksummed 0x address.',
+      error: 'Invalid Rabby address. Provide a valid 0x address.',
     } satisfies ApiEnvelope<never>)
   }
 

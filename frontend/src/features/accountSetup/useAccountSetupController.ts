@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useActiveWallet, useConnectWallet, useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
-import { createWalletClient, custom, type Address } from 'viem'
+import { createWalletClient, custom, getAddress, type Address } from 'viem'
 import { base } from 'viem/chains'
 import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 
@@ -36,7 +36,7 @@ import { selectCrossAppAuthAction } from '@/features/waitlist/crossAppWalletUtil
 import { runWaitlistPrivyLogout } from '@/features/waitlist/waitlistAuthState'
 import { checkEoaOwnershipOfCsw } from '@/wallet/accountContext/ownership'
 
-import { PROVIDER_ROWS, deriveOwnerAuthorityState, hasResolvedZoraSignals, isMobileWalletEnvironment, normalizeAddress, shortValue, sleep } from './shared'
+import { PROVIDER_ROWS, deriveOwnerAuthorityState, hasResolvedZoraSignals, isMobileWalletEnvironment, shortValue, sleep } from './shared'
 import type {
   AccountSetupInitialData,
   AccountSetupMe,
@@ -1309,8 +1309,15 @@ export function useAccountSetupController(params: {
   }, [retryOwnerCheck])
 
   const onAddRabbyCoOwner = useCallback(async (advancedOwnerAddress: string) => {
-    const normalized = normalizeAddress(advancedOwnerAddress)
-    if (!normalized) {
+    const raw = String(advancedOwnerAddress ?? '').trim()
+    if (!/^0x[a-fA-F0-9]{40}$/.test(raw)) {
+      setError('Enter a valid Rabby EOA address.')
+      return
+    }
+    let normalized: `0x${string}`
+    try {
+      normalized = getAddress(raw) as `0x${string}`
+    } catch {
       setError('Enter a valid Rabby EOA address.')
       return
     }

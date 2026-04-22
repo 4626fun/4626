@@ -12,6 +12,7 @@
     "farcaster": "tsx src/crossReferenceFarcaster.ts",
     "names": "tsx src/enrichNames.ts",
     "zora-profiles": "tsx src/enrichZoraProfiles.ts",
+    "export:outreach": "tsx src/exportOutreach.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
