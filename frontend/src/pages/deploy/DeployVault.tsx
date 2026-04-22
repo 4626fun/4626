@@ -2239,6 +2239,7 @@ function DeployVaultBatcher({
   }, [legacyDeploySessionStorageKey])
   const shareOftVanityCacheRef = useRef<{ key: string; salt: Hex } | null>(null)
   const vaultVanityVersionCacheRef = useRef<{ key: string; version: string } | null>(null)
+  const shareOftVanitySkipLogKeyRef = useRef<string | null>(null)
   const ensurePaymasterSession = useCallback(async () => {
     if (!getAccessToken || typeof signInWithPrivyToken !== 'function') return
     try {
@@ -3194,11 +3195,15 @@ function DeployVaultBatcher({
           })
           throw new Error(blockingMessage)
         }
-        logger.info('[DeployVault] share_oft_vanity_suffix_skipped_default', {
-          batcher: batcherAddress,
-          suffix: shareOftVanitySuffix,
-          reason: 'phase1_salt_overrides_not_supported',
-        })
+        const skipLogKey = `${(batcherAddress ?? '').toLowerCase()}:${shareOftVanitySuffix}:phase1_salt_overrides_not_supported`
+        if (shareOftVanitySkipLogKeyRef.current !== skipLogKey) {
+          shareOftVanitySkipLogKeyRef.current = skipLogKey
+          logger.info('[DeployVault] share_oft_vanity_suffix_skipped_default', {
+            batcher: batcherAddress,
+            suffix: shareOftVanitySuffix,
+            reason: 'phase1_salt_overrides_not_supported',
+          })
+        }
         shareOftVanityWarning =
           `Active batcher ${batcherDisplay} does not support Phase-1 salt overrides, so default share suffix ` +
           `"${shareOftVanitySuffix}" is not guaranteed for this deploy.`
@@ -4022,15 +4027,16 @@ function DeployVaultBatcher({
       const hasDeploymentVersionOverride =
         typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('deploymentVersion')?.trim()
       const runtimeDeploymentVersion = runtimeConfig?.deploymentVersion?.trim() ?? ''
+      const clientRuntimeDeploymentVersion = deploymentVersionProp
       if (
         !hasDeploymentVersionOverride &&
         !vaultVanityIsCustom &&
         runtimeDeploymentVersion &&
-        runtimeDeploymentVersion !== deploymentVersion
+        runtimeDeploymentVersion !== clientRuntimeDeploymentVersion
       ) {
         const recovered = tryAutoRecoverStaleDeployConfig({
           reason: 'deploymentVersion',
-          clientValue: deploymentVersion,
+          clientValue: clientRuntimeDeploymentVersion,
           runtimeValue: runtimeDeploymentVersion,
         })
         setDeploymentVersionOverride(runtimeDeploymentVersion)
