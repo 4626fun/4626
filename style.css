@@ -2601,17 +2601,24 @@ body {
   opacity: 0;
 }
 
-/* ─── PHASE G: CRESCENDO FINALE ───
-   Four-line typographic poster that lands at the very end of ch-close.
-   Each line is revealed in sequence via a distinct motion family:
-     1. "One vault."   — inward compression   (letter-spread tightens)
-     2. "Two tokens."  — horizontal split     (halves meet at center)
-     3. "(3, 3)"       — depth recession      (forward from blur+scale)
-     4. "4626.fun"     — structural lock-in   (rules draw out around it)
-   Motion is carried via inline style writes in app.js chapterClose. The
-   CSS below defines the at-rest appearance and the pre-reveal mask state
-   (opacity 0, initial transforms). JS ramps opacity + transform based
-   on scroll progress and respects prefers-reduced-motion. */
+/* ─── PHASE G · CRESCENDO FINALE ───────────────────────────────────────
+   Six-beat typographic finale that lands at the end of ch-close. Each
+   beat occupies the same single-cell grid "stage" so beats swap in place.
+   Motion is driven by JS (app.js chapterClose) writing inline styles on
+   scroll progress; this stylesheet defines the at-rest appearance, the
+   pre-reveal mask state (opacity 0 + initial transforms), and the
+   editorial chrome (eyebrows, rules, glosses, metadata) that gives each
+   beat its authored feel. Reduced-motion users get opacity-only reveals.
+
+   Beat roster (p windows owned by JS):
+     L1     One vault.              editorial opener
+     L2     Two tokens.             horizontal split + sublabels
+     L3     (3, 3)                  game-theoretic resolution
+     L3.5   Earn together.          whispered thesis
+     L4     4626.fun                brand lock-in
+     L5     Partners + CTA          ecosystem + invitation
+*/
+
 .close-crescendo {
   position: absolute;
   inset: 0;
@@ -2619,39 +2626,120 @@ body {
   align-items: center;
   justify-content: center;
   pointer-events: none;
-  z-index: 14; /* above close-final (12), below footer/audio UI */
-  opacity: 0; /* JS reveals */
+  z-index: 14;
+  opacity: 0;
   will-change: opacity;
 }
+
+/* ─── Finale poster ────────────────────────────────────────────────────
+   A settled composed page that replaces the stage once the conceptual
+   beats (L1–L3) have finished crossfading. Lives as a sibling of .cres-stack
+   inside .close-crescendo, absolutely positioned so both wrappers share the
+   same centered frame. JS fades this in as a whole when the finale window
+   arrives; inside it, L3.5/L4/L5 compose in natural vertical flow — no
+   grid-stage overlap, no crossfade tangling. */
+.cres-finale-poster {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(92vw, 1000px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 2.1rem;
+  opacity: 0;
+  pointer-events: none;
+  will-change: opacity, transform;
+}
+/* Inside the finale poster, each line lays out in its OWN vertical row
+   — not in the grid-stage cell. Override the inherited grid-area and
+   relax the flex-column rules so lines stack naturally. */
+.cres-finale-poster .cres-line {
+  grid-area: auto;
+  position: relative;
+  opacity: 1; /* parent poster owns the reveal; individual lines don't hide */
+  width: 100%;
+}
+.cres-finale-poster .cres-line-earn {
+  margin-bottom: 0.3rem;
+}
+.cres-finale-poster .cres-line-4 {
+  gap: 0.6rem;
+}
+.cres-finale-poster .cres-line-finale {
+  margin-top: 1.1rem;
+  gap: 1.1rem;
+  pointer-events: auto; /* the CTA inside needs to be clickable */
+}
+
+/* Ambient aura — soft radial light source behind the stack. Pulses
+   gently as each beat arrives (JS only adjusts opacity 0→1 and scale
+   on a slow breathing curve). Keeps a modern, editorial "lit page" feel. */
+.cres-aura {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: min(80vw, 880px);
+  height: min(52vh, 520px);
+  transform: translate(-50%, -50%) scale(0.88);
+  opacity: 0;
+  background:
+    radial-gradient(ellipse at center,
+      rgba(210, 222, 250, 0.10) 0%,
+      rgba(175, 195, 235, 0.05) 28%,
+      rgba(80, 100, 150, 0.015) 55%,
+      rgba(0, 0, 0, 0) 72%);
+  filter: blur(28px);
+  pointer-events: none;
+  will-change: opacity, transform;
+}
+
 .cres-stack {
-  /* SEQUENTIAL / ONE-AT-A-TIME LAYOUT:
-     All four lines share the same center cell of a single-area grid, so
-     each line is revealed alone in the exact same real estate. Only one
-     beat is visible at a time; JS crossfades between them. */
+  position: relative; /* aura sits in .close-crescendo, stack sits above */
   display: grid;
   grid-template-areas: "stage";
   place-items: center;
   text-align: center;
   padding: 0 2rem;
-  max-width: 960px;
+  max-width: 1040px;
   width: 100%;
-  min-height: clamp(6rem, 12vh, 10rem);
+  min-height: clamp(7rem, 14vh, 12rem);
 }
+
 .cres-line {
   grid-area: stage;
   opacity: 0;
-  line-height: 1;
+  line-height: 1.05;
   will-change: opacity, transform, letter-spacing, filter;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.85rem;
 }
 
-/* Line 1 — "One vault." : editorial opener, gradient sheen like overture */
+/* Shared editorial chrome — italic metadata tags that sit on their own
+   opacity rail so JS can fade them with their parent while keeping the
+   visual hierarchy very quiet (small, tracked, low-contrast). */
+.cres-brand-tag,
+.cres-finale-meta {
+  font-family: 'Newsreader', 'Georgia', serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  color: rgba(190, 202, 225, 0.5);
+}
+
+/* ── L1 · One vault. ─────────────────────────────────────────────────── */
 .cres-line-1 {
   font-family: var(--font-display);
   font-weight: 300;
-  font-size: clamp(2rem, 1.4rem + 2.6vw, 3.6rem);
-  letter-spacing: 0.25em; /* JS tightens to -0.015em on reveal */
+  font-size: clamp(2.4rem, 1.5rem + 3.2vw, 4.4rem);
+  letter-spacing: 0.28em;  /* JS tightens to -0.02em */
   color: #F5F8FF;
-  background: linear-gradient(180deg, #F5F8FF 0%, #9AA3B8 100%);
+  background: linear-gradient(180deg, #F5F8FF 0%, #8F98AE 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -2660,19 +2748,19 @@ body {
   font-family: 'Newsreader', 'Georgia', serif;
   font-style: italic;
   font-weight: 400;
-  padding-right: 0.06em;
-  background: linear-gradient(180deg, #D5DBEA 0%, #7A8498 100%);
+  padding-right: 0.04em;
+  background: linear-gradient(180deg, #F1E8CF 0%, #A28F5E 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
 
-/* Line 2 — "Two tokens." : horizontal split; two spans slide from left/right */
+/* ── L2 · Two tokens. + sublabels ────────────────────────────────────── */
 .cres-line-2 {
   font-family: var(--font-display);
   font-weight: 300;
-  font-size: clamp(2.4rem, 1.6rem + 3.0vw, 4.2rem);
-  letter-spacing: -0.025em;
+  font-size: clamp(2.8rem, 1.8rem + 3.4vw, 5.0rem);
+  letter-spacing: -0.03em;
   color: #F5F8FF;
   background: linear-gradient(180deg, #F5F8FF 0%, #A8B0C4 100%);
   -webkit-background-clip: text;
@@ -2683,7 +2771,7 @@ body {
   font-family: 'Newsreader', 'Georgia', serif;
   font-style: italic;
   font-weight: 400;
-  background: linear-gradient(180deg, #E8D9B0 0%, #A28F5E 100%);
+  background: linear-gradient(180deg, #F1E8CF 0%, #A28F5E 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -2692,46 +2780,141 @@ body {
   display: inline-block;
   opacity: 0;
   will-change: opacity, transform;
-  /* Each split establishes its own inline-block painting context, which
-     breaks the parent's background-clip:text gradient. Re-apply the same
-     gradient here so both halves paint in the display color; the italic
-     "Two" inside .cres-line-2 em has its own gradient that wins. */
   background: linear-gradient(180deg, #F5F8FF 0%, #A8B0C4 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
-.cres-split-l { transform: translateX(-24px); }
-.cres-split-r { transform: translateX(24px); }
+.cres-split-l { transform: translateX(-28px); }
+.cres-split-r { transform: translateX(28px); }
+/* Keep the two splits on a single horizontal line inside the flex-column
+   parent .cres-line. The splits are direct flex-column children, so they
+   stack vertically by default. An inline-flex wrapper (.cres-splits) keeps
+   them on one row without losing the transform target on each split. */
+.cres-splits {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.28em;
+  justify-content: center;
+}
 
-/* Line 3 — "(3, 3)" : depth recession, forward from blur+scale.
-   Uses mono for meme-era tip-of-the-hat but kept editorial in weight. */
+.cres-sublabels {
+  display: flex;
+  align-items: center;
+  gap: 1.4rem;
+  margin-top: 0.5rem;
+  opacity: 0;
+  will-change: opacity;
+}
+.cres-sublabel {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(200, 214, 236, 0.78);
+}
+.cres-sublabel-mark {
+  font-size: 10px;
+  color: rgba(220, 230, 245, 0.6);
+  transform: translateY(-1px);
+}
+.cres-sublabel-name {
+  color: rgba(232, 238, 248, 0.92);
+  letter-spacing: 0.18em;
+}
+.cres-sublabel-kind {
+  color: rgba(175, 192, 218, 0.55);
+  letter-spacing: 0.22em;
+  font-size: 10px;
+}
+.cres-sublabel-divider {
+  width: 1px;
+  height: 12px;
+  background: rgba(180, 200, 230, 0.24);
+  display: inline-block;
+}
+
+/* ── L3 · (3, 3) ─────────────────────────────────────────────────────── */
 .cres-line-3 {
   font-family: var(--font-mono);
   font-weight: 400;
-  font-size: clamp(1.3rem, 0.9rem + 1.6vw, 2.1rem);
-  letter-spacing: 0.1em;
-  color: rgba(220, 225, 235, 0.85);
-  transform: scale(1.22);
+  font-size: clamp(1.6rem, 1.0rem + 2.0vw, 2.8rem);
+  letter-spacing: 0.12em;
+  color: #F4EBD2; /* fallback before clip-text paints */
+  transform: scale(1.18);
   filter: blur(4px);
 }
-.cres-ticker { padding: 0 0.1em; }
+/* Warm cream → bronze gradient, same family as "One" italic and "Earn
+   together." — ties the climax beat into the finale poster's gold accent.
+   Scoped to the inner .cres-ticker span so the flex parent doesn't
+   propagate transparent fill to any sibling. */
+.cres-ticker {
+  padding: 0 0.12em;
+  display: inline-block;
+  background: linear-gradient(180deg, #F4EBD2 0%, #A28F5E 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
 
-/* Line 4 — "4626.fun" : structural lock-in with hairlines */
+/* ── L3.5 · Earn together. ───────────────────────────────────────────── */
+.cres-line-earn {
+  font-family: 'Newsreader', 'Georgia', serif;
+  font-style: italic;
+  font-weight: 400;
+  font-size: clamp(2.6rem, 1.6rem + 3.0vw, 4.4rem);
+  letter-spacing: -0.02em;
+  color: #EDE5CB;
+}
+/* Scope gradient clip-text onto the inner span so the flex parent doesn't
+   propagate transparent text-fill-color to any nested element. */
+.cres-line-earn .cres-earn {
+  background: linear-gradient(180deg, #F4EBD2 0%, #8F8163 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.cres-earn em {
+  font-style: italic;
+}
+
+/* ── L4 · 4626.fun ──────────────────────────────────────────────────── */
 .cres-line-4 {
   font-family: var(--font-display);
   font-weight: 400;
-  font-size: clamp(2.8rem, 1.8rem + 3.6vw, 5.2rem);
-  letter-spacing: -0.045em;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.6rem;
+  font-size: clamp(3.2rem, 2.0rem + 4.0vw, 6.0rem);
+  letter-spacing: -0.05em;
+  gap: 0.55rem;
   color: #F5F8FF;
+}
+/* Scope the gradient text-fill onto the wordmark SPAN (not the flex parent)
+   so sibling children — rules, brand-mark, brand-tag — don't inherit a
+   transparent fill with no background of their own (which previously made
+   the whole line invisible inside the finale poster). */
+.cres-line-4 .cres-brand {
   background: linear-gradient(180deg, #F5F8FF 0%, #7C8699 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
+}
+.cres-brand-mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 10px;
+  height: 10px;
+  opacity: 0;
+  will-change: opacity;
+}
+.cres-brand-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: linear-gradient(180deg, #F4EBD2 0%, #A28F5E 100%);
+  box-shadow: 0 0 12px rgba(244, 235, 210, 0.5);
 }
 .cres-brand {
   line-height: 1;
@@ -2746,32 +2929,177 @@ body {
   -webkit-text-fill-color: transparent;
   background-clip: text;
 }
+.cres-brand-tag {
+  font-size: 11px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(180, 195, 222, 0.52);
+  font-style: normal;
+  font-family: var(--font-mono);
+}
 .cres-rule {
   display: block;
-  width: 0; /* JS grows to 260px on reveal */
-  max-width: 280px;
+  width: 0;  /* JS grows to ~320px */
+  max-width: 340px;
   height: 1px;
-  background: linear-gradient(90deg, rgba(180,200,235,0) 0%, rgba(200,215,240,0.55) 50%, rgba(180,200,235,0) 100%);
+  background: linear-gradient(90deg,
+    rgba(180,200,235,0) 0%,
+    rgba(200,215,240,0.58) 50%,
+    rgba(180,200,235,0) 100%);
   opacity: 0;
   will-change: width, opacity;
 }
 
-/* Reduced motion: no transforms or letter-spread animation — opacity only.
-   Pre-reveal transforms above are reset to identity so the resting pose is
-   the final pose, and JS will skip transform writes. */
+/* ── L5 · Partners + CTA finale ─────────────────────────────────────── */
+.cres-line-finale {
+  gap: 1.4rem;
+  width: 100%;
+  max-width: 920px;
+  will-change: opacity, transform;
+}
+.cres-finale-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.38em;
+  text-transform: uppercase;
+  color: rgba(175, 192, 218, 0.45);
+}
+.cres-partners {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  align-items: center;
+  gap: 1.1rem 2.0rem;
+  opacity: 0.88;
+}
+.cres-partner-logo {
+  height: 18px;
+  width: auto;
+  max-width: 110px;
+  object-fit: contain;
+  opacity: 0.7;
+  filter: grayscale(0.5);
+  transition: opacity 260ms cubic-bezier(0.22, 1, 0.36, 1),
+              filter 260ms cubic-bezier(0.22, 1, 0.36, 1),
+              transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.cres-partner-logo:hover {
+  opacity: 1;
+  filter: grayscale(0);
+  transform: translateY(-1px);
+}
+.cres-cta-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.95rem 2.4rem;
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  text-decoration: none;
+  color: #F5F8FF;
+  background: linear-gradient(180deg,
+    rgba(40, 52, 82, 0.55) 0%,
+    rgba(18, 24, 42, 0.78) 100%);
+  border: 1px solid rgba(210, 224, 248, 0.26);
+  border-radius: 999px;
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.4) inset,
+    0 8px 28px rgba(0, 0, 0, 0.45);
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 260ms ease,
+              background 260ms ease,
+              box-shadow 260ms ease;
+  pointer-events: auto;
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+}
+.cres-cta-btn::before {
+  /* Subtle inner highlight sweep — modern glass chip feel. */
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg,
+    rgba(255, 255, 255, 0.08) 0%,
+    rgba(255, 255, 255, 0) 42%);
+  pointer-events: none;
+}
+.cres-cta-label {
+  position: relative;
+  z-index: 1;
+}
+.cres-cta-arrow {
+  position: relative;
+  z-index: 1;
+  transition: transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+  color: rgba(244, 235, 210, 0.95);
+}
+.cres-cta-btn:hover {
+  transform: translateY(-1px);
+  border-color: rgba(244, 235, 210, 0.55);
+  background: linear-gradient(180deg,
+    rgba(58, 72, 108, 0.75) 0%,
+    rgba(24, 32, 54, 0.88) 100%);
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.4) inset,
+    0 12px 36px rgba(0, 0, 0, 0.55);
+}
+.cres-cta-btn:hover .cres-cta-arrow {
+  transform: translateX(4px);
+}
+.cres-finale-meta {
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  color: rgba(175, 192, 218, 0.35);
+}
+
+/* Mobile refinements ─────────────────────────────────────────────────── */
+@media (max-width: 640px) {
+  .cres-stack { padding: 0 1.1rem; min-height: clamp(6rem, 12vh, 10rem); }
+
+  .cres-line-1 { font-size: clamp(1.9rem, 1.3rem + 2.4vw, 3rem); letter-spacing: 0.22em; }
+  .cres-line-2 { font-size: clamp(2.2rem, 1.4rem + 3.0vw, 3.8rem); }
+
+
+  .cres-sublabels { gap: 0.9rem; flex-wrap: wrap; justify-content: center; }
+  .cres-sublabel { font-size: 9.5px; letter-spacing: 0.16em; }
+  .cres-sublabel-kind { font-size: 9px; letter-spacing: 0.18em; }
+
+  .cres-line-3 { font-size: clamp(1.3rem, 0.9rem + 1.8vw, 2.1rem); }
+
+  .cres-line-earn { font-size: clamp(2rem, 1.4rem + 2.4vw, 3.2rem); }
+
+  .cres-line-4 { font-size: clamp(2.4rem, 1.6rem + 3.2vw, 4.4rem); }
+  .cres-rule { max-width: 220px; }
+  .cres-brand-tag { font-size: 9.5px; letter-spacing: 0.18em; }
+
+  .cres-line-finale { gap: 1.1rem; }
+  .cres-finale-label { font-size: 9px; letter-spacing: 0.3em; }
+  .cres-partners {
+    gap: 0.75rem 1.1rem;
+    max-width: 92%;
+    margin: 0 auto;
+  }
+  .cres-partner-logo { height: 14px; max-width: 72px; }
+  .cres-cta-btn { padding: 0.8rem 1.7rem; font-size: 11.5px; letter-spacing: 0.2em; }
+  .cres-finale-meta { font-size: 9.5px; }
+}
+
+/* Reduced motion — neutralise transforms and filters; opacity only. */
 @media (prefers-reduced-motion: reduce) {
   .cres-line,
   .cres-split,
   .cres-line-3,
-  .cres-rule { transform: none !important; filter: none !important; }
-  .cres-line-1 { letter-spacing: -0.015em; }
-  .cres-rule { width: 260px; }
-}
-
-/* Mobile trim — slightly shorter stage so the crescendo fits above the footer. */
-@media (max-width: 640px) {
-  .cres-stack { padding: 0 1.25rem; min-height: clamp(5rem, 10vh, 8rem); }
-  .cres-rule { max-width: 200px; }
+  .cres-rule,
+  .cres-line-finale,
+  .cres-aura,
+  .cres-line-1 { letter-spacing: -0.02em; }
+  .cres-rule,
 }
 
 /* ─── FOOTER ─── */
@@ -2902,28 +3230,116 @@ body {
     color: #EDEDED;
   }
 
-  /* ── Node Graph v2 — mobile reflow ── */
+  /* ── Node Graph v2 — mobile vertical reflow ──
+     On mobile the 920px horizontal flow is impossible to fit. Collapse the
+     absolute-positioned desktop layout into a single vertical column:
+     Deposit → Allocation Engine → 3 strategy cards → Downstream (Uni + Meteora).
+     JS-drawn edge paths use pixel coords tuned for desktop, so we hide the
+     SVG edge layer entirely on mobile — the vertical stack reads cleanly
+     without the connector lines. */
   .node-graph {
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: calc(100% - 2rem);
-    max-width: 600px;
-    height: 420px;
+    position: relative;
+    top: auto;
+    left: auto;
+    transform: none;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    padding: 1.25rem 1rem;
   }
-  .ng-node-hub { left: 160px; }
-  .ng-strat-ajna, .ng-strat-charm, .ng-strat-solana { left: 360px; }
-  .ng-ds-uni, .ng-ds-met { left: 540px; }
+  /* Hide pixel-coord edges — they map to desktop layout */
+  .node-graph .ng-edges-svg { display: none; }
+
+  .ng-nodes {
+    position: relative;
+    inset: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+  }
+
+  /* Collapse all absolute positioning → natural flow, centered */
+  .ng-node,
+  .ng-node-deposit,
+  .ng-node-hub,
+  .ng-node-idle {
+    position: relative;
+    left: auto;
+    right: auto;
+    top: auto;
+    bottom: auto;
+    transform: none;
+  }
+  .ng-node-idle { display: none; } /* aesthetic-only buffer, skip on mobile */
+
+  /* Strategy column — on mobile we want the downstream venue cards to sit
+     DIRECTLY UNDER their parent strategy (Uniswap V3 → Charm, Meteora →
+     Solana). `display: contents` flattens this wrapper so its 3 children
+     become direct flex items of .ng-nodes, letting us interleave the
+     downstream cards via CSS `order`. */
+  .ng-strat-column {
+    display: contents;
+  }
+  /* Ensure the 3 strategy cards still render as blocks in the flattened flow */
+  .ng-strat-column .ng-node-strat {
+    position: relative;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+  }
+
+  /* Interleave order (flex siblings of .ng-nodes):
+       deposit  (1)
+       hub      (2)
+       Ajna     (3)  — strat-0
+       Charm    (4)  — strat-1
+       Uniswap  (5)  — downstream-1 (directly under Charm)
+       Solana   (6)  — strat-2
+       Meteora  (7)  — downstream-2 (directly under Solana) */
+  #ng-node-deposit { order: 1; }
+  #engine-hub      { order: 2; }
+  #strat-0         { order: 3; }
+  #strat-1         { order: 4; }
+  #downstream-1    { order: 5; }
+  #strat-2         { order: 6; }
+  #downstream-2    { order: 7; }
+
+  /* Downstream nodes — override .ng-ds-uni/met desktop absolute coords */
+  .ng-ds-uni,
+  .ng-ds-met {
+    position: relative;
+    left: auto;
+    right: auto;
+    top: auto;
+    bottom: auto;
+    transform: none;
+  }
+  /* Visual hint: downstream cards are CONSEQUENCES of their strategy, so
+     inset them slightly and make them a touch smaller/subtler — reads as
+     "this is where that strategy's liquidity lives." */
+  .ng-node-downstream .ng-ds-inner {
+    width: min(220px, 88%);
+    margin-left: 2rem; /* indent to show hierarchy */
+    opacity: 0.92;
+  }
+
+  /* Card sizing — comfortable mobile widths */
   .strategy-card-inner {
-    width: 160px;
-    padding: 0.6rem 0.7rem;
+    width: min(260px, 100%);
+    padding: 0.7rem 0.85rem;
   }
   .strat-pct { font-size: 1.1rem; }
-  .strat-role { font-size: 8px; max-width: 160px; }
-  .ng-node-inner { padding: 0.5rem 0.7rem; gap: 0.5rem; }
-  .ng-node-icon img { width: 28px; height: 28px; }
-  .ng-node-title { font-size: 0.75rem; }
-  .ng-hub-label { font-size: 8px; }
+  .strat-role { font-size: 10px; max-width: 100%; }
+  .ng-node-inner { padding: 0.55rem 0.85rem; gap: 0.55rem; }
+  .ng-node-icon img { width: 30px; height: 30px; }
+  .ng-node-title { font-size: 0.78rem; }
+  .ng-hub-label { font-size: 9px; }
   .ng-node-hub-inner { padding: 0.7rem 1rem; }
+  .ng-ds-inner {
+    width: min(240px, 100%);
+  }
 
   /* Morph zone */
   .morph-zone {
@@ -3483,14 +3899,20 @@ body {
   opacity: 0; /* JS controls reveal */
 }
 
-/* Center divider */
+/* Center divider — widened to 150px so the "ERC-4626 VAULT" label (130px)
+   fits WITHIN the container rather than overflowing asymmetrically. The
+   container is a flex child so it naturally reserves horizontal space
+   between the two sides; pairing that with align-items: center gives us a
+   true visual centre-point between the tokens. */
 .dual-divider {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
+  text-align: center;
   gap: 8px;
   flex-shrink: 0;
-  width: 120px;
+  width: 150px;
   opacity: 0;
 }
 .dual-divider-line {
@@ -3644,15 +4066,51 @@ body {
     width: 82px;
     height: 82px;
   }
+  /* ── CCA node graph — mobile vertical reflow ──
+     Same approach as strategies: collapse the horizontal (token on right,
+     3 distribution cards on left) into a single vertical column:
+     ■AKITA share token (top) → Auction → Vesting → Liquidity Pool.
+     Hide the JS-drawn edge SVG since its coords target desktop layout.
+     Generous top padding so the stack doesn't kiss the header — gives the
+     chapter a proper breathing margin on phone viewports. */
   .cca-node-graph {
-    width: 320px;
-    height: 360px;
+    position: relative;
+    top: auto;
+    left: auto;
+    transform: none;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    padding: 13rem 0.75rem 1rem;
   }
-  .cca-strat-column {
-    left: 0;
+  .cca-node-graph .cca-edges-svg { display: none; }
+  .cca-nodes {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    height: auto;
   }
   .cca-ng-token {
-    right: 0;
+    position: relative;
+    right: auto;
+    left: auto;
+    top: auto;
+    transform: none;
+    order: -1; /* share token on top */
+  }
+  .cca-strat-column {
+    position: relative;
+    left: auto;
+    top: auto;
+    transform: none;
+    width: 100%;
+    align-items: center;
+    gap: 0.6rem;
+  }
+  .cca-strat-column .strategy-card-inner {
+    width: min(280px, 100%);
   }
   .cca-summary {
     font-size: 0.95rem;
@@ -3741,11 +4199,9 @@ body {
   .dual-branch { min-width: 128px; }
   .dual-side { gap: 10px; }
 
-  /* CCA — node graph and strat cards need to sit comfortably at 320vw.
-     The scene-pin JS scale (0.74) already shrinks everything; these sizes
-     keep the pre-scale layout inside its container, avoiding absolute-pos
-     children poking out from under .scene-pin's transform-origin. */
-  .cca-node-graph { width: 288px; height: 340px; }
+  /* CCA — node graph now flows vertically (see main mobile block above).
+     Previous fixed 288×340px override removed; natural flow + flex-column
+     handles sizing inside scene-pin's 0.74 transform-origin scale. */
 
   /* Token detail text blocks sit below each token image and span ~170px.
      At 320vw the left block's left edge bled past the viewport by ~15px.
@@ -4086,6 +4542,81 @@ body {
 /* Vault cards share-img (■AKITA glyph) stays square */
 .vault-card-share-img {
   border-radius: 3px !important;
+}
+
+/* ───────────────────────────────────────────────────────────────────────
+   ■AKITA SHARE TOKEN — UNIFIED BLUE FRAME (user request 2026-04-22)
+   Every instance of a share token glyph (■AKITA, ■JESSE, ■GABRIELHAINES,
+   ■THENICKSHIRLEY) gets an elegant Base-blue frame so the share tokens
+   read as a distinct class — protocol-owned, canonical, identifiable.
+   The frame is a single 1.5px hairline in Base-blue with a soft outer
+   glow; intentionally restrained so it reads as "chrome" rather than
+   decoration. Double-border look via box-shadow inset keeps depth.
+   ─────────────────────────────────────────────────────────────────────── */
+
+/* Token chapter: right-side minted share pill */
+.share-img {
+  border: 1.5px solid rgba(0, 82, 255, 0.75) !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 82, 255, 0.12),
+    0 0 18px rgba(0, 82, 255, 0.22),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04) !important;
+}
+
+/* CCA chapter: share token inside .cca-share-token ring */
+.cca-share-img {
+  border: 1.5px solid rgba(0, 82, 255, 0.75) !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 82, 255, 0.12),
+    0 0 18px rgba(0, 82, 255, 0.22),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Node graph: tiny ■AKITA icon inside cca-ng-token / close card-share pills.
+   Use higher-specificity selector to beat the default .ng-node-icon img rule. */
+.ng-node-icon img[src*="/share/"] {
+  border: 1.5px solid rgba(0, 82, 255, 0.75) !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 82, 255, 0.12),
+    0 0 12px rgba(0, 82, 255, 0.25) !important;
+}
+
+/* Dual chapter: share-side node (■AKITA) */
+#dual-node-share .dual-node-img {
+  border: 1.5px solid rgba(0, 82, 255, 0.75) !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 82, 255, 0.12),
+    0 0 14px rgba(0, 82, 255, 0.22) !important;
+}
+
+/* Persistent pair: share float (■AKITA) */
+#float-share .float-token-img {
+  border: 1.5px solid rgba(0, 82, 255, 0.7) !important;
+  box-shadow: 0 0 14px rgba(0, 82, 255, 0.22) !important;
+}
+
+/* Hero ambient float: ■AKITA drifter */
+.hero-float-front-2 {
+  border: 1.5px solid rgba(0, 82, 255, 0.55) !important;
+  box-shadow: 0 0 16px rgba(0, 82, 255, 0.18) !important;
+}
+
+/* Vault cards share-img (4 tokens: ■AKITA, ■JESSE, ■GABRIELHAINES,
+   ■THENICKSHIRLEY) — all are share tokens so all get the frame */
+.vault-card-share-img {
+  border: 1.5px solid rgba(0, 82, 255, 0.72) !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 82, 255, 0.1),
+    0 0 16px rgba(0, 82, 255, 0.2),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.04) !important;
+}
+
+/* Close scene: ■AKITA card floater */
+.close-card-img {
+  border: 1.5px solid rgba(0, 82, 255, 0.72) !important;
+  box-shadow:
+    0 0 0 1px rgba(0, 82, 255, 0.1),
+    0 0 16px rgba(0, 82, 255, 0.2) !important;
 }
 
 

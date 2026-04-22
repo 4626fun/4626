@@ -9,6 +9,7 @@
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%2306080D'/%3E%3Crect x='11' y='11' width='10' height='10' rx='1' fill='%230052FF'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="./base.css">
   <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./beauty.css">
   <script type="importmap">
   {
     "imports": {
@@ -492,7 +493,7 @@
               <div class="ng-node ng-node-downstream ng-ds-met" id="downstream-2">
                 <div class="ng-ds-inner" data-strat="ds-meteora">
                   <img src="./assets/brand/meteora-v2.svg" alt="Meteora" class="ng-ds-logo">
-                  <span class="ng-ds-text">Alpha Vaults</span>
+                  <span class="ng-ds-text">Meteora</span>
                   <span class="strat-expand-icon ds-expand-icon">+</span>
                   <!-- Expandable detail panel -->
                   <div class="strat-detail-panel">
@@ -930,7 +931,7 @@
          stacked on the right, tied together by a thin vertical rule.
          No circles on avatars or share-images — rounded-rectangle framing
          with hairline borders for a premium editorial feel. -->
-    <section class="scroll-scene" id="ch-vaults" data-height="500">
+    <section class="scroll-scene" id="ch-vaults" data-height="420">
       <div class="scene-pin">
         <div class="vaults-container">
           <div class="vaults-header">
@@ -1029,16 +1030,12 @@
          The convergence is told through an editorial "column" composition:
          two token cards collapse into a central logotype plate bounded by
          thin horizontal rules, then dissolve into the brand close. -->
-    <section class="scroll-scene" id="ch-close" data-height="900">
+    <section class="scroll-scene" id="ch-close" data-height="950">
       <div class="scene-pin">
 
-        <!-- PHASE A: Chapter opener — minimal typographic overture -->
-        <div class="close-phase-a" id="close-phase-a">
-          <div class="close-overture" id="close-hero-share">
-            <span class="close-overture-kicker">Chapter VII</span>
-            <span class="close-overture-rule"></span>
-            <h2 class="close-overture-title"><em>One</em> vault.</h2>
-          </div>
+        <!-- PHASE A: Chapter opener — overture removed; crescendo carries the full sequence -->
+        <div class="close-phase-a" id="close-phase-a" aria-hidden="true">
+          <div class="close-overture" id="close-hero-share"></div>
         </div>
 
         <!-- PHASE B-C: Token cards with amount labels (rounded rectangles, no circles) -->
@@ -1113,22 +1110,93 @@
              sequence builds without any upward drift. The existing brand
              block fades under this layer so the finale owns the frame. -->
         <div class="close-crescendo" id="close-crescendo" aria-hidden="true">
+          <!-- Ambient light source behind the stack: a soft radial gradient
+               that gently intensifies at each beat arrival. JS only adjusts
+               opacity and scale, CSS owns the gradient and blur. -->
+          <div class="cres-aura" id="cres-aura" aria-hidden="true"></div>
           <div class="cres-stack">
+            <!-- L1 · One vault.
+                 Editorial opener. Wide tracking collapses inward on arrival,
+                 italic "One" in Newsreader cream, roman "vault." in steel. -->
             <div class="cres-line cres-line-1" id="cres-line-1">
-              <span class="cres-text"><em>One</em> vault.</span>
+              <span class="cres-text"><em>One</em> vault.</span>
             </div>
+
+            <!-- L2 · Two tokens.
+                 Horizontal split. "Two" italic left, "tokens." roman right.
+                 Sublabels arrive under the hold, each side describing its token. -->
             <div class="cres-line cres-line-2" id="cres-line-2">
-              <span class="cres-split cres-split-l"><em>Two</em> </span><span class="cres-split cres-split-r">tokens.</span>
+              <span class="cres-splits"><span class="cres-split cres-split-l"><em>Two</em></span><span class="cres-split cres-split-r">tokens.</span></span>
+              <div class="cres-sublabels" id="cres-sublabels" aria-hidden="true">
+                <span class="cres-sublabel cres-sublabel-l" id="cres-sublabel-l">
+                  <span class="cres-sublabel-mark" aria-hidden="true">■</span>
+                  <span class="cres-sublabel-name">AKITA</span>
+                  <span class="cres-sublabel-kind">Vault Share</span>
+                </span>
+                <span class="cres-sublabel-divider" id="cres-sublabel-divider" aria-hidden="true"></span>
+                <span class="cres-sublabel cres-sublabel-r" id="cres-sublabel-r">
+                  <span class="cres-sublabel-mark" aria-hidden="true">○</span>
+                  <span class="cres-sublabel-name">AKITA</span>
+                  <span class="cres-sublabel-kind">Underlying</span>
+                </span>
+              </div>
             </div>
+
+            <!-- L3 · (3, 3)
+                 Game-theoretic resolution. Mono for culture-era nod, but typeset
+                 large enough to feel monumental. Subtle depth recession (blur+scale)
+                 as it settles into the frame. -->
             <div class="cres-line cres-line-3" id="cres-line-3">
               <span class="cres-text cres-ticker">(3, 3)</span>
             </div>
+          </div><!-- /cres-stack -->
+
+          <!-- ─── FINALE POSTER (L3.5 + L4 + L5) ───
+               Breaks out of the grid-stage cell where L1–L3 crossfade.
+               Once the last three beats arrive, they COMPOSE into a
+               single settled page — nothing fades back out. This is
+               the ending: a real editorial poster you can read, not
+               a frame caught mid-scroll. -->
+          <div class="cres-finale-poster" id="cres-finale-poster" aria-hidden="true">
+
+            <!-- L3.5 · Earn together. (tagline that settles above the mark) -->
+            <div class="cres-line cres-line-earn" id="cres-line-earn">
+              <span class="cres-text cres-earn"><em>Earn together.</em></span>
+            </div>
+
+            <!-- L4 · 4626.fun (brand anchor — hairlines draw out, dot glows) -->
             <div class="cres-line cres-line-4" id="cres-line-4">
               <span class="cres-rule cres-rule-top" aria-hidden="true"></span>
+              <span class="cres-brand-mark" aria-hidden="true">
+                <span class="cres-brand-dot"></span>
+              </span>
               <span class="cres-text cres-brand">4626<em>.fun</em></span>
               <span class="cres-rule cres-rule-bot" aria-hidden="true"></span>
+              <span class="cres-brand-tag" aria-hidden="true">Creator vaults on Base</span>
             </div>
-          </div>
+
+            <!-- L5 · Partners + CTA + meta (action row, settles below) -->
+            <div class="cres-line cres-line-finale" id="cres-line-finale" aria-hidden="true">
+              <span class="cres-finale-label" aria-hidden="true">Built with</span>
+              <div class="cres-partners" id="cres-partners">
+                <img src="./assets/brand/Base_lockup_white.svg" alt="Base" class="cres-partner-logo">
+                <img src="./assets/brand/Zorb-3.svg" alt="Zora" class="cres-partner-logo">
+                <img src="./assets/brand/uniswap-official-pink.svg" alt="Uniswap" class="cres-partner-logo">
+                <img src="./assets/brand/layerzero-official.svg" alt="LayerZero" class="cres-partner-logo">
+                <img src="./assets/brand/chainlink-white-official.svg" alt="Chainlink" class="cres-partner-logo">
+                <img src="./assets/brand/solana-mark.svg" alt="Solana" class="cres-partner-logo">
+                <img src="./assets/brand/meteora-v2.svg" alt="Meteora" class="cres-partner-logo">
+                <img src="./assets/brand/ajna-official.svg" alt="Ajna" class="cres-partner-logo">
+                <img src="./assets/brand/charm.png" alt="Charm" class="cres-partner-logo">
+              </div>
+              <a href="https://4626.fun/waitlist" class="cres-cta-btn" id="cres-cta">
+                <span class="cres-cta-label">Join the Waitlist</span>
+                <span class="cres-cta-arrow" aria-hidden="true">→</span>
+              </a>
+              <span class="cres-finale-meta" aria-hidden="true">Early access · No spam · Unsubscribe anytime</span>
+            </div>
+
+          </div><!-- /cres-finale-poster -->
         </div>
       </div>
     </section>
@@ -1159,5 +1227,79 @@
   </button>
 
   <script type="module" src="./app.js"></script>
-</body>
+  <script src="./beauty.js" defer></script>
+<script data-pplx-inline-edit>
+(function(){
+  if(window===window.top)return;
+  function inlineAll(orig,clone){
+    if(orig.nodeType!==1)return;
+    try{
+      var cs=getComputedStyle(orig);
+      var t='';
+      for(var i=0;i<cs.length;i++){t+=cs[i]+':'+cs.getPropertyValue(cs[i])+';';}
+      clone.style.cssText=t;
+    }catch(e){}
+    var oc=orig.children,cc=clone.children;
+    for(var j=0;j<oc.length&&j<cc.length;j++){inlineAll(oc[j],cc[j]);}
+  }
+  function stripExternal(clone){
+    var imgs=clone.querySelectorAll('img');
+    for(var i=0;i<imgs.length;i++){
+      var s=imgs[i].getAttribute('src');
+      if(s&&!s.startsWith('data:'))imgs[i].removeAttribute('src');
+    }
+    var all=clone.querySelectorAll('*');
+    for(var i=0;i<all.length;i++){
+      var st=all[i].style.cssText;
+      if(st&&st.indexOf('url(')>=0){
+        all[i].style.cssText=st.replace(/url\(["']?(?!data:)[^)"']*["']?\)/gi,'none');
+      }
+    }
+  }
+  var scrollRaf=0;
+  function emitScroll(){
+    scrollRaf=0;
+    var x=window.scrollX||window.pageXOffset||0;
+    var y=window.scrollY||window.pageYOffset||0;
+    window.parent.postMessage({type:'INLINE_EDIT_SCROLL',scrollX:x,scrollY:y},'*');
+  }
+  window.addEventListener('scroll',function(){
+    if(scrollRaf)return;
+    scrollRaf=requestAnimationFrame(emitScroll);
+  },{passive:true,capture:true});
+  emitScroll();
+  window.addEventListener('message',function(e){
+    if(!e.data||e.data.type!=='INLINE_EDIT_CAPTURE_REQUEST')return;
+    var scrollX=window.scrollX||window.pageXOffset||0;
+    var scrollY=window.scrollY||window.pageYOffset||0;
+    var w=window.innerWidth,h=window.innerHeight;
+    try{
+      var clone=document.documentElement.cloneNode(true);
+      var rm=clone.querySelectorAll('script,link[rel="stylesheet"],style');
+      for(var i=0;i<rm.length;i++){rm[i].remove();}
+      inlineAll(document.documentElement,clone);
+      stripExternal(clone);
+      var html=new XMLSerializer().serializeToString(clone);
+      var svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'" height="'+h+'">'
+        +'<foreignObject width="100%" height="100%">'
+        +'<div xmlns="http://www.w3.org/1999/xhtml" style="width:'+w+'px;height:'+h+'px;overflow:hidden">'
+        +'<div style="transform:translate(-'+scrollX+'px,-'+scrollY+'px);transform-origin:top left">'
+        +html+'</div></div></foreignObject></svg>';
+      var svgUrl='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+      var img=new Image();
+      img.onload=function(){
+        var c=document.createElement('canvas');c.width=w;c.height=h;
+        c.getContext('2d').drawImage(img,0,0);
+        window.parent.postMessage({type:'INLINE_EDIT_SCREENSHOT_RESULT',dataUrl:c.toDataURL('image/png'),scrollX:scrollX,scrollY:scrollY},'*');
+      };
+      img.onerror=function(){
+        window.parent.postMessage({type:'INLINE_EDIT_SCREENSHOT_RESULT',dataUrl:null,scrollX:scrollX,scrollY:scrollY},'*');
+      };
+      img.src=svgUrl;
+    }catch(err){
+      window.parent.postMessage({type:'INLINE_EDIT_SCREENSHOT_RESULT',dataUrl:null,scrollX:scrollX,scrollY:scrollY},'*');
+    }
+  });
+})();
+</script></body>
 </html>

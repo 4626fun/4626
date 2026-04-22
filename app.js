@@ -1114,6 +1114,15 @@ function multiMapSmooth(progress, stops, values) {
 function easeOutCubic(t) { t = Math.max(0, Math.min(1, t)); return 1 - Math.pow(1 - t, 3); }
 function easeOutExpo(t)  { t = Math.max(0, Math.min(1, t)); return t === 1 ? 1 : 1 - Math.pow(2, -10 * t); }
 function easeInOutSine(t){ t = Math.max(0, Math.min(1, t)); return -(Math.cos(Math.PI * t) - 1) / 2; }
+// easeOutQuint → cubic-bezier(0.22, 1, 0.36, 1) equivalent. Longer, gentler
+// tail than easeOutCubic — the curve approaches its endpoint with a very
+// soft asymptote, which removes the perceptual "tick" at motion boundaries
+// that causes jitter on sub-pixel transforms and letter-spacing tweens.
+function easeOutQuint(t){ t = Math.max(0, Math.min(1, t)); return 1 - Math.pow(1 - t, 5); }
+// easeInOutCubic → symmetric smooth S-curve, softer than smoothstep at
+// both ends. Use for headline reveals that should glide in and glide out
+// without any linear feel.
+function easeInOutCubic(t){ t = Math.max(0, Math.min(1, t)); return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
 
 // Variant of multiMap that uses a custom easing fn between each stop pair.
 // Use `multiMapEased(p, stops, values, easeOutCubic)` for carries that
@@ -1133,6 +1142,8 @@ function multiMapEased(progress, stops, values, easeFn) {
 // Expose helpers so nested IIFEs can use them
 window.__easeOutCubic = easeOutCubic;
 window.__easeOutExpo = easeOutExpo;
+window.__easeOutQuint = easeOutQuint;
+window.__easeInOutCubic = easeInOutCubic;
 window.__multiMapEased = multiMapEased;
 
 
@@ -1985,14 +1996,28 @@ window.__Continuity = Continuity;
         const ngExitBlur  = multiMapEased(p, [0.90, 1.00], [0, 4], easeOutCubic);
         if (nodeGraph) {
           nodeGraph.style.opacity = nodeGraphOp;
-          nodeGraph.style.transform = `translateX(${ngPanX}px) scale(${ngExitScale})`;
-          nodeGraph.style.filter = ngExitBlur > 0.05 ? `blur(${ngExitBlur}px)` : '';
+          // Mobile: graph flows vertically in natural layout (see style.css
+          // @media max-width:768px). The desktop horizontal-pan transform
+          // would push the whole graph off-canvas, so gate transform writes.
+          if (window.innerWidth > 768) {
+            nodeGraph.style.transform = `translateX(${ngPanX}px) scale(${ngExitScale})`;
+            nodeGraph.style.filter = ngExitBlur > 0.05 ? `blur(${ngExitBlur}px)` : '';
+          } else {
+            nodeGraph.style.transform = '';
+            nodeGraph.style.filter = '';
+          }
         }
         // Deposit + hub
         if (ngNodeDeposit) ngNodeDeposit.style.opacity = ngBranchOp;
         if (engineHub) {
           engineHub.style.opacity = ehOp;
-          engineHub.style.transform = `translateY(-50%) scale(${0.92 + ehOp * 0.08})`;
+          // Desktop: hub is absolute/top:50% so translateY(-50%) centers it.
+          // Mobile: hub is in natural flow, so skip the -50% centering tx.
+          if (window.innerWidth > 768) {
+            engineHub.style.transform = `translateY(-50%) scale(${0.92 + ehOp * 0.08})`;
+          } else {
+            engineHub.style.transform = `scale(${0.92 + ehOp * 0.08})`;
+          }
         }
 
         strat0.style.opacity = s0Op;
@@ -2005,7 +2030,13 @@ window.__Continuity = Continuity;
 
         downstream1.style.opacity = ds1Op;
         downstream2.style.opacity = ds2Op;
-        downstream1.style.transform = `translateY(-50%) translateX(${(1 - ds1Op) * 12}px)`;
+        // Desktop: ds1 has top:38% + translateY(-50%) to center on its top anchor.
+        // Mobile: natural flow, skip vertical centering transform.
+        if (window.innerWidth > 768) {
+          downstream1.style.transform = `translateY(-50%) translateX(${(1 - ds1Op) * 12}px)`;
+        } else {
+          downstream1.style.transform = `translateX(${(1 - ds1Op) * 12}px)`;
+        }
         downstream2.style.transform = `translateX(${(1 - ds2Op) * 12}px)`;
 
         if (ngRowIdle) {
@@ -3342,7 +3373,9 @@ window.__Continuity = Continuity;
         // 0→3px) instead of drifting laterally. Reads as "the source/edge
         // map pulls back into the substrate while the cards widen."
         if (nodeGraph) {
-          if (p >= 0.82) {
+          // Mobile: cca graph is relative-positioned vertical stack; skip the
+          // desktop translate(-50%, -50%) recede transform to avoid layout shift.
+          if (window.innerWidth > 768 && p >= 0.82) {
             const graphRecedeT = easeOutCubic(Math.max(0, Math.min(1, (p - 0.82) / (0.96 - 0.82))));
             const ngScale = 1 - graphRecedeT * 0.12;       // 1 → 0.88
             const ngBlur  = graphRecedeT * 3;              // 0 → 3px
@@ -3503,6 +3536,9 @@ window.__Continuity = Continuity;
       const tr = toEl.getBoundingClientRect();
 
       let x1, y1, x2, y2, cx1, cx2;
+      // Tighter control points (0.30 vs previous 0.45) keep curves from
+      // drooping below the pills when endpoints are close in Y. This makes
+      // the arcs land flush against pill edges rather than hanging low.
       if (ep.dir === 'rtl') {
         // Token left side → branch right side
         x1 = fr.left - gRect.left;
@@ -3510,8 +3546,8 @@ window.__Continuity = Continuity;
         x2 = tr.right - gRect.left;
         y2 = tr.top + tr.height / 2 - gRect.top;
         const dx = Math.abs(x1 - x2);
-        cx1 = x1 - dx * 0.45;
-        cx2 = x2 + dx * 0.45;
+        cx1 = x1 - dx * 0.30;
+        cx2 = x2 + dx * 0.30;
       } else {
         // Token right side → branch left side
         x1 = fr.right - gRect.left;
@@ -3519,8 +3555,8 @@ window.__Continuity = Continuity;
         x2 = tr.left - gRect.left;
         y2 = tr.top + tr.height / 2 - gRect.top;
         const dx = Math.abs(x2 - x1);
-        cx1 = x1 + dx * 0.45;
-        cx2 = x2 - dx * 0.45;
+        cx1 = x1 + dx * 0.30;
+        cx2 = x2 - dx * 0.30;
       }
 
       const d = `M ${x1.toFixed(1)},${y1.toFixed(1)} C ${cx1.toFixed(1)},${y1.toFixed(1)} ${cx2.toFixed(1)},${y2.toFixed(1)} ${x2.toFixed(1)},${y2.toFixed(1)}`;
@@ -3637,8 +3673,13 @@ window.__Continuity = Continuity;
       // ── Phase 6: Token nodes fade as float-tokens take over ──
       const tokenHandoffOp = multiMapSmooth(p, [0.78, 0.88], [1, 0]);
 
-      // Compute edges once graph is visible
-      if (graphOp > 0.1 && !dualEdgesComputed) {
+      // Compute edges only when the graph has fully settled at scale 1 and
+      // nodes/branches are at their final positions. The previous logic fired
+      // once at graphOp > 0.1 (while the graph was still scaling in), which
+      // baked in incorrect endpoint coordinates and left paths dangling into
+      // empty space. We now recompute every frame while edges are visible so
+      // the curves track the live rects and any in-flight transforms.
+      if (edgesOp > 0.05 && graphScale > 0.995) {
         requestAnimationFrame(() => {
           computeDualEdgePaths();
           dualEdgesComputed = true;
@@ -3754,9 +3795,12 @@ window.__Continuity = Continuity;
 
         // Divider: settles DOWNWARD on exit (not up) and tightens
         // letter-spacing — locks to structure rather than drifting away.
+        // Note: no translateX(-50%) — the divider is laid out by flex between
+        // the two sides, so applying a 50% X-shift would offset it by half
+        // its own width to the left and misalign the ERC-4626 VAULT label.
         divider.style.opacity = divOp;
         if (divider) {
-          divider.style.transform = `translateX(-50%) translateY(${dividerSettleY}px)`;
+          divider.style.transform = `translateY(${dividerSettleY}px)`;
           divider.style.letterSpacing = `${0.04 + dividerLetterSpread}em`;
         }
 
@@ -3968,23 +4012,33 @@ window.__Continuity = Continuity;
             vaultsHeader.style.letterSpacing = '';
           } else {
             const dRects = Continuity.getBridge('dualExitRects');
-            const headerFlipRaw = Math.max(0, Math.min(1, (p - 0.02) / (0.22 - 0.02)));
-            const headerFlipT   = 1 - easeOutCubic(headerFlipRaw);
+            // POLISH (vaults-headline smoothing): widened the FLIP window
+            // 0.02–0.22 → 0.02–0.28 (6% longer tail) and swapped easeOutCubic
+            // for easeOutQuint — cubic-bezier(0.22, 1, 0.36, 1) equivalent.
+            // The quint curve has a much softer asymptote near t=1, which
+            // removes the sub-pixel "tick" at FLIP settle that read as
+            // jitter on the "Deposit. Earn together." headline. Letter-
+            // spacing tween now also runs on the quint curve so its
+            // resolution matches the transform, preventing the two
+            // channels from parting ways in the final 10% of the arrival.
+            const headerFlipRaw = Math.max(0, Math.min(1, (p - 0.02) / (0.28 - 0.02)));
+            const headerFlipT   = 1 - easeOutQuint(headerFlipRaw);
             if (dRects && dRects.divider && headerFlipT > 0.001) {
               const hr = vaultsHeader.getBoundingClientRect();
               const hcx = hr.left + hr.width / 2;
               const hcy = hr.top  + hr.height / 2;
-              const dx  = (dRects.divider.x - hcx) * headerFlipT;
-              const dy  = (dRects.divider.y - hcy) * headerFlipT;
-              // Slight letter-spacing loosen during FLIP (inverse of the
-              // divider's exit-phase tightening) so the header reads as the
-              // divider "releasing" into a title band.
+              // Quantize to 0.5px to eliminate sub-pixel shimmer that the
+              // browser's text rasterizer amplifies as perceptible jitter.
+              const dx  = Math.round((dRects.divider.x - hcx) * headerFlipT * 2) / 2;
+              const dy  = Math.round((dRects.divider.y - hcy) * headerFlipT * 2) / 2;
               const letterRelax = headerFlipT * 0.02;
-              vaultsHeader.style.transform = `translate(${dx}px, ${dy}px)`;
-              vaultsHeader.style.letterSpacing = `${letterRelax}em`;
+              vaultsHeader.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
+              vaultsHeader.style.letterSpacing = `${letterRelax.toFixed(4)}em`;
+              vaultsHeader.style.willChange = 'transform, letter-spacing';
             } else {
               vaultsHeader.style.transform = '';
               vaultsHeader.style.letterSpacing = '';
+              vaultsHeader.style.willChange = '';
             }
           }
         }
@@ -4159,16 +4213,34 @@ window.__Continuity = Continuity;
   const tag        = document.getElementById('close-tag');
   const closeLogo  = document.querySelector('.close-logo');
 
-  // Phase G: crescendo (four-line typographic finale)
+  // Phase G: crescendo (SIX-beat typographic finale)
+  // L1 One vault → L2 Two tokens + sublabels → L3 (3,3)
+  // → L3.5 Earn together → L4 4626.fun → L5 Partners + CTA
   const crescendo   = document.getElementById('close-crescendo');
+  const cresAura    = document.getElementById('cres-aura');
   const cresLine1   = document.getElementById('cres-line-1');
   const cresLine2   = document.getElementById('cres-line-2');
   const cresLine3   = document.getElementById('cres-line-3');
+  const cresLineEarn = document.getElementById('cres-line-earn');
   const cresLine4   = document.getElementById('cres-line-4');
+  const cresLineFinale = document.getElementById('cres-line-finale');
   const cresSplitL  = crescendo ? crescendo.querySelector('.cres-split-l') : null;
   const cresSplitR  = crescendo ? crescendo.querySelector('.cres-split-r') : null;
   const cresRuleT   = crescendo ? crescendo.querySelector('.cres-rule-top') : null;
   const cresRuleB   = crescendo ? crescendo.querySelector('.cres-rule-bot') : null;
+  // L2 sublabels (added for the paced Two-tokens beat)
+  const cresSubs    = document.getElementById('cres-sublabels');
+  const cresSubL    = document.getElementById('cres-sublabel-l');
+  const cresSubR    = document.getElementById('cres-sublabel-r');
+  const cresSubDiv  = document.getElementById('cres-sublabel-divider');
+  // Editorial chrome (brand mark/tag, finale meta) — collected once.
+  const cresBrandMark = crescendo ? crescendo.querySelector('.cres-brand-mark') : null;
+  const cresBrandTag  = crescendo ? crescendo.querySelector('.cres-brand-tag') : null;
+  const cresFinaleLabel = crescendo ? crescendo.querySelector('.cres-finale-label') : null;
+  const cresFinaleMeta  = crescendo ? crescendo.querySelector('.cres-finale-meta') : null;
+  // Finale poster wrapper — L3.5/L4/L5 live here, coexist permanently as a composed page.
+  const cresFinalePoster = document.getElementById('cres-finale-poster');
+  const cresStack = crescendo ? crescendo.querySelector('.cres-stack') : null;
 
   let closeSoundPlayed = false;
 
@@ -4343,9 +4415,9 @@ window.__Continuity = Continuity;
 
       // Audio
       AudioEngine.setDroneLevel(multiMap(p, [0, 0.06, 0.60, 1.0], [0.02, 0.06, 0.06, 0]));
-      // Crescendo chime fires as line 4 begins its structural lock-in.
-      if (p >= 0.770 && !closeSoundPlayed) { AudioEngine.playChime(2.0); closeSoundPlayed = true; }
-      if (p < 0.68) closeSoundPlayed = false;
+      // Crescendo chime fires as line 4 (brand lock-in) begins.
+      if (p >= 0.875 && !closeSoundPlayed) { AudioEngine.playChime(2.0); closeSoundPlayed = true; }
+      if (p < 0.80) closeSoundPlayed = false;
 
       // Scene holds at full opacity through the entire scrollable range so
       // the crescendo poster stays lit; the prior [0.92, 1] fade-out drove
@@ -4377,39 +4449,33 @@ window.__Continuity = Continuity;
       const overtureSpread = multiMapEased(p, [0.02, 0.14], [0.10, 0], easeOutCubic); // em
       const overtureBlur   = multiMapEased(p, [0.02, 0.12], [3, 0], easeOutCubic); // px
 
-      // ═══ PHASE B (p 0.13 → 0.28): Camera pans left, hero → card crossfade ═══
-      // Hero token transforms into the ■AKITA card with "50M minted"
-      const cardsOp     = multiMapSmooth(p, [0.13, 0.17], [0, 1]);
-      const shareCardOp = multiMapSmooth(p, [0.13, 0.18], [0, 1]);
-      // Share card starts center, pans to the LEFT half as the "camera pans left"
-      const shareCardX  = multiMapSmooth(p, [0.14, 0.30], [0, -vw * 0.20]);
-      const shareCardScale = multiMapSmooth(p, [0.14, 0.22], [0.85, 1]);
-
-      // ═══ PHASE C (p 0.26 → 0.42): Horizontal compact + AKITA slides in ═══
-      // ■AKITA card compresses to left, AKITA card enters from right
-      const underCardOp = multiMapSmooth(p, [0.26, 0.34], [0, 1]);
-      const underCardX  = multiMapSmooth(p, [0.26, 0.40], [vw * 0.40, vw * 0.20]);
-      const underCardScale = multiMapSmooth(p, [0.26, 0.34], [0.85, 1]);
-      // Both cards now side by side: share on left, underlying on right
-
-      // ═══ PHASE D (p 0.40 → 0.58): Cards converge toward vault center ═══
-      // Cards shrink and move toward the central vault position
-      const convergeProg  = multiMapSmooth(p, [0.40, 0.56], [0, 1]);
-      const cardsFadeOut  = multiMapSmooth(p, [0.52, 0.58], [1, 0]);
-      // Vault layer emerges as cards converge
-      const vaultLayerOp  = multiMapSmooth(p, [0.46, 0.52], [0, 1]);
-      const vaultNodeOp   = multiMapSmooth(p, [0.48, 0.54], [0, 1]);
-      // No more scale-overshoot. Plate eases in from a gentle 0.92 with a
-      // small translateY so it feels set-down rather than popped-in.
-      const vaultNodeScale= multiMapSmooth(p, [0.48, 0.58], [0.94, 1]);
-      const vaultNodeY    = multiMapSmooth(p, [0.48, 0.58], [14, 0]);
-      // Horizontal rules above/below the plate draw in as it settles.
-      const vaultRuleT    = multiMapSmooth(p, [0.50, 0.60], [0, 1]);
-      // Convergence marks (vertical hairlines replacing orbiting tokens):
-      // slide in from the outside and meet at the plate, then retire.
-      const markT         = multiMapSmooth(p, [0.52, 0.60, 0.66, 0.70], [0, 1, 1, 0]);
-      const markTravel    = multiMapSmooth(p, [0.52, 0.62], [80, 0]); // px inward
-      const vaultTokOp    = markT; // alias for old refs below (legacy var, unused now)
+      // ═══ PHASE B-E RETIRED (Restructure round) ═══
+      // The card dance (share card → underlying card → converge → vault
+      // plate collision) that originally spanned p 0.13 → 0.70 has been
+      // retired. The new six-beat crescendo (Phase G, p 0.38 → 0.905)
+      // now owns the entire arc: L2 shows ■AKITA + AKITA as sublabels.
+      // Holding these values at
+      // zero (opacity) or identity (transform) lets the existing write
+      // block below run without NaN/undefined references; the DOM is
+      // still present but invisible and non-competing so the crescendo
+      // owns the visual stage.
+      const cardsOp        = 0;
+      const shareCardOp    = 0;
+      const shareCardX     = 0;
+      const shareCardScale = 1;
+      const underCardOp    = 0;
+      const underCardX     = 0;
+      const underCardScale = 1;
+      const convergeProg   = 0;
+      const cardsFadeOut   = 0;
+      const vaultLayerOp   = 0;
+      const vaultNodeOp    = 0;
+      const vaultNodeScale = 1;
+      const vaultNodeY     = 0;
+      const vaultRuleT     = 0;
+      const markT          = 0;
+      const markTravel     = 0;
+      const vaultTokOp     = 0;
 
       // ═══ PHASE E (p 0.56 → 0.70): Convergence moment — restrained ═══
       // Replaced the dramatic "slam" with a gentler pulse and a soft
@@ -4420,18 +4486,13 @@ window.__Continuity = Continuity;
       // "arrival" cue; the extra pulse felt mechanical against an
       // otherwise held plate. Replaced with a hold-at-1 no-op so downstream
       // vaultNode transform math still works without touching it.
-      const collisionGlow    = multiMapSmooth(p, [0.56, 0.62, 0.68], [0, 1, 0]); // kept for particle trigger timing
-      const collisionParticle= multiMapSmooth(p, [0.60, 0.72], [0, 1]);
-      const vaultPulse       = 1; // pulse retired for restraint
-
-      if (collisionParticle > 0.01 && !particleSeeded) {
-        seedParticles(vw / 2, vh / 2);
-      }
-      if (collisionParticle < 0.01) particleSeeded = false;
-
-      // Vault fades after collision (pulled slightly earlier so Phase F /
-      // Phase G have room to play inside the scrollable progress range).
-      const vaultFadeOut = multiMapSmooth(p, [0.64, 0.70], [1, 0]);
+      // Collision/particle system retired along with Phase B-E. The
+      // crescendo now carries the entire arc so we don't seed particles.
+      const collisionGlow     = 0;
+      const collisionParticle = 0;
+      const vaultPulse        = 1;
+      const vaultFadeOut      = 0;
+      particleSeeded = false;
 
       // ═══ RING RADIATION — REMOVED (user: "no rings or circles, tacky") ═══
       // Legacy radiating ring system deleted to keep the close section
@@ -4443,61 +4504,94 @@ window.__Continuity = Continuity;
       ringOpacity = 0;
       stopRings();
 
-      // ═══ PHASE G (p 0.70 → 0.80): Crescendo overture — ONE LINE AT A TIME ═══
-      // Four-line typographic poster, revealed SEQUENTIALLY and then DISMISSED
-      // so Phase F (brand + CTA) can own the true finale. Every line shares
-      // the same center stage (via CSS grid-area); each fades in → holds →
-      // fades out before the next arrives. L4 ("4626.fun") lingers briefly
-      // with its hairline rules, then fades to reveal the brand close.
-      // Each beat uses a distinct motion family so adjacent reveals never
-      // share a dominant direction:
-      //   L1 "One vault."  inward compression (letter-spread tightens)
-      //   L2 "Two tokens." horizontal split    (halves meet at center)
-      //   L3 "(3, 3)"      depth recession     (forward from blur+scale)
-      //   L4 "4626.fun"    structural lock-in  (rules draw outward)
-      // BRISK PACING: each earlier beat spans ~0.020 of progress so the
-      // four lines land quickly without lingering. L4 holds a bit longer
-      // before handing off to the brand finale.
-      //   L1  in 0.700→0.708, hold, out 0.714→0.720
-      //   L2  in 0.718→0.726, hold, out 0.732→0.738
-      //   L3  in 0.736→0.744, hold, out 0.750→0.756
-      //   L4  in 0.756→0.770, hold, out 0.790→0.800 (clears for brand)
-      const cresContainerOp = multiMapSmooth(p, [0.695, 0.705, 0.795, 0.810], [0, 1, 1, 0]);
-      // Line 1 — in 0.700→0.708, hold, out 0.714→0.720.
-      const cres1Op    = multiMapSmooth(p, [0.700, 0.708, 0.714, 0.720], [0, 1, 1, 0]);
-      const cres1Prog  = multiMapSmooth(p, [0.700, 0.712], [0, 1]); // 0=wide, 1=tight
-      // Line 2 — in 0.718→0.726, hold, out 0.732→0.738.
-      const cres2Op    = multiMapSmooth(p, [0.718, 0.726, 0.732, 0.738], [0, 1, 1, 0]);
-      const cres2Prog  = multiMapSmooth(p, [0.718, 0.730], [0, 1]); // 0=apart, 1=met
-      // Line 3 — in 0.736→0.744, hold, out 0.750→0.756.
-      const cres3Op    = multiMapSmooth(p, [0.736, 0.744, 0.750, 0.756], [0, 1, 1, 0]);
-      const cres3Prog  = multiMapSmooth(p, [0.736, 0.748], [0, 1]); // 0=recessed, 1=forward
-      // Line 4 — in 0.756→0.770, HOLDS through 0.790, then fades out by 0.800
-      // so the brand close can own the final frame.
-      const cres4Op    = multiMapSmooth(p, [0.756, 0.770, 0.790, 0.800], [0, 1, 1, 0]);
-      const cresRuleW  = Math.max(0, mapRange(p, 0.760, 0.775, 0, 260));
-      const cresRuleOp = multiMapSmooth(p, [0.760, 0.775, 0.790, 0.800], [0, 1, 1, 0]);
+      // ═══ PHASE G (p 0.36 → 0.908): Crescendo finale — SIX PACED BEATS ═══
+      // L1.5 (ERC-4626 plate) and the Roman-numeral eyebrows + L3 gloss were
+      // removed for a cleaner, quieter cadence. Each beat now owns more of
+      // the stage; L1 holds longer as the sole opener, L2 moves earlier, and
+      // L3 keeps its deep hold as the climax before the finale poster.
+      //   L1   "One vault."              inward compression (letter-spread)
+      //   L2   "Two tokens." + sublabels  horizontal split + sublabel fade
+      //   L3   "(3, 3)"                  depth recession (scale + blur)
+      //   L3.5 "Earn together."          italic reveal-and-hold (in poster)
+      //   L4   "4626.fun"                structural lock-in (in poster, holds)
+      //   L5   Partners + CTA finale     ecosystem row + Join Waitlist (holds)
+      //
+      // PACING (fits into max reachable p ≈ 0.908):
+      //   Container opens  0.360 → 0.378
+      //   L1        in 0.378→0.410, hold 0.410→0.470, out 0.470→0.500
+      //   L2        in 0.510→0.540, hold 0.540→0.625, out 0.625→0.655
+      //     └ sublabels 0.555→0.595, fade with L2 at 0.625→0.650
+      //   L3        in 0.680→0.715, HOLD 0.715→0.820, out 0.820→0.845
+      //   Stack out 0.840→0.862 ; Poster in 0.858→0.885 (HOLDS to end)
+      //   L3.5 (in poster)  0.862→0.880 reveal-and-hold
+      //   L4   (in poster)  0.875→0.892 reveal-and-hold
+      //     └ rules draw 0.878→0.895, brand tag 0.886→0.900
+      //   L5   (in poster)  0.890→0.906 reveal-and-hold (final frame)
+      const cresContainerOp = multiMapSmooth(p, [0.360, 0.378], [0, 1]);
+      // Ambient aura opacity — gently rises with the container, breathes
+      // subtly to keep the page feeling "lit" (soft radial gradient behind
+      // every beat). Stays ≈0.85 through the stack, dips only if the stack
+      // is fully cleared (which it never is — L5 holds to end).
+      const cresAuraOp    = multiMapSmooth(p, [0.360, 0.405], [0, 0.85]);
+      const cresAuraScale = 0.88 + easeOutQuint(multiMapSmooth(p, [0.360, 0.440], [0, 1])) * 0.12;
 
-      // ═══ PHASE F (p 0.81 → end): Final brand close — TRUE FINALE ═══
-      // After the crescendo overture hands off, the brand block (partners /
-      // brand / hairline / tag) fades in and STAYS lit through to the end of
-      // the page. CTA follows so the call to action is the last thing the
-      // viewer reads. Page's max achievable scroll progress is ~0.90 due to
-      // the footer below the scroll-container, so everything must complete
-      // within that budget.
-      // finalOp drives the whole Phase F brand block (logo + partners + brand
-      // + rule + tag). It now fades IN AFTER the crescendo clears and holds
-      // to end — no fade-out, this is the true finale.
-      const finalOp    = multiMapSmooth(p, [0.810, 0.850], [0, 1]);
-      const partnersOp = multiMapSmooth(p, [0.815, 0.855], [0, 1]);
-      const brandOp    = multiMapSmooth(p, [0.820, 0.860], [0, 1]);
-      // Horizontal hairline: draws from 0 → 220px width under the brand.
-      const lineW      = Math.max(0, mapRange(p, 0.830, 0.865, 0, 220));
-      const lineOp     = multiMapSmooth(p, [0.830, 0.865], [0, 1]);
-      const tagOp      = multiMapSmooth(p, [0.835, 0.870], [0, 1]);
-      // CTA fades in last so it reads as the final prompt.
-      const ctaOp      = multiMapSmooth(p, [0.860, 0.900], [0, 1]);
-      const logoConverge = multiMapSmooth(p, [0.820, 0.880], [0, 1]);
+      // L1 — "One vault."  inward compression; deep hold as sole opener.
+      const cres1Op    = multiMapSmooth(p, [0.378, 0.410, 0.470, 0.500], [0, 1, 1, 0]);
+      const cres1Prog  = multiMapSmooth(p, [0.378, 0.425], [0, 1]); // 0=wide, 1=tight
+      // L2 — "Two tokens."  horizontal split with a meet-and-hold.
+      const cres2Op    = multiMapSmooth(p, [0.510, 0.540, 0.625, 0.655], [0, 1, 1, 0]);
+      const cres2Prog  = multiMapSmooth(p, [0.510, 0.555], [0, 1]); // 0=apart, 1=met
+      // Sublabels ("■AKITA · Vault Share" / "○AKITA · Underlying") fade in
+      // during L2's hold window and fade with L2.
+      const cres2SubOp = multiMapSmooth(p, [0.555, 0.595, 0.625, 0.650], [0, 1, 1, 0]);
+      // L3 — "(3, 3)"  depth recession; deep hold as the climax before the
+      // finale poster arrives. Gloss removed — the ticker stands alone.
+      const cres3Op    = multiMapSmooth(p, [0.680, 0.715, 0.820, 0.845], [0, 1, 1, 0]);
+      const cres3Prog  = multiMapSmooth(p, [0.680, 0.730], [0, 1]); // 0=recessed, 1=forward
+      // ── FINALE POSTER: L3.5 + L4 + L5 coexist permanently ──
+      // These three lines now live inside #cres-finale-poster (a sibling of
+      // .cres-stack). The stack (L1–L3) fades OUT 0.840→0.862 while the
+      // poster fades IN 0.858→0.885 and HOLDS to end. Inside the poster,
+      // L3.5/L4/L5 each reveal on their own micro-window and HOLD — no
+      // fade-out curve, so the final frame is a composed editorial page
+      // (Earn together. / 4626.fun wordmark + rules + brand tag / partners
+      // row + CTA + meta) instead of a caught crossfade.
+      const cresStackOp  = multiMapSmooth(p, [0.840, 0.862], [1, 0]);
+      const cresPosterOp = multiMapSmooth(p, [0.858, 0.885], [0, 1]);
+      // L3.5 — "Earn together."  Reveal-then-hold. Letter-spread still
+      // relaxes 0.06em → -0.02em over its progress window for life.
+      const cresEarnOp   = multiMapSmooth(p, [0.862, 0.880], [0, 1]);
+      const cresEarnProg = multiMapSmooth(p, [0.862, 0.880], [0, 1]);
+      // L4 — "4626.fun"  Structural lock-in; holds at full width forever.
+      const cres4Op    = multiMapSmooth(p, [0.875, 0.892], [0, 1]);
+      const cresRuleW  = Math.max(0, mapRange(p, 0.878, 0.895, 0, 260));
+      const cresRuleOp = multiMapSmooth(p, [0.878, 0.895], [0, 1]);
+      const cres4BrandTagIn = multiMapSmooth(p, [0.886, 0.900], [0, 1]);
+      // L5 — Partners + CTA finale; reveal 0.890→0.906, HOLD to end.
+      const cresFinaleOp = multiMapSmooth(p, [0.890, 0.906], [0, 1]);
+
+      // ═══ PHASE F (p 0.95 → end): Brand close — NOW UNDERNEATH L4 ═══
+      // The "4626.fun" wordmark and "Earn together." tag are now carried by
+      // the crescendo (L4 and L3 respectively), so the corresponding DOM
+      // elements (#close-brand, #close-tag, #close-line) are held at 0
+      // opacity throughout. Partners row + CTA fade in gently under L4 so
+      // the viewer can still act on the page — the final frame is:
+      //   (4626.fun wordmark)
+      //        — — —
+      //   Base · Zora · Uniswap · LayerZero · Chainlink · Solana · Meteora · Ajna · Charm
+      //   [ Join Waitlist ]
+      // Phase F container (close-final/partners/brand/cta/tag/line) is
+      // fully retired in this restructure round. The equivalent roles are
+      // now owned by the crescendo L4 (4626.fun) + L5 (partners + CTA).
+      // All held at 0 so they never compete with the new sequence.
+      const finalOp    = 0;
+      const partnersOp = 0;
+      const brandOp    = 0;
+      const lineW      = 0;
+      const lineOp     = 0;
+      const tagOp      = 0;
+      const ctaOp      = 0;
+      const logoConverge = 0;
 
       WriteBatch.write(() => {
         section.querySelector('.scene-pin').style.opacity = sceneOp;
@@ -4722,6 +4816,34 @@ window.__Continuity = Continuity;
         if (crescendo) {
           crescendo.style.opacity = cresContainerOp;
         }
+        // Ambient aura — soft radial gradient pulse behind the stack. Only
+        // opacity + scale are written (CSS owns the gradient, blur, mix-blend).
+        // The aura breathes via easeOutQuint on scale so the page feels "lit"
+        // without drawing attention to itself.
+        if (cresAura) {
+          cresAura.style.opacity = cresAuraOp;
+          if (!Motion.reduced) {
+            cresAura.style.transform = `translate(-50%, -50%) scale(${cresAuraScale.toFixed(4)})`;
+          } else {
+            cresAura.style.transform = '';
+          }
+        }
+        // ── Stack ↔ Poster handoff ──
+        // .cres-stack carries L1/L1.5/L2/L2.5/L3 (stage-cell crossfade). It
+        // fades out 0.840→0.862 to clear the field for the composed final
+        // poster. #cres-finale-poster (sibling of .cres-stack) carries
+        // L3.5/L4/L5 and fades in 0.858→0.885, HOLDING to end. The two
+        // curves overlap for 4ms of p so there's never a dark frame between.
+        if (cresStack) {
+          cresStack.style.opacity = cresStackOp;
+        }
+        if (cresFinalePoster) {
+          cresFinalePoster.style.opacity = cresPosterOp;
+          // Poster becomes interactive (CTA click, link hovers) only once
+          // it's substantially visible. Avoids stealing clicks during the
+          // handoff window when it's still mostly transparent.
+          cresFinalePoster.style.pointerEvents = cresPosterOp > 0.5 ? 'auto' : 'none';
+        }
         if (cresLine1) {
           cresLine1.style.opacity = cres1Op;
           if (!Motion.reduced) {
@@ -4753,6 +4875,25 @@ window.__Continuity = Continuity;
             cresSplitR.style.transform = '';
           }
         }
+        // Sublabels beneath L2 — fade in during L2 hold, lift up 6px → 0.
+        if (cresSubs) {
+          cresSubs.style.opacity = cres2SubOp;
+        }
+        if (cresSubL && !Motion.reduced) {
+          const ty = 6 * (1 - cres2SubOp);
+          cresSubL.style.transform = `translateY(${ty.toFixed(2)}px)`;
+        } else if (cresSubL) {
+          cresSubL.style.transform = '';
+        }
+        if (cresSubR && !Motion.reduced) {
+          const ty = 6 * (1 - cres2SubOp);
+          cresSubR.style.transform = `translateY(${ty.toFixed(2)}px)`;
+        } else if (cresSubR) {
+          cresSubR.style.transform = '';
+        }
+        if (cresSubDiv) {
+          cresSubDiv.style.opacity = (cres2SubOp * 0.6).toFixed(3);
+        }
         if (cresLine3) {
           cresLine3.style.opacity = cres3Op;
           if (!Motion.reduced) {
@@ -4766,9 +4907,48 @@ window.__Continuity = Continuity;
             cresLine3.style.filter = '';
           }
         }
+        // ── L3.5 — "Earn together." (italic crossfade + letter-spread relax) ──
+        if (cresLineEarn) {
+          cresLineEarn.style.opacity = cresEarnOp;
+          if (!Motion.reduced) {
+            // 0.06em (wide whisper) → -0.02em (settled); quint tail so the
+            // relax arrives softly, matching the italic's implied cadence.
+            const lsE = 0.06 - easeOutQuint(cresEarnProg) * 0.08;
+            cresLineEarn.style.letterSpacing = `${lsE.toFixed(4)}em`;
+          } else {
+            cresLineEarn.style.letterSpacing = '';
+          }
+        }
         if (cresLine4) {
           cresLine4.style.opacity = cres4Op;
         }
+        // Brand mark (glowing cream dot) fades with L4 parent; CSS handles
+        // the dot glow animation so JS only needs opacity inheritance.
+        if (cresBrandMark) {
+          cresBrandMark.style.opacity = cres4Op;
+        }
+        // Brand tag ("Creator vaults on Base") whispers in just after the
+        // wordmark lands, then fades with the parent on exit.
+        if (cresBrandTag) {
+          cresBrandTag.style.opacity = (cres4BrandTagIn * cres4Op).toFixed(3);
+        }
+        // ── L5 — Partners + CTA finale ──
+        if (cresLineFinale) {
+          cresLineFinale.style.opacity = cresFinaleOp;
+          if (!Motion.reduced) {
+            // Subtle lift 8px → 0 on arrival so the row "settles" beneath L4.
+            const ty = 8 * (1 - easeOutQuint(cresFinaleOp));
+            cresLineFinale.style.transform = `translateY(${ty.toFixed(2)}px)`;
+          } else {
+            cresLineFinale.style.transform = '';
+          }
+        }
+        // Finale label ("Built with") + meta ("Early access · No spam ·
+        // Unsubscribe anytime") inherit the L5 parent opacity. CSS owns
+        // their typography and color; JS just keeps them in sync with the
+        // row's arrival so they don't flicker.
+        if (cresFinaleLabel) cresFinaleLabel.style.opacity = cresFinaleOp;
+        if (cresFinaleMeta) cresFinaleMeta.style.opacity = cresFinaleOp;
         if (cresRuleT) {
           cresRuleT.style.opacity = cresRuleOp;
           if (!Motion.reduced) {
