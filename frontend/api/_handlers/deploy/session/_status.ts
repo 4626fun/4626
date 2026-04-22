@@ -801,6 +801,10 @@ function parseBigIntLike(value: unknown): bigint | null {
   return null
 }
 
+function isBytes32Hex(value: unknown): value is Hex {
+  return typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)
+}
+
 function normalizeAddress(value: unknown): Address | null {
   if (typeof value !== 'string' || !isAddress(value)) return null
   const addr = getAddress(value as Address)
@@ -1667,10 +1671,25 @@ async function ensureSolanaRouteReadyForPhase3(params: {
       }
       if (registerRes.ok && registerJson?.success) {
         const data = registerJson?.data ?? null
+        const registered = data?.registered === true
         const existingMintCompatible = data?.existingMintCompatible === true
         const depositEligible = data?.depositEligible === true
         const redeemEligible = data?.redeemEligible === true
-        if (!existingMintCompatible || !depositEligible || !redeemEligible) {
+        const assetPeerSet = data?.assetPeerSet === false ? false : true
+        const sharePeerSet = data?.sharePeerSet === false ? false : true
+        const meteoraAlphaVault = data?.meteoraAlphaVault
+        const hasMeteoraAlphaVault = isBytes32Hex(meteoraAlphaVault) && meteoraAlphaVault !== ZERO_BYTES32
+        const hasSolanaIxs = Array.isArray(data?.solanaIxs) && data.solanaIxs.length > 0
+        if (
+          !registered ||
+          !existingMintCompatible ||
+          !depositEligible ||
+          !redeemEligible ||
+          !assetPeerSet ||
+          !sharePeerSet ||
+          !hasMeteoraAlphaVault ||
+          !hasSolanaIxs
+        ) {
           const blockersRaw = data?.mintCompatibility?.blockers
           const blockers =
             Array.isArray(blockersRaw) && blockersRaw.length > 0
@@ -1679,10 +1698,15 @@ async function ensureSolanaRouteReadyForPhase3(params: {
           return {
             ok: false,
             failure:
-              `${origin}${routePath} (ovault eligibility): ` +
+              `${origin}${routePath} (ovault readiness): ` +
+              `registered=${String(data?.registered)} ` +
               `existingMintCompatible=${String(data?.existingMintCompatible)} ` +
               `depositEligible=${String(data?.depositEligible)} ` +
-              `redeemEligible=${String(data?.redeemEligible)}` +
+              `redeemEligible=${String(data?.redeemEligible)} ` +
+              `assetPeerSet=${String(data?.assetPeerSet)} ` +
+              `sharePeerSet=${String(data?.sharePeerSet)} ` +
+              `meteoraAlphaVault=${String(data?.meteoraAlphaVault ?? '')} ` +
+              `solanaIxs=${Array.isArray(data?.solanaIxs) ? String(data.solanaIxs.length) : '0'}` +
               (blockers ? ` blockers=${blockers}` : ''),
             ovault: null,
           }
@@ -1694,8 +1718,8 @@ async function ensureSolanaRouteReadyForPhase3(params: {
             existingMintCompatible,
             depositEligible,
             redeemEligible,
-            assetPeerSet: data?.assetPeerSet === false ? false : true,
-            sharePeerSet: data?.sharePeerSet === false ? false : true,
+            assetPeerSet,
+            sharePeerSet,
             meshStep: 'ovault_mesh_confirmed',
           },
         }

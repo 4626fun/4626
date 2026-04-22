@@ -397,6 +397,10 @@ type DeploySessionCreateRequest = {
   phase2FinalizeCalls: DeploySessionCall[]
   phase3Calls: DeploySessionCall[]
   phase4Calls: DeploySessionCall[]
+  solanaOvault?: {
+    enabled: boolean
+    assetMintOrigin?: 'existing' | 'wrapped'
+  }
   vanity?: DeploySessionVanityRequest
   version: string
 }
@@ -5423,6 +5427,11 @@ function DeployVaultBatcher({
           phase2FinalizeCalls: serializeSessionCalls(phase2FinalizeCalls),
           phase3Calls: serializeSessionCalls(phase3Calls),
           phase4Calls: serializeSessionCalls(phase4Calls),
+          solanaOvault: {
+            // Force deploy-session OVault mesh preflight for Solana strategy wiring.
+            enabled: true,
+            assetMintOrigin: 'existing',
+          },
           ...(sessionVanityRequest ? { vanity: sessionVanityRequest } : {}),
           version: deploymentVersion,
         }

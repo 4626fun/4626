@@ -814,6 +814,7 @@ export async function sendPreparedOwnerTx(params: {
         effectiveOwnerInstallIntent === 'customCoOwner' && !customCoOwnerSponsoredLane
       const ownerIndexLookupAddressForUserOp =
         selfAuthenticatedCanonicalSession &&
+        !customCoOwnerSponsoredLane &&
         typeof ownerIndexLookupAddress === 'string' &&
         isAddress(ownerIndexLookupAddress)
           ? ownerIndexLookupAddress

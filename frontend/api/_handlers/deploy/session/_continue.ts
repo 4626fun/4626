@@ -94,6 +94,10 @@ function normalizeErrorMessage(error: unknown): string {
   return 'continue_failed'
 }
 
+function isBytes32Hex(value: unknown): value is Hex {
+  return typeof value === 'string' && /^0x[0-9a-fA-F]{64}$/.test(value)
+}
+
 function truncateMessage(input: string, max = 420): string {
   const msg = String(input ?? '')
   return msg.length > max ? `${msg.slice(0, max)}...` : msg
@@ -460,21 +464,40 @@ async function ensureOvaultPreflight(params: {
     const json = rawBody ? (JSON.parse(rawBody) as ApiEnvelope<any>) : null
     if (response.ok && json?.success) {
       const data = json.data ?? {}
+      const registered = data?.registered === true
       const existingMintCompatible = data?.existingMintCompatible === true
       const depositEligible = data?.depositEligible === true
       const redeemEligible = data?.redeemEligible === true
-      if (!existingMintCompatible || !depositEligible || !redeemEligible) {
+      const meteoraAlphaVault = data?.meteoraAlphaVault
+      const hasMeteoraAlphaVault = isBytes32Hex(meteoraAlphaVault) && meteoraAlphaVault !== ZERO_BYTES32
+      const hasSolanaIxs = Array.isArray(data?.solanaIxs) && data.solanaIxs.length > 0
+      const assetPeerSet = data?.assetPeerSet === false ? false : true
+      const sharePeerSet = data?.sharePeerSet === false ? false : true
+
+      if (
+        !registered ||
+        !existingMintCompatible ||
+        !depositEligible ||
+        !redeemEligible ||
+        !assetPeerSet ||
+        !sharePeerSet ||
+        !hasMeteoraAlphaVault ||
+        !hasSolanaIxs
+      ) {
         failures.push(
-          `${routePath} ovault eligibility: existingMintCompatible=${String(data?.existingMintCompatible)} ` +
-            `depositEligible=${String(data?.depositEligible)} redeemEligible=${String(data?.redeemEligible)}`,
+          `${routePath} ovault readiness: registered=${String(data?.registered)} ` +
+            `existingMintCompatible=${String(data?.existingMintCompatible)} ` +
+            `depositEligible=${String(data?.depositEligible)} redeemEligible=${String(data?.redeemEligible)} ` +
+            `assetPeerSet=${String(data?.assetPeerSet)} sharePeerSet=${String(data?.sharePeerSet)} ` +
+            `meteoraAlphaVault=${String(data?.meteoraAlphaVault ?? '')} solanaIxs=${Array.isArray(data?.solanaIxs) ? String(data.solanaIxs.length) : '0'}`,
         )
       } else {
         return {
           existingMintCompatible,
           depositEligible,
           redeemEligible,
-          assetPeerSet: data?.assetPeerSet === false ? false : true,
-          sharePeerSet: data?.sharePeerSet === false ? false : true,
+          assetPeerSet,
+          sharePeerSet,
           meshStep: 'ovault_mesh_confirmed',
         }
       }
