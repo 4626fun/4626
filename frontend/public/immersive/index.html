@@ -3,12 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <base href="/immersive/">
+  <!-- base href removed for standalone deploy compatibility -->
   <title>4626.fun — Deposit. Earn Together.</title>
   <meta name="description" content="ERC-4626 creator coin vaults. Deposit a creator coin, receive vault shares, earn fees pro rata. Redeemable anytime.">
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='4' fill='%2306080D'/%3E%3Crect x='11' y='11' width='10' height='10' rx='1' fill='%230052FF'/%3E%3C/svg%3E">
   <link rel="stylesheet" href="./base.css">
   <link rel="stylesheet" href="./style.css">
+  <link rel="stylesheet" href="./refinement.css">
   <script type="importmap">
   {
     "imports": {
@@ -35,6 +36,18 @@
   <div class="ambient-orb orb-1"></div>
   <div class="ambient-orb orb-2"></div>
   <div class="ambient-orb orb-3"></div>
+
+  <!-- Persistent floating token pair (spans dual overview → vaults → close) -->
+  <div class="float-tokens" id="float-tokens">
+    <div class="float-token" id="float-share">
+      <img src="./assets/tokens/share/akita-512.png" alt="■AKITA" class="float-token-img">
+      <span class="float-token-label">■AKITA</span>
+    </div>
+    <div class="float-token" id="float-underlying">
+      <img src="./assets/tokens/source/akita.webp" alt="AKITA" class="float-token-img">
+      <span class="float-token-label">AKITA</span>
+    </div>
+  </div>
 
   <!-- Fixed Nav -->
   <nav class="nav" id="main-nav">
@@ -67,15 +80,19 @@
 
         <!-- Hero headline container with stagger reveal -->
         <div class="hero-content" id="hero-content">
-          <div class="section-label hero-section-label" id="hero-label">ERC-4626 Creator Vaults on Base</div>
+          <div class="ed-kicker hero-section-label" id="hero-label">
+            <span class="ed-kicker-num">I</span>
+            <span class="ed-kicker-rule"></span>
+            <span class="ed-kicker-label">ERC-4626 Creator Vaults on Base</span>
+          </div>
 
           <h1 class="hero-headline" id="hero-headline">
             <span class="hero-word" data-word="0">
               <span class="hero-char">D</span><span class="hero-char">E</span><span class="hero-char">P</span><span class="hero-char">O</span><span class="hero-char">S</span><span class="hero-char">I</span><span class="hero-char">T</span><span class="hero-char hero-char-dot">.</span>
             </span>
             <br>
-            <span class="hero-word" data-word="1">
-              <span class="hero-char">E</span><span class="hero-char">A</span><span class="hero-char">R</span><span class="hero-char">N</span>
+            <span class="hero-word hero-word-serif" data-word="1">
+              <span class="hero-char">E</span><span class="hero-char">a</span><span class="hero-char">r</span><span class="hero-char">n</span>
             </span>
             <br>
             <span class="hero-word" data-word="2">
@@ -146,8 +163,15 @@
           <div class="token-line-glow"></div>
         </div>
 
+        <!-- Chapter kicker (editorial) -->
+        <div class="ed-kicker token-section-label" id="token-label">
+          <span class="ed-kicker-num">II</span>
+          <span class="ed-kicker-rule"></span>
+          <span class="ed-kicker-label">Tokenize</span>
+        </div>
+
         <!-- Top copy -->
-        <p class="token-top-copy" id="token-top-copy">Deposit a creator coin into the vault.</p>
+        <p class="token-top-copy" id="token-top-copy">Deposit a creator coin <em>into</em> the vault.</p>
 
         <!-- "You" / "Vault" side labels -->
         <span class="side-label side-label-left" id="label-you">You</span>
@@ -167,23 +191,48 @@
               </div>
             </div>
             <span class="token-label" id="coin-label">AKITA</span>
-            <!-- Right detail panel -->
+            <!-- Right detail panel (dual-view phase) -->
             <div class="token-detail" id="coin-detail">
               <div class="detail-section-label" style="color: var(--color-text-muted);">Deposited<br>Asset</div>
               <p class="detail-amount">1 AKITA</p>
               <p class="detail-desc">Deposited in vault. Earning fees.</p>
             </div>
-          </div>
+            <!-- Initial-deposit detail card (nested under coin, strategy-card style).
+                 Clickable: toggles .strat-expanded to reveal the expanded detail rows. -->
+            <div class="coin-deposit-panel" id="deposit-info" data-strat="deposit" role="button" tabindex="0" aria-expanded="false">
+              <div class="coin-deposit-divider"></div>
+              <div class="coin-deposit-header">
+                <p class="deposit-label">Initial Deposit</p>
+                <span class="strat-expand-icon coin-deposit-expand">+</span>
+              </div>
+              <p class="deposit-amount">50,000,000</p>
+              <p class="deposit-unit">AKITA</p>
+              <p class="deposit-desc">Creators deploy 50M of their own token to initiate the vault. These tokens are deployed into strategies, while 10% stays idle as a buffer.</p>
+              <p class="split-deployed" id="split-info">90% deployed</p>
 
-          <!-- Deposit data — centered glass overlay (positioned in scene, not inside token-coin) -->
-          <div class="deposit-info" id="deposit-info">
-            <p class="deposit-label">Initial Deposit</p>
-            <p class="deposit-amount">50,000,000</p>
-            <p class="deposit-unit">AKITA</p>
-            <p class="deposit-desc">Creators deploy 50M of their own token to initiate the vault. These tokens are deployed into strategies, while 10% stays idle as a buffer.</p>
-          </div>
-          <div class="split-info" id="split-info">
-            <p class="split-deployed">90% deployed</p>
+              <!-- Expandable detail panel (grid-row collapse trick, same as strategies) -->
+              <div class="strat-detail-panel coin-deposit-detail">
+                <div class="strat-detail-wrap">
+                  <div class="strat-detail-divider"></div>
+                  <div class="strat-detail-row">
+                    <span class="strat-detail-label">Asset</span>
+                    <span class="strat-detail-value">AKITA — creator coin issued by the creator</span>
+                  </div>
+                  <div class="strat-detail-row">
+                    <span class="strat-detail-label">Allocation</span>
+                    <span class="strat-detail-value">90% deployed across Ajna, Charm, Solana — 30% each</span>
+                  </div>
+                  <div class="strat-detail-row">
+                    <span class="strat-detail-label">Idle Buffer</span>
+                    <span class="strat-detail-value">5,000,000 AKITA (10%) retained for instant redemptions</span>
+                  </div>
+                  <div class="strat-detail-row">
+                    <span class="strat-detail-label">Source</span>
+                    <span class="strat-detail-value">Creator’s own supply — one-time vault genesis deposit</span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
           <!-- MORPH ZONE: WebGL particle morph overlay (positioned between coin & share) -->
           <div class="morph-zone" id="morph-zone">
@@ -209,126 +258,277 @@
             </div>
           </div>
 
-          <!-- ═══ Horizontal Node Graph (revealed by panX) ═══ -->
+          <!-- ═══ Allocation Engine — Figma-style Node Graph ═══ -->
           <div class="node-graph" id="node-graph">
-            <!-- Shared SVG defs for pulse glow -->
-            <svg class="ng-defs" width="0" height="0">
+
+            <!-- Dynamic SVG edges layer — paths computed by JS from actual card positions -->
+            <svg class="ng-edges-svg" id="ng-edges-svg" preserveAspectRatio="none">
               <defs>
-                <filter id="ngGlow" x="-200%" y="-200%" width="500%" height="500%">
-                  <feGaussianBlur in="SourceGraphic" stdDeviation="3" result="blur"/>
-                  <feMerge><feMergeNode in="blur"/><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                <filter id="edgeGlow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/>
+                  <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
                 </filter>
               </defs>
+              <!-- Base edge lines (computed dynamically) -->
+              <path id="edge-deposit-hub" class="ng-edge-line" />
+              <path id="edge-hub-ajna" class="ng-edge-line" />
+              <path id="edge-hub-charm" class="ng-edge-line" />
+              <path id="edge-hub-solana" class="ng-edge-line" />
+              <path id="edge-charm-uni" class="ng-edge-line ng-edge-downstream" />
+              <path id="edge-sol-met" class="ng-edge-line ng-edge-downstream" />
+              <path id="edge-deposit-idle" class="ng-edge-line ng-edge-idle" />
+              <!-- Animated dash overlays (flow along same paths) -->
+              <path id="dash-deposit-hub" class="ng-dash-flow" />
+              <path id="dash-hub-ajna" class="ng-dash-flow ng-dash-delay-1" />
+              <path id="dash-hub-charm" class="ng-dash-flow ng-dash-delay-2" />
+              <path id="dash-hub-solana" class="ng-dash-flow ng-dash-delay-3" />
+              <path id="dash-charm-uni" class="ng-dash-flow ng-dash-delay-4" />
+              <path id="dash-sol-met" class="ng-dash-flow ng-dash-delay-5" />
+              <path id="dash-deposit-idle" class="ng-dash-flow ng-dash-idle" />
             </svg>
 
-            <!-- Branches from token-coin (the existing AKITA avatar to the left) -->
-            <canvas id="ng-pulse-canvas" class="ng-pulse-canvas"></canvas>
-            <div class="ng-body">
-              <!-- Branch SVG — single origin splitting to engine (up) and idle (down) -->
-              <svg class="ng-branch-svg" id="ng-branch-svg" viewBox="0 -35 100 150" preserveAspectRatio="none">
-                <!-- Engine branch — originates from token logo right edge -->
-                <path d="M 1,-29 C 10,-29 16,-10 28,8 C 40,26 60,34 75,34 C 85,34 92,34 100,34" stroke="rgba(0,82,255,0.18)" stroke-width="1" fill="none"/>
-                <!-- Idle branch — originates from token logo right edge -->
-                <path d="M 1,-29 C 10,-29 18,0 30,28 C 44,60 60,82 75,92 C 85,100 92,104 100,104" stroke="rgba(138,143,152,0.13)" stroke-width="0.8" fill="none"/>
-              </svg>
+            <!-- Node cards layer — absolutely positioned on the SVG coordinate grid -->
+            <div class="ng-nodes">
 
-              <!-- Right side: engine row + idle row stacked -->
-              <div class="ng-right-stack">
-                <!-- ROW 1: Engine path — Engine Hub → [Ajna, Charm, Solana] → [Uniswap, Meteora] -->
-                <div class="ng-row ng-row-engine" id="ng-row-engine">
-                  <!-- Col 1: Engine Hub -->
-                  <div class="ng-col ng-col-hub">
-                    <div class="engine-hub" id="engine-hub">
-                      <div class="engine-icon">
-                        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5">
-                          <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
-                        </svg>
-                      </div>
-                      <p class="engine-label">Allocation</p>
-                      <p class="engine-label">Engine</p>
-                      <p class="engine-hub-deploy">90% deployed</p>
-                      <p class="engine-hub-amount">45,000,000</p>
-                      <p class="engine-sub">Routes by weight</p>
+              <!-- Deposit node (left anchor) — this is the landing site for the
+                   deposit-info card's morph. Uses the AKITA creator coin (circle)
+                   so the “same component” reads as continuous across the transition.
+                   Clickable like the strategy cards: toggle .strat-expanded to reveal
+                   the full detail panel (Asset / Allocation / Idle Buffer / Source). -->
+              <div class="ng-node ng-node-deposit" id="ng-node-deposit">
+                <div class="ng-node-inner ng-node-accent" data-strat="deposit-pill" role="button" tabindex="0" aria-expanded="false">
+                  <div class="ng-node-compact">
+                    <div class="ng-node-icon ng-node-icon-coin">
+                      <img src="./assets/tokens/source/akita.webp" alt="AKITA" width="40" height="40">
                     </div>
+                    <div class="ng-node-meta">
+                      <span class="ng-node-title">50,000,000</span>
+                      <span class="ng-node-sub">AKITA deposited</span>
+                    </div>
+                    <span class="strat-expand-icon ng-node-expand">+</span>
                   </div>
-                  <!-- Edge: engine → strategies (organic fan-out with cubic bezier curves) -->
-                  <svg class="ng-edge ng-edge-fan" id="ng-edge-fan" viewBox="0 0 60 100" preserveAspectRatio="none">
-                    <!-- Ajna — base -->
-                    <path d="M 0,50 C 16,50 18,16 34,16 C 46,16 54,16 60,16" stroke="rgba(0,82,255,0.16)" stroke-width="1" fill="none"/>
-                    <!-- Charm — base -->
-                    <path d="M 0,50 C 14,50 22,50 32,50 C 42,50 48,50 60,50" stroke="rgba(0,82,255,0.16)" stroke-width="1" fill="none"/>
-                    <!-- Solana — base -->
-                    <path d="M 0,50 C 16,50 18,84 34,84 C 46,84 54,84 60,84" stroke="rgba(0,82,255,0.16)" stroke-width="1" fill="none"/>
-                  </svg>
-                  <!-- Col 2: Strategy nodes -->
-                  <div class="ng-col ng-col-strats">
-                    <!-- Ajna -->
-                    <div class="ng-strat-node" id="strat-0">
-                      <div class="strategy-card-inner">
-                        <div class="strat-card-top">
-                          <img src="./assets/brand/ajna-official.svg" alt="Ajna" class="strat-icon-img">
-                          <span class="strat-name">Ajna Protocol</span>
-                        </div>
-                        <p class="strat-pct">30%</p>
-                        <p class="strat-amount">15,000,000 <span class="strat-unit">AKITA</span></p>
-                        <p class="strat-role">Allocated to permissionless lending pools for interest-bearing yield on idle collateral.</p>
+                  <!-- Expandable detail panel (same pattern as strategies) -->
+                  <div class="strat-detail-panel ng-node-detail">
+                    <div class="strat-detail-wrap">
+                      <div class="strat-detail-divider"></div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Asset</span>
+                        <span class="strat-detail-value">AKITA — creator coin issued by the creator</span>
                       </div>
-                    </div>
-                    <!-- Charm + downstream -->
-                    <div class="ng-strat-node" id="strat-1">
-                      <div class="strategy-card-inner">
-                        <div class="strat-card-top">
-                          <img src="./assets/tokens/strategy/charm.png" alt="Charm" class="strat-icon-img">
-                          <span class="strat-name">Charm Finance</span>
-                        </div>
-                        <p class="strat-pct">30%</p>
-                        <p class="strat-amount">15,000,000 <span class="strat-unit">AKITA</span></p>
-                        <p class="strat-role">Assigned to the creator on a 1-year 365-day vesting schedule of irrevocable liquidity.</p>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Allocation</span>
+                        <span class="strat-detail-value">90% deployed across Ajna, Charm, Solana — 30% each</span>
                       </div>
-                      <div class="ng-downstream" id="downstream-1">
-                        <svg class="ng-ds-edge" viewBox="0 0 30 16" preserveAspectRatio="none">
-                          <path d="M 0,8 C 8,8 10,4 16,4 C 22,4 24,8 30,8" stroke="rgba(0,82,255,0.14)" stroke-width="0.8" fill="none"/>
-                        </svg>
-                        <div class="downstream-box">
-                          <img src="./assets/brand/uniswap-official-pink.svg" alt="Uniswap" class="downstream-logo">
-                          Uniswap V3 Creator/USDC
-                        </div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Idle Buffer</span>
+                        <span class="strat-detail-value">5,000,000 AKITA (10%) retained for instant redemptions</span>
                       </div>
-                    </div>
-                    <!-- Solana + downstream -->
-                    <div class="ng-strat-node" id="strat-2">
-                      <div class="strategy-card-inner">
-                        <div class="strat-card-top">
-                          <img src="./assets/brand/solana-mark.svg" alt="Solana" class="strat-icon-img">
-                          <span class="strat-name">Solana Ecosystem</span>
-                        </div>
-                        <p class="strat-pct">30%</p>
-                        <p class="strat-amount">15,000,000 <span class="strat-unit">AKITA</span></p>
-                        <p class="strat-role">Bridged to Solana for concentrated liquidity via Meteora Alpha Vaults.</p>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Source</span>
+                        <span class="strat-detail-value">Creator’s own supply — one-time vault genesis deposit</span>
                       </div>
-                      <div class="ng-downstream" id="downstream-2">
-                        <svg class="ng-ds-edge" viewBox="0 0 30 16" preserveAspectRatio="none">
-                          <path d="M 0,8 C 8,8 10,12 16,12 C 22,12 24,8 30,8" stroke="rgba(0,82,255,0.14)" stroke-width="0.8" fill="none"/>
-                        </svg>
-                        <div class="downstream-box">
-                          <img src="./assets/brand/meteora-v2.svg" alt="Meteora" class="downstream-logo">
-                          Meteora Alpha Vaults
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <!-- ROW 2: Idle path -->
-                <div class="ng-row ng-row-idle" id="ng-row-idle">
-                  <div class="ng-col ng-col-idle">
-                    <div class="idle-node" id="idle-badge">
-                      <p class="idle-label">10% idle</p>
-                      <p class="idle-amount">5,000,000</p>
                     </div>
                   </div>
                 </div>
               </div>
+
+              <!-- Engine Hub (center) -->
+              <div class="ng-node ng-node-hub" id="engine-hub">
+                <div class="ng-node-inner ng-node-hub-inner">
+                  <div class="ng-hub-icon">
+                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5">
+                      <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/>
+                    </svg>
+                  </div>
+                  <p class="ng-hub-label">Allocation Engine</p>
+                  <p class="ng-hub-deploy">90% deployed</p>
+                  <p class="ng-hub-amount">45,000,000</p>
+                </div>
+              </div>
+
+              <!-- Strategy column — flex container for vertical stacking -->
+              <div class="ng-strat-column">
+              <!-- Strategy: Ajna -->
+              <div class="ng-node ng-node-strat ng-strat-ajna" id="strat-0">
+                <div class="strategy-card-inner" data-strat="ajna">
+                  <div class="strat-card-top">
+                    <img src="./assets/brand/ajna-official.svg" alt="Ajna" class="strat-icon-img">
+                    <span class="strat-name">Ajna Protocol</span>
+                    <span class="strat-expand-icon">+</span>
+                  </div>
+                  <p class="strat-pct">30%</p>
+                  <p class="strat-amount">15,000,000 <span class="strat-unit">AKITA</span></p>
+                  <p class="strat-role">Permissionless lending pools for interest-bearing yield.</p>
+                  <!-- Expandable detail panel -->
+                  <div class="strat-detail-panel">
+                    <div class="strat-detail-wrap">
+                      <div class="strat-detail-divider"></div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Mechanism</span>
+                        <span class="strat-detail-value">Supply AKITA into permissionless lending pools. Borrowers pay interest; lenders earn yield with no governance overhead.</span>
+                      </div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Risk</span>
+                        <span class="strat-detail-value strat-risk-low">Low</span>
+                      </div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Est. Yield</span>
+                        <span class="strat-detail-value strat-yield">4.2 – 7.8% APY</span>
+                      </div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Chain</span>
+                        <span class="strat-detail-value">Base L2</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Strategy: Charm -->
+              <div class="ng-node ng-node-strat ng-strat-charm" id="strat-1">
+                <div class="strategy-card-inner" data-strat="charm">
+                  <div class="strat-card-top">
+                    <img src="./assets/tokens/strategy/charm.png" alt="Charm" class="strat-icon-img">
+                    <span class="strat-name">Charm Finance</span>
+                    <span class="strat-expand-icon">+</span>
+                  </div>
+                  <p class="strat-pct">30%</p>
+                  <p class="strat-amount">15,000,000 <span class="strat-unit">AKITA</span></p>
+                  <p class="strat-role">Concentrated liquidity via Alpha Vaults on Uniswap V3.</p>
+                  <!-- Expandable detail panel -->
+                  <div class="strat-detail-panel">
+                    <div class="strat-detail-wrap">
+                      <div class="strat-detail-divider"></div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Mechanism</span>
+                        <span class="strat-detail-value">Automated concentrated liquidity management. Alpha Vaults rebalance positions around the active price on Uniswap V3.</span>
+                      </div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Risk</span>
+                        <span class="strat-detail-value strat-risk-med">Medium</span>
+                      </div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Est. Yield</span>
+                        <span class="strat-detail-value strat-yield">12.5 – 24.1% APY</span>
+                      </div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Chain</span>
+                        <span class="strat-detail-value">Base L2 (via Uniswap V3)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Strategy: Solana -->
+              <div class="ng-node ng-node-strat ng-strat-solana" id="strat-2">
+                <div class="strategy-card-inner" data-strat="solana">
+                  <div class="strat-card-top">
+                    <img src="./assets/brand/solana-mark.svg" alt="Solana" class="strat-icon-img">
+                    <span class="strat-name">Solana Ecosystem</span>
+                    <span class="strat-expand-icon">+</span>
+                  </div>
+                  <p class="strat-pct">30%</p>
+                  <p class="strat-amount">15,000,000 <span class="strat-unit">AKITA</span></p>
+                  <p class="strat-role">Bridged to Solana for Meteora Alpha Vault liquidity.</p>
+                  <!-- Expandable detail panel -->
+                  <div class="strat-detail-panel">
+                    <div class="strat-detail-wrap">
+                      <div class="strat-detail-divider"></div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Mechanism</span>
+                        <span class="strat-detail-value">Cross-chain bridge via LayerZero OFT. Deposited into Meteora Alpha Vaults for DLMM concentrated liquidity on Solana.</span>
+                      </div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Risk</span>
+                        <span class="strat-detail-value strat-risk-med">Medium-High</span>
+                      </div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Est. Yield</span>
+                        <span class="strat-detail-value strat-yield">18.3 – 31.7% APY</span>
+                      </div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Chain</span>
+                        <span class="strat-detail-value">Solana (bridged from Base)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              </div><!-- /.ng-strat-column -->
+
+              <!-- Downstream: Uniswap (from Charm) -->
+              <div class="ng-node ng-node-downstream ng-ds-uni" id="downstream-1">
+                <div class="ng-ds-inner" data-strat="ds-uniswap">
+                  <img src="./assets/brand/uniswap-official-pink.svg" alt="Uniswap" class="ng-ds-logo">
+                  <span class="ng-ds-text">Uniswap V3</span>
+                  <span class="strat-expand-icon ds-expand-icon">+</span>
+                  <!-- Expandable detail panel -->
+                  <div class="strat-detail-panel">
+                    <div class="strat-detail-wrap">
+                      <div class="strat-detail-divider"></div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Role</span>
+                        <span class="strat-detail-value">Concentrated liquidity venue for AKITA/USDC. Charm Finance manages the active range.</span>
+                      </div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Pool</span>
+                        <span class="strat-detail-value strat-yield">AKITA / USDC</span>
+                      </div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Chain</span>
+                        <span class="strat-detail-value">Base L2</span>
+                      </div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Managed By</span>
+                        <span class="strat-detail-value strat-risk-low">Charm Finance (Alpha Vaults)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Downstream: Meteora (from Solana) -->
+              <div class="ng-node ng-node-downstream ng-ds-met" id="downstream-2">
+                <div class="ng-ds-inner" data-strat="ds-meteora">
+                  <img src="./assets/brand/meteora-v2.svg" alt="Meteora" class="ng-ds-logo">
+                  <span class="ng-ds-text">Meteora</span>
+                  <span class="strat-expand-icon ds-expand-icon">+</span>
+                  <!-- Expandable detail panel -->
+                  <div class="strat-detail-panel">
+                    <div class="strat-detail-wrap">
+                      <div class="strat-detail-divider"></div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Role</span>
+                        <span class="strat-detail-value">Meteora Alpha Vaults on Solana. Auto-compounds LP fees with DLMM concentrated liquidity.</span>
+                      </div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Pool</span>
+                        <span class="strat-detail-value strat-yield">AKITA / SOL</span>
+                      </div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Chain</span>
+                        <span class="strat-detail-value">Solana</span>
+                      </div>
+                      <div class="strat-detail-row">
+                        <span class="strat-detail-label">Type</span>
+                        <span class="strat-detail-value strat-risk-low">DLMM (Dynamic Concentrated)</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Idle buffer node -->
+              <div class="ng-node ng-node-idle" id="ng-row-idle">
+                <div class="ng-idle-inner">
+                  <span class="ng-idle-pct">10%</span>
+                  <span class="ng-idle-label">Idle buffer</span>
+                  <span class="ng-idle-amount">5,000,000</span>
+                </div>
+              </div>
+
             </div>
           </div>
         </div>
@@ -337,11 +537,7 @@
         <p class="token-cross-copy" id="token-cross-copy">Receive a vault share. Fees are shared pro rata.</p>
         <p class="token-entry-cue" id="token-entry-cue">1:1 at entry (demo)</p>
 
-        <!-- Dual copy (detail phase) -->
-        <div class="dual-copy" id="dual-copy">
-          <p>Deposit a creator coin. Receive a vault share.</p>
-          <p>Your vault share is a redeemable claim on the vault.</p>
-        </div>
+        <!-- Dual-view phase copy — single, non-redundant line (the per-token captions above already describe "deposit creator coin / receive vault share / redeemable claim"). -->
         <p class="dual-entry" id="dual-entry">At entry, 1 AKITA mints 1 ■AKITA.</p>
 
         <!-- Fee label (allocation phase) -->
@@ -355,20 +551,28 @@
         <div class="accrue-container accrue-container-v2">
           <!-- Intro -->
           <div class="accrue-intro" id="accrue-intro">
-            <div class="section-label">Accrue</div>
-            <p class="accrue-desc">Fees flow into the vault. Your share grows.</p>
+            <div class="ed-kicker">
+              <span class="ed-kicker-num">III</span>
+              <span class="ed-kicker-rule"></span>
+              <span class="ed-kicker-label">Accrue</span>
+            </div>
+            <p class="accrue-desc">Fees flow into the vault. Your share <em>grows</em>.</p>
           </div>
           <!-- Central ratio display -->
           <div class="accrue-ratio-display" id="accrue-ratio-display">
+            <span class="ratio-rule-top" aria-hidden="true"></span>
             <span class="ratio-accent" id="ratio-value">1.000</span>
             <div class="ratio-meta">
-              <span class="ratio-unit">AKITA per share</span>
+              <span class="ratio-unit"><em>AKITA</em> per share</span>
               <span class="ratio-hairline"></span>
               <span class="ratio-from">from 1.000</span>
             </div>
+            <span class="ratio-rule-bot" aria-hidden="true"></span>
           </div>
-          <!-- Hidden pair for compat -->
-          <div class="accrue-pair" id="accrue-pair" style="display:none"></div>
+          <!-- Persistent-pair proxy: participates in scroll choreography as
+               a spacing reference. Animated via opacity by the accrue scroll
+               handler (pair.style.opacity = pairOp). No inline display:none. -->
+          <div class="accrue-pair" id="accrue-pair" aria-hidden="true"></div>
           <!-- Clock / Date -->
           <div class="accrue-clock" id="accrue-clock">
             <p class="clock-date" id="clock-date">AUG 10, 2025</p>
@@ -402,7 +606,7 @@
               <p class="accrue-stat-value accent" id="stat-apy">0.0%</p>
             </div>
           </div>
-          <p class="accrue-equation" id="accrue-equation" style="display:none"></p>
+          <p class="accrue-equation" id="accrue-equation"></p>
         </div>
 
         <!-- Volatility narrative text (overlaid on yield curve area) -->
@@ -437,163 +641,382 @@
 
           <!-- Intro text overlay -->
           <div class="cca-intro" id="cca-intro">
-            <div class="section-label">Share Token</div>
-            <p class="cca-headline" id="cca-headline">What happens with ■AKITA?</p>
+            <div class="ed-kicker">
+              <span class="ed-kicker-num">IV</span>
+              <span class="ed-kicker-rule"></span>
+              <span class="ed-kicker-label">Share Token</span>
+            </div>
+            <p class="cca-headline" id="cca-headline"><em>What</em> happens with ■AKITA?</p>
             <p class="cca-desc" id="cca-desc">Every vault begins with a Uniswap Continuous Clearing Auction over 7 days. The share token is distributed to bootstrap liquidity, reward the creator, and align the community.</p>
           </div>
 
-          <!-- LEFT-SIDE NODE GRAPH: Share token → 3 CCA distribution segments -->
+          <!-- CCA NODE GRAPH: 3 distribution cards ← ■AKITA share token -->
+          <!-- Flipped vs strategy graph: cards (left) ← token (right) -->
           <div class="cca-node-graph" id="cca-node-graph">
 
-            <!-- Left stack: 3 distribution cards (first in DOM = left side) -->
-            <div class="cca-left-stack">
-              <!-- CCA Auction card -->
-              <div class="cca-dist-card" id="cca-card-auction">
-                <div class="strategy-card-inner">
-                  <div class="strat-card-top">
-                    <img src="./assets/brand/uniswap-official-pink.svg" alt="Uniswap" class="strat-icon-img">
-                    <span class="strat-name">CCA Auction</span>
-                  </div>
-                  <p class="strat-pct">40%</p>
-                  <p class="strat-role">Auctioned over 7 days via Uniswap Continuous Clearing Auction. Open to the public.</p>
-                </div>
-              </div>
-
-              <!-- Creator Vesting card -->
-              <div class="cca-dist-card" id="cca-card-vesting">
-                <div class="strategy-card-inner">
-                  <div class="strat-card-top">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#0052FF" stroke-width="1.5" class="strat-icon-img" style="border-radius: 50%; background: rgba(0,82,255,0.08); padding: 3px;">
-                      <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
-                      <path d="M12 6v6l4 2"/>
-                    </svg>
-                    <span class="strat-name">Creator Vesting</span>
-                  </div>
-                  <p class="strat-pct">40%</p>
-                  <p class="strat-role">Vested to the creator over 1 year. Linearly unlocking — aligning long-term incentives.</p>
-                </div>
-              </div>
-
-              <!-- Liquidity card -->
-              <div class="cca-dist-card" id="cca-card-liquidity">
-                <div class="strategy-card-inner">
-                  <div class="strat-card-top">
-                    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#0052FF" stroke-width="1.5" class="strat-icon-img" style="border-radius: 50%; background: rgba(0,82,255,0.08); padding: 3px;">
-                      <path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/>
-                    </svg>
-                    <span class="strat-name">Liquidity Pool</span>
-                  </div>
-                  <p class="strat-pct">20%</p>
-                  <p class="strat-role">Seeded directly into the trading pool. Ensures ■AKITA is liquid and tradeable from day one.</p>
-                </div>
-              </div>
-            </div>
-
-            <!-- Branch SVG — curves flow right from cards toward share token -->
-            <svg class="cca-branch-svg" id="cca-branch-svg" viewBox="0 0 660 500" preserveAspectRatio="xMidYMid meet">
-              <!-- CCA Auction branch: from card1 center-Y to share token center -->
-              <path d="M 0,80 C 100,80 180,80 280,80 C 420,80 560,260 660,260" stroke="rgba(0,82,255,0.18)" stroke-width="1.2" fill="none"/>
-              <!-- Creator Vesting branch: center straight -->
-              <path d="M 0,250 C 120,250 280,250 400,252 C 500,256 580,260 660,260" stroke="rgba(0,82,255,0.18)" stroke-width="1.2" fill="none"/>
-              <!-- Liquidity branch: from card3 center-Y to share token center -->
-              <path d="M 0,420 C 100,420 180,420 280,420 C 420,420 560,260 660,260" stroke="rgba(0,82,255,0.18)" stroke-width="1.2" fill="none"/>
+            <!-- Dynamic SVG edges -->
+            <svg class="ng-edges-svg cca-edges-svg" id="cca-edges-svg" preserveAspectRatio="none">
+              <defs>
+                <filter id="ccaEdgeGlow" x="-20%" y="-20%" width="140%" height="140%">
+                  <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur"/>
+                  <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+              </defs>
+              <path id="cca-edge-token-auction"  class="ng-edge-line" />
+              <path id="cca-edge-token-vesting"  class="ng-edge-line" />
+              <path id="cca-edge-token-liquidity" class="ng-edge-line" />
+              <path id="cca-dash-token-auction"  class="ng-dash-flow" />
+              <path id="cca-dash-token-vesting"  class="ng-dash-flow ng-dash-delay-1" />
+              <path id="cca-dash-token-liquidity" class="ng-dash-flow ng-dash-delay-2" />
             </svg>
 
-            <canvas id="cca-pulse-canvas" class="cca-pulse-canvas"></canvas>
+            <div class="ng-nodes cca-nodes">
 
-          </div>
+              <!-- CCA Distribution cards (LEFT column) -->
+              <div class="ng-strat-column cca-strat-column">
+
+                <!-- CCA Auction -->
+                <div class="ng-node ng-node-strat cca-ng-auction" id="cca-card-auction">
+                  <div class="strategy-card-inner" data-strat="cca-auction">
+                    <div class="strat-card-top">
+                      <img src="./assets/brand/uniswap-official-pink.svg" alt="Uniswap" class="strat-icon-img">
+                      <span class="strat-name">CCA Auction</span>
+                      <span class="strat-expand-icon">+</span>
+                    </div>
+                    <p class="strat-pct">40%</p>
+                    <p class="strat-role">Auctioned over 7 days via Uniswap Continuous Clearing Auction. Open to the public.</p>
+                    <div class="strat-detail-panel">
+                      <div class="strat-detail-wrap">
+                        <div class="strat-detail-divider"></div>
+                        <div class="strat-detail-row">
+                          <span class="strat-detail-label">Mechanism</span>
+                          <span class="strat-detail-value">Uniswap V4 Continuous Clearing Auction. Gradual price discovery over 7 days — no sudden dumps, no sniping.</span>
+                        </div>
+                        <div class="strat-detail-row">
+                          <span class="strat-detail-label">Duration</span>
+                          <span class="strat-detail-value strat-yield">7 days</span>
+                        </div>
+                        <div class="strat-detail-row">
+                          <span class="strat-detail-label">Access</span>
+                          <span class="strat-detail-value strat-risk-low">Open to public</span>
+                        </div>
+                        <div class="strat-detail-row">
+                          <span class="strat-detail-label">Platform</span>
+                          <span class="strat-detail-value">Uniswap V4 (Base)</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Creator Vesting -->
+                <div class="ng-node ng-node-strat cca-ng-vesting" id="cca-card-vesting">
+                  <div class="strategy-card-inner" data-strat="cca-vesting">
+                    <div class="strat-card-top">
+                      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#0052FF" stroke-width="1.5" class="strat-icon-img" style="border-radius: 50%; background: rgba(0,82,255,0.08); padding: 3px;">
+                        <path d="M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10z"/>
+                        <path d="M12 6v6l4 2"/>
+                      </svg>
+                      <span class="strat-name">Creator Vesting</span>
+                      <span class="strat-expand-icon">+</span>
+                    </div>
+                    <p class="strat-pct">40%</p>
+                    <p class="strat-role">Vested to the creator over 1 year. Linearly unlocking — aligning long-term incentives.</p>
+                    <div class="strat-detail-panel">
+                      <div class="strat-detail-wrap">
+                        <div class="strat-detail-divider"></div>
+                        <div class="strat-detail-row">
+                          <span class="strat-detail-label">Mechanism</span>
+                          <span class="strat-detail-value">Linear vesting over 12 months. Creator receives ■AKITA shares on a block-by-block schedule — no cliff, no unlock shocks.</span>
+                        </div>
+                        <div class="strat-detail-row">
+                          <span class="strat-detail-label">Duration</span>
+                          <span class="strat-detail-value strat-yield">12 months linear</span>
+                        </div>
+                        <div class="strat-detail-row">
+                          <span class="strat-detail-label">Purpose</span>
+                          <span class="strat-detail-value strat-risk-med">Alignment</span>
+                        </div>
+                        <div class="strat-detail-row">
+                          <span class="strat-detail-label">Contract</span>
+                          <span class="strat-detail-value">On-chain vesting (Base L2)</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Liquidity Pool -->
+                <div class="ng-node ng-node-strat cca-ng-liquidity" id="cca-card-liquidity">
+                  <div class="strategy-card-inner" data-strat="cca-liquidity">
+                    <div class="strat-card-top">
+                      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#0052FF" stroke-width="1.5" class="strat-icon-img" style="border-radius: 50%; background: rgba(0,82,255,0.08); padding: 3px;">
+                        <path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/>
+                      </svg>
+                      <span class="strat-name">Liquidity Pool</span>
+                      <span class="strat-expand-icon">+</span>
+                    </div>
+                    <p class="strat-pct">20%</p>
+                    <p class="strat-role">Seeded into the trading pool upon auction completion. Ensures ■AKITA is liquid and tradeable.</p>
+                    <div class="strat-detail-panel">
+                      <div class="strat-detail-wrap">
+                        <div class="strat-detail-divider"></div>
+                        <div class="strat-detail-row">
+                          <span class="strat-detail-label">Mechanism</span>
+                          <span class="strat-detail-value">Protocol-owned liquidity seeded into a Uniswap V4 full-range position upon completion of the auction. Permanent — never withdrawn.</span>
+                        </div>
+                        <div class="strat-detail-row">
+                          <span class="strat-detail-label">Pool</span>
+                          <span class="strat-detail-value strat-yield">■AKITA / ETH</span>
+                        </div>
+                        <div class="strat-detail-row">
+                          <span class="strat-detail-label">Risk</span>
+                          <span class="strat-detail-value strat-risk-low">Low (protocol-owned)</span>
+                        </div>
+                        <div class="strat-detail-row">
+                          <span class="strat-detail-label">Platform</span>
+                          <span class="strat-detail-value">Uniswap V4 (Base)</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+              </div><!-- /.cca-strat-column -->
+
+              <!-- ■AKITA share token (RIGHT anchor) -->
+              <div class="ng-node cca-ng-token" id="cca-ng-token">
+                <div class="ng-node-inner ng-node-accent">
+                  <div class="ng-node-icon">
+                    <img src="./assets/tokens/share/akita-512.png" alt="■AKITA" width="40" height="40">
+                  </div>
+                  <div class="ng-node-meta">
+                    <span class="ng-node-title">■AKITA</span>
+                    <span class="ng-node-sub">50,000,000 minted</span>
+                  </div>
+                </div>
+              </div>
+
+            </div><!-- /.cca-nodes -->
+          </div><!-- /.cca-node-graph -->
 
         </div>
 
         <!-- Summary line -->
         <p class="cca-summary" id="cca-summary">Deposit an asset. Yield accrues. The share token finds price discovery.</p>
 
+
+      </div>
+    </section>
+
+    <!-- ╔═══ CHAPTER 3.75: DUAL OVERVIEW — zoomed-out view (400vh) ═══╗ -->
+    <section class="scroll-scene" id="ch-dual-overview" data-height="400">
+      <div class="scene-pin">
+
+        <!-- Section headline -->
+        <div class="dual-headline" id="dual-headline">
+          <div class="ed-kicker">
+            <span class="ed-kicker-num">V</span>
+            <span class="ed-kicker-rule"></span>
+            <span class="ed-kicker-label">The Full Picture</span>
+          </div>
+          <h2 class="dual-title"><em>Two</em> tokens. <em>One</em> vault.</h2>
+          <p class="dual-sub">The underlying asset earns yield through strategies. The share token distributes ownership through the CCA.</p>
+        </div>
+
+        <!-- Dual graph container -->
+        <div class="dual-graph" id="dual-graph">
+
+          <!-- SVG edges for both mini-graphs -->
+          <svg class="dual-edges-svg" id="dual-edges-svg" preserveAspectRatio="none">
+            <defs>
+              <filter id="dualEdgeGlow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur in="SourceGraphic" stdDeviation="2" result="blur"/>
+                <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+            <!-- Right side: Underlying → Strategies -->
+            <path id="dual-edge-r-ajna"    class="ng-edge-line" />
+            <path id="dual-edge-r-charm"   class="ng-edge-line" />
+            <path id="dual-edge-r-solana"  class="ng-edge-line" />
+            <path id="dual-dash-r-ajna"    class="ng-dash-flow" />
+            <path id="dual-dash-r-charm"   class="ng-dash-flow ng-dash-delay-1" />
+            <path id="dual-dash-r-solana"  class="ng-dash-flow ng-dash-delay-2" />
+            <!-- Left side: Share → CCA -->
+            <path id="dual-edge-l-auction"  class="ng-edge-line" />
+            <path id="dual-edge-l-vesting"  class="ng-edge-line" />
+            <path id="dual-edge-l-lp"       class="ng-edge-line" />
+            <path id="dual-dash-l-auction"  class="ng-dash-flow" />
+            <path id="dual-dash-l-vesting"  class="ng-dash-flow ng-dash-delay-1" />
+            <path id="dual-dash-l-lp"       class="ng-dash-flow ng-dash-delay-2" />
+          </svg>
+
+          <!-- LEFT SIDE: CCA distribution ← Share Token (■AKITA) -->
+          <!-- Flipped: branches on far left, token on inner side -->
+          <div class="dual-side dual-side-left" id="dual-side-left">
+            <div class="dual-side-label">Share Token</div>
+
+            <!-- CCA branches (far left) -->
+            <div class="dual-branches dual-branches-left">
+              <div class="dual-branch" id="dual-branch-auction">
+                <img src="./assets/brand/uniswap-official-pink.svg" alt="" class="dual-branch-logo">
+                <span class="dual-branch-pct">40%</span>
+                <span class="dual-branch-name">CCA Auction</span>
+              </div>
+              <div class="dual-branch" id="dual-branch-vesting">
+                <span class="dual-branch-icon">⏱</span>
+                <span class="dual-branch-pct">40%</span>
+                <span class="dual-branch-name">Creator Vesting</span>
+              </div>
+              <div class="dual-branch" id="dual-branch-lp">
+                <img src="./assets/brand/uniswap-official-pink.svg" alt="" class="dual-branch-logo">
+                <span class="dual-branch-pct">20%</span>
+                <span class="dual-branch-name">Liquidity Pool</span>
+              </div>
+            </div>
+
+            <!-- ■AKITA token (inner, near divider) -->
+            <div class="dual-node dual-node-center" id="dual-node-share">
+              <img src="./assets/tokens/share/akita-512.png" alt="■AKITA" width="36" height="36" class="dual-node-img">
+              <span class="dual-node-name">■AKITA</span>
+              <span class="dual-node-amount">50M minted</span>
+            </div>
+          </div>
+
+          <!-- CENTER DIVIDER -->
+          <div class="dual-divider" id="dual-divider">
+            <div class="dual-divider-line"></div>
+            <div class="dual-divider-label">ERC-4626 VAULT</div>
+            <div class="dual-divider-line"></div>
+          </div>
+
+          <!-- RIGHT SIDE: Underlying Token (AKITA) → Strategy allocation -->
+          <div class="dual-side dual-side-right" id="dual-side-right">
+            <div class="dual-side-label">Underlying Token</div>
+
+            <!-- Center node: AKITA -->
+            <div class="dual-node dual-node-center" id="dual-node-underlying">
+              <img src="./assets/tokens/source/akita.webp" alt="AKITA" width="36" height="36" class="dual-node-img">
+              <span class="dual-node-name">AKITA</span>
+              <span class="dual-node-amount">50M deposited</span>
+            </div>
+
+            <!-- Strategy branches -->
+            <div class="dual-branches dual-branches-right">
+              <div class="dual-branch" id="dual-branch-ajna">
+                <span class="dual-branch-pct">30%</span>
+                <span class="dual-branch-name">Ajna Protocol</span>
+                <img src="./assets/brand/ajna-official.svg" alt="" class="dual-branch-logo">
+              </div>
+              <div class="dual-branch" id="dual-branch-charm">
+                <span class="dual-branch-pct">30%</span>
+                <span class="dual-branch-name">Charm Finance</span>
+                <img src="./assets/brand/charm.png" alt="" class="dual-branch-logo">
+              </div>
+              <div class="dual-branch" id="dual-branch-solana">
+                <span class="dual-branch-pct">30%</span>
+                <span class="dual-branch-name">Solana Ecosystem</span>
+                <img src="./assets/brand/solana-mark.svg" alt="" class="dual-branch-logo">
+              </div>
+            </div>
+          </div>
+
+        </div><!-- /.dual-graph -->
+
       </div>
     </section>
 
     <!-- ╔═══ CHAPTER 4: CREATOR VAULTS (500vh) ═══╗ -->
-    <section class="scroll-scene" id="ch-vaults" data-height="500">
+    <!-- Editorial layout: featured vault on the left, three compact vaults
+         stacked on the right, tied together by a thin vertical rule.
+         No circles on avatars or share-images — rounded-rectangle framing
+         with hairline borders for a premium editorial feel. -->
+    <section class="scroll-scene" id="ch-vaults" data-height="420">
       <div class="scene-pin">
         <div class="vaults-container">
           <div class="vaults-header">
-            <div class="section-label">Creator Vaults</div>
-            <h2 class="vaults-headline">Deposit. Earn together.</h2>
-            <p class="vaults-sub">Example creator vaults on Base.</p>
+            <div class="ed-kicker vaults-eyebrow">
+              <span class="ed-kicker-num">VI</span>
+              <span class="ed-kicker-rule"></span>
+              <span class="ed-kicker-label">Creator Vaults</span>
+            </div>
+            <h2 class="vaults-headline"><em>Deposit.</em> Earn together.</h2>
+            <p class="vaults-sub">A curated selection of early creator vaults on Base.</p>
           </div>
-          <div class="vaults-grid" id="vaults-grid">
-            <!-- Akita -->
-            <div class="vault-card" id="vc-0">
+
+          <div class="vaults-editorial" id="vaults-grid">
+            <!-- Featured vault — Akita (vc-0) -->
+            <article class="vault-card vault-featured" id="vc-0">
               <div class="vault-card-glow"></div>
-              <div class="vault-card-header">
-                <div class="vault-card-name">
-                  <img src="./assets/tokens/source/akita.webp" alt="Akita" class="vault-card-icon">
-                  <div>
-                    <h3>Akita Vault</h3>
-                    <span class="vault-card-share">■AKITA</span>
-                  </div>
+              <div class="vault-featured-top">
+                <div class="vault-featured-meta">
+                  <span class="vault-featured-kicker">Featured</span>
+                  <h3 class="vault-featured-name">Akita Vault</h3>
+                  <span class="vault-card-share">■AKITA</span>
                 </div>
-                <img src="./assets/tokens/share/akita-512.png" alt="■AKITA" class="vault-card-share-img">
+                <figure class="vault-portrait">
+                  <img src="./assets/tokens/source/akita.webp" alt="Akita" class="vault-card-icon">
+                  <img src="./assets/tokens/share/akita-512.png" alt="■AKITA" class="vault-card-share-img">
+                </figure>
               </div>
-              <div class="vault-card-stats">
+              <p class="vault-featured-quote">“Deposit AKITA. Earn alongside the community.”</p>
+              <div class="vault-featured-stats">
                 <div><span class="vcs-label">APY</span><span class="vcs-value accent">14.2%</span></div>
                 <div><span class="vcs-label">TVL</span><span class="vcs-value">$1.8M</span></div>
+                <div><span class="vcs-label">Depositors</span><span class="vcs-value">2,148</span></div>
               </div>
-            </div>
-            <!-- Jesse -->
-            <div class="vault-card" id="vc-1">
-              <div class="vault-card-glow"></div>
-              <div class="vault-card-header">
-                <div class="vault-card-name">
+            </article>
+
+            <!-- Right column: three compact vaults in an editorial list -->
+            <div class="vaults-list">
+              <article class="vault-card vault-compact" id="vc-1">
+                <div class="vault-card-glow"></div>
+                <figure class="vault-portrait">
                   <img src="./assets/tokens/source/jesse.webp" alt="Jesse" class="vault-card-icon">
-                  <div>
-                    <h3>Jesse Vault</h3>
-                    <span class="vault-card-share">■JESSE</span>
-                  </div>
+                  <img src="./assets/tokens/share/jesse-512.png" alt="■JESSE" class="vault-card-share-img">
+                </figure>
+                <div class="vault-compact-meta">
+                  <h3>Jesse Vault</h3>
+                  <span class="vault-card-share">■JESSE</span>
                 </div>
-                <img src="./assets/tokens/share/jesse-512.png" alt="■JESSE" class="vault-card-share-img">
-              </div>
-              <div class="vault-card-stats">
-                <div><span class="vcs-label">APY</span><span class="vcs-value accent">18.6%</span></div>
-                <div><span class="vcs-label">TVL</span><span class="vcs-value">$3.2M</span></div>
-              </div>
-            </div>
-            <!-- Gabriel Haines -->
-            <div class="vault-card" id="vc-2">
-              <div class="vault-card-glow"></div>
-              <div class="vault-card-header">
-                <div class="vault-card-name">
+                <div class="vault-compact-stats">
+                  <div><span class="vcs-label">APY</span><span class="vcs-value accent">18.6%</span></div>
+                  <div><span class="vcs-label">TVL</span><span class="vcs-value">$3.2M</span></div>
+                </div>
+              </article>
+              <article class="vault-card vault-compact" id="vc-2">
+                <div class="vault-card-glow"></div>
+                <figure class="vault-portrait">
                   <img src="./assets/tokens/source/gabrielhaines.webp" alt="Gabriel Haines" class="vault-card-icon">
-                  <div>
-                    <h3>Gabriel Haines Vault</h3>
-                    <span class="vault-card-share">■GABRIELHAINES</span>
-                  </div>
+                  <img src="./assets/tokens/share/gabrielhaines-512.png" alt="■GABRIELHAINES" class="vault-card-share-img">
+                </figure>
+                <div class="vault-compact-meta">
+                  <h3>Gabriel Haines</h3>
+                  <span class="vault-card-share">■GABRIELHAINES</span>
                 </div>
-                <img src="./assets/tokens/share/gabrielhaines-512.png" alt="■GABRIELHAINES" class="vault-card-share-img">
-              </div>
-              <div class="vault-card-stats">
-                <div><span class="vcs-label">APY</span><span class="vcs-value accent">9.4%</span></div>
-                <div><span class="vcs-label">TVL</span><span class="vcs-value">$740K</span></div>
-              </div>
-            </div>
-            <!-- Nick Shirley -->
-            <div class="vault-card" id="vc-3">
-              <div class="vault-card-glow"></div>
-              <div class="vault-card-header">
-                <div class="vault-card-name">
+                <div class="vault-compact-stats">
+                  <div><span class="vcs-label">APY</span><span class="vcs-value accent">9.4%</span></div>
+                  <div><span class="vcs-label">TVL</span><span class="vcs-value">$740K</span></div>
+                </div>
+              </article>
+              <article class="vault-card vault-compact" id="vc-3">
+                <div class="vault-card-glow"></div>
+                <figure class="vault-portrait">
                   <img src="./assets/tokens/source/thenickshirley.webp" alt="Nick Shirley" class="vault-card-icon">
-                  <div>
-                    <h3>Nick Shirley Vault</h3>
-                    <span class="vault-card-share">■THENICKSHIRLEY</span>
-                  </div>
+                  <img src="./assets/tokens/share/thenickshirley-512.png" alt="■THENICKSHIRLEY" class="vault-card-share-img">
+                </figure>
+                <div class="vault-compact-meta">
+                  <h3>Nick Shirley</h3>
+                  <span class="vault-card-share">■THENICKSHIRLEY</span>
                 </div>
-                <img src="./assets/tokens/share/thenickshirley-512.png" alt="■THENICKSHIRLEY" class="vault-card-share-img">
-              </div>
-              <div class="vault-card-stats">
-                <div><span class="vcs-label">APY</span><span class="vcs-value accent">22.1%</span></div>
-                <div><span class="vcs-label">TVL</span><span class="vcs-value">$520K</span></div>
-              </div>
+                <div class="vault-compact-stats">
+                  <div><span class="vcs-label">APY</span><span class="vcs-value accent">22.1%</span></div>
+                  <div><span class="vcs-label">TVL</span><span class="vcs-value">$520K</span></div>
+                </div>
+              </article>
             </div>
           </div>
+
           <div class="vaults-cta" id="vaults-cta">
             <a href="https://4626.fun/waitlist" class="cta-button secondary">View All Vaults</a>
           </div>
@@ -602,11 +1025,63 @@
       </div>
     </section>
 
-    <!-- ╔═══ CHAPTER 5: CLOSE (280vh) ═══╗ -->
-    <section class="scroll-scene" id="ch-close" data-height="280">
+    <!-- ╔═══ CHAPTER 5: CLOSE (900vh) ═══╗ -->
+    <!-- Premium finale. NO rings, NO orbiting tokens, NO circular halos.
+         The convergence is told through an editorial "column" composition:
+         two token cards collapse into a central logotype plate bounded by
+         thin horizontal rules, then dissolve into the brand close. -->
+    <section class="scroll-scene" id="ch-close" data-height="950">
       <div class="scene-pin">
-        <div class="close-container">
-          <!-- Ecosystem partners -->
+
+        <!-- PHASE A: Chapter opener — overture removed; crescendo carries the full sequence -->
+        <div class="close-phase-a" id="close-phase-a" aria-hidden="true">
+          <div class="close-overture" id="close-hero-share"></div>
+        </div>
+
+        <!-- PHASE B-C: Token cards with amount labels (rounded rectangles, no circles) -->
+        <div class="close-cards-layer" id="close-cards-layer">
+          <div class="close-card close-card-share" id="close-card-share">
+            <div class="close-card-inner">
+              <img src="./assets/tokens/share/akita-512.png" alt="■AKITA" class="close-card-img">
+              <div class="close-card-info">
+                <span class="close-card-name">■AKITA</span>
+                <span class="close-card-amount">50,000,000 minted</span>
+              </div>
+            </div>
+          </div>
+          <div class="close-card close-card-under" id="close-card-under">
+            <div class="close-card-inner">
+              <img src="./assets/tokens/source/akita.webp" alt="AKITA" class="close-card-img">
+              <div class="close-card-info">
+                <span class="close-card-name">AKITA</span>
+                <span class="close-card-amount">50,000,000 deposited</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- PHASE D-E: Vault convergence — editorial logotype plate, no ring -->
+        <div class="close-vault-layer" id="close-vault-layer">
+          <div class="close-vault-node" id="close-vault-node">
+            <span class="close-vault-rule close-vault-rule-top"></span>
+            <div class="close-vault-plate">
+              <img src="./assets/brand/app-icon-7.jpg" alt="4626" class="close-vault-icon">
+              <div class="close-vault-wordmark">
+                <span class="close-vault-wordmark-top">4626</span>
+                <span class="close-vault-wordmark-bot">ERC-4626 Vault</span>
+              </div>
+            </div>
+            <span class="close-vault-rule close-vault-rule-bot"></span>
+          </div>
+          <!-- Convergence marks: two vertical hairlines meeting at center,
+               replacing the prior orbiting token ghosts. -->
+          <span class="close-vault-mark close-vault-mark-l" id="close-vault-tl" aria-hidden="true"></span>
+          <span class="close-vault-mark close-vault-mark-r" id="close-vault-tr" aria-hidden="true"></span>
+          <canvas id="close-particles" class="close-particles"></canvas>
+        </div>
+
+        <!-- PHASE F: Final page — premium brand close -->
+        <div class="close-container" id="close-final">
           <div class="close-partners" id="close-partners">
             <img src="./assets/brand/Base_lockup_white.svg" alt="Base" class="partner-logo">
             <img src="./assets/brand/Zorb-3.svg" alt="Zora" class="partner-logo">
@@ -620,12 +1095,108 @@
           </div>
           <div class="close-brand" id="close-brand">
             <img src="./assets/brand/app-icon-7.jpg" alt="4626" class="close-logo">
+            <h2 class="close-brand-wordmark">4626<em>.fun</em></h2>
           </div>
           <div class="close-line" id="close-line"></div>
+          <p class="close-tag" id="close-tag">Earn together.</p>
           <div class="close-cta" id="close-cta">
             <a href="https://4626.fun/waitlist" class="enter-vaults-btn" id="closing">Join Waitlist</a>
           </div>
-          <p class="close-tag" id="close-tag">Earn together</p>
+        </div>
+
+        <!-- PHASE G: Crescendo — four-line typographic finale
+             Each line uses a distinct motion family (inward compression,
+             horizontal split, depth recession, structural lock-in) so the
+             sequence builds without any upward drift. The existing brand
+             block fades under this layer so the finale owns the frame. -->
+        <div class="close-crescendo" id="close-crescendo" aria-hidden="true">
+          <!-- Ambient light source behind the stack: a soft radial gradient
+               that gently intensifies at each beat arrival. JS only adjusts
+               opacity and scale, CSS owns the gradient and blur. -->
+          <div class="cres-aura" id="cres-aura" aria-hidden="true"></div>
+          <div class="cres-stack">
+            <!-- L1 · One vault.
+                 Editorial opener. Wide tracking collapses inward on arrival,
+                 italic "One" in Newsreader cream, roman "vault." in steel. -->
+            <div class="cres-line cres-line-1" id="cres-line-1">
+              <span class="cres-text"><em>One</em> vault.</span>
+            </div>
+
+            <!-- L2 · Two tokens.
+                 Horizontal split. "Two" italic left, "tokens." roman right.
+                 Sublabels arrive under the hold, each side describing its token. -->
+            <div class="cres-line cres-line-2" id="cres-line-2">
+              <span class="cres-splits"><span class="cres-split cres-split-l"><em>Two</em></span><span class="cres-split cres-split-r">tokens.</span></span>
+              <div class="cres-sublabels" id="cres-sublabels" aria-hidden="true">
+                <span class="cres-sublabel cres-sublabel-l" id="cres-sublabel-l">
+                  <span class="cres-sublabel-mark" aria-hidden="true">■</span>
+                  <span class="cres-sublabel-name">AKITA</span>
+                  <span class="cres-sublabel-kind">Vault Share</span>
+                </span>
+                <span class="cres-sublabel-divider" id="cres-sublabel-divider" aria-hidden="true"></span>
+                <span class="cres-sublabel cres-sublabel-r" id="cres-sublabel-r">
+                  <span class="cres-sublabel-mark" aria-hidden="true">○</span>
+                  <span class="cres-sublabel-name">AKITA</span>
+                  <span class="cres-sublabel-kind">Underlying</span>
+                </span>
+              </div>
+            </div>
+
+            <!-- L3 · (3, 3)
+                 Game-theoretic resolution. Mono for culture-era nod, but typeset
+                 large enough to feel monumental. Subtle depth recession (blur+scale)
+                 as it settles into the frame. -->
+            <div class="cres-line cres-line-3" id="cres-line-3">
+              <span class="cres-text cres-ticker">(3, 3)</span>
+            </div>
+          </div><!-- /cres-stack -->
+
+          <!-- ─── FINALE POSTER (L3.5 + L4 + L5) ───
+               Breaks out of the grid-stage cell where L1–L3 crossfade.
+               Once the last three beats arrive, they COMPOSE into a
+               single settled page — nothing fades back out. This is
+               the ending: a real editorial poster you can read, not
+               a frame caught mid-scroll. -->
+          <div class="cres-finale-poster" id="cres-finale-poster" aria-hidden="true">
+
+            <!-- L3.5 · Earn together. (tagline that settles above the mark) -->
+            <div class="cres-line cres-line-earn" id="cres-line-earn">
+              <span class="cres-text cres-earn"><em>Earn together.</em></span>
+            </div>
+
+            <!-- L4 · 4626.fun (brand anchor — hairlines draw out, dot glows) -->
+            <div class="cres-line cres-line-4" id="cres-line-4">
+              <span class="cres-rule cres-rule-top" aria-hidden="true"></span>
+              <span class="cres-brand-mark" aria-hidden="true">
+                <span class="cres-brand-dot"></span>
+              </span>
+              <span class="cres-text cres-brand">4626<em>.fun</em></span>
+              <span class="cres-rule cres-rule-bot" aria-hidden="true"></span>
+              <span class="cres-brand-tag" aria-hidden="true">Creator vaults on Base</span>
+            </div>
+
+            <!-- L5 · Partners + CTA + meta (action row, settles below) -->
+            <div class="cres-line cres-line-finale" id="cres-line-finale" aria-hidden="true">
+              <span class="cres-finale-label" aria-hidden="true">Built with</span>
+              <div class="cres-partners" id="cres-partners">
+                <img src="./assets/brand/Base_lockup_white.svg" alt="Base" class="cres-partner-logo">
+                <img src="./assets/brand/Zorb-3.svg" alt="Zora" class="cres-partner-logo">
+                <img src="./assets/brand/uniswap-official-pink.svg" alt="Uniswap" class="cres-partner-logo">
+                <img src="./assets/brand/layerzero-official.svg" alt="LayerZero" class="cres-partner-logo">
+                <img src="./assets/brand/chainlink-white-official.svg" alt="Chainlink" class="cres-partner-logo">
+                <img src="./assets/brand/solana-mark.svg" alt="Solana" class="cres-partner-logo">
+                <img src="./assets/brand/meteora-v2.svg" alt="Meteora" class="cres-partner-logo">
+                <img src="./assets/brand/ajna-official.svg" alt="Ajna" class="cres-partner-logo">
+                <img src="./assets/brand/charm.png" alt="Charm" class="cres-partner-logo">
+              </div>
+              <a href="https://4626.fun/waitlist" class="cres-cta-btn" id="cres-cta">
+                <span class="cres-cta-label">Join the Waitlist</span>
+                <span class="cres-cta-arrow" aria-hidden="true">→</span>
+              </a>
+              <span class="cres-finale-meta" aria-hidden="true">Early access · No spam · Unsubscribe anytime</span>
+            </div>
+
+          </div><!-- /cres-finale-poster -->
         </div>
       </div>
     </section>
@@ -656,5 +1227,79 @@
   </button>
 
   <script type="module" src="./app.js"></script>
-</body>
+  <script src="./refinement.js" defer></script>
+<script data-pplx-inline-edit>
+(function(){
+  if(window===window.top)return;
+  function inlineAll(orig,clone){
+    if(orig.nodeType!==1)return;
+    try{
+      var cs=getComputedStyle(orig);
+      var t='';
+      for(var i=0;i<cs.length;i++){t+=cs[i]+':'+cs.getPropertyValue(cs[i])+';';}
+      clone.style.cssText=t;
+    }catch(e){}
+    var oc=orig.children,cc=clone.children;
+    for(var j=0;j<oc.length&&j<cc.length;j++){inlineAll(oc[j],cc[j]);}
+  }
+  function stripExternal(clone){
+    var imgs=clone.querySelectorAll('img');
+    for(var i=0;i<imgs.length;i++){
+      var s=imgs[i].getAttribute('src');
+      if(s&&!s.startsWith('data:'))imgs[i].removeAttribute('src');
+    }
+    var all=clone.querySelectorAll('*');
+    for(var i=0;i<all.length;i++){
+      var st=all[i].style.cssText;
+      if(st&&st.indexOf('url(')>=0){
+        all[i].style.cssText=st.replace(/url\(["']?(?!data:)[^)"']*["']?\)/gi,'none');
+      }
+    }
+  }
+  var scrollRaf=0;
+  function emitScroll(){
+    scrollRaf=0;
+    var x=window.scrollX||window.pageXOffset||0;
+    var y=window.scrollY||window.pageYOffset||0;
+    window.parent.postMessage({type:'INLINE_EDIT_SCROLL',scrollX:x,scrollY:y},'*');
+  }
+  window.addEventListener('scroll',function(){
+    if(scrollRaf)return;
+    scrollRaf=requestAnimationFrame(emitScroll);
+  },{passive:true,capture:true});
+  emitScroll();
+  window.addEventListener('message',function(e){
+    if(!e.data||e.data.type!=='INLINE_EDIT_CAPTURE_REQUEST')return;
+    var scrollX=window.scrollX||window.pageXOffset||0;
+    var scrollY=window.scrollY||window.pageYOffset||0;
+    var w=window.innerWidth,h=window.innerHeight;
+    try{
+      var clone=document.documentElement.cloneNode(true);
+      var rm=clone.querySelectorAll('script,link[rel="stylesheet"],style');
+      for(var i=0;i<rm.length;i++){rm[i].remove();}
+      inlineAll(document.documentElement,clone);
+      stripExternal(clone);
+      var html=new XMLSerializer().serializeToString(clone);
+      var svg='<svg xmlns="http://www.w3.org/2000/svg" width="'+w+'" height="'+h+'">'
+        +'<foreignObject width="100%" height="100%">'
+        +'<div xmlns="http://www.w3.org/1999/xhtml" style="width:'+w+'px;height:'+h+'px;overflow:hidden">'
+        +'<div style="transform:translate(-'+scrollX+'px,-'+scrollY+'px);transform-origin:top left">'
+        +html+'</div></div></foreignObject></svg>';
+      var svgUrl='data:image/svg+xml;charset=utf-8,'+encodeURIComponent(svg);
+      var img=new Image();
+      img.onload=function(){
+        var c=document.createElement('canvas');c.width=w;c.height=h;
+        c.getContext('2d').drawImage(img,0,0);
+        window.parent.postMessage({type:'INLINE_EDIT_SCREENSHOT_RESULT',dataUrl:c.toDataURL('image/png'),scrollX:scrollX,scrollY:scrollY},'*');
+      };
+      img.onerror=function(){
+        window.parent.postMessage({type:'INLINE_EDIT_SCREENSHOT_RESULT',dataUrl:null,scrollX:scrollX,scrollY:scrollY},'*');
+      };
+      img.src=svgUrl;
+    }catch(err){
+      window.parent.postMessage({type:'INLINE_EDIT_SCREENSHOT_RESULT',dataUrl:null,scrollX:scrollX,scrollY:scrollY},'*');
+    }
+  });
+})();
+</script></body>
 </html>
