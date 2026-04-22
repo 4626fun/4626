@@ -5416,7 +5416,7 @@ async function handleTelegramVaultDeployCallback(params: {
   }
 
   const intent = consumed.intentPayload ?? {}
-  const version = asTrimmed(String(intent.version ?? 'v1.9.1')) || 'v1.9.1'
+  const version = asTrimmed(String(intent.version ?? 'v1.9.2')) || 'v1.9.2'
 
   if (callback.kind === 'decline') {
     await logTelegramActionAudit({
@@ -5466,7 +5466,7 @@ async function handleTelegramVaultDeployCallback(params: {
         '',
         `- status: ${started.status}`,
         `- reason: ${started.error}`,
-        '- retry `/vaultdeploy akita v1.9.1`',
+        '- retry `/vaultdeploy akita v1.9.2`',
       ].join('\n'),
       callbackToast: 'Vault deploy failed',
     }

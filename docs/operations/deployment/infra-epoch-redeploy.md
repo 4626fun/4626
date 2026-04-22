@@ -19,7 +19,7 @@ This path assumes legacy per-creator scripts are retired and `/deploy` is the ca
 - `PRIVATE_KEY`
 - `BASE_RPC_URL`
 - `ETHERSCAN_API_KEY` (or `BASESCAN_API_KEY`)
-- `DEPLOYMENT_EPOCH_TAG` (recommended, example: `v1.9.1`)
+- `DEPLOYMENT_EPOCH_TAG` (recommended, example: `v1.9.2`)
 
 Optional:
 
@@ -28,10 +28,10 @@ Optional:
 
 ## 1) Choose Epoch Tag
 
-Pick an immutable epoch token (example: `v1.9.1`) and keep it in release notes.
+Pick an immutable epoch token (example: `v1.9.2`) and keep it in release notes.
 
 ```bash
-export DEPLOYMENT_EPOCH_TAG="v1.9.1"
+export DEPLOYMENT_EPOCH_TAG="v1.9.2"
 ```
 
 Deployment scripts derive `base-release:*` salt tags from this epoch automatically unless raw `INFRA_*_SALT` values are provided.

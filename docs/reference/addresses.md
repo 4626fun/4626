@@ -9,7 +9,7 @@ Deployed contract addresses for 4626.
 
 ## Base (Hub Chain)
 
-### Current Live Infrastructure (`v1.9.1` deploy namespace, `v1.8.3` infra broadcast)
+### Current Live Infrastructure (`v1.9.2` deploy namespace, `v1.8.3` infra broadcast)
 
 | Contract | Address |
 |----------|---------|
@@ -30,7 +30,7 @@ Deployed contract addresses for 4626.
 
 Notes:
 - Shared/global contracts were freshly broadcast for the current live Base infra epoch and handed off into the deterministic v2 batcher deployment.
-- The repo's canonical deployment namespace is `v1.9.1` (fresh CREATE2 salt space for new per-creator deploys); the addresses above come from the `v1.8.3` infra broadcast that backs them.
+- The repo's canonical deployment namespace is `v1.9.2` (fresh CREATE2 salt space for new per-creator deploys); the addresses above come from the `v1.8.3` infra broadcast that backs them.
 - `DeploymentBatcherPhase3Helper` and `DeploymentBatcherUniV4Helper` are constructor-created by `DeploymentBatcher`.
 - `DeploymentBatcher` is forensically matched to the live CREATE2 deployment payload; explorer verification for that deployment path still mismatches.
 

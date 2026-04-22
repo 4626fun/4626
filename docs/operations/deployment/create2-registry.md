@@ -5,22 +5,22 @@ sidebar_position: 4
 
 # CREATE2 Registry
 
-Deterministic deployment inventory for the canonical `v1.9.1` Base infra epoch target. Addresses below are from the last completed broadcast (the `v1.8.3` epoch on `2026-04-11`); a fresh `v1.9.1` broadcast will derive new CREATE2 addresses from the same salt tag pattern.
+Deterministic deployment inventory for the canonical `v1.9.2` Base infra epoch target. Addresses below are from the last completed broadcast (the `v1.8.3` epoch on `2026-04-11`); a fresh `v1.9.2` broadcast will derive new CREATE2 addresses from the same salt tag pattern.
 
 ## Overview
 
 4626 infra resets rely on deterministic salt tags and CREATE2 so the v2 deployment layer stays reproducible across reruns.
 
-The next `v1.9.1` deployment will use these tags (same pattern the `v1.8.3` broadcast used, with the epoch tag swapped):
+The next `v1.9.2` deployment will use these tags (same pattern the `v1.8.3` broadcast used, with the epoch tag swapped):
 
-- `INFRA_STORE_SALT_TAG=base-release:UniversalBytecodeStore:v1.9.1`
-- `INFRA_DEPLOYER_FROM_STORE_SALT_TAG=base-release:UniversalCreate2DeployerFromStore:v1.9.1`
-- `INFRA_VAULT_CORE_MODULE_SALT_TAG=base-release:CreatorOVaultCoreModule:v1.9.1`
-- `INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG=base-release:CreatorOVaultStrategiesModule:v1.9.1`
-- `INFRA_VAULT_ADMIN_MODULE_SALT_TAG=base-release:CreatorOVaultAdminModule:v1.9.1`
-- `INFRA_DEPLOYMENT_BATCHER_SALT_TAG=base-release:DeploymentBatcher:v1.9.1`
+- `INFRA_STORE_SALT_TAG=base-release:UniversalBytecodeStore:v1.9.2`
+- `INFRA_DEPLOYER_FROM_STORE_SALT_TAG=base-release:UniversalCreate2DeployerFromStore:v1.9.2`
+- `INFRA_VAULT_CORE_MODULE_SALT_TAG=base-release:CreatorOVaultCoreModule:v1.9.2`
+- `INFRA_VAULT_STRATEGIES_MODULE_SALT_TAG=base-release:CreatorOVaultStrategiesModule:v1.9.2`
+- `INFRA_VAULT_ADMIN_MODULE_SALT_TAG=base-release:CreatorOVaultAdminModule:v1.9.2`
+- `INFRA_DEPLOYMENT_BATCHER_SALT_TAG=base-release:DeploymentBatcher:v1.9.2`
 
-Addresses in the table below are from the `2026-04-11` `v1.8.3` broadcast and remain the live Base CREATE2 addresses until a `v1.9.1` infra broadcast is performed.
+Addresses in the table below are from the `2026-04-11` `v1.8.3` broadcast and remain the live Base CREATE2 addresses until a `v1.9.2` infra broadcast is performed.
 
 ## Current Live Base Addresses
 
@@ -42,14 +42,14 @@ Addresses in the table below are from the `2026-04-11` `v1.8.3` broadcast and re
 Deterministic v2-only rerun:
 
 ```bash
-export DEPLOYMENT_EPOCH_TAG=v1.9.1
+export DEPLOYMENT_EPOCH_TAG=v1.9.2
 ./script/deploy-infra-v2.sh
 ```
 
 Full shared/global plus deterministic release:
 
 ```bash
-export DEPLOYMENT_EPOCH_TAG=v1.9.1
+export DEPLOYMENT_EPOCH_TAG=v1.9.2
 ./script/deploy-base-full-release.sh
 ```
 

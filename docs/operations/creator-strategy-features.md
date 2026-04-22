@@ -580,7 +580,7 @@ free-tier deploys will fail. Rollout checklist (operator):
 
 1. `forge build` → regenerate the bytecode manifest:
    ```bash
-   ./script/generate_bytecode_manifest.sh v1.9.1
+   ./script/generate_bytecode_manifest.sh v1.9.2
    ```
 2. Broadcast `SeedUniversalBytecodeStore` with the new `DeploymentBatcher`
    + `DeploymentBatcherPhase3Helper` bytecode ids.

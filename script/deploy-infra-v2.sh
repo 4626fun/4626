@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-DEFAULT_RELEASE_TAG="v1.9.1"
+DEFAULT_RELEASE_TAG="v1.9.2"
 DEFAULT_SHARED_GLOBAL_OUTPUT_PATH="${ROOT_DIR}/tmp/base-${DEFAULT_RELEASE_TAG}-shared-global.json"
 
 load_env_file() {

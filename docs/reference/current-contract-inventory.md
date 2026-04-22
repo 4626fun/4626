@@ -6,7 +6,7 @@ sidebar_position: 5
 # Current Contract Inventory (Base)
 
 Generated on: 2026-04-11  
-Scope: current live Base infra addresses (from the `v1.8.3` broadcast) plus the canonical `v1.9.1` deploy namespace for new per-creator vaults.
+Scope: current live Base infra addresses (from the `v1.8.3` broadcast) plus the canonical `v1.9.2` deploy namespace for new per-creator vaults.
 
 ## Sources
 

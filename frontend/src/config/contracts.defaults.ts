@@ -16,7 +16,7 @@ const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as ContractAddress
 export const BASE_DEFAULTS = {
   // Shared infrastructure
   // Shared resources (registry / lottery / VRF / payout factory) carry over
-  // from the v1.8.3 broadcast (2026-04-11); they were not re-deployed in v1.9.1.
+  // from the v1.8.3 broadcast (2026-04-11); they were not re-deployed in v1.9.2.
   registry: addr('9D86e8FAfA39527c4FE13AAa8FBD2B424f9f65Fb'),
   lotteryManager: addr('d593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357'),
   vrfConsumer: addr('dd25Ed1b3D258Ccc6D306a9a325Af1A7F96C7F47'),
@@ -34,7 +34,7 @@ export const BASE_DEFAULTS = {
   create2Factory: addr('4e59b44847b379578588920cA78FbF26c0B4956C'),
   create2Deployer: addr('aBf645362104F34D9C3FE48440bE7c99aaDE58E7'),
 
-  // v1.9.1 bytecode store + deployer-from-store (deployed 2026-04-19 via CREATE2
+  // v1.9.2 bytecode store + deployer-from-store (deployed 2026-04-19 via CREATE2
   // from DeployBaseMainnetDeployer). Supersedes the v1.8.3 pair at
   // 0xA009B1Bf...12e / 0xFd2657b6...2Ec (kept live for AKITA's pinned v1.8.3 vault
   // but no longer referenced by new deploys).
@@ -43,12 +43,12 @@ export const BASE_DEFAULTS = {
 
   // AA helpers
   vaultActivationBatcher: addr('7Cc0050842433968cc7A0884d192b61FD0b46F63'),
-  // v1.9.1 deployment batcher (deployed 2026-04-19). Enables the weight-0-skip
+  // v1.9.2 deployment batcher (deployed 2026-04-19). Enables the weight-0-skip
   // behavior for Charm/Ajna/Solana + at-least-1-strategy-required invariant
   // backing the creator_strategy_features paywall (see
   // docs/operations/creator-strategy-features.md). Predecessor v1.8.3 batcher
   // at 0xcDbEeB764df9878ebAFbf101cc818370f703bC4F stays live for AKITA's
-  // already-deployed vault but new deploys go through the v1.9.1 batcher.
+  // already-deployed vault but new deploys go through the v1.9.2 batcher.
   creatorVaultBatcher: addr('56E8527Bf0824155e1556aED5740366f248B68ca'),
   // Optional alias used by env-based rollout/cutover logic.
   creatorVaultBatcherAutoHandoff: addr('56E8527Bf0824155e1556aED5740366f248B68ca'),
