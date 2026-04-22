@@ -17,7 +17,7 @@
  * so Keepr's `/labels` and `/intel` commands can flag keyholders/creators.
  */
 
-import { type Address, parseAbi } from 'viem'
+import { type Abi, type Address, parseAbi } from 'viem'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -176,7 +176,7 @@ export async function scanAddressTransferredTokenIds(
     const singleLogs = (await client.getLogs({
       address: ALFACLUB.friendKey,
       event: FRIEND_KEY_ABI.find(
-        (x) => x.type === 'event' && x.name === 'TransferSingle',
+        (x: Abi[number]) => x.type === 'event' && x.name === 'TransferSingle',
       ),
       args: { to: address },
       fromBlock: r.fromBlock,
@@ -192,7 +192,7 @@ export async function scanAddressTransferredTokenIds(
     const batchLogs = (await client.getLogs({
       address: ALFACLUB.friendKey,
       event: FRIEND_KEY_ABI.find(
-        (x) => x.type === 'event' && x.name === 'TransferBatch',
+        (x: Abi[number]) => x.type === 'event' && x.name === 'TransferBatch',
       ),
       args: { to: address },
       fromBlock: r.fromBlock,
@@ -330,7 +330,7 @@ export async function getAlfaClubCreatorTokenId(
     const logs = (await client.getLogs({
       address: ALFACLUB.friendKey,
       event: FRIEND_KEY_ABI.find(
-        (x) => x.type === 'event' && x.name === 'TransferSingle',
+        (x: Abi[number]) => x.type === 'event' && x.name === 'TransferSingle',
       ),
       args: { from: ZERO_ADDRESS as Address, to: creator },
       fromBlock: opts?.fromBlock ?? DEFAULT_FROM_BLOCK,

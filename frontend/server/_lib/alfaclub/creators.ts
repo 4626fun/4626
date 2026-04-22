@@ -12,7 +12,7 @@
  * state across cron runs.
  */
 
-import { type Address } from 'viem'
+import { type Abi, type Address } from 'viem'
 
 import { getDb } from '../db/postgres.js'
 import {
@@ -165,7 +165,7 @@ async function scanMintsInRange(
     const logs = (await client.getLogs({
       address: ALFACLUB.friendKey,
       event: FRIEND_KEY_ABI.find(
-        (x) => x.type === 'event' && x.name === 'TransferSingle',
+        (x: Abi[number]) => x.type === 'event' && x.name === 'TransferSingle',
       ),
       args: { from: ZERO_ADDRESS as Address },
       fromBlock,
