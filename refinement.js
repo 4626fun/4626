@@ -1,9 +1,9 @@
 /* ══════════════════════════════════════════════════════════════════════
-   beauty.js — 4626.fun · Beauty Pass (runtime companion)
+   refinement.js — 4626.fun · Design Refinement (runtime companion)
    Tones ambient WebGL intensity without rebuilding shaders.
    Adds gentle chapter-aware atmosphere.
    ══════════════════════════════════════════════════════════════════════ */
-(function beautyPass() {
+(function refinementPass() {
   'use strict';
 
   // Wait until the scene is alive
@@ -21,11 +21,11 @@
     const origSet = u.uBrightness;
     if (origSet) {
       // Proxy the uniform so whatever the chapter system writes,
-      // we scale it by our beauty coefficient.
+      // we scale it by our refinement coefficient.
       let raw = origSet.value;
       Object.defineProperty(u.uBrightness, 'value', {
         configurable: true,
-        get() { return raw * BEAUTY.starMul; },
+        get() { return raw * REFINED.starMul; },
         set(v) { raw = v; }
       });
     }
@@ -65,7 +65,7 @@
       };
       const target = map[active] != null ? map[active] : 0.5;
       // Ease toward target — do not snap
-      BEAUTY.starMul += (target - BEAUTY.starMul) * 0.08;
+      REFINED.starMul += (target - REFINED.starMul) * 0.08;
     };
     window.addEventListener('scroll', () => {
       if (!raf) raf = requestAnimationFrame(updateAtmosphere);
@@ -78,7 +78,7 @@
     })();
   };
 
-  const BEAUTY = { starMul: 0.55 };
-  window.__beauty = BEAUTY;
+  const REFINED = { starMul: 0.55 };
+  window.__refined = REFINED;
   requestAnimationFrame(tick);
 })();
