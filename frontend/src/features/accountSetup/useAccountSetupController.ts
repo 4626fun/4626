@@ -842,19 +842,54 @@ export function useAccountSetupController(params: {
         ownerInstallIntent?: OwnerInstallIntent
         customOwnerPolicyToken?: string | null
         preferSponsoredFirst?: boolean
+        signerAddressOverride?: string | null
+        signerWalletOverride?: any
       },
     ) => {
       let effectiveWalletClient = walletClient
       let effectiveChainId = chainId
       let effectiveSwitchChain = switchChainAsync
+      let effectiveSignerAddress = ownerSignerAddress
 
-      if (shouldUsePrivyExternalOwnerWallet) {
+      if (typeof opts?.signerAddressOverride === 'string' && opts.signerAddressOverride.trim()) {
+        try {
+          effectiveSignerAddress = getAddress(opts.signerAddressOverride.trim())
+        } catch {
+          // Ignore malformed override and keep existing signer.
+        }
+      }
+
+      const signerWalletOverride = opts?.signerWalletOverride ?? null
+      if (signerWalletOverride && effectiveSignerAddress) {
+        let provider = await getPrivyEthereumProvider(signerWalletOverride)
+        if (!provider?.request && typeof setActiveWallet === 'function') {
+          await Promise.resolve(setActiveWallet(signerWalletOverride as any)).catch(() => null)
+          provider = await getPrivyEthereumProvider(signerWalletOverride)
+        }
+        if (!provider?.request) {
+          throw new Error('Embedded owner signer is unavailable. Reconnect your embedded wallet and retry.')
+        }
+        effectiveWalletClient = createWalletClient({
+          account: effectiveSignerAddress as Address,
+          chain: base,
+          transport: custom(provider),
+        }) as any
+        effectiveChainId = parseChainId((signerWalletOverride as any)?.chainId) ?? effectiveChainId
+        effectiveSwitchChain =
+          typeof (signerWalletOverride as any)?.switchChain === 'function'
+            ? ({ chainId: targetChainId }: { chainId: number }) =>
+                (signerWalletOverride as any).switchChain(targetChainId)
+            : switchChainAsync
+      } else if (shouldUsePrivyExternalOwnerWallet) {
+        if (!effectiveSignerAddress) {
+          throw new Error('Connect an owner wallet signer before submitting owner approval.')
+        }
         const provider = await getPrivyEthereumProvider(activeExternalOwnerWallet)
         if (!provider?.request) {
           throw new Error('Connected owner wallet signer is unavailable. Reconnect the wallet and retry.')
         }
         effectiveWalletClient = createWalletClient({
-          account: ownerSignerAddress as Address,
+          account: effectiveSignerAddress as Address,
           chain: base,
           transport: custom(provider),
         }) as any
@@ -865,6 +900,10 @@ export function useAccountSetupController(params: {
             : switchChainAsync
       }
 
+      if (!effectiveSignerAddress) {
+        throw new Error('Connect an owner wallet signer before submitting owner approval.')
+      }
+
       await submitPreparedOwnerTx({
         txRequest,
         walletClient: effectiveWalletClient,
@@ -873,7 +912,7 @@ export function useAccountSetupController(params: {
         authHeaders,
         ownerAddress,
         ownerIndexLookupAddress,
-        signerAddress: ownerSignerAddress,
+        signerAddress: effectiveSignerAddress,
         executionMode: canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect',
         canonicalSmartWalletAddress: canonicalCswAddress,
         publicClient,
@@ -893,6 +932,7 @@ export function useAccountSetupController(params: {
       ensurePaymasterSession,
       ownerSignerAddress,
       publicClient,
+      setActiveWallet,
       shouldUsePrivyExternalOwnerWallet,
       switchChainAsync,
       walletClient,
@@ -1441,6 +1481,13 @@ export function useAccountSetupController(params: {
         connectedCanonicalWalletSelected && preflightPayload?.data?.privyIsOwner === true
           ? preflightPayload?.data?.privyEmbeddedEoaAddress ?? null
           : null
+      const embeddedOwnerWalletCandidate =
+        preflightOwnerLookupAddress &&
+        subAccount.embeddedWallet &&
+        typeof (subAccount.embeddedWallet as any).address === 'string' &&
+        String((subAccount.embeddedWallet as any).address).toLowerCase() === preflightOwnerLookupAddress.toLowerCase()
+          ? subAccount.embeddedWallet
+          : null
 
       emitOwnerApprovalStageEvent({
         runId: approvalRunId,
@@ -1540,6 +1587,8 @@ export function useAccountSetupController(params: {
         ownerInstallIntent: 'customCoOwner',
         customOwnerPolicyToken,
         preferSponsoredFirst: customOwnerPolicyToken !== null,
+        signerAddressOverride: embeddedOwnerWalletCandidate ? preflightOwnerLookupAddress : null,
+        signerWalletOverride: embeddedOwnerWalletCandidate,
       })
       setNotice('Rabby co-owner added.')
       await loadMe({ showSpinner: false })
@@ -1567,6 +1616,7 @@ export function useAccountSetupController(params: {
     ownerSignerAddress,
     runCustomOwnerGasPreflight,
     sendPreparedOwnerTx,
+    subAccount.embeddedWallet,
   ])
 
   const zoraCrossAppCount = zoraStatus?.zoraCrossAppAccounts?.length ?? 0

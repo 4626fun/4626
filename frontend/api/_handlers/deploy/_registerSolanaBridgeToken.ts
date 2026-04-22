@@ -29,6 +29,7 @@ import { readDeployAuthFromRequest } from '../../../server/_lib/auth/deployAuth.
 import {
   SOLANA_NATIVE_MINT,
   resolveMeteoraAlphaVaultConfig,
+  resolveMeteoraAlphaVaultConfigHints,
 } from '../../../server/_lib/onchain/meteoraAlphaVaultConfig.js'
 import {
   evaluateSolanaOvaultMintCompatibility,
@@ -475,6 +476,19 @@ function describeFetchFailure(error: unknown): string {
   return String(error ?? 'Unknown fetch error')
 }
 
+function looksLikeHtmlAppShell(contentType: string | null, body: string): boolean {
+  const ct = String(contentType ?? '').toLowerCase()
+  if (ct.includes('text/html')) return true
+  const sample = String(body ?? '').trim().slice(0, 256).toLowerCase()
+  if (!sample) return false
+  return (
+    sample.startsWith('<!doctype html') ||
+    sample.startsWith('<html') ||
+    sample.includes('<head') ||
+    sample.includes('<body')
+  )
+}
+
 async function fetchWithTimeout(
   input: string,
   init: RequestInit,
@@ -639,6 +653,18 @@ async function tryProvisionDynamicRoute(params: {
             throw new Error(`Remote provisioner request failed (${details}).${healthHint}`)
           })
           const rawBody = await response.text().catch(() => '')
+          const contentType =
+            typeof (response as any)?.headers?.get === 'function'
+              ? response.headers.get('content-type')
+              : null
+          if (looksLikeHtmlAppShell(contentType, rawBody)) {
+            const healthHint = provisionerHealthUrl
+              ? ` Check health endpoint: ${provisionerHealthUrl}`
+              : ''
+            throw new Error(
+              `Remote provisioner URL appears misconfigured (returned HTML instead of JSON): ${provisionerUrl}.${healthHint}`,
+            )
+          }
           let json: Record<string, unknown> | null = null
           try {
             json = rawBody ? (JSON.parse(rawBody) as Record<string, unknown>) : null
@@ -902,6 +928,15 @@ async function buildMeteoraIxsViaProvisioner(params: {
         params.requestTimeoutMs,
       )
       const rawBody = await response.text().catch(() => '')
+      const contentType =
+        typeof (response as any)?.headers?.get === 'function'
+          ? response.headers.get('content-type')
+          : null
+      if (looksLikeHtmlAppShell(contentType, rawBody)) {
+        throw new Error(
+          `status=${response.status} provisioner_url_misconfigured_html_response (${url})`,
+        )
+      }
       const json = rawBody ? (JSON.parse(rawBody) as Record<string, unknown>) : null
       if (!response.ok || !json || json.success !== true) {
         const detail = typeof json?.error === 'string' ? json.error : rawBody.slice(0, 240)
@@ -1164,11 +1199,21 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const meteoraConfig = await resolveMeteoraAlphaVaultConfig({ creatorToken })
       if (!meteoraConfig) {
+        const hints = await resolveMeteoraAlphaVaultConfigHints({ creatorToken }).catch(() => null)
+        const supersededHint =
+          hints?.latestDbRowEnabled === false && hints.supersededReason
+            ? ` Latest DB row is disabled (${hints.supersededReason})` +
+              (hints.supersededNewMint ? `, replacement mint=${hints.supersededNewMint}` : '') +
+              (hints.supersededNewAdapter ? `, replacement adapter=${hints.supersededNewAdapter}` : '') +
+              '.'
+            : ''
         return res.status(409).json({
           success: false,
           error:
             `Missing Meteora DLMM+Alpha Vault mapping for creator token ${creatorToken}. ` +
-            'Add creator mapping in creator_meteora_alpha_vaults or METEORA_CREATOR_ALPHA_VAULT_MAP_JSON.',
+            'Add an active creator mapping in creator_meteora_alpha_vaults or METEORA_CREATOR_ALPHA_VAULT_MAP_JSON, then retry. ' +
+            'If you are bootstrapping Solana side, run `pnpm -C cre run solana:bootstrap-side` with METEORA_ALPHA_VAULT, ' +
+            `ALPHA_VAULT_PROGRAM_ID, and DEPOSIT_ACCOUNTS_JSON set.${supersededHint}`,
         } satisfies ApiEnvelope<never>)
       }
       if (readStrictSolPairEnabled()) {

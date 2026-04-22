@@ -21,6 +21,16 @@ export type MeteoraAlphaVaultConfig = {
   source: 'db' | 'env'
 }
 
+export type MeteoraAlphaVaultConfigHints = {
+  creatorToken: Address
+  hasAnyDbRow: boolean
+  latestDbRowEnabled: boolean | null
+  latestDbRowUpdatedAtIso: string | null
+  supersededReason: string | null
+  supersededNewMint: string | null
+  supersededNewAdapter: string | null
+}
+
 let schemaEnsured = false
 
 function isSolanaPubkey(value: unknown): value is string {
@@ -186,6 +196,53 @@ async function resolveFromDb(creatorToken: Address): Promise<MeteoraAlphaVaultCo
   )
 }
 
+async function readDbHints(creatorToken: Address): Promise<MeteoraAlphaVaultConfigHints | null> {
+  if (!isDbConfigured()) return null
+  const db = (await getDb()) as Db | null
+  if (!db) return null
+  await ensureMeteoraConfigSchema(db)
+
+  const result = await db.sql`
+    SELECT enabled, metadata, updated_at
+    FROM creator_meteora_alpha_vaults
+    WHERE LOWER(creator_token) = ${creatorToken}
+    ORDER BY updated_at DESC
+    LIMIT 1;
+  `
+  const row = result?.rows?.[0]
+  if (!row) {
+    return {
+      creatorToken,
+      hasAnyDbRow: false,
+      latestDbRowEnabled: null,
+      latestDbRowUpdatedAtIso: null,
+      supersededReason: null,
+      supersededNewMint: null,
+      supersededNewAdapter: null,
+    }
+  }
+
+  const metadata = asRecord(row.metadata)
+  const supersededReasonRaw = typeof metadata?.supersededReason === 'string' ? metadata.supersededReason.trim() : ''
+  const supersededBy = asRecord(metadata?.supersededBy)
+  const supersededNewMintRaw = typeof supersededBy?.newMint === 'string' ? supersededBy.newMint.trim() : ''
+  const supersededNewAdapterRaw = typeof supersededBy?.newAdapter === 'string' ? supersededBy.newAdapter.trim() : ''
+  return {
+    creatorToken,
+    hasAnyDbRow: true,
+    latestDbRowEnabled: row.enabled === true,
+    latestDbRowUpdatedAtIso:
+      typeof row.updated_at === 'string'
+        ? row.updated_at
+        : row.updated_at instanceof Date
+          ? row.updated_at.toISOString()
+          : null,
+    supersededReason: supersededReasonRaw || null,
+    supersededNewMint: isSolanaPubkey(supersededNewMintRaw) ? supersededNewMintRaw : null,
+    supersededNewAdapter: isAddress(supersededNewAdapterRaw) ? getAddress(supersededNewAdapterRaw) : null,
+  }
+}
+
 function resolveFromEnv(creatorToken: Address): MeteoraAlphaVaultConfig | null {
   const mapRaw = String(process.env.METEORA_CREATOR_ALPHA_VAULT_MAP_JSON ?? '').trim()
   if (!mapRaw) return null
@@ -221,4 +278,12 @@ export async function resolveMeteoraAlphaVaultConfig(params: {
   const dbConfig = await resolveFromDb(creatorToken)
   if (dbConfig) return dbConfig
   return resolveFromEnv(creatorToken)
+}
+
+export async function resolveMeteoraAlphaVaultConfigHints(params: {
+  creatorToken: string
+}): Promise<MeteoraAlphaVaultConfigHints | null> {
+  const creatorToken = normalizeCreatorToken(params.creatorToken)
+  if (!creatorToken) return null
+  return readDbHints(creatorToken)
 }
