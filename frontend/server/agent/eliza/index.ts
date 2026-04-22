@@ -499,6 +499,7 @@ type RuntimeLeaseState = {
 let latestEnvValidation: EnvValidationResult = { errors: [], warnings: [] }
 let backgroundWorker: { stop: () => void } | null = null
 let alfaclubRelayerStop: (() => void) | null = null
+let alfaclubChatBridgeStop: (() => void) | null = null
 let queueEnabled = false
 let dbRequiredForRuntime = false
 let stderrNoiseFilterInstalled = false
@@ -1533,6 +1534,13 @@ async function shutdown() {
     alfaclubRelayerStop = null
   }
 
+  if (alfaclubChatBridgeStop) {
+    try {
+      alfaclubChatBridgeStop()
+    } catch {}
+    alfaclubChatBridgeStop = null
+  }
+
   logger.info(`[eliza] All ${runningAgents.size} agents stopped`)
   runningAgents.clear()
   await releaseRuntimeLease()
@@ -2079,6 +2087,58 @@ async function main() {
         }
       } catch (err) {
         logger.warn('[alfaclub-relayer] boot failed — continuing without relayer', {
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    })()
+
+    // AlfaClub in-app chat bridge — polls room history for `/alfa` commands
+    // and responds in-room via AlfaClub websocket frames.
+    //
+    // Dynamic import + fail-open behavior mirror the relayer safeguards above:
+    // this optional integration must never block core XMTP agent readiness.
+    void (async () => {
+      try {
+        const mod = await import('../../_lib/alfaclub/chatBridge.js')
+        const bridgeStart = mod.startAlfaClubChatBridge({
+          onTick: (result) => {
+            if (result.seeded) {
+              logger.info('[alfaclub-chat] seeded', {
+                roomId: result.roomId,
+                fetched: result.fetched,
+                unseen: result.unseen,
+              })
+              return
+            }
+            if (result.processed === 0 && result.errors.length === 0) return
+            logger.info('[alfaclub-chat] tick', {
+              roomId: result.roomId,
+              fetched: result.fetched,
+              unseen: result.unseen,
+              processed: result.processed,
+              replied: result.replied,
+              errors: result.errors.slice(0, 3),
+            })
+          },
+          onError: (err) => {
+            logger.warn('[alfaclub-chat] tick error', {
+              error: err instanceof Error ? err.message : String(err),
+            })
+          },
+        })
+        if (bridgeStart.started) {
+          alfaclubChatBridgeStop = bridgeStart.stop
+          logger.info('[alfaclub-chat] started', {
+            roomId: bridgeStart.roomId,
+            intervalMs: bridgeStart.intervalMs,
+          })
+        } else {
+          logger.info('[alfaclub-chat] not started', {
+            reason: bridgeStart.reason ?? 'unknown',
+          })
+        }
+      } catch (err) {
+        logger.warn('[alfaclub-chat] boot failed — continuing without chat bridge', {
           error: err instanceof Error ? err.message : String(err),
         })
       }

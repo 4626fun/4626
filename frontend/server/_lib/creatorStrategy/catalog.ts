@@ -38,6 +38,12 @@ export type CreatorStrategyFeatureKey =
   | 'ajna_sleeve'
   | 'solana_bridge_strategy'
   | 'solana_meteora_alpha_vault'
+  | `deploy_vanity_vault_prefix_len_${DeployVanityLength}`
+  | `deploy_vanity_share_suffix_len_${DeployVanityLength}`
+
+export const DEPLOY_VANITY_ALLOWED_LENGTHS = [1, 2, 3, 4, 5] as const
+export type DeployVanityLength = (typeof DEPLOY_VANITY_ALLOWED_LENGTHS)[number]
+export type DeployVanityFeatureKind = 'vaultPrefix' | 'shareSuffix'
 
 /**
  * Feature keys that gate a strategy's inclusion at deploy time. These
@@ -52,6 +58,56 @@ export const DEPLOY_GATING_FEATURE_KEYS = {
   ajna: 'ajna_sleeve',
   solana: 'solana_bridge_strategy',
 } as const satisfies Record<'charm' | 'ajna' | 'solana', CreatorStrategyFeatureKey>
+
+/**
+ * Paid vanity feature keys used by deploy session validation.
+ * These do not affect Phase-3 strategy weights; they gate vanity
+ * address customization only.
+ */
+export const DEPLOY_VANITY_FEATURE_KEYS_BY_KIND_AND_LENGTH = {
+  vaultPrefix: {
+    1: 'deploy_vanity_vault_prefix_len_1',
+    2: 'deploy_vanity_vault_prefix_len_2',
+    3: 'deploy_vanity_vault_prefix_len_3',
+    4: 'deploy_vanity_vault_prefix_len_4',
+    5: 'deploy_vanity_vault_prefix_len_5',
+  },
+  shareSuffix: {
+    1: 'deploy_vanity_share_suffix_len_1',
+    2: 'deploy_vanity_share_suffix_len_2',
+    3: 'deploy_vanity_share_suffix_len_3',
+    4: 'deploy_vanity_share_suffix_len_4',
+    5: 'deploy_vanity_share_suffix_len_5',
+  },
+} as const satisfies Record<DeployVanityFeatureKind, Record<DeployVanityLength, CreatorStrategyFeatureKey>>
+
+export const DEPLOY_VANITY_PRICE_USDC_BY_LENGTH = {
+  1: 25_000_000n, // $25
+  2: 75_000_000n, // $75
+  3: 200_000_000n, // $200
+  4: 500_000_000n, // $500
+  5: 1_250_000_000n, // $1,250
+} as const satisfies Record<DeployVanityLength, bigint>
+
+export function getDeployVanityFeatureKey(params: {
+  kind: DeployVanityFeatureKind
+  length: number
+}): CreatorStrategyFeatureKey | null {
+  const normalized = Math.floor(params.length)
+  if (!DEPLOY_VANITY_ALLOWED_LENGTHS.includes(normalized as DeployVanityLength)) return null
+  return DEPLOY_VANITY_FEATURE_KEYS_BY_KIND_AND_LENGTH[params.kind][normalized as DeployVanityLength]
+}
+
+export function listDeployVanityFeatureKeysAtOrAbove(params: {
+  kind: DeployVanityFeatureKind
+  minLength: number
+}): CreatorStrategyFeatureKey[] {
+  const normalized = Math.floor(params.minLength)
+  if (!Number.isFinite(normalized)) return []
+  return DEPLOY_VANITY_ALLOWED_LENGTHS
+    .filter((length) => length >= normalized)
+    .map((length) => DEPLOY_VANITY_FEATURE_KEYS_BY_KIND_AND_LENGTH[params.kind][length])
+}
 
 export type CreatorStrategyFeatureDefinition = {
   /** Stable machine-readable identifier. */
@@ -158,6 +214,161 @@ export const CREATOR_STRATEGY_FEATURE_CATALOG: Record<
       'Creator coin registered on the canonical SolanaBridgeAdapter (verify with `scripts/verify-solana-mint-parity.ts`)',
     ],
     estimatedActivationWindow: 'Usually within 1 business day; longer if the Solana keeper needs funding.',
+  },
+  deploy_vanity_vault_prefix_len_1: {
+    key: 'deploy_vanity_vault_prefix_len_1',
+    displayName: 'Deploy vanity: vault prefix (1 char)',
+    tagline: 'Unlock custom vault prefix targeting for 1 hex character.',
+    description:
+      'Enables paid custom vault-address vanity targeting during deploy planning. This tier supports ' +
+      '1 custom hex character after `0x` for the vault CREATE2 address. Free default prefix `0x4626` remains available without activation.',
+    priceUsdc: DEPLOY_VANITY_PRICE_USDC_BY_LENGTH[1],
+    provisionerTag: 'deploy_vanity_vault_prefix_len_1',
+    requires: [
+      'Feature is consumed by deploy-session validation when custom vanity vault prefix is requested',
+      'Higher prefix-length tiers also satisfy this tier',
+    ],
+    estimatedActivationWindow: 'Instant — entitlement is active as soon as payment is verified.',
+  },
+  deploy_vanity_vault_prefix_len_2: {
+    key: 'deploy_vanity_vault_prefix_len_2',
+    displayName: 'Deploy vanity: vault prefix (2 chars)',
+    tagline: 'Unlock custom vault prefix targeting for 2 hex characters.',
+    description:
+      'Enables paid custom vault-address vanity targeting during deploy planning. This tier supports ' +
+      '2 custom hex characters after `0x` for the vault CREATE2 address. Free default prefix `0x4626` remains available without activation.',
+    priceUsdc: DEPLOY_VANITY_PRICE_USDC_BY_LENGTH[2],
+    provisionerTag: 'deploy_vanity_vault_prefix_len_2',
+    requires: [
+      'Feature is consumed by deploy-session validation when custom vanity vault prefix is requested',
+      'Higher prefix-length tiers also satisfy this tier',
+    ],
+    estimatedActivationWindow: 'Instant — entitlement is active as soon as payment is verified.',
+  },
+  deploy_vanity_vault_prefix_len_3: {
+    key: 'deploy_vanity_vault_prefix_len_3',
+    displayName: 'Deploy vanity: vault prefix (3 chars)',
+    tagline: 'Unlock custom vault prefix targeting for 3 hex characters.',
+    description:
+      'Enables paid custom vault-address vanity targeting during deploy planning. This tier supports ' +
+      '3 custom hex characters after `0x` for the vault CREATE2 address. Free default prefix `0x4626` remains available without activation.',
+    priceUsdc: DEPLOY_VANITY_PRICE_USDC_BY_LENGTH[3],
+    provisionerTag: 'deploy_vanity_vault_prefix_len_3',
+    requires: [
+      'Feature is consumed by deploy-session validation when custom vanity vault prefix is requested',
+      'Higher prefix-length tiers also satisfy this tier',
+    ],
+    estimatedActivationWindow: 'Instant — entitlement is active as soon as payment is verified.',
+  },
+  deploy_vanity_vault_prefix_len_4: {
+    key: 'deploy_vanity_vault_prefix_len_4',
+    displayName: 'Deploy vanity: vault prefix (4 chars)',
+    tagline: 'Unlock custom vault prefix targeting for 4 hex characters.',
+    description:
+      'Enables paid custom vault-address vanity targeting during deploy planning. This tier supports ' +
+      '4 custom hex characters after `0x` for the vault CREATE2 address. Free default prefix `0x4626` remains available without activation.',
+    priceUsdc: DEPLOY_VANITY_PRICE_USDC_BY_LENGTH[4],
+    provisionerTag: 'deploy_vanity_vault_prefix_len_4',
+    requires: [
+      'Feature is consumed by deploy-session validation when custom vanity vault prefix is requested',
+      'Higher prefix-length tiers also satisfy this tier',
+    ],
+    estimatedActivationWindow: 'Instant — entitlement is active as soon as payment is verified.',
+  },
+  deploy_vanity_vault_prefix_len_5: {
+    key: 'deploy_vanity_vault_prefix_len_5',
+    displayName: 'Deploy vanity: vault prefix (5 chars)',
+    tagline: 'Unlock custom vault prefix targeting for 5 hex characters.',
+    description:
+      'Enables paid custom vault-address vanity targeting during deploy planning. This tier supports ' +
+      '5 custom hex characters after `0x` for the vault CREATE2 address. Free default prefix `0x4626` remains available without activation.',
+    priceUsdc: DEPLOY_VANITY_PRICE_USDC_BY_LENGTH[5],
+    provisionerTag: 'deploy_vanity_vault_prefix_len_5',
+    requires: [
+      'Feature is consumed by deploy-session validation when custom vanity vault prefix is requested',
+      'Vanity matching remains best-effort within configured search limits',
+    ],
+    estimatedActivationWindow: 'Instant — entitlement is active as soon as payment is verified.',
+  },
+  deploy_vanity_share_suffix_len_1: {
+    key: 'deploy_vanity_share_suffix_len_1',
+    displayName: 'Deploy vanity: share suffix (1 char)',
+    tagline: 'Unlock custom share-token suffix vanity for 1 hex character.',
+    description:
+      'Enables paid custom ShareOFT address suffix vanity during Phase 1 planning. This tier supports ' +
+      '1 custom hex character at the end of the share token address. Free default suffix `4626` remains available without activation.',
+    priceUsdc: DEPLOY_VANITY_PRICE_USDC_BY_LENGTH[1],
+    provisionerTag: 'deploy_vanity_share_suffix_len_1',
+    requires: [
+      'Feature is consumed by deploy-session validation when custom share vanity is requested',
+      'Guaranteed suffix requires batcher support for phase1WithSalt / split Phase-1 with salt selectors',
+      'Higher suffix-length tiers also satisfy this tier',
+    ],
+    estimatedActivationWindow: 'Instant — entitlement is active as soon as payment is verified.',
+  },
+  deploy_vanity_share_suffix_len_2: {
+    key: 'deploy_vanity_share_suffix_len_2',
+    displayName: 'Deploy vanity: share suffix (2 chars)',
+    tagline: 'Unlock custom share-token suffix vanity for 2 hex characters.',
+    description:
+      'Enables paid custom ShareOFT address suffix vanity during Phase 1 planning. This tier supports ' +
+      '2 custom hex characters at the end of the share token address. Free default suffix `4626` remains available without activation.',
+    priceUsdc: DEPLOY_VANITY_PRICE_USDC_BY_LENGTH[2],
+    provisionerTag: 'deploy_vanity_share_suffix_len_2',
+    requires: [
+      'Feature is consumed by deploy-session validation when custom share vanity is requested',
+      'Guaranteed suffix requires batcher support for phase1WithSalt / split Phase-1 with salt selectors',
+      'Higher suffix-length tiers also satisfy this tier',
+    ],
+    estimatedActivationWindow: 'Instant — entitlement is active as soon as payment is verified.',
+  },
+  deploy_vanity_share_suffix_len_3: {
+    key: 'deploy_vanity_share_suffix_len_3',
+    displayName: 'Deploy vanity: share suffix (3 chars)',
+    tagline: 'Unlock custom share-token suffix vanity for 3 hex characters.',
+    description:
+      'Enables paid custom ShareOFT address suffix vanity during Phase 1 planning. This tier supports ' +
+      '3 custom hex characters at the end of the share token address. Free default suffix `4626` remains available without activation.',
+    priceUsdc: DEPLOY_VANITY_PRICE_USDC_BY_LENGTH[3],
+    provisionerTag: 'deploy_vanity_share_suffix_len_3',
+    requires: [
+      'Feature is consumed by deploy-session validation when custom share vanity is requested',
+      'Guaranteed suffix requires batcher support for phase1WithSalt / split Phase-1 with salt selectors',
+      'Higher suffix-length tiers also satisfy this tier',
+    ],
+    estimatedActivationWindow: 'Instant — entitlement is active as soon as payment is verified.',
+  },
+  deploy_vanity_share_suffix_len_4: {
+    key: 'deploy_vanity_share_suffix_len_4',
+    displayName: 'Deploy vanity: share suffix (4 chars)',
+    tagline: 'Unlock custom share-token suffix vanity for 4 hex characters.',
+    description:
+      'Enables paid custom ShareOFT address suffix vanity during Phase 1 planning. This tier supports ' +
+      '4 custom hex characters at the end of the share token address. Free default suffix `4626` remains available without activation.',
+    priceUsdc: DEPLOY_VANITY_PRICE_USDC_BY_LENGTH[4],
+    provisionerTag: 'deploy_vanity_share_suffix_len_4',
+    requires: [
+      'Feature is consumed by deploy-session validation when custom share vanity is requested',
+      'Guaranteed suffix requires batcher support for phase1WithSalt / split Phase-1 with salt selectors',
+      'Higher suffix-length tiers also satisfy this tier',
+    ],
+    estimatedActivationWindow: 'Instant — entitlement is active as soon as payment is verified.',
+  },
+  deploy_vanity_share_suffix_len_5: {
+    key: 'deploy_vanity_share_suffix_len_5',
+    displayName: 'Deploy vanity: share suffix (5 chars)',
+    tagline: 'Unlock custom share-token suffix vanity for 5 hex characters.',
+    description:
+      'Enables paid custom ShareOFT address suffix vanity during Phase 1 planning. This tier supports ' +
+      '5 custom hex characters at the end of the share token address. Free default suffix `4626` remains available without activation.',
+    priceUsdc: DEPLOY_VANITY_PRICE_USDC_BY_LENGTH[5],
+    provisionerTag: 'deploy_vanity_share_suffix_len_5',
+    requires: [
+      'Feature is consumed by deploy-session validation when custom share vanity is requested',
+      'Guaranteed suffix requires batcher support for phase1WithSalt / split Phase-1 with salt selectors',
+      'Vanity matching remains best-effort within configured search limits',
+    ],
+    estimatedActivationWindow: 'Instant — entitlement is active as soon as payment is verified.',
   },
 } as const
 

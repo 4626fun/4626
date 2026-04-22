@@ -67,7 +67,7 @@ const OWNER_WRITE_ABI = [
 function usage(): void {
   process.stdout.write(`Usage:
   pnpm -C frontend tsx scripts/link-canonical-csw-owner.ts \\
-    --canonical-csw 0xab6d5c10b03300326cd7fab7267ae192842967b5 \\
+    --canonical-csw 0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef \\
     --owner-to-add 0xd1780fc23f810b52d8cf277e54842dd8803c9361 \\
     --signer-private-key 0x... \\
     --app-origin https://4626.fun \\

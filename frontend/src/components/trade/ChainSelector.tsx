@@ -1,6 +1,5 @@
-import { memo, useCallback, useMemo, useState } from 'react'
-import { Select } from '@coinbase/cds-web/alpha/select'
-import type { SelectOption } from '@coinbase/cds-web/alpha/select'
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { ChevronDown } from 'lucide-react'
 import { SUPPORTED_CHAINS, type SupportedChainId } from '@/config/chains'
 
 export interface ChainSelectorProps {
@@ -45,38 +44,103 @@ export const ChainSelector = memo(function ChainSelector({
   onSelect,
   compact = false,
 }: ChainSelectorProps) {
-  const options = useMemo(
-    () =>
-      SUPPORTED_CHAINS.map((chain) => {
-        const isWalletChain = chain.id === walletChainId
-        const option: SelectOption<string> & { media?: React.ReactElement } = {
-          value: String(chain.id),
-          label: chain.name,
-          description: isWalletChain && chain.id !== selectedChainId ? 'Wallet connected' : undefined,
-          media: <ChainLogo src={chain.logoUrl} name={chain.name} size={compact ? 16 : 20} />,
-        }
-        return option
-      }),
-    [walletChainId, selectedChainId, compact],
+  const listboxId = useId()
+  const wrapperRef = useRef<HTMLDivElement | null>(null)
+  const [open, setOpen] = useState(false)
+
+  const selected = useMemo(
+    () => SUPPORTED_CHAINS.find((c) => c.id === selectedChainId) ?? SUPPORTED_CHAINS[0] ?? null,
+    [selectedChainId],
   )
 
-  const handleChange = useCallback(
-    (value: string | null) => {
-      if (value != null) {
-        onSelect(Number(value) as SupportedChainId)
-      }
+  if (!selected) return null
+
+  useEffect(() => {
+    if (!open) return
+    function onPointerDown(e: PointerEvent) {
+      const el = wrapperRef.current
+      if (!el) return
+      if (el.contains(e.target as Node)) return
+      setOpen(false)
+    }
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
+    window.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('keydown', onKeyDown)
+    return () => {
+      window.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
+  const handleSelect = useCallback(
+    (chainId: SupportedChainId) => {
+      onSelect(chainId)
+      setOpen(false)
     },
     [onSelect],
   )
 
+  const triggerSize = compact ? 16 : 20
+  const optionSize = compact ? 18 : 22
+
   return (
-    <Select
-      value={String(selectedChainId)}
-      onChange={handleChange}
-      options={options}
-      compact={compact}
-      accessibilityLabel="Select network"
-      bordered={false}
-    />
+    <div ref={wrapperRef} className="relative inline-flex">
+      <button
+        type="button"
+        aria-label={`Select network, ${selected.name} selected`}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-controls={listboxId}
+        onClick={() => setOpen((v) => !v)}
+        className={`inline-flex items-center gap-1 rounded-lg ${compact ? 'px-1.5 py-1' : 'px-2 py-1.5'} text-vault-text transition-colors hover:bg-[rgb(var(--vault-card-raised)/0.55)] focus:outline-none focus-visible:ring-2 focus-visible:ring-[rgb(var(--vault-border-strong))]`}
+      >
+        <ChainLogo src={selected.logoUrl} name={selected.name} size={triggerSize} />
+        <ChevronDown
+          className={`${compact ? 'h-3.5 w-3.5' : 'h-4 w-4'} text-vault-subtext transition-transform ${open ? 'rotate-180' : ''}`}
+          aria-hidden="true"
+        />
+      </button>
+
+      {open && (
+        <ul
+          id={listboxId}
+          role="listbox"
+          aria-label="Select network"
+          className="absolute right-0 top-full z-50 mt-1.5 min-w-[220px] max-w-[calc(100vw-32px)] overflow-hidden rounded-xl border border-white/10 bg-black/90 p-1 shadow-xl backdrop-blur"
+        >
+          {SUPPORTED_CHAINS.map((chain) => {
+            const isSelected = chain.id === selectedChainId
+            const isWalletChain = chain.id === walletChainId
+            return (
+              <li key={chain.id} role="none">
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  onClick={() => handleSelect(chain.id)}
+                  className={`flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors ${
+                    isSelected
+                      ? 'bg-[rgb(var(--vault-card-raised)/0.75)] text-vault-text'
+                      : 'text-vault-text hover:bg-[rgb(var(--vault-card-raised)/0.55)]'
+                  }`}
+                >
+                  <ChainLogo src={chain.logoUrl} name={chain.name} size={optionSize} />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="text-sm font-medium leading-tight">{chain.name}</span>
+                    {isWalletChain && !isSelected ? (
+                      <span className="text-[10px] leading-tight text-vault-subtext">
+                        Wallet connected
+                      </span>
+                    ) : null}
+                  </span>
+                </button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
   )
 })

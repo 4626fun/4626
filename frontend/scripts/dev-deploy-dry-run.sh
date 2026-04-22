@@ -188,6 +188,10 @@ if [[ "$USE_LOCAL_BATCHER" == "1" ]]; then
   export CREATOR_VAULT_BATCHER="$LOCAL_BATCHER_ADDRESS"
   echo "Using local DeploymentBatcher at ${LOCAL_BATCHER_ADDRESS}"
 fi
+
+if [[ "${DEPLOY_DRY_RUN_CLEAR_VITE_CACHE:-1}" == "1" ]]; then
+  rm -rf "$FRONTEND_DIR/node_modules/.vite"
+fi
 DEV_PORT="${DEPLOY_DRY_RUN_PORT:-5174}"
 ORIG_DEV_PORT="$DEV_PORT"
 if port_in_use "$DEV_PORT"; then

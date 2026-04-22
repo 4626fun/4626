@@ -22,56 +22,6 @@ import '@4626/brand-kit/styles'
 import './index.css'
 import '@google/model-viewer' // registers <model-viewer>; bundled so devtools don't resolve CDN maps under webRoot
 
-function isLockedEthereumDescriptor(descriptor: PropertyDescriptor | undefined): boolean {
-  if (!descriptor) return false
-  if (typeof descriptor.get === 'function' && typeof descriptor.set !== 'function') return true
-  if (Object.prototype.hasOwnProperty.call(descriptor, 'writable') && descriptor.writable === false) return true
-  return false
-}
-
-function stabilizeWindowEthereumSlot() {
-  if (typeof window === 'undefined') return
-  try {
-    // Some wallet stacks expose a locked `window.ethereum` descriptor (own or inherited).
-    // Later provider assignment attempts then throw and can disrupt wallet boot.
-    // Normalize it to a writable own data property when we safely can.
-    const ownDescriptor = Object.getOwnPropertyDescriptor(window, 'ethereum')
-    if (ownDescriptor && !isLockedEthereumDescriptor(ownDescriptor)) return
-
-    let cursor: object | null = window
-    let inheritedDescriptor: PropertyDescriptor | null = null
-    while (!ownDescriptor && cursor) {
-      const descriptor = Object.getOwnPropertyDescriptor(cursor, 'ethereum')
-      if (descriptor) {
-        inheritedDescriptor = descriptor
-        break
-      }
-      cursor = Object.getPrototypeOf(cursor)
-    }
-
-    const lockedOwn = isLockedEthereumDescriptor(ownDescriptor)
-    const lockedInherited = isLockedEthereumDescriptor(inheritedDescriptor ?? undefined)
-    if (!lockedOwn && !lockedInherited) return
-    if (ownDescriptor && ownDescriptor.configurable !== true) return
-
-    let currentProvider: unknown = undefined
-    try {
-      currentProvider = (window as any).ethereum
-    } catch {
-      currentProvider = undefined
-    }
-
-    Object.defineProperty(window, 'ethereum', {
-      configurable: true,
-      enumerable: true,
-      writable: true,
-      value: currentProvider,
-    })
-  } catch {
-    // ignore: best-effort hardening
-  }
-}
-
 function stabilizeScrollMeasurementRoots() {
   if (typeof document === 'undefined') return
   try {
@@ -191,9 +141,7 @@ function tryRecoverFromViteOptimizeDepError(message: string, source: string): bo
   if (!import.meta.env.DEV || typeof window === 'undefined') return false
   if (!isViteOutdatedOptimizeDepError(message, source)) return false
 
-  // Local dev often has extension-driven module noise; auto-reload here can feel
-  // like a hard refresh loop. Keep recovery manual on loopback origins.
-  if (isLoopbackHostname(window.location.hostname)) return false
+  const onLoopback = isLoopbackHostname(window.location.hostname)
 
   const path = String(window.location.pathname || '').toLowerCase()
   // Auto reload can feel like a refresh loop on auth-heavy routes.
@@ -204,7 +152,9 @@ function tryRecoverFromViteOptimizeDepError(message: string, source: string): bo
   try {
     const last = Number(window.sessionStorage.getItem(VITE_OPTIMIZE_DEP_RECOVERY_KEY) ?? '0')
     const now = Date.now()
-    if (Number.isFinite(last) && now - last < VITE_OPTIMIZE_DEP_RECOVERY_WINDOW_MS) return false
+    // On localhost, allow one quicker self-heal pass for Vite re-optimize 504s.
+    const minWindowMs = onLoopback ? 5_000 : VITE_OPTIMIZE_DEP_RECOVERY_WINDOW_MS
+    if (Number.isFinite(last) && now - last < minWindowMs) return false
     window.sessionStorage.setItem(VITE_OPTIMIZE_DEP_RECOVERY_KEY, String(now))
   } catch {
     return false
@@ -215,7 +165,6 @@ function tryRecoverFromViteOptimizeDepError(message: string, source: string): bo
 
 if (typeof window !== 'undefined') {
   try {
-    stabilizeWindowEthereumSlot()
     stabilizeScrollMeasurementRoots()
 
     if (!(window as any).__cvWalletNoisePatched) {

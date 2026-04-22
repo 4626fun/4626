@@ -52,6 +52,12 @@ export const FRIEND_KEY_ABI = parseAbi([
   'function stakingPoolByTokenId(uint256 tokenId) view returns (address)',
   'function totalSupply(uint256 id) view returns (uint256)',
   'function exists(uint256 id) view returns (bool)',
+  'function getBuyPriceAfterFee(uint256 id, uint256 amount) view returns (uint256)',
+  'function bondingToken() view returns (address)',
+  'function buyShares(uint256 tokenId, uint256 amount, uint256 maxSpend)',
+  'function canRegisterRoom(address creator, uint8 roomType, uint8 tier) view returns (bool)',
+  'function registerCreator(uint8 tier, uint256 additionalKeys, string metadata, bytes signature) returns (uint256)',
+  'function registerSocialCreator(uint8 tier, uint256 additionalKeys, string metadata, bytes signature) returns (uint256)',
   'event TransferSingle(address indexed operator, address indexed from, address indexed to, uint256 id, uint256 value)',
   'event TransferBatch(address indexed operator, address indexed from, address indexed to, uint256[] ids, uint256[] values)',
 ])

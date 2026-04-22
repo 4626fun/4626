@@ -1,4 +1,4 @@
-import type { Address } from 'viem'
+import { encodeFunctionData, formatUnits, parseAbi, type Address } from 'viem'
 
 import {
   getLatestSnapshotTs,
@@ -13,7 +13,44 @@ import {
   readVigilanteFlags,
   type VigilanteFlags,
 } from '../../_lib/alfaclub/vigilante.js'
+import { assertTeeAttestationOrThrow } from '../../_lib/agent/teeAttestationGate.js'
+import { logger } from '../../_lib/infra/logger.js'
+import { ALFACLUB, FRIEND_KEY_ABI } from '../../_lib/wallet/alfaclub.js'
+import {
+  isExecutionReady,
+  resolveCommandIssuerContextByAddress,
+} from '../../_lib/wallet/commandIssuerContext.js'
+import type { CoinbaseSmartWalletCall } from '../../_lib/wallet/privyCoinbaseSmartWallet.js'
+import { submitUserOpOrRefuse } from '../../_lib/wallet/userOperationSubmitter.js'
+import { getBasePreflightPublicClient } from '../../_lib/wallet/walletBalancePreflight.js'
 import type { KeeprCommandResult } from '../types.js'
+
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
+const BPS_SCALE = 10_000n
+const BUY_KEY_SLIPPAGE_BPS = 300n // 3%
+
+const ERC20_ABI = parseAbi([
+  'function allowance(address owner, address spender) view returns (uint256)',
+  'function approve(address spender, uint256 amount) returns (bool)',
+  'function decimals() view returns (uint8)',
+  'function symbol() view returns (string)',
+])
+
+type ReadContractClient = {
+  readContract: (args: unknown) => Promise<unknown>
+}
+
+type CreateRoomType = 'trading' | 'social'
+
+type ParsedCreateRoomPayload = {
+  roomType: CreateRoomType
+  roomTypeId: 0 | 1
+  tier: 'casual' | 'club' | 'exclusive'
+  tierId: 0 | 1 | 2
+  additionalKeys: bigint
+  metadata: string
+  signature: `0x${string}`
+}
 
 function parseAddressFromText(text: string): string | null {
   const match = text.match(/0x[a-fA-F0-9]{40}/)
@@ -33,32 +70,208 @@ function formatUsd(value: number | null | undefined): string {
   return `${sign}$${abs.toFixed(2)}`
 }
 
+function parsePositiveBigInt(raw: string | undefined): bigint | null {
+  const normalized = String(raw ?? '').trim()
+  if (!/^\d+$/.test(normalized)) return null
+  try {
+    const parsed = BigInt(normalized)
+    return parsed > 0n ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function parseNonNegativeBigInt(raw: string | undefined): bigint | null {
+  const normalized = String(raw ?? '').trim()
+  if (!/^\d+$/.test(normalized)) return null
+  try {
+    return BigInt(normalized)
+  } catch {
+    return null
+  }
+}
+
+function formatTokenAmount(amount: bigint, decimals: number): string {
+  const formatted = formatUnits(amount, decimals)
+  return formatted.replace(/\.?0+$/, '')
+}
+
+function parseRoomType(value: unknown): { type: CreateRoomType; id: 0 | 1 } | null {
+  if (typeof value === 'number') {
+    if (value === 0) return { type: 'trading', id: 0 }
+    if (value === 1) return { type: 'social', id: 1 }
+    return null
+  }
+  const normalized = String(value ?? '')
+    .trim()
+    .toLowerCase()
+  if (normalized === '0' || normalized === 'trading') {
+    return { type: 'trading', id: 0 }
+  }
+  if (normalized === '1' || normalized === 'social') {
+    return { type: 'social', id: 1 }
+  }
+  return null
+}
+
+function parseRoomTier(value: unknown): {
+  tier: 'casual' | 'club' | 'exclusive'
+  id: 0 | 1 | 2
+} | null {
+  if (typeof value === 'number') {
+    if (value === 0) return { tier: 'casual', id: 0 }
+    if (value === 1) return { tier: 'club', id: 1 }
+    if (value === 2) return { tier: 'exclusive', id: 2 }
+    return null
+  }
+  const normalized = String(value ?? '')
+    .trim()
+    .toLowerCase()
+  if (normalized === '0' || normalized === 'casual') {
+    return { tier: 'casual', id: 0 }
+  }
+  if (normalized === '1' || normalized === 'club') {
+    return { tier: 'club', id: 1 }
+  }
+  if (normalized === '2' || normalized === 'exclusive') {
+    return { tier: 'exclusive', id: 2 }
+  }
+  return null
+}
+
+function decodePotentialBase64Json(raw: string): string {
+  const trimmed = raw.trim()
+  if (!trimmed || trimmed.startsWith('{')) return trimmed
+  try {
+    const decoded = Buffer.from(trimmed, 'base64').toString('utf8').trim()
+    if (decoded.startsWith('{')) return decoded
+    return trimmed
+  } catch {
+    return trimmed
+  }
+}
+
+function parseCreateRoomPayload(rawPayload: string): ParsedCreateRoomPayload | null {
+  const jsonText = decodePotentialBase64Json(rawPayload)
+  let parsed: Record<string, unknown>
+  try {
+    parsed = JSON.parse(jsonText) as Record<string, unknown>
+  } catch {
+    return null
+  }
+
+  const roomTypeValue = parsed.roomType ?? parsed.room_type ?? parsed.type
+  const tierValue = parsed.tier ?? parsed.roomTier ?? parsed.room_tier
+  const additionalKeysValue =
+    parsed.additionalKeys ?? parsed.additional_keys ?? parsed.keys ?? 0
+  const metadataValue = parsed.metadata ?? parsed.uri ?? ''
+  const signatureValue = parsed.signature ?? parsed.sig
+
+  const roomTypeParsed = parseRoomType(roomTypeValue)
+  const tierParsed = parseRoomTier(tierValue)
+  const additionalKeys = parseNonNegativeBigInt(
+    additionalKeysValue === undefined ? undefined : String(additionalKeysValue),
+  )
+  const metadata = typeof metadataValue === 'string' ? metadataValue : ''
+  const signature = String(signatureValue ?? '').trim()
+
+  if (!roomTypeParsed || !tierParsed || additionalKeys === null) return null
+  if (!/^0x[0-9a-fA-F]+$/.test(signature)) return null
+
+  return {
+    roomType: roomTypeParsed.type,
+    roomTypeId: roomTypeParsed.id,
+    tier: tierParsed.tier,
+    tierId: tierParsed.id,
+    additionalKeys,
+    metadata,
+    signature: signature as `0x${string}`,
+  }
+}
+
 function parseSubcommand(text: string): {
-  sub: 'leaderboard' | 'creator' | 'status' | 'help'
+  sub:
+    | 'leaderboard'
+    | 'creator'
+    | 'status'
+    | 'help'
+    | 'buy-key'
+    | 'quote-key'
+    | 'create-room'
   address: string | null
+  tokenId: bigint | null
+  amount: bigint | null
+  payloadRaw: string | null
 } {
   const cleaned = text.trim().replace(/^\/alfa(?:club)?\s*/i, '').trim()
-  if (!cleaned) return { sub: 'leaderboard', address: null }
+  if (!cleaned) {
+    return {
+      sub: 'leaderboard',
+      address: null,
+      tokenId: null,
+      amount: null,
+      payloadRaw: null,
+    }
+  }
 
   const parts = cleaned.split(/\s+/)
   const first = (parts[0] ?? '').toLowerCase()
 
   if (first === 'leaderboard' || first === 'top' || first === 'ranking') {
-    return { sub: 'leaderboard', address: null }
+    return {
+      sub: 'leaderboard',
+      address: null,
+      tokenId: null,
+      amount: null,
+      payloadRaw: null,
+    }
   }
   if (first === 'status' || first === 'flags' || first === 'health') {
-    return { sub: 'status', address: null }
+    return {
+      sub: 'status',
+      address: null,
+      tokenId: null,
+      amount: null,
+      payloadRaw: null,
+    }
   }
   if (first === 'help' || first === '?') {
-    return { sub: 'help', address: null }
+    return { sub: 'help', address: null, tokenId: null, amount: null, payloadRaw: null }
+  }
+  if (first === 'create-room' || first === 'createroom') {
+    return {
+      sub: 'create-room',
+      address: null,
+      tokenId: null,
+      amount: null,
+      payloadRaw: parts.slice(1).join(' ').trim() || null,
+    }
+  }
+  if (first === 'quote-key' || first === 'quotekey' || first === 'quote') {
+    const tokenId = parsePositiveBigInt(parts[1])
+    const amount = parts[2] ? parsePositiveBigInt(parts[2]) : 1n
+    return { sub: 'quote-key', address: null, tokenId, amount, payloadRaw: null }
+  }
+  if (first === 'buy-key' || first === 'buykey' || first === 'buy') {
+    const tokenId = parsePositiveBigInt(parts[1])
+    const amount = parts[2] ? parsePositiveBigInt(parts[2]) : 1n
+    return { sub: 'buy-key', address: null, tokenId, amount, payloadRaw: null }
   }
   if (first === 'creator' || first === 'wallet' || first === 'addr') {
-    return { sub: 'creator', address: parseAddressFromText(parts.slice(1).join(' ')) }
+    return {
+      sub: 'creator',
+      address: parseAddressFromText(parts.slice(1).join(' ')),
+      tokenId: null,
+      amount: null,
+      payloadRaw: null,
+    }
   }
   const addr = parseAddressFromText(cleaned)
-  if (addr) return { sub: 'creator', address: addr }
+  if (addr) {
+    return { sub: 'creator', address: addr, tokenId: null, amount: null, payloadRaw: null }
+  }
 
-  return { sub: 'help', address: null }
+  return { sub: 'help', address: null, tokenId: null, amount: null, payloadRaw: null }
 }
 
 function formatFlagsLine(flags: VigilanteFlags): string {
@@ -96,6 +309,9 @@ function formatHelp(): string {
     '  `/alfa <address>` — detail for a specific creator address',
     '  `/alfa creator <address>` — same, explicit form',
     '  `/alfa status` — pipeline phase flag status',
+    '  `/alfa quote-key <tokenId> [amount]` — preview room key cost',
+    '  `/alfa buy-key <tokenId> [amount]` — buy a room key through your CSW',
+    '  `/alfa create-room <json-or-base64>` — register a room using signed payload',
     '',
     SCORECARD_DISCLAIMER,
   ].join('\n')
@@ -275,6 +491,481 @@ async function loadCreator(
   return { snapshotTs, row, publications: allPubs }
 }
 
+function formatExecutionReadinessRefusal(status: string, actionLabel: string): string {
+  if (status === 'db_unavailable') {
+    return `This ${actionLabel} can't be executed right now — account readiness storage is temporarily unavailable. Please try again shortly.`
+  }
+  if (status === 'revoked') {
+    return `This ${actionLabel} can't be executed — your execution context has been revoked. Contact setup to restore access.`
+  }
+  return `This ${actionLabel} can't be executed — your account isn't provisioned for onchain execution yet. Contact setup to finish provisioning.`
+}
+
+async function executeQuoteKey(params: {
+  tokenId: bigint | null
+  amount: bigint | null
+}): Promise<KeeprCommandResult> {
+  if (!params.tokenId || !params.amount) {
+    return {
+      ok: false,
+      response:
+        'Usage: `/alfa quote-key <tokenId> [amount]`\nExample: `/alfa quote-key 42`',
+    }
+  }
+  if (params.amount > 20n) {
+    return {
+      ok: false,
+      response: 'Invalid amount. Keep `amount` between 1 and 20 for a single command.',
+    }
+  }
+
+  const client = getBasePreflightPublicClient() as unknown as ReadContractClient
+
+  let quotedCost = 0n
+  let decimals = 6
+  let symbol = 'USDC'
+
+  try {
+    const creator = (await client.readContract({
+      address: ALFACLUB.friendKey,
+      abi: FRIEND_KEY_ABI,
+      functionName: 'creatorByTokenId',
+      args: [params.tokenId],
+    })) as Address
+    if (creator.toLowerCase() === ZERO_ADDRESS) {
+      return {
+        ok: false,
+        response: `Unknown room tokenId: ${params.tokenId.toString()}.`,
+      }
+    }
+
+    quotedCost = (await client.readContract({
+      address: ALFACLUB.friendKey,
+      abi: FRIEND_KEY_ABI,
+      functionName: 'getBuyPriceAfterFee',
+      args: [params.tokenId, params.amount],
+    })) as bigint
+    if (quotedCost <= 0n) {
+      return {
+        ok: false,
+        response: 'Quote returned zero cost. Try again or choose a different tokenId.',
+      }
+    }
+
+    const bondingTokenRaw = await client.readContract({
+      address: ALFACLUB.friendKey,
+      abi: FRIEND_KEY_ABI,
+      functionName: 'bondingToken',
+    })
+    if (
+      typeof bondingTokenRaw === 'string' &&
+      /^0x[a-fA-F0-9]{40}$/.test(bondingTokenRaw)
+    ) {
+      try {
+        decimals = Number(
+          (await client.readContract({
+            address: bondingTokenRaw as Address,
+            abi: ERC20_ABI,
+            functionName: 'decimals',
+          })) as number,
+        )
+      } catch {
+        decimals = 6
+      }
+      try {
+        symbol = String(
+          (await client.readContract({
+            address: bondingTokenRaw as Address,
+            abi: ERC20_ABI,
+            functionName: 'symbol',
+          })) as string,
+        )
+      } catch {
+        symbol = 'USDC'
+      }
+    }
+  } catch (error) {
+    logger.warn('[alfaclub/quote-key] quote read failed', {
+      tokenId: params.tokenId.toString(),
+      amount: params.amount.toString(),
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return {
+      ok: false,
+      response: 'Unable to quote room key purchase right now. Please retry in a moment.',
+    }
+  }
+
+  const maxSpend = quotedCost + (quotedCost * BUY_KEY_SLIPPAGE_BPS) / BPS_SCALE
+  const estimated = formatTokenAmount(quotedCost, decimals)
+  const max = formatTokenAmount(maxSpend, decimals)
+
+  return {
+    ok: true,
+    response: [
+      'Room key quote',
+      '',
+      `- TokenId: ${params.tokenId.toString()}`,
+      `- Amount: ${params.amount.toString()} key(s)`,
+      `- Estimated cost: ${estimated} ${symbol}`,
+      `- Suggested max spend: ${max} ${symbol} (3% slippage buffer)`,
+      '',
+      `To execute: \`/alfa buy-key ${params.tokenId.toString()} ${params.amount.toString()}\``,
+    ].join('\n'),
+  }
+}
+
+async function executeCreateRoom(params: {
+  senderWallet: Address
+  payloadRaw: string | null
+}): Promise<KeeprCommandResult> {
+  if (!params.payloadRaw) {
+    return {
+      ok: false,
+      response: [
+        'Usage: `/alfa create-room <json-or-base64>`',
+        '',
+        'Required payload fields:',
+        '  - roomType: `trading` or `social`',
+        '  - tier: `casual` | `club` | `exclusive` (or 0/1/2)',
+        '  - additionalKeys: integer (usually 0)',
+        '  - metadata: string',
+        '  - signature: 0x...',
+        '',
+        'Example:',
+        '  `/alfa create-room {"roomType":"social","tier":"club","additionalKeys":"0","metadata":"ipfs://...","signature":"0x..."}`',
+      ].join('\n'),
+    }
+  }
+
+  const payload = parseCreateRoomPayload(params.payloadRaw)
+  if (!payload) {
+    return {
+      ok: false,
+      response:
+        'Invalid create-room payload. Provide valid JSON (or base64 JSON) with roomType, tier, additionalKeys, metadata, signature.',
+    }
+  }
+
+  const resolution = await resolveCommandIssuerContextByAddress(params.senderWallet)
+  if (!isExecutionReady(resolution)) {
+    return {
+      ok: false,
+      response: formatExecutionReadinessRefusal(resolution.status, 'room creation'),
+    }
+  }
+  const issuer = resolution.context
+
+  if (issuer.subAccount) {
+    return {
+      ok: false,
+      response:
+        'Room creation currently requires direct canonical-CSW execution context. This account is configured for sub-account routing; use the AlfaClub app signing flow to create the room.',
+    }
+  }
+
+  try {
+    await assertTeeAttestationOrThrow({
+      action: 'alfaclub.create_room',
+      actorAddress: params.senderWallet,
+      metadata: {
+        roomType: payload.roomType,
+        tier: payload.tier,
+        additionalKeys: payload.additionalKeys.toString(),
+      },
+    })
+  } catch (error) {
+    logger.warn('[alfaclub/create-room] TEE attestation gate denied create', {
+      senderWallet: params.senderWallet,
+      roomType: payload.roomType,
+      tier: payload.tier,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return {
+      ok: false,
+      response:
+        'Room creation denied: secure signer attestation is not verified. Please retry once attestation is healthy.',
+    }
+  }
+
+  const client = getBasePreflightPublicClient() as unknown as ReadContractClient
+  try {
+    const canRegister = (await client.readContract({
+      address: ALFACLUB.friendKey,
+      abi: FRIEND_KEY_ABI,
+      functionName: 'canRegisterRoom',
+      args: [issuer.smartWallet, payload.roomTypeId, payload.tierId],
+    })) as boolean
+    if (!canRegister) {
+      return {
+        ok: false,
+        response:
+          'Room creation blocked: this wallet cannot register that room type/tier right now (already used or not allowed).',
+      }
+    }
+  } catch (error) {
+    // Fail-open: onchain submission still provides authoritative revert reason.
+    logger.warn('[alfaclub/create-room] canRegisterRoom preflight failed', {
+      senderWallet: params.senderWallet,
+      roomType: payload.roomType,
+      tier: payload.tier,
+      error: error instanceof Error ? error.message : String(error),
+    })
+  }
+
+  const functionName =
+    payload.roomType === 'social' ? 'registerSocialCreator' : 'registerCreator'
+  const callData = encodeFunctionData({
+    abi: FRIEND_KEY_ABI,
+    functionName,
+    args: [payload.tierId, payload.additionalKeys, payload.metadata, payload.signature],
+  })
+  const calls: CoinbaseSmartWalletCall[] = [
+    {
+      to: ALFACLUB.friendKey,
+      value: 0n,
+      data: callData,
+    },
+  ]
+
+  const submission = await submitUserOpOrRefuse({
+    issuer,
+    calls,
+    valueWei: 0n,
+    correlationId: `alfaclub/create-room:${payload.roomType}:${payload.tier}`,
+  })
+  if (!submission.ok) return { ok: false, response: submission.response }
+
+  return {
+    ok: true,
+    response: [
+      'Room creation submitted',
+      '',
+      `- Type: ${payload.roomType}`,
+      `- Tier: ${payload.tier}`,
+      `- Additional keys: ${payload.additionalKeys.toString()}`,
+      `- Tx: https://basescan.org/tx/${submission.txHash}`,
+      `- Creator: ${submission.smartWallet} (your smart wallet)`,
+    ].join('\n'),
+    action: {
+      action: 'alfaclub.room.created',
+      roomType: payload.roomType,
+      tier: payload.tier,
+      additionalKeys: payload.additionalKeys.toString(),
+      txHash: submission.txHash,
+      userOpHash: submission.userOpHash,
+      smartWallet: submission.smartWallet,
+      routing: 'arch-b-userop',
+    },
+  }
+}
+
+async function executeBuyKey(params: {
+  senderWallet: Address
+  tokenId: bigint | null
+  amount: bigint | null
+}): Promise<KeeprCommandResult> {
+  if (!params.tokenId || !params.amount) {
+    return {
+      ok: false,
+      response:
+        'Usage: `/alfa buy-key <tokenId> [amount]`\nExample: `/alfa buy-key 42`',
+    }
+  }
+  if (params.amount > 20n) {
+    return {
+      ok: false,
+      response: 'Invalid amount. Keep `amount` between 1 and 20 for a single command.',
+    }
+  }
+
+  const resolution = await resolveCommandIssuerContextByAddress(params.senderWallet)
+  if (!isExecutionReady(resolution)) {
+    return { ok: false, response: formatExecutionReadinessRefusal(resolution.status, 'buy') }
+  }
+  const issuer = resolution.context
+
+  try {
+    await assertTeeAttestationOrThrow({
+      action: 'alfaclub.buy_key',
+      actorAddress: params.senderWallet,
+      metadata: {
+        tokenId: params.tokenId.toString(),
+        amount: params.amount.toString(),
+      },
+    })
+  } catch (error) {
+    logger.warn('[alfaclub/buy-key] TEE attestation gate denied buy', {
+      senderWallet: params.senderWallet,
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return {
+      ok: false,
+      response:
+        'Buy denied: secure signer attestation is not verified. Please retry once attestation is healthy.',
+    }
+  }
+
+  const client = getBasePreflightPublicClient() as unknown as ReadContractClient
+
+  let quotedCost = 0n
+  let bondingToken = ZERO_ADDRESS as Address
+  let decimals = 6
+  let symbol = 'USDC'
+  let allowance = 0n
+
+  try {
+    const creator = (await client.readContract({
+      address: ALFACLUB.friendKey,
+      abi: FRIEND_KEY_ABI,
+      functionName: 'creatorByTokenId',
+      args: [params.tokenId],
+    })) as Address
+    if (creator.toLowerCase() === ZERO_ADDRESS) {
+      return {
+        ok: false,
+        response: `Unknown room tokenId: ${params.tokenId.toString()}.`,
+      }
+    }
+
+    quotedCost = (await client.readContract({
+      address: ALFACLUB.friendKey,
+      abi: FRIEND_KEY_ABI,
+      functionName: 'getBuyPriceAfterFee',
+      args: [params.tokenId, params.amount],
+    })) as bigint
+    if (quotedCost <= 0n) {
+      return {
+        ok: false,
+        response: 'Quote returned zero cost. Try again or choose a different tokenId.',
+      }
+    }
+
+    const bondingTokenRaw = await client.readContract({
+      address: ALFACLUB.friendKey,
+      abi: FRIEND_KEY_ABI,
+      functionName: 'bondingToken',
+    })
+    if (
+      typeof bondingTokenRaw !== 'string' ||
+      !/^0x[a-fA-F0-9]{40}$/.test(bondingTokenRaw)
+    ) {
+      return {
+        ok: false,
+        response: 'Unable to resolve AlfaClub bonding token address.',
+      }
+    }
+    bondingToken = bondingTokenRaw as Address
+
+    try {
+      decimals = Number(
+        (await client.readContract({
+          address: bondingToken,
+          abi: ERC20_ABI,
+          functionName: 'decimals',
+        })) as number,
+      )
+    } catch {
+      decimals = 6
+    }
+    try {
+      symbol = String(
+        (await client.readContract({
+          address: bondingToken,
+          abi: ERC20_ABI,
+          functionName: 'symbol',
+        })) as string,
+      )
+    } catch {
+      symbol = 'USDC'
+    }
+
+    const executionWallet = issuer.subAccount?.subAccountAddress ?? issuer.smartWallet
+    allowance = (await client.readContract({
+      address: bondingToken,
+      abi: ERC20_ABI,
+      functionName: 'allowance',
+      args: [executionWallet, ALFACLUB.friendKey],
+    })) as bigint
+  } catch (error) {
+    logger.warn('[alfaclub/buy-key] quote/allowance read failed', {
+      senderWallet: params.senderWallet,
+      tokenId: params.tokenId.toString(),
+      amount: params.amount.toString(),
+      error: error instanceof Error ? error.message : String(error),
+    })
+    return {
+      ok: false,
+      response: 'Unable to quote room key purchase right now. Please retry in a moment.',
+    }
+  }
+
+  const maxSpend = quotedCost + (quotedCost * BUY_KEY_SLIPPAGE_BPS) / BPS_SCALE
+  const calls: CoinbaseSmartWalletCall[] = []
+  const needsApproval = allowance < maxSpend
+  if (needsApproval) {
+    const approveData = encodeFunctionData({
+      abi: ERC20_ABI,
+      functionName: 'approve',
+      args: [ALFACLUB.friendKey, maxSpend],
+    })
+    calls.push({
+      to: bondingToken,
+      value: 0n,
+      data: approveData,
+    })
+  }
+
+  const buyData = encodeFunctionData({
+    abi: FRIEND_KEY_ABI,
+    functionName: 'buyShares',
+    args: [params.tokenId, params.amount, maxSpend],
+  })
+  calls.push({
+    to: ALFACLUB.friendKey,
+    value: 0n,
+    data: buyData,
+  })
+
+  const submission = await submitUserOpOrRefuse({
+    issuer,
+    calls,
+    valueWei: 0n,
+    correlationId: `alfaclub/buy-key:${params.tokenId.toString()}`,
+  })
+  if (!submission.ok) return { ok: false, response: submission.response }
+
+  const estimated = formatTokenAmount(quotedCost, decimals)
+  const max = formatTokenAmount(maxSpend, decimals)
+
+  return {
+    ok: true,
+    response: [
+      'Room key purchase submitted',
+      '',
+      `- TokenId: ${params.tokenId.toString()}`,
+      `- Amount: ${params.amount.toString()} key(s)`,
+      `- Estimated cost: ${estimated} ${symbol}`,
+      `- Max spend: ${max} ${symbol} (3% slippage buffer)`,
+      `- Approval: ${needsApproval ? 'included in this UserOp' : 'already approved'}`,
+      `- Tx: https://basescan.org/tx/${submission.txHash}`,
+      `- Buyer: ${submission.smartWallet} (your smart wallet)`,
+    ].join('\n'),
+    action: {
+      action: 'alfaclub.key.bought',
+      tokenId: params.tokenId.toString(),
+      amount: params.amount.toString(),
+      estimatedCost: quotedCost.toString(),
+      maxSpend: maxSpend.toString(),
+      symbol,
+      txHash: submission.txHash,
+      userOpHash: submission.userOpHash,
+      smartWallet: submission.smartWallet,
+      routing: 'arch-b-userop',
+    },
+  }
+}
+
 export async function executeAlfaclubCommandFamily(params: {
   text: string
   senderWallet: Address
@@ -284,6 +975,25 @@ export async function executeAlfaclubCommandFamily(params: {
 
   if (parsed.sub === 'status') {
     return { ok: true, response: formatStatus(flags) }
+  }
+  if (parsed.sub === 'quote-key') {
+    return executeQuoteKey({
+      tokenId: parsed.tokenId,
+      amount: parsed.amount,
+    })
+  }
+  if (parsed.sub === 'create-room') {
+    return executeCreateRoom({
+      senderWallet: params.senderWallet,
+      payloadRaw: parsed.payloadRaw,
+    })
+  }
+  if (parsed.sub === 'buy-key') {
+    return executeBuyKey({
+      senderWallet: params.senderWallet,
+      tokenId: parsed.tokenId,
+      amount: parsed.amount,
+    })
   }
   if (parsed.sub === 'help') {
     return { ok: true, response: formatHelp() }

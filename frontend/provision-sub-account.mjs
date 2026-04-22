@@ -20,7 +20,7 @@ const DEFAULT_PROD_URL = 'https://app.akita.llc'
 const DEFAULT_STAGING_URL = 'https://staging.akita.llc'
 
 const PROFILE_ID = 1
-const PARENT_CSW = '0xab6d5c10b03300326cd7fab7267ae192842967b5'
+const PARENT_CSW = '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef'
 const OWNER_EOA = '0xceca13f2686ed061c57620ecdf67e1b8c0f285e9' // privy embedded, owner index 1
 const PRIVY_WALLET = 'l8pocg69pnk3djdrp6t4lm0n'
 const FACTORY = '0x0BA5ED0c6AA8c49038F819E587E2633c4A9F428a'

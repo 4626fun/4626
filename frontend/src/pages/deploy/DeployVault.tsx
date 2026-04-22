@@ -133,6 +133,9 @@ const DEFAULT_CHARM_EXPECTED_PROTOCOL_FEE_PIPS = 10_000 // 1% in Charm 1e6 preci
 const DEFAULT_CCA_DURATION_BLOCKS = 302_400n // ~7 days on Base at ~2s blocks (must match CCALaunchStrategy defaultDuration)
 const DEFAULT_SHARE_OFT_VANITY_SUFFIX = '4626'
 const DEFAULT_SHARE_OFT_VANITY_MAX_TRIES = 1_000_000
+const DEFAULT_VAULT_VANITY_PREFIX = '4626'
+const DEFAULT_VAULT_VANITY_MAX_TRIES = 250_000
+const DEFAULT_DEPLOY_VANITY_CUSTOM_MAX_HEX = 5
 const BATCHER_PHASE1_WITH_SALT_SELECTOR = '297cb1e6'
 const BATCHER_PHASE1_CORE_SELECTOR = '1331378b'
 const BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR = '4154f24e'
@@ -375,6 +378,10 @@ type ServerDeployResponse = {
   }
 }
 type DeploySessionCall = { to: Address; value: string; data: Hex }
+type DeploySessionVanityRequest = {
+  vaultPrefix?: string
+  shareSuffix?: string
+}
 type DeploySessionCreateRequest = {
   smartWallet: Address
   creatorToken: Address
@@ -385,6 +392,7 @@ type DeploySessionCreateRequest = {
   phase2FinalizeCalls: DeploySessionCall[]
   phase3Calls: DeploySessionCall[]
   phase4Calls: DeploySessionCall[]
+  vanity?: DeploySessionVanityRequest
   version: string
 }
 type DeploySessionDryRunPhase = {
@@ -403,6 +411,70 @@ type DeploySessionDryRunResponse = {
   forkMode: string
   phases: DeploySessionDryRunPhase[]
   failure?: DeploySessionDryRunFailure
+}
+
+const DRY_RUN_PHASE_NAMES = new Set<DeploySessionDryRunPhase['name']>([
+  'phase1',
+  'phase2Core',
+  'phase2Finalize',
+  'phase3',
+  'phase4',
+])
+
+function normalizeDryRunResponse(data: unknown): DeploySessionDryRunResponse | null {
+  if (!data || typeof data !== 'object') return null
+  const raw = data as Record<string, unknown>
+  const forkMode =
+    typeof raw.forkMode === 'string' && raw.forkMode.trim().length > 0
+      ? raw.forkMode.trim()
+      : 'unknown'
+  const ok = raw.ok === true
+  const phasesRaw = Array.isArray(raw.phases) ? raw.phases : []
+  const phases: DeploySessionDryRunPhase[] = []
+  for (const entry of phasesRaw) {
+    if (!entry || typeof entry !== 'object') continue
+    const phase = entry as Record<string, unknown>
+    const name = String(phase.name ?? '').trim() as DeploySessionDryRunPhase['name']
+    if (!DRY_RUN_PHASE_NAMES.has(name)) continue
+    const status = phase.status === 'failed' ? 'failed' : 'passed'
+    const parsedCallCount = Number(phase.callCount ?? 0)
+    const callCount = Number.isFinite(parsedCallCount) && parsedCallCount >= 0
+      ? Math.floor(parsedCallCount)
+      : 0
+    phases.push({ name, status, callCount })
+  }
+
+  let failure: DeploySessionDryRunFailure | undefined
+  const failureRaw = raw.failure
+  if (failureRaw && typeof failureRaw === 'object') {
+    const parsed = failureRaw as Record<string, unknown>
+    const phase = String(parsed.phase ?? '').trim() as DeploySessionDryRunFailure['phase']
+    const to = String(parsed.to ?? '').trim()
+    if (DRY_RUN_PHASE_NAMES.has(phase) && to) {
+      const parsedCallIndex = Number(parsed.callIndex ?? 0)
+      const callIndex = Number.isFinite(parsedCallIndex) && parsedCallIndex >= 0
+        ? Math.floor(parsedCallIndex)
+        : 0
+      const error =
+        typeof parsed.error === 'string' && parsed.error.trim().length > 0
+          ? parsed.error.trim()
+          : 'Dry-run simulation failed'
+      failure = {
+        phase,
+        callIndex,
+        to: to as Address,
+        error,
+      }
+    }
+  }
+
+  const out: DeploySessionDryRunResponse = {
+    ok,
+    forkMode,
+    phases,
+  }
+  if (failure) out.failure = failure
+  return out
 }
 
 function isLocalForkRpcUrl(rpcUrl: string): boolean {
@@ -696,6 +768,55 @@ function deriveOftBootstrapSalt(): Hex {
   return keccak256(encodePacked(['string'], ['4626:OFTBootstrapRegistry:v1']))
 }
 
+async function findDeploymentVersionForVaultPrefix(params: {
+  create2Deployer: Address
+  creatorToken: Address
+  owner: Address
+  chainId: number
+  baseVersion: string
+  prefix: string
+  maxTries: number
+  vaultInitCode: Hex
+  isAddressDeployed?: (addr: Address) => Promise<boolean>
+  yieldEvery?: number
+}): Promise<string | null> {
+  const prefix = normalizeHexSuffix(params.prefix)
+  if (!prefix) return null
+  const maxTries = Math.max(1, Math.floor(params.maxTries))
+  const yieldEvery = Math.max(256, Math.floor(params.yieldEvery ?? 4096))
+
+  for (let i = 0; i < maxTries; i += 1) {
+    const candidateVersion = i === 0 ? params.baseVersion : `${params.baseVersion}-v${i.toString(36)}`
+    const baseSalt = deriveBaseSalt({
+      creatorToken: params.creatorToken,
+      owner: params.owner,
+      chainId: params.chainId,
+      version: candidateVersion,
+    })
+    const vaultSalt = saltFor(baseSalt, 'vault')
+    const addr = predictCreate2Address({
+      create2Deployer: params.create2Deployer,
+      salt: vaultSalt,
+      initCode: params.vaultInitCode,
+    })
+    if (addr.slice(2, 2 + prefix.length).toLowerCase() === prefix) {
+      if (params.isAddressDeployed) {
+        try {
+          const deployed = await params.isAddressDeployed(addr)
+          if (deployed) continue
+        } catch {
+          // ignore deployed-check failures; allow candidate version
+        }
+      }
+      return candidateVersion
+    }
+    if (i > 0 && i % yieldEvery === 0) {
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+  }
+  return null
+}
+
 function predictCreate2Address(params: { create2Deployer: Address; salt: Hex; initCode: Hex }): Address {
   const bytecodeHash = keccak256(params.initCode)
   return getCreate2Address({ from: params.create2Deployer, salt: params.salt, bytecodeHash })
@@ -742,15 +863,15 @@ function tryAutoRecoverStaleDeployConfig(params: {
       return false
     }
     window.sessionStorage.setItem(STALE_DEPLOY_CONFIG_RELOAD_KEY, String(now))
-    logger.warn('[DeployVault] stale_runtime_config_detected_auto_reload', {
+    logger.warn('[DeployVault] stale_runtime_config_detected', {
       reason: params.reason,
       clientValue: params.clientValue,
       runtimeValue: params.runtimeValue,
       href: window.location.href,
     })
-    // Force a hard navigation to refresh import.meta.env-backed config after local fork restart.
-    window.location.reload()
-    return true
+    // Do not force a client reload here. In environments with many injected wallets, reload can
+    // repeatedly re-trigger provider-injection races and look like a crash loop.
+    return false
   } catch {
     return false
   }
@@ -1817,7 +1938,7 @@ function DeployVaultBatcher({
   shareName,
   vaultSymbol,
   vaultName,
-  deploymentVersion,
+  deploymentVersion: deploymentVersionProp,
   shareOftSaltOverride,
   currentPayoutRecipient,
   marketFloorText,
@@ -1881,6 +2002,9 @@ function DeployVaultBatcher({
   const chainId = useChainId()
   const { switchChainAsync } = useSwitchChain()
   const publicClient = usePublicClient({ chainId: base.id })
+  const [batcherOverride, setBatcherOverride] = useState<Address | null>(null)
+  const [deploymentVersionOverride, setDeploymentVersionOverride] = useState<string | null>(null)
+  const deploymentVersion = deploymentVersionOverride ?? deploymentVersionProp
   // Legacy ShareOFT Solana overrides are intentionally unused in main deploy flow now.
   void solanaMintOverride
   void solanaDecimalsOverride
@@ -2114,6 +2238,7 @@ function DeployVaultBatcher({
     }
   }, [legacyDeploySessionStorageKey])
   const shareOftVanityCacheRef = useRef<{ key: string; salt: Hex } | null>(null)
+  const vaultVanityVersionCacheRef = useRef<{ key: string; version: string } | null>(null)
   const ensurePaymasterSession = useCallback(async () => {
     if (!getAccessToken || typeof signInWithPrivyToken !== 'function') return
     try {
@@ -2141,6 +2266,18 @@ function DeployVaultBatcher({
     [ensurePaymasterSession],
   )
   const switchAuthLabel = typeof switchAuthCta?.label === 'string' && switchAuthCta.label.trim().length > 0 ? switchAuthCta.label.trim() : null
+  const creatorStrategyFeaturesHref = useMemo(
+    () => `/creator/strategy/features?creator=${creatorToken}`,
+    [creatorToken],
+  )
+  const isVanityPaidFeatureError = useCallback((message: string | null | undefined): boolean => {
+    const lower = String(message ?? '').toLowerCase()
+    if (!lower) return false
+    return (
+      lower.includes('vanity deploy requires paid feature activation') ||
+      lower.includes('deploy_vanity_')
+    )
+  }, [])
 
   const lastAuthAtMs = useMemo(() => {
     if (typeof window === 'undefined') return null
@@ -2308,6 +2445,13 @@ function DeployVaultBatcher({
         'Approve the one-time add-owner transaction from an owner EOA (for example Coinbase Wallet), then retry deploy.'
       )
     }
+    if (isVanityPaidFeatureError(lower)) {
+      return (
+        'Custom vanity deploy options are a paid feature. ' +
+        'Default vanity remains free (vault prefix 0x4626, share suffix 4626). ' +
+        `Activate vanity access in Creator Strategy features (${creatorStrategyFeaturesHref}), then retry.`
+      )
+    }
     if (
       lower.includes('user rejected') ||
       lower.includes('rejected the request') ||
@@ -2357,7 +2501,7 @@ function DeployVaultBatcher({
       return 'Deployment is not configured: missing `VITE_CREATOR_VAULT_BATCHER` / `CONTRACTS.creatorVaultBatcher`.'
     }
     return msg
-  }, [switchAuthLabel])
+  }, [creatorStrategyFeaturesHref, isVanityPaidFeatureError, switchAuthLabel])
 
   const ensureDeploySessionSignerInstalled = useCallback(async (sessionSigner: Address): Promise<void> => {
     let installed = await isCoinbaseSmartWalletOwner({ smartWallet: owner, ownerAddress: sessionSigner })
@@ -2733,7 +2877,28 @@ function DeployVaultBatcher({
   const href3 = hrefForTx(phaseTxs.tx3 ?? null)
   const href4 = hrefForTx(phaseTxs.tx4 ?? null)
 
-  const batcherAddress = (CONTRACTS.creatorVaultBatcher ?? null) as Address | null
+  const batcherAddress = useMemo(() => {
+    if (batcherOverride) return batcherOverride
+    const configured = CONTRACTS.creatorVaultBatcher ?? null
+    if (!configured) return null
+    try {
+      return getAddress(configured as Address) as Address
+    } catch {
+      return null
+    }
+  }, [batcherOverride])
+
+  const vaultVanityPrefix = useMemo(() => {
+    const raw = (import.meta.env.VITE_VAULT_VANITY_PREFIX as string | undefined) ?? DEFAULT_VAULT_VANITY_PREFIX
+    return normalizeHexSuffix(raw)
+  }, [])
+
+  const vaultVanityMaxTries = useMemo(() => {
+    const raw = import.meta.env.VITE_VAULT_VANITY_MAX_TRIES as string | undefined
+    const parsed = raw ? Number(raw) : NaN
+    if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_VAULT_VANITY_MAX_TRIES
+    return Math.floor(parsed)
+  }, [])
 
   const marketFloorWeiPerTokenAligned = useMemo(() => {
     if (!floorPriceQ96Aligned || floorPriceQ96Aligned <= 0n) return null
@@ -2773,6 +2938,43 @@ function DeployVaultBatcher({
     if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_SHARE_OFT_VANITY_MAX_TRIES
     return Math.floor(parsed)
   }, [])
+
+  const vanityCustomMaxHex = useMemo(() => {
+    const raw = import.meta.env.VITE_DEPLOY_VANITY_CUSTOM_MAX_HEX as string | undefined
+    const parsed = raw ? Number(raw) : NaN
+    if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_DEPLOY_VANITY_CUSTOM_MAX_HEX
+    return Math.max(1, Math.min(5, Math.floor(parsed)))
+  }, [])
+  const vaultVanityIsDefault = vaultVanityPrefix === DEFAULT_VAULT_VANITY_PREFIX
+  const shareVanityIsDefault = shareOftVanitySuffix === DEFAULT_SHARE_OFT_VANITY_SUFFIX
+  const vaultVanityIsCustom = Boolean(vaultVanityPrefix) && !vaultVanityIsDefault
+  const shareVanityIsCustom = Boolean(shareOftVanitySuffix) && !shareVanityIsDefault
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      const runtimeConfig = await fetchDeployRuntimeConfig().catch(() => null)
+      if (cancelled || !runtimeConfig) return
+      const runtimeBatcher = runtimeConfig?.creatorVaultBatcher ? normalizeAddressLike(runtimeConfig.creatorVaultBatcher) : null
+      if (runtimeBatcher && (!batcherAddress || !sameAddress(runtimeBatcher, batcherAddress))) {
+        setBatcherOverride(runtimeBatcher)
+      }
+      const hasDeploymentVersionOverride =
+        typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('deploymentVersion')?.trim()
+      const runtimeDeploymentVersion = runtimeConfig?.deploymentVersion?.trim() ?? ''
+      if (
+        !hasDeploymentVersionOverride &&
+        !vaultVanityIsCustom &&
+        runtimeDeploymentVersion &&
+        runtimeDeploymentVersion !== deploymentVersion
+      ) {
+        setDeploymentVersionOverride(runtimeDeploymentVersion)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [batcherAddress, deploymentVersion, vaultVanityIsCustom])
 
   const payoutRouterCodeId = useMemo(() => {
     return keccak256(DEPLOY_BYTECODE.PayoutRouter as Hex)
@@ -2814,6 +3016,8 @@ function DeployVaultBatcher({
       shareOftSaltOverride,
       shareOftVanitySuffix,
       shareOftVanityMaxTries,
+      vaultVanityPrefix,
+      vaultVanityMaxTries,
     ],
     enabled: !!publicClient && !!batcherAddress && !!creatorToken && !!owner && !!shareSymbol && !!shareName && !!vaultName && !!vaultSymbol,
     staleTime: 30_000,
@@ -2898,26 +3102,18 @@ function DeployVaultBatcher({
         return supportsLegacySalt || supportsSplitSalt
       })()
 
-      const baseSalt = deriveBaseSalt({ creatorToken, owner, chainId: base.id, version: deploymentVersion })
-      const vaultSalt = saltFor(baseSalt, 'vault')
-      const wrapperSalt = saltFor(baseSalt, 'wrapper')
-      const gaugeSalt = saltFor(baseSalt, 'gauge')
-      const ccaSalt = saltFor(baseSalt, 'cca')
-      const oracleSalt = saltFor(baseSalt, 'oracle')
-
-      const oftBootstrapSalt = deriveOftBootstrapSalt()
-
-      const oftBootstrapRegistry = predictCreate2Address({
-        create2Deployer,
-        salt: oftBootstrapSalt,
-        initCode: DEPLOY_BYTECODE.OFTBootstrapRegistry as Hex,
-      })
-
       // IMPORTANT: The onchain deployment batcher uses *lowercase* symbols for salts + oracle wiring,
       // but uses *uppercase* symbols for ShareOFT metadata. We must mirror both to keep expected
       // addresses deterministic (especially for ShareOFT + gauge + oracle predictions).
       const shareSymbolLower = shareSymbol.toLowerCase()
       const shareSymbolUpper = shareSymbol.toUpperCase()
+
+      const oftBootstrapSalt = deriveOftBootstrapSalt()
+      const oftBootstrapRegistry = predictCreate2Address({
+        create2Deployer,
+        salt: oftBootstrapSalt,
+        initCode: DEPLOY_BYTECODE.OFTBootstrapRegistry as Hex,
+      })
 
       const shareOftArgs = encodeAbiParameters(parseAbiParameters('string,string,address,address'), [
         shareName,
@@ -2926,22 +3122,98 @@ function DeployVaultBatcher({
         tempOwner,
       ])
       const shareOftInitCode = concatHex([DEPLOY_BYTECODE.CreatorShareOFT as Hex, shareOftArgs])
-      const derivedShareOftSalt = deriveShareOftSalt({ owner, shareSymbol, version: deploymentVersion })
-      let shareOftSaltOverrideUsed = shareOftSaltOverride
-      if (shareOftSaltOverrideUsed && !supportsPhase1WithSalt) {
-        logger.warn('[DeployVault] Batcher lacks vanity salt support; ignoring ShareOFT override', {
-          batcher: batcherAddress,
-        })
-        shareOftSaltOverrideUsed = null
+      const vaultArgs = encodeAbiParameters(parseAbiParameters('address,address,string,string'), [
+        creatorToken,
+        tempOwner,
+        vaultName,
+        vaultSymbol,
+      ])
+      const vaultInitCode = concatHex([DEPLOY_BYTECODE.CreatorOVault as Hex, vaultArgs])
+
+      let deploymentVersionUsed = deploymentVersion
+      if (vaultVanityPrefix) {
+        const vaultVanityKey = [
+          create2Deployer.toLowerCase(),
+          creatorToken.toLowerCase(),
+          owner.toLowerCase(),
+          String(base.id),
+          vaultName,
+          vaultSymbol,
+          deploymentVersion,
+          vaultVanityPrefix,
+          String(vaultVanityMaxTries),
+        ].join(':')
+        const cached = vaultVanityVersionCacheRef.current
+        if (cached?.key === vaultVanityKey) {
+          deploymentVersionUsed = cached.version
+        } else {
+          const foundVersion = await findDeploymentVersionForVaultPrefix({
+            create2Deployer,
+            creatorToken,
+            owner,
+            chainId: base.id,
+            baseVersion: deploymentVersion,
+            prefix: vaultVanityPrefix,
+            maxTries: vaultVanityMaxTries,
+            vaultInitCode,
+            isAddressDeployed: async (addr) => {
+              const bc = await publicClient!.getBytecode({ address: addr })
+              return !!bc && bc !== '0x'
+            },
+          })
+          if (!foundVersion) {
+            throw new Error(
+              `Unable to find vault vanity prefix "0x${vaultVanityPrefix}" in ${vaultVanityMaxTries.toLocaleString()} deployment-version tries. ` +
+                'Increase VITE_VAULT_VANITY_MAX_TRIES and retry.',
+            )
+          }
+          deploymentVersionUsed = foundVersion
+          vaultVanityVersionCacheRef.current = { key: vaultVanityKey, version: foundVersion }
+        }
       }
-      if (!shareOftSaltOverrideUsed && shareOftVanitySuffix && supportsPhase1WithSalt) {
+
+      const baseSalt = deriveBaseSalt({ creatorToken, owner, chainId: base.id, version: deploymentVersionUsed })
+      const vaultSalt = saltFor(baseSalt, 'vault')
+      const wrapperSalt = saltFor(baseSalt, 'wrapper')
+      const gaugeSalt = saltFor(baseSalt, 'gauge')
+      const ccaSalt = saltFor(baseSalt, 'cca')
+      const oracleSalt = saltFor(baseSalt, 'oracle')
+
+      const shareOftVanityUnsupportedByBatcher = !supportsPhase1WithSalt && Boolean(shareOftVanitySuffix)
+      const batcherDisplay = batcherAddress ? shortAddress(batcherAddress) : 'unknown'
+      let shareOftVanityWarning: string | null = null
+      if (shareOftVanityUnsupportedByBatcher) {
+        if (shareVanityIsCustom) {
+          const blockingMessage =
+            `Active batcher ${batcherDisplay} does not support Phase-1 salt overrides. ` +
+            `Custom share token vanity suffix "${shareOftVanitySuffix}" is blocked for this deploy.`
+          logger.warn('[DeployVault] share_oft_vanity_suffix_blocked', {
+            batcher: batcherAddress,
+            suffix: shareOftVanitySuffix,
+            reason: 'phase1_salt_overrides_not_supported',
+          })
+          throw new Error(blockingMessage)
+        }
+        logger.info('[DeployVault] share_oft_vanity_suffix_skipped_default', {
+          batcher: batcherAddress,
+          suffix: shareOftVanitySuffix,
+          reason: 'phase1_salt_overrides_not_supported',
+        })
+        shareOftVanityWarning =
+          `Active batcher ${batcherDisplay} does not support Phase-1 salt overrides, so default share suffix ` +
+          `"${shareOftVanitySuffix}" is not guaranteed for this deploy.`
+      }
+
+      const derivedShareOftSalt = deriveShareOftSalt({ owner, shareSymbol, version: deploymentVersionUsed })
+      let shareOftSaltOverrideUsed = shareOftSaltOverride
+      if (!shareOftSaltOverrideUsed && shareOftVanitySuffix && !shareOftVanityUnsupportedByBatcher) {
         const initCodeHash = keccak256(shareOftInitCode)
         const vanitySeed = keccak256(
           encodePacked(['string', 'address', 'address', 'string'], [
             'CreatorShareOFT:vanity',
             creatorToken,
             owner,
-            deploymentVersion,
+            deploymentVersionUsed,
           ]),
         )
         const vanityStart = BigInt(vanitySeed)
@@ -2950,7 +3222,7 @@ function DeployVaultBatcher({
           initCodeHash.toLowerCase(),
           shareOftVanitySuffix,
           String(shareOftVanityMaxTries),
-          deploymentVersion,
+          deploymentVersionUsed,
           creatorToken.toLowerCase(),
           owner.toLowerCase(),
         ].join(':')
@@ -2981,14 +3253,6 @@ function DeployVaultBatcher({
       }
       const shareOftSalt = shareOftSaltOverrideUsed ?? derivedShareOftSalt
       const shareOftAddress = predictCreate2Address({ create2Deployer, salt: shareOftSalt, initCode: shareOftInitCode })
-
-      const vaultArgs = encodeAbiParameters(parseAbiParameters('address,address,string,string'), [
-        creatorToken,
-        tempOwner,
-        vaultName,
-        vaultSymbol,
-      ])
-      const vaultInitCode = concatHex([DEPLOY_BYTECODE.CreatorOVault as Hex, vaultArgs])
       const vaultAddress = predictCreate2Address({ create2Deployer, salt: vaultSalt, initCode: vaultInitCode })
 
       const wrapperArgs = encodeAbiParameters(parseAbiParameters('address,address,address'), [creatorToken, vaultAddress, tempOwner])
@@ -3140,7 +3404,9 @@ function DeployVaultBatcher({
       return {
         create2Deployer,
         protocolTreasury,
+        deploymentVersion: deploymentVersionUsed,
         shareOftSaltOverride: shareOftSaltOverrideUsed ?? null,
+        shareOftVanityWarning,
         expected: {
           vault: vaultAddress,
           wrapper: wrapperAddress,
@@ -3159,11 +3425,19 @@ function DeployVaultBatcher({
   const expected = expectedQuery.data?.expected ?? null
   const expectedCreate2Deployer = expectedQuery.data?.create2Deployer ?? null
   const expectedProtocolTreasury = normalizeAddressLike(expectedQuery.data?.protocolTreasury ?? CONTRACTS.protocolTreasury)
+  const expectedDeploymentVersion = expectedQuery.data?.deploymentVersion ?? deploymentVersion
   const expectedShareOftSaltOverride = expectedQuery.data?.shareOftSaltOverride ?? null
+  const expectedShareOftVanityWarning = expectedQuery.data?.shareOftVanityWarning ?? null
   const expectedGauge = expected?.gaugeController ?? null
   const expectedBurnStream = expected?.burnStream ?? null
   const expectedPayoutRouter = expected?.payoutRouter ?? null
   const expectedCreatorCoinPolicyController = expected?.creatorCoinPolicyController ?? null
+
+  useEffect(() => {
+    if (expectedDeploymentVersion && expectedDeploymentVersion !== deploymentVersion) {
+      setDeploymentVersionOverride(expectedDeploymentVersion)
+    }
+  }, [deploymentVersion, expectedDeploymentVersion])
 
   const phase3ExpectedQuery = useQuery({
     queryKey: [
@@ -3537,6 +3811,17 @@ function DeployVaultBatcher({
   })
 
   const phase3ExpectedAddressDeployment = phase3ExpectedAddressDeploymentQuery.data
+  const phase3LikelyMissingHelperConfig = useMemo(() => {
+    if (!phase3Expected) return false
+    const hasPools = Boolean(phase3Expected.v3Pool || phase3Expected.ajnaPool || phase3Expected.charmVault)
+    const missingHelperDependent =
+      !phase3Expected.creatorCharmStrategy &&
+      !phase3Expected.ajnaVaultAuth &&
+      !phase3Expected.ajnaVault &&
+      !phase3Expected.erc4626StrategyAdapter &&
+      !phase3Expected.solanaStrategy
+    return hasPools && missingHelperDependent
+  }, [phase3Expected])
 
   const phase4AuctionAddressQuery = useQuery({
     queryKey: ['creatorVaultBatcher', 'phase4AuctionAddress', expected?.ccaStrategy, phase],
@@ -3721,37 +4006,46 @@ function DeployVaultBatcher({
       if (!batcherAddress) throw new Error('Deployment batcher is not configured. Set VITE_CREATOR_VAULT_BATCHER.')
       const runtimeBatcher = runtimeConfig?.creatorVaultBatcher ? getAddress(runtimeConfig.creatorVaultBatcher) : null
       if (runtimeBatcher && !sameAddress(runtimeBatcher, batcherAddress)) {
-        if (
-          tryAutoRecoverStaleDeployConfig({
-            reason: 'batcher',
-            clientValue: batcherAddress,
-            runtimeValue: runtimeBatcher,
-          })
-        ) {
-          setError('Local dry-run config changed after restart. Reloading deploy page...')
-          return null
-        }
-        throw new Error(
-          `Deploy page is stale after a local restart. Client batcher ${batcherAddress} does not match server batcher ${runtimeBatcher}. Hard refresh the page and confirm you are on the dry-run origin (http://localhost:5174).`,
+        const recovered = tryAutoRecoverStaleDeployConfig({
+          reason: 'batcher',
+          clientValue: batcherAddress,
+          runtimeValue: runtimeBatcher,
+        })
+        setBatcherOverride(runtimeBatcher)
+        setError(
+          recovered
+            ? 'Deploy runtime changed. Syncing to server batcher…'
+            : `Deploy runtime changed. Synced batcher to ${shortAddress(runtimeBatcher)}. Click Run dry-run again.`,
         )
+        return null
       }
       const hasDeploymentVersionOverride =
         typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('deploymentVersion')?.trim()
       const runtimeDeploymentVersion = runtimeConfig?.deploymentVersion?.trim() ?? ''
-      if (!hasDeploymentVersionOverride && runtimeDeploymentVersion && runtimeDeploymentVersion !== deploymentVersion) {
-        if (
-          tryAutoRecoverStaleDeployConfig({
-            reason: 'deploymentVersion',
-            clientValue: deploymentVersion,
-            runtimeValue: runtimeDeploymentVersion,
-          })
-        ) {
-          setError('Local dry-run deployment version changed after restart. Reloading deploy page...')
-          return null
-        }
-        throw new Error(
-          `Deploy page is stale after a local restart. Client deployment version ${deploymentVersion} does not match server deployment version ${runtimeDeploymentVersion}. Hard refresh the page and confirm you are on the dry-run origin (http://localhost:5174).`,
+      if (
+        !hasDeploymentVersionOverride &&
+        !vaultVanityIsCustom &&
+        runtimeDeploymentVersion &&
+        runtimeDeploymentVersion !== deploymentVersion
+      ) {
+        const recovered = tryAutoRecoverStaleDeployConfig({
+          reason: 'deploymentVersion',
+          clientValue: deploymentVersion,
+          runtimeValue: runtimeDeploymentVersion,
+        })
+        setDeploymentVersionOverride(runtimeDeploymentVersion)
+        setError(
+          recovered
+            ? 'Deploy runtime changed. Syncing to server deployment version…'
+            : `Deploy runtime changed. Synced deployment version to ${runtimeDeploymentVersion}. Click Run dry-run again.`,
         )
+        return null
+      }
+      if (vaultVanityIsCustom && (vaultVanityPrefix ?? '').length > vanityCustomMaxHex) {
+        throw new Error(`Custom vault vanity supports up to ${vanityCustomMaxHex} hex characters (0-9, a-f).`)
+      }
+      if (shareVanityIsCustom && (shareOftVanitySuffix ?? '').length > vanityCustomMaxHex) {
+        throw new Error(`Custom share vanity supports up to ${vanityCustomMaxHex} hex characters (0-9, a-f).`)
       }
       const payoutRouterKeeperAddress = normalizeAddressLike(runtimeConfig?.payoutRouterKeeperAddress)
       const payoutRouterApprovedExternalSwapTargets = normalizeAddressArray(
@@ -3871,146 +4165,149 @@ function DeployVaultBatcher({
         return !!bc && bc !== '0x'
       })()
 
+      const senderCanAdminPayoutRouter = sameAddress(owner, expectedProtocolTreasury)
       const payoutRouterDesiredSwapPaths: Array<{ tokenIn: Address; path: Hex; label: 'WETH' | 'ZORA' }> = []
-      const uniswapV3Factory = normalizeAddressLike(CONTRACTS.uniswapV3Factory)
-      const hasV3Pool = async (tokenA: Address, tokenB: Address, fee: number): Promise<boolean> => {
-        if (!uniswapV3Factory) return false
-        if (sameAddress(tokenA, tokenB)) return false
-        try {
-          const pool = await publicClient.readContract({
-            address: uniswapV3Factory,
-            abi: UNISWAP_V3_FACTORY_ABI,
-            functionName: 'getPool',
-            args: [tokenA, tokenB, fee],
-          })
-          return typeof pool === 'string' && isAddress(pool) && !sameAddress(pool as Address, ZERO_ADDRESS)
-        } catch {
-          return false
+      if (senderCanAdminPayoutRouter) {
+        const uniswapV3Factory = normalizeAddressLike(CONTRACTS.uniswapV3Factory)
+        const hasV3Pool = async (tokenA: Address, tokenB: Address, fee: number): Promise<boolean> => {
+          if (!uniswapV3Factory) return false
+          if (sameAddress(tokenA, tokenB)) return false
+          try {
+            const pool = await publicClient.readContract({
+              address: uniswapV3Factory,
+              abi: UNISWAP_V3_FACTORY_ABI,
+              functionName: 'getPool',
+              args: [tokenA, tokenB, fee],
+            })
+            return typeof pool === 'string' && isAddress(pool) && !sameAddress(pool as Address, ZERO_ADDRESS)
+          } catch {
+            return false
+          }
         }
-      }
-      const candidateV3Fees = (preferredFee: number): number[] => {
-        const common = [preferredFee, DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE, 500, 3_000, 10_000, 100]
-        const out: number[] = []
-        for (const fee of common) {
-          if (!Number.isInteger(fee) || fee <= 0 || fee > 1_000_000) continue
-          if (!out.includes(fee)) out.push(fee)
+        const candidateV3Fees = (preferredFee: number): number[] => {
+          const common = [preferredFee, DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE, 500, 3_000, 10_000, 100]
+          const out: number[] = []
+          for (const fee of common) {
+            if (!Number.isInteger(fee) || fee <= 0 || fee > 1_000_000) continue
+            if (!out.includes(fee)) out.push(fee)
+          }
+          return out
         }
-        return out
-      }
-      const resolveV3Fee = async (tokenA: Address, tokenB: Address, preferredFee: number): Promise<number | null> => {
-        for (const fee of candidateV3Fees(preferredFee)) {
-          if (await hasV3Pool(tokenA, tokenB, fee)) return fee
+        const resolveV3Fee = async (tokenA: Address, tokenB: Address, preferredFee: number): Promise<number | null> => {
+          for (const fee of candidateV3Fees(preferredFee)) {
+            if (await hasV3Pool(tokenA, tokenB, fee)) return fee
+          }
+          return null
         }
-        return null
-      }
-      const usdcCreatorFee = !sameAddress(usdc, creatorToken)
-        ? await resolveV3Fee(usdc, creatorToken, DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE)
-        : null
+        const usdcCreatorFee = !sameAddress(usdc, creatorToken)
+          ? await resolveV3Fee(usdc, creatorToken, DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE)
+          : null
 
-      if (!sameAddress(weth, creatorToken)) {
-        const directWethCreatorFee = await resolveV3Fee(weth, creatorToken, payoutRouterWethCreatorFee)
-        if (directWethCreatorFee !== null) {
-          payoutRouterDesiredSwapPaths.push({
-            tokenIn: weth,
-            path: encodeUniswapV3Path([weth, creatorToken], [directWethCreatorFee]),
-            label: 'WETH',
-          })
-        } else {
-          const wethUsdcFee = await resolveV3Fee(weth, usdc, DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE)
-          if (wethUsdcFee !== null && usdcCreatorFee !== null) {
+        if (!sameAddress(weth, creatorToken)) {
+          const directWethCreatorFee = await resolveV3Fee(weth, creatorToken, payoutRouterWethCreatorFee)
+          if (directWethCreatorFee !== null) {
             payoutRouterDesiredSwapPaths.push({
               tokenIn: weth,
-              path: encodeUniswapV3Path(
-                [weth, usdc, creatorToken],
-                [wethUsdcFee, usdcCreatorFee],
-              ),
+              path: encodeUniswapV3Path([weth, creatorToken], [directWethCreatorFee]),
               label: 'WETH',
             })
           } else {
-            logger.warn('[DeployVault] No viable WETH->creator V3 route found; skipping WETH swap-path auto-config', {
-              directWethCreatorFee,
-              wethUsdcFee,
-              usdcCreatorFee,
-              creatorToken,
-            })
+            const wethUsdcFee = await resolveV3Fee(weth, usdc, DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE)
+            if (wethUsdcFee !== null && usdcCreatorFee !== null) {
+              payoutRouterDesiredSwapPaths.push({
+                tokenIn: weth,
+                path: encodeUniswapV3Path(
+                  [weth, usdc, creatorToken],
+                  [wethUsdcFee, usdcCreatorFee],
+                ),
+                label: 'WETH',
+              })
+            } else {
+              logger.warn('[DeployVault] No viable WETH->creator V3 route found; skipping WETH swap-path auto-config', {
+                directWethCreatorFee,
+                wethUsdcFee,
+                usdcCreatorFee,
+                creatorToken,
+              })
+            }
           }
         }
-      }
-      if (payoutRouterZoraToken) {
-        if (
-          !sameAddress(payoutRouterZoraToken, creatorToken) &&
-          !sameAddress(payoutRouterZoraToken, weth) &&
-          !sameAddress(payoutRouterZoraToken, usdc)
-        ) {
-          const directZoraCreatorFee = await resolveV3Fee(
-            payoutRouterZoraToken,
-            creatorToken,
-            DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE,
-          )
-          if (directZoraCreatorFee !== null) {
-            payoutRouterDesiredSwapPaths.push({
-              tokenIn: payoutRouterZoraToken,
-              path: encodeUniswapV3Path(
-                [payoutRouterZoraToken, creatorToken],
-                [directZoraCreatorFee],
-              ),
-              label: 'ZORA',
-            })
-          } else {
-            const zoraWethFee = await resolveV3Fee(payoutRouterZoraToken, weth, payoutRouterZoraWethFee)
-            const wethCreatorFee = await resolveV3Fee(weth, creatorToken, payoutRouterWethCreatorFee)
-            if (zoraWethFee !== null && wethCreatorFee !== null) {
+        if (payoutRouterZoraToken) {
+          if (
+            !sameAddress(payoutRouterZoraToken, creatorToken) &&
+            !sameAddress(payoutRouterZoraToken, weth) &&
+            !sameAddress(payoutRouterZoraToken, usdc)
+          ) {
+            const directZoraCreatorFee = await resolveV3Fee(
+              payoutRouterZoraToken,
+              creatorToken,
+              DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE,
+            )
+            if (directZoraCreatorFee !== null) {
               payoutRouterDesiredSwapPaths.push({
                 tokenIn: payoutRouterZoraToken,
                 path: encodeUniswapV3Path(
-                  [payoutRouterZoraToken, weth, creatorToken],
-                  [zoraWethFee, wethCreatorFee],
+                  [payoutRouterZoraToken, creatorToken],
+                  [directZoraCreatorFee],
                 ),
                 label: 'ZORA',
               })
             } else {
-              const zoraUsdcFee = await resolveV3Fee(
-                payoutRouterZoraToken,
-                usdc,
-                DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE,
-              )
-              if (zoraUsdcFee !== null && usdcCreatorFee !== null) {
+              const zoraWethFee = await resolveV3Fee(payoutRouterZoraToken, weth, payoutRouterZoraWethFee)
+              const wethCreatorFee = await resolveV3Fee(weth, creatorToken, payoutRouterWethCreatorFee)
+              if (zoraWethFee !== null && wethCreatorFee !== null) {
                 payoutRouterDesiredSwapPaths.push({
                   tokenIn: payoutRouterZoraToken,
                   path: encodeUniswapV3Path(
-                    [payoutRouterZoraToken, usdc, creatorToken],
-                    [zoraUsdcFee, usdcCreatorFee],
+                    [payoutRouterZoraToken, weth, creatorToken],
+                    [zoraWethFee, wethCreatorFee],
                   ),
                   label: 'ZORA',
                 })
               } else {
-                logger.warn('[DeployVault] No viable ZORA->creator V3 route found; skipping ZORA swap-path auto-config', {
-                  directZoraCreatorFee,
-                  zoraWethFee,
-                  wethCreatorFee,
-                  zoraUsdcFee,
-                  usdcCreatorFee,
-                  zoraToken: payoutRouterZoraToken,
-                  creatorToken,
-                })
+                const zoraUsdcFee = await resolveV3Fee(
+                  payoutRouterZoraToken,
+                  usdc,
+                  DEFAULT_PAYOUT_ROUTER_ROUTE_FALLBACK_FEE,
+                )
+                if (zoraUsdcFee !== null && usdcCreatorFee !== null) {
+                  payoutRouterDesiredSwapPaths.push({
+                    tokenIn: payoutRouterZoraToken,
+                    path: encodeUniswapV3Path(
+                      [payoutRouterZoraToken, usdc, creatorToken],
+                      [zoraUsdcFee, usdcCreatorFee],
+                    ),
+                    label: 'ZORA',
+                  })
+                } else {
+                  logger.warn('[DeployVault] No viable ZORA->creator V3 route found; skipping ZORA swap-path auto-config', {
+                    directZoraCreatorFee,
+                    zoraWethFee,
+                    wethCreatorFee,
+                    zoraUsdcFee,
+                    usdcCreatorFee,
+                    zoraToken: payoutRouterZoraToken,
+                    creatorToken,
+                  })
+                }
               }
             }
           }
+        } else {
+          logger.warn('[DeployVault] Missing runtime ZORA token address; skipping payout router ZORA swap-path auto-config')
         }
-      } else {
-        logger.warn('[DeployVault] Missing runtime ZORA token address; skipping payout router ZORA swap-path auto-config')
-      }
-      if (payoutRouterZoraToken) {
-        const isCreatorToken = sameAddress(payoutRouterZoraToken, creatorToken)
-        const isWethToken = sameAddress(payoutRouterZoraToken, weth)
-        const isUsdcToken = sameAddress(payoutRouterZoraToken, usdc)
-        if (isCreatorToken || isWethToken || isUsdcToken) {
-          logger.warn('[DeployVault] Runtime ZORA token overlaps with creator/WETH/USDC; skipping ZORA swap-path auto-config', {
-            zoraToken: payoutRouterZoraToken,
-            creatorToken,
-            weth,
-            usdc,
-          })
+        if (payoutRouterZoraToken) {
+          const isCreatorToken = sameAddress(payoutRouterZoraToken, creatorToken)
+          const isWethToken = sameAddress(payoutRouterZoraToken, weth)
+          const isUsdcToken = sameAddress(payoutRouterZoraToken, usdc)
+          if (isCreatorToken || isWethToken || isUsdcToken) {
+            logger.warn('[DeployVault] Runtime ZORA token overlaps with creator/WETH/USDC; skipping ZORA swap-path auto-config', {
+              zoraToken: payoutRouterZoraToken,
+              creatorToken,
+              weth,
+              usdc,
+            })
+          }
         }
       }
 
@@ -4096,8 +4393,6 @@ function DeployVaultBatcher({
         return out
       })()
 
-      const senderCanAdminPayoutRouter = sameAddress(owner, expectedProtocolTreasury)
-
       const payoutRouterSetKeeperCall =
         senderCanAdminPayoutRouter &&
         payoutRouterKeeperAddress &&
@@ -4170,8 +4465,8 @@ function DeployVaultBatcher({
           payoutRouterApprovedExternalSwapTargets.length > 0 ||
           payoutRouterApprovedExternalSwapSpenders.length > 0)
       ) {
-        logger.warn(
-          '[DeployVault] PayoutRouter owner is protocol treasury; skipping creator-side setKeeper/setSwapPath/setExternalSwap* auto-config',
+        logger.info(
+          '[DeployVault] PayoutRouter owner is protocol treasury; creator-side setKeeper/setSwapPath/setExternalSwap* auto-config intentionally skipped',
         )
       }
 
@@ -5040,6 +5335,14 @@ function DeployVaultBatcher({
         ]
         assertSafe(phase3Calls)
 
+        const sessionVanityRequest: DeploySessionVanityRequest | undefined =
+          vaultVanityPrefix || shareOftVanitySuffix
+            ? {
+                ...(vaultVanityPrefix ? { vaultPrefix: `0x${vaultVanityPrefix}` } : {}),
+                ...(shareOftVanitySuffix ? { shareSuffix: shareOftVanitySuffix } : {}),
+              }
+            : undefined
+
         const sessionCreatePayload: DeploySessionCreateRequest = {
           smartWallet: owner,
           creatorToken,
@@ -5051,6 +5354,7 @@ function DeployVaultBatcher({
           phase2FinalizeCalls: serializeSessionCalls(phase2FinalizeCalls),
           phase3Calls: serializeSessionCalls(phase3Calls),
           phase4Calls: serializeSessionCalls(phase4Calls),
+          ...(sessionVanityRequest ? { vanity: sessionVanityRequest } : {}),
           version: deploymentVersion,
         }
         const deployPlanExport: DeployPlanExport = {
@@ -6292,8 +6596,9 @@ function DeployVaultBatcher({
         body: plan.sessionCreateRequest,
         label: 'deploy session dry-run',
       })
-      if (!json.data) throw new Error('Dry-run failed')
-      setDryRunResult(json.data)
+      const normalized = normalizeDryRunResponse(json.data)
+      if (!normalized) throw new Error('Dry-run failed (invalid response)')
+      setDryRunResult(normalized)
       return
     } catch (e) {
       setDryRunError(formatDeployError(e))
@@ -6305,6 +6610,18 @@ function DeployVaultBatcher({
   const expectedError = expectedQuery.isError
     ? ((expectedQuery.error as any)?.message || 'Failed to compute deployment addresses.')
     : null
+  const vanityCustomPaidNotice =
+    vaultVanityIsCustom || shareVanityIsCustom
+      ? `Custom vanity requested (paid):${
+          vaultVanityIsCustom ? ` vault prefix 0x${vaultVanityPrefix}` : ''
+        }${
+          shareVanityIsCustom ? `${vaultVanityIsCustom ? ',' : ''} share suffix ${shareOftVanitySuffix}` : ''
+        }`
+      : null
+  const vanityDefaultNotice =
+    !vanityCustomPaidNotice && (vaultVanityPrefix || shareOftVanitySuffix)
+      ? `Default vanity active: vault prefix 0x${DEFAULT_VAULT_VANITY_PREFIX}, share suffix ${DEFAULT_SHARE_OFT_VANITY_SUFFIX}.`
+      : null
 
   const disabledReason =
     busy
@@ -6352,6 +6669,15 @@ function DeployVaultBatcher({
         <div className="text-[11px] text-amber-300/70">
           You’re signed in from an earlier session. Clicking deploy will submit transactions immediately.
         </div>
+      ) : null}
+      {vanityCustomPaidNotice ? (
+        <div className="text-[11px] text-zinc-500">{vanityCustomPaidNotice}</div>
+      ) : null}
+      {vanityDefaultNotice ? (
+        <div className="text-[11px] text-zinc-600">{vanityDefaultNotice}</div>
+      ) : null}
+      {expectedShareOftVanityWarning ? (
+        <div className="text-[11px] text-amber-300/80">{expectedShareOftVanityWarning}</div>
       ) : null}
 
       <details className="vault-surface-muted group rounded-lg">
@@ -6509,6 +6835,12 @@ function DeployVaultBatcher({
               <div className="mt-2 text-[11px] text-zinc-600">
                 Phase-3 addresses are projected from current factory state and CREATE2 salts.
               </div>
+              {phase3LikelyMissingHelperConfig ? (
+                <div className="mt-1 text-[11px] text-amber-300/80">
+                  Some Phase-3 predicted addresses require batcher helper/runtime config that is unavailable on the
+                  current deployment batcher, so they remain hidden until runtime config is complete.
+                </div>
+              ) : null}
             </div>
 
             <div className="px-4 py-4">
@@ -6565,7 +6897,16 @@ function DeployVaultBatcher({
             </div>
             {exportStatus ? <div className="text-[11px] text-zinc-500">{exportStatus}</div> : null}
           </div>
-          {dryRunError ? <div className="mt-2 text-[11px] text-amber-300/80">{dryRunError}</div> : null}
+          {dryRunError ? (
+            <div className="mt-2 space-y-2">
+              <div className="text-[11px] text-amber-300/80">{dryRunError}</div>
+              {isVanityPaidFeatureError(dryRunError) ? (
+                <Link to={creatorStrategyFeaturesHref} className="inline-flex text-[11px] text-blue-300 hover:text-blue-200">
+                  Activate vanity feature access
+                </Link>
+              ) : null}
+            </div>
+          ) : null}
           {dryRunResult ? (
             <div className="mt-3 rounded-lg border border-white/10 bg-white/4 p-3 space-y-2 backdrop-blur-sm">
               <div className="flex items-center justify-between gap-3">
@@ -6575,7 +6916,7 @@ function DeployVaultBatcher({
                 </div>
               </div>
               <div className="space-y-1 text-[11px]">
-                {dryRunResult.phases.map((phaseEntry) => (
+                {(Array.isArray(dryRunResult.phases) ? dryRunResult.phases : []).map((phaseEntry) => (
                   <div key={phaseEntry.name} className="flex items-center justify-between gap-3">
                     <div className="text-zinc-400">{phaseEntry.name}</div>
                     <div className={phaseEntry.status === 'passed' ? 'text-green-400/80' : 'text-amber-300/80'}>
@@ -6688,6 +7029,11 @@ function DeployVaultBatcher({
             <button type="button" className="btn-primary w-full" onClick={switchAuthCta.onClick}>
               {switchAuthCta.label}
             </button>
+          ) : null}
+          {isVanityPaidFeatureError(error) ? (
+            <Link to={creatorStrategyFeaturesHref} className="inline-flex text-[11px] text-blue-300 hover:text-blue-200">
+              Activate vanity feature access
+            </Link>
           ) : null}
         </div>
       ) : null}

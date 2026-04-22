@@ -1,8 +1,8 @@
-import { useState } from 'react'
+import { Component, type ReactNode, useEffect, useState } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 
 import { ConnectButton } from '@/components/account/ConnectButton'
-import { useAdminStatus } from '@/hooks/useAdminStatus'
+import { apiFetch } from '@/lib/api/apiBase'
 import {
   buildCanonicalMarketingWaitlistUrl,
   getCanonicalMarketingWaitlistPath,
@@ -30,6 +30,33 @@ const NAV_ITEMS_PUBLIC: NavItem[] = [
 ]
 
 const ADMIN_ITEM: NavItem = { label: 'Admin', to: '/admin/waitlist', activePrefixes: ['/admin'] }
+
+class NavConnectButtonBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  state = { hasError: false }
+
+  static getDerivedStateFromError(): { hasError: boolean } {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error: unknown) {
+    console.warn('[VaultNavBar] connect button render failed', error)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <button
+          type="button"
+          disabled
+          className="inline-flex h-9 w-[164px] items-center justify-center gap-2 rounded-full bg-white/8 px-3 text-[11px] font-medium text-zinc-300 disabled:opacity-60"
+        >
+          Wallet unavailable
+        </button>
+      )
+    }
+    return this.props.children
+  }
+}
 
 function isActiveLink(location: { pathname: string }, item: NavItem): boolean {
   const pathname = location.pathname
@@ -161,7 +188,9 @@ function VaultNavBarContent(props: VaultNavBarContentProps) {
 
         {showConnect ? (
           <div className="shrink-0">
-            <ConnectButton variant="nav" />
+            <NavConnectButtonBoundary>
+              <ConnectButton variant="nav" />
+            </NavConnectButtonBoundary>
           </div>
         ) : null}
       </div>
@@ -175,7 +204,32 @@ function VaultNavBarWithAdminStatus(props: {
   publicMode: boolean
   hostMode: ReturnType<typeof getHostMode>
 }) {
-  const { isAdmin } = useAdminStatus({ enabled: true })
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const res = await apiFetch('/api/auth/admin', {
+          method: 'GET',
+          headers: { Accept: 'application/json' },
+          credentials: 'include',
+        })
+        const json = (await res.json().catch(() => null)) as
+          | { success?: boolean; data?: { isAdmin?: boolean } | null }
+          | null
+        const nextIsAdmin = Boolean(res.ok && json?.success && json?.data?.isAdmin === true)
+        if (!cancelled) setIsAdmin(nextIsAdmin)
+      } catch {
+        if (!cancelled) setIsAdmin(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   return <VaultNavBarContent {...props} isAdmin={isAdmin} />
 }
 

@@ -113,7 +113,7 @@ function getAgentRegistry(): string {
 }
 
 function getCanonicalCsw(): string {
-  return '0xab6d5c10b03300326cd7fab7267ae192842967b5'
+  return '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef'
 }
 
 // ---------------------------------------------------------------------------

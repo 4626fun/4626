@@ -42,6 +42,12 @@ import { readProfileWalletAuthority } from '../../../../server/_lib/wallet/canon
 import {
   normalizeSolanaAssetMintOrigin,
 } from '../../../../server/_lib/onchain/solanaOvaultCompatibility.js'
+import {
+  DEPLOY_VANITY_ALLOWED_LENGTHS,
+  getDeployVanityFeatureKey,
+  listDeployVanityFeatureKeysAtOrAbove,
+} from '../../../../server/_lib/creatorStrategy/catalog.js'
+import { hasLiveActivationForFeature } from '../../../../server/_lib/creatorStrategy/activations.js'
 import { hasContractBytecode } from '../../../../shared/wallet/bytecode.js'
 
 export type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
@@ -56,6 +62,11 @@ type SolanaOvaultRequest = {
   shareMeshMint?: string
   solanaEid?: number | string
   mintCompatibilityHints?: unknown
+}
+
+type DeployVanityRequest = {
+  vaultPrefix?: string | null
+  shareSuffix?: string | null
 }
 
 export type CreateDeploySessionRequest = {
@@ -76,6 +87,7 @@ export type CreateDeploySessionRequest = {
   phase3Calls?: Call[]
   phase4Calls?: Call[]
   solanaOvault?: SolanaOvaultRequest
+  vanity?: DeployVanityRequest
   // Optional metadata for debugging/UI.
   version?: string
   // Optional per-session invariant expectations (preferred over env defaults).
@@ -119,6 +131,7 @@ export type ValidatedDeploySessionRequest = {
   phase3Calls: Call[]
   phase4Calls: Call[]
   solanaOvault: Record<string, unknown> | null
+  vanity: { vaultPrefix: string | null; shareSuffix: string | null }
   hasPhase2Finalize: boolean
   version: string
   phase2InvariantExpectations: DeployPhase2InvariantExpectations | null
@@ -130,6 +143,10 @@ type OwnershipCheck = {
 }
 
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
+const PHASE1_WITH_SALT_SELECTORS = new Set<string>(['0x297cb1e6', '0x4154f24e', '0x3bc09a8b'])
+const DEFAULT_FREE_VAULT_VANITY_PREFIX = '4626'
+const DEFAULT_FREE_SHARE_VANITY_SUFFIX = '4626'
+const DEFAULT_DEPLOY_VANITY_CUSTOM_MAX_HEX = 5
 
 const ERC20_APPROVE_ABI = [
   {
@@ -357,6 +374,112 @@ function normalizeAddressOrNull(value: unknown): Address | null {
   if (typeof value !== 'string' || !isAddress(value)) return null
   const addr = getAddress(value as Address)
   return addr.toLowerCase() === ZERO_ADDRESS.toLowerCase() ? null : addr
+}
+
+function normalizeHexVanityPattern(value: unknown): string | null {
+  const raw = typeof value === 'string' ? value.trim() : ''
+  if (!raw) return null
+  const cleaned = raw.startsWith('0x') ? raw.slice(2) : raw
+  if (!cleaned) return null
+  if (cleaned.length > 40) return null
+  if (!/^[0-9a-fA-F]+$/.test(cleaned)) return null
+  return cleaned.toLowerCase()
+}
+
+function readDeployVanityCustomMaxHex(): number {
+  const raw = String(process.env.DEPLOY_VANITY_CUSTOM_MAX_HEX ?? '').trim()
+  if (!raw) return DEFAULT_DEPLOY_VANITY_CUSTOM_MAX_HEX
+  const parsed = Number(raw)
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_DEPLOY_VANITY_CUSTOM_MAX_HEX
+  // Keep this bounded so custom vanity remains economically predictable.
+  return Math.min(5, Math.max(1, Math.floor(parsed)))
+}
+
+function isFreeDefaultVaultPrefix(value: string | null): boolean {
+  return String(value ?? '') === DEFAULT_FREE_VAULT_VANITY_PREFIX
+}
+
+function isFreeDefaultShareSuffix(value: string | null): boolean {
+  return String(value ?? '') === DEFAULT_FREE_SHARE_VANITY_SUFFIX
+}
+
+function isCustomVaultPrefix(value: string | null): boolean {
+  return Boolean(value) && !isFreeDefaultVaultPrefix(value)
+}
+
+function isCustomShareSuffix(value: string | null): boolean {
+  return Boolean(value) && !isFreeDefaultShareSuffix(value)
+}
+
+function assertVanityCustomLength(params: {
+  value: string | null
+  label: 'vaultPrefix' | 'shareSuffix'
+  isCustom: boolean
+  maxHexChars: number
+}): void {
+  if (!params.value || !params.isCustom) return
+  if (params.value.length <= params.maxHexChars) return
+  throw new DeploySessionRequestError(
+    400,
+    `${params.label} custom vanity supports up to ${params.maxHexChars} hex characters (0-9, a-f).`,
+  )
+}
+
+function normalizeDeployVanityRequest(value: unknown): { vaultPrefix: string | null; shareSuffix: string | null } {
+  if (!value || typeof value !== 'object') {
+    return { vaultPrefix: null, shareSuffix: null }
+  }
+  const raw = value as Record<string, unknown>
+  return {
+    vaultPrefix: normalizeHexVanityPattern(raw.vaultPrefix),
+    shareSuffix: normalizeHexVanityPattern(raw.shareSuffix),
+  }
+}
+
+function hasPhase1SaltOverrideCalls(calls: Call[]): boolean {
+  for (const call of calls) {
+    const data = typeof call?.data === 'string' ? call.data.trim().toLowerCase() : ''
+    if (!data.startsWith('0x') || data.length < 10) continue
+    const selector = data.slice(0, 10)
+    if (PHASE1_WITH_SALT_SELECTORS.has(selector)) return true
+  }
+  return false
+}
+
+function isDeployVanityPaywallEnabled(): boolean {
+  const raw = String(process.env.DEPLOY_VANITY_PAYWALL_ENABLED ?? '').trim().toLowerCase()
+  if (!raw) return true
+  if (raw === '0' || raw === 'false' || raw === 'no' || raw === 'off') return false
+  return true
+}
+
+function normalizeDeployVanityLength(value: number): number | null {
+  const normalized = Math.floor(value)
+  if (!Number.isFinite(normalized)) return null
+  if (!DEPLOY_VANITY_ALLOWED_LENGTHS.includes(normalized as (typeof DEPLOY_VANITY_ALLOWED_LENGTHS)[number])) {
+    return null
+  }
+  return normalized
+}
+
+async function hasDeployVanityEntitlement(params: {
+  db: { sql?: unknown }
+  creatorToken: Address
+  kind: 'vaultPrefix' | 'shareSuffix'
+  requiredLength: number
+}): Promise<boolean> {
+  const keys = listDeployVanityFeatureKeysAtOrAbove({
+    kind: params.kind,
+    minLength: params.requiredLength,
+  })
+  for (const featureKey of keys) {
+    const ok = await hasLiveActivationForFeature(params.db as any, {
+      creatorToken: params.creatorToken,
+      featureKey,
+    })
+    if (ok) return true
+  }
+  return false
 }
 
 function inferPayoutRecipientMode(value: unknown): 'gauge' | 'payout_router' | null {
@@ -1088,6 +1211,86 @@ export async function validateDeploySessionRequest(params: {
   const phase3Calls = Array.isArray(params.body.phase3Calls) ? params.body.phase3Calls : []
   const phase4Calls = Array.isArray(params.body.phase4Calls) ? params.body.phase4Calls : []
   const solanaOvault = normalizeSolanaOvaultConfig(params.body.solanaOvault)
+  const vanity = normalizeDeployVanityRequest(params.body.vanity)
+  const phase1UsesSaltOverride = hasPhase1SaltOverrideCalls(phase1Calls)
+  const vanityCustomMaxHex = readDeployVanityCustomMaxHex()
+  const vaultPrefixCustom = isCustomVaultPrefix(vanity.vaultPrefix)
+  const shareSuffixCustom = isCustomShareSuffix(vanity.shareSuffix)
+  assertVanityCustomLength({
+    value: vanity.vaultPrefix,
+    label: 'vaultPrefix',
+    isCustom: vaultPrefixCustom,
+    maxHexChars: vanityCustomMaxHex,
+  })
+  assertVanityCustomLength({
+    value: vanity.shareSuffix,
+    label: 'shareSuffix',
+    isCustom: shareSuffixCustom,
+    maxHexChars: vanityCustomMaxHex,
+  })
+  const vaultPrefixCustomLength = vanity.vaultPrefix ? normalizeDeployVanityLength(vanity.vaultPrefix.length) : null
+  const shareSuffixCustomLength = vanity.shareSuffix ? normalizeDeployVanityLength(vanity.shareSuffix.length) : null
+  if (vaultPrefixCustom && !vaultPrefixCustomLength) {
+    throw new DeploySessionRequestError(400, 'vaultPrefix custom vanity currently supports 1-5 hex characters (0-9, a-f).')
+  }
+  if (shareSuffixCustom && !shareSuffixCustomLength) {
+    throw new DeploySessionRequestError(400, 'shareSuffix custom vanity currently supports 1-5 hex characters (0-9, a-f).')
+  }
+  if (isDeployVanityPaywallEnabled()) {
+    const requiresVaultPrefixEntitlementLength = vaultPrefixCustom ? vaultPrefixCustomLength : null
+    // Keep anti-bypass behavior for raw phase1 salt-override calls, but
+    // allow the free default `shareSuffix=4626` path without paid activation.
+    const requiresShareSuffixEntitlement =
+      (shareSuffixCustom ? shareSuffixCustomLength : null) ||
+      (phase1UsesSaltOverride && !isFreeDefaultShareSuffix(vanity.shareSuffix)
+        ? DEPLOY_VANITY_ALLOWED_LENGTHS[DEPLOY_VANITY_ALLOWED_LENGTHS.length - 1]
+        : null)
+    if (requiresVaultPrefixEntitlementLength || requiresShareSuffixEntitlement) {
+      const db = await getDb()
+      if (!db?.sql) {
+        throw new DeploySessionRequestError(503, 'Vanity entitlement check unavailable (database unavailable).')
+      }
+      const missingFeatures: string[] = []
+      if (requiresVaultPrefixEntitlementLength) {
+        const ok = await hasDeployVanityEntitlement({
+          db: db as any,
+          creatorToken,
+          kind: 'vaultPrefix',
+          requiredLength: requiresVaultPrefixEntitlementLength,
+        })
+        if (!ok) {
+          const featureKey = getDeployVanityFeatureKey({
+            kind: 'vaultPrefix',
+            length: requiresVaultPrefixEntitlementLength,
+          })
+          if (featureKey) missingFeatures.push(`${featureKey} (or higher)`)
+        }
+      }
+      if (requiresShareSuffixEntitlement) {
+        const ok = await hasDeployVanityEntitlement({
+          db: db as any,
+          creatorToken,
+          kind: 'shareSuffix',
+          requiredLength: requiresShareSuffixEntitlement,
+        })
+        if (!ok) {
+          const featureKey = getDeployVanityFeatureKey({
+            kind: 'shareSuffix',
+            length: requiresShareSuffixEntitlement,
+          })
+          if (featureKey) missingFeatures.push(`${featureKey} (or higher)`)
+        }
+      }
+      if (missingFeatures.length > 0) {
+        throw new DeploySessionRequestError(
+          402,
+          `Vanity deploy requires paid feature activation: ${missingFeatures.join(', ')}. ` +
+            `Free defaults are vault prefix 0x${DEFAULT_FREE_VAULT_VANITY_PREFIX} and share suffix ${DEFAULT_FREE_SHARE_VANITY_SUFFIX}. ` +
+            `Activate at /creator/strategy/features?creator=${creatorToken}.`,
+        )
+      }
+    }
+  }
   const hasPhase2Finalize = phase2FinalizeCalls.length > 0
   const version = String(params.body.version ?? '').trim()
   const requestedExternalMode = inferPayoutRecipientMode(params.body.expectedPayoutRecipientMode)
@@ -1222,6 +1425,7 @@ export async function validateDeploySessionRequest(params: {
     phase3Calls,
     phase4Calls,
     solanaOvault,
+    vanity,
     hasPhase2Finalize,
     version,
     phase2InvariantExpectations,
@@ -1277,6 +1481,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       phase3Calls,
       phase4Calls,
       solanaOvault,
+      vanity,
       hasPhase2Finalize,
       version,
       phase2InvariantExpectations,
@@ -1440,6 +1645,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           hasOvaultMesh: Boolean(solanaOvault?.enabled) && (phase3Calls.length > 0 || phase4Calls.length > 0),
         },
         version,
+        vanity,
         phase1Calls,
         phase2CoreCalls,
         phase2FinalizeCalls,

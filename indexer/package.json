@@ -10,10 +10,13 @@
     "enrich": "tsx src/runEnrich.ts",
     "classify": "tsx src/classifyOwners.ts",
     "farcaster": "tsx src/crossReferenceFarcaster.ts",
+    "names": "tsx src/enrichNames.ts",
+    "zora-profiles": "tsx src/enrichZoraProfiles.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
+    "@zoralabs/coins-sdk": "^0.3.3",
     "dotenv": "^16.4.5",
     "viem": "^2.21.0"
   },

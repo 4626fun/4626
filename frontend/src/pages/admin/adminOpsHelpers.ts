@@ -23,7 +23,7 @@ import { logger } from '@/lib/observability/logger'
 // Constants
 // ---------------------------------------------------------------------------
 
-export const CANONICAL_SMART_WALLET = '0xAb6d5C10b03300326CD7fAb7267Ae192842967b5'
+export const CANONICAL_SMART_WALLET = '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef'
 export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 export const ERC8004_IDENTITY_REGISTRY = '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432'
 // NOTE:

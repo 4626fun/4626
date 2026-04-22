@@ -5,10 +5,13 @@
  *
  * Designed to be called from a Zora content-coin iframe (sandboxed,
  * `allow-same-origin` disabled), which cannot carry a Privy auth token.
- * Instead of session auth we gate access by an on-chain ownership check:
- * the caller must supply a `(cswAddress, connectedEoa)` pair where
- * `connectedEoa` is a current owner of `cswAddress`. If that check fails
- * we refuse to provision a Privy agent wallet.
+ * Instead of session auth we gate access by ownership proof:
+ * - EOA-owner path: caller supplies `(cswAddress, connectedEoa)` where
+ *   `connectedEoa` is a current owner of `cswAddress`.
+ * - CSW-self path: caller supplies `connectedEoa == cswAddress` plus an
+ *   ERC-1271 signature proof over a short-lived deterministic message.
+ *
+ * If neither proof path validates, we refuse to provision a Privy agent wallet.
  *
  * Because the Zora iframe's Origin header is literally the string "null",
  * we serve permissive CORS (`Access-Control-Allow-Origin: *`) without
@@ -24,7 +27,7 @@
  */
 
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { createPublicClient, http, getAddress, type Address } from 'viem'
+import { createPublicClient, hashMessage, http, getAddress, type Address, type Hex, type PublicClient } from 'viem'
 import { base } from 'viem/chains'
 
 import {
@@ -44,6 +47,29 @@ import {
 import { createAgentWallet } from '../../../server/_lib/wallet/privyWalletApi.js'
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
+const HEX_RE = /^0x[0-9a-fA-F]+$/
+const MAX_PROOF_MESSAGE_LENGTH = 1_024
+const OWNERSHIP_PROOF_TTL_MS = 10 * 60_000
+const OWNERSHIP_PROOF_MAX_FUTURE_SKEW_MS = 2 * 60_000
+const EIP1271_MAGIC_VALUE = '0x1626ba7e'
+const EIP1271_ABI = [
+  {
+    type: 'function',
+    name: 'isValidSignature',
+    stateMutability: 'view',
+    inputs: [
+      { name: 'hash', type: 'bytes32' },
+      { name: 'signature', type: 'bytes' },
+    ],
+    outputs: [{ name: 'magicValue', type: 'bytes4' }],
+  },
+] as const
+
+type OwnershipProof = {
+  issuedAtMs: number
+  message: string
+  signature: Hex
+}
 
 type PreviewResponse =
   | { alreadyOwner: true; agentWalletAddress: string }
@@ -82,6 +108,83 @@ function normalizeAddressOrThrow(raw: unknown, field: string): Address {
   return getAddress(value) as Address
 }
 
+function normalizeHexSignatureOrThrow(raw: unknown): Hex {
+  const value = typeof raw === 'string' ? raw.trim() : ''
+  if (!HEX_RE.test(value) || value.length < 4 || value.length % 2 !== 0) {
+    throw Object.assign(new Error('Invalid ownership proof signature'), { statusCode: 400 })
+  }
+  return value as Hex
+}
+
+function readOwnershipProofOrThrow(raw: unknown): OwnershipProof {
+  if (!raw || typeof raw !== 'object') {
+    throw Object.assign(new Error('Missing ownership proof'), { statusCode: 400 })
+  }
+  const proof = raw as Record<string, unknown>
+  const issuedAtMs = Number(proof.issuedAtMs)
+  if (!Number.isFinite(issuedAtMs) || issuedAtMs <= 0) {
+    throw Object.assign(new Error('Invalid ownership proof issuedAtMs'), { statusCode: 400 })
+  }
+  const message = typeof proof.message === 'string' ? proof.message.trim() : ''
+  if (!message || message.length > MAX_PROOF_MESSAGE_LENGTH) {
+    throw Object.assign(new Error('Invalid ownership proof message'), { statusCode: 400 })
+  }
+  const signature = normalizeHexSignatureOrThrow(proof.signature)
+  return { issuedAtMs: Math.floor(issuedAtMs), message, signature }
+}
+
+function buildOwnershipProofMessage(params: {
+  cswAddress: Address
+  connectedAddress: Address
+  issuedAtMs: number
+}): string {
+  return [
+    '4626 onboarding owner preview',
+    `chainId:8453`,
+    `csw:${params.cswAddress.toLowerCase()}`,
+    `connected:${params.connectedAddress.toLowerCase()}`,
+    `issuedAtMs:${params.issuedAtMs}`,
+  ].join('\n')
+}
+
+function validateOwnershipProofFreshnessOrThrow(issuedAtMs: number) {
+  const now = Date.now()
+  if (issuedAtMs > now + OWNERSHIP_PROOF_MAX_FUTURE_SKEW_MS) {
+    throw Object.assign(new Error('Ownership proof issuedAtMs is in the future'), { statusCode: 400 })
+  }
+  if (now - issuedAtMs > OWNERSHIP_PROOF_TTL_MS) {
+    throw Object.assign(new Error('Ownership proof expired. Sign a fresh proof and retry.'), { statusCode: 400 })
+  }
+}
+
+async function verifyEip1271OwnershipProof(params: {
+  publicClient: Pick<PublicClient, 'readContract'>
+  cswAddress: Address
+  connectedAddress: Address
+  proof: OwnershipProof
+}): Promise<boolean> {
+  validateOwnershipProofFreshnessOrThrow(params.proof.issuedAtMs)
+  const expected = buildOwnershipProofMessage({
+    cswAddress: params.cswAddress,
+    connectedAddress: params.connectedAddress,
+    issuedAtMs: params.proof.issuedAtMs,
+  })
+  if (params.proof.message !== expected) {
+    throw Object.assign(
+      new Error('Ownership proof message mismatch. Build the proof using the documented 4626 message template.'),
+      { statusCode: 400 },
+    )
+  }
+  const digest = hashMessage(params.proof.message)
+  const magic = await params.publicClient.readContract({
+    address: params.cswAddress,
+    abi: EIP1271_ABI,
+    functionName: 'isValidSignature',
+    args: [digest, params.proof.signature],
+  })
+  return String(magic).toLowerCase() === EIP1271_MAGIC_VALUE
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setPublicCors(res)
   setNoStore(res)
@@ -110,16 +213,27 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   let cswAddress: Address
-  let connectedEoa: Address
+  let connectedAddress: Address
+  let ownershipProof: OwnershipProof | null = null
   try {
     cswAddress = normalizeAddressOrThrow(parsedBody.cswAddress, 'cswAddress')
-    connectedEoa = normalizeAddressOrThrow(parsedBody.connectedEoa, 'connectedEoa')
+    connectedAddress = normalizeAddressOrThrow(
+      parsedBody.connectedEoa ?? parsedBody.connectedAddress,
+      'connectedEoa',
+    )
+    if (parsedBody.ownershipProof !== undefined) {
+      ownershipProof = readOwnershipProofOrThrow(parsedBody.ownershipProof)
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Invalid input'
     return res.status(400).json({ success: false, error: message } satisfies ApiEnvelope<never>)
   }
 
-  // 1. Gate on on-chain ownership: the caller must supply an EOA that is
+  // 1. Gate on ownership proof:
+  //    - EOA-owner path (on-chain owner scan), or
+  //    - CSW-self ERC-1271 proof path when connectedAddress === cswAddress.
+  //
+  //    The caller must supply an address that is
   //    currently an owner of the CSW they want to extend. Without this
   //    check anyone could trigger Privy wallet provisioning for arbitrary
   //    CSW addresses they don't control.
@@ -128,9 +242,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     transport: http(resolveBaseRpcUrl()),
   })
 
-  let eoaIsOwner = false
+  let connectedAddressIsOwner = false
   try {
-    eoaIsOwner = await isOwnerOnChain(publicClient, cswAddress, connectedEoa)
+    connectedAddressIsOwner = await isOwnerOnChain(publicClient, cswAddress, connectedAddress)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'On-chain lookup failed'
     // A revert here usually means the address is not a CoinbaseSmartWallet
@@ -141,11 +255,40 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       error: `Could not verify ownership on Base: ${message}. Confirm this is a Coinbase Smart Wallet address.`,
     } satisfies ApiEnvelope<never>)
   }
-  if (!eoaIsOwner) {
-    return res.status(403).json({
-      success: false,
-      error: 'Connected wallet is not an owner of this smart wallet. Connect the EOA you used to sign up for Zora.',
-    } satisfies ApiEnvelope<never>)
+  if (!connectedAddressIsOwner) {
+    const connectedIsCswSelf = connectedAddress.toLowerCase() === cswAddress.toLowerCase()
+    if (!connectedIsCswSelf) {
+      return res.status(403).json({
+        success: false,
+        error: 'Connected wallet is not an owner of this smart wallet. Connect an owner EOA or provide a CSW ownership proof.',
+      } satisfies ApiEnvelope<never>)
+    }
+    if (!ownershipProof) {
+      return res.status(403).json({
+        success: false,
+        error: 'CSW self-auth requires ownershipProof (ERC-1271 signature). Sign a fresh proof and retry.',
+      } satisfies ApiEnvelope<never>)
+    }
+    try {
+      const proofValid = await verifyEip1271OwnershipProof({
+        publicClient,
+        cswAddress,
+        connectedAddress,
+        proof: ownershipProof,
+      })
+      if (!proofValid) {
+        return res.status(403).json({
+          success: false,
+          error: 'Invalid CSW ownership proof signature.',
+        } satisfies ApiEnvelope<never>)
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Invalid ownership proof'
+      const statusCode = typeof (err as { statusCode?: unknown })?.statusCode === 'number'
+        ? (err as { statusCode: number }).statusCode
+        : 400
+      return res.status(statusCode).json({ success: false, error: message } satisfies ApiEnvelope<never>)
+    }
   }
 
   // 2. Idempotent Privy agent-wallet lookup keyed on the CSW. Same CSW

@@ -34,14 +34,13 @@ import type { CommandIssuerSubAccount } from '../../../server/_lib/wallet/comman
 
 declare const process: { env: Record<string, string | undefined> }
 
-function getQuorumId(): string {
+function resolveQuorumId(): { quorumId: string | null; configured: boolean } {
   const nodeEnv = (process.env.NODE_ENV ?? '').trim().toLowerCase()
   const isProd = nodeEnv === 'production' || Boolean((process.env.VERCEL ?? '').trim())
   const fromEnv = (process.env.ARCH_B_SIGNER_QUORUM_ID ?? '').trim()
-  if (!fromEnv && isProd) {
-    throw new Error('ARCH_B_SIGNER_QUORUM_ID missing in production')
-  }
-  return fromEnv || 'lr8vgu2l0wnmwg824n4jrtr3'
+  if (fromEnv) return { quorumId: fromEnv, configured: true }
+  if (isProd) return { quorumId: null, configured: false }
+  return { quorumId: 'lr8vgu2l0wnmwg824n4jrtr3', configured: true }
 }
 
 function getPrivyServerAuth(): { appId: string; appSecret: string } {
@@ -94,7 +93,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { profileId } = principal
-  const quorumId = getQuorumId()
+  const quorum = resolveQuorumId()
 
   // Resolve execution readiness
   const ctxResolution = await resolveCommandIssuerContextByProfileId(profileId)
@@ -160,7 +159,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
   }
 
-  const delegated = walletId ? await resolveDelegated(walletId, quorumId) : null
+  const delegated = walletId && quorum.quorumId ? await resolveDelegated(walletId, quorum.quorumId) : null
 
   // Sub-account surface for the /accounts "Execution scopes" card. When
   // sub_account_address is not populated, the legacy direct-CSW path is
@@ -212,7 +211,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       executionReady,
       caps,
       revokedAt,
-      quorumId,
+      quorumId: quorum.quorumId ?? '',
+      quorumConfigured: quorum.configured,
       subAccount: subAccountResponse,
     },
   } satisfies ApiEnvelope<unknown>)

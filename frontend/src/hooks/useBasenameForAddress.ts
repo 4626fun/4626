@@ -11,8 +11,8 @@ import { formatBasename, getBasenameProfile } from '@/lib/basename/basename-api'
  * so hitting this hook from multiple components doesn't refetch.
  *
  * Resolution order inside `getBasenameProfile`:
- *   1. Base L2 reverse resolver → basename (e.g. `akita.base.eth`)
- *   2. Mainnet ENS reverse resolver → ENS (e.g. `akita.eth`)
+ *   1. Base L2 reverse resolver -> basename (e.g. `akita.base.eth`)
+ *   2. Mainnet ENS reverse resolver -> ENS (e.g. `akita.eth`)
  *   3. Null when nothing resolves
  */
 
@@ -27,35 +27,72 @@ export type BasenameResult = {
 }
 
 const EMPTY: BasenameResult = { name: null, displayName: null, avatar: null, loading: false }
+type BasenameEntry = Omit<BasenameResult, 'loading'>
+const basenameCache = new Map<string, BasenameEntry>()
+const basenamePending = new Map<string, Promise<BasenameEntry>>()
+
+async function resolveBasename(address: Address): Promise<BasenameEntry> {
+  const key = address.toLowerCase()
+  const cached = basenameCache.get(key)
+  if (cached) return cached
+  const pending = basenamePending.get(key)
+  if (pending) return pending
+
+  const promise = (async () => {
+    try {
+      const profile = await getBasenameProfile(address)
+      const entry: BasenameEntry = {
+        name: profile.name ?? null,
+        displayName: profile.name ? formatBasename(profile.name) : null,
+        avatar: profile.avatar ?? null,
+      }
+      basenameCache.set(key, entry)
+      return entry
+    } catch {
+      const entry: BasenameEntry = { name: null, displayName: null, avatar: null }
+      basenameCache.set(key, entry)
+      return entry
+    } finally {
+      basenamePending.delete(key)
+    }
+  })()
+
+  basenamePending.set(key, promise)
+  return promise
+}
 
 export function useBasenameForAddress(address: Address | null | undefined): BasenameResult {
-  const [result, setResult] = useState<BasenameResult>(EMPTY)
+  const [resolvedAsync, setResolvedAsync] = useState<{ address: string; entry: BasenameEntry } | null>(
+    null,
+  )
+  const normalizedAddress = address && isAddress(address) ? address : null
+  const key = normalizedAddress ? normalizedAddress.toLowerCase() : null
+  const cached = key ? (basenameCache.get(key) ?? null) : null
 
   useEffect(() => {
-    if (!address || !isAddress(address)) {
-      setResult(EMPTY)
-      return
-    }
+    if (!normalizedAddress) return
+    const cacheKey = normalizedAddress.toLowerCase()
+    if (basenameCache.has(cacheKey)) return
     let cancelled = false
-    setResult((prev) => ({ ...prev, loading: true }))
-    getBasenameProfile(address)
-      .then((profile) => {
-        if (cancelled) return
-        setResult({
-          name: profile.name ?? null,
-          displayName: profile.name ? formatBasename(profile.name) : null,
-          avatar: profile.avatar ?? null,
-          loading: false,
-        })
-      })
-      .catch(() => {
-        if (cancelled) return
-        setResult({ ...EMPTY, loading: false })
-      })
+    resolveBasename(normalizedAddress).then((entry) => {
+      if (!cancelled) setResolvedAsync({ address: cacheKey, entry })
+    })
     return () => {
       cancelled = true
     }
-  }, [address])
+  }, [normalizedAddress])
 
-  return result
+  if (!normalizedAddress || !key) return EMPTY
+  const asyncEntry = resolvedAsync?.address === key ? resolvedAsync.entry : null
+  const entry = cached ?? asyncEntry
+  if (!entry) {
+    return { ...EMPTY, loading: true }
+  }
+
+  return {
+    name: entry.name,
+    displayName: entry.displayName,
+    avatar: entry.avatar,
+    loading: false,
+  }
 }
