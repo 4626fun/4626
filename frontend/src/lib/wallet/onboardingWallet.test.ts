@@ -160,6 +160,7 @@ describe('sendPreparedOwnerTx', () => {
     expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledWith(
       expect.objectContaining({
         useTypedDataSigning: false,
+        ownerIndexOverride: 0,
         ownerIndexLookupAddress: undefined,
         ownerApprovalContext: expect.objectContaining({
           customOwnerPolicyToken: 'custom-owner-policy-token',

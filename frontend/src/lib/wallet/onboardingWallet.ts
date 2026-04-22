@@ -859,6 +859,8 @@ export async function sendPreparedOwnerTx(params: {
                 typeof ownerIndexLookupAddressForUserOp === 'string'
                   ? (ownerIndexLookupAddressForUserOp as `0x${string}`)
                   : undefined,
+              ownerIndexOverride:
+                selfAuthenticatedCanonicalSession && customCoOwnerSponsoredLane ? 0 : undefined,
               calls: [{ to: txRequest.to, data: txRequest.data, value: 0n }],
               version: '1',
               useTypedDataSigning: selfAuthenticatedCanonicalSession && opts?.disableTypedDataSigning !== true,
