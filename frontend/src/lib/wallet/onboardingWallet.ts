@@ -48,6 +48,7 @@ export type PreparedOwnerTxRequest = {
 }
 
 export type OwnerApprovalExecutionMode = 'canonicalSmartWallet' | 'ownerDirect' | 'subAccount'
+export type OwnerInstallIntent = 'embeddedOwner' | 'customCoOwner'
 
 export type OwnerApprovalStage =
   | 'preflight'
@@ -158,6 +159,12 @@ function appendOwnerApprovalDebug(base: string, classified: ClassifiedOwnerAppro
   return `${base} Debug: ${debugDetails}`
 }
 
+function messageHasOwnerApprovalDebugTag(message: string, token: string): boolean {
+  const debugDetails = extractOwnerApprovalDebugTag(message)
+  if (!debugDetails) return false
+  return debugDetails.toLowerCase().includes(token.toLowerCase())
+}
+
 function classifyOwnerApprovalError(error: unknown): ClassifiedOwnerApprovalError {
   const message = error instanceof Error ? String(error.message || '').trim() : String(error ?? '').trim()
   const lower = message.toLowerCase()
@@ -262,6 +269,14 @@ export function normalizeOwnerApprovalError(error: unknown): Error {
     )
   }
   if (classified.code === 'wallet_generation_insufficient') {
+    if (messageHasOwnerApprovalDebugTag(classified.message, 'lane=custom_co_owner_direct')) {
+      return new Error(
+        appendOwnerApprovalDebug(
+          'Direct co-owner approval needs ETH for gas on the signing wallet. Fund the signer wallet and retry Add co-owner.',
+          classified,
+        ),
+      )
+    }
     return new Error(
       appendOwnerApprovalDebug(
         'Wallet could not generate the Coinbase Smart Wallet signature/approval. Retry from the same Base/Zora smart wallet, and reconnect it if the sponsor session has gone stale.',
@@ -345,6 +360,27 @@ function getConfirmOwnerRetryDelayMs(attempt: number): number {
 
 function isTxHash(value: unknown): value is `0x${string}` {
   return typeof value === 'string' && /^0x([a-fA-F0-9]{64})$/.test(value)
+}
+
+function toOwnerApprovalDebugError(input: {
+  error: unknown
+  runId: string
+  stage: OwnerApprovalStage
+  attempt?: number | null
+  lane: 'embedded_owner_sponsored' | 'custom_co_owner_direct'
+}): Error {
+  const baseMessage =
+    input.error instanceof Error
+      ? input.error.message
+      : String(input.error ?? 'Owner approval failed')
+  const details = [
+    `runId=${input.runId}`,
+    `stage=${input.stage}`,
+    `attempt=${input.attempt ?? 'na'}`,
+    `lane=${input.lane}`,
+    `code=${classifyOwnerApprovalError(input.error).code}`,
+  ].join(';')
+  return new Error(`${baseMessage} [oa-debug:${details}]`)
 }
 
 function isUserRejectedWalletAction(error: unknown): boolean {
@@ -722,6 +758,7 @@ export async function sendPreparedOwnerTx(params: {
   ensurePaymasterSession?: (() => Promise<boolean>) | null
   approvalRunId?: string | null
   onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null
+  ownerInstallIntent?: OwnerInstallIntent
   preferSponsoredFirst?: boolean
 }): Promise<ConfirmOwnerResponse> {
   const {
@@ -739,9 +776,11 @@ export async function sendPreparedOwnerTx(params: {
     ensurePaymasterSession,
     approvalRunId,
     onStageEvent,
+    ownerInstallIntent,
     preferSponsoredFirst,
   } = params
   const effectiveApprovalRunId = typeof approvalRunId === 'string' && approvalRunId.trim() ? approvalRunId.trim() : `approval-${Date.now()}`
+  const effectiveOwnerInstallIntent: OwnerInstallIntent = ownerInstallIntent ?? 'embeddedOwner'
   if (!walletClient) {
     throw new Error('Connect an owner wallet to send this transaction.')
   }
@@ -760,12 +799,14 @@ export async function sendPreparedOwnerTx(params: {
       }
       const selfAuthenticatedCanonicalSession =
         signerAddress.toLowerCase() === canonicalSmartWalletAddress.toLowerCase()
+      const customCoOwnerDirectLane = effectiveOwnerInstallIntent === 'customCoOwner'
       const ownerIndexLookupAddressForUserOp =
         selfAuthenticatedCanonicalSession &&
         typeof ownerIndexLookupAddress === 'string' &&
         isAddress(ownerIndexLookupAddress)
           ? ownerIndexLookupAddress
           : selfAuthenticatedCanonicalSession &&
+              effectiveOwnerInstallIntent !== 'customCoOwner' &&
               !preferSponsoredFirst &&
               typeof ownerAddress === 'string' &&
               isAddress(ownerAddress)
@@ -925,6 +966,31 @@ export async function sendPreparedOwnerTx(params: {
             }
           }
 
+          const runDirectSendTxWithDiagnostics = async (): Promise<`0x${string}`> => {
+            try {
+              return await runDirectSendTx()
+            } catch (sendTxError) {
+              if (isUserRejectedWalletAction(sendTxError)) throw sendTxError
+              emitOwnerApprovalStage(onStageEvent, {
+                runId: effectiveApprovalRunId,
+                stage: 'send_calls',
+                status: 'error',
+                executionMode,
+                signerAddress,
+                canonicalCswAddress: canonicalSmartWalletAddress,
+                code: classifyOwnerApprovalError(sendTxError).code,
+                message: sendTxError instanceof Error ? sendTxError.message : String(sendTxError ?? ''),
+              })
+              throw toOwnerApprovalDebugError({
+                error: sendTxError,
+                runId: effectiveApprovalRunId,
+                stage: 'send_calls',
+                attempt: 1,
+                lane: 'custom_co_owner_direct',
+              })
+            }
+          }
+
           const runSponsoredThenDirectFallback = async () => {
             try {
               txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
@@ -955,7 +1021,9 @@ export async function sendPreparedOwnerTx(params: {
             }
           }
 
-          if (preferSponsoredFirst) {
+          if (customCoOwnerDirectLane) {
+            txHash = await runDirectSendTxWithDiagnostics()
+          } else if (preferSponsoredFirst) {
             await runSponsoredThenDirectFallback()
           } else {
             try {
@@ -1001,19 +1069,94 @@ export async function sendPreparedOwnerTx(params: {
             }
           }
         } else {
-          // No walletRequest available — try UserOp paths directly
-          try {
-            txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
-          } catch (typedUserOpError) {
-            if (isUserRejectedWalletAction(typedUserOpError)) throw typedUserOpError
-            txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true, attempt: 2 })
+          if (customCoOwnerDirectLane) {
+            if (!walletClient.account || typeof walletClient.sendTransaction !== 'function') {
+              throw new Error('Signer wallet does not expose eth_sendTransaction in this session. Reconnect and retry.')
+            }
+            try {
+              txHash = await walletClient.sendTransaction({
+                account: walletClient.account as any,
+                chain: base,
+                to: txRequest.to,
+                data: txRequest.data,
+                value: 0n,
+              })
+            } catch (sendTxError) {
+              if (isUserRejectedWalletAction(sendTxError)) throw sendTxError
+              throw toOwnerApprovalDebugError({
+                error: sendTxError,
+                runId: effectiveApprovalRunId,
+                stage: 'send_calls',
+                attempt: 1,
+                lane: 'custom_co_owner_direct',
+              })
+            }
+          } else {
+            // No walletRequest available — try UserOp paths directly
+            try {
+              txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
+            } catch (typedUserOpError) {
+              if (isUserRejectedWalletAction(typedUserOpError)) throw typedUserOpError
+              txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true, attempt: 2 })
+            }
           }
         }
         if (!txHash) {
           throw new Error('Owner approval failed: no execution path produced a result.')
         }
       } else {
-        txHash = await runSponsoredCanonicalUserOp()
+        if (customCoOwnerDirectLane) {
+          if (!walletClient.account || typeof walletClient.sendTransaction !== 'function') {
+            throw new Error('Connect the current owner wallet to submit this co-owner approval.')
+          }
+          emitOwnerApprovalStage(onStageEvent, {
+            runId: effectiveApprovalRunId,
+            stage: 'send_calls',
+            status: 'start',
+            executionMode,
+            signerAddress,
+            canonicalCswAddress: canonicalSmartWalletAddress,
+          })
+          try {
+            txHash = await walletClient.sendTransaction({
+              account: walletClient.account as any,
+              chain: base,
+              to: txRequest.to,
+              data: txRequest.data,
+              value: 0n,
+            })
+          } catch (sendTxError) {
+            if (isUserRejectedWalletAction(sendTxError)) throw sendTxError
+            emitOwnerApprovalStage(onStageEvent, {
+              runId: effectiveApprovalRunId,
+              stage: 'send_calls',
+              status: 'error',
+              executionMode,
+              signerAddress,
+              canonicalCswAddress: canonicalSmartWalletAddress,
+              code: classifyOwnerApprovalError(sendTxError).code,
+              message: sendTxError instanceof Error ? sendTxError.message : String(sendTxError ?? ''),
+            })
+            throw toOwnerApprovalDebugError({
+              error: sendTxError,
+              runId: effectiveApprovalRunId,
+              stage: 'send_calls',
+              attempt: 1,
+              lane: 'custom_co_owner_direct',
+            })
+          }
+          emitOwnerApprovalStage(onStageEvent, {
+            runId: effectiveApprovalRunId,
+            stage: 'send_calls',
+            status: 'success',
+            executionMode,
+            signerAddress,
+            canonicalCswAddress: canonicalSmartWalletAddress,
+            txHash,
+          })
+        } else {
+          txHash = await runSponsoredCanonicalUserOp()
+        }
       }
     } else {
       if (!walletClient.account || typeof walletClient.sendTransaction !== 'function') {

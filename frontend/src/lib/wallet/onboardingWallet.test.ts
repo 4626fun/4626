@@ -77,6 +77,61 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
+  it('routes custom co-owner installs through direct tx lane only for self-auth sessions', async () => {
+    const request = vi.fn().mockRejectedValue(
+      new Error('Error generating transaction. Please make sure you have enough funds to complete the transaction.'),
+    )
+
+    await expect(
+      sendPreparedOwnerTx({
+        txRequest: TX_REQUEST,
+        walletClient: {
+          account: CANONICAL_CSW,
+          sendTransaction: vi.fn(async () => TX_HASH),
+          request,
+        },
+        chainId: 8453,
+        authHeaders: async () => ({ Authorization: 'Bearer test' }),
+        signerAddress: CANONICAL_CSW,
+        executionMode: 'canonicalSmartWallet',
+        canonicalSmartWalletAddress: CANONICAL_CSW,
+        ownerInstallIntent: 'customCoOwner',
+        publicClient: {},
+        ensurePaymasterSession: async () => true,
+      }),
+    ).rejects.toThrow('Direct co-owner approval needs ETH for gas on the signing wallet.')
+
+    expect(request).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'eth_sendTransaction' }),
+    )
+    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+  })
+
+  it('routes custom co-owner installs through direct tx lane for owner-EOA canonical sessions', async () => {
+    const sendTransaction = vi.fn(async () => TX_HASH)
+
+    const result = await sendPreparedOwnerTx({
+      txRequest: TX_REQUEST,
+      walletClient: {
+        account: OWNER_EOA,
+        sendTransaction,
+        request: vi.fn(),
+      },
+      chainId: 8453,
+      authHeaders: async () => ({ Authorization: 'Bearer test' }),
+      signerAddress: OWNER_EOA,
+      executionMode: 'canonicalSmartWallet',
+      canonicalSmartWalletAddress: CANONICAL_CSW,
+      ownerInstallIntent: 'customCoOwner',
+      publicClient: {},
+      ensurePaymasterSession: async () => true,
+    })
+
+    expect(sendTransaction).toHaveBeenCalledTimes(1)
+    expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
+    expect(result.txHash).toBe(TX_HASH)
+  })
+
   it('self-auth tries eth_sendTransaction first, falls back to UserOp when request mock returns undefined', async () => {
     const sendTransaction = vi.fn(async () => TX_HASH)
     const ensurePaymasterSession = vi.fn(async () => true)

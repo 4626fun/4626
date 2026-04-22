@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { useActiveWallet, useConnectWallet, useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
-import { createWalletClient, custom, getAddress, type Address } from 'viem'
+import { createWalletClient, custom, formatEther, getAddress, type Address } from 'viem'
 import { base } from 'viem/chains'
 import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
 
@@ -19,6 +19,7 @@ import { useSubAccountSetup } from '@/hooks/useSubAccountSetup'
 import {
   type ApiEnvelope,
   type OnboardingBootstrapResponse,
+  type OwnerInstallIntent,
   type OwnerDelegationFlags,
   type OwnerApprovalStageEvent,
   type PrepareOwnerResponse,
@@ -95,6 +96,14 @@ async function maybeCallMethod(target: any, methodNames: string[], args: unknown
     }
   }
   return false
+}
+
+type OwnerInstallGasPreflight = {
+  payerAddress: `0x${string}`
+  estimatedGas: bigint
+  maxFeePerGas: bigint
+  requiredWei: bigint
+  balanceWei: bigint
 }
 
 function selectLinkedValues(me: AccountSetupMe | null, provider: string): string[] {
@@ -216,6 +225,8 @@ export function useAccountSetupController(params: {
   const [ownerDelegationFlags, setOwnerDelegationFlags] = useState<OwnerDelegationFlags | null>(null)
   const [connectedOwnerState, setConnectedOwnerState] = useState<ConnectedOwnerState>({ value: null, reason: 'idle' })
   const [cswOwnersState, setCswOwnersState] = useState<CswOwnersState>({ status: 'idle', owners: [], error: null })
+  const [ownerInstallIntent, setOwnerInstallIntent] = useState<OwnerInstallIntent>('embeddedOwner')
+  const [customOwnerGasPreflight, setCustomOwnerGasPreflight] = useState<OwnerInstallGasPreflight | null>(null)
 
   const canonicalCswAddress = me?.accountSignals?.canonicalCswAddress ?? null
   const zoraLinked = Boolean(zoraStatus?.zoraLinked || me?.accountSignals?.linked)
@@ -828,6 +839,7 @@ export function useAccountSetupController(params: {
       opts?: {
         approvalRunId?: string | null
         onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null
+        ownerInstallIntent?: OwnerInstallIntent
         preferSponsoredFirst?: boolean
       },
     ) => {
@@ -867,6 +879,7 @@ export function useAccountSetupController(params: {
         ensurePaymasterSession,
         approvalRunId: opts?.approvalRunId ?? null,
         onStageEvent: opts?.onStageEvent ?? null,
+        ownerInstallIntent: opts?.ownerInstallIntent ?? 'embeddedOwner',
         preferSponsoredFirst: opts?.preferSponsoredFirst === true,
       })
     },
@@ -884,10 +897,55 @@ export function useAccountSetupController(params: {
     ],
   )
 
+  const runCustomOwnerGasPreflight = useCallback(
+    async (input: {
+      txRequest: { chainId: 8453; to: `0x${string}`; data: `0x${string}`; value: '0x0' }
+      payerAddress: `0x${string}`
+    }): Promise<OwnerInstallGasPreflight> => {
+      if (!publicClient) {
+        throw new Error('Base RPC client is unavailable. Reload and retry.')
+      }
+      const payerAddress = getAddress(input.payerAddress) as `0x${string}`
+      const client = publicClient as any
+      const [estimatedGasRaw, feesRaw, balanceWei] = await Promise.all([
+        client.estimateGas({
+          account: payerAddress,
+          to: input.txRequest.to,
+          data: input.txRequest.data,
+          value: 0n,
+        }),
+        typeof client.estimateFeesPerGas === 'function'
+          ? client.estimateFeesPerGas()
+          : typeof client.getGasPrice === 'function'
+            ? client.getGasPrice().then((gasPrice: bigint) => ({ gasPrice }))
+            : Promise.resolve(null),
+        client.getBalance({
+          address: payerAddress,
+        }),
+      ])
+      const estimatedGas = BigInt(estimatedGasRaw ?? 0n)
+      const fees = feesRaw as { maxFeePerGas?: bigint; gasPrice?: bigint } | null
+      const maxFeePerGas = BigInt(fees?.maxFeePerGas ?? fees?.gasPrice ?? 0n)
+      if (estimatedGas <= 0n || maxFeePerGas <= 0n) {
+        throw new Error('Could not estimate Base gas requirements for co-owner install.')
+      }
+      return {
+        payerAddress,
+        estimatedGas,
+        maxFeePerGas,
+        requiredWei: estimatedGas * maxFeePerGas,
+        balanceWei: BigInt(balanceWei ?? 0n),
+      }
+    },
+    [publicClient],
+  )
+
   const onEnable4626Signing = useCallback(async () => {
     if (!canonicalCswAddress) return
     const runId = ++ownerApprovalRunIdRef.current
     const approvalRunId = `owner-approval-${Date.now()}-${runId}`
+    setOwnerInstallIntent('embeddedOwner')
+    setCustomOwnerGasPreflight(null)
     setAdvancedBusy(true)
     setError(null)
     setNotice(null)
@@ -1260,6 +1318,7 @@ export function useAccountSetupController(params: {
         {
           approvalRunId,
           onStageEvent: emitOwnerApprovalStageEvent,
+          ownerInstallIntent: 'embeddedOwner',
         },
       )
       setNotice('4626 signing is enabled on your canonical CSW.')
@@ -1309,6 +1368,8 @@ export function useAccountSetupController(params: {
     setAdvancedBusy(false)
     setError(null)
     setNotice(null)
+    setOwnerInstallIntent('embeddedOwner')
+    setCustomOwnerGasPreflight(null)
     setOwnerDelegationFlags(null)
     await retryOwnerCheck()
   }, [retryOwnerCheck])
@@ -1335,11 +1396,25 @@ export function useAccountSetupController(params: {
       if (!confirmed) return
     }
 
+    const runId = ++ownerApprovalRunIdRef.current
+    const approvalRunId = `co-owner-approval-${Date.now()}-${runId}`
+    const executionMode = canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect'
+    setOwnerInstallIntent('customCoOwner')
+    setCustomOwnerGasPreflight(null)
     setAdvancedBusy(true)
     setError(null)
     setNotice(null)
     setOwnerDelegationFlags(null)
     try {
+      emitOwnerApprovalStageEvent({
+        runId: approvalRunId,
+        stage: 'preflight',
+        status: 'start',
+        attempt: 1,
+        executionMode,
+        signerAddress: ownerSignerAddress ?? null,
+        canonicalCswAddress,
+      })
       const headers = await authHeaders()
       const preflightRes = await apiFetch('/api/onboarding/bootstrap', {
         method: 'POST',
@@ -1348,6 +1423,16 @@ export function useAccountSetupController(params: {
       })
       const preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<OnboardingBootstrapResponse> | null
       if (!preflightRes.ok || !preflightPayload?.success) {
+        emitOwnerApprovalStageEvent({
+          runId: approvalRunId,
+          stage: 'preflight',
+          status: 'error',
+          executionMode,
+          signerAddress: ownerSignerAddress ?? null,
+          canonicalCswAddress,
+          code: 'preflight_failed',
+          message: readApiError(preflightPayload, 'Signer preflight failed.'),
+        })
         throw buildOwnerDelegationError(preflightPayload, 'Signer preflight failed.')
       }
       const preflightOwnerLookupAddress =
@@ -1355,6 +1440,15 @@ export function useAccountSetupController(params: {
           ? preflightPayload?.data?.privyEmbeddedEoaAddress ?? null
           : null
 
+      emitOwnerApprovalStageEvent({
+        runId: approvalRunId,
+        stage: 'prepare',
+        status: 'start',
+        attempt: 1,
+        executionMode,
+        signerAddress: ownerSignerAddress ?? null,
+        canonicalCswAddress,
+      })
       const prepareRes = await apiFetch('/api/wallet/prepare-add-rabby-owner', {
         method: 'POST',
         headers,
@@ -1365,18 +1459,81 @@ export function useAccountSetupController(params: {
       })
       const preparePayload = (await prepareRes.json().catch(() => null)) as ApiEnvelope<PrepareOwnerResponse> | null
       if (!prepareRes.ok || !preparePayload?.success || !preparePayload.data) {
+        emitOwnerApprovalStageEvent({
+          runId: approvalRunId,
+          stage: 'prepare',
+          status: 'error',
+          executionMode,
+          signerAddress: ownerSignerAddress ?? null,
+          canonicalCswAddress,
+          code: 'prepare_failed',
+          message: readApiError(preparePayload, 'Failed to prepare Rabby co-owner transaction.'),
+        })
         throw buildOwnerDelegationError(preparePayload, 'Failed to prepare Rabby co-owner transaction.')
       }
       if (preparePayload.data.alreadyOwner) {
+        emitOwnerApprovalStageEvent({
+          runId: approvalRunId,
+          stage: 'prepare',
+          status: 'success',
+          executionMode,
+          signerAddress: ownerSignerAddress ?? null,
+          canonicalCswAddress,
+          code: 'already_owner',
+        })
         setNotice('Rabby address is already an owner.')
         return
       }
+      emitOwnerApprovalStageEvent({
+        runId: approvalRunId,
+        stage: 'prepare',
+        status: 'success',
+        executionMode,
+        signerAddress: ownerSignerAddress ?? null,
+        canonicalCswAddress,
+      })
+
+      const preflightPayerAddress =
+        connectedCanonicalWalletSelected && canonicalCswAddress
+          ? (canonicalCswAddress as `0x${string}`)
+          : ownerSignerAddress
+            ? (ownerSignerAddress as `0x${string}`)
+            : null
+      if (!preflightPayerAddress) {
+        throw new Error('Connect an owner wallet before submitting co-owner approval.')
+      }
+
+      const gasPreflight = await runCustomOwnerGasPreflight({
+        txRequest: preparePayload.data.txRequest,
+        payerAddress: preflightPayerAddress,
+      })
+      setCustomOwnerGasPreflight(gasPreflight)
+      if (gasPreflight.balanceWei < gasPreflight.requiredWei) {
+        emitOwnerApprovalStageEvent({
+          runId: approvalRunId,
+          stage: 'preflight',
+          status: 'error',
+          executionMode,
+          signerAddress: ownerSignerAddress ?? null,
+          canonicalCswAddress,
+          code: 'custom_co_owner_insufficient_gas',
+          message: `required=${gasPreflight.requiredWei.toString()} balance=${gasPreflight.balanceWei.toString()} payer=${gasPreflight.payerAddress}`,
+        })
+        throw new Error(
+          `Direct co-owner approval needs ${formatEther(gasPreflight.requiredWei)} ETH for gas from ${gasPreflight.payerAddress}. Current balance is ${formatEther(gasPreflight.balanceWei)} ETH. Fund this wallet on Base and retry.`,
+        )
+      }
+
       await sendPreparedOwnerTx(preparePayload.data.txRequest, normalized, preflightOwnerLookupAddress, {
-        preferSponsoredFirst: connectedCanonicalWalletSelected && isMobileWalletEnvironment(),
+        approvalRunId,
+        onStageEvent: emitOwnerApprovalStageEvent,
+        ownerInstallIntent: 'customCoOwner',
+        preferSponsoredFirst: false,
       })
       setNotice('Rabby co-owner added.')
       await loadMe({ showSpinner: false })
     } catch (rabbyError: any) {
+      if (runId !== ownerApprovalRunIdRef.current) return
       const flags = {
         ...(rabbyError?.needsEmbeddedWallet === true ? { needsEmbeddedWallet: true } : null),
         ...(rabbyError?.needsBaseAppSetup === true ? { needsBaseAppSetup: true } : null),
@@ -1387,9 +1544,19 @@ export function useAccountSetupController(params: {
       setOwnerDelegationFlags(Object.keys(flags).length > 0 ? flags : null)
       setError(typeof rabbyError?.message === 'string' ? rabbyError.message : 'Failed to add Rabby co-owner.')
     } finally {
+      if (runId !== ownerApprovalRunIdRef.current) return
       setAdvancedBusy(false)
     }
-  }, [authHeaders, loadMe, sendPreparedOwnerTx])
+  }, [
+    authHeaders,
+    canonicalCswAddress,
+    connectedCanonicalWalletSelected,
+    emitOwnerApprovalStageEvent,
+    loadMe,
+    ownerSignerAddress,
+    runCustomOwnerGasPreflight,
+    sendPreparedOwnerTx,
+  ])
 
   const zoraCrossAppCount = zoraStatus?.zoraCrossAppAccounts?.length ?? 0
   const canShowAdvanced = Boolean(canonicalCswAddress)
@@ -1567,6 +1734,7 @@ export function useAccountSetupController(params: {
     connectedSignerLabel,
     connectOwnerWallet,
     connectWallet,
+    customOwnerGasPreflight,
     cswOwnersState,
     ensureEmbeddedWallet,
     error,
@@ -1596,6 +1764,7 @@ export function useAccountSetupController(params: {
     ownerDelegationFlags,
     ownerInstallResumeState,
     ownerInstallSectionRef,
+    ownerInstallIntent,
     ownerPrimaryCtaLabel,
     ownerSignerAddress,
     ownerSignerChainId,

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLogin, usePrivy } from '@privy-io/react-auth'
-import { AnimatePresence, motion } from 'framer-motion'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 
 import { PixelWaveLoader } from '@/components/ui/PixelWaveLoader'
 import { apiFetch } from '@/lib/api/apiBase'
@@ -177,6 +177,33 @@ function isTelegramMiniAppRuntime(): boolean {
   return ua.includes('telegram')
 }
 
+function isBaseInAppBrowser(): boolean {
+  if (typeof navigator === 'undefined') return false
+  const ua = navigator.userAgent.toLowerCase()
+  return (
+    ua.includes('coinbase') ||
+    ua.includes('cbios') ||
+    ua.includes('cbandroid') ||
+    ua.includes('baseapp') ||
+    ua.includes(' base/')
+  )
+}
+
+function hasCoinbaseInjectedProvider(): boolean {
+  if (typeof window === 'undefined') return false
+  const ethereum = (window as any).ethereum
+  if (!ethereum) return false
+  if (Boolean(ethereum.isCoinbaseWallet)) return true
+  if (Array.isArray(ethereum.providers)) {
+    return ethereum.providers.some((provider: any) => Boolean(provider?.isCoinbaseWallet))
+  }
+  return false
+}
+
+function isBaseInAppContext(): boolean {
+  return isBaseInAppBrowser() || hasCoinbaseInjectedProvider()
+}
+
 function useWaitlistAttemptState() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -225,6 +252,7 @@ function WaitlistAuthStep(props: {
   referralCode: string | null
   onContinueAuth: () => void | Promise<void>
   onRecoverAccount: () => void | Promise<void>
+  disableMotion?: boolean
 }) {
   const {
     authUi,
@@ -236,10 +264,12 @@ function WaitlistAuthStep(props: {
     referralCode,
     onContinueAuth,
     onRecoverAccount,
+    disableMotion = false,
   } = props
 
   const privyReady = privyClientStatus === 'ready'
   const buttonsDisabled = busy || !privyReady
+  const motionEnabled = !disableMotion
   const signedUpCount = Math.max(0, Number(waitlistStats?.signedUpCount ?? 0))
   const capacity = Math.max(0, Number(waitlistStats?.capacity ?? 0))
   const spotsRemaining = Math.max(0, Number(waitlistStats?.spotsRemaining ?? 0))
@@ -257,19 +287,27 @@ function WaitlistAuthStep(props: {
       : `Only ${spotsRemaining.toLocaleString()} spots remaining!`
     : null
 
-  const stagger = (i: number) => ({
-    initial: { opacity: 0, y: 12 },
-    animate: { opacity: 1, y: 0 },
-    transition: { duration: 0.22, delay: 0.1 + i * 0.06, ease: WAITLIST_EASE },
-  })
+  const stagger = (i: number) => (
+    motionEnabled
+      ? {
+          initial: { opacity: 0, y: 12 },
+          animate: { opacity: 1, y: 0 },
+          transition: { duration: 0.22, delay: 0.1 + i * 0.06, ease: WAITLIST_EASE },
+        }
+      : {
+          initial: false,
+          animate: false,
+          transition: { duration: 0 },
+        }
+  )
 
   return (
     <motion.div
       key="step-auth"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0, y: -6 }}
-      transition={{ duration: 0.22, ease: WAITLIST_EASE }}
+      initial={motionEnabled ? { opacity: 0 } : false}
+      animate={motionEnabled ? { opacity: 1 } : false}
+      exit={motionEnabled ? { opacity: 0, y: -6 } : undefined}
+      transition={motionEnabled ? { duration: 0.22, ease: WAITLIST_EASE } : { duration: 0 }}
       className="relative flex min-h-[460px] items-center justify-center py-12 sm:py-20"
     >
       {/* dot grid texture — Base brand pattern */}
@@ -283,28 +321,37 @@ function WaitlistAuthStep(props: {
       />
 
       {/* film grain overlay */}
-      <div
-        aria-hidden="true"
-        className="pointer-events-none absolute inset-0 opacity-[0.03] mix-blend-overlay"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
-          backgroundSize: '128px 128px',
-        }}
-      />
+      {motionEnabled ? (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 opacity-[0.03] mix-blend-overlay"
+          style={{
+            backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")`,
+            backgroundSize: '128px 128px',
+          }}
+        />
+      ) : (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(60,138,255,0.14),transparent_60%)]"
+        />
+      )}
 
       {/* dual ambient glow — Base Blue core + Cerulean halo */}
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <motion.div
-          animate={{ opacity: [0.18, 0.28, 0.18], scale: [1, 1.04, 1] }}
-          transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
-          className="absolute h-64 w-64 rounded-full bg-[#0000FF]/20 blur-[80px]"
-        />
-        <motion.div
-          animate={{ opacity: [0.08, 0.15, 0.08], scale: [1, 1.08, 1] }}
-          transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
-          className="absolute h-96 w-96 rounded-full bg-[#3C8AFF]/10 blur-[120px]"
-        />
-      </div>
+      {motionEnabled ? (
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <motion.div
+            animate={{ opacity: [0.18, 0.28, 0.18], scale: [1, 1.04, 1] }}
+            transition={{ duration: 6, repeat: Infinity, ease: 'easeInOut' }}
+            className="absolute h-64 w-64 rounded-full bg-[#0000FF]/20 blur-[80px]"
+          />
+          <motion.div
+            animate={{ opacity: [0.08, 0.15, 0.08], scale: [1, 1.08, 1] }}
+            transition={{ duration: 8, repeat: Infinity, ease: 'easeInOut', delay: 1 }}
+            className="absolute h-96 w-96 rounded-full bg-[#3C8AFF]/10 blur-[120px]"
+          />
+        </div>
+      ) : null}
 
       <div className="relative z-10 w-full max-w-sm space-y-8 text-center">
         {/* headline */}
@@ -392,6 +439,9 @@ export function WaitlistFlow(props: {
   sectionId?: string
 }) {
   const sectionId = props.sectionId ?? 'waitlist'
+  const prefersReducedMotion = useReducedMotion()
+  const baseInAppContext = useMemo(() => isBaseInAppContext(), [])
+  const disableHeroMotion = Boolean(prefersReducedMotion || baseInAppContext)
 
   const privy = usePrivy()
   const privyClientStatus = usePrivyClientStatus()
@@ -1117,10 +1167,10 @@ export function WaitlistFlow(props: {
 
   return (
     <section id={sectionId} className={wrapClass}>
-      <AnimatePresence mode="wait" initial={false}>
-        {step === 'auth' ? (
+      {disableHeroMotion ? (
+        step === 'auth' ? (
           <WaitlistAuthStep
-            key="auth"
+            key="auth-static"
             authUi={authUi}
             waitlistStats={waitlistStats}
             busy={busy}
@@ -1130,15 +1180,10 @@ export function WaitlistFlow(props: {
             referralCode={activeReferralCode}
             onContinueAuth={onContinueAuth}
             onRecoverAccount={onRecoverAccount}
+            disableMotion
           />
         ) : step === 'done' && account ? (
-          <motion.div
-            key="done"
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.22, ease: WAITLIST_EASE }}
-          >
+          <div key="done-static">
             <WaitlistSetupWorkspace
               initialAccount={account}
               canEnterApp={canEnterApp}
@@ -1146,9 +1191,42 @@ export function WaitlistFlow(props: {
               onEnterApp={onEnterApp}
               onOpenAccounts={onOpenAccounts}
             />
-          </motion.div>
-        ) : null}
-      </AnimatePresence>
+          </div>
+        ) : null
+      ) : (
+        <AnimatePresence mode="wait" initial={false}>
+          {step === 'auth' ? (
+            <WaitlistAuthStep
+              key="auth"
+              authUi={authUi}
+              waitlistStats={waitlistStats}
+              busy={busy}
+              privyClientStatus={privyClientStatus}
+              error={error}
+              recoveryRequired={recoveryRequired}
+              referralCode={activeReferralCode}
+              onContinueAuth={onContinueAuth}
+              onRecoverAccount={onRecoverAccount}
+            />
+          ) : step === 'done' && account ? (
+            <motion.div
+              key="done"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.22, ease: WAITLIST_EASE }}
+            >
+              <WaitlistSetupWorkspace
+                initialAccount={account}
+                canEnterApp={canEnterApp}
+                completionBusy={completionBusy}
+                onEnterApp={onEnterApp}
+                onOpenAccounts={onOpenAccounts}
+              />
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
+      )}
     </section>
   )
 }

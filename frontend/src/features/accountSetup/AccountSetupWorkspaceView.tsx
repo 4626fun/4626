@@ -64,6 +64,13 @@ function shortAddr(addr: string): string {
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
 }
 
+function formatEth(value: bigint): string {
+  const asEth = Number(value) / 1e18
+  if (!Number.isFinite(asEth)) return '0'
+  if (asEth >= 0.01) return asEth.toFixed(4).replace(/\.?0+$/, '')
+  return asEth.toFixed(6).replace(/\.?0+$/, '')
+}
+
 function extractSponsorshipDiagnostic(errorMessage: string | null | undefined): string | null {
   const message = typeof errorMessage === 'string' ? errorMessage.trim() : ''
   if (!message) return null
@@ -96,6 +103,14 @@ function extractSponsorshipDiagnostic(errorMessage: string | null | undefined): 
   if (lower.includes('insufficient funds')) return 'insufficient funds in paymaster/sponsor'
 
   return 'unknown sponsorship rejection'
+}
+
+function extractOwnerApprovalDebugDiagnostic(errorMessage: string | null | undefined): string | null {
+  const message = typeof errorMessage === 'string' ? errorMessage.trim() : ''
+  if (!message) return null
+  const match = message.match(/\[oa-debug:([^\]]+)\]/i)
+  if (!match?.[1]) return null
+  return match[1].trim()
 }
 
 type AccountSetupWorkspaceController = ReturnType<typeof useAccountSetupController>
@@ -171,6 +186,7 @@ export function AccountSetupWorkspaceView(props: {
   const walletStepComplete = Boolean(canonicalCswAddress)
   const signingStepComplete = Boolean(subAccountAddress) || Boolean(me.baseSubAccount) || /4626 signing is enabled|already enabled/i.test(notice ?? '')
   const sponsorshipDiagnostic = extractSponsorshipDiagnostic(error)
+  const ownerApprovalDiagnostic = extractOwnerApprovalDebugDiagnostic(error)
   // Zora-controlled CBSWs are passkey-owned (P256 keys held in Coinbase
   // Wallet / Base Account), not EOA-owned. The cross-app login surfaces the
   // CBSW address but cannot expose a transactional signer (verified
@@ -229,6 +245,11 @@ export function AccountSetupWorkspaceView(props: {
             {sponsorshipDiagnostic ? (
               <div className="mt-2 rounded-lg border border-rose-400/20 bg-black/20 px-3 py-2 text-xs text-rose-200/90">
                 Sponsorship diagnostics: <span className="font-mono">{sponsorshipDiagnostic}</span>
+              </div>
+            ) : null}
+            {ownerApprovalDiagnostic ? (
+              <div className="mt-2 rounded-lg border border-rose-400/20 bg-black/20 px-3 py-2 text-xs text-rose-200/90">
+                Owner approval diagnostics: <span className="font-mono">{ownerApprovalDiagnostic}</span>
               </div>
             ) : null}
           </div>
@@ -516,6 +537,11 @@ export function AccountSetupWorkspaceView(props: {
           {sponsorshipDiagnostic ? (
             <div className="mt-2 rounded-lg border border-rose-400/20 bg-black/20 px-3 py-2 text-xs text-rose-100/90">
               Sponsorship diagnostics: <span className="font-mono">{sponsorshipDiagnostic}</span>
+            </div>
+          ) : null}
+          {ownerApprovalDiagnostic ? (
+            <div className="mt-2 rounded-lg border border-rose-400/20 bg-black/20 px-3 py-2 text-xs text-rose-100/90">
+              Owner approval diagnostics: <span className="font-mono">{ownerApprovalDiagnostic}</span>
             </div>
           ) : null}
         </div>
@@ -941,6 +967,8 @@ function WaitlistAdvancedSection({
     advancedBusy,
     busyProvider,
     canShowAdvanced,
+    customOwnerGasPreflight,
+    ownerInstallIntent,
     providerCards,
     onLinkProvider,
     onUnlinkProvider,
@@ -1051,8 +1079,21 @@ function WaitlistAdvancedSection({
               {rabbyOpen ? (
                 <div className="mt-2.5 space-y-2">
                   <p className="text-[11px] leading-relaxed text-zinc-500">
-                    Add a second owner to your canonical CSW (e.g. a Rabby EOA). Requires a current
-                    owner signature. Never automatic.
+                    Add a second owner to your canonical CSW (e.g. a Rabby EOA). This always uses a
+                    direct onchain approval from your connected signer (no gas sponsor).
+                  </p>
+                  {ownerInstallIntent === 'customCoOwner' && customOwnerGasPreflight ? (
+                    <div className="rounded-md border border-white/10 bg-black/20 px-2.5 py-2 text-[10.5px] text-zinc-300">
+                      <div>Signer: <span className="font-mono text-zinc-200">{shortAddr(customOwnerGasPreflight.payerAddress)}</span></div>
+                      <div className="mt-0.5">Estimated gas: <span className="font-mono text-zinc-200">{customOwnerGasPreflight.estimatedGas.toString()}</span></div>
+                      <div className="mt-0.5">
+                        Required: <span className="font-mono text-zinc-200">{formatEth(customOwnerGasPreflight.requiredWei)} ETH</span>
+                        {' '}| Balance: <span className="font-mono text-zinc-200">{formatEth(customOwnerGasPreflight.balanceWei)} ETH</span>
+                      </div>
+                    </div>
+                  ) : null}
+                  <p className="text-[10.5px] leading-relaxed text-zinc-500">
+                    If Base App shows insufficient funds, fund the signer wallet on Base and retry Add co-owner.
                   </p>
                   <input
                     value={rabbyAddress}
