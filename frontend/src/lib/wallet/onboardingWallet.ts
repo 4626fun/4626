@@ -1035,10 +1035,30 @@ export async function sendPreparedOwnerTx(params: {
             }
           }
 
+          const runSponsoredCustomCoOwnerFallback = async () => {
+            try {
+              txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true, attempt: 1 })
+              return
+            } catch (nonTypedUserOpError) {
+              if (isUserRejectedWalletAction(nonTypedUserOpError)) throw nonTypedUserOpError
+              emitOwnerApprovalStage(onStageEvent, {
+                runId: effectiveApprovalRunId,
+                stage: 'userop_nontyped',
+                status: 'error',
+                executionMode,
+                signerAddress,
+                canonicalCswAddress: canonicalSmartWalletAddress,
+                code: classifyOwnerApprovalError(nonTypedUserOpError).code,
+                message: nonTypedUserOpError instanceof Error ? nonTypedUserOpError.message : String(nonTypedUserOpError ?? ''),
+              })
+              txHash = await runSponsoredCanonicalUserOp({ attempt: 2 })
+            }
+          }
+
           if (customCoOwnerDirectLane) {
             txHash = await runDirectSendTxWithDiagnostics()
           } else if (customCoOwnerSponsoredLane) {
-            await runSponsoredThenDirectFallback()
+            await runSponsoredCustomCoOwnerFallback()
           } else if (preferSponsoredFirst) {
             await runSponsoredThenDirectFallback()
           } else {
@@ -1109,11 +1129,20 @@ export async function sendPreparedOwnerTx(params: {
             }
           } else {
             // No walletRequest available — try UserOp paths directly
-            try {
-              txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
-            } catch (typedUserOpError) {
-              if (isUserRejectedWalletAction(typedUserOpError)) throw typedUserOpError
-              txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true, attempt: 2 })
+            if (customCoOwnerSponsoredLane) {
+              try {
+                txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true, attempt: 1 })
+              } catch (nonTypedUserOpError) {
+                if (isUserRejectedWalletAction(nonTypedUserOpError)) throw nonTypedUserOpError
+                txHash = await runSponsoredCanonicalUserOp({ attempt: 2 })
+              }
+            } else {
+              try {
+                txHash = await runSponsoredCanonicalUserOp({ attempt: 1 })
+              } catch (typedUserOpError) {
+                if (isUserRejectedWalletAction(typedUserOpError)) throw typedUserOpError
+                txHash = await runSponsoredCanonicalUserOp({ disableTypedDataSigning: true, attempt: 2 })
+              }
             }
           }
         }
