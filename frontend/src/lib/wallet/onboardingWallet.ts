@@ -30,6 +30,9 @@ export type PrepareOwnerResponse =
         data: `0x${string}`
         value: '0x0'
       }
+      sponsorship?: {
+        customOwnerPolicyToken?: string
+      }
     }
 
 export type ConfirmOwnerResponse = {
@@ -759,6 +762,7 @@ export async function sendPreparedOwnerTx(params: {
   approvalRunId?: string | null
   onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null
   ownerInstallIntent?: OwnerInstallIntent
+  customOwnerPolicyToken?: string | null
   preferSponsoredFirst?: boolean
 }): Promise<ConfirmOwnerResponse> {
   const {
@@ -777,10 +781,15 @@ export async function sendPreparedOwnerTx(params: {
     approvalRunId,
     onStageEvent,
     ownerInstallIntent,
+    customOwnerPolicyToken,
     preferSponsoredFirst,
   } = params
   const effectiveApprovalRunId = typeof approvalRunId === 'string' && approvalRunId.trim() ? approvalRunId.trim() : `approval-${Date.now()}`
   const effectiveOwnerInstallIntent: OwnerInstallIntent = ownerInstallIntent ?? 'embeddedOwner'
+  const effectiveCustomOwnerPolicyToken =
+    typeof customOwnerPolicyToken === 'string' && customOwnerPolicyToken.trim()
+      ? customOwnerPolicyToken.trim()
+      : null
   if (!walletClient) {
     throw new Error('Connect an owner wallet to send this transaction.')
   }
@@ -799,7 +808,10 @@ export async function sendPreparedOwnerTx(params: {
       }
       const selfAuthenticatedCanonicalSession =
         signerAddress.toLowerCase() === canonicalSmartWalletAddress.toLowerCase()
-      const customCoOwnerDirectLane = effectiveOwnerInstallIntent === 'customCoOwner'
+      const customCoOwnerSponsoredLane =
+        effectiveOwnerInstallIntent === 'customCoOwner' && Boolean(effectiveCustomOwnerPolicyToken)
+      const customCoOwnerDirectLane =
+        effectiveOwnerInstallIntent === 'customCoOwner' && !customCoOwnerSponsoredLane
       const ownerIndexLookupAddressForUserOp =
         selfAuthenticatedCanonicalSession &&
         typeof ownerIndexLookupAddress === 'string' &&
@@ -854,6 +866,7 @@ export async function sendPreparedOwnerTx(params: {
                 stage,
                 executionMode,
                 attempt: opts?.attempt ?? null,
+                customOwnerPolicyToken: customCoOwnerSponsoredLane ? effectiveCustomOwnerPolicyToken : null,
               },
             }),
             USER_OP_SUBMIT_TIMEOUT_MS,
@@ -1023,6 +1036,8 @@ export async function sendPreparedOwnerTx(params: {
 
           if (customCoOwnerDirectLane) {
             txHash = await runDirectSendTxWithDiagnostics()
+          } else if (customCoOwnerSponsoredLane) {
+            await runSponsoredThenDirectFallback()
           } else if (preferSponsoredFirst) {
             await runSponsoredThenDirectFallback()
           } else {

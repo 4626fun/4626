@@ -4,6 +4,7 @@ import { decodeFunctionData, encodeFunctionData, getAddress } from 'viem'
 import paymasterHandler, { validateSponsoredSmartWalletCalls } from '../_handlers/paymaster/_paymaster.ts'
 import { createMockReq, createMockRes } from './helpers'
 import { applyEnv } from './helpers'
+import { issueCustomOwnerSponsorshipToken } from '../../server/_lib/paymaster/customOwnerSponsorshipToken.js'
 
 const ENTRYPOINT_V06 = getAddress('0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789')
 const CSW_IMPLEMENTATION = getAddress('0x9999999999999999999999999999999999999998')
@@ -252,6 +253,149 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     expect(errMsg).not.toMatch(/request denied/i)
     expect(errMsg).not.toMatch(/missing_primary_call/i)
     expect(readJsonBodyMock).toHaveBeenCalledWith(req, { maxBytes: 512_000 })
+  })
+
+  it('accepts addOwnerAddress self-call for custom owner when policy token matches session + sender + owner', async () => {
+    getActiveDeploySessionMock.mockResolvedValue(null)
+    const customOwner = getAddress('0x4444444444444444444444444444444444444444')
+    mockGetBytecode.mockImplementation(async ({ address }: { address: string }) => {
+      if (String(address).toLowerCase() === customOwner.toLowerCase()) return '0x'
+      return '0x1234'
+    })
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+        outputs: [],
+      },
+    ] as const
+    const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
+      {
+        type: 'function',
+        name: 'addOwnerAddress',
+        stateMutability: 'nonpayable',
+        inputs: [{ name: 'owner', type: 'address' }],
+        outputs: [],
+      },
+    ] as const
+    const policyToken = issueCustomOwnerSponsorshipToken({
+      sessionAddress,
+      smartWalletAddress: sender,
+      ownerToAdd: customOwner,
+      profileId: 42,
+    })
+
+    const innerData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+      functionName: 'addOwnerAddress',
+      args: [customOwner],
+    })
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'execute',
+      args: [sender, 0n, innerData],
+    })
+
+    const userOp = {
+      sender,
+      callData,
+      initCode: '0x',
+    }
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [userOp, ENTRYPOINT_V06, 8453],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: {
+        'content-type': 'application/json',
+        'x-cv-custom-owner-policy': policyToken,
+      },
+    })
+    const res = createMockRes()
+    await paymasterHandler(req as any, res as any)
+
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).not.toMatch(/request denied/i)
+    expect(errMsg).not.toMatch(/custom_owner_policy/i)
+  })
+
+  it('rejects custom-owner policy token when owner arg does not match bound token owner', async () => {
+    getActiveDeploySessionMock.mockResolvedValue(null)
+    const customOwner = getAddress('0x4444444444444444444444444444444444444444')
+    const mismatchedOwner = getAddress('0x5555555555555555555555555555555555555555')
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'execute',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'target', type: 'address' },
+          { name: 'value', type: 'uint256' },
+          { name: 'data', type: 'bytes' },
+        ],
+        outputs: [],
+      },
+    ] as const
+    const COINBASE_SMART_WALLET_OWNER_MGMT_ABI = [
+      {
+        type: 'function',
+        name: 'addOwnerAddress',
+        stateMutability: 'nonpayable',
+        inputs: [{ name: 'owner', type: 'address' }],
+        outputs: [],
+      },
+    ] as const
+    const policyToken = issueCustomOwnerSponsorshipToken({
+      sessionAddress,
+      smartWalletAddress: sender,
+      ownerToAdd: customOwner,
+      profileId: 42,
+    })
+
+    const innerData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+      functionName: 'addOwnerAddress',
+      args: [mismatchedOwner],
+    })
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'execute',
+      args: [sender, 0n, innerData],
+    })
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [{ sender, callData, initCode: '0x' }, ENTRYPOINT_V06, 8453],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: {
+        'content-type': 'application/json',
+        'x-cv-custom-owner-policy': policyToken,
+      },
+    })
+    const res = createMockRes()
+    await paymasterHandler(req as any, res as any)
+
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).toMatch(/custom_owner_policy_owner_mismatch/i)
   })
 
   it('rejects addOwnerAddress self-call when deploy session owner has contract bytecode', async () => {

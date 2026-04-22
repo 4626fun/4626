@@ -840,6 +840,7 @@ export function useAccountSetupController(params: {
         approvalRunId?: string | null
         onStageEvent?: ((event: OwnerApprovalStageEvent) => void) | null
         ownerInstallIntent?: OwnerInstallIntent
+        customOwnerPolicyToken?: string | null
         preferSponsoredFirst?: boolean
       },
     ) => {
@@ -880,6 +881,7 @@ export function useAccountSetupController(params: {
         approvalRunId: opts?.approvalRunId ?? null,
         onStageEvent: opts?.onStageEvent ?? null,
         ownerInstallIntent: opts?.ownerInstallIntent ?? 'embeddedOwner',
+        customOwnerPolicyToken: opts?.customOwnerPolicyToken ?? null,
         preferSponsoredFirst: opts?.preferSponsoredFirst === true,
       })
     },
@@ -1492,43 +1494,52 @@ export function useAccountSetupController(params: {
         signerAddress: ownerSignerAddress ?? null,
         canonicalCswAddress,
       })
+      const customOwnerPolicyToken =
+        typeof preparePayload.data.sponsorship?.customOwnerPolicyToken === 'string' &&
+        preparePayload.data.sponsorship.customOwnerPolicyToken.trim()
+          ? preparePayload.data.sponsorship.customOwnerPolicyToken.trim()
+          : null
+      if (!customOwnerPolicyToken) {
+        const preflightPayerAddress =
+          connectedCanonicalWalletSelected && canonicalCswAddress
+            ? (canonicalCswAddress as `0x${string}`)
+            : ownerSignerAddress
+              ? (ownerSignerAddress as `0x${string}`)
+              : null
+        if (!preflightPayerAddress) {
+          throw new Error('Connect an owner wallet before submitting co-owner approval.')
+        }
 
-      const preflightPayerAddress =
-        connectedCanonicalWalletSelected && canonicalCswAddress
-          ? (canonicalCswAddress as `0x${string}`)
-          : ownerSignerAddress
-            ? (ownerSignerAddress as `0x${string}`)
-            : null
-      if (!preflightPayerAddress) {
-        throw new Error('Connect an owner wallet before submitting co-owner approval.')
-      }
-
-      const gasPreflight = await runCustomOwnerGasPreflight({
-        txRequest: preparePayload.data.txRequest,
-        payerAddress: preflightPayerAddress,
-      })
-      setCustomOwnerGasPreflight(gasPreflight)
-      if (gasPreflight.balanceWei < gasPreflight.requiredWei) {
-        emitOwnerApprovalStageEvent({
-          runId: approvalRunId,
-          stage: 'preflight',
-          status: 'error',
-          executionMode,
-          signerAddress: ownerSignerAddress ?? null,
-          canonicalCswAddress,
-          code: 'custom_co_owner_insufficient_gas',
-          message: `required=${gasPreflight.requiredWei.toString()} balance=${gasPreflight.balanceWei.toString()} payer=${gasPreflight.payerAddress}`,
+        const gasPreflight = await runCustomOwnerGasPreflight({
+          txRequest: preparePayload.data.txRequest,
+          payerAddress: preflightPayerAddress,
         })
-        throw new Error(
-          `Direct co-owner approval needs ${formatEther(gasPreflight.requiredWei)} ETH for gas from ${gasPreflight.payerAddress}. Current balance is ${formatEther(gasPreflight.balanceWei)} ETH. Fund this wallet on Base and retry.`,
-        )
+        setCustomOwnerGasPreflight(gasPreflight)
+        if (gasPreflight.balanceWei < gasPreflight.requiredWei) {
+          emitOwnerApprovalStageEvent({
+            runId: approvalRunId,
+            stage: 'preflight',
+            status: 'error',
+            executionMode,
+            signerAddress: ownerSignerAddress ?? null,
+            canonicalCswAddress,
+            code: 'custom_co_owner_insufficient_gas',
+            message: `required=${gasPreflight.requiredWei.toString()} balance=${gasPreflight.balanceWei.toString()} payer=${gasPreflight.payerAddress}`,
+          })
+          throw new Error(
+            `Direct co-owner approval needs ${formatEther(gasPreflight.requiredWei)} ETH for gas from ${gasPreflight.payerAddress}. Current balance is ${formatEther(gasPreflight.balanceWei)} ETH. Fund this wallet on Base and retry.`,
+          )
+        }
+      } else {
+        setCustomOwnerGasPreflight(null)
       }
 
       await sendPreparedOwnerTx(preparePayload.data.txRequest, normalized, preflightOwnerLookupAddress, {
         approvalRunId,
         onStageEvent: emitOwnerApprovalStageEvent,
         ownerInstallIntent: 'customCoOwner',
-        preferSponsoredFirst: false,
+        customOwnerPolicyToken,
+        preferSponsoredFirst: customOwnerPolicyToken !== null,
       })
       setNotice('Rabby co-owner added.')
       await loadMe({ showSpinner: false })

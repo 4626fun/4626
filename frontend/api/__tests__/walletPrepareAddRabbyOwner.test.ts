@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import handler from '../_handlers/wallet/_prepare-add-rabby-owner.ts'
 import { createMockReq, createMockRes } from './helpers'
+import { makeSessionToken } from '../../server/auth/_shared.js'
 
 const { getDbMock, bootstrapCanonicalDelegationStateMock, confirmOwnerStateMock } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
@@ -65,9 +66,10 @@ describe('POST /api/wallet/prepare-add-rabby-owner', () => {
   })
 
   it('returns a tx request when advanced confirmation is valid', async () => {
+    const sessionToken = makeSessionToken({ address: '0x00000000000000000000000000000000000000AA' })
     const req = createMockReq({
       method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-privy-token': 'test-token' },
+      headers: { 'content-type': 'application/json', 'x-privy-token': 'test-token', authorization: `Bearer ${sessionToken}` },
       rawBody: JSON.stringify({
         rabbyAddress: '0x0000000000000000000000000000000000000011',
         confirmedAdvanced: true,
@@ -81,6 +83,7 @@ describe('POST /api/wallet/prepare-add-rabby-owner', () => {
     expect(res.body?.data?.alreadyOwner).toBe(false)
     expect(typeof res.body?.data?.txRequest?.data).toBe('string')
     expect(String(res.body?.data?.txRequest?.data).startsWith('0x0f0f3f24')).toBe(true)
+    expect(typeof res.body?.data?.sponsorship?.customOwnerPolicyToken).toBe('string')
   })
 
   it('short-circuits when the Rabby address is already installed as an owner', async () => {

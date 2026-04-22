@@ -1047,6 +1047,7 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
     stage?: string | null
     executionMode?: string | null
     attempt?: number | null
+    customOwnerPolicyToken?: string | null
   }
 }): Promise<{ userOpHash: Hex; transactionHash: Hex }> {
   const {
@@ -1476,9 +1477,16 @@ export async function sendCoinbaseSmartWalletUserOperation(params: {
       sendSession &&
       options.includeDebug &&
       (PAYMASTER_DEBUG_HEADER_ENABLED || ownerApprovalDebugMode)
+    const customOwnerPolicyToken =
+      sendSession &&
+      typeof ownerApprovalContext?.customOwnerPolicyToken === 'string' &&
+      ownerApprovalContext.customOwnerPolicyToken.trim()
+        ? ownerApprovalContext.customOwnerPolicyToken.trim()
+        : null
     const headers: Record<string, string> = {
       ...(sendSession && sessionToken ? { Authorization: `Bearer ${sessionToken}` } : {}),
       ...(shouldIncludePaymasterDebugHeader ? { 'X-CV-Paymaster-Debug': '1' } : {}),
+      ...(customOwnerPolicyToken ? { 'X-CV-Custom-Owner-Policy': customOwnerPolicyToken } : {}),
     }
     return http(url, {
       fetchOptions: {

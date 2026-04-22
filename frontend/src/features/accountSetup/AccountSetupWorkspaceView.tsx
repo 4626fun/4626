@@ -1079,8 +1079,8 @@ function WaitlistAdvancedSection({
               {rabbyOpen ? (
                 <div className="mt-2.5 space-y-2">
                   <p className="text-[11px] leading-relaxed text-zinc-500">
-                    Add a second owner to your canonical CSW (e.g. a Rabby EOA). This always uses a
-                    direct onchain approval from your connected signer (no gas sponsor).
+                    Add a second owner to your canonical CSW (e.g. a Rabby EOA). 4626 will use sponsored
+                    smart-wallet approval when policy context is available.
                   </p>
                   {ownerInstallIntent === 'customCoOwner' && customOwnerGasPreflight ? (
                     <div className="rounded-md border border-white/10 bg-black/20 px-2.5 py-2 text-[10.5px] text-zinc-300">
@@ -1093,7 +1093,9 @@ function WaitlistAdvancedSection({
                     </div>
                   ) : null}
                   <p className="text-[10.5px] leading-relaxed text-zinc-500">
-                    If Base App shows insufficient funds, fund the signer wallet on Base and retry Add co-owner.
+                    {ownerInstallIntent === 'customCoOwner' && customOwnerGasPreflight
+                      ? 'Fallback path is direct transaction approval. If Base App shows insufficient funds, fund the signer wallet on Base and retry Add co-owner.'
+                      : 'If sponsorship is denied, the error will include diagnostics so you can retry with the same signed-in wallet session.'}
                   </p>
                   <input
                     value={rabbyAddress}

@@ -224,7 +224,10 @@ function getAllowedOrigins(): Set<string> {
 export function setCors(req: VercelRequest, res: VercelResponse) {
   // Allow Authorization / X-SIWA-Receipt so embedded contexts can pass session or SIWA auth when cookies are blocked.
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Privy-Token, X-SIWA-Receipt, X-CV-Paymaster-Debug')
+  res.setHeader(
+    'Access-Control-Allow-Headers',
+    'Content-Type, Authorization, X-Privy-Token, X-SIWA-Receipt, X-CV-Paymaster-Debug, X-CV-Custom-Owner-Policy',
+  )
   // Allow clients to read debug breadcrumbs when explicitly enabled.
   res.setHeader('Access-Control-Expose-Headers', 'X-CV-Paymaster-Debug')
 

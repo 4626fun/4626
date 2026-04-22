@@ -132,6 +132,41 @@ describe('sendPreparedOwnerTx', () => {
     expect(result.txHash).toBe(TX_HASH)
   })
 
+  it('routes custom co-owner installs through sponsored lane when policy token is provided', async () => {
+    const request = vi.fn().mockResolvedValue(undefined)
+    const ensurePaymasterSession = vi.fn(async () => true)
+
+    const result = await sendPreparedOwnerTx({
+      txRequest: TX_REQUEST,
+      walletClient: {
+        account: CANONICAL_CSW,
+        sendTransaction: vi.fn(async () => TX_HASH),
+        request,
+      },
+      chainId: 8453,
+      authHeaders: async () => ({ Authorization: 'Bearer test' }),
+      ownerAddress: OWNER_EOA,
+      ownerIndexLookupAddress: OWNER_EOA,
+      signerAddress: CANONICAL_CSW,
+      executionMode: 'canonicalSmartWallet',
+      canonicalSmartWalletAddress: CANONICAL_CSW,
+      ownerInstallIntent: 'customCoOwner',
+      customOwnerPolicyToken: 'custom-owner-policy-token',
+      publicClient: {},
+      ensurePaymasterSession,
+    })
+
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
+    expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        ownerApprovalContext: expect.objectContaining({
+          customOwnerPolicyToken: 'custom-owner-policy-token',
+        }),
+      }),
+    )
+    expect(result.txHash).toBe(TX_HASH)
+  })
+
   it('self-auth tries eth_sendTransaction first, falls back to UserOp when request mock returns undefined', async () => {
     const sendTransaction = vi.fn(async () => TX_HASH)
     const ensurePaymasterSession = vi.fn(async () => true)

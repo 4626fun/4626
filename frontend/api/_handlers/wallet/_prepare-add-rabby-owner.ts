@@ -9,6 +9,7 @@ import {
   setCors,
   setNoStore,
   getDb,
+  readRequestPrincipalAddress,
   RATE_LIMITS,
   checkRateLimit,
   getClientIp,
@@ -22,6 +23,7 @@ import {
   extractDelegationFlags,
 } from '../../../server/_lib/wallet/canonicalCswDelegation.js'
 import { prepareAddOwnerTx } from '../../../server/_lib/wallet/coinbaseSmartWalletOwner.js'
+import { issueCustomOwnerSponsorshipToken } from '../../../server/_lib/paymaster/customOwnerSponsorshipToken.js'
 
 type PrepareRabbyBody = {
   rabbyAddress?: string
@@ -37,6 +39,9 @@ type PrepareRabbyResponse =
         to: `0x${string}`
         data: `0x${string}`
         value: '0x0'
+      }
+      sponsorship?: {
+        customOwnerPolicyToken?: string
       }
     }
 
@@ -125,9 +130,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       } satisfies ApiEnvelope<PrepareRabbyResponse>)
     }
     const txRequest = prepareAddOwnerTx(bootstrap.canonicalCswAddress, rabbyAddress)
+    const principalAddressRaw = readRequestPrincipalAddress(req, { lowercase: false })
+    const principalAddress = parseChecksummedAddress(principalAddressRaw)
+    const sponsorshipToken = principalAddress
+      ? issueCustomOwnerSponsorshipToken({
+          sessionAddress: principalAddress,
+          smartWalletAddress: bootstrap.canonicalCswAddress as `0x${string}`,
+          ownerToAdd: rabbyAddress,
+          profileId: bootstrap.profileId,
+        })
+      : null
     return res.status(200).json({
       success: true,
-      data: { alreadyOwner: false, txRequest } satisfies PrepareRabbyResponse,
+      data: {
+        alreadyOwner: false,
+        txRequest,
+        ...(sponsorshipToken ? { sponsorship: { customOwnerPolicyToken: sponsorshipToken } } : null),
+      } satisfies PrepareRabbyResponse,
     } satisfies ApiEnvelope<PrepareRabbyResponse>)
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Failed to prepare advanced owner install'
