@@ -44,12 +44,27 @@ type TargetRow = {
   basename: string | null;
   ens_name: string | null;
   avatar_url: string | null;
-  mainnet_nonce: number | null;
-  base_nonce: number | null;
+  // Activity counters — "tx_count" is clearer in the CSV than "nonce".
+  ethereum_tx_count: number | null;
+  base_tx_count: number | null;
+  total_tx_count: number | null;
+  // Derived signal: what fraction of activity happened on Base? Over 0.5
+  // means Base-native; under 0.2 means an Ethereum-mainnet-first user
+  // who happens to own a Zora CSW. Useful for tailoring outreach copy.
+  base_activity_share: number | null;
+  activity_tier: "whale" | "heavy" | "active" | "light" | "dormant";
   zora_csw_address: string | null;
   zora_csw_base_owner: string | null;
   zora_creation_tx: string | null;
 };
+
+function activityTier(total: number): TargetRow["activity_tier"] {
+  if (total >= 5000) return "whale";
+  if (total >= 1000) return "heavy";
+  if (total >= 200) return "active";
+  if (total >= 20) return "light";
+  return "dormant";
+}
 
 async function main() {
   const supabase = createIndexerSupabase();
@@ -71,6 +86,12 @@ async function main() {
     mainnet_nonce: number | null;
     base_nonce: number | null;
   };
+  // We pull a wider candidate pool (up to TARGET_COUNT * 10) so we can
+  // rank client-side by *total* Base + Ethereum activity. Doing the sum
+  // in Postgres ORDER BY isn't index-backed here and the pg-rest ORM
+  // doesn't expose expression ordering cleanly, so client-side re-sort
+  // on ~500 rows is the pragmatic path.
+  const CANDIDATE_POOL = Math.min(TARGET_COUNT * 10, 1000);
   const { data, error } = await supabase
     .from("zora_csw_owner_class")
     .select(
@@ -82,15 +103,23 @@ async function main() {
     .not("zora_handle", "is", null)
     .not("farcaster_fid", "is", null)
     .order("mainnet_nonce", { ascending: false, nullsFirst: false })
-    .order("base_nonce", { ascending: false, nullsFirst: false })
-    .limit(TARGET_COUNT * 2);
+    .limit(CANDIDATE_POOL);
   if (error) throw error;
 
   const rows = (data ?? []) as unknown as RawRow[];
   const withName = rows.filter(
     (r) => r.basename !== null || r.ens_name !== null,
   );
-  const selected = withName.slice(0, TARGET_COUNT);
+  // Re-rank by total Ethereum + Base activity so Base-native power users
+  // (who may have fewer mainnet txs) aren't artificially demoted.
+  const ranked = [...withName].sort((a, b) => {
+    const totalA = (a.mainnet_nonce ?? 0) + (a.base_nonce ?? 0);
+    const totalB = (b.mainnet_nonce ?? 0) + (b.base_nonce ?? 0);
+    if (totalB !== totalA) return totalB - totalA;
+    // Tiebreak on Base activity (Zora-native preference).
+    return (b.base_nonce ?? 0) - (a.base_nonce ?? 0);
+  });
+  const selected = ranked.slice(0, TARGET_COUNT);
   console.log(`[export] selected ${selected.length} targets`);
 
   // Lookup a CSW for each. We pre-checksum the EOA and use GIN-supported
@@ -116,6 +145,10 @@ async function main() {
 
     const cswRow = csw as { csw_address?: string; base_owner?: string; creation_tx_hash?: string } | null;
     const zora_role = row.zora_creator_coin_address ? "creator" : "collector";
+    const mainnetTx = row.mainnet_nonce ?? 0;
+    const baseTx = row.base_nonce ?? 0;
+    const totalTx = mainnetTx + baseTx;
+    const baseShare = totalTx > 0 ? +(baseTx / totalTx).toFixed(3) : null;
     enriched.push({
       rank,
       eoa: row.eoa,
@@ -129,8 +162,11 @@ async function main() {
       basename: row.basename,
       ens_name: row.ens_name,
       avatar_url: row.basename_avatar ?? row.ens_avatar ?? null,
-      mainnet_nonce: row.mainnet_nonce,
-      base_nonce: row.base_nonce,
+      ethereum_tx_count: row.mainnet_nonce,
+      base_tx_count: row.base_nonce,
+      total_tx_count: totalTx,
+      base_activity_share: baseShare,
+      activity_tier: activityTier(totalTx),
       zora_csw_address: cswRow?.csw_address ?? null,
       zora_csw_base_owner: cswRow?.base_owner ?? null,
       zora_creation_tx: cswRow?.creation_tx_hash ?? null,

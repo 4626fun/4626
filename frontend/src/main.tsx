@@ -52,6 +52,18 @@ const WALLET_COLLISION_SIGNAL_KEY = 'cv:wallet-provider-collision-at'
 const VITE_OPTIMIZE_DEP_RECOVERY_KEY = 'cv:vite:optimize-dep-reload-at'
 const VITE_OPTIMIZE_DEP_RECOVERY_WINDOW_MS = 15_000
 
+function hasExtensionOriginSignal(text: string): boolean {
+  const lower = String(text || '').toLowerCase()
+  if (!lower) return false
+  return (
+    lower.includes('chrome-extension://') ||
+    lower.includes('moz-extension://') ||
+    lower.includes('evmask.js') ||
+    lower.includes('requestprovider.js') ||
+    lower.includes('inpage.js')
+  )
+}
+
 function shouldSuppressWalletNoise(args: unknown[]): boolean {
   if (!args.length) return false
   const joined = args
@@ -63,9 +75,12 @@ function shouldSuppressWalletNoise(args: unknown[]): boolean {
     .join(' ')
     .toLowerCase()
   if (!joined) return false
+  const ethereumCollisionSignal =
+    joined.includes('cannot set property ethereum of #<window> which has only a getter') ||
+    joined.includes('cannot redefine property: ethereum')
   return (
     joined.includes('failed to add embedded wallet connector: wallet proxy not initialized') ||
-    joined.includes('cannot set property ethereum of #<window> which has only a getter') ||
+    (ethereumCollisionSignal && hasExtensionOriginSignal(joined)) ||
     joined.includes('embedded1193provider.request() called with args') ||
     joined.includes('eth_accounts for privy')
   )

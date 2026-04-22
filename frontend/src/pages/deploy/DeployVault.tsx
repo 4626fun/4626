@@ -89,6 +89,11 @@ import {
   resumeAndPollDeploySession,
   type DeploySessionStatusData,
 } from '@/lib/deploy/sessionClient'
+import {
+  buildShareVanitySkipLogKey,
+  isProviderCollisionErrorMessage,
+  shouldEmitShareVanitySkipLog,
+} from './deployVaultSignals'
 import { 
   sendCoinbaseSmartWalletUserOperation, 
   simulateSmartWalletCalls,
@@ -863,7 +868,7 @@ function tryAutoRecoverStaleDeployConfig(params: {
       return false
     }
     window.sessionStorage.setItem(STALE_DEPLOY_CONFIG_RELOAD_KEY, String(now))
-    logger.warn('[DeployVault] stale_runtime_config_detected', {
+    logger.info('[DeployVault] stale_runtime_config_detected', {
       reason: params.reason,
       clientValue: params.clientValue,
       runtimeValue: params.runtimeValue,
@@ -2345,11 +2350,9 @@ function DeployVaultBatcher({
       return 'Please switch your wallet to Base and retry.'
     }
     if (
-      lower.includes('metamask') &&
-      (lower.includes('not found') ||
-        lower.includes('failed to connect') ||
-        lower.includes('cannot set property ethereum') ||
-        lower.includes('only a getter'))
+      isProviderCollisionErrorMessage(msg) ||
+      (lower.includes('metamask') &&
+        (lower.includes('not found') || lower.includes('failed to connect')))
     ) {
       return 'MetaMask failed to initialize because another wallet extension already controls window.ethereum. Disable one extension (MetaMask/Coinbase/Rabby), or use Coinbase Wallet/Privy sign-in.'
     }
@@ -3195,10 +3198,14 @@ function DeployVaultBatcher({
           })
           throw new Error(blockingMessage)
         }
-        const skipLogKey = `${(batcherAddress ?? '').toLowerCase()}:${shareOftVanitySuffix}:phase1_salt_overrides_not_supported`
-        if (shareOftVanitySkipLogKeyRef.current !== skipLogKey) {
+        const skipLogKey = buildShareVanitySkipLogKey({
+          batcher: batcherAddress,
+          suffix: shareOftVanitySuffix,
+          reason: 'phase1_salt_overrides_not_supported',
+        })
+        if (shouldEmitShareVanitySkipLog({ lastKey: shareOftVanitySkipLogKeyRef.current, nextKey: skipLogKey })) {
           shareOftVanitySkipLogKeyRef.current = skipLogKey
-          logger.info('[DeployVault] share_oft_vanity_suffix_skipped_default', {
+          logger.debug('[DeployVault] share_oft_vanity_suffix_skipped_default', {
             batcher: batcherAddress,
             suffix: shareOftVanitySuffix,
             reason: 'phase1_salt_overrides_not_supported',
@@ -6844,7 +6851,8 @@ function DeployVaultBatcher({
               {phase3LikelyMissingHelperConfig ? (
                 <div className="mt-1 text-[11px] text-amber-300/80">
                   Some Phase-3 predicted addresses require batcher helper/runtime config that is unavailable on the
-                  current deployment batcher, so they remain hidden until runtime config is complete.
+                  current deployment batcher, so they remain hidden until runtime config is complete in the server
+                  deploy runtime config source (`/api/deploy/config`).
                 </div>
               ) : null}
             </div>
@@ -7040,6 +7048,12 @@ function DeployVaultBatcher({
             <Link to={creatorStrategyFeaturesHref} className="inline-flex text-[11px] text-blue-300 hover:text-blue-200">
               Activate vanity feature access
             </Link>
+          ) : null}
+          {isProviderCollisionErrorMessage(error) ? (
+            <div className="text-[11px] text-amber-300/80">
+              Wallet extension collision detected around `window.ethereum`. Keep only one EVM wallet extension enabled
+              in this browser profile (or use Coinbase Wallet / Privy sign-in), then retry.
+            </div>
           ) : null}
         </div>
       ) : null}
