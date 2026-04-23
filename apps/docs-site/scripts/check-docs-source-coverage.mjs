@@ -33,6 +33,12 @@ const EXPLICIT_OUT_OF_SCOPE = [
   // Internal design and implementation readmes.
   'design/base-brand-archive/README.md',
   'frontend/public/protocols/README.md',
+  // Internal design/typography working notes, not public docs-site content.
+  'DESIGN_REFINEMENT.md',
+  'TYPOGRAPHY_AUDIT.md',
+  // Indexer and Looker Studio connector readmes are engineering-facing only.
+  'indexer/README.md',
+  'indexer/scripts/lookerStudioConnector/README.md',
 ];
 
 function gitLines(args) {
