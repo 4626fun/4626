@@ -6,6 +6,13 @@ on:
   push:
     branches: [main, master]
   workflow_dispatch:
+  # 4626-399 scope 2: nightly full-history gitleaks sweep so allowlist
+  # drift or a credential accidentally merged outside the PR flow is
+  # caught within ~24h even when nobody pushes. 07:13 UTC is early
+  # morning in US timezones so the check runs before the EU team starts
+  # their day.
+  schedule:
+    - cron: '13 7 * * *'
 
 permissions:
   contents: read
@@ -13,7 +20,15 @@ permissions:
 jobs:
   gitleaks:
     name: Gitleaks (incremental)
+    # 4626-399 scope 2: incremental scan runs on every PR and push for
+    # fast feedback on the commit range. A separate full-tree job below
+    # enforces the allowlist config against the whole working tree on
+    # every event so that `gitleaks.toml` itself cannot regress silently.
     runs-on: ubuntu-latest
+    # Nightly cron is covered by `gitleaks-full-history`; skip the
+    # diff-scoped run in the scheduled context because there is no
+    # meaningful "previous push" range to scan.
+    if: github.event_name != 'schedule'
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
@@ -68,6 +83,84 @@ jobs:
         run: |
           gitleaks detect --source . --config gitleaks.toml --no-banner --verbose --redact \
             --log-opts "${{ github.sha }}^!"
+
+  gitleaks-full-history:
+    # 4626-399 scope 2: enforce `gitleaks.toml` against the whole outer
+    # repo (every commit reachable from HEAD) on every PR, push, and
+    # schedule. The sibling incremental job only scans the commit range,
+    # so a PR that weakens the allowlist would not fail it even though
+    # legitimate secrets already in history become exposed again.
+    #
+    # This job walks every commit in the outer repo and fails on any
+    # finding that survives the allowlist, so the allowlist contract is
+    # explicit: add a rule-scoped entry only if the whole tree remains
+    # clean. Submodules are intentionally out of scope — gitleaks walks
+    # the outer repo's git objects, and the submodule commits are
+    # independently scanned by their upstream projects.
+    #
+    # Run time on this repo is ~10s after the install step (168 commits
+    # on main), so adding it to every PR is cheap.
+    name: Gitleaks (full history)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          # Full history is required; `fetch-depth: 0` downloads every
+          # reachable commit so gitleaks can walk them.
+          fetch-depth: 0
+          # No `submodules: recursive` — we deliberately scope this to
+          # first-party content. Submodules have their own security
+          # review posture and the outer repo's allowlist config is
+          # written against first-party paths only.
+
+      - name: Install gitleaks
+        env:
+          GITLEAKS_VERSION: 8.24.3
+        run: |
+          set -euo pipefail
+          # Same SHA-256-verified install pattern as the incremental job
+          # (L-23 / 4626-374-era hardening). See the `gitleaks` job above
+          # for the full rationale; kept identical here so both jobs use
+          # the exact same pinned binary.
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          curl -fsSL --retry 3 -o "$tarball" "$base/$tarball"
+          curl -fsSL --retry 3 -o checksums.txt "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          expected=$(awk -v f="$tarball" '$2 == f {print $1}' checksums.txt)
+          if [ -z "$expected" ]; then
+            echo "::error::No checksum line for $tarball in checksums.txt"
+            exit 1
+          fi
+          echo "$expected  $tarball" | sha256sum -c -
+          tar xzf "$tarball"
+          sudo mv gitleaks /usr/local/bin/
+          gitleaks version
+
+      - name: Run gitleaks against full git history
+        run: |
+          # No `--log-opts` — scan every commit reachable from HEAD.
+          # No `--no-git` — let gitleaks walk git objects, which cleanly
+          # excludes submodule content.
+          # `--exit-code 1` — any finding that is not allowlisted fails
+          # the job.
+          gitleaks detect \
+            --source . \
+            --config gitleaks.toml \
+            --no-banner \
+            --verbose \
+            --redact \
+            --exit-code 1 \
+            --report-path "$RUNNER_TEMP/gitleaks-full-history.json" \
+            --report-format json
+
+      - name: Upload gitleaks report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gitleaks-full-history-report
+          path: ${{ runner.temp }}/gitleaks-full-history.json
+          if-no-files-found: ignore
+          retention-days: 30
 
   dependency-audit:
     name: pnpm audit (blocking on high+critical)
