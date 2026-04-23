@@ -519,6 +519,12 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         try ICreatorGaugeController(_gaugeController).receiveFees(amount) {
             emit FeeCollected(_gaugeController, amount);
         } catch {
+            // FIX: M-03 (4626-312) — revoke the self-approval granted above before
+            // accumulating. If receiveFees reverts, the allowance remains at `amount`
+            // and would let a replaced/compromised gaugeController address pull the
+            // balance without going through the accounting path. Zeroing the approval
+            // forces a fresh approval on the next successful dispatch.
+            _approve(address(this), _gaugeController, 0);
             // Accumulate instead of bypassing gauge accounting
             pendingFees += amount;
             emit FeesAccumulated(amount, pendingFees);

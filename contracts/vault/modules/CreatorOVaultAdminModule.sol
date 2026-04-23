@@ -29,6 +29,7 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
     event UpdateKeeper(address indexed newKeeper);
     event UpdateEmergencyAdmin(address indexed newEmergencyAdmin);
     event UpdateGaugeController(address indexed oldController, address indexed newController);
+    event UpdateBurnStream(address indexed oldBurnStream, address indexed newBurnStream);
     event UpdatePerformanceFee(uint16 newPerformanceFee);
     event UpdatePerformanceFeeRecipient(address indexed newRecipient);
     event UpdateProfitMaxUnlockTime(uint256 newProfitMaxUnlockTime);
@@ -133,10 +134,29 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
         emit UpdateGaugeController(old, _gaugeController);
     }
 
+    /**
+     * @notice Update the vault's burn stream address.
+     * @dev FIX: L-01 (4626-349) — previously one-time-set. Once the initial
+     *      non-zero burn stream was wired, any future override required a
+     *      full vault migration. If the Charm/gauge infra upgrades the
+     *      burn stream contract, this is operationally expensive.
+     *
+     *      Override now permitted via the same onlyDelegateCall gate that
+     *      governs every other admin setter in this module. The call still
+     *      runs through the vault's management/multisig path (see
+     *      CreatorOVaultRescueModule / `onlyDelegateCall` construction), so
+     *      unilateral overrides from an EOA are not possible. A governance
+     *      timelock should enforce the delay at that layer; we deliberately
+     *      do NOT add a second timelock here so the setter shape matches
+     *      every other `set*` in this module.
+     *
+     *      Emits UpdateBurnStream(oldBurnStream, newBurnStream).
+     */
     function setBurnStream(address _burnStream) external onlyDelegateCall {
         if (_burnStream == address(0)) revert ZeroAddress();
-        if (burnStream != address(0)) revert Unauthorized();
+        address old = burnStream;
         burnStream = _burnStream;
+        emit UpdateBurnStream(old, _burnStream);
     }
 
     function setKeeper(address _keeper) external onlyDelegateCall {

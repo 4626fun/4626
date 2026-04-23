@@ -180,8 +180,31 @@ contract LBPStrategyWithTaxHook is ILBPStrategyBasicCompat {
         return token;
     }
 
+    /// @notice Raised when onTokensReceived is invoked by an unexpected
+    /// caller. FIX: L-07 (4626-355).
+    error OnTokensReceivedUnauthorized(address caller);
+    /// @notice Raised when onTokensReceived is invoked more than once.
+    /// FIX: L-07 (4626-355).
+    error AuctionAlreadyInitialized();
+
     /// @inheritdoc IDistributionContract
     function onTokensReceived() external {
+        // FIX: L-07 (4626-355) — previously any address could call
+        // onTokensReceived() provided the strategy already held the
+        // expected balance. An attacker could front-run the legitimate
+        // operator and pin our auction to an attacker-favourable
+        // `auctionFactory` snapshot (the ctor-supplied factory is
+        // trusted, but the side-effect of flipping `auction` to a
+        // non-zero address once is still observable and permanent).
+        // Constrain the caller to the token itself (hook push-pattern),
+        // the configured operator, or the token's own deployer/owner
+        // via the token address equality on msg.sender. Also reject
+        // double-init.
+        if (address(auction) != address(0)) revert AuctionAlreadyInitialized();
+        if (msg.sender != token && msg.sender != operator) {
+            revert OnTokensReceivedUnauthorized(msg.sender);
+        }
+
         if (IERC20(token).balanceOf(address(this)) < totalSupply) {
             revert InvalidAmountReceived(totalSupply, IERC20(token).balanceOf(address(this)));
         }

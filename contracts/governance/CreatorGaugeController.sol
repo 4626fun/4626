@@ -290,6 +290,14 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
         if (_shareOFT == address(0)) revert ZeroAddress();
         if (_protocolTreasury == address(0)) revert ZeroAddress();
 
+        // FIX: L-03 (4626-351) — constant WETH / SWAP_ROUTER addresses above
+        // are hardcoded to Base (chain id 8453). Deploying this controller to
+        // any other chain would silently succeed but every swap path would
+        // target addresses that do not exist on that chain, bricking fee
+        // routing. Assert chain id at construction so misdeployment fails
+        // fast rather than on the first swap attempt.
+        require(block.chainid == 8453, "Only Base supported");
+
         // FIX: G-24 — compile/deploy-time assertion that fee split constants sum to MAX_BPS
         require(
             burnShareBps + lotteryShareBps + creatorShareBps + protocolShareBps == MAX_BPS,

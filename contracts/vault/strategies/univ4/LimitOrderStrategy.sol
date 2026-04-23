@@ -287,6 +287,22 @@ contract LimitOrderStrategy is Ownable, ReentrancyGuard {
         if (tickLower >= tickUpper) revert InvalidTick();
         if (tickLower % tickSpacing != 0 || tickUpper % tickSpacing != 0) revert InvalidTick();
 
+        // FIX: M-11 (4626-320) — prevent an order from overlapping the current
+        // pool tick. Without this check, a buy-order placed with `tickUpper`
+        // above the current tick (or a sell-order with `tickLower` below) is
+        // immediately filled on the very next swap at the current market
+        // price — defeating the whole point of a limit order. Buy orders
+        // must end at or below the current tick; sell orders must start at
+        // or above it.
+        {
+            int24 currentTick = _getCurrentTick();
+            if (isBuyOrder) {
+                if (tickUpper > currentTick) revert InvalidTick();
+            } else {
+                if (tickLower < currentTick) revert InvalidTick();
+            }
+        }
+
         // Pull tokens based on order type
         if (isBuyOrder) {
             // Buy order: provide paired token (WETH) to buy creator coin

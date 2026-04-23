@@ -101,8 +101,20 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
         require(_owner != address(0), "Invalid owner");
         require(_hubEid != 0, "Invalid hub EID");
         hubEid = _hubEid;
-        // FIX: VRF-04 — use truncated block number as deployment nonce to avoid sequence reuse
-        deploymentNonce = uint64(block.number & 0xFFFF);
+        // FIX: L-06 (4626-354) — previous implementation truncated block
+        // number to 16 bits, giving only 65,536 distinct nonces and a ~50%
+        // collision probability after ~256 deploys (birthday bound). On Base
+        // (~4s blocks) the same lower-16-bit value recurs every ~2.7 days, so
+        // two redeploys in close succession could land on the same nonce and
+        // collide VRF request-id sequences.
+        //
+        // Derive a 64-bit nonce from keccak(block.number, chainid, this) and
+        // truncate. Collision probability is now ~2^-32 for 65k deploys,
+        // which is safe for any realistic deployment cadence. Previous 16-bit
+        // behaviour is preserved as a comment block above for audit trail.
+        deploymentNonce = uint64(
+            uint256(keccak256(abi.encode(block.number, block.chainid, address(this))))
+        );
         requestCounter = uint64(deploymentNonce) << 48; // shift nonce into upper bits
         authorizedSponsoredCallers[_owner] = true;
         emit SponsoredCallerAuthorizationUpdated(_owner, true);

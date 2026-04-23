@@ -1158,8 +1158,11 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
             return;
         }
 
-        _lzSend(dstEid, payload, options, fee, payable(address(this)));
-
+        // FIX: M-05 (4626-314) — CEI ordering. Increment rate-limit counters
+        // BEFORE the external _lzSend so a reentering LayerZero hook or
+        // callback cannot observe pre-increment counter state and bypass the
+        // per-buyer / per-origin caps. The counters are consumed in the same
+        // `if (nativeFee > 0)` branch as before; only the ordering changed.
         if (nativeFee > 0) {
             uint256 epochStart = callbackSponsorshipPolicy.epochStart;
             if (callbackMaxSponsoredPerBuyerPerEpoch > 0) {
@@ -1176,6 +1179,8 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
                 callbackSponsoredCountByOrigin[originKey] = originCount + 1;
             }
         }
+
+        _lzSend(dstEid, payload, options, fee, payable(address(this)));
 
         emit WinnerCallbackSent(dstEid, winner, creatorCoin, totalSharesPaid);
         // If insufficient gas, silently skip — payout already happened on hub

@@ -206,7 +206,16 @@ contract VoterRewardsDistributor is Ownable, ReentrancyGuard {
         amount = epochVaultRewards[epoch][vault];
         if (amount == 0) return 0;
 
-        address token = vaultRewardToken[vault];
+        // FIX: L-04 (4626-352) — previously used the global `vaultRewardToken`
+        // mapping, which returns the *current* token for the vault. If the
+        // reward token was switched after the epoch being swept, this path
+        // would transfer the new token instead of the one actually held for
+        // that epoch, either swapping-out live rewards or reverting on zero
+        // balance. Prefer the per-epoch record stored by
+        // `depositReward(epoch, ...)`; fall back to the global only when a
+        // pre-migration epoch has no per-epoch record.
+        address token = epochRewardToken[epoch][vault];
+        if (token == address(0)) token = vaultRewardToken[vault];
         if (token == address(0)) revert ZeroAddress();
 
         // Effects before interactions

@@ -142,6 +142,15 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
         uint256 lastUpdated;
     }
 
+    /// @notice Maximum number of distinct remote chains permitted to
+    /// push price updates. Bounds the cost of
+    /// `getAggregatedCreatorPrice()` which iterates
+    /// `priceReportingChains` in O(N).
+    /// @dev FIX: L-09 (4626-357) — previously unbounded; a malicious
+    /// set of LayerZero sources could register arbitrarily many EIDs
+    /// and DoS the aggregation read path.
+    uint256 public constant MAX_PRICE_REPORTING_CHAINS = 20;
+
     mapping(uint32 => ChainPriceData) public chainPrices;
     uint32[] public priceReportingChains;
     mapping(uint32 => bool) public hasPriceReported;
@@ -606,8 +615,24 @@ contract CreatorVRFConsumerV2_5 is OApp, ReentrancyGuard {
     // PRICE AGGREGATION
     // ================================
 
+    /// @notice Emitted when a new chain EID is refused registration
+    /// because MAX_PRICE_REPORTING_CHAINS is already full.
+    /// @dev FIX: L-09 (4626-357).
+    event PriceReportingChainRejected(uint32 indexed chainEid);
+
     function _updateChainPrice(uint32 chainEid, int256 price, uint256 timestamp) internal {
         if (!hasPriceReported[chainEid]) {
+            // FIX: L-09 (4626-357) — cap distinct reporting chains at
+            // MAX_PRICE_REPORTING_CHAINS. Beyond the cap, silently drop
+            // the registration (emit an event for observability). The
+            // underlying chainPrices[] mapping still updates for
+            // already-registered chains, so new EIDs are the only
+            // path affected. An admin can widen the cap by deploying a
+            // new contract with the constant bumped.
+            if (priceReportingChains.length >= MAX_PRICE_REPORTING_CHAINS) {
+                emit PriceReportingChainRejected(chainEid);
+                return;
+            }
             priceReportingChains.push(chainEid);
             hasPriceReported[chainEid] = true;
         }

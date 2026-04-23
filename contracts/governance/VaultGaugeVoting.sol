@@ -365,15 +365,19 @@ contract VaultGaugeVoting is IVaultGaugeVoting, Ownable, ReentrancyGuard {
         uint256 epoch = currentEpoch();
         uint256 total = _epochTotalVotes[epoch];
 
+        // FIX: M-04 (4626-313) — previously, zero-vote epochs distributed the
+        // full TOTAL_GAUGE_PROBABILITY_PPM budget equally across whitelisted
+        // vaults. That let the owner steer boost allocation without a
+        // governance vote by manipulating the whitelist size (add vaults to
+        // dilute, remove vaults to concentrate). Returning 0 on zero-vote
+        // epochs removes the manipulability: if no one votes, no vault gets
+        // a vote-directed boost that epoch.
         if (total == 0) {
-            uint256 n = _whitelistedVaults.length();
-            if (n == 0) return 0;
-            boostPPM = TOTAL_GAUGE_PROBABILITY_PPM / n;
-        } else {
-            uint256 v = _epochVaultVotes[epoch][vault];
-            if (v == 0) return 0;
-            boostPPM = (TOTAL_GAUGE_PROBABILITY_PPM * v) / total;
+            return 0;
         }
+        uint256 v = _epochVaultVotes[epoch][vault];
+        if (v == 0) return 0;
+        boostPPM = (TOTAL_GAUGE_PROBABILITY_PPM * v) / total;
 
         if (boostPPM > MAX_PER_VAULT_PPM) {
             boostPPM = MAX_PER_VAULT_PPM;

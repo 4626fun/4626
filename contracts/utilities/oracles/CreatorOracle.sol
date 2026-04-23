@@ -1149,6 +1149,53 @@ contract CreatorOracle is OApp {
         emit CreatorPriceBroadcast(dstEids, creatorPriceUSD, creatorPriceTimestamp);
     }
 
+    /**
+     * @notice Broadcast price to other chains with per-destination LayerZero fees
+     * @dev FIX: M-01 (4626-310) — the equal-split `broadcastCreatorPrice` variant above
+     *      divides `msg.value / dstEids.length` and uses that as the fee for every
+     *      destination. LayerZero fees differ per destination chain, so any chain whose
+     *      real fee exceeds the split amount reverts mid-loop and the broadcast
+     *      partially fails. This overload requires the caller to pass a `fees` array
+     *      parallel to `dstEids`; the correct way to populate it is to call
+     *      `quote()` once per destination and pass the returned native fees here.
+     *      The old method is preserved for backwards compatibility.
+     * @param dstEids    Destination chain EIDs
+     * @param options    LayerZero options (shared across destinations)
+     * @param fees       Native LayerZero fee per destination, in the same order as dstEids
+     */
+    function broadcastCreatorPriceWithFees(
+        uint32[] calldata dstEids,
+        bytes calldata options,
+        uint256[] calldata fees
+    ) external payable returns (MessagingReceipt[] memory receipts) {
+        if (creatorPriceUSD <= 0) revert InvalidPrice();
+        if (!isPriceUpdater[msg.sender] && msg.sender != owner()) revert Unauthorized();
+        require(dstEids.length > 0, "No destinations");
+        require(dstEids.length == fees.length, "Length mismatch");
+
+        uint256 totalFees;
+        for (uint256 i = 0; i < fees.length; i++) {
+            require(fees[i] > 0, "Zero fee");
+            totalFees += fees[i];
+        }
+        require(msg.value >= totalFees, "Insufficient fee");
+
+        receipts = new MessagingReceipt[](dstEids.length);
+        bytes memory payload = abi.encode(creatorPriceUSD, creatorPriceTimestamp, creatorSymbol);
+
+        for (uint256 i = 0; i < dstEids.length; i++) {
+            receipts[i] = _lzSend(dstEids[i], payload, options, MessagingFee(fees[i], 0), payable(msg.sender));
+        }
+
+        uint256 remainder = msg.value - totalFees;
+        if (remainder > 0) {
+            (bool ok,) = payable(msg.sender).call{value: remainder}("");
+            require(ok, "Refund failed");
+        }
+
+        emit CreatorPriceBroadcast(dstEids, creatorPriceUSD, creatorPriceTimestamp);
+    }
+
     /// @dev Override LayerZero default behavior to allow multi-destination broadcasts in one transaction.
     ///      The contract spends from its balance (funded by `msg.value`) across multiple `_lzSend` calls.
     function _payNative(uint256 _nativeFee) internal override returns (uint256 nativeFee) {

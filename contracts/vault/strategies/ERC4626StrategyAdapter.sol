@@ -115,6 +115,18 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
         require(address(ICreatorOVaultLike(_vault).CREATOR_COIN()) == assetAddr, "Vault/asset mismatch");
 
         _isActive = true;
+
+        // FIX: M-10 (4626-319) — seed the valuation snapshot immediately on
+        // construction. Previously isValuationReady() returned true whenever
+        // `lastValuationAssetsPerShare == 0`, which is the initial state until
+        // the first strategy operation. During that window deposits routed
+        // here were not bounded against the underlying ERC-4626's assets-per-
+        // share, leaving an inflation-attack window on any freshly-deployed
+        // 4626 vault. Best-effort read on construction closes that window; if
+        // the underlying read reverts (empty / uninitialized), the snapshot
+        // stays zero and isValuationReady() will still tolerate the absence
+        // of exposure (currentAssetsPerShare == 0 branch above).
+        _syncValuationSnapshotBestEffort();
     }
 
     // ================================
@@ -145,8 +157,14 @@ contract ERC4626StrategyAdapter is IStrategy, IStrategyValuation, Ownable, Reent
 
         uint256 snapshot = lastValuationAssetsPerShare;
         if (snapshot == 0) {
-            // Snapshot not initialized yet; first sync happens after strategy operations.
-            return true;
+            // FIX: M-10 (4626-319) — returning true here previously let
+            // deposits through when there was ERC-4626 share exposure but no
+            // trusted snapshot (e.g. constructor read reverted, or an
+            // operator manually cleared it). Treat that state as NOT ready.
+            // Honest path: the constructor now seeds the snapshot, and every
+            // strategy op refreshes it. If we still see snapshot == 0 with
+            // non-zero current PPS, something is off and we should fail safe.
+            return false;
         }
 
         return _isWithinValuationBounds(snapshot, currentAssetsPerShare);

@@ -69,6 +69,14 @@ contract DeploymentBatcherPhase3Helper {
         address _uniswapRouter,
         address _ajnaFactory
     ) {
+        // FIX: L-02 (4626-350) — CHARM_FACTORY / CHARM_FACTORY_GOVERNANCE
+        // addresses above are hardcoded Base-mainnet values; deploying this
+        // helper on any other chain would silently call into a non-existent
+        // contract (or, worse, an attacker-controlled address if the same
+        // slot happens to be occupied). Refuse to deploy anywhere except
+        // Base mainnet (chainid 8453) so the invariant is enforced at
+        // construction time rather than at first use.
+        require(block.chainid == 8453, "Phase3Helper: Base only");
         create2Deployer = IUniversalCreate2DeployerFromStore(_create2Deployer);
         protocolTreasury = _protocolTreasury;
         usdc = _usdc;
@@ -1136,6 +1144,13 @@ contract DeploymentBatcher is ReentrancyGuard {
         if (_vaultCoreModule == address(0) || _vaultStrategiesModule == address(0) || _vaultAdminModule == address(0)) {
             revert ZeroAddress();
         }
+
+        // FIX: L-02 (4626-350) — outer batcher references a hardcoded
+        // Base-only Charm factory (CHARM_FACTORY public constant above),
+        // and deploys DeploymentBatcherPhase3Helper which also relies on
+        // the same Base-mainnet invariant. Refuse deployment on other
+        // chains instead of discovering the mismatch mid-Phase3.
+        require(block.chainid == 8453, "DeploymentBatcher: Base only");
 
         registry = ICreatorRegistry(_registry);
         bytecodeStore = IUniversalBytecodeStore(_bytecodeStore);

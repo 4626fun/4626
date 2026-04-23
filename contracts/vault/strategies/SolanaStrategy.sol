@@ -169,6 +169,17 @@ contract SolanaStrategy is IStrategy, IStrategyValuation, Ownable, ReentrancyGua
         remoteNav = newRemoteNav;
         if (newRemoteNav > 0) {
             remoteNavAnchor = newRemoteNav;
+        } else {
+            // FIX: M-09 (4626-318) — a deliberate zero-reset (bridge failure,
+            // governance kill switch, etc.) previously left `remoteNavAnchor`
+            // at its last non-zero value. Subsequent updates then computed
+            // their delta against that stale anchor, effectively widening the
+            // allowed delta cap on the next update. Zeroing the anchor and
+            // window on reset forces the next non-zero update to go through
+            // the bootstrap branch, which bounds against base liquidity.
+            remoteNavAnchor = 0;
+            navWindowAnchor = 0;
+            navWindowStart = 0;
         }
         remoteNavUpdatedAt = uint64(block.timestamp);
         emit RemoteNavUpdated(newRemoteNav, reportId);

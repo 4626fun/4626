@@ -107,10 +107,25 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
         return super.previewDeposit(maxAssets - fee);
     }
 
+    /// @notice Flag signalling this vault intentionally understates
+    /// maxWithdraw / maxRedeem relative to the ERC-4626 spec.
+    /// @dev FIX: L-08 (4626-356) — the vault deliberately returns
+    /// buffer-only capacity from maxWithdraw/maxRedeem because bucket
+    /// LP positions require an on-chain Ajna pool interaction to
+    /// liquidate. Integrators (aggregators, routers, indexers) must
+    /// read this flag and call `bucketAssets(index)` + `getBuckets()`
+    /// to recover the full withdrawable balance. Returning `true` is a
+    /// stable ABI contract: it will never silently flip to `false`
+    /// without a new contract deployment.
+    function isPartialWithdrawVault() external pure returns (bool) {
+        return true;
+    }
+
     /// @notice Returns the maximum assets withdrawable by `owner` from the idle buffer only.
     /// @dev FIX: F-19 — ERC-4626 deviation: this intentionally understates available assets
     /// because bucket LP positions require an on-chain Ajna pool interaction to liquidate.
     /// Off-chain integrators should query bucket positions separately for total availability.
+    /// See also `isPartialWithdrawVault()`.
     function maxWithdraw(address owner) public view override returns (uint256) {
         if (AUTH.paused()) return 0;
 
