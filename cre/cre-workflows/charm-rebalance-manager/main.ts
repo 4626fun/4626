@@ -12,6 +12,7 @@ import {
   evaluateAndEnqueueCharmActions,
   parseCharmManualPayload,
 } from "../_shared/charmManager"
+import { assertManualTriggerAuthorized } from "../_shared/manualTriggerAuth"
 
 type Config = CharmManagerConfig & {
   schedule: string
@@ -23,9 +24,9 @@ const onCronTrigger = (runtime: Runtime<Config>): CharmWorkflowResult =>
 const onHttpTrigger = (runtime: Runtime<Config>, payload: HTTPPayload): CharmWorkflowResult => {
   const manual = parseCharmManualPayload(payload.input)
   const apiKey = runtime.getSecret({ id: "KEEPR_API_KEY" }).result().value
-  if (!manual.authToken || manual.authToken !== apiKey) {
-    throw new Error("unauthorized_manual_trigger")
-  }
+  // SEV-001 regression guard — see cre/cre-workflows/_shared/manualTriggerAuth.ts
+  // and the matching unit test in cre/tests/charm-rebalance-manager.test.ts.
+  assertManualTriggerAuthorized(manual.authToken, apiKey)
   return evaluateAndEnqueueCharmActions(runtime, manual)
 }
 

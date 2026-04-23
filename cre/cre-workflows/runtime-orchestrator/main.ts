@@ -14,6 +14,7 @@ import {
 import { getJson, postJson } from "../_shared/http"
 import { assertKvConfigAllowed, readKvNumber, type AwsCredentials, writeKvText } from "../_shared/kvState"
 import { assumeRoleWithWebIdentity } from "../_shared/awsOidc"
+import { assertManualTriggerAuthorized } from "../_shared/manualTriggerAuth"
 
 type Config = {
   schedule: string
@@ -315,9 +316,9 @@ const onCronTrigger = (runtime: Runtime<Config>): string => {
 const onHttpTrigger = (runtime: Runtime<Config>, payload: HTTPPayload): string => {
   const manual = parseManualPayload(payload)
   const apiKey = runtime.getSecret({ id: "KEEPR_API_KEY" }).result().value
-  if (!manual.authToken || manual.authToken !== apiKey) {
-    throw new Error("unauthorized_manual_trigger")
-  }
+  // SEV-010 regression guard — see cre/cre-workflows/_shared/manualTriggerAuth.ts
+  // and the matching unit test in cre/tests/runtime-orchestrator.test.ts.
+  assertManualTriggerAuthorized(manual.authToken, apiKey)
   const result = runOrchestration(runtime, "http", manual)
   return JSON.stringify(result, null, 2)
 }
