@@ -23,7 +23,26 @@ jobs:
         env:
           GITLEAKS_VERSION: 8.24.3
         run: |
-          curl -sSL "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz" | tar xz
+          set -euo pipefail
+          # L-23 (4626-374-era) — verify the tarball's SHA-256 against
+          # the published checksums.txt from the same release before
+          # extracting. The previous install piped curl straight into
+          # `tar xz` with no integrity check, so a registry or CDN
+          # MITM could have served a trojaned binary. Download the
+          # tarball to disk first, fetch the signed checksums file
+          # from the same release, and require an exact match on the
+          # expected filename before proceeding.
+          tarball="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}"
+          curl -fsSL --retry 3 -o "$tarball" "$base/$tarball"
+          curl -fsSL --retry 3 -o checksums.txt "$base/gitleaks_${GITLEAKS_VERSION}_checksums.txt"
+          expected=$(awk -v f="$tarball" '$2 == f {print $1}' checksums.txt)
+          if [ -z "$expected" ]; then
+            echo "::error::No checksum line for $tarball in checksums.txt"
+            exit 1
+          fi
+          echo "$expected  $tarball" | sha256sum -c -
+          tar xzf "$tarball"
           sudo mv gitleaks /usr/local/bin/
           gitleaks version
 

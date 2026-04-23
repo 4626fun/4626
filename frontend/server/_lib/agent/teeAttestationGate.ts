@@ -49,8 +49,30 @@ function teeEnforcementEnabled(): boolean {
   return parseEnvBool(process.env.TEE_ENFORCEMENT_ENABLED, false)
 }
 
+// M-30 (4626-339): the default for TEE_ENFORCEMENT_FAIL_OPEN is already
+// `false` (fail-closed). Harden this further by refusing to honour a
+// `true` value in production: any deployment that tries to enable
+// fail-open behind the TEE gate in production logs a warning and gets
+// the safe (fail-closed) behaviour anyway. Dev/staging can still opt
+// into fail-open for local iteration.
+let loggedFailOpenOverride = false
 function teeFailOpenOnVerifierFailure(): boolean {
-  return parseEnvBool(process.env.TEE_ENFORCEMENT_FAIL_OPEN, false)
+  const raw = parseEnvBool(process.env.TEE_ENFORCEMENT_FAIL_OPEN, false)
+  if (!raw) return false
+  const isProduction = String(process.env.NODE_ENV ?? '').trim().toLowerCase() === 'production'
+  if (isProduction) {
+    if (!loggedFailOpenOverride) {
+      loggedFailOpenOverride = true
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[tee] TEE_ENFORCEMENT_FAIL_OPEN=true ignored in production; '
+          + 'fail-open attestation would defeat the gate. Unset the variable or '
+          + 'explicitly accept the risk by disabling NODE_ENV=production.',
+      )
+    }
+    return false
+  }
+  return true
 }
 
 function parseAgentId(): bigint | null {

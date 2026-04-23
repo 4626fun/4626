@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto'
+import { createHash, randomBytes } from 'node:crypto'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -38,9 +38,45 @@ const DENY_KEY_PATTERNS = [
 
 const ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/
 
+// M-23 (4626-332): the previous fallback was a hardcoded literal
+// '4626-agent-redaction'. Anyone with the source could reverse the
+// pseudonyms by recomputing `sha256(salt + knownId)` over a candidate
+// space (e.g. all Telegram user IDs in a leak). The salt MUST be
+// configured per-deployment.
+//
+// Policy:
+//   1. If `AGENT_REDACTION_SALT` is set and >= 16 chars, use it.
+//   2. In development (`NODE_ENV !== 'production'`) fall back to a
+//      process-lifetime random salt so local runs work without env
+//      setup, but no two boots produce the same pseudonym space.
+//   3. In production with no salt configured, generate a process-lifetime
+//      random salt AND log a one-shot warning so the misconfiguration is
+//      visible. Pseudonyms are still unguessable, just not stable
+//      across restarts — which is the correct failure mode: no operator
+//      should depend on stability of redacted IDs without an explicit salt.
+let cachedSalt: string | null = null
+let loggedSaltWarning = false
+
 function toSalt(): string {
+  if (cachedSalt !== null) return cachedSalt
   const configured = String(process.env.AGENT_REDACTION_SALT ?? '').trim()
-  return configured || '4626-agent-redaction'
+  if (configured.length >= 16) {
+    cachedSalt = configured
+    return cachedSalt
+  }
+  const isProduction = String(process.env.NODE_ENV ?? '').trim().toLowerCase() === 'production'
+  if (isProduction && !loggedSaltWarning) {
+    loggedSaltWarning = true
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[redaction] AGENT_REDACTION_SALT is missing or <16 chars in production; '
+        + 'falling back to a process-lifetime random salt. Pseudonyms will not be '
+        + 'stable across restarts. Set AGENT_REDACTION_SALT to a stable high-entropy '
+        + 'value to restore stability.',
+    )
+  }
+  cachedSalt = randomBytes(32).toString('hex')
+  return cachedSalt
 }
 
 function toPseudonym(value: unknown): string {

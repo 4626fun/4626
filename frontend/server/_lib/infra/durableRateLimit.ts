@@ -6,6 +6,15 @@ type Db = { query?: (text: string, params?: any[]) => Promise<{ rows: any[] }>; 
 let schemaEnsured = false
 let schemaEnsurePromise: Promise<void> | null = null
 
+// M-32 (4626-341): The `agent_rate_limits` table is now defined by
+// supabase/migrations/*_cre_runtime_and_agent_rate_limits_schema.sql.
+// This helper previously issued CREATE TABLE IF NOT EXISTS DDL at
+// application boot. We keep the preflight check to decide whether to
+// use the durable path, but we no longer issue DDL from application
+// code — if the table is missing, the caller falls back to its
+// in-memory limiter (or fail-closed, per `DurableRateLimitOptions`).
+let loggedMissingSchemaWarning = false
+
 async function ensureSchema(db: Db): Promise<void> {
   if (schemaEnsured) return
   if (schemaEnsurePromise) return schemaEnsurePromise
@@ -18,17 +27,16 @@ async function ensureSchema(db: Db): Promise<void> {
       schemaEnsured = true
       return
     }
-
-    await db.sql`
-      CREATE TABLE IF NOT EXISTS agent_rate_limits (
-        key TEXT NOT NULL,
-        window_id BIGINT NOT NULL,
-        count INTEGER NOT NULL DEFAULT 0,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        PRIMARY KEY (key, window_id)
-      );
-    `
-    schemaEnsured = true
+    if (!loggedMissingSchemaWarning) {
+      loggedMissingSchemaWarning = true
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[durableRateLimit] agent_rate_limits table missing. Apply '
+          + 'supabase/migrations/*_cre_runtime_and_agent_rate_limits_schema.sql; '
+          + 'until then the durable limiter will fall back per DurableRateLimitOptions.',
+      )
+    }
+    schemaEnsured = false
   })()
     .catch(() => {
       schemaEnsured = false

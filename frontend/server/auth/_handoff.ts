@@ -1,4 +1,4 @@
-import { createHash, randomBytes } from 'node:crypto'
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto'
 
 type DbWithSql = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
@@ -37,6 +37,67 @@ function hashHandoffCode(code: string): string {
     .digest('hex')
 }
 
+// M-21 (4626-330): encrypt privy_token at rest so a Supabase admin,
+// leaked backup, or compromised read-only DB credential cannot
+// replay Privy tokens during their (short) validity window.
+//
+// Encryption: AES-256-GCM. The key is derived once per process from
+// AUTH_HANDOFF_PRIVY_TOKEN_KEY (preferred) or, as a fallback for
+// environments that haven't provisioned the new key yet, from
+// getHandoffHashSecret() via sha256. The fallback ensures we never
+// silently write plaintext — if no key material is available the
+// throw from getHandoffHashSecret surfaces to the caller.
+//
+// Ciphertext format (single string stored in privy_token column):
+//   "v1:<base64(iv)>:<base64(tag)>:<base64(ciphertext)>"
+// The "v1:" prefix lets us migrate to a stronger scheme later while
+// keeping backward-compatibility with rows already in flight (the
+// consume path treats any row without a recognised prefix as
+// plaintext for backward compatibility during the rollout).
+const PRIVY_TOKEN_CIPHER = 'aes-256-gcm'
+const PRIVY_TOKEN_PREFIX = 'v1:'
+
+function getPrivyTokenKey(): Buffer {
+  const explicit = (process.env.AUTH_HANDOFF_PRIVY_TOKEN_KEY ?? '').trim()
+  if (explicit.length >= 32) {
+    // Derive a fixed-length 32-byte key from the provided material.
+    return createHash('sha256').update(explicit).digest()
+  }
+  // Fallback: derive from the existing handoff-hash secret. This
+  // throws if no secret is configured — correct behaviour, since we
+  // must never write plaintext Privy tokens.
+  return createHash('sha256').update(`privy-token:${getHandoffHashSecret()}`).digest()
+}
+
+export function encryptPrivyToken(token: string): string {
+  const iv = randomBytes(12)
+  const cipher = createCipheriv(PRIVY_TOKEN_CIPHER, getPrivyTokenKey(), iv)
+  const enc = Buffer.concat([cipher.update(token, 'utf8'), cipher.final()])
+  const tag = cipher.getAuthTag()
+  return `${PRIVY_TOKEN_PREFIX}${iv.toString('base64')}:${tag.toString('base64')}:${enc.toString('base64')}`
+}
+
+export function decryptPrivyToken(stored: string): string | null {
+  const trimmed = stored.trim()
+  if (!trimmed) return null
+  // Backward compatibility: rows written before this migration are
+  // plaintext. Surface them unchanged until the next pg_cron purge.
+  if (!trimmed.startsWith(PRIVY_TOKEN_PREFIX)) return trimmed
+  const parts = trimmed.slice(PRIVY_TOKEN_PREFIX.length).split(':')
+  if (parts.length !== 3) return null
+  try {
+    const iv = Buffer.from(parts[0]!, 'base64')
+    const tag = Buffer.from(parts[1]!, 'base64')
+    const enc = Buffer.from(parts[2]!, 'base64')
+    const decipher = createDecipheriv(PRIVY_TOKEN_CIPHER, getPrivyTokenKey(), iv)
+    decipher.setAuthTag(tag)
+    const dec = Buffer.concat([decipher.update(enc), decipher.final()])
+    return dec.toString('utf8')
+  } catch {
+    return null
+  }
+}
+
 export async function ensureHandoffSchema(db: DbWithSql): Promise<void> {
   if (handoffSchemaEnsured) return
   try {
@@ -68,11 +129,13 @@ export async function createHandoffCode(db: DbWithSql, params: { address: string
   const code = makeHandoffCode()
   const codeHash = hashHandoffCode(code)
   const expiresAt = new Date(nowMs + HANDOFF_TTL_SECONDS * 1000)
-  const privyToken = typeof params.privyToken === 'string' && params.privyToken.trim() ? params.privyToken.trim() : null
+  const rawPrivyToken = typeof params.privyToken === 'string' && params.privyToken.trim() ? params.privyToken.trim() : null
+  // M-21: encrypt before writing. Null is passed through as null.
+  const storedPrivyToken = rawPrivyToken === null ? null : encryptPrivyToken(rawPrivyToken)
 
   await db.sql`
     INSERT INTO auth_handoffs (code_hash, address, privy_token, expires_at)
-    VALUES (${codeHash}, ${params.address.toLowerCase()}, ${privyToken}, ${expiresAt.toISOString()})
+    VALUES (${codeHash}, ${params.address.toLowerCase()}, ${storedPrivyToken}, ${expiresAt.toISOString()})
     ON CONFLICT (code_hash) DO NOTHING;
   `
 
@@ -104,6 +167,11 @@ export async function consumeHandoffCode(db: DbWithSql, code: string): Promise<{
   const row = Array.isArray(result.rows) ? result.rows[0] : null
   const address = row && typeof row.address === 'string' ? row.address.trim().toLowerCase() : ''
   if (!/^0x[a-fA-F0-9]{40}$/.test(address)) return null
-  const privyToken = row && typeof row.privy_token === 'string' && row.privy_token.trim() ? row.privy_token.trim() : null
+  // M-21: decrypt on read. Rows written before this change are
+  // plaintext and decryptPrivyToken returns them unchanged; the
+  // two-minute TTL on handoffs means the plaintext window closes
+  // very quickly after rollout.
+  const storedPrivyToken = row && typeof row.privy_token === 'string' && row.privy_token.trim() ? row.privy_token.trim() : null
+  const privyToken = storedPrivyToken ? decryptPrivyToken(storedPrivyToken) : null
   return { address, privyToken }
 }

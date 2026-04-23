@@ -99,8 +99,21 @@ function allow(params: {
   }
 }
 
+// M-22 (4626-331): the original implementation returned `true` whenever
+// `values` was undefined or an empty array, which meant that any call site
+// passing an unset optional allowlist field (e.g. `input.allowlist?.actions`
+// when the operator only configured `subsystems`) silently bypassed the
+// policy check. The fix is to treat "not configured" and "configured empty"
+// identically as DENY: if the caller invokes the guard, the allowlist must
+// be present and non-empty for the check to pass. Explicit callers that
+// want the legacy "skip when unconfigured" behaviour should use
+// `isAllowlistConfigured` first and decide whether to invoke the check.
+function isAllowlistConfigured(values: string[] | undefined): values is string[] {
+  return Array.isArray(values) && values.length > 0
+}
+
 function includesIgnoreCase(values: string[] | undefined, input: string): boolean {
-  if (!Array.isArray(values) || values.length === 0) return true
+  if (!isAllowlistConfigured(values)) return false
   const needle = toSafeLower(input)
   return values.some((value) => toSafeLower(value) === needle)
 }

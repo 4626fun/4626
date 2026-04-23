@@ -9,6 +9,48 @@ const MAX_IMAGE_BYTES = 2_000_000
 const MAX_REDIRECTS = 3
 const CACHE_CONTROL_VALUE = 'public, max-age=3600, stale-while-revalidate=86400'
 
+// Strict image MIME allowlist. HTML/JS/SVG all have `text/...` or `image/svg+xml`
+// content types but would be rendered as active content by some browsers; we
+// refuse SVG here because this endpoint proxies arbitrary third-party URLs and
+// SVG permits inline scripts.
+const ALLOWED_IMAGE_MIMES: ReadonlyArray<string> = [
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+  'image/gif',
+  'image/avif',
+]
+
+// Minimal magic-byte sniffer. The Content-Type header can lie; we verify the
+// bytes themselves before forwarding to the caller. Each entry is a tuple of
+// (mime, required prefix).
+function sniffImageMime(bytes: Uint8Array): string | null {
+  if (bytes.length >= 8 &&
+      bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47 &&
+      bytes[4] === 0x0d && bytes[5] === 0x0a && bytes[6] === 0x1a && bytes[7] === 0x0a) {
+    return 'image/png'
+  }
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return 'image/jpeg'
+  }
+  if (bytes.length >= 12 &&
+      bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+      bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50) {
+    return 'image/webp'
+  }
+  if (bytes.length >= 6 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46 &&
+      bytes[3] === 0x38 && (bytes[4] === 0x37 || bytes[4] === 0x39) && bytes[5] === 0x61) {
+    return 'image/gif'
+  }
+  // AVIF / HEIF: ISOBMFF with ftyp box at offset 4; brand bytes at 8..12.
+  if (bytes.length >= 12 &&
+      bytes[4] === 0x66 && bytes[5] === 0x74 && bytes[6] === 0x79 && bytes[7] === 0x70) {
+    const brand = String.fromCharCode(bytes[8], bytes[9], bytes[10], bytes[11])
+    if (brand === 'avif' || brand === 'avis') return 'image/avif'
+  }
+  return null
+}
+
 function firstQueryString(value: string | string[] | undefined): string {
   if (Array.isArray(value)) return String(value[0] ?? '').trim()
   return String(value ?? '').trim()
@@ -167,7 +209,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     const contentType = String(upstream.headers.get('content-type') || '').trim().toLowerCase()
-    if (!contentType.startsWith('image/')) {
+    // Strip any `; charset=...` param before membership check.
+    const contentTypeBase = contentType.split(';')[0].trim()
+    if (!ALLOWED_IMAGE_MIMES.includes(contentTypeBase)) {
       return res.status(415).json({ success: false, error: 'Upstream did not return an image' })
     }
 
@@ -182,7 +226,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(413).json({ success: false, error: 'Image too large' })
     }
 
-    res.setHeader('Content-Type', contentType)
+    // Content-Type header can lie. Verify the actual bytes are one of the
+    // allowed raster image formats before serving.
+    const sniffed = sniffImageMime(bytes)
+    if (!sniffed || !ALLOWED_IMAGE_MIMES.includes(sniffed)) {
+      return res.status(415).json({ success: false, error: 'Upstream content is not a supported image' })
+    }
+
+    // Force the response Content-Type to match the sniffed magic bytes, not
+    // whatever the upstream server claimed, and set nosniff so browsers do not
+    // re-guess.
+    res.setHeader('Content-Type', sniffed)
     res.setHeader('Cache-Control', CACHE_CONTROL_VALUE)
     res.setHeader('X-Content-Type-Options', 'nosniff')
     return res.status(200).send(bytes)

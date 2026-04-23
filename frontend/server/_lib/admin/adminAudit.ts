@@ -2,6 +2,8 @@
  * Admin audit logging for sensitive actions.
  */
 
+import { createHmac, randomBytes } from 'node:crypto'
+
 type Db = { sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }> }
 
 let schemaEnsured = false
@@ -50,17 +52,50 @@ export type AdminAction =
 
 /**
  * Hash an IP address for privacy-preserving audit logging.
- * One-way hash - can detect same IP but can't reverse to original.
+ *
+ * L-10 (4626-358): the previous implementation used FNV-1a truncated to
+ * 32 bits, which (a) has ~4B output space vs ~4B IPv4 space making
+ * collisions nearly guaranteed for any non-trivial log, and (b) is
+ * trivially reversible — a dictionary of 2^32 IPs can be precomputed
+ * in minutes. Replace with HMAC-SHA256 keyed by ADMIN_IP_HASH_SALT,
+ * truncated to 16 hex chars (64 bits) which is enough to detect
+ * same-IP patterns while keeping the output space large enough to
+ * avoid routine collisions (expected ~2^-32 for 65k distinct IPs).
+ *
+ * Without a configured salt we use a process-lifetime random salt so
+ * pseudonyms are unlinkable across deployments; a warning logs the
+ * misconfiguration in production.
  */
+let cachedIpHashSalt: string | null = null
+let loggedIpHashSaltWarning = false
+
+function getIpHashSalt(): string {
+  if (cachedIpHashSalt !== null) return cachedIpHashSalt
+  const configured = String(process.env.ADMIN_IP_HASH_SALT ?? '').trim()
+  if (configured.length >= 16) {
+    cachedIpHashSalt = configured
+    return cachedIpHashSalt
+  }
+  const isProduction = String(process.env.NODE_ENV ?? '').trim().toLowerCase() === 'production'
+  if (isProduction && !loggedIpHashSaltWarning) {
+    loggedIpHashSaltWarning = true
+    // eslint-disable-next-line no-console
+    console.warn(
+      '[admin_audit] ADMIN_IP_HASH_SALT is missing or <16 chars in production; '
+        + 'falling back to a process-lifetime random salt. IP hashes will not be '
+        + 'stable across restarts. Set ADMIN_IP_HASH_SALT to a stable high-entropy '
+        + 'value to restore same-IP detection across deploys.',
+    )
+  }
+  cachedIpHashSalt = randomBytes(32).toString('hex')
+  return cachedIpHashSalt
+}
+
 function hashIp(ip: string | undefined): string | null {
   if (!ip) return null
-  // Simple hash - enough for detecting patterns, not reversible
-  let hash = 0x811c9dc5
-  for (let i = 0; i < ip.length; i++) {
-    hash ^= ip.charCodeAt(i)
-    hash = Math.imul(hash, 0x01000193)
-  }
-  return (hash >>> 0).toString(16).padStart(8, '0')
+  const normalized = ip.trim()
+  if (!normalized) return null
+  return createHmac('sha256', getIpHashSalt()).update(normalized).digest('hex').slice(0, 16)
 }
 
 export async function logAdminAction(params: {
