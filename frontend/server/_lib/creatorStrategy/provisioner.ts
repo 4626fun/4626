@@ -144,7 +144,6 @@ export async function dispatchProvisioning(
  * shape so ops tooling can parse it consistently across payment paths.
  */
 function logProvisioningIntent(request: ProvisioningRequest, provisionerTag: string): void {
-  // eslint-disable-next-line no-console
   console.log('[creator-strategy-provisioner]', {
     at: 'dispatchProvisioning',
     activationId: request.activationId,

@@ -63,7 +63,6 @@ function teeFailOpenOnVerifierFailure(): boolean {
   if (isProduction) {
     if (!loggedFailOpenOverride) {
       loggedFailOpenOverride = true
-      // eslint-disable-next-line no-console
       console.warn(
         '[tee] TEE_ENFORCEMENT_FAIL_OPEN=true ignored in production; '
           + 'fail-open attestation would defeat the gate. Unset the variable or '

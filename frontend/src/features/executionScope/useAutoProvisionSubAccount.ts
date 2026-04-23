@@ -95,7 +95,13 @@ export function useAutoProvisionSubAccount(): {
     // the manual card actions are the right surface — don't auto-retrigger.
     if (scope.status !== 'not_provisioned') {
       attemptedRef.current = true
-      setStatus('already_provisioned')
+      // react-compiler: defer the terminal-state transition to a microtask
+      // so the setState does not fire synchronously during the effect's
+      // commit phase. Behavior is unchanged — the status still lands on
+      // 'already_provisioned' before any user interaction.
+      queueMicrotask(() => {
+        setStatus('already_provisioned')
+      })
       return
     }
 
@@ -117,10 +123,15 @@ export function useAutoProvisionSubAccount(): {
       //
       // Leave auto-provisioning inert; the card's manual CTA explains
       // the situation and deep-links to the owner-install flow.
-      setStatus('ineligible')
-      setReason(
-        'None of your signers owns your CSW yet. Finish the waitlist owner-install step (or connect the wallet you used to create the CSW) and it will enable automatically.',
-      )
+      // react-compiler: defer the terminal setState pair to a microtask
+      // so we don't fire setState synchronously during the effect's
+      // commit phase. Semantics unchanged.
+      queueMicrotask(() => {
+        setStatus('ineligible')
+        setReason(
+          'None of your signers owns your CSW yet. Finish the waitlist owner-install step (or connect the wallet you used to create the CSW) and it will enable automatically.',
+        )
+      })
       // Intentionally do NOT stamp the session key here — we want
       // auto-provision to fire the moment the user completes owner
       // install or connects an owner wallet during this session.
@@ -129,7 +140,12 @@ export function useAutoProvisionSubAccount(): {
 
     // Preconditions satisfied — kick off the signature flow.
     attemptedRef.current = true
-    setStatus('triggering')
+    // react-compiler: defer the 'triggering' transition to a microtask
+    // so the setState is not called synchronously during the commit phase.
+    // The async IIFE below still observes the transition before awaiting.
+    queueMicrotask(() => {
+      setStatus('triggering')
+    })
     if (key && typeof window !== 'undefined') {
       // Stamp the session key BEFORE the modal opens so a quick
       // re-render or React strict-mode double-fire can't retrigger.

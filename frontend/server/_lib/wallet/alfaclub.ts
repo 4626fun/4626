@@ -172,7 +172,6 @@ export async function scanAddressTransferredTokenIds(
   const seen = new Set<string>()
 
   for (const r of ranges) {
-    // eslint-disable-next-line no-await-in-loop -- sequential by design to respect RPC limits
     const singleLogs = (await client.getLogs({
       address: ALFACLUB.friendKey,
       event: FRIEND_KEY_ABI.find(
@@ -188,7 +187,6 @@ export async function scanAddressTransferredTokenIds(
       if (typeof id === 'bigint') seen.add(id.toString())
     }
 
-    // eslint-disable-next-line no-await-in-loop
     const batchLogs = (await client.getLogs({
       address: ALFACLUB.friendKey,
       event: FRIEND_KEY_ABI.find(

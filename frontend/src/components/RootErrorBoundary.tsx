@@ -59,7 +59,6 @@ export class RootErrorBoundary extends Component<RootErrorBoundaryProps, RootErr
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     // Console log is visible to developers (DevTools) only — never in the DOM.
-    // eslint-disable-next-line no-console
     console.error('[RootErrorBoundary] uncaught render error', error, errorInfo)
     reportToMonitoring(error, errorInfo)
   }

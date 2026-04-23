@@ -11,6 +11,10 @@ export default [
       'scripts/**',
       'fix_duplicates.js',
       'src/**/generated/**',
+      // Third-party bundled libraries (three.js, earcut, etc.) ship their
+      // own directives that trip "unused eslint-disable" warnings — we
+      // must not modify vendor sources.
+      'public/immersive/vendor/**',
     ],
   },
   {

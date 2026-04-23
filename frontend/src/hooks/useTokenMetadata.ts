@@ -50,7 +50,6 @@ function resolveIpfsGateway(raw: string | undefined | null): string {
   try {
     const u = new URL(candidate)
     if (u.protocol !== 'https:') {
-      // eslint-disable-next-line no-console
       console.warn(
         '[ipfs] VITE_IPFS_GATEWAY ignored: only https:// gateways are permitted, got protocol',
         u.protocol,
@@ -58,14 +57,12 @@ function resolveIpfsGateway(raw: string | undefined | null): string {
       return fallback
     }
     if (!u.hostname) {
-      // eslint-disable-next-line no-console
       console.warn('[ipfs] VITE_IPFS_GATEWAY ignored: missing hostname')
       return fallback
     }
     // Normalize trailing slashes so the concatenation below stays correct.
     return candidate.replace(/\/+$/, '') + '/'
   } catch {
-    // eslint-disable-next-line no-console
     console.warn('[ipfs] VITE_IPFS_GATEWAY ignored: not a valid URL')
     return fallback
   }

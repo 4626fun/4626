@@ -37,7 +37,6 @@ export async function ensureCreRuntimeSchema(): Promise<boolean> {
       if (!exists) {
         if (!loggedMissingSchemaWarning) {
           loggedMissingSchemaWarning = true
-          // eslint-disable-next-line no-console
           console.warn(
             `[cre_runtime_schema] missing table "${tableName}". Run Supabase migrations (supabase/migrations/*_cre_runtime_and_agent_rate_limits_schema.sql).`,
           )
@@ -50,7 +49,6 @@ export async function ensureCreRuntimeSchema(): Promise<boolean> {
   } catch (error) {
     runtimeSchemaVerified = false
     // Do not re-throw: callers treat a false return as "skip DB path".
-    // eslint-disable-next-line no-console
     console.warn("[cre_runtime_schema] verification query failed", { error })
     return false
   }

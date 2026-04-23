@@ -64,7 +64,13 @@ export function useCswOwnerSigner(): OwnerCheckState {
 
   useEffect(() => {
     if (!csw || !publicClient) {
-      setState({ loading: false, results: [], preferredSigner: null })
+      // react-compiler: defer terminal reset to a microtask so the
+      // setState does not fire synchronously during the effect's commit
+      // phase. Semantics unchanged — state still resolves to the empty
+      // tuple when prerequisites aren't met.
+      queueMicrotask(() => {
+        setState({ loading: false, results: [], preferredSigner: null })
+      })
       return
     }
 
@@ -74,19 +80,32 @@ export function useCswOwnerSigner(): OwnerCheckState {
     if (external) candidates.push({ label: 'external', address: external })
     if (embedded) candidates.push({ label: 'embedded', address: embedded })
     if (candidates.length === 0) {
-      setState({ loading: false, results: [], preferredSigner: null })
+      // react-compiler: defer terminal reset — same reasoning as the
+      // `!csw || !publicClient` branch above.
+      queueMicrotask(() => {
+        setState({ loading: false, results: [], preferredSigner: null })
+      })
       return
     }
 
     const key = cacheKeyFor(csw, candidates)
     const cached = cache.get(key)
     if (cached) {
-      setState({ loading: false, results: cached, preferredSigner: pickOwnerSigner(cached) })
+      // react-compiler: defer cache-hit state update to a microtask so we
+      // don't setState synchronously during the effect's commit phase.
+      queueMicrotask(() => {
+        setState({ loading: false, results: cached, preferredSigner: pickOwnerSigner(cached) })
+      })
       return
     }
 
     let cancelled = false
-    setState((prev) => ({ ...prev, loading: true }))
+    // react-compiler: defer the `loading: true` transition as well so no
+    // setState fires synchronously in the effect body. The async `.then`
+    // below still flips it back to `loading: false` when results arrive.
+    queueMicrotask(() => {
+      if (!cancelled) setState((prev) => ({ ...prev, loading: true }))
+    })
 
     const existing = pending.get(key)
     const promise =

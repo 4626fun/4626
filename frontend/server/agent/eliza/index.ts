@@ -370,7 +370,6 @@ const optionalCorePlugins: CorePlugin[] = await (async () => {
       const message = err instanceof Error ? err.message : String(err)
       // Use console directly since logger may not be initialized yet at this
       // module-top-level evaluation point.
-      // eslint-disable-next-line no-console
       console.warn('[eliza] alfaclub plugin load skipped:', message)
     }
   }

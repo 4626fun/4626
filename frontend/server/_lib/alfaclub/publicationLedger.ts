@@ -400,7 +400,6 @@ export async function insertMetricsSnapshot(rows: readonly MetricsSnapshotRow[])
   let inserted = 0
   for (const r of rows) {
     try {
-      // eslint-disable-next-line no-await-in-loop
       await db.sql`
         INSERT INTO alfaclub_metrics_snapshot (
           snapshot_ts, creator_address, token_id,

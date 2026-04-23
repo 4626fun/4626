@@ -29,7 +29,6 @@ async function ensureSchema(db: Db): Promise<void> {
     }
     if (!loggedMissingSchemaWarning) {
       loggedMissingSchemaWarning = true
-      // eslint-disable-next-line no-console
       console.warn(
         '[durableRateLimit] agent_rate_limits table missing. Apply '
           + 'supabase/migrations/*_cre_runtime_and_agent_rate_limits_schema.sql; '

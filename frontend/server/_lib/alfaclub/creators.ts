@@ -368,7 +368,6 @@ export async function runCreatorIndexer(
   let chunks = 0
   while (start <= latest && chunks < maxChunks) {
     const end = start + chunk > latest ? latest : start + chunk
-    // eslint-disable-next-line no-await-in-loop -- must throttle RPC to stay within limits
     const logs = await scanMintsInRange(client, start, end)
     for (const log of logs) {
       const id = log.args?.id
@@ -376,13 +375,11 @@ export async function runCreatorIndexer(
       const idKey = id.toString()
       if (known.has(idKey) || seenInRun.has(idKey)) continue
       seenInRun.add(idKey)
-      // eslint-disable-next-line no-await-in-loop
       const creator = await resolveCreator(id, client)
       if (!creator) continue
       const pool =
         newCreators.length < MAX_POOL_LOOKUPS_PER_RUN
-          ? // eslint-disable-next-line no-await-in-loop
-            await resolveStakingPool(id, client)
+          ? await resolveStakingPool(id, client)
           : null
       newCreators.push({
         tokenId: id,
@@ -398,7 +395,6 @@ export async function runCreatorIndexer(
 
   // Persist one row at a time — these are rare writes.
   for (const c of newCreators) {
-    // eslint-disable-next-line no-await-in-loop
     await upsertCreator(c)
   }
 

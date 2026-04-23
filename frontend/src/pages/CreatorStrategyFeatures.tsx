@@ -254,7 +254,7 @@ export function CreatorStrategyFeatures() {
         setInflightFeature(null)
       }
     },
-    [creatorToken, data, loadFeatures],
+    [creatorToken, data, loadFeatures, x402],
   )
 
   if (!creatorToken) {

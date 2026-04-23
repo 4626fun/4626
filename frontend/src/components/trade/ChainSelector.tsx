@@ -53,8 +53,6 @@ export const ChainSelector = memo(function ChainSelector({
     [selectedChainId],
   )
 
-  if (!selected) return null
-
   useEffect(() => {
     if (!open) return
     function onPointerDown(e: PointerEvent) {
@@ -81,6 +79,10 @@ export const ChainSelector = memo(function ChainSelector({
     },
     [onSelect],
   )
+
+  // Render-level guard (replaces the earlier early-return between hooks,
+  // which violated rules-of-hooks). All hooks above run unconditionally.
+  if (!selected) return null
 
   const triggerSize = compact ? 16 : 20
   const optionSize = compact ? 18 : 22

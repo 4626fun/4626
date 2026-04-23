@@ -79,7 +79,6 @@ function getIpHashSalt(): string {
   const isProduction = String(process.env.NODE_ENV ?? '').trim().toLowerCase() === 'production'
   if (isProduction && !loggedIpHashSaltWarning) {
     loggedIpHashSaltWarning = true
-    // eslint-disable-next-line no-console
     console.warn(
       '[admin_audit] ADMIN_IP_HASH_SALT is missing or <16 chars in production; '
         + 'falling back to a process-lifetime random salt. IP hashes will not be '

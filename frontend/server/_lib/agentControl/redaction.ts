@@ -67,7 +67,6 @@ function toSalt(): string {
   const isProduction = String(process.env.NODE_ENV ?? '').trim().toLowerCase() === 'production'
   if (isProduction && !loggedSaltWarning) {
     loggedSaltWarning = true
-    // eslint-disable-next-line no-console
     console.warn(
       '[redaction] AGENT_REDACTION_SALT is missing or <16 chars in production; '
         + 'falling back to a process-lifetime random salt. Pseudonyms will not be '

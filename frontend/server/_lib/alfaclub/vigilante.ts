@@ -168,17 +168,12 @@ async function captureMetricsForCreators(
   const hl = opts.getHyperliquid ?? getHyperliquidSnapshot
   const out: CreatorMetricsInput[] = []
   for (const c of creators) {
-    // eslint-disable-next-line no-await-in-loop
     const totalSupply = await readSupply(client, c.tokenId)
-    // eslint-disable-next-line no-await-in-loop
     const stakedSupply = await readStakedSupply(client, c.stakingPool, c.tokenId)
     // Only hit Hyperliquid for active rooms — rooms with zero supply are either
     // not launched or fully exited, either way no PnL to fetch.
     const shouldFetchHl = !opts.skipHyperliquid && totalSupply > 0n
-    const snapshot = shouldFetchHl
-      ? // eslint-disable-next-line no-await-in-loop
-        await hl(c.creatorAddress)
-      : null
+    const snapshot = shouldFetchHl ? await hl(c.creatorAddress) : null
     out.push({
       tokenId: c.tokenId,
       creatorAddress: c.creatorAddress,
@@ -580,7 +575,6 @@ export async function runVigilante(
         erc8004: null,
       }
       if (flags.postEnabled) {
-        // eslint-disable-next-line no-await-in-loop
         result.lens = await publishLensScorecard({
           creator,
           snapshotTs,
@@ -590,7 +584,6 @@ export async function runVigilante(
         })
       }
       if (flags.feedbackEnabled) {
-        // eslint-disable-next-line no-await-in-loop
         result.erc8004 = await publishErc8004Feedback({
           creator,
           snapshotTs,

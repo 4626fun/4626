@@ -343,7 +343,6 @@ export async function relayAlfaClubFeedbackOnce(
     if (!isGiveFeedbackCalldata(row.erc8004Calldata)) {
       abandoned += 1
       errors.push({ publicationKey: key, error: 'invalid_calldata_selector' })
-      // eslint-disable-next-line no-await-in-loop
       await abandonQueuedFeedback(key, 'invalid_calldata_selector')
       continue
     }
@@ -353,7 +352,6 @@ export async function relayAlfaClubFeedbackOnce(
       continue
     }
 
-    // eslint-disable-next-line no-await-in-loop
     const result = await submitCall({
       walletId: env.walletId,
       smartWallet: TARGET_CANONICAL_CSW_ADDRESS as Address,
@@ -370,7 +368,6 @@ export async function relayAlfaClubFeedbackOnce(
     })
 
     if (result.ok) {
-      // eslint-disable-next-line no-await-in-loop
       await attachErc8004TxHash(key, result.txHash)
       submitted += 1
       txHashes.push(result.txHash)
@@ -379,18 +376,15 @@ export async function relayAlfaClubFeedbackOnce(
       errors.push({ publicationKey: key, error: result.error })
       const nextAttempt = (row.submissionAttempts ?? 0) + 1
       if (nextAttempt >= flags.maxAttempts) {
-        // eslint-disable-next-line no-await-in-loop
         await abandonQueuedFeedback(key, result.error)
         abandoned += 1
       } else {
-        // eslint-disable-next-line no-await-in-loop
         await markSubmissionAttemptFailed(key, result.error)
       }
     }
 
     // Polite spacing between sends.
     if (i < queued.length - 1) {
-      // eslint-disable-next-line no-await-in-loop
       await sleep(flags.spacingMs)
     }
   }

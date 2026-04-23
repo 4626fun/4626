@@ -172,7 +172,7 @@ export function useReprovisionSubAccount(): UseReprovisionReturn {
           // Telemetry: narrow console marker so we can grep this path
           // in production frontend logs and see how often ERC-1271
           // signatures are being produced + validated.
-          // eslint-disable-next-line no-console
+
           console.info('[arch-b/subacct/reprovision] signed via smart_wallet (ERC-1271)', {
             csw: prep.parentCswAddress,
             sigLen: signature?.length,
@@ -189,7 +189,7 @@ export function useReprovisionSubAccount(): UseReprovisionReturn {
           signature = await (
             client.signTypedData as unknown as (args: typeof signArgs) => Promise<Hex>
           )(signArgs)
-          // eslint-disable-next-line no-console
+
           console.info(
             `[arch-b/subacct/reprovision] signed via ${signerPath} EOA (secp256k1)`,
             { csw: prep.parentCswAddress, signer: signArgs.account, sigLen: signature?.length },
@@ -240,7 +240,10 @@ export function useReprovisionSubAccount(): UseReprovisionReturn {
         permissionHash: prep.permissionHash,
       }
     },
-    [walletClient],
+    // react-compiler preserve-manual-memoization: the callback body reads
+    // `smartWalletClient` (line 99) and `ownerCheck.preferredSigner?.label`
+    // (line 89), so both must be in the deps array alongside `walletClient`.
+    [walletClient, smartWalletClient, ownerCheck.preferredSigner?.label],
   )
 
   return {

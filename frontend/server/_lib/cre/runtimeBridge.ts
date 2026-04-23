@@ -79,11 +79,10 @@ export type RuntimeAuthResult =
   | { ok: true; correlationId: string }
   | { ok: false; status: number; error: string; correlationId: string }
 
-type RuntimeAuthOptions = {
-  // Deprecated: the allowUnsignedWhenHmacConfigured bypass has been removed.
-  // If CRE_RUNTIME_WEBHOOK_HMAC_SECRET is configured, HMAC is mandatory.
-  // See audit finding H-08 / 4626-300.
-}
+// H-08 / 4626-300: the legacy RuntimeAuthOptions bag (which carried the
+// allowUnsignedWhenHmacConfigured bypass) has been removed. HMAC is mandatory
+// whenever CRE_RUNTIME_WEBHOOK_HMAC_SECRET is configured and cannot be
+// overridden per call.
 
 type ExecuteWorkflowInput = {
   workflowId: string
@@ -212,7 +211,6 @@ function mapDecisionRow(row: DecisionRow): RuntimeDecision {
 export async function authenticateRuntimeRequest(
   req: VercelRequest,
   body: unknown,
-  options: RuntimeAuthOptions = {},
 ): Promise<RuntimeAuthResult> {
   const correlationId = parseHeader(req, "x-correlation-id") ?? `cre-runtime-${randomUUID()}`
   const expectedApiKey = process.env.KEEPR_API_KEY

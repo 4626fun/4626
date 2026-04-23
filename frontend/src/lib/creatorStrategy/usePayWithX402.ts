@@ -278,6 +278,5 @@ export function usePayWithX402() {
 function toBase64(input: string): string {
   if (typeof btoa === 'function') return btoa(input)
   // Node fallback for SSR / tests.
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
   return (globalThis as any).Buffer.from(input, 'utf8').toString('base64')
 }
