@@ -18,7 +18,11 @@ Only one program ID appears in the article: `EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz
 - `AGENTS.md` operations runbook — **matches**.
 - `docs/_internal/audits/internal-monorepo-audit-2026-03-30.md` — **matches**.
 
-There is no `solana-bridge-naming-invariant.md` in the tree at the audited commit (`git ls-files | grep -i naming-invariant` returns nothing). The finding's cited counter-reference does not exist; no live discrepancy.
+The finding's cited counter-reference, `docs/operations/solana-bridge-naming-invariant.md`, **does exist** in the tree (confirmed via `git ls-files | grep -i naming-invariant` at commit HEAD). An earlier revision of this doc incorrectly asserted the file was absent and closed the finding on that basis — that claim was wrong (see Correction notice below). The actual file is a 340-line history of the `SolanaBridgeAdapter` migration that records addresses current at each deploy generation. It points at [`docs/reference/addresses.md`](../../../reference/addresses.md) as the canonical address source and does not contain a `creator_share_hook` program-ID value that conflicts with `Anchor.toml`. No live program-ID discrepancy between the two docs; the article-level remediation (pinning `Anchor.toml` as canonical) remains correct.
+
+## Correction notice (2026-04-23, Codex-follow-up cross-check)
+
+A prior revision of this acceptance doc asserted `git ls-files | grep -i naming-invariant` returned nothing. That was factually wrong: the command returns `docs/operations/solana-bridge-naming-invariant.md`. The underlying conclusion — that `Anchor.toml` is the canonical program-ID source and no live discrepancy exists — still holds after re-verification against the real file contents, but the stated evidence was false. Fixed in this revision.
 
 ## Fix
 

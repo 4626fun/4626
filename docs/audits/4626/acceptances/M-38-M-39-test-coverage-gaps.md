@@ -34,13 +34,20 @@ $ grep -rn "^\s*function testFuzz_" test/ --include="*.sol" | wc -l
 9
 ```
 
-Up from 6 at audit time. Sprint additions:
+Up from 2 at audit time (verified count of `testFuzz_` functions in the
+pre-remediation tree). Sprint additions, enumerated by `grep -rn "^\s*function testFuzz_" test/ --include="*.sol"`:
 
-| Commit | Test file | Finding |
+| Sprint | Test file (function) | Finding |
 |---|---|---|
-| Sprint 7 (prior) | `test/ChainlinkVRFIntegratorV2_5.DeploymentNonce.t.sol::testFuzz_requestCounterHigh48BitIsUnique` | H-10 regression |
-| Sprint 9 `b522389` | `test/CreatorLotteryManager.JackpotPayoutCap.t.sol::testFuzz_cursorEventuallyVisitsEveryIndex` | M-06 regression |
-| Sprint 9 `b522389` | `test/CreatorLotteryManager.JackpotPayoutCap.t.sol::testFuzz_iterationsBounded` | M-06 regression |
+| Sprint 7 | `test/ChainlinkVRFIntegratorV2_5.DeploymentNonce.t.sol::testFuzz_RequestCounter_LowSixteenBitsAreZero` | H-10 regression |
+| Sprint 7 | `test/ChainlinkVRFIntegratorV2_5.DeploymentNonce.t.sol::testFuzz_RequestCounter_MatchesHighBitsOfNonce` | H-10 regression |
+| Sprint 7 | `test/ChainlinkVRFIntegratorV2_5.DeploymentNonce.t.sol::testFuzz_HighBitsUnique_AcrossRedeploys` | H-10 regression |
+| Sprint 7 | `test/ChainlinkVRFIntegratorV2_5.DeploymentNonce.t.sol::testFuzz_HighBitsUnique_SameBlockDifferentAddress` | H-10 regression |
+| Sprint 7 | `test/ChainlinkVRFIntegratorV2_5.DeploymentNonce.t.sol::testFuzz_RegressionGuard_BugWouldHaveKeptMiddleBitsZero` | H-10 regression |
+| Sprint 9 | `test/CreatorLotteryManager.JackpotPayoutCap.t.sol::testFuzz_cursorEventuallyVisitsEveryIndex` | M-06 regression |
+| Sprint 9 | `test/CreatorLotteryManager.JackpotPayoutCap.t.sol::testFuzz_boundsHoldForAnyActivityPattern` | M-06 regression (superseded `testFuzz_iterationsBounded` added in `b522389`; rewritten in `4bbe891` for the two-cap design) |
+
+Pre-existing entries retained from before Sprint 5: `testFuzz_RandomRecipient` and `testFuzz_RandomAmount` in `test/CreatorShareOFT.EdgeCases.t.sol`. 5 Sprint-7 + 2 Sprint-9 + 2 pre-existing = 9 total.
 
 Invariant (`invariant_*`) tests remain at 0. See **Follow-ups** below.
 
