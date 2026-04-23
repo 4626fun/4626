@@ -834,6 +834,10 @@ async function findDeploymentVersionForVanityTargets(params: {
   const yieldEvery = Math.max(256, Math.floor(params.yieldEvery ?? 4096))
 
   for (let i = 0; i < maxTries; i += 1) {
+    if (i > 0 && i % yieldEvery === 0) {
+      // Yield periodically so large vanity scans do not freeze the UI thread.
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
     const candidateVersion = i === 0 ? params.baseVersion : `${params.baseVersion}-v${i.toString(36)}`
     const baseSalt = deriveBaseSalt({
       creatorToken: params.creatorToken,
@@ -880,10 +884,6 @@ async function findDeploymentVersionForVanityTargets(params: {
       }
     }
     return candidateVersion
-
-    if (i > 0 && i % yieldEvery === 0) {
-      await new Promise((resolve) => setTimeout(resolve, 0))
-    }
   }
   return null
 }
@@ -2311,6 +2311,7 @@ function DeployVaultBatcher({
   const shareOftVanityCacheRef = useRef<{ key: string; salt: Hex } | null>(null)
   const vaultVanityVersionCacheRef = useRef<{ key: string; version: string } | null>(null)
   const shareOftVanitySkipLogKeyRef = useRef<string | null>(null)
+  const creatorCoinOwnerUnresolvedLogKeyRef = useRef<string | null>(null)
   const ensurePaymasterSession = useCallback(async () => {
     if (!getAccessToken || typeof signInWithPrivyToken !== 'function') return
     try {
@@ -3032,11 +3033,12 @@ function DeployVaultBatcher({
       const hasDeploymentVersionOverride =
         typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('deploymentVersion')?.trim()
       const runtimeDeploymentVersion = runtimeConfig?.deploymentVersion?.trim() ?? ''
+      const clientRuntimeDeploymentVersion = deploymentVersionProp
       if (
         !hasDeploymentVersionOverride &&
         !vaultVanityIsCustom &&
         runtimeDeploymentVersion &&
-        runtimeDeploymentVersion !== deploymentVersion
+        runtimeDeploymentVersion !== clientRuntimeDeploymentVersion
       ) {
         setDeploymentVersionOverride(runtimeDeploymentVersion)
       }
@@ -3044,7 +3046,7 @@ function DeployVaultBatcher({
     return () => {
       cancelled = true
     }
-  }, [batcherAddress, deploymentVersion, vaultVanityIsCustom])
+  }, [batcherAddress, deploymentVersionProp, vaultVanityIsCustom])
 
   const payoutRouterCodeId = useMemo(() => {
     return keccak256(DEPLOY_BYTECODE.PayoutRouter as Hex)
@@ -3201,9 +3203,10 @@ function DeployVaultBatcher({
       const vaultInitCode = concatHex([DEPLOY_BYTECODE.CreatorOVault as Hex, vaultArgs])
 
       let deploymentVersionUsed = deploymentVersion
-      const needsVersionSearchForShareSuffix =
-        !supportsPhase1WithSalt && Boolean(shareOftVanitySuffix) && !shareVanityIsCustom
-      if (vaultVanityPrefix || needsVersionSearchForShareSuffix) {
+      // Apply vault vanity for both default and custom prefixes by deriving a deployment-version suffix.
+      // This keeps deterministic salts while avoiding explicit phase-1 salt overrides.
+      const shouldSearchVersionForVaultPrefix = Boolean(vaultVanityPrefix)
+      if (shouldSearchVersionForVaultPrefix) {
         const vanityTargetsKey = [
           create2Deployer.toLowerCase(),
           creatorToken.toLowerCase(),
@@ -3215,19 +3218,15 @@ function DeployVaultBatcher({
           shareSymbol,
           deploymentVersion,
           vaultVanityPrefix ?? '',
-          needsVersionSearchForShareSuffix ? shareOftVanitySuffix : '',
+          '',
           String(vaultVanityMaxTries),
-          String(shareOftVanityMaxTries),
+          '0',
         ].join(':')
         const cached = vaultVanityVersionCacheRef.current
         if (cached?.key === vanityTargetsKey) {
           deploymentVersionUsed = cached.version
         } else {
-          const versionSearchMaxTries = vaultVanityPrefix && needsVersionSearchForShareSuffix
-            ? Math.max(vaultVanityMaxTries, shareOftVanityMaxTries)
-            : vaultVanityPrefix
-              ? vaultVanityMaxTries
-              : shareOftVanityMaxTries
+          const versionSearchMaxTries = vaultVanityMaxTries
           const foundVersion = await findDeploymentVersionForVanityTargets({
             create2Deployer,
             creatorToken,
@@ -3235,7 +3234,7 @@ function DeployVaultBatcher({
             chainId: base.id,
             baseVersion: deploymentVersion,
             vaultPrefix: vaultVanityPrefix,
-            shareSuffix: needsVersionSearchForShareSuffix ? shareOftVanitySuffix : null,
+            shareSuffix: null,
             maxTries: versionSearchMaxTries,
             vaultInitCode,
             shareOftInitCode,
@@ -3246,22 +3245,9 @@ function DeployVaultBatcher({
             },
           })
           if (!foundVersion) {
-            if (vaultVanityPrefix && needsVersionSearchForShareSuffix) {
-              throw new Error(
-                `Unable to satisfy both vault vanity prefix "0x${vaultVanityPrefix}" and ShareOFT suffix "${shareOftVanitySuffix}" ` +
-                  `in ${versionSearchMaxTries.toLocaleString()} deployment-version tries. Increase ` +
-                  '`VITE_VAULT_VANITY_MAX_TRIES` and `VITE_SHARE_OFT_VANITY_MAX_TRIES`, then retry.',
-              )
-            }
-            if (vaultVanityPrefix) {
-              throw new Error(
-                `Unable to find vault vanity prefix "0x${vaultVanityPrefix}" in ${versionSearchMaxTries.toLocaleString()} deployment-version tries. ` +
-                  'Increase VITE_VAULT_VANITY_MAX_TRIES and retry.',
-              )
-            }
             throw new Error(
-              `Unable to satisfy ShareOFT suffix "${shareOftVanitySuffix}" in ${versionSearchMaxTries.toLocaleString()} ` +
-                'deployment-version tries with the active batcher. Increase VITE_SHARE_OFT_VANITY_MAX_TRIES and retry.',
+              `Unable to find vault vanity prefix "0x${vaultVanityPrefix}" in ${versionSearchMaxTries.toLocaleString()} deployment-version tries. ` +
+                'Increase VITE_VAULT_VANITY_MAX_TRIES and retry.',
             )
           }
           deploymentVersionUsed = foundVersion
@@ -3291,24 +3277,22 @@ function DeployVaultBatcher({
           })
           throw new Error(blockingMessage)
         }
-        if (!needsVersionSearchForShareSuffix) {
-          const skipLogKey = buildShareVanitySkipLogKey({
+        const skipLogKey = buildShareVanitySkipLogKey({
+          batcher: batcherAddress,
+          suffix: shareOftVanitySuffix,
+          reason: 'phase1_salt_overrides_not_supported',
+        })
+        if (shouldEmitShareVanitySkipLog({ lastKey: shareOftVanitySkipLogKeyRef.current, nextKey: skipLogKey })) {
+          shareOftVanitySkipLogKeyRef.current = skipLogKey
+          logger.debug('[DeployVault] share_oft_vanity_suffix_skipped_default', {
             batcher: batcherAddress,
             suffix: shareOftVanitySuffix,
             reason: 'phase1_salt_overrides_not_supported',
           })
-          if (shouldEmitShareVanitySkipLog({ lastKey: shareOftVanitySkipLogKeyRef.current, nextKey: skipLogKey })) {
-            shareOftVanitySkipLogKeyRef.current = skipLogKey
-            logger.debug('[DeployVault] share_oft_vanity_suffix_skipped_default', {
-              batcher: batcherAddress,
-              suffix: shareOftVanitySuffix,
-              reason: 'phase1_salt_overrides_not_supported',
-            })
-          }
-          shareOftVanityWarning =
-            `Active batcher ${batcherDisplay} does not support Phase-1 salt overrides, so default share suffix ` +
-            `"${shareOftVanitySuffix}" is not guaranteed for this deploy.`
         }
+        shareOftVanityWarning =
+          `Active batcher ${batcherDisplay} does not support Phase-1 salt overrides, so default share suffix ` +
+          `"${shareOftVanitySuffix}" is not guaranteed for this deploy.`
       }
 
       const derivedShareOftSalt = deriveShareOftSalt({ owner, shareSymbol, version: deploymentVersionUsed })
@@ -3864,6 +3848,7 @@ function DeployVaultBatcher({
     retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
     retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 5_000),
     refetchInterval: (query) => {
+      if (!busy) return false
       const data = query.state.data as
         | {
             v3Pool: boolean | null
@@ -4011,6 +3996,7 @@ function DeployVaultBatcher({
     retry: (failureCount, error) => isTransientRpcFailure(error) && failureCount < 2,
     retryDelay: (attempt) => Math.min(1_000 * 2 ** attempt, 5_000),
     refetchInterval: (query) => {
+      if (!busy) return false
       const data = query.state.data as
         | {
             vault: boolean
@@ -4573,7 +4559,7 @@ function DeployVaultBatcher({
           payoutRouterApprovedExternalSwapTargets.length > 0 ||
           payoutRouterApprovedExternalSwapSpenders.length > 0)
       ) {
-        logger.info(
+        logger.debug(
           '[DeployVault] PayoutRouter owner is protocol treasury; creator-side setKeeper/setSwapPath/setExternalSwap* auto-config intentionally skipped',
         )
       }
@@ -4664,9 +4650,18 @@ function DeployVaultBatcher({
         }
       })()
       if (!currentCoinOwner) {
-        throw new Error('Failed to resolve CreatorCoin owner.')
+        const unresolvedLogKey = `${creatorToken.toLowerCase()}:${batcherAddress.toLowerCase()}`
+        if (creatorCoinOwnerUnresolvedLogKeyRef.current !== unresolvedLogKey) {
+          creatorCoinOwnerUnresolvedLogKeyRef.current = unresolvedLogKey
+          logger.debug('[DeployVault] creator_coin_owner_unresolved', {
+            creatorToken,
+            batcher: batcherAddress,
+          })
+        }
       }
-      const coinOwnershipNeedsTransfer = !sameAddress(currentCoinOwner, expectedCreatorCoinPolicyController)
+      const coinOwnershipNeedsTransfer = currentCoinOwner
+        ? !sameAddress(currentCoinOwner, expectedCreatorCoinPolicyController)
+        : false
       const canSetPayoutRecipientFromOwner = await (async () => {
         if (!payoutMismatch) return false
         try {
@@ -4682,7 +4677,7 @@ function DeployVaultBatcher({
       })()
       const canTransferCoinOwnershipFromOwner = await (async () => {
         if (!coinOwnershipNeedsTransfer) return false
-        if (!sameAddress(currentCoinOwner, owner)) return false
+        if (currentCoinOwner && !sameAddress(currentCoinOwner, owner)) return false
         try {
           await publicClient.call({
             to: creatorToken,
@@ -4826,9 +4821,11 @@ function DeployVaultBatcher({
 
         if (!supportsSplitPhase1) {
           if (expectedShareOftSaltOverride && !supportsLegacyPhase1WithSalt) {
-            logger.warn('[DeployVault] Batcher lacks legacy phase1 vanity salt support; continuing without override', {
-              batcher: batcherAddress,
-            })
+            if (shareVanityIsCustom) {
+              logger.warn('[DeployVault] Batcher lacks legacy phase1 vanity salt support; continuing without override', {
+                batcher: batcherAddress,
+              })
+            }
           }
           if (phase1Any && !phase1All) {
             throw new Error(
@@ -4865,9 +4862,11 @@ function DeployVaultBatcher({
           const saltEnabled = supportsSplitPhase1WithSalt
           const shareOftSaltOverride: Hex = (expectedShareOftSaltOverride ?? ZERO_BYTES32) as Hex
           if (expectedShareOftSaltOverride && !saltEnabled) {
-            logger.warn('[DeployVault] Batcher lacks split phase1 vanity salt support; continuing without override', {
-              batcher: batcherAddress,
-            })
+            if (shareVanityIsCustom) {
+              logger.warn('[DeployVault] Batcher lacks split phase1 vanity salt support; continuing without override', {
+                batcher: batcherAddress,
+              })
+            }
           }
           if (phase1All) {
             phase1CallsPrepared = []
@@ -5354,15 +5353,22 @@ function DeployVaultBatcher({
         }
         if (coinOwnershipNeedsTransfer) {
           if (!canTransferCoinOwnershipFromOwner) {
+            const ownerDisplay = currentCoinOwner ? shortAddress(currentCoinOwner) : 'unknown'
             throw new Error(
               `Cannot transfer CreatorCoin ownership to policy controller ${shortAddress(expectedCreatorCoinPolicyController)} ` +
-                `from current owner ${shortAddress(currentCoinOwner)}.`,
+                `from current owner ${ownerDisplay}.`,
             )
           }
           phase2Calls.push({
             target: creatorToken,
             value: 0n,
             data: coinTransferOwnershipCallData,
+          })
+        } else if (!currentCoinOwner) {
+          logger.info('[DeployVault] creator_coin_owner_unresolved_skip_transfer', {
+            creatorToken,
+            owner,
+            policyController: expectedCreatorCoinPolicyController,
           })
         }
 

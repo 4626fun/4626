@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation } from 'react-router-dom'
-import { useActiveWallet, useConnectWallet, useCrossAppAccounts, useLogin, usePrivy } from '@privy-io/react-auth'
+import { useActiveWallet, useConnectWallet, useCrossAppAccounts, useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
 import { createWalletClient, custom, formatEther, getAddress, type Address } from 'viem'
 import { base } from 'viem/chains'
 import { useAccount, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
@@ -180,6 +180,14 @@ function useSafeActiveWallet() {
   }
 }
 
+function useSafeWallets() {
+  try {
+    return useWallets() as any
+  } catch {
+    return { wallets: [] } as any
+  }
+}
+
 export function useAccountSetupController(params: {
   initialData?: AccountSetupInitialData
   zoraReturnPath?: string
@@ -190,6 +198,7 @@ export function useAccountSetupController(params: {
   const { loginWithCrossAppAccount, linkCrossAppAccount } = useSafeCrossApp()
   const { connectWallet } = useSafeConnectWallet()
   const { wallet: activePrivyWallet, setActiveWallet } = useSafeActiveWallet()
+  const { wallets: privyLiveWallets } = useSafeWallets()
   const siwe = useSiweAuth()
   const publicClient = usePublicClient()
   const { data: walletClient } = useWalletClient()
@@ -1481,13 +1490,42 @@ export function useAccountSetupController(params: {
         connectedCanonicalWalletSelected && preflightPayload?.data?.privyIsOwner === true
           ? preflightPayload?.data?.privyEmbeddedEoaAddress ?? null
           : null
-      const embeddedOwnerWalletCandidate =
+      const liveEmbeddedOwnerWalletCandidate =
+        preflightOwnerLookupAddress && Array.isArray(privyLiveWallets)
+          ? ((privyLiveWallets as any[]).find((wallet) => {
+              const walletAddress =
+                typeof wallet?.address === 'string' && /^0x[a-fA-F0-9]{40}$/.test(wallet.address)
+                  ? wallet.address.toLowerCase()
+                  : null
+              if (!walletAddress || walletAddress !== preflightOwnerLookupAddress.toLowerCase()) return false
+              const walletType = String(
+                wallet?.walletClientType ?? wallet?.wallet_client_type ?? wallet?.connector_type ?? wallet?.type ?? '',
+              )
+                .toLowerCase()
+                .trim()
+              const looksEmbedded = walletType === 'privy' || walletType.includes('embedded') || walletType.includes('privy')
+              const hasProviderSurface =
+                typeof wallet?.request === 'function' ||
+                typeof wallet?.getEthereumProvider === 'function' ||
+                Boolean(wallet?.provider && typeof wallet.provider.request === 'function')
+              return looksEmbedded || hasProviderSurface
+            }) ?? null)
+          : null
+      const subAccountEmbeddedWalletCandidate =
         preflightOwnerLookupAddress &&
         subAccount.embeddedWallet &&
         typeof (subAccount.embeddedWallet as any).address === 'string' &&
         String((subAccount.embeddedWallet as any).address).toLowerCase() === preflightOwnerLookupAddress.toLowerCase()
           ? subAccount.embeddedWallet
           : null
+      const embeddedOwnerWalletCandidate =
+        preflightOwnerLookupAddress ? (subAccountEmbeddedWalletCandidate ?? liveEmbeddedOwnerWalletCandidate) : null
+      if (preflightOwnerLookupAddress && !embeddedOwnerWalletCandidate) {
+        throw new Error(
+          `Embedded owner signer ${preflightOwnerLookupAddress} is not available in this session. ` +
+            'Reconnect your Privy embedded wallet in Base App, then retry Add co-owner.',
+        )
+      }
 
       emitOwnerApprovalStageEvent({
         runId: approvalRunId,
@@ -1614,6 +1652,7 @@ export function useAccountSetupController(params: {
     emitOwnerApprovalStageEvent,
     loadMe,
     ownerSignerAddress,
+    privyLiveWallets,
     runCustomOwnerGasPreflight,
     sendPreparedOwnerTx,
     subAccount.embeddedWallet,

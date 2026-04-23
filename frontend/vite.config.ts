@@ -37,9 +37,11 @@ function loadDotEnvFile(filePath: string) {
       continue
     }
 
-    // Preserve shell-provided env precedence. Only allow a later dotenv file
-    // to fill a blank if that blank came from an earlier dotenv load.
-    if (dotenvLoadedKeys.has(key) && existing.trim().length === 0 && value.trim().length > 0) {
+    // Preserve shell-provided env precedence. For keys that were loaded from an
+    // earlier dotenv file in this process, let later dotenv files override.
+    // This gives local precedence ordering: repo root .env -> frontend/.env,
+    // while still honoring explicit shell exports.
+    if (dotenvLoadedKeys.has(key)) {
       process.env[key] = value
       dotenvLoadedKeys.add(key)
     }

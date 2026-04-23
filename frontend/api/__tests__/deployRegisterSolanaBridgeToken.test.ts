@@ -528,7 +528,7 @@ describe('deploy registerSolanaBridgeToken handler', () => {
     }
   })
 
-  it('returns 409 when strict SOL pair policy sees non-SOL quote mint', async () => {
+  it('continues without inline Meteora payload when strict SOL pair policy sees non-SOL quote mint (default)', async () => {
     resolveMeteoraConfigMock.mockResolvedValue({
       creatorToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
       meteoraAlphaVault: '11111111111111111111111111111111',
@@ -568,12 +568,64 @@ describe('deploy registerSolanaBridgeToken handler', () => {
     const res = createMockRes()
     await handler(req, res)
 
-    expect(res.statusCode).toBe(409)
-    expect(res.body?.success).toBe(false)
-    expect(String(res.body?.error ?? '')).toContain('Strict SOL pair policy is enabled')
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data?.meteoraAlphaVault).toBeNull()
+    expect(Array.isArray(res.body?.data?.solanaIxs)).toBe(true)
+    expect(res.body?.data?.solanaIxs?.length ?? 0).toBe(0)
   })
 
-  it('returns actionable superseded-mapping hint when Meteora config is missing', async () => {
+  it('returns 409 when strict SOL pair policy sees non-SOL quote mint and inline Meteora is required', async () => {
+    const restoreEnv = applyEnv({ DEPLOY_SOLANA_REQUIRE_INLINE_METEORA_PAYLOAD: '1' })
+    try {
+      resolveMeteoraConfigMock.mockResolvedValue({
+        creatorToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+        meteoraAlphaVault: '11111111111111111111111111111111',
+        alphaVaultProgramId: '11111111111111111111111111111111',
+        depositAccounts: [{ pubkey: '11111111111111111111111111111111', isSigner: false, isWritable: true }],
+        quoteMint: 'FG56varC4uyw8RxAswAweE7tQmjxw3vSsZmmCWkKhYuA',
+        source: 'db',
+      })
+      const mockPublicClient = {
+        readContract: vi.fn(async (args: any) => {
+          switch (args.functionName) {
+            case 'solanaBridgeAdapter':
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'isRegistered':
+              return true
+            case 'owner':
+              return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
+            default:
+              throw new Error(`Unexpected read ${String(args.functionName)}`)
+          }
+        }),
+        getBytecode: vi.fn(async () => '0x1234'),
+      }
+      createPublicClientMock.mockReturnValue(mockPublicClient as any)
+
+      const req = createMockReq({
+        method: 'POST',
+        body: {
+          bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+          creatorToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+          expectedSolanaAmount: '1000000000000000000',
+          buildOnly: true,
+        },
+      })
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(409)
+      expect(res.body?.success).toBe(false)
+      expect(String(res.body?.error ?? '')).toContain('Strict SOL pair policy is enabled')
+    } finally {
+      restoreEnv()
+    }
+  })
+
+  it('continues without inline Meteora payload when mapping is missing (default)', async () => {
     resolveMeteoraConfigMock.mockResolvedValue(null)
     resolveMeteoraConfigHintsMock.mockResolvedValue({
       creatorToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
@@ -616,14 +668,134 @@ describe('deploy registerSolanaBridgeToken handler', () => {
     const res = createMockRes()
     await handler(req, res)
 
-    expect(res.statusCode).toBe(409)
-    expect(String(res.body?.error ?? '')).toContain('Missing Meteora DLMM+Alpha Vault mapping')
-    expect(String(res.body?.error ?? '')).toContain('solana:bootstrap-side')
-    expect(String(res.body?.error ?? '')).toContain('replacement mint=9JWhbEAVpuHQdx1x5kSH62p6ZrWivqcBfARhvdLsLJdp')
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data?.meteoraAlphaVault).toBeNull()
+    expect(Array.isArray(res.body?.data?.solanaIxs)).toBe(true)
+    expect(res.body?.data?.solanaIxs?.length ?? 0).toBe(0)
   })
 
-  it('surfaces provisioner URL misconfiguration when Meteora endpoint returns HTML', async () => {
+  it('returns actionable superseded-mapping hint when mapping is missing and inline Meteora is required', async () => {
+    const restoreEnv = applyEnv({ DEPLOY_SOLANA_REQUIRE_INLINE_METEORA_PAYLOAD: '1' })
+    try {
+      resolveMeteoraConfigMock.mockResolvedValue(null)
+      resolveMeteoraConfigHintsMock.mockResolvedValue({
+        creatorToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+        hasAnyDbRow: true,
+        latestDbRowEnabled: false,
+        latestDbRowUpdatedAtIso: '2026-04-20T00:00:00.000Z',
+        supersededReason: 'v2-adapter-migration-2026-04-19',
+        supersededNewMint: '9JWhbEAVpuHQdx1x5kSH62p6ZrWivqcBfARhvdLsLJdp',
+        supersededNewAdapter: '0x653326dD0145656eC3b598943C0E84d7405aE6Ae',
+      })
+      const mockPublicClient = {
+        readContract: vi.fn(async (args: any) => {
+          switch (args.functionName) {
+            case 'solanaBridgeAdapter':
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'isRegistered':
+              return true
+            case 'owner':
+              return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
+            default:
+              throw new Error(`Unexpected read ${String(args.functionName)}`)
+          }
+        }),
+        getBytecode: vi.fn(async () => '0x1234'),
+      }
+      createPublicClientMock.mockReturnValue(mockPublicClient as any)
+
+      const req = createMockReq({
+        method: 'POST',
+        body: {
+          bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+          creatorToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+          expectedSolanaAmount: '1000000000000000000',
+          buildOnly: true,
+        },
+      })
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(409)
+      expect(String(res.body?.error ?? '')).toContain('Missing Meteora DLMM+Alpha Vault mapping')
+      expect(String(res.body?.error ?? '')).toContain('solana:bootstrap-side')
+      expect(String(res.body?.error ?? '')).toContain('replacement mint=9JWhbEAVpuHQdx1x5kSH62p6ZrWivqcBfARhvdLsLJdp')
+    } finally {
+      restoreEnv()
+    }
+  })
+
+  it('continues without inline Meteora payload when provisioner endpoint is misconfigured (default)', async () => {
     const restoreEnv = applyEnv({
+      METEORA_IX_PROVISIONER_URL: 'https://provisioner.4626.fun/meteora-ixs',
+      METEORA_IX_PROVISIONER_SECRET: 'secret',
+    })
+    const originalFetch = globalThis.fetch
+    try {
+      resolveMeteoraConfigMock.mockResolvedValue({
+        creatorToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+        meteoraAlphaVault: '11111111111111111111111111111111',
+        alphaVaultProgramId: '11111111111111111111111111111111',
+        depositAccounts: [{ pubkey: '11111111111111111111111111111111', isSigner: false, isWritable: true }],
+        quoteMint: SOL_MINT,
+        source: 'env',
+      })
+      const mockPublicClient = {
+        readContract: vi.fn(async (args: any) => {
+          switch (args.functionName) {
+            case 'solanaBridgeAdapter':
+              return '0x2414b595c4f18532A5836B6e2E6d536832c572e8'
+            case 'solanaDestination':
+              return '0x7d076c0e9f957d83a16d58370df29fc679069cf902dfb47ce06fd2507218ff2c'
+            case 'isRegistered':
+              return true
+            case 'owner':
+              return '0xB05Cf01231cF2fF99499682E64D3780d57c80FdD'
+            case 'decimals':
+              return 18
+            default:
+              throw new Error(`Unexpected read ${String(args.functionName)}`)
+          }
+        }),
+        getBytecode: vi.fn(async () => '0x1234'),
+      }
+      createPublicClientMock.mockReturnValue(mockPublicClient as any)
+      ;(globalThis as any).fetch = vi.fn(async () => ({
+        ok: false,
+        status: 405,
+        headers: { get: (name: string) => (name.toLowerCase() === 'content-type' ? 'text/html; charset=utf-8' : null) },
+        text: async () => '<!doctype html><html><head><title>Vercel</title></head><body></body></html>',
+      })) as any
+
+      const req = createMockReq({
+        method: 'POST',
+        body: {
+          bridgeToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+          creatorToken: '0x6702e7a54f1d8b190ef13b4764ba3f7d6458e9ba',
+          expectedSolanaAmount: '1000000000000000000',
+          buildOnly: true,
+        },
+      })
+      const res = createMockRes()
+      await handler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.success).toBe(true)
+      expect(res.body?.data?.meteoraAlphaVault).toBeNull()
+      expect(Array.isArray(res.body?.data?.solanaIxs)).toBe(true)
+      expect(res.body?.data?.solanaIxs?.length ?? 0).toBe(0)
+    } finally {
+      ;(globalThis as any).fetch = originalFetch
+      restoreEnv()
+    }
+  })
+
+  it('surfaces provisioner URL misconfiguration when inline Meteora is required', async () => {
+    const restoreEnv = applyEnv({
+      DEPLOY_SOLANA_REQUIRE_INLINE_METEORA_PAYLOAD: '1',
       METEORA_IX_PROVISIONER_URL: 'https://provisioner.4626.fun/meteora-ixs',
       METEORA_IX_PROVISIONER_SECRET: 'secret',
     })

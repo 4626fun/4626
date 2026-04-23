@@ -20,6 +20,13 @@
     "classify-profile-wallets": "tsx src/classifyProfileWallets.ts",
     "scan-coin-holders": "tsx src/scanCoinHolders.ts",
     "flag-holder-contracts": "tsx src/flagHolderContracts.ts",
+    "probe:xmtp": "tsx src/probeXmtpReachability.ts",
+    "build:master-sheet": "tsx src/buildMasterSheet.ts",
+    "build:dm-campaign": "tsx src/buildDmCampaign.ts",
+    "groups:plan": "tsx src/createXmtpGroups.ts",
+    "groups:plan:priority": "tsx src/createXmtpGroups.ts --shape=priority",
+    "groups:plan:top-only": "tsx src/createXmtpGroups.ts --shape=top-only",
+    "cluster:cohorts": "tsx src/clusterCohorts.ts",
     "export:outreach": "tsx src/exportOutreach.ts",
     "export:multi-holders": "tsx src/exportMultiHolders.ts",
     "export:top-creators": "tsx src/exportTopCreators.ts",
@@ -27,6 +34,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
+    "@xmtp/node-sdk": "5.2.0",
     "@zoralabs/coins-sdk": "^0.3.3",
     "dotenv": "^16.4.5",
     "viem": "^2.21.0"

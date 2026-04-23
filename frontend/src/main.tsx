@@ -1,3 +1,4 @@
+import '@/lib/bootstrap/consoleNoisePatch'
 import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
@@ -80,10 +81,39 @@ function shouldSuppressWalletNoise(args: unknown[]): boolean {
     joined.includes('cannot set property ethereum of #<window> which has only a getter') ||
     joined.includes('cannot redefine property: ethereum')
   return (
+    joined.includes('unable to initialize all expected connectors before timeout') ||
+    joined.includes('unable to refresh tokens - token is missing or no longer valid') ||
+    joined.includes('wallet did not respond to eth_accounts') ||
+    joined.includes('exceeded max attempts before resolving function') ||
+    joined.includes('eth_accounts for ') ||
+    joined.includes('eth_chainid for ') ||
+    joined.includes('[deployvault] share_oft_vanity_suffix_skipped_default') ||
+    joined.includes('[deployvault] payoutrouter owner is protocol treasury') ||
+    joined.includes('[deployvault] creator_coin_owner_unresolved') ||
     joined.includes('failed to add embedded wallet connector: wallet proxy not initialized') ||
     (ethereumCollisionSignal && hasExtensionOriginSignal(joined)) ||
     joined.includes('embedded1193provider.request() called with args') ||
     joined.includes('eth_accounts for privy')
+  )
+}
+
+function shouldSuppressKnownDevWarn(args: unknown[]): boolean {
+  if (!args.length) return false
+  const joined = args
+    .map((arg) => {
+      if (typeof arg === 'string') return arg
+      if (arg instanceof Error) return arg.message
+      return String((arg as any)?.message ?? arg ?? '')
+    })
+    .join(' ')
+    .toLowerCase()
+  if (!joined) return false
+  return (
+    joined.includes('motion() is deprecated. use motion.create() instead') ||
+    joined.includes('lit is in dev mode. not recommended for production') ||
+    (joined.includes('each child in a list should have a unique "key" prop') &&
+      joined.includes('check the render method of `fragment`') &&
+      joined.includes('child from me'))
   )
 }
 
@@ -186,6 +216,7 @@ if (typeof window !== 'undefined') {
     if (!(window as any).__cvWalletNoisePatched) {
       const originalLog = console.log.bind(console)
       const originalDebug = console.debug.bind(console)
+      const originalWarn = console.warn.bind(console)
       const originalError = console.error.bind(console)
       console.log = (...args: unknown[]) => {
         if (shouldSuppressWalletNoise(args)) return
@@ -195,8 +226,12 @@ if (typeof window !== 'undefined') {
         if (shouldSuppressWalletNoise(args)) return
         originalDebug(...args)
       }
+      console.warn = (...args: unknown[]) => {
+        if (shouldSuppressWalletNoise(args) || shouldSuppressKnownDevWarn(args)) return
+        originalWarn(...args)
+      }
       console.error = (...args: unknown[]) => {
-        if (shouldSuppressWalletNoise(args)) return
+        if (shouldSuppressWalletNoise(args) || shouldSuppressKnownDevWarn(args)) return
         originalError(...args)
       }
       ;(window as any).__cvWalletNoisePatched = true

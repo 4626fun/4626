@@ -11,6 +11,9 @@ importers:
       '@supabase/supabase-js':
         specifier: ^2.45.0
         version: 2.103.3
+      '@xmtp/node-sdk':
+        specifier: 5.2.0
+        version: 5.2.0
       '@zoralabs/coins-sdk':
         specifier: ^0.3.3
         version: 0.3.3(abitype@1.2.3(typescript@5.9.3))(viem@2.48.1(typescript@5.9.3))
@@ -249,6 +252,21 @@ packages:
 
   '@types/ws@8.18.1':
     resolution: {integrity: sha512-ThVF6DCVhA8kUGy+aazFQ4kXQ7E1Ty7A3ypFOe0IcJV8O/M511G99AW24irKrW56Wt44yG9+ij8FaqoBGkuBXg==}
+
+  '@xmtp/content-type-primitives@3.0.0':
+    resolution: {integrity: sha512-gxK6+k0ywOz39LFJjrUF3fOXWXR3aAmIkF7e0rFz7c27izDimZC5E2oja9iz/CYyzDS6lf9Pm31qRcGTMSYaHg==}
+
+  '@xmtp/node-bindings@1.8.0':
+    resolution: {integrity: sha512-dyppg1pQNsEdGH13RfsbkbXdnUdjufak6ea1YahjCROgmaJClDpMHcMcSfMzoJzASanU58MwEdCgYUF638NKgw==}
+    engines: {node: '>=22'}
+
+  '@xmtp/node-bindings@1.9.1':
+    resolution: {integrity: sha512-0cnAq7j8dPvxDZ5d7JpdbWTgSIKDiN421dxZj4sy1qw7QLOH4yTUKuuMY7CxoChoGa7/QPZGm+0sIIx/Gs2bAg==}
+    engines: {node: '>=22'}
+
+  '@xmtp/node-sdk@5.2.0':
+    resolution: {integrity: sha512-68PlLMlh7d6ap0UYvjGOUNXcq0a8IOqEfrU5G2tPyx3gwyeF+d+vQJwaa1GBKDaAH2GtK+bKh0CQau9f/tEeKQ==}
+    engines: {node: '>=22'}
 
   '@zoralabs/coins-sdk@0.3.3':
     resolution: {integrity: sha512-C6rHMgZnK5dfUs4/i6OCJhBzF6Uj4KsuYpfoIyFSvgj2iZbZ7SIICGhS0lKbLdxvb8xbSwv2Fn7Xnqylf/BuEg==}
@@ -511,6 +529,19 @@ snapshots:
   '@types/ws@8.18.1':
     dependencies:
       '@types/node': 22.19.17
+
+  '@xmtp/content-type-primitives@3.0.0':
+    dependencies:
+      '@xmtp/node-bindings': 1.8.0
+
+  '@xmtp/node-bindings@1.8.0': {}
+
+  '@xmtp/node-bindings@1.9.1': {}
+
+  '@xmtp/node-sdk@5.2.0':
+    dependencies:
+      '@xmtp/content-type-primitives': 3.0.0
+      '@xmtp/node-bindings': 1.9.1
 
   '@zoralabs/coins-sdk@0.3.3(abitype@1.2.3(typescript@5.9.3))(viem@2.48.1(typescript@5.9.3))':
     dependencies:

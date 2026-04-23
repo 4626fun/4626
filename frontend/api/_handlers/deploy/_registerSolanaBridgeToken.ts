@@ -525,6 +525,14 @@ function readProvisionerRequestTimeoutMs(): number {
   return Math.min(Math.max(timeoutMs, 10_000), 300_000)
 }
 
+function readRequireInlineMeteoraPayload(): boolean {
+  const raw = String(process.env.DEPLOY_SOLANA_REQUIRE_INLINE_METEORA_PAYLOAD ?? '')
+    .trim()
+    .toLowerCase()
+  if (!raw) return false
+  return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
+}
+
 function isRetryableRemoteProvisionError(message: string): boolean {
   const lower = message.toLowerCase()
   const statusMatch = lower.match(/status=(\d{3})/)
@@ -1191,13 +1199,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     let meteoraAlphaVault: Hex | null = null
     let solanaIxs: SolanaBridgeIxPayload[] = []
     if (creatorToken) {
-      if (!expectedSolanaAmountBase || expectedSolanaAmountBase <= 0n) {
-        return res.status(400).json({
-          success: false,
-          error: 'expectedSolanaAmount is required when creatorToken is provided.',
-        } satisfies ApiEnvelope<never>)
-      }
-      const meteoraConfig = await resolveMeteoraAlphaVaultConfig({ creatorToken })
+      const requireInlineMeteoraPayload = readRequireInlineMeteoraPayload()
+      let meteoraConfig = await resolveMeteoraAlphaVaultConfig({ creatorToken })
       if (!meteoraConfig) {
         const hints = await resolveMeteoraAlphaVaultConfigHints({ creatorToken }).catch(() => null)
         const supersededHint =
@@ -1207,81 +1210,129 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
               (hints.supersededNewAdapter ? `, replacement adapter=${hints.supersededNewAdapter}` : '') +
               '.'
             : ''
-        return res.status(409).json({
-          success: false,
-          error:
-            `Missing Meteora DLMM+Alpha Vault mapping for creator token ${creatorToken}. ` +
-            'Add an active creator mapping in creator_meteora_alpha_vaults or METEORA_CREATOR_ALPHA_VAULT_MAP_JSON, then retry. ' +
-            'If you are bootstrapping Solana side, run `pnpm -C cre run solana:bootstrap-side` with METEORA_ALPHA_VAULT, ' +
-            `ALPHA_VAULT_PROGRAM_ID, and DEPOSIT_ACCOUNTS_JSON set.${supersededHint}`,
-        } satisfies ApiEnvelope<never>)
+        if (requireInlineMeteoraPayload) {
+          return res.status(409).json({
+            success: false,
+            error:
+              `Missing Meteora DLMM+Alpha Vault mapping for creator token ${creatorToken}. ` +
+              'Add an active creator mapping in creator_meteora_alpha_vaults or METEORA_CREATOR_ALPHA_VAULT_MAP_JSON, then retry. ' +
+              'If you are bootstrapping Solana side, run `pnpm -C cre run solana:bootstrap-side` with METEORA_ALPHA_VAULT, ' +
+              `ALPHA_VAULT_PROGRAM_ID, and DEPOSIT_ACCOUNTS_JSON set.${supersededHint}`,
+          } satisfies ApiEnvelope<never>)
+        }
+        logger.info('[deploy/registerSolanaBridgeToken] Meteora config missing; continuing without inline payload', {
+          creatorToken,
+          bridgeToken: resolvedBridgeToken,
+          requireInlineMeteoraPayload,
+          hint: hints,
+        })
       }
-      if (readStrictSolPairEnabled()) {
+      if (meteoraConfig && readStrictSolPairEnabled()) {
         const quoteMint = String(meteoraConfig.quoteMint ?? '').trim()
-        if (!quoteMint) {
-          return res.status(409).json({
-            success: false,
-            error:
-              `Strict SOL pair policy is enabled, but creator token ${creatorToken} does not define quoteMint. ` +
-              `Set quoteMint=${SOLANA_NATIVE_MINT} in creator_meteora_alpha_vaults (or METEORA_CREATOR_ALPHA_VAULT_MAP_JSON).`,
-          } satisfies ApiEnvelope<never>)
-        }
-        if (quoteMint !== SOLANA_NATIVE_MINT) {
-          return res.status(409).json({
-            success: false,
-            error:
-              `Strict SOL pair policy is enabled, but creator token ${creatorToken} is mapped to quote mint ${quoteMint}. ` +
-              `Only ${SOLANA_NATIVE_MINT} is allowed.`,
-          } satisfies ApiEnvelope<never>)
-        }
-      }
-      const shareDecimals =
-        requestedShareDecimals ??
-        (await publicClient
-          .readContract({
-            address: resolvedBridgeToken,
-            abi: ERC20_METADATA_ABI,
-            functionName: 'decimals',
+        if (!quoteMint || quoteMint !== SOLANA_NATIVE_MINT) {
+          if (requireInlineMeteoraPayload) {
+            return res.status(409).json({
+              success: false,
+              error:
+                `Strict SOL pair policy is enabled, but creator token ${creatorToken} is mapped to quote mint ${quoteMint || '(missing)'}. ` +
+                `Only ${SOLANA_NATIVE_MINT} is allowed.`,
+            } satisfies ApiEnvelope<never>)
+          }
+          logger.warn('[deploy/registerSolanaBridgeToken] Meteora config quote mint is not strict-SOL compatible; continuing without inline payload', {
+            creatorToken,
+            bridgeToken: resolvedBridgeToken,
+            quoteMint: quoteMint || null,
+            requiredQuoteMint: SOLANA_NATIVE_MINT,
+            requireInlineMeteoraPayload,
           })
-          .then((v) => Number(v as number))
-          .catch(() => null)) ??
-        18
-      let expectedRemoteAmount: bigint
-      try {
-        expectedRemoteAmount = toRemoteAmountExact(expectedSolanaAmountBase, shareDecimals, solanaDecimals)
-      } catch (error) {
-        const message = error instanceof Error ? error.message : String(error)
-        return res.status(409).json({
-          success: false,
-          error: `Invalid Solana allocation amount for Meteora ix generation: ${message}`,
-        } satisfies ApiEnvelope<never>)
+          meteoraConfig = null
+        }
       }
-      const dynamicProvisionerUrls = readDynamicProvisionerUrls()
-      const meteoraProvisionerUrls = readMeteoraProvisionerUrls(dynamicProvisionerUrls)
-      const meteoraProvisionerSecret = readMeteoraProvisionerSecret()
-      const meteoraPayload = await buildMeteoraIxsViaProvisioner({
-        creatorToken,
-        bridgeToken: resolvedBridgeToken,
-        expectedRemoteAmount,
-        meteoraAlphaVault: meteoraConfig.meteoraAlphaVault,
-        alphaVaultProgramId: meteoraConfig.alphaVaultProgramId,
-        depositAccounts: meteoraConfig.depositAccounts,
-        provisionerUrls: meteoraProvisionerUrls,
-        provisionerSecret: meteoraProvisionerSecret,
-        requestTimeoutMs: readProvisionerRequestTimeoutMs(),
-      })
-      meteoraAlphaVault = meteoraPayload.meteoraAlphaVault
-      solanaIxs = meteoraPayload.solanaIxs
-      logger.info('[deploy/registerSolanaBridgeToken] Built Meteora ix payload', {
-        creatorToken,
-        bridgeToken: resolvedBridgeToken,
-        configSource: meteoraConfig.source,
-        quoteMint: meteoraConfig.quoteMint,
-        expectedSolanaAmountBase: expectedSolanaAmountBase.toString(),
-        expectedRemoteAmount: expectedRemoteAmount.toString(),
-        meteoraAlphaVault,
-        ixCount: solanaIxs.length,
-      })
+      if (meteoraConfig) {
+        if (!expectedSolanaAmountBase || expectedSolanaAmountBase <= 0n) {
+          if (requireInlineMeteoraPayload) {
+            return res.status(400).json({
+              success: false,
+              error: 'expectedSolanaAmount is required when creatorToken is provided.',
+            } satisfies ApiEnvelope<never>)
+          }
+          logger.warn('[deploy/registerSolanaBridgeToken] Missing expectedSolanaAmount for creator token; continuing without inline payload', {
+            creatorToken,
+            bridgeToken: resolvedBridgeToken,
+            requireInlineMeteoraPayload,
+          })
+        } else {
+          const shareDecimals =
+            requestedShareDecimals ??
+            (await publicClient
+              .readContract({
+                address: resolvedBridgeToken,
+                abi: ERC20_METADATA_ABI,
+                functionName: 'decimals',
+              })
+              .then((v) => Number(v as number))
+              .catch(() => null)) ??
+            18
+          let expectedRemoteAmount: bigint
+          try {
+            expectedRemoteAmount = toRemoteAmountExact(expectedSolanaAmountBase, shareDecimals, solanaDecimals)
+          } catch (error) {
+            const message = error instanceof Error ? error.message : String(error)
+            if (requireInlineMeteoraPayload) {
+              return res.status(409).json({
+                success: false,
+                error: `Invalid Solana allocation amount for Meteora ix generation: ${message}`,
+              } satisfies ApiEnvelope<never>)
+            }
+            logger.warn('[deploy/registerSolanaBridgeToken] Invalid expected solana amount for inline payload; continuing without inline payload', {
+              creatorToken,
+              bridgeToken: resolvedBridgeToken,
+              error: message,
+              requireInlineMeteoraPayload,
+            })
+            expectedRemoteAmount = 0n
+          }
+          if (expectedRemoteAmount > 0n) {
+            try {
+              const dynamicProvisionerUrls = readDynamicProvisionerUrls()
+              const meteoraProvisionerUrls = readMeteoraProvisionerUrls(dynamicProvisionerUrls)
+              const meteoraProvisionerSecret = readMeteoraProvisionerSecret()
+              const meteoraPayload = await buildMeteoraIxsViaProvisioner({
+                creatorToken,
+                bridgeToken: resolvedBridgeToken,
+                expectedRemoteAmount,
+                meteoraAlphaVault: meteoraConfig.meteoraAlphaVault,
+                alphaVaultProgramId: meteoraConfig.alphaVaultProgramId,
+                depositAccounts: meteoraConfig.depositAccounts,
+                provisionerUrls: meteoraProvisionerUrls,
+                provisionerSecret: meteoraProvisionerSecret,
+                requestTimeoutMs: readProvisionerRequestTimeoutMs(),
+              })
+              meteoraAlphaVault = meteoraPayload.meteoraAlphaVault
+              solanaIxs = meteoraPayload.solanaIxs
+              logger.info('[deploy/registerSolanaBridgeToken] Built Meteora ix payload', {
+                creatorToken,
+                bridgeToken: resolvedBridgeToken,
+                configSource: meteoraConfig.source,
+                quoteMint: meteoraConfig.quoteMint,
+                expectedSolanaAmountBase: expectedSolanaAmountBase.toString(),
+                expectedRemoteAmount: expectedRemoteAmount.toString(),
+                meteoraAlphaVault,
+                ixCount: solanaIxs.length,
+              })
+            } catch (error) {
+              const message = error instanceof Error ? error.message : String(error)
+              if (requireInlineMeteoraPayload) throw error
+              logger.warn('[deploy/registerSolanaBridgeToken] Inline Meteora payload generation failed; continuing without inline payload', {
+                creatorToken,
+                bridgeToken: resolvedBridgeToken,
+                error: message,
+                requireInlineMeteoraPayload,
+              })
+            }
+          }
+        }
+      }
     }
 
     if (alreadyRegistered) {

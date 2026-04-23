@@ -140,6 +140,10 @@ function shouldPersistManagedSessionOwner(): boolean {
   return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, false)
 }
 
+function shouldRequireInlineMeteoraPayload(): boolean {
+  return isTruthyEnv(process.env.DEPLOY_SOLANA_REQUIRE_INLINE_METEORA_PAYLOAD, false)
+}
+
 function isVercelDeploymentOrigin(origin: string): boolean {
   try {
     return new URL(origin).hostname.toLowerCase().endsWith('.vercel.app')
@@ -473,6 +477,7 @@ async function ensureOvaultPreflight(params: {
       const hasSolanaIxs = Array.isArray(data?.solanaIxs) && data.solanaIxs.length > 0
       const assetPeerSet = data?.assetPeerSet === false ? false : true
       const sharePeerSet = data?.sharePeerSet === false ? false : true
+      const requireInlineMeteoraPayload = shouldRequireInlineMeteoraPayload()
 
       if (
         !registered ||
@@ -481,15 +486,15 @@ async function ensureOvaultPreflight(params: {
         !redeemEligible ||
         !assetPeerSet ||
         !sharePeerSet ||
-        !hasMeteoraAlphaVault ||
-        !hasSolanaIxs
+        (requireInlineMeteoraPayload && (!hasMeteoraAlphaVault || !hasSolanaIxs))
       ) {
         failures.push(
           `${routePath} ovault readiness: registered=${String(data?.registered)} ` +
             `existingMintCompatible=${String(data?.existingMintCompatible)} ` +
             `depositEligible=${String(data?.depositEligible)} redeemEligible=${String(data?.redeemEligible)} ` +
             `assetPeerSet=${String(data?.assetPeerSet)} sharePeerSet=${String(data?.sharePeerSet)} ` +
-            `meteoraAlphaVault=${String(data?.meteoraAlphaVault ?? '')} solanaIxs=${Array.isArray(data?.solanaIxs) ? String(data.solanaIxs.length) : '0'}`,
+            `meteoraAlphaVault=${String(data?.meteoraAlphaVault ?? '')} solanaIxs=${Array.isArray(data?.solanaIxs) ? String(data.solanaIxs.length) : '0'} ` +
+            `inlineMeteoraRequired=${requireInlineMeteoraPayload ? 'yes' : 'no'}`,
         )
       } else {
         return {

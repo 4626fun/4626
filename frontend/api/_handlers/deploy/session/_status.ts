@@ -261,6 +261,10 @@ function shouldPersistManagedSessionOwner(): boolean {
   return isTruthyEnv(process.env.DEPLOY_SESSION_PERSIST_OWNER, false)
 }
 
+function shouldRequireInlineMeteoraPayload(): boolean {
+  return isTruthyEnv(process.env.DEPLOY_SOLANA_REQUIRE_INLINE_METEORA_PAYLOAD, false)
+}
+
 function isVercelDeploymentOrigin(origin: string): boolean {
   try {
     return new URL(origin).hostname.toLowerCase().endsWith('.vercel.app')
@@ -1680,6 +1684,7 @@ async function ensureSolanaRouteReadyForPhase3(params: {
         const meteoraAlphaVault = data?.meteoraAlphaVault
         const hasMeteoraAlphaVault = isBytes32Hex(meteoraAlphaVault) && meteoraAlphaVault !== ZERO_BYTES32
         const hasSolanaIxs = Array.isArray(data?.solanaIxs) && data.solanaIxs.length > 0
+        const requireInlineMeteoraPayload = shouldRequireInlineMeteoraPayload()
         if (
           !registered ||
           !existingMintCompatible ||
@@ -1687,8 +1692,7 @@ async function ensureSolanaRouteReadyForPhase3(params: {
           !redeemEligible ||
           !assetPeerSet ||
           !sharePeerSet ||
-          !hasMeteoraAlphaVault ||
-          !hasSolanaIxs
+          (requireInlineMeteoraPayload && (!hasMeteoraAlphaVault || !hasSolanaIxs))
         ) {
           const blockersRaw = data?.mintCompatibility?.blockers
           const blockers =
@@ -1706,7 +1710,8 @@ async function ensureSolanaRouteReadyForPhase3(params: {
               `assetPeerSet=${String(data?.assetPeerSet)} ` +
               `sharePeerSet=${String(data?.sharePeerSet)} ` +
               `meteoraAlphaVault=${String(data?.meteoraAlphaVault ?? '')} ` +
-              `solanaIxs=${Array.isArray(data?.solanaIxs) ? String(data.solanaIxs.length) : '0'}` +
+              `solanaIxs=${Array.isArray(data?.solanaIxs) ? String(data.solanaIxs.length) : '0'} ` +
+              `inlineMeteoraRequired=${requireInlineMeteoraPayload ? 'yes' : 'no'}` +
               (blockers ? ` blockers=${blockers}` : ''),
             ovault: null,
           }

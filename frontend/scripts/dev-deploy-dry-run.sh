@@ -60,7 +60,7 @@ replace_local_origin_port() {
   echo "$origin"
 }
 
-USE_LOCAL_BATCHER="${DEPLOY_DRY_RUN_USE_LOCAL_BATCHER:-1}"
+USE_LOCAL_BATCHER="${DEPLOY_DRY_RUN_USE_LOCAL_BATCHER:-0}"
 if [[ "$USE_LOCAL_BATCHER" == "1" ]]; then
   if ! command -v forge >/dev/null 2>&1; then
     echo "forge is required when DEPLOY_DRY_RUN_USE_LOCAL_BATCHER=1." >&2
