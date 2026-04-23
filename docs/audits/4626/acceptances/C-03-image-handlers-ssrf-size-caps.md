@@ -34,13 +34,15 @@ audit. It enforces:
   `0.0.0.0`, any IPv4/IPv6 address matched by `isForbiddenIpAddress`
   (covers `10/8`, `127/8`, `169.254/16`, `172.16/12`, `192.168/16`,
   `100.64/10`, `198.18/15`, multicast, loopback IPv6, ULA, link-local).
-- `redirect: 'manual'` + `readRedirectUrl` (lines 102–112): every
-  hop re-runs the forbidden-host / IP-resolution check; max 3
-  redirects.
+- `redirect: 'manual'` (line 207) + `readRedirectUrl` (line 118):
+  every hop re-runs the forbidden-host / IP-resolution check; max
+  3 redirects.
 - `maxBytes` cap (default 10 MiB) — checked first via
-  `content-length` header (429→413) and then via streaming
-  `readResponseBytesWithLimit` (lines 128–161) which aborts reads
-  over the cap. Covers both honest and deceitful Content-Length.
+  `content-length` header (throws `fetch_too_large` at line 230
+  of `blob.ts`; no HTTP status is set by this helper) and then via
+  streaming `readResponseBytesWithLimit` (lines 130–161) which
+  aborts reads over the cap. Covers both honest and deceitful
+  Content-Length.
 - `timeoutMs` via `AbortController` (default 8s).
 - `requireImageContentType` optional flag that rejects non-image
   MIME in a single check (the token image handler also re-validates

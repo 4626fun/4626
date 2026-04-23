@@ -20,7 +20,7 @@ This acceptance document covers all Informational severity findings from the Pha
 
 ## I-03 — `_autoAllocateToStrategy()` deploys only to `defaultQueue[0]` (Linear 4626-384)
 
-- File: `contracts/vault/modules/CreatorOVaultStrategiesModule.sol` line 278–301 (`address firstStrategy = defaultQueue[0];`)
+- File: `contracts/vault/modules/CreatorOVaultStrategiesModule.sol` lines 278–301 (`_autoAllocateToStrategy()`); `address firstStrategy = defaultQueue[0];` is on line 281.
 - Disposition: **Accepted — documented behaviour**. The auto-allocator is deliberately cheap on gas; strategy weight distribution happens through `_deployToStrategies()` which is called by the keeper. The `_autoAllocate` path is specifically the "idle overflow top-off" hook; it should not simulate a full rebalance.
 - Follow-up: add a `@dev` NatSpec block above the function clarifying that callers needing weight-respecting distribution should invoke the keeper path (not auto-allocate). Not in-scope for this sprint — purely documentation.
 
@@ -46,7 +46,7 @@ This acceptance document covers all Informational severity findings from the Pha
 
 ## I-07 — `ConcentratedStrategy._calculateLiquidity()` stub geometric mean (Linear 4626-388)
 
-- File: `contracts/vault/strategies/univ4/ConcentratedStrategy.sol` lines 780–784 (`return _sqrt(creatorCoinAmount * pairedAmount);`)
+- File: `contracts/vault/strategies/univ4/ConcentratedStrategy.sol` lines 770–784 (`_calculateLiquidity`); `return _sqrt(creatorCoinAmount * pairedAmount);` is on line 784.
 - Disposition: **Known limitation — tracked under L-05**. This is the same stub math flagged in L-05 (`L-05-FullRangeStrategy-stub-valuation.md`) and applies here too. Replacing with full V4 `LiquidityAmounts.getAmountsForLiquidity()` requires adopting the V4 math library and refactoring both strategies' valuation paths.
 - Follow-up: bundle with the L-05 remediation (FullRangeStrategy); single PR replacing both stubs with the canonical V4 math library.
 

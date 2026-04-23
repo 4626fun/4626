@@ -44,27 +44,29 @@ the same single-source dependency in a more complicated wrapper.
 
 - Rebalance authority is restricted to the protocol-owned
   `lpManager` / strategy operator; no external party can trigger it.
-- Keeper-side strategy automation applies price-change triggers plus
-  dedupe/cooldown controls before enqueueing actions (Charm/Ajna
-  manager + signal listener paths).
+- Rebalance cadence is rate-limited by the keeper (see
+  `cre/cre-workflows/charm-rebalance-manager/`, which owns the
+  rebalance-cadence guard; earlier drafts of this doc mis-cited
+  `cre/cre-workflows/rebalance-cadence-guard` — that directory has
+  never existed in-tree).
 - Charm Alpha vault imposes its own TWAP deviation threshold
   (`CHARM_MAX_TWAP_DEVIATION = 500` / 5%) before allowing a
   rebalance; a divergent primary price will be refused by Charm
   before our strategy even issues the tx.
-- The payout-integrity CRE workflow (Sprint 4 — H-13, L-24, M-16)
-  verifies payout-lane wiring and downstream distribution health; it
-  is an operational integrity monitor and does not implement
-  post-rebalance NAV cross-validation.
-
-## Reproduction at HEAD
-
-- Keeper trigger/dedupe/cooldown controls:
-  - `grep -nE 'priceChangeTriggerBps|deviationBps|dedupeKey' cre/cre-workflows/_shared/charmManager.ts cre/cre-workflows/_shared/ajnaManager.ts`
-  - `grep -nE 'cooldownSeconds|listener_cooldown_active|dedupeKey' cre/actions/strategy-signal-listener.action.ts`
-- Onchain TWAP-deviation gate:
-  - `grep -nE 'maxTwapDeviation|checkCanRebalance' contracts/vault/strategies/univ4/CreatorLPManager.sol`
-- Payout-integrity scope (wiring/health checks, not NAV deviation):
-  - `grep -nE 'payoutRecipient|tradeFeeCollector|burnStream|lastDistribution' cre/cre-workflows/payout-integrity/main.ts`
+- The Charm and Ajna rebalance-manager CRE workflows gate every
+  rebalance on a `priceChangeTriggerBps` threshold before
+  emitting the action: a deviation below the configured bps is
+  skipped, which means a stale or frozen primary price cannot
+  silently drive an incremental rebalance. Reproduction:
+  `grep -nE 'deviationBps|priceChangeTriggerBps' cre/cre-workflows/_shared/ajnaManager.ts cre/cre-workflows/_shared/charmManager.ts`
+  surfaces the guard (`bucketPriceChangeBps` / `tickPriceChangeBps`
+  compared against `runtime.config.priceChangeTriggerBps` before the
+  action is enqueued); the per-environment threshold is set in each
+  workflow's `config.*.json` under `priceChangeTriggerBps`. Note:
+  this is a pre-rebalance single-source sanity gate, not an
+  independent cross-source validation — a post-rebalance NAV
+  deviation check against an independent feed is part of the
+  exit criteria below and is not yet implemented.
 
 ## Exit criteria (to close this finding)
 

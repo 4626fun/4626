@@ -21,12 +21,13 @@ All checks live in `frontend/api/_handlers/rpc/_proxy.ts`:
 
 ### 1. Authentication required
 
-Lines 631–634: after CORS + OPTIONS handling, the handler rejects
-unauthenticated requests with `401 Authentication required`:
+Line 8 imports `readRequestPrincipalAddress`; line 628 calls it and
+rejects unauthenticated requests with `401 Authentication required`
+(return at line 632, after CORS + OPTIONS handling):
 
 ```ts
-const principal = readRequestPrincipal(req)
-if (!principal) {
+const principalAddress = readRequestPrincipalAddress(req)
+if (!principalAddress) {
   return res.status(401).json({ success: false, error: 'Authentication required' })
 }
 ```
