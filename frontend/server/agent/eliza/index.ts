@@ -247,16 +247,54 @@ function rotateCorruptXmtpDbFiles(): void {
   }
 }
 
+function archiveStaleSingleAgentDbFilesForEnv(activeDbPath: string): void {
+  const activeResolved = path.resolve(activeDbPath)
+  const envPrefix = `xmtp-${XMTP_ENV}-`
+  const ts = Date.now()
+  let archived = 0
+  try {
+    const paths = listXmtpDb3FilesUnderRoot(XMTP_DB_DIR)
+    for (const src of paths) {
+      const srcResolved = path.resolve(src)
+      if (srcResolved === activeResolved) continue
+      const base = path.basename(src)
+      // Scope cleanup to this runtime env only (e.g. production vs dev),
+      // and keep multi-agent nested stores untouched.
+      if (!base.startsWith(envPrefix)) continue
+      const dest = `${src}.stale.${ts}`
+      try {
+        fs.renameSync(src, dest)
+        archived += 1
+        logger.warn(`[xmtp] Archived stale DB: ${path.basename(src)} -> ${path.basename(dest)}`)
+      } catch (err) {
+        logger.warn(`[xmtp] Failed to archive stale DB ${src}:`, err)
+      }
+    }
+    if (archived > 0) {
+      logger.warn(
+        `[xmtp] Single-agent mode archived ${archived} stale ${XMTP_ENV} DB file(s); keeping only active DB path.`,
+      )
+    }
+  } catch (err) {
+    logger.warn('[xmtp] Failed while archiving stale single-agent DB files:', err)
+  }
+}
+
 /**
  * Build a stable `dbPath` function for the XMTP SDK.
  * Ensures the directory exists and returns a deterministic path
  * per inboxId so the same installation is reused across restarts.
  */
-function makeDbPath(): (inboxId: string) => string {
+function makeDbPath(options?: { enforceSingleFileForEnv?: boolean }): (inboxId: string) => string {
   fs.mkdirSync(XMTP_DB_DIR, { recursive: true, mode: 0o700 })
+  let staleArchived = false
   return (inboxId: string) => {
     const p = path.join(XMTP_DB_DIR, `xmtp-${XMTP_ENV}-${inboxId}.db3`)
     rotateLegacyPlaintextDbIfNeeded(p)
+    if (options?.enforceSingleFileForEnv && !staleArchived) {
+      archiveStaleSingleAgentDbFilesForEnv(p)
+      staleArchived = true
+    }
     logger.info(`[xmtp] Using local database: ${p}`)
     return p
   }
@@ -1557,12 +1595,13 @@ async function shutdown() {
  */
 async function startSingleAgentEoa(privateKey: `0x${string}`): Promise<RunningAgent> {
   const dbEncryptionKey = getEffectiveDbEncryptionKey()
+  const dbPath = makeDbPath({ enforceSingleFileForEnv: true })
   const swarmProfile = resolveSwarmProfile('single-agent')
   const runtimeBridge = initializeRuntimeBridge('single-agent')
   const xmtp = new XmtpService({
     privateKey,
     env: XMTP_ENV,
-    dbPath: makeDbPath(),
+    dbPath,
     dbEncryptionKey,
     revokeOtherInstallations: XMTP_REVOKE_OTHER,
   })
@@ -1633,6 +1672,7 @@ async function startSingleAgentCsw(params: {
   chainId?: number
 }): Promise<RunningAgent> {
   const dbEncryptionKey = getEffectiveDbEncryptionKey()
+  const dbPath = makeDbPath({ enforceSingleFileForEnv: true })
   const swarmProfile = resolveSwarmProfile('single-agent-csw')
   const runtimeBridge = initializeRuntimeBridge('single-agent-csw')
   const signer = createPrivyScwSigner({
@@ -1645,7 +1685,7 @@ async function startSingleAgentCsw(params: {
   const xmtp = new XmtpService({
     signer,
     env: XMTP_ENV,
-    dbPath: makeDbPath(),
+    dbPath,
     dbEncryptionKey,
     revokeOtherInstallations: XMTP_REVOKE_OTHER,
   })
@@ -1694,7 +1734,7 @@ async function startSingleAgentCsw(params: {
           chainId: params.chainId ?? 8453,
         }),
         env: XMTP_ENV,
-        dbPath: makeDbPath(),
+        dbPath,
         dbEncryptionKey,
         revokeOtherInstallations: XMTP_REVOKE_OTHER,
       })
@@ -2020,7 +2060,14 @@ async function main() {
     const privyWalletId = (process.env.XMTP_AGENT_PRIVY_WALLET_ID ?? '').trim()
     const chainId = Number(process.env.XMTP_AGENT_CSW_CHAIN_ID ?? '8453') || 8453
     const ownerIndexRaw = (process.env.XMTP_AGENT_CSW_OWNER_INDEX ?? '').trim()
-    const ownerIndex = ownerIndexRaw ? Number(ownerIndexRaw) : undefined
+    const ownerIndexParsed = ownerIndexRaw ? Number(ownerIndexRaw) : Number.NaN
+    const ownerIndex =
+      Number.isFinite(ownerIndexParsed) && ownerIndexParsed >= 0 ? Math.floor(ownerIndexParsed) : undefined
+    if (ownerIndexRaw && ownerIndex === undefined) {
+      logger.warn('[eliza] invalid XMTP_AGENT_CSW_OWNER_INDEX; ignoring and auto-detecting at runtime', {
+        value: ownerIndexRaw,
+      })
+    }
 
     console.log(`\n  CSW address: ${cswAddress}`)
     console.log(`  Privy wallet: ${privyWalletId.slice(0, 12)}...`)

@@ -353,7 +353,7 @@ Keeper bots in `cre/` relay data between Solana and Base. Install: `cd cre && np
 - Agent-install / delegate-signing surfaces (Zora content coin, landing page, in-app prompts) must avoid alarming verbs like "install", "connect", or "drain"; prefer softer framing such as "delegate signing authority to the 4626 agent", "add co-signer", "authorize", or a neutral queue/process term instead of "drain" — keep ticker/title choices in that register too (e.g. `$agent` / "agent 4626" rather than "AGENT INSTALL").
 - In the top-right account chrome, the primary identity shown should be the connected external EOA (Rabby / MetaMask / Base App wallet) rendered with ENS or Basename and the matching profile picture, with the canonical CSW surfaced separately (via its own basename where one exists). Do not display the Privy embedded EOA as the primary identity — it is a delegated signer, not the user-facing account.
 - After shipping requested changes, the user frequently expects immediate `commit` + `push` execution (and often asks for merge/PR follow-through) rather than stopping at a local diff summary.
-- For CSW owner-setup actions, prefer click-first Base App deep-link/prolink signing flows over manual calldata copy steps when both are possible.
+- For CSW owner-setup and deploy flows, prefer click-first Base App deep-link/prolink or canonical self-auth signing lanes; avoid external-EOA fallback paths, and if canonical signing is unavailable, fail with explicit guidance rather than forcing long manual EOA signature sequences.
 
 ## Learned Workspace Facts
 

@@ -177,7 +177,9 @@ export function createPrivyScwSigner(params: {
           walletId: params.walletId,
           smartWallet: params.cswAddress,
           configuredOwnerIndex,
-          allowConfiguredOwnerIndexFallback: true,
+          // Never silently sign with a stale configured index for XMTP;
+          // index hints are advisory and must match Privy's actual owner wallet.
+          allowConfiguredOwnerIndexFallback: false,
           maxScan: 512,
         })
         return ownerIndex

@@ -11,6 +11,8 @@ type MarketingToAppBaseUrlResolutionInput = {
   fallbackPublicAppOrigin?: string
 }
 
+let warnedLoopbackAppOriginOnPublicHost = false
+
 function isLoopbackHostname(hostname: string): boolean {
   const h = String(hostname || '').trim().toLowerCase()
   return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]'
@@ -71,6 +73,13 @@ export function resolveMarketingToAppBaseUrl(input: MarketingToAppBaseUrlResolut
     const preferred = new URL(input.preferredAppOrigin)
     const current = new URL(input.currentOrigin)
     if (isLoopbackHostname(preferred.hostname) && !isLoopbackHostname(current.hostname)) {
+      if (!warnedLoopbackAppOriginOnPublicHost && typeof window !== 'undefined') {
+        warnedLoopbackAppOriginOnPublicHost = true
+        console.warn(
+          '[host] VITE_APP_ORIGIN resolved to loopback on a public host; using canonical app origin fallback.',
+          { preferred: input.preferredAppOrigin, current: input.currentOrigin, fallback },
+        )
+      }
       return fallback
     }
   } catch {
