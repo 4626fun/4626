@@ -45,7 +45,7 @@ import {
 import { Link, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { coinABI } from '@zoralabs/protocol-deployments'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, ExternalLink } from 'lucide-react'
 import { useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
 import { useSmartWallets } from '@privy-io/react-auth/smart-wallets'
 import { usePrivyClientStatus } from '@/lib/privy/client'
@@ -62,6 +62,7 @@ import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { logger } from '@/lib/observability/logger'
 import { appendBuilderSuffixToHex } from '@/lib/base/baseBuilderCodes'
+import { buildBaseAppProlinkUrl, encodeSingleCallSendCallsProlink } from '@/lib/base/prolink'
 import { useZoraCoin, useZoraProfile } from '@/lib/zora/hooks'
 import { buildZoraHandoffUrl } from '@/lib/zora/referrals'
 import { resolveCreatorIdentity } from '@/lib/identity/creatorIdentity'
@@ -141,6 +142,7 @@ const DEFAULT_SHARE_OFT_VANITY_MAX_TRIES = 1_000_000
 const DEFAULT_VAULT_VANITY_PREFIX = '4626'
 const DEFAULT_VAULT_VANITY_MAX_TRIES = 250_000
 const DEFAULT_DEPLOY_VANITY_CUSTOM_MAX_HEX = 5
+const BATCHER_PHASE1_SELECTOR = '3c51ca4e'
 const BATCHER_PHASE1_WITH_SALT_SELECTOR = '297cb1e6'
 const BATCHER_PHASE1_CORE_SELECTOR = '1331378b'
 const BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR = '4154f24e'
@@ -1950,6 +1952,26 @@ const UNIVERSAL_BYTECODE_STORE_CHUNKCOUNT_ABI = [
   },
 ] as const
 
+const BATCHER_PHASE1_SPLIT_STATE_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'phase1SplitStates',
+    stateMutability: 'view',
+    inputs: [{ name: 'baseSalt', type: 'bytes32' }],
+    outputs: [
+      { name: 'oftBootstrapRegistry', type: 'address' },
+      { name: 'vault', type: 'address' },
+      { name: 'wrapper', type: 'address' },
+      { name: 'shareOFT', type: 'address' },
+      { name: 'shareOftSalt', type: 'bytes32' },
+      { name: 'paramsHash', type: 'bytes32' },
+      { name: 'codeIdsHash', type: 'bytes32' },
+      { name: 'coreDone', type: 'bool' },
+      { name: 'finalized', type: 'bool' },
+    ],
+  },
+] as const
+
 const CREATE2_DEPLOYER_STORE_ABI = [
   {
     type: 'function',
@@ -3209,10 +3231,14 @@ function DeployVaultBatcher({
       const vaultInitCode = concatHex([DEPLOY_BYTECODE.CreatorOVault as Hex, vaultArgs])
 
       let deploymentVersionUsed = deploymentVersion
-      // Apply vault vanity for both default and custom prefixes by deriving a deployment-version suffix.
-      // This keeps deterministic salts while avoiding explicit phase-1 salt overrides.
-      const shouldSearchVersionForVaultPrefix = Boolean(vaultVanityPrefix)
-      if (shouldSearchVersionForVaultPrefix) {
+      let vanityVersionSearchWarning: string | null = null
+      // Apply deployment-version search for deterministic vanity when possible.
+      // When Phase-1 salt overrides are unavailable, also attempt share-suffix matching
+      // via version search (with share suffix taking priority over vault prefix fallback).
+      const useVersionSearchForShareSuffix = Boolean(shareOftVanitySuffix) && !supportsPhase1WithSalt
+      const versionSearchVaultPrefix = vaultVanityPrefix ?? null
+      const versionSearchShareSuffix = useVersionSearchForShareSuffix ? shareOftVanitySuffix : null
+      if (versionSearchVaultPrefix || versionSearchShareSuffix) {
         const vanityTargetsKey = [
           create2Deployer.toLowerCase(),
           creatorToken.toLowerCase(),
@@ -3223,25 +3249,26 @@ function DeployVaultBatcher({
           shareName,
           shareSymbol,
           deploymentVersion,
-          vaultVanityPrefix ?? '',
-          '',
+          versionSearchVaultPrefix ?? '',
+          versionSearchShareSuffix ?? '',
           String(vaultVanityMaxTries),
+          String(shareOftVanityMaxTries),
           '0',
         ].join(':')
         const cached = vaultVanityVersionCacheRef.current
         if (cached?.key === vanityTargetsKey) {
           deploymentVersionUsed = cached.version
         } else {
-          const versionSearchMaxTries = vaultVanityMaxTries
-          const foundVersion = await findDeploymentVersionForVanityTargets({
+          const combinedMaxTries = Math.min(10_000, vaultVanityMaxTries, shareOftVanityMaxTries)
+          let foundVersion = await findDeploymentVersionForVanityTargets({
             create2Deployer,
             creatorToken,
             owner,
             chainId: base.id,
             baseVersion: deploymentVersion,
-            vaultPrefix: vaultVanityPrefix,
-            shareSuffix: null,
-            maxTries: versionSearchMaxTries,
+            vaultPrefix: versionSearchVaultPrefix,
+            shareSuffix: versionSearchShareSuffix,
+            maxTries: combinedMaxTries,
             vaultInitCode,
             shareOftInitCode,
             shareSymbol,
@@ -3250,9 +3277,46 @@ function DeployVaultBatcher({
               return !!bc && bc !== '0x'
             },
           })
+          // If both targets are requested and a combined hit wasn't found,
+          // prioritize deterministic share suffix for deploy correctness/UX.
+          if (!foundVersion && versionSearchVaultPrefix && versionSearchShareSuffix) {
+            foundVersion = await findDeploymentVersionForVanityTargets({
+              create2Deployer,
+              creatorToken,
+              owner,
+              chainId: base.id,
+              baseVersion: deploymentVersion,
+              vaultPrefix: null,
+              shareSuffix: versionSearchShareSuffix,
+              maxTries: shareOftVanityMaxTries,
+              vaultInitCode,
+              shareOftInitCode,
+              shareSymbol,
+              isAddressDeployed: async (addr) => {
+                const bc = await publicClient!.getBytecode({ address: addr })
+                return !!bc && bc !== '0x'
+              },
+            })
+            if (foundVersion) {
+              vanityVersionSearchWarning =
+                `Could not satisfy vault prefix 0x${versionSearchVaultPrefix} with share suffix ${versionSearchShareSuffix} in the same version search window. ` +
+                `Prioritizing share suffix ${versionSearchShareSuffix} for this deploy.`
+            }
+          }
           if (!foundVersion) {
+            if (versionSearchVaultPrefix && versionSearchShareSuffix) {
+              throw new Error(
+                `Unable to find a deployment version matching vault prefix "0x${versionSearchVaultPrefix}" and share suffix "${versionSearchShareSuffix}" ` +
+                  `in ${combinedMaxTries.toLocaleString()} tries (share-only fallback also failed after ${shareOftVanityMaxTries.toLocaleString()} tries).`,
+              )
+            }
+            if (versionSearchShareSuffix) {
+              throw new Error(
+                `Unable to find ShareOFT vanity suffix "${versionSearchShareSuffix}" in ${shareOftVanityMaxTries.toLocaleString()} deployment-version tries.`,
+              )
+            }
             throw new Error(
-              `Unable to find vault vanity prefix "0x${vaultVanityPrefix}" in ${versionSearchMaxTries.toLocaleString()} deployment-version tries. ` +
+              `Unable to find vault vanity prefix "0x${versionSearchVaultPrefix}" in ${vaultVanityMaxTries.toLocaleString()} deployment-version tries. ` +
                 'Increase VITE_VAULT_VANITY_MAX_TRIES and retry.',
             )
           }
@@ -3299,6 +3363,11 @@ function DeployVaultBatcher({
         shareOftVanityWarning =
           `Active batcher ${batcherDisplay} does not support Phase-1 salt overrides, so default share suffix ` +
           `"${shareOftVanitySuffix}" is not guaranteed for this deploy.`
+      }
+      if (vanityVersionSearchWarning) {
+        shareOftVanityWarning = shareOftVanityWarning
+          ? `${shareOftVanityWarning} ${vanityVersionSearchWarning}`
+          : vanityVersionSearchWarning
       }
 
       const derivedShareOftSalt = deriveShareOftSalt({ owner, shareSymbol, version: deploymentVersionUsed })
@@ -4810,13 +4879,36 @@ function DeployVaultBatcher({
             'Update `VITE_CREATOR_VAULT_BATCHER` (and server `CREATOR_VAULT_BATCHER`) to the current batcher.',
         )
       }
-      const supportsSplitPhase1 = (() => {
+      let supportsSplitPhase1 = (() => {
         if (!batcherBytecode || batcherBytecode === '0x') return false
         return (
           batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_SELECTOR) &&
           batcherBytecodeLower.includes(BATCHER_PHASE1_FINALIZE_SELECTOR)
         )
       })()
+      const supportsLegacyPhase1 = (() => {
+        if (!batcherBytecode || batcherBytecode === '0x') return false
+        return batcherBytecodeLower.includes(BATCHER_PHASE1_SELECTOR)
+      })()
+      if (!supportsSplitPhase1) {
+        try {
+          await publicClient.readContract({
+            address: batcherAddress as Address,
+            abi: BATCHER_PHASE1_SPLIT_STATE_VIEW_ABI,
+            functionName: 'phase1SplitStates',
+            args: [ZERO_BYTES32 as Hex],
+          })
+          supportsSplitPhase1 = true
+        } catch {
+          // no-op: keep selector-derived capability
+        }
+      }
+      if (!supportsSplitPhase1 && !supportsLegacyPhase1) {
+        throw new Error(
+          `Configured batcher at ${batcherAddress} exposes neither split Phase-1 nor legacy deployPhase1 entrypoints. ` +
+            'Update VITE_CREATOR_VAULT_BATCHER / CREATOR_VAULT_BATCHER.',
+        )
+      }
       const supportsLegacyPhase1WithSalt = (() => {
         if (!expectedShareOftSaltOverride) return true
         if (!batcherBytecode || batcherBytecode === '0x') return false
@@ -7907,6 +7999,45 @@ function DeployVaultMain() {
     if (canonicalIdentityBytecodeQuery.isSuccess) return 'eoa'
     return 'unknown'
   }, [canonicalIdentityBytecodeQuery.isSuccess, canonicalIdentityIsContract])
+  const addPrivySmartWalletOwnerCalldata = useMemo(() => {
+    if (!canonicalIdentityIsContract || !canonicalIdentityAddress || !privySmartWalletAddress) return null
+    try {
+      return encodeFunctionData({
+        abi: COINBASE_SMART_WALLET_OWNER_MGMT_ABI,
+        functionName: 'addOwnerAddress',
+        args: [privySmartWalletAddress],
+      })
+    } catch {
+      return null
+    }
+  }, [canonicalIdentityAddress, canonicalIdentityIsContract, privySmartWalletAddress])
+  const addPrivySmartWalletOwnerProlinkQuery = useQuery({
+    queryKey: [
+      'deploy-vault',
+      'add-privy-smart-wallet-owner-prolink',
+      canonicalIdentityAddress,
+      privySmartWalletAddress,
+      addPrivySmartWalletOwnerCalldata,
+    ],
+    queryFn: async () => {
+      if (!canonicalIdentityAddress || !addPrivySmartWalletOwnerCalldata) return null
+      return await encodeSingleCallSendCallsProlink({
+        to: canonicalIdentityAddress,
+        data: addPrivySmartWalletOwnerCalldata,
+      })
+    },
+    enabled: Boolean(canonicalIdentityAddress && addPrivySmartWalletOwnerCalldata),
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  })
+  const addPrivySmartWalletOwnerProlinkUrl = useMemo(() => {
+    if (!addPrivySmartWalletOwnerProlinkQuery.data) return null
+    try {
+      return buildBaseAppProlinkUrl(addPrivySmartWalletOwnerProlinkQuery.data)
+    } catch {
+      return null
+    }
+  }, [addPrivySmartWalletOwnerProlinkQuery.data])
 
   const privySmartWalletIsCanonicalOwnerQuery = useQuery({
     queryKey: ['coinbaseSmartWalletOwner', 'privySmartWallet', canonicalIdentityAddress, privySmartWalletAddress],
@@ -7984,100 +8115,86 @@ function DeployVaultMain() {
         args: [privySmartWalletAddress],
       })
 
-      if (!connectedWalletAddress || !walletClient || !publicClient) {
+      if (!walletClient || !publicClient) {
         throw new Error('Wallet not connected. Please connect a wallet that is an owner of your canonical Coinbase Smart Wallet.')
       }
-      if (connectedWalletAddress.toLowerCase() === canonicalIdentityAddress.toLowerCase()) {
-        throw new Error(
-          'Add-owner setup requires an owner EOA signer. Connect an owner EOA wallet (for example Coinbase Wallet) and retry.',
-        )
+      if (!connectedWalletAddress) {
+        throw new Error('Wallet not connected. Please connect a wallet that is an owner of your canonical Coinbase Smart Wallet.')
       }
 
       await ensureBaseChain('your wallet')
-
-      const isOwner = await isCoinbaseSmartWalletOwner({
-        smartWallet: canonicalIdentityAddress as Address,
-        ownerAddress: connectedWalletAddress as Address,
-      })
-
-      if (!isOwner) {
-        throw new Error(
-          'Your connected wallet is not an owner of your canonical Coinbase Smart Wallet.\n\n' +
-            'Connect with a wallet that controls your Zora identity.'
-        )
-      }
-
-      const paymasterEnv = import.meta.env.VITE_CDP_PAYMASTER_URL as string | undefined
-      const bundlerUrl = resolveCdpPaymasterUrl(paymasterEnv) || '/api/paymaster'
-      const usingPaymasterProxy = isPaymasterProxyUrl(bundlerUrl)
-      if (!usingPaymasterProxy) {
-        try {
-          logger.info('[DeployVault] Trying ERC-4337 to add app smart wallet as owner (gas-free)', {
-            connector: connector?.id,
-            owner: connectedWalletAddress,
-            smartWallet: privySmartWalletAddress,
-          })
-
-          const result = await sendCoinbaseSmartWalletUserOperation({
-            publicClient: publicClient as any,
-            walletClient: walletClient as any,
-            bundlerUrl,
-            smartWallet: canonicalIdentityAddress as Address,
-            ownerAddress: connectedWalletAddress as Address,
-            calls: [{
-              to: canonicalIdentityAddress as Address,
-              value: 0n,
-              data: addOwnerData,
-            }],
-            version: '1',
-          })
-
-          setAddPrivySmartWalletOwnerTxHash(result.transactionHash)
-          logger.info('[DeployVault] App smart wallet added as owner via ERC-4337 (gas-free)', {
-            userOpHash: result.userOpHash,
-            txHash: result.transactionHash,
-            smartWallet: privySmartWalletAddress,
-            connector: connector?.id,
-          })
-
-          await privySmartWalletIsCanonicalOwnerQuery.refetch()
-          return true
-        } catch (erc4337Error: any) {
-          // Adding owners is frequently *not* sponsorable via a self-call UserOp depending on
-          // the smart wallet's internal access rules. When it fails, fall back to a normal tx
-          // from the connected EOA (requires gas, but is the most reliable path).
-          logger.warn('[DeployVault] ERC-4337 failed, falling back to direct tx', {
-            error: erc4337Error?.message,
-            connector: connector?.id,
-          })
-        }
-      } else {
-        logger.info('[DeployVault] Skipping ERC-4337 add-owner sponsorship via paymaster proxy; using direct tx', {
-          connector: connector?.id,
-          owner: connectedWalletAddress,
+      const walletIsCanonicalSelfSigner = connectedWalletAddress.toLowerCase() === canonicalIdentityAddress.toLowerCase()
+      const finalizeOwnerAddTx = async (txHash: Hex, submissionPath: string): Promise<boolean> => {
+        setAddPrivySmartWalletOwnerTxHash(txHash)
+        logger.info('[DeployVault] App smart wallet add-owner transaction submitted', {
+          txHash,
+          canonical: canonicalIdentityAddress,
           smartWallet: privySmartWalletAddress,
+          submissionPath,
         })
+        await publicClient.waitForTransactionReceipt({ hash: txHash })
+        await privySmartWalletIsCanonicalOwnerQuery.refetch()
+        return true
       }
 
-      logger.info('[DeployVault] Using direct tx fallback to add app smart wallet as owner (requires gas)')
+      // Primary lane: canonical self-auth (Base Account / CSW-as-signer)
+      if (walletIsCanonicalSelfSigner) {
+        const walletRequest =
+          typeof (walletClient as any)?.request === 'function'
+            ? ((walletClient as any).request as (args: { method: string; params?: unknown[] }) => Promise<unknown>)
+            : null
 
-      const txHash = await walletClient.sendTransaction({
-        to: canonicalIdentityAddress as Address,
-        data: addOwnerData,
-        value: 0n,
-        chain: base,
-      })
+        if (walletRequest) {
+          try {
+            const rawTxHash = await walletRequest({
+              method: 'eth_sendTransaction',
+              params: [{
+                from: canonicalIdentityAddress as Address,
+                to: canonicalIdentityAddress as Address,
+                data: addOwnerData,
+                value: '0x0',
+              }],
+            })
+            if (typeof rawTxHash === 'string' && /^0x[a-fA-F0-9]{64}$/.test(rawTxHash)) {
+              return await finalizeOwnerAddTx(rawTxHash as Hex, 'canonical_self_auth.eth_sendTransaction')
+            }
+            throw new Error('eth_sendTransaction did not return a valid transaction hash.')
+          } catch (canonicalSelfAuthError: any) {
+            if (isUserRejectedErrorMessage(canonicalSelfAuthError?.message ?? String(canonicalSelfAuthError ?? ''))) {
+              throw canonicalSelfAuthError
+            }
+            logger.warn('[DeployVault] Canonical self-auth eth_sendTransaction failed; trying fallback lane', {
+              error: canonicalSelfAuthError?.message,
+              connector: connector?.id,
+            })
+          }
+        }
 
-      setAddPrivySmartWalletOwnerTxHash(txHash)
-      logger.info('[DeployVault] App smart wallet added as owner via direct tx', {
-        txHash,
-        canonical: canonicalIdentityAddress,
-        smartWallet: privySmartWalletAddress,
-      })
+        try {
+          const txHash = await walletClient.sendTransaction({
+            to: canonicalIdentityAddress as Address,
+            data: addOwnerData,
+            value: 0n,
+            chain: base,
+          })
+          return await finalizeOwnerAddTx(txHash, 'canonical_self_auth.sendTransaction')
+        } catch (canonicalFallbackError: any) {
+          if (isUserRejectedErrorMessage(canonicalFallbackError?.message ?? String(canonicalFallbackError ?? ''))) {
+            throw canonicalFallbackError
+          }
+          logger.warn('[DeployVault] Canonical self-auth fallback sendTransaction failed', {
+            error: canonicalFallbackError?.message,
+            connector: connector?.id,
+          })
+          throw new Error(
+            'Base Account owner approval could not be completed in this session. Use the Base App prolink above or reconnect with your canonical Base Account wallet and retry.',
+          )
+        }
+      }
 
-      await publicClient.waitForTransactionReceipt({ hash: txHash })
-      await privySmartWalletIsCanonicalOwnerQuery.refetch()
-      return true
+      throw new Error(
+        'This setup now requires canonical Base Account self-auth only. Reconnect with your canonical Base Account wallet (sender must equal your CSW) or use the Base App prolink above.',
+      )
     } catch (e: any) {
       const msg = typeof e?.message === 'string' ? e.message : 'Failed to add app smart wallet as owner'
       setAddPrivySmartWalletOwnerError(msg)
@@ -8590,6 +8707,10 @@ function DeployVaultMain() {
     if (!privySmartWalletAddress || !canonicalIdentityAddress) return false
     return privySmartWalletAddress.toLowerCase() === canonicalIdentityAddress.toLowerCase()
   }, [privySmartWalletAddress, canonicalIdentityAddress])
+  const connectedWalletMatchesCanonical = useMemo(() => {
+    if (!connectedWalletAddress || !canonicalIdentityAddress) return false
+    return connectedWalletAddress.toLowerCase() === canonicalIdentityAddress.toLowerCase()
+  }, [connectedWalletAddress, canonicalIdentityAddress])
   
   const isCoinbaseWalletDirect = connector?.id === 'coinbaseWalletSDK' || connector?.id === 'com.coinbase.wallet'
 
@@ -8605,6 +8726,7 @@ function DeployVaultMain() {
     if (privySmartWalletIsCanonicalOwner) return
     if (!canonicalIdentityIsContract || !canonicalIdentityAddress) return
     if (!connectedWalletAddress) return
+    if (!connectedWalletMatchesCanonical) return
     if (addPrivySmartWalletOwnerBusy) return
     if (autoSmartWalletOwnerAttemptCount >= 3) return
 
@@ -8640,6 +8762,7 @@ function DeployVaultMain() {
     canonicalIdentityAddress,
     canonicalIdentityIsContract,
     connectedWalletAddress,
+    connectedWalletMatchesCanonical,
     handleAddPrivyAppSmartWalletOwner,
     isCoinbaseWalletDirect,
     strictNoEoaMode,
@@ -8849,11 +8972,11 @@ function DeployVaultMain() {
                       : oneTimePrivyOwnerApprovalNeeded
                         ? connectedWalletAddress
                           ? 'One-time owner approval required before deploy. Approve your app Privy wallet as an owner of your canonical Coinbase Smart Wallet.'
-                          : 'One-time owner approval required. Connect an owner wallet, approve once, then deploy.'
+                          : 'One-time owner approval required. Connect your canonical Base Account wallet, approve once, then deploy.'
                       : !smartWalletCapabilityReady
                         ? hasDetectedZoraCrossAppWallet
-                          ? 'Detected your Zora wallet, but this session is read-only for deploy signing. Connect Coinbase Wallet (owner EOA) to sign ERC-4337 UserOps, then retry.'
-                          : 'Smart wallet required. Sign in to 4626 to restore your canonical Coinbase Smart Wallet session, connect an owner EOA, or use Coinbase Wallet (Base Account).'
+                          ? 'Detected your Zora wallet, but this session is read-only for deploy signing. Reconnect with your canonical Base Account wallet and retry.'
+                          : 'Smart wallet required. Sign in to 4626 to restore your canonical Coinbase Smart Wallet session, then connect via Base Account.'
                     : bytecodeInfraQuery.isFetching
                       ? 'Checking deployment bytecode store…'
                       : bytecodeInfraQuery.isError
@@ -8938,18 +9061,65 @@ function DeployVaultMain() {
                   {' · '}
                   App Privy wallet: <span className="font-mono">{shortAddress(privySmartWalletAddress as Address)}</span>
                 </div>
+                {addPrivySmartWalletOwnerProlinkQuery.isLoading ? (
+                  <div className="text-[11px] text-zinc-400">Encoding Base App prolink…</div>
+                ) : addPrivySmartWalletOwnerProlinkQuery.data ? (
+                  <div className="rounded-md border border-white/10 bg-black/20 px-2.5 py-2 space-y-2">
+                    <div className="text-[10px] uppercase tracking-wider text-zinc-500">Base App prolink (same owner-add call)</div>
+                    {addPrivySmartWalletOwnerProlinkUrl ? (
+                      <a
+                        href={addPrivySmartWalletOwnerProlinkUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 rounded-md border border-purple-300/30 bg-purple-400/10 px-2 py-1 text-[10px] text-purple-100 hover:bg-purple-400/20"
+                      >
+                        Open in Base App <ExternalLink className="w-3 h-3" />
+                      </a>
+                    ) : null}
+                    <div className="flex items-start gap-2">
+                      <span className="text-[10px] text-zinc-300 font-mono break-all">{addPrivySmartWalletOwnerProlinkQuery.data}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          void (async () => {
+                            try {
+                              if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                                await navigator.clipboard.writeText(addPrivySmartWalletOwnerProlinkQuery.data ?? '')
+                                return
+                              }
+                            } catch {
+                              // ignore clipboard failures
+                            }
+                          })()
+                        }}
+                        className="shrink-0 rounded-md border border-white/15 bg-black/30 px-2 py-1 text-[10px] text-zinc-300 hover:bg-black/40"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                ) : addPrivySmartWalletOwnerProlinkQuery.error ? (
+                  <div className="text-[11px] text-amber-200/80">
+                    Prolink unavailable: {(addPrivySmartWalletOwnerProlinkQuery.error as Error)?.message}
+                  </div>
+                ) : null}
                 {!connectedWalletAddress ? (
                   <div className="space-y-2">
                     <div className="text-[11px] text-amber-200/85">
-                      Connect an owner wallet (Rabby/Coinbase/etc) to submit this one-time approval.
+                      Connect your canonical Base Account wallet to submit this one-time approval.
                     </div>
                     <button
                       type="button"
                       className="btn-secondary w-full sm:w-auto"
                       onClick={() => void login({ loginMethods: ['wallet'] })}
                     >
-                      Connect Owner Wallet
+                      Connect Base Account Wallet
                     </button>
+                  </div>
+                ) : null}
+                {connectedWalletAddress && !connectedWalletMatchesCanonical ? (
+                  <div className="text-[11px] text-amber-200/85">
+                    Connected signer does not match your canonical CSW. Reconnect with Base Account (canonical sender) or use the Base App prolink.
                   </div>
                 ) : null}
                 {addPrivySmartWalletOwnerTxHash ? (
@@ -8971,7 +9141,7 @@ function DeployVaultMain() {
                 <button
                   type="button"
                   onClick={() => void handleAddPrivyAppSmartWalletOwner()}
-                  disabled={addPrivySmartWalletOwnerBusy || !connectedWalletAddress}
+                  disabled={addPrivySmartWalletOwnerBusy || !connectedWalletAddress || !connectedWalletMatchesCanonical}
                   className="btn-primary w-full sm:w-auto"
                 >
                   {addPrivySmartWalletOwnerBusy ? 'Waiting for wallet confirmation…' : 'Approve Once'}
