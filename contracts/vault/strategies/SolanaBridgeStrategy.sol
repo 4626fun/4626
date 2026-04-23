@@ -28,6 +28,8 @@ contract SolanaBridgeStrategy is IStrategy, IStrategyValuation, Ownable, Reentra
     error InvalidAddress();
     error InvalidAmount();
     error BridgeConfigMissing();
+    // FIX: H-14 — bridge call produced no-op / wrong token movement
+    error BridgeCallNotConsumed(uint256 expected, uint256 actual);
 
     address public immutable vault;
     IERC20 public immutable ASSET;
@@ -130,8 +132,22 @@ contract SolanaBridgeStrategy is IStrategy, IStrategyValuation, Ownable, Reentra
         if (bridgeAdapter == address(0) || solanaDestination == bytes32(0)) revert BridgeConfigMissing();
         if (amount > ASSET.balanceOf(address(this))) revert InvalidAmount();
 
+        // FIX: H-14 — post-call balance check so a misbehaving adapter that
+        // silently returns without moving tokens (e.g. void return, swallowed
+        // inner failure) cannot make this contract believe the bridge
+        // succeeded. Solidity high-level calls revert on bubbled failures, but
+        // we still want positive evidence that the tokens left this contract.
+        uint256 balBefore = ASSET.balanceOf(address(this));
+
         ASSET.forceApprove(bridgeAdapter, amount);
         ISolanaBridgeAdapter(bridgeAdapter).bridgeToSolana{value: msg.value}(address(ASSET), amount, solanaDestination);
+
+        uint256 balAfter = ASSET.balanceOf(address(this));
+        uint256 consumed = balBefore > balAfter ? balBefore - balAfter : 0;
+        if (consumed != amount) {
+            revert BridgeCallNotConsumed(amount, consumed);
+        }
+
         emit BridgedToSolana(amount, solanaDestination);
     }
 

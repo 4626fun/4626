@@ -483,7 +483,11 @@ contract CreatorGaugeController is Ownable, ReentrancyGuard {
                 tokenOut: address(creatorCoin),
                 fee: swapFeeTier,
                 recipient: address(this),
-                deadline: block.timestamp,
+                // FIX: H-03 — give the swap a real 2-minute deadline window
+                // instead of block.timestamp, which provides zero slack against
+                // sequencer delays or re-orgs on L2 and effectively disables
+                // deadline protection.
+                deadline: block.timestamp + 2 minutes,
                 amountIn: wethAmount,
                 amountOutMinimum: minAmountOut,
                 sqrtPriceLimitX96: sqrtPriceLimitX96

@@ -111,6 +111,8 @@ contract FullRangeStrategy is Ownable, ReentrancyGuard {
     event Deposited(uint256 creatorCoinAmount, uint256 pairedAmount, uint256 liquidity);
     event Withdrawn(uint256 liquidity, uint256 creatorCoinAmount, uint256 pairedAmount);
     event Rebalanced(uint256 timestamp);
+    /// @notice FIX: H-15 — fees actually collected from the V4 position
+    event FeesCollected(uint256 creatorCoinAmount, uint256 pairedAmount);
     event PoolConfigured(
         bytes32 poolId, address poolManager, address positionManager, address permit2, bool creatorIsCurrency0
     );
@@ -389,12 +391,15 @@ contract FullRangeStrategy is Ownable, ReentrancyGuard {
      * @dev Full range doesn't need tick rebalancing, just fee collection
      */
     function rebalance() external onlyLPManager whenActive {
-        // Collect accrued fees
-        // _collectFees();
+        // FIX: H-15 — previously this was a commented-out TODO, so rebalance()
+        // never actually collected accrued fees from the V4 position, causing
+        // fees to silently accrue in the position and never flow back to the
+        // LP Manager / vault.
+        if (positionTokenId != 0 && totalLiquidity > 0) {
+            _collectFees(positionTokenId);
+        }
 
-        // For full range, no tick adjustment needed
-        // Just reinvest collected fees if desired
-
+        // For full range, no tick adjustment needed.
         emit Rebalanced(block.timestamp);
     }
 
@@ -485,6 +490,43 @@ contract FullRangeStrategy is Ownable, ReentrancyGuard {
         params[2] = abi.encode(poolKey.currency1);
 
         IPositionManager(positionManager).modifyLiquidities(abi.encode(actions, params), block.timestamp + 1);
+    }
+
+    /**
+     * @notice Collect accrued Uniswap V4 fees from our full-range position.
+     * @dev FIX: H-15 — implements the previously-stubbed _collectFees.
+     *      In Uniswap V4, issuing DECREASE_LIQUIDITY with liquidityDelta == 0
+     *      is the canonical way to "poke" a position and claim accrued fees
+     *      without removing principal. CLOSE_CURRENCY on both currencies
+     *      sweeps the resulting deltas back to this contract. Collected fees
+     *      are forwarded to the LP Manager so they can be compounded or
+     *      distributed by the caller.
+     * @param tokenId The V4 position NFT id
+     */
+    function _collectFees(uint256 tokenId) internal {
+        uint256 balCreatorBefore = CREATOR_COIN.balanceOf(address(this));
+        uint256 balPairedBefore = PAIRED_TOKEN.balanceOf(address(this));
+
+        bytes memory actions = new bytes(3);
+        actions[0] = bytes1(uint8(Actions.DECREASE_LIQUIDITY));
+        actions[1] = bytes1(uint8(Actions.CLOSE_CURRENCY));
+        actions[2] = bytes1(uint8(Actions.CLOSE_CURRENCY));
+
+        bytes[] memory params = new bytes[](3);
+        // liquidityDelta = 0 → PosM treats this as a fee-only collection
+        params[0] = abi.encode(tokenId, uint256(0), uint128(0), uint128(0), bytes(""));
+        params[1] = abi.encode(poolKey.currency0);
+        params[2] = abi.encode(poolKey.currency1);
+
+        IPositionManager(positionManager).modifyLiquidities(abi.encode(actions, params), block.timestamp + 1);
+
+        uint256 creatorCollected = CREATOR_COIN.balanceOf(address(this)) - balCreatorBefore;
+        uint256 pairedCollected = PAIRED_TOKEN.balanceOf(address(this)) - balPairedBefore;
+
+        if (creatorCollected > 0) CREATOR_COIN.safeTransfer(lpManager, creatorCollected);
+        if (pairedCollected > 0) PAIRED_TOKEN.safeTransfer(lpManager, pairedCollected);
+
+        emit FeesCollected(creatorCollected, pairedCollected);
     }
 
     function _posmDecrease(uint256 tokenId, uint128 liquidityToRemove) internal {

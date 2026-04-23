@@ -45,6 +45,12 @@ runs = 256
 via_ir = true
 optimizer = true
 optimizer_runs = 200
+# C-04 (4626-292): EIP-170 size gate. CI must run `forge build --sizes`
+# and fail the job if any contract exceeds 24,576 bytes runtime bytecode.
+# See docs/operations/contract-size-gate.md for the recommended workflow.
+# CCALaunchStrategy is the current hot-spot contract — Sprint 2 adds
+# ~<200 bytes (H-02 slot0 check + deadlines) and does not itself push it
+# over the cap, but the gate must be enforced going forward.
 
 [rpc_endpoints]
 base = "${BASE_RPC_URL}"

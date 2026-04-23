@@ -7,6 +7,11 @@ sidebar_position: 1
 
 Deployed contract addresses for 4626.
 
+> **Canonical source.** This file is the single source of truth for live deployed
+> addresses. Per-release notes under `docs/operations/deployment/releases/` are
+> frozen point-in-time records; when those disagree with this file, **this file
+> wins**. (Fix H-16 consolidation — 4626-308.)
+
 ## Base (Hub Chain)
 
 ### Current Live Infrastructure (`v1.9.2` deploy namespace, `v1.8.3` infra broadcast)
@@ -18,7 +23,7 @@ Deployed contract addresses for 4626.
 | VaultActivationBatcher | `0x7Cc0050842433968cc7A0884d192b61FD0b46F63` |
 | CreatorLotteryManager | `0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357` |
 | CreatorVRFConsumerV2_5 | `0xdd25Ed1b3D258Ccc6D306a9a325Af1A7F96C7F47` |
-| SolanaBridgeAdapter | `0x653326dD0145656eC3b598943C0E84d7405aE6Ae` |
+| SolanaBridgeAdapter | `0x90F578A4e23c1cB8DDFE63fd496ED7F4474f2b00` |
 | UniversalBytecodeStoreV2 | `0xA009B1Bf8cB711c115d832AEb392156BA6A4112e` |
 | UniversalCreate2DeployerFromStore | `0xFd2657b6f1905C3F0494942F618a68963CF792Ec` |
 | CreatorOVaultCoreModule | `0xeD728378f969f8e94a19fC081172D1e67B80412e` |

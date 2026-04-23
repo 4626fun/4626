@@ -92,6 +92,23 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
     /// @notice Total voting supply
     uint256 private _totalVotingSupply;
 
+    // FIX: H-06 — historical total-voting-supply checkpoints.
+    // Previously getPastTotalSupply() returned the *current* _totalVotingSupply
+    // for every timepoint, so a governance snapshot taken at block N would be
+    // evaluated against the supply at the block the proposal was cast, enabling
+    // quorum manipulation (e.g. unlock-then-vote-then-re-lock within a proposal).
+    // We now append a (clock, supply) entry on every mutation of _totalVotingSupply
+    // and binary-search it in getPastTotalSupply to return the supply that was
+    // in effect at or before the requested clock value.
+    struct SupplyCheckpoint {
+        uint48 clockTime; // ERC20Votes clock() value (default: block.number)
+        uint208 supply;   // _totalVotingSupply at that time
+    }
+    SupplyCheckpoint[] private _totalSupplyCheckpoints;
+
+    error FutureSupplyLookup(uint256 timepoint, uint48 clockNow);
+    error SupplyCheckpointOverflow(uint256 supply);
+
     // ================================
     // CONSTRUCTOR
     // ================================
@@ -397,6 +414,39 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
     // Required overrides
     function _update(address from, address to, uint256 value) internal override(ERC20, ERC20Votes) {
         super._update(from, to, value);
+        // FIX: H-06 — checkpoint _totalVotingSupply on every mint/burn so
+        // getPastTotalSupply can resolve historical snapshots accurately.
+        // This also covers the ExpiredLockBurned / increaseLockAmount paths
+        // because they all funnel through _mint/_burn → _update.
+        _writeSupplyCheckpoint();
+    }
+
+    /**
+     * @dev FIX: H-06 — append the current _totalVotingSupply to the checkpoint
+     *      array, replacing the last entry in-place when two writes happen
+     *      within the same clock tick (matches the OZ Checkpoints convention).
+     */
+    function _writeSupplyCheckpoint() internal {
+        uint256 supply = _totalVotingSupply;
+        if (supply > type(uint208).max) revert SupplyCheckpointOverflow(supply);
+        uint48 nowClock = SafeCastUint48(clock());
+        uint256 len = _totalSupplyCheckpoints.length;
+        if (len > 0 && _totalSupplyCheckpoints[len - 1].clockTime == nowClock) {
+            _totalSupplyCheckpoints[len - 1].supply = uint208(supply);
+        } else {
+            _totalSupplyCheckpoints.push(
+                SupplyCheckpoint({clockTime: nowClock, supply: uint208(supply)})
+            );
+        }
+    }
+
+    /**
+     * @dev FIX: H-06 — tiny local helper because we do not want to import
+     *      OZ SafeCast just for one uint48 cast.
+     */
+    function SafeCastUint48(uint256 v) private pure returns (uint48) {
+        require(v <= type(uint48).max, "clock overflow");
+        return uint48(v);
     }
 
     // FIX: G-07 — override getPastVotes to return time-decayed voting power
@@ -409,10 +459,34 @@ contract ve4626 is Ive4626, Ownable, ERC20, ERC20Permit, ERC20Votes, ReentrancyG
         return (userLock.amount * duration) / MAX_LOCK_DURATION;
     }
 
-    // FIX: G-07 — override getPastTotalSupply to return current _totalVotingSupply
-    // (prevents inflated quorum denominators from stale ERC20 total supply checkpoints)
-    function getPastTotalSupply(uint256 /* timepoint */) public view override returns (uint256) {
-        return _totalVotingSupply;
+    // FIX: H-06 (supersedes G-07) — binary search the checkpoint array to
+    // return the _totalVotingSupply in effect at `timepoint`. The prior
+    // implementation always returned the current supply regardless of
+    // timepoint, which let a voter manipulate quorum by changing their lock
+    // between the snapshot block and the vote cast.
+    function getPastTotalSupply(uint256 timepoint) public view override returns (uint256) {
+        uint48 currentClock = SafeCastUint48(clock());
+        if (timepoint >= currentClock) revert FutureSupplyLookup(timepoint, currentClock);
+
+        uint256 len = _totalSupplyCheckpoints.length;
+        if (len == 0) return 0;
+
+        // Binary search for the last checkpoint with clockTime <= timepoint.
+        // Invariant: answer lies in [lo, hi).
+        uint256 lo = 0;
+        uint256 hi = len;
+        while (lo < hi) {
+            uint256 mid = (lo + hi) >> 1;
+            if (_totalSupplyCheckpoints[mid].clockTime > timepoint) {
+                hi = mid;
+            } else {
+                lo = mid + 1;
+            }
+        }
+        // lo is the first index with clockTime > timepoint; the checkpoint at
+        // lo - 1 is the one in effect at `timepoint`.
+        if (lo == 0) return 0;
+        return uint256(_totalSupplyCheckpoints[lo - 1].supply);
     }
 
     function nonces(address owner) public view override(ERC20Permit, Nonces) returns (uint256) {

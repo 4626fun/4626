@@ -14,6 +14,8 @@ import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
 import {LPFeeLibrary} from "@uniswap/v4-core/src/libraries/LPFeeLibrary.sol";
 import {LiquidityAmounts} from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
 import {IPositionManager} from "@uniswap/v4-periphery/src/interfaces/IPositionManager.sol";
+import {StateLibrary} from "@uniswap/v4-core/src/libraries/StateLibrary.sol";
+import {PoolId, PoolIdLibrary} from "@uniswap/v4-core/src/types/PoolId.sol";
 import {ICreatorOracle} from "../../interfaces/ICreatorOracle.sol";
 import {CCALaunchStrategyConfigModule} from "./CCALaunchStrategyConfigModule.sol";
 import {CCALaunchStrategyEncodingHelper} from "./CCALaunchStrategyEncodingHelper.sol";
@@ -339,6 +341,8 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
     error InvalidConfig();
     error Unauthorized();
     error EthTransferFailed();
+    // FIX: H-02 — migrate deadline / slippage protection
+    error MigrationSqrtPriceMismatch(uint160 expected, uint160 actual);
 
     // ================================
     // CONSTRUCTOR
@@ -718,6 +722,18 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         _setPhase(LifecyclePhase.PoolInitializing);
         poolManager.initialize(key, sqrtPriceX96);
 
+        // FIX: H-02 — verify pool slot0 matches the price we computed from the
+        // auction clearing price. If a prior tx initialized the pool at a
+        // different sqrtPrice (front-run / stale pool), this guards the LP
+        // mint against adding liquidity at a manipulated price.
+        {
+            PoolId pid = PoolIdLibrary.toId(key);
+            (uint160 actualSqrtPriceX96,,,) = StateLibrary.getSlot0(poolManager, pid);
+            if (actualSqrtPriceX96 != sqrtPriceX96) {
+                revert MigrationSqrtPriceMismatch(sqrtPriceX96, actualSqrtPriceX96);
+            }
+        }
+
         Plan memory plan = StrategyPlanner.init();
         BasePositionParams memory baseParams = BasePositionParams({
             currency: currency,
@@ -741,11 +757,16 @@ contract CCALaunchStrategy is Ownable, ReentrancyGuard {
         _persistLifecycleSnapshot();
 
         Currency.wrap(address(auctionToken)).transfer(address(positionManager), fullRangeTokenAmount);
+        // FIX: H-02 — give the position-manager call a real deadline window
+        // (5 minutes) instead of the raw block.timestamp used previously,
+        // which left no slack and effectively disabled deadline protection
+        // for L2 re-orgs or sequencer delays.
+        uint256 migrationDeadline = block.timestamp + 5 minutes;
         if (currency == address(0)) {
-            positionManager.modifyLiquidities{value: fullRangeCurrencyAmount}(encodedPlan, block.timestamp);
+            positionManager.modifyLiquidities{value: fullRangeCurrencyAmount}(encodedPlan, migrationDeadline);
         } else {
             IERC20(currency).safeTransfer(address(positionManager), fullRangeCurrencyAmount);
-            positionManager.modifyLiquidities(encodedPlan, block.timestamp);
+            positionManager.modifyLiquidities(encodedPlan, migrationDeadline);
         }
 
         _configureOracleV4Pool();

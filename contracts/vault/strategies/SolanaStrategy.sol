@@ -37,6 +37,8 @@ contract SolanaStrategy is IStrategy, IStrategyValuation, Ownable, ReentrancyGua
     // ================================
 
     event RemoteNavUpdated(uint256 newRemoteNav, bytes32 reportId);
+    // FIX: C-01 — emitted when the hourly anchor rolls forward
+    event NavWindowRolled(uint256 newAnchor, uint64 newWindowStart);
     event RebalanceToSolana(uint256 amount, address indexed bridge);
     event RebalanceFromSolanaReconciled(uint256 amount, bytes32 reportId);
     event KeeperSet(address indexed keeper, bool status);
@@ -58,6 +60,18 @@ contract SolanaStrategy is IStrategy, IStrategyValuation, Ownable, ReentrancyGua
     uint16 public minBaseLiquidityBps;
     address public bridgeAddress;
     uint256 public totalReconciledFromSolana;
+
+    // FIX: C-01 — per-hour NAV cool-down anchor.
+    // Previously the bps delta cap was applied against the running remoteNav,
+    // so a compromised/misbehaving keeper could chain many within-cap updates
+    // inside a single block and drift NAV arbitrarily (bypassing the delta
+    // cap by making the cap compound against itself). We now freeze a
+    // "window anchor" for a full 1-hour cool-down window; every NAV update
+    // inside a window must stay within maxNavDeltaBpsPerUpdate of *that*
+    // frozen anchor. The anchor only rolls forward once an hour has elapsed.
+    uint64 public constant NAV_WINDOW_DURATION = 1 hours;
+    uint256 public navWindowAnchor;
+    uint64 public navWindowStart;
 
     bool public remoteNavEnabled;
     bool private _emergencyPaused;
@@ -121,7 +135,16 @@ contract SolanaStrategy is IStrategy, IStrategyValuation, Ownable, ReentrancyGua
      * @param reportId Report identifier for offchain correlation.
      */
     function updateRemoteNav(uint256 newRemoteNav, bytes32 reportId) external onlyKeeper {
-        uint256 referenceNav = remoteNav > 0 ? remoteNav : remoteNavAnchor;
+        // FIX: C-01 — roll the hourly anchor forward if the current window has
+        // expired. Within a window, all deltas are measured against the frozen
+        // anchor, not the running remoteNav, so the cap cannot be compounded.
+        if (navWindowStart == 0 || block.timestamp >= navWindowStart + NAV_WINDOW_DURATION) {
+            navWindowAnchor = remoteNav > 0 ? remoteNav : remoteNavAnchor;
+            navWindowStart = uint64(block.timestamp);
+            emit NavWindowRolled(navWindowAnchor, navWindowStart);
+        }
+
+        uint256 referenceNav = navWindowAnchor > 0 ? navWindowAnchor : (remoteNav > 0 ? remoteNav : remoteNavAnchor);
 
         // On first NAV update, enforce a bounded bootstrap relative to base liquidity.
         // This prevents unbounded first writes while still allowing remote NAV initialization.
@@ -130,7 +153,14 @@ contract SolanaStrategy is IStrategy, IStrategyValuation, Ownable, ReentrancyGua
             if (minBaseLiquidityBps == 0) revert NavDeltaExceedsCap();
             uint256 maxBootstrapRemoteNav = (baseLiquid * (10_000 - minBaseLiquidityBps)) / minBaseLiquidityBps;
             if (newRemoteNav > maxBootstrapRemoteNav) revert NavDeltaExceedsCap();
+            // On bootstrap, seed the anchor too so subsequent in-window updates
+            // are bounded relative to this first value.
+            navWindowAnchor = newRemoteNav;
         } else if (referenceNav > 0) {
+            // FIX: C-01 — cap measured against the frozen hourly anchor, not
+            // the running remoteNav. This bounds *cumulative* drift per hour
+            // to maxNavDeltaBpsPerUpdate regardless of how many updates the
+            // keeper submits inside the window.
             uint256 delta = newRemoteNav > referenceNav ? newRemoteNav - referenceNav : referenceNav - newRemoteNav;
             uint256 deltaBps = (delta * 10_000) / referenceNav;
             if (deltaBps > maxNavDeltaBpsPerUpdate) revert NavDeltaExceedsCap();

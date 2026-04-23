@@ -46,6 +46,12 @@ contract VaultShareBurnStream is ReentrancyGuard {
     // FIX: BS-03 — track failed burn amounts for manual recovery
     uint256 public failedBurnAccumulator;
 
+    // FIX: H-05 — hard cap on how many failed shares we'll keep silently accruing
+    // before the drip path starts reverting. Prevents unbounded silent loss when
+    // burnSharesForPriceIncrease keeps failing (e.g. vault paused indefinitely).
+    // Operators must call recoverFailedBurns before the cap is reached.
+    uint256 public constant MAX_FAILED_BURN_ACCUMULATOR = 1_000_000e18;
+
     event SharesQueued(uint256 shares, uint256 indexed scheduledEpochStart);
     event StreamStarted(uint256 indexed epochStart, uint256 shares);
     event StreamDripped(
@@ -54,6 +60,8 @@ contract VaultShareBurnStream is ReentrancyGuard {
     event StreamCompleted(uint256 indexed epochStart, uint256 totalBurned, uint256 pps);
     // FIX: BS-03 — event for burn failures
     event BurnFailed(uint256 indexed epochStart, uint256 burnAttempted, uint256 failedTotal);
+    // FIX: H-05 — recovery attempt event
+    event FailedBurnsRecovered(uint256 recovered, uint256 remaining);
     // FIX: BS-01 — event for queuer authorization
     event QueuerAuthorizationUpdated(address indexed queuer, bool authorized);
 
@@ -66,6 +74,10 @@ contract VaultShareBurnStream is ReentrancyGuard {
     error PendingEpochMismatch(uint256 pendingEpochStart, uint256 requiredEpochStart);
     // FIX: BS-01 — unauthorized queuer error
     error UnauthorizedQueuer();
+    // FIX: H-05 — accumulator cap + recovery errors
+    error FailedBurnAccumulatorFull(uint256 current, uint256 cap);
+    error NothingToRecover();
+    error OnlyVault();
 
     constructor(address _vault) {
         if (_vault == address(0)) revert ZeroAddress();
@@ -243,7 +255,14 @@ contract VaultShareBurnStream is ReentrancyGuard {
         try ICreatorOVaultBurn(vault).burnSharesForPriceIncrease(burnedNow) {
             // success
         } catch {
-            failedBurnAccumulator += burnedNow;
+            // FIX: H-05 — enforce a hard cap on accumulated failed burns so that
+            // a persistently-failing vault does not silently build up unbounded
+            // "ghost" shares. Operators must recover before the cap is reached.
+            uint256 newAccum = failedBurnAccumulator + burnedNow;
+            if (newAccum > MAX_FAILED_BURN_ACCUMULATOR) {
+                revert FailedBurnAccumulatorFull(newAccum, MAX_FAILED_BURN_ACCUMULATOR);
+            }
+            failedBurnAccumulator = newAccum;
             emit BurnFailed(activeEpochStart, burnedNow, failedBurnAccumulator);
         }
 
@@ -260,7 +279,13 @@ contract VaultShareBurnStream is ReentrancyGuard {
             uint256 roundingRemainder = activeShares - burnedActive;
             if (roundingRemainder > 0) {
                 try ICreatorOVaultBurn(vault).burnSharesForPriceIncrease(roundingRemainder) {} catch {
-                    failedBurnAccumulator += roundingRemainder;
+                    // FIX: H-05 — same cap enforcement on the rounding-remainder path
+                    uint256 newAccum2 = failedBurnAccumulator + roundingRemainder;
+                    if (newAccum2 > MAX_FAILED_BURN_ACCUMULATOR) {
+                        revert FailedBurnAccumulatorFull(newAccum2, MAX_FAILED_BURN_ACCUMULATOR);
+                    }
+                    failedBurnAccumulator = newAccum2;
+                    emit BurnFailed(activeEpochStart, roundingRemainder, failedBurnAccumulator);
                 }
                 burnedActive = activeShares;
             }
@@ -269,5 +294,34 @@ contract VaultShareBurnStream is ReentrancyGuard {
             activeEpochStart = 0;
             burnedActive = 0;
         }
+    }
+
+    // ================================
+    // FAILED BURN RECOVERY (FIX: H-05)
+    // ================================
+
+    /**
+     * @notice Retry burning shares accumulated from prior failed burn attempts.
+     * @dev The accumulator grows whenever vault.burnSharesForPriceIncrease reverts
+     *      during a drip (e.g. vault was paused). Once the vault is healthy again,
+     *      the vault itself may call this to clear the accumulator and actually
+     *      burn the queued-but-never-burned shares. Gated by the vault address
+     *      because this contract has no owner (see BS-01 authorization model).
+     *      Callable with `amount == 0` to retry the full accumulator.
+     */
+    function recoverFailedBurns(uint256 amount) external nonReentrant returns (uint256 recovered) {
+        if (msg.sender != vault) revert OnlyVault();
+        uint256 accum = failedBurnAccumulator;
+        if (accum == 0) revert NothingToRecover();
+
+        recovered = amount == 0 || amount > accum ? accum : amount;
+
+        // Effects first
+        failedBurnAccumulator = accum - recovered;
+
+        // Interaction
+        ICreatorOVaultBurn(vault).burnSharesForPriceIncrease(recovered);
+
+        emit FailedBurnsRecovered(recovered, failedBurnAccumulator);
     }
 }

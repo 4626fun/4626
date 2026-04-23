@@ -70,6 +70,14 @@ contract CreatorOracle is OApp {
     /// @notice Maximum allowed price deviation per update (20%)
     uint256 public constant MAX_PRICE_DEVIATION = 0.2e18;
 
+    /// @notice Hard upper bound on the first price that `initializeCreatorPrice`
+    /// may set (1e18 format). Prevents the bootstrap anchor from being placed
+    /// at an extreme value even if the owner key is compromised. 1_000_000 USD
+    /// per CREATOR token is unrealistically high but is a non-insulting
+    /// sanity cap. Raise only via a formal parameter change, not inline.
+    /// @dev Mitigates H-01 (audit finding 4626-293).
+    int256 public constant MAX_INITIAL_PRICE_USD = int256(uint256(1_000_000e18));
+
     /// @notice Maximum observations to store
     uint16 public constant MAX_CARDINALITY = 1024;
 
@@ -237,6 +245,10 @@ contract CreatorOracle is OApp {
     error InvalidDuration();
     error PriceUpdateCooldown();
     error PriceDeviationTooHigh();
+    // H-01 / 4626-293: oracle bootstrap must go through initializeCreatorPrice.
+    error OracleNotInitialized();
+    error OracleAlreadyInitialized();
+    error InitialPriceTooHigh();
     error InvalidBaseEid();
     error InvalidOriginEid(uint32 srcEid);
 
@@ -492,14 +504,45 @@ contract CreatorOracle is OApp {
         }
         if (_price <= 0) revert InvalidPrice();
 
+        // H-01 / 4626-293: the first write must go through
+        // initializeCreatorPrice(), which is owner-only and bounded. A 0 price
+        // here means the oracle has never been initialized, and accepting an
+        // arbitrary value at this point lets an attacker (or a compromised
+        // isPriceUpdater) anchor every subsequent MAX_PRICE_DEVIATION-capped
+        // update to a manipulated baseline.
+        if (creatorPriceUSD == 0) revert OracleNotInitialized();
+
         // FIX: H-4 — apply deviation bounds to direct setter; previously bypassed all
         // TWAP/deviation guards, allowing a compromised priceUpdater to set arbitrary prices
-        if (creatorPriceUSD > 0) {
-            uint256 oldP = uint256(creatorPriceUSD);
-            uint256 newP = uint256(_price);
-            uint256 deviation = oldP > newP ? ((oldP - newP) * 1e18) / oldP : ((newP - oldP) * 1e18) / oldP;
-            if (deviation > MAX_PRICE_DEVIATION) revert PriceDeviationTooHigh();
-        }
+        uint256 oldP = uint256(creatorPriceUSD);
+        uint256 newP = uint256(_price);
+        uint256 deviation = oldP > newP ? ((oldP - newP) * 1e18) / oldP : ((newP - oldP) * 1e18) / oldP;
+        if (deviation > MAX_PRICE_DEVIATION) revert PriceDeviationTooHigh();
+
+        creatorPriceUSD = _price;
+        creatorPriceTimestamp = block.timestamp;
+
+        emit CreatorPriceUpdated(creatorSymbol, _price, block.timestamp, msg.sender);
+    }
+
+    /**
+     * @notice Owner-only bootstrap of the first creator price. Every other
+     *         update path (updateCreatorPrice, updateCreatorPriceFromTWAP,
+     *         updateCreatorPriceFromV3TWAP) enforces a MAX_PRICE_DEVIATION
+     *         cap against the previously stored value, so the first write is
+     *         what anchors every subsequent movement. Before this function was
+     *         added, any `isPriceUpdater` could silently anchor the oracle to
+     *         an arbitrary value. See H-01 / 4626-293.
+     * @dev Can only be called once. Further changes must go through the
+     *      deviation-capped paths. Bounded by MAX_INITIAL_PRICE_USD as a
+     *      last-line sanity check even on the owner key.
+     * @param _price Initial price in 1e18 format. Must be > 0 and
+     *               <= MAX_INITIAL_PRICE_USD.
+     */
+    function initializeCreatorPrice(int256 _price) external onlyOwner {
+        if (creatorPriceUSD != 0) revert OracleAlreadyInitialized();
+        if (_price <= 0) revert InvalidPrice();
+        if (_price > MAX_INITIAL_PRICE_USD) revert InitialPriceTooHigh();
 
         creatorPriceUSD = _price;
         creatorPriceTimestamp = block.timestamp;
@@ -1015,8 +1058,11 @@ contract CreatorOracle is OApp {
         // USD per CREATOR = (USD per ETH) / (CREATOR per ETH)
         int256 creatorUSD = int256(Math.mulDiv(ethUSD18, 1e18, creatorPerEth));
 
+        // H-01 / 4626-293: TWAP-driven writes also must not bootstrap the oracle.
+        if (creatorPriceUSD == 0) revert OracleNotInitialized();
+
         // Sanity: reject updates that move price more than MAX_PRICE_DEVIATION from the stored value
-        if (creatorPriceUSD > 0) {
+        {
             uint256 oldP = uint256(creatorPriceUSD);
             uint256 newP = creatorUSD > 0 ? uint256(creatorUSD) : 0;
             uint256 deviation = oldP > newP ? ((oldP - newP) * 1e18) / oldP : ((newP - oldP) * 1e18) / oldP;
@@ -1045,8 +1091,11 @@ contract CreatorOracle is OApp {
         uint256 creatorUsd18 = getCreatorUsdTWAP(dur);
         if (creatorUsd18 == 0) revert InvalidPrice();
 
+        // H-01 / 4626-293: TWAP-driven writes also must not bootstrap the oracle.
+        if (creatorPriceUSD == 0) revert OracleNotInitialized();
+
         // Sanity: reject updates that move price more than MAX_PRICE_DEVIATION from the stored value
-        if (creatorPriceUSD > 0) {
+        {
             uint256 oldP = uint256(creatorPriceUSD);
             uint256 deviation =
                 oldP > creatorUsd18 ? ((oldP - creatorUsd18) * 1e18) / oldP : ((creatorUsd18 - oldP) * 1e18) / oldP;

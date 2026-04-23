@@ -3,6 +3,16 @@ title: Solana Bridge Naming Invariant
 sidebar_position: 6
 ---
 
+:::info Canonical address source
+This document narrates the historical migration of the
+`SolanaBridgeAdapter` contract and contains the addresses that were
+current at each point in time. For the **current canonical deployment
+addresses**, always consult
+[`docs/reference/addresses.md`](../reference/addresses.md) — it is the
+single source of truth and is updated on every release. Addresses
+below (e.g. `0x653326dD…`) are preserved for historical context only.
+:::
+
 # Solana Bridge Naming Invariant
 
 Canonical reference for how creator coins' Solana-side display identity

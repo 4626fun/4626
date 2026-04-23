@@ -155,6 +155,21 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     /// @notice Minter permissions (for wrapper integration)
     mapping(address => bool) public isMinter;
 
+    /// @notice Dedup set for winner-callback messages to prevent replay
+    /// @dev FIX: H-14 — LayerZero delivers each message with a unique _guid.
+    ///      The OFT base-class nonce tracker handles replay for token transfers,
+    ///      but the custom winner-callback branch short-circuits before that,
+    ///      so we track consumed guids explicitly here.
+    mapping(bytes32 => bool) public usedReportIds;
+
+    /// @notice Allowlist of contracts trusted to return a lottery beneficiary
+    /// @dev FIX: H-04 — only addresses on this allowlist are consulted via
+    ///      ILotteryBeneficiary.getLotteryBeneficiary(). Any other contract
+    ///      recipient falls through to itself as the beneficiary. This prevents
+    ///      an arbitrary malicious contract-recipient from redirecting lottery
+    ///      entries to an attacker-controlled EOA.
+    mapping(address => bool) public isLotteryResolver;
+
     /// @notice Tax config delegate (hub-only, for future custom hooks)
     address public taxConfigDelegate;
 
@@ -214,6 +229,10 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
 
     event VaultSet(address indexed vault);
     event RegistrySet(address indexed registry);
+    /// @notice FIX: H-04 — allowlist change event
+    event LotteryResolverSet(address indexed resolver, bool allowed);
+    /// @notice FIX: H-14 — duplicate callback observed and rejected
+    event WinnerCallbackReplayRejected(bytes32 indexed reportId);
     event SharesMinted(address indexed to, uint256 amount);
     event SharesBurned(address indexed from, uint256 amount);
     event BuyFee(address indexed from, address indexed to, uint256 amount, uint256 fee);
@@ -744,12 +763,33 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
             return recipient;
         }
 
+        // FIX: H-04 — only trust the resolver callback for allowlisted contracts.
+        // Previously any contract recipient could implement ILotteryBeneficiary
+        // and redirect the lottery entry to an arbitrary address, letting an
+        // attacker farm entries toward an address they control without being
+        // the actual buyer. Gate behind isLotteryResolver and fall through to
+        // the recipient itself for unknown contracts (smart wallet case).
+        if (!isLotteryResolver[recipient]) {
+            return recipient;
+        }
+
         // Check if recipient implements ILotteryBeneficiary
         try ILotteryBeneficiary(recipient).getLotteryBeneficiary() returns (address beneficiary) {
             return beneficiary == address(0) ? recipient : beneficiary;
         } catch {
             return recipient;
         }
+    }
+
+    /**
+     * @notice Allow or disallow a contract to act as a lottery beneficiary resolver
+     * @dev FIX: H-04 — only owner-approved contracts (e.g. audited aggregator
+     *      adapters) may redirect lottery entries via ILotteryBeneficiary.
+     */
+    function setLotteryResolver(address resolver, bool allowed) external onlyOwner {
+        if (resolver == address(0)) revert ZeroAddress();
+        isLotteryResolver[resolver] = allowed;
+        emit LotteryResolverSet(resolver, allowed);
     }
 
     // ================================
@@ -774,6 +814,14 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         // - they come from `hubLotteryPeer`, and
         // - the payload is exactly the ABI encoding of (uint16,address,address,uint256) (128 bytes).
         if (_isWinnerCallbackMessage(_origin, _message)) {
+            // FIX: H-14 — deduplicate winner-callback messages by LayerZero _guid
+            // so a replayed callback cannot emit a duplicate LotteryWinnerNotification
+            // and let a downstream indexer credit the prize twice.
+            if (usedReportIds[_guid]) {
+                emit WinnerCallbackReplayRejected(_guid);
+                return;
+            }
+            usedReportIds[_guid] = true;
             _handleWinnerCallback(_origin, _message);
             return;
         }
