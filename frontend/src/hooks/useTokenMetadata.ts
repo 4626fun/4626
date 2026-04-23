@@ -34,7 +34,44 @@ interface TokenMetadata {
 }
 
 const DEFAULT_IPFS_GATEWAY = 'https://ipfs.decentralized-content.com/ipfs/'
-const IPFS_GATEWAY = (import.meta.env.VITE_IPFS_GATEWAY || DEFAULT_IPFS_GATEWAY).replace(/\/+$/, '') + '/'
+
+/**
+ * L-20: Validate VITE_IPFS_GATEWAY before interpolating it into image
+ * `src` attributes. Any value that is not a well-formed https:// URL
+ * (e.g. `javascript:`, `data:`, a plain http:// URL that would trip
+ * mixed-content on an https page, or garbage) is discarded in favour
+ * of DEFAULT_IPFS_GATEWAY, with a console.warn so the misconfiguration
+ * is visible in DevTools at startup.
+ */
+function resolveIpfsGateway(raw: string | undefined | null): string {
+  const fallback = DEFAULT_IPFS_GATEWAY
+  if (typeof raw !== 'string' || raw.trim().length === 0) return fallback
+  const candidate = raw.trim()
+  try {
+    const u = new URL(candidate)
+    if (u.protocol !== 'https:') {
+      // eslint-disable-next-line no-console
+      console.warn(
+        '[ipfs] VITE_IPFS_GATEWAY ignored: only https:// gateways are permitted, got protocol',
+        u.protocol,
+      )
+      return fallback
+    }
+    if (!u.hostname) {
+      // eslint-disable-next-line no-console
+      console.warn('[ipfs] VITE_IPFS_GATEWAY ignored: missing hostname')
+      return fallback
+    }
+    // Normalize trailing slashes so the concatenation below stays correct.
+    return candidate.replace(/\/+$/, '') + '/'
+  } catch {
+    // eslint-disable-next-line no-console
+    console.warn('[ipfs] VITE_IPFS_GATEWAY ignored: not a valid URL')
+    return fallback
+  }
+}
+
+const IPFS_GATEWAY = resolveIpfsGateway(import.meta.env.VITE_IPFS_GATEWAY as string | undefined)
 
 const SAFE_HTTP_PROTOCOLS = new Set(['http:', 'https:'])
 

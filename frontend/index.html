@@ -177,11 +177,16 @@
     </script>
     <script src="/stale-chunk-recovery.js"></script>
     <!-- Fonts (Creator Vaults Brand Kit: Inter + JetBrains Mono + Doto) -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!-- L-14: crossorigin + referrerpolicy hardens the cross-origin stylesheet fetch.
+         SRI is not applicable to Google Fonts CSS2 (response varies by User-Agent).
+         Long-term remediation: migrate to self-hosted @fontsource packages (tracked separately). -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin="anonymous" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
     <link
       href="https://fonts.googleapis.com/css2?family=Doto:wght@400;700;900&family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
       rel="stylesheet"
+      crossorigin="anonymous"
+      referrerpolicy="no-referrer"
     />
     <!-- PWA / Mobile App -->
     <meta name="apple-mobile-web-app-capable" content="yes" />

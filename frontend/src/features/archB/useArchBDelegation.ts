@@ -52,6 +52,34 @@ export type ArchBDelegationCaps = {
   dailyCapWei: string
 }
 
+/**
+ * Canonical client-side expected caps for the Arch-B delegation.
+ *
+ * These values mirror the on-chain policy that the delegation contract
+ * enforces. They are the source of truth shown to the user BEFORE any
+ * backend round-trip, so a backend compromise or API MITM cannot present
+ * artificially low caps to lull the user into consent (L-18).
+ *
+ * Keep in sync with the on-chain policy in the Arch-B session key
+ * contract. The backend `GET /api/arch-b/status` response is compared
+ * against these values and flagged as a mismatch if it deviates.
+ */
+export const ARCH_B_EXPECTED_CAPS: ArchBDelegationCaps = {
+  // 0.01 ETH
+  perTxCapWei: '10000000000000000',
+  // 0.05 ETH
+  dailyCapWei: '50000000000000000',
+}
+
+/** True when the backend-returned caps match the expected on-chain policy. */
+export function archBCapsMatchExpected(caps: ArchBDelegationCaps | null): boolean {
+  if (!caps) return true // absence is handled separately; caller uses the expected fallback
+  return (
+    caps.perTxCapWei === ARCH_B_EXPECTED_CAPS.perTxCapWei &&
+    caps.dailyCapWei === ARCH_B_EXPECTED_CAPS.dailyCapWei
+  )
+}
+
 export type ArchBDelegationError = {
   /** Machine-readable code from backend or Privy. */
   code: string

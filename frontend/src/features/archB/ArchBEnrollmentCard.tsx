@@ -17,7 +17,12 @@ import { toast } from '@/components/ui/Toast'
 import { Button } from '@/components/ui/Button'
 import { LoadingInline } from '@/components/ui/LoadingState'
 
-import { useArchBDelegation, type ArchBDelegationStatus } from './useArchBDelegation'
+import {
+  useArchBDelegation,
+  archBCapsMatchExpected,
+  ARCH_B_EXPECTED_CAPS,
+  type ArchBDelegationStatus,
+} from './useArchBDelegation'
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -141,13 +146,18 @@ export function ArchBEnrollmentCard({ hasCanonicalCsw }: ArchBEnrollmentCardProp
 
   if (!isPromptState) return null
 
-  const perTxDisplay = formatWei(caps?.perTxCapWei)
-  const dailyDisplay = formatWei(caps?.dailyCapWei)
-
-  const hasCaps = caps !== null
-  const capsNote = hasCaps
-    ? `Per-transfer cap: ${perTxDisplay}. Daily cap: ${dailyDisplay}.`
-    : 'Per-transfer cap: 0.01 ETH. Daily cap: 0.05 ETH.'
+  // L-18: Spend caps must be shown prominently BEFORE consent. The
+  // canonical expected caps come from ARCH_B_EXPECTED_CAPS (client-side
+  // constant mirroring the on-chain policy). The backend-sourced `caps`
+  // are only trusted for display when they match the expected values;
+  // any mismatch surfaces a warning so a compromised API cannot present
+  // artificially low numbers.
+  const displayCaps = caps ?? ARCH_B_EXPECTED_CAPS
+  const perTxDisplay = formatWei(displayCaps.perTxCapWei)
+  const dailyDisplay = formatWei(displayCaps.dailyCapWei)
+  const capsMismatch = caps !== null && !archBCapsMatchExpected(caps)
+  const expectedPerTxDisplay = formatWei(ARCH_B_EXPECTED_CAPS.perTxCapWei)
+  const expectedDailyDisplay = formatWei(ARCH_B_EXPECTED_CAPS.dailyCapWei)
 
   return (
     <section
@@ -160,7 +170,7 @@ export function ArchBEnrollmentCard({ hasCanonicalCsw }: ArchBEnrollmentCardProp
           <p className="text-xs leading-relaxed text-zinc-400 max-w-prose">
             Grant this app permission to sign{' '}
             <code className="font-mono text-zinc-300">/keepr send</code> transactions from your
-            smart wallet. Your wallet stays yours — you can revoke at any time. {capsNote}
+            smart wallet. Your wallet stays yours — you can revoke at any time.
           </p>
         </div>
         <button
@@ -172,6 +182,41 @@ export function ArchBEnrollmentCard({ hasCanonicalCsw }: ArchBEnrollmentCardProp
           ✕
         </button>
       </div>
+
+      {/* L-18: Prominent pre-consent spend-cap panel. Always visible
+          above the Enable button. */}
+      <div
+        data-testid="arch-b-caps-panel"
+        className="rounded-lg border border-white/10 bg-white/[0.02] px-4 py-3 space-y-1.5"
+      >
+        <div className="text-[11px] uppercase tracking-wider text-zinc-500">
+          Spend limits that will apply
+        </div>
+        <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-zinc-200">
+          <div>
+            <span className="text-zinc-500">Per transfer: </span>
+            <span className="font-mono">{perTxDisplay}</span>
+          </div>
+          <div>
+            <span className="text-zinc-500">Per day: </span>
+            <span className="font-mono">{dailyDisplay}</span>
+          </div>
+        </div>
+      </div>
+
+      {capsMismatch ? (
+        <div
+          role="alert"
+          aria-live="assertive"
+          data-testid="arch-b-caps-mismatch"
+          className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200"
+        >
+          The displayed caps differ from the expected on-chain policy
+          ({expectedPerTxDisplay} per transfer, {expectedDailyDisplay}{' '}
+          per day). Do not enable until this is resolved — contact support
+          if the mismatch persists.
+        </div>
+      ) : null}
 
       {error ? (
         <div
@@ -188,6 +233,7 @@ export function ArchBEnrollmentCard({ hasCanonicalCsw }: ArchBEnrollmentCardProp
           variant="primary"
           size="sm"
           onClick={() => void enable()}
+          disabled={capsMismatch}
         >
           Enable
         </Button>

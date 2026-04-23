@@ -11,14 +11,43 @@ import {
 
 declare const process: { env: Record<string, string | undefined> }
 
+// Only enable the debug endpoint when an operator explicitly opts in via
+// SOCIAL_PREVIEW_DEBUG_ENABLED. The previous behaviour of auto-enabling on
+// every non-production Vercel env exposed internal rewrite rules on every
+// preview deployment (those URLs are not secret; anyone with the URL can hit
+// them). The endpoint still short-circuits to 404 in any env where the flag
+// is unset or set to a falsy value, including all production deployments.
 function isDebugEnabled(): boolean {
   const explicit = String(process.env.SOCIAL_PREVIEW_DEBUG_ENABLED ?? '')
     .trim()
     .toLowerCase()
-  if (explicit === '1' || explicit === 'true' || explicit === 'yes') return true
+  return explicit === '1' || explicit === 'true' || explicit === 'yes'
+}
 
-  const vercelEnv = String(process.env.VERCEL_ENV ?? '').trim().toLowerCase()
-  return vercelEnv !== 'production'
+// Parse SOCIAL_PREVIEW_DEBUG_ALLOWED_ORIGINS (comma-separated list of exact
+// origins, e.g. 'https://4626.fun,https://staging.4626.fun'). The `origin`
+// query parameter must exactly match one of the entries before it is used as
+// the social-preview origin override; otherwise the request falls back to
+// the request-derived origin. An empty allowlist rejects every override.
+function getAllowedOriginOverrides(): ReadonlySet<string> {
+  const raw = String(process.env.SOCIAL_PREVIEW_DEBUG_ALLOWED_ORIGINS ?? '').trim()
+  if (!raw) return new Set<string>()
+  const out = new Set<string>()
+  for (const part of raw.split(',')) {
+    const trimmed = part.trim()
+    if (!trimmed) continue
+    try {
+      const parsed = new URL(trimmed)
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') continue
+      // Store the canonical origin (protocol + host + optional port) so
+      // comparison does not drift on trailing slashes or paths.
+      out.add(parsed.origin)
+    } catch {
+      // Drop malformed entries silently; an operator misconfiguration should
+      // not open the gate.
+    }
+  }
+  return out
 }
 
 function getUserAgent(req: VercelRequest): string {
@@ -72,7 +101,23 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return
   }
 
-  const originOverride = getStringQuery(req, 'origin')
+  // M-24 fix: originOverride must be in the explicit allowlist. A malformed
+  // or non-allowlisted override is dropped and we fall back to the
+  // request-derived origin; we do not surface an error to avoid turning the
+  // endpoint into an allowlist oracle.
+  const rawOriginOverride = getStringQuery(req, 'origin')
+  let originOverride: string | null = null
+  if (rawOriginOverride) {
+    try {
+      const parsed = new URL(rawOriginOverride)
+      const allowedOrigins = getAllowedOriginOverrides()
+      if (allowedOrigins.has(parsed.origin)) {
+        originOverride = parsed.origin
+      }
+    } catch {
+      originOverride = null
+    }
+  }
   const origin = originOverride ?? getRequestOrigin(req)
   const input = normalizeSocialPreviewInput({
     origin,

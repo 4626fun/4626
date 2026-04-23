@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 
 import { RootRouter } from './RootRouter'
+import { RootErrorBoundary } from './components/RootErrorBoundary'
 import { ThemeProvider } from '@/lib/ui/theme'
 import { ThemeProvider as CdsThemeProvider, MediaQueryProvider as CdsMediaQueryProvider } from '@coinbase/cds-web/system'
 import { PortalProvider as CdsPortalProvider } from '@coinbase/cds-web/overlays'
@@ -304,18 +305,24 @@ function redirectWwwToCanonicalApex(): boolean {
 if (!redirectWwwToCanonicalApex()) {
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
-      <ThemeProvider>
-        <CdsMediaQueryProvider>
-          <CdsThemeProvider theme={theme4626} activeColorScheme="dark">
-            <CdsPortalProvider>
-              <CdsToastBridge />
-              <BrowserRouter>
-                <RootRouter />
-              </BrowserRouter>
-            </CdsPortalProvider>
-          </CdsThemeProvider>
-        </CdsMediaQueryProvider>
-      </ThemeProvider>
+      {/* L-19: Top-level error boundary wraps every provider so a render
+          failure anywhere in the tree (including ThemeProvider / CDS /
+          Router initialization) falls back to a recoverable UI instead
+          of a blank white page. */}
+      <RootErrorBoundary>
+        <ThemeProvider>
+          <CdsMediaQueryProvider>
+            <CdsThemeProvider theme={theme4626} activeColorScheme="dark">
+              <CdsPortalProvider>
+                <CdsToastBridge />
+                <BrowserRouter>
+                  <RootRouter />
+                </BrowserRouter>
+              </CdsPortalProvider>
+            </CdsThemeProvider>
+          </CdsMediaQueryProvider>
+        </ThemeProvider>
+      </RootErrorBoundary>
     </React.StrictMode>,
   )
 }

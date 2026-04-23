@@ -653,6 +653,34 @@ function deriveBaseSalt(params: { creatorToken: Address; owner: Address; chainId
   )
 }
 
+// L-16: Map known revert reasons / extension conflicts to user-friendly
+// messages. Raw error.message is never rendered in production because it
+// may leak internal contract storage slot names, addresses, or logic
+// structure. Dev-only raw view is gated on import.meta.env.DEV.
+const DEPLOY_VAULT_ERROR_PATTERNS: ReadonlyArray<{ match: RegExp; userMessage: string }> = [
+  { match: /wallet.*extension|metamask|rabby|ethereum.*request|window\.ethereum/i,
+    userMessage: 'A wallet extension (MetaMask, Rabby, etc.) is interfering with the page. Disable other wallet extensions and reload.' },
+  { match: /user rejected|user denied|rejected the request/i,
+    userMessage: 'The request was cancelled in the wallet. Retry when ready.' },
+  { match: /insufficient funds|insufficient balance/i,
+    userMessage: 'Insufficient funds to cover the deployment fee. Top up and retry.' },
+  { match: /network.*mismatch|wrong.*network|unsupported chain|chain.*not.*supported/i,
+    userMessage: 'Wallet is on the wrong network. Switch to Base Mainnet and retry.' },
+  { match: /timeout|timed out|abort|AbortError/i,
+    userMessage: 'The operation timed out. Check your connection and retry.' },
+  { match: /nonce|replacement transaction underpriced/i,
+    userMessage: 'Wallet transaction state is out of sync. Reset the account activity in your wallet and retry.' },
+]
+
+function sanitizeDeployVaultError(err: Error | null): string {
+  if (!err) return 'Unexpected error. Please retry or reload the page.'
+  const raw = String(err.message ?? '')
+  for (const { match, userMessage } of DEPLOY_VAULT_ERROR_PATTERNS) {
+    if (match.test(raw)) return userMessage
+  }
+  return 'Unexpected error. Please retry or reload the page.'
+}
+
 // Error boundary to catch React rendering errors (like #426) and allow retry
 class DeployVaultErrorBoundary extends Component<
   { children: ReactNode },
@@ -668,6 +696,9 @@ class DeployVaultErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    // Log full error to console for developer debugging (only visible to
+    // users who open DevTools). The user-facing render path never exposes
+    // raw error.message in production builds (L-16).
     console.error('[DeployVault] Error caught by boundary:', error, errorInfo)
   }
 
@@ -677,6 +708,8 @@ class DeployVaultErrorBoundary extends Component<
 
   render() {
     if (this.state.hasError) {
+      const userMessage = sanitizeDeployVaultError(this.state.error)
+      const showRawForDev = import.meta.env.DEV && this.state.error?.message
       return (
         <div className="vault-shell min-h-screen bg-vault-bg text-white">
           <section className="max-w-[1400px] mx-auto px-6 py-16">
@@ -684,11 +717,13 @@ class DeployVaultErrorBoundary extends Component<
             <div className="vault-surface vault-hover-lift p-8 space-y-4">
               <div className="text-lg font-medium text-red-400">Something went wrong</div>
               <div className="text-sm text-zinc-400 leading-relaxed">
-                The deploy page encountered an error. This may be due to wallet extension conflicts or a temporary issue.
+                {userMessage}
               </div>
-              <div className="text-xs text-zinc-600 font-mono break-all">
-                {this.state.error?.message || 'Unknown error'}
-              </div>
+              {showRawForDev ? (
+                <div className="text-xs text-zinc-600 font-mono break-all">
+                  [dev-only] {this.state.error?.message}
+                </div>
+              ) : null}
               <div className="flex gap-3">
                 <button
                   type="button"

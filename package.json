@@ -14,7 +14,17 @@
     "docs:check": "node apps/docs-site/scripts/docs-refresh.mjs --check",
     "docs:build:strict": "pnpm docs:check",
     "docs:bundle": "NODE_OPTIONS=--max-old-space-size=4096 pnpm -C apps/docs-site bundle:strict",
-    "docs:drift": "node apps/docs-site/scripts/check-docs-drift.mjs"
+    "docs:drift": "node apps/docs-site/scripts/check-docs-drift.mjs",
+    "prepare": "husky || true",
+    "lint-staged": "lint-staged"
+  },
+  "lint-staged": {
+    "frontend/**/*.{ts,tsx}": [
+      "bash -c 'cd frontend && pnpm eslint --max-warnings 0 --no-warn-ignored'"
+    ],
+    "*.{ts,tsx,js,mjs,json,md,yml,yaml,sol,toml}": [
+      "bash scripts/lint-staged-gitleaks.sh"
+    ]
   },
   "dependencies": {
     "@layerzerolabs/lz-evm-messagelib-v2": "^3.0.159",
@@ -103,6 +113,8 @@
     "@types/mocha": "^10.0.10",
     "@vercel/node": "^5.5.30",
     "chai": "^4.5.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.2.11",
     "mocha": "^11.7.5",
     "ts-mocha": "^11.1.0",
     "typescript": "^5.9.3"

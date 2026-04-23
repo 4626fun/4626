@@ -1,0 +1,12 @@
+#!/usr/bin/env sh
+# L-22: Pre-commit hook.
+#
+# Runs lint-staged, which in turn runs:
+#   - ESLint (max-warnings 0) on staged frontend TS/TSX files
+#   - gitleaks protect --staged on all staged text-like files
+#
+# Skip with: `git commit --no-verify` (use sparingly and document why).
+#
+# CI continues to enforce the same checks; this hook is defense in depth.
+
+pnpm lint-staged

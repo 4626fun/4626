@@ -3,17 +3,47 @@ title = "4626 gitleaks"
 [extend]
 useDefault = true
 
+# Global allowlist — vendored / third-party content we do not control.
+# These paths contain copy-pasted reference artefacts, audit snapshots,
+# and configuration fixtures that cannot be edited without breaking
+# provenance. They are exempt from all detectors.
 [allowlist]
-description = "Vendored audit snapshots, third-party scan dumps, docs with example material, and test fixtures using non-production secrets"
+description = "Vendored audit snapshots, third-party docs, and pinned deployment manifests"
 paths = [
   '''^design/audit-source-snapshots/''',
   '''^docs/vibeship/''',
   '''^docs/scan2\.txt$''',
   '''^docs/yearn/''',
-  '''^frontend/api/__tests__/''',
-  '''^frontend/src/.+\.test\.tsx?$''',
-  '''^cre/tests/''',
   '''^\.cursor/skills/moltbook/''',
   '''^frontend/skills/moltbook/''',
   '''^deployment-vault-v3-final\.json$''',
+]
+
+# Rule-scoped allowlist for the `generic-api-key` heuristic.
+#
+# Background: L-21 (Linear 4626-369, Phase 6 SEV-607) flagged the
+# previous broad `frontend/api/__tests__/` path exemption on the global
+# allowlist as a credential-smuggling risk — a developer could stash a
+# real pk_live_*, sk_test_*, AKIA*, or ghp_* inside a test file and
+# gitleaks would never see it.
+#
+# Unit-test fixtures for this repo use field names such as
+# `privyToken`, `bridgeToken`, `friendKeyContract`, and
+# `SOLANA_DEFAULT_BRIDGE_TOKEN` which gitleaks' catch-all
+# `generic-api-key` rule flags as secret-shaped. The narrow fix is to
+# allow *only* the `generic-api-key` rule to skip these paths, while
+# every provider-specific detector (aws-access-token, github-pat,
+# stripe-access-token, slack-user-token, private-key, etc.) continues
+# to apply. A real cloud credential committed into a test file will
+# still fail CI.
+[[rules]]
+id = "generic-api-key"
+[rules.allowlist]
+description = "Vitest fixture field names match generic-api-key heuristic but are not credentials"
+paths = [
+  '''^frontend/api/__tests__/''',
+  '''^frontend/src/.+\.test\.tsx?$''',
+  '''^frontend/server/.+\.test\.ts$''',
+  '''^frontend/server/.+/__tests__/''',
+  '''^cre/tests/''',
 ]
