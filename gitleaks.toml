@@ -36,14 +36,67 @@ paths = [
 # stripe-access-token, slack-user-token, private-key, etc.) continues
 # to apply. A real cloud credential committed into a test file will
 # still fail CI.
+#
+# The allowlist was extended (4626-399) with three further categories of
+# false positives:
+#   • `.env.example` template files — by definition placeholders, and
+#     provider-specific detectors still apply so a committed real AWS /
+#     Stripe / GitHub credential in an example file still fails CI.
+#   • EVM contract / EOA addresses (`0x` + 40 hex chars, optional trailing
+#     `.`) — these are public on-chain identifiers, not secrets.
+#   • Specific well-known public constants (Anvil default test key,
+#     Chainlink VRF keyhash on Base) and DB-column / React-constant
+#     identifiers that match the heuristic's entropy threshold.
 [[rules]]
 id = "generic-api-key"
 [rules.allowlist]
-description = "Vitest fixture field names match generic-api-key heuristic but are not credentials"
+description = "Test fixtures, env.example templates, public on-chain identifiers, and well-known public constants"
 paths = [
   '''^frontend/api/__tests__/''',
   '''^frontend/src/.+\.test\.tsx?$''',
   '''^frontend/server/.+\.test\.ts$''',
   '''^frontend/server/.+/__tests__/''',
   '''^cre/tests/''',
+  # env.example files are distribution templates, not secret stores.
+  # Provider-specific detectors still scan them.
+  '''(^|/)\.env\.example$''',
+  # Standalone HTML utility whose only config values are public token
+  # addresses referenced from query params.
+  '''^zora-enable/index\.html$''',
+]
+# Targets the full matched line — useful for contract addresses that
+# appear embedded in larger expressions.
+regexTarget = "secret"
+regexes = [
+  # 20-byte EVM address (contract or EOA), with optional trailing punctuation
+  # gitleaks sometimes captures in the match window.
+  '''^0x[0-9a-fA-F]{40}\.?$''',
+]
+stopwords = [
+  # Column name from the agent_wallets row; variable identifier, not a secret.
+  '''row.encrypted_private_key_b64''',
+  '''row.encrypted_private_key_iv_b64''',
+  '''row.encrypted_private_key_tag_b64''',
+  # Deploy-session phase-invariant flag key (object property name).
+  '''phase2InvariantGate''',
+  # Well-known Anvil account #0 private key (public, documented in
+  # https://book.getfoundry.sh/reference/anvil/) used for local-only fork tests.
+  '''0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80''',
+  # Chainlink VRF keyHash on Base (public network constant, see
+  # https://docs.chain.link/vrf/v2/subscription/supported-networks#base-mainnet).
+  '''0x00b81b5a830cb0a4009fbd8904de511e28631e62ce5ad231373d3cdad373ccab''',
+]
+
+# Rule-scoped allowlist for the `private-key` detector. Gitleaks matches
+# `-----BEGIN PRIVATE KEY-----` markers on sight, but some files contain
+# PEM *template literals* that wrap an interpolated base64 segment fetched
+# at runtime — no key material is stored in the source tree.
+[[rules]]
+id = "private-key"
+[rules.allowlist]
+description = "PEM template literals that embed a runtime-interpolated ${b64} segment are format strings, not keys"
+regexTarget = "secret"
+regexes = [
+  # Matches the exact template: -----BEGIN PRIVATE KEY-----\n${b64}\n-----END PRIVATE KEY-----
+  '''^-----BEGIN PRIVATE KEY-----\\n\$\{b64\}\\n-----END PRIVATE KEY-----$''',
 ]
