@@ -46,6 +46,13 @@ jobs:
           #   0xd5d5...f634              VRF coordinator v2.5 (Base)
           #   0x5ff1...2789              ERC-4337 EntryPoint v0.6
           #   0x4e59...956c              Gnosis safe Create2 factory
+          #   0x4200...0006              WETH (Base canonical L2 predeploy)
+          #   0x0000...8BA3              Permit2 (Uniswap canonical across chains)
+          #   0x4985...2b2b              Uniswap V4 PoolManager (Base canonical)
+          #   0x8004...9b63              ERC-8004 Reputation Registry (canonical)
+          #   0x1111...1111              docs placeholder (ELIZA_SWARM_ROLE_MAP_JSON example)
+          #   0x2222...2222              docs placeholder (ELIZA_SWARM_ROLE_MAP_JSON example)
+          #   0x3333...3333              docs placeholder (ELIZA_SWARM_ROLE_MAP_JSON example)
           ALLOWLIST=$(cat <<'EOF' | tr '[:upper:]' '[:lower:]'
           0x0000000000000000000000000000000000000000
           0xca975b9daf772c71161f3648437c3616e5be0088
@@ -54,6 +61,13 @@ jobs:
           0xd5d517abe5cf79b7e95ec98db0f0277788aff634
           0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789
           0x4e59b44847b379578588920ca78fbf26c0b4956c
+          0x4200000000000000000000000000000000000006
+          0x000000000022d473030f116ddee9f6b43ac78ba3
+          0x498581ff718922c3f8e6a244956af099b2652b2b
+          0x8004baa17c55a88189ae136b182e5fda19de9b63
+          0x1111111111111111111111111111111111111111
+          0x2222222222222222222222222222222222222222
+          0x3333333333333333333333333333333333333333
           EOF
           )
 
