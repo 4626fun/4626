@@ -332,6 +332,23 @@ function isSolanaWalletAddressInClassification(classification: ClassifiedLinkedA
   return classification.allWallets.some((wallet) => wallet.chain === 'solana' && walletAddressEquals(wallet.address, target))
 }
 
+// FIX: M-20 / 4626-432 — symmetric EVM equivalent of
+// isSolanaWalletAddressInClassification. Used to gate persisted canonical/active-owner
+// EVM addresses on the live Privy classification so a stale DB row cannot cause the
+// server to re-assert an address that the user has since unlinked from their Privy
+// account. Callers must fall back to the live classification whenever this returns
+// false, NEVER silently inject the persisted address.
+function isEvmWalletAddressInClassification(classification: ClassifiedLinkedAccounts, address: string | null | undefined): boolean {
+  const target = normalizeAddress(address)
+  if (!target) return false
+  const targetLower = normalizeLower(target)
+  return classification.allWallets.some((wallet) => {
+    if (wallet.chain !== 'evm') return false
+    const walletLower = normalizeLower(wallet.address)
+    return Boolean(walletLower && walletLower === targetLower)
+  })
+}
+
 function isSmartWalletCandidate(wallet: MappedWallet): boolean {
   if (wallet.chain !== 'evm') return false
   if (wallet.walletType !== 'smart_wallet') return false
@@ -396,9 +413,19 @@ function applyPersistedIdentity(params: {
   const { classification, persisted } = params
   if (!persisted) return classification
 
-  // Treat persisted canonical as durable source of truth even if the current
-  // Privy payload omits it (canonical drift protection).
-  const persistedCanonical = persisted?.canonicalSmartWallet ?? null
+  // Treat persisted canonical as durable source of truth only when the current
+  // Privy payload still enumerates that address as a linked EVM wallet. If the user
+  // has since unlinked the canonical smart wallet from Privy we MUST NOT
+  // resurrect it from the database — doing so would promote a stale owner into
+  // paymaster ownership checks and canonical submit guards. This enforces a
+  // "persisted AND live" invariant symmetric to the Solana gating below.
+  //
+  // FIX: M-20 / 4626-432
+  const persistedCanonicalRaw = persisted?.canonicalSmartWallet ?? null
+  const persistedCanonical =
+    persistedCanonicalRaw && isEvmWalletAddressInClassification(classification, persistedCanonicalRaw)
+      ? persistedCanonicalRaw
+      : null
   const persistedCanonicalSolana =
     persisted?.canonicalSolanaWallet &&
     isSolanaWalletAddressInClassification(classification, persisted.canonicalSolanaWallet)
@@ -480,8 +507,12 @@ function applyPersistedIdentity(params: {
     classification.activeOwnerWallet
       ? allWallets.find((wallet) => walletAddressEquals(wallet.address, classification.activeOwnerWallet?.address))
       : null
+  // FIX: M-20 / 4626-432 — same invariant for the persisted active-owner signer.
+  // We only fall back to the persisted value when it is present in the live Privy
+  // classification; otherwise the active owner must come from the classification
+  // record (or null).
   const persistedActiveOwnerRecord =
-    persisted?.activeOwnerWallet
+    persisted?.activeOwnerWallet && isEvmWalletAddressInClassification(classification, persisted.activeOwnerWallet)
       ? allWallets.find((wallet) => walletAddressEquals(wallet.address, persisted.activeOwnerWallet))
       : null
   const activeOwnerWallet = classificationActiveOwnerRecord
