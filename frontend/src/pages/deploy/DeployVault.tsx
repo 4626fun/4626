@@ -575,18 +575,6 @@ async function isCoinbaseSmartWalletOwner(params: {
   }
 }
 
-function isPaymasterProxyUrl(value: string): boolean {
-  const v = String(value ?? '').trim()
-  if (!v) return false
-  try {
-    const base = typeof window !== 'undefined' ? window.location.origin : undefined
-    const u = base ? new URL(v, base) : new URL(v)
-    return u.pathname === '/api/paymaster'
-  } catch {
-    return v === '/api/paymaster' || v.endsWith('/api/paymaster')
-  }
-}
-
 const shortAddress = (addr: string) => `${addr.slice(0, 6)}…${addr.slice(-4)}`
 
 function formatEthPerTokenForUi(weiPerToken: bigint): string {
