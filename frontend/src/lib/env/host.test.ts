@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { resolveLoopbackOriginForCurrentWindow } from '@/lib/env/host'
+import { resolveLoopbackOriginForCurrentWindow, resolveMarketingToAppBaseUrl } from '@/lib/env/host'
 
 describe('resolveLoopbackOriginForCurrentWindow', () => {
   it('keeps configured origin for non-local hosts', () => {
@@ -28,5 +28,34 @@ describe('resolveLoopbackOriginForCurrentWindow', () => {
         currentOrigin: 'http://localhost:5174',
       }),
     ).toBe('http://localhost:5174')
+  })
+})
+
+describe('resolveMarketingToAppBaseUrl', () => {
+  it('keeps preferred app origin when it is public', () => {
+    expect(
+      resolveMarketingToAppBaseUrl({
+        preferredAppOrigin: 'https://app.4626.fun',
+        currentOrigin: 'https://4626.fun',
+      }),
+    ).toBe('https://app.4626.fun')
+  })
+
+  it('falls back to canonical public app origin when preferred origin is loopback on a public host', () => {
+    expect(
+      resolveMarketingToAppBaseUrl({
+        preferredAppOrigin: 'http://localhost:5173',
+        currentOrigin: 'https://4626.fun',
+      }),
+    ).toBe('https://app.4626.fun')
+  })
+
+  it('keeps loopback preferred origin while running locally', () => {
+    expect(
+      resolveMarketingToAppBaseUrl({
+        preferredAppOrigin: 'http://localhost:5173',
+        currentOrigin: 'http://localhost:5174',
+      }),
+    ).toBe('http://localhost:5173')
   })
 })

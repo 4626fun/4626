@@ -66,6 +66,8 @@ export type AlfaClubCommandMessage = {
   text: string
 }
 
+type BridgeJwtSource = 'db' | 'env' | 'none'
+
 type NormalizedHistoryMessage = {
   id: string
   date: number
@@ -388,7 +390,8 @@ function isFutureIsoTimestamp(value: string | null | undefined): boolean {
 }
 
 async function resolveBridgeJwt(fallbackJwt: string | null): Promise<string | null> {
-  let resolved: string | null = fallbackJwt
+  const envJwt = (fallbackJwt ?? '').trim() || null
+  let resolved: string | null = envJwt
   try {
     const persisted = await readAlfaClubChatToken()
     if (
@@ -402,6 +405,21 @@ async function resolveBridgeJwt(fallbackJwt: string | null): Promise<string | nu
     // Fail-open to env fallback.
   }
   return resolved
+}
+
+async function resolveBridgeJwtWithSource(
+  fallbackJwt: string | null,
+): Promise<{ jwt: string | null; source: BridgeJwtSource }> {
+  const envJwt = (fallbackJwt ?? '').trim() || null
+  const resolved = await resolveBridgeJwt(fallbackJwt)
+  if (!resolved) return { jwt: null, source: 'none' }
+  if (envJwt && resolved === envJwt) return { jwt: resolved, source: 'env' }
+  return { jwt: resolved, source: 'db' }
+}
+
+function isRoomHistory401(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error)
+  return message.trim() === 'room_history_failed:401'
 }
 
 function rememberSeenMessageId(id: string): void {
@@ -418,8 +436,8 @@ async function runBridgeTick(
   flags: AlfaClubChatBridgeFlags,
 ): Promise<AlfaClubChatBridgeTickResult> {
   const roomId = flags.roomId as string
-  const jwt = await resolveBridgeJwt(flags.jwt)
-  if (!jwt) {
+  const resolvedJwt = await resolveBridgeJwtWithSource(flags.jwt)
+  if (!resolvedJwt.jwt) {
     return {
       seeded: false,
       roomId,
@@ -430,12 +448,31 @@ async function runBridgeTick(
       errors: [],
     }
   }
-  const fetchedMessages = await fetchRoomHistory({
-    apiBaseUrl: flags.apiBaseUrl,
-    roomId,
-    jwt,
-    limit: flags.historyLimit,
-  })
+  let jwt = resolvedJwt.jwt
+  let fetchedMessages: AlfaClubRoomHistoryMessage[]
+  try {
+    fetchedMessages = await fetchRoomHistory({
+      apiBaseUrl: flags.apiBaseUrl,
+      roomId,
+      jwt,
+      limit: flags.historyLimit,
+    })
+  } catch (error) {
+    const fallbackJwt = (flags.jwt ?? '').trim() || null
+    const shouldRetryWithEnv =
+      resolvedJwt.source === 'db' &&
+      Boolean(fallbackJwt) &&
+      fallbackJwt !== resolvedJwt.jwt &&
+      isRoomHistory401(error)
+    if (!shouldRetryWithEnv) throw error
+    fetchedMessages = await fetchRoomHistory({
+      apiBaseUrl: flags.apiBaseUrl,
+      roomId,
+      jwt: fallbackJwt as string,
+      limit: flags.historyLimit,
+    })
+    jwt = fallbackJwt as string
+  }
 
   const unseenMessages = fetchedMessages.filter((message) => {
     const id = String(message.id ?? '').trim()

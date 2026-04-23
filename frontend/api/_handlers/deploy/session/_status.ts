@@ -59,6 +59,8 @@ const REPLAY_SKIP_PHASE2_FINALIZE_REASON_KEY = 'replaySkipPhase2FinalizeReason'
 const PHASE3_AJNA_ADMIN_ALIGNMENT_KEY = 'phase3AjnaAdminAlignment'
 const PHASE2_INVARIANT_GATE_KEY = 'phase2InvariantGate'
 const PHASE2_INVARIANT_GATE_CHECKED_AT_KEY = 'phase2InvariantGateCheckedAt'
+const PHASE2_FINALIZE_SENT_STEP = 'phase2_finalize_sent'
+const PHASE2_FINALIZE_CONFIRMED_STEP = 'phase2_finalize_confirmed'
 
 type Phase3AjnaAdminAlignment = {
   ajnaAuthAddress: Address | null
@@ -179,7 +181,10 @@ function buildSessionDiagnostics(rec: any): {
   const phase2CoreSentWithoutStageHash =
     step === 'phase2_core_sent' && !asHexHash(payload?.[stageUserOpHashKey('phase2_core_sent')])
   const phase2FinalizeSentWithoutStageHash =
-    step === 'phase2_sent' && !asHexHash(payload?.[stageUserOpHashKey('phase2_sent')])
+    (step === PHASE2_FINALIZE_SENT_STEP || step === 'phase2_sent') &&
+    !asHexHash(
+      payload?.[stageUserOpHashKey(PHASE2_FINALIZE_SENT_STEP)] ?? payload?.[stageUserOpHashKey('phase2_sent')],
+    )
 
   let category: 'ok' | 'expired' | 'grant_expired' | 'session_signer_unavailable' | 'onchain_revert' | 'other_error' =
     'ok'
@@ -221,7 +226,8 @@ function buildSessionDiagnostics(rec: any): {
 }
 
 function stageUserOpHashKey(step: string): string {
-  return `${STAGE_USEROP_HASH_PREFIX}${step}`
+  const normalized = step === 'phase2_sent' ? PHASE2_FINALIZE_SENT_STEP : step
+  return `${STAGE_USEROP_HASH_PREFIX}${normalized}`
 }
 
 function asHexHash(value: unknown): Hex | null {
@@ -1809,6 +1815,8 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
       'phase1_finalize_confirmed',
       'phase2_core_sent',
       'phase2_core_confirmed',
+      PHASE2_FINALIZE_SENT_STEP,
+      PHASE2_FINALIZE_CONFIRMED_STEP,
       'phase2_sent',
       'phase2_confirmed',
       'ovault_mesh_sent',
@@ -1822,7 +1830,16 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   ) {
     return
   }
-  const receiptBackedSteps = ['phase1_sent', 'phase1_finalize_sent', 'phase2_core_sent', 'phase2_sent', 'phase3_sent', 'phase4_sent', 'cleanup_sent']
+  const receiptBackedSteps = [
+    'phase1_sent',
+    'phase1_finalize_sent',
+    'phase2_core_sent',
+    PHASE2_FINALIZE_SENT_STEP,
+    'phase2_sent',
+    'phase3_sent',
+    'phase4_sent',
+    'cleanup_sent',
+  ]
   const needsReceipt = receiptBackedSteps.includes(step)
 
   const origin = getCanonicalOrigin(req)
@@ -2212,7 +2229,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     }
     if (hasPhase2Finalize) {
       if (!shouldSkipPhase2Finalize) {
-        await startStage(fromStep, 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
+        await startStage(fromStep, PHASE2_FINALIZE_SENT_STEP, phase2FinalizeCalls, !hasPostPhase2)
         return
       }
       await markReplaySkip('phase2Finalize')
@@ -2223,7 +2240,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   const startAfterPhase2Core = async (fromStep: string): Promise<void> => {
     if (hasPhase2Finalize) {
       if (!shouldSkipPhase2Finalize) {
-        await startStage(fromStep, 'phase2_sent', phase2FinalizeCalls, !hasPostPhase2)
+        await startStage(fromStep, PHASE2_FINALIZE_SENT_STEP, phase2FinalizeCalls, !hasPostPhase2)
         return
       }
       await markReplaySkip('phase2Finalize')
@@ -2253,7 +2270,7 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
         attachCleanup: !hasPhase2Finalize && !hasPostPhase2,
       }
     }
-    if (sentStep === 'phase2_sent') {
+    if (sentStep === PHASE2_FINALIZE_SENT_STEP || sentStep === 'phase2_sent') {
       return {
         calls: phase2FinalizeCalls,
         attachCleanup: !hasPostPhase2,
@@ -2333,7 +2350,8 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
   const resolveReceiptTxHash = async (): Promise<Hex | undefined> => {
     if (!needsReceipt) return undefined
     const stageKey = stageUserOpHashKey(step)
-    let stageHash = asHexHash(payload?.[stageKey])
+    const legacyStageKey = step === PHASE2_FINALIZE_SENT_STEP ? stageUserOpHashKey('phase2_sent') : null
+    let stageHash = asHexHash(payload?.[stageKey]) ?? (legacyStageKey ? asHexHash(payload?.[legacyStageKey]) : null)
     if (!stageHash) {
       const fallback = asHexHash(rec.lastUserOpHash)
       // Adopt compatibility fallback only when tx hash is empty (means it wasn't reused from a prior stage).
@@ -2356,17 +2374,17 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
         await startAfterPhase2Core('phase2_core_confirmed')
         return undefined
       }
-      if (step === 'phase2_sent' && shouldSkipPhase2Finalize) {
+      if ((step === PHASE2_FINALIZE_SENT_STEP || step === 'phase2_sent') && shouldSkipPhase2Finalize) {
         await markReplaySkip('phase2Finalize')
         const confirmed = await transitionDeploySession({
           id: rec.id,
-          fromStep: 'phase2_sent',
-          toStep: 'phase2_confirmed',
+          fromStep: step as any,
+          toStep: PHASE2_FINALIZE_CONFIRMED_STEP,
           lastTxHash: null,
           lastError: null,
         })
         if (!confirmed) throw new Error(CONCURRENT_MODIFICATION)
-        await startOrCompleteAfterPhase2('phase2_confirmed')
+        await startOrCompleteAfterPhase2(PHASE2_FINALIZE_CONFIRMED_STEP)
         return undefined
       }
       if (step !== 'cleanup_sent') {
@@ -2442,15 +2460,15 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     return
   }
 
-  if (step === 'phase2_sent') {
+  if (step === PHASE2_FINALIZE_SENT_STEP || step === 'phase2_sent') {
     const confirmed = await transitionDeploySession({
       id: rec.id,
-      fromStep: 'phase2_sent',
-      toStep: 'phase2_confirmed',
+      fromStep: step as any,
+      toStep: PHASE2_FINALIZE_CONFIRMED_STEP,
       lastTxHash: txHash,
     })
     if (!confirmed) throw new Error(CONCURRENT_MODIFICATION)
-    await startOrCompleteAfterPhase2('phase2_confirmed')
+    await startOrCompleteAfterPhase2(PHASE2_FINALIZE_CONFIRMED_STEP)
     return
   }
 
@@ -2540,8 +2558,8 @@ async function advanceDeploySession(rec: any, req: VercelRequest): Promise<void>
     return
   }
 
-  if (step === 'phase2_confirmed') {
-    await startOrCompleteAfterPhase2('phase2_confirmed')
+  if (step === PHASE2_FINALIZE_CONFIRMED_STEP || step === 'phase2_confirmed') {
+    await startOrCompleteAfterPhase2(step)
     return
   }
 

@@ -48,6 +48,8 @@ const REPLAY_SKIP_PHASE2_FINALIZE_AT_KEY = 'replaySkipPhase2FinalizeAt'
 const REPLAY_SKIP_PHASE2_FINALIZE_REASON_KEY = 'replaySkipPhase2FinalizeReason'
 const PHASE2_INVARIANT_GATE_KEY = 'phase2InvariantGate'
 const PHASE2_INVARIANT_GATE_CHECKED_AT_KEY = 'phase2InvariantGateCheckedAt'
+const PHASE2_FINALIZE_SENT_STEP = 'phase2_finalize_sent'
+const PHASE2_FINALIZE_CONFIRMED_STEP = 'phase2_finalize_confirmed'
 
 function isSessionExpired(expiresAt: unknown): boolean {
   if (typeof expiresAt !== 'string') return false
@@ -56,7 +58,8 @@ function isSessionExpired(expiresAt: unknown): boolean {
 }
 
 function stageUserOpHashKey(step: string): string {
-  return `${STAGE_USEROP_HASH_PREFIX}${step}`
+  const normalized = step === 'phase2_sent' ? PHASE2_FINALIZE_SENT_STEP : step
+  return `${STAGE_USEROP_HASH_PREFIX}${normalized}`
 }
 
 function isPlainObject(value: unknown): value is Record<string, any> {
@@ -808,6 +811,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       'phase1_sent',
       'phase1_finalize_sent',
       'phase2_core_sent',
+      PHASE2_FINALIZE_SENT_STEP,
       'phase2_sent',
       'phase3_sent',
       'phase4_sent',
@@ -1069,7 +1073,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (hasPhase2Finalize) {
         if (!shouldSkipPhase2Finalize) {
           const attachCleanup = !hasPostPhase2
-          return sendStage('phase2_sent', phase2FinalizeCalls, attachCleanup)
+          return sendStage(PHASE2_FINALIZE_SENT_STEP, phase2FinalizeCalls, attachCleanup)
         }
         await markReplaySkip('phase2Finalize')
       }
@@ -1080,7 +1084,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       if (hasPhase2Finalize) {
         if (!shouldSkipPhase2Finalize) {
           const attachCleanup = !hasPostPhase2
-          return sendStage('phase2_sent', phase2FinalizeCalls, attachCleanup)
+          return sendStage(PHASE2_FINALIZE_SENT_STEP, phase2FinalizeCalls, attachCleanup)
         }
         await markReplaySkip('phase2Finalize')
       }
@@ -1137,12 +1141,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const started = await runFromPhase2CoreConfirmed()
       if (started) return started
     }
-    if (rec.step === 'phase2_confirmed' && hasPostPhase2) {
-      const started = await runAfterPhase2('phase2_confirmed')
+    if ((rec.step === PHASE2_FINALIZE_CONFIRMED_STEP || rec.step === 'phase2_confirmed') && hasPostPhase2) {
+      const started = await runAfterPhase2(rec.step)
       if (started) return started
     }
-    if (rec.step === 'phase2_confirmed' && !hasPostPhase2) {
-      return await runAfterPhase2('phase2_confirmed')
+    if ((rec.step === PHASE2_FINALIZE_CONFIRMED_STEP || rec.step === 'phase2_confirmed') && !hasPostPhase2) {
+      return await runAfterPhase2(rec.step)
     }
     if (rec.step === 'ovault_mesh_sent') {
       return await runOvaultMeshGate('ovault_mesh_sent')

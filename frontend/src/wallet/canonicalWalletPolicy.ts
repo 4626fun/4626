@@ -3,7 +3,7 @@ import { getAddress, isAddress } from 'viem'
 export type PolicyAddress = `0x${string}`
 
 export const TARGET_CANONICAL_CSW_ADDRESS =
-  '0xab6d5c10b03300326cd7fab7267ae192842967b5' as const satisfies PolicyAddress
+  '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef' as const satisfies PolicyAddress
 
 export const TARGET_ALLOWED_OWNER_EOA_ADDRESSES = [
   '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',

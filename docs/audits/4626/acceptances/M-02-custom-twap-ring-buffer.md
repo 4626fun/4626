@@ -10,6 +10,20 @@
 
 Migrating `CreatorOracle` to delegate TWAP observation to the V4 pool's native `observe()` is a deep refactor that changes both the on-chain storage layout and every downstream consumer (lottery pricing, vault PPS, LBP migration pricing). Shipping it inside a single audit-remediation sprint without the ability to run `forge test` against the full suite is not acceptable — the blast radius is larger than the "Plausible" risk justifies.
 
+## Current state at HEAD
+
+- The ring-buffer storage and cumulative-tick logic are implemented in `contracts/utilities/oracles/CreatorOracle.sol` (observation writes, ring advance, and TWAP observation traversal).
+- Targeted TWAP/ring-buffer safety coverage already exists in `test/CreatorOracle.TwapSafety.t.sol`, including:
+  - `test_recordObservation_FirstWriteAdvancesIndexAndInitializesNextSlot`
+  - `test_getTWAPTick_DoesNotUseUninitializedObservation`
+- Coverage is not yet a dedicated ring-buffer-only suite, and explicit tests for same-block (`timeDelta == 0`) and wrap-around (`N+1` into full ring) remain part of the follow-up mitigation scope below.
+
+Quick verification commands:
+
+- `grep -nE 'ring buffer|_write|_observe|getTWAPTick' contracts/utilities/oracles/CreatorOracle.sol`
+- `find test -iname '*twap*' -o -iname '*ringbuffer*'`
+- `grep -nE 'FirstWriteAdvancesIndex|DoesNotUseUninitializedObservation' test/CreatorOracle.TwapSafety.t.sol`
+
 Mitigation to apply before this can be closed:
 
 1. Add a `forge test` suite specifically for the ring buffer covering:

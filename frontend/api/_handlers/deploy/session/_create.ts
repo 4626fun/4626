@@ -455,6 +455,13 @@ function isDeployVanityPaywallEnabled(): boolean {
   return true
 }
 
+function isDeployOvaultMeshPaywallEnabled(): boolean {
+  const raw = String(process.env.DEPLOY_OVAULT_MESH_PAYWALL_ENABLED ?? '').trim().toLowerCase()
+  if (!raw) return true
+  if (raw === '0' || raw === 'false' || raw === 'no' || raw === 'off') return false
+  return true
+}
+
 function normalizeDeployVanityLength(value: number): number | null {
   const normalized = Math.floor(value)
   if (!Number.isFinite(normalized)) return null
@@ -1301,6 +1308,30 @@ export async function validateDeploySessionRequest(params: {
             `Activate at /creator/strategy/features?creator=${creatorToken}.`,
         )
       }
+    }
+  }
+  if (isDeployOvaultMeshPaywallEnabled() && solanaOvault?.enabled === true) {
+    const db = await getDb()
+    if (!db?.sql) {
+      throw new DeploySessionRequestError(503, 'OVault mesh entitlement check unavailable (database unavailable).')
+    }
+    // OVault mesh is bridge/composer infrastructure; treat the base Solana strategy
+    // entitlement as sufficient so creators are not forced into an unrelated extra gate.
+    const requiredFeatureKeys = ['solana_bridge_strategy', 'solana_ovault_mesh', 'solana_meteora_alpha_vault'] as const
+    let entitled = false
+    for (const featureKey of requiredFeatureKeys) {
+      const hasFeature = await hasLiveActivationForFeature(db as any, { creatorToken, featureKey })
+      if (hasFeature) {
+        entitled = true
+        break
+      }
+    }
+    if (!entitled) {
+      throw new DeploySessionRequestError(
+        402,
+        `OVault mesh deploy lane requires paid feature activation: ${requiredFeatureKeys.join(' or ')}. ` +
+          `Activate at /creator/strategy/features?creator=${creatorToken}.`,
+      )
     }
   }
   const hasPhase2Finalize = phase2FinalizeCalls.length > 0

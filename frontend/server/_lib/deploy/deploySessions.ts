@@ -12,6 +12,9 @@ export type DeploySessionStep =
   | 'phase1_finalize_confirmed'
   | 'phase2_core_sent'
   | 'phase2_core_confirmed'
+  | 'phase2_finalize_sent'
+  | 'phase2_finalize_confirmed'
+  // Legacy aliases kept for in-flight/read compatibility.
   | 'phase2_sent'
   | 'phase2_confirmed'
   | 'ovault_mesh_sent'

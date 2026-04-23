@@ -37,6 +37,7 @@ export type CreatorStrategyFeatureKey =
   | 'charm_active_lp'
   | 'ajna_sleeve'
   | 'solana_bridge_strategy'
+  | 'solana_ovault_mesh'
   | 'solana_meteora_alpha_vault'
   | `deploy_vanity_vault_prefix_len_${DeployVanityLength}`
   | `deploy_vanity_share_suffix_len_${DeployVanityLength}`
@@ -194,6 +195,23 @@ export const CREATOR_STRATEGY_FEATURE_CATALOG: Record<
       'Creator coin must pass lowercase-parity normalization so the Solana-side wrapped mint can be created (see docs/operations/solana-bridge-naming-invariant.md)',
     ],
     estimatedActivationWindow: 'Instant — applied automatically at vault deploy once payment is verified.',
+  },
+  solana_ovault_mesh: {
+    key: 'solana_ovault_mesh',
+    displayName: 'Solana OVault composer mesh (Phase 2b)',
+    tagline: 'Enable cross-chain OVault compose routing for Solana asset/share flows.',
+    description:
+      'Enables the Phase-2b OVault composer mesh path in deploy sessions. This configures and validates ' +
+      'the `CreatorOVaultComposer` route invariants (asset/share mesh tokens + Solana peers) before ' +
+      'post-Phase2 stages continue. It powers the cross-chain deposit/redeem lane where Solana-origin ' +
+      'asset flow can compose into Base-side wrapper deposit and emit share-token flow for Solana paths.',
+    priceUsdc: DEFAULT_CREATOR_STRATEGY_PRICE_USDC,
+    provisionerTag: 'deploy_phase2b_ovault_mesh',
+    requires: [
+      'Used only when deploy session requests `solanaOvault.enabled=true`',
+      'Deploy lane entitlement is satisfied by any one of: `solana_bridge_strategy`, `solana_ovault_mesh`, or `solana_meteora_alpha_vault`',
+    ],
+    estimatedActivationWindow: 'Instant — entitlement is active as soon as payment is verified.',
   },
   solana_meteora_alpha_vault: {
     key: 'solana_meteora_alpha_vault',

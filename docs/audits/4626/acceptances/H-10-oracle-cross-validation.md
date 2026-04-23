@@ -44,15 +44,27 @@ the same single-source dependency in a more complicated wrapper.
 
 - Rebalance authority is restricted to the protocol-owned
   `lpManager` / strategy operator; no external party can trigger it.
-- Rebalance cadence is rate-limited by the keeper (see
-  `cre/cre-workflows/rebalance-cadence-guard` alerts).
+- Keeper-side strategy automation applies price-change triggers plus
+  dedupe/cooldown controls before enqueueing actions (Charm/Ajna
+  manager + signal listener paths).
 - Charm Alpha vault imposes its own TWAP deviation threshold
   (`CHARM_MAX_TWAP_DEVIATION = 500` / 5%) before allowing a
   rebalance; a divergent primary price will be refused by Charm
   before our strategy even issues the tx.
-- The payout-integrity CRE workflow (see Sprint 4 — H-13, L-24,
-  M-16) checks post-rebalance NAV against the previous snapshot and
-  pages the on-call if deviation exceeds the configured bps.
+- The payout-integrity CRE workflow (Sprint 4 — H-13, L-24, M-16)
+  verifies payout-lane wiring and downstream distribution health; it
+  is an operational integrity monitor and does not implement
+  post-rebalance NAV cross-validation.
+
+## Reproduction at HEAD
+
+- Keeper trigger/dedupe/cooldown controls:
+  - `grep -nE 'priceChangeTriggerBps|deviationBps|dedupeKey' cre/cre-workflows/_shared/charmManager.ts cre/cre-workflows/_shared/ajnaManager.ts`
+  - `grep -nE 'cooldownSeconds|listener_cooldown_active|dedupeKey' cre/actions/strategy-signal-listener.action.ts`
+- Onchain TWAP-deviation gate:
+  - `grep -nE 'maxTwapDeviation|checkCanRebalance' contracts/vault/strategies/univ4/CreatorLPManager.sol`
+- Payout-integrity scope (wiring/health checks, not NAV deviation):
+  - `grep -nE 'payoutRecipient|tradeFeeCollector|burnStream|lastDistribution' cre/cre-workflows/payout-integrity/main.ts`
 
 ## Exit criteria (to close this finding)
 
@@ -74,4 +86,8 @@ the same single-source dependency in a more complicated wrapper.
 - `contracts/vault/strategies/charm/*` (rebalance entry points)
 - `contracts/vault/strategies/ajna4626/AjnaERC4626Vault.sol`
 - `contracts/vault/strategies/univ4/ConcentratedStrategy.sol`
+- `cre/cre-workflows/_shared/charmManager.ts`
+- `cre/cre-workflows/_shared/ajnaManager.ts`
+- `cre/actions/strategy-signal-listener.action.ts`
+- `cre/cre-workflows/payout-integrity/main.ts`
 - `docs/audits/4626/AUDIT_REPORT.md` — H-10 row

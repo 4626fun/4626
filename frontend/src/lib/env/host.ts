@@ -5,6 +5,12 @@ type LoopbackOriginResolutionInput = {
   currentOrigin: string
 }
 
+type MarketingToAppBaseUrlResolutionInput = {
+  preferredAppOrigin: string
+  currentOrigin: string
+  fallbackPublicAppOrigin?: string
+}
+
 function isLoopbackHostname(hostname: string): boolean {
   const h = String(hostname || '').trim().toLowerCase()
   return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]'
@@ -52,6 +58,25 @@ function resolveConfiguredOrigin(rawOrigin: string): string {
     configuredOrigin: rawOrigin,
     currentOrigin: window.location.origin,
   })
+}
+
+/**
+ * When rendering the marketing host, never route users to loopback app origins.
+ * This protects against accidentally shipping VITE_APP_ORIGIN=localhost in a
+ * public build while preserving local-dev behavior.
+ */
+export function resolveMarketingToAppBaseUrl(input: MarketingToAppBaseUrlResolutionInput): string {
+  const fallback = (input.fallbackPublicAppOrigin ?? 'https://app.4626.fun').trim()
+  try {
+    const preferred = new URL(input.preferredAppOrigin)
+    const current = new URL(input.currentOrigin)
+    if (isLoopbackHostname(preferred.hostname) && !isLoopbackHostname(current.hostname)) {
+      return fallback
+    }
+  } catch {
+    // Fall through to preferred origin below.
+  }
+  return input.preferredAppOrigin
 }
 
 /** Canonical marketing/waitlist domain origin. */
@@ -106,7 +131,11 @@ export function getHostMode(): HostMode {
 export function getAppBaseUrl(): string {
   if (typeof window === 'undefined') return APP_ORIGIN
   const mode = getHostMode()
-  return mode === 'app' ? window.location.origin : APP_ORIGIN
+  if (mode === 'app') return window.location.origin
+  return resolveMarketingToAppBaseUrl({
+    preferredAppOrigin: APP_ORIGIN,
+    currentOrigin: window.location.origin,
+  })
 }
 
 /**

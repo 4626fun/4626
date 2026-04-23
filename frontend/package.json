@@ -56,6 +56,7 @@
     "agent:eliza": "tsx --env-file=.env --env-file=../cre/.env server/agent/eliza/index.ts",
     "agent:eliza:doctor": "tsx --env-file=.env --env-file=../cre/.env scripts/agent/eliza-doctor.ts",
     "agent:eliza:standby:smoke": "bash -lc 'tmp_xmtp_db_dir=$(mktemp -d); trap \"rm -rf \\\"$tmp_xmtp_db_dir\\\"\" EXIT; timeout 20s env PORT=${PORT:-8081} AGENT_RUNTIME_ROLE=standby AGENT_CONSUME_XMTP=false XMTP_DB_DIRECTORY=\"$tmp_xmtp_db_dir\" pnpm agent:eliza; code=$?; if [ \"$code\" -eq 124 ]; then exit 0; fi; exit \"$code\"'",
+    "alfaclub:chat:smoke": "tsx --env-file=.env scripts/alfaclub-chat-smoke.ts",
     "solana-provisioner:start": "if [ -f server/solana-provisioner/.env ]; then tsx --env-file=server/solana-provisioner/.env server/solana-provisioner/index.ts; else tsx server/solana-provisioner/index.ts; fi",
     "solana-mint:mine": "tsx scripts/mine-solana-mint-vanity.ts",
     "csw:link-owner": "tsx scripts/link-canonical-csw-owner.ts",
@@ -142,6 +143,7 @@
     "@types/node": "^25.2.1",
     "@types/react": "^19.2.13",
     "@types/react-dom": "^19.2.3",
+    "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^8.54.0",
     "@typescript-eslint/parser": "^8.54.0",
     "@vercel/node": "^5.5.30",
@@ -157,7 +159,8 @@
     "typedoc": "^0.28.16",
     "typedoc-plugin-markdown": "^4.9.0",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "ws": "^8.20.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
