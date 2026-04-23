@@ -12,6 +12,7 @@ on:
       - 'frontend/src/**'
       - 'frontend/api/**'
       - 'frontend/server/**'
+      - 'frontend/scripts/**'
       - 'script/agent-runtime/skills/**'
       - 'frontend/packages/server-core/**'
       - 'frontend/package.json'
@@ -24,6 +25,14 @@ on:
       - 'contracts/**'
       - 'foundry.toml'
       - 'package.json'
+      # Root-level configs scanned by scripts/check-docs-source-link-pin.mjs.
+      - 'tsconfig.json'
+      - 'tsconfig*.json'
+      - 'typedoc.json'
+      - 'typedoc*.json'
+      # Any change to the docs pipeline / guards themselves must rerun this
+      # workflow so CI coverage matches the code that enforces it.
+      - 'scripts/**'
       - '.github/workflows/docs.yml'
   push:
     branches: [main, master]
@@ -36,6 +45,7 @@ on:
       - 'frontend/src/**'
       - 'frontend/api/**'
       - 'frontend/server/**'
+      - 'frontend/scripts/**'
       - 'script/agent-runtime/skills/**'
       - 'frontend/packages/server-core/**'
       - 'frontend/package.json'
@@ -48,6 +58,14 @@ on:
       - 'contracts/**'
       - 'foundry.toml'
       - 'package.json'
+      # Root-level configs scanned by scripts/check-docs-source-link-pin.mjs.
+      - 'tsconfig.json'
+      - 'tsconfig*.json'
+      - 'typedoc.json'
+      - 'typedoc*.json'
+      # Any change to the docs pipeline / guards themselves must rerun this
+      # workflow so CI coverage matches the code that enforces it.
+      - 'scripts/**'
       - '.github/workflows/docs.yml'
 
 jobs:
@@ -97,6 +115,14 @@ jobs:
         run: |
           node apps/docs-site/scripts/audit-docs-hygiene.mjs --json > /tmp/docs-hygiene.json
           node -e "const fs=require('node:fs'); const r=JSON.parse(fs.readFileSync('/tmp/docs-hygiene.json','utf8')); console.log('[docs] duplicate paragraph groups:', r.duplicateParagraphGroupCount); console.log('[docs] stale files:', r.staleFileCount); if (r.staleFileCount > 0) process.exit(1);"
+
+      - name: Verify docs source-link pin (no hardcoded refs)
+        if: steps.detect.outputs.docs_sensitive == 'true'
+        run: node scripts/check-docs-source-link-pin.mjs
+
+      - name: Run docs release-branch ref e2e test
+        if: steps.detect.outputs.docs_sensitive == 'true'
+        run: node apps/docs-site/scripts/__tests__/source-link-ref-e2e.test.mjs
 
       - name: Install root dependencies
         if: steps.detect.outputs.docs_sensitive == 'true'

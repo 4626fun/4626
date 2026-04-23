@@ -134,8 +134,13 @@ const GIT_DATE_PATHS = [
 ];
 
 let gitLastUpdatedByPath = new Map();
-const GITHUB_BLOB_BASE = 'https://github.com/wenakita/4626/blob/main';
-const GITHUB_TREE_BASE = 'https://github.com/wenakita/4626/tree/main';
+// Source-link ref: honour DOCS_GITHUB_REF so release-branch docs builds resolve
+// to the branch being documented, not hardcoded main. Mirrors the convention
+// in apps/docs-site/scripts/docs-refresh.mjs and
+// frontend/scripts/check-typedoc-warnings.mjs. See PR #338 / 4626-402.
+const DOCS_GIT_REF = process.env.DOCS_GITHUB_REF || 'main';
+const GITHUB_BLOB_BASE = `https://github.com/wenakita/4626/blob/${DOCS_GIT_REF}`;
+const GITHUB_TREE_BASE = `https://github.com/wenakita/4626/tree/${DOCS_GIT_REF}`;
 const MANUAL_ALLOWED_STATUS = new Set(['current', 'needs-review', 'archived']);
 const MANUAL_DEFAULT_OWNER = process.env.DOCS_DEFAULT_OWNER || 'docs-team';
 
@@ -247,8 +252,8 @@ function fixGeneratedLinks(content, sourceType) {
     }
   );
   
-  // Fix LICENSE links (common in forge doc output)
-  fixed = fixed.replace(/\]\(LICENSE\)/g, '](https://github.com/wenakita/4626/blob/main/LICENSE)');
+  // Fix LICENSE links (common in forge doc output). Ref honours DOCS_GITHUB_REF.
+  fixed = fixed.replace(/\]\(LICENSE\)/g, `](${GITHUB_BLOB_BASE}/LICENSE)`);
   
   return fixed;
 }

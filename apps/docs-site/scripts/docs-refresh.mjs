@@ -3,6 +3,7 @@
 import { spawnSync } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const args = new Set(process.argv.slice(2));
 const shouldCheck = args.has('--check');
@@ -98,6 +99,23 @@ async function walkMarkdownFiles(dir) {
   return files;
 }
 
+// Match any previously-emitted blob ref: raw commit SHA (7-40 hex chars)
+// OR a literal "main" ref. The literal-main rewrite matters for non-main
+// docs builds (e.g. release-branch docs regeneration under DOCS_GITHUB_REF)
+// so links land on the branch being documented, not stale main content.
+//
+// Exported so integration tests can exercise the rewrite under a simulated
+// release-branch ref (see apps/docs-site/scripts/__tests__/source-link-ref-e2e.test.mjs).
+export const BLOB_REF_PATTERN =
+  /https:\/\/github\.com\/wenakita\/4626\/blob\/(?:[0-9a-f]{7,40}|main)\//g;
+
+export function rewriteBlobRefs(content, gitRef) {
+  const stablePrefix = `https://github.com/wenakita/4626/blob/${gitRef}/`;
+  // Reset regex state (global flag) before reuse across calls.
+  BLOB_REF_PATTERN.lastIndex = 0;
+  return content.replace(BLOB_REF_PATTERN, stablePrefix);
+}
+
 async function normalizeGeneratedSourceLinks(dir) {
   const fullDir = path.join(repoRoot, dir);
   let files;
@@ -107,18 +125,10 @@ async function normalizeGeneratedSourceLinks(dir) {
     return;
   }
 
-  // Match any previously-emitted blob ref: raw commit SHA (7-40 hex chars)
-  // OR a literal "main" ref. The literal-main rewrite matters for non-main
-  // docs builds (e.g. release-branch docs regeneration under DOCS_GITHUB_REF)
-  // so links land on the branch being documented, not stale main content.
-  const blobRefPattern =
-    /https:\/\/github\.com\/wenakita\/4626\/blob\/(?:[0-9a-f]{7,40}|main)\//g;
-  const stablePrefix = `https://github.com/wenakita/4626/blob/${docsGitRef}/`;
   let rewritten = 0;
-
   for (const file of files) {
     const content = await fs.readFile(file, 'utf8');
-    const next = content.replace(blobRefPattern, stablePrefix);
+    const next = rewriteBlobRefs(content, docsGitRef);
     if (next !== content) {
       await fs.writeFile(file, next);
       rewritten++;
@@ -128,30 +138,37 @@ async function normalizeGeneratedSourceLinks(dir) {
   console.log(`[docs] Normalized source links in ${rewritten} generated files under ${dir}`);
 }
 
-run('pnpm', ['-C', 'frontend', 'docs'], 'Generate frontend API docs');
-if (!skipContractDocs) {
-  run('forge', ['doc'], 'Generate contract API docs');
-} else {
-  console.log('\n[docs] Skip contract API docs (frontend/docs-site only)');
-}
-if (shouldCheck) {
-  run('node', ['apps/docs-site/scripts/check-docs-source-coverage.mjs'], 'Verify docs source coverage');
-  run('node', ['apps/docs-site/scripts/audit-docs-hygiene.mjs', '--strict-stale'], 'Audit docs hygiene (staleness gate)');
-}
-await normalizeGeneratedSourceLinks('docs/_generated/frontend');
-if (!skipContractDocs) {
-  await normalizeGeneratedSourceLinks('docs/_generated/contracts');
-}
-run('pnpm', ['-C', 'apps/docs-site', syncCommand], 'Sync docs site sources');
-run('pnpm', ['-C', 'apps/docs-site', postprocessCommand], 'Postprocess docs site API output');
-if (shouldCheck) {
-  run('node', ['apps/docs-site/scripts/check-docs-hygiene-policy.mjs'], 'Verify docs hygiene policy');
-}
+// Only run the pipeline when executed directly, not when imported as a
+// module (e.g. by integration tests that reuse `rewriteBlobRefs`).
+const isMainModule = import.meta.url === `file://${process.argv[1]}` ||
+  fileURLToPath(import.meta.url) === path.resolve(process.argv[1] ?? '');
 
-if (shouldCheck) {
-  verifyGeneratedTargetsCommitted(generatedTargets);
-}
+if (isMainModule) {
+  run('pnpm', ['-C', 'frontend', 'docs'], 'Generate frontend API docs');
+  if (!skipContractDocs) {
+    run('forge', ['doc'], 'Generate contract API docs');
+  } else {
+    console.log('\n[docs] Skip contract API docs (frontend/docs-site only)');
+  }
+  if (shouldCheck) {
+    run('node', ['apps/docs-site/scripts/check-docs-source-coverage.mjs'], 'Verify docs source coverage');
+    run('node', ['apps/docs-site/scripts/audit-docs-hygiene.mjs', '--strict-stale'], 'Audit docs hygiene (staleness gate)');
+  }
+  await normalizeGeneratedSourceLinks('docs/_generated/frontend');
+  if (!skipContractDocs) {
+    await normalizeGeneratedSourceLinks('docs/_generated/contracts');
+  }
+  run('pnpm', ['-C', 'apps/docs-site', syncCommand], 'Sync docs site sources');
+  run('pnpm', ['-C', 'apps/docs-site', postprocessCommand], 'Postprocess docs site API output');
+  if (shouldCheck) {
+    run('node', ['apps/docs-site/scripts/check-docs-hygiene-policy.mjs'], 'Verify docs hygiene policy');
+  }
 
-if (shouldBuildStrict) {
-  run('pnpm', ['-C', 'apps/docs-site', 'build:strict'], 'Run strict docs build');
+  if (shouldCheck) {
+    verifyGeneratedTargetsCommitted(generatedTargets);
+  }
+
+  if (shouldBuildStrict) {
+    run('pnpm', ['-C', 'apps/docs-site', 'build:strict'], 'Run strict docs build');
+  }
 }

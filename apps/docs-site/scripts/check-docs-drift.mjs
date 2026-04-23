@@ -19,6 +19,8 @@ const exactMatches = new Set([
   'frontend/README.md',
   'apps/docs-site/package.json',
   'apps/docs-site/README.md',
+  // Root-level configs scanned by scripts/check-docs-source-link-pin.mjs.
+  'tsconfig.json',
 ]);
 
 const docsSensitivePrefixes = [
@@ -28,12 +30,16 @@ const docsSensitivePrefixes = [
   'frontend/src/',
   'frontend/api/',
   'frontend/server/',
+  'frontend/scripts/',
   'script/agent-runtime/skills/',
   'apps/docs-site/',
   '.github/workflows/',
   'cre/',
   'src/',
   'contracts/',
+  // Root-level docs pipeline / guard scripts. Changes here must rerun the
+  // Docs Drift workflow so CI coverage stays in sync with the code it gates on.
+  'scripts/',
 ];
 
 const contractDocsPrefixes = [
@@ -66,6 +72,8 @@ const generatedDocsPrefixes = [
 
 const docsToolingPrefixes = [
   'apps/docs-site/scripts/',
+  'frontend/scripts/',
+  'scripts/',
   '.github/workflows/',
 ];
 

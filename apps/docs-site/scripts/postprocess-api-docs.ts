@@ -38,6 +38,11 @@ const API_ROOTS = [
   },
 ] as const;
 const STRICT_MODE = process.argv.includes('--strict');
+// Source-link ref: honour DOCS_GITHUB_REF so release-branch docs builds resolve
+// to the branch being documented, not hardcoded main. Mirrors the convention
+// in apps/docs-site/scripts/docs-refresh.mjs and sync-docs.mjs. PR #338 / 4626-402.
+const DOCS_GIT_REF = process.env.DOCS_GITHUB_REF || 'main';
+const GITHUB_BLOB_BASE = `https://github.com/wenakita/4626/blob/${DOCS_GIT_REF}`;
 
 interface Stats {
   filesScanned: number;
@@ -431,7 +436,7 @@ async function fixLinksInFile(filePath: string, apiRoot: (typeof API_ROOTS)[numb
     // Pattern 1e: AGENTS.md is not part of docs-site content; link to GitHub.
     content = content.replace(/\]\((?:\.\/)?AGENTS(?:\.md)?\)/g, () => {
       fileRewrites++;
-      return '](https://github.com/wenakita/4626/blob/main/AGENTS.md)';
+      return `](${GITHUB_BLOB_BASE}/AGENTS.md)`;
     });
   }
 
