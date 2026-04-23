@@ -982,44 +982,46 @@ body {
   box-shadow: 0 0 16px rgba(0, 82, 255, 0.18) !important;
 }
 
-/* ─── Audio mute toggle (nav) ────────────────────────────────────── */
-.nav-audio-btn {
+/* ─── Audio mute toggle (floating bottom-right) ────────────────────── */
+.audio-toggle-float {
+  position: fixed;
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 18px);
+  right: calc(env(safe-area-inset-right, 0px) + 18px);
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
+  width: 40px;
+  height: 40px;
   padding: 0;
-  margin-right: 0.6rem;
-  background: transparent;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 6px;
-  color: rgba(255, 255, 255, 0.7);
-  cursor: pointer;
-  transition: color 180ms ease, border-color 180ms ease, background 180ms ease;
-}
-.nav-audio-btn:hover {
-  color: rgba(255, 255, 255, 0.95);
-  border-color: rgba(255, 255, 255, 0.25);
-  background: rgba(255, 255, 255, 0.03);
-}
-.nav-audio-btn:focus-visible {
-  outline: 2px solid rgba(0, 82, 255, 0.55);
-  outline-offset: 2px;
-}
-.nav-audio-btn svg { display: block; }
-@media (max-width: 520px) {
-  .nav-audio-btn { width: 30px; height: 30px; margin-right: 0.4rem; }
-}
-
-.nav-audio-btn--floating {
-  position: fixed !important;
-  top: auto;
-  bottom: 18px;
-  right: 18px;
   margin: 0;
+  background: rgba(6, 8, 13, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
   z-index: 100;
-  background: rgba(6, 8, 13, 0.7) !important;
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+  transition: color 180ms ease, border-color 180ms ease, background 180ms ease, transform 180ms ease;
+}
+.audio-toggle-float:hover {
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(6, 8, 13, 0.85);
+  transform: translateY(-1px);
+}
+.audio-toggle-float:active { transform: translateY(0); }
+.audio-toggle-float:focus-visible {
+  outline: 2px solid rgba(0, 82, 255, 0.6);
+  outline-offset: 3px;
+}
+.audio-toggle-float svg { display: block; }
+@media (max-width: 520px) {
+  .audio-toggle-float {
+    width: 38px;
+    height: 38px;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 14px);
+    right: calc(env(safe-area-inset-right, 0px) + 14px);
+  }
 }

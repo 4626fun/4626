@@ -168,9 +168,9 @@
     toggleMuted() { this.setMuted(!this.muted); return this.muted; }
   }
 
-  // ─── Mute button (nav-right) ───────────────────────────────────────────
-  // Create button + handler once. Place into .nav .nav-right if present;
-  // otherwise float bottom-right. Retries placement for up to 3s.
+  // ─── Mute button (floating bottom-right) ───────────────────────────────
+  // Always floats at bottom-right. Keeps the nav clean so "4626.fun" reads
+  // without competing elements (important on narrow mobile viewports).
   function injectMuteButton(mixer) {
     const existing = document.getElementById('audio-toggle');
     if (existing && existing.parentElement) existing.parentElement.removeChild(existing);
@@ -178,7 +178,7 @@
     const btn = document.createElement('button');
     btn.id = 'audio-toggle';
     btn.type = 'button';
-    btn.className = 'nav-audio-btn';
+    btn.className = 'audio-toggle-float';
     btn.setAttribute('aria-label', mixer.muted ? 'Unmute audio' : 'Mute audio');
     btn.setAttribute('aria-pressed', mixer.muted ? 'true' : 'false');
     btn.innerHTML = svgIcon(mixer.muted);
@@ -192,26 +192,7 @@
       if (!muted && !mixer.started) mixer.start();
     });
 
-    function place() {
-      const navRight = document.querySelector('.nav .nav-right');
-      if (navRight && btn.parentElement !== navRight) {
-        btn.classList.remove('nav-audio-btn--floating');
-        navRight.insertBefore(btn, navRight.firstChild);
-        return true;
-      }
-      if (!navRight && !btn.parentElement) {
-        btn.classList.add('nav-audio-btn--floating');
-        document.body.appendChild(btn);
-      }
-      return !!navRight;
-    }
-
-    if (place()) return;
-    let tries = 0;
-    const iv = setInterval(() => {
-      tries++;
-      if (place() || tries >= 15) clearInterval(iv);
-    }, 200);
+    document.body.appendChild(btn);
   }
 
   function svgIcon(muted) {
