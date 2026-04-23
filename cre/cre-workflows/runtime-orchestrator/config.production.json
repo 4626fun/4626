@@ -10,5 +10,10 @@
   "initialCheckpoint": 0,
   "aws_region": "us-east-1",
   "s3_bucket": "your-production-runtime-checkpoints",
-  "s3_key": "runtime-orchestrator/checkpoint.txt"
+  "s3_key": "runtime-orchestrator/checkpoint.txt",
+  "aws_role_arn": "arn:aws:iam::REPLACE_ACCOUNT_ID:role/cre-runtime-orchestrator-prod",
+  "aws_role_session_name": "cre-runtime-orchestrator",
+  "aws_session_duration_seconds": 900,
+  "s3_bucket_allowlist": ["your-production-runtime-checkpoints"],
+  "s3_key_prefix_allowlist": ["runtime-orchestrator/"]
 }

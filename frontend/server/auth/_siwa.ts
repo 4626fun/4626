@@ -56,14 +56,49 @@ export function readSiwaReceiptFromRequest(req: VercelRequest): string | null {
   return null
 }
 
+/**
+ * M-20 (4626-329) remediation. Returns the SIWA receipt HMAC key, or
+ * null if it is not configured. The previous implementation fell back
+ * to AUTH_SESSION_SECRET when @buildersgarden/siwa's resolveReceiptSecret
+ * threw, which silently reused the user-session signing key to sign
+ * agent-identity receipts. That merged two security boundaries — a
+ * compromise of AUTH_SESSION_SECRET would have let an attacker forge
+ * agent receipts even though that secret is only supposed to sign
+ * user session cookies.
+ *
+ * New contract:
+ *   - Prefer an explicit SIWA_RECEIPT_SECRET env var.
+ *   - Otherwise, delegate to resolveReceiptSecret() from the library.
+ *   - If neither is present, return null. No silent AUTH_SESSION_SECRET
+ *     fallback. Upstream handlers already treat null as a 503, which is
+ *     the correct behavior for a missing machine-to-machine secret.
+ *
+ * Key-separation is also enforced defensively: if an operator sets
+ * SIWA_RECEIPT_SECRET to the same value as AUTH_SESSION_SECRET, we
+ * return null so the misconfiguration surfaces immediately rather than
+ * leaving the security boundary collapsed.
+ */
 export function getSiwaReceiptSecret(): string | null {
   if (cachedReceiptSecret !== undefined) return cachedReceiptSecret
+
+  const explicit = (process.env.SIWA_RECEIPT_SECRET ?? '').trim()
+  const sessionSecret = (process.env.AUTH_SESSION_SECRET ?? '').trim()
+  if (explicit.length >= 16) {
+    if (sessionSecret.length > 0 && explicit === sessionSecret) {
+      // Same value as the session cookie key defeats key separation.
+      cachedReceiptSecret = null
+      return cachedReceiptSecret
+    }
+    cachedReceiptSecret = explicit
+    return cachedReceiptSecret
+  }
+
   try {
-    cachedReceiptSecret = resolveReceiptSecret()
+    const resolved = resolveReceiptSecret()
+    cachedReceiptSecret = resolved && resolved.trim().length >= 16 ? resolved : null
     return cachedReceiptSecret
   } catch {
-    const fallback = (process.env.AUTH_SESSION_SECRET ?? '').trim()
-    cachedReceiptSecret = fallback.length >= 16 ? fallback : null
+    cachedReceiptSecret = null
     return cachedReceiptSecret
   }
 }

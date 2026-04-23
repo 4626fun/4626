@@ -499,6 +499,21 @@ export function useSiweAuth() {
         setBusy(true)
         setError(null)
       }
+      // M-29 (4626-338): defensively clear any stale sessionStorage
+      // bearer token BEFORE the /api/auth/privy roundtrip. The audit
+      // called out a race condition in which an exception between the
+      // Privy login response and the existing `writeStoredSessionToken(null)`
+      // at the success site could leave an old SIWE token in place,
+      // continuing to be injected as `Authorization` on subsequent
+      // /api/* calls and potentially bypassing server-side revocation.
+      // Clearing up-front makes the stale-token window empty regardless
+      // of which exit path the Privy flow takes below.
+      try {
+        writeStoredSessionToken(null)
+      } catch {
+        // sessionStorage may be unavailable (e.g. private-mode Safari).
+        // Not a hard failure — apiBase.ts already guards absent storage.
+      }
       try {
         lastPrivyBridgeAttemptAt = Date.now()
         const res = await apiFetch('/api/auth/privy', {
@@ -561,6 +576,20 @@ export function useSiweAuth() {
         return null
       } finally {
         if (!background) setBusy(false)
+        // M-29: belt-and-braces clear in the finally block so that
+        // any unexpected throw between the success check and the
+        // existing writeStoredSessionToken(null) call below it cannot
+        // leave a stale token behind. Idempotent, cheap, and paired
+        // with the up-front clear above to bracket the whole Privy
+        // bridge attempt.
+        try {
+          if (typeof window !== 'undefined') {
+            const stale = window.sessionStorage?.getItem('cv_siwe_session_token')
+            if (stale) writeStoredSessionToken(null)
+          }
+        } catch {
+          // ignore — storage access may be blocked
+        }
       }
     },
     [supersedePendingRefresh],

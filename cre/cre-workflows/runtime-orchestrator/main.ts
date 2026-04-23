@@ -12,7 +12,8 @@ import {
   type Runtime,
 } from "@chainlink/cre-sdk"
 import { getJson, postJson } from "../_shared/http"
-import { readKvNumber, type AwsCredentials, writeKvText } from "../_shared/kvState"
+import { assertKvConfigAllowed, readKvNumber, type AwsCredentials, writeKvText } from "../_shared/kvState"
+import { assumeRoleWithWebIdentity } from "../_shared/awsOidc"
 
 type Config = {
   schedule: string
@@ -29,6 +30,13 @@ type Config = {
   aws_region: string
   s3_bucket: string
   s3_key: string
+  // H-09 (4626-301): OIDC → STS AssumeRoleWithWebIdentity. Long-lived
+  // AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY are no longer accepted.
+  aws_role_arn: string
+  aws_role_session_name: string
+  aws_session_duration_seconds?: number
+  s3_bucket_allowlist?: readonly string[]
+  s3_key_prefix_allowlist?: readonly string[]
 }
 
 type ManualPayload = {
@@ -161,12 +169,24 @@ function runOrchestration(
   const idempotencyKey = `${runtime.config.workflowName}:${checkpointSuffix}`
   const httpClient = new HTTPClient()
   const apiKey = runtime.getSecret({ id: "KEEPR_API_KEY" }).result().value
-  const awsCreds: AwsCredentials | null = runtime.config.kvDisabled
-    ? null
-    : {
-        accessKeyId: runtime.getSecret({ id: "AWS_ACCESS_KEY_ID" }).result().value,
-        secretAccessKey: runtime.getSecret({ id: "AWS_SECRET_ACCESS_KEY" }).result().value,
-      }
+  // H-09 (4626-301): exchange a short-lived OIDC token for STS temporary
+  // credentials on every orchestration run. If the OIDC token or the
+  // target bucket/prefix is misconfigured, we fail fast rather than
+  // silently falling back to long-lived keys.
+  let awsCreds: AwsCredentials | null = null
+  if (!runtime.config.kvDisabled) {
+    assertKvConfigAllowed(runtime.config)
+    const oidcToken = runtime.getSecret({ id: "AWS_OIDC_TOKEN" }).result().value
+    const temp = runtime.runInNodeMode(
+      (nodeRuntime: NodeRuntime<Config>) => assumeRoleWithWebIdentity(nodeRuntime, httpClient, oidcToken),
+      consensusIdenticalAggregation(),
+    )().result()
+    awsCreds = {
+      accessKeyId: temp.accessKeyId,
+      secretAccessKey: temp.secretAccessKey,
+      sessionToken: temp.sessionToken,
+    }
+  }
 
   const previousCheckpoint = runtime.config.kvDisabled
     ? Math.max(0, Math.floor(runtime.config.initialCheckpoint ?? 0))

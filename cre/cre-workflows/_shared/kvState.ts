@@ -10,11 +10,47 @@ export type KvRuntimeConfig = {
   aws_region: string
   s3_bucket: string
   s3_key: string
+  /**
+   * H-09 (4626-301): optional allowlists enforced by `assertKvConfigAllowed`.
+   * When set, s3_bucket must be in `s3_bucket_allowlist` and s3_key must
+   * start with one of the prefixes in `s3_key_prefix_allowlist`. This is a
+   * defense-in-depth layer on top of the IAM role's permission policy so
+   * a misconfigured workflow cannot silently read/write unrelated keys.
+   */
+  s3_bucket_allowlist?: readonly string[]
+  s3_key_prefix_allowlist?: readonly string[]
 }
 
 export type AwsCredentials = {
   accessKeyId: string
   secretAccessKey: string
+  /**
+   * Populated when the credentials came from STS AssumeRoleWithWebIdentity
+   * (H-09 remediation). SigV4 signed requests must include this value in
+   * the X-Amz-Security-Token header, or S3 will reject the request.
+   */
+  sessionToken?: string
+}
+
+/**
+ * H-09 defense-in-depth validator. Throws if the runtime config references
+ * a bucket or prefix outside the workflow's allowlist. Call this before
+ * any `readKv*` / `writeKv*` invocation that accepts operator-controlled
+ * config.
+ */
+export function assertKvConfigAllowed(config: KvRuntimeConfig): void {
+  const bucketAllow = config.s3_bucket_allowlist
+  if (bucketAllow && bucketAllow.length > 0 && !bucketAllow.includes(config.s3_bucket)) {
+    throw new Error(`kv_bucket_not_allowed_${config.s3_bucket}`)
+  }
+  const prefixAllow = config.s3_key_prefix_allowlist
+  if (prefixAllow && prefixAllow.length > 0) {
+    const normalizedKey = config.s3_key.startsWith("/") ? config.s3_key.slice(1) : config.s3_key
+    const match = prefixAllow.some((prefix) => normalizedKey.startsWith(prefix))
+    if (!match) {
+      throw new Error("kv_key_prefix_not_allowed")
+    }
+  }
 }
 
 function sha256Hex(data: string): string {
@@ -85,9 +121,20 @@ function signRequest(params: {
     ["x-amz-date", amzDate],
   ]
 
+  // H-09: STS temporary credentials require x-amz-security-token to be
+  // part of the signed canonical request. Long-lived keys leave it out.
+  if (credentials.sessionToken && credentials.sessionToken.length > 0) {
+    signedHeaderEntries.push(["x-amz-security-token", credentials.sessionToken])
+  }
+
   for (const [key, value] of Object.entries(params.headers)) {
     const lower = key.toLowerCase()
-    if (lower !== "host" && lower !== "x-amz-content-sha256" && lower !== "x-amz-date") {
+    if (
+      lower !== "host" &&
+      lower !== "x-amz-content-sha256" &&
+      lower !== "x-amz-date" &&
+      lower !== "x-amz-security-token"
+    ) {
       signedHeaderEntries.push([lower, value])
     }
   }
@@ -117,13 +164,17 @@ function signRequest(params: {
 
   const authorization = `AWS4-HMAC-SHA256 Credential=${credentials.accessKeyId}/${scope}, SignedHeaders=${signedHeaders}, Signature=${signature}`
 
-  return {
+  const result: Record<string, string> = {
     ...params.headers,
     host,
     "x-amz-content-sha256": payloadHash,
     "x-amz-date": amzDate,
     Authorization: authorization,
   }
+  if (credentials.sessionToken && credentials.sessionToken.length > 0) {
+    result["x-amz-security-token"] = credentials.sessionToken
+  }
+  return result
 }
 
 function readBodyText(body: Uint8Array): string {

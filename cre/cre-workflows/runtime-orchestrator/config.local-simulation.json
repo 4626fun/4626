@@ -12,5 +12,7 @@
   "mockMatchedTransactions": 1,
   "aws_region": "us-east-1",
   "s3_bucket": "runtime-checkpoint-bucket",
-  "s3_key": "runtime-orchestrator/checkpoint.txt"
+  "s3_key": "runtime-orchestrator/checkpoint.txt",
+  "aws_role_arn": "arn:aws:iam::000000000000:role/local-sim-noop",
+  "aws_role_session_name": "cre-runtime-orchestrator"
 }
