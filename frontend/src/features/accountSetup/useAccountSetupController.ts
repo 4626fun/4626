@@ -23,6 +23,7 @@ import {
   type OwnerDelegationFlags,
   type OwnerApprovalStageEvent,
   type PrepareOwnerResponse,
+  type PreparedOwnerTxRequest,
   buildOwnerDelegationError,
   deriveOwnerDelegationFlags,
   readApiError,
@@ -236,6 +237,8 @@ export function useAccountSetupController(params: {
   const [cswOwnersState, setCswOwnersState] = useState<CswOwnersState>({ status: 'idle', owners: [], error: null })
   const [ownerInstallIntent, setOwnerInstallIntent] = useState<OwnerInstallIntent>('embeddedOwner')
   const [customOwnerGasPreflight, setCustomOwnerGasPreflight] = useState<OwnerInstallGasPreflight | null>(null)
+  const [customOwnerPreparedTxRequest, setCustomOwnerPreparedTxRequest] = useState<PreparedOwnerTxRequest | null>(null)
+  const [customOwnerPreparedAddress, setCustomOwnerPreparedAddress] = useState<string | null>(null)
 
   const canonicalCswAddress = me?.accountSignals?.canonicalCswAddress ?? null
   const zoraLinked = Boolean(zoraStatus?.zoraLinked || me?.accountSignals?.linked)
@@ -1421,6 +1424,8 @@ export function useAccountSetupController(params: {
     setNotice(null)
     setOwnerInstallIntent('embeddedOwner')
     setCustomOwnerGasPreflight(null)
+    setCustomOwnerPreparedTxRequest(null)
+    setCustomOwnerPreparedAddress(null)
     setOwnerDelegationFlags(null)
     await retryOwnerCheck()
   }, [retryOwnerCheck])
@@ -1452,6 +1457,8 @@ export function useAccountSetupController(params: {
     const executionMode = canonicalCswAddress ? 'canonicalSmartWallet' : 'ownerDirect'
     setOwnerInstallIntent('customCoOwner')
     setCustomOwnerGasPreflight(null)
+    setCustomOwnerPreparedTxRequest(null)
+    setCustomOwnerPreparedAddress(null)
     setAdvancedBusy(true)
     setError(null)
     setNotice(null)
@@ -1559,6 +1566,8 @@ export function useAccountSetupController(params: {
         throw buildOwnerDelegationError(preparePayload, 'Failed to prepare Rabby co-owner transaction.')
       }
       if (preparePayload.data.alreadyOwner) {
+        setCustomOwnerPreparedTxRequest(null)
+        setCustomOwnerPreparedAddress(normalized.toLowerCase())
         emitOwnerApprovalStageEvent({
           runId: approvalRunId,
           stage: 'prepare',
@@ -1579,6 +1588,8 @@ export function useAccountSetupController(params: {
         signerAddress: ownerSignerAddress ?? null,
         canonicalCswAddress,
       })
+      setCustomOwnerPreparedTxRequest(preparePayload.data.txRequest)
+      setCustomOwnerPreparedAddress(normalized.toLowerCase())
       const customOwnerPolicyToken =
         typeof preparePayload.data.sponsorship?.customOwnerPolicyToken === 'string' &&
         preparePayload.data.sponsorship.customOwnerPolicyToken.trim()
@@ -1835,6 +1846,8 @@ export function useAccountSetupController(params: {
     connectOwnerWallet,
     connectWallet,
     customOwnerGasPreflight,
+    customOwnerPreparedAddress,
+    customOwnerPreparedTxRequest,
     cswOwnersState,
     ensureEmbeddedWallet,
     error,

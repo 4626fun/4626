@@ -1,4 +1,6 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
+import { type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { encodeFunctionData, getAddress } from 'viem'
 import {
   Apple,
   CheckCircle2,
@@ -17,6 +19,7 @@ import { WalletProviderIcon } from '@/components/ui/WalletProviderIcon'
 import { LoadingText } from '@/components/ui/LoadingState'
 import { PROVIDER_POINTS } from '@/features/waitlist/waitlistTiers'
 import { ArchBEnrollmentCard } from '@/features/archB/ArchBEnrollmentCard'
+import { buildBaseAppProlinkUrl, encodeSingleCallSendCallsProlink } from '@/lib/base/prolink'
 import { shortValue } from './shared'
 import type { AccountLinkProvider } from './types'
 import type { useAccountSetupController } from './useAccountSetupController'
@@ -58,10 +61,23 @@ function ProviderIconBadge({ provider }: { provider: AccountLinkProvider }) {
 
 const BASESCAN_BASE = 'https://basescan.org/address/'
 const ZORA_PROFILE_BASE = 'https://zora.co/'
+const CSW_OWNER_MGMT_ABI = [
+  {
+    type: 'function',
+    name: 'addOwnerAddress',
+    stateMutability: 'nonpayable',
+    inputs: [{ name: 'owner', type: 'address' }],
+    outputs: [],
+  },
+] as const
 
 function shortAddr(addr: string): string {
   if (addr.length <= 10) return addr
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`
+}
+
+function isAddressLike(value: string): boolean {
+  return /^0x[a-fA-F0-9]{40}$/i.test(value.trim())
 }
 
 function formatEth(value: bigint): string {
@@ -967,7 +983,10 @@ function WaitlistAdvancedSection({
     advancedBusy,
     busyProvider,
     canShowAdvanced,
+    canonicalCswAddress,
     customOwnerGasPreflight,
+    customOwnerPreparedAddress,
+    customOwnerPreparedTxRequest,
     ownerInstallIntent,
     providerCards,
     onLinkProvider,
@@ -975,6 +994,63 @@ function WaitlistAdvancedSection({
     onAddRabbyCoOwner,
     telegramLaunchParamsAvailable,
   } = controller
+  const normalizedRabbyAddress = useMemo(() => {
+    const raw = rabbyAddress.trim()
+    return isAddressLike(raw) ? raw.toLowerCase() : null
+  }, [rabbyAddress])
+  const rabbyOwnerAddCalldata = useMemo(() => {
+    if (!normalizedRabbyAddress) return null
+    try {
+      return encodeFunctionData({
+        abi: CSW_OWNER_MGMT_ABI,
+        functionName: 'addOwnerAddress',
+        args: [getAddress(normalizedRabbyAddress) as `0x${string}`],
+      })
+    } catch {
+      return null
+    }
+  }, [normalizedRabbyAddress])
+  const preparedOwnerTxForAddress = useMemo(() => {
+    if (!customOwnerPreparedTxRequest || !customOwnerPreparedAddress || !normalizedRabbyAddress) return null
+    if (customOwnerPreparedAddress.toLowerCase() !== normalizedRabbyAddress.toLowerCase()) return null
+    return customOwnerPreparedTxRequest
+  }, [customOwnerPreparedAddress, customOwnerPreparedTxRequest, normalizedRabbyAddress])
+  const prolinkCallTarget = preparedOwnerTxForAddress?.to ?? canonicalCswAddress ?? null
+  const prolinkCallData = preparedOwnerTxForAddress?.data ?? rabbyOwnerAddCalldata
+  const prolinkCallValue = preparedOwnerTxForAddress?.value ?? '0x0'
+  const rabbyProlinkSourceLabel = preparedOwnerTxForAddress
+    ? 'Base App prolink (exact backend-prepared call)'
+    : 'Base App prolink (local preview call)'
+  const rabbyOwnerAddProlinkQuery = useQuery({
+    queryKey: [
+      'waitlist-advanced',
+      'custom-owner-prolink',
+      prolinkCallTarget,
+      normalizedRabbyAddress,
+      prolinkCallData,
+      prolinkCallValue,
+      preparedOwnerTxForAddress ? 'prepared' : 'preview',
+    ],
+    queryFn: async () => {
+      if (!prolinkCallTarget || !prolinkCallData) return null
+      return await encodeSingleCallSendCallsProlink({
+        to: prolinkCallTarget,
+        data: prolinkCallData,
+        value: prolinkCallValue,
+      })
+    },
+    enabled: Boolean(rabbyOpen && prolinkCallTarget && normalizedRabbyAddress && prolinkCallData),
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  })
+  const rabbyOwnerAddProlinkUrl = useMemo(() => {
+    if (!rabbyOwnerAddProlinkQuery.data) return null
+    try {
+      return buildBaseAppProlinkUrl(rabbyOwnerAddProlinkQuery.data)
+    } catch {
+      return null
+    }
+  }, [rabbyOwnerAddProlinkQuery.data])
 
   return (
     <div className="w-full">
@@ -1103,6 +1179,49 @@ function WaitlistAdvancedSection({
                     placeholder="0x…"
                     className="w-full rounded-md border border-white/10 bg-black/30 px-2.5 py-1.5 font-mono text-[11.5px] text-white placeholder:text-zinc-700 outline-none focus:border-brand-primary/40"
                   />
+                  {rabbyOwnerAddProlinkQuery.isLoading ? (
+                    <div className="text-[10.5px] text-zinc-500">Encoding Base App prolink…</div>
+                  ) : rabbyOwnerAddProlinkQuery.data ? (
+                    <div className="rounded-md border border-white/10 bg-black/20 px-2.5 py-2 space-y-2">
+                      <div className="text-[10px] uppercase tracking-[0.14em] text-zinc-500">
+                        {rabbyProlinkSourceLabel}
+                      </div>
+                      {rabbyOwnerAddProlinkUrl ? (
+                        <a
+                          href={rabbyOwnerAddProlinkUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 rounded-md border border-brand-primary/30 bg-brand-primary/10 px-2 py-1 text-[10px] text-brand-100 hover:bg-brand-primary/20"
+                        >
+                          Open in Base App <ExternalLink className="h-3 w-3" />
+                        </a>
+                      ) : null}
+                      <div className="flex items-start gap-2">
+                        <span className="font-mono text-[10px] break-all text-zinc-300">{rabbyOwnerAddProlinkQuery.data}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            void (async () => {
+                              try {
+                                if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+                                  await navigator.clipboard.writeText(rabbyOwnerAddProlinkQuery.data ?? '')
+                                }
+                              } catch {
+                                // ignore
+                              }
+                            })()
+                          }}
+                          className="shrink-0 rounded-md border border-white/10 bg-black/25 px-2 py-1 text-[10px] text-zinc-300 hover:bg-black/40"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+                  ) : rabbyOwnerAddProlinkQuery.error ? (
+                    <div className="text-[10.5px] text-amber-300">
+                      Prolink unavailable: {(rabbyOwnerAddProlinkQuery.error as Error)?.message}
+                    </div>
+                  ) : null}
                   <button
                     type="button"
                     disabled={advancedBusy || rabbyAddress.trim().length === 0}

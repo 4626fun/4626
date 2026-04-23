@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useWallets } from '@privy-io/react-auth'
-import { encodeProlink } from '@base-org/account/prolink'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { Bot, CheckCircle, Copy, ExternalLink, Link2, Shield, Loader2, AlertTriangle, Wallet, Zap } from 'lucide-react'
 import { encodeFunctionData, getAddress } from 'viem'
@@ -16,6 +15,7 @@ import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 import { resolveBaseAppInviteUrl } from '@/lib/base/baseAppInvite'
+import { buildBaseAppProlinkUrl, encodeSingleCallSendCallsProlink } from '@/lib/base/prolink'
 import { getAppBaseUrl } from '@/lib/env/host'
 import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
 import { AgentOperatorStatus, type AgentOperatorStatusData } from './AgentOperatorStatus'
@@ -286,8 +286,6 @@ const CSW_ABI = [
     outputs: [{ name: '', type: 'bool' as const }],
   },
 ] as const
-const BASE_MAINNET_CHAIN_ID_HEX = '0x2105' as const
-
 export function AdminAgentSetup() {
   const manualQueryParams = useMemo(() => {
     if (typeof window === 'undefined') return new URLSearchParams('')
@@ -470,19 +468,20 @@ export function AdminAgentSetup() {
 
   const agent = agentQuery.data
   const serverWallet = serverWalletQuery.data
+  const serverWalletAddress = serverWallet?.address ?? null
   const isServerWalletOwner = isOwnerQuery.data === true
-  const serverOwnerAddCalldata = useMemo(() => {
-    if (!canonicalCswAddress || !serverWallet?.address) return null
+  const serverOwnerAddCalldata = (() => {
+    if (!canonicalCswAddress || !serverWalletAddress) return null
     try {
       return encodeFunctionData({
         abi: CSW_ABI,
         functionName: 'addOwnerAddress',
-        args: [getAddress(serverWallet.address) as `0x${string}`],
+        args: [getAddress(serverWalletAddress) as `0x${string}`],
       })
     } catch {
       return null
     }
-  }, [canonicalCswAddress, serverWallet?.address])
+  })()
 
   const manualCswAddress = useMemo(() => {
     const fromQuery = String(manualQueryParams.get('manualCsw') ?? '').trim()
@@ -493,9 +492,9 @@ export function AdminAgentSetup() {
   const manualOwnerToAdd = useMemo(() => {
     const fromQuery = String(manualQueryParams.get('manualOwner') ?? '').trim()
     if (isAddressLike(fromQuery)) return fromQuery.toLowerCase()
-    const serverAddress = String(serverWallet?.address ?? '').trim()
+    const serverAddress = String(serverWalletAddress ?? '').trim()
     return isAddressLike(serverAddress) ? serverAddress.toLowerCase() : null
-  }, [manualQueryParams, serverWallet?.address])
+  }, [manualQueryParams, serverWalletAddress])
 
   const manualAddOwnerCalldata = useMemo(() => {
     if (!manualOwnerToAdd) return null
@@ -519,22 +518,9 @@ export function AdminAgentSetup() {
     queryKey: ['admin', 'manual-owner-add-prolink', manualCswAddress, manualOwnerToAdd, manualAddOwnerCalldata],
     queryFn: async (): Promise<string | null> => {
       if (!manualCswAddress || !manualOwnerToAdd || !manualAddOwnerCalldata) return null
-      const payload = await encodeProlink({
-        method: 'wallet_sendCalls',
-        params: [
-          {
-            version: '1.0',
-            chainId: BASE_MAINNET_CHAIN_ID_HEX,
-            atomicRequired: true,
-            calls: [
-              {
-                to: getAddress(manualCswAddress) as `0x${string}`,
-                value: '0x0',
-                data: manualAddOwnerCalldata as `0x${string}`,
-              },
-            ],
-          },
-        ],
+      const payload = await encodeSingleCallSendCallsProlink({
+        to: manualCswAddress,
+        data: manualAddOwnerCalldata as `0x${string}`,
       })
       return String(payload ?? '').trim() || null
     },
@@ -544,32 +530,35 @@ export function AdminAgentSetup() {
   })
 
   const serverOwnerAddProlinkQuery = useQuery({
-    queryKey: ['admin', 'server-owner-add-prolink', canonicalCswAddress, serverWallet?.address, serverOwnerAddCalldata],
+    queryKey: ['admin', 'server-owner-add-prolink', canonicalCswAddress, serverWalletAddress, serverOwnerAddCalldata],
     queryFn: async (): Promise<string | null> => {
-      if (!canonicalCswAddress || !serverWallet?.address || !serverOwnerAddCalldata) return null
-      const payload = await encodeProlink({
-        method: 'wallet_sendCalls',
-        params: [
-          {
-            version: '1.0',
-            chainId: BASE_MAINNET_CHAIN_ID_HEX,
-            atomicRequired: true,
-            calls: [
-              {
-                to: getAddress(canonicalCswAddress) as `0x${string}`,
-                value: '0x0',
-                data: serverOwnerAddCalldata as `0x${string}`,
-              },
-            ],
-          },
-        ],
+      if (!canonicalCswAddress || !serverWalletAddress || !serverOwnerAddCalldata) return null
+      const payload = await encodeSingleCallSendCallsProlink({
+        to: canonicalCswAddress,
+        data: serverOwnerAddCalldata as `0x${string}`,
       })
       return String(payload ?? '').trim() || null
     },
-    enabled: Boolean(canonicalCswAddress && serverWallet?.address && serverOwnerAddCalldata && !isServerWalletOwner && agentMode === 'csw'),
+    enabled: Boolean(canonicalCswAddress && serverWalletAddress && serverOwnerAddCalldata && !isServerWalletOwner && agentMode === 'csw'),
     staleTime: Number.POSITIVE_INFINITY,
     retry: false,
   })
+  const manualOwnerAddProlinkUrl = useMemo(() => {
+    if (!manualOwnerAddProlinkQuery.data) return null
+    try {
+      return buildBaseAppProlinkUrl(manualOwnerAddProlinkQuery.data)
+    } catch {
+      return null
+    }
+  }, [manualOwnerAddProlinkQuery.data])
+  const serverOwnerAddProlinkUrl = useMemo(() => {
+    if (!serverOwnerAddProlinkQuery.data) return null
+    try {
+      return buildBaseAppProlinkUrl(serverOwnerAddProlinkQuery.data)
+    } catch {
+      return null
+    }
+  }, [serverOwnerAddProlinkQuery.data])
 
   // -----------------------------------------------------------------------
   // Vault link form state
@@ -1116,9 +1105,21 @@ export function AdminAgentSetup() {
                       {manualOwnerAddProlinkQuery.isLoading ? (
                         <div className="text-xs text-zinc-500">Encoding prolink...</div>
                       ) : manualOwnerAddProlinkQuery.data ? (
-                        <div className="flex items-start gap-2">
-                          <span className="text-[10px] text-zinc-300 font-mono break-all">{manualOwnerAddProlinkQuery.data}</span>
-                          <CopyButton text={manualOwnerAddProlinkQuery.data} />
+                        <div className="space-y-2">
+                          {manualOwnerAddProlinkUrl ? (
+                            <a
+                              href={manualOwnerAddProlinkUrl}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 rounded-md border border-sky-400/30 bg-sky-400/10 px-2 py-1 text-[10px] text-sky-100 hover:bg-sky-400/20"
+                            >
+                              Open in Base App <ExternalLink className="w-3 h-3" />
+                            </a>
+                          ) : null}
+                          <div className="flex items-start gap-2">
+                            <span className="text-[10px] text-zinc-300 font-mono break-all">{manualOwnerAddProlinkQuery.data}</span>
+                            <CopyButton text={manualOwnerAddProlinkQuery.data} />
+                          </div>
                         </div>
                       ) : manualOwnerAddProlinkQuery.error ? (
                         <div className="text-xs text-red-300">
@@ -1262,9 +1263,21 @@ export function AdminAgentSetup() {
                           ) : serverOwnerAddProlinkQuery.data ? (
                             <div className="rounded-md border border-white/10 bg-black/20 px-2.5 py-2">
                               <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Prolink (same owner-add call)</div>
-                              <div className="flex items-start gap-2">
-                                <span className="text-[10px] text-zinc-300 font-mono break-all">{serverOwnerAddProlinkQuery.data}</span>
-                                <CopyButton text={serverOwnerAddProlinkQuery.data} />
+                              <div className="space-y-2">
+                                {serverOwnerAddProlinkUrl ? (
+                                  <a
+                                    href={serverOwnerAddProlinkUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 rounded-md border border-sky-400/30 bg-sky-400/10 px-2 py-1 text-[10px] text-sky-100 hover:bg-sky-400/20"
+                                  >
+                                    Open in Base App <ExternalLink className="w-3 h-3" />
+                                  </a>
+                                ) : null}
+                                <div className="flex items-start gap-2">
+                                  <span className="text-[10px] text-zinc-300 font-mono break-all">{serverOwnerAddProlinkQuery.data}</span>
+                                  <CopyButton text={serverOwnerAddProlinkQuery.data} />
+                                </div>
                               </div>
                             </div>
                           ) : serverOwnerAddProlinkQuery.error ? (
