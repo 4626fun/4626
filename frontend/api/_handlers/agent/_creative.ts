@@ -10,6 +10,7 @@ import {
   logger,
   rateLimitKey,
   readJsonBody,
+  readSessionFromRequest,
   setCors,
   setNoStore,
 } from '../../../packages/server-core/src/index.js'
@@ -730,13 +731,31 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(405).json({ success: false, error: 'Method not allowed' })
   }
 
+  // FIX: M-12 / 4626-424 — agent/creative invokes the Eliza LLM which is a paid,
+  // quota-bearing resource. Prior to this fix the endpoint was reachable by any
+  // unauthenticated caller on the public internet. We now require an authenticated
+  // session cookie (mirroring agent/stream) so only wallet-authenticated users can
+  // generate creative envelopes. Rate limiting is tightened below to include the
+  // session principal in addition to the client IP.
+  const session = readSessionFromRequest(req)
+  const sessionAddress = String(session?.address ?? '').trim().toLowerCase()
+  if (!/^0x[a-f0-9]{40}$/.test(sessionAddress)) {
+    return res.status(401).json({ success: false, error: 'Unauthorized' })
+  }
+
   const clientIp = getClientIp(req)
   const rate = checkRateLimit(rateLimitKey('agent-creative', clientIp), RATE_LIMITS.agentCreative)
+  const principalRate = checkRateLimit(
+    rateLimitKey('agent-creative-principal', sessionAddress),
+    RATE_LIMITS.agentCreative,
+  )
+  const rateRemaining = Math.min(rate.remaining, principalRate.remaining)
+  const rateResetAt = Math.min(rate.resetAt, principalRate.resetAt)
   res.setHeader('X-RateLimit-Limit', String(RATE_LIMITS.agentCreative.maxRequests))
-  res.setHeader('X-RateLimit-Remaining', String(Math.max(0, rate.remaining)))
-  res.setHeader('X-RateLimit-Reset', String(Math.floor(rate.resetAt / 1000)))
-  if (!rate.allowed) {
-    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rate.resetAt - Date.now()) / 1000))))
+  res.setHeader('X-RateLimit-Remaining', String(Math.max(0, rateRemaining)))
+  res.setHeader('X-RateLimit-Reset', String(Math.floor(rateResetAt / 1000)))
+  if (!rate.allowed || !principalRate.allowed) {
+    res.setHeader('Retry-After', String(Math.max(1, Math.ceil((rateResetAt - Date.now()) / 1000))))
     return res.status(429).json({ success: false, error: 'Rate limit exceeded' })
   }
 
