@@ -981,3 +981,45 @@ body {
   border: 1.5px solid rgba(0, 82, 255, 0.55) !important;
   box-shadow: 0 0 16px rgba(0, 82, 255, 0.18) !important;
 }
+
+/* ─── Audio mute toggle (nav) ────────────────────────────────────── */
+.nav-audio-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  margin-right: 0.6rem;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.7);
+  cursor: pointer;
+  transition: color 180ms ease, border-color 180ms ease, background 180ms ease;
+}
+.nav-audio-btn:hover {
+  color: rgba(255, 255, 255, 0.95);
+  border-color: rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.03);
+}
+.nav-audio-btn:focus-visible {
+  outline: 2px solid rgba(0, 82, 255, 0.55);
+  outline-offset: 2px;
+}
+.nav-audio-btn svg { display: block; }
+@media (max-width: 520px) {
+  .nav-audio-btn { width: 30px; height: 30px; margin-right: 0.4rem; }
+}
+
+.nav-audio-btn--floating {
+  position: fixed !important;
+  top: auto;
+  bottom: 18px;
+  right: 18px;
+  margin: 0;
+  z-index: 100;
+  background: rgba(6, 8, 13, 0.7) !important;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
