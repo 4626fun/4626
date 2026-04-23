@@ -348,6 +348,22 @@ function applyFilterViews(ss, sheet, headers, lastRow, lastCol) {
   Sheets.Spreadsheets.batchUpdate({ requests: adds }, spreadsheetId);
 }
 
+// Dashboard color palette (Google Material + Base blue).
+const DASH_COLORS = {
+  bgPage: "#fafafa",
+  accent: "#1a73e8",
+  success: "#188038",
+  warning: "#e8710a",
+  danger: "#d93025",
+  neutral: "#5f6368",
+  divider: "#1f1f1f",
+  cardBg: "#ffffff",
+  cardBorder: "#e0e0e0",
+  tableHeader: "#1f1f1f",
+  tableHeaderText: "#ffffff",
+  sectionBg: "#e8f0fe",
+};
+
 function buildDashboard(ss, sourceSheetName) {
   let dash = ss.getSheetByName("📊 Dashboard");
   if (dash) ss.deleteSheet(dash);
@@ -367,38 +383,69 @@ function buildDashboard(ss, sourceSheetName) {
 
   const q = (select) => `=QUERY('${sourceSheetName}'!A:AH, "${select}", 1)`;
 
+  // Page-wide background + grid removal for a calm canvas.
+  dash.getRange("A1:H60").setBackground(DASH_COLORS.bgPage);
+  dash.setHiddenGridlines(true);
+
+  // Title + subtitle block (A1:H2 merged each).
   dash
-    .getRange("A1")
+    .getRange("A1:H1")
+    .merge()
     .setValue("4626 Outreach Dashboard")
-    .setFontSize(18)
-    .setFontWeight("bold");
+    .setFontSize(22)
+    .setFontWeight("bold")
+    .setFontColor(DASH_COLORS.divider)
+    .setVerticalAlignment("middle");
+  dash.setRowHeight(1, 44);
+
   dash
-    .getRange("A2")
+    .getRange("A2:H2")
+    .merge()
     .setValue(
       "Live view over the Creators sheet. Numbers update automatically as you edit rows.",
     )
-    .setFontColor("#5f6368");
+    .setFontSize(11)
+    .setFontColor(DASH_COLORS.neutral)
+    .setVerticalAlignment("middle");
+  dash.setRowHeight(2, 22);
 
-  // Totals block
-  dash.getRange("A4").setValue("XMTP reachability").setFontWeight("bold");
-  dash.getRange("A5").setValue("Total creators");
-  dash
-    .getRange("B5")
-    .setFormula(`=COUNTA('${sourceSheetName}'!${col.name}2:${col.name})`);
-  dash.getRange("A6").setValue("Reachable on Base App / XMTP");
-  dash
-    .getRange("B6")
-    .setFormula(
-      `=COUNTIF('${sourceSheetName}'!${col.reachable}2:${col.reachable}, TRUE)`,
-    );
-  dash.getRange("A7").setValue("Reach rate");
-  dash.getRange("B7").setFormula("=B6/B5").setNumberFormat("0.0%");
+  // ── KPI CARDS row (A4:H7) ──────────────────────────────────────────────
+  // Three cards: Total creators | Reachable | Reach rate. Each is a 2-row
+  // 2-column merged block: label row + big-number row.
+  renderKpiCard(dash, "A4:B5", "TOTAL CREATORS", {
+    formula: `=COUNTA('${sourceSheetName}'!${col.name}2:${col.name})`,
+    format: "#,##0",
+    color: DASH_COLORS.divider,
+  });
+  renderKpiCard(dash, "D4:E5", "REACHABLE ON BASE APP", {
+    formula: `=COUNTIF('${sourceSheetName}'!${col.reachable}2:${col.reachable}, TRUE)`,
+    format: "#,##0",
+    color: DASH_COLORS.success,
+  });
+  renderKpiCard(dash, "G4:H5", "REACH RATE", {
+    formula: `=IFERROR(COUNTIF('${sourceSheetName}'!${col.reachable}2:${col.reachable}, TRUE) / COUNTA('${sourceSheetName}'!${col.name}2:${col.name}), 0)`,
+    format: "0.0%",
+    color: DASH_COLORS.accent,
+  });
 
-  // Cohort × priority heatmap (pivoted)
+  dash.setRowHeight(4, 20);
+  dash.setRowHeight(5, 48);
+
+  // ── SEGMENTATION section (A8 down) ─────────────────────────────────────
+  renderSectionDivider(dash, "A7:H7", "SEGMENTATION");
+  dash.setRowHeight(7, 28);
+
   dash
     .getRange("A9")
     .setValue("Reachable by cohort × priority")
-    .setFontWeight("bold");
+    .setFontWeight("bold")
+    .setFontSize(12);
+  dash
+    .getRange("G9")
+    .setValue("Winning XMTP address kind")
+    .setFontWeight("bold")
+    .setFontSize(12);
+
   dash
     .getRange("A10")
     .setFormula(
@@ -407,22 +454,6 @@ function buildDashboard(ss, sourceSheetName) {
       ),
     );
 
-  // Status funnel
-  dash.getRange("A16").setValue("Status funnel").setFontWeight("bold");
-  dash
-    .getRange("A17")
-    .setFormula(
-      q(
-        `SELECT ${col.status}, COUNT(${col.name}) GROUP BY ${col.status} ORDER BY COUNT(${col.name}) DESC LABEL COUNT(${col.name}) 'Rows'`,
-      ),
-    );
-
-  // Winning XMTP address-kind split. Placed at column G to leave space for
-  // the cohort × priority pivot at A10, which expands up to column E.
-  dash
-    .getRange("G9")
-    .setValue("Winning XMTP address kind")
-    .setFontWeight("bold");
   dash
     .getRange("G10")
     .setFormula(
@@ -431,29 +462,144 @@ function buildDashboard(ss, sourceSheetName) {
       ),
     );
 
-  // Install readiness split (reachable only)
+  // Style the header row of each pivot table (A10:E10 and G10:H10).
+  styleQueryHeader(dash, "A10:E10");
+  styleQueryHeader(dash, "G10:H10");
+
+  // ── WORKFLOW section ───────────────────────────────────────────────────
+  renderSectionDivider(dash, "A18:H18", "WORKFLOW");
+  dash.setRowHeight(18, 28);
+
   dash
-    .getRange("G16")
+    .getRange("A20")
+    .setValue("Status funnel")
+    .setFontWeight("bold")
+    .setFontSize(12);
+  dash
+    .getRange("G20")
     .setValue("Install readiness (reachable only)")
-    .setFontWeight("bold");
+    .setFontWeight("bold")
+    .setFontSize(12);
+
   dash
-    .getRange("G17")
+    .getRange("A21")
+    .setFormula(
+      q(
+        `SELECT ${col.status}, COUNT(${col.name}) WHERE ${col.status} IS NOT NULL GROUP BY ${col.status} ORDER BY COUNT(${col.name}) DESC LABEL COUNT(${col.name}) 'Rows'`,
+      ),
+    );
+  dash
+    .getRange("G21")
     .setFormula(
       q(
         `SELECT ${col.readiness}, COUNT(${col.name}) WHERE ${col.reachable}=TRUE GROUP BY ${col.readiness} ORDER BY COUNT(${col.name}) DESC LABEL COUNT(${col.name}) 'Rows'`,
       ),
     );
 
-  // Column widths. A-B hold the headline KPI block, C-F carry the pivot
-  // expansion room, G-H hold the right-side summary tables.
-  dash.setColumnWidth(1, 260); // A — labels
-  dash.setColumnWidth(2, 120); // B — values
-  dash.setColumnWidth(3, 120); // C — pivot P0
-  dash.setColumnWidth(4, 120); // D — pivot P1
-  dash.setColumnWidth(5, 120); // E — pivot P2
-  dash.setColumnWidth(6, 120); // F — pivot P3 (if present)
-  dash.setColumnWidth(7, 260); // G — right block labels
-  dash.setColumnWidth(8, 120); // H — right block values
+  styleQueryHeader(dash, "A21:B21");
+  styleQueryHeader(dash, "G21:H21");
+
+  // ── Charts ─────────────────────────────────────────────────────────────
+  // Stacked column: cohort × priority. Anchor below the WORKFLOW tables.
+  try {
+    const cohortChart = dash
+      .newChart()
+      .setChartType(Charts.ChartType.COLUMN)
+      .addRange(dash.getRange("A10:E13"))
+      .setOption("title", "Reachable creators by cohort and priority")
+      .setOption("isStacked", true)
+      .setOption("legend", { position: "bottom" })
+      .setOption("colors", ["#d93025", "#e8710a", "#f9ab00", "#9aa0a6"])
+      .setOption("height", 280)
+      .setOption("width", 520)
+      .setPosition(30, 1, 0, 0)
+      .build();
+    dash.insertChart(cohortChart);
+
+    // Donut: winning XMTP address kind.
+    const kindChart = dash
+      .newChart()
+      .setChartType(Charts.ChartType.PIE)
+      .addRange(dash.getRange("G10:H13"))
+      .setOption("title", "Winning XMTP address kind")
+      .setOption("pieHole", 0.55)
+      .setOption("legend", { position: "right" })
+      .setOption("colors", ["#1a73e8", "#188038", "#9aa0a6"])
+      .setOption("height", 280)
+      .setOption("width", 380)
+      .setPosition(30, 6, 0, 0)
+      .build();
+    dash.insertChart(kindChart);
+  } catch (err) {
+    console.warn("Chart insertion failed (non-fatal): " + err);
+  }
+
+  // Column widths. Three equal KPI-card widths, plus space for pivots.
+  dash.setColumnWidth(1, 210); // A
+  dash.setColumnWidth(2, 210); // B
+  dash.setColumnWidth(3, 30);  // C — gutter
+  dash.setColumnWidth(4, 210); // D
+  dash.setColumnWidth(5, 210); // E
+  dash.setColumnWidth(6, 30);  // F — gutter
+  dash.setColumnWidth(7, 210); // G
+  dash.setColumnWidth(8, 210); // H
+}
+
+function renderKpiCard(sheet, a1Range, label, spec) {
+  // Card is a 2-row block: label row on top, big value on bottom.
+  const range = sheet.getRange(a1Range);
+  const startRow = range.getRow();
+  const startCol = range.getColumn();
+  const numCols = range.getNumColumns();
+  range.breakApart(); // safety for re-runs
+
+  const labelRange = sheet.getRange(startRow, startCol, 1, numCols).merge();
+  labelRange
+    .setValue(label)
+    .setFontSize(10)
+    .setFontColor(DASH_COLORS.neutral)
+    .setFontWeight("bold")
+    .setHorizontalAlignment("left")
+    .setVerticalAlignment("middle")
+    .setBackground(DASH_COLORS.cardBg)
+    .setBorder(true, true, false, true, false, false,
+      DASH_COLORS.cardBorder, SpreadsheetApp.BorderStyle.SOLID);
+
+  const valueRange = sheet
+    .getRange(startRow + 1, startCol, 1, numCols)
+    .merge();
+  valueRange
+    .setFormula(spec.formula)
+    .setNumberFormat(spec.format)
+    .setFontSize(28)
+    .setFontWeight("bold")
+    .setFontColor(spec.color)
+    .setHorizontalAlignment("left")
+    .setVerticalAlignment("middle")
+    .setBackground(DASH_COLORS.cardBg)
+    .setBorder(false, true, true, true, false, false,
+      DASH_COLORS.cardBorder, SpreadsheetApp.BorderStyle.SOLID);
+}
+
+function renderSectionDivider(sheet, a1Range, label) {
+  sheet
+    .getRange(a1Range)
+    .merge()
+    .setValue(label)
+    .setFontSize(11)
+    .setFontWeight("bold")
+    .setFontColor(DASH_COLORS.neutral)
+    .setBackground(DASH_COLORS.sectionBg)
+    .setVerticalAlignment("middle")
+    .setHorizontalAlignment("left");
+}
+
+function styleQueryHeader(sheet, a1Range) {
+  sheet
+    .getRange(a1Range)
+    .setBackground(DASH_COLORS.tableHeader)
+    .setFontColor(DASH_COLORS.tableHeaderText)
+    .setFontWeight("bold");
 }
 
 function colLetter(columnName, ss, sheetName) {
