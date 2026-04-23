@@ -93,6 +93,38 @@ const QUEUE_MAX_ATTEMPTS = 5
 const RETRY_BASE_SECONDS = 60
 const RETRY_MAX_SECONDS = 600
 
+// FIX: H-17 (4626-309) — claim expiry + idempotency defense. The
+// previous claim-then-execute split allowed a node that died between
+// `updateStatus { status: "executing" }` and `/execute` to strand an
+// action forever, and allowed two nodes to each believe they were the
+// sole executor under a consensus re-run. We now:
+//   1. Pass `expectedStatus: <row's current status>` in every claim so
+//      the backend performs optimistic concurrency and rejects a second
+//      claimant. The fetch endpoint returns both `pending` and `retry`
+//      rows, so we echo the row's own status rather than hardcoding
+//      `"pending"` — hardcoding would strand every retry row forever
+//      once the backend honors expectedStatus.
+//   2. Generate a deterministic `idempotencyKey` per (workflow-run,
+//      action.id) and forward it to /execute. The backend keys
+//      writes by idempotencyKey, so a replay — whether from CRE
+//      consensus re-run or from post-restart resume — is a no-op.
+//   3. Include `claimTtlSeconds` so the backend auto-releases stale
+//      claims. The actual release logic lives in the API (Sprint 7,
+//      L-11 / M-31 family); this payload is forward-compatible.
+const CLAIM_TTL_SECONDS = 300
+
+function buildIdempotencyKey(
+  nodeRuntime: NodeRuntime<Config>,
+  action: PendingAction,
+): string {
+  // Deterministic within a workflow-run + action.id so consensus
+  // re-runs produce the same key. The node-runtime's id() is derived
+  // from the cron trigger timestamp + workflow hash and is stable
+  // across the whole quorum for a single trigger.
+  const triggerId = (nodeRuntime as unknown as { id?: () => string }).id?.() ?? ""
+  return `keepr:${action.id}:${triggerId || action.attemptCount}`
+}
+
 function fetchPendingActions(
   nodeRuntime: NodeRuntime<Config>,
   httpClient: HTTPClient,
@@ -130,17 +162,49 @@ function fetchPendingActions(
   for (const action of actions) {
     result.processed++
 
-    // --- Call 2/4: Claim the action ---
+    // FIX: H-17 (4626-309) — deterministic idempotency key used for
+    // both the claim and the execute request so a consensus re-run or
+    // post-restart resume collapses to a no-op at the backend.
+    const idempotencyKey = buildIdempotencyKey(nodeRuntime, action)
+
+    // --- Call 2/4: Claim the action (optimistic concurrency) ---
+    // FIX: H-17 — expectedStatus echoes the row's own current status.
+    // The fetch endpoint returns rows in both `pending` and `retry`
+    // states; both must be claimable or transient failures never
+    // recover. Hardcoding `"pending"` here would make every retry row
+    // permanently un-claimable once the backend honors expectedStatus.
+    // The optimistic-concurrency property still holds: two nodes
+    // observing the same row with status=S can still only have one
+    // winner (the first successful `S -> executing` transition).
+    const expectedStatus = action.status
+    if (expectedStatus !== "pending" && expectedStatus !== "retry") {
+      // Row arrived in an unexpected state — skip it and let the
+      // backend surface it through the normal pending feed.
+      result.skipped++
+      continue
+    }
+
     const claimBody = postJson<Config, UpdateStatusResponse>(
       nodeRuntime,
       httpClient,
       apiKey,
       "/keepr/actions/updateStatus",
-      { id: action.id, status: "executing" },
+      {
+        id: action.id,
+        status: "executing",
+        // FIX: H-17 — reject the claim if another node has already
+        // moved the row off its current status. Backend responds
+        // updated=false without side-effects in that case.
+        expectedStatus,
+        // FIX: H-17 — let the backend auto-release a claim that
+        // never finishes (node crash between claim and execute).
+        claimTtlSeconds: CLAIM_TTL_SECONDS,
+        idempotencyKey,
+      },
     )
 
     if (!claimBody.success || !claimBody.data?.updated) {
-      // Another worker claimed it
+      // Another worker claimed it, or the row is no longer pending.
       result.skipped++
       continue
     }
@@ -157,6 +221,11 @@ function fetchPendingActions(
         groupId: action.groupId,
         actionType: action.actionType,
         action: action.action,
+        // FIX: H-17 — idempotency key lets the backend dedupe a
+        // second execute call from the same workflow-run that got
+        // re-attempted because of transport retries or a partial
+        // consensus failure.
+        idempotencyKey,
       },
     )
 
@@ -166,7 +235,15 @@ function fetchPendingActions(
         httpClient,
         apiKey,
         "/keepr/actions/updateStatus",
-        { id: action.id, status: "executed" },
+        {
+          id: action.id,
+          status: "executed",
+          // FIX: H-17 — finalize-with-idempotency completes the chain
+          // so a duplicate workflow-run cannot flip a completed row
+          // back to executing.
+          expectedStatus: "executing",
+          idempotencyKey,
+        },
       )
       if (doneBody.success && doneBody.data?.updated) {
         result.succeeded++
@@ -193,6 +270,8 @@ function fetchPendingActions(
           status: "retry",
           error: execBody.data?.error ?? execBody.error ?? "execution_failed",
           retryDelaySeconds,
+          expectedStatus: "executing",
+          idempotencyKey,
         },
       )
       if (retryBody.success && retryBody.data?.updated) {
@@ -210,6 +289,8 @@ function fetchPendingActions(
           id: action.id,
           status: "failed",
           error: execBody.data?.error ?? execBody.error ?? "execution_failed",
+          expectedStatus: "executing",
+          idempotencyKey,
         },
       )
       if (failBody.success && failBody.data?.updated) {

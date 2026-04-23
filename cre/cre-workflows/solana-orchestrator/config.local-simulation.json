@@ -9,5 +9,6 @@
     "graduation",
     "price-monitor"
   ],
-  "checkpointIntervalSeconds": 60
+  "checkpointIntervalSeconds": 60,
+  "authAdminRegistry": []
 }

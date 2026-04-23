@@ -25,10 +25,19 @@ staging-settings:
     # Replace with your assigned DON family once approved.
     don-family: "zone-a"
   rpcs:
+    # FIX: M-12 (4626-321) — staging previously referenced
+    # publicnode.com / mainnet.base.org. Public endpoints have
+    # 10–100 req/s limits and no SLA; CRE workflows that exceed the
+    # limit fail silently, missing on-chain events (and therefore
+    # missing lottery settlements, rebalance cadence, etc.). Staging
+    # now uses the same keyed Infura project as production via
+    # ${INFURA_PROJECT_ID_STAGING}. Operators are expected to set a
+    # separate staging key so staging load does not exhaust the
+    # production quota.
     - chain-name: ethereum-mainnet
-      url: https://ethereum-rpc.publicnode.com
+      url: https://mainnet.infura.io/v3/${INFURA_PROJECT_ID_STAGING}
     - chain-name: ethereum-mainnet-base-1
-      url: https://mainnet.base.org
+      url: https://base-mainnet.infura.io/v3/${INFURA_PROJECT_ID_STAGING}
 
 production-settings:
   cre-cli:

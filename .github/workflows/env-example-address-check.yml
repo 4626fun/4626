@@ -1,0 +1,86 @@
+# FIX: M-13 (4626-322) — CI guard preventing real protocol addresses from
+# regressing into committed .env.example / secrets.example.env files.
+#
+# The list of permitted addresses is the small set of public ecosystem
+# constants (LayerZero V2 endpoint, Chainlink ETH/USD, VRF coordinator,
+# ERC-4337 EntryPoint, Gnosis Create2 factory, tax hook) plus the
+# zero address. Every other EVM address literal in those files is
+# considered a live-protocol reconnaissance leak and fails the job.
+
+name: .env example address check
+
+on:
+  pull_request:
+    paths:
+      - '.env.example'
+      - 'cre/secrets.example.env'
+      - 'cre/cre-workflows/.env.example'
+      - 'frontend/.env.example'
+      - 'indexer/.env.example'
+      - '.github/workflows/env-example-address-check.yml'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Scan example env files for non-allowlisted addresses
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          FILES=(
+            ".env.example"
+            "cre/secrets.example.env"
+            "cre/cre-workflows/.env.example"
+            "frontend/.env.example"
+            "indexer/.env.example"
+          )
+
+          # Allowlisted public addresses (lowercased):
+          #   0x0000...0000              zero address
+          #   0xca97...0088              tax hook (4626 published constant)
+          #   0x1a44...728c              LayerZero V2 endpoint (Base)
+          #   0x7104...bb70              Chainlink ETH/USD feed (Base)
+          #   0xd5d5...f634              VRF coordinator v2.5 (Base)
+          #   0x5ff1...2789              ERC-4337 EntryPoint v0.6
+          #   0x4e59...956c              Gnosis safe Create2 factory
+          ALLOWLIST=$(cat <<'EOF' | tr '[:upper:]' '[:lower:]'
+          0x0000000000000000000000000000000000000000
+          0xca975b9daf772c71161f3648437c3616e5be0088
+          0x1a44076050125825900e736c501f859c50fe728c
+          0x71041dddad3595f9ced3dccfbe3d1f4b0a16bb70
+          0xd5d517abe5cf79b7e95ec98db0f0277788aff634
+          0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789
+          0x4e59b44847b379578588920ca78fbf26c0b4956c
+          EOF
+          )
+
+          fail=0
+          for f in "${FILES[@]}"; do
+            if [ ! -f "$f" ]; then continue; fi
+            # Extract every EVM address literal, lowercase, dedupe.
+            # grep exits 1 when a file has zero matches; under
+            # `set -euo pipefail` that would kill the job on any
+            # PR that touches an address-free env file. Tolerate
+            # no-match with `|| true` and treat empty `addrs` as
+            # "nothing to check for this file".
+            addrs=$(grep -oE "0x[a-fA-F0-9]{40}" "$f" 2>/dev/null | tr '[:upper:]' '[:lower:]' | sort -u || true)
+            if [ -z "$addrs" ]; then
+              continue
+            fi
+            while IFS= read -r a; do
+              [ -z "$a" ] && continue
+              if ! grep -q "^$a$" <<<"$ALLOWLIST"; then
+                echo "::error file=$f::Non-allowlisted EVM address literal $a in example env file. Replace with 0xYOUR_<NAME>_HERE or extend the allowlist in .github/workflows/env-example-address-check.yml."
+                fail=1
+              fi
+            done <<<"$addrs"
+          done
+
+          if [ $fail -ne 0 ]; then
+            exit 1
+          fi
+
+          echo "All example env files use allowlisted addresses only."

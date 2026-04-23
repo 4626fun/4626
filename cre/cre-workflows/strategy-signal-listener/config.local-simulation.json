@@ -11,5 +11,6 @@
   "liquiditySearchRadius": 20,
   "maxVaultsPerExecution": 1,
   "maxStrategiesPerVault": 5,
-  "rotationIntervalSeconds": 120
+  "rotationIntervalSeconds": 120,
+  "expectedEventSignatures": []
 }

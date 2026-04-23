@@ -17,6 +17,9 @@ type Config = {
   workflowName: string
   actions: string[]
   checkpointIntervalSeconds: number
+  // Allowlist of authAdmin addresses permitted to appear in manual.payload.
+  // Empty list = no authAdmin-bearing payloads are accepted. See audit finding M-17 (4626-326).
+  authAdminRegistry: string[]
 }
 
 type ManualPayload = {
@@ -84,6 +87,45 @@ function normalizeActionName(action: string): string {
   return action.trim().toLowerCase()
 }
 
+function normalizeAddress(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined
+  const trimmed = value.trim()
+  if (trimmed.length === 0) return undefined
+  return trimmed.toLowerCase()
+}
+
+// M-17 (4626-326): validate that any authAdmin embedded in a manual payload is
+// in the workflow's configured registry of authorized admins. Without this
+// check, an attacker with a leaked manual auth token could pass an arbitrary
+// authAdmin/smartWallet pair through to /cre/keeper/solana/reconcile. The
+// registry is intentionally required on Config (may be empty) so that an
+// unset registry is a loud deployment bug rather than a silent allow-all.
+function validatePayloadAuthAdmin(
+  config: Config,
+  payload: Record<string, unknown>,
+): void {
+  const rawAuthAdmin = payload["authAdmin"]
+  const rawSmartWallet = payload["smartWallet"]
+  const hasAuthAdmin = rawAuthAdmin !== undefined && rawAuthAdmin !== null
+  const hasSmartWallet = rawSmartWallet !== undefined && rawSmartWallet !== null
+  if (!hasAuthAdmin && !hasSmartWallet) return
+
+  const authAdmin = normalizeAddress(rawAuthAdmin)
+  const smartWallet = normalizeAddress(rawSmartWallet)
+
+  if (!authAdmin) {
+    throw new Error("authAdmin_missing_or_invalid")
+  }
+  if (!smartWallet) {
+    throw new Error("smartWallet_required_with_authAdmin")
+  }
+
+  const registry = (config.authAdminRegistry ?? []).map((entry) => entry.trim().toLowerCase())
+  if (registry.length === 0 || !registry.includes(authAdmin)) {
+    throw new Error("authAdmin_not_in_registry")
+  }
+}
+
 function normalizeActionList(config: Config, manual?: ManualPayload): string[] {
   const fromArray =
     manual?.actions?.filter((value): value is string => typeof value === "string" && value.trim().length > 0) ??
@@ -118,9 +160,12 @@ function runReconciliation(runtime: Runtime<Config>, manual?: ManualPayload): So
     },
   }
 
+  const payload = manual?.payload ?? {}
+  // M-17 (4626-326): enforce authAdmin registry before dispatching any action.
+  validatePayloadAuthAdmin(runtime.config, payload)
+
   for (const action of actions) {
     const checkpointKey = `${action}:${checkpointSuffix}`
-    const payload = manual?.payload ?? {}
     result.attempts += 1
     result.checkpoints.push(checkpointKey)
 
