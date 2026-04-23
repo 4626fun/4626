@@ -1,0 +1,33 @@
+[**4626-app**](../../../index.md)
+
+***
+
+[4626-app](../../../index.md) / server/\_lib/alfaclub/schema
+
+# server/\_lib/alfaclub/schema
+
+## Functions
+
+### \_resetAlfaClubSchemaCacheForTests()
+
+> **\_resetAlfaClubSchemaCacheForTests**(): `void`
+
+Defined in: [server/\_lib/alfaclub/schema.ts:200](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/schema.ts#L200)
+
+Reset state cache — exposed for tests only.
+
+#### Returns
+
+`void`
+
+***
+
+### ensureAlfaClubVigilanteSchema()
+
+> **ensureAlfaClubVigilanteSchema**(): `Promise`\<`void`\>
+
+Defined in: [server/\_lib/alfaclub/schema.ts:14](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/alfaclub/schema.ts#L14)
+
+#### Returns
+
+`Promise`\<`void`\>

@@ -453,7 +453,7 @@ create — caller must provision the base context first).
 
 > **readIssuerDailySpend**(`profileId`): `Promise`\<`bigint`\>
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:730](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L730)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:796](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L796)
 
 Read today's spend total without mutation. Used for preflight cap checks.
 
@@ -473,7 +473,7 @@ Read today's spend total without mutation. Used for preflight cap checks.
 
 > **recordIssuerDailySpend**(`params`): `Promise`\<\{ `newTotalWei`: `bigint`; `ok`: `true`; \} \| \{ `error`: `string`; `ok`: `false`; \}\>
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:661](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L661)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:727](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L727)
 
 Durable per-profile daily spend: increments today's counter atomically
 and returns the new total. Used by the submitter to enforce dailyCapWei
@@ -572,11 +572,47 @@ Soft-revoke an execution context. The row stays for audit but
 
 ***
 
+### revokeSubAccountSpendPermission()
+
+> **revokeSubAccountSpendPermission**(`params`): `Promise`\<\{ `alreadyRevoked`: `boolean`; `ok`: `true`; \} \| \{ `error`: `"not_provisioned"` \| `"db_unavailable"` \| `"db_write_failed"` \| `"context_row_missing"`; `ok`: `false`; \}\>
+
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:669](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L669)
+
+Revoke JUST the sub-account spend permission on a context row.
+
+Distinct from `revokeCommandIssuerContext` above, which revokes the
+entire context (kills delegation + execution + sub-account together).
+This narrower revoke lets users turn off bot-initiated spending of
+their parent CSW's funds while keeping the Privy delegation and
+sub-account intact — they can re-provision a new spend permission
+later without re-enrolling Privy.
+
+Only flips `spend_permission_revoked_at`. The submitter preflight
+rejects any UserOp whose issuer context has this column set, which
+is what actually stops in-chat commands from debiting the parent.
+
+Returns 'not_provisioned' if the row exists but has no sub-account,
+or 'context_row_missing' if there's no row at all.
+
+#### Parameters
+
+##### params
+
+###### profileId
+
+`number`
+
+#### Returns
+
+`Promise`\<\{ `alreadyRevoked`: `boolean`; `ok`: `true`; \} \| \{ `error`: `"not_provisioned"` \| `"db_unavailable"` \| `"db_write_failed"` \| `"context_row_missing"`; `ok`: `false`; \}\>
+
+***
+
 ### rollbackIssuerDailySpend()
 
 > **rollbackIssuerDailySpend**(`params`): `Promise`\<\{ `ok`: `true`; \} \| \{ `error`: `string`; `ok`: `false`; \}\>
 
-Defined in: [server/\_lib/wallet/commandIssuerContext.ts:698](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L698)
+Defined in: [server/\_lib/wallet/commandIssuerContext.ts:764](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/commandIssuerContext.ts#L764)
 
 Roll back a previously-recorded spend (e.g., after a submission failure).
 Subtracts `amountWei` from today's counter. Uses GREATEST to prevent

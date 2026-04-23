@@ -7,7 +7,21 @@ import { spawnSync } from 'node:child_process';
 const budgetPath = path.resolve(process.cwd(), 'scripts/typedoc-warning-budget.json');
 const budget = JSON.parse(readFileSync(budgetPath, 'utf8'));
 
-const typedocResult = spawnSync('pnpm', ['exec', 'typedoc'], {
+// Source-link pinning: honour DOCS_GITHUB_REF so release-branch docs builds
+// resolve to the branch being documented, not main. Defaults to main for
+// local runs and the standard CI path. Paired with the blob-ref rewrite in
+// apps/docs-site/scripts/docs-refresh.mjs::normalizeGeneratedSourceLinks.
+const docsGitRef = process.env.DOCS_GITHUB_REF || 'main';
+const typedocArgs = [
+  'exec',
+  'typedoc',
+  '--gitRevision',
+  docsGitRef,
+  '--sourceLinkTemplate',
+  `https://github.com/wenakita/4626/blob/${docsGitRef}/{path}#L{line}`,
+];
+
+const typedocResult = spawnSync('pnpm', typedocArgs, {
   cwd: process.cwd(),
   env: process.env,
   encoding: 'utf8',

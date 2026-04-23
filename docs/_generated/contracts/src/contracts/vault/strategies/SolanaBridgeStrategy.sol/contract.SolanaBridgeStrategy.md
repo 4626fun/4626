@@ -208,3 +208,9 @@ error InvalidAmount();
 error BridgeConfigMissing();
 ```
 
+### BridgeCallNotConsumed
+
+```solidity
+error BridgeCallNotConsumed(uint256 expected, uint256 actual);
+```
+

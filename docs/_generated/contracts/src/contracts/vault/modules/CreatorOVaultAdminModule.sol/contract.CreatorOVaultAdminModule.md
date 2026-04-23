@@ -111,6 +111,22 @@ function setGaugeController(address _gaugeController) external onlyDelegateCall;
 
 ### setBurnStream
 
+Update the vault's burn stream address.
+
+FIX: L-01 (4626-349) — previously one-time-set. Once the initial
+non-zero burn stream was wired, any future override required a
+full vault migration. If the Charm/gauge infra upgrades the
+burn stream contract, this is operationally expensive.
+Override now permitted via the same onlyDelegateCall gate that
+governs every other admin setter in this module. The call still
+runs through the vault's management/multisig path (see
+CreatorOVaultRescueModule / `onlyDelegateCall` construction), so
+unilateral overrides from an EOA are not possible. A governance
+timelock should enforce the delay at that layer; we deliberately
+do NOT add a second timelock here so the setter shape matches
+every other `set*` in this module.
+Emits UpdateBurnStream(oldBurnStream, newBurnStream).
+
 
 ```solidity
 function setBurnStream(address _burnStream) external onlyDelegateCall;
@@ -303,6 +319,12 @@ event UpdateEmergencyAdmin(address indexed newEmergencyAdmin);
 
 ```solidity
 event UpdateGaugeController(address indexed oldController, address indexed newController);
+```
+
+### UpdateBurnStream
+
+```solidity
+event UpdateBurnStream(address indexed oldBurnStream, address indexed newBurnStream);
 ```
 
 ### UpdatePerformanceFee

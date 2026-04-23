@@ -83,6 +83,27 @@ uint256 public totalReconciledFromSolana
 ```
 
 
+### NAV_WINDOW_DURATION
+
+```solidity
+uint64 public constant NAV_WINDOW_DURATION = 1 hours
+```
+
+
+### navWindowAnchor
+
+```solidity
+uint256 public navWindowAnchor
+```
+
+
+### navWindowStart
+
+```solidity
+uint64 public navWindowStart
+```
+
+
 ### remoteNavEnabled
 
 ```solidity
@@ -303,6 +324,12 @@ function emergencyPaused() external view returns (bool);
 
 ```solidity
 event RemoteNavUpdated(uint256 newRemoteNav, bytes32 reportId);
+```
+
+### NavWindowRolled
+
+```solidity
+event NavWindowRolled(uint256 newAnchor, uint64 newWindowStart);
 ```
 
 ### RebalanceToSolana

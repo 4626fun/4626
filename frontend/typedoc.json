@@ -84,6 +84,8 @@
   "disableSources": false,
   "githubPages": false,
   "hideGenerator": true,
+  "gitRemote": "origin",
+  "sourceLinkExternal": true,
   "navigation": {
     "includeCategories": true,
     "includeGroups": true

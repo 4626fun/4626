@@ -12,7 +12,7 @@
 
 > **ConfirmOwnerResponse** = `object`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L35)
+Defined in: [src/lib/wallet/onboardingWallet.ts:38](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L38)
 
 #### Properties
 
@@ -20,31 +20,31 @@ Defined in: [src/lib/wallet/onboardingWallet.ts:35](https://github.com/wenakita/
 
 > **canonicalCswAddress**: `string`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:37](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L37)
+Defined in: [src/lib/wallet/onboardingWallet.ts:40](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L40)
 
 ##### confirmationState?
 
 > `optional` **confirmationState**: `"owner_confirmed"` \| `"pending_tx"` \| `"owner_not_found_yet"` \| `"tx_failed"`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:40](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L40)
+Defined in: [src/lib/wallet/onboardingWallet.ts:43](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L43)
 
 ##### isOwner
 
 > **isOwner**: `boolean`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:36](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L36)
+Defined in: [src/lib/wallet/onboardingWallet.ts:39](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L39)
 
 ##### ownerAddress
 
 > **ownerAddress**: `string`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:38](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L38)
+Defined in: [src/lib/wallet/onboardingWallet.ts:41](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L41)
 
 ##### txHash
 
 > **txHash**: `string` \| `null`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:39](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L39)
+Defined in: [src/lib/wallet/onboardingWallet.ts:42](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L42)
 
 ***
 
@@ -86,7 +86,7 @@ Defined in: [src/lib/wallet/onboardingWallet.ts:20](https://github.com/wenakita/
 
 > **OwnerApprovalExecutionMode** = `"canonicalSmartWallet"` \| `"ownerDirect"` \| `"subAccount"`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:50](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L50)
+Defined in: [src/lib/wallet/onboardingWallet.ts:53](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L53)
 
 ***
 
@@ -94,7 +94,7 @@ Defined in: [src/lib/wallet/onboardingWallet.ts:50](https://github.com/wenakita/
 
 > **OwnerApprovalStage** = `"preflight"` \| `"prepare"` \| `"prepare_calls"` \| `"userop_typed"` \| `"userop_nontyped"` \| `"send_calls"` \| `"add_sub_account"` \| `"confirm_owner"`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:52](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L52)
+Defined in: [src/lib/wallet/onboardingWallet.ts:56](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L56)
 
 ***
 
@@ -102,7 +102,7 @@ Defined in: [src/lib/wallet/onboardingWallet.ts:52](https://github.com/wenakita/
 
 > **OwnerApprovalStageEvent** = `object`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:64](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L64)
+Defined in: [src/lib/wallet/onboardingWallet.ts:68](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L68)
 
 #### Properties
 
@@ -110,61 +110,61 @@ Defined in: [src/lib/wallet/onboardingWallet.ts:64](https://github.com/wenakita/
 
 > `optional` **attempt**: `number`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:68](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L68)
+Defined in: [src/lib/wallet/onboardingWallet.ts:72](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L72)
 
 ##### canonicalCswAddress?
 
 > `optional` **canonicalCswAddress**: `string` \| `null`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:71](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L71)
+Defined in: [src/lib/wallet/onboardingWallet.ts:75](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L75)
 
 ##### code?
 
 > `optional` **code**: `string`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:73](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L73)
+Defined in: [src/lib/wallet/onboardingWallet.ts:77](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L77)
 
 ##### executionMode
 
 > **executionMode**: [`OwnerApprovalExecutionMode`](#ownerapprovalexecutionmode)
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L69)
+Defined in: [src/lib/wallet/onboardingWallet.ts:73](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L73)
 
 ##### message?
 
 > `optional` **message**: `string`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:74](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L74)
+Defined in: [src/lib/wallet/onboardingWallet.ts:78](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L78)
 
 ##### runId
 
 > **runId**: `string`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:65](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L65)
+Defined in: [src/lib/wallet/onboardingWallet.ts:69](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L69)
 
 ##### signerAddress?
 
 > `optional` **signerAddress**: `string` \| `null`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:70](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L70)
+Defined in: [src/lib/wallet/onboardingWallet.ts:74](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L74)
 
 ##### stage
 
 > **stage**: [`OwnerApprovalStage`](#ownerapprovalstage)
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:66](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L66)
+Defined in: [src/lib/wallet/onboardingWallet.ts:70](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L70)
 
 ##### status
 
 > **status**: [`OwnerApprovalStageStatus`](#ownerapprovalstagestatus)
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:67](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L67)
+Defined in: [src/lib/wallet/onboardingWallet.ts:71](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L71)
 
 ##### txHash?
 
 > `optional` **txHash**: `string` \| `null`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:72](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L72)
+Defined in: [src/lib/wallet/onboardingWallet.ts:76](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L76)
 
 ***
 
@@ -172,7 +172,7 @@ Defined in: [src/lib/wallet/onboardingWallet.ts:72](https://github.com/wenakita/
 
 > **OwnerApprovalStageStatus** = `"start"` \| `"retry"` \| `"success"` \| `"error"`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:62](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L62)
+Defined in: [src/lib/wallet/onboardingWallet.ts:66](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L66)
 
 ***
 
@@ -204,11 +204,19 @@ Defined in: [src/lib/wallet/onboardingWallet.ts:11](https://github.com/wenakita/
 
 ***
 
+### OwnerInstallIntent
+
+> **OwnerInstallIntent** = `"embeddedOwner"` \| `"customCoOwner"`
+
+Defined in: [src/lib/wallet/onboardingWallet.ts:54](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L54)
+
+***
+
 ### PreparedOwnerTxRequest
 
 > **PreparedOwnerTxRequest** = `object`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:43](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L43)
+Defined in: [src/lib/wallet/onboardingWallet.ts:46](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L46)
 
 #### Properties
 
@@ -216,31 +224,31 @@ Defined in: [src/lib/wallet/onboardingWallet.ts:43](https://github.com/wenakita/
 
 > **chainId**: `8453`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:44](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L44)
+Defined in: [src/lib/wallet/onboardingWallet.ts:47](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L47)
 
 ##### data
 
 > **data**: `` `0x${string}` ``
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:46](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L46)
+Defined in: [src/lib/wallet/onboardingWallet.ts:49](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L49)
 
 ##### to
 
 > **to**: `` `0x${string}` ``
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:45](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L45)
+Defined in: [src/lib/wallet/onboardingWallet.ts:48](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L48)
 
 ##### value
 
 > **value**: `"0x0"`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:47](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L47)
+Defined in: [src/lib/wallet/onboardingWallet.ts:50](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L50)
 
 ***
 
 ### PrepareOwnerResponse
 
-> **PrepareOwnerResponse** = \{ `alreadyOwner`: `true`; \} \| \{ `alreadyOwner`: `false`; `txRequest`: \{ `chainId`: `8453`; `data`: `` `0x${string}` ``; `to`: `` `0x${string}` ``; `value`: `"0x0"`; \}; \}
+> **PrepareOwnerResponse** = \{ `alreadyOwner`: `true`; \} \| \{ `alreadyOwner`: `false`; `sponsorship?`: \{ `customOwnerPolicyToken?`: `string`; \}; `txRequest`: \{ `chainId`: `8453`; `data`: `` `0x${string}` ``; `to`: `` `0x${string}` ``; `value`: `"0x0"`; \}; \}
 
 Defined in: [src/lib/wallet/onboardingWallet.ts:23](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L23)
 
@@ -250,7 +258,7 @@ Defined in: [src/lib/wallet/onboardingWallet.ts:23](https://github.com/wenakita/
 
 > **\_submitOwnerTxViaWalletSendCalls**(`params`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:319](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L319)
+Defined in: [src/lib/wallet/onboardingWallet.ts:408](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L408)
 
 #### Parameters
 
@@ -310,7 +318,7 @@ Defined in: [src/lib/wallet/onboardingWallet.ts:319](https://github.com/wenakita
 
 > **\_submitOwnerViaPreparedCalls**(`params`): `Promise`\<`` `0x${string}` ``\>
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:479](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L479)
+Defined in: [src/lib/wallet/onboardingWallet.ts:568](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L568)
 
 #### Parameters
 
@@ -370,7 +378,7 @@ Defined in: [src/lib/wallet/onboardingWallet.ts:479](https://github.com/wenakita
 
 > **buildOwnerDelegationError**(`payload`, `fallback`): `Error` & [`OwnerDelegationFlags`](#ownerdelegationflags)
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:91](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L91)
+Defined in: [src/lib/wallet/onboardingWallet.ts:95](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L95)
 
 #### Parameters
 
@@ -392,7 +400,7 @@ Defined in: [src/lib/wallet/onboardingWallet.ts:91](https://github.com/wenakita/
 
 > **deriveOwnerDelegationFlags**(`flags`): [`OwnerDelegationFlags`](#ownerdelegationflags) \| `null`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:106](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L106)
+Defined in: [src/lib/wallet/onboardingWallet.ts:110](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L110)
 
 #### Parameters
 
@@ -420,7 +428,7 @@ Defined in: [src/lib/wallet/onboardingWallet.ts:106](https://github.com/wenakita
 
 > **normalizeOwnerApprovalError**(`error`): `Error`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:195](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L195)
+Defined in: [src/lib/wallet/onboardingWallet.ts:218](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L218)
 
 #### Parameters
 
@@ -438,7 +446,7 @@ Defined in: [src/lib/wallet/onboardingWallet.ts:195](https://github.com/wenakita
 
 > **readApiError**(`payload`, `fallback`): `string`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:77](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L77)
+Defined in: [src/lib/wallet/onboardingWallet.ts:81](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L81)
 
 #### Parameters
 
@@ -460,7 +468,7 @@ Defined in: [src/lib/wallet/onboardingWallet.ts:77](https://github.com/wenakita/
 
 > **readOwnerDelegationFlags**(`payload`): [`OwnerDelegationFlags`](#ownerdelegationflags)
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:81](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L81)
+Defined in: [src/lib/wallet/onboardingWallet.ts:85](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L85)
 
 #### Parameters
 
@@ -478,7 +486,7 @@ Defined in: [src/lib/wallet/onboardingWallet.ts:81](https://github.com/wenakita/
 
 > **sendPreparedOwnerTx**(`params`): `Promise`\<[`ConfirmOwnerResponse`](#confirmownerresponse)\>
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:653](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L653)
+Defined in: [src/lib/wallet/onboardingWallet.ts:742](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L742)
 
 #### Parameters
 
@@ -500,6 +508,10 @@ Defined in: [src/lib/wallet/onboardingWallet.ts:653](https://github.com/wenakita
 
 `number` \| `undefined`
 
+###### customOwnerPolicyToken?
+
+`string` \| `null`
+
 ###### ensurePaymasterSession?
 
 () => `Promise`\<`boolean`\> \| `null`
@@ -519,6 +531,14 @@ Defined in: [src/lib/wallet/onboardingWallet.ts:653](https://github.com/wenakita
 ###### ownerIndexLookupAddress?
 
 `string` \| `null`
+
+###### ownerInstallIntent?
+
+[`OwnerInstallIntent`](#ownerinstallintent)
+
+###### preferSponsoredFirst?
+
+`boolean`
 
 ###### publicClient?
 
@@ -550,7 +570,7 @@ Defined in: [src/lib/wallet/onboardingWallet.ts:653](https://github.com/wenakita
 
 > **shouldRefreshOwnerDelegationOnForeground**(`input`): `boolean`
 
-Defined in: [src/lib/wallet/onboardingWallet.ts:119](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L119)
+Defined in: [src/lib/wallet/onboardingWallet.ts:123](https://github.com/wenakita/4626/blob/main/frontend/src/lib/wallet/onboardingWallet.ts#L123)
 
 #### Parameters
 

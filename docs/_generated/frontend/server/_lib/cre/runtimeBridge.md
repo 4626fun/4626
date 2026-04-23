@@ -6,6 +6,38 @@
 
 # server/\_lib/cre/runtimeBridge
 
+## Classes
+
+### RuntimeNonceStoreUnavailableError
+
+Defined in: [server/\_lib/cre/runtimeBridge.ts:99](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L99)
+
+#### Extends
+
+- `Error`
+
+#### Constructors
+
+##### Constructor
+
+> **new RuntimeNonceStoreUnavailableError**(`message`): [`RuntimeNonceStoreUnavailableError`](#runtimenoncestoreunavailableerror)
+
+Defined in: [server/\_lib/cre/runtimeBridge.ts:100](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L100)
+
+###### Parameters
+
+###### message
+
+`string`
+
+###### Returns
+
+[`RuntimeNonceStoreUnavailableError`](#runtimenoncestoreunavailableerror)
+
+###### Overrides
+
+`Error.constructor`
+
 ## Type Aliases
 
 ### RuntimeAuthResult
@@ -256,7 +288,7 @@ Defined in: [server/\_lib/cre/runtimeBridge.ts:54](https://github.com/wenakita/4
 
 > **authenticateRuntimeRequest**(`req`, `body`, `options`): `Promise`\<[`RuntimeAuthResult`](#runtimeauthresult)\>
 
-Defined in: [server/\_lib/cre/runtimeBridge.ts:207](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L207)
+Defined in: [server/\_lib/cre/runtimeBridge.ts:212](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L212)
 
 #### Parameters
 
@@ -282,7 +314,7 @@ Defined in: [server/\_lib/cre/runtimeBridge.ts:207](https://github.com/wenakita/
 
 > **executeCreHttpTrigger**(`input`): `Promise`\<\{ `gatewayUrl`: `string`; `ok`: `boolean`; `requestId`: `string`; `response`: `unknown`; `statusCode`: `number`; \}\>
 
-Defined in: [server/\_lib/cre/runtimeBridge.ts:455](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L455)
+Defined in: [server/\_lib/cre/runtimeBridge.ts:465](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L465)
 
 #### Parameters
 
@@ -300,7 +332,7 @@ Defined in: [server/\_lib/cre/runtimeBridge.ts:455](https://github.com/wenakita/
 
 > **listRuntimeRecords**(`params`): `Promise`\<[`RuntimeRecord`](#runtimerecord)[]\>
 
-Defined in: [server/\_lib/cre/runtimeBridge.ts:323](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L323)
+Defined in: [server/\_lib/cre/runtimeBridge.ts:333](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L333)
 
 #### Parameters
 
@@ -328,7 +360,7 @@ Defined in: [server/\_lib/cre/runtimeBridge.ts:323](https://github.com/wenakita/
 
 > **maybeEnqueueRuntimeAction**(`input`): `Promise`\<`number`\>
 
-Defined in: [server/\_lib/cre/runtimeBridge.ts:416](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L416)
+Defined in: [server/\_lib/cre/runtimeBridge.ts:426](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L426)
 
 #### Parameters
 
@@ -346,7 +378,7 @@ Defined in: [server/\_lib/cre/runtimeBridge.ts:416](https://github.com/wenakita/
 
 > **storeRuntimeDecision**(`input`): `Promise`\<\{ `decision`: [`RuntimeDecision`](#runtimedecision); `inserted`: `boolean`; \}\>
 
-Defined in: [server/\_lib/cre/runtimeBridge.ts:371](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L371)
+Defined in: [server/\_lib/cre/runtimeBridge.ts:381](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L381)
 
 #### Parameters
 
@@ -364,7 +396,7 @@ Defined in: [server/\_lib/cre/runtimeBridge.ts:371](https://github.com/wenakita/
 
 > **storeRuntimeRecord**(`input`): `Promise`\<\{ `inserted`: `boolean`; `record`: [`RuntimeRecord`](#runtimerecord); \}\>
 
-Defined in: [server/\_lib/cre/runtimeBridge.ts:276](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L276)
+Defined in: [server/\_lib/cre/runtimeBridge.ts:286](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeBridge.ts#L286)
 
 #### Parameters
 

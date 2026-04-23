@@ -20,9 +20,9 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:31](https://github.
 
 ##### Constructor
 
-> **new CoinbaseSmartWalletHelperError**(`code`, `retryable`, `message?`): [`CoinbaseSmartWalletHelperError`](#coinbasesmartwallethelpererror)
+> **new CoinbaseSmartWalletHelperError**(`code`, `retryable`, `messageOrOptions?`): [`CoinbaseSmartWalletHelperError`](#coinbasesmartwallethelpererror)
 
-Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:35](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L35)
+Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:42](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L42)
 
 ###### Parameters
 
@@ -34,9 +34,9 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:35](https://github.
 
 `boolean`
 
-###### message?
+###### messageOrOptions?
 
-`string`
+`string` | \{ `cause?`: `unknown`; `causeMessage?`: `string`; `message?`: `string`; \}
 
 ###### Returns
 
@@ -47,6 +47,17 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:35](https://github.
 `Error.constructor`
 
 #### Properties
+
+##### causeMessage?
+
+> `optional` **causeMessage**: `string`
+
+Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L40)
+
+Optional original message from the underlying error that caused this
+helper error. Kept separate from `message` so `message` remains the
+stable short code callers match against, while operators still see the
+raw bundler/paymaster/RPC text in logs.
 
 ##### code
 
@@ -94,7 +105,7 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:27](https://github.
 
 > **asCoinbaseSmartWalletOwnerBytes**(`ownerAddress`): `` `0x${string}` ``
 
-Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:144](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L144)
+Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:249](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L249)
 
 #### Parameters
 
@@ -112,7 +123,7 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:144](https://github
 
 > **createPrivyWalletBackedAccount**(`params`): `any`
 
-Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:313](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L313)
+Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:418](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L418)
 
 #### Parameters
 
@@ -136,7 +147,7 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:313](https://github
 
 > **findCoinbaseSmartWalletOwnerIndex**(`params`): `Promise`\<`number` \| `null`\>
 
-Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:148](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L148)
+Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:253](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L253)
 
 #### Parameters
 
@@ -168,7 +179,7 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:148](https://github
 
 > **isCoinbaseSmartWalletHelperError**(`error`): `error is CoinbaseSmartWalletHelperError`
 
-Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:43](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L43)
+Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:69](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L69)
 
 #### Parameters
 
@@ -182,11 +193,29 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:43](https://github.
 
 ***
 
+### isRetryableInfraError()
+
+> **isRetryableInfraError**(`error`): `boolean`
+
+Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:83](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L83)
+
+#### Parameters
+
+##### error
+
+`unknown`
+
+#### Returns
+
+`boolean`
+
+***
+
 ### resolvePrivyCoinbaseSmartWalletOwnerContext()
 
 > **resolvePrivyCoinbaseSmartWalletOwnerContext**(`params`): `Promise`\<\{ `ownerAddress`: `` `0x${string}` ``; `ownerIndex`: `number`; \}\>
 
-Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:211](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L211)
+Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:316](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L316)
 
 #### Parameters
 
@@ -230,7 +259,7 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:211](https://github
 
 > **sendCoinbaseSmartWalletUserOperation**(`params`): `Promise`\<\{ `ownerIndex`: `number`; `smartWallet`: `` `0x${string}` ``; `txHash`: `` `0x${string}` ``; `userOpHash`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:345](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L345)
+Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:450](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L450)
 
 #### Parameters
 
@@ -274,7 +303,7 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:345](https://github
 
 > **sendPrivyCoinbaseSmartWalletUserOperation**(`params`): `Promise`\<\{ `ownerAddress`: `` `0x${string}` ``; `ownerIndex`: `number`; `smartWallet`: `` `0x${string}` ``; `txHash`: `` `0x${string}` ``; `userOpHash`: `` `0x${string}` ``; \}\>
 
-Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:446](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L446)
+Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:551](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L551)
 
 #### Parameters
 
@@ -322,7 +351,7 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:446](https://github
 
 > **waitForUserOperationReceipt**(`params`): `Promise`\<`any`\>
 
-Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:293](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L293)
+Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:398](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L398)
 
 #### Parameters
 
@@ -347,3 +376,25 @@ Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:293](https://github
 #### Returns
 
 `Promise`\<`any`\>
+
+***
+
+### wrapUnknownHelperError()
+
+> **wrapUnknownHelperError**(`code`, `error`): [`CoinbaseSmartWalletHelperError`](#coinbasesmartwallethelpererror)
+
+Defined in: [server/\_lib/wallet/privyCoinbaseSmartWallet.ts:193](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts#L193)
+
+#### Parameters
+
+##### code
+
+`string`
+
+##### error
+
+`unknown`
+
+#### Returns
+
+[`CoinbaseSmartWalletHelperError`](#coinbasesmartwallethelpererror)

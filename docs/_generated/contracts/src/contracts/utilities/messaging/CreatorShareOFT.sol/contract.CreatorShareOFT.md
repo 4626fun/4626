@@ -172,6 +172,35 @@ mapping(address => bool) public isMinter
 ```
 
 
+### usedReportIds
+Dedup set for winner-callback messages to prevent replay
+
+FIX: H-14 — LayerZero delivers each message with a unique _guid.
+The OFT base-class nonce tracker handles replay for token transfers,
+but the custom winner-callback branch short-circuits before that,
+so we track consumed guids explicitly here.
+
+
+```solidity
+mapping(bytes32 => bool) public usedReportIds
+```
+
+
+### isLotteryResolver
+Allowlist of contracts trusted to return a lottery beneficiary
+
+FIX: H-04 — only addresses on this allowlist are consulted via
+ILotteryBeneficiary.getLotteryBeneficiary(). Any other contract
+recipient falls through to itself as the beneficiary. This prevents
+an arbitrary malicious contract-recipient from redirecting lottery
+entries to an attacker-controlled EOA.
+
+
+```solidity
+mapping(address => bool) public isLotteryResolver
+```
+
+
 ### taxConfigDelegate
 Tax config delegate (hub-only, for future custom hooks)
 
@@ -655,6 +684,18 @@ function _resolveLotteryBeneficiary(address recipient) internal view returns (ad
 |`buyer`|`address`|The address that should receive lottery entries|
 
 
+### setLotteryResolver
+
+Allow or disallow a contract to act as a lottery beneficiary resolver
+
+FIX: H-04 — only owner-approved contracts (e.g. audited aggregator
+adapters) may redirect lottery entries via ILotteryBeneficiary.
+
+
+```solidity
+function setLotteryResolver(address resolver, bool allowed) external onlyOwner;
+```
+
 ### _lzReceive
 
 Override _lzReceive to handle both OFT token transfers and custom messages
@@ -1100,6 +1141,22 @@ event VaultSet(address indexed vault);
 
 ```solidity
 event RegistrySet(address indexed registry);
+```
+
+### LotteryResolverSet
+FIX: H-04 — allowlist change event
+
+
+```solidity
+event LotteryResolverSet(address indexed resolver, bool allowed);
+```
+
+### WinnerCallbackReplayRejected
+FIX: H-14 — duplicate callback observed and rejected
+
+
+```solidity
+event WinnerCallbackReplayRejected(bytes32 indexed reportId);
 ```
 
 ### SharesMinted

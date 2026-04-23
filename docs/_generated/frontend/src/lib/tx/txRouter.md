@@ -306,7 +306,7 @@ Defined in: [src/lib/tx/txRouter.ts:36](https://github.com/wenakita/4626/blob/ma
 
 > **buildAndSendApproval**(`params`): `Promise`\<\{ `routing`: [`TxRoutingDecision`](#txroutingdecision); `send`: [`TxRouterSendResult`](#txroutersendresult); \}\>
 
-Defined in: [src/lib/tx/txRouter.ts:932](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tx/txRouter.ts#L932)
+Defined in: [src/lib/tx/txRouter.ts:1004](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tx/txRouter.ts#L1004)
 
 #### Parameters
 
@@ -374,7 +374,7 @@ The quantity of ETH tokens approved for spending by the transaction, denominated
 
 > **buildAndSendSwap**(`params`): `Promise`\<\{ `routing`: [`TxRoutingDecision`](#txroutingdecision); `send`: [`TxRouterSendResult`](#txroutersendresult); \}\>
 
-Defined in: [src/lib/tx/txRouter.ts:946](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tx/txRouter.ts#L946)
+Defined in: [src/lib/tx/txRouter.ts:1018](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tx/txRouter.ts#L1018)
 
 #### Parameters
 
@@ -446,7 +446,7 @@ The quantity of ETH tokens approved for spending by the transaction, denominated
 
 > **detectTxSendMode**(`context`): [`TxRoutingDecision`](#txroutingdecision)
 
-Defined in: [src/lib/tx/txRouter.ts:319](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tx/txRouter.ts#L319)
+Defined in: [src/lib/tx/txRouter.ts:354](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tx/txRouter.ts#L354)
 
 #### Parameters
 
@@ -464,7 +464,7 @@ Defined in: [src/lib/tx/txRouter.ts:319](https://github.com/wenakita/4626/blob/m
 
 > **normalizeCanonicalSendError**(`error`): `Error`
 
-Defined in: [src/lib/tx/txRouter.ts:216](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tx/txRouter.ts#L216)
+Defined in: [src/lib/tx/txRouter.ts:226](https://github.com/wenakita/4626/blob/main/frontend/src/lib/tx/txRouter.ts#L226)
 
 #### Parameters
 

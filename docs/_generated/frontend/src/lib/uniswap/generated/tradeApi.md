@@ -72,7 +72,7 @@ A list of comma separated orderIds.
 
 ###### orderStatusParam
 
-> **orderStatusParam**: `"error"` \| `"open"` \| `"expired"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`
+> **orderStatusParam**: `"error"` \| `"expired"` \| `"open"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`
 
 ###### Description
 
@@ -2582,7 +2582,7 @@ Encoded order submitted.
 
 ###### OrderSuccess201.content.application/json.orderStatus
 
-> **orderStatus**: `"error"` \| `"open"` \| `"expired"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`
+> **orderStatus**: `"error"` \| `"expired"` \| `"open"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`
 
 ###### OrderSuccess201.content.application/json.requestId
 
@@ -7931,7 +7931,7 @@ The signed permit.
 
 ###### OrderResponse.orderStatus
 
-> **orderStatus**: `"error"` \| `"open"` \| `"expired"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`
+> **orderStatus**: `"error"` \| `"expired"` \| `"open"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`
 
 ###### OrderResponse.requestId
 
@@ -7939,7 +7939,7 @@ The signed permit.
 
 ###### OrderStatus
 
-> **OrderStatus**: `"error"` \| `"open"` \| `"expired"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`
+> **OrderStatus**: `"error"` \| `"expired"` \| `"open"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`
 
 ###### Description
 
@@ -9684,7 +9684,7 @@ The address of the filler who has priority to fill the order by the `decayStartT
 
 ###### UniswapXOrder.orderStatus
 
-> **orderStatus**: `"error"` \| `"open"` \| `"expired"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`
+> **orderStatus**: `"error"` \| `"expired"` \| `"open"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`
 
 ###### UniswapXOrder.outputs?
 
@@ -16222,7 +16222,7 @@ A list of comma separated orderIds.
 
 ###### parameters.query.orderStatus?
 
-> `optional` **orderStatus**: `"error"` \| `"open"` \| `"expired"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`
+> `optional` **orderStatus**: `"error"` \| `"expired"` \| `"open"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`
 
 ###### Description
 
@@ -19100,7 +19100,7 @@ The signed permit.
 
 ###### responses.201.content.application/json.orderStatus
 
-> **orderStatus**: `"error"` \| `"open"` \| `"expired"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`
+> **orderStatus**: `"error"` \| `"expired"` \| `"open"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`
 
 ###### responses.201.content.application/json.requestId
 
@@ -25955,7 +25955,7 @@ The signed permit.
 
 ###### post.responses.201.content.application/json.orderStatus
 
-> **orderStatus**: `"error"` \| `"open"` \| `"expired"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`
+> **orderStatus**: `"error"` \| `"expired"` \| `"open"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`
 
 ###### post.responses.201.content.application/json.requestId
 
@@ -26217,7 +26217,7 @@ A list of comma separated orderIds.
 
 ###### get.parameters.query.orderStatus?
 
-> `optional` **orderStatus**: `"error"` \| `"open"` \| `"expired"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`
+> `optional` **orderStatus**: `"error"` \| `"expired"` \| `"open"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`
 
 ###### Description
 

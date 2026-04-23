@@ -152,7 +152,7 @@ Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:30](https://github
 
 > **checkPrivyDelegation**(`args`): `Promise`\<\{ `present`: `true`; \} \| \{ `actualSigners`: `string`[]; `present`: `false`; \}\>
 
-Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:226](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L226)
+Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:243](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L243)
 
 Verify Privy delegation: the owner EOA's Privy wallet must include the
 Architecture B signer quorum in its `additional_signers`. Returns `missing`
@@ -239,7 +239,7 @@ Either path is sufficient; we try EOA first because it is cheap.
 
 > **verifySubAccountProvision**(`args`): `Promise`\<[`SubAccountVerifyOk`](#subaccountverifyok) \| [`SubAccountVerifyErr`](#subaccountverifyerr)\>
 
-Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:158](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L158)
+Defined in: [server/\_lib/wallet/subAccountProvisionVerify.ts:175](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/wallet/subAccountProvisionVerify.ts#L175)
 
 Full verification pipeline (hash match, signature, spender correctness, caps,
 expiry). Returns a typed ok/err result; callers handle HTTP mapping.

@@ -27,6 +27,36 @@ uint256 public constant BASIS_POINTS = 10_000
 ```
 
 
+### MAX_JACKPOT_PAYOUT_ITERATIONS
+Hard cap on the number of *active* creator coins evaluated in
+a single jackpot payout. Caps the gas cost of
+_payoutLocalJackpotInner() so the function cannot be bricked by a
+growing registry (M-06 / 4626-315). Remainder active coins roll to
+the next jackpot via the payout cursor.
+
+
+```solidity
+uint256 public constant MAX_JACKPOT_PAYOUT_ITERATIONS = 128
+```
+
+
+### MAX_JACKPOT_PAYOUT_SLOT_SCANS
+Hard cap on the number of registry slots scanned in a single
+jackpot payout, regardless of active/inactive status. Because
+registeredTokens is append-only and inactive entries are never
+removed, a long prefix of inactive coins would otherwise consume the
+active cap without paying any active creator. The slot cap bounds the
+worst-case all-inactive loop while the cursor carries progress into
+the next call until an active creator is found. Set materially higher
+than MAX_JACKPOT_PAYOUT_ITERATIONS so natural inactive density does
+not starve active creators.
+
+
+```solidity
+uint256 public constant MAX_JACKPOT_PAYOUT_SLOT_SCANS = 1024
+```
+
+
 ### MSG_TYPE_LOTTERY_ENTRY
 Message types for hub-centric architecture
 
@@ -485,6 +515,19 @@ uint256 private _payoutLock
 
 ```solidity
 address private immutable _adminModule
+```
+
+
+### jackpotPayoutCursor
+Cursor that advances through the creator-coin registry between
+jackpot payouts so that when the registry is larger than
+MAX_JACKPOT_PAYOUT_ITERATIONS, all coins eventually receive payouts
+across successive jackpots rather than being starved behind the cap.
+Incremented after each payout in _payoutLocalJackpotInner (M-06).
+
+
+```solidity
+uint256 public jackpotPayoutCursor
 ```
 
 
@@ -1330,6 +1373,27 @@ event InvalidPayloadReceived(uint32 indexed srcEid, uint256 payloadLength);
 ```solidity
 event StaleVRFResultDiscarded(uint256 indexed requestId, uint256 requestTimestamp, uint256 gracePeriod);
 ```
+
+### JackpotPayoutCapped
+Emitted when the per-call iteration cap truncated the payout.
+Off-chain monitors can use this to reconcile that the remaining coins
+will be reached on subsequent jackpots via the advancing cursor.
+
+
+```solidity
+event JackpotPayoutCapped(
+    uint256 totalRegistrySize, uint256 startIndex, uint256 activeIterated, uint256 slotsScanned
+);
+```
+
+**Parameters**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`totalRegistrySize`|`uint256`|Full registry size at the time of the call.|
+|`startIndex`|`uint256`|First registry index visited (pre-wrap).|
+|`activeIterated`|`uint256`|Number of *active* creator coins actually evaluated.|
+|`slotsScanned`|`uint256`|Number of registry slots scanned (active + inactive).|
 
 ## Errors
 ### ZeroAddress

@@ -12,7 +12,7 @@
 
 > **consumeSiwaNonce**(`db`, `params`): `Promise`\<\{ `ownerAddress`: `string`; \} \| `null`\>
 
-Defined in: [server/auth/\_siwa.ts:183](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L183)
+Defined in: [server/auth/\_siwa.ts:218](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L218)
 
 #### Parameters
 
@@ -44,7 +44,7 @@ Defined in: [server/auth/\_siwa.ts:183](https://github.com/wenakita/4626/blob/ma
 
 > **createSiwaReceiptToken**(`payload`, `opts`): `ReceiptResult` \| `null`
 
-Defined in: [server/auth/\_siwa.ts:79](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L79)
+Defined in: [server/auth/\_siwa.ts:114](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L114)
 
 #### Parameters
 
@@ -68,7 +68,7 @@ Defined in: [server/auth/\_siwa.ts:79](https://github.com/wenakita/4626/blob/mai
 
 > **ensureSiwaNonceSchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/auth/\_siwa.ts:88](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L88)
+Defined in: [server/auth/\_siwa.ts:123](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L123)
 
 #### Parameters
 
@@ -86,7 +86,28 @@ Defined in: [server/auth/\_siwa.ts:88](https://github.com/wenakita/4626/blob/mai
 
 > **getSiwaReceiptSecret**(): `string` \| `null`
 
-Defined in: [server/auth/\_siwa.ts:59](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L59)
+Defined in: [server/auth/\_siwa.ts:81](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L81)
+
+M-20 (4626-329) remediation. Returns the SIWA receipt HMAC key, or
+null if it is not configured. The previous implementation fell back
+to AUTH_SESSION_SECRET when @buildersgarden/siwa's resolveReceiptSecret
+threw, which silently reused the user-session signing key to sign
+agent-identity receipts. That merged two security boundaries — a
+compromise of AUTH_SESSION_SECRET would have let an attacker forge
+agent receipts even though that secret is only supposed to sign
+user session cookies.
+
+New contract:
+  - Prefer an explicit SIWA_RECEIPT_SECRET env var.
+  - Otherwise, delegate to resolveReceiptSecret() from the library.
+  - If neither is present, return null. No silent AUTH_SESSION_SECRET
+    fallback. Upstream handlers already treat null as a 503, which is
+    the correct behavior for a missing machine-to-machine secret.
+
+Key-separation is also enforced defensively: if an operator sets
+SIWA_RECEIPT_SECRET to the same value as AUTH_SESSION_SECRET, we
+return null so the misconfiguration surfaces immediately rather than
+leaving the security boundary collapsed.
 
 #### Returns
 
@@ -152,7 +173,7 @@ Defined in: [server/auth/\_siwa.ts:28](https://github.com/wenakita/4626/blob/mai
 
 > **readSiwaAgentFromRequest**(`req`): `ReceiptPayload` \| `null`
 
-Defined in: [server/auth/\_siwa.ts:71](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L71)
+Defined in: [server/auth/\_siwa.ts:106](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L106)
 
 #### Parameters
 
@@ -188,7 +209,7 @@ Defined in: [server/auth/\_siwa.ts:41](https://github.com/wenakita/4626/blob/mai
 
 > **storeSiwaNonce**(`db`, `params`): `Promise`\<`void`\>
 
-Defined in: [server/auth/\_siwa.ts:144](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L144)
+Defined in: [server/auth/\_siwa.ts:179](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_siwa.ts#L179)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/agent-registration.ts:22](https://github.com/wenakita/4626/blob/main/frontend/api/agent-registration.ts#L22)
+Defined in: [api/agent-registration.ts:33](https://github.com/wenakita/4626/blob/main/frontend/api/agent-registration.ts#L33)
 
 #### Parameters
 

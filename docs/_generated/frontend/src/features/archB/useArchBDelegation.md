@@ -12,7 +12,7 @@
 
 > **ArchBActionResult** = \{ `ok`: `true`; \} \| \{ `error`: [`ArchBDelegationError`](#archbdelegationerror); `ok`: `false`; \}
 
-Defined in: [src/features/archB/useArchBDelegation.ts:66](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L66)
+Defined in: [src/features/archB/useArchBDelegation.ts:94](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L94)
 
 Result shape returned by enable()/disable(). Callers should inspect
 `ok` before claiming success to the user — the hook never throws for
@@ -48,7 +48,7 @@ Wei, as string to preserve precision.
 
 > **ArchBDelegationError** = `object`
 
-Defined in: [src/features/archB/useArchBDelegation.ts:55](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L55)
+Defined in: [src/features/archB/useArchBDelegation.ts:83](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L83)
 
 #### Properties
 
@@ -56,7 +56,7 @@ Defined in: [src/features/archB/useArchBDelegation.ts:55](https://github.com/wen
 
 > **code**: `string`
 
-Defined in: [src/features/archB/useArchBDelegation.ts:57](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L57)
+Defined in: [src/features/archB/useArchBDelegation.ts:85](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L85)
 
 Machine-readable code from backend or Privy.
 
@@ -64,7 +64,7 @@ Machine-readable code from backend or Privy.
 
 > **message**: `string`
 
-Defined in: [src/features/archB/useArchBDelegation.ts:58](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L58)
+Defined in: [src/features/archB/useArchBDelegation.ts:86](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L86)
 
 ***
 
@@ -92,7 +92,7 @@ client-side transient states.
 
 > **UseArchBDelegationReturn** = `object`
 
-Defined in: [src/features/archB/useArchBDelegation.ts:70](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L70)
+Defined in: [src/features/archB/useArchBDelegation.ts:98](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L98)
 
 #### Properties
 
@@ -100,13 +100,13 @@ Defined in: [src/features/archB/useArchBDelegation.ts:70](https://github.com/wen
 
 > **caps**: [`ArchBDelegationCaps`](#archbdelegationcaps) \| `null`
 
-Defined in: [src/features/archB/useArchBDelegation.ts:72](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L72)
+Defined in: [src/features/archB/useArchBDelegation.ts:100](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L100)
 
 ##### disable()
 
 > **disable**: () => `Promise`\<[`ArchBActionResult`](#archbactionresult)\>
 
-Defined in: [src/features/archB/useArchBDelegation.ts:77](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L77)
+Defined in: [src/features/archB/useArchBDelegation.ts:105](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L105)
 
 Backend revoke + Privy wallet revoke. No-op if not provisioned.
 
@@ -118,7 +118,7 @@ Backend revoke + Privy wallet revoke. No-op if not provisioned.
 
 > **enable**: () => `Promise`\<[`ArchBActionResult`](#archbactionresult)\>
 
-Defined in: [src/features/archB/useArchBDelegation.ts:75](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L75)
+Defined in: [src/features/archB/useArchBDelegation.ts:103](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L103)
 
 Trigger delegation consent + backend enroll. No-op if not ready.
 
@@ -130,13 +130,13 @@ Trigger delegation consent + backend enroll. No-op if not ready.
 
 > **error**: [`ArchBDelegationError`](#archbdelegationerror) \| `null`
 
-Defined in: [src/features/archB/useArchBDelegation.ts:73](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L73)
+Defined in: [src/features/archB/useArchBDelegation.ts:101](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L101)
 
 ##### refresh()
 
 > **refresh**: () => `void`
 
-Defined in: [src/features/archB/useArchBDelegation.ts:79](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L79)
+Defined in: [src/features/archB/useArchBDelegation.ts:107](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L107)
 
 Manually refresh status (e.g. after returning from external browser).
 
@@ -148,15 +148,54 @@ Manually refresh status (e.g. after returning from external browser).
 
 > **status**: [`ArchBDelegationStatus`](#archbdelegationstatus)
 
-Defined in: [src/features/archB/useArchBDelegation.ts:71](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L71)
+Defined in: [src/features/archB/useArchBDelegation.ts:99](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L99)
+
+## Variables
+
+### ARCH\_B\_EXPECTED\_CAPS
+
+> `const` **ARCH\_B\_EXPECTED\_CAPS**: [`ArchBDelegationCaps`](#archbdelegationcaps)
+
+Defined in: [src/features/archB/useArchBDelegation.ts:67](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L67)
+
+Canonical client-side expected caps for the Arch-B delegation.
+
+These values mirror the on-chain policy that the delegation contract
+enforces. They are the source of truth shown to the user BEFORE any
+backend round-trip, so a backend compromise or API MITM cannot present
+artificially low caps to lull the user into consent (L-18).
+
+Keep in sync with the on-chain policy in the Arch-B session key
+contract. The backend `GET /api/arch-b/status` response is compared
+against these values and flagged as a mismatch if it deviates.
 
 ## Functions
+
+### archBCapsMatchExpected()
+
+> **archBCapsMatchExpected**(`caps`): `boolean`
+
+Defined in: [src/features/archB/useArchBDelegation.ts:75](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L75)
+
+True when the backend-returned caps match the expected on-chain policy.
+
+#### Parameters
+
+##### caps
+
+[`ArchBDelegationCaps`](#archbdelegationcaps) | `null`
+
+#### Returns
+
+`boolean`
+
+***
 
 ### useArchBDelegation()
 
 > **useArchBDelegation**(): [`UseArchBDelegationReturn`](#usearchbdelegationreturn)
 
-Defined in: [src/features/archB/useArchBDelegation.ts:151](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L151)
+Defined in: [src/features/archB/useArchBDelegation.ts:179](https://github.com/wenakita/4626/blob/main/frontend/src/features/archB/useArchBDelegation.ts#L179)
 
 #### Returns
 

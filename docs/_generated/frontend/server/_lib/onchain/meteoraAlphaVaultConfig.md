@@ -80,6 +80,58 @@ Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:20](https://github.
 
 Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:21](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L21)
 
+***
+
+### MeteoraAlphaVaultConfigHints
+
+> **MeteoraAlphaVaultConfigHints** = `object`
+
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L24)
+
+#### Properties
+
+##### creatorToken
+
+> **creatorToken**: `Address`
+
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:25](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L25)
+
+##### hasAnyDbRow
+
+> **hasAnyDbRow**: `boolean`
+
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:26](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L26)
+
+##### latestDbRowEnabled
+
+> **latestDbRowEnabled**: `boolean` \| `null`
+
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:27](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L27)
+
+##### latestDbRowUpdatedAtIso
+
+> **latestDbRowUpdatedAtIso**: `string` \| `null`
+
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:28](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L28)
+
+##### supersededNewAdapter
+
+> **supersededNewAdapter**: `string` \| `null`
+
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:31](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L31)
+
+##### supersededNewMint
+
+> **supersededNewMint**: `string` \| `null`
+
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:30](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L30)
+
+##### supersededReason
+
+> **supersededReason**: `string` \| `null`
+
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:29](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L29)
+
 ## Variables
 
 ### SOLANA\_NATIVE\_MINT
@@ -94,7 +146,7 @@ Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:7](https://github.c
 
 > **resolveMeteoraAlphaVaultConfig**(`params`): `Promise`\<[`MeteoraAlphaVaultConfig`](#meteoraalphavaultconfig) \| `null`\>
 
-Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:216](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L216)
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:273](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L273)
 
 #### Parameters
 
@@ -107,3 +159,23 @@ Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:216](https://github
 #### Returns
 
 `Promise`\<[`MeteoraAlphaVaultConfig`](#meteoraalphavaultconfig) \| `null`\>
+
+***
+
+### resolveMeteoraAlphaVaultConfigHints()
+
+> **resolveMeteoraAlphaVaultConfigHints**(`params`): `Promise`\<[`MeteoraAlphaVaultConfigHints`](#meteoraalphavaultconfighints) \| `null`\>
+
+Defined in: [server/\_lib/onchain/meteoraAlphaVaultConfig.ts:283](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/onchain/meteoraAlphaVaultConfig.ts#L283)
+
+#### Parameters
+
+##### params
+
+###### creatorToken
+
+`string`
+
+#### Returns
+
+`Promise`\<[`MeteoraAlphaVaultConfigHints`](#meteoraalphavaultconfighints) \| `null`\>

@@ -20,7 +20,7 @@ Defined in: [api/\_handlers/\_routes.zora.ts:5](https://github.com/wenakita/4626
 
 > **getZoraApiHandler**(`subpath`): `Promise`\<[`ApiHandler`](_routeLoader.md#apihandler) \| `null`\>
 
-Defined in: [api/\_handlers/\_routes.zora.ts:26](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.zora.ts#L26)
+Defined in: [api/\_handlers/\_routes.zora.ts:28](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/_routes.zora.ts#L28)
 
 #### Parameters
 

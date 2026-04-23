@@ -156,7 +156,7 @@ Defined in: [src/pages/admin/adminOpsHelpers.ts:52](https://github.com/wenakita/
 
 ### CANONICAL\_SMART\_WALLET
 
-> `const` **CANONICAL\_SMART\_WALLET**: `"0xAb6d5C10b03300326CD7fAb7267Ae192842967b5"` = `'0xAb6d5C10b03300326CD7fAb7267Ae192842967b5'`
+> `const` **CANONICAL\_SMART\_WALLET**: `"0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef"` = `'0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef'`
 
 Defined in: [src/pages/admin/adminOpsHelpers.ts:26](https://github.com/wenakita/4626/blob/main/frontend/src/pages/admin/adminOpsHelpers.ts#L26)
 

@@ -28,7 +28,7 @@ Defined in: [server/\_lib/workspace/normalizer.ts:221](https://github.com/wenaki
 
 ###### status
 
-`"retry"` \| `"failed"` \| `"executing"` \| `"executed"`
+`"failed"` \| `"retry"` \| `"executed"` \| `"executing"`
 
 #### Returns
 

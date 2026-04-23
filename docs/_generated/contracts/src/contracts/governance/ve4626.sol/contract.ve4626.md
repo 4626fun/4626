@@ -65,6 +65,13 @@ uint256 private _totalVotingSupply
 ```
 
 
+### _totalSupplyCheckpoints
+
+```solidity
+SupplyCheckpoint[] private _totalSupplyCheckpoints
+```
+
+
 ## Functions
 ### constructor
 
@@ -268,6 +275,27 @@ function approve(address, uint256) public pure override returns (bool);
 function _update(address from, address to, uint256 value) internal override(ERC20, ERC20Votes);
 ```
 
+### _writeSupplyCheckpoint
+
+FIX: H-06 — append the current _totalVotingSupply to the checkpoint
+array, replacing the last entry in-place when two writes happen
+within the same clock tick (matches the OZ Checkpoints convention).
+
+
+```solidity
+function _writeSupplyCheckpoint() internal;
+```
+
+### SafeCastUint48
+
+FIX: H-06 — tiny local helper because we do not want to import
+OZ SafeCast just for one uint48 cast.
+
+
+```solidity
+function SafeCastUint48(uint256 v) private pure returns (uint48);
+```
+
 ### getPastVotes
 
 
@@ -279,13 +307,7 @@ function getPastVotes(address account, uint256 timepoint) public view override r
 
 
 ```solidity
-function getPastTotalSupply(
-    uint256 /* timepoint */
-)
-    public
-    view
-    override
-    returns (uint256);
+function getPastTotalSupply(uint256 timepoint) public view override returns (uint256);
 ```
 
 ### nonces
@@ -300,5 +322,28 @@ function nonces(address owner) public view override(ERC20Permit, Nonces) returns
 
 ```solidity
 event ExpiredLockBurned(address indexed user, uint256 burnedBalance);
+```
+
+## Errors
+### FutureSupplyLookup
+
+```solidity
+error FutureSupplyLookup(uint256 timepoint, uint48 clockNow);
+```
+
+### SupplyCheckpointOverflow
+
+```solidity
+error SupplyCheckpointOverflow(uint256 supply);
+```
+
+## Structs
+### SupplyCheckpoint
+
+```solidity
+struct SupplyCheckpoint {
+    uint48 clockTime; // ERC20Votes clock() value (default: block.number)
+    uint208 supply; // _totalVotingSupply at that time
+}
 ```
 

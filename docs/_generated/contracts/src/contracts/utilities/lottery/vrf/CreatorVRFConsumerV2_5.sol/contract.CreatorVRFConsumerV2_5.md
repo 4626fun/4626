@@ -216,6 +216,22 @@ uint32 public defaultGasLimit = 2500000
 ```
 
 
+### MAX_PRICE_REPORTING_CHAINS
+Maximum number of distinct remote chains permitted to
+push price updates. Bounds the cost of
+`getAggregatedCreatorPrice()` which iterates
+`priceReportingChains` in O(N).
+
+FIX: L-09 (4626-357) — previously unbounded; a malicious
+set of LayerZero sources could register arbitrarily many EIDs
+and DoS the aggregation read path.
+
+
+```solidity
+uint256 public constant MAX_PRICE_REPORTING_CHAINS = 20
+```
+
+
 ### chainPrices
 
 ```solidity
@@ -864,6 +880,17 @@ event VRFCoordinatorChangeQueued(address indexed newCoordinator, uint256 effecti
 
 ```solidity
 event VRFCoordinatorChangeExecuted(address indexed newCoordinator);
+```
+
+### PriceReportingChainRejected
+Emitted when a new chain EID is refused registration
+because MAX_PRICE_REPORTING_CHAINS is already full.
+
+FIX: L-09 (4626-357).
+
+
+```solidity
+event PriceReportingChainRejected(uint32 indexed chainEid);
 ```
 
 ## Errors

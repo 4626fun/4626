@@ -1368,6 +1368,12 @@ error Unauthorized();
 error EthTransferFailed();
 ```
 
+### MigrationSqrtPriceMismatch
+
+```solidity
+error MigrationSqrtPriceMismatch(uint160 expected, uint160 actual);
+```
+
 ## Structs
 ### LaunchLifecycle
 

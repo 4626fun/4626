@@ -112,7 +112,7 @@ Defined in: [src/lib/flags/featureFlags.ts:57](https://github.com/wenakita/4626/
 
 > `const` **allFlags**: [`FeatureFlag`](#featureflag)\<`unknown`\>[]
 
-Defined in: [src/lib/flags/featureFlags.ts:306](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L306)
+Defined in: [src/lib/flags/featureFlags.ts:336](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L336)
 
 ***
 
@@ -120,7 +120,7 @@ Defined in: [src/lib/flags/featureFlags.ts:306](https://github.com/wenakita/4626
 
 > `const` **debugLogsFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:242](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L242)
+Defined in: [src/lib/flags/featureFlags.ts:272](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L272)
 
 ***
 
@@ -144,7 +144,7 @@ Defined in: [src/lib/flags/featureFlags.ts:207](https://github.com/wenakita/4626
 
 > `const` **lensGroveFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:222](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L222)
+Defined in: [src/lib/flags/featureFlags.ts:252](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L252)
 
 ***
 
@@ -152,7 +152,7 @@ Defined in: [src/lib/flags/featureFlags.ts:222](https://github.com/wenakita/4626
 
 > `const` **privyAnalyticsFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:275](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L275)
+Defined in: [src/lib/flags/featureFlags.ts:305](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L305)
 
 ***
 
@@ -184,7 +184,7 @@ Defined in: [src/lib/flags/featureFlags.ts:196](https://github.com/wenakita/4626
 
 > `const` **useropTelemetryFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:264](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L264)
+Defined in: [src/lib/flags/featureFlags.ts:294](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L294)
 
 ***
 
@@ -192,7 +192,32 @@ Defined in: [src/lib/flags/featureFlags.ts:264](https://github.com/wenakita/4626
 
 > `const` **xmtpDebugFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:253](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L253)
+Defined in: [src/lib/flags/featureFlags.ts:283](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L283)
+
+***
+
+### zoraGlobalWalletConnectorFlag
+
+> `const` **zoraGlobalWalletConnectorFlag**: [`FeatureFlag`](#featureflag)\<`boolean`\>
+
+Defined in: [src/lib/flags/featureFlags.ts:236](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L236)
+
+Diagnostic flag: registers `@privy-io/cross-app-connect` as a wagmi
+connector so a tester can re-evaluate Privy Connect-mode cross-app
+behavior with Zora's app at `clpgf04wn04hnkw0fv1m11mnb`.
+
+Empirical result (recorded for future re-testing):
+  - Connect step works → Zora authorizes the 4626 appId for Connect mode.
+  - Sign / transact step is refused by `privy.zora.co` (read-only).
+  - The address surfaced even with `smartWalletMode: true` is a Privy
+    embedded EOA that is NOT one of the user's CBSW owners (those are
+    P256 passkeys in Coinbase Wallet / Base Account), so this connector
+    cannot be used to add owners to a Zora CBSW even if read-only is
+    fixed on Zora's side.
+
+Therefore this flag stays OFF by default. Keep it as a one-line probe
+for re-testing if Privy/Zora change their cross-app config. Full
+write-up in `frontend/src/lib/wallet/zoraGlobalWalletConnector.ts`.
 
 ***
 
@@ -208,7 +233,7 @@ Defined in: [src/lib/flags/featureFlags.ts:157](https://github.com/wenakita/4626
 
 > **buildFlagDefinitions**(): `Record`\<`string`, \{ `description`: `string`; `options`: `object`[]; \}\>
 
-Defined in: [src/lib/flags/featureFlags.ts:330](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L330)
+Defined in: [src/lib/flags/featureFlags.ts:361](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L361)
 
 Build the FlagDefinitionsType shape expected by flags/react FlagDefinitions.
 
@@ -240,7 +265,7 @@ Defined in: [src/lib/flags/featureFlags.ts:134](https://github.com/wenakita/4626
 
 > **resolveAllFlagValues**(): `Record`\<`string`, `unknown`\>
 
-Defined in: [src/lib/flags/featureFlags.ts:321](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L321)
+Defined in: [src/lib/flags/featureFlags.ts:352](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L352)
 
 Snapshot every flag's current value, keyed by flag key.
 
@@ -254,7 +279,7 @@ Snapshot every flag's current value, keyed by flag key.
 
 > **resolvePrivyAppId**(): `string` \| `null`
 
-Defined in: [src/lib/flags/featureFlags.ts:291](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L291)
+Defined in: [src/lib/flags/featureFlags.ts:321](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L321)
 
 #### Returns
 
@@ -266,7 +291,7 @@ Defined in: [src/lib/flags/featureFlags.ts:291](https://github.com/wenakita/4626
 
 > **resolvePrivyClientId**(): `string` \| `null`
 
-Defined in: [src/lib/flags/featureFlags.ts:297](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L297)
+Defined in: [src/lib/flags/featureFlags.ts:327](https://github.com/wenakita/4626/blob/main/frontend/src/lib/flags/featureFlags.ts#L327)
 
 #### Returns
 

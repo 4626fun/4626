@@ -448,7 +448,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:538](https://github.com/wenakita/4626
 
 ### createOrder()
 
-> **createOrder**(`body`): `Promise`\<\{ `orderId`: `string`; `orderStatus`: `"error"` \| `"open"` \| `"expired"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`; `requestId`: `string`; \}\>
+> **createOrder**(`body`): `Promise`\<\{ `orderId`: `string`; `orderStatus`: `"error"` \| `"expired"` \| `"open"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`; `requestId`: `string`; \}\>
 
 Defined in: [src/lib/uniswap/tradingApi.ts:488](https://github.com/wenakita/4626/blob/main/frontend/src/lib/uniswap/tradingApi.ts#L488)
 
@@ -460,7 +460,7 @@ Defined in: [src/lib/uniswap/tradingApi.ts:488](https://github.com/wenakita/4626
 
 #### Returns
 
-`Promise`\<\{ `orderId`: `string`; `orderStatus`: `"error"` \| `"open"` \| `"expired"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`; `requestId`: `string`; \}\>
+`Promise`\<\{ `orderId`: `string`; `orderStatus`: `"error"` \| `"expired"` \| `"open"` \| `"cancelled"` \| `"filled"` \| `"unverified"` \| `"insufficient-funds"`; `requestId`: `string`; \}\>
 
 ***
 

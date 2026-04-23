@@ -12,7 +12,7 @@
 
 > **consumeHandoffCode**(`db`, `code`): `Promise`\<\{ `address`: `string`; `privyToken`: `string` \| `null`; \} \| `null`\>
 
-Defined in: [server/auth/\_handoff.ts:82](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_handoff.ts#L82)
+Defined in: [server/auth/\_handoff.ts:145](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_handoff.ts#L145)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [server/auth/\_handoff.ts:82](https://github.com/wenakita/4626/blob/
 
 > **createHandoffCode**(`db`, `params`): `Promise`\<\{ `code`: `string`; `expiresAt`: `string`; \}\>
 
-Defined in: [server/auth/\_handoff.ts:66](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_handoff.ts#L66)
+Defined in: [server/auth/\_handoff.ts:127](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_handoff.ts#L127)
 
 #### Parameters
 
@@ -62,11 +62,47 @@ Defined in: [server/auth/\_handoff.ts:66](https://github.com/wenakita/4626/blob/
 
 ***
 
+### decryptPrivyToken()
+
+> **decryptPrivyToken**(`stored`): `string` \| `null`
+
+Defined in: [server/auth/\_handoff.ts:80](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_handoff.ts#L80)
+
+#### Parameters
+
+##### stored
+
+`string`
+
+#### Returns
+
+`string` \| `null`
+
+***
+
+### encryptPrivyToken()
+
+> **encryptPrivyToken**(`token`): `string`
+
+Defined in: [server/auth/\_handoff.ts:72](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_handoff.ts#L72)
+
+#### Parameters
+
+##### token
+
+`string`
+
+#### Returns
+
+`string`
+
+***
+
 ### ensureHandoffSchema()
 
 > **ensureHandoffSchema**(`db`): `Promise`\<`void`\>
 
-Defined in: [server/auth/\_handoff.ts:40](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_handoff.ts#L40)
+Defined in: [server/auth/\_handoff.ts:101](https://github.com/wenakita/4626/blob/main/frontend/server/auth/_handoff.ts#L101)
 
 #### Parameters
 

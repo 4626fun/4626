@@ -10,10 +10,10 @@
 
 ### ensureCreRuntimeSchema()
 
-> **ensureCreRuntimeSchema**(): `Promise`\<`void`\>
+> **ensureCreRuntimeSchema**(): `Promise`\<`boolean`\>
 
-Defined in: [server/\_lib/cre/runtimeSchema.ts:5](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeSchema.ts#L5)
+Defined in: [server/\_lib/cre/runtimeSchema.ts:24](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/cre/runtimeSchema.ts#L24)
 
 #### Returns
 
-`Promise`\<`void`\>
+`Promise`\<`boolean`\>

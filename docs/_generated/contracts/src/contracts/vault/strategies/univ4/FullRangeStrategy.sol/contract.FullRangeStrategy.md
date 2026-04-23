@@ -362,6 +362,29 @@ function _posmMint(int24 tickLower, int24 tickUpper, uint128 liquidityToAdd) int
 function _posmIncrease(uint256 tokenId, uint128 liquidityToAdd) internal;
 ```
 
+### _collectFees
+
+Collect accrued Uniswap V4 fees from our full-range position.
+
+FIX: H-15 — implements the previously-stubbed _collectFees.
+In Uniswap V4, issuing DECREASE_LIQUIDITY with liquidityDelta == 0
+is the canonical way to "poke" a position and claim accrued fees
+without removing principal. CLOSE_CURRENCY on both currencies
+sweeps the resulting deltas back to this contract. Collected fees
+are forwarded to the LP Manager so they can be compounded or
+distributed by the caller.
+
+
+```solidity
+function _collectFees(uint256 tokenId) internal;
+```
+**Parameters**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`tokenId`|`uint256`|The V4 position NFT id|
+
+
 ### _posmDecrease
 
 
@@ -448,6 +471,14 @@ event Withdrawn(uint256 liquidity, uint256 creatorCoinAmount, uint256 pairedAmou
 
 ```solidity
 event Rebalanced(uint256 timestamp);
+```
+
+### FeesCollected
+FIX: H-15 — fees actually collected from the V4 position
+
+
+```solidity
+event FeesCollected(uint256 creatorCoinAmount, uint256 pairedAmount);
 ```
 
 ### PoolConfigured

@@ -12,7 +12,7 @@
 
 > **readOptionalZoraStatus**(`params`): [`ZoraLinkStatusResponse`](types.md#zoralinkstatusresponse) \| `null`
 
-Defined in: [src/features/accountSetup/useAccountSetupController.ts:116](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L116)
+Defined in: [src/features/accountSetup/useAccountSetupController.ts:126](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L126)
 
 #### Parameters
 
@@ -36,7 +36,7 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:116](https:/
 
 > **shouldRefreshAccountsOnForeground**(`input`): `boolean`
 
-Defined in: [src/features/accountSetup/useAccountSetupController.ts:104](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L104)
+Defined in: [src/features/accountSetup/useAccountSetupController.ts:114](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L114)
 
 #### Parameters
 
@@ -64,7 +64,7 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:104](https:/
 
 > **useAccountSetupController**(`params`): `object`
 
-Defined in: [src/features/accountSetup/useAccountSetupController.ts:173](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L173)
+Defined in: [src/features/accountSetup/useAccountSetupController.ts:191](https://github.com/wenakita/4626/blob/main/frontend/src/features/accountSetup/useAccountSetupController.ts#L191)
 
 #### Parameters
 
@@ -161,6 +161,10 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:173](https:/
 ##### cswOwnersState
 
 > **cswOwnersState**: [`CswOwnersState`](types.md#cswownersstate)
+
+##### customOwnerGasPreflight
+
+> **customOwnerGasPreflight**: `OwnerInstallGasPreflight` \| `null`
 
 ##### ensureEmbeddedWallet()
 
@@ -336,6 +340,10 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:173](https:/
 
 > **ownerDelegationFlags**: [`OwnerDelegationFlags`](../../lib/wallet/onboardingWallet.md#ownerdelegationflags) \| `null`
 
+##### ownerInstallIntent
+
+> **ownerInstallIntent**: [`OwnerInstallIntent`](../../lib/wallet/onboardingWallet.md#ownerinstallintent)
+
 ##### ownerInstallResumeState
 
 > **ownerInstallResumeState**: [`OwnerInstallResumeState`](types.md#ownerinstallresumestate)
@@ -438,9 +446,29 @@ Defined in: [src/features/accountSetup/useAccountSetupController.ts:173](https:/
 
 `string` \| `null`
 
+###### customOwnerPolicyToken?
+
+`string` \| `null`
+
 ###### onStageEvent?
 
 (`event`) => `void` \| `null`
+
+###### ownerInstallIntent?
+
+[`OwnerInstallIntent`](../../lib/wallet/onboardingWallet.md#ownerinstallintent)
+
+###### preferSponsoredFirst?
+
+`boolean`
+
+###### signerAddressOverride?
+
+`string` \| `null`
+
+###### signerWalletOverride?
+
+`any`
 
 ###### Returns
 

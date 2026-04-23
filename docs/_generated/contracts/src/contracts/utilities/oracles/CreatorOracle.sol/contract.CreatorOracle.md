@@ -93,6 +93,21 @@ uint256 public constant MAX_PRICE_DEVIATION = 0.2e18
 ```
 
 
+### MAX_INITIAL_PRICE_USD
+Hard upper bound on the first price that `initializeCreatorPrice`
+may set (1e18 format). Prevents the bootstrap anchor from being placed
+at an extreme value even if the owner key is compromised. 1_000_000 USD
+per CREATOR token is unrealistically high but is a non-insulting
+sanity cap. Raise only via a formal parameter change, not inline.
+
+Mitigates H-01 (audit finding 4626-293).
+
+
+```solidity
+int256 public constant MAX_INITIAL_PRICE_USD = int256(uint256(1_000_000e18))
+```
+
+
 ### MAX_CARDINALITY
 Maximum observations to store
 
@@ -539,6 +554,31 @@ function updateCreatorPrice(int256 _price) external;
 |`_price`|`int256`|Price in 1e18 format|
 
 
+### initializeCreatorPrice
+
+Owner-only bootstrap of the first creator price. Every other
+update path (updateCreatorPrice, updateCreatorPriceFromTWAP,
+updateCreatorPriceFromV3TWAP) enforces a MAX_PRICE_DEVIATION
+cap against the previously stored value, so the first write is
+what anchors every subsequent movement. Before this function was
+added, any `isPriceUpdater` could silently anchor the oracle to
+an arbitrary value. See H-01 / 4626-293.
+
+Can only be called once. Further changes must go through the
+deviation-capped paths. Bounded by MAX_INITIAL_PRICE_USD as a
+last-line sanity check even on the owner key.
+
+
+```solidity
+function initializeCreatorPrice(int256 _price) external onlyOwner;
+```
+**Parameters**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`_price`|`int256`|Initial price in 1e18 format. Must be > 0 and <= MAX_INITIAL_PRICE_USD.|
+
+
 ### recordSwapObservation
 
 Record observation on swap
@@ -787,6 +827,35 @@ function broadcastCreatorPrice(uint32[] calldata dstEids, bytes calldata options
 |`options`|`bytes`|LayerZero options|
 
 
+### broadcastCreatorPriceWithFees
+
+Broadcast price to other chains with per-destination LayerZero fees
+
+FIX: M-01 (4626-310) — the equal-split `broadcastCreatorPrice` variant above
+divides `msg.value / dstEids.length` and uses that as the fee for every
+destination. LayerZero fees differ per destination chain, so any chain whose
+real fee exceeds the split amount reverts mid-loop and the broadcast
+partially fails. This overload requires the caller to pass a `fees` array
+parallel to `dstEids`; the correct way to populate it is to call
+`quote()` once per destination and pass the returned native fees here.
+The old method is preserved for backwards compatibility.
+
+
+```solidity
+function broadcastCreatorPriceWithFees(uint32[] calldata dstEids, bytes calldata options, uint256[] calldata fees)
+    external
+    payable
+    returns (MessagingReceipt[] memory receipts);
+```
+**Parameters**
+
+|Name|Type|Description|
+|----|----|-----------|
+|`dstEids`|`uint32[]`|   Destination chain EIDs|
+|`options`|`bytes`|   LayerZero options (shared across destinations)|
+|`fees`|`uint256[]`|      Native LayerZero fee per destination, in the same order as dstEids|
+
+
 ### _payNative
 
 Override LayerZero default behavior to allow multi-destination broadcasts in one transaction.
@@ -978,6 +1047,24 @@ error PriceUpdateCooldown();
 
 ```solidity
 error PriceDeviationTooHigh();
+```
+
+### OracleNotInitialized
+
+```solidity
+error OracleNotInitialized();
+```
+
+### OracleAlreadyInitialized
+
+```solidity
+error OracleAlreadyInitialized();
+```
+
+### InitialPriceTooHigh
+
+```solidity
+error InitialPriceTooHigh();
 ```
 
 ### InvalidBaseEid

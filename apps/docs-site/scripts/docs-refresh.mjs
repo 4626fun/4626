@@ -107,7 +107,12 @@ async function normalizeGeneratedSourceLinks(dir) {
     return;
   }
 
-  const blobRefPattern = /https:\/\/github\.com\/wenakita\/4626\/blob\/[0-9a-f]{7,40}\//g;
+  // Match any previously-emitted blob ref: raw commit SHA (7-40 hex chars)
+  // OR a literal "main" ref. The literal-main rewrite matters for non-main
+  // docs builds (e.g. release-branch docs regeneration under DOCS_GITHUB_REF)
+  // so links land on the branch being documented, not stale main content.
+  const blobRefPattern =
+    /https:\/\/github\.com\/wenakita\/4626\/blob\/(?:[0-9a-f]{7,40}|main)\//g;
   const stablePrefix = `https://github.com/wenakita/4626/blob/${docsGitRef}/`;
   let rewritten = 0;
 

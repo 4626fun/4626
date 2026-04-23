@@ -20,7 +20,7 @@ Defined in: [server/agent/eliza/\_healthStatus.ts:1](https://github.com/wenakita
 
 > **getHealthProbeStatusCode**(`args`): `number`
 
-Defined in: [server/agent/eliza/\_healthStatus.ts:15](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_healthStatus.ts#L15)
+Defined in: [server/agent/eliza/\_healthStatus.ts:16](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/_healthStatus.ts#L16)
 
 /healthz is liveness for container orchestrators.
 /readyz is strict readiness for traffic routing and monitoring.

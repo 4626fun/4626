@@ -91,6 +91,13 @@ uint256 public failedBurnAccumulator
 ```
 
 
+### MAX_FAILED_BURN_ACCUMULATOR
+
+```solidity
+uint256 public constant MAX_FAILED_BURN_ACCUMULATOR = 1_000_000e18
+```
+
+
 ## Functions
 ### constructor
 
@@ -212,6 +219,22 @@ function checkpoint() external nonReentrant returns (uint256 burnedNow);
 function _drip() internal returns (uint256 burnedNow);
 ```
 
+### recoverFailedBurns
+
+Retry burning shares accumulated from prior failed burn attempts.
+
+The accumulator grows whenever vault.burnSharesForPriceIncrease reverts
+during a drip (e.g. vault was paused). Once the vault is healthy again,
+the vault itself may call this to clear the accumulator and actually
+burn the queued-but-never-burned shares. Gated by the vault address
+because this contract has no owner (see BS-01 authorization model).
+Callable with `amount == 0` to retry the full accumulator.
+
+
+```solidity
+function recoverFailedBurns(uint256 amount) external nonReentrant returns (uint256 recovered);
+```
+
 ## Events
 ### SharesQueued
 
@@ -243,6 +266,12 @@ event StreamCompleted(uint256 indexed epochStart, uint256 totalBurned, uint256 p
 
 ```solidity
 event BurnFailed(uint256 indexed epochStart, uint256 burnAttempted, uint256 failedTotal);
+```
+
+### FailedBurnsRecovered
+
+```solidity
+event FailedBurnsRecovered(uint256 recovered, uint256 remaining);
 ```
 
 ### QueuerAuthorizationUpdated
@@ -298,5 +327,23 @@ error PendingEpochMismatch(uint256 pendingEpochStart, uint256 requiredEpochStart
 
 ```solidity
 error UnauthorizedQueuer();
+```
+
+### FailedBurnAccumulatorFull
+
+```solidity
+error FailedBurnAccumulatorFull(uint256 current, uint256 cap);
+```
+
+### NothingToRecover
+
+```solidity
+error NothingToRecover();
+```
+
+### OnlyVault
+
+```solidity
+error OnlyVault();
 ```
 

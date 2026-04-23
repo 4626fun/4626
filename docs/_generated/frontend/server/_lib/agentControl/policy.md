@@ -106,7 +106,7 @@ Defined in: [server/\_lib/agentControl/policy.ts:53](https://github.com/wenakita
 
 > **assertPolicy**(`input`): `object`
 
-Defined in: [server/\_lib/agentControl/policy.ts:462](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/policy.ts#L462)
+Defined in: [server/\_lib/agentControl/policy.ts:475](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/policy.ts#L475)
 
 #### Parameters
 
@@ -144,7 +144,7 @@ Defined in: [server/\_lib/agentControl/policy.ts:462](https://github.com/wenakit
 
 > **evaluatePolicy**(`input`): [`PolicyCheckResult`](types.md#policycheckresult)
 
-Defined in: [server/\_lib/agentControl/policy.ts:228](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/policy.ts#L228)
+Defined in: [server/\_lib/agentControl/policy.ts:241](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agentControl/policy.ts#L241)
 
 #### Parameters
 

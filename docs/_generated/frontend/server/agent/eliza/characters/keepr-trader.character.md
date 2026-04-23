@@ -30,7 +30,7 @@ Defined in: [server/agent/eliza/characters/keepr-trader.character.ts:1](https://
 
 ##### id
 
-> **id**: `string` = `'0xab6d5c10b03300326cd7fab7267ae192842967b5'`
+> **id**: `string` = `'0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef'`
 
 ##### name
 

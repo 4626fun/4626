@@ -134,7 +134,7 @@ Defined in: [server/\_lib/agent/agentRegistration.ts:36](https://github.com/wena
 
 > **buildAgentRegistration**(`origin`): `object`
 
-Defined in: [server/\_lib/agent/agentRegistration.ts:278](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/agentRegistration.ts#L278)
+Defined in: [server/\_lib/agent/agentRegistration.ts:281](https://github.com/wenakita/4626/blob/main/frontend/server/_lib/agent/agentRegistration.ts#L281)
 
 #### Parameters
 

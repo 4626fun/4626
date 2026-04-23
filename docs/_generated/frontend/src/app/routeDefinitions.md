@@ -12,7 +12,7 @@
 
 > **PathRouteDef** = `object`
 
-Defined in: [src/app/routeDefinitions.tsx:46](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L46)
+Defined in: [src/app/routeDefinitions.tsx:50](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L50)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [src/app/routeDefinitions.tsx:46](https://github.com/wenakita/4626/b
 
 > **element**: `ReactNode`
 
-Defined in: [src/app/routeDefinitions.tsx:46](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L46)
+Defined in: [src/app/routeDefinitions.tsx:50](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L50)
 
 ##### path
 
 > **path**: `string`
 
-Defined in: [src/app/routeDefinitions.tsx:46](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L46)
+Defined in: [src/app/routeDefinitions.tsx:50](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L50)
 
 ## Variables
 
@@ -34,7 +34,23 @@ Defined in: [src/app/routeDefinitions.tsx:46](https://github.com/wenakita/4626/b
 
 > `const` **ACCOUNT\_ROUTES**: [`PathRouteDef`](#pathroutedef)[]
 
-Defined in: [src/app/routeDefinitions.tsx:82](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L82)
+Defined in: [src/app/routeDefinitions.tsx:89](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L89)
+
+`/accounts` is the identity + execution-scope surface (canonical CSW,
+signers, sub-account state, advanced owner recovery).
+
+Previously this route redirected to `/waitlist` because the waitlist
+flow had absorbed the old `/accounts` content. Reinstated 2026-04-19
+so the new identity card + ExecutionScopeCard + AutoProvisionMount
+actually render somewhere users can reach them. `/waitlist` stays
+focused on net-new onboarding (Zora link, owner install, points)
+while `/accounts` handles day-two operations on an already-linked
+identity.
+
+Wrapped in `SmartWalletRoute` so `useSmartWallets()` is available —
+the sub-account SpendPermission flow signs via Privy's ERC-1271
+smart-wallet client for Zora-cross-app profiles whose Privy embedded
+EOA isn't on the parent CSW owner list.
 
 ***
 
@@ -42,7 +58,7 @@ Defined in: [src/app/routeDefinitions.tsx:82](https://github.com/wenakita/4626/b
 
 > `const` **ADMIN\_CHILD\_ROUTES**: [`PathRouteDef`](#pathroutedef)[]
 
-Defined in: [src/app/routeDefinitions.tsx:155](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L155)
+Defined in: [src/app/routeDefinitions.tsx:175](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L175)
 
 ***
 
@@ -50,7 +66,7 @@ Defined in: [src/app/routeDefinitions.tsx:155](https://github.com/wenakita/4626/
 
 > `const` **APP\_ACCEPTED\_ROUTES**: [`PathRouteDef`](#pathroutedef)[]
 
-Defined in: [src/app/routeDefinitions.tsx:113](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L113)
+Defined in: [src/app/routeDefinitions.tsx:131](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L131)
 
 ***
 
@@ -58,7 +74,7 @@ Defined in: [src/app/routeDefinitions.tsx:113](https://github.com/wenakita/4626/
 
 > `const` **EXPLORE\_ROUTES**: [`PathRouteDef`](#pathroutedef)[]
 
-Defined in: [src/app/routeDefinitions.tsx:90](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L90)
+Defined in: [src/app/routeDefinitions.tsx:108](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L108)
 
 ***
 
@@ -66,7 +82,7 @@ Defined in: [src/app/routeDefinitions.tsx:90](https://github.com/wenakita/4626/b
 
 > `const` **MARKETING\_ONLY\_ROUTES**: [`PathRouteDef`](#pathroutedef)[]
 
-Defined in: [src/app/routeDefinitions.tsx:61](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L61)
+Defined in: [src/app/routeDefinitions.tsx:65](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L65)
 
 ## Functions
 
@@ -74,7 +90,7 @@ Defined in: [src/app/routeDefinitions.tsx:61](https://github.com/wenakita/4626/b
 
 > **renderPathRoutes**(`routes`, `transformElement?`): `Element`[]
 
-Defined in: [src/app/routeDefinitions.tsx:48](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L48)
+Defined in: [src/app/routeDefinitions.tsx:52](https://github.com/wenakita/4626/blob/main/frontend/src/app/routeDefinitions.tsx#L52)
 
 #### Parameters
 

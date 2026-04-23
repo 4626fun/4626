@@ -12,7 +12,7 @@
 
 > **PollUserOperationStatusOptions** = `object`
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:387](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L387)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:412](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L412)
 
 #### Properties
 
@@ -20,13 +20,13 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:387](https://github.com/wenakita/4626
 
 > `optional` **maxDurationMs**: `number`
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:389](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L389)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:414](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L414)
 
 ##### onError()?
 
 > `optional` **onError**: (`error`) => `void`
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:392](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L392)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:417](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L417)
 
 ###### Parameters
 
@@ -42,7 +42,7 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:392](https://github.com/wenakita/4626
 
 > `optional` **onStatusChange**: (`status`, `txHash?`) => `void`
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:391](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L391)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:416](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L416)
 
 ###### Parameters
 
@@ -62,19 +62,19 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:391](https://github.com/wenakita/4626
 
 > `optional` **perCheckTimeoutMs**: `number`
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:390](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L390)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:415](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L415)
 
 ##### pollIntervalMs?
 
 > `optional` **pollIntervalMs**: `number`
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:388](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L388)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:413](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L413)
 
 ##### signal?
 
 > `optional` **signal**: `AbortSignal`
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:393](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L393)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:418](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L418)
 
 ***
 
@@ -114,7 +114,7 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:199](https://github.com/wenakita/4626
 
 > **UserOpStatus** = `"pending"` \| `"confirmed"` \| `"failed"` \| `"timeout"`
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:385](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L385)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:410](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L410)
 
 ***
 
@@ -188,7 +188,7 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:204](https://github.com/wenakita/4626
 
 > `const` **ERC4337\_ENTRYPOINT\_V06**: `` `0x${string}` `` = `ENTRYPOINT_V06`
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:424](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L424)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:449](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L449)
 
 The canonical EntryPoint v0.6 address used by this module.
 This is the ONLY EntryPoint version supported.
@@ -199,7 +199,7 @@ This is the ONLY EntryPoint version supported.
 
 > **assertEntryPointV06**(`address`): `void`
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:430](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L430)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:455](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L455)
 
 Assert that a given address matches EntryPoint v0.6.
 Use this to verify configuration matches expectations.
@@ -220,7 +220,7 @@ Use this to verify configuration matches expectations.
 
 > **pollUserOperationStatus**(`params`): `Promise`\<\{ `status`: [`UserOpStatus`](#useropstatus); `txHash?`: `` `0x${string}` ``; \}\>
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:2076](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L2076)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:2122](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L2122)
 
 #### Parameters
 
@@ -248,7 +248,7 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:2076](https://github.com/wenakita/462
 
 > **sendCoinbaseSmartWalletUserOperation**(`params`): `Promise`\<\{ `transactionHash`: `` `0x${string}` ``; `userOpHash`: `` `0x${string}` ``; \}\>
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:996](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L996)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:1021](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L1021)
 
 #### Parameters
 
@@ -280,7 +280,7 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:996](https://github.com/wenakita/4626
 
 ###### ownerApprovalContext?
 
-\{ `approvalRunId?`: `string` \| `null`; `attempt?`: `number` \| `null`; `executionMode?`: `string` \| `null`; `stage?`: `string` \| `null`; \}
+\{ `approvalRunId?`: `string` \| `null`; `attempt?`: `number` \| `null`; `customOwnerPolicyToken?`: `string` \| `null`; `executionMode?`: `string` \| `null`; `stage?`: `string` \| `null`; \}
 
 ###### ownerApprovalContext.approvalRunId?
 
@@ -289,6 +289,10 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:996](https://github.com/wenakita/4626
 ###### ownerApprovalContext.attempt?
 
 `number` \| `null`
+
+###### ownerApprovalContext.customOwnerPolicyToken?
+
+`string` \| `null`
 
 ###### ownerApprovalContext.executionMode?
 
@@ -376,7 +380,7 @@ Defined in: [src/lib/aa/coinbaseErc4337.ts:996](https://github.com/wenakita/4626
 
 > **simulateSmartWalletCalls**(`params`): `Promise`\<\{ `directCallResult?`: \{ `error?`: `string`; `errorName?`: `string`; `revertData?`: `` `0x${string}` ``; `success`: `boolean`; \}; `error?`: `string`; `errorName?`: `string`; `revertData?`: `` `0x${string}` ``; `success`: `boolean`; \}\>
 
-Defined in: [src/lib/aa/coinbaseErc4337.ts:721](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L721)
+Defined in: [src/lib/aa/coinbaseErc4337.ts:746](https://github.com/wenakita/4626/blob/main/frontend/src/lib/aa/coinbaseErc4337.ts#L746)
 
 Pre-flight simulation: test if the calls would succeed when executed from the smart wallet.
 This helps diagnose whether a UserOp failure is due to:

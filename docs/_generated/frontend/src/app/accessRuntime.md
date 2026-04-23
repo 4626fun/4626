@@ -12,7 +12,7 @@
 
 > **AccessStateProvider**(`props`): `Element`
 
-Defined in: [src/app/accessRuntime.tsx:106](https://github.com/wenakita/4626/blob/main/frontend/src/app/accessRuntime.tsx#L106)
+Defined in: [src/app/accessRuntime.tsx:115](https://github.com/wenakita/4626/blob/main/frontend/src/app/accessRuntime.tsx#L115)
 
 #### Parameters
 
@@ -32,7 +32,7 @@ Defined in: [src/app/accessRuntime.tsx:106](https://github.com/wenakita/4626/blo
 
 > **RequireAccepted**(`props`): `Element`
 
-Defined in: [src/app/accessRuntime.tsx:130](https://github.com/wenakita/4626/blob/main/frontend/src/app/accessRuntime.tsx#L130)
+Defined in: [src/app/accessRuntime.tsx:139](https://github.com/wenakita/4626/blob/main/frontend/src/app/accessRuntime.tsx#L139)
 
 #### Parameters
 
@@ -52,7 +52,7 @@ Defined in: [src/app/accessRuntime.tsx:130](https://github.com/wenakita/4626/blo
 
 > **RequireAdmin**(`props`): `Element`
 
-Defined in: [src/app/accessRuntime.tsx:134](https://github.com/wenakita/4626/blob/main/frontend/src/app/accessRuntime.tsx#L134)
+Defined in: [src/app/accessRuntime.tsx:143](https://github.com/wenakita/4626/blob/main/frontend/src/app/accessRuntime.tsx#L143)
 
 #### Parameters
 
@@ -72,7 +72,7 @@ Defined in: [src/app/accessRuntime.tsx:134](https://github.com/wenakita/4626/blo
 
 > **RequireSession**(`props`): `Element`
 
-Defined in: [src/app/accessRuntime.tsx:126](https://github.com/wenakita/4626/blob/main/frontend/src/app/accessRuntime.tsx#L126)
+Defined in: [src/app/accessRuntime.tsx:135](https://github.com/wenakita/4626/blob/main/frontend/src/app/accessRuntime.tsx#L135)
 
 #### Parameters
 
@@ -92,7 +92,7 @@ Defined in: [src/app/accessRuntime.tsx:126](https://github.com/wenakita/4626/blo
 
 > **RequireTelegramMiniAppEntry**(`props`): `Element` \| `null`
 
-Defined in: [src/app/accessRuntime.tsx:138](https://github.com/wenakita/4626/blob/main/frontend/src/app/accessRuntime.tsx#L138)
+Defined in: [src/app/accessRuntime.tsx:147](https://github.com/wenakita/4626/blob/main/frontend/src/app/accessRuntime.tsx#L147)
 
 #### Parameters
 

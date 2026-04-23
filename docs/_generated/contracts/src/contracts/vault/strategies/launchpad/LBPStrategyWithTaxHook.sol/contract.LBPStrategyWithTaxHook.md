@@ -310,6 +310,24 @@ receive() external payable;
 error ZeroAddress();
 ```
 
+### OnTokensReceivedUnauthorized
+Raised when onTokensReceived is invoked by an unexpected
+caller. FIX: L-07 (4626-355).
+
+
+```solidity
+error OnTokensReceivedUnauthorized(address caller);
+```
+
+### AuctionAlreadyInitialized
+Raised when onTokensReceived is invoked more than once.
+FIX: L-07 (4626-355).
+
+
+```solidity
+error AuctionAlreadyInitialized();
+```
+
 ## Structs
 ### MigratorParameters
 

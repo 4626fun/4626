@@ -12,7 +12,7 @@
 
 > `const` **walletIntelPlugin**: `Plugin`
 
-Defined in: [server/agent/eliza/plugins/walletIntel/index.ts:392](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/plugins/walletIntel/index.ts#L392)
+Defined in: [server/agent/eliza/plugins/walletIntel/index.ts:413](https://github.com/wenakita/4626/blob/main/frontend/server/agent/eliza/plugins/walletIntel/index.ts#L413)
 
 ## References
 

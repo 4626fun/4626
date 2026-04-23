@@ -12,7 +12,7 @@
 
 > **default**(`req`, `res`): `Promise`\<`VercelResponse` \| `undefined`\>
 
-Defined in: [api/\_handlers/arch-b/\_status.ts:75](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/arch-b/_status.ts#L75)
+Defined in: [api/\_handlers/arch-b/\_status.ts:77](https://github.com/wenakita/4626/blob/main/frontend/api/_handlers/arch-b/_status.ts#L77)
 
 #### Parameters
 

@@ -30,7 +30,7 @@ Defined in: [src/features/waitlist/WaitlistFlow.tsx:106](https://github.com/wena
 
 > **WaitlistFlow**(`props`): `Element`
 
-Defined in: [src/features/waitlist/WaitlistFlow.tsx:379](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/WaitlistFlow.tsx#L379)
+Defined in: [src/features/waitlist/WaitlistFlow.tsx:438](https://github.com/wenakita/4626/blob/main/frontend/src/features/waitlist/WaitlistFlow.tsx#L438)
 
 #### Parameters
 

@@ -12,7 +12,7 @@
 
 > **TelegramMiniAppLinkContext** = `object`
 
-Defined in: [src/lib/telegram/telegramMiniAppLink.ts:16](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppLink.ts#L16)
+Defined in: [src/lib/telegram/telegramMiniAppLink.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppLink.ts#L18)
 
 #### Properties
 
@@ -20,19 +20,19 @@ Defined in: [src/lib/telegram/telegramMiniAppLink.ts:16](https://github.com/wena
 
 > **chatId**: `string` \| `null`
 
-Defined in: [src/lib/telegram/telegramMiniAppLink.ts:18](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppLink.ts#L18)
+Defined in: [src/lib/telegram/telegramMiniAppLink.ts:20](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppLink.ts#L20)
 
 ##### linkToken
 
 > **linkToken**: `string`
 
-Defined in: [src/lib/telegram/telegramMiniAppLink.ts:17](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppLink.ts#L17)
+Defined in: [src/lib/telegram/telegramMiniAppLink.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppLink.ts#L19)
 
 ##### telegramUsername
 
 > **telegramUsername**: `string` \| `null`
 
-Defined in: [src/lib/telegram/telegramMiniAppLink.ts:19](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppLink.ts#L19)
+Defined in: [src/lib/telegram/telegramMiniAppLink.ts:21](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppLink.ts#L21)
 
 ## Functions
 
@@ -40,7 +40,7 @@ Defined in: [src/lib/telegram/telegramMiniAppLink.ts:19](https://github.com/wena
 
 > **clearStoredTelegramMiniAppLinkContext**(): `void`
 
-Defined in: [src/lib/telegram/telegramMiniAppLink.ts:99](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppLink.ts#L99)
+Defined in: [src/lib/telegram/telegramMiniAppLink.ts:101](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppLink.ts#L101)
 
 #### Returns
 
@@ -52,7 +52,7 @@ Defined in: [src/lib/telegram/telegramMiniAppLink.ts:99](https://github.com/wena
 
 > **persistTelegramMiniAppLinkContext**(`context`): `void`
 
-Defined in: [src/lib/telegram/telegramMiniAppLink.ts:50](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppLink.ts#L50)
+Defined in: [src/lib/telegram/telegramMiniAppLink.ts:52](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppLink.ts#L52)
 
 #### Parameters
 
@@ -70,7 +70,7 @@ Defined in: [src/lib/telegram/telegramMiniAppLink.ts:50](https://github.com/wena
 
 > **readStoredTelegramMiniAppLinkContext**(): [`TelegramMiniAppLinkContext`](#telegramminiapplinkcontext) \| `null`
 
-Defined in: [src/lib/telegram/telegramMiniAppLink.ts:72](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppLink.ts#L72)
+Defined in: [src/lib/telegram/telegramMiniAppLink.ts:74](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppLink.ts#L74)
 
 #### Returns
 
@@ -82,7 +82,7 @@ Defined in: [src/lib/telegram/telegramMiniAppLink.ts:72](https://github.com/wena
 
 > **readTelegramMiniAppLinkContext**(`searchParams`): [`TelegramMiniAppLinkContext`](#telegramminiapplinkcontext) \| `null`
 
-Defined in: [src/lib/telegram/telegramMiniAppLink.ts:35](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppLink.ts#L35)
+Defined in: [src/lib/telegram/telegramMiniAppLink.ts:37](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppLink.ts#L37)
 
 #### Parameters
 
@@ -100,7 +100,7 @@ Defined in: [src/lib/telegram/telegramMiniAppLink.ts:35](https://github.com/wena
 
 > **resolveTelegramMiniAppLinkContext**(`searchParams`): [`TelegramMiniAppLinkContext`](#telegramminiapplinkcontext) \| `null`
 
-Defined in: [src/lib/telegram/telegramMiniAppLink.ts:109](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppLink.ts#L109)
+Defined in: [src/lib/telegram/telegramMiniAppLink.ts:111](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppLink.ts#L111)
 
 #### Parameters
 
@@ -118,7 +118,7 @@ Defined in: [src/lib/telegram/telegramMiniAppLink.ts:109](https://github.com/wen
 
 > **stripTelegramMiniAppLinkParams**(`searchParams`): `URLSearchParams`
 
-Defined in: [src/lib/telegram/telegramMiniAppLink.ts:118](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppLink.ts#L118)
+Defined in: [src/lib/telegram/telegramMiniAppLink.ts:120](https://github.com/wenakita/4626/blob/main/frontend/src/lib/telegram/telegramMiniAppLink.ts#L120)
 
 #### Parameters
 
