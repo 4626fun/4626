@@ -1,9 +1,8 @@
 /* ═══════════════════════════════════════════════════════════════════════
  *  4626.fun — Immersive Audio Layer
  *  ─────────────────────────────────────────────────────────────────────
- *  • 90s looped music bed (D minor, piano + phonk sub + tape hiss)
+ *  • ~60s looped music bed (subtle, piano-led)
  *  • 15s cosmic ambience loop (string pad)
- *  • 6 scroll-chapter transition FX
  *  • 4 close-beat crescendo FX  (L1 → L2 → L3 → L4)
  *  • 3 interaction FX (hover / click / reveal)
  *  • Silent at load. Fades in on first user scroll.
@@ -18,23 +17,17 @@
   const AUDIO_BASE = './audio/';
   const MUTE_KEY = '4626.audio.muted';
 
-  const MUSIC = { key: 'bed', url: AUDIO_BASE + 'bed.mp3', loop: true, gain: 0.28 };
-  const AMBIENCE = { key: 'ambience', url: AUDIO_BASE + 'fx/ambience.mp3', loop: true, gain: 0.18 };
+  const MUSIC = { key: 'bed', url: AUDIO_BASE + 'bed.mp3', loop: true, gain: 0.22 };
+  const AMBIENCE = { key: 'ambience', url: AUDIO_BASE + 'fx/ambience.mp3', loop: true, gain: 0.12 };
 
   const FX = {
-    chapter_1: { url: AUDIO_BASE + 'fx/chapter_1.mp3', gain: 0.35 },
-    chapter_2: { url: AUDIO_BASE + 'fx/chapter_2.mp3', gain: 0.35 },
-    chapter_3: { url: AUDIO_BASE + 'fx/chapter_3.mp3', gain: 0.35 },
-    chapter_4: { url: AUDIO_BASE + 'fx/chapter_4.mp3', gain: 0.35 },
-    chapter_5: { url: AUDIO_BASE + 'fx/chapter_5.mp3', gain: 0.40 },
-    chapter_6: { url: AUDIO_BASE + 'fx/chapter_6.mp3', gain: 0.42 },
-    beat_L1:   { url: AUDIO_BASE + 'fx/beat_L1.mp3',   gain: 0.50 },
-    beat_L2:   { url: AUDIO_BASE + 'fx/beat_L2.mp3',   gain: 0.55 },
-    beat_L3:   { url: AUDIO_BASE + 'fx/beat_L3.mp3',   gain: 0.60 },
-    beat_L4:   { url: AUDIO_BASE + 'fx/beat_L4.mp3',   gain: 0.70 },
-    hover:     { url: AUDIO_BASE + 'fx/hover.mp3',     gain: 0.25 },
-    click:     { url: AUDIO_BASE + 'fx/click.mp3',     gain: 0.40 },
-    reveal:    { url: AUDIO_BASE + 'fx/reveal.mp3',    gain: 0.35 },
+    beat_L1:   { url: AUDIO_BASE + 'fx/beat_L1.mp3',   gain: 0.30 },
+    beat_L2:   { url: AUDIO_BASE + 'fx/beat_L2.mp3',   gain: 0.34 },
+    beat_L3:   { url: AUDIO_BASE + 'fx/beat_L3.mp3',   gain: 0.38 },
+    beat_L4:   { url: AUDIO_BASE + 'fx/beat_L4.mp3',   gain: 0.45 },
+    hover:     { url: AUDIO_BASE + 'fx/hover.mp3',     gain: 0.15 },
+    click:     { url: AUDIO_BASE + 'fx/click.mp3',     gain: 0.25 },
+    reveal:    { url: AUDIO_BASE + 'fx/reveal.mp3',    gain: 0.22 },
   };
 
   // ─── AudioMixer ────────────────────────────────────────────────────────
@@ -210,26 +203,6 @@
       return setTimeout(() => bindScrollTriggers(mixer), 300);
     }
     const ST = window.ScrollTrigger;
-
-    // 6 chapter transitions — fire once on first forward enter.
-    const chapters = [
-      { id: 'ch-token',         fx: 'chapter_1' },
-      { id: 'ch-accrue',        fx: 'chapter_2' },
-      { id: 'ch-cca',           fx: 'chapter_3' },
-      { id: 'ch-dual-overview', fx: 'chapter_4' },
-      { id: 'ch-vaults',        fx: 'chapter_5' },
-      { id: 'ch-close',         fx: 'chapter_6' },
-    ];
-    for (const c of chapters) {
-      const el = document.getElementById(c.id);
-      if (!el) continue;
-      ST.create({
-        id: 'audio-' + c.id,
-        trigger: el,
-        start: 'top 70%',
-        onEnter: () => mixer.playFx(c.fx),
-      });
-    }
 
     // 4 close-scene beats — driven by progress on #ch-close.
     // From the mobile audit: L1 peaks at progress 0.47, L2 at 0.55, L3 at 0.72, L4 at 0.90.
