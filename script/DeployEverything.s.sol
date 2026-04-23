@@ -3,6 +3,10 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Script.sol";
 import "../contracts/helpers/batchers/StrategyDeploymentBatcher.sol";
+import {
+    CreatorCharmStrategyFactory,
+    AjnaERC4626StrategyFactory
+} from "../contracts/helpers/batchers/StrategyDeploymentFactories.sol";
 import "../contracts/helpers/batchers/VaultActivationBatcher.sol";
 
 /**
@@ -26,11 +30,23 @@ contract DeployEverything is Script {
         vm.startBroadcast(deployerPrivateKey);
 
         // ═══════════════════════════════════════════════════════════
-        // STEP 1: Deploy StrategyDeploymentBatcher
+        // STEP 1: Deploy strategy factories, then StrategyDeploymentBatcher
         // ═══════════════════════════════════════════════════════════
-        console.log("\n1. Deploying StrategyDeploymentBatcher...");
-        StrategyDeploymentBatcher strategyBatcher = new StrategyDeploymentBatcher();
-        console.log("   Address:", address(strategyBatcher));
+        // FIX: 4626-401 / M-37 — the two strategy factories are deployed here instead of
+        // inside `StrategyDeploymentBatcher`'s constructor so the batcher's init-code stays
+        // under the EIP-3860 49,152-byte cap enforced by `forge build --sizes`.
+        console.log("\n1a. Deploying CreatorCharmStrategyFactory...");
+        CreatorCharmStrategyFactory creatorCharmFactory = new CreatorCharmStrategyFactory();
+        console.log("    Address:", address(creatorCharmFactory));
+
+        console.log("\n1b. Deploying AjnaERC4626StrategyFactory...");
+        AjnaERC4626StrategyFactory ajnaFactory = new AjnaERC4626StrategyFactory();
+        console.log("    Address:", address(ajnaFactory));
+
+        console.log("\n1c. Deploying StrategyDeploymentBatcher...");
+        StrategyDeploymentBatcher strategyBatcher =
+            new StrategyDeploymentBatcher(address(creatorCharmFactory), address(ajnaFactory));
+        console.log("    Address:", address(strategyBatcher));
 
         // ═══════════════════════════════════════════════════════════
         // STEP 2: Deploy VaultActivationBatcher
@@ -50,8 +66,10 @@ contract DeployEverything is Script {
         console.log("========================================");
         console.log("DEPLOYMENT COMPLETE!");
         console.log("========================================");
-        console.log("StrategyDeploymentBatcher:", address(strategyBatcher));
-        console.log("VaultActivationBatcher:", address(activationBatcher));
+        console.log("CreatorCharmStrategyFactory:", address(creatorCharmFactory));
+        console.log("AjnaERC4626StrategyFactory:", address(ajnaFactory));
+        console.log("StrategyDeploymentBatcher:  ", address(strategyBatcher));
+        console.log("VaultActivationBatcher:     ", address(activationBatcher));
         console.log("\n");
         console.log("NEXT STEPS:");
         console.log("1. Save these addresses");

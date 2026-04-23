@@ -4,6 +4,10 @@ pragma solidity ^0.8.20;
 import "forge-std/Script.sol";
 import "forge-std/Test.sol";
 import "../contracts/helpers/batchers/StrategyDeploymentBatcher.sol";
+import {
+    CreatorCharmStrategyFactory,
+    AjnaERC4626StrategyFactory
+} from "../contracts/helpers/batchers/StrategyDeploymentFactories.sol";
 import "../contracts/vault/strategies/univ3/CreatorCharmStrategy.sol";
 
 /**
@@ -39,8 +43,14 @@ contract TestAAStrategyDeploy is Script, Test {
         vm.startBroadcast();
 
         // Deploy batcher
-        console.log("1. Deploying StrategyDeploymentBatcher...");
-        StrategyDeploymentBatcher batcher = new StrategyDeploymentBatcher();
+        // FIX: 4626-401 / M-37 — deploy factories separately (keeps batcher init-code under EIP-3860).
+        console.log("1. Deploying strategy factories and StrategyDeploymentBatcher...");
+        CreatorCharmStrategyFactory creatorCharmFactoryImpl = new CreatorCharmStrategyFactory();
+        AjnaERC4626StrategyFactory ajnaFactoryImpl = new AjnaERC4626StrategyFactory();
+        StrategyDeploymentBatcher batcher =
+            new StrategyDeploymentBatcher(address(creatorCharmFactoryImpl), address(ajnaFactoryImpl));
+        console.log("   CreatorCharmStrategyFactory:", address(creatorCharmFactoryImpl));
+        console.log("   AjnaERC4626StrategyFactory:", address(ajnaFactoryImpl));
         console.log("   Batcher deployed at:", address(batcher));
         console.log("");
 

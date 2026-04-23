@@ -3,6 +3,10 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "../contracts/helpers/batchers/StrategyDeploymentBatcher.sol";
+import {
+    CreatorCharmStrategyFactory,
+    AjnaERC4626StrategyFactory
+} from "../contracts/helpers/batchers/StrategyDeploymentFactories.sol";
 
 /**
  * @title CompileTestBatcher
@@ -10,9 +14,15 @@ import "../contracts/helpers/batchers/StrategyDeploymentBatcher.sol";
  */
 contract CompileTestBatcher is Test {
     StrategyDeploymentBatcher public batcher;
+    CreatorCharmStrategyFactory public creatorCharmFactory;
+    AjnaERC4626StrategyFactory public ajnaFactory;
 
     function setUp() public {
-        batcher = new StrategyDeploymentBatcher();
+        // FIX: 4626-401 / M-37 — factories are deployed separately so the batcher's
+        // init-code stays under the EIP-3860 49,152-byte cap.
+        creatorCharmFactory = new CreatorCharmStrategyFactory();
+        ajnaFactory = new AjnaERC4626StrategyFactory();
+        batcher = new StrategyDeploymentBatcher(address(creatorCharmFactory), address(ajnaFactory));
     }
 
     function testBatcherExists() public {

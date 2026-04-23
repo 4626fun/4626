@@ -4,6 +4,10 @@ pragma solidity ^0.8.20;
 import "forge-std/Script.sol";
 import "forge-std/Test.sol";
 import "../contracts/helpers/batchers/StrategyDeploymentBatcher.sol";
+import {
+    CreatorCharmStrategyFactory,
+    AjnaERC4626StrategyFactory
+} from "../contracts/helpers/batchers/StrategyDeploymentFactories.sol";
 import "../contracts/helpers/batchers/VaultActivationBatcher.sol";
 import "../contracts/vault/strategies/ERC4626StrategyAdapter.sol";
 import "../contracts/vault/strategies/univ3/CreatorCharmStrategy.sol";
@@ -39,8 +43,15 @@ contract TestAADeployment is Script, Test {
         // ═══════════════════════════════════════════════════════════
         // PHASE 1: Deploy Strategy Batcher
         // ═══════════════════════════════════════════════════════════
-        console.log("Phase 1: Deploying StrategyDeploymentBatcher...");
-        StrategyDeploymentBatcher batcher = new StrategyDeploymentBatcher();
+        // FIX: 4626-401 / M-37 — factories are deployed separately so the batcher's
+        // init-code stays under the EIP-3860 49,152-byte cap.
+        console.log("Phase 1: Deploying strategy factories and StrategyDeploymentBatcher...");
+        CreatorCharmStrategyFactory creatorCharmFactory = new CreatorCharmStrategyFactory();
+        AjnaERC4626StrategyFactory ajnaFactory = new AjnaERC4626StrategyFactory();
+        StrategyDeploymentBatcher batcher =
+            new StrategyDeploymentBatcher(address(creatorCharmFactory), address(ajnaFactory));
+        console.log("   CreatorCharmStrategyFactory:", address(creatorCharmFactory));
+        console.log("   AjnaERC4626StrategyFactory:", address(ajnaFactory));
         console.log("   Batcher:", address(batcher));
         console.log("");
 

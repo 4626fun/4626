@@ -7,11 +7,13 @@ import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {Ownable2Step} from "@openzeppelin/contracts/access/Ownable2Step.sol";
 import "../../interfaces/uniswap/IUniswapV3Factory.sol";
 import "../../interfaces/uniswap/IUniswapV3Pool.sol";
+// FIX: 4626-401 / M-37 — only the interfaces are imported here. The concrete factory
+// contracts are deployed in `script/DeployEverything.s.sol` and their addresses are
+// injected via the constructor, which keeps this contract's init-code under the
+// EIP-3860 49,152-byte limit.
 import {
     ICreatorCharmStrategyFactory,
-    IAjnaERC4626StrategyFactory,
-    CreatorCharmStrategyFactory,
-    AjnaERC4626StrategyFactory
+    IAjnaERC4626StrategyFactory
 } from "./StrategyDeploymentFactories.sol";
 
 /**
@@ -80,14 +82,22 @@ contract StrategyDeploymentBatcher is ReentrancyGuard, Ownable2Step {
     error ZeroUnderlying();
     error ZeroQuote();
     error ZeroVault();
+    error ZeroCreatorCharmFactory();
+    error ZeroAjnaFactory();
     error CharmFactoryGovernanceMismatch(address expected, address actual);
     error CharmFactoryProtocolFeeMismatch(uint256 expected, uint256 actual);
     error CharmVaultManagerMismatch(address expected, address actual);
 
     // FIX: F-14 — constructor passes msg.sender to Ownable; use onlyOwner instead of custom modifier
-    constructor() Ownable(msg.sender) {
-        creatorCharmStrategyFactory = address(new CreatorCharmStrategyFactory());
-        ajnaStrategyFactory = address(new AjnaERC4626StrategyFactory());
+    // FIX: 4626-401 / M-37 — factories are now injected rather than deployed inline so this
+    // contract's init-code stays under the EIP-3860 49,152-byte limit. Deploy
+    // `CreatorCharmStrategyFactory` and `AjnaERC4626StrategyFactory` separately (see
+    // `script/DeployEverything.s.sol`) and pass their addresses in.
+    constructor(address _creatorCharmStrategyFactory, address _ajnaStrategyFactory) Ownable(msg.sender) {
+        if (_creatorCharmStrategyFactory == address(0)) revert ZeroCreatorCharmFactory();
+        if (_ajnaStrategyFactory == address(0)) revert ZeroAjnaFactory();
+        creatorCharmStrategyFactory = _creatorCharmStrategyFactory;
+        ajnaStrategyFactory = _ajnaStrategyFactory;
     }
 
     struct DeploymentResult {
