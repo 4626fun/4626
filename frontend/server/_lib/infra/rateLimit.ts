@@ -199,6 +199,19 @@ export const RATE_LIMITS = {
 
 /**
  * Helper to get client IP from request headers.
+ *
+ * FIX: M-10 / 4626-421 — this project is fronted by Vercel, not Cloudflare.
+ * The `cf-connecting-ip` header is therefore NOT set by our own edge. On a
+ * Vercel-only surface, any caller can attach an arbitrary `cf-connecting-ip`
+ * value to the request and we would previously trust it. That allows rate-limit
+ * bypass by spoofing unique "client IPs" per request, and also corrupts
+ * downstream audit trails.
+ *
+ * We now trust ONLY Vercel-issued headers (`x-vercel-forwarded-for` and, as a
+ * conservative fallback, `x-real-ip` / `x-forwarded-for`). `cf-connecting-ip`
+ * is intentionally no longer consulted. If this deployment is ever moved
+ * behind Cloudflare in front of Vercel, re-introduce it only under a
+ * feature flag that asserts Cloudflare is the true edge.
  */
 export function getClientIp(req: { headers?: Record<string, any> }): string {
   const h = req?.headers ?? {}
@@ -210,17 +223,19 @@ export function getClientIp(req: { headers?: Record<string, any> }): string {
   }
   const extractFirstIp = (value: string): string => value.split(',')[0]?.trim() ?? ''
 
+  // Vercel's verified client-IP header, stamped by the Vercel edge.
   const fromVercel = extractFirstIp(firstHeaderValue(h['x-vercel-forwarded-for']))
   if (fromVercel) return fromVercel
 
-  const fromCloudflare = extractFirstIp(firstHeaderValue(h['cf-connecting-ip']))
-  if (fromCloudflare) return fromCloudflare
-
+  // Conservative fallbacks when x-vercel-forwarded-for is absent (local dev,
+  // preview environments proxied through a reverse proxy, etc.). These headers
+  // are still spoofable by clients, but they are the best remaining signal
+  // and are acceptable because they are NOT used as a security boundary on
+  // their own — rate-limit keys are joined with a principal (session address /
+  // API key / etc.) on security-sensitive endpoints.
   const fromRealIp = extractFirstIp(firstHeaderValue(h['x-real-ip']))
   if (fromRealIp) return fromRealIp
 
-  // Some edge paths expose only x-forwarded-for in production.
-  // Use it as a fallback only when stronger edge headers are absent.
   const fromForwarded = extractFirstIp(firstHeaderValue(h['x-forwarded-for']))
   if (fromForwarded) return fromForwarded
 
