@@ -112,10 +112,25 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
         // truncate. Collision probability is now ~2^-32 for 65k deploys,
         // which is safe for any realistic deployment cadence. Previous 16-bit
         // behaviour is preserved as a comment block above for audit trail.
+        //
+        // REVIEW FIX (L-06 follow-up): the seeding of `requestCounter` must
+        // preserve the full 64-bit nonce entropy. The previous assignment
+        // `uint64(deploymentNonce) << 48` discarded bits 16..63 of the 64-bit
+        // hash, collapsing the cross-deployment sequence space back to 16
+        // bits — exactly the L-06 regression this fix was meant to close.
+        // We now keep the high 48 bits of the nonce and reserve the low 16
+        // bits (65,535 requests) as sequence headroom before a wrap-around
+        // into the next nonce band. Per-deploy request volume far below 65k
+        // is assumed; if a single integrator ever approaches that cap, a
+        // redeploy rotates to a fresh high-48-bit band. sequenceToRequestId
+        // on the hub keys on `(srcEid, uint64 sequence)`, so the full 64-bit
+        // space is addressable over the wire.
         deploymentNonce = uint64(
             uint256(keccak256(abi.encode(block.number, block.chainid, address(this))))
         );
-        requestCounter = uint64(deploymentNonce) << 48; // shift nonce into upper bits
+        // Mask off the low 16 bits; they are the per-deploy sequence window
+        // and start at zero so the first request_id is deploymentNonce-band + 1.
+        requestCounter = deploymentNonce & uint64(0xFFFFFFFFFFFF0000);
         authorizedSponsoredCallers[_owner] = true;
         emit SponsoredCallerAuthorizationUpdated(_owner, true);
     }
