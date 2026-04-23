@@ -103,6 +103,8 @@ All code is built and tested:
 
 The existing Solana program at `EjpziSWGRcEiDHLXft5etbUtcJiZxEttkwz1tqiuzzWU` will be upgraded in place — no new deployment cost, same program ID, all PDAs valid from day one.
 
+> **Canonical program-ID source:** [`Anchor.toml`](https://github.com/wenakita/4626/blob/main/Anchor.toml) is authoritative for the `creator_share_hook` program ID on every cluster (localnet, devnet, mainnet). The value above is verified to match `Anchor.toml` and `cre/config.ts` as of 2026-04-22. If the two ever diverge, `Anchor.toml` wins.
+
 ## What This Means
 
 Every creator who launches on 4626 can opt into native Solana liquidity for $100 USDC (the `solana_bridge_strategy` paid feature). Pay that and the vault installs a `SolanaStrategy` that bridges CREATOR to a wrapped Solana mint at the share price target, and Solana trades flow the same fee / lottery / gauge routes back to Base. Add the optional `solana_meteora_alpha_vault` feature for another $100 and the strategy also routes bridged supply through a Meteora DLMM pool + Alpha Vault for Solana-side concentrated liquidity. No second vault deploy, no fragmented jackpot, no duplicated gauge controller — the DLMM pool, Alpha Vault, fee relay, and lottery participation are all infrastructure-level once the opt-in lands.

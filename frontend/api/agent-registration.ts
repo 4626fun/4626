@@ -7,6 +7,17 @@ function setNoStore(res: VercelResponse) {
   res.setHeader('Cache-Control', 'no-store')
 }
 
+/**
+ * Intentionally wildcard CORS: the ERC-8004 agent-registration payload is a
+ * public identity artifact by design — any dApp, indexer, or wallet that
+ * wants to discover the agent must be able to fetch it cross-origin. The
+ * handler only ever returns static registry data (no user session, no
+ * cookies, no secrets) so a permissive origin is safe. Non-GET/HEAD methods
+ * are rejected a few lines below.
+ *
+ * Do not narrow this to an allowlist without also rewriting the discovery
+ * contract — see docs/audits/4626/acceptances/I-01-I-17-info-findings.md (I-12).
+ */
 function setPublicCors(res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS')

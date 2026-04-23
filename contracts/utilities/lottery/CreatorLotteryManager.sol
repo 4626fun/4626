@@ -118,6 +118,24 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     uint256 public constant MAX_SWAP_USD = 1_000_000_000_000; // $1M
     uint256 public constant BASIS_POINTS = 10_000;
 
+    /// @notice Hard cap on the number of *active* creator coins evaluated in
+    /// a single jackpot payout. Caps the gas cost of
+    /// _payoutLocalJackpotInner() so the function cannot be bricked by a
+    /// growing registry (M-06 / 4626-315). Remainder active coins roll to
+    /// the next jackpot via the payout cursor.
+    uint256 public constant MAX_JACKPOT_PAYOUT_ITERATIONS = 128;
+
+    /// @notice Hard cap on the number of registry slots scanned in a single
+    /// jackpot payout, regardless of active/inactive status. Because
+    /// registeredTokens is append-only and inactive entries are never
+    /// removed, a long prefix of inactive coins would otherwise consume the
+    /// active cap without paying any active creator. The slot cap bounds the
+    /// worst-case all-inactive loop while the cursor carries progress into
+    /// the next call until an active creator is found. Set materially higher
+    /// than MAX_JACKPOT_PAYOUT_ITERATIONS so natural inactive density does
+    /// not starve active creators.
+    uint256 public constant MAX_JACKPOT_PAYOUT_SLOT_SCANS = 1024;
+
     /// @notice Message types for hub-centric architecture
     uint16 public constant MSG_TYPE_LOTTERY_ENTRY = 3;
     uint16 public constant MSG_TYPE_WINNER_CALLBACK = 4;
@@ -1320,6 +1338,27 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         return totalPaidOut;
     }
 
+    /// @notice Cursor that advances through the creator-coin registry between
+    /// jackpot payouts so that when the registry is larger than
+    /// MAX_JACKPOT_PAYOUT_ITERATIONS, all coins eventually receive payouts
+    /// across successive jackpots rather than being starved behind the cap.
+    /// Incremented after each payout in _payoutLocalJackpotInner (M-06).
+    uint256 public jackpotPayoutCursor;
+
+    /// @notice Emitted when the per-call iteration cap truncated the payout.
+    /// Off-chain monitors can use this to reconcile that the remaining coins
+    /// will be reached on subsequent jackpots via the advancing cursor.
+    /// @param totalRegistrySize Full registry size at the time of the call.
+    /// @param startIndex First registry index visited (pre-wrap).
+    /// @param activeIterated Number of *active* creator coins actually evaluated.
+    /// @param slotsScanned Number of registry slots scanned (active + inactive).
+    event JackpotPayoutCapped(
+        uint256 totalRegistrySize,
+        uint256 startIndex,
+        uint256 activeIterated,
+        uint256 slotsScanned
+    );
+
     function _payoutLocalJackpotInner(address triggeringCoin, address winner, uint16 payoutBps) internal returns (uint256 totalPaidOut) {
         // FIX: CLM-04 — registry calls wrapped in try/catch to prevent permanent lock
         address[] memory allCreators;
@@ -1329,9 +1368,43 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
             return 0;
         }
 
-        // Pay from EVERY active creator vault
-        for (uint256 i = 0; i < allCreators.length; i++) {
+        uint256 registrySize = allCreators.length;
+        if (registrySize == 0) {
+            return 0;
+        }
+
+        // M-06: cap the per-call iteration count so the payout cannot be
+        // bricked by a growing registry. The cap is applied to *active*
+        // creators actually evaluated, not to raw slot visits, so a long
+        // prefix of inactive entries at the front of registeredTokens (it
+        // is append-only) cannot starve active creators of payouts.
+        //
+        // To keep the loop bounded in the worst case where every slot is
+        // inactive, we also cap total slot scans at
+        // MAX_JACKPOT_PAYOUT_SLOT_SCANS. If the scan budget is exhausted
+        // before the active cap fills, the cursor advances past the last
+        // slot scanned so subsequent jackpots continue where this one
+        // stopped and eventually reach every active creator.
+        uint256 activeCap = registrySize < MAX_JACKPOT_PAYOUT_ITERATIONS
+            ? registrySize
+            : MAX_JACKPOT_PAYOUT_ITERATIONS;
+        uint256 slotCap = registrySize < MAX_JACKPOT_PAYOUT_SLOT_SCANS
+            ? registrySize
+            : MAX_JACKPOT_PAYOUT_SLOT_SCANS;
+        uint256 startIndex = jackpotPayoutCursor % registrySize;
+
+        uint256 activeIterated;
+        uint256 slotsScanned;
+
+        // Pay from every active creator vault within the iteration window.
+        // Loop variable k counts slot visits; activeIterated counts active
+        // creators whose gauge was actually queried.
+        for (uint256 k = 0; k < slotCap; k++) {
+            if (activeIterated >= activeCap) break;
+
+            uint256 i = (startIndex + k) % registrySize;
             address creatorCoin = allCreators[i];
+            slotsScanned = k + 1;
 
             // Skip inactive creators
             // slither-disable-next-line calls-loop
@@ -1342,6 +1415,7 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
                 continue;
             }
             if (!isActive) continue;
+            activeIterated++;
 
             // Look up per-creator contracts
             // slither-disable-next-line calls-loop
@@ -1388,6 +1462,22 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
                 } catch {
                     emit JackpotPayoutFailed(creatorCoin, winner, rewardShares);
                 }
+            }
+        }
+
+        // Advance the cursor past the last slot actually scanned. Using
+        // unchecked add is safe: the cursor is taken modulo registrySize
+        // on every read.
+        unchecked {
+            jackpotPayoutCursor = startIndex + slotsScanned;
+        }
+
+        // Emit a capped event if either bound actually bit. This lets the
+        // off-chain monitor detect starvation (e.g. many inactive slots
+        // accumulating) and prioritise registry compaction.
+        if (activeIterated < registrySize || slotsScanned < registrySize) {
+            if (activeIterated >= activeCap || slotsScanned >= slotCap) {
+                emit JackpotPayoutCapped(registrySize, startIndex, activeIterated, slotsScanned);
             }
         }
 

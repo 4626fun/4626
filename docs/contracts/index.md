@@ -29,4 +29,4 @@ See [Reference > Addresses](/reference/addresses) for all deployed contract addr
 
 ## API Reference
 
-Auto-generated API documentation is available at [API Reference](/api/contracts).
+Auto-generated contract API documentation is not yet published. For now, consult the Solidity NatSpec in `contracts/` directly, or browse the source on [GitHub](https://github.com/wenakita/4626/tree/main/contracts).

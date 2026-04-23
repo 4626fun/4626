@@ -9,17 +9,23 @@ Current status of the ve(3,3) governance system.
 
 ## Completed
 
-- [x] ve4626 vote-escrow token
-- [x] ve4626BoostManager for lottery boosts
-- [x] VaultGaugeVoting for probability direction
-- [x] VoterRewardsDistributor for fee claims
-- [x] Integration with CreatorLotteryManager
+- [x] ve4626 vote-escrow token (`contracts/governance/ve4626.sol`)
+- [x] ve4626BoostManager for lottery boosts (`contracts/governance/ve4626BoostManager.sol`)
+- [x] VaultGaugeVoting for probability direction (`contracts/governance/VaultGaugeVoting.sol`)
+- [x] VoterRewardsDistributor for fee claims (`contracts/governance/VoterRewardsDistributor.sol`)
+- [x] Integration with CreatorLotteryManager (`contracts/utilities/lottery/CreatorLotteryManager.sol`)
+- [x] Frontend voting UI (`frontend/src/pages/GaugeVoting.tsx`)
+- [x] Bribe marketplace contract (`contracts/governance/bribes/BribeDepot.sol`)
 
 ## In Progress
 
-- [ ] Frontend voting UI
-- [ ] Bribe marketplace
-- [ ] Cross-chain voting aggregation
+- [ ] Bribe marketplace frontend (contract is deployed; UI is not yet shipped)
+
+## Planned
+
+- [ ] Cross-chain voting aggregation (no code yet; design pending)
+
+> Categories: **Completed** means contract and, where applicable, frontend exist in the audited commit. **In Progress** means partial code is merged. **Planned** means no code exists yet.
 
 ## Architecture
 

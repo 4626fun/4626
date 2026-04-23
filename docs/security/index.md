@@ -77,6 +77,8 @@ DEX aggregators work out-of-the-box without code changes. Aggregator contracts a
 
 ## Test Coverage
 
+> Last verified: 2026-04-22 against commit `main`. Counts below reflect the lottery-specific wallet-type test suite, not global Foundry fuzz or invariant coverage. For broader suite status see the Foundry output in CI and the `M-38` / `M-39` acceptance docs under `docs/audits/4626/acceptances/`.
+
 The lottery system is tested against **88 edge cases** across multiple categories:
 
 - **Wallet Type Tests** (5 tests) - EOA, Coinbase Smart Wallet, Safe, Argent, Proxy wallets

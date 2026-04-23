@@ -26,7 +26,21 @@ function getAllowedOriginsFromEnv(): Set<string> {
   const raw = (process.env.CORS_ALLOWED_ORIGINS ?? '').trim()
   const out = new Set<string>()
   if (!raw) return out
-  for (const part of raw.split(/[\s,]+/g)) {
+  const parts = raw.split(/[\s,]+/g).filter(Boolean)
+  // Explicit guard: CORS_ALLOWED_ORIGINS must never contain a bare wildcard.
+  // A literal '*' would silently be dropped by normalizeOrigin (URL parser
+  // rejects it), but we want an early, loud failure in production so a
+  // misconfiguration surfaces before traffic hits protected endpoints.
+  const hasWildcard = parts.some((p) => p === '*' || p === 'null')
+  const isProd =
+    (process.env.VERCEL_ENV ?? '').trim().toLowerCase() === 'production' ||
+    (process.env.NODE_ENV ?? '').trim().toLowerCase() === 'production'
+  if (hasWildcard && isProd) {
+    throw new Error(
+      'CORS_ALLOWED_ORIGINS contains "*" or "null" in production; refuse to start.',
+    )
+  }
+  for (const part of parts) {
     const n = normalizeOrigin(part)
     if (n) out.add(n)
   }
