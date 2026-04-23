@@ -982,6 +982,74 @@ body {
   box-shadow: 0 0 16px rgba(0, 82, 255, 0.18) !important;
 }
 
+/* ─── Nav & Footer: borderless, blended with page ──────────────────── */
+/* Remove the hard seams so the chrome melts into the cinematic background. */
+.nav {
+  border-bottom: none !important;
+  /* Soft vertical gradient: fully opaque at top, fades into transparency.
+     Replaces the solid slab + border. */
+  background: linear-gradient(
+    to bottom,
+    rgba(0, 0, 0, 0.55) 0%,
+    rgba(0, 0, 0, 0.28) 60%,
+    rgba(0, 0, 0, 0) 100%
+  ) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+  /* Extend the gradient below nav so text can read against it without a hard edge */
+  padding-bottom: 1.25rem !important;
+}
+.nav.visible { transition: opacity 0.6s var(--ease-cinematic), transform 0.6s var(--ease-cinematic) !important; }
+
+.footer {
+  border-top: none !important;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.78) 0%,
+    rgba(0, 0, 0, 0.4) 55%,
+    rgba(0, 0, 0, 0) 100%
+  ) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  padding-top: 4rem !important;
+}
+
+/* ─── Nav & Footer typography: match the page's display elegance ───── */
+/* Swap from uppercase Inter + heavy tracking to Space Grotesk (display)
+   in mixed case with tight tracking — same family as headlines. */
+.nav-link {
+  font-family: var(--font-display) !important;
+  font-size: 0.875rem !important;
+  font-weight: 400 !important;
+  letter-spacing: -0.005em !important;
+  text-transform: none !important;
+  color: rgba(255, 255, 255, 0.62) !important;
+}
+.nav-link:hover { color: rgba(255, 255, 255, 0.95) !important; }
+
+.nav-btn {
+  font-family: var(--font-display) !important;
+  font-size: 0.85rem !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.005em !important;
+  text-transform: none !important;
+}
+
+.footer {
+  font-family: var(--font-display) !important;
+  font-size: 0.8rem !important;
+  letter-spacing: -0.005em !important;
+}
+.footer-links a {
+  font-family: var(--font-display) !important;
+  font-size: 0.8rem !important;
+  font-weight: 400 !important;
+  letter-spacing: -0.005em !important;
+  text-transform: none !important;
+  color: rgba(255, 255, 255, 0.5) !important;
+}
+.footer-links a:hover { color: rgba(255, 255, 255, 0.9) !important; }
+
 /* ─── Audio mute toggle (floating bottom-right) ────────────────────── */
 .audio-toggle-float {
   position: fixed;
