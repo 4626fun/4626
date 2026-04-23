@@ -253,10 +253,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         }
       }
     } catch (dbSyncError) {
+      // FIX: M-16 / 4626-428 — Privy auth must NEVER swallow IDENTITY_RECOVERY_REQUIRED.
+      //
+      // Previously this catch block bypassed identity-recovery enforcement whenever a
+      // classified sessionAddress had already been resolved from the in-memory Privy
+      // response, even though the database rejected the write because the same email
+      // is bound to a different account. That allowed a caller to mint an HttpOnly
+      // session cookie for an account the Privy user is not authorized to represent,
+      // silently defeating the RECOVERY_REQUIRED_EMAIL_BOUND protection surfaced by
+      // other bootstrap endpoints.
+      //
+      // The server now re-throws so the outer catch returns 409 RECOVERY_REQUIRED_EMAIL_BOUND
+      // regardless of whether a session address was derivable. Other database errors
+      // continue to fall through (best-effort): auth can still succeed when the DB is
+      // unavailable for reasons unrelated to identity recovery.
       if (isIdentityRecoveryRequiredError(dbSyncError)) {
-        // Do not block wallet-auth session establishment when identity writes need recovery.
-        // Recovery enforcement still happens in account/bootstrap endpoints that mutate identity state.
-        if (!sessionAddress) throw dbSyncError
+        throw dbSyncError
       }
       // best-effort: auth should succeed even if DB is unavailable
     }
