@@ -120,6 +120,22 @@ declare const process: {
 // ---------------------------------------------------------------------------
 
 const XMTP_ENV = ((process.env.XMTP_ENV ?? 'production').trim()) as 'production' | 'dev' | 'local'
+
+// Emergency escape hatch: when true, XMTP_AGENT_CSW_ADDRESS is honored even
+// when it does not match TARGET_CANONICAL_CSW_ADDRESS. Intended for the case
+// where the on-chain owner set of the canonical CSW has drifted away from the
+// Privy server wallet and we need the agent to breathe as a *different* CSW
+// (still Privy-owned) while the canonical identity is being recovered.
+//
+// Scope: XMTP identity only. The rest of the app (canonicalWalletPolicy,
+// Zora referrer, ERC-8004 agent registration, admin helpers) keeps treating
+// TARGET_CANONICAL_CSW_ADDRESS as authoritative, so the two identities will
+// be visibly divergent from user-facing endpoints. Do not leave this flag on
+// in steady state.
+const XMTP_AGENT_CSW_SKIP_CANONICAL = /^(1|true|yes)$/i.test(
+  (process.env.XMTP_AGENT_CSW_SKIP_CANONICAL ?? '').trim(),
+)
+
 const POLL_INTERVAL_MS = 60_000
 const MAX_AGENTS = Number(process.env.MAX_AGENTS ?? '50')
 const ACTION_TIMEOUT_MS = Math.floor(parsePositiveNumber(process.env.ELIZA_ACTION_TIMEOUT_MS, 30_000))
@@ -830,9 +846,15 @@ function validateStartupEnv(): EnvValidationResult {
     errors.push('XMTP_AGENT_CSW_ADDRESS must be a valid EVM address.')
   }
   if (configuredCsw && !isTargetCanonicalCsw(configuredCsw)) {
-    warnings.push(
-      `XMTP_AGENT_CSW_ADDRESS (${configuredCsw}) does not match canonical target ${TARGET_CANONICAL_CSW_ADDRESS}; startup will enforce canonical target identity.`,
-    )
+    if (XMTP_AGENT_CSW_SKIP_CANONICAL) {
+      warnings.push(
+        `XMTP_AGENT_CSW_SKIP_CANONICAL=true: XMTP identity will run as ${configuredCsw} instead of canonical ${TARGET_CANONICAL_CSW_ADDRESS}. Business identity (Zora referrer, ERC-8004, admin) still treats the canonical address as authoritative — DIVERGENT identities in effect.`,
+      )
+    } else {
+      warnings.push(
+        `XMTP_AGENT_CSW_ADDRESS (${configuredCsw}) does not match canonical target ${TARGET_CANONICAL_CSW_ADDRESS}; startup will enforce canonical target identity.`,
+      )
+    }
   }
 
   if (!llmService.getAvailableProviders().length) {
@@ -1856,6 +1878,13 @@ async function uploadRegistrationToGrove(): Promise<void> {
 
     const configuredCsw = normalizePolicyAddress((process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim())
     if (configuredCsw && !isTargetCanonicalCsw(configuredCsw)) {
+      if (XMTP_AGENT_CSW_SKIP_CANONICAL) {
+        regLogger.warn(
+          '[eliza] Skipping Grove registration upload: XMTP_AGENT_CSW_SKIP_CANONICAL=true would publish ERC-8004 metadata with a divergent XMTP identity. Resolve canonical ownership, then unset the bypass flag to re-enable.',
+          { configured: configuredCsw, canonical: TARGET_CANONICAL_CSW_ADDRESS, correlationId },
+        )
+        return
+      }
       regLogger.warn('[eliza] XMTP agent CSW mismatch detected; using canonical target agent key', {
         configured: configuredCsw,
         expected: TARGET_CANONICAL_CSW_ADDRESS,
@@ -2096,13 +2125,24 @@ async function main() {
     // Same delegation pattern used for ERC-4337 UserOps & vault deployments.
     // -----------------------------------------------------------------------
     const configuredCsw = normalizePolicyAddress((process.env.XMTP_AGENT_CSW_ADDRESS ?? '').trim())
-    if (configuredCsw && !isTargetCanonicalCsw(configuredCsw)) {
+    const divergentConfigured = configuredCsw && !isTargetCanonicalCsw(configuredCsw)
+    if (divergentConfigured && !XMTP_AGENT_CSW_SKIP_CANONICAL) {
       logger.warn('[eliza] overriding configured CSW with canonical target', {
         configured: configuredCsw,
         expected: TARGET_CANONICAL_CSW_ADDRESS,
       })
+    } else if (divergentConfigured && XMTP_AGENT_CSW_SKIP_CANONICAL) {
+      logger.warn('[eliza] XMTP_AGENT_CSW_SKIP_CANONICAL=true — running XMTP identity on configured CSW, NOT canonical', {
+        xmtpCsw: configuredCsw,
+        canonicalCsw: TARGET_CANONICAL_CSW_ADDRESS,
+        note: 'Temporary bypass. Unset the flag once the canonical CSW owner set is restored.',
+      })
     }
-    const cswAddress = TARGET_CANONICAL_CSW_ADDRESS as `0x${string}`
+    const cswAddress = (
+      divergentConfigured && XMTP_AGENT_CSW_SKIP_CANONICAL
+        ? (configuredCsw as `0x${string}`)
+        : (TARGET_CANONICAL_CSW_ADDRESS as `0x${string}`)
+    )
     const privyWalletId = (process.env.XMTP_AGENT_PRIVY_WALLET_ID ?? '').trim()
     const chainId = Number(process.env.XMTP_AGENT_CSW_CHAIN_ID ?? '8453') || 8453
     const ownerIndexRaw = (process.env.XMTP_AGENT_CSW_OWNER_INDEX ?? '').trim()
