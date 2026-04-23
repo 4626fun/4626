@@ -10,16 +10,18 @@
   <link rel="stylesheet" href="./base.css">
   <link rel="stylesheet" href="./style.css">
   <link rel="stylesheet" href="./refinement.css">
+  <!-- Self-hosted vendor libraries (three.js 0.183.0, GSAP 3.13.0, ScrollTrigger 3.13.0).
+       Relative paths resolve under <base href="/immersive/"> to /immersive/vendor/*.
+       Scoped to 'self' in CSP — no external script-src allowlist needed. -->
   <script type="importmap">
   {
     "imports": {
-      "three": "https://cdn.jsdelivr.net/npm/three@0.183.0/build/three.module.js",
-      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.183.0/examples/jsm/"
+      "three": "./vendor/three.module.js"
     }
   }
   </script>
-  <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/gsap.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/gsap@3/dist/ScrollTrigger.min.js"></script>
+  <script src="./vendor/gsap.min.js"></script>
+  <script src="./vendor/ScrollTrigger.min.js"></script>
 </head>
 <body>
 
