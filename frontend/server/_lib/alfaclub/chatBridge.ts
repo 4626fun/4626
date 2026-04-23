@@ -13,6 +13,7 @@
 import { executeDeterministicCommand } from '../../agent/core/executeDeterministicCommand.js'
 import { matchesCommandFamily } from '../../commands/registry.js'
 import { TARGET_CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
+import { readAlfaClubChatToken } from './chatTokenStore.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -379,6 +380,30 @@ let bridgeState: BridgeState = {
   seenMessageIds: new Set<string>(),
 }
 
+function isFutureIsoTimestamp(value: string | null | undefined): boolean {
+  if (!value || !value.trim()) return true
+  const ts = Date.parse(value)
+  if (!Number.isFinite(ts)) return true
+  return ts > Date.now()
+}
+
+async function resolveBridgeJwt(fallbackJwt: string | null): Promise<string | null> {
+  let resolved: string | null = fallbackJwt
+  try {
+    const persisted = await readAlfaClubChatToken()
+    if (
+      persisted?.jwt &&
+      persisted.jwt.trim() &&
+      isFutureIsoTimestamp(persisted.expiresAt)
+    ) {
+      resolved = persisted.jwt.trim()
+    }
+  } catch {
+    // Fail-open to env fallback.
+  }
+  return resolved
+}
+
 function rememberSeenMessageId(id: string): void {
   if (bridgeState.seenMessageIds.has(id)) return
   bridgeState.seenMessageIds.add(id)
@@ -393,7 +418,18 @@ async function runBridgeTick(
   flags: AlfaClubChatBridgeFlags,
 ): Promise<AlfaClubChatBridgeTickResult> {
   const roomId = flags.roomId as string
-  const jwt = flags.jwt as string
+  const jwt = await resolveBridgeJwt(flags.jwt)
+  if (!jwt) {
+    return {
+      seeded: false,
+      roomId,
+      fetched: 0,
+      unseen: 0,
+      processed: 0,
+      replied: 0,
+      errors: [],
+    }
+  }
   const fetchedMessages = await fetchRoomHistory({
     apiBaseUrl: flags.apiBaseUrl,
     roomId,
@@ -519,7 +555,7 @@ export function startAlfaClubChatBridge(opts?: {
       stop,
     }
   }
-  if (!flags.roomId || !flags.jwt) {
+  if (!flags.roomId) {
     return {
       started: false,
       reason: 'env_missing',

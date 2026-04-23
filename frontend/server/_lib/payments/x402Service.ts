@@ -13,13 +13,14 @@ import {
 import { useFacilitator as createFacilitatorClient } from 'x402/verify'
 
 import { getCanonicalOrigin } from '../infra/origin.js'
+import { TARGET_CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
 const DEFAULT_NETWORK = 'base' as const
 const DEFAULT_PRICE_USD = 1
 const DEFAULT_MAX_TIMEOUT_SECONDS = 300
-const DEFAULT_PAY_TO = '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef'
+const DEFAULT_PAY_TO = TARGET_CANONICAL_CSW_ADDRESS
 const X402_VERSION = 1
 const PAYMENT_ALLOW_HEADERS = [
   'PAYMENT-SIGNATURE',

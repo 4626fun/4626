@@ -12,7 +12,7 @@ describe('alfaclub vigilante — vercel wiring', () => {
     expect(entry?.schedule).toBe('0 12 * * *')
   })
 
-  it('v1 route map exposes alfaclub/leaderboard, alfaclub/run, alfaclub/compare', async () => {
+  it('v1 route map exposes alfaclub/leaderboard, run, compare, relay-now, chat-token', async () => {
     const src = await readFile(
       new URL('../_handlers/_routes.v1.ts', import.meta.url),
       'utf8',
@@ -20,5 +20,7 @@ describe('alfaclub vigilante — vercel wiring', () => {
     expect(src).toContain("'alfaclub/leaderboard'")
     expect(src).toContain("'alfaclub/run'")
     expect(src).toContain("'alfaclub/compare'")
+    expect(src).toContain("'alfaclub/relay-now'")
+    expect(src).toContain("'alfaclub/chat-token'")
   })
 })

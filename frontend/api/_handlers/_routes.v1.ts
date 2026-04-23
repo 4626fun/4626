@@ -54,6 +54,7 @@ const v1RouteLoaders: ApiRouteLoaders = {
   'alfaclub/run': () => import('./v1/alfaclub/_run.js'),
   'alfaclub/compare': () => import('./v1/alfaclub/_compare.js'),
   'alfaclub/relay-now': () => import('./v1/alfaclub/_relay-now.js'),
+  'alfaclub/chat-token': () => import('./v1/alfaclub/_chat-token.js'),
   'build/auction/submitBid': () => import('./v1/build/auction/_submitBid.js'),
   'build/gauge/vote': () => import('./v1/build/gauge/_vote.js'),
   'build/gauge/resetVotes': () => import('./v1/build/gauge/_resetVotes.js'),

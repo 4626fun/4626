@@ -17,6 +17,7 @@ import { keccak256, toHex } from 'viem'
 
 import { tryUploadImmutableJson, type GroveUploadAttempt } from '../lens/lensGrove.js'
 import type { RankedCreator } from './leaderboard.js'
+import { TARGET_CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
 
 export const SCORECARD_SCHEMA = '4626.alfaclub.scorecard.v1' as const
 
@@ -113,7 +114,7 @@ function getAgentRegistry(): string {
 }
 
 function getCanonicalCsw(): string {
-  return '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef'
+  return TARGET_CANONICAL_CSW_ADDRESS
 }
 
 // ---------------------------------------------------------------------------

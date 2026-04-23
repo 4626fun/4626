@@ -1,7 +1,9 @@
+import { TARGET_CANONICAL_CSW_ADDRESS } from '../../../../src/wallet/canonicalWalletPolicy.js'
+
 export const keeprTraderCharacter = {
   name: 'Keepr-Trader',
   username: 'keepr_trader_2205',
-  id: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
+  id: TARGET_CANONICAL_CSW_ADDRESS,
   description: 'DeFi execution specialist for Keepr swarm routing.',
 
   bio: [

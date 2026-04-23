@@ -40,6 +40,7 @@ import { getCanonicalOrigin } from '../../../../server/_lib/infra/origin.js'
 import { resolveCoinPartiesAndOwner } from '../../../../server/_lib/onchain/coinParties.js'
 import { charmPoolNotIndexedError, extractCharmCreateVaultPool, isCharmPoolIndexed } from '../../../../server/_lib/deploy/charmVaults.js'
 import { readProfileWalletAuthority } from '../../../../server/_lib/wallet/canonicalWalletResolver.js'
+import { isServerAdminAddress } from '../../../../server/_lib/infra/trust.js'
 import {
   normalizeSolanaAssetMintOrigin,
 } from '../../../../server/_lib/onchain/solanaOvaultCompatibility.js'
@@ -911,7 +912,7 @@ async function isOnchainSmartWalletOwner(params: { smartWallet: Address; ownerAd
   }
 }
 
-type CreatorAllowlistMatch = 'allowlist' | 'creator_wallets' | 'none'
+type CreatorAllowlistMatch = 'admin' | 'allowlist' | 'creator_wallets' | 'none'
 
 type CreatorAllowlistCheck = {
   allowed: boolean
@@ -939,7 +940,12 @@ async function resolveAllowlistAddresses(params: {
   creatorToken: Address
 }): Promise<Address[]> {
   const base = normalizeAllowlistAddresses([params.sessionAddress, params.smartWallet])
-  return base
+  try {
+    const parties = await resolveCoinPartiesAndOwner(params.creatorToken as `0x${string}`)
+    return normalizeAllowlistAddresses([params.sessionAddress, params.smartWallet, parties.creator, parties.payoutRecipient, parties.owner])
+  } catch {
+    return base
+  }
 }
 
 /**
@@ -960,6 +966,11 @@ async function checkCreatorAllowlist(params: {
 
   if (addressFilters.length === 0) {
     return { allowed: false, matchedBy: 'none', checkedAddresses: [] }
+  }
+
+  const isAdmin = addressesToCheck.some((address) => isServerAdminAddress(address))
+  if (isAdmin) {
+    return { allowed: true, matchedBy: 'admin', checkedAddresses: addressFilters }
   }
 
   // Try Supabase first

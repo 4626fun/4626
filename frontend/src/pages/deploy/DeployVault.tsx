@@ -3164,14 +3164,20 @@ function DeployVaultBatcher({
         (await publicClient!
           .getBytecode({ address: batcherAddress as Address })
           .catch(() => null)) ?? null
-      const supportsPhase1WithSalt = (() => {
+      const batcherBytecodeLower = (batcherBytecode ?? '0x').toLowerCase()
+      const supportsLegacyPhase1WithSaltSelector = (() => {
         if (!batcherBytecode || batcherBytecode === '0x') return false
-        const bytecodeLower = batcherBytecode.toLowerCase()
-        const supportsLegacySalt = bytecodeLower.includes(BATCHER_PHASE1_WITH_SALT_SELECTOR)
-        const supportsSplitSalt =
-          bytecodeLower.includes(BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR) &&
-          bytecodeLower.includes(BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR)
-        return supportsLegacySalt || supportsSplitSalt
+        return batcherBytecodeLower.includes(BATCHER_PHASE1_WITH_SALT_SELECTOR)
+      })()
+      const supportsSplitPhase1WithSaltSelectors = (() => {
+        if (!batcherBytecode || batcherBytecode === '0x') return false
+        return (
+          batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR) &&
+          batcherBytecodeLower.includes(BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR)
+        )
+      })()
+      const supportsPhase1WithSalt = (() => {
+        return supportsLegacyPhase1WithSaltSelector || supportsSplitPhase1WithSaltSelectors
       })()
 
       // IMPORTANT: The onchain deployment batcher uses *lowercase* symbols for salts + oracle wiring,
@@ -3340,6 +3346,76 @@ function DeployVaultBatcher({
           }
           shareOftSaltOverrideUsed = found
           shareOftVanityCacheRef.current = { key: vanityKey, salt: found }
+        }
+      }
+      if (shareOftSaltOverrideUsed && shareOftVanitySuffix) {
+        const phase1ParamsForProbe = {
+          creatorToken,
+          owner,
+          vaultName,
+          vaultSymbol,
+          shareName,
+          shareSymbol,
+          version: deploymentVersionUsed,
+        } as const
+        const probeCallData = supportsSplitPhase1WithSaltSelectors
+          ? encodeFunctionData({
+              abi: CREATOR_VAULT_BATCHER_ABI,
+              functionName: 'deployPhase1CoreWithSalt',
+              args: [phase1ParamsForProbe, codeIds, shareOftSaltOverrideUsed],
+            })
+          : supportsLegacyPhase1WithSaltSelector
+            ? encodeFunctionData({
+                abi: CREATOR_VAULT_BATCHER_ABI,
+                functionName: 'deployPhase1WithSalt',
+                args: [phase1ParamsForProbe, codeIds, shareOftSaltOverrideUsed],
+              })
+            : null
+        let saltOverrideUsable = false
+        if (probeCallData) {
+          try {
+            await publicClient!.call({
+              to: batcherAddress as Address,
+              data: probeCallData,
+              account: owner,
+            })
+            saltOverrideUsable = true
+          } catch {
+            saltOverrideUsable = false
+          }
+        }
+
+        if (!saltOverrideUsable) {
+          if (shareVanityIsCustom) {
+            const blockingMessage =
+              `Active batcher ${batcherDisplay} rejects Phase-1 salt overrides for this deploy. ` +
+              `Custom share token vanity suffix "${shareOftVanitySuffix}" is blocked.`
+            logger.warn('[DeployVault] share_oft_vanity_suffix_blocked', {
+              batcher: batcherAddress,
+              suffix: shareOftVanitySuffix,
+              reason: 'phase1_salt_overrides_rejected',
+            })
+            throw new Error(blockingMessage)
+          }
+
+          const skipLogKey = buildShareVanitySkipLogKey({
+            batcher: batcherAddress,
+            suffix: shareOftVanitySuffix,
+            reason: 'phase1_salt_overrides_rejected',
+          })
+          if (shouldEmitShareVanitySkipLog({ lastKey: shareOftVanitySkipLogKeyRef.current, nextKey: skipLogKey })) {
+            shareOftVanitySkipLogKeyRef.current = skipLogKey
+            logger.debug('[DeployVault] share_oft_vanity_suffix_skipped_default', {
+              batcher: batcherAddress,
+              suffix: shareOftVanitySuffix,
+              reason: 'phase1_salt_overrides_rejected',
+            })
+          }
+
+          shareOftSaltOverrideUsed = null
+          shareOftVanityWarning =
+            `Active batcher ${batcherDisplay} rejects Phase-1 salt overrides, so default share suffix ` +
+            `"${shareOftVanitySuffix}" is not guaranteed for this deploy.`
         }
       }
       const shareOftSalt = shareOftSaltOverrideUsed ?? derivedShareOftSalt

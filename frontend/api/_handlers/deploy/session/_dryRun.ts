@@ -138,20 +138,34 @@ async function runDryRunPhase(params: {
   smartWallet: Address
   sendTransaction: (args: { account: Address; to: Address; data: Hex; value: bigint }) => Promise<Hex>
   waitForTransactionReceipt: (args: { hash: Hex }) => Promise<{ status?: string }>
+  simulateCall: (args: { account: Address; to: Address; data: Hex; value: bigint }) => Promise<unknown>
 }): Promise<{ phase: DryRunPhaseResult; failure?: DryRunFailure }> {
   for (let callIndex = 0; callIndex < params.calls.length; callIndex += 1) {
     const call = params.calls[callIndex]!
     const to = getAddress(call.to)
+    const value = callValueToBigInt(call.value)
     try {
       const hash = await params.sendTransaction({
         account: params.smartWallet,
         to,
         data: call.data,
-        value: callValueToBigInt(call.value),
+        value,
       })
       const receipt = await params.waitForTransactionReceipt({ hash })
       if (String(receipt?.status ?? '').toLowerCase() === 'reverted') {
-        throw new Error('simulation transaction reverted')
+        let revertDetail = 'simulation transaction reverted'
+        try {
+          await params.simulateCall({
+            account: params.smartWallet,
+            to,
+            data: call.data,
+            value,
+          })
+        } catch (simulationError) {
+          const formatted = formatDryRunError(simulationError)
+          if (formatted) revertDetail = formatted
+        }
+        throw new Error(revertDetail)
       }
     } catch (error) {
       return {
@@ -259,6 +273,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           smartWallet,
           sendTransaction: (args) => walletClient.sendTransaction({ ...args, chain: base } as any),
           waitForTransactionReceipt: (args) => publicClient.waitForTransactionReceipt(args as any),
+          simulateCall: (args) => publicClient.call({ ...args, chain: base } as any),
         })
         phases.push(result.phase)
         if (result.failure) {

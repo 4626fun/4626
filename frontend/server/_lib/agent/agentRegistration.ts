@@ -8,6 +8,7 @@ import {
   ERC8004_DOMAIN_VERIFICATION_PATH,
   STRICT_IMMUTABLE_AGENT_URI_SUMMARY,
 } from '../../../src/lib/agent/erc8004AgentUriPolicy.js'
+import { TARGET_CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
 
 export type RegistrationService = {
   name: string
@@ -34,6 +35,7 @@ const REGISTRATION_TYPE = 'https://eips.ethereum.org/EIPS/eip-8004#registration-
 const SUPPORTED_ENDPOINT_PREFIXES = ['https://', 'http://', 'ipfs://', 'ar://', 'data:'] as const
 export { AGENT_REGISTRATION_WELL_KNOWN_PATH, ERC8004_DOMAIN_VERIFICATION_PATH }
 export const STRICT_IMMUTABLE_AGENT_URI_HINT = STRICT_IMMUTABLE_AGENT_URI_SUMMARY
+const CANONICAL_AGENT_WALLET_CAIP10 = `eip155:8453:${TARGET_CANONICAL_CSW_ADDRESS}` as const
 
 const fallbackRegistration: RegistrationFile = {
   type: REGISTRATION_TYPE,
@@ -44,15 +46,15 @@ const fallbackRegistration: RegistrationFile = {
     { name: 'web', endpoint: 'https://4626.fun' },
     {
       name: 'XMTP',
-      endpoint: 'https://xmtp.chat/dm/0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
+      endpoint: `https://xmtp.chat/dm/${TARGET_CANONICAL_CSW_ADDRESS}`,
       version: 'production',
-      address: '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
+      address: TARGET_CANONICAL_CSW_ADDRESS,
       description: 'XMTP messaging endpoint — DM or group chat with the agent. Identity is a Coinbase Smart Wallet on Base (chain 8453).',
     },
     {
       name: 'agentWallet',
-      endpoint: 'eip155:8453:0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
-      account: 'eip155:8453:0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef',
+      endpoint: CANONICAL_AGENT_WALLET_CAIP10,
+      account: CANONICAL_AGENT_WALLET_CAIP10,
     },
     { name: 'api', endpoint: 'https://4626.fun/api/v1/spec.json', version: '1.0.0' },
     { name: 'feedback', endpoint: 'https://4626.fun/api/v1/agents/feedback', version: '2.0' },

@@ -89,6 +89,42 @@ export async function ensureAlfaClubVigilanteSchema(): Promise<void> {
     // Ignore.
   }
 
+  // ── alfaclub_runtime_secret ──
+  // Runtime-rotated short-lived credentials (e.g. AlfaClub chat JWT).
+  await db.sql`
+    CREATE TABLE IF NOT EXISTS alfaclub_runtime_secret (
+      secret_key         TEXT PRIMARY KEY,
+      secret_value       TEXT NOT NULL,
+      expires_at         TIMESTAMPTZ,
+      updated_by         TEXT,
+      updated_at         TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `
+  try {
+    await db.sql`ALTER TABLE alfaclub_runtime_secret ENABLE ROW LEVEL SECURITY;`
+  } catch {
+    // Ignore.
+  }
+  try {
+    await db.sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_policies
+          WHERE schemaname = 'public'
+            AND tablename = 'alfaclub_runtime_secret'
+            AND policyname = 'alfaclub_runtime_secret_deny_all'
+        ) THEN
+          CREATE POLICY alfaclub_runtime_secret_deny_all
+            ON alfaclub_runtime_secret FOR ALL TO public USING (false) WITH CHECK (false);
+        END IF;
+      END
+      $$;
+    `
+  } catch {
+    // Ignore.
+  }
+
   // ── alfaclub_metrics_snapshot ──
   await db.sql`
     CREATE TABLE IF NOT EXISTS alfaclub_metrics_snapshot (

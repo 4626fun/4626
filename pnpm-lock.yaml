@@ -32,6 +32,7 @@ overrides:
   jayson>uuid: 9.0.1
   ws: 8.18.0
   yaml: 2.8.3
+  svix>uuid: 10.0.0
 
 patchedDependencies:
   elliptic@6.6.1:
