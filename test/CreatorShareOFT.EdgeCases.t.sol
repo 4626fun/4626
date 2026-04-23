@@ -662,6 +662,15 @@ contract CreatorShareOFTEdgeCasesTest is Test {
         MockBeneficiaryReturnsAddress beneficiaryContract = new MockBeneficiaryReturnsAddress();
         beneficiaryContract.setBeneficiary(eoaUser);
 
+        // H-04 gate: only allowlisted recipients have their ILotteryBeneficiary
+        // callback consulted. Without this, `_resolveLotteryBeneficiary` short-
+        // circuits to the recipient itself and buyer would be the beneficiary
+        // contract, not the user. The other tests in this block that assert a
+        // fallback-to-recipient outcome correctly exercise the un-registered
+        // path and do not need a resolver registration.
+        vm.prank(owner);
+        shareOFT.setLotteryResolver(address(beneficiaryContract), true);
+
         vm.prank(address(aggregator));
         shareOFT.transfer(address(beneficiaryContract), 100 ether);
 

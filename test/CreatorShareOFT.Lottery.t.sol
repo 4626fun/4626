@@ -479,6 +479,14 @@ contract CreatorShareOFTLotteryTest is Test {
         // User sets themselves as beneficiary
         lotteryMulticall.setBeneficiary(eoaUser);
 
+        // H-04 gate: `ILotteryBeneficiary` is only honored for recipients the
+        // owner has explicitly registered as lottery resolvers. Register the
+        // multicall before the transfer so the resolver callback is consulted;
+        // without this the transfer falls through to the recipient itself and
+        // the multicall (not the user) would be credited with the entry.
+        vm.prank(owner);
+        shareOFT.setLotteryResolver(address(lotteryMulticall), true);
+
         // Simulate swap ending at multicall contract
         vm.prank(address(dexRouter));
         shareOFT.transfer(address(lotteryMulticall), swapAmount);
@@ -545,6 +553,14 @@ contract CreatorShareOFTLotteryTest is Test {
             abi.encodeWithSelector(ILotteryBeneficiary.getLotteryBeneficiary.selector),
             abi.encode(eoaUser)
         );
+
+        // H-04 gate: `ILotteryBeneficiary` is only honored for recipients the
+        // owner has explicitly registered as lottery resolvers. In production
+        // this is a one-time admin call that whitelists audited aggregator
+        // adapters; without it the resolver callback is skipped and the
+        // aggregator contract itself (not the user) would be credited.
+        vm.prank(owner);
+        shareOFT.setLotteryResolver(address(lotteryAggregator), true);
 
         // DEX sends to aggregator (aggregator is recipient)
         vm.prank(address(dexRouter));
