@@ -1086,45 +1086,101 @@ async function checkCanonicalWalletOwnership(params: {
   }
 
   const db = await getDb()
+  // When the database is not configured at all (e.g. local dev / preview env
+  // without Postgres), fall back to the on-chain ownership check. This is a
+  // deliberate null-linkage case: there is no off-chain linkage to honour or
+  // revoke, so the chain remains the source of truth.
   if (!db) return await onchainOwnerCheck()
-  await ensureWaitlistSchema(db as any)
+
+  // Any failure past this point is a DB availability / schema failure
+  // (connection error, transient query failure, migration lag). We must NOT
+  // fall back to the on-chain check on a DB error — doing so would let a
+  // wallet whose profile linkage was revoked regain deploy authority whenever
+  // the DB is degraded. Fail closed with 503 so the client retries.
+  try {
+    await ensureWaitlistSchema(db as any)
+  } catch (err) {
+    console.warn('[deploy/session/create] canonical_linkage_db_unavailable (schema)', {
+      smartWallet: params.smartWallet.toLowerCase(),
+      error: err instanceof Error ? err.message : String(err),
+    })
+    throw new DeploySessionRequestError(
+      503,
+      'Canonical wallet linkage lookup temporarily unavailable. Please retry.',
+    )
+  }
 
   const smartWalletLc = params.smartWallet.toLowerCase()
   const ownerLc = params.ownerAddress.toLowerCase()
   const sessionLc = params.sessionAddress.toLowerCase()
 
-  const canonicalRow = await db.sql`
-    SELECT profile_id
-    FROM profile_wallets
-    WHERE LOWER(address) = ${smartWalletLc}
-      AND is_canonical_smart_wallet = true
-    LIMIT 1;
-  `
+  let canonicalRow: { rows?: Array<{ profile_id?: unknown }> }
+  try {
+    canonicalRow = await db.sql`
+      SELECT profile_id
+      FROM profile_wallets
+      WHERE LOWER(address) = ${smartWalletLc}
+        AND is_canonical_smart_wallet = true
+      LIMIT 1;
+    `
+  } catch (err) {
+    console.warn('[deploy/session/create] canonical_linkage_db_unavailable (canonicalRow)', {
+      smartWallet: smartWalletLc,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    throw new DeploySessionRequestError(
+      503,
+      'Canonical wallet linkage lookup temporarily unavailable. Please retry.',
+    )
+  }
   const profileId = canonicalRow.rows?.[0]?.profile_id ?? null
   if (!profileId) {
+    // Null linkage: the smart wallet was never registered as canonical for any
+    // profile. Fall through to the on-chain check — there is nothing to have
+    // been revoked.
     const onchain = await onchainOwnerCheck()
     return onchain.ok ? onchain : { ok: false, reason: onchain.reason ?? 'canonical_wallet_not_verified' }
   }
 
-  const authority = await readProfileWalletAuthority({
-    db: db as any,
-    profileId: Number(profileId),
-  })
+  let authority: Awaited<ReturnType<typeof readProfileWalletAuthority>>
+  try {
+    authority = await readProfileWalletAuthority({
+      db: db as any,
+      profileId: Number(profileId),
+    })
+  } catch (err) {
+    console.warn('[deploy/session/create] canonical_linkage_db_unavailable (authority)', {
+      smartWallet: smartWalletLc,
+      profileId,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    throw new DeploySessionRequestError(
+      503,
+      'Canonical wallet linkage lookup temporarily unavailable. Please retry.',
+    )
+  }
   if (!authority) {
+    // Null linkage: profile row exists but no authority record has been
+    // written. Treat as not-yet-linked and fall back to on-chain.
     const onchain = await onchainOwnerCheck()
     return onchain.ok ? onchain : { ok: false, reason: onchain.reason ?? 'canonical_wallet_not_verified' }
   }
 
   if (authority.canonicalSmartWalletAddress !== smartWalletLc) {
-    const onchain = await onchainOwnerCheck()
-    return onchain.ok ? onchain : { ok: false, reason: onchain.reason ?? 'canonical_wallet_not_verified' }
+    // Linkage exists and points to a DIFFERENT canonical smart wallet. This is
+    // a deliberate revocation / re-linkage — must NOT fall back to on-chain,
+    // or a previously-linked wallet retains deploy authority after being
+    // unlinked.
+    return { ok: false, reason: 'canonical_wallet_linkage_revoked' }
   }
 
   if (sessionLc === smartWalletLc) return { ok: true }
   if (authority.activeOwnerWalletAddress === sessionLc) return { ok: true }
 
-  const onchain = await onchainOwnerCheck()
-  return onchain.ok ? onchain : { ok: false, reason: onchain.reason ?? 'session_not_authorized' }
+  // Linkage exists for this CSW but the session wallet is not the recorded
+  // active owner. This is also a revocation scenario (the session wallet was
+  // rotated out). Do not fall back to on-chain ownership.
+  return { ok: false, reason: 'session_not_linkage_owner' }
 }
 
 export async function validateDeploySessionRequest(params: {
