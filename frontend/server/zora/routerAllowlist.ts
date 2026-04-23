@@ -1,5 +1,5 @@
 /**
- * Router target allowlist for Arch B `/coin buy` (and future `/coin sell`).
+ * Router target allowlist for Arch B `/coin buy` (and `/coin sell`).
  *
  * Why this exists
  * ---------------
@@ -12,15 +12,22 @@
  *
  * Modes
  * -----
- * - `observe` (default): unknown targets are allowed but logged via
- *   logger.warn so we can collect empirical router addresses during pilot.
- *   Never blocks a trade in this mode.
- * - `enforce`: unknown targets return `{ allowed: false }`. Blocks the trade.
+ * - `enforce` (default, safe): unknown targets return `{ allowed: false }`.
+ *   Blocks the trade. This is the production default.
+ * - `observe`: unknown targets are allowed but logged via `logger.warn` so
+ *   we can collect empirical router addresses during pilot. Only use in
+ *   preview/development while discovering new routers.
  *
- * Flip from observe to enforce after 20+ successful preview trades confirm
- * the allowlist is complete (Phase 3c pre-production step).
+ * The default changed from `observe` → `enforce` in response to audit
+ * findings H-01 ([M-x]/4626-411) and H-02 ([M-x]/4626-413). Prior to this
+ * change, production silently allowed arbitrary router targets when the
+ * `ARCH_B_ROUTER_ALLOWLIST_MODE` env var was unset, which left the CSW
+ * exposed to malicious Zora-quote responses.
  *
- * Set `ARCH_B_ROUTER_ALLOWLIST_MODE=enforce` in env to enable enforcement.
+ * Operators who still need observe-mode behaviour (e.g. for preview
+ * pilots discovering new router addresses) must **explicitly** set
+ * `ARCH_B_ROUTER_ALLOWLIST_MODE=observe`. A missing or empty env var now
+ * fails closed.
  */
 
 import type { Address } from 'viem'
@@ -40,9 +47,8 @@ declare const process: { env: Record<string, string | undefined> }
  * - Permit2: canonical EIP-2612 permit relay used by Uniswap and Zora.
  *   Address is deterministic across chains.
  * - Uniswap Universal Router on Base: provisional — needs empirical
- *   confirmation from pilot tx logs before enforcing. Logged at WARN in
- *   observe mode if seen from the quote API. Listed here as the expected
- *   target so it passes without noise in a green pilot.
+ *   confirmation from pilot tx logs before enforcing. Listed here as the
+ *   expected target so it passes without noise in a green pilot.
  */
 const ROUTER_ALLOWLIST: ReadonlySet<string> = new Set([
   '0x000000000022d473030f116ddee9f6b43ac78ba3', // Permit2 (deterministic)
@@ -55,9 +61,16 @@ const ROUTER_ALLOWLIST: ReadonlySet<string> = new Set([
 
 type AllowlistMode = 'observe' | 'enforce'
 
+/**
+ * Resolve the allowlist mode from the environment.
+ *
+ * **Fail-closed default**: if `ARCH_B_ROUTER_ALLOWLIST_MODE` is unset,
+ * empty, or an unrecognised value, we return `'enforce'`. Only an
+ * explicit `observe` opts in to the permissive behaviour.
+ */
 function resolveMode(): AllowlistMode {
   const raw = (process.env.ARCH_B_ROUTER_ALLOWLIST_MODE ?? '').trim().toLowerCase()
-  return raw === 'enforce' ? 'enforce' : 'observe'
+  return raw === 'observe' ? 'observe' : 'enforce'
 }
 
 // ---------------------------------------------------------------------------
@@ -73,12 +86,12 @@ export type RouterAllowlistResult =
  *
  * Call this AFTER receiving the quote and BEFORE building the calls array.
  *
- * In `observe` mode: always returns `{ allowed: true }`. If the target is
- * unknown, also sets `observed: true` and emits a logger.warn so we can
- * track new router addresses in preview.
+ * In `enforce` mode (default): returns `{ allowed: false, reason }` for any
+ * target not in the allowlist.
  *
- * In `enforce` mode: returns `{ allowed: false, reason }` for any target not
- * in the allowlist.
+ * In `observe` mode: always returns `{ allowed: true }`. If the target is
+ * unknown, also sets `observed: true` and emits a `logger.warn` so we can
+ * track new router addresses in preview.
  */
 export function checkRouterTarget(target: Address): RouterAllowlistResult {
   if (!target || !isAddress(target, { strict: false })) {
@@ -97,9 +110,14 @@ export function checkRouterTarget(target: Address): RouterAllowlistResult {
   }
 
   if (mode === 'enforce') {
+    logger.warn('[arch-b/router-allowlist] Rejected unknown router target', {
+      target,
+      mode: 'enforce',
+      note: 'Trade blocked. Add to ROUTER_ALLOWLIST if this target is legitimate.',
+    })
     return {
       allowed: false,
-      reason: `Router target ${target} is not on the allowlist. Coin buy blocked (enforce mode).`,
+      reason: `Router target ${target} is not on the allowlist. Coin buy/sell blocked (enforce mode).`,
     }
   }
 
