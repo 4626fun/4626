@@ -94,9 +94,20 @@ export async function listActivationsForCreator(
 }
 
 /**
- * True when the creator has a live entitlement row for the feature.
- * We treat both `pending` and `active` as entitled because payment
- * verification is authoritative and provisioning can lag.
+ * True when the creator has a live, PAID entitlement row for the feature.
+ *
+ * FIX: M-02 / 4626-408 — previously this function treated any row whose status
+ * was `pending` or `active` as entitled. A `pending` row is inserted the moment
+ * a Stripe checkout session (or x402 attempt) is created — BEFORE the payment
+ * has cleared and `payment_verified_at` has been set by the webhook. That
+ * window (typically several seconds, but unbounded if the user abandons the
+ * flow) granted feature access for free.
+ *
+ * We now additionally require `payment_verified_at IS NOT NULL` so only rows
+ * whose payment has been verified server-side (stripe webhook or x402 settle)
+ * count as entitled. `active` rows written by the webhook always set
+ * `payment_verified_at` (see upsertActivationFromStripeWebhook below), so this
+ * tightens the gate without changing the happy path.
  */
 export async function hasLiveActivationForFeature(
   db: Db,
@@ -111,6 +122,7 @@ export async function hasLiveActivationForFeature(
     WHERE creator_token = ${creatorKey}
       AND feature_key = ${featureKey}
       AND status IN ('pending', 'active')
+      AND payment_verified_at IS NOT NULL
     LIMIT 1;
   `
   return Array.isArray(result.rows) && result.rows.length > 0
