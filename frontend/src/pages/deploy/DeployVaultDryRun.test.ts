@@ -8,10 +8,10 @@ describe('DeployVault dry run wiring', () => {
     const viteConfigSource = fs.readFileSync(path.resolve(__dirname, '../../../vite.config.ts'), 'utf8')
     const pageSource = fs.readFileSync(path.resolve(__dirname, './DeployVault.tsx'), 'utf8')
 
-    expect(routeSource).toContain("'deploy/session/dry-run': () => import('./deploy/session/_dryRun.js')")
+    expect(routeSource).toContain("'deploy/v2/session/dry-run': () => import('./deploy/v2/session/_dryRun.js')")
     expect(viteConfigSource).toContain("'/api/deploy/config': () => import('./api/_handlers/deploy/_config')")
     expect(pageSource).toContain('/api/deploy/config')
-    expect(pageSource).toContain('/api/deploy/session/dry-run')
+    expect(pageSource).toContain('/api/deploy/v2/session/dry-run')
     expect(pageSource).toContain('isLocalForkRpcUrl')
     expect(pageSource).toContain('VITE_BASE_RPC')
     expect(pageSource).toContain('Run dry-run')

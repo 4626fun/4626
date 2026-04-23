@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import handler from '../_handlers/deploy/session/_start.ts'
+import handler from '../_handlers/deploy/v2/session/_start.ts'
 import { createMockReq, createMockRes } from './helpers'
 
 const { readJsonBodyMock, readSessionFromRequestMock, readSiwaAgentFromRequestMock } = vi.hoisted(() => ({
@@ -36,12 +36,16 @@ vi.mock('../../server/_lib/infra/origin.js', () => ({
 }))
 
 const readContractMock = vi.fn()
-vi.mock('viem', () => ({
-  getAddress: (value: string) => String(value).toLowerCase(),
-  encodeAbiParameters: vi.fn(() => '0xownerbytes'),
-  createPublicClient: vi.fn(() => ({ readContract: readContractMock })),
-  http: vi.fn(() => ({ transport: 'http' })),
-}))
+vi.mock('viem', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('viem')>()
+  return {
+    ...actual,
+    getAddress: (value: string) => String(value).toLowerCase(),
+    encodeAbiParameters: vi.fn(() => '0xownerbytes'),
+    createPublicClient: vi.fn(() => ({ readContract: readContractMock })),
+    http: vi.fn(() => ({ transport: 'http' })),
+  }
+})
 
 vi.mock('viem/chains', () => ({
   base: {},
@@ -187,7 +191,7 @@ describe('deploy session start wrapper', () => {
 
   it('continues immediately when session owner is already installed', async () => {
     const fetchMock = vi.fn(async (url: string) => {
-      if (String(url).includes('/api/deploy/session/create')) {
+      if (String(url).includes('/api/deploy/v2/session/create')) {
         return createResponse(200, {
           success: true,
           data: {

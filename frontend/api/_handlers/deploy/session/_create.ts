@@ -46,10 +46,15 @@ import {
 } from '../../../../server/_lib/onchain/solanaOvaultCompatibility.js'
 import {
   DEPLOY_VANITY_ALLOWED_LENGTHS,
-  getDeployVanityFeatureKey,
-  listDeployVanityFeatureKeysAtOrAbove,
 } from '../../../../server/_lib/creatorStrategy/catalog.js'
-import { hasLiveActivationForFeature } from '../../../../server/_lib/creatorStrategy/activations.js'
+import {
+  DEPLOY_FEATURE_POLICY_MATRIX,
+  hasAnyFeatureActivation,
+  listActiveCreatorFeatureKeys,
+  missingDeployVanityFeatureHints,
+  readPolicyFlagEnabled,
+  validateFeatureCompatibility,
+} from '../../../../server/_lib/deploy/featurePolicy/policy.js'
 import { hasContractBytecode } from '../../../../shared/wallet/bytecode.js'
 
 export type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
@@ -449,17 +454,11 @@ function hasPhase1SaltOverrideCalls(calls: Call[]): boolean {
 }
 
 function isDeployVanityPaywallEnabled(): boolean {
-  const raw = String(process.env.DEPLOY_VANITY_PAYWALL_ENABLED ?? '').trim().toLowerCase()
-  if (!raw) return true
-  if (raw === '0' || raw === 'false' || raw === 'no' || raw === 'off') return false
-  return true
+  return readPolicyFlagEnabled('DEPLOY_VANITY_PAYWALL_ENABLED', true)
 }
 
 function isDeployOvaultMeshPaywallEnabled(): boolean {
-  const raw = String(process.env.DEPLOY_OVAULT_MESH_PAYWALL_ENABLED ?? '').trim().toLowerCase()
-  if (!raw) return true
-  if (raw === '0' || raw === 'false' || raw === 'no' || raw === 'off') return false
-  return true
+  return readPolicyFlagEnabled('DEPLOY_OVAULT_MESH_PAYWALL_ENABLED', true)
 }
 
 function normalizeDeployVanityLength(value: number): number | null {
@@ -469,26 +468,6 @@ function normalizeDeployVanityLength(value: number): number | null {
     return null
   }
   return normalized
-}
-
-async function hasDeployVanityEntitlement(params: {
-  db: { sql?: unknown }
-  creatorToken: Address
-  kind: 'vaultPrefix' | 'shareSuffix'
-  requiredLength: number
-}): Promise<boolean> {
-  const keys = listDeployVanityFeatureKeysAtOrAbove({
-    kind: params.kind,
-    minLength: params.requiredLength,
-  })
-  for (const featureKey of keys) {
-    const ok = await hasLiveActivationForFeature(params.db as any, {
-      creatorToken: params.creatorToken,
-      featureKey,
-    })
-    if (ok) return true
-  }
-  return false
 }
 
 function inferPayoutRecipientMode(value: unknown): 'gauge' | 'payout_router' | null {
@@ -1269,37 +1248,12 @@ export async function validateDeploySessionRequest(params: {
       if (!db?.sql) {
         throw new DeploySessionRequestError(503, 'Vanity entitlement check unavailable (database unavailable).')
       }
-      const missingFeatures: string[] = []
-      if (requiresVaultPrefixEntitlementLength) {
-        const ok = await hasDeployVanityEntitlement({
-          db: db as any,
-          creatorToken,
-          kind: 'vaultPrefix',
-          requiredLength: requiresVaultPrefixEntitlementLength,
-        })
-        if (!ok) {
-          const featureKey = getDeployVanityFeatureKey({
-            kind: 'vaultPrefix',
-            length: requiresVaultPrefixEntitlementLength,
-          })
-          if (featureKey) missingFeatures.push(`${featureKey} (or higher)`)
-        }
-      }
-      if (requiresShareSuffixEntitlement) {
-        const ok = await hasDeployVanityEntitlement({
-          db: db as any,
-          creatorToken,
-          kind: 'shareSuffix',
-          requiredLength: requiresShareSuffixEntitlement,
-        })
-        if (!ok) {
-          const featureKey = getDeployVanityFeatureKey({
-            kind: 'shareSuffix',
-            length: requiresShareSuffixEntitlement,
-          })
-          if (featureKey) missingFeatures.push(`${featureKey} (or higher)`)
-        }
-      }
+      const missingFeatures = await missingDeployVanityFeatureHints({
+        db: db as any,
+        creatorToken,
+        vaultPrefixRequiredLength: requiresVaultPrefixEntitlementLength,
+        shareSuffixRequiredLength: requiresShareSuffixEntitlement,
+      })
       if (missingFeatures.length > 0) {
         throw new DeploySessionRequestError(
           402,
@@ -1315,21 +1269,47 @@ export async function validateDeploySessionRequest(params: {
     if (!db?.sql) {
       throw new DeploySessionRequestError(503, 'OVault mesh entitlement check unavailable (database unavailable).')
     }
-    // OVault mesh is bridge/composer infrastructure; treat the base Solana strategy
-    // entitlement as sufficient so creators are not forced into an unrelated extra gate.
-    const requiredFeatureKeys = ['solana_bridge_strategy', 'solana_ovault_mesh', 'solana_meteora_alpha_vault'] as const
-    let entitled = false
-    for (const featureKey of requiredFeatureKeys) {
-      const hasFeature = await hasLiveActivationForFeature(db as any, { creatorToken, featureKey })
-      if (hasFeature) {
-        entitled = true
-        break
-      }
-    }
+    const ovaultPolicy = DEPLOY_FEATURE_POLICY_MATRIX.find((entry) => entry.key === 'solana_ovault_mesh')
+    const requiredFeatureKeys =
+      ovaultPolicy?.requiresAnyOf ?? (['solana_bridge_strategy', 'solana_ovault_mesh', 'solana_meteora_alpha_vault'] as const)
+    const entitled = await hasAnyFeatureActivation({
+      db: db as any,
+      creatorToken,
+      featureKeys: requiredFeatureKeys,
+    })
     if (!entitled) {
       throw new DeploySessionRequestError(
         402,
         `OVault mesh deploy lane requires paid feature activation: ${requiredFeatureKeys.join(' or ')}. ` +
+          `Activate at /creator/strategy/features?creator=${creatorToken}.`,
+      )
+    }
+  }
+  if (phase3Calls.length > 0) {
+    const db = await getDb()
+    if (!db?.sql) {
+      throw new DeploySessionRequestError(503, 'Phase3 feature policy check unavailable (database unavailable).')
+    }
+    const activeFeatureKeys = await listActiveCreatorFeatureKeys({
+      db: db as any,
+      creatorToken,
+    })
+    const compatibility = validateFeatureCompatibility(activeFeatureKeys)
+    if (!compatibility.ok) {
+      throw new DeploySessionRequestError(409, compatibility.message)
+    }
+    const phase3Eligible = Array.from(
+      new Set(
+        DEPLOY_FEATURE_POLICY_MATRIX
+          .filter((entry) => entry.stages.includes('phase3'))
+          .flatMap((entry) => entry.requiresAnyOf),
+      ),
+    )
+    const hasDeployGatingFeature = phase3Eligible.some((key) => activeFeatureKeys.includes(key))
+    if (!hasDeployGatingFeature) {
+      throw new DeploySessionRequestError(
+        402,
+        `Phase 3 strategy deploy requires at least one paid deploy feature activation: ${phase3Eligible.join(', ')}. ` +
           `Activate at /creator/strategy/features?creator=${creatorToken}.`,
       )
     }

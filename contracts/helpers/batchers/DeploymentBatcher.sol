@@ -555,6 +555,10 @@ interface ICreatorOVaultStrategyManager {
     function setAutoAllocate(bool autoAllocate) external;
 }
 
+interface ICreatorOVaultManagementView {
+    function management() external view returns (address);
+}
+
 interface IAjnaVaultAuthConfigurator {
     function setBufferRatio(uint256 bufferRatioBps) external;
     function setMinBucketIndex(uint256 minBucketIndex) external;
@@ -968,6 +972,8 @@ contract DeploymentBatcher is ReentrancyGuard {
     error Phase1StateNotStuck();
     error InvalidCreatorTreasury(address provided);
     error InvalidPayoutRecipient();
+    error DeprecatedFinalizeSolanaParams();
+    error Phase3ManagementMismatch(address expected, address actual);
     error CharmFactoryGovernanceMismatch(address expected, address actual);
     error CharmFactoryProtocolFeeMismatch(uint256 expected, uint256 actual);
     error CharmVaultManagerMismatch(address expected, address actual);
@@ -1482,6 +1488,11 @@ contract DeploymentBatcher is ReentrancyGuard {
         }
         // Enforce deposit bounds: min 50M, max 50M.
         if (params.depositAmount < MIN_DEPOSIT || params.depositAmount > MAX_DEPOSIT) revert InvalidDepositAmount();
+        // Finalize no longer consumes Solana route payloads. Keep boundary strict so stale
+        // callers cannot silently pass dead params that imply behavior we no longer execute.
+        if (params.meteoraAlphaVault != bytes32(0) || params.solanaIxs.length != 0) {
+            revert DeprecatedFinalizeSolanaParams();
+        }
 
         // Require phase-1 + phase-2 contracts to exist.
         if (params.vault.code.length == 0 || params.wrapper.code.length == 0 || params.shareOFT.code.length == 0) {
@@ -1576,6 +1587,12 @@ contract DeploymentBatcher is ReentrancyGuard {
         // Bind caller auth to the actual vault owner onchain (not only user-supplied params.owner).
         if (IOwnableView(params.vault).owner() != params.owner) revert NotOwner();
         _requireOwner(params.owner);
+        // Explicit phase handoff invariant: phase-1 finalization keeps this batcher as vault
+        // management until phase-3 completes strategy registration.
+        address vaultManagement = ICreatorOVaultManagementView(params.vault).management();
+        if (vaultManagement != address(this)) {
+            revert Phase3ManagementMismatch(address(this), vaultManagement);
+        }
         // All three productive strategies are OPT-IN paid features. A
         // `weightBps == 0` means the creator did not activate that
         // strategy; we skip the deploy AND the `addStrategy` call

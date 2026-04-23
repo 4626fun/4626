@@ -71,7 +71,7 @@ async function main() {
 
     let statusCalls = 0
     let continueCalls = 0
-    await page.route('**/api/deploy/session/status', async (route) => {
+    await page.route('**/api/deploy/v2/session/status', async (route) => {
       statusCalls += 1
       const fulfill = (status, body) =>
         route.fulfill({
@@ -113,7 +113,7 @@ async function main() {
       })
     })
 
-    await page.route('**/api/deploy/session/continue', async (route) => {
+    await page.route('**/api/deploy/v2/session/resume', async (route) => {
       continueCalls += 1
       await route.fulfill({
         status: 200,

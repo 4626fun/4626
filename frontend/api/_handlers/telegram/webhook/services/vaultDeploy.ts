@@ -910,7 +910,7 @@ export async function startAkitaVaultDeployFromTelegram(params: {
 
     const token = makeSessionToken({ address: body.smartWallet })
     const origin = getCanonicalOrigin().replace(/\/+$/, '')
-    const response = await fetch(`${origin}/api/deploy/session/start`, {
+    const response = await fetch(`${origin}/api/deploy/v2/session/start`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -963,7 +963,7 @@ export async function fetchVaultDeployStatusFromTelegram(params: {
     const smartWallet = getAddress(params.canonicalSmartWallet)
     const token = makeSessionToken({ address: smartWallet })
     const origin = getCanonicalOrigin().replace(/\/+$/, '')
-    const response = await fetch(`${origin}/api/deploy/session/status`, {
+    const response = await fetch(`${origin}/api/deploy/v2/session/status`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',

@@ -28,9 +28,9 @@ describe('sessionClient', () => {
 
     const result = await postDeploySessionRequestWithAuthRetry<{ ok: boolean }>({
       postJson,
-      url: '/api/deploy/session/status',
+      url: '/api/deploy/v2/session/status',
       body: { sessionId: 'sess_1' },
-      label: 'deploy session status',
+      label: 'deploy v2 session status',
       ensurePaymasterSession,
     })
 
@@ -59,7 +59,7 @@ describe('sessionClient', () => {
     ]
     let statusIndex = 0
     const postJson = vi.fn(async ({ url }: { url: string }) => {
-      if (url === '/api/deploy/session/status') {
+      if (url === '/api/deploy/v2/session/status') {
         if (statusIndex === 0 && ensurePaymasterSession.mock.calls.length === 0) {
           return {
             response: makeResponse(false, 401),
@@ -74,7 +74,7 @@ describe('sessionClient', () => {
           json: { success: true, data: next } satisfies ApiEnvelope<DeploySessionStatusData>,
         }
       }
-      if (url === '/api/deploy/session/continue') {
+      if (url === '/api/deploy/v2/session/resume') {
         return {
           response: makeResponse(true, 200),
           json: { success: true, data: { ok: true } } satisfies ApiEnvelope<{ ok: boolean }>,

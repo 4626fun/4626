@@ -28,6 +28,8 @@ export type DeploySessionStep =
   | 'completed'
   | 'failed'
 
+export type DeploySessionState = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+
 export type DeploySessionRecord = {
   id: string
   tokenHash: string
@@ -43,9 +45,28 @@ export type DeploySessionRecord = {
   lastError: string | null
   lastUserOpHash: string | null
   lastTxHash: string | null
+  state: DeploySessionState
+  currentStage: DeploySessionStep
+  attemptCount: number
+  nextRunAfter: string | null
+  lockOwner: string | null
+  lockExpiresAt: string | null
+  lastFailureCode: string | null
+  lastFailureStage: string | null
+  artifacts: Record<string, unknown>
 }
 
 let deploySessionsSchemaEnsured = false
+
+const TERMINAL_STEPS = new Set<DeploySessionStep>(['completed', 'cancelled', 'failed'])
+
+function deriveStateFromStep(step: DeploySessionStep): DeploySessionState {
+  if (step === 'completed') return 'completed'
+  if (step === 'cancelled') return 'cancelled'
+  if (step === 'failed') return 'failed'
+  if (step.endsWith('_sent') || step === 'created') return 'running'
+  return 'pending'
+}
 
 export async function ensureDeploySessionsSchema(): Promise<void> {
   if (!isDbConfigured()) return
@@ -104,10 +125,95 @@ export async function ensureDeploySessionsSchema(): Promise<void> {
       // ignore (already exists or insufficient permissions)
     }
     try {
+      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS state TEXT;`
+    } catch {
+      // ignore (already exists or insufficient permissions)
+    }
+    try {
+      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS current_stage TEXT;`
+    } catch {
+      // ignore (already exists or insufficient permissions)
+    }
+    try {
+      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS attempt_count INTEGER NOT NULL DEFAULT 0;`
+    } catch {
+      // ignore (already exists or insufficient permissions)
+    }
+    try {
+      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS next_run_after TIMESTAMPTZ;`
+    } catch {
+      // ignore (already exists or insufficient permissions)
+    }
+    try {
+      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS lock_owner TEXT;`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS lock_expires_at TIMESTAMPTZ;`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS last_failure_code TEXT;`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS last_failure_stage TEXT;`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`ALTER TABLE deploys ADD COLUMN IF NOT EXISTS artifacts JSONB NOT NULL DEFAULT '{}'::jsonb;`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`CREATE INDEX IF NOT EXISTS deploys_state_idx ON deploys (state);`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`CREATE INDEX IF NOT EXISTS deploys_current_stage_idx ON deploys (current_stage);`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`CREATE INDEX IF NOT EXISTS deploys_next_run_after_idx ON deploys (next_run_after);`
+    } catch {
+      // ignore
+    }
+    try {
+      await db.sql`CREATE INDEX IF NOT EXISTS deploys_lock_expires_idx ON deploys (lock_expires_at);`
+    } catch {
+      // ignore
+    }
+    try {
       await db.sql`
         UPDATE deploys
         SET session_signer = COALESCE(NULLIF(session_signer, ''), session_owner)
         WHERE session_signer IS NULL OR session_signer = '';
+      `
+    } catch {
+      // ignore when migration columns are unavailable
+    }
+    try {
+      await db.sql`
+        UPDATE deploys
+        SET
+          current_stage = COALESCE(NULLIF(current_stage, ''), step),
+          state = COALESCE(
+            NULLIF(state, ''),
+            CASE
+              WHEN step = 'completed' THEN 'completed'
+              WHEN step = 'cancelled' THEN 'cancelled'
+              WHEN step = 'failed' THEN 'failed'
+              WHEN step LIKE '%_sent' OR step = 'created' THEN 'running'
+              ELSE 'pending'
+            END
+          )
+        WHERE current_stage IS NULL OR current_stage = '' OR state IS NULL OR state = '';
       `
     } catch {
       // ignore when migration columns are unavailable
@@ -167,6 +273,9 @@ export async function insertDeploySession(params: {
       session_owner_key_enc,
       payload,
       step,
+      current_stage,
+      state,
+      artifacts,
       expires_at
     ) VALUES (
       ${params.id},
@@ -178,6 +287,9 @@ export async function insertDeploySession(params: {
       ${null},
       ${payloadJson},
       ${'created'},
+      ${'created'},
+      ${'running'},
+      ${{}},
       ${params.expiresAt.toISOString()}
     );
   `
@@ -285,30 +397,75 @@ export async function getActiveDeploySessionForSender(params: {
 export async function updateDeploySession(params: {
   id: string
   step?: DeploySessionStep
+  state?: DeploySessionState
+  currentStage?: DeploySessionStep
   lastError?: string | null
   lastUserOpHash?: string | null
   lastTxHash?: string | null
+  lastFailureCode?: string | null
+  lastFailureStage?: string | null
+  nextRunAfter?: Date | null
+  lockOwner?: string | null
+  lockExpiresAt?: Date | null
+  attemptCount?: number | null
   payloadPatch?: any
+  artifactsPatch?: Record<string, unknown>
 }): Promise<void> {
   const db = await getDb()
   if (!db) throw new Error('db_not_configured')
   await ensureDeploySessionsSchema()
   const hasStep = Object.prototype.hasOwnProperty.call(params, 'step')
+  const hasState = Object.prototype.hasOwnProperty.call(params, 'state')
+  const hasCurrentStage = Object.prototype.hasOwnProperty.call(params, 'currentStage')
   const hasLastError = Object.prototype.hasOwnProperty.call(params, 'lastError')
   const hasLastUserOpHash = Object.prototype.hasOwnProperty.call(params, 'lastUserOpHash')
   const hasLastTxHash = Object.prototype.hasOwnProperty.call(params, 'lastTxHash')
+  const hasLastFailureCode = Object.prototype.hasOwnProperty.call(params, 'lastFailureCode')
+  const hasLastFailureStage = Object.prototype.hasOwnProperty.call(params, 'lastFailureStage')
+  const hasNextRunAfter = Object.prototype.hasOwnProperty.call(params, 'nextRunAfter')
+  const hasLockOwner = Object.prototype.hasOwnProperty.call(params, 'lockOwner')
+  const hasLockExpiresAt = Object.prototype.hasOwnProperty.call(params, 'lockExpiresAt')
+  const hasAttemptCount = Object.prototype.hasOwnProperty.call(params, 'attemptCount')
+  const derivedState = hasStep ? deriveStateFromStep(params.step ?? 'created') : null
 
   const patch = params.payloadPatch
-  if (patch && typeof patch === 'object') {
+  const artifactsPatch = params.artifactsPatch
+  const hasPayloadPatch = Boolean(patch && typeof patch === 'object')
+  const hasArtifactsPatch = Boolean(artifactsPatch && typeof artifactsPatch === 'object')
+
+  if (hasPayloadPatch || hasArtifactsPatch) {
     // Merge JSONB (right-biased).
     await db.sql`
       UPDATE deploys
       SET
-        payload = COALESCE(payload, '{}'::jsonb) || ${patch},
+        payload = CASE
+          WHEN ${hasPayloadPatch} THEN COALESCE(payload, '{}'::jsonb) || ${patch ?? {}}
+          ELSE payload
+        END,
+        artifacts = CASE
+          WHEN ${hasArtifactsPatch} THEN COALESCE(artifacts, '{}'::jsonb) || ${artifactsPatch ?? {}}
+          ELSE artifacts
+        END,
         step = CASE WHEN ${hasStep} THEN ${params.step ?? null} ELSE step END,
+        current_stage = CASE
+          WHEN ${hasCurrentStage} THEN ${params.currentStage ?? null}
+          WHEN ${hasStep} THEN ${params.step ?? null}
+          ELSE current_stage
+        END,
+        state = CASE
+          WHEN ${hasState} THEN ${params.state ?? null}
+          WHEN ${hasStep} THEN ${derivedState}
+          ELSE state
+        END,
         last_error = CASE WHEN ${hasLastError} THEN ${params.lastError ?? null} ELSE last_error END,
         last_userop_hash = CASE WHEN ${hasLastUserOpHash} THEN ${params.lastUserOpHash ?? null} ELSE last_userop_hash END,
         last_tx_hash = CASE WHEN ${hasLastTxHash} THEN ${params.lastTxHash ?? null} ELSE last_tx_hash END,
+        last_failure_code = CASE WHEN ${hasLastFailureCode} THEN ${params.lastFailureCode ?? null} ELSE last_failure_code END,
+        last_failure_stage = CASE WHEN ${hasLastFailureStage} THEN ${params.lastFailureStage ?? null} ELSE last_failure_stage END,
+        next_run_after = CASE WHEN ${hasNextRunAfter} THEN ${params.nextRunAfter ? params.nextRunAfter.toISOString() : null} ELSE next_run_after END,
+        lock_owner = CASE WHEN ${hasLockOwner} THEN ${params.lockOwner ?? null} ELSE lock_owner END,
+        lock_expires_at = CASE WHEN ${hasLockExpiresAt} THEN ${params.lockExpiresAt ? params.lockExpiresAt.toISOString() : null} ELSE lock_expires_at END,
+        attempt_count = CASE WHEN ${hasAttemptCount} THEN COALESCE(${params.attemptCount ?? null}, attempt_count) ELSE attempt_count END,
         updated_at = NOW()
       WHERE id = ${params.id};
     `
@@ -319,9 +476,25 @@ export async function updateDeploySession(params: {
     UPDATE deploys
     SET
       step = CASE WHEN ${hasStep} THEN ${params.step ?? null} ELSE step END,
+      current_stage = CASE
+        WHEN ${hasCurrentStage} THEN ${params.currentStage ?? null}
+        WHEN ${hasStep} THEN ${params.step ?? null}
+        ELSE current_stage
+      END,
+      state = CASE
+        WHEN ${hasState} THEN ${params.state ?? null}
+        WHEN ${hasStep} THEN ${derivedState}
+        ELSE state
+      END,
       last_error = CASE WHEN ${hasLastError} THEN ${params.lastError ?? null} ELSE last_error END,
       last_userop_hash = CASE WHEN ${hasLastUserOpHash} THEN ${params.lastUserOpHash ?? null} ELSE last_userop_hash END,
       last_tx_hash = CASE WHEN ${hasLastTxHash} THEN ${params.lastTxHash ?? null} ELSE last_tx_hash END,
+      last_failure_code = CASE WHEN ${hasLastFailureCode} THEN ${params.lastFailureCode ?? null} ELSE last_failure_code END,
+      last_failure_stage = CASE WHEN ${hasLastFailureStage} THEN ${params.lastFailureStage ?? null} ELSE last_failure_stage END,
+      next_run_after = CASE WHEN ${hasNextRunAfter} THEN ${params.nextRunAfter ? params.nextRunAfter.toISOString() : null} ELSE next_run_after END,
+      lock_owner = CASE WHEN ${hasLockOwner} THEN ${params.lockOwner ?? null} ELSE lock_owner END,
+      lock_expires_at = CASE WHEN ${hasLockExpiresAt} THEN ${params.lockExpiresAt ? params.lockExpiresAt.toISOString() : null} ELSE lock_expires_at END,
+      attempt_count = CASE WHEN ${hasAttemptCount} THEN COALESCE(${params.attemptCount ?? null}, attempt_count) ELSE attempt_count END,
       updated_at = NOW()
     WHERE id = ${params.id};
   `
@@ -331,10 +504,19 @@ export async function transitionDeploySession(params: {
   id: string
   fromStep: DeploySessionStep
   toStep: DeploySessionStep
+  state?: DeploySessionState
+  currentStage?: DeploySessionStep
   lastError?: string | null
   lastUserOpHash?: string | null
   lastTxHash?: string | null
+  lastFailureCode?: string | null
+  lastFailureStage?: string | null
+  nextRunAfter?: Date | null
+  lockOwner?: string | null
+  lockExpiresAt?: Date | null
+  attemptCount?: number | null
   payloadPatch?: any
+  artifactsPatch?: Record<string, unknown>
 }): Promise<boolean> {
   const db = await getDb()
   if (!db) throw new Error('db_not_configured')
@@ -342,18 +524,51 @@ export async function transitionDeploySession(params: {
   const hasLastError = Object.prototype.hasOwnProperty.call(params, 'lastError')
   const hasLastUserOpHash = Object.prototype.hasOwnProperty.call(params, 'lastUserOpHash')
   const hasLastTxHash = Object.prototype.hasOwnProperty.call(params, 'lastTxHash')
+  const hasState = Object.prototype.hasOwnProperty.call(params, 'state')
+  const hasCurrentStage = Object.prototype.hasOwnProperty.call(params, 'currentStage')
+  const hasLastFailureCode = Object.prototype.hasOwnProperty.call(params, 'lastFailureCode')
+  const hasLastFailureStage = Object.prototype.hasOwnProperty.call(params, 'lastFailureStage')
+  const hasNextRunAfter = Object.prototype.hasOwnProperty.call(params, 'nextRunAfter')
+  const hasLockOwner = Object.prototype.hasOwnProperty.call(params, 'lockOwner')
+  const hasLockExpiresAt = Object.prototype.hasOwnProperty.call(params, 'lockExpiresAt')
+  const hasAttemptCount = Object.prototype.hasOwnProperty.call(params, 'attemptCount')
 
   const patch = params.payloadPatch
+  const artifactsPatch = params.artifactsPatch
+  const hasArtifactsPatch = Boolean(artifactsPatch && typeof artifactsPatch === 'object')
+  const derivedState = deriveStateFromStep(params.toStep)
+  const hasPayloadPatch = Boolean(patch && typeof patch === 'object')
   const result =
-    patch && typeof patch === 'object'
+    hasPayloadPatch || hasArtifactsPatch
       ? await db.sql`
           UPDATE deploys
           SET
-            payload = COALESCE(payload, '{}'::jsonb) || ${patch},
+            payload = CASE
+              WHEN ${hasPayloadPatch} THEN COALESCE(payload, '{}'::jsonb) || ${patch ?? {}}
+              ELSE payload
+            END,
             step = ${params.toStep},
+            current_stage = CASE
+              WHEN ${hasCurrentStage} THEN ${params.currentStage ?? null}
+              ELSE ${params.toStep}
+            END,
+            state = CASE
+              WHEN ${hasState} THEN ${params.state ?? null}
+              ELSE ${derivedState}
+            END,
+            artifacts = CASE
+              WHEN ${hasArtifactsPatch} THEN COALESCE(artifacts, '{}'::jsonb) || ${artifactsPatch ?? {}}
+              ELSE artifacts
+            END,
             last_error = CASE WHEN ${hasLastError} THEN ${params.lastError ?? null} ELSE last_error END,
             last_userop_hash = CASE WHEN ${hasLastUserOpHash} THEN ${params.lastUserOpHash ?? null} ELSE last_userop_hash END,
             last_tx_hash = CASE WHEN ${hasLastTxHash} THEN ${params.lastTxHash ?? null} ELSE last_tx_hash END,
+            last_failure_code = CASE WHEN ${hasLastFailureCode} THEN ${params.lastFailureCode ?? null} ELSE last_failure_code END,
+            last_failure_stage = CASE WHEN ${hasLastFailureStage} THEN ${params.lastFailureStage ?? null} ELSE last_failure_stage END,
+            next_run_after = CASE WHEN ${hasNextRunAfter} THEN ${params.nextRunAfter ? params.nextRunAfter.toISOString() : null} ELSE next_run_after END,
+            lock_owner = CASE WHEN ${hasLockOwner} THEN ${params.lockOwner ?? null} ELSE lock_owner END,
+            lock_expires_at = CASE WHEN ${hasLockExpiresAt} THEN ${params.lockExpiresAt ? params.lockExpiresAt.toISOString() : null} ELSE lock_expires_at END,
+            attempt_count = CASE WHEN ${hasAttemptCount} THEN COALESCE(${params.attemptCount ?? null}, attempt_count) ELSE attempt_count END,
             updated_at = NOW()
           WHERE id = ${params.id}
             AND step = ${params.fromStep}
@@ -363,9 +578,23 @@ export async function transitionDeploySession(params: {
           UPDATE deploys
           SET
             step = ${params.toStep},
+            current_stage = CASE
+              WHEN ${hasCurrentStage} THEN ${params.currentStage ?? null}
+              ELSE ${params.toStep}
+            END,
+            state = CASE
+              WHEN ${hasState} THEN ${params.state ?? null}
+              ELSE ${derivedState}
+            END,
             last_error = CASE WHEN ${hasLastError} THEN ${params.lastError ?? null} ELSE last_error END,
             last_userop_hash = CASE WHEN ${hasLastUserOpHash} THEN ${params.lastUserOpHash ?? null} ELSE last_userop_hash END,
             last_tx_hash = CASE WHEN ${hasLastTxHash} THEN ${params.lastTxHash ?? null} ELSE last_tx_hash END,
+            last_failure_code = CASE WHEN ${hasLastFailureCode} THEN ${params.lastFailureCode ?? null} ELSE last_failure_code END,
+            last_failure_stage = CASE WHEN ${hasLastFailureStage} THEN ${params.lastFailureStage ?? null} ELSE last_failure_stage END,
+            next_run_after = CASE WHEN ${hasNextRunAfter} THEN ${params.nextRunAfter ? params.nextRunAfter.toISOString() : null} ELSE next_run_after END,
+            lock_owner = CASE WHEN ${hasLockOwner} THEN ${params.lockOwner ?? null} ELSE lock_owner END,
+            lock_expires_at = CASE WHEN ${hasLockExpiresAt} THEN ${params.lockExpiresAt ? params.lockExpiresAt.toISOString() : null} ELSE lock_expires_at END,
+            attempt_count = CASE WHEN ${hasAttemptCount} THEN COALESCE(${params.attemptCount ?? null}, attempt_count) ELSE attempt_count END,
             updated_at = NOW()
           WHERE id = ${params.id}
             AND step = ${params.fromStep}
@@ -375,10 +604,103 @@ export async function transitionDeploySession(params: {
   return Array.isArray(result.rows) && result.rows.length > 0
 }
 
+export function isDeploySessionTerminal(step: DeploySessionStep): boolean {
+  return TERMINAL_STEPS.has(step)
+}
+
+export async function listRunnableDeploySessions(params?: {
+  limit?: number
+  now?: Date
+}): Promise<DeploySessionRecord[]> {
+  const db = await getDb()
+  if (!db) return []
+  await ensureDeploySessionsSchema()
+  const limit = Math.max(1, Math.min(200, Math.floor(params?.limit ?? 20)))
+  const nowIso = (params?.now ?? new Date()).toISOString()
+  const res = await db.sql`
+    SELECT *
+    FROM deploys
+    WHERE state IN ('pending', 'running')
+      AND step NOT IN ('completed', 'cancelled', 'failed')
+      AND expires_at > ${nowIso}
+      AND (next_run_after IS NULL OR next_run_after <= ${nowIso})
+      AND (lock_expires_at IS NULL OR lock_expires_at <= ${nowIso})
+    ORDER BY COALESCE(next_run_after, created_at) ASC
+    LIMIT ${limit};
+  `
+  const rows = Array.isArray(res.rows) ? res.rows : []
+  return rows.map((row: any) => mapRow(row))
+}
+
+export async function claimDeploySessionLease(params: {
+  id: string
+  expectedStep?: DeploySessionStep
+  workerId: string
+  leaseMs: number
+  now?: Date
+}): Promise<boolean> {
+  const db = await getDb()
+  if (!db) throw new Error('db_not_configured')
+  await ensureDeploySessionsSchema()
+  const now = params.now ?? new Date()
+  const leaseMs = Math.max(5_000, Math.min(10 * 60_000, Math.floor(params.leaseMs)))
+  const lockExpiresAt = new Date(now.getTime() + leaseMs).toISOString()
+  const nowIso = now.toISOString()
+  const expectedStep = params.expectedStep ?? null
+  const result = await db.sql`
+    UPDATE deploys
+    SET
+      lock_owner = ${params.workerId},
+      lock_expires_at = ${lockExpiresAt},
+      state = CASE WHEN state = 'pending' THEN 'running' ELSE state END,
+      updated_at = NOW()
+    WHERE id = ${params.id}
+      AND (step NOT IN ('completed', 'cancelled', 'failed'))
+      AND (expires_at > ${nowIso})
+      AND (lock_expires_at IS NULL OR lock_expires_at <= ${nowIso})
+      AND (${expectedStep}::text IS NULL OR step = ${expectedStep})
+    RETURNING id;
+  `
+  return Array.isArray(result.rows) && result.rows.length > 0
+}
+
+export async function releaseDeploySessionLease(params: {
+  id: string
+  workerId: string
+}): Promise<void> {
+  const db = await getDb()
+  if (!db) throw new Error('db_not_configured')
+  await ensureDeploySessionsSchema()
+  await db.sql`
+    UPDATE deploys
+    SET
+      lock_owner = NULL,
+      lock_expires_at = NULL,
+      updated_at = NOW()
+    WHERE id = ${params.id}
+      AND lock_owner = ${params.workerId};
+  `
+}
+
 function mapRow(r: any): DeploySessionRecord {
   const sessionSigner =
     (typeof r.session_signer === 'string' && r.session_signer.trim() ? r.session_signer : r.session_owner) ??
     r.session_owner
+  const step = String(r.step) as DeploySessionStep
+  const currentStageRaw = typeof r.current_stage === 'string' && r.current_stage.trim() ? r.current_stage : step
+  const currentStage = String(currentStageRaw) as DeploySessionStep
+  const stateRaw = typeof r.state === 'string' && r.state.trim() ? r.state : deriveStateFromStep(step)
+  const state = String(stateRaw) as DeploySessionState
+  const parseIso = (value: unknown): string | null => {
+    if (value == null) return null
+    const dt = new Date(String(value))
+    return Number.isNaN(dt.getTime()) ? null : dt.toISOString()
+  }
+  const parseIntSafe = (value: unknown): number => {
+    const n = Number(value ?? 0)
+    if (!Number.isFinite(n)) return 0
+    return Math.max(0, Math.floor(n))
+  }
   return {
     id: String(r.id),
     tokenHash: String(r.token_hash),
@@ -387,12 +709,21 @@ function mapRow(r: any): DeploySessionRecord {
     sessionSigner: String(sessionSigner).toLowerCase() as `0x${string}`,
     deployToken: String(r.deploy_token),
     payload: r.payload,
-    step: String(r.step) as DeploySessionStep,
+    step,
     expiresAt: new Date(r.expires_at).toISOString(),
     createdAt: new Date(r.created_at).toISOString(),
     updatedAt: new Date(r.updated_at).toISOString(),
     lastError: r.last_error ? String(r.last_error) : null,
     lastUserOpHash: r.last_userop_hash ? String(r.last_userop_hash) : null,
     lastTxHash: r.last_tx_hash ? String(r.last_tx_hash) : null,
+    state,
+    currentStage,
+    attemptCount: parseIntSafe(r.attempt_count),
+    nextRunAfter: parseIso(r.next_run_after),
+    lockOwner: r.lock_owner ? String(r.lock_owner) : null,
+    lockExpiresAt: parseIso(r.lock_expires_at),
+    lastFailureCode: r.last_failure_code ? String(r.last_failure_code) : null,
+    lastFailureStage: r.last_failure_stage ? String(r.last_failure_stage) : null,
+    artifacts: r.artifacts && typeof r.artifacts === 'object' ? (r.artifacts as Record<string, unknown>) : {},
   }
 }

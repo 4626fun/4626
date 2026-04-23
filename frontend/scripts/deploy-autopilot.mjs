@@ -311,7 +311,7 @@ async function main() {
     const headers = buildHeaders({ bearer, cookie })
     const started = await apiPost({
       origin,
-      path: 'deploy/session/start',
+      path: 'deploy/v2/session/start',
       headers,
       body: { ...plan, autoContinue: true },
     })
@@ -347,7 +347,7 @@ async function main() {
           pushAuditEvent('owner_install_detected')
           const continued = await apiPost({
             origin,
-            path: 'deploy/session/continue',
+            path: 'deploy/v2/session/resume',
             headers,
             body: { sessionId },
           })
@@ -389,7 +389,7 @@ async function main() {
     while (Date.now() < deadline) {
       const st = await apiPost({
         origin,
-        path: 'deploy/session/status',
+        path: 'deploy/v2/session/status',
         headers,
         body: { sessionId },
       })
@@ -456,7 +456,7 @@ async function main() {
         lastContinueAttemptAt = now
         const continued = await apiPost({
           origin,
-          path: 'deploy/session/continue',
+          path: 'deploy/v2/session/resume',
           headers,
           body: { sessionId },
         })

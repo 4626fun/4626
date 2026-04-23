@@ -85,10 +85,9 @@ import {
   deriveVaultShareBurnStreamSalt,
 } from '@/lib/deploy/create2Salts'
 import {
-  postDeploySessionRequestWithAuthRetry,
-  resumeAndPollDeploySession,
   type DeploySessionStatusData,
 } from '@/lib/deploy/sessionClient'
+import { useDeploySessionV2 } from '@/features/deploy-vault/useDeploySessionV2'
 import {
   buildShareVanitySkipLogKey,
   isProviderCollisionErrorMessage,
@@ -102,6 +101,14 @@ import {
 } from '@/lib/aa/coinbaseErc4337'
 import { PageMeta, META } from '@/components/seo/PageMeta'
 import { LoadingInline, LoadingText } from '@/components/ui/LoadingState'
+import {
+  DEPLOY_TIMELINE_STAGE_INDEX,
+  DEPLOY_TIMELINE_STAGES,
+  legacyPhaseFromTimelineStage,
+  timelineStageFromDeployStep,
+  txSlotFromTimelineStage,
+  type DeployTimelineStageId,
+} from '@/features/deploy-vault/deploySteps'
 
 const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 50_000_000n
 const MIN_FIRST_DEPOSIT = DEFAULT_MIN_FIRST_DEPOSIT_TOKENS * 10n ** 18n
@@ -184,75 +191,6 @@ const CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI = [
 ] as const
 
 type DeployMode = 'default' | 'no_eoa_strict'
-
-type DeployTimelineStageId =
-  | 'setupOwnerApproval'
-  | 'phase1Core'
-  | 'phase1Finalize'
-  | 'phase2Core'
-  | 'phase2Finalize'
-  | 'phase2bOvaultMesh'
-  | 'phase3Strategies'
-  | 'phase4Launch'
-  | 'cleanup'
-
-const DEPLOY_TIMELINE_STAGES: ReadonlyArray<{
-  id: DeployTimelineStageId
-  label: string
-  optional?: boolean
-}> = [
-  { id: 'setupOwnerApproval', label: 'Setup owner approval' },
-  { id: 'phase1Core', label: 'Phase 1 core' },
-  { id: 'phase1Finalize', label: 'Phase 1 finalize' },
-  { id: 'phase2Core', label: 'Phase 2 core' },
-  { id: 'phase2Finalize', label: 'Phase 2 finalize' },
-  { id: 'phase2bOvaultMesh', label: 'Phase 2b ovault mesh', optional: true },
-  { id: 'phase3Strategies', label: 'Phase 3 strategies' },
-  { id: 'phase4Launch', label: 'Phase 4 launch' },
-  { id: 'cleanup', label: 'Cleanup' },
-]
-
-const DEPLOY_TIMELINE_STAGE_INDEX: Record<DeployTimelineStageId, number> = DEPLOY_TIMELINE_STAGES.reduce(
-  (acc, stage, index) => ({ ...acc, [stage.id]: index }),
-  {} as Record<DeployTimelineStageId, number>,
-)
-
-function timelineStageFromDeployStep(stepRaw: string): DeployTimelineStageId | null {
-  const step = String(stepRaw ?? '').trim()
-  if (!step) return null
-  if (step === 'created') return 'setupOwnerApproval'
-  if (step === 'phase1_sent' || step === 'phase1_confirmed') return 'phase1Core'
-  if (step === 'phase1_finalize_sent' || step === 'phase1_finalize_confirmed') return 'phase1Finalize'
-  if (step === 'phase2_core_sent' || step === 'phase2_core_confirmed') return 'phase2Core'
-  if (
-    step === 'phase2_sent' ||
-    step === 'phase2_confirmed' ||
-    step === 'phase2_finalize_sent' ||
-    step === 'phase2_finalize_confirmed'
-  ) {
-    return 'phase2Finalize'
-  }
-  if (step === 'ovault_mesh_sent' || step === 'ovault_mesh_confirmed') return 'phase2bOvaultMesh'
-  if (step === 'phase3_sent' || step === 'phase3_confirmed') return 'phase3Strategies'
-  if (step === 'phase4_sent' || step === 'phase4_confirmed') return 'phase4Launch'
-  if (step === 'cleanup_sent' || step === 'completed') return 'cleanup'
-  return null
-}
-
-function legacyPhaseFromTimelineStage(stage: DeployTimelineStageId): 'phase1' | 'phase2' | 'phase3' | 'phase4' {
-  if (stage === 'phase1Core' || stage === 'phase1Finalize' || stage === 'setupOwnerApproval') return 'phase1'
-  if (stage === 'phase2Core' || stage === 'phase2Finalize' || stage === 'phase2bOvaultMesh' || stage === 'cleanup') return 'phase2'
-  if (stage === 'phase3Strategies') return 'phase3'
-  return 'phase4'
-}
-
-function txSlotFromTimelineStage(stage: DeployTimelineStageId): 'tx1' | 'tx2' | 'tx3' | 'tx4' | null {
-  if (stage === 'phase1Core' || stage === 'phase1Finalize') return 'tx1'
-  if (stage === 'phase2Core' || stage === 'phase2Finalize' || stage === 'phase2bOvaultMesh' || stage === 'cleanup') return 'tx2'
-  if (stage === 'phase3Strategies') return 'tx3'
-  if (stage === 'phase4Launch') return 'tx4'
-  return null
-}
 
 function resolveDeployMode(): DeployMode {
   // Deploy defaults to no-external-EOA mode.
@@ -2401,13 +2339,14 @@ function DeployVaultBatcher({
       // If we can't bridge, we still let the paymaster decide.
     }
   }, [getAccessToken, signInWithPrivyToken])
+  const { postSessionRequest, pollSession } = useDeploySessionV2()
   const postDeploySessionJson = useCallback(
     async <T,>(params: {
       url: string
       body: unknown
       label: string
     }): Promise<ApiEnvelope<T>> => {
-      return await postDeploySessionRequestWithAuthRetry<T>({
+      return await postSessionRequest<T>({
         postJson: postJsonWithTimeout,
         url: params.url,
         body: params.body,
@@ -2415,7 +2354,7 @@ function DeployVaultBatcher({
         ensurePaymasterSession,
       })
     },
-    [ensurePaymasterSession],
+    [ensurePaymasterSession, postSessionRequest],
   )
   const switchAuthLabel = typeof switchAuthCta?.label === 'string' && switchAuthCta.label.trim().length > 0 ? switchAuthCta.label.trim() : null
   const creatorStrategyFeaturesHref = useMemo(
@@ -2922,7 +2861,7 @@ function DeployVaultBatcher({
       }
     }
 
-    const completed = await resumeAndPollDeploySession({
+    const completed = await pollSession({
       sessionId,
       postJson: postJsonWithTimeout,
       ensurePaymasterSession,
@@ -2948,6 +2887,7 @@ function DeployVaultBatcher({
     ensurePaymasterSession,
     onSuccess,
     owner,
+    pollSession,
   ])
 
   useEffect(() => {
@@ -6386,7 +6326,7 @@ function DeployVaultBatcher({
             if (!sessionId) return
             try {
               await postDeploySessionJson({
-                url: '/api/deploy/session/cancel',
+                url: '/api/deploy/v2/session/cancel',
                 body: { sessionId },
                 label: 'deploy session cancel',
               })
@@ -6398,7 +6338,7 @@ function DeployVaultBatcher({
             if (!sessionId) return false
             try {
               const statusJson = await postDeploySessionJson<any>({
-                url: '/api/deploy/session/status',
+                url: '/api/deploy/v2/session/status',
                 body: { sessionId },
                 label: 'deploy session post-error status',
               })
@@ -6415,7 +6355,7 @@ function DeployVaultBatcher({
               ? { ...sessionCreatePayload, preflightOnly: true }
               : sessionCreatePayload
             return await postDeploySessionJson<any>({
-              url: '/api/deploy/session/create',
+              url: '/api/deploy/v2/session/create',
               body,
               label: preflightOnly ? 'deploy session preflight create' : 'deploy session create',
             })
@@ -6440,7 +6380,7 @@ function DeployVaultBatcher({
 
             // Kick off server continuation; status polling will advance remaining phases.
             await postDeploySessionJson({
-              url: '/api/deploy/session/continue',
+              url: '/api/deploy/v2/session/resume',
               body: { sessionId },
               label: 'deploy session continue',
             })
@@ -6632,7 +6572,7 @@ function DeployVaultBatcher({
       if (!plan) throw new Error('Could not prepare deployment plan.')
 
       const json = await postDeploySessionJson<DeploySessionDryRunResponse>({
-        url: '/api/deploy/session/dry-run',
+        url: '/api/deploy/v2/session/dry-run',
         body: plan.sessionCreateRequest,
         label: 'deploy session dry-run',
       })

@@ -12,12 +12,22 @@ export type PostJsonWithTimeout = <T>(params: {
 }) => Promise<{ response: Response; json: ApiEnvelope<T> | null }>
 
 export type DeploySessionStatusData = {
+  id?: string
+  state?: 'pending' | 'running' | 'completed' | 'failed' | 'cancelled' | string
+  currentStage?: string
   step?: string
+  attemptCount?: number
+  nextRunAfter?: string | null
   lastTxHash?: string | null
   lastUserOpHash?: string | null
   lastError?: string | null
+  lastFailureCode?: string | null
+  lastFailureStage?: string | null
+  lockOwner?: string | null
+  lockExpiresAt?: string | null
   sessionSignerAddress?: string | null
   sessionOwner?: string | null
+  nextAction?: string | null
   [key: string]: unknown
 }
 
@@ -90,9 +100,9 @@ export async function resumeAndPollDeploySession(params: {
   while (true) {
     const statusJson = await postDeploySessionRequestWithAuthRetry<DeploySessionStatusData>({
       postJson: params.postJson,
-      url: '/api/deploy/session/status',
+      url: '/api/deploy/v2/session/status',
       body: { sessionId: params.sessionId },
-      label: attemptedContinueFromCreated ? 'deploy session status' : 'deploy session resume status',
+      label: attemptedContinueFromCreated ? 'deploy v2 session status' : 'deploy v2 session resume status',
       ensurePaymasterSession: params.ensurePaymasterSession,
     })
     const data = statusJson.data ?? {}
@@ -111,9 +121,9 @@ export async function resumeAndPollDeploySession(params: {
       await params.ensureDeploySessionSignerInstalled(getAddress(sessionSignerRaw) as Address)
       await postDeploySessionRequestWithAuthRetry({
         postJson: params.postJson,
-        url: '/api/deploy/session/continue',
+        url: '/api/deploy/v2/session/resume',
         body: { sessionId: params.sessionId },
-        label: 'deploy session resume continue',
+        label: 'deploy v2 session initial resume',
         ensurePaymasterSession: params.ensurePaymasterSession,
       })
       continue
@@ -126,8 +136,24 @@ export async function resumeAndPollDeploySession(params: {
     }
     if (step === 'failed' || step === 'cancelled') {
       params.clearDeploySession()
-      throw new Error(String(data.lastError ?? 'Server deploy failed'))
+      const failureCode = typeof data.lastFailureCode === 'string' ? data.lastFailureCode : ''
+      const failureStage = typeof data.lastFailureStage === 'string' ? data.lastFailureStage : ''
+      const nextAction = typeof data.nextAction === 'string' ? data.nextAction : ''
+      const summary = String(data.lastError ?? 'Server deploy failed')
+      const details = [failureCode && `code=${failureCode}`, failureStage && `stage=${failureStage}`, nextAction && `next=${nextAction}`]
+        .filter(Boolean)
+        .join(' ')
+      throw new Error(details ? `${summary} (${details})` : summary)
     }
+
+    // Status is read-only in v2; trigger workflow progression explicitly.
+    await postDeploySessionRequestWithAuthRetry({
+      postJson: params.postJson,
+      url: '/api/deploy/v2/session/resume',
+      body: { sessionId: params.sessionId, maxTicks: 3 },
+      label: 'deploy v2 session resume tick',
+      ensurePaymasterSession: params.ensurePaymasterSession,
+    })
 
     if (step.endsWith('_sent') || step === 'cleanup_sent') {
       const hasUserOpHash = isHexHash(lastUserOpHash)

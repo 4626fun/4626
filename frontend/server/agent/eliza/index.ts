@@ -252,6 +252,45 @@ function archiveStaleSingleAgentDbFilesForEnv(activeDbPath: string): void {
   const envPrefix = `xmtp-${XMTP_ENV}-`
   const ts = Date.now()
   let archived = 0
+  let orphanedSidecarsArchived = 0
+  const archiveRelatedSidecars = (baseDbPath: string): void => {
+    const suffixes = ['-wal', '-shm', '.sqlcipher_salt'] as const
+    for (const suffix of suffixes) {
+      const sidecarPath = `${baseDbPath}${suffix}`
+      if (!fs.existsSync(sidecarPath)) continue
+      const sidecarDest = `${sidecarPath}.stale.${ts}`
+      try {
+        fs.renameSync(sidecarPath, sidecarDest)
+      } catch (err) {
+        logger.warn(`[xmtp] Failed to archive stale DB sidecar ${sidecarPath}:`, err)
+      }
+    }
+  }
+  const archiveOrphanedSidecars = (): void => {
+    const sidecarSuffixes = ['-wal', '-shm', '.sqlcipher_salt'] as const
+    let names: string[] = []
+    try {
+      names = fs.readdirSync(XMTP_DB_DIR)
+    } catch {
+      return
+    }
+    for (const name of names) {
+      if (!name.startsWith(envPrefix)) continue
+      const suffix = sidecarSuffixes.find((candidate) => name.endsWith(candidate))
+      if (!suffix) continue
+      const fullPath = path.join(XMTP_DB_DIR, name)
+      const baseName = name.slice(0, -suffix.length)
+      const expectedBaseDb = path.join(XMTP_DB_DIR, baseName)
+      if (fs.existsSync(expectedBaseDb)) continue
+      const dest = `${fullPath}.stale.${ts}`
+      try {
+        fs.renameSync(fullPath, dest)
+        orphanedSidecarsArchived += 1
+      } catch (err) {
+        logger.warn(`[xmtp] Failed to archive orphaned sidecar ${fullPath}:`, err)
+      }
+    }
+  }
   try {
     const paths = listXmtpDb3FilesUnderRoot(XMTP_DB_DIR)
     for (const src of paths) {
@@ -264,15 +303,22 @@ function archiveStaleSingleAgentDbFilesForEnv(activeDbPath: string): void {
       const dest = `${src}.stale.${ts}`
       try {
         fs.renameSync(src, dest)
+        archiveRelatedSidecars(src)
         archived += 1
         logger.warn(`[xmtp] Archived stale DB: ${path.basename(src)} -> ${path.basename(dest)}`)
       } catch (err) {
         logger.warn(`[xmtp] Failed to archive stale DB ${src}:`, err)
       }
     }
+    archiveOrphanedSidecars()
     if (archived > 0) {
       logger.warn(
         `[xmtp] Single-agent mode archived ${archived} stale ${XMTP_ENV} DB file(s); keeping only active DB path.`,
+      )
+    }
+    if (orphanedSidecarsArchived > 0) {
+      logger.warn(
+        `[xmtp] Single-agent mode archived ${orphanedSidecarsArchived} orphaned ${XMTP_ENV} DB sidecar file(s).`,
       )
     }
   } catch (err) {

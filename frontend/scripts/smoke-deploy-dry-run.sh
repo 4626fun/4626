@@ -9,7 +9,7 @@ PORT="${DEPLOY_DRY_RUN_PORT:-5174}"
 OWNER="0x0000000000000000000000000000000000000002"
 ORIGIN="http://localhost:${PORT}"
 HOST_HEADER="localhost:${PORT}"
-URL="http://127.0.0.1:${PORT}/api/deploy/session/dry-run"
+URL="http://127.0.0.1:${PORT}/api/deploy/v2/session/dry-run"
 
 BODY='{
   "smartWallet": "0x0000000000000000000000000000000000000002",
