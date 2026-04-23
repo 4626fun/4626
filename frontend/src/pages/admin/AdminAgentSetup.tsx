@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useWallets } from '@privy-io/react-auth'
+import { encodeProlink } from '@base-org/account/prolink'
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi'
 import { Bot, CheckCircle, Copy, ExternalLink, Link2, Shield, Loader2, AlertTriangle, Wallet, Zap } from 'lucide-react'
 import { encodeFunctionData, getAddress } from 'viem'
@@ -285,8 +286,13 @@ const CSW_ABI = [
     outputs: [{ name: '', type: 'bool' as const }],
   },
 ] as const
+const BASE_MAINNET_CHAIN_ID_HEX = '0x2105' as const
 
 export function AdminAgentSetup() {
+  const manualQueryParams = useMemo(() => {
+    if (typeof window === 'undefined') return new URLSearchParams('')
+    return new URLSearchParams(window.location.search ?? '')
+  }, [])
   const { address } = useAccount()
   const { authAddress } = useSiweAuth()
   const { wallets: privyWallets } = useWallets()
@@ -414,17 +420,12 @@ export function AdminAgentSetup() {
   // -----------------------------------------------------------------------
   const addOwnerMutation = useMutation({
     mutationFn: async () => {
-      if (!walletClient || !canonicalCswAddress || !serverWalletQuery.data?.address) {
+      if (!walletClient || !canonicalCswAddress || !serverWalletQuery.data?.address || !serverOwnerAddCalldata) {
         throw new Error('Wallet not connected or server wallet not provisioned')
       }
-      const data = encodeFunctionData({
-        abi: CSW_ABI,
-        functionName: 'addOwnerAddress',
-        args: [getAddress(serverWalletQuery.data.address) as `0x${string}`],
-      })
       const hash = await walletClient.sendTransaction({
         to: getAddress(canonicalCswAddress) as `0x${string}`,
-        data,
+        data: serverOwnerAddCalldata as `0x${string}`,
         chain: walletClient.chain,
       })
       if (publicClient) {
@@ -470,6 +471,105 @@ export function AdminAgentSetup() {
   const agent = agentQuery.data
   const serverWallet = serverWalletQuery.data
   const isServerWalletOwner = isOwnerQuery.data === true
+  const serverOwnerAddCalldata = useMemo(() => {
+    if (!canonicalCswAddress || !serverWallet?.address) return null
+    try {
+      return encodeFunctionData({
+        abi: CSW_ABI,
+        functionName: 'addOwnerAddress',
+        args: [getAddress(serverWallet.address) as `0x${string}`],
+      })
+    } catch {
+      return null
+    }
+  }, [canonicalCswAddress, serverWallet?.address])
+
+  const manualCswAddress = useMemo(() => {
+    const fromQuery = String(manualQueryParams.get('manualCsw') ?? '').trim()
+    if (isAddressLike(fromQuery)) return fromQuery.toLowerCase()
+    return canonicalCswAddress
+  }, [canonicalCswAddress, manualQueryParams])
+
+  const manualOwnerToAdd = useMemo(() => {
+    const fromQuery = String(manualQueryParams.get('manualOwner') ?? '').trim()
+    if (isAddressLike(fromQuery)) return fromQuery.toLowerCase()
+    const serverAddress = String(serverWallet?.address ?? '').trim()
+    return isAddressLike(serverAddress) ? serverAddress.toLowerCase() : null
+  }, [manualQueryParams, serverWallet?.address])
+
+  const manualAddOwnerCalldata = useMemo(() => {
+    if (!manualOwnerToAdd) return null
+    try {
+      return encodeFunctionData({
+        abi: CSW_ABI,
+        functionName: 'addOwnerAddress',
+        args: [getAddress(manualOwnerToAdd) as `0x${string}`],
+      })
+    } catch {
+      return null
+    }
+  }, [manualOwnerToAdd])
+
+  const manualBasescanWriteHref = useMemo(() => {
+    if (!manualCswAddress) return null
+    return `https://basescan.org/address/${manualCswAddress}#writeProxyContract`
+  }, [manualCswAddress])
+
+  const manualOwnerAddProlinkQuery = useQuery({
+    queryKey: ['admin', 'manual-owner-add-prolink', manualCswAddress, manualOwnerToAdd, manualAddOwnerCalldata],
+    queryFn: async (): Promise<string | null> => {
+      if (!manualCswAddress || !manualOwnerToAdd || !manualAddOwnerCalldata) return null
+      const payload = await encodeProlink({
+        method: 'wallet_sendCalls',
+        params: [
+          {
+            version: '1.0',
+            chainId: BASE_MAINNET_CHAIN_ID_HEX,
+            atomicRequired: true,
+            calls: [
+              {
+                to: getAddress(manualCswAddress) as `0x${string}`,
+                value: '0x0',
+                data: manualAddOwnerCalldata as `0x${string}`,
+              },
+            ],
+          },
+        ],
+      })
+      return String(payload ?? '').trim() || null
+    },
+    enabled: Boolean(manualCswAddress && manualOwnerToAdd && manualAddOwnerCalldata && agentMode === 'csw'),
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  })
+
+  const serverOwnerAddProlinkQuery = useQuery({
+    queryKey: ['admin', 'server-owner-add-prolink', canonicalCswAddress, serverWallet?.address, serverOwnerAddCalldata],
+    queryFn: async (): Promise<string | null> => {
+      if (!canonicalCswAddress || !serverWallet?.address || !serverOwnerAddCalldata) return null
+      const payload = await encodeProlink({
+        method: 'wallet_sendCalls',
+        params: [
+          {
+            version: '1.0',
+            chainId: BASE_MAINNET_CHAIN_ID_HEX,
+            atomicRequired: true,
+            calls: [
+              {
+                to: getAddress(canonicalCswAddress) as `0x${string}`,
+                value: '0x0',
+                data: serverOwnerAddCalldata as `0x${string}`,
+              },
+            ],
+          },
+        ],
+      })
+      return String(payload ?? '').trim() || null
+    },
+    enabled: Boolean(canonicalCswAddress && serverWallet?.address && serverOwnerAddCalldata && !isServerWalletOwner && agentMode === 'csw'),
+    staleTime: Number.POSITIVE_INFINITY,
+    retry: false,
+  })
 
   // -----------------------------------------------------------------------
   // Vault link form state
@@ -957,6 +1057,79 @@ export function AdminAgentSetup() {
               {/* CSW flow */}
               {agentMode === 'csw' && (
                 <div className="space-y-3 rounded-lg border border-emerald-500/10 bg-emerald-500/2 p-4">
+                  <div className="rounded-lg border border-sky-500/20 bg-sky-500/5 px-3 py-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="text-[11px] text-sky-200 font-medium">Manual owner add (BaseScan helper)</div>
+                      {manualBasescanWriteHref ? (
+                        <a
+                          href={manualBasescanWriteHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 rounded-md border border-sky-400/30 bg-sky-400/10 px-2 py-1 text-[10px] text-sky-100 hover:bg-sky-400/20"
+                        >
+                          Open Write Contract <ExternalLink className="w-3 h-3" />
+                        </a>
+                      ) : null}
+                    </div>
+                    <div className="app-meta-value text-zinc-400">
+                      Use query params to prefill this card from a shareable URL:
+                      <span className="text-zinc-200"> </span>
+                      <code>?manualCsw=0x...&manualOwner=0x...</code>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <div className="rounded-md border border-white/10 bg-black/20 px-2.5 py-2">
+                        <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Target CSW</div>
+                        {manualCswAddress ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-zinc-300 font-mono">{truncAddr(manualCswAddress)}</span>
+                            <CopyButton text={manualCswAddress} />
+                          </div>
+                        ) : (
+                          <div className="text-xs text-zinc-500">Missing canonical CSW</div>
+                        )}
+                      </div>
+                      <div className="rounded-md border border-white/10 bg-black/20 px-2.5 py-2">
+                        <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Owner to add</div>
+                        {manualOwnerToAdd ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-zinc-300 font-mono">{truncAddr(manualOwnerToAdd)}</span>
+                            <CopyButton text={manualOwnerToAdd} />
+                          </div>
+                        ) : (
+                          <div className="text-xs text-zinc-500">Set `manualOwner` query param</div>
+                        )}
+                      </div>
+                    </div>
+                    <div className="rounded-md border border-white/10 bg-black/20 px-2.5 py-2">
+                      <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">addOwnerAddress calldata</div>
+                      {manualAddOwnerCalldata ? (
+                        <div className="flex items-start gap-2">
+                          <span className="text-[10px] text-zinc-300 font-mono break-all">{manualAddOwnerCalldata}</span>
+                          <CopyButton text={manualAddOwnerCalldata} />
+                        </div>
+                      ) : (
+                        <div className="text-xs text-zinc-500">Unavailable until owner address is valid</div>
+                      )}
+                    </div>
+                    <div className="rounded-md border border-white/10 bg-black/20 px-2.5 py-2">
+                      <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Prolink (wallet_sendCalls)</div>
+                      {manualOwnerAddProlinkQuery.isLoading ? (
+                        <div className="text-xs text-zinc-500">Encoding prolink...</div>
+                      ) : manualOwnerAddProlinkQuery.data ? (
+                        <div className="flex items-start gap-2">
+                          <span className="text-[10px] text-zinc-300 font-mono break-all">{manualOwnerAddProlinkQuery.data}</span>
+                          <CopyButton text={manualOwnerAddProlinkQuery.data} />
+                        </div>
+                      ) : manualOwnerAddProlinkQuery.error ? (
+                        <div className="text-xs text-red-300">
+                          Failed to encode prolink: {(manualOwnerAddProlinkQuery.error as Error)?.message}
+                        </div>
+                      ) : (
+                        <div className="text-xs text-zinc-500">Unavailable until calldata is valid</div>
+                      )}
+                    </div>
+                  </div>
+
                   {!canonicalCswAddress ? (
                     <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 px-3 py-3">
                       <div className="text-[11px] text-amber-200 font-medium">Canonical Coinbase Smart Wallet required</div>
@@ -1084,6 +1257,21 @@ export function AdminAgentSetup() {
                               </>
                             )}
                           </button>
+                          {serverOwnerAddProlinkQuery.isLoading ? (
+                            <div className="text-[10px] text-zinc-500">Encoding prolink for Base wallet_sendCalls...</div>
+                          ) : serverOwnerAddProlinkQuery.data ? (
+                            <div className="rounded-md border border-white/10 bg-black/20 px-2.5 py-2">
+                              <div className="text-[10px] uppercase tracking-wider text-zinc-500 mb-1">Prolink (same owner-add call)</div>
+                              <div className="flex items-start gap-2">
+                                <span className="text-[10px] text-zinc-300 font-mono break-all">{serverOwnerAddProlinkQuery.data}</span>
+                                <CopyButton text={serverOwnerAddProlinkQuery.data} />
+                              </div>
+                            </div>
+                          ) : serverOwnerAddProlinkQuery.error ? (
+                            <div className="text-[10px] text-red-300">
+                              Prolink unavailable: {(serverOwnerAddProlinkQuery.error as Error)?.message}
+                            </div>
+                          ) : null}
                           {addOwnerMutation.isError && (
                             <div className="flex items-start gap-2 rounded-lg border border-red-500/20 bg-red-500/5 px-3 py-2">
                               <AlertTriangle className="w-3.5 h-3.5 text-red-400 mt-0.5 shrink-0" />

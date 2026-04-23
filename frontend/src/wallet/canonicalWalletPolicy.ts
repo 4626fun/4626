@@ -3,7 +3,7 @@ import { getAddress, isAddress } from 'viem'
 export type PolicyAddress = `0x${string}`
 
 export const TARGET_CANONICAL_CSW_ADDRESS =
-  '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef' as const satisfies PolicyAddress
+  '0xab6d5c10b03300326cd7fab7267ae192842967b5' as const satisfies PolicyAddress
 
 export const TARGET_ALLOWED_OWNER_EOA_ADDRESSES = [
   '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
@@ -16,6 +16,8 @@ export const TARGET_ALLOWED_OWNER_EOA_ADDRESSES = [
   // before even attempting fetchTradeQuote) even though the embedded
   // wallet is a real, registered owner of the CSW.
   '0xceca13f2686ed061c57620ecdf67e1b8c0f285e9',
+  // Privy server wallet owner used by Railway XMTP runtime.
+  '0x858c01556ec5a8531fa4118d595430ac7fd0baf0',
 ] as const satisfies readonly PolicyAddress[]
 
 const TARGET_ALLOWED_OWNER_EOA_SET = new Set<string>(TARGET_ALLOWED_OWNER_EOA_ADDRESSES)
