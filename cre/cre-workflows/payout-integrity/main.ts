@@ -43,6 +43,7 @@ import { ERC20ABI } from "../contracts/abi/ERC20"
 import {
   createAiFallbackResult,
   normalizeAiResult,
+  sanitizeAlertsForAi,
   type PayoutIntegrityAlertLike,
   type PayoutIntegrityAiResult,
 } from "../../utils/payoutIntegrityAi.js"
@@ -121,6 +122,13 @@ type ConsensusAiAssessment = {
 // EVM read helper
 // ---------------------------------------------------------------------------
 
+// NOTE (finding 4626-325 / M-16): `fallbackToLatest` is intentionally `false`
+// here. Payout-integrity checks must only trust finalized state; silently
+// reading an unfinalized head block on RPC error could mask a live
+// misconfiguration and cause the monitor to declare "all clear" when it
+// should be alerting. On failure the check throws, the surrounding try/catch
+// logs an error, and the next run retries on the cron cadence. Other
+// workflows may still opt into fallback behaviour via `_shared/evm.ts`.
 function evmRead(
   runtime: Runtime<Config>,
   evmClient: ReturnType<typeof createEvmClientForChain>,
@@ -136,7 +144,7 @@ function evmRead(
     abi,
     functionName,
     args,
-    fallbackToLatest: true,
+    fallbackToLatest: false,
   })
 }
 
@@ -207,6 +215,18 @@ function requestAiAssessment(
   apiKey: string,
   request: AiAssessmentRequest,
 ): PayoutIntegrityAiResult {
+  // Finding 4626-305 (H-13): alert message/details fields flow from on-chain
+  // data (addresses, BPS values, revert strings) that is partially
+  // attacker-controllable. Sanitize before sending to the LLM endpoint so
+  // embedded directives or control characters cannot steer the AI's output.
+  // The AI verdict is advisory only — alerts are gated on
+  // `pendingAlerts.length > 0` at the call site, not on the AI result.
+  const sanitizedRequest: AiAssessmentRequest = {
+    vaultAddress: request.vaultAddress,
+    checksRun: request.checksRun,
+    alerts: sanitizeAlertsForAi(request.alerts) as PayoutIntegrityAlertLike[],
+  }
+
   const body = postJson<Config, {
     success: boolean
     data?: unknown
@@ -216,7 +236,7 @@ function requestAiAssessment(
     httpClient,
     apiKey,
     "/cre/keeper/aiAssess",
-    request,
+    sanitizedRequest,
   )
 
   if (!body.success || !body.data) {
@@ -645,6 +665,12 @@ const onCronTrigger = (runtime: Runtime<Config>): MonitorResult => {
 
   // -----------------------------------------------------------------------
   // Send alerts
+  //
+  // INVARIANT (finding 4626-305 / H-13): alerts fire IFF deterministic checks
+  // produced entries in `pendingAlerts`. The AI assessment above is strictly
+  // advisory; it must never gate, suppress, or escalate alert delivery. Any
+  // change here that references `aiAssessment.verdict` in the condition below
+  // reintroduces the prompt-injection attack surface and MUST be rejected.
   // -----------------------------------------------------------------------
   let alertsSent = 0
   if (pendingAlerts.length > 0) {

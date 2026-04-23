@@ -22,6 +22,28 @@ export type PayoutIntegrityAiResult = {
 const MAX_SUMMARY_LENGTH = 280;
 const MAX_ACTION_LENGTH = 220;
 
+// ---------------------------------------------------------------------------
+// Prompt-injection hardening (finding 4626-305 / H-13)
+//
+// Alert fields (message, details) flow from on-chain data that is partially
+// attacker-controllable (addresses, BPS values, error strings) into an LLM
+// prompt at /cre/keeper/aiAssess. We sanitize before POST so the AI cannot be
+// steered by embedded directives or unprintable control characters.
+//
+// INVARIANT (do NOT regress): the AI verdict is advisory. Alerts fire iff
+// `pendingAlerts.length > 0` (see payout-integrity/main.ts Check 8). The AI
+// result must never gate alert firing; sanitization below is defense-in-depth.
+// ---------------------------------------------------------------------------
+
+const MAX_ALERT_MESSAGE_LENGTH = 280;
+const MAX_DETAIL_STRING_LENGTH = 256;
+const MAX_DETAIL_KEYS = 32;
+const MAX_DETAILS_DEPTH = 3;
+
+// Strip C0/C1 control characters (except space), zero-width and bidi-override
+// codepoints often used in prompt-injection payloads.
+const CONTROL_CHAR_PATTERN = /[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u2028-\u202F\u2060-\u206F\uFEFF]/g;
+
 function toText(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
@@ -29,6 +51,60 @@ function toText(value: unknown): string {
 function truncate(value: string, maxLength: number): string {
   if (value.length <= maxLength) return value;
   return `${value.slice(0, maxLength - 1)}…`;
+}
+
+export function sanitizePromptString(value: unknown, maxLength: number): string {
+  if (typeof value !== 'string') return '';
+  const stripped = value.replace(CONTROL_CHAR_PATTERN, ' ');
+  // Collapse runs of whitespace to a single space so newline-based injections
+  // don't bypass the control-char filter via concatenation.
+  const collapsed = stripped.replace(/\s+/g, ' ').trim();
+  return truncate(collapsed, maxLength);
+}
+
+function sanitizeDetailValue(value: unknown, depth: number): unknown {
+  if (value === null || value === undefined) return value;
+  if (typeof value === 'string') return sanitizePromptString(value, MAX_DETAIL_STRING_LENGTH);
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') return value;
+  if (depth >= MAX_DETAILS_DEPTH) return '[truncated]';
+  if (Array.isArray(value)) {
+    return value.slice(0, MAX_DETAIL_KEYS).map((entry) => sanitizeDetailValue(entry, depth + 1));
+  }
+  if (typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>).slice(0, MAX_DETAIL_KEYS);
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of entries) {
+      const safeKey = sanitizePromptString(k, 64);
+      if (!safeKey) continue;
+      out[safeKey] = sanitizeDetailValue(v, depth + 1);
+    }
+    return out;
+  }
+  return '[unsupported]';
+}
+
+export function sanitizeAlertForAi<T extends PayoutIntegrityAlertLike & { details?: Record<string, unknown> }>(
+  alert: T,
+): PayoutIntegrityAlertLike & { details?: Record<string, unknown> } {
+  const severity: PayoutIntegrityAlertSeverity =
+    alert.severity === 'critical' || alert.severity === 'warning' || alert.severity === 'info'
+      ? alert.severity
+      : 'info';
+  const sanitized: PayoutIntegrityAlertLike & { details?: Record<string, unknown> } = {
+    alertType: sanitizePromptString(alert.alertType, 64) || 'unknown',
+    severity,
+    message: sanitizePromptString(alert.message, MAX_ALERT_MESSAGE_LENGTH),
+  };
+  if (alert.details && typeof alert.details === 'object') {
+    sanitized.details = sanitizeDetailValue(alert.details, 0) as Record<string, unknown>;
+  }
+  return sanitized;
+}
+
+export function sanitizeAlertsForAi(
+  alerts: ReadonlyArray<PayoutIntegrityAlertLike & { details?: Record<string, unknown> }>,
+): Array<PayoutIntegrityAlertLike & { details?: Record<string, unknown> }> {
+  return alerts.map((a) => sanitizeAlertForAi(a));
 }
 
 function normalizeConfidence(value: unknown): number | null {
@@ -87,19 +163,27 @@ export function normalizeAiResult(
 
   const source = raw as Record<string, unknown>;
   const verdict = normalizeVerdict(source.verdict) ?? fallback.verdict;
-  const summary = truncate(toText(source.summary) || fallback.summary, MAX_SUMMARY_LENGTH);
-  const suggestedAction = truncate(
+  // Defense-in-depth: strip control chars from AI-supplied strings so a
+  // compromised AI response cannot inject markup or directives into downstream
+  // logs / notifications. See finding 4626-305 (H-13).
+  const summary = sanitizePromptString(
+    toText(source.summary) || fallback.summary,
+    MAX_SUMMARY_LENGTH,
+  );
+  const suggestedAction = sanitizePromptString(
     toText(source.suggestedAction) || defaultSuggestedAction(verdict),
     MAX_ACTION_LENGTH,
   );
+  const provider = sanitizePromptString(toText(source.provider), 64);
+  const error = sanitizePromptString(toText(source.error), 256);
 
   return {
     enabled: source.enabled === true,
     verdict,
     confidence: normalizeConfidence(source.confidence),
-    summary,
-    suggestedAction,
-    ...(toText(source.provider) ? { provider: toText(source.provider) } : {}),
-    ...(toText(source.error) ? { error: toText(source.error) } : {}),
+    summary: summary || fallback.summary,
+    suggestedAction: suggestedAction || defaultSuggestedAction(verdict),
+    ...(provider ? { provider } : {}),
+    ...(error ? { error } : {}),
   };
 }
