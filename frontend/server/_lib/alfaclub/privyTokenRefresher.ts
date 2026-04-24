@@ -358,6 +358,7 @@ export function startAlfaClubPrivyTokenRefresher(opts?: {
 }): AlfaClubRefresherHandle {
   const intervalMs = opts?.intervalMs ?? DEFAULT_REFRESH_INTERVAL_MS
   const deps = opts?.deps ?? {}
+  let firstTick = true
   let stopped = false
 
   const runNow = async (): Promise<AlfaClubRefresherOutcome> =>
@@ -365,6 +366,21 @@ export function startAlfaClubPrivyTokenRefresher(opts?: {
 
   const tick = async (): Promise<void> => {
     if (stopped) return
+    if (firstTick) {
+      // Force-refresh on the very first tick after boot. Without this, a
+      // restart that lands inside the [near_expiry_window, interval_ms]
+      // gap — e.g. boot 25 min before the identity token expires with a
+      // 20-min near-expiry window and 30-min interval — would skip the
+      // first tick as `not_due`, then hit the next scheduled tick AFTER
+      // both access + identity tokens have expired (they share a TTL).
+      // At that point Privy rejects the refresh and we're stuck. The
+      // force ensures every restart resets the clock to a fresh 1-hour
+      // window, making the refresher behavior path-independent of when
+      // the process happened to boot relative to a prior token lifetime.
+      firstTick = false
+      await runAlfaClubPrivyRefreshOnce(deps, { force: true })
+      return
+    }
     await runNow()
   }
 

@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 import {
   runAlfaClubPrivyRefreshOnce,
+  startAlfaClubPrivyTokenRefresher,
   type PrivyRefreshBundle,
 } from './privyTokenRefresher.js'
 
@@ -214,5 +215,63 @@ describe('runAlfaClubPrivyRefreshOnce', () => {
     })
     expect(outcome.status).toBe('refreshed')
     expect(writes[0]?.refreshToken).toBe('rt-stable')
+  })
+})
+
+describe('startAlfaClubPrivyTokenRefresher boot behavior', () => {
+  it('force-refreshes on the first tick after boot so cold starts mid-lifetime always get fresh tokens', async () => {
+    // Regression guard for the post-merge bug found in production on PR #368:
+    // if the refresher booted when the current identity token had, say, 25
+    // minutes of life left — above the 20-minute near-expiry window but
+    // below the 30-minute interval — the first tick would report `not_due`
+    // and the NEXT scheduled tick would hit after both access + identity
+    // tokens had expired (they share a TTL), causing the refresh to fail
+    // with 400 and leaving the bridge on stale credentials until operator
+    // re-bootstrap. The fix: first tick after boot always uses force: true.
+
+    // Identity token has 25 minutes of life left — comfortably outside a
+    // 20-min near-expiry window but inside a 30-min interval.
+    const NOW_MS = 1_800_000_000_000
+    const exp = NOW_MS / 1000 + 25 * 60
+    const refresh = vi.fn(
+      async (): Promise<PrivyRefreshBundle> => ({
+        accessToken: 'at-new',
+        identityToken: `x.${Buffer.from(
+          JSON.stringify({ exp: NOW_MS / 1000 + 60 * 60 }),
+        ).toString('base64url')}.sig`,
+        refreshToken: 'rt-new',
+      }),
+    )
+    const deps = {
+      readAccessToken: async () => 'at-old',
+      readRefreshToken: async () => 'rt-old',
+      readIdentityToken: async () =>
+        `x.${Buffer.from(JSON.stringify({ exp })).toString('base64url')}.sig`,
+      refresh,
+      writeBundle: vi.fn(async () => {}),
+      log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+      now: () => NOW_MS,
+      nearExpiryWindowMs: 20 * 60 * 1000,
+    }
+
+    // Interval 1h so only the first (microtask) tick fires during this
+    // test. We just need to observe that Privy's refresh endpoint WAS
+    // called even though the identity token wasn't inside the near-
+    // expiry window — i.e., the force flag was applied.
+    const handle = startAlfaClubPrivyTokenRefresher({
+      intervalMs: 60 * 60 * 1000,
+      deps,
+    })
+
+    // queueMicrotask uses the microtask queue; one turn of the scheduler
+    // is enough to flush.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+    // Also drain one more pending microtask — the inner tick is async.
+    await new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+    expect(refresh).toHaveBeenCalledTimes(1)
+    expect(deps.writeBundle).toHaveBeenCalledTimes(1)
+
+    handle.stop()
   })
 })
