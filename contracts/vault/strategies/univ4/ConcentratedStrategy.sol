@@ -66,6 +66,20 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
     int24 public constant MIN_TICK = -887272;
     int24 public constant MAX_TICK = 887272;
 
+    /// @notice Slippage tolerance (in bps) for BURN_POSITION min-out amounts during rebalance.
+    /// FIX: S-H05 — BURN_POSITION previously passed zero as both min amounts. To defend
+    ///      against sandwich attacks in the same block a rebalance lands (TWAP oracles use
+    ///      historical data and cannot react within a single tx), the min amounts are now
+    ///      derived from the TWAP-implied sqrtPriceX96 with a 1% floor.
+    uint256 public constant REBALANCE_BURN_SLIPPAGE_BPS = 100; // 1%
+
+    /// @notice Tighter slippage tolerance (in bps) for BURN_POSITION during full withdraws.
+    /// @dev `withdrawAll` is a higher-trust path (onlyLPManager) but still benefits from a
+    ///      non-zero min amount so LP manager bugs / compromised keepers cannot silently
+    ///      burn against a manipulated pool. Kept at 2% to avoid unnecessary reverts when
+    ///      the pool genuinely diverges from TWAP within a block.
+    uint256 public constant WITHDRAW_BURN_SLIPPAGE_BPS = 200; // 2%
+
     // =================================
     // STATE
     // =================================
@@ -451,7 +465,13 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         uint256 balPairedBefore = PAIRED_TOKEN.balanceOf(address(this));
 
         uint256 tokenId = position.tokenId;
-        _posmBurn(tokenId);
+        (uint128 amount0Min, uint128 amount1Min) = _computeBurnMinAmounts(
+            position.tickLower,
+            position.tickUpper,
+            position.liquidity,
+            WITHDRAW_BURN_SLIPPAGE_BPS
+        );
+        _posmBurn(tokenId, amount0Min, amount1Min);
 
         creatorCoinAmount = CREATOR_COIN.balanceOf(address(this)) - balCreatorBefore;
         pairedAmount = PAIRED_TOKEN.balanceOf(address(this)) - balPairedBefore;
@@ -503,7 +523,13 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         uint256 oldTokenId = position.tokenId;
         uint128 oldLiquidity = position.liquidity;
 
-        _posmBurn(oldTokenId);
+        (uint128 burnAmount0Min, uint128 burnAmount1Min) = _computeBurnMinAmounts(
+            position.tickLower,
+            position.tickUpper,
+            oldLiquidity,
+            REBALANCE_BURN_SLIPPAGE_BPS
+        );
+        _posmBurn(oldTokenId, burnAmount0Min, burnAmount1Min);
 
         // Compute new liquidity from current balances (fees + principal now sit idle on this contract)
         uint256 creatorBal = CREATOR_COIN.balanceOf(address(this));
@@ -750,21 +776,92 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         IPositionManager(positionManager).modifyLiquidities(abi.encode(actions, params), block.timestamp + 1);
     }
 
-    /// @dev FIX: S-H05 — BURN_POSITION min amounts are zero because V4 burn always
-    ///      returns the full position value at current pool price. Manipulation is
-    ///      guarded by the TWAP deviation check in checkCanRebalance() (now 900s window).
-    function _posmBurn(uint256 tokenId) internal {
+    /// @dev FIX: S-H05 — Dual defense against pool manipulation during burns:
+    ///      (1) `checkCanRebalance()` rejects rebalances when spot deviates from the
+    ///          900s TWAP by more than `maxTwapDeviation` (prevents multi-block
+    ///          manipulation and stale-price exits).
+    ///      (2) `amount0Min` / `amount1Min` are derived from the TWAP-implied
+    ///          sqrtPriceX96 with a per-path slippage floor (see
+    ///          REBALANCE_BURN_SLIPPAGE_BPS / WITHDRAW_BURN_SLIPPAGE_BPS). This makes
+    ///          same-block sandwiching strictly unprofitable because the burn reverts
+    ///          if the PoolManager would return less than the TWAP-implied amounts
+    ///          net of slippage.
+    function _posmBurn(uint256 tokenId, uint128 amount0Min, uint128 amount1Min) internal {
         bytes memory actions = new bytes(3);
         actions[0] = bytes1(uint8(Actions.BURN_POSITION));
         actions[1] = bytes1(uint8(Actions.CLOSE_CURRENCY));
         actions[2] = bytes1(uint8(Actions.CLOSE_CURRENCY));
 
         bytes[] memory params = new bytes[](3);
-        params[0] = abi.encode(tokenId, uint128(0), uint128(0), bytes(""));
+        params[0] = abi.encode(tokenId, amount0Min, amount1Min, bytes(""));
         params[1] = abi.encode(poolKey.currency0);
         params[2] = abi.encode(poolKey.currency1);
 
         IPositionManager(positionManager).modifyLiquidities(abi.encode(actions, params), block.timestamp + 1);
+    }
+
+    /// @dev FIX: S-H05 — Compute BURN_POSITION min-out amounts from the TWAP-implied
+    ///      sqrtPriceX96 with a bps slippage floor.
+    ///
+    ///      Returns (0, 0) when:
+    ///        - `liquidity == 0` (nothing to burn) — callers still pay for position tracking state.
+    ///        - `maxTwapDeviation == 0` (TWAP checks explicitly disabled by governance). In this
+    ///          regime the operator has opted out of manipulation protection wholesale and a
+    ///          zero min-out preserves pre-fix withdraw behaviour.
+    ///
+    ///      Reverts with `TwapOracleNotSet()` when:
+    ///        - `maxTwapDeviation > 0` (TWAP protection is on) but `twapOracle` is unset.
+    ///          This mirrors `getTwap()`'s presence check and surfaces the mis-configuration
+    ///          as a clear, named revert on the `withdrawAll` / `rebalance` paths rather than
+    ///          letting the raw low-level call to a zero address bubble up. Using a zero min-out
+    ///          fallback here is deliberately avoided because that would silently disable the
+    ///          S-H05 slippage floor precisely when the operator believes it is on.
+    ///
+    ///      Otherwise, computes the expected amounts from the TWAP tick and shaves
+    ///      `slippageBps` basis points.
+    function _computeBurnMinAmounts(
+        int24 tickLower,
+        int24 tickUpper,
+        uint128 liquidity,
+        uint256 slippageBps
+    ) internal view returns (uint128 amount0Min, uint128 amount1Min) {
+        if (liquidity == 0) {
+            return (0, 0);
+        }
+        if (maxTwapDeviation == 0) {
+            // Operator opted out of TWAP protection; retain legacy zero-min behaviour
+            // rather than falling back to spot (which would let spot-manipulators set
+            // the floor themselves).
+            return (0, 0);
+        }
+        // FIX: S-H05 follow-up — gate the oracle dereference the same way `getTwap()` does
+        // so that an unset oracle surfaces as `TwapOracleNotSet()` instead of a raw revert
+        // from calling into address(0). Without this, `withdrawAll` (which does not run the
+        // TWAP-deviation checks) would DOS on the mis-config state
+        // (twapOracle == address(0) && maxTwapDeviation > 0), which was not the case
+        // before the S-H05 fix.
+        if (address(twapOracle) == address(0)) revert TwapOracleNotSet();
+
+        int24 twapTick = twapOracle.getTWAPTick(twapDuration);
+        uint160 twapSqrtPriceX96 = TickMath.getSqrtPriceAtTick(twapTick);
+
+        (uint256 expected0, uint256 expected1) = LiquidityAmounts.getAmountsForLiquidity(
+            twapSqrtPriceX96,
+            TickMath.getSqrtPriceAtTick(tickLower),
+            TickMath.getSqrtPriceAtTick(tickUpper),
+            liquidity
+        );
+
+        uint256 scale = BASIS_POINTS - slippageBps;
+        uint256 min0 = (expected0 * scale) / BASIS_POINTS;
+        uint256 min1 = (expected1 * scale) / BASIS_POINTS;
+
+        // Cast safely. Positions with liquidity fitting uint128 can still produce amounts
+        // exceeding uint128 only in extremely wide / imbalanced configurations; cap at
+        // type(uint128).max in that (practically unreachable) edge so we never underflow
+        // the min-out silently.
+        amount0Min = min0 > type(uint128).max ? type(uint128).max : uint128(min0);
+        amount1Min = min1 > type(uint128).max ? type(uint128).max : uint128(min1);
     }
 
     function _calculateLiquidity(
