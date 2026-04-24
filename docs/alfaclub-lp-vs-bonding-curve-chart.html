@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AlfaClub Bonding Curve vs ERC20/ERC1155 LP</title>
+    <title>AlfaClub Key Price in USDC</title>
     <style>
       :root {
         color-scheme: dark;
@@ -34,9 +34,10 @@
 
       h1 {
         margin: 0;
-        font-size: clamp(28px, 4vw, 48px);
-        line-height: 1.04;
+        font-size: clamp(22px, 3vw, 36px);
+        line-height: 1.1;
         letter-spacing: 0;
+        white-space: nowrap;
       }
 
       p {
@@ -121,6 +122,72 @@
       select:focus {
         outline: 2px solid rgba(75, 146, 255, 0.5);
         outline-offset: 1px;
+      }
+
+      input[type="range"] {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 100%;
+        min-height: 28px;
+        height: 28px;
+        padding: 0;
+        background: transparent;
+        border: none;
+        accent-color: #4b92ff;
+        cursor: grab;
+      }
+
+      input[type="range"]:active {
+        cursor: grabbing;
+      }
+
+      input[type="range"]::-webkit-slider-runnable-track {
+        height: 6px;
+        background: linear-gradient(90deg, rgba(75, 146, 255, 0.85), rgba(75, 146, 255, 0.25));
+        border-radius: 999px;
+      }
+
+      input[type="range"]::-moz-range-track {
+        height: 6px;
+        background: linear-gradient(90deg, rgba(75, 146, 255, 0.85), rgba(75, 146, 255, 0.25));
+        border-radius: 999px;
+        border: none;
+      }
+
+      input[type="range"]::-webkit-slider-thumb {
+        -webkit-appearance: none;
+        appearance: none;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #eef2f8;
+        border: 2px solid #4b92ff;
+        margin-top: -6px;
+        box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+      }
+
+      input[type="range"]::-moz-range-thumb {
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #eef2f8;
+        border: 2px solid #4b92ff;
+        box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+      }
+
+      .slider-row {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+      }
+
+      .slider-row strong {
+        font-weight: 500;
+        color: #eef2f8;
+        font-variant-numeric: tabular-nums;
+        min-width: 2.5ch;
+        text-align: right;
       }
 
       .chart-panel {
@@ -235,18 +302,17 @@
     <main>
       <section class="top">
         <div>
-          <h1>AlfaClub Bonding Curve vs Creator Coin LP</h1>
+          <h1>AlfaClub Key Price in USDC</h1>
           <p class="summary">
-            The primary curve prices keys from total ERC1155 supply. The secondary LP prices
-            keys from ERC20 and key reserves. This chart normalizes the ERC20 side to USDC so
-            the shapes can be compared directly. Defaults are set to AlfaClub room #1043:
+            Price of one AlfaClub key in USDC across key supply from 1 to 100, using the
+            primary sum-of-squares bonding curve. Defaults are set to room #1043:
             Social / Casual with 73 keys minted.
           </p>
         </div>
         <div class="formula" aria-label="pricing formulas">
-          <div>Primary buy: sum(i^2) * priceUnit / divisor + fees</div>
-          <div>LP buy: x * q / (y - q), then grossed up by 6.9%</div>
-          <div>LP sell: x * q / (y + q), then reduced by 6.9%</div>
+          <div>Bonding curve buy(N) = N^2 / divisor * (1 + fee)  [USDC]</div>
+          <div>Bonding curve sell(N) = (N - 1)^2 / divisor * (1 - fee)  [USDC]</div>
+          <div>LP: keys &harr; Creator Coin. y&#8320; = (x&#8320; * mid) / coinPriceUsd, k = x&#8320; * y&#8320;</div>
         </div>
       </section>
 
@@ -273,59 +339,124 @@
             </select>
           </div>
           <div class="field">
-            <label for="supply">Current key supply</label>
-            <input id="supply" type="number" min="2" max="10000" step="1" value="73" />
+            <div class="slider-row">
+              <label for="supply">Current key supply</label>
+              <strong id="supplyOut">73</strong>
+            </div>
+            <input id="supply" type="range" min="1" max="100" step="1" value="73" />
           </div>
           <div class="field">
-            <label for="poolKeys">LP key reserve</label>
-            <input id="poolKeys" type="number" min="2" max="10000" step="1" value="40" />
+            <div class="slider-row">
+              <label for="lpSeedKeys">LP seed keys (x&#8320;, capped at key supply)</label>
+              <strong id="lpSeedKeysOut">10</strong>
+            </div>
+            <input id="lpSeedKeys" type="range" min="1" max="100" step="1" value="10" />
           </div>
           <div class="field">
-            <label for="lpFee">LP fee %</label>
-            <input id="lpFee" type="number" min="0" max="30" step="0.1" value="6.9" />
+            <label for="coinSymbol">Creator Coin symbol</label>
+            <input id="coinSymbol" type="text" value="mangames" />
           </div>
           <div class="field">
-            <label for="creatorCoinUsd">Creator Coin price in USDC</label>
-            <input id="creatorCoinUsd" type="number" min="0.000001" step="0.0001" value="1" />
+            <label for="coinPriceUsd">Creator Coin price (USDC)</label>
+            <input
+              id="coinPriceUsd"
+              type="number"
+              min="0"
+              step="0.00000001"
+              value="0.0000027"
+            />
           </div>
           <div class="field">
-            <label for="maxTrade">Max trade size</label>
-            <input id="maxTrade" type="number" min="1" max="200" step="1" value="18" />
+            <label for="coinAddress">Creator Coin address</label>
+            <input
+              id="coinAddress"
+              type="text"
+              value="0x3eaba5728b56d793059aff679ac925c93fe44379"
+              spellcheck="false"
+            />
+          </div>
+          <div class="field">
+            <label for="lpFeeBps">LP fee (bps, auto-set from room type)</label>
+            <input id="lpFeeBps" type="number" min="0" max="10000" step="1" value="300" />
           </div>
           <p class="note">
-            The LP is auto-seeded at the midpoint of the one-key no-arbitrage range when that
-            range exists. Otherwise it uses the midpoint of the primary one-key bid and ask.
+            Chart 1: primary bonding curve (USDC per key). Chart 2: LP paired as keys &harr;
+            Creator Coin. The LP seeds at the primary midprice, so
+            y&#8320; (in Creator Coins) = (x&#8320; &middot; midprice) / coinPriceUsd,
+            and k = x&#8320; &middot; y&#8320; in units of keys &middot; Creator Coins.
+            Pressing <code>Refetch price</code> pulls the live quote from Zora.
           </p>
+          <button
+            id="refetchPriceBtn"
+            type="button"
+            style="
+              width: 100%;
+              min-height: 36px;
+              border: 1px solid rgba(75, 146, 255, 0.45);
+              background: rgba(75, 146, 255, 0.12);
+              color: #dbe7ff;
+              border-radius: 6px;
+              font: inherit;
+              cursor: pointer;
+              margin-top: 6px;
+            "
+          >
+            Refetch price from Zora
+          </button>
+          <p class="note" id="coinPriceStatus" style="min-height: 16px">Ready.</p>
         </aside>
 
         <section class="chart-panel">
-          <h2>Total quote by exact key amount</h2>
+          <h2>Bonding curve: key price vs supply</h2>
           <div class="legend">
-            <span class="key"><span class="swatch" style="background:#4b92ff"></span>Primary buy cost</span>
-            <span class="key"><span class="swatch" style="background:#2dd4bf"></span>LP buy cost</span>
-            <span class="key"><span class="swatch" style="background:#f59e0b"></span>Primary sell proceeds</span>
-            <span class="key"><span class="swatch" style="background:#ef5da8"></span>LP sell proceeds</span>
+            <span class="key"><span class="swatch" style="background:#22c55e;height:10px;width:6px;border-radius:2px"></span>Bonding curve spread (sell to buy)</span>
+            <span class="key"><span class="swatch" style="background:#a78bfa"></span>Midprice dot at current supply</span>
           </div>
-          <svg id="chart" viewBox="0 0 820 430" role="img" aria-label="Bonding curve and LP quote chart"></svg>
+          <svg id="chart" viewBox="0 0 820 430" role="img" aria-label="AlfaClub key price in USDC by supply"></svg>
           <div class="metrics">
             <div class="metric">
-              <span>1-key primary ask</span>
+              <span>Buy at current supply</span>
               <strong id="primaryAsk">--</strong>
             </div>
             <div class="metric">
-              <span>1-key primary bid</span>
+              <span>Sell at current supply</span>
               <strong id="primaryBid">--</strong>
             </div>
             <div class="metric">
-              <span>LP spot seed</span>
-              <strong id="lpSpot">--</strong>
+              <span>Midprice at current supply</span>
+              <strong id="midOut">--</strong>
             </div>
             <div class="metric">
-              <span>1-key spread fit</span>
-              <strong id="spreadFit">--</strong>
+              <span>k = x&#8320; &middot; y&#8320; (keys &middot; Coin)</span>
+              <strong id="kOut">--</strong>
             </div>
           </div>
           <p class="note" id="chartNote"></p>
+
+          <h2 style="margin-top: 26px">LP reserves: xy = k</h2>
+          <div class="legend">
+            <span class="key"><span class="swatch" style="background:#a78bfa"></span>y = k / x (USDC reserve at key reserve x)</span>
+            <span class="key"><span class="swatch" style="background:#22c55e"></span>Anchor at (S, k / S)</span>
+          </div>
+          <svg id="lpChart" viewBox="0 0 820 320" role="img" aria-label="LP reserves xy equals k"></svg>
+          <p class="note" id="lpNote"></p>
+
+          <h2 style="margin-top: 26px">Quote: how many <span id="quoteSymbolLabel">Creator Coins</span> to buy Q keys</h2>
+          <table id="quoteTable" style="width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 4px">
+            <thead>
+              <tr style="text-align: right; color: #8d99aa">
+                <th style="text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">Q (keys)</th>
+                <th style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">Bonding curve (USDC)</th>
+                <th style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">Bonding curve in <span class="quoteSymbolLabel">coins</span></th>
+                <th style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">LP in <span class="quoteSymbolLabel">coins</span> (with fee)</th>
+                <th style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">LP effective USDC</th>
+                <th style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">LP vs bonding curve</th>
+                <th style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">Cheaper venue</th>
+              </tr>
+            </thead>
+            <tbody id="quoteBody"></tbody>
+          </table>
+          <p class="note" id="quoteNote"></p>
         </section>
       </section>
     </main>
@@ -341,8 +472,17 @@
         social: 0.04,
       }
 
+      const lpFeeBpsByRoom = {
+        trading: 690,
+        social: 300,
+      }
+
+      const N_MIN = 1
+      const N_MAX = 100
+
       const $ = (id) => document.getElementById(id)
       const chart = $("chart")
+      const lpChart = $("lpChart")
 
       function sumSquaresThrough(n) {
         if (n <= 0) return 0
@@ -363,39 +503,8 @@
       }
 
       function primarySell(supply, amount, divisor, fee) {
-        if (amount >= supply) return Number.NaN
+        if (amount > supply) return Number.NaN
         return curveBasePrice(supply, amount, divisor, false) * (1 - fee)
-      }
-
-      function lpSeedSpot(primaryBidOne, primaryAskOne, keyReserve, lpFeeRate) {
-        const keep = 1 - lpFeeRate
-        const lower = (primaryBidOne * (keyReserve + 1)) / (keyReserve * keep)
-        const upper = (primaryAskOne * (keyReserve - 1) * keep) / keyReserve
-        const feasible = Number.isFinite(lower) && Number.isFinite(upper) && lower <= upper
-        const fallback = (primaryBidOne + primaryAskOne) / 2
-        return {
-          spot: feasible ? (lower + upper) / 2 : fallback,
-          lower,
-          upper,
-          feasible,
-        }
-      }
-
-      function maxFeeInsideSpread(primaryBidOne, primaryAskOne, keyReserve) {
-        const ratio = (primaryBidOne * (keyReserve + 1)) / (primaryAskOne * (keyReserve - 1))
-        if (!Number.isFinite(ratio) || ratio >= 1) return 0
-        return Math.max(0, 1 - Math.sqrt(ratio))
-      }
-
-      function lpBuy(creatorReserve, keyReserve, amount, lpFeeRate, creatorCoinUsd) {
-        if (amount >= keyReserve) return Number.NaN
-        const effective = (creatorReserve * amount) / (keyReserve - amount)
-        return (effective / (1 - lpFeeRate)) * creatorCoinUsd
-      }
-
-      function lpSell(creatorReserve, keyReserve, amount, lpFeeRate, creatorCoinUsd) {
-        const gross = (creatorReserve * amount) / (keyReserve + amount)
-        return gross * (1 - lpFeeRate) * creatorCoinUsd
       }
 
       function linePath(points, xScale, yScale) {
@@ -407,60 +516,67 @@
 
       function formatUsd(value) {
         if (!Number.isFinite(value)) return "--"
+        if (value === 0) return "$0"
         if (value >= 1000) return `$${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
         if (value >= 10) return `$${value.toFixed(2)}`
-        return `$${value.toFixed(4)}`
-      }
-
-      function formatNumber(value) {
-        if (!Number.isFinite(value)) return "--"
-        if (value >= 1000) return value.toLocaleString(undefined, { maximumFractionDigits: 0 })
-        if (value >= 10) return value.toFixed(2)
-        return value.toFixed(4)
+        if (value >= 0.01) return `$${value.toFixed(4)}`
+        if (value > 0) {
+          const digits = Math.min(10, Math.max(4, 2 - Math.floor(Math.log10(value))))
+          return `$${value.toFixed(digits)}`
+        }
+        return `-$${formatUsd(-value).slice(1)}`
       }
 
       function render() {
         const roomType = $("roomType").value
         const tokenId = Math.max(1, Math.floor(Number($("tokenId").value) || 1043))
         const tier = Number($("tier").value)
-        const supply = Math.max(2, Math.floor(Number($("supply").value) || 73))
-        const poolKeys = Math.max(2, Math.floor(Number($("poolKeys").value) || 40))
-        const lpFeeRate = Math.max(0, Math.min(0.3, Number($("lpFee").value) / 100 || 0.069))
-        const creatorCoinUsd = Math.max(0.000001, Number($("creatorCoinUsd").value) || 1)
-        const maxTradeInput = Math.max(1, Math.floor(Number($("maxTrade").value) || 18))
-        const maxTrade = Math.min(maxTradeInput, supply - 1, poolKeys - 1)
+        const supply = Math.min(
+          N_MAX,
+          Math.max(N_MIN, Math.floor(Number($("supply").value) || 73)),
+        )
+        const lpSeedKeys = Math.max(1, Math.floor(Number($("lpSeedKeys").value) || 10))
+        if ($("supplyOut")) $("supplyOut").textContent = String(supply)
+        if ($("lpSeedKeysOut")) $("lpSeedKeysOut").textContent = String(lpSeedKeys)
+        const coinSymbol = ($("coinSymbol").value || "CreatorCoin").trim() || "CreatorCoin"
+        const coinPriceUsd = Math.max(0, Number($("coinPriceUsd").value) || 0)
+        const lpFeeBps = Math.max(0, Math.min(10000, Math.floor(Number($("lpFeeBps").value) || 0)))
+        const lpFeeRate = lpFeeBps / 10_000
         const divisor = divisorTable[roomType][tier]
         const primaryFee = feeTable[roomType]
-        const primaryAskOne = primaryBuy(supply, 1, divisor, primaryFee)
-        const primaryBidOne = primarySell(supply, 1, divisor, primaryFee)
-        const seed = lpSeedSpot(primaryBidOne, primaryAskOne, poolKeys, lpFeeRate)
-        const creatorReserve = (seed.spot * poolKeys) / creatorCoinUsd
+        const primaryAskAtSupply = primaryBuy(supply, 1, divisor, primaryFee)
+        const primaryBidAtSupply = primarySell(supply, 1, divisor, primaryFee)
 
-        const primaryBuyPoints = []
-        const lpBuyPoints = []
-        const primarySellPoints = []
-        const lpSellPoints = []
-        for (let q = 1; q <= maxTrade; q++) {
-          primaryBuyPoints.push({ x: q, y: primaryBuy(supply, q, divisor, primaryFee) })
-          lpBuyPoints.push({ x: q, y: lpBuy(creatorReserve, poolKeys, q, lpFeeRate, creatorCoinUsd) })
-          primarySellPoints.push({ x: q, y: primarySell(supply, q, divisor, primaryFee) })
-          lpSellPoints.push({ x: q, y: lpSell(creatorReserve, poolKeys, q, lpFeeRate, creatorCoinUsd) })
+        const candles = []
+        for (let n = N_MIN; n <= N_MAX; n++) {
+          candles.push({
+            x: n,
+            buy: primaryBuy(n, 1, divisor, primaryFee),
+            sell: primarySell(n, 1, divisor, primaryFee),
+          })
         }
 
-        const allValues = [...primaryBuyPoints, ...lpBuyPoints, ...primarySellPoints, ...lpSellPoints]
-          .map((point) => point.y)
-          .filter(Number.isFinite)
-        const yMax = Math.max(...allValues, 1) * 1.08
+        const midAtSupply = Number.isFinite(primaryAskAtSupply) && Number.isFinite(primaryBidAtSupply)
+          ? (primaryAskAtSupply + primaryBidAtSupply) / 2
+          : Number.NaN
+        const usdcAnchorValue = Number.isFinite(midAtSupply) ? lpSeedKeys * midAtSupply : Number.NaN
+        const coinAnchor = Number.isFinite(usdcAnchorValue) && coinPriceUsd > 0
+          ? usdcAnchorValue / coinPriceUsd
+          : Number.NaN
+        const kValue = Number.isFinite(coinAnchor) ? lpSeedKeys * coinAnchor : Number.NaN
+
+        const candleBuyMax = Math.max(...candles.map((c) => c.buy).filter(Number.isFinite), 0)
+        const yMax = Math.max(candleBuyMax, 1) * 1.08
         const width = 820
         const height = 430
         const margin = { top: 16, right: 24, bottom: 44, left: 70 }
         const innerWidth = width - margin.left - margin.right
         const innerHeight = height - margin.top - margin.bottom
-        const xScale = (x) => margin.left + ((x - 1) / Math.max(1, maxTrade - 1)) * innerWidth
+        const xScale = (x) => margin.left + ((x - N_MIN) / Math.max(1, N_MAX - N_MIN)) * innerWidth
         const yScale = (y) => margin.top + innerHeight - (y / yMax) * innerHeight
+        const candleWidth = Math.max(2, (innerWidth / (N_MAX - N_MIN + 1)) * 0.72)
 
         const yTicks = 5
-        const xTicks = Math.min(maxTrade, 8)
         let svg = ""
 
         for (let i = 0; i <= yTicks; i++) {
@@ -470,48 +586,376 @@
           svg += `<text class="tick" x="${margin.left - 10}" y="${y + 4}" text-anchor="end">${formatUsd(value)}</text>`
         }
 
-        for (let i = 0; i <= xTicks; i++) {
-          const value = 1 + Math.round(((maxTrade - 1) * i) / Math.max(1, xTicks))
-          const x = xScale(value)
+        for (let tickValue = 0; tickValue <= N_MAX; tickValue += 10) {
+          const x = xScale(Math.max(N_MIN, tickValue))
           svg += `<line class="grid" x1="${x}" y1="${margin.top}" x2="${x}" y2="${height - margin.bottom}"></line>`
-          svg += `<text class="tick" x="${x}" y="${height - 18}" text-anchor="middle">${value}</text>`
+          svg += `<text class="tick" x="${x}" y="${height - 18}" text-anchor="middle">${tickValue}</text>`
         }
 
         svg += `<line class="axis" x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}"></line>`
         svg += `<line class="axis" x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}"></line>`
-        svg += `<text class="tick" x="${width / 2}" y="${height - 2}" text-anchor="middle">Exact trade size in keys</text>`
-        svg += `<text class="tick" transform="translate(16 ${height / 2}) rotate(-90)" text-anchor="middle">Total quote in USDC terms</text>`
+        svg += `<text class="tick" x="${width / 2}" y="${height - 2}" text-anchor="middle">Key supply</text>`
+        svg += `<text class="tick" transform="translate(16 ${height / 2}) rotate(-90)" text-anchor="middle">Price per 1 key (USDC)</text>`
 
-        const lines = [
-          { points: primaryBuyPoints, color: "#4b92ff" },
-          { points: lpBuyPoints, color: "#2dd4bf" },
-          { points: primarySellPoints, color: "#f59e0b" },
-          { points: lpSellPoints, color: "#ef5da8" },
-        ]
+        for (const c of candles) {
+          if (!Number.isFinite(c.buy) || !Number.isFinite(c.sell)) continue
+          const high = Math.max(c.buy, c.sell)
+          const low = Math.min(c.buy, c.sell)
+          const yTop = yScale(high)
+          const yBottom = yScale(low)
+          const rx = xScale(c.x) - candleWidth / 2
+          const rh = Math.max(1, yBottom - yTop)
+          svg += `<rect x="${rx.toFixed(2)}" y="${yTop.toFixed(2)}" width="${candleWidth.toFixed(2)}" height="${rh.toFixed(2)}" fill="#22c55e" fill-opacity="0.82" stroke="#16a34a" stroke-width="0.6"></rect>`
+        }
 
-        for (const line of lines) {
-          svg += `<path class="line" d="${linePath(line.points, xScale, yScale)}" stroke="${line.color}"></path>`
+        if (supply >= N_MIN && supply <= N_MAX) {
+          const markerX = xScale(supply)
+          svg += `<line class="grid" x1="${markerX}" y1="${margin.top}" x2="${markerX}" y2="${height - margin.bottom}" stroke="rgba(255,255,255,0.32)" stroke-dasharray="4 4"></line>`
+          const labelY = margin.top + 14
+          svg += `<text class="tick" x="${markerX + 6}" y="${labelY}" text-anchor="start">N = ${supply}</text>`
+          if (Number.isFinite(midAtSupply)) {
+            const dy = yScale(midAtSupply)
+            svg += `<circle cx="${markerX}" cy="${dy}" r="4" fill="#a78bfa" stroke="#0a0d12" stroke-width="1"></circle>`
+          }
         }
 
         chart.innerHTML = svg
+        renderLp({
+          kValue,
+          midAtSupply,
+          coinAnchor,
+          usdcAnchorValue,
+          lpSeedKeys,
+          coinSymbol,
+          coinPriceUsd,
+        })
 
-        $("primaryAsk").textContent = formatUsd(primaryAskOne)
-        $("primaryBid").textContent = formatUsd(primaryBidOne)
-        $("lpSpot").textContent = `${formatNumber(seed.spot)} Creator Coin/key`
-        $("spreadFit").textContent = seed.feasible ? "inside spread" : "outside spread"
+        $("primaryAsk").textContent = formatUsd(primaryAskAtSupply)
+        $("primaryBid").textContent = formatUsd(primaryBidAtSupply)
+        $("midOut").textContent = formatUsd(midAtSupply)
 
-        const fitText = seed.feasible
-          ? `One-key LP quotes can sit inside the primary bid/ask spread. Seed spot range: ${formatUsd(seed.lower)} to ${formatUsd(seed.upper)}.`
-          : `One-key LP quotes cannot fit inside the primary bid/ask spread with these reserves and fee. At ${poolKeys} LP keys, the max fee that fits is ${(maxFeeInsideSpread(primaryBidOne, primaryAskOne, poolKeys) * 100).toFixed(2)}%.`
         $("chartNote").textContent =
-          `Room #${tokenId}: ${fitText} Chart uses divisor ${divisor} and primary fee ${(primaryFee * 100).toFixed(1)}%.`
+          `Room #${tokenId}: ${roomType === "trading" ? "Trading" : "Social"} / ${
+            ["Casual", "Club", "Exclusive"][tier] ?? "Casual"
+          }. Divisor ${divisor}, bonding-curve fee ${(primaryFee * 100).toFixed(1)}%. ` +
+          `Candles show the sell-to-buy bonding-curve spread at each supply N. ` +
+          `Purple dot marks the midprice at the current supply (${formatUsd(midAtSupply)}).`
+
+        renderQuote({
+          supply,
+          divisor,
+          primaryFee,
+          lpSeedKeys,
+          coinAnchor,
+          kValue,
+          coinSymbol,
+          coinPriceUsd,
+          lpFeeRate,
+          lpFeeBps,
+        })
       }
 
-      for (const id of ["tokenId", "roomType", "tier", "supply", "poolKeys", "lpFee", "creatorCoinUsd", "maxTrade"]) {
+      function renderQuote({
+        supply,
+        divisor,
+        primaryFee,
+        lpSeedKeys,
+        coinAnchor,
+        kValue,
+        coinSymbol,
+        coinPriceUsd,
+        lpFeeRate,
+        lpFeeBps,
+      }) {
+        const body = $("quoteBody")
+        const note = $("quoteNote")
+        for (const el of document.querySelectorAll(".quoteSymbolLabel, #quoteSymbolLabel")) {
+          el.textContent = coinSymbol
+        }
+        if (!body || !note) return
+        body.innerHTML = ""
+
+        const hasCoin = coinPriceUsd > 0 && Number.isFinite(kValue) && kValue > 0
+        if (!hasCoin) {
+          body.innerHTML = `<tr><td colspan="6" style="padding:10px;color:#8d99aa">Set Creator Coin price &gt; 0 and LP seed keys &gt; 0 to compute quotes.</td></tr>`
+          note.textContent = ""
+          return
+        }
+
+        const MAX_Q = 25
+        const quantities = []
+        for (let q = 1; q <= MAX_Q; q++) {
+          if (q < lpSeedKeys && q < supply) quantities.push(q)
+        }
+        if (quantities.length === 0) {
+          body.innerHTML = `<tr><td colspan="6" style="padding:10px;color:#8d99aa">Increase LP seed keys or current supply so at least 1 key trade is feasible.</td></tr>`
+          note.textContent = ""
+          return
+        }
+
+        const rows = []
+        for (const q of quantities) {
+          const primaryUsd = primaryBuy(supply, q, divisor, primaryFee)
+          const primaryCoin = primaryUsd / coinPriceUsd
+
+          const newXLp = lpSeedKeys - q
+          const y0 = coinAnchor
+          const grossLpCoin = newXLp > 0 ? kValue / newXLp - y0 : Number.POSITIVE_INFINITY
+          const lpCoinWithFee = newXLp > 0 ? grossLpCoin / Math.max(1e-9, 1 - lpFeeRate) : Number.POSITIVE_INFINITY
+          const lpUsdEffective = lpCoinWithFee * coinPriceUsd
+
+          const cheaper = !Number.isFinite(lpUsdEffective)
+            ? "primary"
+            : lpUsdEffective <= primaryUsd
+              ? "LP"
+              : "primary"
+
+          rows.push({ q, primaryUsd, primaryCoin, lpCoinWithFee, lpUsdEffective, cheaper })
+        }
+
+        const tdR = `padding:4px 8px;border-bottom:1px solid rgba(255,255,255,0.05);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap`
+        const tdL = `padding:4px 8px;border-bottom:1px solid rgba(255,255,255,0.05);text-align:left;font-weight:500`
+        const avgStyle = `display:block;color:#7c8798;font-size:11px;margin-top:2px`
+
+        const avg = (total, q, formatter) =>
+          q > 1 && Number.isFinite(total) ? `<span style="${avgStyle}">${formatter(total / q)} / key</span>` : ""
+
+        body.innerHTML = rows
+          .map((r) => {
+            const badge =
+              r.cheaper === "LP"
+                ? `<span style="color:#22c55e">LP</span>`
+                : `<span style="color:#4b92ff">Bonding curve</span>`
+            const lpCoinCell = Number.isFinite(r.lpCoinWithFee)
+              ? `${formatCount(r.lpCoinWithFee)} ${coinSymbol}${avg(r.lpCoinWithFee, r.q, (v) => formatCount(v) + " " + coinSymbol)}`
+              : `\u221e (drains LP)`
+            const lpUsdCell = Number.isFinite(r.lpUsdEffective)
+              ? `${formatUsd(r.lpUsdEffective)}${avg(r.lpUsdEffective, r.q, formatUsd)}`
+              : "--"
+
+            let vsCell
+            if (!Number.isFinite(r.lpUsdEffective) || !Number.isFinite(r.primaryUsd) || r.primaryUsd <= 0) {
+              vsCell = "--"
+            } else {
+              const delta = r.lpUsdEffective - r.primaryUsd
+              const ratio = delta / r.primaryUsd
+              const sign = delta > 0 ? "+" : delta < 0 ? "\u2212" : ""
+              const color = delta < 0 ? "#22c55e" : delta > 0 ? "#f59e0b" : "#eef2f8"
+              const absDeltaUsd = formatUsd(Math.abs(delta))
+              const pct = (Math.abs(ratio) * 100).toFixed(ratio === 0 ? 0 : Math.abs(ratio) < 0.01 ? 2 : 2)
+              const label = delta < 0 ? "cheaper" : delta > 0 ? "more" : "identical"
+              vsCell = `<span style="color:${color}">${sign}${pct}%</span><span style="${avgStyle}">${sign}${absDeltaUsd} ${label}</span>`
+            }
+
+            return `<tr>
+              <td style="${tdL}">${r.q}</td>
+              <td style="${tdR}">${formatUsd(r.primaryUsd)}${avg(r.primaryUsd, r.q, formatUsd)}</td>
+              <td style="${tdR}">${formatCount(r.primaryCoin)} ${coinSymbol}${avg(r.primaryCoin, r.q, (v) => formatCount(v) + " " + coinSymbol)}</td>
+              <td style="${tdR}">${lpCoinCell}</td>
+              <td style="${tdR}">${lpUsdCell}</td>
+              <td style="${tdR}">${vsCell}</td>
+              <td style="${tdR}">${badge}</td>
+            </tr>`
+          })
+          .join("")
+
+        note.textContent =
+          `Bonding curve path: FriendKey charges USDC, so you'd swap ${coinSymbol} \u2192 USDC first ` +
+          `(quote ignores any Zora v4 pool slippage, fees, or gas). ` +
+          `LP path: constant-product against a ${lpSeedKeys}-key pool with ${lpFeeBps} bps fee, ` +
+          `using the current ${coinSymbol}/USDC price (${formatUsd(coinPriceUsd)}) for the USDC equivalent column. ` +
+          `When the bonding curve wins, either deepen the LP or reduce Q.`
+      }
+
+      function formatCount(value) {
+        if (!Number.isFinite(value)) return "--"
+        const abs = Math.abs(value)
+        if (abs >= 1e9) return (value / 1e9).toFixed(2) + "B"
+        if (abs >= 1e6) return (value / 1e6).toFixed(2) + "M"
+        if (abs >= 1e3) return (value / 1e3).toFixed(2) + "K"
+        if (abs >= 1) return value.toFixed(2)
+        if (abs > 0) return value.toFixed(4)
+        return "0"
+      }
+
+      function renderLp({
+        kValue,
+        midAtSupply,
+        coinAnchor,
+        usdcAnchorValue,
+        lpSeedKeys,
+        coinSymbol,
+        coinPriceUsd,
+      }) {
+        if (!lpChart) return
+        const width = 820
+        const height = 320
+        const margin = { top: 18, right: 24, bottom: 44, left: 92 }
+        const innerWidth = width - margin.left - margin.right
+        const innerHeight = height - margin.top - margin.bottom
+
+        const X_MIN = Math.max(1, Math.floor(lpSeedKeys / 4))
+        const X_MAX = Math.max(lpSeedKeys + 10, Math.ceil(lpSeedKeys * 2.5))
+
+        const hasK = Number.isFinite(kValue) && kValue > 0
+
+        const sampleX = []
+        const step = (X_MAX - X_MIN) / 400
+        for (let x = X_MIN; x <= X_MAX + 1e-9; x += step) sampleX.push(x)
+
+        const yAtXMin = hasK ? kValue / X_MIN : 1
+        const yMax = hasK ? Math.max(yAtXMin, 1) * 1.05 : 1
+        const xScale = (x) =>
+          margin.left + ((x - X_MIN) / Math.max(1e-9, X_MAX - X_MIN)) * innerWidth
+        const yScale = (y) => margin.top + innerHeight - (y / yMax) * innerHeight
+
+        let svg = ""
+
+        const yTicks = 5
+        for (let i = 0; i <= yTicks; i++) {
+          const value = (yMax * i) / yTicks
+          const y = yScale(value)
+          svg += `<line class="grid" x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}"></line>`
+          svg += `<text class="tick" x="${margin.left - 10}" y="${y + 4}" text-anchor="end">${formatCount(value)}</text>`
+        }
+
+        const xRange = X_MAX - X_MIN
+        const xStep = xRange <= 40 ? 5 : xRange <= 120 ? 10 : 20
+        for (let xv = Math.ceil(X_MIN / xStep) * xStep; xv <= X_MAX + 1e-9; xv += xStep) {
+          const gx = xScale(xv)
+          svg += `<line class="grid" x1="${gx}" y1="${margin.top}" x2="${gx}" y2="${height - margin.bottom}"></line>`
+          svg += `<text class="tick" x="${gx}" y="${height - 18}" text-anchor="middle">${xv}</text>`
+        }
+
+        svg += `<line class="axis" x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}"></line>`
+        svg += `<line class="axis" x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}"></line>`
+        svg += `<text class="tick" x="${width / 2}" y="${height - 2}" text-anchor="middle">Key reserve x (keys in LP)</text>`
+        svg += `<text class="tick" transform="translate(16 ${height / 2}) rotate(-90)" text-anchor="middle">Creator Coin reserve y (${coinSymbol})</text>`
+
+        if (hasK) {
+          const points = sampleX.map((x) => ({ x, y: kValue / x }))
+          svg += `<path class="line" d="${linePath(points, xScale, yScale)}" stroke="#a78bfa"></path>`
+
+          if (lpSeedKeys >= X_MIN && lpSeedKeys <= X_MAX && Number.isFinite(coinAnchor)) {
+            const ax = xScale(lpSeedKeys)
+            const ay = yScale(coinAnchor)
+            svg += `<line class="grid" x1="${ax}" y1="${margin.top}" x2="${ax}" y2="${height - margin.bottom}" stroke="rgba(255,255,255,0.28)" stroke-dasharray="4 4"></line>`
+            svg += `<line class="grid" x1="${margin.left}" y1="${ay}" x2="${width - margin.right}" y2="${ay}" stroke="rgba(255,255,255,0.28)" stroke-dasharray="4 4"></line>`
+            svg += `<circle cx="${ax}" cy="${ay}" r="5" fill="#22c55e" stroke="#0a0d12" stroke-width="1"></circle>`
+            svg += `<text class="tick" x="${ax + 8}" y="${ay - 6}" text-anchor="start">x&#8320; = ${lpSeedKeys} keys, y&#8320; = ${formatCount(coinAnchor)} ${coinSymbol}</text>`
+          }
+        } else {
+          svg += `<text class="tick" x="${margin.left + innerWidth / 2}" y="${margin.top + innerHeight / 2}" text-anchor="middle">Set coin price &gt; 0 and primary midprice &gt; 0 to see the xy = k curve</text>`
+        }
+
+        lpChart.innerHTML = svg
+
+        $("kOut").textContent = hasK
+          ? `${formatCount(kValue)} keys\u00b7${coinSymbol}`
+          : "--"
+
+        if ($("lpNote")) {
+          if (hasK) {
+            const percentOfSupply = (coinAnchor / 1_000_000_000) * 100
+            $("lpNote").textContent =
+              `LP seeded with x\u2080 = ${lpSeedKeys} keys paired against ` +
+              `y\u2080 = ${formatCount(coinAnchor)} ${coinSymbol} ` +
+              `(\u2248 ${formatUsd(usdcAnchorValue)} at ${formatUsd(coinPriceUsd)} per ${coinSymbol}). ` +
+              `Invariant k = x\u2080 \u00b7 y\u2080 = ${formatCount(kValue)} keys\u00b7${coinSymbol}. ` +
+              `That's roughly ${percentOfSupply.toFixed(3)}% of a 1B-supply Creator Coin. ` +
+              `If ${coinSymbol} price moves, the Coin-reserve needed to sit on this curve scales inversely: a 2x price pump halves the Coin reserve required for the same LP depth.`
+          } else {
+            $("lpNote").textContent =
+              `Enter a Creator Coin price > 0 and pick a supply with a positive midprice to see the xy = k curve.`
+          }
+        }
+      }
+
+      function syncLpFeeFromRoomType() {
+        const roomType = $("roomType").value
+        const bps = lpFeeBpsByRoom[roomType]
+        if (bps != null) $("lpFeeBps").value = String(bps)
+      }
+
+      function clampLpSeedToSupply() {
+        const supply = Math.min(
+          N_MAX,
+          Math.max(N_MIN, Math.floor(Number($("supply").value) || 73)),
+        )
+        const input = $("lpSeedKeys")
+        input.max = String(supply)
+        const current = Math.floor(Number(input.value) || 1)
+        if (current > supply) input.value = String(supply)
+        if (current < 1) input.value = "1"
+      }
+
+      $("roomType").addEventListener("change", () => {
+        syncLpFeeFromRoomType()
+        render()
+      })
+
+      $("supply").addEventListener("input", () => {
+        clampLpSeedToSupply()
+      })
+
+      for (const id of [
+        "tokenId",
+        "roomType",
+        "tier",
+        "supply",
+        "lpSeedKeys",
+        "coinSymbol",
+        "coinPriceUsd",
+        "lpFeeBps",
+      ]) {
         $(id).addEventListener("input", render)
       }
 
+      syncLpFeeFromRoomType()
+      clampLpSeedToSupply()
+
+      async function fetchCreatorCoinPrice(address) {
+        const url = `https://api-sdk.zora.engineering/coin?address=${encodeURIComponent(address)}&chainId=8453`
+        const res = await fetch(url, { headers: { accept: "application/json" } })
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        const token = data?.zora20Token
+        if (!token) throw new Error("no zora20Token in response")
+        const priceStr = token?.tokenPrice?.priceInUsdc
+        if (!priceStr) throw new Error("no priceInUsdc")
+        const price = Number(priceStr)
+        if (!Number.isFinite(price) || price <= 0) throw new Error("bad price")
+        return {
+          priceUsd: price,
+          symbol: token.symbol || token.name || "CreatorCoin",
+        }
+      }
+
+      async function refetchCoinPrice({ manual } = { manual: false }) {
+        const status = $("coinPriceStatus")
+        const address = ($("coinAddress").value || "").trim()
+        if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
+          if (status) status.textContent = "Invalid Creator Coin address."
+          return
+        }
+        if (status) status.textContent = "Fetching price from Zora..."
+        try {
+          const { priceUsd, symbol } = await fetchCreatorCoinPrice(address)
+          $("coinPriceUsd").value = priceUsd.toPrecision(6)
+          if (!manual || !$("coinSymbol").value.trim()) {
+            $("coinSymbol").value = symbol
+          }
+          if (status) status.textContent = `Fetched: 1 ${symbol} = ${formatUsd(priceUsd)} (Zora).`
+          render()
+        } catch (err) {
+          if (status) status.textContent = `Price fetch failed: ${err?.message ?? "unknown"}. Using input value.`
+        }
+      }
+
+      $("refetchPriceBtn").addEventListener("click", () => refetchCoinPrice({ manual: true }))
+
       render()
+      refetchCoinPrice({ manual: false })
     </script>
   </body>
 </html>

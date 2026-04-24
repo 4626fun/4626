@@ -3211,6 +3211,9 @@ function DeployVaultBatcher({
       const useVersionSearchForShareSuffix = Boolean(shareOftVanitySuffix) && !supportsPhase1WithSalt
       const versionSearchVaultPrefix = vaultVanityPrefix ?? null
       const versionSearchShareSuffix = useVersionSearchForShareSuffix ? shareOftVanitySuffix : null
+      const usingDefaultVaultVanityTarget = versionSearchVaultPrefix === DEFAULT_VAULT_VANITY_PREFIX
+      const usingDefaultShareVanityTarget =
+        !versionSearchShareSuffix || versionSearchShareSuffix === DEFAULT_SHARE_OFT_VANITY_SUFFIX
       if (versionSearchVaultPrefix || versionSearchShareSuffix) {
         const vanityTargetsKey = [
           create2Deployer.toLowerCase(),
@@ -3278,23 +3281,40 @@ function DeployVaultBatcher({
           }
           if (!foundVersion) {
             if (versionSearchVaultPrefix && versionSearchShareSuffix) {
-              throw new Error(
-                `Unable to find a deployment version matching vault prefix "0x${versionSearchVaultPrefix}" and share suffix "${versionSearchShareSuffix}" ` +
-                  `in ${combinedMaxTries.toLocaleString()} tries (share-only fallback also failed after ${shareOftVanityMaxTries.toLocaleString()} tries).`,
-              )
+              if (!usingDefaultVaultVanityTarget || !usingDefaultShareVanityTarget) {
+                throw new Error(
+                  `Unable to find a deployment version matching vault prefix "0x${versionSearchVaultPrefix}" and share suffix "${versionSearchShareSuffix}" ` +
+                    `in ${combinedMaxTries.toLocaleString()} tries (share-only fallback also failed after ${shareOftVanityMaxTries.toLocaleString()} tries).`,
+                )
+              }
+              vanityVersionSearchWarning =
+                `Default vanity targets (0x${versionSearchVaultPrefix} / ${versionSearchShareSuffix}) were not found in the current search window. ` +
+                'Continuing with deterministic deployment addresses.'
+            } else if (versionSearchShareSuffix) {
+              if (!usingDefaultShareVanityTarget) {
+                throw new Error(
+                  `Unable to find ShareOFT vanity suffix "${versionSearchShareSuffix}" in ${shareOftVanityMaxTries.toLocaleString()} deployment-version tries.`,
+                )
+              }
+              vanityVersionSearchWarning =
+                `Default share suffix "${versionSearchShareSuffix}" was not found in the current search window. ` +
+                'Continuing with deterministic deployment addresses.'
+            } else if (versionSearchVaultPrefix) {
+              if (!usingDefaultVaultVanityTarget) {
+                throw new Error(
+                  `Unable to find vault vanity prefix "0x${versionSearchVaultPrefix}" in ${vaultVanityMaxTries.toLocaleString()} deployment-version tries. ` +
+                    'Increase VITE_VAULT_VANITY_MAX_TRIES and retry.',
+                )
+              }
+              vanityVersionSearchWarning =
+                `Default vault prefix "0x${versionSearchVaultPrefix}" was not found in the current search window. ` +
+                'Continuing with deterministic deployment addresses.'
             }
-            if (versionSearchShareSuffix) {
-              throw new Error(
-                `Unable to find ShareOFT vanity suffix "${versionSearchShareSuffix}" in ${shareOftVanityMaxTries.toLocaleString()} deployment-version tries.`,
-              )
-            }
-            throw new Error(
-              `Unable to find vault vanity prefix "0x${versionSearchVaultPrefix}" in ${vaultVanityMaxTries.toLocaleString()} deployment-version tries. ` +
-                'Increase VITE_VAULT_VANITY_MAX_TRIES and retry.',
-            )
           }
-          deploymentVersionUsed = foundVersion
-          vaultVanityVersionCacheRef.current = { key: vanityTargetsKey, version: foundVersion }
+          if (foundVersion) {
+            deploymentVersionUsed = foundVersion
+            vaultVanityVersionCacheRef.current = { key: vanityTargetsKey, version: foundVersion }
+          }
         }
       }
 
@@ -6612,7 +6632,7 @@ function DeployVaultBatcher({
       : null
   const vanityDefaultNotice =
     !vanityCustomPaidNotice && (vaultVanityPrefix || shareOftVanitySuffix)
-      ? `Default vanity active: vault prefix 0x${DEFAULT_VAULT_VANITY_PREFIX}, share suffix ${DEFAULT_SHARE_OFT_VANITY_SUFFIX}.`
+      ? `Default vanity targets: vault 0x${DEFAULT_VAULT_VANITY_PREFIX}, share ${DEFAULT_SHARE_OFT_VANITY_SUFFIX} (best-effort).`
       : null
 
   const disabledReason =
@@ -6744,18 +6764,27 @@ function DeployVaultBatcher({
     })
     return pendingStageCount
   }, [isTimelineStageEnabled, timelineProgressState])
+  const timelineRemainingText = timelinePendingCount > 0 ? `${timelinePendingCount} remaining` : 'No stages remaining'
+  const renderStageDetailStatus = useCallback(
+    (stage: DeployTimelineStageId) => {
+      const state = timelineProgressState(stage)
+      if (state === 'pending') return null
+      return <div className="text-zinc-700">{deployTimelineProgressLabel(state)}</div>
+    },
+    [timelineProgressState],
+  )
 
   return (
     <div className="space-y-3">
       <div className="text-[11px] text-zinc-400 leading-relaxed">
         {useServerContinue ? (
           <>
-            Approve <span className="text-zinc-200">one</span> setup transaction, then the server submits Phases 1–4 through your
-            smart wallet and removes the temporary owner.
+            Approve <span className="text-zinc-200">one</span> setup transaction. Then the server runs Phases 1–4 and removes the
+            temporary owner.
           </>
         ) : (
           <>
-            One click submits <span className="text-zinc-200">up to 4</span> onchain operations (Phases 1–4) through your smart wallet.
+            One click runs <span className="text-zinc-200">up to 4</span> onchain operations (Phases 1–4) through your smart wallet.
           </>
         )}
       </div>
@@ -6778,13 +6807,13 @@ function DeployVaultBatcher({
         <summary className="cursor-pointer select-none list-none px-5 sm:px-6 py-4 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <div className="text-[11px] font-medium text-zinc-500">Deployment plan</div>
-            <div className="text-[12px] text-zinc-200 truncate">Canonical stage timeline · deterministic addresses on Base</div>
+            <div className="text-[12px] text-zinc-200 truncate">Canonical stage timeline · deterministic contract plan on Base</div>
           </div>
           <ChevronDown className="w-4 h-4 text-zinc-500 transition-transform group-open:rotate-180" />
         </summary>
         <div className="px-5 sm:px-6 pb-5 pt-2">
           <div className="text-[11px] text-zinc-600 mb-3">
-            Addresses are deterministic on Base. BaseScan links activate once each contract is live onchain.
+            Contract addresses are deterministic on Base. BaseScan links appear once each contract is live.
           </div>
           <div className="rounded-md border border-white/10 bg-white/4 px-4 py-3 mb-3 space-y-2 backdrop-blur-sm">
             <div className="flex items-start justify-between gap-4 text-[11px]">
@@ -6817,7 +6846,7 @@ function DeployVaultBatcher({
               <div className="text-[10px] font-medium text-zinc-500">Canonical stage timeline</div>
               <div className="text-right text-[10px] leading-relaxed">
                 <div className="text-zinc-400">{timelineCompletionSummary}</div>
-                <div className="text-zinc-600">{timelinePendingCount} pending</div>
+                <div className="text-zinc-600">{timelineRemainingText}</div>
               </div>
             </div>
             {DEPLOY_TIMELINE_STAGES.map((stage) => (
@@ -6846,12 +6875,12 @@ function DeployVaultBatcher({
                     view tx
                   </a>
                 ) : (
-                  <div className="text-zinc-700">{timelineProgressText('phase1Core')}</div>
+                  renderStageDetailStatus('phase1Core')
                 )}
               </div>
               <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
                 <div className={timelineProgressTone('phase1Finalize')}>Finalize phase-1 state</div>
-                <div className="text-zinc-700">{timelineProgressText('phase1Finalize')}</div>
+                {renderStageDetailStatus('phase1Finalize')}
               </div>
               <div className="space-y-2">
                 <AddressRow label="Vault" address={expected?.vault} deployed={expectedAddressDeployment?.vault ?? null} />
@@ -6869,16 +6898,16 @@ function DeployVaultBatcher({
                     view tx
                   </a>
                 ) : (
-                  <div className="text-zinc-700">{timelineProgressText('phase2Core')}</div>
+                  renderStageDetailStatus('phase2Core')
                 )}
               </div>
               <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
                 <div className={timelineProgressTone('phase2Finalize')}>Finalize + configure payout and ownership routing</div>
-                <div className="text-zinc-700">{timelineProgressText('phase2Finalize')}</div>
+                {renderStageDetailStatus('phase2Finalize')}
               </div>
               <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
                 <div className={timelineProgressTone('phase2bOvaultMesh')}>OVault mesh preflight + peer wiring</div>
-                <div className="text-zinc-700">{timelineProgressText('phase2bOvaultMesh')}</div>
+                {renderStageDetailStatus('phase2bOvaultMesh')}
               </div>
               {ovaultMeshEnabledForSession ? (
                 <div className="rounded-md border border-white/10 bg-black/10 px-3 py-3 mb-3 space-y-2">
@@ -6979,7 +7008,7 @@ function DeployVaultBatcher({
                     view tx
                   </a>
                 ) : (
-                  <div className="text-zinc-700">{timelineProgressText('phase3Strategies')}</div>
+                  renderStageDetailStatus('phase3Strategies')
                 )}
               </div>
               <div className="space-y-2">
@@ -7041,14 +7070,14 @@ function DeployVaultBatcher({
                     view tx
                   </a>
                 ) : (
-                  <div className="text-zinc-700">{timelineProgressText('phase4Launch')}</div>
+                  renderStageDetailStatus('phase4Launch')
                 )}
               </div>
               <div className="space-y-2">
                 <AddressRow label="Deferred auction" address={phase4AuctionAddress} deployed={phase4AuctionDeployment} />
               </div>
               <div className="mt-2 text-[11px] text-zinc-600">
-                Auction address resolves after Phase 4 launch writes CCA auction state.
+                Auction address appears after Phase 4 writes CCA auction state.
               </div>
               {marketFloorText ? (
                 <div className="mt-2 flex items-center justify-between gap-4 text-[11px]">
@@ -7058,7 +7087,7 @@ function DeployVaultBatcher({
               ) : null}
               <div className="mt-2 flex items-center justify-between gap-4 text-[11px]">
                 <div className={timelineProgressTone('cleanup')}>Cleanup temporary deploy signer</div>
-                <div className="text-zinc-700">{timelineProgressText('cleanup')}</div>
+                {renderStageDetailStatus('cleanup')}
               </div>
             </div>
           </div>
@@ -9230,7 +9259,7 @@ function DeployVaultMain() {
             <div className={`space-y-5 ${tokenIsValid ? 'pt-5 border-t border-zinc-900/50' : ''}`}>
               <div className="space-y-1.5">
                 <div className="label">Deploy</div>
-                <div className="text-xs text-zinc-500">Review the plan, optionally run dry-run, then submit.</div>
+                <div className="text-xs text-zinc-500">Confirm the plan, run dry-run if needed, then deploy.</div>
               </div>
               {/* Auth flow */}
               {!privyReady ? (
