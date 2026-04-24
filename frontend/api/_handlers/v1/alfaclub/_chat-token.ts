@@ -29,6 +29,8 @@ import {
   readAlfaClubChatToken,
   readAlfaClubChatTokenMeta,
   upsertAlfaClubChatToken,
+  upsertAlfaClubPrivyAccessToken,
+  upsertAlfaClubPrivyRefreshToken,
 } from '../../../../server/_lib/alfaclub/chatTokenStore.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -36,11 +38,23 @@ declare const process: { env: Record<string, string | undefined> }
 type ChatTokenUpdateBody = {
   jwt?: string
   alfaclubJwt?: string
+  // Bootstrap for the auto-refresher. When supplied alongside `jwt`, the
+  // refresher no longer needs env-var fallback and will rotate `jwt`
+  // automatically every ~30 minutes.
+  privyAccessToken?: string
+  privyRefreshToken?: string
 }
 
 function isPlausibleJwt(value: unknown): value is string {
   if (typeof value !== 'string') return false
   return /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(value.trim())
+}
+
+function isPlausibleRefreshToken(value: unknown): value is string {
+  // Privy refresh tokens are opaque base64url-ish strings. Allow the same
+  // charset as a JWT segment (letters, digits, _, -), minimum 16 chars.
+  if (typeof value !== 'string') return false
+  return /^[A-Za-z0-9_-]{16,}$/.test(value.trim())
 }
 
 function fingerprintJwt(token: string | null): string | null {
@@ -134,6 +148,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
   }
 
+  // Optional: bootstrap the auto-refresher in the same call. Both tokens
+  // must be present for refresher semantics to work; reject partial
+  // bootstraps rather than silently leaving the refresher misconfigured.
+  //
+  // Validate bootstrap tokens BEFORE mutating chat_jwt so a 400 from a
+  // malformed bootstrap doesn't leave the caller with a side-effect-y
+  // "failure" (P2 review feedback on PR #368). After validation passes,
+  // writes happen in sequence: chat_jwt -> access -> refresh. If one of
+  // the later upserts fails at the DB level, chat_jwt may still be
+  // rotated, but that's acceptable because the caller KNOWS the jwt
+  // field was intended to succeed. Pre-flight validation is the piece
+  // callers were previously tripping on with 400s.
+  const accessCandidate =
+    typeof body?.privyAccessToken === 'string' ? body.privyAccessToken.trim() : ''
+  const refreshCandidate =
+    typeof body?.privyRefreshToken === 'string' ? body.privyRefreshToken.trim() : ''
+  const wantsRefresherBootstrap = Boolean(accessCandidate || refreshCandidate)
+  if (wantsRefresherBootstrap) {
+    if (!isPlausibleJwt(accessCandidate)) {
+      return res.status(400).json({
+        success: false,
+        error: 'privyAccessToken is required as a JWT when bootstrapping the refresher.',
+      })
+    }
+    if (!isPlausibleRefreshToken(refreshCandidate)) {
+      return res.status(400).json({
+        success: false,
+        error: 'privyRefreshToken is required (opaque base64url string, >= 16 chars) when bootstrapping the refresher.',
+      })
+    }
+  }
+
   const saved = await upsertAlfaClubChatToken({
     jwt: candidate,
     updatedBy: admin.toLowerCase(),
@@ -141,6 +187,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!saved) {
     return res.status(503).json({ success: false, error: 'token_store_unavailable' })
   }
+
+  const refresherBootstrapped: { access: boolean; refresh: boolean } = {
+    access: false,
+    refresh: false,
+  }
+  if (wantsRefresherBootstrap) {
+    refresherBootstrapped.access = await upsertAlfaClubPrivyAccessToken({
+      accessToken: accessCandidate,
+      updatedBy: admin.toLowerCase(),
+    })
+    refresherBootstrapped.refresh = await upsertAlfaClubPrivyRefreshToken({
+      refreshToken: refreshCandidate,
+      updatedBy: admin.toLowerCase(),
+    })
+  }
+
   return res.status(200).json({
     success: true,
     data: {
@@ -148,6 +210,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       db: saved,
       envFallbackConfigured: Boolean(readEnvJwt()),
       tokenFingerprint: fingerprintJwt(candidate),
+      refresherBootstrapped,
     },
   })
 }

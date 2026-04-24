@@ -7,6 +7,8 @@ const {
   readAlfaClubChatTokenMock,
   upsertAlfaClubChatTokenMock,
   clearAlfaClubChatTokenMock,
+  upsertAlfaClubPrivyAccessTokenMock,
+  upsertAlfaClubPrivyRefreshTokenMock,
   getSessionAddressMock,
   isAdminAddressMock,
 } = vi.hoisted(() => ({
@@ -14,6 +16,8 @@ const {
   readAlfaClubChatTokenMock: vi.fn(),
   upsertAlfaClubChatTokenMock: vi.fn(),
   clearAlfaClubChatTokenMock: vi.fn(),
+  upsertAlfaClubPrivyAccessTokenMock: vi.fn(),
+  upsertAlfaClubPrivyRefreshTokenMock: vi.fn(),
   getSessionAddressMock: vi.fn(),
   isAdminAddressMock: vi.fn(),
 }))
@@ -23,6 +27,8 @@ vi.mock('../../server/_lib/alfaclub/chatTokenStore.js', () => ({
   readAlfaClubChatToken: readAlfaClubChatTokenMock,
   upsertAlfaClubChatToken: upsertAlfaClubChatTokenMock,
   clearAlfaClubChatToken: clearAlfaClubChatTokenMock,
+  upsertAlfaClubPrivyAccessToken: upsertAlfaClubPrivyAccessTokenMock,
+  upsertAlfaClubPrivyRefreshToken: upsertAlfaClubPrivyRefreshTokenMock,
 }))
 
 vi.mock('../../server/_lib/auth/session.js', () => ({
@@ -173,6 +179,74 @@ describe('/api/v1/alfaclub/chat-token', () => {
     expect(clearAlfaClubChatTokenMock).toHaveBeenCalledWith({
       clearedBy: ADMIN.toLowerCase(),
     })
+  })
+
+  // --- P2 review-feedback regressions on PR #368 -------------------------
+
+  it('POST rejects malformed privyAccessToken BEFORE mutating chat_jwt', async () => {
+    // Regression guard: previously the handler wrote chat_jwt first then
+    // validated the bootstrap triplet. A 400 from a bad refresher token
+    // therefore left a partial mutation behind. Now validation is pre-
+    // flight: malformed bootstrap => 0 writes of any kind.
+    const token = 'header.payload.signature'
+    const body = {
+      jwt: token,
+      privyAccessToken: 'not-a-jwt',
+      privyRefreshToken: 'abcdefghijklmnopqrstuvwxyz0123',
+    }
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      rawBody: JSON.stringify(body),
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(400)
+    expect(upsertAlfaClubChatTokenMock).not.toHaveBeenCalled()
+    expect(upsertAlfaClubPrivyAccessTokenMock).not.toHaveBeenCalled()
+    expect(upsertAlfaClubPrivyRefreshTokenMock).not.toHaveBeenCalled()
+  })
+
+  it('POST rejects malformed privyRefreshToken BEFORE mutating chat_jwt', async () => {
+    const token = 'header.payload.signature'
+    const body = {
+      jwt: token,
+      privyAccessToken: 'header.payload.signature',
+      privyRefreshToken: 'short',
+    }
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      rawBody: JSON.stringify(body),
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(400)
+    expect(upsertAlfaClubChatTokenMock).not.toHaveBeenCalled()
+    expect(upsertAlfaClubPrivyAccessTokenMock).not.toHaveBeenCalled()
+    expect(upsertAlfaClubPrivyRefreshTokenMock).not.toHaveBeenCalled()
+  })
+
+  it('POST with a valid refresher bootstrap writes all three tokens and succeeds', async () => {
+    upsertAlfaClubPrivyAccessTokenMock.mockResolvedValueOnce(true)
+    upsertAlfaClubPrivyRefreshTokenMock.mockResolvedValueOnce(true)
+    const body = {
+      jwt: 'header.payload.signature',
+      privyAccessToken: 'a.b.c',
+      privyRefreshToken: 'abcdefghijklmnop-long-refresh-token',
+    }
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      rawBody: JSON.stringify(body),
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(200)
+    expect(upsertAlfaClubChatTokenMock).toHaveBeenCalledTimes(1)
+    expect(upsertAlfaClubPrivyAccessTokenMock).toHaveBeenCalledTimes(1)
+    expect(upsertAlfaClubPrivyRefreshTokenMock).toHaveBeenCalledTimes(1)
+    expect(res.body?.data?.refresherBootstrapped).toEqual({ access: true, refresh: true })
   })
 })
 

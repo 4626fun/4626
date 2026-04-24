@@ -13,9 +13,22 @@ import { getDb } from '../db/postgres.js'
 import { ensureAlfaClubVigilanteSchema } from './schema.js'
 
 const CHAT_TOKEN_KEY = 'chat_jwt' as const
+// Privy session tokens needed to refresh `chat_jwt` (identity token) without
+// an operator re-login. Stored separately from the identity token because
+// only the identity token is used by alfaclub's API; the others are only
+// consumed by the Privy refresh flow.
+const CHAT_ACCESS_TOKEN_KEY = 'chat_privy_access_token' as const
+const CHAT_REFRESH_TOKEN_KEY = 'chat_privy_refresh_token' as const
 
 export type AlfaClubChatTokenRecord = {
   jwt: string
+  updatedAt: string
+  expiresAt: string | null
+  updatedBy: string | null
+}
+
+export type AlfaClubPrivySecretRecord = {
+  value: string
   updatedAt: string
   expiresAt: string | null
   updatedBy: string | null
@@ -189,6 +202,106 @@ export async function upsertAlfaClubChatToken(params: {
   } catch {
     return null
   }
+}
+
+async function readPrivySecret(
+  secretKey: typeof CHAT_ACCESS_TOKEN_KEY | typeof CHAT_REFRESH_TOKEN_KEY,
+): Promise<AlfaClubPrivySecretRecord | null> {
+  const db = await getDb()
+  if (!db) return null
+  try {
+    await ensureAlfaClubVigilanteSchema()
+    const result = await db.sql`
+      SELECT secret_value,
+             updated_at::text AS updated_at,
+             expires_at::text AS expires_at,
+             updated_by
+      FROM alfaclub_runtime_secret
+      WHERE secret_key = ${secretKey}
+      LIMIT 1;
+    `
+    const row = ((result.rows ?? [])[0] ?? null) as TokenRow | null
+    if (!row?.secret_value) return null
+    return {
+      value: row.secret_value,
+      updatedAt: row.updated_at,
+      expiresAt: row.expires_at ?? null,
+      updatedBy: row.updated_by ?? null,
+    }
+  } catch {
+    return null
+  }
+}
+
+async function upsertPrivySecret(
+  secretKey: typeof CHAT_ACCESS_TOKEN_KEY | typeof CHAT_REFRESH_TOKEN_KEY,
+  params: { value: string; updatedBy?: string | null; expiresAt?: string | null },
+): Promise<boolean> {
+  const db = await getDb()
+  if (!db) return false
+  const trimmed = String(params.value ?? '').trim()
+  if (!trimmed) return false
+  try {
+    await ensureAlfaClubVigilanteSchema()
+    await db.sql`
+      INSERT INTO alfaclub_runtime_secret (
+        secret_key,
+        secret_value,
+        expires_at,
+        updated_by,
+        updated_at
+      ) VALUES (
+        ${secretKey},
+        ${trimmed},
+        ${params.expiresAt ?? null},
+        ${params.updatedBy ?? null},
+        NOW()
+      )
+      ON CONFLICT (secret_key) DO UPDATE
+      SET secret_value = EXCLUDED.secret_value,
+          expires_at = EXCLUDED.expires_at,
+          updated_by = EXCLUDED.updated_by,
+          updated_at = NOW();
+    `
+    return true
+  } catch {
+    return false
+  }
+}
+
+export async function readAlfaClubPrivyAccessToken(): Promise<AlfaClubPrivySecretRecord | null> {
+  return readPrivySecret(CHAT_ACCESS_TOKEN_KEY)
+}
+
+export async function readAlfaClubPrivyRefreshToken(): Promise<AlfaClubPrivySecretRecord | null> {
+  return readPrivySecret(CHAT_REFRESH_TOKEN_KEY)
+}
+
+export async function upsertAlfaClubPrivyAccessToken(params: {
+  accessToken: string
+  updatedBy?: string | null
+}): Promise<boolean> {
+  const expiresAt = extractJwtExpiryIso(params.accessToken)
+  return upsertPrivySecret(CHAT_ACCESS_TOKEN_KEY, {
+    value: params.accessToken,
+    updatedBy: params.updatedBy,
+    expiresAt,
+  })
+}
+
+export async function upsertAlfaClubPrivyRefreshToken(params: {
+  refreshToken: string
+  updatedBy?: string | null
+}): Promise<boolean> {
+  // Refresh tokens are opaque strings, not JWTs — no meaningful expiresAt.
+  // Privy documents a 30-day default lifetime but doesn't encode it in the
+  // token itself. Leave expires_at null and rely on Privy returning an
+  // error if the refresh token has expired.
+  return upsertPrivySecret(CHAT_REFRESH_TOKEN_KEY, {
+    value: params.refreshToken,
+    updatedBy: params.updatedBy,
+    expiresAt: null,
+  })
 }
 
 export async function clearAlfaClubChatToken(params?: {

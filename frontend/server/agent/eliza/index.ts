@@ -2276,6 +2276,35 @@ async function main() {
       }
     })()
 
+    // AlfaClub Privy token auto-refresher. Without this, the identity JWT
+    // expires every 1h and the chat bridge starts 401-ing in a loop until
+    // an operator manually rotates. The refresher pulls the current access
+    // + refresh tokens from DB (with env fallback for bootstrap), calls
+    // Privy's /sessions endpoint, and writes the fresh identity token back
+    // to the same `alfaclub_runtime_secret.chat_jwt` slot the bridge reads
+    // from on every tick — so rotation happens transparently.
+    //
+    // Fire-and-forget, guarded same as other alfaclub boots: a broken
+    // refresher must NOT block agent readiness.
+    void (async () => {
+      try {
+        const mod = await import('../../_lib/alfaclub/privyTokenRefresher.js')
+        const refresher = mod.startAlfaClubPrivyTokenRefresher()
+        logger.info('[alfaclub-refresher] started', {
+          intervalMinutes: 30,
+        })
+        // Stop the refresher on shutdown so Railway doesn't see lingering
+        // fetches during container drain.
+        const stopOnShutdown = () => refresher.stop()
+        process.on('SIGINT', stopOnShutdown)
+        process.on('SIGTERM', stopOnShutdown)
+      } catch (err) {
+        logger.warn('[alfaclub-refresher] boot failed — continuing without auto-refresh', {
+          error: err instanceof Error ? err.message : String(err),
+        })
+      }
+    })()
+
     // Graceful shutdown
     process.on('SIGINT', () => void shutdown())
     process.on('SIGTERM', () => void shutdown())
