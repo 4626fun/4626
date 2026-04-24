@@ -1,30 +1,33 @@
 # M-02 — CreatorOracle TWAP Ring Buffer: Custom Implementation Risk
 
-- **Linear:** [4626-311](https://linear.app/4626fun/issue/4626-311)
+- **Linear:** [4626-311](https://linear.app/4626fun/issue/4626-311) (parent) · [4626-436](https://linear.app/4626fun/issue/4626-436) (ring-buffer test gap)
 - **Severity:** Medium
 - **Confidence (auditor):** Plausible
 - **File:** `contracts/utilities/oracles/CreatorOracle.sol`
 - **Finding:** The oracle implements a custom ring-buffer TWAP instead of delegating to Uniswap V4's `Oracle.sol` library or `observe()`. Custom implementations have a history of subtle bugs (off-by-one ring pointer, incorrect time weighting, buffer-not-yet-full edge cases, wrap-around).
 
-## Disposition: Risk-accepted with mitigation plan
+## Disposition: Risk-accepted with mitigation plan — mitigation (1) now complete
 
 Migrating `CreatorOracle` to delegate TWAP observation to the V4 pool's native `observe()` is a deep refactor that changes both the on-chain storage layout and every downstream consumer (lottery pricing, vault PPS, LBP migration pricing). Shipping it inside a single audit-remediation sprint without the ability to run `forge test` against the full suite is not acceptable — the blast radius is larger than the "Plausible" risk justifies.
 
 ## Current state at HEAD
 
 - The ring-buffer storage and cumulative-tick logic are implemented in `contracts/utilities/oracles/CreatorOracle.sol` (observation writes, ring advance, and TWAP observation traversal).
-- Targeted TWAP/ring-buffer safety coverage already exists in `test/CreatorOracle.TwapSafety.t.sol`, including:
-  - `test_recordObservation_FirstWriteAdvancesIndexAndInitializesNextSlot`
-  - `test_getTWAPTick_DoesNotUseUninitializedObservation`
-- Coverage is not yet a dedicated ring-buffer-only suite, and explicit tests for same-block (`timeDelta == 0`) and wrap-around (`N+1` into full ring) remain part of the follow-up mitigation scope below.
+- Targeted TWAP/ring-buffer safety coverage lives in `test/CreatorOracle.TwapSafety.t.sol` and — as of 4626-436 — `test/CreatorOracle.RingBuffer.t.sol`. Between the two suites the following scenarios are now covered:
+  - `test_recordObservation_FirstWriteAdvancesIndexAndInitializesNextSlot` (first write, next-slot initialization)
+  - `test_getTWAPTick_DoesNotUseUninitializedObservation` (buffer-not-yet-full read path)
+  - `test_ringBuffer_sameBlockWriteIsIdempotent` (time delta 0 idempotence — 4626-436)
+  - `test_ringBuffer_wrapAroundAtMaxCardinality` (N+1 writes into a size-N buffer — 4626-436)
+  - `test_ringBuffer_cumulativeTickMonotonicityAcrossWrap` (cumulative-tick monotonicity across the wrap boundary — 4626-436)
 
 Quick verification commands:
 
 - `grep -nE 'ring buffer|_write|_observe|getTWAPTick' contracts/utilities/oracles/CreatorOracle.sol`
 - `find test -iname '*twap*' -o -iname '*ringbuffer*'`
-- `grep -nE 'FirstWriteAdvancesIndex|DoesNotUseUninitializedObservation' test/CreatorOracle.TwapSafety.t.sol`
+- `grep -nE 'test_ringBuffer_' test/CreatorOracle.RingBuffer.t.sol`
+- `forge test --match-contract CreatorOracleRingBufferTest -vvv`
 
-Mitigation to apply before this can be closed:
+Mitigation:
 
 1. Extend the existing `test/CreatorOracle.TwapSafety.t.sol` suite (which already covers first-write index advance and buffer-not-yet-full behavior) to additionally cover:
    - Two observations in the same block (time delta 0).
