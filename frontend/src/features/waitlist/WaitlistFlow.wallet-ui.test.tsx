@@ -168,10 +168,18 @@ const WAITLIST_ACCOUNT = {
   email: 'waitlisted@example.com',
   emailVerified: true,
   appAccessStatus: 'pending',
+  baseSubAccount: null,
   linkedMethods: { email: ['waitlisted@example.com'] },
   accountSignals: {
     linked: true,
     canonicalCswAddress: '0x1111111111111111111111111111111111111111',
+    baseSubAccount: {
+      address: null,
+      registered: false,
+      isDistinctFromCsw: false,
+    },
+    executionTrack: 'none-yet',
+    privyEmbeddedEoaIsOwnerOfCanonicalCsw: null,
     creatorCoin: null,
     zoraHandle: null,
     lastResolvedAt: null,

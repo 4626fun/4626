@@ -82,6 +82,16 @@ Server constructs UserOp (sender = CSW address)
   → CSW executes the operation
 ```
 
+### Wallet-Type Decision Matrix
+
+| Wallet Type | Canonical Role | Where It Signs | Default Usage in 4626 | Key Advantage | Key Constraint |
+|---|---|---|---|---|---|
+| **Zora/Base Coinbase Smart Wallet (CSW)** | Canonical identity + asset holder | Parent CSW (direct) | Source of truth for identity, balances, ownership, and server-side sender | Strong continuity across Zora/Base surfaces | Passkey UX is too heavy for frequent frontend execution |
+| **Base Sub-Account** | Execution-only child wallet | Sub-account contract | Frontend user actions (swaps, vault interactions, in-app execution) | Silent day-to-day signing after one-time setup | Not usable for headless server execution |
+| **Privy Embedded EOA** | Signer identity (not canonical) | Signs sub-account path | User UX signer routed through `setToOwnerAccount()` | Fast UX with no repeated passkeys | Must not replace canonical CSW identity |
+| **Privy Server Wallet** | Delegated signer (not canonical) | Signs parent CSW UserOps | XMTP agent, deploy-session automation, ERC-8004 operations | Headless reliable server signing | Requires one-time CSW owner install (`addOwnerAddress`) |
+| **Privy Smart Wallet (4626)** | Optional helper signer surface | ERC-4337 smart wallet lane | Compatibility lane for owner setup / fallback signing only | Useful fallback when available | Do not silently promote to canonical wallet |
+
 ---
 
 ## 3. Why Two Paths Exist
@@ -577,12 +587,11 @@ These invariants are enforced in `.cursor/rules/ERC-4337-Wallet-Invariants.mdc` 
 
 ### Owner Installation Invariants
 
-- Both installations happen during account setup in a single session.
-- `wallet_addSubAccount` creates the sub-account (passkey popup 1).
-- `addOwnerAddress(agentWalletAddress)` via **`eth_sendTransaction`** installs the server wallet (passkey popup 2).
+- `wallet_addSubAccount` creates the sub-account (passkey popup 1) and is the readiness gate for user-initiated frontend execution.
+- `addOwnerAddress(agentWalletAddress)` via **`eth_sendTransaction`** can opportunistically install the server wallet in the same session (passkey popup 2), but it must not block sub-account readiness.
 - **Never use `wallet_sendCalls` for `addOwnerAddress`** — the Coinbase popup's `eGe` function blocks self-calls.
 - Deploy-session and XMTP agent rely on the server wallet already being an owner.
-- If popup 2 fails, deploy-session handles installation on first use (non-blocking fallback).
+- If popup 2 fails or is canceled, deploy-session handles installation on first use (non-blocking fallback).
 
 ### Security Invariants
 
@@ -590,6 +599,20 @@ These invariants are enforced in `.cursor/rules/ERC-4337-Wallet-Invariants.mdc` 
 - XMTP agent must present as the CSW address, not the Privy EOA address.
 - Deploy-session temporary owners must be removed after deployment completes.
 - ERC-8004 `agentWallet` must point to the CSW address, not any Privy wallet.
+
+### Upgrade Ambiguity Policy (Zora/Base)
+
+If wallet metadata changes after Zora/Base app upgrades or cross-app relinking, treat canonical resolution as a verification flow, not an assumption:
+
+1. **Detect**: refresh cross-app signals and canonical candidates from profile/auth sources.
+2. **Verify**: confirm candidate has contract bytecode and re-check owner set before enabling signing.
+3. **Confirm**: if a different CSW candidate appears, require explicit user-confirmed migration before switching canonical identity.
+
+Guardrails:
+
+- Never auto-migrate canonical CSW because a new candidate appears.
+- Keep existing canonical CSW as identity anchor until user approval is recorded.
+- Re-run owner checks after migration confirmation before enabling deploy/agent flows.
 
 ---
 

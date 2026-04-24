@@ -179,7 +179,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     await upsertProfileByWallet(db as any, {
       primaryWallet: verified.address,
       cswAddress: verifiedCanonicalCsw,
-      baseSubAccount: verifiedCanonicalCsw,
+      baseSubAccount: null,
     })
   } catch {
     // best-effort: auth should succeed even if DB is unavailable

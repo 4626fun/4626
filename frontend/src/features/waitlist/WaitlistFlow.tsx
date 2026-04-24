@@ -46,6 +46,13 @@ type AccountsSummary = {
   accountSignals: {
     linked: boolean
     canonicalCswAddress: string | null
+    baseSubAccount: {
+      address: string | null
+      registered: boolean
+      isDistinctFromCsw: boolean
+    }
+    executionTrack: 'sub-account' | 'legacy-owner-install' | 'migration-pending' | 'none-yet'
+    privyEmbeddedEoaIsOwnerOfCanonicalCsw: boolean | null
     creatorCoin: { address: string } | null
     zoraHandle: string | null
     lastResolvedAt: string | null

@@ -1576,10 +1576,10 @@ export function TelegramLink() {
             {walletSetupPending ? (
               <div className="rounded-[18px] border border-[#0052FF]/20 bg-[#0052FF]/8 px-3.5 py-3 text-[13px] leading-5 text-[#EDEDED] space-y-1.5">
                 <div>
-                  Wallet setup pending. Telegram is linked, but wallet and trading actions unlock after your Privy embedded signer is added as an owner on your Zora Coinbase Smart Wallet.
+                  Wallet setup pending. Telegram is linked, but wallet and trading actions unlock after your 4626 execution setup is complete.
                 </div>
                 <div className="text-[11px] leading-5 text-[#A9B9FF]">
-                  Next step: continue into Accounts on phone or desktop, connect a current owner of your detected Zora Coinbase Smart Wallet, and run <span className="font-medium text-[#D7E0FF]">Enable 4626 signing</span>.
+                  Next step: continue into Accounts on phone or desktop, connect your detected Zora Coinbase Smart Wallet through Base Account, and run <span className="font-medium text-[#D7E0FF]">Enable 4626 signing</span>.
                 </div>
                 <div className="text-[11px] text-[#8FB0FF]">
                   <button

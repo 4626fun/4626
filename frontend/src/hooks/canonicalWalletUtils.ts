@@ -10,6 +10,7 @@ export type WaitlistMeData = {
     provider?: string | null
     verifiedAt?: string | null
     isCanonicalSmartWallet?: boolean
+    isExecutionSubAccount?: boolean
   }>
 }
 
@@ -40,7 +41,6 @@ export function pickCanonicalSmartWalletAddress(row: WaitlistMeData | null | und
     canonicalFromAccounts?.address,
     row.cswAddress,
     row.primarySmartWallet,
-    row.baseSubAccount,
   ]
   for (const value of candidates) {
     if (!isAddressLike(value)) continue
@@ -48,4 +48,3 @@ export function pickCanonicalSmartWalletAddress(row: WaitlistMeData | null | und
   }
   return null
 }
-

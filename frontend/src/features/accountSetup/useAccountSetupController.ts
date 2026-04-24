@@ -210,8 +210,8 @@ export function useAccountSetupController(params: {
   const hasInitialDataRef = useRef(Boolean(params.initialData))
   const ownerApprovalRunIdRef = useRef(0)
 
-  // Sub-account setup: creates a derived smart wallet where Privy embedded
-  // wallet is the owner, bypassing the broken addOwnerAddress self-call path.
+  // Sub-account setup: creates a derived smart wallet whose signer is the
+  // Privy embedded EOA, avoiding parent-CSW owner install for user execution.
   const subAccount = useSubAccountSetup()
 
   const privyAuthed = Boolean(privy?.authenticated)
@@ -1083,7 +1083,9 @@ export function useAccountSetupController(params: {
               code: 'sub_account_parent_mismatch',
               message: `Sub-account parent ${result.parentAddress} does not match canonical CSW ${canonicalCswAddress}.`,
             })
-            // Fall through to legacy path — do NOT register a mismatched sub-account.
+            setError('The connected Base Account returned a sub-account for a different smart wallet. Reconnect the canonical Base Account and retry.')
+            setAdvancedBusy(false)
+            return
           } else {
             emitOwnerApprovalStageEvent({
               runId: approvalRunId,
@@ -1219,9 +1221,12 @@ export function useAccountSetupController(params: {
             code: 'sub_account_setup_failed',
             message: subAccount.error?.message ?? 'Sub-account setup did not complete.',
           })
-          logger.warn('Sub-account setup returned null, falling through to legacy owner path', {
+          logger.warn('Sub-account setup returned null; blocking legacy embedded-owner fallback for self-auth path', {
             error: subAccount.error?.message,
           })
+          setError(subAccount.error?.message ?? 'Sub-account setup did not complete. Reconnect with Base Account and retry.')
+          setAdvancedBusy(false)
+          return
         }
       }
 
@@ -1779,8 +1784,8 @@ export function useAccountSetupController(params: {
               title: 'Approve on Base',
               description: ownerApprovalReady
                 ? connectedCanonicalWalletSelected
-                  ? '4626 can now submit one Base smart-wallet approval to add its embedded owner.'
-                  : '4626 can now add its embedded owner through one Base owner transaction.'
+                  ? '4626 can now create the app-scoped sub-account for user signing.'
+                  : '4626 can now use one Base owner transaction for legacy signing access.'
                 : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
                   ? 'Wait for the signer client to finish hydrating, then approve.'
                   : 'Approval unlocks after a current owner is connected and verified.',

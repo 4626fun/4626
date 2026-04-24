@@ -3,7 +3,7 @@
  *
  * Provisions a Privy-managed agent wallet for the authenticated user's
  * canonical CSW and returns the `addOwnerAddress` calldata.  The client
- * sends this as a transaction from the CSW (via passkey or wallet_sendCalls)
+ * sends this as an `eth_sendTransaction` self-call from the CSW
  * during the same account-setup ceremony that creates the sub-account.
  *
  * This replaces the old pattern where deploy-session lazily installed the

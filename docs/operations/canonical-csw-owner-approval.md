@@ -18,7 +18,7 @@ This runbook still applies to:
 Canonical wallet invariants: `.cursor/rules/ERC-4337-Wallet-Invariants.mdc`.
 :::
 
-This runbook describes the owner-install step used by the waitlist/account activation flow.
+This runbook describes the legacy owner-install step that predates the sub-account execution track. New waitlist/account activation should use the sub-account flow for user-initiated execution.
 
 The product model is fixed:
 
@@ -29,14 +29,14 @@ The product model is fixed:
 
 ## Outcome
 
-The owner-install step is successful only when:
+The legacy owner-install step is successful only when:
 
 1. the active 4626 user has a verified email and a Privy embedded EOA
 2. the canonical CSW is resolved for that account
 3. `addOwnerAddress(privyEmbeddedEoa)` is approved on Base
 4. `/api/wallet/confirm-owner` confirms the embedded EOA is now an onchain owner of the canonical CSW
 
-This is what moves the account from linked/setup-only into wallet-ready execution.
+This moves a legacy account from linked/setup-only into the `legacy-owner-install` execution track. Current accounts should become user-execution-ready through a distinct registered sub-account instead.
 
 ## Canonical rule
 
@@ -95,21 +95,11 @@ Rules:
 - the client must not silently choose a stale linked wallet over the actually connected signer
 - canonical-smart-wallet execution must reject prepared targets that do not match the canonical CSW
 
-### Deterministic canonical fallback ladder
+### Current self-auth behavior
 
-Canonical self-auth owner install now follows one strict sequence:
+Canonical self-auth no longer falls through to parent-CSW owner install for user-initiated execution. When the connected wallet is the canonical CSW, activation must create or hydrate the app-scoped sub-account and bind the Privy embedded EOA with `setToOwnerAccount()`. If that sub-account path is canceled or mismatched, setup stops cleanly.
 
-1. sponsored UserOp with typed-data signing (`userop_typed`)
-2. sponsored UserOp without typed-data signing (`userop_nontyped`)
-3. `wallet_sendCalls` fallback (`send_calls`)
-
-`wallet_sendCalls` keeps a compatibility retry for wallets that reject the
-`capabilities.paymasterService` payload:
-
-- first attempt includes capabilities payload
-- if rejected by wallet params validation, retry without capabilities
-
-This order is intentional and must remain deterministic.
+Server-side agent/deploy-session owner installation is separate and uses `eth_sendTransaction` for the CSW self-call. Do not use `wallet_sendCalls` for `addOwnerAddress`.
 
 ## Confirmation states
 

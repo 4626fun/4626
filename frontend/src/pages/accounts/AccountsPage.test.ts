@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server'
 import { MemoryRouter } from 'react-router-dom'
 
 import { AccountsPage, readOptionalZoraStatus, shouldRefreshAccountsOnForeground } from './AccountsPage'
+import type { AccountSignals } from '@/features/accountSetup/types'
 
 vi.mock('@privy-io/react-auth', () => ({
   usePrivy: () => ({
@@ -61,6 +62,24 @@ vi.mock('@/features/executionScope/AutoProvisionMount', () => ({
   AutoProvisionMount: () => null,
 }))
 
+function accountSignals(overrides: Partial<AccountSignals> = {}): AccountSignals {
+  return {
+    linked: true,
+    canonicalCswAddress: '0x2222222222222222222222222222222222222222',
+    baseSubAccount: {
+      address: null,
+      registered: false,
+      isDistinctFromCsw: false,
+    },
+    executionTrack: 'none-yet' as const,
+    privyEmbeddedEoaIsOwnerOfCanonicalCsw: null,
+    creatorCoin: { address: '0x3333333333333333333333333333333333333333' },
+    zoraHandle: 'akita',
+    lastResolvedAt: '2026-03-04T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
 describe('AccountsPage', () => {
   it('renders sections with mocked account API data', () => {
     const html = renderToStaticMarkup(
@@ -80,13 +99,7 @@ describe('AccountsPage', () => {
                 google: ['google-sub-1'],
                 zora_cross_app: ['0x1111111111111111111111111111111111111111'],
               },
-              accountSignals: {
-                linked: true,
-                canonicalCswAddress: '0x2222222222222222222222222222222222222222',
-                creatorCoin: { address: '0x3333333333333333333333333333333333333333' },
-                zoraHandle: 'akita',
-                lastResolvedAt: '2026-03-04T00:00:00.000Z',
-              },
+              accountSignals: accountSignals(),
               score: {
                 points: 130,
                 tier: 2,
@@ -138,13 +151,7 @@ describe('AccountsPage', () => {
               linkedMethods: {
                 email: ['user@example.com'],
               },
-              accountSignals: {
-                linked: true,
-                canonicalCswAddress: '0x2222222222222222222222222222222222222222',
-                creatorCoin: { address: '0x3333333333333333333333333333333333333333' },
-                zoraHandle: 'akita',
-                lastResolvedAt: '2026-03-04T00:00:00.000Z',
-              },
+              accountSignals: accountSignals(),
               score: {
                 points: 130,
                 tier: 2,
@@ -180,13 +187,7 @@ describe('AccountsPage', () => {
               linkedMethods: {
                 email: ['user@example.com'],
               },
-              accountSignals: {
-                linked: true,
-                canonicalCswAddress: '0x2222222222222222222222222222222222222222',
-                creatorCoin: { address: '0x3333333333333333333333333333333333333333' },
-                zoraHandle: 'akita',
-                lastResolvedAt: '2026-03-04T00:00:00.000Z',
-              },
+              accountSignals: accountSignals(),
               score: {
                 points: 130,
                 tier: 2,

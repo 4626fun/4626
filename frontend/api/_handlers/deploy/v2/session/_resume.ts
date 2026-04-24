@@ -12,14 +12,14 @@ import {
   updateDeploySession,
 } from '../../../../../server/_lib/deploy/deploySessions.js'
 import { runDeployWorkflow } from '../../../../../server/_lib/deploy/workflow/runner.js'
-import legacyContinueHandler from '../../session/_continue.js'
-import legacyStatusHandler from '../../session/_status.js'
+import continueCoreHandler from './_continueCore.js'
+import statusCoreHandler from './_statusCore.js'
 import {
   DeploySessionAccessError,
   loadAuthorizedDeploySession,
   normalizeDeploySessionId,
-} from '../../session/_sessionAccess.js'
-import { invokeLegacyHandler } from './_legacyInvoke.js'
+} from './_sessionAccess.js'
+import { invokeHandler } from './_invokeHandler.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -53,16 +53,16 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       maxTicks,
       callbacks: {
         invokeContinue: async () =>
-          invokeLegacyHandler({
+          invokeHandler({
             req,
             body: { sessionId },
-            handler: legacyContinueHandler as any,
+            handler: continueCoreHandler as any,
           }),
         invokeStatus: async () =>
-          invokeLegacyHandler({
+          invokeHandler({
             req,
             body: { sessionId },
-            handler: legacyStatusHandler as any,
+            handler: statusCoreHandler as any,
           }),
       },
     })

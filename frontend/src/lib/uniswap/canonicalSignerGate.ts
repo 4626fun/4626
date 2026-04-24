@@ -1,6 +1,7 @@
 import { isAddress } from 'viem'
 
 import type { WalletMode } from '@/lib/uniswap/walletMode'
+import type { UserExecutionTrack } from '@/lib/tx/txRouter'
 
 export type CanonicalOwnerCheckStatus = 'owner' | 'not-owner' | 'pending' | 'unknown'
 export type CanonicalAuthStatus = 'authenticated' | 'unauthenticated' | 'unknown'
@@ -8,7 +9,10 @@ export type CanonicalPrivyClientStatus = 'disabled' | 'loading' | 'ready'
 
 export type CanonicalSignerGateInput = {
   executionMode: WalletMode
+  executionTrack?: UserExecutionTrack | null
   canonicalAddress: string | null
+  baseSubAccountAddress?: string | null
+  subAccountProviderReady?: boolean
   clientStatus?: CanonicalPrivyClientStatus
   authStatus?: CanonicalAuthStatus
   embeddedWalletDetected: boolean
@@ -26,6 +30,10 @@ export type CanonicalSignerGateResult = {
     | 'privy-auth-loading'
     | 'privy-auth-required'
     | 'missing-canonical-address'
+    | 'base-sub-account-missing'
+    | 'base-sub-account-invalid'
+    | 'base-sub-account-provider-missing'
+    | 'execution-setup-required'
     | 'embedded-wallet-missing'
     | 'embedded-wallet-address-invalid'
     | 'embedded-wallet-cannot-sign'
@@ -45,6 +53,10 @@ function gateFailure(
     code,
     reason,
   }
+}
+
+function isSubAccountTrack(track: UserExecutionTrack | null | undefined): boolean {
+  return track === 'sub-account' || track === 'migration-pending'
 }
 
 export function evaluateCanonicalSignerGate(input: CanonicalSignerGateInput): CanonicalSignerGateResult {
@@ -75,6 +87,15 @@ export function evaluateCanonicalSignerGate(input: CanonicalSignerGateInput): Ca
     return gateFailure(
       'missing-canonical-address',
       'Canonical mode requires a canonical smart wallet address before signing can proceed.',
+    )
+  }
+
+  const subAccountTrack = isSubAccountTrack(input.executionTrack)
+
+  if (input.executionTrack === 'none-yet') {
+    return gateFailure(
+      'execution-setup-required',
+      'Enable 4626 signing in account setup before canonical swaps.',
     )
   }
 
@@ -111,6 +132,39 @@ export function evaluateCanonicalSignerGate(input: CanonicalSignerGateInput): Ca
       'embedded-wallet-cannot-sign',
       'Privy embedded wallet cannot sign in this session.',
     )
+  }
+
+  if (subAccountTrack) {
+    if (!input.baseSubAccountAddress) {
+      return gateFailure(
+        'base-sub-account-missing',
+        'Canonical swaps require your app-scoped Base sub-account.',
+      )
+    }
+    if (!isAddress(input.baseSubAccountAddress)) {
+      return gateFailure(
+        'base-sub-account-invalid',
+        'Canonical swaps require a valid app-scoped Base sub-account address.',
+      )
+    }
+    if (input.baseSubAccountAddress.toLowerCase() === input.canonicalAddress.toLowerCase()) {
+      return gateFailure(
+        'base-sub-account-invalid',
+        'Canonical swaps require a distinct app-scoped Base sub-account.',
+      )
+    }
+    if (input.subAccountProviderReady !== true) {
+      return gateFailure(
+        'base-sub-account-provider-missing',
+        'Reconnect with Base Account to route canonical swaps through your 4626 sub-account.',
+      )
+    }
+    return {
+      required: true,
+      ready: true,
+      code: 'ok',
+      reason: null,
+    }
   }
 
   if (input.ownerCheckStatus === 'pending' || input.ownerCheckStatus === 'unknown') {

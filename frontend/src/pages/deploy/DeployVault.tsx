@@ -787,7 +787,7 @@ export function DeployVault() {
           <div className="vault-surface vault-hover-lift p-8 space-y-3">
             <div className="text-lg font-medium">Authentication not configured</div>
             <div className="text-sm text-zinc-400 leading-relaxed">
-              Deploy requires Privy for authentication. Your Coinbase Smart Wallet will be used for signing.
+              Deploy requires Privy authentication and canonical CSW context. Your app sub-account handles in-app execution; deploy signing uses your canonical CSW plus delegated server signer.
             </div>
             <div className="text-xs text-zinc-500 leading-relaxed">
               Set <span className="font-mono text-zinc-300">VITE_PRIVY_ENABLED=true</span> in environment variables.
@@ -7035,7 +7035,7 @@ function DeployVaultBatcher({
             <span>✓</span>{' '}
             {strictNoEoaEnforced
               ? hasPrivyEmbeddedOwnerSigner
-                ? 'Gas-free ERC-4337 via preconfigured Privy embedded owner'
+                ? 'Gas-free ERC-4337 via preconfigured owner signer'
                 : 'Gas-free ERC-4337 via preconfigured app smart wallet owner'
               : `Gas-free ERC-4337 ${
                   isCoinbaseWalletDirect
@@ -7043,7 +7043,7 @@ function DeployVaultBatcher({
                     : connectedEoaOwnerReady
                       ? 'via connected signer'
                       : hasPrivyEmbeddedOwnerSigner
-                        ? 'via Privy embedded owner'
+                        ? 'via preconfigured owner signer'
                         : 'via app smart wallet owner'
                 }`}
           </div>
@@ -8752,8 +8752,8 @@ function DeployVaultMain() {
                         ? 'Solana decimals override must be 0-255.'
                       : oneTimePrivyOwnerApprovalNeeded
                         ? connectedWalletAddress
-                          ? 'One-time owner approval required before deploy. Approve your app Privy wallet as an owner of your canonical Coinbase Smart Wallet.'
-                          : 'One-time owner approval required. Connect your canonical Base Account wallet, approve once, then deploy.'
+                          ? 'One-time owner approval required before deploy. Approve your app Privy wallet as a canonical CSW owner so deploy-session server signing can run.'
+                          : 'One-time owner approval required. Connect your canonical Base Account wallet, approve once for deploy-session server signing, then deploy.'
                       : !smartWalletCapabilityReady
                         ? hasDetectedZoraCrossAppWallet
                           ? 'Detected your Zora wallet, but this session is read-only for deploy signing. Reconnect with your canonical Base Account wallet and retry.'
@@ -8835,7 +8835,7 @@ function DeployVaultMain() {
                 <div className="text-sm font-medium text-purple-200">One-time wallet approval (recommended first step)</div>
                 <div className="text-[11px] text-purple-200/75 leading-relaxed">
                   Before deploy, approve your app Privy wallet once as an owner of your canonical Coinbase Smart Wallet (EIP-1271).
-                  This is a one-time setup per canonical wallet.
+                  This enables deploy-session and agent server signing. Your app sub-account remains your in-app execution wallet.
                 </div>
                 <div className="text-[11px] text-zinc-300/90">
                   Canonical wallet: <span className="font-mono">{shortAddress(canonicalIdentityAddress as Address)}</span>

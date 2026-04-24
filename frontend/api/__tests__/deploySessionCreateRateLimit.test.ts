@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import handler from '../_handlers/deploy/session/_create.ts'
+import handler from '../_handlers/deploy/v2/session/_create.ts'
 import { createMockReq, createMockRes } from './helpers'
 
 const {
@@ -8,6 +8,7 @@ const {
   readDeployAuthFromRequestMock,
   isDbConfiguredMock,
   checkRateLimitMock,
+  checkDurableRateLimitMock,
   rateLimitKeyMock,
 } = vi.hoisted(() => ({
   readJsonBodyMock: vi.fn(async (req: any) => req.body),
@@ -17,30 +18,25 @@ const {
   })),
   isDbConfiguredMock: vi.fn(() => true),
   checkRateLimitMock: vi.fn(() => ({ allowed: false, resetAt: Date.now() + 60_000 })),
+  checkDurableRateLimitMock: vi.fn(async () => ({ allowed: false, resetAt: Date.now() + 60_000 })),
   rateLimitKeyMock: vi.fn((...parts: string[]) => parts.join(':')),
 }))
 
-vi.mock('../../server/auth/_shared.js', () => ({
+vi.mock('../../packages/server-core/src/index.js', () => ({
   handleOptions: vi.fn(() => false),
   readBoundedJsonObjectBody: readJsonBodyMock,
-  readJsonBody: readJsonBodyMock,
   setCors: vi.fn(),
   setNoStore: vi.fn(),
+  isDbConfigured: isDbConfiguredMock,
+  getDb: vi.fn(),
+  checkRateLimit: checkRateLimitMock,
+  checkDurableRateLimit: checkDurableRateLimitMock,
+  RATE_LIMITS: { deployCreate: { windowMs: 60_000, maxRequests: 3 } },
+  rateLimitKey: rateLimitKeyMock,
 }))
 
 vi.mock('../../server/_lib/auth/deployAuth.js', () => ({
   readDeployAuthFromRequest: readDeployAuthFromRequestMock,
-}))
-
-vi.mock('../../server/_lib/db/postgres.js', () => ({
-  isDbConfigured: isDbConfiguredMock,
-  getDb: vi.fn(),
-}))
-
-vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
-  checkRateLimit: checkRateLimitMock,
-  RATE_LIMITS: { deployCreate: { windowMs: 60_000, maxRequests: 3 } },
-  rateLimitKey: rateLimitKeyMock,
 }))
 
 describe('deploy session create rate limits', () => {
@@ -52,6 +48,7 @@ describe('deploy session create rate limits', () => {
       type: 'session',
     })
     checkRateLimitMock.mockReturnValue({ allowed: false, resetAt: Date.now() + 60_000 })
+    checkDurableRateLimitMock.mockResolvedValue({ allowed: false, resetAt: Date.now() + 60_000 })
   })
 
   it('uses a dedicated preflight rate limit bucket when preflightOnly=true', async () => {
@@ -79,9 +76,10 @@ describe('deploy session create rate limits', () => {
     expect(res.statusCode).toBe(429)
     expect(String(res.body?.error ?? '')).toContain('Too many deploy attempts')
     expect(rateLimitKeyMock).toHaveBeenCalledWith('deploy', '0x0000000000000000000000000000000000000001')
-    expect(checkRateLimitMock).toHaveBeenCalledWith(
+    expect(checkDurableRateLimitMock).toHaveBeenCalledWith(
       'deploy:0x0000000000000000000000000000000000000001',
       { windowMs: 60_000, maxRequests: 3 },
+      { failClosed: true },
     )
   })
 })

@@ -23,6 +23,13 @@ export type AccountCreatorCoin = {
 export type AccountSignals = {
   linked: boolean
   canonicalCswAddress: string | null
+  baseSubAccount: {
+    address: string | null
+    registered: boolean
+    isDistinctFromCsw: boolean
+  }
+  executionTrack: 'sub-account' | 'legacy-owner-install' | 'migration-pending' | 'none-yet'
+  privyEmbeddedEoaIsOwnerOfCanonicalCsw: boolean | null
   creatorCoin: AccountCreatorCoin | null
   zoraHandle: string | null
   lastResolvedAt: string | null
@@ -109,4 +116,3 @@ export type CswOwnersState = {
   owners: SmartWalletOwnersResponse['owners']
   error: string | null
 }
-

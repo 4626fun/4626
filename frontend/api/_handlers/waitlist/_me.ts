@@ -21,6 +21,7 @@ type ConnectedAccount = {
   source: string
   isPrimary: boolean
   isCanonicalSmartWallet: boolean
+  isExecutionSubAccount: boolean
   isCanonicalSolanaWallet: boolean
   isOperationalSolanaWallet: boolean
   isEmbeddedEoa: boolean
@@ -95,6 +96,7 @@ function upsertAccount(
       source: input.source ?? 'profile',
       isPrimary: Boolean(input.isPrimary),
       isCanonicalSmartWallet: Boolean(input.isCanonicalSmartWallet),
+      isExecutionSubAccount: Boolean(input.isExecutionSubAccount),
       isCanonicalSolanaWallet: Boolean(input.isCanonicalSolanaWallet),
       isOperationalSolanaWallet: Boolean(input.isOperationalSolanaWallet),
       isEmbeddedEoa: Boolean(input.isEmbeddedEoa),
@@ -110,6 +112,7 @@ function upsertAccount(
     source: prev.source === 'profile_wallets' ? prev.source : (input.source ?? prev.source),
     isPrimary: prev.isPrimary || Boolean(input.isPrimary),
     isCanonicalSmartWallet: prev.isCanonicalSmartWallet || Boolean(input.isCanonicalSmartWallet),
+    isExecutionSubAccount: prev.isExecutionSubAccount || Boolean(input.isExecutionSubAccount),
     isCanonicalSolanaWallet: prev.isCanonicalSolanaWallet || Boolean(input.isCanonicalSolanaWallet),
     isOperationalSolanaWallet: prev.isOperationalSolanaWallet || Boolean(input.isOperationalSolanaWallet),
     isEmbeddedEoa: prev.isEmbeddedEoa || Boolean(input.isEmbeddedEoa),
@@ -181,6 +184,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const accountMap = new Map<string, ConnectedAccount>()
+  const cswAddressKey = toAccountKey(row.csw_address || row.primary_smart_wallet)
+  const rawBaseSubAccountKey = toAccountKey(row.base_sub_account)
+  const baseSubAccountKey =
+    rawBaseSubAccountKey && rawBaseSubAccountKey !== cswAddressKey ? rawBaseSubAccountKey : ''
   upsertAccount(accountMap, {
     address: normalizeAddress(row.primary_wallet),
     chain: 'evm',
@@ -217,11 +224,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     isCanonicalSmartWallet: true,
   })
   upsertAccount(accountMap, {
-    address: normalizeAddress(row.base_sub_account),
+    address: baseSubAccountKey ? normalizeAddress(row.base_sub_account) : '',
     chain: 'evm',
     walletType: 'smart_wallet',
     source: 'base_sub_account_column',
-    isCanonicalSmartWallet: true,
+    isExecutionSubAccount: true,
   })
   upsertAccount(accountMap, {
     address: normalizeAddress(row.canonical_solana_wallet ?? row.solana_wallet),
@@ -258,6 +265,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   for (const walletRow of wallets?.rows ?? []) {
     const addressValue = normalizeAddress(walletRow.address)
     if (!addressValue) continue
+    const isExecutionSubAccount = baseSubAccountKey !== '' && toAccountKey(addressValue) === baseSubAccountKey
     upsertAccount(accountMap, {
       address: addressValue,
       chain: typeof walletRow.chain === 'string' ? walletRow.chain : null,
@@ -265,7 +273,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       provider: typeof walletRow.provider === 'string' ? walletRow.provider : null,
       source: 'profile_wallets',
       isPrimary: walletRow.is_primary === true,
-      isCanonicalSmartWallet: walletRow.is_canonical_smart_wallet === true,
+      isCanonicalSmartWallet: !isExecutionSubAccount && walletRow.is_canonical_smart_wallet === true,
+      isExecutionSubAccount,
       isCanonicalSolanaWallet: walletRow.is_canonical_solana_wallet === true,
       isOperationalSolanaWallet: walletRow.is_operational_solana_wallet === true,
       isEmbeddedEoa: walletRow.is_embedded_eoa === true,
@@ -277,6 +286,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const rank = (v: ConnectedAccount): number =>
       (v.isPrimary ? 100 : 0) +
       (v.isCanonicalSmartWallet ? 10 : 0) +
+      (v.isExecutionSubAccount ? 6 : 0) +
       (v.isCanonicalSolanaWallet ? 8 : 0) +
       (v.isOperationalSolanaWallet ? 4 : 0) +
       (v.isEmbeddedEoa ? 5 : 0)

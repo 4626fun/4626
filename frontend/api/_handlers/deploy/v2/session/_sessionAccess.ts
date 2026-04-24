@@ -2,8 +2,8 @@ import type { VercelRequest } from '@vercel/node'
 
 import { getAddress, type Address } from 'viem'
 
-import type { DeploySessionRecord } from '../../../../server/_lib/deploy/deploySessions.js'
-import { readDeployAuthFromRequest } from '../../../../server/_lib/auth/deployAuth.js'
+import type { DeploySessionRecord } from '../../../../../server/_lib/deploy/deploySessions.js'
+import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deployAuth.js'
 
 const DEPLOY_SESSION_ID_RE = /^[A-Za-z0-9_-]{1,128}$/
 

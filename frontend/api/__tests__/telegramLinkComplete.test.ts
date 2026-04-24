@@ -107,6 +107,13 @@ describe('POST /api/telegram/link/complete', () => {
       accountSignals: {
         linked: true,
         canonicalCswAddress: null,
+        baseSubAccount: {
+          address: null,
+          registered: false,
+          isDistinctFromCsw: false,
+        },
+        executionTrack: 'none-yet',
+        privyEmbeddedEoaIsOwnerOfCanonicalCsw: null,
         creatorCoin: null,
         zoraHandle: null,
         lastResolvedAt: '2026-03-23T00:00:00.000Z',

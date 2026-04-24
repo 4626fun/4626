@@ -113,6 +113,24 @@ import { TelegramLink } from './TelegramLink'
 
 const CANONICAL_CSW_ADDRESS = '0x1234567890abcdef1234567890abcdef12345678'
 
+function telegramAccountSignals(overrides: Record<string, unknown> = {}) {
+  return {
+    linked: true,
+    canonicalCswAddress: CANONICAL_CSW_ADDRESS,
+    baseSubAccount: {
+      address: null,
+      registered: false,
+      isDistinctFromCsw: false,
+    },
+    executionTrack: 'none-yet',
+    privyEmbeddedEoaIsOwnerOfCanonicalCsw: null,
+    creatorCoin: null,
+    zoraHandle: null,
+    lastResolvedAt: '2026-03-23T00:00:00.000Z',
+    ...overrides,
+  }
+}
+
 function deferred<T>() {
   let resolve!: (value: T) => void
   let reject!: (reason?: unknown) => void
@@ -209,13 +227,7 @@ beforeEach(() => {
               emailVerified: true,
               appAccessStatus: 'approved',
               linkedMethods: { email: ['user@example.com'], telegram: ['42'] },
-              accountSignals: {
-                linked: true,
-                canonicalCswAddress: CANONICAL_CSW_ADDRESS,
-                creatorCoin: null,
-                zoraHandle: null,
-                lastResolvedAt: '2026-03-23T00:00:00.000Z',
-              },
+              accountSignals: telegramAccountSignals(),
               score: {
                 points: 15,
                 tier: 1,
@@ -654,13 +666,7 @@ describe('TelegramLink UI flow', () => {
                 emailVerified: true,
                 appAccessStatus: 'approved',
                 linkedMethods: { email: ['user@example.com'], telegram: ['42'] },
-                accountSignals: {
-                  linked: true,
-                  canonicalCswAddress: CANONICAL_CSW_ADDRESS,
-                  creatorCoin: null,
-                  zoraHandle: null,
-                  lastResolvedAt: '2026-03-23T00:00:00.000Z',
-                },
+                accountSignals: telegramAccountSignals(),
                 score: {
                   points: 15,
                   tier: 1,
@@ -728,13 +734,7 @@ describe('TelegramLink UI flow', () => {
                   emailVerified: true,
                   appAccessStatus: 'approved',
                   linkedMethods: { email: ['user@example.com'], telegram: ['42'] },
-                  accountSignals: {
-                    linked: true,
-                    canonicalCswAddress: CANONICAL_CSW_ADDRESS,
-                    creatorCoin: null,
-                    zoraHandle: null,
-                    lastResolvedAt: '2026-03-23T00:00:00.000Z',
-                  },
+                  accountSignals: telegramAccountSignals(),
                   score: {
                     points: 15,
                     tier: 1,
@@ -1013,13 +1013,7 @@ describe('TelegramLink UI flow', () => {
                 emailVerified: true,
                 appAccessStatus: 'approved',
                 linkedMethods: { email: ['user@example.com'], telegram: ['42'] },
-                accountSignals: {
-                  linked: true,
-                  canonicalCswAddress: CANONICAL_CSW_ADDRESS,
-                  creatorCoin: null,
-                  zoraHandle: null,
-                  lastResolvedAt: '2026-03-23T00:00:00.000Z',
-                },
+                accountSignals: telegramAccountSignals({ executionTrack: 'legacy-owner-install' }),
                 score: {
                   points: 15,
                   tier: 1,

@@ -2,7 +2,7 @@ import type { VercelRequest } from '@vercel/node'
 
 import type { ApiHandler } from '../../../_routeLoader.js'
 
-type LegacyInvokeResult<T = any> = {
+type InvokeResult<T = any> = {
   statusCode: number
   payload: T | null
   headers: Record<string, string | string[]>
@@ -46,11 +46,11 @@ function makeRequest(req: VercelRequest, body: unknown): VercelRequest {
   } as VercelRequest
 }
 
-export async function invokeLegacyHandler<T = any>(params: {
+export async function invokeHandler<T = any>(params: {
   req: VercelRequest
   body: Record<string, unknown>
   handler: ApiHandler
-}): Promise<LegacyInvokeResult<T>> {
+}): Promise<InvokeResult<T>> {
   const mockReq = makeRequest(params.req, params.body)
   const mockRes = new MockVercelResponse() as any
   await params.handler(mockReq, mockRes)

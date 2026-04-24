@@ -1,14 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import cancelHandler from '../_handlers/deploy/session/_cancel.ts'
-import continueHandler from '../_handlers/deploy/session/_continue.ts'
-import statusHandler from '../_handlers/deploy/session/_status.ts'
+import cancelHandler from '../_handlers/deploy/v2/session/_cancelCore.ts'
+import continueHandler from '../_handlers/deploy/v2/session/_continueCore.ts'
+import statusHandler from '../_handlers/deploy/v2/session/_statusCore.ts'
 import { createMockReq, createMockRes } from './helpers'
 
 const {
   readJsonBodyMock,
   readSessionFromRequestMock,
   readSiwaAgentFromRequestMock,
+  readDeployAuthFromRequestMock,
   getDeploySessionByIdMock,
   transitionDeploySessionMock,
   updateDeploySessionMock,
@@ -22,8 +23,9 @@ const {
   checkRateLimitMock,
 } = vi.hoisted(() => ({
   readJsonBodyMock: vi.fn(async (req: any) => req.body),
-  readSessionFromRequestMock: vi.fn(() => ({ address: '0xsession' })),
+  readSessionFromRequestMock: vi.fn(() => ({ address: '0x0000000000000000000000000000000000000001' })),
   readSiwaAgentFromRequestMock: vi.fn(() => null),
+  readDeployAuthFromRequestMock: vi.fn(),
   getDeploySessionByIdMock: vi.fn(),
   transitionDeploySessionMock: vi.fn(),
   updateDeploySessionMock: vi.fn(async () => {}),
@@ -54,17 +56,26 @@ const {
   checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
 }))
 
-vi.mock('../../server/auth/_shared.js', () => ({
+vi.mock('../../packages/server-core/src/index.js', () => ({
   handleOptions: vi.fn(() => false),
   setCors: vi.fn(),
   setNoStore: vi.fn(),
   readBoundedJsonObjectBody: readJsonBodyMock,
-  readJsonBody: readJsonBodyMock,
-  readSessionFromRequest: readSessionFromRequestMock,
+  logger: {
+    warn: vi.fn(),
+    error: vi.fn(),
+  },
+  checkRateLimit: checkRateLimitMock,
+  RATE_LIMITS: {
+    deploySessionStatus: { windowMs: 60_000, maxRequests: 240 },
+    deploySessionContinue: { windowMs: 60_000, maxRequests: 30 },
+    deploySessionCancel: { windowMs: 60_000, maxRequests: 20 },
+  },
+  rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
 }))
 
-vi.mock('../../server/auth/_siwa.js', () => ({
-  readSiwaAgentFromRequest: readSiwaAgentFromRequestMock,
+vi.mock('../../server/_lib/auth/deployAuth.js', () => ({
+  readDeployAuthFromRequest: readDeployAuthFromRequestMock,
 }))
 
 vi.mock('../../server/_lib/deploy/deploySessions.js', () => ({
@@ -73,16 +84,6 @@ vi.mock('../../server/_lib/deploy/deploySessions.js', () => ({
   updateDeploySession: updateDeploySessionMock,
   signDeployToken: signDeployTokenMock,
   decryptWithSecret: decryptWithSecretMock,
-}))
-
-vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
-  checkRateLimit: checkRateLimitMock,
-  RATE_LIMITS: {
-    deploySessionStatus: { windowMs: 60_000, maxRequests: 240 },
-    deploySessionContinue: { windowMs: 60_000, maxRequests: 30 },
-    deploySessionCancel: { windowMs: 60_000, maxRequests: 20 },
-  },
-  rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
 }))
 
 vi.mock('../../server/_lib/infra/origin.js', () => ({
@@ -112,32 +113,36 @@ vi.mock('../_handlers/paymaster/_paymaster.js', () => ({
   validateSponsoredSmartWalletCalls: validateSponsoredSmartWalletCallsMock,
 }))
 
-vi.mock('viem', () => ({
-  getAddress: (value: string) => String(value).toLowerCase(),
-  isAddress: (value: string) => /^0x[a-fA-F0-9]{40}$/.test(String(value)),
-  keccak256: vi.fn(() => `0x${'1'.repeat(64)}`),
-  decodeEventLog: vi.fn(() => ({
-    eventName: 'AuctionLaunchedDeferred',
-    args: {},
-  })),
-  decodeFunctionData: vi.fn(() => ({
-    args: [
-      {
-        creatorToken: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
-        depositAmount: '5000000000000000000000000',
-      },
-    ],
-  })),
-  createPublicClient: vi.fn(() => ({
-    readContract: vi.fn(async ({ functionName }: any) => {
-      if (functionName === 'ownerCount') return 1n
-      return '0xownerbytes'
-    }),
-  })),
-  encodeAbiParameters: vi.fn(() => '0xownerbytes'),
-  encodeFunctionData: vi.fn(() => '0xcalldata'),
-  http: vi.fn(() => ({ transport: 'http' })),
-}))
+vi.mock('viem', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('viem')>()
+  return {
+    ...actual,
+    getAddress: (value: string) => String(value).toLowerCase(),
+    isAddress: (value: string) => /^0x[a-fA-F0-9]{40}$/.test(String(value)),
+    keccak256: vi.fn(() => `0x${'1'.repeat(64)}`),
+    decodeEventLog: vi.fn(() => ({
+      eventName: 'AuctionLaunchedDeferred',
+      args: {},
+    })),
+    decodeFunctionData: vi.fn(() => ({
+      args: [
+        {
+          creatorToken: '0x5b674196812451B7cEC024FE9d22D2c0b172fa75',
+          depositAmount: '5000000000000000000000000',
+        },
+      ],
+    })),
+    createPublicClient: vi.fn(() => ({
+      readContract: vi.fn(async ({ functionName }: any) => {
+        if (functionName === 'ownerCount') return 1n
+        return '0xownerbytes'
+      }),
+    })),
+    encodeAbiParameters: vi.fn(() => '0xownerbytes'),
+    encodeFunctionData: vi.fn(() => '0xcalldata'),
+    http: vi.fn(() => ({ transport: 'http' })),
+  }
+})
 
 vi.mock('viem/accounts', () => ({
   privateKeyToAccount: vi.fn(() => ({ address: '0xowner' })),
@@ -155,16 +160,16 @@ vi.mock('viem/account-abstraction', () => ({
     getPaymasterStubData: vi.fn(async () => ({})),
   })),
   sendUserOperation: sendUserOperationMock,
-  toCoinbaseSmartAccount: vi.fn(async () => ({ address: '0xsmart' })),
+  toCoinbaseSmartAccount: vi.fn(async () => ({ address: '0x0000000000000000000000000000000000000002' })),
 }))
 
 function makeDeploySession(step: string) {
   return {
     id: 'sess_1',
     tokenHash: 'hash',
-    sessionAddress: '0xsession',
-    smartWallet: '0xsmartwallet',
-    sessionSigner: '0xowner',
+    sessionAddress: '0x0000000000000000000000000000000000000001',
+    smartWallet: '0x0000000000000000000000000000000000000002',
+    sessionSigner: '0x0000000000000000000000000000000000000003',
     sessionSignerWalletId: 'agent_123',
     deployToken: 'token',
     sessionSignerKeyEnc: 'encrypted',
@@ -189,7 +194,30 @@ function makeCall(to: string, data = '0x12345678') {
 describe('deploy session optimistic concurrency', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    readSessionFromRequestMock.mockReturnValue({
+      address: '0x0000000000000000000000000000000000000001',
+    } as any)
     readSiwaAgentFromRequestMock.mockReturnValue(null)
+    readDeployAuthFromRequestMock.mockImplementation(() => {
+      const siwa = readSiwaAgentFromRequestMock()
+      if (siwa?.address) {
+        return {
+          type: 'siwa' as const,
+          address: siwa.address,
+          agentId: Number(siwa.agentId ?? 0),
+          agentRegistry: String(siwa.agentRegistry ?? ''),
+          chainId: Number(siwa.chainId ?? 8453),
+        }
+      }
+      const session = readSessionFromRequestMock()
+      if (session?.address) {
+        return {
+          type: 'session' as const,
+          address: session.address,
+        }
+      }
+      return null
+    })
     verifyDeployPhase2InvariantsMock.mockResolvedValue({
       checked: true,
       checksRun: 0,
@@ -1233,7 +1261,7 @@ describe('deploy session optimistic concurrency', () => {
     expect(res2.statusCode).toBe(200)
     expect(res2.body?.data?.step).toBe('phase4_sent')
     expect(transitionDeploySessionMock).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'sess_1', fromStep: 'phase2_sent', toStep: 'phase2_confirmed' }),
+      expect.objectContaining({ id: 'sess_1', fromStep: 'phase2_sent', toStep: 'phase2_finalize_confirmed' }),
     )
     expect(transitionDeploySessionMock).toHaveBeenCalledWith(
       expect.objectContaining({ id: 'sess_1', fromStep: 'phase3_sent', toStep: 'phase3_confirmed' }),
@@ -1264,7 +1292,7 @@ describe('deploy session optimistic concurrency', () => {
     const args = (sendUserOperationMock.mock.calls as any[])[0]?.[1] as any
     expect(String(args.calls[0]?.to)).toBe('0xphase2target')
     expect(updateDeploySessionMock).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'sess_1', step: 'phase2_sent' }),
+      expect.objectContaining({ id: 'sess_1', step: 'phase2_finalize_sent' }),
     )
   })
 
@@ -1920,7 +1948,7 @@ describe('deploy session optimistic concurrency', () => {
       expect(transitionDeploySessionMock).not.toHaveBeenCalled()
       expect(updateDeploySessionMock).toHaveBeenCalled()
       const sawOvaultEligibilityFailure = (updateDeploySessionMock.mock.calls as any[]).some((call) =>
-        String(call?.[0]?.lastError ?? '').includes('ovault eligibility'),
+        String(call?.[0]?.lastError ?? '').includes('depositEligible=false'),
       )
       expect(sawOvaultEligibilityFailure).toBe(true)
     } finally {
@@ -3332,6 +3360,7 @@ describe('deploy session optimistic concurrency', () => {
         JSON.stringify({
           success: true,
           data: {
+            registered: true,
             existingMintCompatible: true,
             depositEligible: true,
             redeemEligible: true,

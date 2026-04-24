@@ -7,6 +7,7 @@ const {
   readDeployAuthFromRequestMock,
   isDbConfiguredMock,
   checkRateLimitMock,
+  rateLimitKeyMock,
   getDbMock,
   getBytecodeMock,
   readContractMock,
@@ -28,6 +29,7 @@ const {
   })),
   isDbConfiguredMock: vi.fn(() => true),
   checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
+  rateLimitKeyMock: vi.fn((...parts: string[]) => parts.join(':')),
   getDbMock: vi.fn(),
   getBytecodeMock: vi.fn(async () => '0x'),
   readContractMock: vi.fn(async () => ({ amount: 1n })),
@@ -47,30 +49,23 @@ const {
   })),
 }))
 
-vi.mock('../../server/auth/_shared.js', () => ({
+vi.mock('../../packages/server-core/src/index.js', () => ({
   handleOptions: vi.fn(() => false),
   readBoundedJsonObjectBody: readJsonBodyMock,
-  readJsonBody: readJsonBodyMock,
   setCors: vi.fn(),
   setNoStore: vi.fn(),
-}))
-
-vi.mock('../../server/_lib/auth/deployAuth.js', () => ({
-  readDeployAuthFromRequest: readDeployAuthFromRequestMock,
-}))
-
-vi.mock('../../server/_lib/db/postgres.js', () => ({
   isDbConfigured: isDbConfiguredMock,
   getDb: getDbMock,
-}))
-
-vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
   checkRateLimit: checkRateLimitMock,
   RATE_LIMITS: {
     deployCreate: { limit: 3, windowMs: 60_000 },
     deploySessionDryRun: { windowMs: 60_000, maxRequests: 10 },
   },
-  rateLimitKey: vi.fn(() => 'rl_key'),
+  rateLimitKey: rateLimitKeyMock,
+}))
+
+vi.mock('../../server/_lib/auth/deployAuth.js', () => ({
+  readDeployAuthFromRequest: readDeployAuthFromRequestMock,
 }))
 
 vi.mock('../../server/_lib/infra/origin.js', () => ({
@@ -194,6 +189,35 @@ function makeCanonicalDb() {
       if (text.includes('from profile_wallets') && text.includes('select profile_id') && text.includes('is_canonical_smart_wallet = true')) {
         return { rows: [{ profile_id: 99 }] }
       }
+      if (text.includes('from creator_strategy_features')) {
+        if (text.includes('and feature_key =')) {
+          // Vanity entitlement checks should remain inactive in baseline tests.
+          return { rows: [] }
+        }
+        return {
+          rows: [
+            {
+              id: 1,
+              creator_token: '0x0000000000000000000000000000000000000003',
+              feature_key: 'charm_active_lp',
+              status: 'active',
+              price_usdc_paid: '100000000',
+              payment_tx_hash: null,
+              payment_from: null,
+              payment_to: null,
+              payment_verified_at: new Date().toISOString(),
+              provisioned_at: null,
+              failed_at: null,
+              refunded_at: null,
+              provisioner_ref: null,
+              failure_reason: null,
+              metadata: {},
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          ],
+        }
+      }
       return { rows: [] }
     }),
   }
@@ -234,7 +258,7 @@ describe('deploy session dry run', () => {
     const previousBypass = process.env.DEPLOY_DRY_RUN_DEV_BYPASS
     process.env.DEPLOY_DRY_RUN_DEV_BYPASS = '1'
     readDeployAuthFromRequestMock.mockReturnValueOnce(null as any)
-    const { default: handler } = await import('../_handlers/deploy/session/_dryRun.ts')
+    const { default: handler } = await import('../_handlers/deploy/v2/session/_dryRun.ts')
     const req = createMockReq({
       method: 'POST',
       headers: { 'x-deploy-dry-run-dev': '0x00000000000000000000000000000000000000ff' },
@@ -254,7 +278,7 @@ describe('deploy session dry run', () => {
 
   it('returns 429 when dry-run is rate limited', async () => {
     checkRateLimitMock.mockReturnValueOnce({ allowed: false, resetAt: Date.now() + 45_000 })
-    const { default: handler } = await import('../_handlers/deploy/session/_dryRun.ts')
+    const { default: handler } = await import('../_handlers/deploy/v2/session/_dryRun.ts')
     const req = createMockReq({ method: 'POST', body: makeRequestBody() })
     const res = createMockRes()
 
@@ -266,7 +290,7 @@ describe('deploy session dry run', () => {
   })
 
   it('requires paid vanity entitlement when dry-run requests custom vanity deploy options', async () => {
-    const { default: handler } = await import('../_handlers/deploy/session/_dryRun.ts')
+    const { default: handler } = await import('../_handlers/deploy/v2/session/_dryRun.ts')
     const req = createMockReq({
       method: 'POST',
       body: {
@@ -286,7 +310,7 @@ describe('deploy session dry run', () => {
   })
 
   it('allows dry-run with free default vanity patterns without paid entitlement', async () => {
-    const { default: handler } = await import('../_handlers/deploy/session/_dryRun.ts')
+    const { default: handler } = await import('../_handlers/deploy/v2/session/_dryRun.ts')
     const req = createMockReq({
       method: 'POST',
       body: {
@@ -307,7 +331,7 @@ describe('deploy session dry run', () => {
   })
 
   it('returns a phase summary without persisting session state or sending user operations', async () => {
-    const { default: handler } = await import('../_handlers/deploy/session/_dryRun.ts')
+    const { default: handler } = await import('../_handlers/deploy/v2/session/_dryRun.ts')
     const req = createMockReq({ method: 'POST', body: makeRequestBody() })
     const res = createMockRes()
 
@@ -328,7 +352,7 @@ describe('deploy session dry run', () => {
   })
 
   it('configures base chain for fork transaction sends', async () => {
-    const { default: handler } = await import('../_handlers/deploy/session/_dryRun.ts')
+    const { default: handler } = await import('../_handlers/deploy/v2/session/_dryRun.ts')
     const req = createMockReq({ method: 'POST', body: makeRequestBody() })
     const res = createMockRes()
 
@@ -348,7 +372,7 @@ describe('deploy session dry run', () => {
 
   it('returns a non-500 error when dry-run is called without a local fork RPC', async () => {
     process.env.BASE_RPC_URL = 'https://mainnet.base.org'
-    const { default: handler } = await import('../_handlers/deploy/session/_dryRun.ts')
+    const { default: handler } = await import('../_handlers/deploy/v2/session/_dryRun.ts')
     const req = createMockReq({ method: 'POST', body: makeRequestBody() })
     const res = createMockRes()
 
@@ -362,7 +386,7 @@ describe('deploy session dry run', () => {
   })
 
   it('returns the first failing phase and call index when simulation fails', async () => {
-    const { default: handler } = await import('../_handlers/deploy/session/_dryRun.ts')
+    const { default: handler } = await import('../_handlers/deploy/v2/session/_dryRun.ts')
     sendTransactionMock
       .mockResolvedValueOnce(`0x${'1'.repeat(64)}`)
       .mockRejectedValueOnce(new Error('phase3 exploded'))

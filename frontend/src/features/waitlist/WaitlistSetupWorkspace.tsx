@@ -27,7 +27,11 @@ function WaitlistSetupWorkspaceContent(props: WaitlistSetupWorkspaceProps) {
     initialData: { me: initialAccount, zoraStatus: null },
     zoraReturnPath: '/waitlist',
   })
-  const signingStepComplete = Boolean(controller.subAccountAddress) || Boolean(initialAccount.baseSubAccount) || /4626 signing is enabled|already enabled/i.test(controller.notice ?? '')
+  const signingStepComplete =
+    Boolean(controller.subAccountAddress) ||
+    initialAccount.accountSignals.baseSubAccount.registered ||
+    initialAccount.accountSignals.executionTrack === 'legacy-owner-install' ||
+    /4626 signing is enabled|already enabled/i.test(controller.notice ?? '')
   const setupComplete =
     controller.zoraLinked && Boolean(controller.canonicalCswAddress) && signingStepComplete
   const canEnterNow = canEnterApp && setupComplete

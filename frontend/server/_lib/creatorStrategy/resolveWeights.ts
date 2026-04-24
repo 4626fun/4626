@@ -28,7 +28,7 @@
  * `charmWeightBps > 0` but no `charm_active_lp` activation must be
  * refused by the paymaster / deploy-continue handler using this
  * resolver's output as the truth. Enforcement wiring lives in
- * `deploy/session/_continue.ts` (follow-up).
+ * `deploy/v2/session/_continueCore.ts` (follow-up).
  */
 
 import type { Address } from 'viem'

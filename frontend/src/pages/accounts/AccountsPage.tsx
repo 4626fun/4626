@@ -86,7 +86,7 @@ export function AccountsPage(props: {
           <div className="text-[11px] uppercase tracking-[0.2em] text-zinc-500">Accounts</div>
           <h1 className="text-3xl font-semibold tracking-tight">Your identity</h1>
           <p className="text-sm text-zinc-400">
-            Your canonical Coinbase Smart Wallet (CSW) + the signers currently able to act on its behalf.
+            Your canonical CSW anchors identity and assets, your app sub-account handles in-app execution, and delegated server signers power deploy and agent automation.
           </p>
         </div>
 

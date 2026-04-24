@@ -35,6 +35,13 @@ const {
     accountSignals: {
       linked: false,
       canonicalCswAddress: null,
+      baseSubAccount: {
+        address: null,
+        registered: false,
+        isDistinctFromCsw: false,
+      },
+      executionTrack: 'none-yet',
+      privyEmbeddedEoaIsOwnerOfCanonicalCsw: null,
       creatorCoin: null,
       zoraHandle: null,
       lastResolvedAt: null,

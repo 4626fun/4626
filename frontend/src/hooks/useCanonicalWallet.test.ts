@@ -45,6 +45,20 @@ describe('pickCanonicalSmartWalletAddress', () => {
     expect(pickCanonicalSmartWalletAddress(row)).toBe('0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee')
   })
 
+  it('does not use baseSubAccount as a canonical parent wallet fallback', () => {
+    const row: WaitlistMeData = {
+      baseSubAccount: '0xffffffffffffffffffffffffffffffffffffffff',
+      connectedAccounts: [
+        {
+          address: '0xffffffffffffffffffffffffffffffffffffffff',
+          isExecutionSubAccount: true,
+          isCanonicalSmartWallet: false,
+        },
+      ],
+    }
+    expect(pickCanonicalSmartWalletAddress(row)).toBeNull()
+  })
+
   it('returns null when no valid candidate exists', () => {
     const row: WaitlistMeData = {
       cswAddress: 'not-an-address',
@@ -53,4 +67,3 @@ describe('pickCanonicalSmartWalletAddress', () => {
     expect(pickCanonicalSmartWalletAddress(row)).toBeNull()
   })
 })
-

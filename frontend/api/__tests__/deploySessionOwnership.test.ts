@@ -1,13 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { decodeFunctionData, encodeFunctionData } from 'viem'
 
-import handler from '../_handlers/deploy/session/_create.ts'
+import handler from '../_handlers/deploy/v2/session/_create.ts'
 import { canonicalWalletSchemaReadyResult, createMockReq, createMockRes } from './helpers'
 
 const {
   readJsonBodyMock,
-  readSessionFromRequestMock,
+  readDeployAuthFromRequestMock,
   isDbConfiguredMock,
+  checkRateLimitMock,
+  checkDurableRateLimitMock,
+  rateLimitKeyMock,
   getDbMock,
   ensureDeploySessionsSchemaMock,
   insertDeploySessionMock,
@@ -21,8 +24,14 @@ const {
   ensureWaitlistSchemaMock,
 } = vi.hoisted(() => ({
   readJsonBodyMock: vi.fn(async (req: any) => req.body),
-  readSessionFromRequestMock: vi.fn(() => ({ address: '0x0000000000000000000000000000000000000001' })),
+  readDeployAuthFromRequestMock: vi.fn(() => ({
+    address: '0x0000000000000000000000000000000000000001',
+    type: 'session' as const,
+  })),
   isDbConfiguredMock: vi.fn(() => true),
+  checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
+  checkDurableRateLimitMock: vi.fn(async () => ({ allowed: true, resetAt: Date.now() + 60_000 })),
+  rateLimitKeyMock: vi.fn((...parts: string[]) => parts.join(':')),
   getDbMock: vi.fn(),
   ensureDeploySessionsSchemaMock: vi.fn(async () => {}),
   insertDeploySessionMock: vi.fn(async () => ({})),
@@ -45,13 +54,21 @@ const {
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
 }))
 
-vi.mock('../../server/auth/_shared.js', () => ({
+vi.mock('../../packages/server-core/src/index.js', () => ({
   handleOptions: vi.fn(() => false),
   readBoundedJsonObjectBody: readJsonBodyMock,
-  readJsonBody: readJsonBodyMock,
-  readSessionFromRequest: readSessionFromRequestMock,
   setCors: vi.fn(),
   setNoStore: vi.fn(),
+  isDbConfigured: isDbConfiguredMock,
+  getDb: getDbMock,
+  checkRateLimit: checkRateLimitMock,
+  checkDurableRateLimit: checkDurableRateLimitMock,
+  RATE_LIMITS: { deployCreate: { limit: 3, windowMs: 60_000 } },
+  rateLimitKey: rateLimitKeyMock,
+}))
+
+vi.mock('../../server/_lib/auth/deployAuth.js', () => ({
+  readDeployAuthFromRequest: readDeployAuthFromRequestMock,
 }))
 
 vi.mock('../../server/_lib/deploy/deploySessions.js', () => ({
@@ -60,17 +77,6 @@ vi.mock('../../server/_lib/deploy/deploySessions.js', () => ({
   insertDeploySession: insertDeploySessionMock,
   randomDeployToken: vi.fn(() => 'deploy_token'),
   randomId: vi.fn(() => 'sess_123'),
-}))
-
-vi.mock('../../server/_lib/db/postgres.js', () => ({
-  isDbConfigured: isDbConfiguredMock,
-  getDb: getDbMock,
-}))
-
-vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
-  checkRateLimit: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
-  RATE_LIMITS: { deployCreate: { limit: 3, windowMs: 60_000 } },
-  rateLimitKey: vi.fn(() => 'rl_key'),
 }))
 
 vi.mock('../../server/_lib/db/supabaseAdmin.js', () => ({
@@ -334,6 +340,13 @@ describe('deploy session ownership guardrails', () => {
     vi.clearAllMocks()
     delete process.env.DEPLOY_SESSION_TTL_MINUTES
     process.env.DEPLOY_SESSION_TOKEN_HMAC_SECRET = 'test-deploy-session-hmac-secret'
+    isDbConfiguredMock.mockReturnValue(true)
+    readDeployAuthFromRequestMock.mockReturnValue({
+      address: '0x0000000000000000000000000000000000000001',
+      type: 'session',
+    })
+    checkRateLimitMock.mockReturnValue({ allowed: true, resetAt: Date.now() + 60_000 })
+    checkDurableRateLimitMock.mockResolvedValue({ allowed: true, resetAt: Date.now() + 60_000 })
     resolveCoinPartiesMock.mockResolvedValue({ creator: null, payoutRecipient: null })
     resolveCoinPartiesAndOwnerMock.mockResolvedValue({
       creator: '0x0000000000000000000000000000000000000002',
@@ -457,7 +470,10 @@ describe('deploy session ownership guardrails', () => {
 
   it('rejects stale historical session wallets that are no longer current deploy authority', async () => {
     getDbMock.mockResolvedValue(makeCanonicalDbWithHistoricalSessionOnly())
-    readSessionFromRequestMock.mockReturnValue({ address: '0x0000000000000000000000000000000000000001' } as any)
+    readDeployAuthFromRequestMock.mockReturnValue({
+      address: '0x0000000000000000000000000000000000000001',
+      type: 'session',
+    })
 
     const req = createMockReq({ method: 'POST', body: makeRequestBody() })
     const res = createMockRes()
@@ -744,7 +760,35 @@ describe('deploy session ownership guardrails', () => {
   })
 
   it('does not persist client-provided solana OVault compatibility hints', async () => {
-    getDbMock.mockResolvedValue(makeCanonicalDb())
+    const db = makeCanonicalDb()
+    ;(db.sql as any).mockImplementation(async (strings: TemplateStringsArray) => {
+      const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+      const schemaReady = canonicalWalletSchemaReadyResult(text)
+      if (schemaReady) return schemaReady
+      if (text.includes('from profiles p') && text.includes('where p.id =')) {
+        return {
+          rows: [
+            {
+              id: 99,
+              primary_wallet: '0x0000000000000000000000000000000000000001',
+              primary_embedded_eoa: null,
+              primary_smart_wallet: '0x0000000000000000000000000000000000000002',
+              csw_address: '0x0000000000000000000000000000000000000002',
+              base_sub_account: null,
+              canonical_wallet: '0x0000000000000000000000000000000000000002',
+            },
+          ],
+        }
+      }
+      if (text.includes('from profile_wallets') && text.includes('is_canonical_smart_wallet = true')) {
+        return { rows: [{ profile_id: 99 }] }
+      }
+      if (text.includes('from creator_strategy_features')) {
+        return { rows: [{}] }
+      }
+      return { rows: [] }
+    })
+    getDbMock.mockResolvedValue(db)
 
     const req = createMockReq({
       method: 'POST',

@@ -4,7 +4,15 @@ import { Droplets, Plus, RefreshCw } from 'lucide-react'
 import { getAddress, isAddress, toHex, type Address, type Hex } from 'viem'
 import { useQuery } from '@tanstack/react-query'
 import { useAccount, useBalance, useConnect, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
-import { useActiveWallet, useConnectWallet, useLogin, usePrivy, useWallets } from '@privy-io/react-auth'
+import {
+  toViemAccount,
+  useActiveWallet,
+  useBaseAccountSdk,
+  useConnectWallet,
+  useLogin,
+  usePrivy,
+  useWallets,
+} from '@privy-io/react-auth'
 import { useDebounceValue } from 'usehooks-ts'
 
 import { META, PageMeta } from '@/components/seo/PageMeta'
@@ -20,6 +28,7 @@ import { useSwapExecution } from '@/hooks/useSwapExecution'
 import { useSwapState } from '@/hooks/useSwapState'
 import { useTokenIdentity } from '@/hooks/useTokenIdentity'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
+import { useAccountMe } from '@/hooks/useAccountMe'
 import { usePrivyClientStatus } from '@/lib/privy/client'
 import { extractPrivyWalletsFromUser } from '@/lib/privy/embeddedWallet'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
@@ -51,6 +60,7 @@ import {
   type TokenOption,
 } from '@/lib/uniswap/swapUtils'
 import { ensureProviderOnBase } from '@/lib/wallet/safeSwitchToBase'
+import { configureSubAccountSigner, getExistingSubAccount } from '@/lib/wallet/subAccountSetup'
 import { resolveCreatorTradeTokenAddress } from '@/lib/onchain/vaultResolve'
 import { useAccountContext } from '@/wallet/accountContext'
 import { useScreenshotReady } from '@/lib/ui/screenshotMode'
@@ -117,6 +127,18 @@ type ExploreSwapTokenResponse = {
 }
 
 const EMPTY_SWAP_TOKEN_OPTIONS: SwapTokenOption[] = []
+type UserExecutionTrack = 'sub-account' | 'legacy-owner-install' | 'migration-pending' | 'none-yet'
+
+type SubAccountRuntimeState = {
+  ready: boolean
+  provider: { request: (args: { method: string; params?: any[] }) => Promise<unknown> } | null
+  status: 'idle' | 'checking' | 'ready' | 'missing-provider' | 'missing-wallet' | 'mismatch' | 'error'
+  message: string | null
+}
+
+type StoredSubAccountRuntimeState = SubAccountRuntimeState & {
+  key: string | null
+}
 
 function normalizeCreatorCoinLabel(value: unknown): string | null {
   if (typeof value !== 'string') return null
@@ -229,6 +251,181 @@ function useSafeSwapConnectWalletHook(enabled: boolean): {
     warnSwapPrivyHookFailure('useConnectWallet', error)
     return { connectWallet: null }
   }
+}
+
+function isBaseAccountWallet(wallet: unknown): boolean {
+  const record = wallet && typeof wallet === 'object' ? (wallet as Record<string, unknown>) : null
+  const type = normalizePrivyText(record?.walletClientType ?? record?.wallet_client_type ?? record?.connector_type)
+  return type === 'base_account'
+}
+
+async function getWalletProvider(wallet: any): Promise<any | null> {
+  if (wallet?.provider && typeof wallet.provider.request === 'function') return wallet.provider
+  if (typeof wallet?.getEthereumProvider === 'function') {
+    const provider = await wallet.getEthereumProvider().catch(() => null)
+    if (provider && typeof provider.request === 'function') return provider
+  }
+  if (typeof wallet?.request === 'function') return { request: wallet.request.bind(wallet) }
+  return null
+}
+
+function useSwapSubAccountRuntime(params: {
+  enabled: boolean
+  canonicalAddress: Address | null
+  baseSubAccountAddress: Address | null
+  baseAccountWallet: any | null
+  embeddedWallet: any | null
+  baseAccountSdk: any | null
+}): SubAccountRuntimeState {
+  const [state, setState] = useState<StoredSubAccountRuntimeState>({
+    key: null,
+    ready: false,
+    provider: null,
+    status: 'idle',
+    message: null,
+  })
+  const walletAddress = normalizeAddressOrNull(params.baseAccountWallet?.address)
+  const runtimeKey =
+    params.enabled &&
+    params.canonicalAddress &&
+    params.baseSubAccountAddress &&
+    walletAddress &&
+    params.embeddedWallet &&
+    params.baseAccountSdk
+      ? [
+          params.canonicalAddress.toLowerCase(),
+          params.baseSubAccountAddress.toLowerCase(),
+          walletAddress.toLowerCase(),
+          normalizePrivyText(params.embeddedWallet?.address) ?? '',
+        ].join(':')
+      : null
+
+  useEffect(() => {
+    let cancelled = false
+
+    const canonicalAddress = params.canonicalAddress
+    const baseSubAccountAddress = params.baseSubAccountAddress
+    if (!runtimeKey || !canonicalAddress || !baseSubAccountAddress || !params.baseAccountWallet || !params.embeddedWallet || !params.baseAccountSdk) {
+      return () => {
+        cancelled = true
+      }
+    }
+
+    ;(async () => {
+      try {
+        if (!walletAddress || walletAddress.toLowerCase() !== canonicalAddress.toLowerCase()) {
+          if (!cancelled) {
+            setState({
+              key: runtimeKey,
+              ready: false,
+              provider: null,
+              status: 'mismatch',
+              message: 'Connected Base Account does not match your canonical smart wallet.',
+            })
+          }
+          return
+        }
+
+        if (typeof params.baseAccountWallet.switchChain === 'function') {
+          await params.baseAccountWallet.switchChain(BASE_CHAIN_ID).catch(() => null)
+        }
+
+        const provider = await getWalletProvider(params.baseAccountWallet)
+        if (!provider?.request) {
+          if (!cancelled) {
+            setState({
+              key: runtimeKey,
+              ready: false,
+              provider: null,
+              status: 'missing-provider',
+              message: 'Base Account provider is unavailable.',
+            })
+          }
+          return
+        }
+
+        const existing = await getExistingSubAccount({
+          provider,
+          parentAddress: canonicalAddress,
+        }).catch(() => null)
+        if (!existing?.address || existing.address.toLowerCase() !== baseSubAccountAddress.toLowerCase()) {
+          if (!cancelled) {
+            setState({
+              key: runtimeKey,
+              ready: false,
+              provider: null,
+              status: 'mismatch',
+              message: 'Connected Base Account did not expose the persisted 4626 sub-account.',
+            })
+          }
+          return
+        }
+
+        configureSubAccountSigner({
+          baseAccountSdk: params.baseAccountSdk,
+          toViemAccountFn: toViemAccount,
+          embeddedWallet: params.embeddedWallet,
+        })
+
+        if (!cancelled) {
+          setState({
+            key: runtimeKey,
+            ready: true,
+            provider,
+            status: 'ready',
+            message: null,
+          })
+        }
+      } catch (error) {
+        if (!cancelled) {
+          setState({
+            key: runtimeKey,
+            ready: false,
+            provider: null,
+            status: 'error',
+            message: error instanceof Error ? error.message : String(error ?? 'Sub-account signer setup failed.'),
+          })
+        }
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    params.baseAccountSdk,
+    params.baseAccountWallet,
+    params.baseSubAccountAddress,
+    params.canonicalAddress,
+    params.embeddedWallet,
+    params.enabled,
+    runtimeKey,
+    walletAddress,
+  ])
+
+  if (!params.enabled) {
+    return { ready: false, provider: null, status: 'idle', message: null }
+  }
+  if (!params.canonicalAddress || !params.baseSubAccountAddress) {
+    return {
+      ready: false,
+      provider: null,
+      status: 'missing-wallet',
+      message: 'Canonical CSW or sub-account is missing.',
+    }
+  }
+  if (!params.baseAccountWallet || !params.embeddedWallet || !params.baseAccountSdk) {
+    return {
+      ready: false,
+      provider: null,
+      status: 'missing-wallet',
+      message: 'Reconnect with Base Account to use your 4626 sub-account.',
+    }
+  }
+  if (!runtimeKey || state.key !== runtimeKey) {
+    return { ready: false, provider: null, status: 'checking', message: null }
+  }
+  return state
 }
 
 function isHexSignature(value: unknown): value is Hex {
@@ -436,6 +633,8 @@ export function Swap() {
   const { login: privyLogin } = useSafeSwapLoginHook(privyHooksEnabled)
   const { connectWallet: privyConnectWallet } = useSafeSwapConnectWalletHook(privyHooksEnabled)
   const { connectors: wagmiConnectors, connect: wagmiConnect } = useConnect()
+  const accountMe = useAccountMe()
+  const { baseAccountSdk } = useBaseAccountSdk()
   // `extractPrivyWalletsFromUser` returns ADDRESS-ONLY metadata parsed from
   // `privy.user` (`linkedAccounts` / `user.wallets`). Those records do NOT
   // carry provider methods like `getEthereumProvider` — so the earlier
@@ -474,6 +673,10 @@ export function Swap() {
     }
     return merged
   }, [privyLiveWallets, privyUser])
+  const baseAccountWallet = useMemo(
+    () => (Array.isArray(privyWallets) ? (privyWallets as any[]).find(isBaseAccountWallet) ?? null : null),
+    [privyWallets],
+  )
   const auth = useSiweAuth()
   const {
     authAddress,
@@ -604,6 +807,12 @@ export function Swap() {
   const accountContext = useAccountContext()
   const canonicalAddress = accountContext.cswAddress ?? null
   const signerAddress = accountContext.signerAddress ?? null
+  const accountSignals = accountMe.me?.accountSignals ?? null
+  const executionTrack = (accountSignals?.executionTrack ?? null) as UserExecutionTrack | null
+  const baseSubAccountAddress = normalizeAddressOrNull(
+    accountSignals?.baseSubAccount?.address ?? accountMe.me?.baseSubAccount ?? null,
+  )
+  const subAccountTrack = executionTrack === 'sub-account' || executionTrack === 'migration-pending'
 
   const privyCrossAppEmbeddedEoaAddress = useMemo(() => pickPrivyCrossAppEmbeddedEoaAddress(privyUser), [privyUser])
   const privyEmbeddedEoaAddressFromUser = useMemo(() => pickPrivyEmbeddedEoaAddressFromUser(privyUser), [privyUser])
@@ -667,6 +876,14 @@ export function Swap() {
 
   const privyEmbeddedEoaAddress = privyEmbeddedEoaAddressInfo.address
   const privyEmbeddedEoaAddressSource = privyEmbeddedEoaAddressInfo.source
+  const subAccountRuntime = useSwapSubAccountRuntime({
+    enabled: subAccountTrack,
+    canonicalAddress,
+    baseSubAccountAddress,
+    baseAccountWallet,
+    embeddedWallet: privyEmbeddedEoaWallet,
+    baseAccountSdk,
+  })
 
   const privyEmbeddedEoaCanSign = useMemo(() => {
     const walletAny: any = privyEmbeddedEoaWallet as any
@@ -767,7 +984,7 @@ export function Swap() {
 
   const privyEmbeddedEoaCanOperateCanonicalQuery = useQuery({
     queryKey: ['swap', 'privy-embedded-can-operate-canonical', canonicalAddress, privyEmbeddedEoaAddress, swapChainId],
-    enabled: Boolean(canonicalAddress && privyEmbeddedEoaAddress && publicClient && swapChainId === BASE_CHAIN_ID),
+    enabled: Boolean(!subAccountTrack && canonicalAddress && privyEmbeddedEoaAddress && publicClient && swapChainId === BASE_CHAIN_ID),
     staleTime: 10_000,
     queryFn: async () => {
       if (!canonicalAddress || !privyEmbeddedEoaAddress || !publicClient) return false
@@ -862,7 +1079,10 @@ export function Swap() {
     () =>
       evaluateCanonicalSignerGate({
         executionMode,
+        executionTrack,
         canonicalAddress,
+        baseSubAccountAddress,
+        subAccountProviderReady: subAccountRuntime.ready,
         clientStatus: privyClientStatus,
         authStatus: canonicalAuthStatus,
         embeddedWalletDetected: Boolean(privyEmbeddedEoaAddress),
@@ -872,7 +1092,10 @@ export function Swap() {
       }),
     [
       executionMode,
+      executionTrack,
       canonicalAddress,
+      baseSubAccountAddress,
+      subAccountRuntime.ready,
       privyClientStatus,
       canonicalAuthStatus,
       privyEmbeddedEoaAddress,
@@ -880,37 +1103,55 @@ export function Swap() {
       canonicalOwnerCheckStatus,
     ],
   )
-  const usePrivyEmbeddedCanonicalSigner = executionMode === 'canonical' && canonicalSignerGate.ready
+  const useSubAccountCanonicalSigner = executionMode === 'canonical' && subAccountTrack && canonicalSignerGate.ready
+  const usePrivyEmbeddedCanonicalSigner = executionMode === 'canonical' && !subAccountTrack && canonicalSignerGate.ready
   const canonicalSignerAddress =
-    executionMode === 'canonical' ? (usePrivyEmbeddedCanonicalSigner ? privyEmbeddedEoaAddress : null) : signerAddress
+    executionMode === 'canonical'
+      ? (useSubAccountCanonicalSigner || usePrivyEmbeddedCanonicalSigner ? privyEmbeddedEoaAddress : null)
+      : signerAddress
   const canonicalSignerWalletClient =
     executionMode === 'canonical'
-      ? (usePrivyEmbeddedCanonicalSigner ? (privyEmbeddedCanonicalWalletClient as any) : null)
+      ? useSubAccountCanonicalSigner
+        ? subAccountRuntime.provider
+        : usePrivyEmbeddedCanonicalSigner
+          ? (privyEmbeddedCanonicalWalletClient as any)
+          : null
       : walletClient
   const executionSignerAddress = executionMode === 'canonical' ? canonicalSignerAddress : signerAddress
   const executionWalletClient = executionMode === 'canonical' ? canonicalSignerWalletClient : walletClient
   const executionSignerType =
-    executionMode === 'canonical' ? (usePrivyEmbeddedCanonicalSigner ? 'EOA' : 'UNKNOWN') : accountContext.signerType
+    executionMode === 'canonical'
+      ? (useSubAccountCanonicalSigner || usePrivyEmbeddedCanonicalSigner ? 'EOA' : 'UNKNOWN')
+      : accountContext.signerType
   const executionCapabilities = useMemo(
     () =>
       executionMode === 'canonical'
-        ? ({ paymasterService: false, atomicStatus: 'unknown', supports5792: false } as const)
+        ? ({
+            paymasterService: false,
+            atomicStatus: useSubAccountCanonicalSigner ? 'supported' : 'unknown',
+            supports5792: useSubAccountCanonicalSigner,
+          } as const)
         : accountContext.capabilities,
-    [executionMode, accountContext.capabilities],
+    [executionMode, accountContext.capabilities, useSubAccountCanonicalSigner],
   )
   const executionConnectorId =
     executionMode === 'canonical'
-      ? usePrivyEmbeddedCanonicalSigner
+      ? useSubAccountCanonicalSigner
+        ? 'base-sub-account'
+        : usePrivyEmbeddedCanonicalSigner
         ? 'privy-embedded'
         : 'privy-embedded-required'
       : (connector?.id ?? null)
   const executionConnectorName =
     executionMode === 'canonical'
-      ? usePrivyEmbeddedCanonicalSigner
+      ? useSubAccountCanonicalSigner
+        ? 'Base Account Sub-Account'
+        : usePrivyEmbeddedCanonicalSigner
         ? 'Privy Embedded EOA'
         : 'Privy Embedded EOA (required)'
       : (connector?.name ?? null)
-  const executionAddress = accountContext.activeAccount ?? null
+  const executionAddress =
+    executionMode === 'canonical' && subAccountTrack ? baseSubAccountAddress : (accountContext.activeAccount ?? null)
   const executionReady = Boolean(
     executionAddress &&
       executionWalletClient &&
@@ -1230,6 +1471,7 @@ export function Swap() {
     canonicalAddress,
     signerAddress: executionSignerAddress,
     executionMode,
+    executionTrack,
     executionAddress,
     executionReady,
     tokenIn,
@@ -1692,7 +1934,8 @@ export function Swap() {
               },
             }}
           >
-            Canonical mode uses your Privy embedded EOA as the owner signer. Sign in with Privy, then retry the swap.
+            Canonical mode uses your verified 4626 account to load the signer for your active execution track.
+            Sign in with Privy, then retry the swap.
             {authError ? <div className="mt-2 text-rose-300">{authError}</div> : null}
           </Alert>
         </div>
@@ -1731,7 +1974,7 @@ export function Swap() {
       {activePanel === 'swap' && showPrivyClientDisabledHint ? (
         <div data-screenshot-hide="true" className="mx-auto mt-4 max-w-4xl">
           <Alert variant="warning" title="Privy is not configured for canonical swaps">
-            Canonical mode requires Privy authentication and an embedded owner wallet. Enable Privy for this environment,
+            Canonical mode requires Privy authentication and an embedded signer wallet. Enable Privy for this environment,
             then reload.
             <div className="mt-2 text-zinc-300">
               Set <span className="font-mono text-zinc-200">VITE_PRIVY_ENABLED=true</span> with a valid Privy app

@@ -9,6 +9,7 @@ import {
   detectTxSendMode,
   type TxRouterContext,
   type TxRouterDebugEvent,
+  type UserExecutionTrack,
 } from '@/lib/tx/txRouter'
 import {
   evaluateSwapPolicyInput,
@@ -316,6 +317,7 @@ export function useSwapExecution(params: {
   canonicalAddress: `0x${string}` | null
   signerAddress: `0x${string}` | null
   executionMode: 'canonical' | 'eoa'
+  executionTrack?: UserExecutionTrack | null
   executionAddress: `0x${string}` | null
   executionReady: boolean
   tokenIn: string
@@ -652,19 +654,26 @@ export function useSwapExecution(params: {
     if (!isTargetCanonicalCsw(params.canonicalAddress ?? null)) {
       throw new Error('Canonical CSW policy requires the configured canonical smart wallet identity.')
     }
-    if (!isTargetCanonicalCsw(params.executionAddress ?? null)) {
+    const subAccountExecution =
+      params.executionTrack === 'sub-account' || params.executionTrack === 'migration-pending'
+    if (!subAccountExecution && !isTargetCanonicalCsw(params.executionAddress ?? null)) {
       throw new Error('Canonical CSW policy blocked non-canonical execution address.')
     }
-    if (!isAllowedCanonicalSigner(params.signerAddress ?? null)) {
+    if (!subAccountExecution && !isAllowedCanonicalSigner(params.signerAddress ?? null)) {
       throw new Error('Canonical CSW policy requires an allowed owner signer.')
     }
-    if (params.signerType === 'SMART_WALLET' && !isTargetCanonicalCsw(params.signerAddress ?? null)) {
+    if (
+      !subAccountExecution &&
+      params.signerType === 'SMART_WALLET' &&
+      !isTargetCanonicalCsw(params.signerAddress ?? null)
+    ) {
       throw new Error('Canonical CSW policy blocked non-canonical smart-wallet signer usage.')
     }
   }, [
     cdpCanonicalOnlyMode,
     canonicalPolicyApplies,
     params.executionMode,
+    params.executionTrack,
     params.canonicalAddress,
     params.executionAddress,
     params.signerAddress,
@@ -676,6 +685,7 @@ export function useSwapExecution(params: {
     return {
       chainId: Number(swapChainId),
       executionMode: params.executionMode,
+      executionTrack: params.executionTrack ?? null,
       walletClient: params.walletClient,
       publicClient: params.publicClient,
       canonicalAddress: params.canonicalAddress,
@@ -691,6 +701,7 @@ export function useSwapExecution(params: {
     assertCanonicalSwapExecutionContext,
     swapChainId,
     params.executionMode,
+    params.executionTrack,
     params.walletClient,
     params.publicClient,
     params.canonicalAddress,

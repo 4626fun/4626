@@ -26,27 +26,27 @@ import {
   checkDurableRateLimit,
   RATE_LIMITS,
   rateLimitKey,
-} from '../../../../packages/server-core/src/index.js'
+} from '../../../../../packages/server-core/src/index.js'
 
-import { ensureDeploySessionsSchema, hashDeployToken, insertDeploySession, randomDeployToken, randomId } from '../../../../server/_lib/deploy/deploySessions.js'
+import { ensureDeploySessionsSchema, hashDeployToken, insertDeploySession, randomDeployToken, randomId } from '../../../../../server/_lib/deploy/deploySessions.js'
 
-import { ensureWaitlistSchema } from '../../../../server/_lib/onboarding/waitlistSchema.js'
+import { ensureWaitlistSchema } from '../../../../../server/_lib/onboarding/waitlistSchema.js'
 
-import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../server/_lib/db/supabaseAdmin.js'
-import { getOrCreateCreatorAgentWallet } from '../../../../server/_lib/wallet/creatorAgentWallets.js'
-import { readDeployAuthFromRequest } from '../../../../server/_lib/auth/deployAuth.js'
-import { buildDeployPermissionGrant } from '../../../../server/_lib/deploy/erc7712Permissions.js'
-import { getCanonicalOrigin } from '../../../../server/_lib/infra/origin.js'
-import { resolveCoinPartiesAndOwner } from '../../../../server/_lib/onchain/coinParties.js'
-import { charmPoolNotIndexedError, extractCharmCreateVaultPool, isCharmPoolIndexed } from '../../../../server/_lib/deploy/charmVaults.js'
-import { readProfileWalletAuthority } from '../../../../server/_lib/wallet/canonicalWalletResolver.js'
-import { isServerAdminAddress } from '../../../../server/_lib/infra/trust.js'
+import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../../../server/_lib/db/supabaseAdmin.js'
+import { getOrCreateCreatorAgentWallet } from '../../../../../server/_lib/wallet/creatorAgentWallets.js'
+import { readDeployAuthFromRequest } from '../../../../../server/_lib/auth/deployAuth.js'
+import { buildDeployPermissionGrant } from '../../../../../server/_lib/deploy/erc7712Permissions.js'
+import { getCanonicalOrigin } from '../../../../../server/_lib/infra/origin.js'
+import { resolveCoinPartiesAndOwner } from '../../../../../server/_lib/onchain/coinParties.js'
+import { charmPoolNotIndexedError, extractCharmCreateVaultPool, isCharmPoolIndexed } from '../../../../../server/_lib/deploy/charmVaults.js'
+import { readProfileWalletAuthority } from '../../../../../server/_lib/wallet/canonicalWalletResolver.js'
+import { isServerAdminAddress } from '../../../../../server/_lib/infra/trust.js'
 import {
   normalizeSolanaAssetMintOrigin,
-} from '../../../../server/_lib/onchain/solanaOvaultCompatibility.js'
+} from '../../../../../server/_lib/onchain/solanaOvaultCompatibility.js'
 import {
   DEPLOY_VANITY_ALLOWED_LENGTHS,
-} from '../../../../server/_lib/creatorStrategy/catalog.js'
+} from '../../../../../server/_lib/creatorStrategy/catalog.js'
 import {
   DEPLOY_FEATURE_POLICY_MATRIX,
   hasAnyFeatureActivation,
@@ -54,8 +54,8 @@ import {
   missingDeployVanityFeatureHints,
   readPolicyFlagEnabled,
   validateFeatureCompatibility,
-} from '../../../../server/_lib/deploy/featurePolicy/policy.js'
-import { hasContractBytecode } from '../../../../shared/wallet/bytecode.js'
+} from '../../../../../server/_lib/deploy/featurePolicy/policy.js'
+import { hasContractBytecode } from '../../../../../shared/wallet/bytecode.js'
 
 export type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -1100,7 +1100,7 @@ async function checkCanonicalWalletOwnership(params: {
   try {
     await ensureWaitlistSchema(db as any)
   } catch (err) {
-    console.warn('[deploy/session/create] canonical_linkage_db_unavailable (schema)', {
+    console.warn('[deploy/v2/session/create] canonical_linkage_db_unavailable (schema)', {
       smartWallet: params.smartWallet.toLowerCase(),
       error: err instanceof Error ? err.message : String(err),
     })
@@ -1124,7 +1124,7 @@ async function checkCanonicalWalletOwnership(params: {
       LIMIT 1;
     `
   } catch (err) {
-    console.warn('[deploy/session/create] canonical_linkage_db_unavailable (canonicalRow)', {
+    console.warn('[deploy/v2/session/create] canonical_linkage_db_unavailable (canonicalRow)', {
       smartWallet: smartWalletLc,
       error: err instanceof Error ? err.message : String(err),
     })
@@ -1149,7 +1149,7 @@ async function checkCanonicalWalletOwnership(params: {
       profileId: Number(profileId),
     })
   } catch (err) {
-    console.warn('[deploy/session/create] canonical_linkage_db_unavailable (authority)', {
+    console.warn('[deploy/v2/session/create] canonical_linkage_db_unavailable (authority)', {
       smartWallet: smartWalletLc,
       profileId,
       error: err instanceof Error ? err.message : String(err),
@@ -1241,7 +1241,7 @@ export async function validateDeploySessionRequest(params: {
     creatorToken,
   })
   if (!allowlistCheck.allowed) {
-    console.warn('[deploy/session/create] creator_access_denied', {
+    console.warn('[deploy/v2/session/create] creator_access_denied', {
       sessionAddress: sessionAddress.toLowerCase(),
       smartWallet: smartWallet.toLowerCase(),
       creatorToken: creatorToken.toLowerCase(),
@@ -1756,7 +1756,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     if (e instanceof DeploySessionRequestError) {
       return res.status(e.status).json({ success: false, error: e.message } satisfies ApiEnvelope<null>)
     }
-    console.error('deploy/session/create error', e?.message ? String(e.message) : e)
+    console.error('deploy/v2/session/create error', e?.message ? String(e.message) : e)
     return res.status(500).json({ success: false, error: 'create_failed' } satisfies ApiEnvelope<null>)
   }
 }

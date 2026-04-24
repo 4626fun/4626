@@ -200,7 +200,11 @@ export function AccountSetupWorkspaceView(props: {
 
   const zoraStepComplete = zoraLinked
   const walletStepComplete = Boolean(canonicalCswAddress)
-  const signingStepComplete = Boolean(subAccountAddress) || Boolean(me.baseSubAccount) || /4626 signing is enabled|already enabled/i.test(notice ?? '')
+  const signingStepComplete =
+    Boolean(subAccountAddress) ||
+    me.accountSignals.baseSubAccount.registered ||
+    me.accountSignals.executionTrack === 'legacy-owner-install' ||
+    /4626 signing is enabled|already enabled/i.test(notice ?? '')
   const sponsorshipDiagnostic = extractSponsorshipDiagnostic(error)
   const ownerApprovalDiagnostic = extractOwnerApprovalDebugDiagnostic(error)
   // Zora-controlled CBSWs are passkey-owned (P256 keys held in Coinbase
@@ -734,9 +738,9 @@ export function AccountSetupWorkspaceView(props: {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="space-y-1.5">
                     <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">Step 3</div>
-                    <div className="text-base font-medium text-white">Enable 4626 signing on that wallet</div>
+                    <div className="text-base font-medium text-white">Enable 4626 execution and deploy signing</div>
                     <p className="text-sm leading-relaxed text-zinc-400">
-                      This adds the 4626 embedded owner to your existing CSW. Your wallet stays primary while 4626 receives signing permission.
+                      Your canonical CSW stays primary. 4626 finalizes app sub-account execution for user actions and confirms one-time server signer approval for deploy and agent flows.
                     </p>
                   </div>
                   <div className={`rounded-full px-2.5 py-1 text-xs ${
@@ -844,10 +848,9 @@ export function AccountSetupWorkspaceView(props: {
                     </div>
                     <p className="mt-1 text-zinc-300">
                       Your Zora Coinbase Smart Wallet is passkey-controlled. Connecting via
-                      Base Account lets 4626 add itself as a sub-account owner without
-                      requiring an EOA owner to sign <code>addOwnerAddress</code>. Other
-                      wallet types (Coinbase Wallet, MetaMask, Rabby) can&rsquo;t bootstrap
-                      this for a Zora-provisioned wallet.
+                      Base Account lets 4626 complete sub-account setup for in-app execution
+                      and, when accepted, the separate <code>addOwnerAddress</code> approval used by deploy and agent server signing.
+                      Other wallet types (Coinbase Wallet, MetaMask, Rabby) can&rsquo;t bootstrap this for a Zora-provisioned wallet.
                     </p>
                   </div>
                 ) : null}
@@ -899,8 +902,8 @@ export function AccountSetupWorkspaceView(props: {
                   )}
                   <span className="max-w-xl text-xs leading-relaxed text-zinc-500">
                     {connectedOwnerReady
-                      ? 'Server prepares the transaction. If the canonical CSW is selected, 4626 submits one Base smart-wallet approval; otherwise a current owner signs on Base directly. The account refreshes automatically after confirmation.'
-                      : 'Connect a current CSW owner first, then approve 4626 signing.'}
+                      ? 'Server prepares the transaction. If the canonical CSW is selected, 4626 submits the one-time Base smart-wallet approval for deploy/agent server signing. Your app sub-account remains your day-to-day execution address.'
+                      : 'Connect a current CSW owner first, then approve 4626 signing for deploy/agent server flows.'}
                   </span>
                 </div>
                 {!connectedOwnerReady ? (

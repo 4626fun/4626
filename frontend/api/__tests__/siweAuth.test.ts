@@ -33,6 +33,7 @@ const { createPublicClientMock, httpMock } = vi.hoisted(() => ({
 
 vi.mock('../../server/_lib/db/postgres.js', () => ({
   getDb: getDbMock,
+  isDbConfigured: () => true,
 }))
 
 vi.mock('../../server/_lib/onboarding/waitlistSchema.js', () => ({
@@ -81,6 +82,18 @@ function createNonceDb() {
       }
       if (text.includes('create index if not exists auth_nonces_expires_idx')) {
         return { rows: [] }
+      }
+      if (text.includes("to_regclass('public.agent_rate_limits')")) {
+        return { rows: [{ table_exists: true }] }
+      }
+      if (text.includes('create table if not exists agent_rate_limits')) {
+        return { rows: [] }
+      }
+      if (text.includes('create index if not exists agent_rate_limits')) {
+        return { rows: [] }
+      }
+      if (text.includes('insert into agent_rate_limits')) {
+        return { rows: [{ count: 1 }] }
       }
       if (text.includes('insert into auth_nonces')) {
         const nonce = String(values[0])
@@ -344,8 +357,8 @@ describe('siwe auth hardening', () => {
 
     await verifyHandler(req, res)
 
-    expect(res.statusCode).toBe(503)
-    expect(res.body?.error).toBe('Auth service unavailable')
+    expect(res.statusCode).toBe(429)
+    expect(res.body?.error).toBe('Rate limit exceeded')
   })
 
   it('persists canonical CSW when SIWE owner verification proves ownership', async () => {
@@ -381,7 +394,7 @@ describe('siwe auth hardening', () => {
       expect.objectContaining({
         primaryWallet: account.address.toLowerCase(),
         cswAddress: cswAddress.toLowerCase(),
-        baseSubAccount: cswAddress.toLowerCase(),
+        baseSubAccount: null,
       }),
     )
   })

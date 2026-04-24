@@ -28,6 +28,24 @@ vi.mock('../../server/_lib/identity/accountsIdentity.js', () => ({
   buildAccountsMePayload: buildAccountsMePayloadMock,
 }))
 
+function defaultAccountSignals(overrides: Record<string, unknown> = {}) {
+  return {
+    linked: false,
+    canonicalCswAddress: null,
+    baseSubAccount: {
+      address: null,
+      registered: false,
+      isDistinctFromCsw: false,
+    },
+    executionTrack: 'none-yet',
+    privyEmbeddedEoaIsOwnerOfCanonicalCsw: null,
+    creatorCoin: null,
+    zoraHandle: null,
+    lastResolvedAt: null,
+    ...overrides,
+  }
+}
+
 describe('GET /api/accounts/me', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -40,7 +58,7 @@ describe('GET /api/accounts/me', () => {
       privyUserId: 'did:privy:test-user',
       email: 'user@example.com',
       linkedMethods: { email: ['user@example.com'] },
-      accountSignals: { linked: false, canonicalCswAddress: null, creatorCoin: null, zoraHandle: null, lastResolvedAt: null },
+      accountSignals: defaultAccountSignals(),
       score: { points: 10, tier: 1 },
     })
   })
@@ -58,6 +76,12 @@ describe('GET /api/accounts/me', () => {
     expect(res.body?.success).toBe(true)
     expect(res.body?.data?.privyUserId).toBe('did:privy:test-user')
     expect(res.body?.data?.linkedMethods?.email).toEqual(['user@example.com'])
+    expect(res.body?.data?.accountSignals?.executionTrack).toBe('none-yet')
+    expect(res.body?.data?.accountSignals?.baseSubAccount).toEqual({
+      address: null,
+      registered: false,
+      isDistinctFromCsw: false,
+    })
     expect(buildAccountsMePayloadMock).toHaveBeenCalled()
   })
 
@@ -67,7 +91,7 @@ describe('GET /api/accounts/me', () => {
       email: 'user@example.com',
       emailVerified: false,
       linkedMethods: { email: ['user@example.com'], telegram: ['akita'] },
-      accountSignals: { linked: false, canonicalCswAddress: null, creatorCoin: null, zoraHandle: null, lastResolvedAt: null },
+      accountSignals: defaultAccountSignals(),
       score: { points: 10, tier: 1 },
     })
 

@@ -56,6 +56,24 @@ vi.mock('../../server/_lib/identity/identityRecovery.js', () => ({
   isIdentityRecoveryRequiredError: (error: any) => error?.code === 'IDENTITY_RECOVERY_REQUIRED',
 }))
 
+function defaultAccountSignals(overrides: Record<string, unknown> = {}) {
+  return {
+    linked: false,
+    canonicalCswAddress: null,
+    baseSubAccount: {
+      address: null,
+      registered: false,
+      isDistinctFromCsw: false,
+    },
+    executionTrack: 'none-yet',
+    privyEmbeddedEoaIsOwnerOfCanonicalCsw: null,
+    creatorCoin: null,
+    zoraHandle: null,
+    lastResolvedAt: null,
+    ...overrides,
+  }
+}
+
 describe('POST /api/waitlist/bootstrap', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -79,7 +97,7 @@ describe('POST /api/waitlist/bootstrap', () => {
       privyUserId: 'did:privy:test-user',
       email: 'user@example.com',
       linkedMethods: { email: ['user@example.com'] },
-      accountSignals: { linked: false, canonicalCswAddress: null, creatorCoin: null, zoraHandle: null, lastResolvedAt: null },
+      accountSignals: defaultAccountSignals(),
       score: { points: 0, tier: 0 },
     })
   })

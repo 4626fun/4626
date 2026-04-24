@@ -11,7 +11,7 @@ import {
   DeploySessionAccessError,
   loadAuthorizedDeploySession,
   normalizeDeploySessionId,
-} from '../../session/_sessionAccess.js'
+} from './_sessionAccess.js'
 
 type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
