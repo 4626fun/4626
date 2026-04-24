@@ -228,6 +228,9 @@ contract CreatorOracle is OApp {
     event MaxTicksUpdated(int24 oldMaxTicks, int24 newMaxTicks, bool autoTuned);
     event TickWasCapped(int24 rawTick, int24 truncatedTick, int24 movement);
     event ChainlinkFeedSet(address indexed feed);
+    // FIX: M-3 (4626-439) — emitted (via the deprecated entrypoint's revert path in tests / off-chain
+    // call-simulation) so tooling can pick up migrations to broadcastCreatorPriceWithFees.
+    event BroadcastEqualSplitCallAttempted(address indexed caller, uint256 msgValue, uint32[] dstEids);
 
     // ================================
     // ERRORS
@@ -251,6 +254,8 @@ contract CreatorOracle is OApp {
     error InitialPriceTooHigh();
     error InvalidBaseEid();
     error InvalidOriginEid(uint32 srcEid);
+    // FIX: M-3 (4626-439) — signalled when the legacy equal-split broadcast entrypoint is called.
+    error BroadcastEqualSplitDeprecated();
 
     // ================================
     // CONSTRUCTOR
@@ -1113,40 +1118,27 @@ contract CreatorOracle is OApp {
     // ================================
 
     /**
-     * @notice Broadcast price to other chains
-     * @param dstEids Destination chain EIDs
-     * @param options LayerZero options
+     * @notice DEPRECATED — see `broadcastCreatorPriceWithFees`.
+     * @dev FIX: M-3 (4626-439) — the equal-split variant divided `msg.value / dstEids.length`
+     *      and used that as the fee for every destination. LayerZero fees differ per
+     *      destination chain, so any chain whose real fee exceeded the split amount
+     *      reverted mid-loop and the broadcast partially failed, while leaving excess
+     *      ETH stranded on non-refund paths. Rather than carry a footgun with an
+     *      attractive short signature, this entrypoint is now a hard revert that emits
+     *      a migration-signal event against off-chain call simulation. Callers must
+     *      switch to `broadcastCreatorPriceWithFees(dstEids, options, fees)` and quote
+     *      per-destination native fees via `quote()` / `endpoint.quote(...)`.
+     * @custom:deprecated Use `broadcastCreatorPriceWithFees` with per-chain fees.
      */
-    // FIX: M-3 — accept per-chain fees array so different destination chains can have
-    // different LZ messaging costs; previous equal-split approach caused reverts when
-    // one chain's fee exceeded the split amount, and left excess ETH in the contract
-    function broadcastCreatorPrice(uint32[] calldata dstEids, bytes calldata options)
+    function broadcastCreatorPrice(uint32[] calldata dstEids, bytes calldata /* options */)
         external
         payable
-        returns (MessagingReceipt[] memory receipts)
+        returns (MessagingReceipt[] memory /* receipts */)
     {
-        if (creatorPriceUSD <= 0) revert InvalidPrice();
-        if (!isPriceUpdater[msg.sender] && msg.sender != owner()) revert Unauthorized();
-        require(dstEids.length > 0, "No destinations");
-
-        receipts = new MessagingReceipt[](dstEids.length);
-        bytes memory payload = abi.encode(creatorPriceUSD, creatorPriceTimestamp, creatorSymbol);
-
-        uint256 feePerChain = msg.value / dstEids.length;
-        require(feePerChain > 0, "Insufficient fee");
-
-        for (uint256 i = 0; i < dstEids.length; i++) {
-            receipts[i] = _lzSend(dstEids[i], payload, options, MessagingFee(feePerChain, 0), payable(msg.sender));
-        }
-
-        // Refund any remainder from integer division to caller
-        uint256 remainder = msg.value - (feePerChain * dstEids.length);
-        if (remainder > 0) {
-            (bool ok,) = payable(msg.sender).call{value: remainder}("");
-            require(ok, "Refund failed");
-        }
-
-        emit CreatorPriceBroadcast(dstEids, creatorPriceUSD, creatorPriceTimestamp);
+        // Emit before revert so off-chain call-simulation / trace tooling surfaces the
+        // migration signal even though the transaction aborts.
+        emit BroadcastEqualSplitCallAttempted(msg.sender, msg.value, dstEids);
+        revert BroadcastEqualSplitDeprecated();
     }
 
     /**
