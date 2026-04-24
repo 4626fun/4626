@@ -282,9 +282,27 @@ contract SolanaBridgeAdapter is Ownable, ReentrancyGuard {
      * @param token The Base token to bridge
      * @param amount Amount to bridge
      * @param solanaDestination Destination address on Solana (as bytes32)
+     * @return success Always true on the happy path. The underlying
+     *         `IBaseSolanaBridge.bridgeToken` reverts on failure, so reaching
+     *         the return statement implies the bridge submitted the transfer.
+     *         The bool exists so callers (e.g. `SolanaBridgeStrategy`) can
+     *         enforce an explicit success check at the interface boundary
+     *         instead of relying on revert-only semantics, in case a future
+     *         adapter variant introduces a non-reverting failure branch.
+     *         See FIX: H-06 (4626-438).
      */
-    function bridgeToSolana(address token, uint256 amount, bytes32 solanaDestination) external payable nonReentrant {
+    function bridgeToSolana(address token, uint256 amount, bytes32 solanaDestination)
+        external
+        payable
+        nonReentrant
+        returns (bool success)
+    {
         _bridgeToSolanaNoIxs(token, amount, solanaDestination);
+        // FIX: H-06 (4626-438) — reaching this line means `_bridgeToSolanaNoIxs`
+        // completed without revert; its inner `bridgeToken` call reverts on
+        // failure, so success is definitionally `true` here. Returning an
+        // explicit bool lets the strategy layer require a positive signal.
+        return true;
     }
 
     /**

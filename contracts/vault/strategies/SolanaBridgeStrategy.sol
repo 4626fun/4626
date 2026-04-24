@@ -10,7 +10,15 @@ import {IStrategy} from "../../interfaces/IStrategy.sol";
 import {IStrategyValuation} from "../../interfaces/IStrategyValuation.sol";
 
 interface ISolanaBridgeAdapter {
-    function bridgeToSolana(address token, uint256 amount, bytes32 solanaDestination) external payable;
+    // FIX: H-06 (4626-438) — adapter must surface success as an explicit
+    // bool so a misbehaving or upgraded adapter that does not revert on
+    // its internal failure path still cannot make the strategy believe the
+    // bridge succeeded. Combined with H-14's post-call balance check this
+    // gives two independent success signals.
+    function bridgeToSolana(address token, uint256 amount, bytes32 solanaDestination)
+        external
+        payable
+        returns (bool success);
 }
 
 /**
@@ -30,6 +38,8 @@ contract SolanaBridgeStrategy is IStrategy, IStrategyValuation, Ownable, Reentra
     error BridgeConfigMissing();
     // FIX: H-14 — bridge call produced no-op / wrong token movement
     error BridgeCallNotConsumed(uint256 expected, uint256 actual);
+    // FIX: H-06 (4626-438) — adapter reported failure via bool return
+    error BridgeAdapterReportedFailure();
 
     address public immutable vault;
     IERC20 public immutable ASSET;
@@ -140,7 +150,19 @@ contract SolanaBridgeStrategy is IStrategy, IStrategyValuation, Ownable, Reentra
         uint256 balBefore = ASSET.balanceOf(address(this));
 
         ASSET.forceApprove(bridgeAdapter, amount);
-        ISolanaBridgeAdapter(bridgeAdapter).bridgeToSolana{value: msg.value}(address(ASSET), amount, solanaDestination);
+        // FIX: H-06 (4626-438) — adapter now returns an explicit success bool
+        // and the strategy reverts if it reports failure. This closes the gap
+        // where a previous void-return interface would let the caller treat
+        // any non-reverting invocation as success, even though the adapter
+        // (or one of its future variants) might have internally swallowed a
+        // failed branch. H-14's post-call balance check below remains as a
+        // defense-in-depth second signal.
+        bool success = ISolanaBridgeAdapter(bridgeAdapter).bridgeToSolana{value: msg.value}(
+            address(ASSET),
+            amount,
+            solanaDestination
+        );
+        if (!success) revert BridgeAdapterReportedFailure();
 
         uint256 balAfter = ASSET.balanceOf(address(this));
         uint256 consumed = balBefore > balAfter ? balBefore - balAfter : 0;
