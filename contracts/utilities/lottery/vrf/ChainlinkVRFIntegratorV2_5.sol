@@ -101,32 +101,35 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
         require(_owner != address(0), "Invalid owner");
         require(_hubEid != 0, "Invalid hub EID");
         hubEid = _hubEid;
-        // FIX: L-06 (4626-354) — previous implementation truncated block
-        // number to 16 bits, giving only 65,536 distinct nonces and a ~50%
-        // collision probability after ~256 deploys (birthday bound). On Base
-        // (~4s blocks) the same lower-16-bit value recurs every ~2.7 days, so
-        // two redeploys in close succession could land on the same nonce and
-        // collide VRF request-id sequences.
+        // FIX: VRF-04 (4626-441) — deployment-nonce entropy sources.
         //
-        // Derive a 64-bit nonce from keccak(block.number, chainid, this) and
-        // truncate. Collision probability is now ~2^-32 for 65k deploys,
-        // which is safe for any realistic deployment cadence. Previous 16-bit
-        // behaviour is preserved as a comment block above for audit trail.
+        // Derive a 64-bit nonce from keccak(block.number, block.prevrandao,
+        // block.chainid, address(this), msg.sender) and truncate. `prevrandao`
+        // adds constructor-time RANDAO entropy (post-merge PoS randomness) on
+        // top of the structural inputs (block number / chain id / deployed
+        // address / deployer). On non-merge chains `prevrandao` degrades
+        // gracefully to `block.difficulty` under the same opcode, so the
+        // derivation is safe on every EVM-compatible chain this contract
+        // targets. `msg.sender` captures the deploying EOA/factory so two
+        // factories deploying in the same block still land on distinct
+        // bands.
         //
-        // REVIEW FIX (L-06 follow-up): the seeding of `requestCounter` must
-        // preserve the full 64-bit nonce entropy. The previous assignment
-        // `uint64(deploymentNonce) << 48` discarded bits 16..63 of the 64-bit
-        // hash, collapsing the cross-deployment sequence space back to 16
-        // bits — exactly the L-06 regression this fix was meant to close.
-        // We now keep the high 48 bits of the nonce and reserve the low 16
-        // bits (65,535 requests) as sequence headroom before a wrap-around
-        // into the next nonce band. Per-deploy request volume far below 65k
-        // is assumed; if a single integrator ever approaches that cap, a
-        // redeploy rotates to a fresh high-48-bit band. sequenceToRequestId
-        // on the hub keys on `(srcEid, uint64 sequence)`, so the full 64-bit
-        // space is addressable over the wire.
+        // History (L-06 / 4626-354, and its review follow-up) is preserved
+        // at `docs/audits/4626/acceptances/VRF-04-deployment-nonce.md`. The
+        // low-16-bit sequence window + high-48-bit deploy band split is
+        // retained from that fix; only the keccak inputs have widened.
         deploymentNonce = uint64(
-            uint256(keccak256(abi.encode(block.number, block.chainid, address(this))))
+            uint256(
+                keccak256(
+                    abi.encode(
+                        block.number,
+                        block.prevrandao,
+                        block.chainid,
+                        address(this),
+                        msg.sender
+                    )
+                )
+            )
         );
         // Mask off the low 16 bits; they are the per-deploy sequence window
         // and start at zero so the first request_id is deploymentNonce-band + 1.
