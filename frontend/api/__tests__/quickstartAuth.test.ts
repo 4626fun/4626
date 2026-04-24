@@ -52,40 +52,55 @@ const {
   })),
 }))
 
-vi.mock('../../server/auth/_shared.js', () => ({
+vi.mock('../../packages/server-core/src/index.js', () => ({
   handleOptions: vi.fn(() => false),
   setCors: vi.fn(),
   setNoStore: vi.fn(),
   readBoundedJsonObjectBody: readJsonBodyMock,
-  readJsonBody: readJsonBodyMock,
-  readSessionFromRequest: readSessionFromRequestMock,
-}))
-
-vi.mock('../../server/auth/_siwa.js', () => ({
-  readSiwaAgentFromRequest: readSiwaAgentFromRequestMock,
-}))
-
-vi.mock('../../server/_lib/infra/rateLimit.js', () => ({
-  checkRateLimit: checkRateLimitMock,
+  getDb: getDbMock,
+  isDbConfigured: isDbConfiguredMock,
+  readRequestPrincipalAddress: vi.fn((req: any) => {
+    const session = readSessionFromRequestMock(req)
+    if (session?.address) return String(session.address)
+    const siwa = readSiwaAgentFromRequestMock(req)
+    if (siwa?.address) return String(siwa.address)
+    return null
+  }),
+  resolveAuthorizedRequestPrincipal: vi.fn(async (req: any) => {
+    const session = readSessionFromRequestMock(req)
+    if (session?.address) {
+      return {
+        address: String(session.address),
+        type: 'session',
+        canonicalSmartWalletAddress: String(session.address),
+      }
+    }
+    const siwa = readSiwaAgentFromRequestMock(req)
+    if (siwa?.address) {
+      return {
+        address: String(siwa.address),
+        type: 'siwa',
+        agentId: Number(siwa.agentId ?? 0),
+        agentRegistry: String(siwa.agentRegistry ?? ''),
+        chainId: Number(siwa.chainId ?? 8453),
+        canonicalSmartWalletAddress: String(siwa.address),
+      }
+    }
+    return null
+  }),
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
   getClientIp: getClientIpMock,
-  rateLimitKey: rateLimitKeyMock,
   RATE_LIMITS: {
     creatorQuickstart: { windowMs: 60_000, maxRequests: 20 },
   },
-}))
-
-vi.mock('../../server/_lib/db/postgres.js', () => ({
-  getDb: getDbMock,
-  isDbConfigured: isDbConfiguredMock,
+  checkRateLimit: checkRateLimitMock,
+  rateLimitKey: rateLimitKeyMock,
+  enableCswAgent: enableCswAgentMock,
+  getOrCreateCreatorXmtpAgent: getOrCreateCreatorXmtpAgentMock,
 }))
 
 vi.mock('../../server/_lib/wallet/creatorAgentWallets.js', () => ({
   getOrCreateCreatorAgentWallet: getOrCreateCreatorAgentWalletMock,
-}))
-
-vi.mock('../../server/_lib/messaging/creatorXmtpAgents.js', () => ({
-  enableCswAgent: enableCswAgentMock,
-  getOrCreateCreatorXmtpAgent: getOrCreateCreatorXmtpAgentMock,
 }))
 
 vi.mock('../../server/_lib/onchain/coinParties.js', () => ({
@@ -101,12 +116,16 @@ vi.mock('../../server/_lib/wallet/canonicalWalletsSchema.js', () => ({
   ensureCanonicalWalletsSchema: vi.fn(async () => {}),
 }))
 
-vi.mock('viem', () => ({
-  createPublicClient: vi.fn(() => ({
-    readContract: vi.fn(async () => true),
-  })),
-  http: vi.fn(() => ({ transport: 'http' })),
-}))
+vi.mock('viem', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('viem')>()
+  return {
+    ...actual,
+    createPublicClient: vi.fn(() => ({
+      readContract: vi.fn(async () => true),
+    })),
+    http: vi.fn(() => ({ transport: 'http' })),
+  }
+})
 
 vi.mock('viem/chains', () => ({
   base: {},

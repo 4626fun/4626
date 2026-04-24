@@ -15,6 +15,7 @@ import {
   AgentDirectory,
   AgentRegister,
   AgentUriService,
+  AlfaClubLiquidity,
   AuctionBid,
   AuctionDemo,
   CoinManage,
@@ -169,6 +170,14 @@ export const APP_ACCEPTED_ROUTES: PathRouteDef[] = [
   { path: '/agents', element: <AgentDirectory /> },
   { path: '/agents/register', element: <AgentRegister /> },
   { path: '/agents/uri-service', element: <AgentUriService /> },
+  {
+    path: '/alfaclub/liquidity',
+    element: (
+      <SmartWalletRoute>
+        <AlfaClubLiquidity />
+      </SmartWalletRoute>
+    ),
+  },
   { path: '/auction-demo', element: <AuctionDemo /> },
 ]
 

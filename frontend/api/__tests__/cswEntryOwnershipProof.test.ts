@@ -38,7 +38,7 @@ import {
   consumeCswEntryChallenge,
   issueCswEntryChallenge,
   verifyCswWalletSignature,
-} from '../../../server/_lib/zora/cswGateVerification.js'
+} from '../../server/_lib/zora/cswGateVerification.ts'
 
 // -----------------------------------------------------------------------------
 // Fake Db

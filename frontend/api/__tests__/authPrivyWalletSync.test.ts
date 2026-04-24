@@ -6,6 +6,7 @@ import { applyEnv, createMockReq, createMockRes, readSetCookies } from './helper
 const {
   getDbMock,
   checkRateLimitMock,
+  checkDurableRateLimitMock,
   getClientIpMock,
   rateLimitKeyMock,
   ensureWaitlistSchemaMock,
@@ -15,6 +16,7 @@ const {
 } = vi.hoisted(() => ({
   getDbMock: vi.fn(),
   checkRateLimitMock: vi.fn(() => ({ allowed: true, resetAt: Date.now() + 60_000 })),
+  checkDurableRateLimitMock: vi.fn(async () => ({ allowed: true, resetAt: Date.now() + 60_000 })),
   getClientIpMock: vi.fn(() => '127.0.0.1'),
   rateLimitKeyMock: vi.fn((...parts: string[]) => parts.join(':')),
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
@@ -57,6 +59,7 @@ vi.mock('../../packages/server-core/src/index.js', () => ({
     authPrivy: { windowMs: 60_000, maxRequests: 20 },
   },
   checkRateLimit: checkRateLimitMock,
+  checkDurableRateLimit: checkDurableRateLimitMock,
   getClientIp: getClientIpMock,
   rateLimitKey: rateLimitKeyMock,
   classifyLinkedAccounts: vi.fn((user: any) => {
@@ -95,6 +98,7 @@ describe('auth privy wallet sync', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     getDbMock.mockResolvedValue({ sql: vi.fn(async () => ({ rows: [] })) })
+    checkDurableRateLimitMock.mockResolvedValue({ allowed: true, resetAt: Date.now() + 60_000 })
     restoreEnv = applyEnv({
       PRIVY_APP_ID: 'test-privy-id',
       PRIVY_APP_SECRET: 'test-privy-secret',
@@ -147,7 +151,7 @@ describe('auth privy wallet sync', () => {
     expect(res.body?.data?.address).toBe('0x00000000000000000000000000000000000000aa')
   })
 
-  it('keeps wallet sign-in successful when DB sync reports recovery required', async () => {
+  it('returns recovery-required when DB sync reports identity recovery required', async () => {
     syncUserWalletsMock.mockRejectedValueOnce(
       Object.assign(new Error('collision'), {
         code: 'IDENTITY_RECOVERY_REQUIRED',
@@ -162,9 +166,11 @@ describe('auth privy wallet sync', () => {
     const res = createMockRes()
     await handler(req, res)
 
-    expect(res.statusCode).toBe(200)
-    expect(res.body?.success).toBe(true)
-    expect(res.body?.data?.address).toBe('0x00000000000000000000000000000000000000aa')
+    expect(res.statusCode).toBe(409)
+    expect(res.body?.success).toBe(false)
+    expect(String(res.body?.error ?? '')).toContain('Recovery required')
+    expect(res.body?.code).toBe('RECOVERY_REQUIRED_EMAIL_BOUND')
+    expect(res.body?.recoveryRequired).toBe(true)
   })
 
   it('uses persisted canonical wallet when DB sync is throttled', async () => {

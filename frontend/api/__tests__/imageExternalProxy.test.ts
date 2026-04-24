@@ -10,6 +10,11 @@ vi.mock('node:dns/promises', () => ({
   lookup: lookupMock,
 }))
 
+const VALID_PNG_BYTES = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5XW8kAAAAASUVORK5CYII=',
+  'base64',
+)
+
 describe('image external proxy route registration', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -35,9 +40,8 @@ describe('GET /api/image/external', () => {
   })
 
   it('routes through the root catch-all when subpath comes from request URL', async () => {
-    const payload = new Uint8Array([137, 80, 78, 71])
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(payload, {
+      new Response(VALID_PNG_BYTES, {
         status: 200,
         headers: { 'Content-Type': 'image/png' },
       }),
@@ -61,9 +65,8 @@ describe('GET /api/image/external', () => {
   })
 
   it('routes through the root catch-all when request URL has trailing slash', async () => {
-    const payload = new Uint8Array([137, 80, 78, 71])
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(payload, {
+      new Response(VALID_PNG_BYTES, {
         status: 200,
         headers: { 'Content-Type': 'image/png' },
       }),
@@ -185,9 +188,8 @@ describe('GET /api/image/external', () => {
   })
 
   it('proxies image responses with cache headers', async () => {
-    const payload = new Uint8Array([137, 80, 78, 71])
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response(payload, {
+      new Response(VALID_PNG_BYTES, {
         status: 200,
         headers: {
           'Content-Type': 'image/png',

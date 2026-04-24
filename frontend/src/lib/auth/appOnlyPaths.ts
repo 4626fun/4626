@@ -11,6 +11,7 @@ export const APP_ONLY_PATHS = [
   '/auction',
   '/admin',
   '/agents',
+  '/alfaclub',
   '/coin',
   '/creator',
   '/complete-auction',

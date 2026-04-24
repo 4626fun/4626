@@ -2,6 +2,7 @@
  * Unit tests for routerAllowlist.ts
  *
  * Covers:
+<<<<<<< HEAD
  *  - Fail-closed default: when ARCH_B_ROUTER_ALLOWLIST_MODE is unset/empty/
  *    unrecognised, resolveMode() returns 'enforce' and unknown targets are
  *    rejected. This is the H-01/H-02 remediation.
@@ -16,6 +17,14 @@
  *    structured logger.warn carrying the rejected target.
  *  - Case-insensitive matching (mixed-case, all-lowercase).
  *  - Invalid address input handled defensively.
+=======
+ *  - known address (Permit2) → { allowed: true }
+ *  - unknown address, default/enforce mode → { allowed: false, reason } + logger.warn called
+ *  - unknown address, mode=observe → { allowed: true, observed: true } + logger.warn called
+ *  - unknown address, mode=enforce → { allowed: false, reason }
+ *  - case-insensitive matching (mixed-case input matches allowlist lowercase)
+ *  - invalid address input → { allowed: false, reason }
+>>>>>>> 78400866e (feat(alfaclub): introduce AlfaCreatorKeyLPFactory and AlfaCreatorKeyPool contracts)
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -54,6 +63,7 @@ describe('checkRouterTarget', () => {
   })
 
   // -----------------------------------------------------------------------
+<<<<<<< HEAD
   // Fail-closed default (resolveMode() === 'enforce' when env unset)
   //
   // This block is the regression suite for the H-01/H-02 remediation:
@@ -62,6 +72,12 @@ describe('checkRouterTarget', () => {
   // -----------------------------------------------------------------------
 
   describe('fail-closed default (env unset)', () => {
+=======
+  // Default mode (fail closed)
+  // -----------------------------------------------------------------------
+
+  describe('default mode', () => {
+>>>>>>> 78400866e (feat(alfaclub): introduce AlfaCreatorKeyLPFactory and AlfaCreatorKeyPool contracts)
     it('allows Permit2 without logging a warning', () => {
       const result = checkRouterTarget(PERMIT2)
       expect(result).toEqual({ allowed: true })
@@ -74,7 +90,37 @@ describe('checkRouterTarget', () => {
       expect(warnMock).not.toHaveBeenCalled()
     })
 
+<<<<<<< HEAD
     it('rejects unknown targets when the env var is unset (H-01/H-02 regression)', () => {
+=======
+    it('blocks an unknown address', () => {
+      const result = checkRouterTarget(UNKNOWN)
+      expect(result.allowed).toBe(false)
+      expect((result as any).reason).toBeTruthy()
+    })
+
+    it('calls logger.warn for an unknown address', () => {
+      checkRouterTarget(UNKNOWN)
+      expect(warnMock).toHaveBeenCalledTimes(1)
+      expect(warnMock.mock.calls[0][0]).toContain('unknown router target')
+    })
+  })
+
+  // -----------------------------------------------------------------------
+  // Observe mode
+  // -----------------------------------------------------------------------
+
+  describe('observe mode', () => {
+    beforeEach(() => {
+      process.env.ARCH_B_ROUTER_ALLOWLIST_MODE = 'observe'
+    })
+
+    afterEach(() => {
+      delete process.env.ARCH_B_ROUTER_ALLOWLIST_MODE
+    })
+
+    it('allows an unknown address and sets observed: true', () => {
+>>>>>>> 78400866e (feat(alfaclub): introduce AlfaCreatorKeyLPFactory and AlfaCreatorKeyPool contracts)
       const result = checkRouterTarget(UNKNOWN)
       expect(result.allowed).toBe(false)
       expect((result as { allowed: false; reason: string }).reason).toMatch(
@@ -104,9 +150,13 @@ describe('checkRouterTarget', () => {
     it('emits a structured logger.warn naming the rejected target', () => {
       checkRouterTarget(UNKNOWN)
       expect(warnMock).toHaveBeenCalledTimes(1)
+<<<<<<< HEAD
       const [msg, meta] = warnMock.mock.calls[0]
       expect(msg).toContain('Rejected unknown router target')
       expect(meta).toMatchObject({ target: UNKNOWN, mode: 'enforce' })
+=======
+      expect(warnMock.mock.calls[0][0]).toContain('Unknown router target observed')
+>>>>>>> 78400866e (feat(alfaclub): introduce AlfaCreatorKeyLPFactory and AlfaCreatorKeyPool contracts)
     })
   })
 
@@ -237,11 +287,18 @@ describe('checkRouterTarget', () => {
       expect((result as { allowed: false; reason: string }).reason).toBeTruthy()
     })
 
+<<<<<<< HEAD
     it('logs the rejection via logger.warn (audit trail for blocked calls)', () => {
       checkRouterTarget(UNKNOWN)
       expect(warnMock).toHaveBeenCalledTimes(1)
       const [msg] = warnMock.mock.calls[0]
       expect(msg).toContain('Rejected unknown router target')
+=======
+    it('calls logger.warn for a blocked address in enforce mode', () => {
+      checkRouterTarget(UNKNOWN)
+      expect(warnMock).toHaveBeenCalledTimes(1)
+      expect(warnMock.mock.calls[0][0]).toContain('Rejected unknown router target')
+>>>>>>> 78400866e (feat(alfaclub): introduce AlfaCreatorKeyLPFactory and AlfaCreatorKeyPool contracts)
     })
   })
 

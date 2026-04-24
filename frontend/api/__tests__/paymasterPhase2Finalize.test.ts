@@ -37,6 +37,8 @@ const {
   mockReadContract,
   mockGetBytecode,
   mockGetLogs,
+  resolveCreatorStrategyPlanMock,
+  gateRequestedStrategyWeightsMock,
 } = vi.hoisted(() => ({
   readRequestPrincipalMock: vi.fn(),
   getApiContractsMock: vi.fn(),
@@ -47,6 +49,16 @@ const {
   mockReadContract: vi.fn(),
   mockGetBytecode: vi.fn(),
   mockGetLogs: vi.fn(),
+  resolveCreatorStrategyPlanMock: vi.fn(async (..._args: any[]) => ({
+    ok: true,
+    plan: {
+      isPaid: true,
+      charmWeightBps: 3_000n,
+      ajnaWeightBps: 3_000n,
+      solanaWeightBps: 3_000n,
+    },
+  })),
+  gateRequestedStrategyWeightsMock: vi.fn((..._args: any[]) => ({ ok: true })),
 }))
 
 vi.mock('../../server/_lib/auth/requestPrincipal.js', () => ({
@@ -90,6 +102,11 @@ vi.mock('../../server/auth/_shared.js', () => ({
 
 vi.mock('../../server/_lib/onchain/coinParties.js', () => ({
   resolveCoinParties: vi.fn(() => Promise.resolve({ creator: sessionAddress, payoutRecipient: sessionAddress })),
+}))
+
+vi.mock('../../server/_lib/creatorStrategy/resolveWeights.js', () => ({
+  resolveCreatorStrategyPlan: (...args: any[]) => resolveCreatorStrategyPlanMock(...args),
+  gateRequestedStrategyWeights: (...args: any[]) => gateRequestedStrategyWeightsMock(...args),
 }))
 
 vi.mock('../../server/_lib/infra/logger.js', () => ({
@@ -663,6 +680,23 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
   })
 
   it('accepts deployPhase3Strategies with current selector', async () => {
+    isDbConfiguredMock.mockReturnValue(true)
+    getDbMock.mockResolvedValue({
+      query: vi.fn(async (sql: string) => {
+        const text = String(sql).toLowerCase().replace(/\s+/g, ' ')
+        if (text.includes('from allowlist') && text.includes('select address')) {
+          return { rows: [{ address: sessionAddress }] }
+        }
+        if (text.includes('select csw_address from allowlist')) {
+          return { rows: [] }
+        }
+        if (text.includes('from profile_wallets')) return { rows: [] }
+        if (text.includes('from profiles')) return { rows: [{ id: 1 }] }
+        return { rows: [] }
+      }),
+      sql: vi.fn(async () => ({ rows: [] })),
+    })
+
     const BATCHER_ABI = [
       {
         type: 'function',
@@ -899,6 +933,23 @@ describe('paymaster phase2 finalize selector/tuple compatibility', () => {
   })
 
   it('accepts phase3 runtime vault calls after deployPhase3Strategies', async () => {
+    isDbConfiguredMock.mockReturnValue(true)
+    getDbMock.mockResolvedValue({
+      query: vi.fn(async (sql: string) => {
+        const text = String(sql).toLowerCase().replace(/\s+/g, ' ')
+        if (text.includes('from allowlist') && text.includes('select address')) {
+          return { rows: [{ address: sessionAddress }] }
+        }
+        if (text.includes('select csw_address from allowlist')) {
+          return { rows: [] }
+        }
+        if (text.includes('from profile_wallets')) return { rows: [] }
+        if (text.includes('from profiles')) return { rows: [{ id: 1 }] }
+        return { rows: [] }
+      }),
+      sql: vi.fn(async () => ({ rows: [] })),
+    })
+
     const BATCHER_ABI = [
       {
         type: 'function',

@@ -199,7 +199,7 @@ describe('deploy session optimistic concurrency', () => {
     } as any)
     readSiwaAgentFromRequestMock.mockReturnValue(null)
     readDeployAuthFromRequestMock.mockImplementation(() => {
-      const siwa = readSiwaAgentFromRequestMock()
+      const siwa = readSiwaAgentFromRequestMock() as any
       if (siwa?.address) {
         return {
           type: 'siwa' as const,
@@ -209,7 +209,7 @@ describe('deploy session optimistic concurrency', () => {
           chainId: Number(siwa.chainId ?? 8453),
         }
       }
-      const session = readSessionFromRequestMock()
+      const session = readSessionFromRequestMock() as any
       if (session?.address) {
         return {
           type: 'session' as const,

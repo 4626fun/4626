@@ -26,5 +26,6 @@ describe('appOnlyPaths', () => {
     expect(isAppOnlyPath('/deploy')).toBe(true)
     expect(isAppOnlyPath('/continue')).toBe(false)
     expect(isAppOnlyPath('/portfolio/0xabc')).toBe(true)
+    expect(isAppOnlyPath('/alfaclub/liquidity')).toBe(true)
   })
 })

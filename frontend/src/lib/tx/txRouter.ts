@@ -1075,6 +1075,27 @@ export async function buildAndSendApproval(params: {
   return { routing, send }
 }
 
+export async function buildAndSendCalls(params: {
+  context: TxRouterContext
+  calls: TransactionRequest[]
+}): Promise<{ routing: TxRoutingDecision; send: TxRouterSendResult }> {
+  if (!Array.isArray(params.calls) || params.calls.length === 0) {
+    throw new Error('At least one transaction call is required')
+  }
+  const calls = params.calls.map(normalizeTx)
+  const hasBatch = calls.length > 1
+  const hasNativeValue = callsIncludeNativeValue(calls)
+  const baseRouting = detectTxSendMode(params.context)
+  const canonicalRouted = ensureCanonicalOneClickBatchRouting(params.context, baseRouting, hasBatch, hasNativeValue)
+  const routing = ensureDirectEOASendForSwapWithApproval(canonicalRouted, hasBatch)
+  const send = await sendViaMode({
+    context: params.context,
+    decision: routing,
+    calls,
+  })
+  return { routing, send }
+}
+
 export async function buildAndSendSwap(params: {
   context: TxRouterContext
   swapTx: TransactionRequest

@@ -308,7 +308,7 @@ describe('wallet mapping + sync', () => {
     expect(result.canonicalSmartWallet?.address).toBe('0x00000000000000000000000000000000000000f2')
   })
 
-  it('keeps persisted canonical smart wallet even if Privy omits it', async () => {
+  it('does not resurrect persisted canonical smart wallet when Privy omits it', async () => {
     fetchZoraProfileMock.mockResolvedValue({
       linkedWallets: {
         edges: [
@@ -365,10 +365,10 @@ describe('wallet mapping + sync', () => {
     const result = await syncUserWallets(db as any, user as any)
 
     expect(result.profileId).toBe(101)
-    expect(result.canonicalSmartWallet?.address).toBe('0x00000000000000000000000000000000000000f2')
+    expect(result.canonicalSmartWallet?.address).toBe('0x00000000000000000000000000000000000000f1')
   })
 
-  it('prefers canonical from profile_wallets over legacy profile columns', async () => {
+  it('does not override live canonical with profile_wallets entry missing from Privy payload', async () => {
     const calls: string[] = []
     const db = {
       calls,
@@ -418,7 +418,7 @@ describe('wallet mapping + sync', () => {
     const result = await syncUserWallets(db as any, user as any)
 
     expect(result.profileId).toBe(101)
-    expect(result.canonicalSmartWallet?.address).toBe('0x00000000000000000000000000000000000000f2')
+    expect(result.canonicalSmartWallet?.address).toBe('0x00000000000000000000000000000000000000f1')
   })
 
   it('seeds Zora lookup from preprov_zora_handle when available', async () => {

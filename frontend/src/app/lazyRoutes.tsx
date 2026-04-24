@@ -175,6 +175,10 @@ export const ExploreContentPoolAlias = lazyNamed(
   'ExploreContentPoolAlias',
 )
 export const Swap = lazyNamed(() => import('../pages/Swap'), 'Swap')
+export const AlfaClubLiquidity = lazyNamed(
+  () => import('../pages/AlfaClubLiquidity'),
+  'AlfaClubLiquidity',
+)
 export const Positions = lazyNamed(() => import('../pages/Positions'), 'Positions')
 export const Portfolio = lazyNamed(() => import('../pages/Portfolio'), 'Portfolio')
 export const AccountsPage = lazyNamed(() => import('../pages/accounts/AccountsPage'), 'AccountsPage')

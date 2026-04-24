@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest'
 
 import {
   buildShareVanitySkipLogKey,
+  deployTimelineProgressLabel,
+  deriveDeployTimelineProgressState,
   isProviderCollisionErrorMessage,
+  summarizeDeployTimelineProgress,
   shouldEmitShareVanitySkipLog,
 } from './deployVaultSignals'
+import { DEPLOY_TIMELINE_STAGE_INDEX, DEPLOY_TIMELINE_STAGES, type DeployTimelineStageId } from '@/features/deploy-vault/deploySteps'
 
 describe('deploy vault signals', () => {
   it('normalizes provider collision error signatures', () => {
@@ -41,6 +45,74 @@ describe('deploy vault signals', () => {
       suffix: '4626',
     })
     expect(shouldEmitShareVanitySkipLog({ lastKey: keyA, nextKey: keyB })).toBe(true)
+  })
+
+  it('derives timeline chip labels for enabled, done, in-progress, pending, and disabled stages', () => {
+    const isEnabled = (stage: DeployTimelineStageId) => stage !== 'phase2bOvaultMesh'
+
+    const doneState = deriveDeployTimelineProgressState({
+      stage: 'phase1Core',
+      timelineCurrentStage: 'phase2Core',
+      isDone: false,
+      isStageEnabled: isEnabled,
+      stageIndexMap: DEPLOY_TIMELINE_STAGE_INDEX,
+    })
+    expect(doneState).toBe('done')
+    expect(deployTimelineProgressLabel(doneState)).toBe('done')
+
+    const inProgressState = deriveDeployTimelineProgressState({
+      stage: 'phase2Core',
+      timelineCurrentStage: 'phase2Core',
+      isDone: false,
+      isStageEnabled: isEnabled,
+      stageIndexMap: DEPLOY_TIMELINE_STAGE_INDEX,
+    })
+    expect(inProgressState).toBe('inProgress')
+    expect(deployTimelineProgressLabel(inProgressState)).toBe('in progress')
+
+    const pendingState = deriveDeployTimelineProgressState({
+      stage: 'phase4Launch',
+      timelineCurrentStage: 'phase2Core',
+      isDone: false,
+      isStageEnabled: isEnabled,
+      stageIndexMap: DEPLOY_TIMELINE_STAGE_INDEX,
+    })
+    expect(pendingState).toBe('pending')
+    expect(deployTimelineProgressLabel(pendingState)).toBe('pending')
+
+    const disabledState = deriveDeployTimelineProgressState({
+      stage: 'phase2bOvaultMesh',
+      timelineCurrentStage: 'phase2Core',
+      isDone: false,
+      isStageEnabled: isEnabled,
+      stageIndexMap: DEPLOY_TIMELINE_STAGE_INDEX,
+    })
+    expect(disabledState).toBe('disabled')
+    expect(deployTimelineProgressLabel(disabledState)).toBe('not enabled')
+  })
+
+  it('summarizes timeline counts used by the timeline header', () => {
+    const isEnabled = (stage: DeployTimelineStageId) => stage !== 'phase2bOvaultMesh'
+    const stateForStage = (stage: DeployTimelineStageId) =>
+      deriveDeployTimelineProgressState({
+        stage,
+        timelineCurrentStage: 'phase2Core',
+        isDone: false,
+        isStageEnabled: isEnabled,
+        stageIndexMap: DEPLOY_TIMELINE_STAGE_INDEX,
+      })
+
+    const summary = summarizeDeployTimelineProgress({
+      stages: DEPLOY_TIMELINE_STAGES,
+      isStageEnabled: isEnabled,
+      stateForStage,
+    })
+
+    expect(summary).toEqual({
+      enabledStageCount: 8,
+      completedEnabledStageCount: 3,
+      pendingStageCount: 4,
+    })
   })
 })
 

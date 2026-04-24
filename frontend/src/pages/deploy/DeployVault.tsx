@@ -90,7 +90,10 @@ import {
 import { useDeploySessionV2 } from '@/features/deploy-vault/useDeploySessionV2'
 import {
   buildShareVanitySkipLogKey,
+  deployTimelineProgressLabel,
+  deriveDeployTimelineProgressState,
   isProviderCollisionErrorMessage,
+  summarizeDeployTimelineProgress,
   shouldEmitShareVanitySkipLog,
 } from './deployVaultSignals'
 import { 
@@ -107,6 +110,7 @@ import {
   legacyPhaseFromTimelineStage,
   timelineStageFromDeployStep,
   txSlotFromTimelineStage,
+  type DeployTimelineStage,
   type DeployTimelineStageId,
 } from '@/features/deploy-vault/deploySteps'
 
@@ -467,6 +471,14 @@ const DRY_RUN_PHASE_NAMES = new Set<DeploySessionDryRunPhase['name']>([
   'phase3',
   'phase4',
 ])
+
+const DRY_RUN_PHASE_LABELS: Record<DeploySessionDryRunPhase['name'], string> = {
+  phase1: 'Phase 1 core/finalize',
+  phase2Core: 'Phase 2 core',
+  phase2Finalize: 'Phase 2 finalize',
+  phase3: 'Phase 3 strategies',
+  phase4: 'Phase 4 launch',
+}
 
 function normalizeDryRunResponse(data: unknown): DeploySessionDryRunResponse | null {
   if (!data || typeof data !== 'object') return null
@@ -6618,6 +6630,15 @@ function DeployVaultBatcher({
   const hasDeploySignerPath = strictNoEoaEnforced
     ? hasPrivyEmbeddedOwnerSigner || hasPrivySmartWalletOwnerSigner
     : isCoinbaseWalletDirect || connectedEoaOwnerReady || hasPrivyEmbeddedOwnerSigner || hasPrivySmartWalletOwnerSigner
+  const ovaultMeshEnabledForSession =
+    seenOvaultMeshStep ||
+    lastSessionStep.startsWith('ovault_mesh') ||
+    ovaultMeshStatus !== null ||
+    String(deploymentVersion).toLowerCase().includes('ovault')
+  const isTimelineStageEnabled = useCallback(
+    (stage: DeployTimelineStageId) => (stage === 'phase2bOvaultMesh' ? ovaultMeshEnabledForSession : true),
+    [ovaultMeshEnabledForSession],
+  )
   const timelineCurrentStage = useMemo<DeployTimelineStageId | null>(() => {
     if (phase === 'done') return 'cleanup'
     if (lastSessionStep) return timelineStageFromDeployStep(lastSessionStep)
@@ -6628,28 +6649,101 @@ function DeployVaultBatcher({
     if (busy) return 'setupOwnerApproval'
     return null
   }, [busy, lastSessionStep, phase])
-  const timelineProgressText = useCallback(
-    (stage: DeployTimelineStageId) => {
-      const currentIndex = timelineCurrentStage ? DEPLOY_TIMELINE_STAGE_INDEX[timelineCurrentStage] : -1
-      const stageIndex = DEPLOY_TIMELINE_STAGE_INDEX[stage]
-      if (timelineCurrentStage === stage && phase !== 'done') return 'pending…'
-      if (currentIndex >= stageIndex && currentIndex >= 0) return 'done'
-      return '—'
+  const timelineCurrentStageMeta = useMemo<DeployTimelineStage | null>(() => {
+    if (!timelineCurrentStage) return null
+    return DEPLOY_TIMELINE_STAGES.find((stage) => stage.id === timelineCurrentStage) ?? null
+  }, [timelineCurrentStage])
+  const workflowStatus = useMemo(() => {
+    if (phase === 'done') {
+      return {
+        label: 'Completed',
+        detail: 'All deploy phases and cleanup are confirmed on-chain.',
+      }
+    }
+    if (timelineCurrentStageMeta) {
+      return {
+        label: busy ? 'In progress' : 'Awaiting continue tick',
+        detail: `${timelineCurrentStageMeta.label}${lastSessionStep ? ` (${lastSessionStep})` : ''}`,
+      }
+    }
+    if (busy) {
+      return {
+        label: 'Preparing',
+        detail: 'Building deploy calls and validating preflight requirements.',
+      }
+    }
+    return {
+      label: 'Ready',
+      detail: 'Waiting for deploy start.',
+    }
+  }, [busy, lastSessionStep, phase, timelineCurrentStageMeta])
+  const workflowStatusToneClass = useMemo(() => {
+    if (phase === 'done') return 'border-emerald-400/35 bg-emerald-500/12 text-emerald-200'
+    if (busy) return 'border-blue-400/35 bg-blue-500/10 text-blue-200'
+    return 'border-zinc-600 bg-zinc-800/70 text-zinc-200'
+  }, [busy, phase])
+  const timelineProgressState = useCallback(
+    (stage: DeployTimelineStageId): 'disabled' | 'inProgress' | 'done' | 'pending' => {
+      return deriveDeployTimelineProgressState({
+        stage,
+        timelineCurrentStage,
+        isDone: phase === 'done',
+        isStageEnabled: isTimelineStageEnabled,
+        stageIndexMap: DEPLOY_TIMELINE_STAGE_INDEX,
+      })
     },
-    [phase, timelineCurrentStage],
+    [isTimelineStageEnabled, phase, timelineCurrentStage],
+  )
+  const timelineProgressText = useCallback(
+    (stage: DeployTimelineStageId) => deployTimelineProgressLabel(timelineProgressState(stage)),
+    [timelineProgressState],
   )
   const timelineProgressTone = useCallback(
     (stage: DeployTimelineStageId) => {
-      if (timelineCurrentStage === stage && phase !== 'done') return 'text-zinc-100'
-      const currentIndex = timelineCurrentStage ? DEPLOY_TIMELINE_STAGE_INDEX[timelineCurrentStage] : -1
-      const stageIndex = DEPLOY_TIMELINE_STAGE_INDEX[stage]
-      if (currentIndex >= stageIndex && currentIndex >= 0) return 'text-zinc-300'
+      const state = timelineProgressState(stage)
+      if (state === 'disabled') return 'text-zinc-600'
+      if (state === 'inProgress') return 'text-zinc-100'
+      if (state === 'done') return 'text-zinc-300'
       return phase === 'idle' ? 'text-zinc-500' : 'text-zinc-600'
     },
-    [phase, timelineCurrentStage],
+    [phase, timelineProgressState],
   )
-  const showOvaultMeshStage =
-    seenOvaultMeshStep || lastSessionStep.startsWith('ovault_mesh') || String(deploymentVersion).toLowerCase().includes('ovault')
+  const timelineProgressChipTone = useCallback(
+    (stage: DeployTimelineStageId) => {
+      const state = timelineProgressState(stage)
+      if (state === 'disabled') return 'border-zinc-700 bg-zinc-900 text-zinc-500'
+      if (state === 'inProgress') return 'border-blue-400/35 bg-blue-500/15 text-blue-200'
+      if (state === 'done') return 'border-emerald-400/35 bg-emerald-500/15 text-emerald-200'
+      return 'border-zinc-700 bg-zinc-900 text-zinc-400'
+    },
+    [timelineProgressState],
+  )
+  const timelineStageRowTone = useCallback(
+    (stage: DeployTimelineStageId) => {
+      const state = timelineProgressState(stage)
+      if (state === 'disabled') return 'border-white/6 bg-black/5'
+      if (state === 'inProgress') return 'border-blue-400/25 bg-blue-500/8'
+      if (state === 'done') return 'border-emerald-400/20 bg-emerald-500/6'
+      return 'border-white/8 bg-black/10'
+    },
+    [timelineProgressState],
+  )
+  const timelineCompletionSummary = useMemo(() => {
+    const { completedEnabledStageCount, enabledStageCount } = summarizeDeployTimelineProgress({
+      stages: DEPLOY_TIMELINE_STAGES,
+      isStageEnabled: isTimelineStageEnabled,
+      stateForStage: timelineProgressState,
+    })
+    return `${completedEnabledStageCount}/${enabledStageCount} enabled stages completed`
+  }, [isTimelineStageEnabled, timelineProgressState])
+  const timelinePendingCount = useMemo(() => {
+    const { pendingStageCount } = summarizeDeployTimelineProgress({
+      stages: DEPLOY_TIMELINE_STAGES,
+      isStageEnabled: isTimelineStageEnabled,
+      stateForStage: timelineProgressState,
+    })
+    return pendingStageCount
+  }, [isTimelineStageEnabled, timelineProgressState])
 
   return (
     <div className="space-y-3">
@@ -6693,6 +6787,18 @@ function DeployVaultBatcher({
             Addresses are deterministic on Base. BaseScan links activate once each contract is live onchain.
           </div>
           <div className="rounded-md border border-white/10 bg-white/4 px-4 py-3 mb-3 space-y-2 backdrop-blur-sm">
+            <div className="flex items-start justify-between gap-4 text-[11px]">
+              <div className="text-zinc-500">Workflow status</div>
+              <div className="text-right min-w-0">
+                <div
+                  className={`inline-flex items-center justify-center rounded-full border px-2 py-0.5 text-[10px] font-medium mb-1 ${workflowStatusToneClass}`}
+                >
+                  {workflowStatus.label}
+                </div>
+                <div className="text-zinc-500 leading-relaxed break-words">{workflowStatus.detail}</div>
+              </div>
+            </div>
+            <div className="h-px bg-white/8" />
             <div className="flex items-center justify-between gap-4 text-[11px]">
               <div className="text-zinc-500">Initial deposit</div>
               <div className="font-mono text-zinc-200/90">
@@ -6707,14 +6813,25 @@ function DeployVaultBatcher({
           </div>
 
           <div className="rounded-md border border-white/10 bg-white/4 px-4 py-3 mb-3 space-y-2 backdrop-blur-sm">
-            <div className="text-[10px] font-medium text-zinc-500">Canonical stage timeline</div>
-            {DEPLOY_TIMELINE_STAGES.filter((stage) => showOvaultMeshStage || stage.id !== 'phase2bOvaultMesh').map((stage) => (
-              <div key={stage.id} className="flex items-center justify-between gap-3 text-[11px]">
+            <div className="flex items-start justify-between gap-3">
+              <div className="text-[10px] font-medium text-zinc-500">Canonical stage timeline</div>
+              <div className="text-right text-[10px] leading-relaxed">
+                <div className="text-zinc-400">{timelineCompletionSummary}</div>
+                <div className="text-zinc-600">{timelinePendingCount} pending</div>
+              </div>
+            </div>
+            {DEPLOY_TIMELINE_STAGES.map((stage) => (
+              <div
+                key={stage.id}
+                className={`rounded-md border px-3 py-2 flex items-start justify-between gap-3 text-[11px] ${timelineStageRowTone(stage.id)}`}
+              >
                 <div className={timelineProgressTone(stage.id)}>
-                  {stage.label}
-                  {stage.optional ? <span className="ml-1 text-zinc-500">(optional)</span> : null}
+                  <div className="font-medium">{stage.label}</div>
+                  <div className="text-[10px] text-zinc-600">{stage.description}</div>
                 </div>
-                <div className="text-zinc-700">{timelineProgressText(stage.id)}</div>
+                <div className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[10px] font-medium ${timelineProgressChipTone(stage.id)}`}>
+                  {timelineProgressText(stage.id)}
+                </div>
               </div>
             ))}
           </div>
@@ -6759,13 +6876,11 @@ function DeployVaultBatcher({
                 <div className={timelineProgressTone('phase2Finalize')}>Finalize + configure payout and ownership routing</div>
                 <div className="text-zinc-700">{timelineProgressText('phase2Finalize')}</div>
               </div>
-              {showOvaultMeshStage ? (
-                <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
-                  <div className={timelineProgressTone('phase2bOvaultMesh')}>Optional OVault mesh alignment</div>
-                  <div className="text-zinc-700">{timelineProgressText('phase2bOvaultMesh')}</div>
-                </div>
-              ) : null}
-              {showOvaultMeshStage ? (
+              <div className="flex items-center justify-between gap-4 text-[11px] mb-3">
+                <div className={timelineProgressTone('phase2bOvaultMesh')}>OVault mesh preflight + peer wiring</div>
+                <div className="text-zinc-700">{timelineProgressText('phase2bOvaultMesh')}</div>
+              </div>
+              {ovaultMeshEnabledForSession ? (
                 <div className="rounded-md border border-white/10 bg-black/10 px-3 py-3 mb-3 space-y-2">
                   <div className="text-[10px] font-medium text-zinc-500">Solana token lanes</div>
                   <div className="flex items-center justify-between gap-4 text-[11px]">
@@ -6806,7 +6921,11 @@ function DeployVaultBatcher({
                     </>
                   ) : null}
                 </div>
-              ) : null}
+              ) : (
+                <div className="rounded-md border border-white/8 bg-black/5 px-3 py-2 mb-3 text-[10px] text-zinc-600">
+                  OVault mesh lane is disabled for this deployment profile.
+                </div>
+              )}
               <div className="space-y-2">
                 <AddressRow
                   label="Gauge controller"
@@ -6992,7 +7111,7 @@ function DeployVaultBatcher({
               <div className="space-y-1 text-[11px]">
                 {(Array.isArray(dryRunResult.phases) ? dryRunResult.phases : []).map((phaseEntry) => (
                   <div key={phaseEntry.name} className="flex items-center justify-between gap-3">
-                    <div className="text-zinc-400">{phaseEntry.name}</div>
+                    <div className="text-zinc-400">{DRY_RUN_PHASE_LABELS[phaseEntry.name] ?? phaseEntry.name}</div>
                     <div className={phaseEntry.status === 'passed' ? 'text-green-400/80' : 'text-amber-300/80'}>
                       {phaseEntry.status === 'passed'
                         ? `passed (${phaseEntry.callCount} call${phaseEntry.callCount === 1 ? '' : 's'})`

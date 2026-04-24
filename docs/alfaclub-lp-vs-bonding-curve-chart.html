@@ -1,0 +1,517 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AlfaClub Bonding Curve vs ERC20/ERC1155 LP</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #0a0d12;
+        color: #eef2f8;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          linear-gradient(180deg, rgba(10, 13, 18, 0.92), #0a0d12 34%),
+          radial-gradient(circle at top left, rgba(58, 123, 213, 0.18), transparent 32%),
+          radial-gradient(circle at top right, rgba(45, 190, 176, 0.12), transparent 28%);
+      }
+
+      main {
+        width: min(1180px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 28px 0 40px;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(28px, 4vw, 48px);
+        line-height: 1.04;
+        letter-spacing: 0;
+      }
+
+      p {
+        color: #aeb8c8;
+        line-height: 1.55;
+      }
+
+      .top {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 22px;
+        align-items: end;
+      }
+
+      .summary {
+        margin-top: 14px;
+        max-width: 720px;
+      }
+
+      .formula {
+        display: grid;
+        gap: 8px;
+        padding: 14px;
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        background: rgba(255, 255, 255, 0.035);
+        border-radius: 8px;
+        color: #cbd5e1;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        font-size: 12px;
+      }
+
+      .layout {
+        display: grid;
+        grid-template-columns: 290px minmax(0, 1fr);
+        gap: 20px;
+        margin-top: 24px;
+      }
+
+      .panel,
+      .chart-panel,
+      .metric {
+        border: 1px solid rgba(255, 255, 255, 0.09);
+        background: rgba(12, 17, 24, 0.78);
+        border-radius: 8px;
+      }
+
+      .panel {
+        padding: 16px;
+      }
+
+      .panel h2,
+      .chart-panel h2 {
+        margin: 0 0 12px;
+        font-size: 15px;
+        letter-spacing: 0;
+      }
+
+      .field {
+        display: grid;
+        gap: 6px;
+        margin-bottom: 12px;
+      }
+
+      label {
+        color: #8d99aa;
+        font-size: 12px;
+      }
+
+      input,
+      select {
+        width: 100%;
+        min-height: 38px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: #101722;
+        color: #eef2f8;
+        border-radius: 6px;
+        padding: 8px 10px;
+        font: inherit;
+      }
+
+      input:focus,
+      select:focus {
+        outline: 2px solid rgba(75, 146, 255, 0.5);
+        outline-offset: 1px;
+      }
+
+      .chart-panel {
+        padding: 16px;
+        min-width: 0;
+      }
+
+      .legend {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 12px;
+        margin: 4px 0 14px;
+        color: #aeb8c8;
+        font-size: 12px;
+      }
+
+      .key {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+
+      .swatch {
+        width: 18px;
+        height: 3px;
+        border-radius: 999px;
+      }
+
+      svg {
+        display: block;
+        width: 100%;
+        height: auto;
+        min-height: 390px;
+        overflow: visible;
+      }
+
+      .axis,
+      .grid {
+        stroke: rgba(255, 255, 255, 0.12);
+      }
+
+      .grid {
+        stroke-dasharray: 3 5;
+      }
+
+      .tick {
+        fill: #7c8798;
+        font-size: 11px;
+      }
+
+      .line {
+        fill: none;
+        stroke-width: 3;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .metric {
+        padding: 12px;
+      }
+
+      .metric span {
+        display: block;
+        color: #8390a1;
+        font-size: 11px;
+        margin-bottom: 5px;
+      }
+
+      .metric strong {
+        display: block;
+        font-size: 18px;
+        line-height: 1.2;
+      }
+
+      .note {
+        margin: 14px 0 0;
+        color: #8d99aa;
+        font-size: 12px;
+      }
+
+      @media (max-width: 860px) {
+        .top,
+        .layout {
+          grid-template-columns: 1fr;
+        }
+
+        .metrics {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 520px) {
+        main {
+          width: min(100vw - 20px, 1180px);
+          padding-top: 18px;
+        }
+
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="top">
+        <div>
+          <h1>AlfaClub Bonding Curve vs Creator Coin LP</h1>
+          <p class="summary">
+            The primary curve prices keys from total ERC1155 supply. The secondary LP prices
+            keys from ERC20 and key reserves. This chart normalizes the ERC20 side to USDC so
+            the shapes can be compared directly. Defaults are set to AlfaClub room #1043:
+            Social / Casual with 73 keys minted.
+          </p>
+        </div>
+        <div class="formula" aria-label="pricing formulas">
+          <div>Primary buy: sum(i^2) * priceUnit / divisor + fees</div>
+          <div>LP buy: x * q / (y - q), then grossed up by 6.9%</div>
+          <div>LP sell: x * q / (y + q), then reduced by 6.9%</div>
+        </div>
+      </section>
+
+      <section class="layout">
+        <aside class="panel">
+          <h2>Parameters</h2>
+          <div class="field">
+            <label for="tokenId">Example room tokenId</label>
+            <input id="tokenId" type="number" min="1" step="1" value="1043" />
+          </div>
+          <div class="field">
+            <label for="roomType">Room type</label>
+            <select id="roomType">
+              <option value="trading">Trading</option>
+              <option value="social" selected>Social</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="tier">Room tier</label>
+            <select id="tier">
+              <option value="0" selected>Casual</option>
+              <option value="1">Club</option>
+              <option value="2">Exclusive</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="supply">Current key supply</label>
+            <input id="supply" type="number" min="2" max="10000" step="1" value="73" />
+          </div>
+          <div class="field">
+            <label for="poolKeys">LP key reserve</label>
+            <input id="poolKeys" type="number" min="2" max="10000" step="1" value="40" />
+          </div>
+          <div class="field">
+            <label for="lpFee">LP fee %</label>
+            <input id="lpFee" type="number" min="0" max="30" step="0.1" value="6.9" />
+          </div>
+          <div class="field">
+            <label for="creatorCoinUsd">Creator Coin price in USDC</label>
+            <input id="creatorCoinUsd" type="number" min="0.000001" step="0.0001" value="1" />
+          </div>
+          <div class="field">
+            <label for="maxTrade">Max trade size</label>
+            <input id="maxTrade" type="number" min="1" max="200" step="1" value="18" />
+          </div>
+          <p class="note">
+            The LP is auto-seeded at the midpoint of the one-key no-arbitrage range when that
+            range exists. Otherwise it uses the midpoint of the primary one-key bid and ask.
+          </p>
+        </aside>
+
+        <section class="chart-panel">
+          <h2>Total quote by exact key amount</h2>
+          <div class="legend">
+            <span class="key"><span class="swatch" style="background:#4b92ff"></span>Primary buy cost</span>
+            <span class="key"><span class="swatch" style="background:#2dd4bf"></span>LP buy cost</span>
+            <span class="key"><span class="swatch" style="background:#f59e0b"></span>Primary sell proceeds</span>
+            <span class="key"><span class="swatch" style="background:#ef5da8"></span>LP sell proceeds</span>
+          </div>
+          <svg id="chart" viewBox="0 0 820 430" role="img" aria-label="Bonding curve and LP quote chart"></svg>
+          <div class="metrics">
+            <div class="metric">
+              <span>1-key primary ask</span>
+              <strong id="primaryAsk">--</strong>
+            </div>
+            <div class="metric">
+              <span>1-key primary bid</span>
+              <strong id="primaryBid">--</strong>
+            </div>
+            <div class="metric">
+              <span>LP spot seed</span>
+              <strong id="lpSpot">--</strong>
+            </div>
+            <div class="metric">
+              <span>1-key spread fit</span>
+              <strong id="spreadFit">--</strong>
+            </div>
+          </div>
+          <p class="note" id="chartNote"></p>
+        </section>
+      </section>
+    </main>
+
+    <script>
+      const divisorTable = {
+        trading: [4000, 40, 4],
+        social: [400, 40, 4],
+      }
+
+      const feeTable = {
+        trading: 0.1,
+        social: 0.04,
+      }
+
+      const $ = (id) => document.getElementById(id)
+      const chart = $("chart")
+
+      function sumSquaresThrough(n) {
+        if (n <= 0) return 0
+        return (n * (n + 1) * (2 * n + 1)) / 6
+      }
+
+      function curveBasePrice(supply, amount, divisor, isBuy) {
+        if (amount <= 0) return 0
+        const start = isBuy ? supply : supply - amount
+        if (start < 0) return Number.NaN
+        const end = start + amount - 1
+        const sum = sumSquaresThrough(end) - sumSquaresThrough(start - 1)
+        return sum / divisor
+      }
+
+      function primaryBuy(supply, amount, divisor, fee) {
+        return curveBasePrice(supply, amount, divisor, true) * (1 + fee)
+      }
+
+      function primarySell(supply, amount, divisor, fee) {
+        if (amount >= supply) return Number.NaN
+        return curveBasePrice(supply, amount, divisor, false) * (1 - fee)
+      }
+
+      function lpSeedSpot(primaryBidOne, primaryAskOne, keyReserve, lpFeeRate) {
+        const keep = 1 - lpFeeRate
+        const lower = (primaryBidOne * (keyReserve + 1)) / (keyReserve * keep)
+        const upper = (primaryAskOne * (keyReserve - 1) * keep) / keyReserve
+        const feasible = Number.isFinite(lower) && Number.isFinite(upper) && lower <= upper
+        const fallback = (primaryBidOne + primaryAskOne) / 2
+        return {
+          spot: feasible ? (lower + upper) / 2 : fallback,
+          lower,
+          upper,
+          feasible,
+        }
+      }
+
+      function maxFeeInsideSpread(primaryBidOne, primaryAskOne, keyReserve) {
+        const ratio = (primaryBidOne * (keyReserve + 1)) / (primaryAskOne * (keyReserve - 1))
+        if (!Number.isFinite(ratio) || ratio >= 1) return 0
+        return Math.max(0, 1 - Math.sqrt(ratio))
+      }
+
+      function lpBuy(creatorReserve, keyReserve, amount, lpFeeRate, creatorCoinUsd) {
+        if (amount >= keyReserve) return Number.NaN
+        const effective = (creatorReserve * amount) / (keyReserve - amount)
+        return (effective / (1 - lpFeeRate)) * creatorCoinUsd
+      }
+
+      function lpSell(creatorReserve, keyReserve, amount, lpFeeRate, creatorCoinUsd) {
+        const gross = (creatorReserve * amount) / (keyReserve + amount)
+        return gross * (1 - lpFeeRate) * creatorCoinUsd
+      }
+
+      function linePath(points, xScale, yScale) {
+        return points
+          .filter((point) => Number.isFinite(point.y))
+          .map((point, index) => `${index === 0 ? "M" : "L"} ${xScale(point.x).toFixed(2)} ${yScale(point.y).toFixed(2)}`)
+          .join(" ")
+      }
+
+      function formatUsd(value) {
+        if (!Number.isFinite(value)) return "--"
+        if (value >= 1000) return `$${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+        if (value >= 10) return `$${value.toFixed(2)}`
+        return `$${value.toFixed(4)}`
+      }
+
+      function formatNumber(value) {
+        if (!Number.isFinite(value)) return "--"
+        if (value >= 1000) return value.toLocaleString(undefined, { maximumFractionDigits: 0 })
+        if (value >= 10) return value.toFixed(2)
+        return value.toFixed(4)
+      }
+
+      function render() {
+        const roomType = $("roomType").value
+        const tokenId = Math.max(1, Math.floor(Number($("tokenId").value) || 1043))
+        const tier = Number($("tier").value)
+        const supply = Math.max(2, Math.floor(Number($("supply").value) || 73))
+        const poolKeys = Math.max(2, Math.floor(Number($("poolKeys").value) || 40))
+        const lpFeeRate = Math.max(0, Math.min(0.3, Number($("lpFee").value) / 100 || 0.069))
+        const creatorCoinUsd = Math.max(0.000001, Number($("creatorCoinUsd").value) || 1)
+        const maxTradeInput = Math.max(1, Math.floor(Number($("maxTrade").value) || 18))
+        const maxTrade = Math.min(maxTradeInput, supply - 1, poolKeys - 1)
+        const divisor = divisorTable[roomType][tier]
+        const primaryFee = feeTable[roomType]
+        const primaryAskOne = primaryBuy(supply, 1, divisor, primaryFee)
+        const primaryBidOne = primarySell(supply, 1, divisor, primaryFee)
+        const seed = lpSeedSpot(primaryBidOne, primaryAskOne, poolKeys, lpFeeRate)
+        const creatorReserve = (seed.spot * poolKeys) / creatorCoinUsd
+
+        const primaryBuyPoints = []
+        const lpBuyPoints = []
+        const primarySellPoints = []
+        const lpSellPoints = []
+        for (let q = 1; q <= maxTrade; q++) {
+          primaryBuyPoints.push({ x: q, y: primaryBuy(supply, q, divisor, primaryFee) })
+          lpBuyPoints.push({ x: q, y: lpBuy(creatorReserve, poolKeys, q, lpFeeRate, creatorCoinUsd) })
+          primarySellPoints.push({ x: q, y: primarySell(supply, q, divisor, primaryFee) })
+          lpSellPoints.push({ x: q, y: lpSell(creatorReserve, poolKeys, q, lpFeeRate, creatorCoinUsd) })
+        }
+
+        const allValues = [...primaryBuyPoints, ...lpBuyPoints, ...primarySellPoints, ...lpSellPoints]
+          .map((point) => point.y)
+          .filter(Number.isFinite)
+        const yMax = Math.max(...allValues, 1) * 1.08
+        const width = 820
+        const height = 430
+        const margin = { top: 16, right: 24, bottom: 44, left: 70 }
+        const innerWidth = width - margin.left - margin.right
+        const innerHeight = height - margin.top - margin.bottom
+        const xScale = (x) => margin.left + ((x - 1) / Math.max(1, maxTrade - 1)) * innerWidth
+        const yScale = (y) => margin.top + innerHeight - (y / yMax) * innerHeight
+
+        const yTicks = 5
+        const xTicks = Math.min(maxTrade, 8)
+        let svg = ""
+
+        for (let i = 0; i <= yTicks; i++) {
+          const value = (yMax * i) / yTicks
+          const y = yScale(value)
+          svg += `<line class="grid" x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}"></line>`
+          svg += `<text class="tick" x="${margin.left - 10}" y="${y + 4}" text-anchor="end">${formatUsd(value)}</text>`
+        }
+
+        for (let i = 0; i <= xTicks; i++) {
+          const value = 1 + Math.round(((maxTrade - 1) * i) / Math.max(1, xTicks))
+          const x = xScale(value)
+          svg += `<line class="grid" x1="${x}" y1="${margin.top}" x2="${x}" y2="${height - margin.bottom}"></line>`
+          svg += `<text class="tick" x="${x}" y="${height - 18}" text-anchor="middle">${value}</text>`
+        }
+
+        svg += `<line class="axis" x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}"></line>`
+        svg += `<line class="axis" x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}"></line>`
+        svg += `<text class="tick" x="${width / 2}" y="${height - 2}" text-anchor="middle">Exact trade size in keys</text>`
+        svg += `<text class="tick" transform="translate(16 ${height / 2}) rotate(-90)" text-anchor="middle">Total quote in USDC terms</text>`
+
+        const lines = [
+          { points: primaryBuyPoints, color: "#4b92ff" },
+          { points: lpBuyPoints, color: "#2dd4bf" },
+          { points: primarySellPoints, color: "#f59e0b" },
+          { points: lpSellPoints, color: "#ef5da8" },
+        ]
+
+        for (const line of lines) {
+          svg += `<path class="line" d="${linePath(line.points, xScale, yScale)}" stroke="${line.color}"></path>`
+        }
+
+        chart.innerHTML = svg
+
+        $("primaryAsk").textContent = formatUsd(primaryAskOne)
+        $("primaryBid").textContent = formatUsd(primaryBidOne)
+        $("lpSpot").textContent = `${formatNumber(seed.spot)} Creator Coin/key`
+        $("spreadFit").textContent = seed.feasible ? "inside spread" : "outside spread"
+
+        const fitText = seed.feasible
+          ? `One-key LP quotes can sit inside the primary bid/ask spread. Seed spot range: ${formatUsd(seed.lower)} to ${formatUsd(seed.upper)}.`
+          : `One-key LP quotes cannot fit inside the primary bid/ask spread with these reserves and fee. At ${poolKeys} LP keys, the max fee that fits is ${(maxFeeInsideSpread(primaryBidOne, primaryAskOne, poolKeys) * 100).toFixed(2)}%.`
+        $("chartNote").textContent =
+          `Room #${tokenId}: ${fitText} Chart uses divisor ${divisor} and primary fee ${(primaryFee * 100).toFixed(1)}%.`
+      }
+
+      for (const id of ["tokenId", "roomType", "tier", "supply", "poolKeys", "lpFee", "creatorCoinUsd", "maxTrade"]) {
+        $(id).addEventListener("input", render)
+      }
+
+      render()
+    </script>
+  </body>
+</html>

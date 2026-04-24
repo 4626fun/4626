@@ -81,6 +81,9 @@ export const BASE_DEFAULTS = {
 
   // Uniswap V3 factory (Base)
   uniswapV3Factory: addr('33128a8fC17869897dcE68Ed026d694621f6FDfD'),
+
+  // 4626 AlfaClub secondary-market LP factory. Zero until deployed.
+  alfaCreatorKeyLpFactory: addr('0000000000000000000000000000000000000000'),
 } as const
 
 export const AKITA_DEFAULTS = {

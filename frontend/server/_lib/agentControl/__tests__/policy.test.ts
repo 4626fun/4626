@@ -83,6 +83,7 @@ describe('agent control policy', () => {
       allowlist: {
         subsystems: ['telegram_trade'],
         actions: ['trade.buy'],
+        targets: ['0x00000000000000000000000000000000000000aa'],
       },
     })
 
@@ -210,6 +211,10 @@ describe('agent control policy', () => {
       },
       replayGuard: {
         isReplay: (key) => key === 'replay-key-1',
+      },
+      allowlist: {
+        subsystems: ['telegram_trade'],
+        actions: ['trade.buy'],
       },
     })
 

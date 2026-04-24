@@ -205,7 +205,7 @@ describe('ArchBEnrollmentCard', () => {
     setStatus('not_delegated')
     renderCard()
 
-    expect(screen.getByText(/Per-transfer cap/i)).toBeTruthy()
+    expect(screen.getByText(/Per transfer:/i)).toBeTruthy()
     // 0.01 ETH formatted to 4 decimal places
     expect(screen.getByText(/0\.0100 ETH/i)).toBeTruthy()
   })

@@ -9,20 +9,58 @@ export type DeployTimelineStageId =
   | 'phase4Launch'
   | 'cleanup'
 
-export const DEPLOY_TIMELINE_STAGES: ReadonlyArray<{
+export type DeployTimelineStage = {
   id: DeployTimelineStageId
   label: string
-  optional?: boolean
-}> = [
-  { id: 'setupOwnerApproval', label: 'Setup owner approval' },
-  { id: 'phase1Core', label: 'Phase 1 core' },
-  { id: 'phase1Finalize', label: 'Phase 1 finalize' },
-  { id: 'phase2Core', label: 'Phase 2 core' },
-  { id: 'phase2Finalize', label: 'Phase 2 finalize' },
-  { id: 'phase2bOvaultMesh', label: 'Phase 2b ovault mesh', optional: true },
-  { id: 'phase3Strategies', label: 'Phase 3 strategies' },
-  { id: 'phase4Launch', label: 'Phase 4 launch' },
-  { id: 'cleanup', label: 'Cleanup' },
+  description: string
+}
+
+export const DEPLOY_TIMELINE_STAGES: ReadonlyArray<DeployTimelineStage> = [
+  {
+    id: 'setupOwnerApproval',
+    label: 'Setup owner approval',
+    description: 'Install the temporary deploy signer owner so the workflow can proceed server-side.',
+  },
+  {
+    id: 'phase1Core',
+    label: 'Phase 1 core',
+    description: 'Deploy vault core contracts (vault, wrapper, and share token).',
+  },
+  {
+    id: 'phase1Finalize',
+    label: 'Phase 1 finalize',
+    description: 'Finalize phase-1 deployment state before phase-2 routing and launch setup.',
+  },
+  {
+    id: 'phase2Core',
+    label: 'Phase 2 core',
+    description: 'Deploy gauge, CCA strategy, and oracle runtime contracts.',
+  },
+  {
+    id: 'phase2Finalize',
+    label: 'Phase 2 finalize',
+    description: 'Finalize launch inputs and configure payout, routing, and ownership handoff.',
+  },
+  {
+    id: 'phase2bOvaultMesh',
+    label: 'Phase 2b OVault mesh',
+    description: 'Run Solana OVault mesh preflight and peer wiring checks when mesh is enabled.',
+  },
+  {
+    id: 'phase3Strategies',
+    label: 'Phase 3 strategies',
+    description: 'Deploy and register Charm, Ajna, and Solana strategy stack.',
+  },
+  {
+    id: 'phase4Launch',
+    label: 'Phase 4 launch',
+    description: 'Launch the deferred auction and finalize launch state.',
+  },
+  {
+    id: 'cleanup',
+    label: 'Cleanup',
+    description: 'Remove temporary deploy signer and leave canonical ownership clean.',
+  },
 ]
 
 export const DEPLOY_TIMELINE_STAGE_INDEX: Record<DeployTimelineStageId, number> =

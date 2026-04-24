@@ -2,13 +2,61 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { applyEnv, createMockReq, createMockRes } from './helpers'
 
-const { generateResponseMock, getElizaLlmServiceMock } = vi.hoisted(() => ({
-  generateResponseMock: vi.fn(),
-  getElizaLlmServiceMock: vi.fn(),
-}))
+const {
+  generateResponseMock,
+  getElizaLlmServiceMock,
+  readSessionFromRequestMock,
+  checkRateLimitMock,
+  resetRateLimitStateMock,
+  getClientIpMock,
+  rateLimitKeyMock,
+} = vi.hoisted(() => {
+  const counts = new Map<string, number>()
+  return {
+    generateResponseMock: vi.fn(),
+    getElizaLlmServiceMock: vi.fn(),
+    readSessionFromRequestMock: vi.fn(() => ({
+      address: '0x00000000000000000000000000000000000000aa',
+    })),
+    checkRateLimitMock: vi.fn((key: string, config: { maxRequests?: number; windowMs?: number }) => {
+      const maxRequests = Number(config?.maxRequests ?? 20)
+      const next = (counts.get(key) ?? 0) + 1
+      counts.set(key, next)
+      return {
+        allowed: next <= maxRequests,
+        remaining: Math.max(0, maxRequests - next),
+        resetAt: Date.now() + Number(config?.windowMs ?? 60_000),
+      }
+    }),
+    resetRateLimitStateMock: vi.fn(() => counts.clear()),
+    getClientIpMock: vi.fn((req: any) => {
+      const forwarded = req?.headers?.['x-forwarded-for']
+      if (Array.isArray(forwarded)) return String(forwarded[0] ?? '127.0.0.1')
+      if (typeof forwarded === 'string' && forwarded.trim().length > 0) return forwarded.trim()
+      return '127.0.0.1'
+    }),
+    rateLimitKeyMock: vi.fn((...parts: string[]) => parts.join(':')),
+  }
+})
 
 vi.mock('../../server/agent/eliza/llm.js', () => ({
   getElizaLlmService: getElizaLlmServiceMock,
+}))
+
+vi.mock('../../packages/server-core/src/index.js', () => ({
+  RATE_LIMITS: {
+    agentCreative: { windowMs: 60_000, maxRequests: 20 },
+  },
+  checkRateLimit: checkRateLimitMock,
+  createCorrelationId: vi.fn(() => 'creative-correlation-id'),
+  getClientIp: getClientIpMock,
+  handleOptions: vi.fn(() => false),
+  logger: { warn: vi.fn(), error: vi.fn() },
+  rateLimitKey: rateLimitKeyMock,
+  readJsonBody: vi.fn(async (req: any) => req.body ?? null),
+  readSessionFromRequest: readSessionFromRequestMock,
+  setCors: vi.fn(),
+  setNoStore: vi.fn(),
 }))
 
 describe('agent creative handler', () => {
@@ -16,6 +64,7 @@ describe('agent creative handler', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    resetRateLimitStateMock()
     restoreEnv = applyEnv({ AGENT_CREATIVE_ENABLE_LLM: '0' })
     generateResponseMock.mockResolvedValue({
       text: null,

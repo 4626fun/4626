@@ -3,7 +3,8 @@
 import React from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter } from 'react-router-dom'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { act, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react'
 
 import { apiFetch } from '@/lib/api/apiBase'
 
@@ -21,6 +22,7 @@ const collisionStateRef = vi.hoisted(() => ({
 
 vi.mock('framer-motion', () => ({
   AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  useReducedMotion: () => false,
   motion: new Proxy(
     ((component: any) => component) as any,
     {
@@ -161,6 +163,17 @@ function jsonResponse(body: unknown, ok = true, status = 200) {
     status,
     json: async () => body,
   }
+}
+
+function render(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: { retry: false },
+    },
+  })
+
+  return rtlRender(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>)
 }
 
 const WAITLIST_ACCOUNT = {

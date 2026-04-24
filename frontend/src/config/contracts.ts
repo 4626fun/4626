@@ -94,6 +94,10 @@ export const CONTRACTS = {
 
   // Helpers
   strategyDeploymentBatcher: envAddress('VITE_STRATEGY_DEPLOYMENT_BATCHER'), // Deploy with: forge create StrategyDeploymentBatcher
+  alfaCreatorKeyLpFactory: envAddress(
+    'VITE_ALFA_CREATOR_KEY_LP_FACTORY',
+    BASE_DEFAULTS.alfaCreatorKeyLpFactory,
+  )!,
 } as const
 
 // Example: AKITA Vault (first creator)
