@@ -334,6 +334,22 @@ const CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI = [
     inputs: [],
     outputs: [{ type: 'bytes32' }],
   },
+  {
+    type: 'function',
+    name: 'getOVaultRuntimeConfig',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [
+      {
+        type: 'tuple',
+        components: [
+          { name: 'hubComposer', type: 'address' },
+          { name: 'solanaEid', type: 'uint32' },
+          { name: 'enabled', type: 'bool' },
+        ],
+      },
+    ],
+  },
 ] as const
 
 const SOLANA_BRIDGE_ADAPTER_VIEW_ABI = [
@@ -864,6 +880,55 @@ function extractFinalizePhase2Info(data: Hex): {
     }
   }
   return null
+}
+
+function findFinalizePhase2Entry(calls: Array<{ to: Address; value: bigint; data: Hex }>): {
+  call: { to: Address; value: bigint; data: Hex }
+  info: NonNullable<ReturnType<typeof extractFinalizePhase2Info>>
+} | null {
+  for (const call of calls) {
+    const info = extractFinalizePhase2Info(call.data)
+    if (info?.creatorToken) return { call, info }
+  }
+  return null
+}
+
+function isOvaultRequestEnabled(value: unknown): boolean {
+  return isPlainObject(value) && value.enabled === true
+}
+
+function isOvaultRuntimeConfigured(value: unknown): boolean {
+  const tuple = Array.isArray(value) ? value : null
+  const obj = value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+  const hubComposer =
+    typeof obj?.hubComposer === 'string'
+      ? obj.hubComposer
+      : tuple && typeof tuple[0] === 'string'
+        ? tuple[0]
+        : ''
+  const solanaEid =
+    typeof obj?.solanaEid === 'number'
+      ? obj.solanaEid
+      : typeof obj?.solanaEid === 'bigint'
+        ? Number(obj.solanaEid)
+        : tuple && typeof tuple[1] === 'number'
+          ? tuple[1]
+          : tuple && typeof tuple[1] === 'bigint'
+            ? Number(tuple[1])
+            : 0
+  const enabled =
+    typeof obj?.enabled === 'boolean'
+      ? obj.enabled
+      : tuple && typeof tuple[2] === 'boolean'
+        ? tuple[2]
+        : false
+  return (
+    enabled === true &&
+    typeof hubComposer === 'string' &&
+    isAddress(hubComposer) &&
+    getAddress(hubComposer as Address).toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
+    Number(solanaEid) > 0
+  )
 }
 
 async function hasRuntimeCode(publicClient: any, address: Address | null): Promise<boolean> {
@@ -1554,12 +1619,17 @@ async function ensureSolanaRouteReadyForPhase3(params: {
     sharePeerSet: true,
     meshStep: 'ovault_mesh_confirmed' as const,
   }
-  const finalizeCall = params.phase2FinalizeCalls[0]
-  if (!finalizeCall) return defaultStatus
+  const ovaultRequested = isOvaultRequestEnabled(params.solanaOvault)
+  const finalizeEntry = findFinalizePhase2Entry(params.phase2FinalizeCalls)
+  if (!finalizeEntry) {
+    if (ovaultRequested) {
+      throw new Error('Solana preflight failed: OVault mesh requires a decodable finalizePhase2 call.')
+    }
+    return defaultStatus
+  }
 
+  const { call: finalizeCall, info: finalizeInfo } = finalizeEntry
   const batcherAddress = getAddress(finalizeCall.to)
-  const finalizeInfo = extractFinalizePhase2Info(finalizeCall.data)
-  if (!finalizeInfo?.creatorToken) return defaultStatus
   const bridgeToken = finalizeInfo.creatorToken
   const expectedSolanaAmount =
     finalizeInfo.depositAmount && finalizeInfo.depositAmount > 0n
@@ -1575,7 +1645,7 @@ async function ensureSolanaRouteReadyForPhase3(params: {
   const mintCompatibilityHints = readSolanaOvaultMintCompatibilityHintsFromEnv()
   const hasMintCompatibilityHints = Object.values(mintCompatibilityHints).some((value) => value !== null)
 
-  const [adapterRaw, destinationRaw] = await Promise.all([
+  const [adapterRaw, destinationRaw, ovaultRuntimeRaw] = await Promise.all([
     params.publicClient
       .readContract({
         address: batcherAddress,
@@ -1590,13 +1660,32 @@ async function ensureSolanaRouteReadyForPhase3(params: {
         functionName: 'solanaDestination',
       })
       .catch(() => ZERO_BYTES32 as Hex),
+    params.publicClient
+      .readContract({
+        address: batcherAddress,
+        abi: CREATOR_VAULT_BATCHER_SOLANA_VIEW_ABI,
+        functionName: 'getOVaultRuntimeConfig',
+      })
+      .catch(() => null),
   ])
   const adapter = getAddress((adapterRaw as Address) || ZERO_ADDRESS)
   const destination = ((destinationRaw as Hex) || ZERO_BYTES32).toLowerCase()
   const solanaEnabled =
     adapter.toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
     destination !== ZERO_BYTES32.toLowerCase()
-  if (!solanaEnabled) return defaultStatus
+  if (ovaultRequested && !isOvaultRuntimeConfigured(ovaultRuntimeRaw)) {
+    throw new Error(
+      `Solana preflight failed: OVault runtime config is not enabled on deployment batcher ${batcherAddress}.`,
+    )
+  }
+  if (!solanaEnabled) {
+    if (ovaultRequested) {
+      throw new Error(
+        `Solana preflight failed: Solana bridge is not enabled on deployment batcher ${batcherAddress}.`,
+      )
+    }
+    return defaultStatus
+  }
 
   const registered = await params.publicClient
     .readContract({

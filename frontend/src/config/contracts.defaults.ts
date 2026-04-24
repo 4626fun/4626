@@ -34,24 +34,20 @@ export const BASE_DEFAULTS = {
   create2Factory: addr('4e59b44847b379578588920cA78FbF26c0B4956C'),
   create2Deployer: addr('aBf645362104F34D9C3FE48440bE7c99aaDE58E7'),
 
-  // v1.9.2 bytecode store + deployer-from-store (deployed 2026-04-19 via CREATE2
-  // from DeployBaseMainnetDeployer). Supersedes the v1.8.3 pair at
-  // 0xA009B1Bf...12e / 0xFd2657b6...2Ec (kept live for AKITA's pinned v1.8.3 vault
-  // but no longer referenced by new deploys).
-  universalBytecodeStore: addr('019Ba688D58F722c6de3B1F9C0b257eAa03088F6'),
-  universalCreate2DeployerFromStore: addr('BdF5f3496fe4764f9BFBa6c4C87280683Fd0e2A8'),
+  // Split Phase-1 bytecode store + deployer-from-store for the active Base
+  // DeploymentBatcher. Keep these paired with `creatorVaultBatcher`; strict
+  // no-EOA deploy preflight checks the batcher's onchain getters.
+  universalBytecodeStore: addr('4F047c895aA1390D4d0607B2aDDAc54a08ccfe5A'),
+  universalCreate2DeployerFromStore: addr('6f02c56B2F6C213f727D303Ce9E12e6bE1D224f0'),
 
   // AA helpers
   vaultActivationBatcher: addr('7Cc0050842433968cc7A0884d192b61FD0b46F63'),
-  // v1.9.2 deployment batcher (deployed 2026-04-19). Enables the weight-0-skip
-  // behavior for Charm/Ajna/Solana + at-least-1-strategy-required invariant
-  // backing the creator_strategy_features paywall (see
-  // docs/operations/creator-strategy-features.md). Predecessor v1.8.3 batcher
-  // at 0xcDbEeB764df9878ebAFbf101cc818370f703bC4F stays live for AKITA's
-  // already-deployed vault but new deploys go through the v1.9.2 batcher.
-  creatorVaultBatcher: addr('56E8527Bf0824155e1556aED5740366f248B68ca'),
+  // Split Phase-1 deployment batcher for strict no-EOA deploy sessions. It
+  // exposes both core/finalize split selectors, Base↔Solana bridge routing,
+  // and the enabled OVault runtime composer config for day-one mesh preflight.
+  creatorVaultBatcher: addr('32403a647e73e04ae42b02bdd1ade9c88698fd0c'),
   // Optional alias used by env-based rollout/cutover logic.
-  creatorVaultBatcherAutoHandoff: addr('56E8527Bf0824155e1556aED5740366f248B68ca'),
+  creatorVaultBatcherAutoHandoff: addr('32403a647e73e04ae42b02bdd1ade9c88698fd0c'),
 
   // Treasury
   protocolTreasury: addr('7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3'),

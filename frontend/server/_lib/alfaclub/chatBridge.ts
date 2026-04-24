@@ -22,6 +22,7 @@ const DEFAULT_WS_URL = 'wss://ws.alfaclub.app'
 const DEFAULT_POLL_INTERVAL_MS = 6_000
 const DEFAULT_HISTORY_LIMIT = 20
 const DEFAULT_SEND_TIMEOUT_MS = 10_000
+const DEFAULT_HTTP_TIMEOUT_MS = 8_000
 const DEFAULT_WS_CLOSE_DELAY_MS = 75
 const MAX_HISTORY_LIMIT = 100
 const MAX_SEEN_MESSAGE_IDS = 4_000
@@ -57,6 +58,7 @@ export type AlfaClubChatBridgeFlags = {
   pollIntervalMs: number
   historyLimit: number
   sendTimeoutMs: number
+  requestTimeoutMs: number
 }
 
 export type AlfaClubCommandMessage = {
@@ -164,6 +166,11 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
       DEFAULT_SEND_TIMEOUT_MS,
       60_000,
     ),
+    requestTimeoutMs: parsePositiveInt(
+      process.env.ALFACLUB_CHAT_HTTP_TIMEOUT_MS,
+      DEFAULT_HTTP_TIMEOUT_MS,
+      60_000,
+    ),
   }
 }
 
@@ -234,19 +241,31 @@ async function fetchRoomHistory(params: {
   roomId: string
   jwt: string
   limit: number
+  timeoutMs: number
 }): Promise<AlfaClubRoomHistoryMessage[]> {
   const url = new URL('/api/websocket/room_history_paginate', params.apiBaseUrl)
   url.searchParams.set('roomId', params.roomId)
   url.searchParams.set('limit', String(params.limit))
   url.searchParams.set('forward', 'false')
 
-  const response = await fetch(url.toString(), {
-    method: 'GET',
-    headers: {
-      Authorization: `Bearer ${params.jwt}`,
-      Accept: 'application/json',
-    },
-  })
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), params.timeoutMs)
+  let response: Response
+  try {
+    response = await fetch(url.toString(), {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${params.jwt}`,
+        Accept: 'application/json',
+      },
+      signal: controller.signal,
+    })
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`room_history_failed:timeout:${message}`)
+  } finally {
+    clearTimeout(timeout)
+  }
   if (!response.ok) {
     throw new Error(`room_history_failed:${response.status}`)
   }
@@ -259,8 +278,11 @@ async function markReadMessage(params: {
   roomId: string
   jwt: string
   messageDate: number
+  timeoutMs: number
 }): Promise<void> {
   const url = new URL('/api/websocket/update_read_msg', params.apiBaseUrl)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), params.timeoutMs)
   try {
     await fetch(url.toString(), {
       method: 'POST',
@@ -272,9 +294,12 @@ async function markReadMessage(params: {
         roomId: params.roomId,
         messageDate: String(Math.floor(params.messageDate)),
       }),
+      signal: controller.signal,
     })
   } catch {
     // Read receipts are best-effort only.
+  } finally {
+    clearTimeout(timeout)
   }
 }
 
@@ -456,6 +481,7 @@ async function runBridgeTick(
       roomId,
       jwt,
       limit: flags.historyLimit,
+      timeoutMs: flags.requestTimeoutMs,
     })
   } catch (error) {
     const fallbackJwt = (flags.jwt ?? '').trim() || null
@@ -470,6 +496,7 @@ async function runBridgeTick(
       roomId,
       jwt: fallbackJwt as string,
       limit: flags.historyLimit,
+      timeoutMs: flags.requestTimeoutMs,
     })
     jwt = fallbackJwt as string
   }
@@ -533,6 +560,7 @@ async function runBridgeTick(
         roomId,
         jwt,
         messageDate: command.date,
+        timeoutMs: flags.requestTimeoutMs,
       })
     } catch (error) {
       errors.push({

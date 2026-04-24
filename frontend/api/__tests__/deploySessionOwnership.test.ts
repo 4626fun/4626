@@ -50,6 +50,16 @@ const {
   getBytecodeMock: vi.fn(async () => '0x'),
   createPublicClientMock: vi.fn(() => ({
     getBytecode: getBytecodeMock,
+    readContract: vi.fn(async ({ functionName }: any) => {
+      if (functionName === 'getOVaultRuntimeConfig') {
+        return {
+          hubComposer: '0x7dF44cBB93a5191837a988f0Cc441E3811C39CD1',
+          solanaEid: 30168,
+          enabled: true,
+        }
+      }
+      return null
+    }),
   })),
   ensureWaitlistSchemaMock: vi.fn(async () => {}),
 }))
@@ -783,8 +793,33 @@ describe('deploy session ownership guardrails', () => {
       if (text.includes('from profile_wallets') && text.includes('is_canonical_smart_wallet = true')) {
         return { rows: [{ profile_id: 99 }] }
       }
-      if (text.includes('from creator_strategy_features')) {
+      if (text.includes('from creator_strategy_features') && text.includes('select 1')) {
         return { rows: [{}] }
+      }
+      if (text.includes('from creator_strategy_features')) {
+        return {
+          rows: [
+            {
+              id: 1,
+              creator_token: '0x0000000000000000000000000000000000000003',
+              feature_key: 'solana_bridge_strategy',
+              status: 'active',
+              price_usdc_paid: '0',
+              payment_tx_hash: null,
+              payment_from: null,
+              payment_to: null,
+              payment_verified_at: new Date().toISOString(),
+              provisioned_at: null,
+              failed_at: null,
+              refunded_at: null,
+              provisioner_ref: null,
+              failure_reason: null,
+              metadata: {},
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            },
+          ],
+        }
       }
       return { rows: [] }
     })
@@ -794,6 +829,14 @@ describe('deploy session ownership guardrails', () => {
       method: 'POST',
       body: {
         ...makeRequestBody(),
+        phase2FinalizeCalls: [
+          {
+            to: '0x0000000000000000000000000000000000000010',
+            value: '0',
+            data: makeFinalizePhase2Data(),
+          },
+        ],
+        phase3Calls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x12345678' }],
         solanaOvault: {
           enabled: true,
           assetMintOrigin: 'existing',
@@ -821,6 +864,43 @@ describe('deploy session ownership guardrails', () => {
     expect(insertArgs.payload?.solanaOvault?.assetMintOrigin).toBe('existing')
     expect(insertArgs.payload?.solanaOvault?.solanaEid).toBe(30168)
     expect(insertArgs.payload?.solanaOvault?.mintCompatibilityHints).toBeUndefined()
+  })
+
+  it('rejects OVault mesh sessions that cannot run the mesh gate', async () => {
+    const db = makeCanonicalDb()
+    const baseSql = (db.sql as any).getMockImplementation()
+    ;(db.sql as any).mockImplementation(async (strings: TemplateStringsArray) => {
+      const text = strings.join(' ').toLowerCase().replace(/\s+/g, ' ')
+      if (text.includes('from creator_strategy_features')) return { rows: [{}] }
+      return baseSql ? baseSql(strings) : { rows: [] }
+    })
+    getDbMock.mockResolvedValue(db)
+
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        ...makeRequestBody(),
+        phase2FinalizeCalls: [
+          {
+            to: '0x0000000000000000000000000000000000000010',
+            value: '0',
+            data: makeFinalizePhase2Data(),
+          },
+        ],
+        phase3Calls: [],
+        phase4Calls: [],
+        solanaOvault: {
+          enabled: true,
+          assetMintOrigin: 'existing',
+        },
+      },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(400)
+    expect(String(res.body?.error ?? '')).toContain('post-Phase-2 stage')
+    expect(insertDeploySessionMock).not.toHaveBeenCalled()
   })
 
   it('rejects creator-token party allowlist spoofing when caller is not directly allowlisted', async () => {

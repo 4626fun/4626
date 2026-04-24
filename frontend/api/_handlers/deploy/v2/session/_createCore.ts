@@ -238,6 +238,25 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
   },
 ] as const
 
+const CREATOR_VAULT_BATCHER_OVAULT_RUNTIME_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'getOVaultRuntimeConfig',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [
+      {
+        type: 'tuple',
+        components: [
+          { name: 'hubComposer', type: 'address' },
+          { name: 'solanaEid', type: 'uint32' },
+          { name: 'enabled', type: 'bool' },
+        ],
+      },
+    ],
+  },
+] as const
+
 const CREATOR_VAULT_BATCHER_DEPLOY_PHASE2_CORE_ABI = [
   {
     type: 'function',
@@ -526,6 +545,76 @@ function extractFinalizePhase2InvariantInfo(data: Hex): {
     }
   }
   return null
+}
+
+function findFinalizePhase2InvariantCall(calls: Call[]): {
+  call: Call
+  info: {
+    creatorToken: Address
+    shareToken: Address
+    gaugeController: Address
+  }
+} | null {
+  for (const call of calls) {
+    const info = extractFinalizePhase2InvariantInfo(call.data)
+    if (info) return { call, info }
+  }
+  return null
+}
+
+function isOvaultRuntimeConfigured(value: unknown): boolean {
+  const tuple = Array.isArray(value) ? value : null
+  const obj = value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+  const hubComposer =
+    typeof obj?.hubComposer === 'string'
+      ? obj.hubComposer
+      : tuple && typeof tuple[0] === 'string'
+        ? tuple[0]
+        : ''
+  const solanaEid =
+    typeof obj?.solanaEid === 'number'
+      ? obj.solanaEid
+      : typeof obj?.solanaEid === 'bigint'
+        ? Number(obj.solanaEid)
+        : tuple && typeof tuple[1] === 'number'
+          ? tuple[1]
+          : tuple && typeof tuple[1] === 'bigint'
+            ? Number(tuple[1])
+            : 0
+  const enabled =
+    typeof obj?.enabled === 'boolean'
+      ? obj.enabled
+      : tuple && typeof tuple[2] === 'boolean'
+        ? tuple[2]
+        : false
+  return (
+    enabled === true &&
+    typeof hubComposer === 'string' &&
+    isAddress(hubComposer) &&
+    getAddress(hubComposer as Address).toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
+    Number(solanaEid) > 0
+  )
+}
+
+async function assertOvaultRuntimeReadyForBatcher(batcherAddress: Address): Promise<void> {
+  const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+  const publicClient = createPublicClient({
+    chain: base,
+    transport: http(rpc, { timeout: 12_000 }),
+  })
+  const runtime = await publicClient
+    .readContract({
+      address: batcherAddress,
+      abi: CREATOR_VAULT_BATCHER_OVAULT_RUNTIME_VIEW_ABI,
+      functionName: 'getOVaultRuntimeConfig',
+    })
+    .catch(() => null)
+  if (!isOvaultRuntimeConfigured(runtime)) {
+    throw new DeploySessionRequestError(
+      409,
+      `OVault mesh deploy lane requires enabled runtime config on deployment batcher ${batcherAddress}.`,
+    )
+  }
 }
 
 function extractFinalizePhase2ApprovalInfo(data: Hex): {
@@ -1371,6 +1460,26 @@ export async function validateDeploySessionRequest(params: {
     }
   }
   const hasPhase2Finalize = phase2FinalizeCalls.length > 0
+  const ovaultMeshRequested = solanaOvault?.enabled === true
+  const hasPostPhase2Stage = phase3Calls.length > 0 || phase4Calls.length > 0
+  if (ovaultMeshRequested) {
+    if (!hasPostPhase2Stage) {
+      throw new DeploySessionRequestError(
+        400,
+        'OVault mesh deploy lane requires a post-Phase-2 stage so preflight and peer wiring cannot be skipped.',
+      )
+    }
+    const ovaultFinalize = findFinalizePhase2InvariantCall(phase2FinalizeCalls)
+    if (!hasPhase2Finalize || !ovaultFinalize) {
+      throw new DeploySessionRequestError(
+        400,
+        'OVault mesh deploy lane requires a decodable finalizePhase2 call with creator token and ShareOFT addresses.',
+      )
+    }
+    if (params.requireCalls) {
+      await assertOvaultRuntimeReadyForBatcher(getAddress(ovaultFinalize.call.to as Address))
+    }
+  }
   const version = String(params.body.version ?? '').trim()
   const requestedExternalMode = inferPayoutRecipientMode(params.body.expectedPayoutRecipientMode)
   const requestedPayoutRecipient = normalizeAddressOrNull(params.body.expectedPayoutRecipient)

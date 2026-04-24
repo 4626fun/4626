@@ -145,6 +145,7 @@ const DEFAULT_MIN_IDLE_PERCENT_BPS = DEFAULT_IDLE_PERCENT_BPS
 const DEFAULT_SOLANA_MAX_NAV_AGE = 3_600n
 const DEFAULT_SOLANA_MAX_NAV_DELTA_BPS = 500
 const DEFAULT_SOLANA_MIN_BASE_LIQUIDITY_BPS = 1_000
+const DEFAULT_SOLANA_OVAULT_MESH_ENABLED = true
 const DEFAULT_CHARM_EXPECTED_PROTOCOL_FEE_PIPS = 10_000 // 1% in Charm 1e6 precision
 const DEFAULT_CCA_DURATION_BLOCKS = 302_400n // ~7 days on Base at ~2s blocks (must match CCALaunchStrategy defaultDuration)
 const DEFAULT_SHARE_OFT_VANITY_SUFFIX = '4626'
@@ -5633,7 +5634,7 @@ function DeployVaultBatcher({
           phase4Calls: serializeSessionCalls(phase4Calls),
           solanaOvault: {
             // Force deploy-session OVault mesh preflight for Solana strategy wiring.
-            enabled: true,
+            enabled: DEFAULT_SOLANA_OVAULT_MESH_ENABLED,
             assetMintOrigin: 'existing',
           },
           ...(sessionVanityRequest ? { vanity: sessionVanityRequest } : {}),
@@ -6651,6 +6652,7 @@ function DeployVaultBatcher({
     ? hasPrivyEmbeddedOwnerSigner || hasPrivySmartWalletOwnerSigner
     : isCoinbaseWalletDirect || connectedEoaOwnerReady || hasPrivyEmbeddedOwnerSigner || hasPrivySmartWalletOwnerSigner
   const ovaultMeshEnabledForSession =
+    DEFAULT_SOLANA_OVAULT_MESH_ENABLED ||
     seenOvaultMeshStep ||
     lastSessionStep.startsWith('ovault_mesh') ||
     ovaultMeshStatus !== null ||

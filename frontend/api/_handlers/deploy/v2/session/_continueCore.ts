@@ -264,6 +264,25 @@ const CREATOR_VAULT_BATCHER_FINALIZE_PHASE2_LEGACY_ABI = [
   },
 ] as const
 
+const CREATOR_VAULT_BATCHER_OVAULT_RUNTIME_VIEW_ABI = [
+  {
+    type: 'function',
+    name: 'getOVaultRuntimeConfig',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [
+      {
+        type: 'tuple',
+        components: [
+          { name: 'hubComposer', type: 'address' },
+          { name: 'solanaEid', type: 'uint32' },
+          { name: 'enabled', type: 'bool' },
+        ],
+      },
+    ],
+  },
+] as const
+
 function parseBigIntLike(value: unknown): bigint | null {
   if (typeof value === 'bigint') return value >= 0n ? value : null
   if (typeof value === 'number' && Number.isFinite(value) && value >= 0) return BigInt(Math.trunc(value))
@@ -326,6 +345,73 @@ function extractFinalizePhase2Info(data: Hex): {
     }
   }
   return null
+}
+
+function findFinalizePhase2Entry(calls: Array<{ to: Address; value: bigint; data: Hex }>): {
+  call: { to: Address; value: bigint; data: Hex }
+  info: NonNullable<ReturnType<typeof extractFinalizePhase2Info>>
+} | null {
+  for (const call of calls) {
+    const info = extractFinalizePhase2Info(call.data)
+    if (info?.creatorToken) return { call, info }
+  }
+  return null
+}
+
+function isOvaultRequestEnabled(value: unknown): boolean {
+  return isPlainObject(value) && value.enabled === true
+}
+
+function isOvaultRuntimeConfigured(value: unknown): boolean {
+  const tuple = Array.isArray(value) ? value : null
+  const obj = value && typeof value === 'object' ? (value as Record<string, unknown>) : null
+  const hubComposer =
+    typeof obj?.hubComposer === 'string'
+      ? obj.hubComposer
+      : tuple && typeof tuple[0] === 'string'
+        ? tuple[0]
+        : ''
+  const solanaEid =
+    typeof obj?.solanaEid === 'number'
+      ? obj.solanaEid
+      : typeof obj?.solanaEid === 'bigint'
+        ? Number(obj.solanaEid)
+        : tuple && typeof tuple[1] === 'number'
+          ? tuple[1]
+          : tuple && typeof tuple[1] === 'bigint'
+            ? Number(tuple[1])
+            : 0
+  const enabled =
+    typeof obj?.enabled === 'boolean'
+      ? obj.enabled
+      : tuple && typeof tuple[2] === 'boolean'
+        ? tuple[2]
+        : false
+  return (
+    enabled === true &&
+    typeof hubComposer === 'string' &&
+    isAddress(hubComposer) &&
+    getAddress(hubComposer as Address).toLowerCase() !== ZERO_ADDRESS.toLowerCase() &&
+    Number(solanaEid) > 0
+  )
+}
+
+async function assertOvaultRuntimeReady(params: {
+  publicClient: any
+  batcherAddress: Address
+}): Promise<void> {
+  const runtime = await params.publicClient
+    .readContract({
+      address: params.batcherAddress,
+      abi: CREATOR_VAULT_BATCHER_OVAULT_RUNTIME_VIEW_ABI,
+      functionName: 'getOVaultRuntimeConfig',
+    })
+    .catch(() => null)
+  if (!isOvaultRuntimeConfigured(runtime)) {
+    throw new Error(
+      `Solana preflight failed: OVault runtime config is not enabled on deployment batcher ${params.batcherAddress}.`,
+    )
+  }
 }
 
 async function hasRuntimeCode(publicClient: any, address: Address | null): Promise<boolean> {
@@ -394,6 +480,7 @@ async function readPhase2ReplayState(params: {
 
 async function ensureOvaultPreflight(params: {
   req: VercelRequest
+  publicClient: any
   phase2FinalizeCalls: Array<{ to: Address; value: bigint; data: Hex }>
   solanaOvault: unknown
 }): Promise<{
@@ -412,10 +499,21 @@ async function ensureOvaultPreflight(params: {
     sharePeerSet: true,
     meshStep: 'ovault_mesh_confirmed' as const,
   }
-  const finalizeCall = params.phase2FinalizeCalls[0]
-  if (!finalizeCall) return defaultStatus
-  const finalizeInfo = extractFinalizePhase2Info(finalizeCall.data)
-  if (!finalizeInfo?.creatorToken) return defaultStatus
+  const ovaultRequested = isOvaultRequestEnabled(params.solanaOvault)
+  const finalizeEntry = findFinalizePhase2Entry(params.phase2FinalizeCalls)
+  if (!finalizeEntry) {
+    if (ovaultRequested) {
+      throw new Error('Solana preflight failed: OVault mesh requires a decodable finalizePhase2 call.')
+    }
+    return defaultStatus
+  }
+  const { call: finalizeCall, info: finalizeInfo } = finalizeEntry
+  if (ovaultRequested) {
+    await assertOvaultRuntimeReady({
+      publicClient: params.publicClient,
+      batcherAddress: getAddress(finalizeCall.to),
+    })
+  }
 
   const bridgeToken = finalizeInfo.creatorToken
   const expectedSolanaAmount =
@@ -1030,6 +1128,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       }
       const ovault = await ensureOvaultPreflight({
         req,
+        publicClient,
         phase2FinalizeCalls,
         solanaOvault: payload.solanaOvault,
       })

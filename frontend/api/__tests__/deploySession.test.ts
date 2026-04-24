@@ -135,6 +135,13 @@ vi.mock('viem', async (importOriginal) => {
     createPublicClient: vi.fn(() => ({
       readContract: vi.fn(async ({ functionName }: any) => {
         if (functionName === 'ownerCount') return 1n
+        if (functionName === 'getOVaultRuntimeConfig') {
+          return {
+            hubComposer: '0x7dF44cBB93a5191837a988f0Cc441E3811C39CD1',
+            solanaEid: 30168,
+            enabled: true,
+          }
+        }
         return '0xownerbytes'
       }),
     })),
@@ -3287,57 +3294,109 @@ describe('deploy session optimistic concurrency', () => {
     const rec = {
       ...makeDeploySession('phase2_confirmed'),
       payload: {
-        phase2FinalizeCalls: [],
+        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
         phase3Calls: [makeCall('0xphase3target')],
         phase4Calls: [],
         solanaOvault: { enabled: true },
       },
     }
-    getDeploySessionByIdMock.mockResolvedValue(rec)
-    transitionDeploySessionMock.mockResolvedValue(true)
+    const previous = process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
+    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = 'internal-secret'
+    const originalFetch = globalThis.fetch
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          success: true,
+          data: {
+            registered: true,
+            existingMintCompatible: true,
+            depositEligible: true,
+            redeemEligible: true,
+          },
+        }),
+    })) as any
 
-    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
-    const res = createMockRes()
-    await continueHandler(req, res)
+    try {
+      ;(globalThis as any).fetch = fetchMock
+      getDeploySessionByIdMock.mockResolvedValue(rec)
+      transitionDeploySessionMock.mockResolvedValue(true)
 
-    expect(res.statusCode).toBe(200)
-    expect(res.body?.data?.step).toBe('ovault_mesh_confirmed')
-    expect(transitionDeploySessionMock).toHaveBeenCalledTimes(2)
-    expect(transitionDeploySessionMock).toHaveBeenNthCalledWith(
-      1,
-      expect.objectContaining({ id: 'sess_1', fromStep: 'phase2_confirmed', toStep: 'ovault_mesh_sent' }),
-    )
-    expect(transitionDeploySessionMock).toHaveBeenNthCalledWith(
-      2,
-      expect.objectContaining({ id: 'sess_1', fromStep: 'ovault_mesh_sent', toStep: 'ovault_mesh_confirmed' }),
-    )
-    expect(sendUserOperationMock).not.toHaveBeenCalled()
+      const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+      const res = createMockRes()
+      await continueHandler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.data?.step).toBe('ovault_mesh_confirmed')
+      expect(fetchMock).toHaveBeenCalled()
+      expect(transitionDeploySessionMock).toHaveBeenCalledTimes(2)
+      expect(transitionDeploySessionMock).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({ id: 'sess_1', fromStep: 'phase2_confirmed', toStep: 'ovault_mesh_sent' }),
+      )
+      expect(transitionDeploySessionMock).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({ id: 'sess_1', fromStep: 'ovault_mesh_sent', toStep: 'ovault_mesh_confirmed' }),
+      )
+      expect(sendUserOperationMock).not.toHaveBeenCalled()
+    } finally {
+      if (typeof previous === 'undefined') delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
+      else process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = previous
+      ;(globalThis as any).fetch = originalFetch
+    }
   })
 
   it('continue resumes ovault_mesh_sent by confirming mesh without re-sending sent transition', async () => {
     const rec = {
       ...makeDeploySession('ovault_mesh_sent'),
       payload: {
-        phase2FinalizeCalls: [],
+        phase2FinalizeCalls: [makeCall('0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753', '0xphase2finalize')],
         phase3Calls: [makeCall('0xphase3target')],
         phase4Calls: [],
         solanaOvault: { enabled: true },
       },
     }
-    getDeploySessionByIdMock.mockResolvedValue(rec)
-    transitionDeploySessionMock.mockResolvedValue(true)
+    const previous = process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
+    process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = 'internal-secret'
+    const originalFetch = globalThis.fetch
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          success: true,
+          data: {
+            registered: true,
+            existingMintCompatible: true,
+            depositEligible: true,
+            redeemEligible: true,
+          },
+        }),
+    })) as any
 
-    const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
-    const res = createMockRes()
-    await continueHandler(req, res)
+    try {
+      ;(globalThis as any).fetch = fetchMock
+      getDeploySessionByIdMock.mockResolvedValue(rec)
+      transitionDeploySessionMock.mockResolvedValue(true)
 
-    expect(res.statusCode).toBe(200)
-    expect(res.body?.data?.step).toBe('ovault_mesh_confirmed')
-    expect(transitionDeploySessionMock).toHaveBeenCalledTimes(1)
-    expect(transitionDeploySessionMock).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'sess_1', fromStep: 'ovault_mesh_sent', toStep: 'ovault_mesh_confirmed' }),
-    )
-    expect(sendUserOperationMock).not.toHaveBeenCalled()
+      const req = createMockReq({ method: 'POST', body: { sessionId: 'sess_1' } })
+      const res = createMockRes()
+      await continueHandler(req, res)
+
+      expect(res.statusCode).toBe(200)
+      expect(res.body?.data?.step).toBe('ovault_mesh_confirmed')
+      expect(fetchMock).toHaveBeenCalled()
+      expect(transitionDeploySessionMock).toHaveBeenCalledTimes(1)
+      expect(transitionDeploySessionMock).toHaveBeenCalledWith(
+        expect.objectContaining({ id: 'sess_1', fromStep: 'ovault_mesh_sent', toStep: 'ovault_mesh_confirmed' }),
+      )
+      expect(sendUserOperationMock).not.toHaveBeenCalled()
+    } finally {
+      if (typeof previous === 'undefined') delete process.env.DEPLOY_SOLANA_REGISTRATION_SECRET
+      else process.env.DEPLOY_SOLANA_REGISTRATION_SECRET = previous
+      ;(globalThis as any).fetch = originalFetch
+    }
   })
 
   it('continue uses only the internal registration secret during OVault mesh preflight', async () => {

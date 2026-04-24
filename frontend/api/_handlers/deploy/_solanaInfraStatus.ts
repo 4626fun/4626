@@ -568,6 +568,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       blockers.push(`OVault compatibility: ${blocker}`)
     }
   }
+  if (solanaEnabledOnBatcher && !ovaultComposerConfigured) {
+    blockers.push('OVault runtime composer is not configured on the deployment batcher.')
+  }
   if (bridgeLivenessApplies && !bridgeLivenessEvaluation.healthy) {
     for (const livenessBlocker of bridgeLivenessEvaluation.blockers) {
       blockers.push(`Bridge liveness: ${livenessBlocker}`)
