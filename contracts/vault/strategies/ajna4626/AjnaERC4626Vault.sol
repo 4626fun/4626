@@ -121,11 +121,53 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
         return true;
     }
 
+    // =============================================================
+    // ERC-4626 deviation flags (FIX: F-19 / 4626-442)
+    //
+    // Shared convention documented at
+    // `docs/contracts/ERC4626_DEVIATION_FLAGS.md`. Integrators (aggregators,
+    // routers, indexers, audit tooling) can probe any vault for the same
+    // interface and branch on the bitmap.
+    //
+    // This vault sets bits 0 (maxWithdraw under-reports) and 1 (maxRedeem
+    // under-reports) because both methods cap at buffer liquidity rather
+    // than share entitlement, per the F-19 / L-08 design decision.
+    // =============================================================
+
+    /// @notice Bit 0: maxWithdraw intentionally under-reports vs ERC-4626 spec.
+    uint256 public constant DEVIATION_MAX_WITHDRAW_UNDER_REPORTS = 1 << 0;
+
+    /// @notice Bit 1: maxRedeem intentionally under-reports vs ERC-4626 spec.
+    uint256 public constant DEVIATION_MAX_REDEEM_UNDER_REPORTS = 1 << 1;
+
+    /// @notice Bitmap of ERC-4626 deviations this vault knowingly takes.
+    /// @dev FIX: F-19 (4626-442). Stable ABI: bits only change via a new
+    ///      contract deployment. Interpret against the shared convention in
+    ///      `docs/contracts/ERC4626_DEVIATION_FLAGS.md`.
+    ///      Bit 0 = maxWithdraw under-reports (capped at idle buffer)
+    ///      Bit 1 = maxRedeem under-reports (capped at idle buffer)
+    ///      Bits 2..255 = reserved for future deviations; always zero here.
+    function erc4626DeviationFlags() external pure returns (uint256) {
+        return DEVIATION_MAX_WITHDRAW_UNDER_REPORTS | DEVIATION_MAX_REDEEM_UNDER_REPORTS;
+    }
+
+    /// @notice Human-readable convenience: true iff maxWithdraw / maxRedeem
+    ///         are capped below the share-entitlement value.
+    /// @dev Equivalent to `erc4626DeviationFlags() & 0x3 != 0` for this vault.
+    ///      Kept separate from `isPartialWithdrawVault()` for semantic clarity:
+    ///      `isPartialWithdrawVault` is a vault-wide behavioural flag ("partial
+    ///      withdraw semantics"); `hasConservativeMaxWithdraw` is a narrower
+    ///      assertion about the maxWithdraw / maxRedeem return values.
+    function hasConservativeMaxWithdraw() external pure returns (bool) {
+        return true;
+    }
+
     /// @notice Returns the maximum assets withdrawable by `owner` from the idle buffer only.
     /// @dev FIX: F-19 — ERC-4626 deviation: this intentionally understates available assets
     /// because bucket LP positions require an on-chain Ajna pool interaction to liquidate.
     /// Off-chain integrators should query bucket positions separately for total availability.
-    /// See also `isPartialWithdrawVault()`.
+    /// Probe `erc4626DeviationFlags()` (bit 0) or `hasConservativeMaxWithdraw()` to detect
+    /// this deviation without parsing NatSpec. See also `isPartialWithdrawVault()`.
     function maxWithdraw(address owner) public view override returns (uint256) {
         if (AUTH.paused()) return 0;
 
@@ -135,7 +177,8 @@ contract AjnaERC4626Vault is ERC4626, ReentrancyGuard {
     }
 
     /// @notice Returns the maximum shares redeemable by `owner` backed by idle buffer only.
-    /// @dev FIX: F-19 — see maxWithdraw; same ERC-4626 deviation applies.
+    /// @dev FIX: F-19 — see maxWithdraw; same ERC-4626 deviation applies. Probe
+    ///      `erc4626DeviationFlags()` (bit 1) or `hasConservativeMaxWithdraw()` to detect.
     function maxRedeem(address owner) public view override returns (uint256) {
         if (AUTH.paused()) return 0;
 
