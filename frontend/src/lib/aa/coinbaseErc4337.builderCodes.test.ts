@@ -100,7 +100,7 @@ describe('applyBuilderDataSuffixToCalls', () => {
 
   it('does not append suffix to self-calls (CSW owner management)', () => {
     expect(dataSuffix).toBeDefined()
-    const smartWallet = '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef' as Address
+    const smartWallet = '0xab6d5c10b03300326cd7fab7267ae192842967b5' as Address
     const addOwnerData = '0x0f0f3f24000000000000000000000000b2aad65a5402714bf428a66731ae62ba5c45cac0' as Hex
     const selfCalls = [{ to: smartWallet, value: 0n, data: addOwnerData }]
     const result = applyBuilderDataSuffixToCalls(selfCalls, 8453, dataSuffix, false, smartWallet)
@@ -110,7 +110,7 @@ describe('applyBuilderDataSuffixToCalls', () => {
 
   it('still appends suffix to non-self-calls when smartWallet is provided', () => {
     expect(dataSuffix).toBeDefined()
-    const smartWallet = '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef' as Address
+    const smartWallet = '0xab6d5c10b03300326cd7fab7267ae192842967b5' as Address
     const externalTarget = '0x0000000000000000000000000000000000000001' as Address
     const externalCalls = [{ to: externalTarget, value: 0n, data: '0x123456' as Hex }]
     const result = applyBuilderDataSuffixToCalls(externalCalls, 8453, dataSuffix, false, smartWallet)

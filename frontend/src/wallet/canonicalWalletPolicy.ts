@@ -2,21 +2,31 @@ import { getAddress, isAddress } from 'viem'
 
 export type PolicyAddress = `0x${string}`
 
+// Canonical CSW migrated on 2026-04-23 from 0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef
+// to the address below. Rationale: the prior canonical address was created via
+// an unknown device/account (passkey at idx 0 + two nonce-0 EVM owners that
+// have never signed anything). None of the previously-listed "allowed owner
+// EOA" addresses were ever actually on-chain owners of the old canonical —
+// the policy was aspirational. The address below is the CSW that is truly
+// controlled by this project: Privy server wallet is owner at idx 15, the
+// project's admin EOA at idx 1, and historically-used Privy embedded EOA at
+// idx 18. See git blame for full forensics.
 export const TARGET_CANONICAL_CSW_ADDRESS =
-  '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef' as const satisfies PolicyAddress
+  '0xab6d5c10b03300326cd7fab7267ae192842967b5' as const satisfies PolicyAddress
 
 export const TARGET_ALLOWED_OWNER_EOA_ADDRESSES = [
+  // Admin EOA — on-chain owner slot 1 of the canonical CSW.
   '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
+  // Historical co-admin — on-chain owner slot 0 of the canonical CSW.
   '0x6c0ea422aa7bb7e1e17c5257f7023c8f05ddf9b3',
+  // Secondary admin EOA — on-chain owner slot 3 of the canonical CSW.
   '0xd1780fc23f810b52d8cf277e54842dd8803c9361',
-  // Privy embedded EOA owner of the canonical CSW. Verified on-chain via
-  // isOwnerAddress() on the canonical CSW — this EOA signs UserOps that are
-  // executed by the canonical CBSW. Without it, the swap page's
-  // `isReady` gate stays false in canonical mode (handleQuote returns
-  // before even attempting fetchTradeQuote) even though the embedded
-  // wallet is a real, registered owner of the CSW.
+  // Privy embedded EOA (historical). On-chain owner slot 18 of the canonical
+  // CSW. Kept so profiles that onboarded with the previous Privy embedded
+  // wallet still resolve to the canonical identity.
   '0xceca13f2686ed061c57620ecdf67e1b8c0f285e9',
-  // Privy server wallet owner used by Railway XMTP runtime.
+  // Privy server wallet owner used by Railway XMTP runtime. On-chain owner
+  // slot 15 of the canonical CSW. Signs UserOps on the agent's behalf.
   '0x858c01556ec5a8531fa4118d595430ac7fd0baf0',
 ] as const satisfies readonly PolicyAddress[]
 

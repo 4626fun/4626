@@ -23,7 +23,10 @@ import { logger } from '@/lib/observability/logger'
 // Constants
 // ---------------------------------------------------------------------------
 
-export const CANONICAL_SMART_WALLET = '0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef'
+// Canonical smart wallet — kept in sync with TARGET_CANONICAL_CSW_ADDRESS in
+// src/wallet/canonicalWalletPolicy.ts. Migrated 2026-04-23 from
+// 0x4beabd0afbcc2f0440cdef1c3c745d43fae704ef.
+export const CANONICAL_SMART_WALLET = '0xab6d5c10b03300326cd7fab7267ae192842967b5'
 export const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000'
 export const ERC8004_IDENTITY_REGISTRY = '0x8004A169FB4a3325136EB29fA0ceB6D2e539a432'
 // NOTE:
