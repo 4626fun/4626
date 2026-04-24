@@ -1223,7 +1223,7 @@ describe('telegram webhook handler', () => {
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('only available to configured bot operators')
     const buttons = payload.reply_markup?.inline_keyboard?.flat?.() ?? []
-    expect(buttons.some((button: any) => String(button?.callback_data ?? '') === 'menu:linked')).toBe(true)
+    expect(buttons.some((button: any) => String(button?.callback_data ?? '') === 'menu:status')).toBe(true)
   })
 
   it('edits the previous tracked group reply for the same user instead of stacking a new one', async () => {
@@ -1422,7 +1422,7 @@ describe('telegram webhook handler', () => {
     expect(Array.isArray(payload.reply_markup?.inline_keyboard)).toBe(true)
     const buttons = payload.reply_markup.inline_keyboard.flat()
     expect(buttons.some((button: any) => button?.callback_data === 'onboard:begin')).toBe(true)
-    expect(buttons.some((button: any) => button?.callback_data === 'menu:linked')).toBe(true)
+    expect(buttons.some((button: any) => button?.callback_data === 'menu:status')).toBe(true)
     expect(buttons.some((button: any) => button?.callback_data === 'menu:topics')).toBe(true)
     expect(buttons.some((button: any) => button?.callback_data === 'menu:wallet')).toBe(false)
     expect(buttons.some((button: any) => button?.callback_data === 'menu:trade')).toBe(false)
@@ -1470,7 +1470,7 @@ describe('telegram webhook handler', () => {
     expect(String(payload.text ?? '')).toContain('/buy — guided creator-coin buy flow')
     expect(String(payload.text ?? '')).toContain('/sell — guided creator-coin sell flow')
     expect(String(payload.text ?? '')).toContain('/bid — guided auction bid flow')
-    expect(String(payload.text ?? '')).toContain('/linked — account and wallet link status')
+    expect(String(payload.text ?? '')).toContain('/status — account and wallet link status')
     expect(String(payload.text ?? '')).toContain('Use the buttons below for Wallet, Trade, Explore, and Help.')
     expect(String(payload.text ?? '')).not.toContain('<code>/wallet</code>')
     expect(String(payload.text ?? '')).not.toContain('<code>/buy</code>')
@@ -1521,7 +1521,7 @@ describe('telegram webhook handler', () => {
     expect(String(payload.text ?? '')).toContain('wallet setup is not finished yet')
     const flat = (payload.reply_markup?.inline_keyboard ?? []).flat()
     expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:connect')).toBe(true)
-    expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:linked')).toBe(true)
+    expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:status')).toBe(true)
     expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:topics')).toBe(true)
     expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:wallet')).toBe(false)
     expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:trade')).toBe(false)
@@ -1545,9 +1545,9 @@ describe('telegram webhook handler', () => {
     expect(res.statusCode).toBe(200)
     const payload = JSON.parse(String((fetch as any).mock.calls[0][1]?.body ?? '{}'))
     expect(String(payload.text ?? '')).toContain('Groups are for discovery and live context')
-    expect(String(payload.text ?? '')).toContain('/linked')
+    expect(String(payload.text ?? '')).toContain('/status')
     const flat = (payload.reply_markup?.inline_keyboard ?? []).flat()
-    expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:linked')).toBe(true)
+    expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:status')).toBe(true)
     expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'menu:topics')).toBe(true)
     expect(flat.some((b: any) => String(b?.callback_data ?? '') === 'onboard:begin')).toBe(false)
   })
@@ -2276,7 +2276,7 @@ describe('telegram webhook handler', () => {
     expect(String(payload.text ?? '').toLowerCase()).not.toContain('coinbase smart wallet | 4626.fun')
     const buttons = payload.reply_markup.inline_keyboard.flat()
     expect(buttons.some((button: any) => button?.callback_data === 'onboard:begin')).toBe(true)
-    expect(buttons.some((button: any) => button?.callback_data === 'menu:linked')).toBe(true)
+    expect(buttons.some((button: any) => button?.callback_data === 'menu:status')).toBe(true)
     expect(buttons.some((button: any) => button?.callback_data === 'menu:topics')).toBe(true)
   })
 
@@ -2935,7 +2935,7 @@ describe('telegram webhook handler', () => {
     expect(allButtons.some((button: any) => button?.callback_data === 'menu:cre')).toBe(true)
   })
 
-  it('handles /linked as a telegram-native command without delegating to keepr', async () => {
+  it('handles /status as a telegram-native command without delegating to keepr', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
 
     const req = createMockReq({
@@ -2943,7 +2943,7 @@ describe('telegram webhook handler', () => {
       headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
       body: {
         update_id: 12,
-        message: { message_id: 16, text: '/linked', chat: { id: -100123 }, from: { id: 99 } },
+        message: { message_id: 16, text: '/status', chat: { id: -100123 }, from: { id: 99 } },
       },
     })
     const res = createMockRes()
@@ -2964,7 +2964,7 @@ describe('telegram webhook handler', () => {
     expect(allButtons.length).toBeGreaterThan(0)
   })
 
-  it('renders /linked success as a status-first screen when owner is verified', async () => {
+  it('renders /status success as a status-first screen when owner is verified', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
     getTelegramLinkByUserIdMock.mockResolvedValueOnce({
       telegramUserId: '99',
@@ -2987,7 +2987,7 @@ describe('telegram webhook handler', () => {
       headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
       body: {
         update_id: 12_0,
-        message: { message_id: 16, text: '/linked', chat: { id: -100123 }, from: { id: 99 } },
+        message: { message_id: 16, text: '/status', chat: { id: -100123 }, from: { id: 99 } },
       },
     })
     const res = createMockRes()
@@ -3006,7 +3006,7 @@ describe('telegram webhook handler', () => {
     expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:explore')).toBe(false)
   })
 
-  it('renders /linked pending with a finish-wallet CTA in private chat when owner confirmation is incomplete', async () => {
+  it('renders /status pending with a finish-wallet CTA in private chat when owner confirmation is incomplete', async () => {
     const { default: handler } = await import('../_handlers/telegram/_webhook.ts')
     getTelegramLinkByUserIdMock.mockResolvedValueOnce({
       telegramUserId: '99',
@@ -3033,7 +3033,7 @@ describe('telegram webhook handler', () => {
         headers: { 'x-telegram-bot-api-secret-token': 'top-secret' },
         body: {
           update_id: 12_0_1,
-          message: { message_id: 16, text: '/linked', chat: { id: 7726886643 }, from: { id: 99 } },
+          message: { message_id: 16, text: '/status', chat: { id: 7726886643 }, from: { id: 99 } },
         },
       })
       const res = createMockRes()
@@ -3078,7 +3078,7 @@ describe('telegram webhook handler', () => {
     expect(String(payload.text ?? '')).toContain('/link')
     expect(String(payload.text ?? '')).not.toContain('Tap Open Mini App.')
     const allButtons = payload.reply_markup?.inline_keyboard?.flat() ?? []
-    expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:linked')).toBe(true)
+    expect(allButtons.some((button: any) => String(button?.callback_data ?? '') === 'menu:status')).toBe(true)
     expect(allButtons.some((button: any) => String(button?.text ?? '').trim() === 'Check Link Status')).toBe(true)
     expect(allButtons.some((button: any) => String(button?.text ?? '').trim() === 'Open Mini App')).toBe(false)
   })
@@ -3105,7 +3105,7 @@ describe('telegram webhook handler', () => {
     expect(String(payload.text ?? '')).toContain('Welcome to 4626.fun on Telegram')
     const buttons = payload.reply_markup.inline_keyboard.flat()
     expect(buttons.some((button: any) => button?.callback_data === 'onboard:begin')).toBe(true)
-    expect(buttons.some((button: any) => button?.callback_data === 'menu:linked')).toBe(true)
+    expect(buttons.some((button: any) => button?.callback_data === 'menu:status')).toBe(true)
     expect(buttons.some((button: any) => button?.callback_data === 'menu:topics')).toBe(true)
   })
 
@@ -3339,7 +3339,7 @@ describe('telegram webhook handler', () => {
     expect(String(payload.text ?? '')).toContain('Welcome to 4626.fun on Telegram')
     const buttons = payload.reply_markup?.inline_keyboard?.flat?.() ?? []
     expect(buttons.some((button: any) => button?.callback_data === 'onboard:begin')).toBe(true)
-    expect(buttons.some((button: any) => button?.callback_data === 'menu:linked')).toBe(true)
+    expect(buttons.some((button: any) => button?.callback_data === 'menu:status')).toBe(true)
     expect(buttons.some((button: any) => button?.callback_data === 'menu:topics')).toBe(true)
   })
 

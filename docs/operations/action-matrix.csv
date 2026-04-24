@@ -84,7 +84,7 @@
 "agent_command","start","/start","all users","manual","Open bot home","frontend/server/commands/families/keepr.ts"
 "agent_command","help","/help [topic]","all users","manual","Command tree and topics","frontend/server/commands/families/keepr.ts"
 "agent_command","link","/link","all users","manual","Link Telegram to 4626 account","frontend/server/commands/families/keepr.ts"
-"agent_command","linked","/linked","all users","manual","Link status","frontend/server/commands/families/keepr.ts"
+"agent_command","status","/status","all users","manual","Link status","frontend/server/commands/families/keepr.ts"
 "agent_command","id","/id","group","manual","Shows IDs","frontend/server/commands/families/keepr.ts"
 "agent_command","buy","/buy","all users","manual","Guided buy","frontend/server/commands/families/keepr.ts"
 "agent_command","sell","/sell","all users","manual","Guided sell","frontend/server/commands/families/keepr.ts"

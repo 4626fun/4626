@@ -88,7 +88,7 @@ Core loop:
 
 - `/link` - start one-time Telegram + Privy + canonical CSW link
 - `/unlink` - revoke link
-- `/linked` - show linked/qualified status
+- `/status` - show linked/qualified status
 - `/portfolio` - positions, PnL, quick inline sell buttons
 - `/vaults` or `/list` - searchable allowed 4626 vaults with live prices
 - `/auctions` - active CCA auctions with time left
@@ -353,7 +353,7 @@ Output:
 2. bot issues one-time link token
 3. user completes app auth
 4. backend upserts mapping and canonical authority state
-5. `/linked` returns ready state
+5. `/status` returns ready state
 
 ### Buy and sell flow
 

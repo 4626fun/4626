@@ -212,6 +212,86 @@ export async function ensureAlfaClubVigilanteSchema(): Promise<void> {
   await db.sql`CREATE INDEX IF NOT EXISTS alfaclub_publications_creator_idx ON alfaclub_publications(creator_address, created_at DESC);`
   await db.sql`CREATE INDEX IF NOT EXISTS alfaclub_publications_kind_idx ON alfaclub_publications(kind, created_at DESC);`
 
+  // ── alfaclub.chat_ingest ──
+  // Live websocket message ingest across all rooms visible to the auth identity.
+  await db.sql`CREATE SCHEMA IF NOT EXISTS alfaclub;`
+  await db.sql`
+    CREATE TABLE IF NOT EXISTS alfaclub.chat_ingest (
+      room_id           TEXT NOT NULL,
+      message_id        TEXT NOT NULL,
+      sender_address    TEXT NOT NULL,
+      message_text      TEXT NOT NULL DEFAULT '',
+      message_date      TIMESTAMPTZ,
+      source            TEXT NOT NULL DEFAULT 'ws-live',
+      raw_payload_text  TEXT,
+      ingested_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (room_id, message_id)
+    );
+  `
+  try {
+    await db.sql`ALTER TABLE alfaclub.chat_ingest ENABLE ROW LEVEL SECURITY;`
+  } catch {
+    // Ignore.
+  }
+  try {
+    await db.sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_policies
+          WHERE schemaname = 'alfaclub'
+            AND tablename = 'chat_ingest'
+            AND policyname = 'chat_ingest_deny_all'
+        ) THEN
+          CREATE POLICY chat_ingest_deny_all
+            ON alfaclub.chat_ingest FOR ALL TO public USING (false) WITH CHECK (false);
+        END IF;
+      END
+      $$;
+    `
+  } catch {
+    // Ignore.
+  }
+  await db.sql`CREATE INDEX IF NOT EXISTS chat_ingest_room_date_idx ON alfaclub.chat_ingest(room_id, message_date DESC);`
+  await db.sql`CREATE INDEX IF NOT EXISTS chat_ingest_ingested_idx ON alfaclub.chat_ingest(ingested_at DESC);`
+  // One-time safe migration from previous public table name.
+  try {
+    await db.sql`
+      DO $$
+      BEGIN
+        IF to_regclass('public.alfaclub_chat_ingest') IS NOT NULL THEN
+          INSERT INTO alfaclub.chat_ingest (
+            room_id,
+            message_id,
+            sender_address,
+            message_text,
+            message_date,
+            source,
+            raw_payload_text,
+            ingested_at,
+            updated_at
+          )
+          SELECT
+            room_id,
+            message_id,
+            sender_address,
+            message_text,
+            message_date,
+            source,
+            raw_payload_text,
+            ingested_at,
+            updated_at
+          FROM public.alfaclub_chat_ingest
+          ON CONFLICT (room_id, message_id) DO NOTHING;
+        END IF;
+      END
+      $$;
+    `
+  } catch {
+    // Ignore.
+  }
+
   // ── Drain state columns (additive; safe on re-run) ──
   // Tracks autonomous Railway-side submission attempts for 'erc8004-queued'
   // rows. Consumed by [feedbackRelayer.ts](./feedbackRelayer.ts).

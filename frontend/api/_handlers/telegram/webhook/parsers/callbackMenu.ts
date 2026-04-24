@@ -3,7 +3,7 @@ import { asTrimmed } from '../utils.js'
 const MENU_CALLBACK_COMMANDS: Readonly<Record<string, string>> = {
   start: '/start',
   connect: '/link',
-  linked: '/linked',
+  status: '/status',
   wallet: '/wallet',
   buy: '/buy',
   sell: '/sell',
@@ -58,7 +58,7 @@ const CALLBACK_TOASTS: Readonly<Record<string, string>> = {
   'onboard:csw:link': 'CSW check',
   'onboard:csw:create': 'CSW check',
   'menu:connect': 'Connect flow',
-  'menu:linked': 'Link status',
+  'menu:status': 'Link status',
   'menu:rooms': 'Rooms list',
   'cre:status': 'CRE status',
   'cre:auction': 'Auction status',

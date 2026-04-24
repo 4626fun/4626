@@ -122,7 +122,7 @@ Generated from `docs/operations/action-matrix.csv`.
 | `start`              | `/start`                                   | all users                      | manual | Open bot home                              | `frontend/server/commands/families/keepr.ts` |
 | `help`               | `/help [topic]`                            | all users                      | manual | Command tree and topics                    | `frontend/server/commands/families/keepr.ts` |
 | `link`               | `/link`                                    | all users                      | manual | Link Telegram to 4626 account              | `frontend/server/commands/families/keepr.ts` |
-| `linked`             | `/linked`                                  | all users                      | manual | Link status                                | `frontend/server/commands/families/keepr.ts` |
+| `status`             | `/status`                                  | all users                      | manual | Link status                                | `frontend/server/commands/families/keepr.ts` |
 | `id`                 | `/id`                                      | group                          | manual | Shows IDs                                  | `frontend/server/commands/families/keepr.ts` |
 | `buy`                | `/buy`                                     | all users                      | manual | Guided buy                                 | `frontend/server/commands/families/keepr.ts` |
 | `sell`               | `/sell`                                    | all users                      | manual | Guided sell                                | `frontend/server/commands/families/keepr.ts` |

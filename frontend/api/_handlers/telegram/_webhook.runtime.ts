@@ -1275,7 +1275,7 @@ function buildTelegramLinkFlowResponse(params: {
         'After linking, return here and tap Check Link Status.',
       ].join('\n'),
       replyMarkup: {
-        inline_keyboard: [[{ text: 'Check Link Status', callback_data: 'menu:linked' }]],
+        inline_keyboard: [[{ text: 'Check Link Status', callback_data: 'menu:status' }]],
       },
     }
   }
@@ -1383,14 +1383,14 @@ function buildTelegramLinkFlowResponse(params: {
           [{ text: 'Get Base app', url: baseInviteUrl }],
           [openMiniAppButton],
           [
-            { text: 'Check Link Status', callback_data: 'menu:linked' },
+            { text: 'Check Link Status', callback_data: 'menu:status' },
             { text: params.linkButtonText, callback_data: 'menu:connect' },
           ],
         ]
       : [
           [openMiniAppButton],
           [
-            { text: 'Check Link Status', callback_data: 'menu:linked' },
+            { text: 'Check Link Status', callback_data: 'menu:status' },
             { text: params.linkButtonText, callback_data: 'menu:connect' },
           ],
         ]
@@ -1450,7 +1450,7 @@ function buildOnboardingWelcomeReplyMarkup(): Record<string, unknown> {
     inline_keyboard: [
       [{ text: 'Start', callback_data: 'onboard:begin' }],
       [
-        { text: 'Check Link Status', callback_data: 'menu:linked' },
+        { text: 'Check Link Status', callback_data: 'menu:status' },
         { text: menuLabel('help'), callback_data: 'menu:topics' },
       ],
     ],
@@ -1487,7 +1487,7 @@ function buildUnlinkedGroupStartLandingText(): string {
     '<u>In your DM with this bot</u>',
     '/start — home (tap <b>Start</b> to begin onboarding)',
     '/link — continue wallet linking after onboarding',
-    '/linked — check Telegram link and wallet setup',
+    '/status — check Telegram link and wallet setup',
     '',
     'After setup is ready, use /buy, /sell, /bid, and /wallet from Telegram.',
   ].join('\n')
@@ -1506,7 +1506,7 @@ function buildStartLandingText(params: { state: Exclude<TelegramHomeState, 'unli
       '/buy — guided creator-coin buy flow',
       '/sell — guided creator-coin sell flow',
       '/bid — guided auction bid flow',
-      '/linked — account and wallet link status',
+      '/status — account and wallet link status',
       '',
       'Use the buttons below for Wallet, Trade, Explore, and Help.',
     ].join('\n')
@@ -1548,7 +1548,7 @@ function buildStartReplyMarkup(params: { chatId: string; state: TelegramHomeStat
       inline_keyboard: [
         [{ text: 'Finish Wallet Setup', callback_data: 'menu:connect' }],
         [
-          { text: 'Check Link Status', callback_data: 'menu:linked' },
+          { text: 'Check Link Status', callback_data: 'menu:status' },
           { text: menuLabel('help'), callback_data: 'menu:topics' },
         ],
       ],
@@ -1559,7 +1559,7 @@ function buildStartReplyMarkup(params: { chatId: string; state: TelegramHomeStat
     return {
       inline_keyboard: [
         [
-          { text: 'Check Link Status', callback_data: 'menu:linked' },
+          { text: 'Check Link Status', callback_data: 'menu:status' },
           { text: menuLabel('help'), callback_data: 'menu:topics' },
         ],
       ],
@@ -1578,7 +1578,7 @@ function buildFocusedHelpText(): string {
     '🎮 <b>Start Here</b>',
     '├ <code>/start</code> — home and onboarding',
     '├ <code>/link</code> — open the Mini App connect flow',
-    '├ <code>/linked</code> — check link and wallet setup',
+    '├ <code>/status</code> — check link and wallet setup',
     '└ <code>/help all</code> — full command guide',
     '',
     '💼 <b>Core Actions</b>',
@@ -1602,7 +1602,7 @@ function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Re
           { text: menuLabel('explore'), callback_data: 'menu:explore' },
           { text: menuLabel('help'), callback_data: 'menu:topics' },
         ],
-        [{ text: 'Check Link Status', callback_data: 'menu:linked' }],
+        [{ text: 'Check Link Status', callback_data: 'menu:status' }],
       ]
     : [
         [{ text: menuLabel('connect'), callback_data: 'menu:connect' }],
@@ -1610,7 +1610,7 @@ function buildHelpReplyMarkup(params: { chatId: string; isLinked: boolean }): Re
           { text: menuLabel('explore'), callback_data: 'menu:explore' },
           { text: menuLabel('help'), callback_data: 'menu:topics' },
         ],
-        [{ text: 'Check Link Status', callback_data: 'menu:linked' }],
+        [{ text: 'Check Link Status', callback_data: 'menu:status' }],
       ]
 
   return {
@@ -2680,7 +2680,7 @@ function formatLinkStatusText(link: Awaited<ReturnType<typeof getTelegramLinkByU
   if (!link) {
     return buildTelegramCommandChrome({
       title: 'AKITA | LINK STATUS',
-      command: '/linked',
+      command: '/status',
       summaryLines: [
         'Not connected yet.',
         'Open the Mini App to link Telegram and finish wallet checks.',
@@ -2703,7 +2703,7 @@ function formatLinkStatusText(link: Awaited<ReturnType<typeof getTelegramLinkByU
 
   return buildTelegramCommandChrome({
     title: 'AKITA | LINK STATUS',
-    command: '/linked',
+    command: '/status',
     summaryLines,
     detailLines: formatLinkStatusDetails(link),
     expandableDetails: true,
@@ -3299,7 +3299,7 @@ async function executeTelegramNativeCommand(params: {
 }): Promise<TelegramCommandResponse | null> {
   if (!isTelegramNativeCommand(params.text)) return null
 
-  // Group-admin gate for setup commands (/link, /linked, /unlink, /keepr).
+  // Group-admin gate for setup commands (/link, /status, /unlink, /keepr).
   // Runs before any head-dispatched branches so the native fast-path can
   // never bypass the gate. No-op for open commands, DMs, when flag is off,
   // or when chatId/userId are missing (non-Telegram callers never hit this).
@@ -3421,13 +3421,13 @@ async function executeTelegramNativeCommand(params: {
 
   const db = params.db ?? (await getDb())
   if (!db) {
-    if (head === 'linked') {
+    if (head === 'status') {
       return {
         text: [
           'Link Status',
           '',
           '- linked: unknown (database unavailable)',
-          '- next: run /link and retry /linked in a moment',
+          '- next: run /link and retry /status in a moment',
         ].join('\n'),
       }
     }
@@ -3560,7 +3560,7 @@ async function executeTelegramNativeCommand(params: {
           'Vault Deploy blocked',
           '',
           '- wallet setup pending',
-          '- run /linked, finish wallet confirmation, then retry',
+          '- run /status, finish wallet confirmation, then retry',
         ].join('\n'),
       }
     }
@@ -3669,7 +3669,7 @@ async function executeTelegramNativeCommand(params: {
           'Deploy blocked',
           '',
           '- wallet setup pending',
-          '- run /linked, finish wallet confirmation, then retry',
+          '- run /status, finish wallet confirmation, then retry',
         ].join('\n'),
       }
     }
@@ -3776,7 +3776,7 @@ async function executeTelegramNativeCommand(params: {
             'Trade blocked',
             '',
             '- wallet setup pending',
-            '- run /linked, finish wallet confirmation, then retry',
+            '- run /status, finish wallet confirmation, then retry',
           ].join('\n'),
         }
       }
@@ -3935,7 +3935,7 @@ async function executeTelegramNativeCommand(params: {
           'Join Room',
           '',
           '- wallet setup pending',
-          '- run /linked, finish wallet confirmation, then retry',
+          '- run /status, finish wallet confirmation, then retry',
         ].join('\n'),
       }
     }
@@ -3989,7 +3989,7 @@ async function executeTelegramNativeCommand(params: {
           'Join Room',
           '',
           '- canonical wallet is unavailable for this link',
-          '- run /linked to verify wallet setup, then retry',
+          '- run /status to verify wallet setup, then retry',
         ].join('\n'),
       }
     }
@@ -4116,7 +4116,7 @@ async function executeTelegramNativeCommand(params: {
     }
   }
 
-  if (head === 'linked') {
+  if (head === 'status') {
     const link = await getTelegramLinkByUserId({ db: db as any, telegramUserId: params.userId })
     if (!link || link.linkStatus !== 'active') {
       const linkFlow = buildTelegramLinkFlowResponse({
@@ -4245,7 +4245,7 @@ async function executeTelegramNativeCommand(params: {
           'Trade blocked',
           '',
           '- wallet setup pending',
-          '- run /linked, finish wallet confirmation, then retry',
+          '- run /status, finish wallet confirmation, then retry',
         ].join('\n'),
       }
     }
@@ -4667,7 +4667,7 @@ async function handleTelegramTradeFlowCallback(params: {
         'Trade blocked',
         '',
         '- wallet setup pending',
-        '- run /linked, finish wallet confirmation, then retry',
+        '- run /status, finish wallet confirmation, then retry',
       ].join('\n'),
       callbackToast: 'Wallet setup pending',
     }
@@ -4680,7 +4680,7 @@ async function handleTelegramTradeFlowCallback(params: {
         'Trade blocked',
         '',
         '- canonical wallet is unavailable for this link',
-        '- run /linked and confirm wallet setup, then retry',
+        '- run /status and confirm wallet setup, then retry',
       ].join('\n'),
       callbackToast: 'Canonical wallet missing',
     }
@@ -4820,7 +4820,7 @@ async function maybeHandlePendingTradePercentInput(params: {
         'Trade blocked',
         '',
         '- Telegram link and wallet setup are required',
-        '- run /link, then /linked to finish wallet confirmation, then retry',
+        '- run /link, then /status to finish wallet confirmation, then retry',
       ].join('\n'),
     }
   }
@@ -4832,7 +4832,7 @@ async function maybeHandlePendingTradePercentInput(params: {
         'Trade blocked',
         '',
         '- canonical wallet is unavailable for this link',
-        '- run /linked and confirm wallet setup, then retry',
+        '- run /status and confirm wallet setup, then retry',
       ].join('\n'),
       replyMarkup: buildTradeCustomPercentReplyMarkup({
         actionType: tradeFlowState.actionType,
@@ -5299,7 +5299,7 @@ async function handleTelegramVaultDeployCallback(params: {
         'Vault Deploy blocked',
         '',
         '- account link is no longer active/verified',
-        '- run /linked and /link again if needed',
+        '- run /status and /link again if needed',
       ].join('\n'),
       callbackToast: 'Reconnect required',
       replyMarkup: relinkFlow.replyMarkup,
@@ -5621,7 +5621,7 @@ async function handleTelegramDeployCallback(params: {
         'Deploy blocked',
         '',
         '- account link is no longer active/verified',
-        '- run /linked and /link again if needed',
+        '- run /status and /link again if needed',
       ].join('\n'),
       callbackToast: 'Reconnect required',
       replyMarkup: relinkFlow.replyMarkup,
@@ -5905,7 +5905,7 @@ function buildTradeRecoveryReplyMarkup(): Record<string, unknown> {
       ],
       [
         { text: menuLabel('wallet'), callback_data: 'menu:wallet' },
-        { text: 'Link Status', callback_data: 'menu:linked' },
+        { text: 'Link Status', callback_data: 'menu:status' },
       ],
       [{ text: 'Main Menu', callback_data: 'menu:start' }],
     ],
@@ -6211,7 +6211,7 @@ async function handleTelegramTradeCallback(params: {
         'Trade blocked',
         '',
         '- account link is no longer active/verified',
-        '- run /linked and /link again if needed',
+        '- run /status and /link again if needed',
       ].join('\n'),
       callbackToast: 'Reconnect required',
       replyMarkup: relinkFlow.replyMarkup,

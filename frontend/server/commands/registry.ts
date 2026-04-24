@@ -12,7 +12,7 @@ type CommandFamily =
   | 'id'
   | 'whois'
   | 'link'
-  | 'linked'
+  | 'status'
   | 'unlink'
   | 'zora'
   | 'deploy'
@@ -84,8 +84,8 @@ const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
     },
   },
   {
-    head: 'linked',
-    family: 'linked',
+    head: 'status',
+    family: 'status',
     telegramNative: true,
     botMenu: {
       private: 'Check wallet link status',
@@ -249,7 +249,7 @@ export function matchesAnyCommandFamily(rawText: string, families: readonly Comm
  */
 const GROUP_ADMIN_REQUIRED_FAMILIES: ReadonlySet<CommandFamily> = new Set<CommandFamily>([
   'link',
-  'linked',
+  'status',
   'unlink',
   'keepr',
 ])

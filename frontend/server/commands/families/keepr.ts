@@ -61,7 +61,7 @@ const HELP_COMMANDS: HelpCommandDef[] = [
     featured: true,
   },
   {
-    command: '/linked',
+    command: '/status',
     description: 'check link and wallet status',
     topic: 'core',
     scopes: ['private', 'group'],
@@ -661,7 +661,7 @@ export function formatGroupConnectGuidance(groupId: string): string {
     '',
     'Setup steps:',
     '1) In this chat, run <code>/link</code>, then open the bot DM and send <code>/start</code> + <code>/link</code> to complete wallet linking',
-    '2) Run <code>/linked</code> and confirm <code>ownerVerified</code> is true',
+    '2) Run <code>/status</code> and confirm <code>ownerVerified</code> is true',
     '3) Scope at least one vault to this chat in 4626',
     '4) Run <code>/vaults</code>, then <code>/keepr status</code> to confirm config',
     '',
@@ -675,12 +675,12 @@ export function formatAssistantOnlyBlocked(command: string): string {
     '',
     `• <code>${escapeTelegramHtml(command)}</code> is disabled until this group is connected to a 4626 vault`,
     '• You can still use <code>/ai</code>, <code>/help</code>, <code>/whois</code>, and <code>/wallet</code>',
-    '• To enable full actions: run <code>/link</code>, verify <code>/linked</code>, scope a vault, then confirm with <code>/keepr status</code>',
+    '• To enable full actions: run <code>/link</code>, verify <code>/status</code>, scope a vault, then confirm with <code>/keepr status</code>',
   ].join('\n')
 }
 
 /**
- * Shown when a non-admin group member invokes a setup command (/link, /linked,
+ * Shown when a non-admin group member invokes a setup command (/link, /status,
  * /unlink, /keepr). The command is still available to group owners and admins,
  * and to all users in private DMs with the bot.
  */
@@ -690,7 +690,7 @@ export function formatAdminOnlyRefusal(command: string): string {
     '',
     `• <code>${escapeTelegramHtml(command)}</code> can only be run by the group owner or an admin`,
     '• You can still use <code>/ai</code>, <code>/help</code>, <code>/whois</code>, and <code>/wallet</code>',
-    '• Ask an admin to run <code>/link</code> → <code>/linked</code> → scope a vault → <code>/keepr status</code>',
+    '• Ask an admin to run <code>/link</code> → <code>/status</code> → scope a vault → <code>/keepr status</code>',
     '• To link your own wallet, DM the bot and send <code>/link</code> there',
   ].join('\n')
 }

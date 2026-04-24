@@ -38,6 +38,8 @@ describe('readAlfaClubChatBridgeFlags', () => {
     expect(flags.pollIntervalMs).toBe(7000)
     expect(flags.historyLimit).toBe(35)
     expect(flags.sendTimeoutMs).toBe(9000)
+    expect(flags.wsLiveFallbackEnabled).toBe(true)
+    expect(flags.wsIngestAllRoomsEnabled).toBe(true)
   })
 
   it('falls back when room id is invalid', () => {
@@ -51,6 +53,22 @@ describe('readAlfaClubChatBridgeFlags', () => {
     const flags = readAlfaClubChatBridgeFlags()
     expect(flags.roomId).toBeNull()
     expect(flags.groupId).toBe('alfaclub-room-unknown')
+    expect(flags.wsLiveFallbackEnabled).toBe(true)
+    expect(flags.wsIngestAllRoomsEnabled).toBe(true)
+  })
+
+  it('allows disabling websocket live fallback', () => {
+    restoreEnv = applyEnv({
+      ALFACLUB_CHAT_BRIDGE_ENABLED: '1',
+      ALFACLUB_CHAT_ROOM_ID: '1043',
+      ALFACLUB_CHAT_JWT: 'token-xyz',
+      ALFACLUB_CHAT_WS_LIVE_FALLBACK_ENABLED: '0',
+      ALFACLUB_CHAT_WS_INGEST_ALL_ROOMS_ENABLED: '0',
+    })
+
+    const flags = readAlfaClubChatBridgeFlags()
+    expect(flags.wsLiveFallbackEnabled).toBe(false)
+    expect(flags.wsIngestAllRoomsEnabled).toBe(false)
   })
 })
 

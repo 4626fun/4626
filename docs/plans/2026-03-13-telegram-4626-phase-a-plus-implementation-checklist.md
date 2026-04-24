@@ -17,7 +17,7 @@
 - [x] Create implementation checklist doc
 - [x] Add Telegram schema and DB helpers (`telegram_user_links`, `telegram_action_tokens`, `telegram_action_audit`, `telegram_chat_vault_scope`)
 - [x] Wire webhook commands for:
-  - `/link`, `/linked`, `/unlink`
+  - `/link`, `/status`, `/unlink`
   - `/portfolio`, `/vaults` (`/list` alias), `/auctions`, `/mybids`, `/signals`
 - [x] Add API endpoints:
   - `POST /api/telegram/unlink`
@@ -83,7 +83,7 @@
 
 **Checklist:**
 - [x] Write failing tests for:
-  - `/linked` response path
+  - `/status` response path
   - `/unlink` response path
   - `/portfolio` response path
   - `/vaults`, `/auctions`, `/signals`, `/mybids` response paths
