@@ -4520,7 +4520,11 @@ window.__Continuity = Continuity;
       //   Container opens  0.360 → 0.378
       //   L1        in 0.378→0.410, hold 0.410→0.470, out 0.470→0.500
       //   L2        in 0.510→0.540, hold 0.540→0.625, out 0.625→0.655
-      //     └ sublabels 0.555→0.595, fade with L2 at 0.625→0.650
+      //     └ sublabels 0.530→0.560, fade with L2 at 0.625→0.655
+      //       (pulled in from 0.555→0.595 after the mobile pacing audit —
+      //        old window gave only ~302ms of L2+sublabel co-visibility at
+      //        an 800px/s swipe; new window gives ≥500ms so the Share /
+      //        Underlying qualifiers are actually readable on phones)
       //   L3        in 0.680→0.715, HOLD 0.715→0.820, out 0.820→0.845
       //   Stack out 0.840→0.862 ; Poster in 0.858→0.885 (HOLDS to end)
       //   L3.5 (in poster)  0.862→0.880 reveal-and-hold
@@ -4542,8 +4546,10 @@ window.__Continuity = Continuity;
       const cres2Op    = multiMapSmooth(p, [0.510, 0.540, 0.625, 0.655], [0, 1, 1, 0]);
       const cres2Prog  = multiMapSmooth(p, [0.510, 0.555], [0, 1]); // 0=apart, 1=met
       // Sublabels ("■AKITA · Vault Share" / "○AKITA · Underlying") fade in
-      // during L2's hold window and fade with L2.
-      const cres2SubOp = multiMapSmooth(p, [0.555, 0.595, 0.625, 0.650], [0, 1, 1, 0]);
+      // as L2 reaches its hold and fade with L2. See pacing comment above —
+      // window was pulled forward from [0.555, 0.595, 0.625, 0.650] to give
+      // the mobile reader enough co-visibility to register the qualifiers.
+      const cres2SubOp = multiMapSmooth(p, [0.530, 0.560, 0.625, 0.655], [0, 1, 1, 0]);
       // L3 — "(3, 3)"  depth recession; deep hold as the climax before the
       // finale poster arrives. Gloss removed — the ticker stands alone.
       const cres3Op    = multiMapSmooth(p, [0.680, 0.715, 0.820, 0.845], [0, 1, 1, 0]);
