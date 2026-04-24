@@ -4,6 +4,7 @@ import { zoraCliRouteSubpaths } from './zora/cli/_routes.js'
 
 export const zoraRouteLoaders: ApiRouteLoaders = {
   'csw-entry': () => import('./zora/_cswEntry.js'),
+  'csw-entry/challenge': () => import('./zora/_cswEntryChallenge.js'),
   'csw-entry/telegram-verify': () => import('./zora/_cswEntryTelegramVerify.js'),
   'coin': () => import('./zora/_coin.js'),
   'coinHistory': () => import('./zora/_coinHistory.js'),

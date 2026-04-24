@@ -17,7 +17,12 @@ import {
   setNoStore,
 } from '../../../packages/server-core/src/index.js'
 import { getSupabaseAdmin, isSupabaseAdminConfigured } from '../../../server/_lib/db/supabaseAdmin.js'
-import { issueZoraCswGateVerificationToken } from '../../../server/_lib/zora/cswGateVerification.js'
+import {
+  buildCswEntryChallengeMessage,
+  consumeCswEntryChallenge,
+  issueZoraCswGateVerificationToken,
+  verifyCswWalletSignature,
+} from '../../../server/_lib/zora/cswGateVerification.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -29,6 +34,9 @@ type EntryRequestBody = {
   symbol?: string | null
   minTokens?: string | null
   source?: string | null
+  // FIX: M-01 — proof-of-CSW-ownership fields. Both are now required.
+  challengeNonce?: string | null
+  signature?: string | null
 }
 
 type RegistryMatch = {
@@ -187,11 +195,70 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .json({ success: false, error: 'Invalid telegramUsername (expected @name or name)' } satisfies ApiEnvelope<never>)
   }
 
+  // FIX: M-01 — require a signed challenge from the CSW before any side
+  // effects (registry lookup, token issuance). Rejects attackers who submit
+  // a CSW address they do not control.
+  const challengeNonce = typeof body.challengeNonce === 'string' ? body.challengeNonce.trim() : ''
+  const signatureRaw = typeof body.signature === 'string' ? body.signature.trim() : ''
+  if (!challengeNonce || !signatureRaw) {
+    return res.status(400).json({
+      success: false,
+      error:
+        'challengeNonce and signature are required. Call /api/zora/csw-entry/challenge first and sign the returned message with the CSW.',
+    } satisfies ApiEnvelope<never>)
+  }
+  if (!/^0x[0-9a-fA-F]+$/.test(signatureRaw)) {
+    return res.status(400).json({ success: false, error: 'Invalid signature encoding' } satisfies ApiEnvelope<never>)
+  }
+  const signature = signatureRaw as `0x${string}`
+
   const connectedAddress = normalizeAddress(body.connectedAddress)
   const tokenAddress = normalizeAddress(body.tokenAddress)
   const symbol = typeof body.symbol === 'string' ? body.symbol.trim().slice(0, 32) : null
   const minTokens = typeof body.minTokens === 'string' ? body.minTokens.trim().slice(0, 64) : null
   const source = typeof body.source === 'string' ? body.source.trim().slice(0, 512) : null
+
+  // FIX: M-01 — atomically consume the challenge. Returns the server-stored
+  // row containing the CSW address and expiry so we can rebuild the exact
+  // canonical message the client was supposed to sign. The consume is a
+  // DELETE RETURNING; any subsequent attempt with the same nonce fails.
+  const db = await getDb()
+  if (!db) {
+    return res.status(503).json({
+      success: false,
+      error: 'Database unavailable for challenge verification',
+    } satisfies ApiEnvelope<never>)
+  }
+
+  const challenge = await consumeCswEntryChallenge({ db: db as any, cswAddress, nonce: challengeNonce })
+  if (!challenge.ok) {
+    const error =
+      challenge.reason === 'expired'
+        ? 'Challenge expired. Request a fresh challenge.'
+        : challenge.reason === 'mismatch'
+          ? 'Challenge does not belong to this CSW address.'
+          : 'Invalid or already-used challenge nonce.'
+    return res.status(409).json({ success: false, error } satisfies ApiEnvelope<never>)
+  }
+
+  // Rebuild the canonical message that was bound to this challenge at issuance.
+  const challengeMessage = buildCswEntryChallengeMessage({
+    cswAddress,
+    nonce: challengeNonce,
+    expiresAt: challenge.row.expiresAt,
+  })
+
+  const signatureResult = await verifyCswWalletSignature({
+    cswAddress,
+    message: challengeMessage,
+    signature,
+  })
+  if (!signatureResult.ok) {
+    return res.status(401).json({
+      success: false,
+      error: 'Signature does not validate against the CSW address (EOA + EIP-1271 both failed).',
+    } satisfies ApiEnvelope<never>)
+  }
 
   const registryLookup = await findRegistryMatch(cswAddress)
   if (!registryLookup.match) {
@@ -206,14 +273,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(403).json({
       success: false,
       error: 'Address is not in the imported Zora CSW registry',
-    } satisfies ApiEnvelope<never>)
-  }
-
-  const db = await getDb()
-  if (!db) {
-    return res.status(503).json({
-      success: false,
-      error: 'Database unavailable for telegram verification token issuance',
     } satisfies ApiEnvelope<never>)
   }
 
@@ -238,6 +297,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       source,
       registry: registryLookup.match,
       submittedAt: new Date().toISOString(),
+      // FIX: M-01 — record that this entry completed wallet-ownership proof.
+      cswOwnershipProof: {
+        verified: true,
+        contractValidated: signatureResult.contractValidated,
+        recoveredSigner: signatureResult.recoveredSigner,
+        challengeExpiresAt: challenge.row.expiresAt,
+      },
     }
   }
 
