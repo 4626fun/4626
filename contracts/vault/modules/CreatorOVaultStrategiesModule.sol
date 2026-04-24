@@ -211,6 +211,79 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
         coinBalance = afterBal;
     }
 
+    /// @dev FIX: M-09 — best-effort withdraw used on the user-facing withdrawal hot path.
+    ///      A hostile or temporarily-illiquid strategy must not be able to freeze vault
+    ///      withdrawals. On revert or measured/reported mismatch we emit
+    ///      `StrategyWithdrawFailed` and fall through with 0/received — the caller
+    ///      (`_withdrawFromStrategies`) continues to the next strategy in the queue, and
+    ///      the vault's core module still reverts with `InsufficientBalance` if the
+    ///      aggregate shortfall can't be met. Strict accounting remains on
+    ///      `_withdrawFromStrategyMeasured` for admin flows (`removeStrategy`).
+    ///
+    ///      FIX: M-09 Codex review (PR #357) — negative balance deltas (strategy
+    ///      DECREASED the vault's balance, e.g. via leftover allowance) must be
+    ///      treated as a failed leg instead of subtracted blindly. Prior version
+    ///      underflowed on `afterBalRevert - beforeBal` and re-bricked the user's
+    ///      withdraw, defeating the entire M-09 best-effort fix. Both the revert
+    ///      path and the success-with-lying-report path now guard this.
+    function _tryWithdrawFromStrategyMeasured(address strategy, uint256 amount) internal returns (uint256 withdrawn) {
+        IERC20 coin = _creatorCoin();
+        uint256 beforeBal = coin.balanceOf(address(this));
+
+        uint256 reported;
+        try IStrategy(strategy).withdraw(amount) returns (uint256 _reported) {
+            reported = _reported;
+        } catch (bytes memory revertData) {
+            emit StrategyWithdrawFailed(strategy, amount, revertData);
+            // Strategy may have moved funds before reverting. Sync `coinBalance`
+            // to the observed value and return the positive delta (if any). A
+            // NEGATIVE delta means the strategy pulled tokens out of the vault
+            // (e.g. via stale allowance from a prior deposit) before reverting;
+            // that is a failed leg from the user's perspective — sync state,
+            // keep the event record, and return 0 so the queue moves on.
+            uint256 afterBalRevert = coin.balanceOf(address(this));
+            coinBalance = afterBalRevert;
+            if (afterBalRevert > beforeBal) {
+                return afterBalRevert - beforeBal;
+            }
+            return 0;
+        }
+
+        uint256 afterBal = coin.balanceOf(address(this));
+        coinBalance = afterBal;
+
+        if (afterBal < beforeBal) {
+            // Strategy returned a success value but our balance went DOWN —
+            // the strategy is lying about having withdrawn when it actually
+            // drained the vault. Treat as failed leg: sync state (already
+            // done), emit, return 0. Do NOT revert the user's withdrawal —
+            // the caller will continue to the next strategy and the aggregate
+            // `InsufficientBalance` check still protects the user.
+            emit StrategyWithdrawFailed(
+                strategy,
+                amount,
+                abi.encodeWithSelector(TransferAmountMismatch.selector, reported, 0)
+            );
+            return 0;
+        }
+
+        uint256 received = afterBal - beforeBal;
+
+        if (received != reported) {
+            // Report the mismatch via the existing failure event — the strategy's
+            // accounting disagrees with measured transfer. Do NOT revert the user's
+            // withdrawal; trust the measured `received` amount and move on.
+            emit StrategyWithdrawFailed(
+                strategy,
+                amount,
+                abi.encodeWithSelector(TransferAmountMismatch.selector, reported, received)
+            );
+            return received;
+        }
+
+        return reported;
+    }
+
     function _getStrategyAssetsSafe(address strategy) internal view returns (uint256 assets) {
         try IStrategy(strategy).getTotalAssets() returns (uint256 reportedAssets) {
             assets = reportedAssets;
@@ -242,7 +315,12 @@ contract CreatorOVaultStrategiesModule is CreatorOVaultModuleBase, ICreatorOVaul
                 emit UnrealisedLossAssessed(strategy, unrealizedLoss);
             }
 
-            uint256 withdrawn = _withdrawFromStrategyMeasured(strategy, toWithdraw);
+            // FIX: M-09 — user-facing withdrawal path is best-effort per strategy.
+            // A reverting/illiquid strategy is skipped (via `_tryWithdrawFromStrategyMeasured`)
+            // instead of bubbling up and freezing the entire withdrawal queue.
+            uint256 withdrawn = _tryWithdrawFromStrategyMeasured(strategy, toWithdraw);
+
+            if (withdrawn == 0) continue;
 
             totalWithdrawn += withdrawn;
             remaining = remaining > withdrawn ? remaining - withdrawn : 0;
