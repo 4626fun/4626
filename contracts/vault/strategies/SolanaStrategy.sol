@@ -31,6 +31,9 @@ contract SolanaStrategy is IStrategy, IStrategyValuation, Ownable, ReentrancyGua
     error RebalanceWouldBreachBuffer();
     error InvalidBridgeAddress();
     error InsufficientBaseLiquidity();
+    // FIX: H-05 (4626-437) — reportId replay guard
+    error InvalidReportId();
+    error ReportIdAlreadyUsed();
 
     // ================================
     // EVENTS
@@ -44,6 +47,8 @@ contract SolanaStrategy is IStrategy, IStrategyValuation, Ownable, ReentrancyGua
     event KeeperSet(address indexed keeper, bool status);
     event RemoteNavEnabledSet(bool enabled);
     event EmergencyPausedSet(bool paused);
+    // FIX: H-05 (4626-437) — emitted when a reportId is marked consumed
+    event ReportIdConsumed(bytes32 indexed reportId, bytes32 indexed context);
 
     // ================================
     // STATE
@@ -77,6 +82,14 @@ contract SolanaStrategy is IStrategy, IStrategyValuation, Ownable, ReentrancyGua
     bool private _emergencyPaused;
 
     mapping(address => bool) public keepers;
+
+    // FIX: H-05 (4626-437) — prevents replay of keeper reports. Every
+    // `updateRemoteNav` / `reconcileFromSolana` call is identified by a
+    // non-zero `reportId` derived offchain from (srcChain, slot, nonce).
+    // Once consumed, the same reportId can never be replayed. Without this
+    // guard a compromised relayer or re-org could re-submit an old report,
+    // ratcheting `remoteNav` or `totalReconciledFromSolana` arbitrarily.
+    mapping(bytes32 => bool) public usedReportIds;
 
     // ================================
     // MODIFIERS
@@ -135,6 +148,14 @@ contract SolanaStrategy is IStrategy, IStrategyValuation, Ownable, ReentrancyGua
      * @param reportId Report identifier for offchain correlation.
      */
     function updateRemoteNav(uint256 newRemoteNav, bytes32 reportId) external onlyKeeper {
+        // FIX: H-05 (4626-437) — consume reportId before any effects to
+        // prevent replay. Non-zero reportId required so off-chain correlation
+        // and on-chain replay-protection both resolve to the same identifier.
+        if (reportId == bytes32(0)) revert InvalidReportId();
+        if (usedReportIds[reportId]) revert ReportIdAlreadyUsed();
+        usedReportIds[reportId] = true;
+        emit ReportIdConsumed(reportId, bytes32("updateRemoteNav"));
+
         // FIX: C-01 — roll the hourly anchor forward if the current window has
         // expired. Within a window, all deltas are measured against the frozen
         // anchor, not the running remoteNav, so the cap cannot be compounded.
@@ -218,6 +239,15 @@ contract SolanaStrategy is IStrategy, IStrategyValuation, Ownable, ReentrancyGua
      */
     function reconcileFromSolana(uint256 amount, bytes32 reportId) external onlyKeeper {
         if (amount == 0) return;
+        // FIX: H-05 (4626-437) — consume reportId before any effects to
+        // prevent replay of bridge-receipt reports. A successful bridge
+        // receipt must carry a unique reportId; re-submitting the same
+        // reportId would otherwise inflate `totalReconciledFromSolana`.
+        if (reportId == bytes32(0)) revert InvalidReportId();
+        if (usedReportIds[reportId]) revert ReportIdAlreadyUsed();
+        usedReportIds[reportId] = true;
+        emit ReportIdConsumed(reportId, bytes32("reconcileFromSolana"));
+
         totalReconciledFromSolana += amount;
         emit RebalanceFromSolanaReconciled(amount, reportId);
     }

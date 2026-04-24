@@ -129,7 +129,7 @@ contract SolanaStrategyFlowsTest is Test {
 
     function test_rebalanceToSolana_respectsBuffer_withRemoteNav() public {
         vm.prank(keeper);
-        strategy.updateRemoteNav(100e18, bytes32(0));
+        strategy.updateRemoteNav(100e18, bytes32("flow-nav-1"));
         // Total = 200 + 100 = 300e18. Min base = 10% = 30e18.
         // Max rebalance = 200 - 30 = 170e18.
         vm.prank(keeper);
@@ -199,6 +199,42 @@ contract SolanaStrategyFlowsTest is Test {
     function test_reconcileFromSolana_reverts_whenNotKeeper() public {
         vm.prank(vault);
         vm.expectRevert(SolanaStrategy.OnlyKeeper.selector);
+        strategy.reconcileFromSolana(50e18, bytes32("flow-r-unauth"));
+    }
+
+    // ================================
+    // FIX: H-05 (4626-437) — reportId replay guard for reconcileFromSolana
+    // ================================
+
+    function test_reconcileFromSolana_reverts_whenReportIdZero() public {
+        vm.prank(keeper);
+        vm.expectRevert(SolanaStrategy.InvalidReportId.selector);
         strategy.reconcileFromSolana(50e18, bytes32(0));
+    }
+
+    function test_reconcileFromSolana_reverts_whenReportIdReplayed() public {
+        bytes32 id = keccak256("bridge-receipt-1");
+        creator.mint(address(strategy), 100e18); // simulate bridge deposit
+        vm.prank(keeper);
+        strategy.reconcileFromSolana(50e18, id);
+
+        // Replaying the same receipt would double-count `totalReconciledFromSolana`.
+        vm.prank(keeper);
+        vm.expectRevert(SolanaStrategy.ReportIdAlreadyUsed.selector);
+        strategy.reconcileFromSolana(50e18, id);
+    }
+
+    function test_reconcileFromSolana_allowsZeroAmount_withoutConsumingReportId() public {
+        // Zero-amount short-circuits before any state change — reportId not
+        // consumed, so a legitimate later report with the same id still works.
+        bytes32 id = keccak256("bridge-receipt-noop");
+        vm.prank(keeper);
+        strategy.reconcileFromSolana(0, id);
+        assertFalse(strategy.usedReportIds(id), "zero-amount path must not mark id used");
+
+        creator.mint(address(strategy), 10e18);
+        vm.prank(keeper);
+        strategy.reconcileFromSolana(10e18, id);
+        assertTrue(strategy.usedReportIds(id), "id consumed on real reconciliation");
     }
 }
