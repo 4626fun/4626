@@ -61,6 +61,11 @@ interface ICreatorOVaultAsset {
     function asset() external view returns (address);
 }
 
+// FIX: M-08 — wrapper-side cooldown propagation hook
+interface IWrapperCooldownHook {
+    function propagateCooldownOnTransfer(address from, address to) external;
+}
+
 /**
  * @title CreatorShareOFT
  * @author 0xakita.eth
@@ -155,6 +160,12 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     /// @notice Minter permissions (for wrapper integration)
     mapping(address => bool) public isMinter;
 
+    // FIX: M-08 — registered wrapper that receives transfer notifications so it can
+    // propagate its per-user deposit cooldown forward on ShareOFT transfers. When
+    // unset (address(0)) the hook is disabled and behaviour matches the pre-fix
+    // code path exactly.
+    address public wrapper;
+
     /// @notice Dedup set for winner-callback messages to prevent replay
     /// @dev FIX: H-14 — LayerZero delivers each message with a unique _guid.
     ///      The OFT base-class nonce tracker handles replay for token transfers,
@@ -242,6 +253,9 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     event GaugeControllerSet(address indexed controller);
     event BuyFeeUpdated(uint16 oldFee, uint16 newFee);
     event MinterUpdated(address indexed minter, bool status);
+    // FIX: M-08
+    event WrapperSet(address indexed wrapper);
+    event WrapperCooldownHookFailed(address indexed wrapper, address indexed from, address indexed to, bytes revertData);
     event TaxConfigDelegateSet(address indexed delegate);
     event TaxHookConfigured(address indexed hook, address recipient, uint256 taxRate);
 
@@ -374,6 +388,20 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     }
 
     /**
+     * @notice FIX: M-08 — register the CreatorOVaultWrapper so its per-user wrapper
+     *         cooldown (`lastWrapperDepositBlock`) is propagated on ShareOFT transfers.
+     *         Passing address(0) disables the hook. Exempts the wrapper from fees since
+     *         wrap/unwrap should not be treated as a fee-bearing trade.
+     */
+    function setWrapper(address _wrapper) external onlyOwner {
+        wrapper = _wrapper;
+        if (_wrapper != address(0)) {
+            addressType[_wrapper] = OperationType.NoFees;
+        }
+        emit WrapperSet(_wrapper);
+    }
+
+    /**
      * @notice Mint shares (vault/minter only)
      * @param _to Recipient
      * @param _amount Amount to mint
@@ -481,6 +509,32 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         _triggerLottery(to, transferAmount);
 
         return true;
+    }
+
+    /**
+     * @dev FIX: M-08 — hook every ERC20 balance change (mints, burns, transfers,
+     *      LayerZero credit/debit via the OFT base _credit/_debit which ultimately
+     *      call _update) to propagate the wrapper’s per-user flash-loan cooldown.
+     *
+     *      The hook is a no-op when no wrapper is registered (setWrapper(0)), for
+     *      mints (`from == 0`), burns (`to == 0`), and self-transfers. The wrapper
+     *      call is wrapped in try/catch: a revert in the hook must NOT freeze token
+     *      transfers. Failures are surfaced via `WrapperCooldownHookFailed` so
+     *      operators can page on persistent hook regressions.
+     */
+    function _update(address from, address to, uint256 value) internal virtual override {
+        super._update(from, to, value);
+
+        address _wrapper = wrapper;
+        if (_wrapper == address(0)) return;
+        if (from == address(0) || to == address(0)) return;
+        if (from == to) return;
+
+        try IWrapperCooldownHook(_wrapper).propagateCooldownOnTransfer(from, to) {
+            // ok
+        } catch (bytes memory revertData) {
+            emit WrapperCooldownHookFailed(_wrapper, from, to, revertData);
+        }
     }
 
     // ================================

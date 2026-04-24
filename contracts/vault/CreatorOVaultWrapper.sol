@@ -135,6 +135,9 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
     event FeeRecipientUpdated(address indexed recipient);
     event BeneficiaryOperatorUpdated(address indexed operator, bool status);
 
+    // FIX: M-08 — cooldown propagation on ShareOFT transfer
+    event CooldownPropagated(address indexed from, address indexed to, uint256 propagatedBlock);
+
     // ================================
     // ERRORS
     // ================================
@@ -157,6 +160,8 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
     error SlippageExceeded();
     error AmountTooSmallToNormalize(); // < 1 normalized share after fees + user dust
     error WrapperWithdrawTooSoon(uint256 currentBlock, uint256 requiredBlock);
+    // FIX: M-08 — cooldown propagation hook restricted to the registered ShareOFT
+    error CooldownHookUnauthorizedCaller(address caller);
     error UnauthorizedBeneficiaryOperator(address operator, address beneficiary);
     error AsyncRedemptionRequired(uint256 assets, uint256 threshold);
 
@@ -760,6 +765,40 @@ contract CreatorOVaultWrapper is Ownable, ReentrancyGuard {
     function _requireWrapperCooldown(address user) internal view {
         uint256 requiredBlock = lastWrapperDepositBlock[user] + wrapperWithdrawDelayBlocks;
         if (block.number < requiredBlock) revert WrapperWithdrawTooSoon(block.number, requiredBlock);
+    }
+
+    /**
+     * @notice FIX: M-08 — propagate the wrapper cooldown on ShareOFT transfers.
+     * @dev Called by CreatorShareOFT._update on every non-mint/non-burn ERC20 movement
+     *      (including LayerZero credit/debit via the OFT transfer hooks). Propagates
+     *      `lastWrapperDepositBlock[from]` forward to `to` so a user cannot deposit,
+     *      transfer the resulting ShareOFT to a fresh address, and withdraw in the
+     *      same block.
+     *
+     *      Only the registered `shareOFT` may call this function. The hook is a
+     *      monotonically-increasing max-propagator: it never decreases an existing
+     *      cooldown on the recipient, so stacking deposits from multiple sources
+     *      behaves correctly.
+     *
+     *      Mint (from == 0) and burn (to == 0) are skipped: deposit paths in this
+     *      contract already record `lastWrapperDepositBlock[msg.sender] = block.number`
+     *      on the original depositor, and burns have no recipient.
+     */
+    function propagateCooldownOnTransfer(address from, address to) external {
+        if (msg.sender != address(shareOFT)) revert CooldownHookUnauthorizedCaller(msg.sender);
+        // Mints and burns are no-ops here. Deposits record the cooldown on the
+        // original depositor; burns have no recipient to propagate to.
+        if (from == address(0) || to == address(0)) return;
+        if (from == to) return;
+
+        uint256 fromBlock = lastWrapperDepositBlock[from];
+        if (fromBlock == 0) return;
+
+        uint256 toBlock = lastWrapperDepositBlock[to];
+        if (fromBlock > toBlock) {
+            lastWrapperDepositBlock[to] = fromBlock;
+            emit CooldownPropagated(from, to, fromBlock);
+        }
     }
 
     function _requireSynchronousRedemption(uint256 vaultShares) internal view {
