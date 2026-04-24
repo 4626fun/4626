@@ -162,6 +162,13 @@ async function main() {
         to: CANONICAL_CSW,
         value: "0x0",
         data: calldata,
+        // Explicit gas. Base App's default paymaster appears to refuse
+        // sponsoring the addOwnerAddress selector and its own gas
+        // estimator then fails with a misleading "insufficient funds"
+        // message. Providing a fixed generous gas limit forces the
+        // wallet to skip estimation and pay gas from the CSW's own
+        // balance (0x4beab… has 0.014 ETH — plenty for ~150k gas).
+        gas: toHex(300_000),
         metadata: {
           description: `Add ${NEW_OWNER} as an authorized owner of your Coinbase Smart Wallet (${CANONICAL_CSW}).`,
           transactionType: "addOwnerAddress",

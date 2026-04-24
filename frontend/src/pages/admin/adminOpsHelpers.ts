@@ -481,6 +481,17 @@ export function summarizeErrorReason(error: unknown): string {
 export function toFriendlyTxError(error: unknown): string {
   const msg = summarizeErrorReason(error)
   const lower = msg.toLowerCase()
+  if (
+    lower.includes('gas required exceeds allowance (0)') ||
+    lower.includes("didn't pay prefund") ||
+    lower.includes('sender balance and deposit together') ||
+    lower.includes('insufficient funds for gas')
+  ) {
+    return (
+      'Gas sponsorship failed, and the owner wallet has no usable Base ETH for direct fallback. ' +
+      'Refresh authentication to restore sponsorship, or fund the owner wallet before retrying.'
+    )
+  }
   if (lower.includes('reserved key')) {
     return (
       'Identity Registry reserves the `agentWallet` metadata key. ' +
@@ -649,6 +660,24 @@ export async function sendEmbeddedOwnerSmartWalletCall(params: {
       reason: fallbackReason,
     })
 
+    let ownerBalance: bigint | null = null
+    try {
+      ownerBalance = await publicClient.getBalance({ address: ownerAddress })
+    } catch {
+      ownerBalance = null
+    }
+    if (ownerBalance === 0n) {
+      logger.error('[AdminOps][ERC-4337] Skipping direct owner executeBatch fallback: owner has zero Base ETH', {
+        smartWallet,
+        ownerAddress,
+        callCount: calls.length,
+        reason: fallbackReason,
+      })
+      throw new Error(
+        'Gas sponsorship failed, and direct owner fallback is unavailable because the owner wallet has 0 ETH on Base.',
+      )
+    }
+
     const executeBatchData = encodeFunctionData({
       abi: COINBASE_SMART_WALLET_EXECUTE_BATCH_ABI as any,
       functionName: 'executeBatch' as any,
@@ -676,13 +705,19 @@ export async function sendEmbeddedOwnerSmartWalletCall(params: {
         ],
       })
     } catch (fallbackError: unknown) {
+      const fallbackErrorReason = summarizeErrorReason(fallbackError)
       logger.error('[AdminOps][ERC-4337] Direct owner executeBatch failed to submit', {
         smartWallet,
         ownerAddress,
         callCount: calls.length,
         reason: fallbackReason,
-        error: summarizeErrorReason(fallbackError),
+        error: fallbackErrorReason,
       })
+      if (fallbackErrorReason.toLowerCase().includes('gas required exceeds allowance (0)')) {
+        throw new Error(
+          'Gas sponsorship failed, and direct owner fallback could not estimate gas because the owner wallet has no spendable Base ETH.',
+        )
+      }
       throw fallbackError
     }
     logger.warn('[AdminOps][ERC-4337] Direct owner executeBatch submitted', {

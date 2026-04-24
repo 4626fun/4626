@@ -280,6 +280,17 @@ if (typeof window !== 'undefined') {
       window.localStorage.getItem('cv:privy:analytics') === 'off'
     let privyPasswordlessCooldownUntilMs = 0
     let privyPasswordlessInFlight: Promise<Response> | null = null
+    if (disablePrivyAnalytics && !(window as any).__cvPrivyAnalyticsFetchPatched) {
+      const originalFetch = window.fetch.bind(window)
+      window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url
+        if (url.includes('https://auth.privy.io/api/v1/analytics_events')) {
+          return Promise.resolve(new Response(null, { status: 204 }))
+        }
+        return originalFetch(input, init)
+      }
+      ;(window as any).__cvPrivyAnalyticsFetchPatched = true
+    }
     if (debugEnabled && !(window as any).__cvFetchPatched) {
       const originalFetch = window.fetch.bind(window)
       window.fetch = (input: RequestInfo | URL, init?: RequestInit) => {
