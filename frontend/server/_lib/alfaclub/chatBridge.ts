@@ -26,10 +26,12 @@ const DEFAULT_SEND_TIMEOUT_MS = 10_000
 const DEFAULT_HTTP_TIMEOUT_MS = 8_000
 const DEFAULT_WS_LIVE_FALLBACK_ENABLED = true
 const DEFAULT_WS_INGEST_ALL_ROOMS_ENABLED = true
+const DEFAULT_TELEGRAM_RELAY_FALLBACK_ENABLED = true
 const DEFAULT_WS_CLOSE_DELAY_MS = 75
 const MAX_HISTORY_LIMIT = 100
 const MAX_SEEN_MESSAGE_IDS = 4_000
 const MAX_LIVE_COMMAND_QUEUE = 200
+const MAX_TELEGRAM_MESSAGE_CHARS = 3500
 
 type AlfaClubRoomHistoryMessage = {
   id?: string
@@ -65,6 +67,10 @@ export type AlfaClubChatBridgeFlags = {
   requestTimeoutMs: number
   wsLiveFallbackEnabled: boolean
   wsIngestAllRoomsEnabled: boolean
+  telegramRelayEnabled: boolean
+  telegramRelayBotToken: string | null
+  telegramRelayChatId: string | null
+  telegramRelayThreadId: number | null
 }
 
 export type AlfaClubCommandMessage = {
@@ -126,6 +132,14 @@ function parsePositiveInt(value: string | undefined, fallback: number, max: numb
   return Math.min(n, max)
 }
 
+function parseOptionalPositiveInt(value: string | undefined, max: number): number | null {
+  const raw = (value ?? '').trim()
+  if (!/^\d+$/.test(raw)) return null
+  const n = Number.parseInt(raw, 10)
+  if (!Number.isFinite(n) || n <= 0) return null
+  return Math.min(n, max)
+}
+
 function normalizeApiBaseUrl(raw: string | undefined): string {
   const value = (raw ?? '').trim() || DEFAULT_API_BASE_URL
   try {
@@ -154,6 +168,12 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
   const roomIdRaw = (process.env.ALFACLUB_CHAT_ROOM_ID ?? '').trim()
   const roomId = /^\d+$/.test(roomIdRaw) ? roomIdRaw : null
   const groupIdRaw = (process.env.ALFACLUB_CHAT_GROUP_ID ?? '').trim()
+  const telegramRelayBotToken = (process.env.TELEGRAM_BOT_TOKEN ?? '').trim() || null
+  const telegramRelayChatId =
+    (process.env.ALFACLUB_TELEGRAM_RELAY_CHAT_ID ?? '').trim() ||
+    (process.env.TELEGRAM_TARGET_CHAT_ID ?? '').trim() ||
+    null
+  const telegramRelayEnabledFallback = Boolean(telegramRelayBotToken && telegramRelayChatId)
 
   return {
     killSwitch: parseBool(process.env.ALFACLUB_VIGILANTE_KILL_SWITCH),
@@ -190,6 +210,16 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
     wsIngestAllRoomsEnabled: parseBoolWithDefault(
       process.env.ALFACLUB_CHAT_WS_INGEST_ALL_ROOMS_ENABLED,
       DEFAULT_WS_INGEST_ALL_ROOMS_ENABLED,
+    ),
+    telegramRelayEnabled: parseBoolWithDefault(
+      process.env.ALFACLUB_TELEGRAM_RELAY_ENABLED,
+      DEFAULT_TELEGRAM_RELAY_FALLBACK_ENABLED && telegramRelayEnabledFallback,
+    ),
+    telegramRelayBotToken,
+    telegramRelayChatId,
+    telegramRelayThreadId: parseOptionalPositiveInt(
+      process.env.ALFACLUB_TELEGRAM_RELAY_THREAD_ID,
+      2_000_000_000,
     ),
   }
 }
@@ -651,9 +681,58 @@ function decodeWsEventData(data: unknown): string | null {
   return null
 }
 
-async function ingestLiveMessages(messages: AlfaClubLiveInboundMessage[]): Promise<void> {
+function compactSingleLine(value: string): string {
+  return value.replace(/\s+/g, ' ').trim()
+}
+
+function truncateTelegramText(value: string, maxChars = MAX_TELEGRAM_MESSAGE_CHARS): string {
+  const compact = compactSingleLine(value)
+  if (compact.length <= maxChars) return compact
+  return `${compact.slice(0, Math.max(0, maxChars - 1)).trimEnd()}…`
+}
+
+function buildTelegramRelayText(message: AlfaClubLiveInboundMessage): string {
+  const sender = message.sender.trim().toLowerCase()
+  const body = truncateTelegramText(message.text || '')
+  const fallback = body || '(no text)'
+  return [`[AlfaClub] room ${message.roomId}`, `from ${sender}`, fallback].join('\n')
+}
+
+async function sendTelegramRelayMessage(params: {
+  botToken: string
+  chatId: string
+  messageThreadId: number | null
+  text: string
+  timeoutMs: number
+}): Promise<void> {
+  const endpoint = `https://api.telegram.org/bot${params.botToken}/sendMessage`
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), params.timeoutMs)
+  try {
+    await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: params.chatId,
+        text: params.text,
+        disable_web_page_preview: true,
+        ...(params.messageThreadId ? { message_thread_id: params.messageThreadId } : {}),
+      }),
+      signal: controller.signal,
+    })
+  } catch {
+    // Fail-open to preserve bridge progress.
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function ingestLiveMessages(
+  messages: AlfaClubLiveInboundMessage[],
+  flags: AlfaClubChatBridgeFlags,
+): Promise<void> {
   if (messages.length === 0) return
-  await upsertAlfaClubIngestMessages(
+  const inserted = await upsertAlfaClubIngestMessages(
     messages.map((message) => ({
       roomId: message.roomId,
       messageId: message.id,
@@ -664,12 +743,32 @@ async function ingestLiveMessages(messages: AlfaClubLiveInboundMessage[]): Promi
       rawPayloadText: message.rawPayloadText,
     })),
   )
+  if (!flags.telegramRelayEnabled) return
+  if (!flags.telegramRelayBotToken || !flags.telegramRelayChatId) return
+
+  for (const message of inserted) {
+    await sendTelegramRelayMessage({
+      botToken: flags.telegramRelayBotToken,
+      chatId: flags.telegramRelayChatId,
+      messageThreadId: flags.telegramRelayThreadId,
+      text: buildTelegramRelayText({
+        roomId: message.roomId,
+        id: message.messageId,
+        date: message.dateMs ?? Date.now(),
+        sender: message.senderAddress,
+        text: message.text,
+        rawPayloadText: message.rawPayloadText ?? null,
+      }),
+      timeoutMs: flags.sendTimeoutMs,
+    })
+  }
 }
 
 function ensureLiveCommandSocket(params: {
   websocketUrl: string
   roomId: string
   jwt: string
+  flags: AlfaClubChatBridgeFlags
 }): void {
   if (
     bridgeState.liveSocket &&
@@ -704,7 +803,7 @@ function ensureLiveCommandSocket(params: {
       return
     }
     const inboundMessages = extractWsMessagesFromPayload(parsed)
-    void ingestLiveMessages(inboundMessages).catch(() => {
+    void ingestLiveMessages(inboundMessages, params.flags).catch(() => {
       // Fail-open: ingest should never block chat command processing.
     })
     if (!bridgeState.liveFallbackActive) return
@@ -813,6 +912,7 @@ async function runBridgeTick(
       websocketUrl: flags.websocketUrl,
       roomId,
       jwt,
+      flags,
     })
   }
   let fetchedMessages: AlfaClubRoomHistoryMessage[] | null = null
@@ -859,6 +959,7 @@ async function runBridgeTick(
       websocketUrl: flags.websocketUrl,
       roomId,
       jwt,
+      flags,
     })
     bridgeState.seeded = true
     const liveCommands = drainLiveCommands()

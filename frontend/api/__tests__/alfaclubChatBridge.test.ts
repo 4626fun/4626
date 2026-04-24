@@ -27,6 +27,10 @@ describe('readAlfaClubChatBridgeFlags', () => {
       ALFACLUB_CHAT_API_BASE_URL: 'https://api.alfaclub.app',
       ALFACLUB_CHAT_WS_URL: 'wss://ws.alfaclub.app',
       ALFACLUB_VIGILANTE_KILL_SWITCH: '0',
+      TELEGRAM_BOT_TOKEN: undefined,
+      TELEGRAM_TARGET_CHAT_ID: undefined,
+      ALFACLUB_TELEGRAM_RELAY_CHAT_ID: undefined,
+      ALFACLUB_TELEGRAM_RELAY_ENABLED: undefined,
     })
 
     const flags = readAlfaClubChatBridgeFlags()
@@ -40,6 +44,8 @@ describe('readAlfaClubChatBridgeFlags', () => {
     expect(flags.sendTimeoutMs).toBe(9000)
     expect(flags.wsLiveFallbackEnabled).toBe(true)
     expect(flags.wsIngestAllRoomsEnabled).toBe(true)
+    expect(flags.telegramRelayEnabled).toBe(false)
+    expect(flags.telegramRelayChatId).toBeNull()
   })
 
   it('falls back when room id is invalid', () => {
@@ -64,11 +70,34 @@ describe('readAlfaClubChatBridgeFlags', () => {
       ALFACLUB_CHAT_JWT: 'token-xyz',
       ALFACLUB_CHAT_WS_LIVE_FALLBACK_ENABLED: '0',
       ALFACLUB_CHAT_WS_INGEST_ALL_ROOMS_ENABLED: '0',
+      TELEGRAM_BOT_TOKEN: 'telegram-token',
+      ALFACLUB_TELEGRAM_RELAY_CHAT_ID: '@fun4626',
+      ALFACLUB_TELEGRAM_RELAY_ENABLED: '0',
     })
 
     const flags = readAlfaClubChatBridgeFlags()
     expect(flags.wsLiveFallbackEnabled).toBe(false)
     expect(flags.wsIngestAllRoomsEnabled).toBe(false)
+    expect(flags.telegramRelayEnabled).toBe(false)
+    expect(flags.telegramRelayChatId).toBe('@fun4626')
+  })
+
+  it('auto-enables telegram relay when bot token and destination are configured', () => {
+    restoreEnv = applyEnv({
+      ALFACLUB_CHAT_BRIDGE_ENABLED: '1',
+      ALFACLUB_CHAT_ROOM_ID: '1043',
+      ALFACLUB_CHAT_JWT: 'token-xyz',
+      TELEGRAM_BOT_TOKEN: 'telegram-token',
+      ALFACLUB_TELEGRAM_RELAY_CHAT_ID: '@fun4626',
+      ALFACLUB_TELEGRAM_RELAY_THREAD_ID: '77',
+      ALFACLUB_TELEGRAM_RELAY_ENABLED: undefined,
+    })
+
+    const flags = readAlfaClubChatBridgeFlags()
+    expect(flags.telegramRelayEnabled).toBe(true)
+    expect(flags.telegramRelayBotToken).toBe('telegram-token')
+    expect(flags.telegramRelayChatId).toBe('@fun4626')
+    expect(flags.telegramRelayThreadId).toBe(77)
   })
 })
 
