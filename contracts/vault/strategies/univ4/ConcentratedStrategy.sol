@@ -845,7 +845,7 @@ contract ConcentratedStrategy is Ownable, ReentrancyGuard {
         int24 twapTick = twapOracle.getTWAPTick(twapDuration);
         uint160 twapSqrtPriceX96 = TickMath.getSqrtPriceAtTick(twapTick);
 
-        (uint256 expected0, uint256 expected1) = LiquidityAmounts.getAmountsForLiquidity(
+        (uint256 expected0, uint256 expected1) = V4LiquidityAmounts.getAmountsForLiquidity(
             twapSqrtPriceX96,
             TickMath.getSqrtPriceAtTick(tickLower),
             TickMath.getSqrtPriceAtTick(tickUpper),

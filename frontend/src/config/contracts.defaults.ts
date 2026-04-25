@@ -34,20 +34,22 @@ export const BASE_DEFAULTS = {
   create2Factory: addr('4e59b44847b379578588920cA78FbF26c0B4956C'),
   create2Deployer: addr('aBf645362104F34D9C3FE48440bE7c99aaDE58E7'),
 
-  // Split Phase-1 bytecode store + deployer-from-store for the active Base
-  // DeploymentBatcher. Keep these paired with `creatorVaultBatcher`; strict
-  // no-EOA deploy preflight checks the batcher's onchain getters.
-  universalBytecodeStore: addr('4F047c895aA1390D4d0607B2aDDAc54a08ccfe5A'),
-  universalCreate2DeployerFromStore: addr('6f02c56B2F6C213f727D303Ce9E12e6bE1D224f0'),
+  // Module-fixed split Phase-1 bytecode store + deployer-from-store for the
+  // active Base DeploymentBatcher. Keep these paired with
+  // `creatorVaultBatcher`; strict no-EOA deploy preflight checks the
+  // batcher's onchain getters.
+  universalBytecodeStore: addr('6925d601cf618AFB9F55099C0FF3d30769a5e141'),
+  universalCreate2DeployerFromStore: addr('02feAFb12fDF2c0Ef65dA3038584Dd4EA3b1E2A9'),
 
   // AA helpers
   vaultActivationBatcher: addr('7Cc0050842433968cc7A0884d192b61FD0b46F63'),
-  // Split Phase-1 deployment batcher for strict no-EOA deploy sessions. It
-  // exposes both core/finalize split selectors, Base↔Solana bridge routing,
-  // and the enabled OVault runtime composer config for day-one mesh preflight.
-  creatorVaultBatcher: addr('32403a647e73e04ae42b02bdd1ade9c88698fd0c'),
+  // Module-fixed split Phase-1 deployment batcher for strict no-EOA deploy
+  // sessions. It exposes both core/finalize split selectors, Base↔Solana
+  // bridge routing, compatible CreatorOVault modules, and enabled OVault
+  // runtime composer config for day-one mesh preflight.
+  creatorVaultBatcher: addr('e3F9490CfD6bd3D68010405d18Bf772C167E7178'),
   // Optional alias used by env-based rollout/cutover logic.
-  creatorVaultBatcherAutoHandoff: addr('32403a647e73e04ae42b02bdd1ade9c88698fd0c'),
+  creatorVaultBatcherAutoHandoff: addr('e3F9490CfD6bd3D68010405d18Bf772C167E7178'),
 
   // Treasury
   protocolTreasury: addr('7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3'),

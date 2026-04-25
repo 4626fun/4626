@@ -16,7 +16,6 @@ import {
   resolvePayoutRouterKeeperAddress,
   resolvePayoutRouterZoraToken,
 } from '../../../server/_lib/onchain/payoutRouterRuntime.js'
-import { isServerAdminAddress } from '../../../server/_lib/infra/trust.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -50,9 +49,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const principalAddress = readRequestPrincipalAddress(req, { lowercase: true })
   if (!principalAddress) {
     return res.status(401).json({ success: false, error: 'Not authenticated' } satisfies ApiEnvelope<never>)
-  }
-  if (!isServerAdminAddress(principalAddress)) {
-    return res.status(403).json({ success: false, error: 'Admin access required' } satisfies ApiEnvelope<never>)
   }
 
   const contracts = getApiContracts()

@@ -29,6 +29,7 @@ import {
 } from './deployVaultSignatureUtils'
 import {
   concatHex,
+  createPublicClient,
   encodeAbiParameters,
   encodeFunctionData,
   encodePacked,
@@ -37,6 +38,7 @@ import {
   getAddress,
   getCreate2Address,
   isAddress,
+  http,
   keccak256,
   parseAbiParameters,
   toHex,
@@ -118,6 +120,11 @@ const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 50_000_000n
 const MIN_FIRST_DEPOSIT = DEFAULT_MIN_FIRST_DEPOSIT_TOKENS * 10n ** 18n
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
 const ZERO_ADDRESS = addr('0000000000000000000000000000000000000000')
+const LEGACY_DEPLOYMENT_BATCHER = addr('56E8527Bf0824155e1556aED5740366f248B68ca')
+const MODULE_MISMATCH_DEPLOYMENT_BATCHER = addr('32403a647e73e04ae42b02bdd1ade9c88698fd0c')
+const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('e3F9490CfD6bd3D68010405d18Bf772C167E7178')
+const SPLIT_PHASE1_PHASE3_HELPER = addr('A2Bb16F729229705a7F101d3be11ad51Ae90aC83')
+const BASE_PUBLIC_RPC_URL = 'https://mainnet.base.org'
 const BASE_SWAP_ROUTER = addr('2626664c2603336E57B271c5C0b26F421741e481')
 const BASE_WETH = addr('4200000000000000000000000000000000000006')
 const BASE_USDC = addr('833589fCD6eDb6E08f4c7C32D4f71b54bdA02913')
@@ -228,6 +235,26 @@ function resolveDeploymentVersionFromRuntime(): string {
   const params = new URLSearchParams(window.location.search)
   const queryVersion = normalizeDeploymentVersion(params.get('deploymentVersion'))
   return queryVersion ?? envVersion ?? DEFAULT_DEPLOYMENT_VERSION
+}
+
+function normalizeDeploymentBatcherAddress(value: unknown): Address | null {
+  const normalized = normalizeAddressLike(typeof value === 'string' ? value : null)
+  if (!normalized) return null
+  if (sameAddress(normalized, LEGACY_DEPLOYMENT_BATCHER) || sameAddress(normalized, MODULE_MISMATCH_DEPLOYMENT_BATCHER)) {
+    return SPLIT_PHASE1_DEPLOYMENT_BATCHER
+  }
+  return normalized
+}
+
+function defaultPhase3HelperForBatcher(batcher: Address | null | undefined): Address | null {
+  return batcher && sameAddress(batcher, SPLIT_PHASE1_DEPLOYMENT_BATCHER) ? SPLIT_PHASE1_PHASE3_HELPER : null
+}
+
+function createBaseFallbackClient() {
+  return createPublicClient({
+    chain: base,
+    transport: http(BASE_PUBLIC_RPC_URL, { timeout: 12_000 }),
+  })
 }
 
 
@@ -2945,14 +2972,10 @@ function DeployVaultBatcher({
   const href4 = hrefForTx(phaseTxs.tx4 ?? null)
 
   const batcherAddress = useMemo(() => {
-    if (batcherOverride) return batcherOverride
+    const normalizedOverride = normalizeDeploymentBatcherAddress(batcherOverride)
+    if (normalizedOverride) return normalizedOverride
     const configured = CONTRACTS.creatorVaultBatcher ?? null
-    if (!configured) return null
-    try {
-      return getAddress(configured as Address) as Address
-    } catch {
-      return null
-    }
+    return normalizeDeploymentBatcherAddress(configured)
   }, [batcherOverride])
 
   const vaultVanityPrefix = useMemo(() => {
@@ -3022,7 +3045,7 @@ function DeployVaultBatcher({
     ;(async () => {
       const runtimeConfig = await fetchDeployRuntimeConfig().catch(() => null)
       if (cancelled || !runtimeConfig) return
-      const runtimeBatcher = runtimeConfig?.creatorVaultBatcher ? normalizeAddressLike(runtimeConfig.creatorVaultBatcher) : null
+      const runtimeBatcher = normalizeDeploymentBatcherAddress(runtimeConfig?.creatorVaultBatcher ?? null)
       if (runtimeBatcher && (!batcherAddress || !sameAddress(runtimeBatcher, batcherAddress))) {
         setBatcherOverride(runtimeBatcher)
       }
@@ -3411,76 +3434,6 @@ function DeployVaultBatcher({
           shareOftVanityCacheRef.current = { key: vanityKey, salt: found }
         }
       }
-      if (shareOftSaltOverrideUsed && shareOftVanitySuffix) {
-        const phase1ParamsForProbe = {
-          creatorToken,
-          owner,
-          vaultName,
-          vaultSymbol,
-          shareName,
-          shareSymbol,
-          version: deploymentVersionUsed,
-        } as const
-        const probeCallData = supportsSplitPhase1WithSaltSelectors
-          ? encodeFunctionData({
-              abi: CREATOR_VAULT_BATCHER_ABI,
-              functionName: 'deployPhase1CoreWithSalt',
-              args: [phase1ParamsForProbe, codeIds, shareOftSaltOverrideUsed],
-            })
-          : supportsLegacyPhase1WithSaltSelector
-            ? encodeFunctionData({
-                abi: CREATOR_VAULT_BATCHER_ABI,
-                functionName: 'deployPhase1WithSalt',
-                args: [phase1ParamsForProbe, codeIds, shareOftSaltOverrideUsed],
-              })
-            : null
-        let saltOverrideUsable = false
-        if (probeCallData) {
-          try {
-            await publicClient!.call({
-              to: batcherAddress as Address,
-              data: probeCallData,
-              account: owner,
-            })
-            saltOverrideUsable = true
-          } catch {
-            saltOverrideUsable = false
-          }
-        }
-
-        if (!saltOverrideUsable) {
-          if (shareVanityIsCustom) {
-            const blockingMessage =
-              `Active batcher ${batcherDisplay} rejects Phase-1 salt overrides for this deploy. ` +
-              `Custom share token vanity suffix "${shareOftVanitySuffix}" is blocked.`
-            logger.warn('[DeployVault] share_oft_vanity_suffix_blocked', {
-              batcher: batcherAddress,
-              suffix: shareOftVanitySuffix,
-              reason: 'phase1_salt_overrides_rejected',
-            })
-            throw new Error(blockingMessage)
-          }
-
-          const skipLogKey = buildShareVanitySkipLogKey({
-            batcher: batcherAddress,
-            suffix: shareOftVanitySuffix,
-            reason: 'phase1_salt_overrides_rejected',
-          })
-          if (shouldEmitShareVanitySkipLog({ lastKey: shareOftVanitySkipLogKeyRef.current, nextKey: skipLogKey })) {
-            shareOftVanitySkipLogKeyRef.current = skipLogKey
-            logger.debug('[DeployVault] share_oft_vanity_suffix_skipped_default', {
-              batcher: batcherAddress,
-              suffix: shareOftVanitySuffix,
-              reason: 'phase1_salt_overrides_rejected',
-            })
-          }
-
-          shareOftSaltOverrideUsed = null
-          shareOftVanityWarning =
-            `Active batcher ${batcherDisplay} rejects Phase-1 salt overrides, so default share suffix ` +
-            `"${shareOftVanitySuffix}" is not guaranteed for this deploy.`
-        }
-      }
       const shareOftSalt = shareOftSaltOverrideUsed ?? derivedShareOftSalt
       const shareOftAddress = predictCreate2Address({ create2Deployer, salt: shareOftSalt, initCode: shareOftInitCode })
       const vaultAddress = predictCreate2Address({ create2Deployer, salt: vaultSalt, initCode: vaultInitCode })
@@ -3738,7 +3691,7 @@ function DeployVaultBatcher({
           .catch(() => null),
       ])
 
-      const phase3HelperAddress = normalizeAddressLike(phase3HelperRaw)
+      const phase3HelperAddress = normalizeAddressLike(phase3HelperRaw) ?? defaultPhase3HelperForBatcher(batcherAddress)
       const usdcAddress = normalizeAddressLike(usdcRaw) ?? fallbackUsdc
       const uniswapRouterAddress = normalizeAddressLike(uniswapRouterRaw) ?? fallbackUniswapRouter
       const uniswapV3FactoryAddress = normalizeAddressLike(uniswapV3FactoryRaw) ?? fallbackUniswapV3Factory
@@ -4239,7 +4192,7 @@ function DeployVaultBatcher({
       const runtimeConfig = await fetchDeployRuntimeConfig().catch(() => null)
       await ensurePaymasterSession()
       if (!batcherAddress) throw new Error('Deployment batcher is not configured. Set VITE_CREATOR_VAULT_BATCHER.')
-      const runtimeBatcher = runtimeConfig?.creatorVaultBatcher ? getAddress(runtimeConfig.creatorVaultBatcher) : null
+      const runtimeBatcher = normalizeDeploymentBatcherAddress(runtimeConfig?.creatorVaultBatcher ?? null)
       if (runtimeBatcher && !sameAddress(runtimeBatcher, batcherAddress)) {
         const recovered = tryAutoRecoverStaleDeployConfig({
           reason: 'batcher',
@@ -8400,8 +8353,17 @@ function DeployVaultMain() {
     retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 5000),
     queryFn: async () => {
       const batcher = creatorVaultBatcherAddress as Address
+      let readClient = publicClient!
 
-      const batcherCode = await publicClient!.getBytecode({ address: batcher })
+      let batcherCode = await readClient.getBytecode({ address: batcher })
+      if (!batcherCode || batcherCode === '0x') {
+        const fallbackClient = createBaseFallbackClient()
+        const fallbackCode = await fallbackClient.getBytecode({ address: batcher }).catch(() => null)
+        if (fallbackCode && fallbackCode !== '0x') {
+          readClient = fallbackClient
+          batcherCode = fallbackCode
+        }
+      }
       if (!batcherCode || batcherCode === '0x') {
         const chainId = publicClient?.chain?.id
         throw new Error(
@@ -8413,7 +8375,7 @@ function DeployVaultMain() {
       let bytecodeStore: Address | null = null
       let create2Deployer: Address | null = null
       try {
-        bytecodeStore = (await publicClient!.readContract({
+        bytecodeStore = (await readClient.readContract({
           address: batcher,
           abi: CREATOR_VAULT_BATCHER_ABI,
           functionName: 'bytecodeStore',
@@ -8422,7 +8384,7 @@ function DeployVaultMain() {
         getterErrors.push(err)
       }
       try {
-        create2Deployer = (await publicClient!.readContract({
+        create2Deployer = (await readClient.readContract({
           address: batcher,
           abi: CREATOR_VAULT_BATCHER_ABI,
           functionName: 'create2Deployer',
@@ -8454,7 +8416,7 @@ function DeployVaultMain() {
 
       let deployerStore: Address | null = null
       try {
-        deployerStore = (await publicClient!.readContract({
+        deployerStore = (await readClient.readContract({
           address: create2DeployerAddress,
           abi: CREATE2_DEPLOYER_STORE_ABI,
           functionName: 'store',
@@ -8482,7 +8444,7 @@ function DeployVaultMain() {
       // v2 store detection: v1 stores won't have `chunkCount(bytes32)`.
       let storeSupportsChunking = false
       try {
-        await publicClient!.readContract({
+        await readClient.readContract({
           address: bytecodeStoreAddress,
           abi: UNIVERSAL_BYTECODE_STORE_CHUNKCOUNT_ABI,
           functionName: 'chunkCount',
@@ -8520,7 +8482,7 @@ function DeployVaultMain() {
         { key: 'solanaStrategy', label: 'SolanaStrategy', codeId: deployCodeIds.solanaStrategy },
       ] as const
 
-      const pointerResults = await publicClient!.multicall({
+      const pointerResults = await readClient.multicall({
         allowFailure: true,
         contracts: codeEntries.map((c) => ({
           address: bytecodeStoreAddress,
