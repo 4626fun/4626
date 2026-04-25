@@ -14,7 +14,8 @@ import {
 import { getJson, postJson } from "../_shared/http"
 import { assertKvConfigAllowed, readKvNumber, type AwsCredentials, writeKvText } from "../_shared/kvState"
 import { assumeRoleWithWebIdentity } from "../_shared/awsOidc"
-import { assertManualTriggerAuthorized } from "../_shared/manualTriggerAuth"
+import { assertManualTriggerHmac } from "../_shared/manualTriggerAuth"
+import { assertMockDataAllowed } from "../_shared/mockGuard"
 
 type Config = {
   schedule: string
@@ -38,10 +39,21 @@ type Config = {
   aws_session_duration_seconds?: number
   s3_bucket_allowlist?: readonly string[]
   s3_key_prefix_allowlist?: readonly string[]
+  // H-02 (audit 2026-04-25): explicit per-config opt-in for mock-data branches.
+  // See cre/cre-workflows/_shared/mockGuard.ts for the gate semantics; even
+  // when set, the workflowName must end in `-local-simulation` for mock fields
+  // to be honored.
+  allowMockData?: boolean
 }
 
 type ManualPayload = {
   authToken?: string
+  // H-01 (audit 2026-04-25): callers must include `timestamp` (epoch ms) and
+  // `nonce` (>=16 hex chars) so the webhook signature can be rebuilt as
+  // hmac-sha256(secret, `${timestamp}.${nonce}.${stableJson(rest)}`). See
+  // cre/cre-workflows/_shared/manualTriggerAuth.ts for the wire format.
+  timestamp?: number | string
+  nonce?: string
   checkpointKey?: string
   latestBlockNumber?: number
   matchedTransactions?: number
@@ -126,6 +138,14 @@ function fetchBlockWindowSnapshot(
   apiKey: string,
   minBlockExclusive: number,
 ): { blockNumber: number; matchedTransactions: number } | null {
+  // H-02 (audit 2026-04-25): refuse mock branches outside local-simulation.
+  // A stray `mockLatestBlockNumber` / `mockMatchedTransactions` copy-pasted
+  // into config.staging.json / config.production.json now fails the run
+  // instead of silently emitting mock-derived orchestrator decisions.
+  assertMockDataAllowed(nodeRuntime.config, {
+    mockLatestBlockNumber: nodeRuntime.config.mockLatestBlockNumber,
+    mockMatchedTransactions: nodeRuntime.config.mockMatchedTransactions,
+  })
   if (typeof nodeRuntime.config.mockLatestBlockNumber === "number") {
     return {
       blockNumber: Math.max(0, Math.floor(nodeRuntime.config.mockLatestBlockNumber)),
@@ -315,10 +335,14 @@ const onCronTrigger = (runtime: Runtime<Config>): string => {
 
 const onHttpTrigger = (runtime: Runtime<Config>, payload: HTTPPayload): string => {
   const manual = parseManualPayload(payload)
-  const apiKey = runtime.getSecret({ id: "KEEPR_API_KEY" }).result().value
+  // H-01 (audit 2026-04-25): the manual trigger now requires HMAC + ts + nonce
+  // verification. The signing key is the workflow-specific HMAC secret (not
+  // KEEPR_API_KEY, which gates the downstream runtime ingest API and remains
+  // a separate trust boundary). See cre/cre-workflows/_shared/manualTriggerAuth.ts.
+  const hmacSecret = runtime.getSecret({ id: "CRE_RUNTIME_WEBHOOK_HMAC_SECRET" }).result().value
   // SEV-010 regression guard — see cre/cre-workflows/_shared/manualTriggerAuth.ts
   // and the matching unit test in cre/tests/runtime-orchestrator.test.ts.
-  assertManualTriggerAuthorized(manual.authToken, apiKey)
+  assertManualTriggerHmac(manual, hmacSecret)
   const result = runOrchestration(runtime, "http", manual)
   return JSON.stringify(result, null, 2)
 }

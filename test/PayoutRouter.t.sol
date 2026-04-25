@@ -89,6 +89,17 @@ contract MockExternalSwapTarget {
     }
 }
 
+/// M-04 (audit 2026-04-25): minimal Protocol Rewards mock so the test deploy
+/// passes the constructor's `code.length > 0` guard. Returns 0 from
+/// `balanceOf` and accepts the legacy `withdraw(to,amount)` selector.
+contract MockProtocolRewards {
+    function balanceOf(address) external pure returns (uint256) {
+        return 0;
+    }
+
+    function withdraw(address, uint256) external pure {}
+}
+
 contract PayoutRouterTest is Test {
     MockToken internal creatorCoin;
     MockToken internal usdc;
@@ -100,6 +111,7 @@ contract PayoutRouterTest is Test {
     MockExternalSwapTarget internal externalTarget;
 
     PayoutRouter internal router;
+    MockProtocolRewards internal protocolRewards;
 
     function setUp() public {
         creatorCoin = new MockToken("Creator", "CR8R");
@@ -110,9 +122,16 @@ contract PayoutRouterTest is Test {
         burnStream = new MockBurnStream();
         swapRouter = new MockSwapRouterV3();
         externalTarget = new MockExternalSwapTarget();
+        protocolRewards = new MockProtocolRewards();
 
         router = new PayoutRouter(
-            address(creatorCoin), address(vault), address(burnStream), address(this), address(swapRouter), address(weth)
+            address(creatorCoin),
+            address(vault),
+            address(burnStream),
+            address(this),
+            address(swapRouter),
+            address(weth),
+            address(protocolRewards)
         );
     }
 
@@ -259,6 +278,50 @@ contract PayoutRouterTest is Test {
 
     function _encodePath(address tokenIn, uint24 fee, address tokenOut) internal pure returns (bytes memory) {
         return abi.encodePacked(tokenIn, fee, tokenOut);
+    }
+
+    /// M-04 (audit 2026-04-25): a deploy that resolves `protocolRewards` to an
+    /// address with no code MUST revert. This pins the constructor-time guard
+    /// against silently no-op'ing every claim call after deploy.
+    function test_M04_constructorRevertsWhenProtocolRewardsHasNoCode() public {
+        address eoa = address(0xDEAD); // no code
+        vm.expectRevert(abi.encodeWithSelector(PayoutRouter.ProtocolRewardsHasNoCode.selector, eoa));
+        new PayoutRouter(
+            address(creatorCoin),
+            address(vault),
+            address(burnStream),
+            address(this),
+            address(swapRouter),
+            address(weth),
+            eoa
+        );
+    }
+
+    /// M-04: passing `address(0)` MUST select the chain default. On Base
+    /// mainnet that address has bytecode (the Zora Protocol Rewards contract);
+    /// on chains where it does not, the constructor still reverts. We do not
+    /// assert the address value here — only that the address(0) sentinel is
+    /// honored; the deploy-time guard is the safety net regardless.
+    function test_M04_constructorAcceptsAddressZeroAsDefaultSelector() public {
+        // The default address has no code in a unit-test EVM; the deploy MUST
+        // therefore revert with ProtocolRewardsHasNoCode pointing at the
+        // default. This is the expected behavior — operators must explicitly
+        // pass a chain-appropriate address (or deploy to a fork that has code
+        // at the default).
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PayoutRouter.ProtocolRewardsHasNoCode.selector, router.DEFAULT_PROTOCOL_REWARDS()
+            )
+        );
+        new PayoutRouter(
+            address(creatorCoin),
+            address(vault),
+            address(burnStream),
+            address(this),
+            address(swapRouter),
+            address(weth),
+            address(0)
+        );
     }
 }
 

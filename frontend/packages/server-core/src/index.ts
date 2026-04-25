@@ -29,6 +29,7 @@ export { guardAgentApiRequest } from './agent.js'
 export { getApiContracts } from './contracts.js'
 export {
   readBearerToken,
+  requireAdminApiToken,
   requireBearerEnvAuth,
   requireKeeprApiKey,
   requireOptionalHeaderEnvAuth,

@@ -40,12 +40,17 @@ jobs:
         with:
           version: nightly
 
-      - name: Run Forge build (sizes; non-blocking EIP-170)
+      - name: Run Forge build (sizes; EIP-170 blocking)
         run: |
-          # `forge build --sizes` exits non-zero when contracts exceed EIP-170.
-          # This is a real deployability concern, but it shouldn't block CI from
-          # running tests while we work down contract size.
-          forge build --sizes || true
+          # M-01 (audit 2026-04-25): `forge build --sizes` exits non-zero when
+          # any deployable contract exceeds the EIP-170 24,576-byte runtime
+          # bytecode cap. This step is the protocol's only deployability gate;
+          # multiple oversize-driven splits already exist (vault modules,
+          # DeploymentBatcher helpers, lottery admin module), and a single
+          # innocent ~200B feature add could silently push the next deploy
+          # over the cap. The previous `|| true` swallowed that failure; the
+          # gate is now blocking. See docs/operations/contract-size-gate.md.
+          forge build --sizes
         id: build
 
       - name: Run Forge tests

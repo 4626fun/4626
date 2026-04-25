@@ -11,6 +11,7 @@ import {
 } from "@chainlink/cre-sdk"
 import { postJson } from "../_shared/http"
 import { sha256Hex, stableSortBy, stableSortStrings } from "../_shared/determinism"
+import { assertManualTriggerHmac } from "../_shared/manualTriggerAuth"
 
 type Config = {
   apiBaseUrl: string
@@ -21,6 +22,13 @@ type Config = {
 
 type WebhookPayload = {
   authToken?: string
+  // H-01 (audit 2026-04-25): the webhook envelope is now an HMAC-signed
+  // structure of shape { authToken, timestamp, nonce, event } where authToken
+  // is hmac-sha256(secret, `${timestamp}.${nonce}.${stableJson(event)}`).
+  // See cre/cre-workflows/_shared/manualTriggerAuth.ts for the wire format
+  // and the canonicalization contract.
+  timestamp?: number | string
+  nonce?: string
   event?: {
     data?: {
       block?: {
@@ -163,10 +171,13 @@ function sinkSummary(
 
 const onHttpTrigger = (runtime: Runtime<Config>, payload: HTTPPayload): string => {
   const parsedPayload = parseWebhookPayload(payload)
-  const expectedToken = runtime.getSecret({ id: "CRE_RUNTIME_WEBHOOK_HMAC_SECRET" }).result().value
-  if (!parsedPayload.authToken || parsedPayload.authToken !== expectedToken) {
-    throw new Error("unauthorized_webhook")
-  }
+  const hmacSecret = runtime.getSecret({ id: "CRE_RUNTIME_WEBHOOK_HMAC_SECRET" }).result().value
+  // H-01 (audit 2026-04-25): mirror the runtimeBridge HMAC contract — verify
+  // hmac-sha256(secret, `${timestamp}.${nonce}.${canonicalBody}`) with a
+  // ±5min skew window and a constant-time compare. Replay protection across
+  // CRE node restarts is enforced downstream via the server-side replay
+  // nonce store (M-18 / 4626-327).
+  assertManualTriggerHmac(parsedPayload, hmacSecret)
   const summary = buildSummary(runtime.config, parsedPayload)
 
   runtime.log(

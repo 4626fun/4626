@@ -52,6 +52,11 @@ import {
   rateLimitKey,
   readBoundedJsonObjectBody,
   logger,
+  // M-06 (audit 2026-04-25): centralized admin-token gate. Replaces the
+  // local `requireAdminBearer` + `timingSafeEqualStr` + `extractBearerToken`
+  // helpers below. Migrating other admin handlers to this import is the
+  // remaining surface tracked in M-06.
+  requireAdminApiToken,
 } from '../../../../packages/server-core/src/index.js'
 import { provisionCommandIssuerContext } from '../../../../server/_lib/wallet/commandIssuerContext.js'
 import type { SpendPermissionPayload } from '../../../../server/_lib/wallet/commandIssuerContext.js'
@@ -118,41 +123,13 @@ function getQuorumId(): string {
   return fromEnv || 'lr8vgu2l0wnmwg824n4jrtr3'
 }
 
-function extractBearerToken(req: VercelRequest): string | null {
-  const header = req.headers.authorization ?? req.headers.Authorization
-  const raw = Array.isArray(header) ? header[0] : header
-  if (!raw || typeof raw !== 'string') return null
-  const match = /^Bearer\s+(.+)$/i.exec(raw.trim())
-  if (!match) return null
-  return match[1].trim() || null
-}
-
-function timingSafeEqualStr(a: string, b: string): boolean {
-  if (a.length !== b.length) return false
-  let diff = 0
-  for (let i = 0; i < a.length; i += 1) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i)
-  }
-  return diff === 0
-}
-
-function requireAdminBearer(req: VercelRequest, res: VercelResponse): boolean {
-  const expected = (process.env.ADMIN_API_TOKEN ?? '').trim()
-  if (!expected) {
-    res
-      .status(401)
-      .json({ success: false, error: 'admin_token_missing' } satisfies ApiEnvelope<never>)
-    return false
-  }
-  const provided = extractBearerToken(req)
-  if (!provided || !timingSafeEqualStr(provided, expected)) {
-    res
-      .status(401)
-      .json({ success: false, error: 'admin_token_invalid' } satisfies ApiEnvelope<never>)
-    return false
-  }
-  return true
-}
+// M-06 (audit 2026-04-25): the local `extractBearerToken`,
+// `timingSafeEqualStr`, and `requireAdminBearer` helpers were replaced with
+// the centralized `requireAdminApiToken` import from `packages/server-core`.
+// Behaviour-equivalent: same `ADMIN_API_TOKEN` env var, same constant-time
+// compare semantics (server-core uses `node:crypto` `timingSafeEqual` which
+// is materially identical to the manual XOR loop). Other admin handlers
+// re-implementing the same boilerplate should migrate to this helper.
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
@@ -165,7 +142,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .json({ success: false, error: 'Method not allowed' } satisfies ApiEnvelope<never>)
   }
 
-  if (!requireAdminBearer(req, res)) return
+  if (!requireAdminApiToken(req, res)) return
 
   const rate = checkRateLimit(
     rateLimitKey('admin-arch-b-subacct-provision', getClientIp(req) || 'no-ip', 'token'),

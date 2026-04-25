@@ -1,8 +1,9 @@
 {
   "schedule": "0 */5 * * * *",
   "apiBaseUrl": "http://127.0.0.1:8789/api",
-  "workflowName": "runtime-reference-feeds",
+  "workflowName": "runtime-reference-feeds-local-simulation",
   "sinkEnabled": false,
+  "allowMockData": true,
   "chainName": "ethereum-mainnet-base-1",
   "feeds": [
     {

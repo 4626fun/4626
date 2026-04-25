@@ -59,25 +59,29 @@ the next feature lands on that file — Sprint 3 is the right window.
 
 ## CI gate
 
-A `forge build --sizes` check should be added to GitHub Actions as a
-required status check on `main`. The suggested workflow step is:
+The `forge build --sizes` check is enforced as a blocking step in
+`.github/workflows/test.yml` (step name: *Run Forge build (sizes;
+EIP-170 blocking)*). It exits non-zero if any deployable contract
+exceeds the 24,576-byte runtime cap, and CI fails the job.
+
+**M-01 (audit 2026-04-25) update:** the previous CI step swallowed
+failures with `|| true`, making the gate effectively non-blocking.
+This was flagged as a deployability time-bomb because the protocol
+already runs multiple oversize-driven splits (`CreatorOVault`
+core/strategies/admin modules, `DeploymentBatcher` phase2/phase3/UniV4
+helpers, `CreatorLotteryManager` admin module). The current step is:
 
 ```yaml
-- name: Enforce EIP-170 contract size limit
-  run: |
-    forge build --sizes 2>&1 | tee sizes.log
-    # Fail if any contract is over 24,576 bytes
-    if awk '/^\|/ && $4+0 > 24576 { print; found=1 } END { exit found }' sizes.log; then
-      echo "All contracts within EIP-170 limit"
-    else
-      echo "::error::One or more contracts exceed 24 KiB (EIP-170)"
-      exit 1
-    fi
+- name: Run Forge build (sizes; EIP-170 blocking)
+  run: forge build --sizes
+  id: build
 ```
 
-This gate is **not** part of Sprint 2 because the audit remediation
-branch is scoped to contract fixes only. Adding the CI step is
-tracked as follow-up work in Linear (4626-292).
+If a contract crosses 24 KiB, the build will fail and the PR cannot
+land until the offending contract is split or shrunk. Local
+developers who want to inspect sizes without failing should run
+`forge build --sizes` directly in their checkout — `forge` returns
+the offending contract list before exiting with a non-zero code.
 
 ## Why no module split in Sprint 2
 

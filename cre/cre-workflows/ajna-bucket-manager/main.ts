@@ -12,6 +12,7 @@ import {
   evaluateAndEnqueueAjnaActions,
   parseAjnaManualPayload,
 } from "../_shared/ajnaManager"
+import { assertManualTriggerHmac } from "../_shared/manualTriggerAuth"
 
 type Config = AjnaManagerConfig & {
   schedule: string
@@ -22,10 +23,11 @@ const onCronTrigger = (runtime: Runtime<Config>): AjnaWorkflowResult =>
 
 const onHttpTrigger = (runtime: Runtime<Config>, payload: HTTPPayload): AjnaWorkflowResult => {
   const manual = parseAjnaManualPayload(payload.input)
-  const apiKey = runtime.getSecret({ id: "KEEPR_API_KEY" }).result().value
-  if (!manual.authToken || manual.authToken !== apiKey) {
-    throw new Error("unauthorized_manual_trigger")
-  }
+  // H-01 (audit 2026-04-25): manual triggers now require an HMAC envelope.
+  // The signing key is the workflow-specific HMAC secret, not KEEPR_API_KEY.
+  // See cre/cre-workflows/_shared/manualTriggerAuth.ts for the wire format.
+  const hmacSecret = runtime.getSecret({ id: "CRE_RUNTIME_WEBHOOK_HMAC_SECRET" }).result().value
+  assertManualTriggerHmac(manual, hmacSecret)
   return evaluateAndEnqueueAjnaActions(runtime, manual)
 }
 

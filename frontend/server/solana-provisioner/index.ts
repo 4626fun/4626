@@ -537,13 +537,41 @@ async function handleHealth(req: IncomingMessage, res: ServerResponse): Promise<
   const cliExists = !!cliDir && existsSync(cliDir)
   const provisionerSecret = readProvisionerBearerSecret()
   const secretSet = provisionerSecret.value.length > 0
-  if (secretSet && !authOk(req, provisionerSecret.value)) {
+
+  // L-01 (audit 2026-04-25): redact diagnostic fields from unauthenticated
+  // responses. Previously, when no secret was configured we returned the
+  // full `{cliExists, secretSet, payerConfigured, payerHealthy, payerError,
+  // baseRpcConfigured, solanaRpcConfigured, deployEnvDefault}` body to any
+  // caller — this is useful pre-attack reconnaissance for an attacker
+  // probing a misconfigured deployment. We now require either:
+  //   - a configured bearer secret AND a valid Authorization header, OR
+  //   - the explicit dev-only flag PROVISIONER_HEALTH_ALLOW_UNAUTH=1.
+  // Otherwise the response is reduced to `{ok:false, reason:"unconfigured"}`
+  // which leaks no deployment-readiness state.
+  const allowUnauth = String(process.env.PROVISIONER_HEALTH_ALLOW_UNAUTH ?? '').trim() === '1'
+  const authenticated = secretSet && authOk(req, provisionerSecret.value)
+
+  if (secretSet && !authenticated) {
     return json(res, 401, {
       ok: false,
       service: 'solana-route-provisioner',
       error: 'Unauthorized',
     })
   }
+
+  if (!secretSet && !allowUnauth) {
+    // Fail-closed: return a minimal unconfigured envelope. Operators can
+    // still detect that the service is up (HTTP 200) without leaking any
+    // deployment-readiness fields. To restore the previous behavior in a
+    // dev/staging environment, set PROVISIONER_HEALTH_ALLOW_UNAUTH=1.
+    return json(res, 200, {
+      ok: false,
+      service: 'solana-route-provisioner',
+      reason: 'unconfigured',
+      now: new Date().toISOString(),
+    })
+  }
+
   const payerHealth = await readProvisionerPayerHealth()
   const payload: Record<string, unknown> = {
     ok: cliExists && secretSet && payerHealth.payerHealthy,

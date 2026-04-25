@@ -79,6 +79,37 @@ export function requireKeeprApiKey(
   })
 }
 
+/**
+ * M-06 (audit 2026-04-25) centralization helper. Wraps `requireBearerEnvAuth`
+ * for handlers under `frontend/api/_handlers/admin/**` that gate on a single
+ * `ADMIN_API_TOKEN` env var with a constant-time bearer compare.
+ *
+ * Use from new handlers; existing handlers that re-implement the same
+ * pattern inline (see audit M-06 / L-04 for the migration surface) should
+ * be migrated to this helper one PR at a time so admin-token logic lives
+ * in exactly one place.
+ *
+ * Returns false and writes a 401 (or 500 if the env var is unset) to `res`
+ * when the request fails the gate; returns true and leaves `res` untouched
+ * on success.
+ */
+export function requireAdminApiToken(
+  req: VercelRequest,
+  res: VercelResponse,
+  options?: {
+    /** Custom error string for the 401 path. Defaults to 'admin_token_invalid'. */
+    unauthorizedError?: string
+    /** Custom error string for the 500 path when ADMIN_API_TOKEN is unset. Defaults to 'admin_token_missing'. */
+    missingSecretError?: string
+  },
+): boolean {
+  return requireBearerEnvAuth(req, res, {
+    envKey: 'ADMIN_API_TOKEN',
+    missingSecretError: options?.missingSecretError ?? 'admin_token_missing',
+    unauthorizedError: options?.unauthorizedError ?? 'admin_token_invalid',
+  })
+}
+
 // FIX: FINDING-06 — fail closed when the env var is absent instead of allowing
 // unauthenticated access. A misconfigured deployment should reject requests,
 // not silently bypass auth.

@@ -84,7 +84,20 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
     address public immutable burnStream;
     address public immutable swapRouter;
     address public immutable weth;
-    address public constant PROTOCOL_REWARDS = 0x7777777F279eba3d3Ad8F4E708545291A6fDBA8B;
+    /// @notice Default Zora Protocol Rewards address on Base mainnet. Used as
+    ///         the default value for the `protocolRewards` immutable when the
+    ///         deployer passes `address(0)` to the constructor. Kept as a
+    ///         public constant so existing tooling that reads it continues to
+    ///         work.
+    address public constant DEFAULT_PROTOCOL_REWARDS = 0x7777777F279eba3d3Ad8F4E708545291A6fDBA8B;
+    /// @notice Address of the protocol rewards contract this router claims
+    ///         from. M-04 (audit 2026-04-25): previously a hardcoded constant
+    ///         that, when deployed to a chain where the address has no code,
+    ///         would silently no-op (`(bool ok,) = addr.call(...)` returns
+    ///         `(true, "")` for an EOA). Now an immutable parameter, with a
+    ///         constructor-time `code.length > 0` guard so a chain mismatch
+    ///         is caught at deploy time rather than corrupting routing state.
+    address public immutable protocolRewards;
 
     // ================================
     // CONFIG
@@ -143,6 +156,13 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
     error InvalidBatchAction(uint8 kind);
     error ExternalSwapCallFailed();
     error ProtocolRewardsClaimFailed();
+    /// @notice M-04 (audit 2026-04-25): the constructor-supplied
+    ///         `_protocolRewards` (or its default fallback) had no code at
+    ///         deploy time. Without code, `.call(...)` to an EOA succeeds
+    ///         silently (returns `(true, "")`) and the claim path no-ops
+    ///         while `claimProtocolRewards()` reports success. Failing the
+    ///         deploy is the correct response.
+    error ProtocolRewardsHasNoCode(address candidate);
 
     // ================================
     // MODIFIERS
@@ -163,7 +183,8 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
         address _burnStream,
         address _owner,
         address _swapRouter,
-        address _weth
+        address _weth,
+        address _protocolRewards
     ) Ownable(_owner) {
         if (
             _creatorCoin == address(0) || _vault == address(0) || _burnStream == address(0) || _owner == address(0)
@@ -177,6 +198,18 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
         burnStream = _burnStream;
         swapRouter = _swapRouter;
         weth = _weth;
+
+        // M-04 (audit 2026-04-25): the protocol rewards address is now an
+        // immutable constructor parameter. Passing `address(0)` selects the
+        // mainnet default (Zora Protocol Rewards on Base), preserving
+        // backwards compatibility for existing deploy scripts. We then
+        // require that the resolved address has bytecode at construction
+        // time so a chain-mismatch (e.g. deploying to a chain where the
+        // address is empty) fails the deploy instead of silently no-opping
+        // every claim call afterwards.
+        address rewards = _protocolRewards == address(0) ? DEFAULT_PROTOCOL_REWARDS : _protocolRewards;
+        if (rewards.code.length == 0) revert ProtocolRewardsHasNoCode(rewards);
+        protocolRewards = rewards;
 
         // Allow this router to deposit creatorCoin without repeated approvals.
         IERC20(_creatorCoin).forceApprove(_vault, type(uint256).max);
@@ -366,7 +399,7 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
      * @notice Return claimable protocol rewards assigned to this router.
      */
     function protocolRewardsClaimable() external view returns (uint256) {
-        return IProtocolRewards(PROTOCOL_REWARDS).balanceOf(address(this));
+        return IProtocolRewards(protocolRewards).balanceOf(address(this));
     }
 
     /**
@@ -385,7 +418,7 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
      * @dev Claimed ETH is wrapped to WETH by `receive()`.
      */
     function claimAllProtocolRewards() external onlyOwnerOrKeeper nonReentrant returns (uint256 claimed) {
-        uint256 claimable = IProtocolRewards(PROTOCOL_REWARDS).balanceOf(address(this));
+        uint256 claimable = IProtocolRewards(protocolRewards).balanceOf(address(this));
         if (claimable == 0) revert ZeroAmount();
         _claimProtocolRewards(claimable);
         emit ProtocolRewardsClaimed(msg.sender, claimable);
@@ -501,11 +534,11 @@ contract PayoutRouter is Ownable, ReentrancyGuard {
 
     function _claimProtocolRewards(uint256 amount) internal {
         // Primary ABI: withdraw(address to, uint256 amount)
-        (bool ok,) = PROTOCOL_REWARDS.call(abi.encodeWithSelector(bytes4(0xf3fef3a3), address(this), amount));
+        (bool ok,) = protocolRewards.call(abi.encodeWithSelector(bytes4(0xf3fef3a3), address(this), amount));
 
         // Compatibility ABI: withdrawFor(address from, address to, uint256 amount)
         if (!ok) {
-            (ok,) = PROTOCOL_REWARDS.call(abi.encodeWithSelector(bytes4(0x9f1d9267), address(this), address(this), amount));
+            (ok,) = protocolRewards.call(abi.encodeWithSelector(bytes4(0x9f1d9267), address(this), address(this), amount));
         }
 
         if (!ok) revert ProtocolRewardsClaimFailed();

@@ -14,6 +14,7 @@ import {
 } from "./strategyQueue"
 import { createEvmClientForChain, readContractBytes, resolveChainId } from "./evm"
 import { selectRotatingItems } from "./rotation"
+import { constantTimeEqualString } from "./manualTriggerAuth"
 
 export type CharmManagerConfig = {
   apiBaseUrl: string
@@ -30,7 +31,19 @@ export type CharmManualPayload = {
   vaultAddress?: string
   maxVaultsPerExecution?: number
   forceEnqueue?: boolean
+  // H-01 (audit 2026-04-25): `authToken` is the HMAC-SHA256 signature of the
+  // canonical payload (see `manualTriggerAuth.ts`). It authorizes that the
+  // caller knows the webhook secret — it does NOT authorize force-enqueue.
   authToken?: string
+  // H-01 (audit 2026-04-25): callers must include `timestamp` (epoch ms) and
+  // `nonce` (>=16 hex chars) so the webhook signature can be rebuilt as
+  // hmac-sha256(secret, `${timestamp}.${nonce}.${stableJson(rest)}`).
+  timestamp?: number | string
+  nonce?: string
+  // 4626-audit-2026-04-25: separate field for the FORCE_ENQUEUE_AUTH_TOKEN
+  // shared secret. Required (in addition to a valid HMAC envelope) when
+  // `forceEnqueue=true`. Compared in constant time against the secret.
+  forceEnqueueAuthToken?: string
   strategyAddress?: string
   charmVaultAddress?: string
   referenceTick?: number
@@ -334,9 +347,19 @@ export function evaluateAndEnqueueCharmActions(
   manual: CharmManualPayload = {},
 ): CharmWorkflowResult {
   const apiKey = runtime.getSecret({ id: "KEEPR_API_KEY" }).result().value
-  // FIX: CRT-03 — Use separate FORCE_ENQUEUE_AUTH_TOKEN secret for manual override auth
+  // FIX: CRT-03 — Use separate FORCE_ENQUEUE_AUTH_TOKEN secret for manual override auth.
+  // 4626-audit-2026-04-25 review: after the H-01 HMAC migration, `authToken` is the
+  // HMAC signature, NOT the force-enqueue secret. Force-enqueue authorization is now
+  // gated on a dedicated `forceEnqueueAuthToken` field, constant-time compared against
+  // the configured secret. Both checks must pass: valid HMAC envelope (already
+  // verified by the workflow `onHttpTrigger`) AND a matching force-enqueue token.
   const forceEnqueueToken = runtime.getSecret({ id: "FORCE_ENQUEUE_AUTH_TOKEN" }).result().value || apiKey
-  const canForceEnqueue = manual.forceEnqueue === true && manual.authToken === forceEnqueueToken
+  const providedForceToken =
+    typeof manual.forceEnqueueAuthToken === "string" ? manual.forceEnqueueAuthToken : ""
+  const canForceEnqueue =
+    manual.forceEnqueue === true &&
+    forceEnqueueToken.length > 0 &&
+    constantTimeEqualString(providedForceToken, forceEnqueueToken)
   const chainId = resolveChainId(runtime.config.chainName, runtime.config.chainId)
   const evmClient = createEvmClientForChain(runtime.config.chainName)
   const httpClient = new HTTPClient()

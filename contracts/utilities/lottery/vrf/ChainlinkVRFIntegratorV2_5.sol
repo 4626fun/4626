@@ -250,7 +250,13 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
      * @notice Quote fee for VRF request
      */
     function quoteFee() public view returns (MessagingFee memory fee) {
-        bytes memory options = hex"000301001101000000000000000000000000000A88F4";
+        // FIX: M-03 (audit 2026-04-25) — derive options from the configured
+        // `defaultGasLimit` so that calls to `setDefaultGasLimit` actually
+        // change both the quote and the send. The previous literal blob
+        // `0x000301001101000000000000000000000000000A88F4` baked in
+        // gas=0xA88F4 (=690420), diverging silently from any reconfigured
+        // gas limit and causing under-funded LayerZero messages.
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(defaultGasLimit, 0);
         bytes memory payload = abi.encode(uint64(requestCounter + 1), int256(0), uint256(0));
         return _quote(hubEid, payload, options, false);
     }
@@ -299,7 +305,9 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
         // an arbitrary EOA cannot externalize hub VRF subscription spend.
         if (!authorizedSponsoredCallers[msg.sender]) revert UnauthorizedSponsoredCaller();
         require(dstEid == hubEid, "Invalid destination");
-        bytes memory options = hex"000301001101000000000000000000000000000A88F4";
+        // FIX: M-03 (audit 2026-04-25) — derive options from `defaultGasLimit`
+        // so quote and send agree under a single source of truth.
+        bytes memory options = OptionsBuilder.newOptions().addExecutorLzReceiveOption(defaultGasLimit, 0);
 
         bytes32 peer = peers[hubEid];
         require(peer != bytes32(0), "Hub peer not set");
@@ -373,10 +381,25 @@ contract ChainlinkVRFIntegratorV2_5 is OApp, OAppOptionsType3 {
         emit SponsoredCallerAuthorizationUpdated(caller, authorized);
     }
 
+    /// FIX: L-02 (audit 2026-04-25) — bound the per-call iteration count so
+    /// the permissionless cleanup path cannot be used to grief gas / mempool
+    /// pressure with arbitrarily large `requestIds` arrays. Operators / keepers
+    /// can still drain a long backlog by calling repeatedly; legitimate users
+    /// will rarely supply more than a handful of ids per call.
+    uint256 public constant MAX_CLEANUP_BATCH = 256;
+    error CleanupBatchTooLarge(uint256 supplied, uint256 maxAllowed);
+
     /**
      * @notice Clean up expired requests
+     * @dev L-02 (audit 2026-04-25): the batch length is capped at
+     *      `MAX_CLEANUP_BATCH`. Calls with a larger array revert before any
+     *      state writes, preserving the original semantics for normal use
+     *      while removing the unbounded-loop griefing surface.
      */
     function cleanupExpiredRequests(uint64[] calldata requestIds) external {
+        if (requestIds.length > MAX_CLEANUP_BATCH) {
+            revert CleanupBatchTooLarge(requestIds.length, MAX_CLEANUP_BATCH);
+        }
         for (uint256 i = 0; i < requestIds.length; i++) {
             uint64 requestId = requestIds[i];
             RequestStatus storage request = s_requests[requestId];

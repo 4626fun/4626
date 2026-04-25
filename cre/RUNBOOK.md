@@ -6,7 +6,7 @@
 - CRE CLI installed and available in `PATH`
 - CRE CLI authenticated (`cre login`) when required
 - Bun installed
-- Working directory: repo root (`/home/akitav2/projects/4626`)
+- Working directory: repo root (`<repo-root>`, i.e. wherever you cloned the repository — e.g. `$REPO_ROOT` exported from your shell)
 
 Verify the local toolchain before doing anything else:
 
@@ -23,7 +23,7 @@ Do not rely on `npx cre` in locked-down environments, since registry access may 
 
 ```bash
 # Run from an existing checkout of this repository:
-# /home/akitav2/projects/4626
+# cd <repo-root>     # e.g. $REPO_ROOT, set to your local clone path
 npm --prefix cre install
 cp cre/cre-workflows/.env.example cre/cre-workflows/.env
 cp cre/secrets.example.env cre/.env

@@ -22,6 +22,7 @@ import {
 } from "viem"
 import { postJson } from "../_shared/http"
 import { sha256Hex, stableJsonStringify, stableSortBy } from "../_shared/determinism"
+import { assertMockDataAllowed } from "../_shared/mockGuard"
 
 type FeedConfig = {
   name: string
@@ -66,6 +67,11 @@ type Config = {
     feeds?: PriceFeedResult[]
     mvrFeeds?: MvrFeedResult[]
   }
+  // H-02 (audit 2026-04-25): explicit per-config opt-in for mock-data branches.
+  // See cre/cre-workflows/_shared/mockGuard.ts for the gate semantics; even
+  // when set, the workflowName must end in `-local-simulation` for mock fields
+  // to be honored.
+  allowMockData?: boolean
 }
 
 type IngestResponse = {
@@ -255,6 +261,11 @@ function readMvrFeed(
 }
 
 const onCronTrigger = (runtime: Runtime<Config>): string => {
+  // H-02 (audit 2026-04-25): refuse mock branches outside local-simulation.
+  // A stray `mockResults` field copy-pasted into config.staging.json /
+  // config.production.json now fails the run instead of silently emitting
+  // mock-derived feeds digest.
+  assertMockDataAllowed(runtime.config, { mockResults: runtime.config.mockResults })
   const orderedFeeds = stableSortBy(runtime.config.feeds ?? [], (entry) => entry.address.toLowerCase())
   const orderedMvrFeeds = stableSortBy(runtime.config.mvrFeeds ?? [], (entry) =>
     entry.address.toLowerCase(),

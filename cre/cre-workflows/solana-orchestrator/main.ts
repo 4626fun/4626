@@ -10,6 +10,7 @@ import {
   consensusIdenticalAggregation,
 } from "@chainlink/cre-sdk"
 import { postJson } from "../_shared/http"
+import { assertManualTriggerHmac } from "../_shared/manualTriggerAuth"
 
 type Config = {
   schedule: string
@@ -28,6 +29,11 @@ type ManualPayload = {
   workflowName?: string
   checkpointKey?: string
   authToken?: string
+  // H-01 (audit 2026-04-25): callers must include `timestamp` (epoch ms) and
+  // `nonce` (>=16 hex chars) so the webhook signature can be rebuilt as
+  // hmac-sha256(secret, `${timestamp}.${nonce}.${stableJson(rest)}`).
+  timestamp?: number | string
+  nonce?: string
   payload?: Record<string, unknown>
 }
 
@@ -236,10 +242,11 @@ const onCronTrigger = (runtime: Runtime<Config>): SolanaOrchestratorResult => ru
 
 const onHttpTrigger = (runtime: Runtime<Config>, payload: HTTPPayload): SolanaOrchestratorResult => {
   const manual = parseManualPayload(payload)
-  const apiKey = runtime.getSecret({ id: "KEEPR_API_KEY" }).result().value
-  if (!manual.authToken || manual.authToken !== apiKey) {
-    throw new Error("unauthorized_manual_trigger")
-  }
+  // H-01 (audit 2026-04-25): manual triggers now require an HMAC envelope.
+  // The signing key is the workflow-specific HMAC secret, not KEEPR_API_KEY.
+  // See cre/cre-workflows/_shared/manualTriggerAuth.ts for the wire format.
+  const hmacSecret = runtime.getSecret({ id: "CRE_RUNTIME_WEBHOOK_HMAC_SECRET" }).result().value
+  assertManualTriggerHmac(manual, hmacSecret)
   return runReconciliation(runtime, manual)
 }
 

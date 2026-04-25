@@ -974,6 +974,36 @@ const ZERO_BYTES32 = `0x${'0'.repeat(64)}` as const
 const ZERO_ADDRESS = getAddress(`0x${'0'.repeat(40)}`)
 
 const BASE_WETH = getAddress(`0x${'4200000000000000000000000000000000000006'}`)
+// 4626-audit-2026-04-25 review: Zora ProtocolRewards canonical singleton on Base.
+// Mirrors PayoutRouter.DEFAULT_PROTOCOL_REWARDS — see contracts/utilities/routers/PayoutRouter.sol.
+// PayoutRouter accepts either `address(0)` (sentinel -> DEFAULT_PROTOCOL_REWARDS)
+// or this exact address explicitly. Any other value can divert protocol-reward
+// claims to an attacker-chosen contract via _claimProtocolRewards' permissive
+// low-level calls, breaking accounting/claims even though the constructor's
+// `code.length > 0` check would pass.
+export const DEFAULT_PROTOCOL_REWARDS = getAddress(`0x${'7777777F279eba3d3Ad8F4E708545291A6fDBA8B'}`)
+
+/**
+ * 4626-audit-2026-04-25 review: validates the 7th constructor arg of a
+ * sponsored PayoutRouter deploy. Returns null if accepted, otherwise an
+ * error code matching the existing throw semantics.
+ *
+ * Extracted as an exported pure helper so the security-critical accept/reject
+ * decision can be exercised directly in unit tests without mounting the full
+ * paymaster mock stack.
+ */
+export function validatePayoutRouterProtocolRewardsArg(
+  protocolRewardsArg: Address | null,
+): null | 'payout_router_protocol_rewards_mismatch' {
+  if (!protocolRewardsArg) return 'payout_router_protocol_rewards_mismatch'
+  if (
+    protocolRewardsArg !== ZERO_ADDRESS &&
+    protocolRewardsArg !== DEFAULT_PROTOCOL_REWARDS
+  ) {
+    return 'payout_router_protocol_rewards_mismatch'
+  }
+  return null
+}
 // Uniswap Universal Router on Base (current deployment).
 const BASE_UNIVERSAL_ROUTER_CURRENT = getAddress(`0x${'6ff5693b99212da76ad316178a184ab56d299b43'}`)
 // Uniswap v3 SwapRouter02 on Base (exactInput/exactInputSingle).
@@ -2981,13 +3011,19 @@ async function validateInnerCalls(params: {
         if (String(salt).toLowerCase() !== String(expectedSalt).toLowerCase()) throw new Error('create2_salt_not_allowed')
 
         // PayoutRouter constructor args:
-        // constructor(address creatorCoin, address vault, address burnStream, address owner, address swapRouter, address weth)
+        // M-04 (audit 2026-04-25): added trailing `protocolRewards` argument
+        // (immutable). The deploy flow lets callers pass `address(0)` to
+        // select the chain default; the contract reverts at construction if
+        // the resolved address has no code. We accept any non-undefined value
+        // here because the contract enforces the deploy-time invariant.
+        // constructor(address creatorCoin, address vault, address burnStream, address owner, address swapRouter, address weth, address protocolRewards)
         const creatorCoinArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 0)
         const vaultArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 1)
         const burnStreamArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 2)
         const ownerArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 3)
         const swapRouterArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 4)
         const wethArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 5)
+        const protocolRewardsArg = decodeAddressArgFromAbiEncodedBytes(ctorArgs, 6)
 
         if (!creatorCoinArg || creatorCoinArg !== expectedCreatorToken) throw new Error('payout_router_creator_mismatch')
         if (!vaultArg || vaultArg !== expectedVault) throw new Error('payout_router_vault_mismatch')
@@ -3009,6 +3045,18 @@ async function validateInnerCalls(params: {
           throw new Error('payout_router_swap_router_mismatch')
         }
         if (!wethArg || wethArg !== BASE_WETH) throw new Error('payout_router_weth_mismatch')
+        // 4626-audit-2026-04-25 review: validate the 7th constructor arg.
+        // PayoutRouter only enforces `code.length > 0` and `_claimProtocolRewards`
+        // uses permissive low-level calls, so without this gate a caller can
+        // route protocol-reward claims to an arbitrary contract. The contract
+        // semantics (PayoutRouter.DEFAULT_PROTOCOL_REWARDS) accept exactly two
+        // values: `address(0)` (sentinel -> default) or the canonical default
+        // itself. Reject anything else here, with the same strict-but-safe
+        // semantics on Base mainnet and Base forks alike.
+        const protocolRewardsErr = validatePayoutRouterProtocolRewardsArg(protocolRewardsArg)
+        if (protocolRewardsErr) {
+          throw new Error(protocolRewardsErr)
+        }
       } else if (codeIdLc === String(CREATOR_COIN_POLICY_CONTROLLER_CODE_ID).toLowerCase()) {
         const expectedSalt = deriveCreatorCoinPolicyControllerSalt({
           creatorToken: expectedCreatorToken as Address,

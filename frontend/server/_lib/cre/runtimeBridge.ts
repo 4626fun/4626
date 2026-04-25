@@ -183,6 +183,34 @@ function safeEqualsHex(leftHex: string, rightHex: string): boolean {
   }
 }
 
+/**
+ * M-02 (audit 2026-04-25): constant-time string compare for the runtime
+ * bridge bearer. The HMAC compare below uses `timingSafeEqual` correctly,
+ * but the bearer was previously a plain `!==` compare, which leaks a
+ * length-and-prefix timing oracle to any attacker that can measure server
+ * latency. This helper hashes both sides to a fixed-length digest before
+ * comparing so the compare is constant-time even when actual and expected
+ * have different lengths — that prevents a length-disclosure side channel
+ * on the bearer.
+ */
+function safeEqualsString(actual: string, expected: string): boolean {
+  // Hash both inputs to a fixed-length sha256 digest. The compare is then
+  // a constant-length, constant-time `timingSafeEqual` over 32-byte buffers
+  // independent of the original strings' lengths or contents. This is the
+  // standard pattern recommended in the Node.js `crypto.timingSafeEqual`
+  // docs for variable-length secret comparison.
+  const actualHash = createHash("sha256").update(actual, "utf8").digest()
+  const expectedHash = createHash("sha256").update(expected, "utf8").digest()
+  if (actualHash.length !== expectedHash.length) return false
+  // Fold the explicit length-equality requirement of the original strings
+  // into the result so an attacker that triggered a hash collision (which
+  // is computationally infeasible for sha256, but still: defense in depth)
+  // would also need to control the actual string length.
+  const lengthsMatch = actual.length === expected.length
+  const digestsMatch = timingSafeEqual(actualHash, expectedHash)
+  return lengthsMatch && digestsMatch
+}
+
 function mapRuntimeRow(row: RuntimeRow): RuntimeRecord {
   return {
     id: Number(row.id),
@@ -219,7 +247,13 @@ export async function authenticateRuntimeRequest(
   }
 
   const authorization = parseHeader(req, "authorization") ?? ""
-  if (!authorization.startsWith("Bearer ") || authorization.slice(7) !== expectedApiKey) {
+  // M-02 (audit 2026-04-25): use constant-time string compare for the bearer
+  // gate. The HMAC step below already uses `timingSafeEqual`; the bearer is
+  // the gate that runs first, and a `!==` compare leaks a per-character
+  // timing oracle. `safeEqualsString` hashes both sides to a fixed-length
+  // sha256 digest before the constant-time compare, so neither length nor
+  // prefix-match timing is observable.
+  if (!authorization.startsWith("Bearer ") || !safeEqualsString(authorization.slice(7), expectedApiKey)) {
     return { ok: false, status: 401, error: "Unauthorized", correlationId }
   }
 

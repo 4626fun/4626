@@ -26,6 +26,27 @@ const mocks = vi.hoisted(() => ({
   checkRateLimit: vi.fn(() => ({ allowed: true, remaining: 29, resetAt: Date.now() + 60_000 })),
   rateLimitKey: vi.fn((...parts: string[]) => parts.join(':')),
   resolveAuthorizedRequestPrincipal: vi.fn(),
+  // M-06 (audit 2026-04-25): the handler now imports the centralized admin
+  // bearer gate from server-core. We simulate the real helper here: read
+  // ADMIN_API_TOKEN from env, compare to the Bearer header, and write a
+  // 500/401 to `res` on failure. This keeps the existing auth-coverage
+  // assertions ('admin_token_missing', 'admin_token_invalid', etc.)
+  // passing without per-test boilerplate.
+  requireAdminApiToken: vi.fn((req: any, res: any) => {
+    const expected = String(process.env.ADMIN_API_TOKEN ?? '').trim()
+    if (!expected) {
+      res.status(500).json({ success: false, error: 'admin_token_missing' })
+      return false
+    }
+    const raw = String(req?.headers?.authorization ?? '').trim()
+    const m = /^Bearer\s+(.+)$/i.exec(raw)
+    const token = m ? m[1].trim() : ''
+    if (!token || token !== expected) {
+      res.status(401).json({ success: false, error: 'admin_token_invalid' })
+      return false
+    }
+    return true
+  }),
 
   provisionCommandIssuerContext: vi.fn(),
 
@@ -50,6 +71,7 @@ vi.mock('../../../packages/server-core/src/index.js', () => ({
   checkRateLimit: mocks.checkRateLimit,
   rateLimitKey: mocks.rateLimitKey,
   resolveAuthorizedRequestPrincipal: mocks.resolveAuthorizedRequestPrincipal,
+  requireAdminApiToken: mocks.requireAdminApiToken,
   RATE_LIMITS: { adminAction: { windowMs: 60_000, maxRequests: 30 } },
   // arch-b handlers now import `logger` from server-core (per the
   // server-core-boundary guard). Stub it as no-ops so tests don't crash
@@ -492,7 +514,11 @@ describe('POST /api/admin/arch-b/sub-account/provision', () => {
     expect(res.body.error).toBe('admin_token_invalid')
   })
 
-  it('returns 401 when ADMIN_API_TOKEN env var is unset', async () => {
+  it('returns 500 admin_token_missing when ADMIN_API_TOKEN env var is unset', async () => {
+    // M-06 (audit 2026-04-25): the centralized server-core gate returns
+    // 500 for an unset secret (the server itself is misconfigured), not
+    // 401. The previous inline handler returned 401 — that was a less
+    // correct status. Tests updated to assert the new behavior.
     delete process.env.ADMIN_API_TOKEN
     const req = createMockReq({
       method: 'POST',
@@ -500,7 +526,7 @@ describe('POST /api/admin/arch-b/sub-account/provision', () => {
     })
     const res = createMockRes()
     await handler(req, res)
-    expect(res.statusCode).toBe(401)
+    expect(res.statusCode).toBe(500)
     expect(res.body.error).toBe('admin_token_missing')
   })
 

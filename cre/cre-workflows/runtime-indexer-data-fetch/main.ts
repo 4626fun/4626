@@ -14,6 +14,7 @@ import {
   stableJsonStringify,
 } from "../_shared/determinism"
 import { postJson } from "../_shared/http"
+import { assertMockDataAllowed } from "../_shared/mockGuard"
 
 type Config = {
   schedule: string
@@ -24,6 +25,11 @@ type Config = {
   query: string
   variables?: Record<string, unknown>
   mockGraphData?: Record<string, unknown>
+  // H-02 (audit 2026-04-25): explicit per-config opt-in for mock-data branches.
+  // The runtime still refuses to honor any mock* field when workflowName does
+  // not end in `-local-simulation`, even if this flag is set. See
+  // cre/cre-workflows/_shared/mockGuard.ts for the gate semantics.
+  allowMockData?: boolean
 }
 
 type GraphQLResponse = {
@@ -44,6 +50,11 @@ type IngestResponse = {
 }
 
 function fetchGraphSnapshot(nodeRuntime: NodeRuntime<Config>, httpClient: HTTPClient): GraphSnapshot {
+  // H-02 (audit 2026-04-25): refuse mock branches outside local-simulation so
+  // a stray `mockGraphData` field copy-pasted into config.staging.json /
+  // config.production.json fails the entire run instead of silently producing
+  // mock-derived metrics.
+  assertMockDataAllowed(nodeRuntime.config, { mockGraphData: nodeRuntime.config.mockGraphData })
   if (nodeRuntime.config.mockGraphData) {
     const digest = sha256Hex(stableJsonStringify(nodeRuntime.config.mockGraphData))
     return {
