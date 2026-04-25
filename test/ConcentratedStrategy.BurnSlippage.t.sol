@@ -4,10 +4,9 @@ pragma solidity ^0.8.20;
 import {Test} from "forge-std/Test.sol";
 
 import {TickMath} from "@uniswap/v4-core/src/libraries/TickMath.sol";
-import {LiquidityAmounts} from "@uniswap/v4-periphery/src/libraries/LiquidityAmounts.sol";
-
 import {ConcentratedStrategy} from "../contracts/vault/strategies/univ4/ConcentratedStrategy.sol";
 import {ICreatorOracle} from "../contracts/interfaces/ICreatorOracle.sol";
+import {V4LiquidityAmounts} from "../contracts/libraries/V4LiquidityAmounts.sol";
 import {IApprovedV4HooksRegistry} from "../contracts/vault/strategies/univ4/ApprovedV4HooksRegistry.sol";
 
 import {PoolKey} from "@uniswap/v4-core/src/types/PoolKey.sol";
@@ -58,6 +57,12 @@ contract OracleStub is ICreatorOracle {
     function updateCreatorPriceFromV3TWAP(uint32) external {}
     function recordSwapObservation() external {}
     function getObservationState() external pure returns (uint16, uint16, uint16, uint32) { return (0,0,0,0); }
+    function getTickCapState() external pure returns (int24, uint64, bool) { return (0, 0, false); }
+    function creatorSymbol() external pure returns (string memory) { return "MOCK"; }
+    function creatorPriceUSD() external pure returns (int256) { return 0; }
+    function creatorPriceTimestamp() external pure returns (uint256) { return 0; }
+    function v4PoolConfigured() external pure returns (bool) { return false; }
+    function maxTicksPerObservation() external pure returns (int24) { return 0; }
 }
 
 // -----------------------------------------------------------------------------
@@ -197,7 +202,7 @@ contract ConcentratedStrategyBurnSlippageTest is Test {
 
     // -------------------------------------------------------------------------
     // Happy path: TWAP at pool mid (tick 0) — amount0 and amount1 should each
-    // equal the LiquidityAmounts library output shaved by REBALANCE_SLIPPAGE_BPS.
+    // equal the V4LiquidityAmounts library output shaved by REBALANCE_SLIPPAGE_BPS.
     // -------------------------------------------------------------------------
     function test_rebalanceSlippage_shavesOnePercent() public {
         oracle.setTwapTick(0);
@@ -207,7 +212,7 @@ contract ConcentratedStrategyBurnSlippageTest is Test {
         );
 
         uint160 twapSqrt = TickMath.getSqrtPriceAtTick(0);
-        (uint256 expected0, uint256 expected1) = LiquidityAmounts.getAmountsForLiquidity(
+        (uint256 expected0, uint256 expected1) = V4LiquidityAmounts.getAmountsForLiquidity(
             twapSqrt,
             TickMath.getSqrtPriceAtTick(TICK_LOWER),
             TickMath.getSqrtPriceAtTick(TICK_UPPER),
@@ -247,7 +252,7 @@ contract ConcentratedStrategyBurnSlippageTest is Test {
 
         // Verify the 2% shave is exact.
         uint160 twapSqrt = TickMath.getSqrtPriceAtTick(0);
-        (uint256 expected0, uint256 expected1) = LiquidityAmounts.getAmountsForLiquidity(
+        (uint256 expected0, uint256 expected1) = V4LiquidityAmounts.getAmountsForLiquidity(
             twapSqrt,
             TickMath.getSqrtPriceAtTick(TICK_LOWER),
             TickMath.getSqrtPriceAtTick(TICK_UPPER),

@@ -102,11 +102,11 @@ contract RevertingStrategy is IStrategy {
 /// @dev Reverts AFTER partially moving funds. Used to prove measured fall-through.
 contract PartialThenRevertStrategy is IStrategy {
     IERC20 public immutable coin;
-    uint256 public immutable partial;
+    uint256 public immutable partialAmount;
 
     constructor(IERC20 _coin, uint256 _partial) {
         coin = _coin;
-        partial = _partial;
+        partialAmount = _partial;
     }
 
     function asset() external view returns (address) { return address(coin); }
@@ -118,7 +118,7 @@ contract PartialThenRevertStrategy is IStrategy {
     function withdraw(uint256) external returns (uint256) {
         // Move some funds first, then revert — simulates a buggy strategy that
         // partially completed a transfer before hitting an internal invariant.
-        coin.transfer(msg.sender, partial);
+        coin.transfer(msg.sender, partialAmount);
         revert("partial-then-revert");
     }
 
