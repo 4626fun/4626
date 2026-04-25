@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { createPublicClient, decodeFunctionResult, encodeFunctionData, getAddress, http, isAddress, type Address } from 'viem'
 import { base } from 'viem/chains'
 
-const DEFAULT_SOURCE_BATCHER = '0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753' as Address
+const DEFAULT_SOURCE_BATCHER = '0x32403a647e73e04ae42b02bdd1ade9c88698fd0c' as Address
 // Anvil account #0. Local-only default used to deploy the replacement batcher onto the fork.
 const DEFAULT_ANVIL_DEPLOYER_PRIVATE_KEY =
   '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'

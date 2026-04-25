@@ -55,16 +55,16 @@ Production override safety:
 - leave `ALLOW_API_CONTRACT_OVERRIDES` unset (or `0`)
 - production then uses repo defaults from `frontend/src/config/contracts.defaults.ts`
 
-### Canonical Base rollout target (`v1.9.2`)
+### Canonical Base rollout target (`v1.9.2 split Phase-1`)
 
-Current live Base defaults still come from the `2026-04-11` `v1.8.3` infra broadcast; the `v1.9.2` tag is the new per-creator deploy namespace and the target epoch for any future infra redeploy. Addresses below are the live Base values:
+Current live Base defaults use the split Phase-1 deployment batcher and its paired v2 bytecode store/deployer. Addresses below are the live Base values:
 - Registry: `0x9D86e8FAfA39527c4FE13AAa8FBD2B424f9f65Fb`
-- Deployment batcher: `0xcDbEeB764df9878ebAFbf101cc818370f703bC4F`
-- Deployment batcher auto-handoff alias: `0xcDbEeB764df9878ebAFbf101cc818370f703bC4F`
+- Deployment batcher: `0x32403a647e73e04ae42b02bdd1ade9c88698fd0c`
+- Deployment batcher auto-handoff alias: `0x32403a647e73e04ae42b02bdd1ade9c88698fd0c`
 - Creator lottery manager: `0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357`
 - Creator VRF consumer: `0xdd25Ed1b3D258Ccc6D306a9a325Af1A7F96C7F47`
-- `UniversalBytecodeStoreV2`: `0xA009B1Bf8cB711c115d832AEb392156BA6A4112e`
-- `UniversalCreate2DeployerFromStore`: `0xFd2657b6f1905C3F0494942F618a68963CF792Ec`
+- `UniversalBytecodeStoreV2`: `0x4F047c895aA1390D4d0607B2aDDAc54a08ccfe5A`
+- `UniversalCreate2DeployerFromStore`: `0x6f02c56B2F6C213f727D303Ce9E12e6bE1D224f0`
 - `VaultActivationBatcher`: `0x7Cc0050842433968cc7A0884d192b61FD0b46F63`
 - `SolanaBridgeAdapter`: see [Contract Addresses](../reference/addresses.md) (canonical). Do not hardcode this address in new docs — it has rotated across releases (H-16).
 
@@ -88,7 +88,7 @@ If the shared/global layer is already live and you only need the deterministic v
 
 ```bash
 export BASE_RPC_URL=https://mainnet.base.org
-export NEW_BATCHER=0xcDbEeB764df9878ebAFbf101cc818370f703bC4F
+export NEW_BATCHER=0x32403a647e73e04ae42b02bdd1ade9c88698fd0c
 
 # infra wiring
 cast call "$NEW_BATCHER" "bytecodeStore()(address)" --rpc-url "$BASE_RPC_URL"
@@ -103,7 +103,7 @@ cast call "$NEW_BATCHER" "uniV4Helper()(address)" --rpc-url "$BASE_RPC_URL"
 cast code "$NEW_BATCHER" --rpc-url "$BASE_RPC_URL" | tr 'A-F' 'a-f' | rg "4154f24e|3bc09a8b"
 
 # v2 store surface
-cast call 0xA009B1Bf8cB711c115d832AEb392156BA6A4112e \
+cast call 0x4F047c895aA1390D4d0607B2aDDAc54a08ccfe5A \
   "chunkCount(bytes32)(uint256)" \
   0x0000000000000000000000000000000000000000000000000000000000000000 \
   --rpc-url "$BASE_RPC_URL"
@@ -114,7 +114,7 @@ cast call 0xA009B1Bf8cB711c115d832AEb392156BA6A4112e \
 ```bash
 export PRIVATE_KEY=... # must be protocolTreasury for setSolanaConfig
 export BASE_RPC_URL=https://mainnet.base.org
-export DEPLOYMENT_BATCHER=0xcDbEeB764df9878ebAFbf101cc818370f703bC4F
+export DEPLOYMENT_BATCHER=0x32403a647e73e04ae42b02bdd1ade9c88698fd0c
 export SOLANA_BRIDGE_ADAPTER=0x653326dD0145656eC3b598943C0E84d7405aE6Ae
 export SOLANA_DESTINATION=0x<32-byte-solana-pubkey>
 export SET_BATCHER_SOLANA_CONFIG=1

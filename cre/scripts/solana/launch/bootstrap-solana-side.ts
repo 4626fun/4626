@@ -56,7 +56,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const CRE_ROOT = resolve(__dirname, '../../..');
 const REPO_ROOT = resolve(CRE_ROOT, '..');
 const DEFAULT_ORIGIN = 'https://4626.fun';
-const DEFAULT_BATCHER = '0xb2481e6F970B92Cd6435Ed9e19956e2F2D3C1753';
+const DEFAULT_BATCHER = '0x32403a647e73e04ae42b02bdd1ade9c88698fd0c';
 const DEFAULT_EXPECTED_SOLANA_AMOUNT = '1000000000';
 
 function loadBootstrapEnv(): void {
