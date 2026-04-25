@@ -13,6 +13,8 @@
 import { executeDeterministicCommand } from '../../agent/core/executeDeterministicCommand.js'
 import { matchesCommandFamily } from '../../commands/registry.js'
 import { TARGET_CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
+import { logger } from '../infra/logger.js'
+import WebSocket from 'ws'
 import { upsertAlfaClubIngestMessages } from './chatIngestStore.js'
 import { readAlfaClubChatToken } from './chatTokenStore.js'
 
@@ -58,6 +60,7 @@ export type AlfaClubChatBridgeFlags = {
   enabled: boolean
   roomId: string | null
   jwt: string | null
+  ingestJwt: string | null
   apiBaseUrl: string
   websocketUrl: string
   groupId: string
@@ -180,6 +183,7 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
     enabled: parseBool(process.env.ALFACLUB_CHAT_BRIDGE_ENABLED),
     roomId,
     jwt: (process.env.ALFACLUB_CHAT_JWT ?? '').trim() || null,
+    ingestJwt: (process.env.ALFACLUB_CHAT_INGEST_JWT ?? '').trim() || null,
     apiBaseUrl: normalizeApiBaseUrl(process.env.ALFACLUB_CHAT_API_BASE_URL),
     websocketUrl: normalizeWsUrl(process.env.ALFACLUB_CHAT_WS_URL),
     groupId: groupIdRaw || `alfaclub-room-${roomId ?? 'unknown'}`,
@@ -320,6 +324,12 @@ function pickFirstString(values: unknown[]): string | null {
     if (trimmed) return trimmed
   }
   return null
+}
+
+function getBridgeWebSocketCtor(): BridgeWebSocketCtor | null {
+  const nativeCtor = (globalThis as { WebSocket?: BridgeWebSocketCtor }).WebSocket
+  if (nativeCtor) return nativeCtor
+  return WebSocket as unknown as BridgeWebSocketCtor
 }
 
 function pickFirstDateMs(values: unknown[]): number {
@@ -481,7 +491,7 @@ async function sendRoomMessageViaWebSocket(params: {
   text: string
   timeoutMs: number
 }): Promise<void> {
-  const WebSocketCtor = (globalThis as { WebSocket?: BridgeWebSocketCtor }).WebSocket
+  const WebSocketCtor = getBridgeWebSocketCtor()
   if (!WebSocketCtor) {
     throw new Error('ws_unavailable')
   }
@@ -704,12 +714,12 @@ async function sendTelegramRelayMessage(params: {
   messageThreadId: number | null
   text: string
   timeoutMs: number
-}): Promise<void> {
+}): Promise<{ sent: boolean; status?: number; error?: string }> {
   const endpoint = `https://api.telegram.org/bot${params.botToken}/sendMessage`
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), params.timeoutMs)
   try {
-    await fetch(endpoint, {
+    const response = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -720,8 +730,19 @@ async function sendTelegramRelayMessage(params: {
       }),
       signal: controller.signal,
     })
-  } catch {
+    if (response.ok) return { sent: true, status: response.status }
+    const text = await response.text().catch(() => '')
+    return {
+      sent: false,
+      status: response.status,
+      error: text.slice(0, 180),
+    }
+  } catch (error) {
     // Fail-open to preserve bridge progress.
+    return {
+      sent: false,
+      error: error instanceof Error ? error.message : String(error),
+    }
   } finally {
     clearTimeout(timeout)
   }
@@ -743,11 +764,19 @@ async function ingestLiveMessages(
       rawPayloadText: message.rawPayloadText,
     })),
   )
+  if (messages.length > 0) {
+    const roomIds = Array.from(new Set(messages.map((message) => message.roomId))).slice(0, 10)
+    logger.info('[alfaclub-chat] ws_messages_ingested', {
+      received: messages.length,
+      inserted: inserted.length,
+      roomIds,
+    })
+  }
   if (!flags.telegramRelayEnabled) return
   if (!flags.telegramRelayBotToken || !flags.telegramRelayChatId) return
 
   for (const message of inserted) {
-    await sendTelegramRelayMessage({
+    const relay = await sendTelegramRelayMessage({
       botToken: flags.telegramRelayBotToken,
       chatId: flags.telegramRelayChatId,
       messageThreadId: flags.telegramRelayThreadId,
@@ -761,6 +790,21 @@ async function ingestLiveMessages(
       }),
       timeoutMs: flags.sendTimeoutMs,
     })
+    if (relay.sent) {
+      logger.info('[alfaclub-chat] telegram_relay_sent', {
+        roomId: message.roomId,
+        messageId: message.messageId,
+        chatId: flags.telegramRelayChatId,
+      })
+    } else {
+      logger.warn('[alfaclub-chat] telegram_relay_failed', {
+        roomId: message.roomId,
+        messageId: message.messageId,
+        chatId: flags.telegramRelayChatId,
+        status: relay.status ?? null,
+        error: relay.error ?? null,
+      })
+    }
   }
 }
 
@@ -778,8 +822,11 @@ function ensureLiveCommandSocket(params: {
     return
   }
 
-  const WebSocketCtor = (globalThis as { WebSocket?: BridgeWebSocketCtor }).WebSocket
-  if (!WebSocketCtor) return
+  const WebSocketCtor = getBridgeWebSocketCtor()
+  if (!WebSocketCtor) {
+    logger.warn('[alfaclub-chat] ws_unavailable', { roomId: params.roomId })
+    return
+  }
 
   closeLiveSocket()
 
@@ -792,6 +839,15 @@ function ensureLiveCommandSocket(params: {
   bridgeState.liveSocketJwt = params.jwt
   bridgeState.liveSocketRoomId = params.roomId
 
+  const onOpen = (): void => {
+    logger.info('[alfaclub-chat] ws_open', {
+      roomId: params.roomId,
+      ingestAllRooms: params.flags.wsIngestAllRoomsEnabled,
+      liveFallbackActive: bridgeState.liveFallbackActive,
+      telegramRelayEnabled: params.flags.telegramRelayEnabled,
+    })
+  }
+
   const onMessage = (event?: BridgeWebSocketEvent): void => {
     if (!event) return
     const data = decodeWsEventData(event.data)
@@ -800,9 +856,20 @@ function ensureLiveCommandSocket(params: {
     try {
       parsed = JSON.parse(data)
     } catch {
+      logger.warn('[alfaclub-chat] ws_message_parse_failed', {
+        roomId: params.roomId,
+        bytes: data.length,
+      })
       return
     }
     const inboundMessages = extractWsMessagesFromPayload(parsed)
+    if (inboundMessages.length > 0) {
+      logger.info('[alfaclub-chat] ws_message_parsed', {
+        roomId: params.roomId,
+        messages: inboundMessages.length,
+        roomIds: Array.from(new Set(inboundMessages.map((message) => message.roomId))).slice(0, 10),
+      })
+    }
     void ingestLiveMessages(inboundMessages, params.flags).catch(() => {
       // Fail-open: ingest should never block chat command processing.
     })
@@ -823,16 +890,33 @@ function ensureLiveCommandSocket(params: {
     pushLiveCommands(commands)
   }
 
-  const onCloseOrError = (): void => {
+  const onClose = (event?: any): void => {
+    logger.warn('[alfaclub-chat] ws_close', {
+      roomId: params.roomId,
+      code: typeof event?.code === 'number' ? event.code : null,
+      reason: typeof event?.reason === 'string' ? event.reason.slice(0, 120) : '',
+    })
     if (bridgeState.liveSocket !== socket) return
     bridgeState.liveSocket = null
     bridgeState.liveSocketJwt = null
     bridgeState.liveSocketRoomId = null
   }
 
+  const onError = (event?: any): void => {
+    logger.warn('[alfaclub-chat] ws_error', {
+      roomId: params.roomId,
+      message: String(event?.message ?? event?.error?.message ?? event ?? 'unknown').slice(0, 180),
+    })
+    if (bridgeState.liveSocket !== socket) return
+    bridgeState.liveSocket = null
+    bridgeState.liveSocketJwt = null
+    bridgeState.liveSocketRoomId = null
+  }
+
+  socket.addEventListener('open', onOpen)
   socket.addEventListener('message', onMessage)
-  socket.addEventListener('close', onCloseOrError)
-  socket.addEventListener('error', onCloseOrError)
+  socket.addEventListener('close', onClose)
+  socket.addEventListener('error', onError)
 }
 
 async function executeCommandBatch(params: {
@@ -894,8 +978,21 @@ async function runBridgeTick(
   flags: AlfaClubChatBridgeFlags,
 ): Promise<AlfaClubChatBridgeTickResult> {
   const roomId = flags.roomId as string
-  const resolvedJwt = await resolveBridgeJwtWithSource(flags.jwt)
-  if (!resolvedJwt.jwt) {
+  const resolvedCommandJwt = await resolveBridgeJwtWithSource(flags.jwt)
+  const commandJwt = resolvedCommandJwt.jwt
+  const explicitIngestJwt = (flags.ingestJwt ?? '').trim() || null
+  const ingestJwt = explicitIngestJwt || commandJwt
+
+  if (flags.wsIngestAllRoomsEnabled && ingestJwt) {
+    ensureLiveCommandSocket({
+      websocketUrl: flags.websocketUrl,
+      roomId,
+      jwt: ingestJwt,
+      flags,
+    })
+  }
+
+  if (!commandJwt) {
     return {
       seeded: false,
       roomId,
@@ -906,15 +1003,7 @@ async function runBridgeTick(
       errors: [],
     }
   }
-  let jwt = resolvedJwt.jwt
-  if (flags.wsIngestAllRoomsEnabled) {
-    ensureLiveCommandSocket({
-      websocketUrl: flags.websocketUrl,
-      roomId,
-      jwt,
-      flags,
-    })
-  }
+  let jwt = commandJwt
   let fetchedMessages: AlfaClubRoomHistoryMessage[] | null = null
   let historyError: unknown = null
   try {
@@ -928,9 +1017,9 @@ async function runBridgeTick(
   } catch (error) {
     const fallbackJwt = (flags.jwt ?? '').trim() || null
     const shouldRetryWithEnv =
-      resolvedJwt.source === 'db' &&
+      resolvedCommandJwt.source === 'db' &&
       Boolean(fallbackJwt) &&
-      fallbackJwt !== resolvedJwt.jwt &&
+      fallbackJwt !== resolvedCommandJwt.jwt &&
       isRoomHistory401(error)
     if (!shouldRetryWithEnv) {
       historyError = error
@@ -955,12 +1044,14 @@ async function runBridgeTick(
     if (!canUseLiveFallback) throw historyError
 
     bridgeState.liveFallbackActive = true
-    ensureLiveCommandSocket({
-      websocketUrl: flags.websocketUrl,
-      roomId,
-      jwt,
-      flags,
-    })
+    if (ingestJwt) {
+      ensureLiveCommandSocket({
+        websocketUrl: flags.websocketUrl,
+        roomId,
+        jwt: ingestJwt,
+        flags,
+      })
+    }
     bridgeState.seeded = true
     const liveCommands = drainLiveCommands()
     const liveBatch = await executeCommandBatch({

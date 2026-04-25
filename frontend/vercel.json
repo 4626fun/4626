@@ -47,6 +47,10 @@
     {
       "path": "/api/v1/alfaclub/run",
       "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/v1/alfaclub/radar",
+      "schedule": "5 12 * * *"
     }
   ],
   "routes": [

@@ -38,6 +38,7 @@ describe('readAlfaClubChatBridgeFlags', () => {
     expect(flags.killSwitch).toBe(false)
     expect(flags.roomId).toBe('1043')
     expect(flags.jwt).toBe('token-xyz')
+    expect(flags.ingestJwt).toBeNull()
     expect(flags.groupId).toBe('alfa-room-main')
     expect(flags.pollIntervalMs).toBe(7000)
     expect(flags.historyLimit).toBe(35)
@@ -80,6 +81,19 @@ describe('readAlfaClubChatBridgeFlags', () => {
     expect(flags.wsIngestAllRoomsEnabled).toBe(false)
     expect(flags.telegramRelayEnabled).toBe(false)
     expect(flags.telegramRelayChatId).toBe('@fun4626')
+  })
+
+  it('supports a dedicated ingest jwt for all-room websocket ingestion', () => {
+    restoreEnv = applyEnv({
+      ALFACLUB_CHAT_BRIDGE_ENABLED: '1',
+      ALFACLUB_CHAT_ROOM_ID: '1043',
+      ALFACLUB_CHAT_JWT: 'command-token',
+      ALFACLUB_CHAT_INGEST_JWT: 'ingest-token',
+    })
+
+    const flags = readAlfaClubChatBridgeFlags()
+    expect(flags.jwt).toBe('command-token')
+    expect(flags.ingestJwt).toBe('ingest-token')
   })
 
   it('auto-enables telegram relay when bot token and destination are configured', () => {

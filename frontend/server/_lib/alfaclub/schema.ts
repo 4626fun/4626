@@ -255,6 +255,46 @@ export async function ensureAlfaClubVigilanteSchema(): Promise<void> {
   }
   await db.sql`CREATE INDEX IF NOT EXISTS chat_ingest_room_date_idx ON alfaclub.chat_ingest(room_id, message_date DESC);`
   await db.sql`CREATE INDEX IF NOT EXISTS chat_ingest_ingested_idx ON alfaclub.chat_ingest(ingested_at DESC);`
+
+  // ── alfaclub.radar_dispatch ──
+  // Dedupe ledger for Telegram radar digests so scheduled runs do not repost
+  // the same snapshot to the same destination.
+  await db.sql`
+    CREATE TABLE IF NOT EXISTS alfaclub.radar_dispatch (
+      dispatch_key          TEXT PRIMARY KEY,
+      snapshot_ts           TIMESTAMPTZ NOT NULL,
+      previous_snapshot_ts  TIMESTAMPTZ,
+      chat_id               TEXT NOT NULL,
+      message_hash          TEXT NOT NULL,
+      sent_at               TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    );
+  `
+  try {
+    await db.sql`ALTER TABLE alfaclub.radar_dispatch ENABLE ROW LEVEL SECURITY;`
+  } catch {
+    // Ignore.
+  }
+  try {
+    await db.sql`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1 FROM pg_policies
+          WHERE schemaname = 'alfaclub'
+            AND tablename = 'radar_dispatch'
+            AND policyname = 'radar_dispatch_deny_all'
+        ) THEN
+          CREATE POLICY radar_dispatch_deny_all
+            ON alfaclub.radar_dispatch FOR ALL TO public USING (false) WITH CHECK (false);
+        END IF;
+      END
+      $$;
+    `
+  } catch {
+    // Ignore.
+  }
+  await db.sql`CREATE INDEX IF NOT EXISTS radar_dispatch_snapshot_idx ON alfaclub.radar_dispatch(snapshot_ts DESC);`
+
   // One-time safe migration from previous public table name.
   try {
     await db.sql`
