@@ -1,0 +1,155 @@
+# GPU-accelerated AMOE prover & MIT verifier emitter — Apple Silicon CI.
+#
+# Why this exists:
+#   relayer/zkproof and relayer/drand link against zkMetal, which is Metal-only
+#   (Apple Silicon, macOS 14+). No Linux runner can build them. GitHub-hosted
+#   `macos-15` runners are M-series and free for public repos, so we use them
+#   as our reproducible Apple Silicon host instead of asking anyone to run
+#   builds on their personal machine.
+#
+# What it does on every push / PR that touches zkproof or drand:
+#   1. Builds relayer/zkproof and relayer/drand in release mode.
+#   2. Runs `swift test` for both targets.
+#   3. Re-emits AmoeGroth16Verifier.sol via amoe-prover and confirms the
+#      regenerated contract verifies the existing AMOE fixture proof in
+#      test/zk/AmoeGroth16Verifier.t.sol (when forge is available).
+#   4. Diffs the regenerated verifier against the committed copy. If the
+#      committed contract drifts from what zkMetal would emit, the diff
+#      surfaces in CI logs — non-blocking by default, but easy to flip to
+#      blocking once we're confident the emitter output is stable.
+
+name: zkMetal · Apple Silicon
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "relayer/zkproof/**"
+      - "relayer/drand/**"
+      - "circuits/amoe/build/verification_key.json"
+      - "contracts/utilities/lottery/zk/AmoeGroth16Verifier.sol"
+      - "tools/zk/emit_amoe_verifier.sh"
+      - ".github/workflows/zkmetal-macos.yml"
+  pull_request:
+    paths:
+      - "relayer/zkproof/**"
+      - "relayer/drand/**"
+      - "circuits/amoe/build/verification_key.json"
+      - "contracts/utilities/lottery/zk/AmoeGroth16Verifier.sol"
+      - "tools/zk/emit_amoe_verifier.sh"
+      - ".github/workflows/zkmetal-macos.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zkmetal-macos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: build & test on Apple Silicon
+    runs-on: macos-15
+    timeout-minutes: 30
+    env:
+      ZKMETAL_REF: main
+    steps:
+      - name: Checkout 4626
+        uses: actions/checkout@v4
+        with:
+          path: fourksixsixtwo
+
+      # zkMetal is a sibling-path dependency in both Package.swift files
+      # (`.package(path: "../../../zkmetal")`). Clone it next to the 4626
+      # checkout so the relative path resolves.
+      - name: Checkout zkMetal
+        uses: actions/checkout@v4
+        with:
+          repository: carni-ships/zkMetal
+          ref: ${{ env.ZKMETAL_REF }}
+          path: zkmetal
+
+      - name: Show toolchain
+        run: |
+          sw_vers
+          xcodebuild -version || true
+          swift --version
+          uname -a
+
+      - name: Cache SwiftPM build
+        uses: actions/cache@v4
+        with:
+          path: |
+            fourksixsixtwo/relayer/zkproof/.build
+            fourksixsixtwo/relayer/drand/.build
+            ~/Library/Caches/org.swift.swiftpm
+          key: spm-${{ runner.os }}-${{ hashFiles('fourksixsixtwo/relayer/zkproof/Package.swift', 'fourksixsixtwo/relayer/drand/Package.swift') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
+
+      - name: Build relayer/zkproof (release)
+        working-directory: fourksixsixtwo/relayer/zkproof
+        run: swift build -c release
+
+      - name: Test relayer/zkproof
+        working-directory: fourksixsixtwo/relayer/zkproof
+        run: swift test --parallel
+
+      - name: Build relayer/drand (release)
+        working-directory: fourksixsixtwo/relayer/drand
+        run: swift build -c release
+
+      - name: Test relayer/drand
+        working-directory: fourksixsixtwo/relayer/drand
+        run: swift test --parallel
+
+      # The verifier emitter is a pure function of verification_key.json, so
+      # we can regenerate AmoeGroth16Verifier.sol on every CI run and diff it
+      # against what's checked in. Any drift means somebody hand-edited the
+      # contract or the emitter output changed.
+      - name: Re-emit AmoeGroth16Verifier.sol via zkMetal
+        working-directory: fourksixsixtwo
+        run: |
+          if [ ! -f circuits/amoe/build/verification_key.json ]; then
+            echo "::warning::no verification_key.json checked in — skipping verifier emit"
+            exit 0
+          fi
+          ./tools/zk/emit_amoe_verifier.sh
+
+      - name: Diff regenerated verifier vs. committed copy
+        working-directory: fourksixsixtwo
+        run: |
+          if [ ! -f contracts/utilities/lottery/zk/AmoeGroth16Verifier.sol ]; then
+            echo "no committed AmoeGroth16Verifier.sol — nothing to diff"
+            exit 0
+          fi
+          if git diff --exit-code -- contracts/utilities/lottery/zk/AmoeGroth16Verifier.sol; then
+            echo "verifier matches zkMetal-emitted output ✓"
+          else
+            echo "::warning::AmoeGroth16Verifier.sol differs from zkMetal-emitted output"
+            echo "If this drift is intentional, document it. Otherwise re-run tools/zk/emit_amoe_verifier.sh and commit."
+            # Non-blocking for now. Flip to `exit 1` once we're confident the
+            # emitter output is byte-stable across zkMetal versions.
+          fi
+
+      # Optional: run forge tests against the regenerated verifier to confirm
+      # the existing fixture proof still verifies. Only runs if forge is on
+      # PATH; macos-15 doesn't ship it by default, but if someone adds a
+      # foundry install step above this picks it up automatically.
+      - name: Verify fixture proof against regenerated verifier (forge, if available)
+        working-directory: fourksixsixtwo
+        run: |
+          if ! command -v forge >/dev/null 2>&1; then
+            echo "forge not installed — skipping fixture verification"
+            exit 0
+          fi
+          forge test --match-path "test/zk/AmoeGroth16Verifier.t.sol" -vv
+
+      - name: Upload regenerated verifier as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: AmoeGroth16Verifier-regenerated
+          path: fourksixsixtwo/contracts/utilities/lottery/zk/AmoeGroth16Verifier.sol
+          if-no-files-found: ignore
