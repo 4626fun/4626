@@ -55,6 +55,12 @@ import { pickPrivyEmbeddedEoaWallet } from '@/lib/privy/privyEmbeddedEoa'
 import { RequestCreatorAccess } from '@/components/deploy/RequestCreatorAccess'
 import { LaunchCoinCard } from '@/features/waitlist/LaunchCoinCard'
 import { CONTRACTS } from '@/config/contracts'
+import {
+  SPLIT_PHASE1_DEPLOYMENT_BATCHER,
+  isDeprecatedCreatorVaultBatcherAddress,
+  normalizeCreatorVaultBatcherAddress,
+} from '@/config/contracts.defaults'
+import { deploymentBatcherNotConfiguredMessage } from '@/lib/deploy/deploymentBatcherConfigError'
 import { useCreatorAllowlist, useDeploymentTracker } from '@/hooks'
 import { DeploymentSuccess, AlreadyDeployedBanner } from '@/components/deploy/DeploymentSuccess'
 import { VaultImageGenerator } from '@/components/deploy/VaultImageGenerator'
@@ -120,9 +126,6 @@ const DEFAULT_MIN_FIRST_DEPOSIT_TOKENS = 50_000_000n
 const MIN_FIRST_DEPOSIT = DEFAULT_MIN_FIRST_DEPOSIT_TOKENS * 10n ** 18n
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as Address
 const ZERO_ADDRESS = addr('0000000000000000000000000000000000000000')
-const LEGACY_DEPLOYMENT_BATCHER = addr('56E8527Bf0824155e1556aED5740366f248B68ca')
-const MODULE_MISMATCH_DEPLOYMENT_BATCHER = addr('32403a647e73e04ae42b02bdd1ade9c88698fd0c')
-const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('e3F9490CfD6bd3D68010405d18Bf772C167E7178')
 const SPLIT_PHASE1_PHASE3_HELPER = addr('A2Bb16F729229705a7F101d3be11ad51Ae90aC83')
 const BASE_PUBLIC_RPC_URL = 'https://mainnet.base.org'
 const BASE_SWAP_ROUTER = addr('2626664c2603336E57B271c5C0b26F421741e481')
@@ -167,11 +170,23 @@ const BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR = '4154f24e'
 const BATCHER_PHASE1_FINALIZE_SELECTOR = 'a98ec9d8'
 const BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR = '3bc09a8b'
 const BATCHER_PHASE2_FINALIZE_WITH_PERMIT2_SELECTOR = '0ecf9382'
+const BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR = 'e7fdf838'
+const KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS = new Set<string>([
+  '0xe3f9490cfd6bd3d68010405d18bf772c167e7178',
+])
 // The phased deployment batcher v4+ exposes these immutables as getters. We use this as a
 // compatibility gate to avoid legacy batchers that deploy module-uninitialized vaults.
 const BATCHER_VAULT_CORE_MODULE_SELECTOR = '22c40b75'
 const BATCHER_VAULT_STRATEGIES_MODULE_SELECTOR = '3283d513'
 const BATCHER_VAULT_ADMIN_MODULE_SELECTOR = '822f9d9b'
+function hasSaltOverrideDisabledError(error: unknown): boolean {
+  const text = String((error as { message?: unknown; shortMessage?: unknown } | null)?.shortMessage
+    ?? (error as { message?: unknown } | null)?.message
+    ?? error
+    ?? '')
+    .toLowerCase()
+  return text.includes(`0x${BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR}`) || text.includes('saltoverridedisabled')
+}
 const NO_EOA_STRICT_BLOCKER =
   'No-EOA deploy requires Privy owner signer readiness on your canonical CSW. Complete one-time Base Account owner approval (or use Base App prolink), then retry.'
 const CCA_LAUNCH_STRATEGY_AUCTION_STATUS_ABI = [
@@ -240,10 +255,9 @@ function resolveDeploymentVersionFromRuntime(): string {
 function normalizeDeploymentBatcherAddress(value: unknown): Address | null {
   const normalized = normalizeAddressLike(typeof value === 'string' ? value : null)
   if (!normalized) return null
-  if (sameAddress(normalized, LEGACY_DEPLOYMENT_BATCHER) || sameAddress(normalized, MODULE_MISMATCH_DEPLOYMENT_BATCHER)) {
-    return SPLIT_PHASE1_DEPLOYMENT_BATCHER
-  }
-  return normalized
+  if (isDeprecatedCreatorVaultBatcherAddress(normalized)) return null
+  const mapped = normalizeCreatorVaultBatcherAddress(normalized)
+  return mapped ? (mapped as Address) : null
 }
 
 function defaultPhase3HelperForBatcher(batcher: Address | null | undefined): Address | null {
@@ -2594,6 +2608,18 @@ function DeployVaultBatcher({
         `Activate it in Creator Strategy features (${creatorStrategyFeaturesHref}), then retry.`
       )
     }
+    if (lower.includes('0xe7fdf838') || lower.includes('saltoverridedisabled')) {
+      return (
+        'The active deployment batcher does not support ShareOFT salt overrides. ' +
+        'Refresh the page so the deploy planner can use the no-salt Phase 1 path, then retry.'
+      )
+    }
+    if (lower.includes('0x5cfe78fe') || lower.includes('invalidmoduleaddress')) {
+      return (
+        'The selected deployment batcher is wired to incompatible CreatorOVault modules (InvalidModuleAddress). ' +
+        'Switch to a module-compatible batcher/runtime deploy stack, then retry.'
+      )
+    }
     if (
       lower.includes('user rejected') ||
       lower.includes('rejected the request') ||
@@ -2640,7 +2666,7 @@ function DeployVaultBatcher({
       return 'Market floor price is still loading. Wait a moment and try again.'
     }
     if (lower.includes('deployment batcher is not configured') || lower.includes('deploymentbatcher is not configured')) {
-      return 'Deployment is not configured: missing `VITE_CREATOR_VAULT_BATCHER` / `CONTRACTS.creatorVaultBatcher`.'
+      return deploymentBatcherNotConfiguredMessage()
     }
     return msg
   }, [creatorStrategyFeaturesHref, isOvaultMeshPaidFeatureError, isVanityPaidFeatureError, switchAuthLabel])
@@ -3184,13 +3210,18 @@ function DeployVaultBatcher({
           .getBytecode({ address: batcherAddress as Address })
           .catch(() => null)) ?? null
       const batcherBytecodeLower = (batcherBytecode ?? '0x').toLowerCase()
+      const batcherAddressLower = String(batcherAddress ?? '').toLowerCase()
+      const saltOverridesDisabledByBatcher =
+        KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS.has(batcherAddressLower) ||
+        batcherBytecodeLower.includes(BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR)
       const supportsLegacyPhase1WithSaltSelector = (() => {
         if (!batcherBytecode || batcherBytecode === '0x') return false
-        return batcherBytecodeLower.includes(BATCHER_PHASE1_WITH_SALT_SELECTOR)
+        return !saltOverridesDisabledByBatcher && batcherBytecodeLower.includes(BATCHER_PHASE1_WITH_SALT_SELECTOR)
       })()
       const supportsSplitPhase1WithSaltSelectors = (() => {
         if (!batcherBytecode || batcherBytecode === '0x') return false
         return (
+          !saltOverridesDisabledByBatcher &&
           batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR) &&
           batcherBytecodeLower.includes(BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR)
         )
@@ -3259,7 +3290,12 @@ function DeployVaultBatcher({
         if (cached?.key === vanityTargetsKey) {
           deploymentVersionUsed = cached.version
         } else {
-          const combinedMaxTries = Math.min(10_000, vaultVanityMaxTries, shareOftVanityMaxTries)
+          const versionSearchMaxTries =
+            versionSearchVaultPrefix && versionSearchShareSuffix
+              ? Math.min(10_000, vaultVanityMaxTries, shareOftVanityMaxTries)
+              : versionSearchVaultPrefix
+                ? vaultVanityMaxTries
+                : shareOftVanityMaxTries
           let foundVersion = await findDeploymentVersionForVanityTargets({
             create2Deployer,
             creatorToken,
@@ -3268,7 +3304,7 @@ function DeployVaultBatcher({
             baseVersion: deploymentVersion,
             vaultPrefix: versionSearchVaultPrefix,
             shareSuffix: versionSearchShareSuffix,
-            maxTries: combinedMaxTries,
+            maxTries: versionSearchMaxTries,
             vaultInitCode,
             shareOftInitCode,
             shareSymbol,
@@ -3308,7 +3344,7 @@ function DeployVaultBatcher({
               if (!usingDefaultVaultVanityTarget || !usingDefaultShareVanityTarget) {
                 throw new Error(
                   `Unable to find a deployment version matching vault prefix "0x${versionSearchVaultPrefix}" and share suffix "${versionSearchShareSuffix}" ` +
-                    `in ${combinedMaxTries.toLocaleString()} tries (share-only fallback also failed after ${shareOftVanityMaxTries.toLocaleString()} tries).`,
+                    `in ${versionSearchMaxTries.toLocaleString()} tries (share-only fallback also failed after ${shareOftVanityMaxTries.toLocaleString()} tries).`,
                 )
               }
               vanityVersionSearchWarning =
@@ -3632,7 +3668,7 @@ function DeployVaultBatcher({
       expected?.vault,
       creatorToken,
       owner,
-      deploymentVersion,
+      expectedDeploymentVersion,
       depositSymbol,
       phase,
     ],
@@ -3809,7 +3845,7 @@ function DeployVaultBatcher({
         }
       }
 
-      const baseSalt = deriveBaseSalt({ creatorToken, owner, chainId: base.id, version: deploymentVersion })
+      const baseSalt = deriveBaseSalt({ creatorToken, owner, chainId: base.id, version: expectedDeploymentVersion })
       const ajnaVaultAuthSalt = saltFor(baseSalt, 'ajnaVaultAuth')
       const ajnaVaultSalt = saltFor(baseSalt, 'ajnaVault')
       const ajnaStrategySalt = saltFor(baseSalt, 'ajnaStrategyAdapter')
@@ -4191,7 +4227,7 @@ function DeployVaultBatcher({
     try {
       const runtimeConfig = await fetchDeployRuntimeConfig().catch(() => null)
       await ensurePaymasterSession()
-      if (!batcherAddress) throw new Error('Deployment batcher is not configured. Set VITE_CREATOR_VAULT_BATCHER.')
+      if (!batcherAddress) throw new Error(deploymentBatcherNotConfiguredMessage())
       const runtimeBatcher = normalizeDeploymentBatcherAddress(runtimeConfig?.creatorVaultBatcher ?? null)
       if (runtimeBatcher && !sameAddress(runtimeBatcher, batcherAddress)) {
         const recovered = tryAutoRecoverStaleDeployConfig({
@@ -4260,6 +4296,7 @@ function DeployVaultBatcher({
         !expectedProtocolTreasury
       )
         throw new Error('Failed to compute expected deployment addresses')
+      const deployVersion = expectedDeploymentVersion
       // Compatibility-only placeholder. CCA strategy now derives launch floor onchain from oracle data.
       const floorPriceQ96ForBatcher =
         floorPriceQ96Aligned && floorPriceQ96Aligned > 0n ? floorPriceQ96Aligned : 1n
@@ -4861,29 +4898,45 @@ function DeployVaultBatcher({
             'Update VITE_CREATOR_VAULT_BATCHER / CREATOR_VAULT_BATCHER.',
         )
       }
+      const batcherAddressLower = String(batcherAddress ?? '').toLowerCase()
       const supportsLegacyPhase1WithSalt = (() => {
-        if (!expectedShareOftSaltOverride) return true
         if (!batcherBytecode || batcherBytecode === '0x') return false
-        return batcherBytecodeLower.includes(BATCHER_PHASE1_WITH_SALT_SELECTOR)
+        if (
+          KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS.has(batcherAddressLower) ||
+          batcherBytecodeLower.includes(BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR)
+        ) {
+          return false
+        }
+        if (!expectedShareOftSaltOverride) return true
+        return (
+          batcherBytecodeLower.includes(BATCHER_PHASE1_WITH_SALT_SELECTOR)
+        )
       })()
       const supportsSplitPhase1WithSalt = (() => {
-        if (!expectedShareOftSaltOverride) return true
         if (!batcherBytecode || batcherBytecode === '0x') return false
+        if (
+          KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS.has(batcherAddressLower) ||
+          batcherBytecodeLower.includes(BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR)
+        ) {
+          return false
+        }
+        if (!expectedShareOftSaltOverride) return true
         return (
           batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR) &&
           batcherBytecodeLower.includes(BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR)
         )
       })()
       if (strictNoEoaEnforced) {
-        const hasAllSplitSelectors =
-          batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_SELECTOR) &&
-          batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR) &&
-          batcherBytecodeLower.includes(BATCHER_PHASE1_FINALIZE_SELECTOR) &&
-          batcherBytecodeLower.includes(BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR)
-        if (!hasAllSplitSelectors) {
+        const requiresShareSaltOverride = Boolean(expectedShareOftSaltOverride)
+        const saltOverrideRequiredButUnavailable = requiresShareSaltOverride && !supportsSplitPhase1WithSalt && shareVanityIsCustom
+        if (!supportsSplitPhase1 || saltOverrideRequiredButUnavailable) {
           logger.warn('[DeployVault] legacy_batcher_blocked', {
             deploy_mode: 'no_eoa_strict',
             batcher: batcherAddress,
+            requiresShareSaltOverride,
+            supportsSplitPhase1,
+            supportsSplitPhase1WithSalt,
+            saltOverrideRequiredButUnavailable,
             selectors: {
               core: batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_SELECTOR),
               coreWithSalt: batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR),
@@ -4930,7 +4983,7 @@ function DeployVaultBatcher({
           vaultSymbol,
           shareName,
           shareSymbol,
-          version: deploymentVersion,
+          version: deployVersion,
         } as const
         const asBatcherCall = (data: Hex) =>
           ({
@@ -4949,7 +5002,7 @@ function DeployVaultBatcher({
           }
           if (phase1Any && !phase1All) {
             throw new Error(
-              `Phase 1 is partially deployed for this creator + deployment version (${deploymentVersion}). ` +
+              `Phase 1 is partially deployed for this creator + deployment version (${deployVersion}). ` +
                 'Bump VITE_DEPLOYMENT_VERSION to start a fresh slate, or contact support to reconcile the partial deploy.',
             )
           }
@@ -4968,19 +5021,48 @@ function DeployVaultBatcher({
         } else {
           if (shareOftDeployed && (!vaultDeployed || !wrapperDeployed)) {
             throw new Error(
-              `Phase 1 split state is invalid for deployment version (${deploymentVersion}). ` +
+              `Phase 1 split state is invalid for deployment version (${deployVersion}). ` +
                 'ShareOFT is deployed while vault/wrapper are missing. Bump VITE_DEPLOYMENT_VERSION or contact support.',
             )
           }
           if (vaultDeployed !== wrapperDeployed) {
             throw new Error(
-              `Phase 1 split state is invalid for deployment version (${deploymentVersion}). ` +
+              `Phase 1 split state is invalid for deployment version (${deployVersion}). ` +
                 'Vault/wrapper deployment is inconsistent. Bump VITE_DEPLOYMENT_VERSION or contact support.',
             )
           }
           const coreDone = vaultDeployed && wrapperDeployed
-          const saltEnabled = supportsSplitPhase1WithSalt
+          let saltEnabled = supportsSplitPhase1WithSalt
           const shareOftSaltOverride: Hex = (expectedShareOftSaltOverride ?? ZERO_BYTES32) as Hex
+          if (saltEnabled && shareOftSaltOverride !== ZERO_BYTES32) {
+            try {
+              const phase1SaltProbeParams = {
+                creatorToken,
+                owner,
+                vaultName,
+                vaultSymbol,
+                shareName,
+                shareSymbol,
+                version: deployVersion,
+              } as const
+              await publicClient.call({
+                account: owner,
+                to: batcherAddress,
+                data: encodeFunctionData({
+                  abi: CREATOR_VAULT_BATCHER_ABI,
+                  functionName: 'deployPhase1CoreWithSalt',
+                  args: [phase1SaltProbeParams, codeIds, shareOftSaltOverride],
+                }),
+              })
+            } catch (probeError: unknown) {
+              if (hasSaltOverrideDisabledError(probeError)) {
+                saltEnabled = false
+                logger.warn('[DeployVault] Batcher runtime disabled phase1 salt overrides; falling back to no-salt phase1 calls', {
+                  batcher: batcherAddress,
+                })
+              }
+            }
+          }
           if (expectedShareOftSaltOverride && !saltEnabled) {
             if (shareVanityIsCustom) {
               logger.warn('[DeployVault] Batcher lacks split phase1 vanity salt support; continuing without override', {
@@ -5039,7 +5121,7 @@ function DeployVaultBatcher({
           wrapper: expected.wrapper,
           shareOFT: expected.shareOFT,
           shareSymbol,
-          version: deploymentVersion,
+          version: deployVersion,
           floorPriceQ96: floorPriceQ96ForBatcher,
         } as const
 
@@ -5052,7 +5134,7 @@ function DeployVaultBatcher({
           gaugeController: expected.gaugeController,
           ccaStrategy: expected.ccaStrategy,
           oracle: expected.oracle,
-          version: deploymentVersion,
+          version: deployVersion,
           depositAmount,
           requiredRaise: DEFAULT_REQUIRED_RAISE_WEI,
           floorPriceQ96: floorPriceQ96ForBatcher,
@@ -5225,7 +5307,7 @@ function DeployVaultBatcher({
           logger.warn('[DeployVault] Market-derived V3 price unavailable; using conservative fallback', {
             creatorToken,
             owner,
-            deploymentVersion,
+            deploymentVersion: deployVersion,
           })
         }
 
@@ -5233,7 +5315,7 @@ function DeployVaultBatcher({
           creatorToken,
           owner,
           vault: expected.vault,
-          version: deploymentVersion,
+          version: deployVersion,
           initialSqrtPriceX96: marketV3InitialSqrtPriceX96 ?? fallbackV3InitialSqrtPriceX96,
           charmVaultName: charmLabel ? `4626: ${charmLabel}/USDC` : '4626: CREATOR/USDC',
           charmVaultSymbol: charmLabel ? `CV-${charmLabel}-USDC` : 'CV-CREATOR-USDC',
@@ -5514,7 +5596,7 @@ function DeployVaultBatcher({
                   creatorToken,
                   owner,
                   shareOFT: phase2CoreParams.shareOFT,
-                  version: deploymentVersion,
+                  version: deployVersion,
                   floorPriceQ96: floorPriceQ96ForBatcher,
                   requiredRaise: DEFAULT_REQUIRED_RAISE_WEI,
                   auctionSteps,
@@ -5591,7 +5673,7 @@ function DeployVaultBatcher({
             assetMintOrigin: 'existing',
           },
           ...(sessionVanityRequest ? { vanity: sessionVanityRequest } : {}),
-          version: deploymentVersion,
+          version: deployVersion,
         }
         const deployPlanExport: DeployPlanExport = {
           generatedAt: new Date().toISOString(),
@@ -5601,7 +5683,7 @@ function DeployVaultBatcher({
           create2Deployer: expectedCreate2Deployer,
           creatorToken,
           owner,
-          deploymentVersion,
+          deploymentVersion: deployVersion,
           expectedAddresses: {
             vault: expected.vault,
             wrapper: expected.wrapper,
@@ -5626,7 +5708,7 @@ function DeployVaultBatcher({
           deploy_mode: strictNoEoaEnforced ? 'no_eoa_strict' : 'default',
           creatorToken,
           owner,
-          deploymentVersion,
+          deploymentVersion: deployVersion,
           batcher: batcherAddress,
           phases: { phase1: phase1Calls.length, phase2: phase2Calls.length, phase3: phase3Calls.length, phase4: phase4Calls.length },
         })
@@ -5686,7 +5768,7 @@ function DeployVaultBatcher({
             owner,
             batcherAddress,
             creatorToken,
-            deploymentVersion,
+            deploymentVersion: deployVersion,
             testPhaseCall,
             // Backward compatibility with existing console hint.
             testDirectCall: () => testPhaseCall('phase1', 0),
@@ -5759,7 +5841,7 @@ function DeployVaultBatcher({
                   creatorToken,
                   owner,
                   chainId: base.id,
-                  version: deploymentVersion,
+                  version: deployVersion,
                 })
                 await waitForPhase1CoreState({
                   publicClient: publicClient as any,
@@ -6407,7 +6489,7 @@ function DeployVaultBatcher({
             creatorToken,
             owner,
             chainId: base.id,
-            version: deploymentVersion,
+            version: deployVersion,
           })
           try {
             const pending = (await publicClient.readContract({

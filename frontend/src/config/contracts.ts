@@ -3,7 +3,12 @@
  * Updated: December 2024
  */
 
-import { AKITA_DEFAULTS, BASE_DEFAULTS, ERC4626_DEFAULTS } from './contracts.defaults'
+import {
+  AKITA_DEFAULTS,
+  BASE_DEFAULTS,
+  ERC4626_DEFAULTS,
+  normalizeCreatorVaultBatcherAddress,
+} from './contracts.defaults'
 
 // Prefer env overrides for local/dev flexibility. In production, default to repo-controlled BASE_DEFAULTS
 // to avoid mismatches between frontend + backend configs (which can break paymaster validation).
@@ -46,11 +51,13 @@ export const CONTRACTS = {
   // Phased deploy orchestrator (Phases 1–3): deterministic deploy+launch across multiple txs on Base.
   // Optional env alias kept for staged cutovers / emergency overrides.
   // Primary default remains BASE_DEFAULTS.creatorVaultBatcher.
-  creatorVaultBatcher: envAddress(
-    'VITE_CREATOR_VAULT_BATCHER',
-    envAddress('VITE_CREATOR_VAULT_BATCHER_AUTO_HANDOFF') ??
-      BASE_DEFAULTS.creatorVaultBatcher,
-  ),
+  creatorVaultBatcher: normalizeCreatorVaultBatcherAddress(
+    envAddress(
+      'VITE_CREATOR_VAULT_BATCHER',
+      envAddress('VITE_CREATOR_VAULT_BATCHER_AUTO_HANDOFF') ??
+        BASE_DEFAULTS.creatorVaultBatcher,
+    ),
+  ) ?? undefined,
 
   // Protocol treasury / multisig (receives protocol fee slice from GaugeController)
   protocolTreasury: envAddress('VITE_PROTOCOL_TREASURY', BASE_DEFAULTS.protocolTreasury)!,

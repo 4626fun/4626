@@ -56,6 +56,10 @@ import {
   validateFeatureCompatibility,
 } from '../../../../../server/_lib/deploy/featurePolicy/policy.js'
 import { hasContractBytecode } from '../../../../../shared/wallet/bytecode.js'
+import {
+  isDeprecatedCreatorVaultBatcherAddress,
+} from '../../../../../src/config/contracts.defaults.js'
+import { deploymentBatcherNotConfiguredMessage } from '../../../../../server/_lib/onchain/deploymentBatcherConfigError.js'
 
 export type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -150,10 +154,129 @@ type OwnershipCheck = {
 }
 
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
-const PHASE1_WITH_SALT_SELECTORS = new Set<string>(['0x297cb1e6', '0x4154f24e', '0x3bc09a8b'])
+const PHASE1_SELECTOR_DEPLOY = '0x3c51ca4e'
+const PHASE1_SELECTOR_CORE = '0x1331378b'
+const PHASE1_SELECTOR_FINALIZE = '0xa98ec9d8'
+const PHASE1_SELECTOR_DEPLOY_WITH_SALT = '0x297cb1e6'
+const PHASE1_SELECTOR_CORE_WITH_SALT = '0x4154f24e'
+const PHASE1_SELECTOR_FINALIZE_WITH_SALT = '0x3bc09a8b'
+const PHASE1_WITH_SALT_SELECTORS = new Set<string>([
+  PHASE1_SELECTOR_DEPLOY_WITH_SALT,
+  PHASE1_SELECTOR_CORE_WITH_SALT,
+  PHASE1_SELECTOR_FINALIZE_WITH_SALT,
+])
+const BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR = 'e7fdf838'
+const KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS = new Set<string>([
+  '0xe3f9490cfd6bd3d68010405d18bf772c167e7178',
+])
+const EXPECTED_VAULT_MODULE_STORAGE_VERSION = keccak256(encodePacked(['string'], ['CreatorOVaultModuleStorage.v1']))
+const EXPECTED_VAULT_CORE_MODULE_KIND = keccak256(encodePacked(['string'], ['CreatorOVaultModule.core']))
+const EXPECTED_VAULT_STRATEGIES_MODULE_KIND = keccak256(encodePacked(['string'], ['CreatorOVaultModule.strategies']))
+const EXPECTED_VAULT_ADMIN_MODULE_KIND = keccak256(encodePacked(['string'], ['CreatorOVaultModule.admin']))
 const DEFAULT_FREE_VAULT_VANITY_PREFIX = '4626'
 const DEFAULT_FREE_SHARE_VANITY_SUFFIX = '4626'
 const DEFAULT_DEPLOY_VANITY_CUSTOM_MAX_HEX = 5
+
+const PHASE1_PARAMS_COMPONENTS = [
+  { name: 'creatorToken', type: 'address' },
+  { name: 'owner', type: 'address' },
+  { name: 'vaultName', type: 'string' },
+  { name: 'vaultSymbol', type: 'string' },
+  { name: 'shareName', type: 'string' },
+  { name: 'shareSymbol', type: 'string' },
+  { name: 'version', type: 'string' },
+] as const
+
+const PHASE1_CODE_IDS_COMPONENTS = [
+  { name: 'vault', type: 'bytes32' },
+  { name: 'wrapper', type: 'bytes32' },
+  { name: 'shareOFT', type: 'bytes32' },
+  { name: 'gauge', type: 'bytes32' },
+  { name: 'cca', type: 'bytes32' },
+  { name: 'oracle', type: 'bytes32' },
+  { name: 'oftBootstrap', type: 'bytes32' },
+] as const
+
+const CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI = [
+  {
+    type: 'function',
+    name: 'deployPhase1WithSalt',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'params', type: 'tuple', components: PHASE1_PARAMS_COMPONENTS },
+      { name: 'codeIds', type: 'tuple', components: PHASE1_CODE_IDS_COMPONENTS },
+      { name: 'shareOftSaltOverride', type: 'bytes32' },
+    ],
+    outputs: [{ name: 'out', type: 'tuple', components: [] }],
+  },
+] as const
+
+const CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI = [
+  {
+    type: 'function',
+    name: 'deployPhase1CoreWithSalt',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'params', type: 'tuple', components: PHASE1_PARAMS_COMPONENTS },
+      { name: 'codeIds', type: 'tuple', components: PHASE1_CODE_IDS_COMPONENTS },
+      { name: 'shareOftSaltOverride', type: 'bytes32' },
+    ],
+    outputs: [{ name: 'out', type: 'tuple', components: [] }],
+  },
+] as const
+
+const CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI = [
+  {
+    type: 'function',
+    name: 'finalizePhase1WithSalt',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'params', type: 'tuple', components: PHASE1_PARAMS_COMPONENTS },
+      { name: 'codeIds', type: 'tuple', components: PHASE1_CODE_IDS_COMPONENTS },
+      { name: 'shareOftSaltOverride', type: 'bytes32' },
+    ],
+    outputs: [{ name: 'out', type: 'tuple', components: [] }],
+  },
+] as const
+
+const CREATOR_VAULT_BATCHER_PHASE1_ABI = [
+  {
+    type: 'function',
+    name: 'deployPhase1',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'params', type: 'tuple', components: PHASE1_PARAMS_COMPONENTS },
+      { name: 'codeIds', type: 'tuple', components: PHASE1_CODE_IDS_COMPONENTS },
+    ],
+    outputs: [{ name: 'out', type: 'tuple', components: [] }],
+  },
+] as const
+
+const CREATOR_VAULT_BATCHER_PHASE1_CORE_ABI = [
+  {
+    type: 'function',
+    name: 'deployPhase1Core',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'params', type: 'tuple', components: PHASE1_PARAMS_COMPONENTS },
+      { name: 'codeIds', type: 'tuple', components: PHASE1_CODE_IDS_COMPONENTS },
+    ],
+    outputs: [{ name: 'out', type: 'tuple', components: [] }],
+  },
+] as const
+
+const CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_ABI = [
+  {
+    type: 'function',
+    name: 'finalizePhase1',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'params', type: 'tuple', components: PHASE1_PARAMS_COMPONENTS },
+      { name: 'codeIds', type: 'tuple', components: PHASE1_CODE_IDS_COMPONENTS },
+    ],
+    outputs: [{ name: 'out', type: 'tuple', components: [] }],
+  },
+] as const
 
 const ERC20_APPROVE_ABI = [
   {
@@ -470,6 +593,379 @@ function hasPhase1SaltOverrideCalls(calls: Call[]): boolean {
     if (PHASE1_WITH_SALT_SELECTORS.has(selector)) return true
   }
   return false
+}
+
+function rewritePhase1SaltCallToUnsalted(call: Call): Call {
+  const data = typeof call?.data === 'string' ? call.data.trim() : ''
+  if (!data.startsWith('0x') || data.length < 10) return call
+  const selector = data.slice(0, 10).toLowerCase()
+  try {
+    if (selector === PHASE1_SELECTOR_DEPLOY_WITH_SALT) {
+      const decoded = decodeFunctionData({
+        abi: CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI,
+        data: data as Hex,
+      })
+      const params = decoded.args?.[0]
+      const codeIds = decoded.args?.[1]
+      if (!params || !codeIds) return call
+      return {
+        ...call,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_BATCHER_PHASE1_ABI,
+          functionName: 'deployPhase1',
+          args: [params as any, codeIds as any],
+        }) as Hex,
+      }
+    }
+    if (selector === PHASE1_SELECTOR_CORE_WITH_SALT) {
+      const decoded = decodeFunctionData({
+        abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI,
+        data: data as Hex,
+      })
+      const params = decoded.args?.[0]
+      const codeIds = decoded.args?.[1]
+      if (!params || !codeIds) return call
+      return {
+        ...call,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_ABI,
+          functionName: 'deployPhase1Core',
+          args: [params as any, codeIds as any],
+        }) as Hex,
+      }
+    }
+    if (selector === PHASE1_SELECTOR_FINALIZE_WITH_SALT) {
+      const decoded = decodeFunctionData({
+        abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI,
+        data: data as Hex,
+      })
+      const params = decoded.args?.[0]
+      const codeIds = decoded.args?.[1]
+      if (!params || !codeIds) return call
+      return {
+        ...call,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_ABI,
+          functionName: 'finalizePhase1',
+          args: [params as any, codeIds as any],
+        }) as Hex,
+      }
+    }
+  } catch {
+    return call
+  }
+  return call
+}
+
+async function normalizePhase1SaltOverrideCalls(calls: Call[]): Promise<{ calls: Call[]; rewrote: boolean }> {
+  if (!Array.isArray(calls) || calls.length === 0) return { calls: [], rewrote: false }
+  const saltedTargets = new Set<string>()
+  for (const call of calls) {
+    const data = typeof call?.data === 'string' ? call.data.trim().toLowerCase() : ''
+    if (!data.startsWith('0x') || data.length < 10) continue
+    const selector = data.slice(0, 10)
+    if (!PHASE1_WITH_SALT_SELECTORS.has(selector)) continue
+    if (!call?.to || !isAddress(call.to)) continue
+    saltedTargets.add(getAddress(call.to as Address).toLowerCase())
+  }
+  if (saltedTargets.size === 0) return { calls, rewrote: false }
+
+  const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+  const readClient = createPublicClient({
+    chain: base,
+    transport: http(rpc, { timeout: 12_000 }),
+  })
+  const saltDisabledTargets = new Set<string>()
+  for (const targetLc of saltedTargets) {
+    if (KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS.has(targetLc)) {
+      saltDisabledTargets.add(targetLc)
+      continue
+    }
+    const bytecode = await readClient.getBytecode({ address: getAddress(targetLc as Address) }).catch(() => null)
+    const bytecodeLower = String(bytecode ?? '').toLowerCase()
+    if (bytecodeLower.includes(BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR)) {
+      saltDisabledTargets.add(targetLc)
+    }
+  }
+  if (saltDisabledTargets.size === 0) return { calls, rewrote: false }
+
+  let rewrote = false
+  const normalized = calls.map((call) => {
+    if (!call?.to || !isAddress(call.to)) return call
+    const targetLc = getAddress(call.to as Address).toLowerCase()
+    if (!saltDisabledTargets.has(targetLc)) return call
+    const rewritten = rewritePhase1SaltCallToUnsalted(call)
+    if (rewritten.data !== call.data) rewrote = true
+    return rewritten
+  })
+  return { calls: normalized, rewrote }
+}
+
+type Phase1CodeIdsTuple = {
+  vault?: Hex
+  wrapper?: Hex
+  shareOFT?: Hex
+  gauge?: Hex
+  cca?: Hex
+  oracle?: Hex
+  oftBootstrap?: Hex
+} | null
+
+function decodePhase1CodeIdsFromCallData(data: Hex): Phase1CodeIdsTuple {
+  const raw = typeof data === 'string' ? data.trim() : ''
+  if (!raw.startsWith('0x') || raw.length < 10) return null
+  const selector = raw.slice(0, 10).toLowerCase()
+  try {
+    if (selector === PHASE1_SELECTOR_DEPLOY) {
+      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_ABI, data: raw as Hex })
+      return (decoded.args?.[1] ?? null) as Phase1CodeIdsTuple
+    }
+    if (selector === PHASE1_SELECTOR_CORE) {
+      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_ABI, data: raw as Hex })
+      return (decoded.args?.[1] ?? null) as Phase1CodeIdsTuple
+    }
+    if (selector === PHASE1_SELECTOR_FINALIZE) {
+      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_ABI, data: raw as Hex })
+      return (decoded.args?.[1] ?? null) as Phase1CodeIdsTuple
+    }
+    if (selector === PHASE1_SELECTOR_DEPLOY_WITH_SALT) {
+      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI, data: raw as Hex })
+      return (decoded.args?.[1] ?? null) as Phase1CodeIdsTuple
+    }
+    if (selector === PHASE1_SELECTOR_CORE_WITH_SALT) {
+      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI, data: raw as Hex })
+      return (decoded.args?.[1] ?? null) as Phase1CodeIdsTuple
+    }
+    if (selector === PHASE1_SELECTOR_FINALIZE_WITH_SALT) {
+      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI, data: raw as Hex })
+      return (decoded.args?.[1] ?? null) as Phase1CodeIdsTuple
+    }
+  } catch {
+    return null
+  }
+  return null
+}
+
+async function assertPhase1BatcherReadiness(phase1Calls: Call[]): Promise<void> {
+  if (!Array.isArray(phase1Calls) || phase1Calls.length === 0) return
+
+  const phase1Selectors = new Set<string>([
+    PHASE1_SELECTOR_DEPLOY,
+    PHASE1_SELECTOR_CORE,
+    PHASE1_SELECTOR_FINALIZE,
+    PHASE1_SELECTOR_DEPLOY_WITH_SALT,
+    PHASE1_SELECTOR_CORE_WITH_SALT,
+    PHASE1_SELECTOR_FINALIZE_WITH_SALT,
+  ])
+  const phase1BatcherCall = phase1Calls.find((call) => {
+    if (!call?.to || !isAddress(call.to)) return false
+    const data = typeof call.data === 'string' ? call.data.trim().toLowerCase() : ''
+    if (!data.startsWith('0x') || data.length < 10) return false
+    return phase1Selectors.has(data.slice(0, 10))
+  })
+  if (!phase1BatcherCall || !isAddress(phase1BatcherCall.to)) return
+
+  const batcherAddress = getAddress(phase1BatcherCall.to as Address)
+  if (isDeprecatedCreatorVaultBatcherAddress(batcherAddress)) {
+    throw new DeploySessionRequestError(409, deploymentBatcherNotConfiguredMessage(batcherAddress))
+  }
+  const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+  const readClient = createPublicClient({
+    chain: base,
+    transport: http(rpc, { timeout: 12_000 }),
+  })
+
+  const BATCHER_DEPENDENCY_ABI = [
+    { type: 'function', name: 'create2Deployer', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+    { type: 'function', name: 'bytecodeStore', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  ] as const
+  const CREATE2_AUTH_ABI = [
+    { type: 'function', name: 'owner', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+    {
+      type: 'function',
+      name: 'authorizedDeployers',
+      stateMutability: 'view',
+      inputs: [{ name: 'deployer', type: 'address' }],
+      outputs: [{ type: 'bool' }],
+    },
+  ] as const
+  const BYTECODE_STORE_POINTER_ABI = [
+    {
+      type: 'function',
+      name: 'pointers',
+      stateMutability: 'view',
+      inputs: [{ name: 'codeId', type: 'bytes32' }],
+      outputs: [{ type: 'address' }],
+    },
+  ] as const
+  const BATCHER_VAULT_MODULES_ABI = [
+    { type: 'function', name: 'vaultCoreModule', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+    { type: 'function', name: 'vaultStrategiesModule', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+    { type: 'function', name: 'vaultAdminModule', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  ] as const
+  const MODULE_IDENTITY_ABI = [
+    { type: 'function', name: 'moduleKind', stateMutability: 'view', inputs: [], outputs: [{ type: 'bytes32' }] },
+    { type: 'function', name: 'moduleStorageVersion', stateMutability: 'view', inputs: [], outputs: [{ type: 'bytes32' }] },
+  ] as const
+
+  let create2Deployer: Address
+  let bytecodeStore: Address
+  try {
+    const [create2Read, storeRead] = await Promise.all([
+      readClient.readContract({
+        address: batcherAddress,
+        abi: BATCHER_DEPENDENCY_ABI,
+        functionName: 'create2Deployer',
+      }),
+      readClient.readContract({
+        address: batcherAddress,
+        abi: BATCHER_DEPENDENCY_ABI,
+        functionName: 'bytecodeStore',
+      }),
+    ])
+    create2Deployer = getAddress(create2Read as Address)
+    bytecodeStore = getAddress(storeRead as Address)
+  } catch {
+    throw new DeploySessionRequestError(
+      409,
+      `phase1 precheck failed: could not resolve create2 dependencies for batcher ${batcherAddress}.`,
+    )
+  }
+
+  try {
+    const [create2Owner, isAuthorized] = await Promise.all([
+      readClient.readContract({
+        address: create2Deployer,
+        abi: CREATE2_AUTH_ABI,
+        functionName: 'owner',
+      }),
+      readClient.readContract({
+        address: create2Deployer,
+        abi: CREATE2_AUTH_ABI,
+        functionName: 'authorizedDeployers',
+        args: [batcherAddress],
+      }),
+    ])
+    if (!Boolean(isAuthorized)) {
+      throw new DeploySessionRequestError(
+        409,
+        `phase1 precheck failed: batcher ${batcherAddress} is not authorized in create2Deployer ${create2Deployer} ` +
+          `(owner ${String(create2Owner)}). Rotate to a deploy-capable batcher or authorize this batcher, then retry.`,
+      )
+    }
+  } catch (error) {
+    if (error instanceof DeploySessionRequestError) throw error
+    // Some legacy deployers may not expose owner/authorizedDeployers; in that
+    // case, skip this specific check and continue with bytecode presence checks.
+  }
+
+  // If batcher module getters exist, ensure they point to CreatorOVault-compatible
+  // modules before we attempt phase1. This catches immutable module-mismatch
+  // batchers up front (otherwise deployPhase1* reverts with InvalidModuleAddress()).
+  try {
+    const [coreModule, strategiesModule, adminModule] = (await Promise.all([
+      readClient.readContract({
+        address: batcherAddress,
+        abi: BATCHER_VAULT_MODULES_ABI,
+        functionName: 'vaultCoreModule',
+      }),
+      readClient.readContract({
+        address: batcherAddress,
+        abi: BATCHER_VAULT_MODULES_ABI,
+        functionName: 'vaultStrategiesModule',
+      }),
+      readClient.readContract({
+        address: batcherAddress,
+        abi: BATCHER_VAULT_MODULES_ABI,
+        functionName: 'vaultAdminModule',
+      }),
+    ])) as [Address, Address, Address]
+
+    const moduleChecks: Array<{ label: 'core' | 'strategies' | 'admin'; address: Address; expectedKind: Hex }> = [
+      { label: 'core', address: getAddress(coreModule), expectedKind: EXPECTED_VAULT_CORE_MODULE_KIND },
+      { label: 'strategies', address: getAddress(strategiesModule), expectedKind: EXPECTED_VAULT_STRATEGIES_MODULE_KIND },
+      { label: 'admin', address: getAddress(adminModule), expectedKind: EXPECTED_VAULT_ADMIN_MODULE_KIND },
+    ]
+
+    for (const moduleCheck of moduleChecks) {
+      let moduleKind: Hex
+      let moduleStorageVersion: Hex
+      try {
+        const [kindRead, storageVersionRead] = (await Promise.all([
+          readClient.readContract({
+            address: moduleCheck.address,
+            abi: MODULE_IDENTITY_ABI,
+            functionName: 'moduleKind',
+          }),
+          readClient.readContract({
+            address: moduleCheck.address,
+            abi: MODULE_IDENTITY_ABI,
+            functionName: 'moduleStorageVersion',
+          }),
+        ])) as [Hex, Hex]
+        moduleKind = kindRead
+        moduleStorageVersion = storageVersionRead
+      } catch {
+        throw new DeploySessionRequestError(
+          409,
+          `phase1 precheck failed: batcher ${batcherAddress} ${moduleCheck.label} module ${moduleCheck.address} ` +
+            `does not implement CreatorOVault module identity (InvalidModuleAddress). Rotate to a module-compatible batcher.`,
+        )
+      }
+
+      if (
+        moduleKind.toLowerCase() !== moduleCheck.expectedKind.toLowerCase() ||
+        moduleStorageVersion.toLowerCase() !== EXPECTED_VAULT_MODULE_STORAGE_VERSION.toLowerCase()
+      ) {
+        throw new DeploySessionRequestError(
+          409,
+          `phase1 precheck failed: batcher ${batcherAddress} ${moduleCheck.label} module ${moduleCheck.address} ` +
+            `is incompatible with current CreatorOVault module identity/version (InvalidModuleAddress).`,
+        )
+      }
+    }
+  } catch (error) {
+    if (error instanceof DeploySessionRequestError) throw error
+    // Older batchers may not expose immutable module getters. If absent, keep
+    // backwards compatibility and continue.
+  }
+
+  const requiredCodeIds = new Map<string, Hex>()
+  for (const call of phase1Calls) {
+    const codeIds = decodePhase1CodeIdsFromCallData(call.data)
+    if (!codeIds) continue
+    if (typeof codeIds.vault === 'string' && codeIds.vault.startsWith('0x')) requiredCodeIds.set('vault', codeIds.vault)
+    if (typeof codeIds.wrapper === 'string' && codeIds.wrapper.startsWith('0x')) requiredCodeIds.set('wrapper', codeIds.wrapper)
+    if (typeof codeIds.shareOFT === 'string' && codeIds.shareOFT.startsWith('0x')) requiredCodeIds.set('shareOFT', codeIds.shareOFT)
+    if (typeof codeIds.oftBootstrap === 'string' && codeIds.oftBootstrap.startsWith('0x')) {
+      requiredCodeIds.set('oftBootstrap', codeIds.oftBootstrap)
+    }
+  }
+  if (requiredCodeIds.size === 0) return
+
+  const missing: string[] = []
+  for (const [label, codeId] of requiredCodeIds.entries()) {
+    let pointer: Address
+    try {
+      pointer = (await readClient.readContract({
+        address: bytecodeStore,
+        abi: BYTECODE_STORE_POINTER_ABI,
+        functionName: 'pointers',
+        args: [codeId],
+      })) as Address
+    } catch {
+      continue
+    }
+    if (String(pointer).toLowerCase() === ZERO_ADDRESS.toLowerCase()) {
+      missing.push(`${label}:${codeId}`)
+    }
+  }
+  if (missing.length > 0) {
+    throw new DeploySessionRequestError(
+      409,
+      `phase1 precheck failed: bytecodeStore ${bytecodeStore} is missing required codeIds (${missing.join(', ')}).`,
+    )
+  }
 }
 
 function isDeployVanityPaywallEnabled(): boolean {
@@ -1344,7 +1840,8 @@ export async function validateDeploySessionRequest(params: {
     )
   }
 
-  const phase1Calls = Array.isArray(params.body.phase1Calls) ? params.body.phase1Calls : []
+  const phase1CallsRaw = Array.isArray(params.body.phase1Calls) ? params.body.phase1Calls : []
+  const { calls: phase1Calls, rewrote: phase1SaltCallsRewritten } = await normalizePhase1SaltOverrideCalls(phase1CallsRaw)
   const phase2CoreCallsRaw = Array.isArray(params.body.phase2CoreCalls) ? params.body.phase2CoreCalls : []
   const phase2FinalizeCallsRaw = Array.isArray(params.body.phase2FinalizeCalls) ? params.body.phase2FinalizeCalls : []
   const { phase2CoreCalls, phase2FinalizeCalls } = distributePhase2FinalizeApprovals({
@@ -1408,6 +1905,12 @@ export async function validateDeploySessionRequest(params: {
         )
       }
     }
+  }
+  if (phase1SaltCallsRewritten) {
+    console.warn('[deploy/v2/session/create] phase1_salt_calls_rewritten', {
+      smartWallet: smartWallet.toLowerCase(),
+      creatorToken: creatorToken.toLowerCase(),
+    })
   }
   if (isDeployOvaultMeshPaywallEnabled() && solanaOvault?.enabled === true) {
     const db = await getDb()
@@ -1559,6 +2062,10 @@ export async function validateDeploySessionRequest(params: {
       phase4Calls.length > 0
     if (!hasAnyWork) {
       throw new DeploySessionRequestError(400, 'Missing deploy calls')
+    }
+
+    if (phase1Calls.length > 0) {
+      await assertPhase1BatcherReadiness(phase1Calls)
     }
 
     if (phase2CoreCalls.length > 0 && !hasPhase2Finalize) {

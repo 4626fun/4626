@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AlfaClub Key Price in USDC</title>
+    <title>AlfaClub Bonding Curve vs Sudoswap Delta</title>
     <style>
       :root {
         color-scheme: dark;
@@ -275,6 +275,48 @@
         font-size: 12px;
       }
 
+      .chart-wrap {
+        position: relative;
+        cursor: grab;
+        user-select: none;
+      }
+
+      .chart-wrap.dragging {
+        cursor: grabbing;
+      }
+
+      .tooltip {
+        position: absolute;
+        display: none;
+        min-width: 250px;
+        pointer-events: none;
+        border: 1px solid rgba(255, 255, 255, 0.14);
+        background: rgba(245, 247, 251, 0.96);
+        color: #111827;
+        border-radius: 6px;
+        padding: 10px 12px;
+        font-size: 12px;
+        line-height: 1.45;
+        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+        z-index: 5;
+      }
+
+      .tooltip strong {
+        display: block;
+        color: #111827;
+        margin-bottom: 6px;
+      }
+
+      .tooltip-row {
+        display: flex;
+        justify-content: space-between;
+        gap: 16px;
+      }
+
+      .tooltip-row span:first-child {
+        color: #4b5563;
+      }
+
       @media (max-width: 860px) {
         .top,
         .layout {
@@ -302,7 +344,7 @@
     <main>
       <section class="top">
         <div>
-          <h1>AlfaClub Key Price in USDC</h1>
+          <h1>AlfaClub Bonding Curve vs Sudoswap Delta</h1>
           <p class="summary">
             Price of one AlfaClub key in USDC across key supply from 1 to 100, using the
             primary sum-of-squares bonding curve. Defaults are set to room #1043:
@@ -312,7 +354,7 @@
         <div class="formula" aria-label="pricing formulas">
           <div>Bonding curve buy(N) = N^2 / divisor * (1 + fee)  [USDC]</div>
           <div>Bonding curve sell(N) = (N - 1)^2 / divisor * (1 - fee)  [USDC]</div>
-          <div>LP: keys &harr; Creator Coin. y&#8320; = (x&#8320; * mid) / coinPriceUsd, k = x&#8320; * y&#8320;</div>
+          <div>Sudoswap model: delta = x&#8320; * 11 + 1; raw spot = bondingMid(S) * delta</div>
         </div>
       </section>
 
@@ -347,7 +389,7 @@
           </div>
           <div class="field">
             <div class="slider-row">
-              <label for="lpSeedKeys">LP seed keys (x&#8320;, capped at key supply)</label>
+              <label for="lpSeedKeys">ERC-1155 keys deposited (x&#8320;, capped at key supply)</label>
               <strong id="lpSeedKeysOut">10</strong>
             </div>
             <input id="lpSeedKeys" type="range" min="1" max="100" step="1" value="10" />
@@ -375,16 +417,12 @@
               spellcheck="false"
             />
           </div>
-          <div class="field">
-            <label for="lpFeeBps">LP fee (bps, auto-set from room type)</label>
-            <input id="lpFeeBps" type="number" min="0" max="10000" step="1" value="300" />
-          </div>
           <p class="note">
-            Chart 1: primary bonding curve (USDC per key). Chart 2: LP paired as keys &harr;
-            Creator Coin. The LP seeds at the primary midprice, so
-            y&#8320; (in Creator Coins) = (x&#8320; &middot; midprice) / coinPriceUsd,
-            and k = x&#8320; &middot; y&#8320; in units of keys &middot; Creator Coins.
-            Pressing <code>Refetch price</code> pulls the live quote from Zora.
+            The chart compares the AlfaClub bonding curve against the Frenmint/Sudoswap
+            delta model. The Sudoswap model uses x&#8320; as the ERC-1155 key deposit,
+            derives <code>delta = x&#8320; &middot; 11 + 1</code>, and converts required
+            ERC-20 amounts through the live Creator Coin price. Pressing
+            <code>Refetch price</code> pulls the live quote from Zora.
           </p>
           <button
             id="refetchPriceBtn"
@@ -407,12 +445,36 @@
         </aside>
 
         <section class="chart-panel">
-          <h2>Bonding curve: key price vs supply</h2>
+          <h2>Bonding curve + Sudoswap delta: price vs key count</h2>
           <div class="legend">
-            <span class="key"><span class="swatch" style="background:#22c55e;height:10px;width:6px;border-radius:2px"></span>Bonding curve spread (sell to buy)</span>
-            <span class="key"><span class="swatch" style="background:#a78bfa"></span>Midprice dot at current supply</span>
+            <span class="key"><span class="swatch" style="background:#22c55e;height:10px;width:6px;border-radius:2px"></span>Bonding curve candle (sell→buy)</span>
+            <span class="key"><span class="swatch" style="background:#a78bfa"></span>Mid/share price (USDC)</span>
+            <span class="key"><span class="swatch" style="background:#f472d8"></span>Sudoswap sell (<span class="quoteSymbolLabel">coins</span>)</span>
+            <span class="key"><span class="swatch" style="background:#93c5fd"></span>Sudoswap buy (<span class="quoteSymbolLabel">coins</span>)</span>
           </div>
-          <svg id="chart" viewBox="0 0 820 430" role="img" aria-label="AlfaClub key price in USDC by supply"></svg>
+          <div class="chart-wrap">
+            <svg id="chart" viewBox="0 0 820 430" role="img" aria-label="AlfaClub bonding curve and Sudoswap delta spot by key count"></svg>
+            <div id="chartTooltip" class="tooltip"></div>
+          </div>
+          <div class="field" style="margin-top: 16px">
+            <div class="slider-row">
+              <label for="chartZoomWidth">Zoom window (shares visible)</label>
+              <strong id="chartZoomWidthOut">60</strong>
+            </div>
+            <input id="chartZoomWidth" type="range" min="10" max="160" step="1" value="60" />
+          </div>
+          <div class="field">
+            <div class="slider-row">
+              <label for="chartCenter">Pan left / right (center share)</label>
+              <strong id="chartCenterOut">73</strong>
+            </div>
+            <input id="chartCenter" type="range" min="1" max="160" step="1" value="73" />
+            <div style="display:flex;gap:8px">
+              <button id="panLeftBtn" type="button" style="flex:1;min-height:34px;border:1px solid rgba(255,255,255,0.12);background:#101722;color:#eef2f8;border-radius:6px;font:inherit;cursor:pointer">← Left</button>
+              <button id="panRightBtn" type="button" style="flex:1;min-height:34px;border:1px solid rgba(255,255,255,0.12);background:#101722;color:#eef2f8;border-radius:6px;font:inherit;cursor:pointer">Right →</button>
+            </div>
+            <p class="note" style="margin-top: 6px">Tip: scroll over the chart to zoom in/out around your cursor.</p>
+          </div>
           <div class="metrics">
             <div class="metric">
               <span>Buy at current supply</span>
@@ -427,36 +489,65 @@
               <strong id="midOut">--</strong>
             </div>
             <div class="metric">
-              <span>k = x&#8320; &middot; y&#8320; (keys &middot; Coin)</span>
+              <span>Sudoswap delta at x&#8320;</span>
               <strong id="kOut">--</strong>
             </div>
           </div>
           <p class="note" id="chartNote"></p>
 
-          <h2 style="margin-top: 26px">LP reserves: xy = k</h2>
-          <div class="legend">
-            <span class="key"><span class="swatch" style="background:#a78bfa"></span>y = k / x (USDC reserve at key reserve x)</span>
-            <span class="key"><span class="swatch" style="background:#22c55e"></span>Anchor at (S, k / S)</span>
+          <h2 style="margin-top: 26px">Frenmint / Sudoswap delta model</h2>
+          <div class="metrics">
+            <div class="metric">
+              <span>Delta</span>
+              <strong id="sudoDeltaOut">--</strong>
+            </div>
+            <div class="metric">
+              <span>ERC-20 deposit</span>
+              <strong id="sudoDepositOut">--</strong>
+            </div>
+            <div class="metric">
+              <span>Raw Sudoswap spot</span>
+              <strong id="sudoSpotOut">--</strong>
+            </div>
+            <div class="metric">
+              <span>Spot value</span>
+              <strong id="sudoSpotUsdOut">--</strong>
+            </div>
           </div>
-          <svg id="lpChart" viewBox="0 0 820 320" role="img" aria-label="LP reserves xy equals k"></svg>
-          <p class="note" id="lpNote"></p>
-
-          <h2 style="margin-top: 26px">Quote: how many <span id="quoteSymbolLabel">Creator Coins</span> to buy Q keys</h2>
-          <table id="quoteTable" style="width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 4px">
+          <table id="sudoTable" style="width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 10px">
             <thead>
               <tr style="text-align: right; color: #8d99aa">
-                <th style="text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">Q (keys)</th>
-                <th style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">Bonding curve (USDC)</th>
-                <th style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">Bonding curve in <span class="quoteSymbolLabel">coins</span></th>
-                <th style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">LP in <span class="quoteSymbolLabel">coins</span> (with fee)</th>
-                <th style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">LP effective USDC</th>
-                <th style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">LP vs bonding curve</th>
-                <th style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">Cheaper venue</th>
+                <th style="text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">x&#8320; keys</th>
+                <th style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">delta = x&#8320;·11+1</th>
+                <th style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">ERC-20 deposit y&#8320;</th>
+                <th style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">raw spot</th>
+                <th style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">raw spot value</th>
               </tr>
             </thead>
-            <tbody id="quoteBody"></tbody>
+            <tbody id="sudoBody"></tbody>
           </table>
-          <p class="note" id="quoteNote"></p>
+          <p class="note" id="sudoNote"></p>
+
+          <h2 style="margin-top: 26px">Sudoswap LP pool metrics</h2>
+          <div class="metrics">
+            <div class="metric">
+              <span>Selling at</span>
+              <strong id="poolSellOut">--</strong>
+            </div>
+            <div class="metric">
+              <span>Buying at</span>
+              <strong id="poolBuyOut">--</strong>
+            </div>
+            <div class="metric">
+              <span>Reserves</span>
+              <strong id="poolReservesOut">--</strong>
+            </div>
+            <div class="metric">
+              <span>Swap fee</span>
+              <strong id="poolFeeOut">--</strong>
+            </div>
+          </div>
+          <p class="note" id="sudoPoolNote"></p>
         </section>
       </section>
     </main>
@@ -472,17 +563,12 @@
         social: 0.04,
       }
 
-      const lpFeeBpsByRoom = {
-        trading: 690,
-        social: 300,
-      }
-
       const N_MIN = 1
       const N_MAX = 100
+      const CHART_DOMAIN_MAX = 160
 
       const $ = (id) => document.getElementById(id)
       const chart = $("chart")
-      const lpChart = $("lpChart")
 
       function sumSquaresThrough(n) {
         if (n <= 0) return 0
@@ -514,6 +600,151 @@
           .join(" ")
       }
 
+      function rectFromBar({ x, y0, y1, width, color, opacity = 0.72 }) {
+        const top = Math.min(y0, y1)
+        const height = Math.max(1, Math.abs(y1 - y0))
+        return `<rect x="${(x - width / 2).toFixed(2)}" y="${top.toFixed(2)}" width="${width.toFixed(2)}" height="${height.toFixed(2)}" fill="${color}" fill-opacity="${opacity}"></rect>`
+      }
+
+      function nearestPoint(points, x) {
+        let best = null
+        let bestDistance = Infinity
+        for (const point of points) {
+          const distance = Math.abs(point.x - x)
+          if (distance < bestDistance) {
+            best = point
+            bestDistance = distance
+          }
+        }
+        return best
+      }
+
+      function tooltipRow(label, value, color) {
+        return `<div class="tooltip-row"><span>${color ? `<span style="color:${color}">\u25a0</span> ` : ""}${label}</span><strong>${value}</strong></div>`
+      }
+
+      function wireChartTooltip({
+        points,
+        sudoPoolPoints,
+        chartMaxSupply,
+        chartMinX = N_MIN,
+        xScale,
+        yScale,
+        ySudoScale,
+        margin,
+        width,
+        height,
+        coinSymbol,
+        coinPriceUsd,
+      }) {
+        const tooltip = $("chartTooltip")
+        if (!chart || !tooltip) return
+
+        chart.onmousemove = (event) => {
+          const rect = chart.getBoundingClientRect()
+          const scaleX = width / rect.width
+          const svgX = (event.clientX - rect.left) * scaleX
+          const xValue =
+            chartMinX + ((svgX - margin.left) / Math.max(1, width - margin.left - margin.right)) * (chartMaxSupply - chartMinX)
+          const point = nearestPoint(points, xValue)
+          if (!point) return
+          const sudoPoint = nearestPoint(sudoPoolPoints || [], point.x)
+          const mid = point.mid
+
+          tooltip.innerHTML = `
+            <strong>${Math.round(point.x)}</strong>
+            ${tooltipRow("Buy Price (USDC)", formatUsd(point.buy), "#4b92ff")}
+            ${tooltipRow("Share Price (USDC)", formatUsd(mid), "#a78bfa")}
+            ${tooltipRow("Sell Price (USDC)", formatUsd(point.sell), "#f59e0b")}
+            ${sudoPoint ? tooltipRow(`Sudoswap Sell (${coinSymbol})`, `${formatCount(sudoPoint.sell)} ${coinSymbol}`, "#f472d8") : ""}
+            ${sudoPoint ? tooltipRow(`Sudoswap Buy (${coinSymbol})`, `${formatCount(sudoPoint.buy)} ${coinSymbol}`, "#93c5fd") : ""}
+          `
+          tooltip.style.display = "block"
+          const tooltipX = Math.min(rect.width - 270, Math.max(8, event.clientX - rect.left + 14))
+          const tooltipY = Math.min(rect.height - 160, Math.max(8, event.clientY - rect.top - 20))
+          tooltip.style.left = `${tooltipX}px`
+          tooltip.style.top = `${tooltipY}px`
+
+          const focusX = xScale(point.x)
+          const focusBuyY = yScale(point.buy)
+          const focusSellY = yScale(point.sell)
+          const focusSudoSellY = sudoPoint ? ySudoScale(sudoPoint.sell) : Number.NaN
+          const focusSudoBuyY = sudoPoint ? ySudoScale(sudoPoint.buy) : Number.NaN
+          const existing = chart.querySelector("#hoverLayer")
+          if (existing) existing.remove()
+          const layer = document.createElementNS("http://www.w3.org/2000/svg", "g")
+          layer.setAttribute("id", "hoverLayer")
+          layer.innerHTML = `
+            <line x1="${focusX}" y1="${margin.top}" x2="${focusX}" y2="${height - margin.bottom}" stroke="rgba(255,255,255,0.35)" stroke-dasharray="4 4"></line>
+            <circle cx="${focusX}" cy="${focusBuyY}" r="3.5" fill="#4b92ff"></circle>
+            <circle cx="${focusX}" cy="${focusSellY}" r="3.5" fill="#f59e0b"></circle>
+            ${Number.isFinite(focusSudoSellY) ? `<circle cx="${focusX}" cy="${focusSudoSellY}" r="3.5" fill="#f472d8"></circle>` : ""}
+            ${Number.isFinite(focusSudoBuyY) ? `<circle cx="${focusX}" cy="${focusSudoBuyY}" r="3.5" fill="#93c5fd"></circle>` : ""}
+          `
+          chart.appendChild(layer)
+        }
+
+        chart.onmouseleave = () => {
+          tooltip.style.display = "none"
+          const existing = chart.querySelector("#hoverLayer")
+          if (existing) existing.remove()
+        }
+
+        chart.onwheel = (event) => {
+          event.preventDefault()
+          const rect = chart.getBoundingClientRect()
+          const scaleX = width / rect.width
+          const svgX = (event.clientX - rect.left) * scaleX
+          const ratio = Math.max(0, Math.min(1, (svgX - margin.left) / Math.max(1, width - margin.left - margin.right)))
+          const hoveredX = chartMinX + ratio * (chartMaxSupply - chartMinX)
+          const currentWidth = Math.max(10, Math.floor(Number($("chartZoomWidth").value) || 60))
+          const zoomFactor = event.deltaY < 0 ? 0.88 : 1.14
+          const nextWidth = Math.max(10, Math.min(CHART_DOMAIN_MAX, Math.round(currentWidth * zoomFactor)))
+          const nextMin = Math.max(
+            N_MIN,
+            Math.min(CHART_DOMAIN_MAX - nextWidth + 1, Math.round(hoveredX - ratio * (nextWidth - 1))),
+          )
+          const nextCenter = Math.max(
+            N_MIN,
+            Math.min(CHART_DOMAIN_MAX, Math.round(nextMin + (nextWidth - 1) / 2)),
+          )
+          $("chartZoomWidth").value = String(nextWidth)
+          $("chartCenter").value = String(nextCenter)
+          render()
+        }
+
+        let dragStartX = null
+        let dragStartCenter = null
+        const wrap = chart.closest(".chart-wrap")
+
+        chart.onmousedown = (event) => {
+          dragStartX = event.clientX
+          dragStartCenter = Math.floor(Number($("chartCenter").value) || 73)
+          if (wrap) wrap.classList.add("dragging")
+          event.preventDefault()
+        }
+
+        window.onmousemove = (event) => {
+          if (dragStartX == null || dragStartCenter == null) return
+          const rect = chart.getBoundingClientRect()
+          const currentWidth = Math.max(10, Math.floor(Number($("chartZoomWidth").value) || 60))
+          const sharesPerPixel = currentWidth / Math.max(1, rect.width)
+          const deltaShares = Math.round((dragStartX - event.clientX) * sharesPerPixel)
+          const nextCenter = Math.max(
+            N_MIN,
+            Math.min(CHART_DOMAIN_MAX, dragStartCenter + deltaShares),
+          )
+          $("chartCenter").value = String(nextCenter)
+          render()
+        }
+
+        window.onmouseup = () => {
+          dragStartX = null
+          dragStartCenter = null
+          if (wrap) wrap.classList.remove("dragging")
+        }
+      }
+
       function formatUsd(value) {
         if (!Number.isFinite(value)) return "--"
         if (value === 0) return "$0"
@@ -531,6 +762,16 @@
         const roomType = $("roomType").value
         const tokenId = Math.max(1, Math.floor(Number($("tokenId").value) || 1043))
         const tier = Number($("tier").value)
+        const chartZoomWidth = Math.max(
+          10,
+          Math.min(CHART_DOMAIN_MAX, Math.floor(Number($("chartZoomWidth").value) || 60)),
+        )
+        const chartCenter = Math.max(
+          N_MIN,
+          Math.min(CHART_DOMAIN_MAX, Math.floor(Number($("chartCenter").value) || 73)),
+        )
+        if ($("chartZoomWidthOut")) $("chartZoomWidthOut").textContent = String(chartZoomWidth)
+        if ($("chartCenterOut")) $("chartCenterOut").textContent = String(chartCenter)
         const supply = Math.min(
           N_MAX,
           Math.max(N_MIN, Math.floor(Number($("supply").value) || 73)),
@@ -540,41 +781,74 @@
         if ($("lpSeedKeysOut")) $("lpSeedKeysOut").textContent = String(lpSeedKeys)
         const coinSymbol = ($("coinSymbol").value || "CreatorCoin").trim() || "CreatorCoin"
         const coinPriceUsd = Math.max(0, Number($("coinPriceUsd").value) || 0)
-        const lpFeeBps = Math.max(0, Math.min(10000, Math.floor(Number($("lpFeeBps").value) || 0)))
-        const lpFeeRate = lpFeeBps / 10_000
         const divisor = divisorTable[roomType][tier]
         const primaryFee = feeTable[roomType]
         const primaryAskAtSupply = primaryBuy(supply, 1, divisor, primaryFee)
         const primaryBidAtSupply = primarySell(supply, 1, divisor, primaryFee)
+        const primaryAskCoinAtSupply = coinPriceUsd > 0 ? primaryAskAtSupply / coinPriceUsd : Number.NaN
+        const primaryBidCoinAtSupply = coinPriceUsd > 0 ? primaryBidAtSupply / coinPriceUsd : Number.NaN
+        const maxPoolStepsLeft = Math.min(supply - 1, lpSeedKeys)
+        const maxPoolStepsRight = Math.min(CHART_DOMAIN_MAX - supply, lpSeedKeys)
+        const halfWindow = chartZoomWidth / 2
+        const unclampedMin = Math.round(chartCenter - halfWindow)
+        const chartMinX = Math.max(
+          N_MIN,
+          Math.min(CHART_DOMAIN_MAX - chartZoomWidth + 1, unclampedMin),
+        )
+        const chartMaxX = Math.min(CHART_DOMAIN_MAX, chartMinX + chartZoomWidth - 1)
 
-        const candles = []
-        for (let n = N_MIN; n <= N_MAX; n++) {
-          candles.push({
+        const chartPoints = []
+        const midPoints = []
+        const sudoPoolPoints = []
+        for (let n = chartMinX; n <= chartMaxX; n++) {
+          const buy = primaryBuy(n, 1, divisor, primaryFee)
+          const sell = primarySell(n, 1, divisor, primaryFee)
+          const mid = Number.isFinite(buy) && Number.isFinite(sell) ? (buy + sell) / 2 : Number.NaN
+          chartPoints.push({
             x: n,
-            buy: primaryBuy(n, 1, divisor, primaryFee),
-            sell: primarySell(n, 1, divisor, primaryFee),
+            buy,
+            sell,
+            mid,
           })
+          midPoints.push({ x: n, y: mid })
         }
 
         const midAtSupply = Number.isFinite(primaryAskAtSupply) && Number.isFinite(primaryBidAtSupply)
           ? (primaryAskAtSupply + primaryBidAtSupply) / 2
           : Number.NaN
-        const usdcAnchorValue = Number.isFinite(midAtSupply) ? lpSeedKeys * midAtSupply : Number.NaN
-        const coinAnchor = Number.isFinite(usdcAnchorValue) && coinPriceUsd > 0
-          ? usdcAnchorValue / coinPriceUsd
-          : Number.NaN
-        const kValue = Number.isFinite(coinAnchor) ? lpSeedKeys * coinAnchor : Number.NaN
-
-        const candleBuyMax = Math.max(...candles.map((c) => c.buy).filter(Number.isFinite), 0)
+        if (Number.isFinite(midAtSupply) && midAtSupply > 0 && coinPriceUsd > 0) {
+          const roomFeeBps = roomType === "trading" ? 690 : 300
+          const feeRate = roomFeeBps / 10_000
+          if (Number.isFinite(primaryAskCoinAtSupply) && Number.isFinite(primaryBidCoinAtSupply)) {
+            const currentModel = sudoModelForKeys({ keyAmount: lpSeedKeys, midAtSupply, coinPriceUsd })
+            if (currentModel) {
+              for (let offset = -maxPoolStepsLeft; offset <= maxPoolStepsRight; offset++) {
+                const x = supply + offset
+                if (x < chartMinX || x > chartMaxX) continue
+                const state = sudoStateAtOffset({ current: currentModel, offset })
+                sudoPoolPoints.push({
+                  x,
+                  buy: sudoXykSellQuote({ spot: state.spot, delta: state.delta, feeRate }),
+                  sell: sudoXykBuyQuote({ spot: state.spot, delta: state.delta, feeRate }),
+                })
+              }
+            }
+          }
+        }
+        const candleBuyMax = Math.max(...chartPoints.map((c) => c.buy).filter(Number.isFinite), 0)
         const yMax = Math.max(candleBuyMax, 1) * 1.08
+        // The right axis is not independently scaled: it is the left USDC axis
+        // converted into Creator Coin units so equal values share the same y-pixel.
+        const ySudoMax = coinPriceUsd > 0 ? yMax / coinPriceUsd : 1
         const width = 820
         const height = 430
-        const margin = { top: 16, right: 24, bottom: 44, left: 70 }
+        const margin = { top: 16, right: 92, bottom: 44, left: 70 }
         const innerWidth = width - margin.left - margin.right
         const innerHeight = height - margin.top - margin.bottom
-        const xScale = (x) => margin.left + ((x - N_MIN) / Math.max(1, N_MAX - N_MIN)) * innerWidth
+        const xScale = (x) => margin.left + ((x - chartMinX) / Math.max(1, chartMaxX - chartMinX)) * innerWidth
         const yScale = (y) => margin.top + innerHeight - (y / yMax) * innerHeight
-        const candleWidth = Math.max(2, (innerWidth / (N_MAX - N_MIN + 1)) * 0.72)
+        const ySudoScale = (y) => margin.top + innerHeight - (y / ySudoMax) * innerHeight
+        const barWidth = Math.max(1.2, (innerWidth / (chartMaxX - chartMinX + 1)) * 0.28)
 
         const yTicks = 5
         let svg = ""
@@ -586,7 +860,14 @@
           svg += `<text class="tick" x="${margin.left - 10}" y="${y + 4}" text-anchor="end">${formatUsd(value)}</text>`
         }
 
-        for (let tickValue = 0; tickValue <= N_MAX; tickValue += 10) {
+        for (let i = 0; i <= yTicks; i++) {
+          const value = (ySudoMax * i) / yTicks
+          const y = ySudoScale(value)
+          svg += `<text class="tick" x="${width - margin.right + 10}" y="${y + 4}" text-anchor="start">${formatCount(value)}</text>`
+        }
+
+        const tickStep = chartMaxX - chartMinX <= 40 ? 5 : 10
+        for (let tickValue = Math.ceil(chartMinX / tickStep) * tickStep; tickValue <= chartMaxX; tickValue += tickStep) {
           const x = xScale(Math.max(N_MIN, tickValue))
           svg += `<line class="grid" x1="${x}" y1="${margin.top}" x2="${x}" y2="${height - margin.bottom}"></line>`
           svg += `<text class="tick" x="${x}" y="${height - 18}" text-anchor="middle">${tickValue}</text>`
@@ -594,21 +875,32 @@
 
         svg += `<line class="axis" x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}"></line>`
         svg += `<line class="axis" x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}"></line>`
+        svg += `<line class="axis" x1="${width - margin.right}" y1="${margin.top}" x2="${width - margin.right}" y2="${height - margin.bottom}"></line>`
         svg += `<text class="tick" x="${width / 2}" y="${height - 2}" text-anchor="middle">Key supply</text>`
-        svg += `<text class="tick" transform="translate(16 ${height / 2}) rotate(-90)" text-anchor="middle">Price per 1 key (USDC)</text>`
+        svg += `<text class="tick" transform="translate(16 ${height / 2}) rotate(-90)" text-anchor="middle">Bonding curve price (USDC/key)</text>`
+        svg += `<text class="tick" transform="translate(${width - 12} ${height / 2}) rotate(90)" text-anchor="middle">Sudoswap pool price (${coinSymbol})</text>`
 
-        for (const c of candles) {
+        const baseline = yScale(0)
+        for (const c of chartPoints) {
           if (!Number.isFinite(c.buy) || !Number.isFinite(c.sell)) continue
+          const center = xScale(c.x)
           const high = Math.max(c.buy, c.sell)
           const low = Math.min(c.buy, c.sell)
           const yTop = yScale(high)
           const yBottom = yScale(low)
-          const rx = xScale(c.x) - candleWidth / 2
-          const rh = Math.max(1, yBottom - yTop)
-          svg += `<rect x="${rx.toFixed(2)}" y="${yTop.toFixed(2)}" width="${candleWidth.toFixed(2)}" height="${rh.toFixed(2)}" fill="#22c55e" fill-opacity="0.82" stroke="#16a34a" stroke-width="0.6"></rect>`
+          const candleWidth = Math.max(2, barWidth * 1.6)
+          svg += `<line x1="${center.toFixed(2)}" y1="${yTop.toFixed(2)}" x2="${center.toFixed(2)}" y2="${yBottom.toFixed(2)}" stroke="#16a34a" stroke-width="0.8" stroke-opacity="0.85"></line>`
+          svg += `<rect x="${(center - candleWidth / 2).toFixed(2)}" y="${yTop.toFixed(2)}" width="${candleWidth.toFixed(2)}" height="${Math.max(1, yBottom - yTop).toFixed(2)}" fill="#22c55e" fill-opacity="0.78" stroke="#16a34a" stroke-width="0.6"></rect>`
         }
 
-        if (supply >= N_MIN && supply <= N_MAX) {
+        svg += `<path class="line" d="${linePath(midPoints, xScale, yScale)}" stroke="#a78bfa"></path>`
+
+        if (sudoPoolPoints.length) {
+          svg += `<path class="line" d="${linePath(sudoPoolPoints.map((p) => ({ x: p.x, y: p.sell })), xScale, ySudoScale)}" stroke="#f472d8"></path>`
+          svg += `<path class="line" d="${linePath(sudoPoolPoints.map((p) => ({ x: p.x, y: p.buy })), xScale, ySudoScale)}" stroke="#93c5fd"></path>`
+        }
+
+        if (supply >= chartMinX && supply <= chartMaxX) {
           const markerX = xScale(supply)
           svg += `<line class="grid" x1="${markerX}" y1="${margin.top}" x2="${markerX}" y2="${height - margin.bottom}" stroke="rgba(255,255,255,0.32)" stroke-dasharray="4 4"></line>`
           const labelY = margin.top + 14
@@ -620,151 +912,151 @@
         }
 
         chart.innerHTML = svg
-        renderLp({
-          kValue,
-          midAtSupply,
-          coinAnchor,
-          usdcAnchorValue,
-          lpSeedKeys,
-          coinSymbol,
-          coinPriceUsd,
-        })
 
         $("primaryAsk").textContent = formatUsd(primaryAskAtSupply)
         $("primaryBid").textContent = formatUsd(primaryBidAtSupply)
         $("midOut").textContent = formatUsd(midAtSupply)
+        $("kOut").textContent = String(sudoDeltaForKeys(lpSeedKeys))
 
         $("chartNote").textContent =
           `Room #${tokenId}: ${roomType === "trading" ? "Trading" : "Social"} / ${
             ["Casual", "Club", "Exclusive"][tier] ?? "Casual"
           }. Divisor ${divisor}, bonding-curve fee ${(primaryFee * 100).toFixed(1)}%. ` +
-          `Candles show the sell-to-buy bonding-curve spread at each supply N. ` +
-          `Purple dot marks the midprice at the current supply (${formatUsd(midAtSupply)}).`
+          `Green candles show the bonding-curve sell-to-buy spread on the left axis, with the purple mid/share-price line. ` +
+          `Pink/blue Sudoswap lines use the right axis in ${coinSymbol}; they are centered at current supply S=${supply} and extend \u00b1x\u2080 keys.`
 
-        renderQuote({
-          supply,
-          divisor,
-          primaryFee,
-          lpSeedKeys,
-          coinAnchor,
-          kValue,
+        wireChartTooltip({
+          points: chartPoints,
+          chartMaxSupply: chartMaxX,
+          chartMinX,
+          xScale,
+          yScale,
+          ySudoScale,
+          margin,
+          width,
+          height,
           coinSymbol,
           coinPriceUsd,
-          lpFeeRate,
-          lpFeeBps,
+          sudoPoolPoints,
+        })
+
+        renderSudoswapDeltaModel({
+          supply,
+          lpSeedKeys,
+          midAtSupply,
+          coinSymbol,
+          coinPriceUsd,
+          lpFeeBps: roomType === "trading" ? 690 : 300,
         })
       }
 
-      function renderQuote({
-        supply,
-        divisor,
-        primaryFee,
-        lpSeedKeys,
-        coinAnchor,
-        kValue,
-        coinSymbol,
-        coinPriceUsd,
-        lpFeeRate,
-        lpFeeBps,
-      }) {
-        const body = $("quoteBody")
-        const note = $("quoteNote")
-        for (const el of document.querySelectorAll(".quoteSymbolLabel, #quoteSymbolLabel")) {
-          el.textContent = coinSymbol
+      function sudoDeltaForKeys(keyAmount) {
+        return keyAmount * 11 + 1
+      }
+
+      function sudoModelForKeys({ keyAmount, midAtSupply, coinPriceUsd }) {
+        if (!Number.isFinite(midAtSupply) || midAtSupply <= 0 || coinPriceUsd <= 0 || keyAmount <= 0) {
+          return null
         }
+        const delta = sudoDeltaForKeys(keyAmount)
+        const tokenDeposit = (midAtSupply * keyAmount) / coinPriceUsd
+        const rawSpot = (midAtSupply * delta) / coinPriceUsd
+        const rawSpotUsd = rawSpot * coinPriceUsd
+        return { keyAmount, delta, tokenDeposit, rawSpot, rawSpotUsd }
+      }
+
+      function sudoStateAtOffset({ current, offset }) {
+        // offset < 0: pool buys NFTs (delta increases). offset > 0: pool sells NFTs (delta decreases).
+        const delta = current.delta - offset
+        const spot = (current.rawSpot * current.delta) / delta
+        return { delta, spot }
+      }
+
+      function sudoXykBuyQuote({ spot, delta, feeRate }) {
+        if (!Number.isFinite(spot) || !Number.isFinite(delta) || delta <= 1) return Number.NaN
+        const inputWithoutFee = spot / (delta - 1)
+        return inputWithoutFee * (1 + feeRate)
+      }
+
+      function sudoXykSellQuote({ spot, delta, feeRate }) {
+        if (!Number.isFinite(spot) || !Number.isFinite(delta) || delta <= 0) return Number.NaN
+        const outputWithoutFee = spot / (delta + 1)
+        return outputWithoutFee * Math.max(0, 1 - feeRate)
+      }
+
+      function renderSudoswapDeltaModel({ supply, lpSeedKeys, midAtSupply, coinSymbol, coinPriceUsd, lpFeeBps }) {
+        const body = $("sudoBody")
+        const note = $("sudoNote")
         if (!body || !note) return
-        body.innerHTML = ""
 
-        const hasCoin = coinPriceUsd > 0 && Number.isFinite(kValue) && kValue > 0
-        if (!hasCoin) {
-          body.innerHTML = `<tr><td colspan="6" style="padding:10px;color:#8d99aa">Set Creator Coin price &gt; 0 and LP seed keys &gt; 0 to compute quotes.</td></tr>`
+        const current = sudoModelForKeys({ keyAmount: lpSeedKeys, midAtSupply, coinPriceUsd })
+        if (!current) {
+          body.innerHTML = `<tr><td colspan="5" style="padding:10px;color:#8d99aa">Set a positive Creator Coin price and midprice to display the Sudoswap delta model.</td></tr>`
+          for (const id of ["sudoDeltaOut", "sudoDepositOut", "sudoSpotOut", "sudoSpotUsdOut"]) {
+            if ($(id)) $(id).textContent = "--"
+          }
           note.textContent = ""
           return
         }
 
-        const MAX_Q = 25
-        const quantities = []
-        for (let q = 1; q <= MAX_Q; q++) {
-          if (q < lpSeedKeys && q < supply) quantities.push(q)
-        }
-        if (quantities.length === 0) {
-          body.innerHTML = `<tr><td colspan="6" style="padding:10px;color:#8d99aa">Increase LP seed keys or current supply so at least 1 key trade is feasible.</td></tr>`
-          note.textContent = ""
-          return
-        }
+        $("sudoDeltaOut").textContent = String(current.delta)
+        $("sudoDepositOut").textContent = `${formatCount(current.tokenDeposit)} ${coinSymbol}`
+        $("sudoSpotOut").textContent = `${formatCount(current.rawSpot)} ${coinSymbol}`
+        $("sudoSpotUsdOut").textContent = formatUsd(current.rawSpotUsd)
 
-        const rows = []
-        for (const q of quantities) {
-          const primaryUsd = primaryBuy(supply, q, divisor, primaryFee)
-          const primaryCoin = primaryUsd / coinPriceUsd
-
-          const newXLp = lpSeedKeys - q
-          const y0 = coinAnchor
-          const grossLpCoin = newXLp > 0 ? kValue / newXLp - y0 : Number.POSITIVE_INFINITY
-          const lpCoinWithFee = newXLp > 0 ? grossLpCoin / Math.max(1e-9, 1 - lpFeeRate) : Number.POSITIVE_INFINITY
-          const lpUsdEffective = lpCoinWithFee * coinPriceUsd
-
-          const cheaper = !Number.isFinite(lpUsdEffective)
-            ? "primary"
-            : lpUsdEffective <= primaryUsd
-              ? "LP"
-              : "primary"
-
-          rows.push({ q, primaryUsd, primaryCoin, lpCoinWithFee, lpUsdEffective, cheaper })
-        }
+        const sampleKeys = Array.from(
+          new Set(
+            [1, 5, 10, 25, lpSeedKeys, supply]
+              .map((x) => Math.max(1, Math.min(supply, Math.floor(x))))
+              .sort((a, b) => a - b),
+          ),
+        )
 
         const tdR = `padding:4px 8px;border-bottom:1px solid rgba(255,255,255,0.05);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap`
         const tdL = `padding:4px 8px;border-bottom:1px solid rgba(255,255,255,0.05);text-align:left;font-weight:500`
-        const avgStyle = `display:block;color:#7c8798;font-size:11px;margin-top:2px`
 
-        const avg = (total, q, formatter) =>
-          q > 1 && Number.isFinite(total) ? `<span style="${avgStyle}">${formatter(total / q)} / key</span>` : ""
-
-        body.innerHTML = rows
-          .map((r) => {
-            const badge =
-              r.cheaper === "LP"
-                ? `<span style="color:#22c55e">LP</span>`
-                : `<span style="color:#4b92ff">Bonding curve</span>`
-            const lpCoinCell = Number.isFinite(r.lpCoinWithFee)
-              ? `${formatCount(r.lpCoinWithFee)} ${coinSymbol}${avg(r.lpCoinWithFee, r.q, (v) => formatCount(v) + " " + coinSymbol)}`
-              : `\u221e (drains LP)`
-            const lpUsdCell = Number.isFinite(r.lpUsdEffective)
-              ? `${formatUsd(r.lpUsdEffective)}${avg(r.lpUsdEffective, r.q, formatUsd)}`
-              : "--"
-
-            let vsCell
-            if (!Number.isFinite(r.lpUsdEffective) || !Number.isFinite(r.primaryUsd) || r.primaryUsd <= 0) {
-              vsCell = "--"
-            } else {
-              const delta = r.lpUsdEffective - r.primaryUsd
-              const ratio = delta / r.primaryUsd
-              const sign = delta > 0 ? "+" : delta < 0 ? "\u2212" : ""
-              const color = delta < 0 ? "#22c55e" : delta > 0 ? "#f59e0b" : "#eef2f8"
-              const absDeltaUsd = formatUsd(Math.abs(delta))
-              const pct = (Math.abs(ratio) * 100).toFixed(ratio === 0 ? 0 : Math.abs(ratio) < 0.01 ? 2 : 2)
-              const label = delta < 0 ? "cheaper" : delta > 0 ? "more" : "identical"
-              vsCell = `<span style="color:${color}">${sign}${pct}%</span><span style="${avgStyle}">${sign}${absDeltaUsd} ${label}</span>`
-            }
-
+        body.innerHTML = sampleKeys
+          .map((keyAmount) => sudoModelForKeys({ keyAmount, midAtSupply, coinPriceUsd }))
+          .filter(Boolean)
+          .map((row) => {
             return `<tr>
-              <td style="${tdL}">${r.q}</td>
-              <td style="${tdR}">${formatUsd(r.primaryUsd)}${avg(r.primaryUsd, r.q, formatUsd)}</td>
-              <td style="${tdR}">${formatCount(r.primaryCoin)} ${coinSymbol}${avg(r.primaryCoin, r.q, (v) => formatCount(v) + " " + coinSymbol)}</td>
-              <td style="${tdR}">${lpCoinCell}</td>
-              <td style="${tdR}">${lpUsdCell}</td>
-              <td style="${tdR}">${vsCell}</td>
-              <td style="${tdR}">${badge}</td>
+              <td style="${tdL}">${row.keyAmount}</td>
+              <td style="${tdR}">${row.delta}</td>
+              <td style="${tdR}">${formatCount(row.tokenDeposit)} ${coinSymbol}</td>
+              <td style="${tdR}">${formatCount(row.rawSpot)} ${coinSymbol}</td>
+              <td style="${tdR}">${formatUsd(row.rawSpotUsd)}</td>
             </tr>`
           })
           .join("")
 
         note.textContent =
-          `Bonding curve path: FriendKey charges USDC, so you'd swap ${coinSymbol} \u2192 USDC first ` +
-          `(quote ignores any Zora v4 pool slippage, fees, or gas). ` +
-          `LP path: constant-product against a ${lpSeedKeys}-key pool with ${lpFeeBps} bps fee, ` +
-          `using the current ${coinSymbol}/USDC price (${formatUsd(coinPriceUsd)}) for the USDC equivalent column. ` +
-          `When the bonding curve wins, either deepen the LP or reduce Q.`
+          `This mirrors Frenmint's setup formula, not an exact live-pool quote: delta = x\u2080\u00b711 + 1, ` +
+          `ERC-20 deposit y\u2080 = (midprice \u00b7 x\u2080) / ${coinSymbol}Price, and raw Sudoswap spot = (midprice \u00b7 delta) / ${coinSymbol}Price. ` +
+          `The raw spot is intentionally much larger than y\u2080/x\u2080 because Sudoswap's curve adapter also consumes delta; use the pool's getBuyNFTQuote/getSellNFTQuote for exact live quotes once deployed.`
+
+        renderSudoswapPoolView({
+          current,
+          lpSeedKeys,
+          coinSymbol,
+          lpFeeBps,
+        })
+      }
+
+      function renderSudoswapPoolView({ current, lpSeedKeys, coinSymbol, lpFeeBps }) {
+        const note = $("sudoPoolNote")
+        const feeRate = Math.max(0, lpFeeBps) / 10_000
+        const sellAtStart = sudoXykBuyQuote({ spot: current.rawSpot, delta: current.delta, feeRate })
+        const buyAtStart = sudoXykSellQuote({ spot: current.rawSpot, delta: current.delta, feeRate })
+
+        $("poolSellOut").textContent = `${formatCount(sellAtStart)} ${coinSymbol}`
+        $("poolBuyOut").textContent = `${formatCount(buyAtStart)} ${coinSymbol}`
+        $("poolReservesOut").textContent = `${formatCount(current.tokenDeposit)} ${coinSymbol} & ${lpSeedKeys}`
+        $("poolFeeOut").textContent = `${(feeRate * 100).toFixed(1)}%`
+
+        if (note) {
+          note.textContent =
+            `These are derived with the verified XykCurve formula: buy from pool = spot/(delta-1) plus fee; sell to pool = spot/(delta+1) minus fee. Exact deployed-pair values should still be read from getBuyNFTQuote/getSellNFTQuote.`
+        }
       }
 
       function formatCount(value) {
@@ -776,105 +1068,6 @@
         if (abs >= 1) return value.toFixed(2)
         if (abs > 0) return value.toFixed(4)
         return "0"
-      }
-
-      function renderLp({
-        kValue,
-        midAtSupply,
-        coinAnchor,
-        usdcAnchorValue,
-        lpSeedKeys,
-        coinSymbol,
-        coinPriceUsd,
-      }) {
-        if (!lpChart) return
-        const width = 820
-        const height = 320
-        const margin = { top: 18, right: 24, bottom: 44, left: 92 }
-        const innerWidth = width - margin.left - margin.right
-        const innerHeight = height - margin.top - margin.bottom
-
-        const X_MIN = Math.max(1, Math.floor(lpSeedKeys / 4))
-        const X_MAX = Math.max(lpSeedKeys + 10, Math.ceil(lpSeedKeys * 2.5))
-
-        const hasK = Number.isFinite(kValue) && kValue > 0
-
-        const sampleX = []
-        const step = (X_MAX - X_MIN) / 400
-        for (let x = X_MIN; x <= X_MAX + 1e-9; x += step) sampleX.push(x)
-
-        const yAtXMin = hasK ? kValue / X_MIN : 1
-        const yMax = hasK ? Math.max(yAtXMin, 1) * 1.05 : 1
-        const xScale = (x) =>
-          margin.left + ((x - X_MIN) / Math.max(1e-9, X_MAX - X_MIN)) * innerWidth
-        const yScale = (y) => margin.top + innerHeight - (y / yMax) * innerHeight
-
-        let svg = ""
-
-        const yTicks = 5
-        for (let i = 0; i <= yTicks; i++) {
-          const value = (yMax * i) / yTicks
-          const y = yScale(value)
-          svg += `<line class="grid" x1="${margin.left}" y1="${y}" x2="${width - margin.right}" y2="${y}"></line>`
-          svg += `<text class="tick" x="${margin.left - 10}" y="${y + 4}" text-anchor="end">${formatCount(value)}</text>`
-        }
-
-        const xRange = X_MAX - X_MIN
-        const xStep = xRange <= 40 ? 5 : xRange <= 120 ? 10 : 20
-        for (let xv = Math.ceil(X_MIN / xStep) * xStep; xv <= X_MAX + 1e-9; xv += xStep) {
-          const gx = xScale(xv)
-          svg += `<line class="grid" x1="${gx}" y1="${margin.top}" x2="${gx}" y2="${height - margin.bottom}"></line>`
-          svg += `<text class="tick" x="${gx}" y="${height - 18}" text-anchor="middle">${xv}</text>`
-        }
-
-        svg += `<line class="axis" x1="${margin.left}" y1="${height - margin.bottom}" x2="${width - margin.right}" y2="${height - margin.bottom}"></line>`
-        svg += `<line class="axis" x1="${margin.left}" y1="${margin.top}" x2="${margin.left}" y2="${height - margin.bottom}"></line>`
-        svg += `<text class="tick" x="${width / 2}" y="${height - 2}" text-anchor="middle">Key reserve x (keys in LP)</text>`
-        svg += `<text class="tick" transform="translate(16 ${height / 2}) rotate(-90)" text-anchor="middle">Creator Coin reserve y (${coinSymbol})</text>`
-
-        if (hasK) {
-          const points = sampleX.map((x) => ({ x, y: kValue / x }))
-          svg += `<path class="line" d="${linePath(points, xScale, yScale)}" stroke="#a78bfa"></path>`
-
-          if (lpSeedKeys >= X_MIN && lpSeedKeys <= X_MAX && Number.isFinite(coinAnchor)) {
-            const ax = xScale(lpSeedKeys)
-            const ay = yScale(coinAnchor)
-            svg += `<line class="grid" x1="${ax}" y1="${margin.top}" x2="${ax}" y2="${height - margin.bottom}" stroke="rgba(255,255,255,0.28)" stroke-dasharray="4 4"></line>`
-            svg += `<line class="grid" x1="${margin.left}" y1="${ay}" x2="${width - margin.right}" y2="${ay}" stroke="rgba(255,255,255,0.28)" stroke-dasharray="4 4"></line>`
-            svg += `<circle cx="${ax}" cy="${ay}" r="5" fill="#22c55e" stroke="#0a0d12" stroke-width="1"></circle>`
-            svg += `<text class="tick" x="${ax + 8}" y="${ay - 6}" text-anchor="start">x&#8320; = ${lpSeedKeys} keys, y&#8320; = ${formatCount(coinAnchor)} ${coinSymbol}</text>`
-          }
-        } else {
-          svg += `<text class="tick" x="${margin.left + innerWidth / 2}" y="${margin.top + innerHeight / 2}" text-anchor="middle">Set coin price &gt; 0 and primary midprice &gt; 0 to see the xy = k curve</text>`
-        }
-
-        lpChart.innerHTML = svg
-
-        $("kOut").textContent = hasK
-          ? `${formatCount(kValue)} keys\u00b7${coinSymbol}`
-          : "--"
-
-        if ($("lpNote")) {
-          if (hasK) {
-            const percentOfSupply = (coinAnchor / 1_000_000_000) * 100
-            $("lpNote").textContent =
-              `LP seeded with x\u2080 = ${lpSeedKeys} keys paired against ` +
-              `y\u2080 = ${formatCount(coinAnchor)} ${coinSymbol} ` +
-              `(\u2248 ${formatUsd(usdcAnchorValue)} at ${formatUsd(coinPriceUsd)} per ${coinSymbol}). ` +
-              `Invariant k = x\u2080 \u00b7 y\u2080 = ${formatCount(kValue)} keys\u00b7${coinSymbol}. ` +
-              `That's roughly ${percentOfSupply.toFixed(3)}% of a 1B-supply Creator Coin. ` +
-              `If ${coinSymbol} price moves, the Coin-reserve needed to sit on this curve scales inversely: a 2x price pump halves the Coin reserve required for the same LP depth.`
-          } else {
-            $("lpNote").textContent =
-              `Enter a Creator Coin price > 0 and pick a supply with a positive midprice to see the xy = k curve.`
-          }
-        }
-      }
-
-      function syncLpFeeFromRoomType() {
-        const roomType = $("roomType").value
-        const bps = lpFeeBpsByRoom[roomType]
-        if (bps != null) $("lpFeeBps").value = String(bps)
       }
 
       function clampLpSeedToSupply() {
@@ -890,12 +1083,20 @@
       }
 
       $("roomType").addEventListener("change", () => {
-        syncLpFeeFromRoomType()
         render()
       })
 
       $("supply").addEventListener("input", () => {
         clampLpSeedToSupply()
+        $("chartCenter").value = $("supply").value
+        const seed = Math.max(1, Math.floor(Number($("lpSeedKeys").value) || 10))
+        $("chartZoomWidth").value = String(Math.max(10, Math.min(CHART_DOMAIN_MAX, seed * 2)))
+      })
+
+      $("lpSeedKeys").addEventListener("input", () => {
+        $("chartCenter").value = $("supply").value
+        const seed = Math.max(1, Math.floor(Number($("lpSeedKeys").value) || 10))
+        $("chartZoomWidth").value = String(Math.max(10, Math.min(CHART_DOMAIN_MAX, seed * 2)))
       })
 
       for (const id of [
@@ -904,15 +1105,28 @@
         "tier",
         "supply",
         "lpSeedKeys",
+        "chartZoomWidth",
+        "chartCenter",
         "coinSymbol",
         "coinPriceUsd",
-        "lpFeeBps",
+        "coinAddress",
       ]) {
         $(id).addEventListener("input", render)
       }
 
-      syncLpFeeFromRoomType()
       clampLpSeedToSupply()
+
+      function panChart(direction) {
+        const centerInput = $("chartCenter")
+        const width = Math.max(10, Math.floor(Number($("chartZoomWidth").value) || 60))
+        const step = Math.max(1, Math.round(width / 4))
+        const current = Math.floor(Number(centerInput.value) || 73)
+        centerInput.value = String(Math.max(N_MIN, Math.min(CHART_DOMAIN_MAX, current + direction * step)))
+        render()
+      }
+
+      $("panLeftBtn").addEventListener("click", () => panChart(-1))
+      $("panRightBtn").addEventListener("click", () => panChart(1))
 
       async function fetchCreatorCoinPrice(address) {
         const url = `https://api-sdk.zora.engineering/coin?address=${encodeURIComponent(address)}&chainId=8453`

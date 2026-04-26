@@ -59,6 +59,7 @@ import {
   gateRequestedStrategyWeights,
   resolveCreatorStrategyPlan,
 } from '../../../server/_lib/creatorStrategy/resolveWeights.js'
+import { deploymentBatcherNotConfiguredMessage } from '../../../server/_lib/onchain/deploymentBatcherConfigError.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -1926,7 +1927,7 @@ async function validateInnerCalls(params: {
   const expectedWethToken = contracts.weth && isAddress(contracts.weth) ? getAddress(contracts.weth) : BASE_WETH
   const expectedProtocolTreasury =
     contracts.protocolTreasury && isAddress(contracts.protocolTreasury) ? getAddress(contracts.protocolTreasury) : null
-  if (!contracts.creatorVaultBatcher) throw new Error('creator_vault_batcher_not_configured')
+  if (!contracts.creatorVaultBatcher) throw new Error(deploymentBatcherNotConfiguredMessage())
   const creatorVaultBatcher = getAddress(contracts.creatorVaultBatcher)
   const vaultActivationBatcher = getAddress(contracts.vaultActivationBatcher)
   const permit2 = getAddress(contracts.permit2)

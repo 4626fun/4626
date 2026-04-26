@@ -13,6 +13,39 @@ export type ContractAddress = `0x${string}`
 // Helper to avoid hardcoding `0x...` literals inline (some scanners misclassify onchain addresses as secrets).
 const addr = (hexWithout0x: string) => `0x${hexWithout0x}` as ContractAddress
 
+// Creator vault deployment batcher compatibility:
+// - Keep one canonical target (`SPLIT_PHASE1_DEPLOYMENT_BATCHER`).
+// - Deprecated aliases are explicitly rejected (hard-fail) so stale env config
+//   is surfaced immediately instead of silently remapping.
+export const LEGACY_DEPLOYMENT_BATCHER = addr('56E8527Bf0824155e1556aED5740366f248B68ca')
+export const MODULE_MISMATCH_DEPLOYMENT_BATCHER = addr('32403a647e73e04ae42b02bdd1ade9c88698fd0c')
+export const SPLIT_PHASE1_DEPLOYMENT_BATCHER = addr('e3F9490CfD6bd3D68010405d18Bf772C167E7178')
+
+const DEPRECATED_CREATOR_VAULT_BATCHERS = new Set<string>([
+  LEGACY_DEPLOYMENT_BATCHER.toLowerCase(),
+  MODULE_MISMATCH_DEPLOYMENT_BATCHER.toLowerCase(),
+])
+
+export function isDeprecatedCreatorVaultBatcherAddress(value: string | null | undefined): boolean {
+  if (value == null) return false
+  const trimmed = value.trim()
+  if (!trimmed) return false
+  if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) return false
+  return DEPRECATED_CREATOR_VAULT_BATCHERS.has(trimmed.toLowerCase())
+}
+
+export function normalizeCreatorVaultBatcherAddress(
+  value: string | null | undefined,
+): ContractAddress | null | undefined {
+  if (value == null) return value
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  if (!/^0x[a-fA-F0-9]{40}$/.test(trimmed)) return undefined
+  if (isDeprecatedCreatorVaultBatcherAddress(trimmed)) return undefined
+  const normalized = trimmed as ContractAddress
+  return normalized
+}
+
 export const BASE_DEFAULTS = {
   // Shared infrastructure
   // Shared resources (registry / lottery / VRF / payout factory) carry over
@@ -47,9 +80,9 @@ export const BASE_DEFAULTS = {
   // sessions. It exposes both core/finalize split selectors, Base↔Solana
   // bridge routing, compatible CreatorOVault modules, and enabled OVault
   // runtime composer config for day-one mesh preflight.
-  creatorVaultBatcher: addr('e3F9490CfD6bd3D68010405d18Bf772C167E7178'),
+  creatorVaultBatcher: SPLIT_PHASE1_DEPLOYMENT_BATCHER,
   // Optional alias used by env-based rollout/cutover logic.
-  creatorVaultBatcherAutoHandoff: addr('e3F9490CfD6bd3D68010405d18Bf772C167E7178'),
+  creatorVaultBatcherAutoHandoff: SPLIT_PHASE1_DEPLOYMENT_BATCHER,
 
   // Treasury
   protocolTreasury: addr('7d429eCbdcE5ff516D6e0a93299cbBa97203f2d3'),

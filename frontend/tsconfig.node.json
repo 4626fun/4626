@@ -32,6 +32,7 @@
     "src/config/contracts.defaults.ts",
     "src/deploy/**/*.ts",
     "src/lib/deploy/create2Salts.ts",
+    "src/lib/deploy/deploymentBatcherConfigError.ts",
     "src/lib/agent/erc8004AgentUriPolicy.ts",
     "src/lib/viteManualChunks.ts",
     "shared/deploy/bytecode.generated.ts",
