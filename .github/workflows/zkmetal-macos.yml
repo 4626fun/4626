@@ -45,7 +45,10 @@ permissions:
 
 concurrency:
   group: zkmetal-macos-${{ github.ref }}
-  cancel-in-progress: true
+  # Only cancel in-progress runs for PR updates. Pushes to main must run to
+  # completion so required-check signals are not lost when commits land
+  # back-to-back.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build-and-test:
@@ -55,14 +58,19 @@ jobs:
     env:
       # Pin zkMetal to a known-good SHA so an upstream change cannot break
       # our CI overnight. Bump this manually when we want a newer zkMetal.
-      # As of 2026-04-26 main HEAD compiles fine with Xcode 16.2+; older
-      # Xcode versions hit Swift type-checker timeouts in zkMetal's
-      # Groth16/Serialization sources. We pin both ZKMETAL_REF and the
-      # Xcode toolchain together so the contract is deterministic.
+      #
+      # NOTE (2026-04-26): zkMetal `main` currently does not compile cleanly
+      # against any Xcode on macos-15 — there are real Swift type errors in
+      # `Sources/zkMetal/ECDSA/EdDSAEngine.swift` and
+      # `Sources/zkMetal/Fields/MetaField/MetaFieldCircuit.swift`. These are
+      # tracked upstream and downstream in the repo issue for H-1/H-3/H-4.
+      # Until they are resolved, the swift build/test steps below will fail
+      # and the triage step will tolerate them as upstream flakes — the
+      # verifier emit + diff steps are gated on a successful zkproof build.
       ZKMETAL_REF: 0ff64e0323ac985bd495ebf0fae09b22a55729d5
-      # Xcode 16.2 is currently the GA release on macos-15 runners that
-      # accepts zkMetal's complex generic expressions without timing out.
-      # If GitHub Actions retires it, bump to the next available version.
+      # We pin Xcode alongside ZKMETAL_REF so the toolchain combination is
+      # deterministic. If GitHub Actions retires this Xcode image, bump to
+      # the next available version on macos-15.
       DEVELOPER_DIR: /Applications/Xcode_16.2.app/Contents/Developer
     steps:
       - name: Checkout 4626
@@ -83,19 +91,29 @@ jobs:
       - name: Select Xcode toolchain
         # `DEVELOPER_DIR` above only takes effect for tools that read it; we
         # use xcode-select so `swift`, `xcrun`, and `swift build` all see the
-        # same SDK. If the pinned Xcode is missing, fall back to the runner
-        # default rather than hard-failing the job (CI image rotation).
+        # same SDK.
+        #
+        # If the pinned Xcode is missing, behavior depends on event type:
+        #   - push to main: hard-fail. main is what produces required-check
+        #     signals and release artifacts; a silent toolchain swap there
+        #     defeats the whole point of pinning.
+        #   - pull_request / workflow_dispatch: warn and fall back to the
+        #     runner default so CI image rotation doesn't block PRs.
         run: |
           if [ -d "$DEVELOPER_DIR" ]; then
             sudo xcode-select -s "$DEVELOPER_DIR"
             echo "Selected: $DEVELOPER_DIR"
           else
-            echo "::warning::pinned $DEVELOPER_DIR not found; using runner default"
-            # Clear the job-level DEVELOPER_DIR override so subsequent steps
-            # (and any tool that reads $DEVELOPER_DIR directly, e.g. xcrun)
-            # don't inherit a non-existent path. Re-export the runner's
-            # currently-selected developer dir so things stay consistent.
-            echo "DEVELOPER_DIR=" >> "$GITHUB_ENV"
+            if [ "${{ github.event_name }}" = "push" ] && [ "${{ github.ref }}" = "refs/heads/main" ]; then
+              echo "::error::pinned $DEVELOPER_DIR not found on macos-15 runner"
+              echo "::error::refusing to silently fall back on push-to-main; bump DEVELOPER_DIR in this workflow"
+              exit 1
+            fi
+            echo "::warning::pinned $DEVELOPER_DIR not found; using runner default (non-main event)"
+            # Re-export the runner's currently-selected developer dir so
+            # subsequent steps (and any tool that reads $DEVELOPER_DIR
+            # directly, e.g. xcrun) see a consistent value. The later write
+            # to $GITHUB_ENV wins, so a single overwrite is sufficient.
             RUNNER_DEVELOPER_DIR="$(xcode-select -p)"
             echo "Falling back to: $RUNNER_DEVELOPER_DIR"
             echo "DEVELOPER_DIR=$RUNNER_DEVELOPER_DIR" >> "$GITHUB_ENV"
@@ -117,8 +135,13 @@ jobs:
             fourksixsixtwo/relayer/zkproof/.build
             fourksixsixtwo/relayer/drand/.build
             ~/Library/Caches/org.swift.swiftpm
-          key: spm-${{ runner.os }}-${{ hashFiles('fourksixsixtwo/relayer/zkproof/Package.swift', 'fourksixsixtwo/relayer/drand/Package.swift') }}
+          # Include ZKMETAL_REF in the cache key: zkMetal is a sibling-path
+          # SwiftPM dependency, so its source changes are NOT reflected in
+          # Package.swift hashes. Without this, bumping ZKMETAL_REF would
+          # restore a stale .build cache and silently mask the upgrade.
+          key: spm-${{ runner.os }}-${{ env.ZKMETAL_REF }}-${{ hashFiles('fourksixsixtwo/relayer/zkproof/Package.swift', 'fourksixsixtwo/relayer/drand/Package.swift') }}
           restore-keys: |
+            spm-${{ runner.os }}-${{ env.ZKMETAL_REF }}-
             spm-${{ runner.os }}-
 
       # The build steps below transitively compile zkMetal. When upstream
@@ -241,9 +264,19 @@ jobs:
 
       - name: Diff regenerated verifier vs. committed copy
         working-directory: fourksixsixtwo
+        # Only run when the emit step actually ran AND succeeded. Without
+        # this guard, `git diff --exit-code` against an unchanged working
+        # tree returns 0 and prints "verifier matches zkMetal-emitted
+        # output ✓" — a false-green signal when emit was skipped because
+        # the upstream build failed or verification_key.json is missing.
+        if: steps.build-zkproof.outcome == 'success'
         run: |
           if [ ! -f contracts/utilities/lottery/zk/AmoeGroth16Verifier.sol ]; then
             echo "no committed AmoeGroth16Verifier.sol — nothing to diff"
+            exit 0
+          fi
+          if [ ! -f circuits/amoe/build/verification_key.json ]; then
+            echo "::warning::no verification_key.json — emit was skipped, diff is meaningless"
             exit 0
           fi
           if git diff --exit-code -- contracts/utilities/lottery/zk/AmoeGroth16Verifier.sol; then
@@ -255,17 +288,23 @@ jobs:
             # emitter output is byte-stable across zkMetal versions.
           fi
 
-      # Optional: run forge tests against the regenerated verifier to confirm
-      # the existing fixture proof still verifies. Only runs if forge is on
-      # PATH; macos-15 doesn't ship it by default, but if someone adds a
-      # foundry install step above this picks it up automatically.
-      - name: Verify fixture proof against regenerated verifier (forge, if available)
+      # Run forge tests against the regenerated verifier to confirm the
+      # existing fixture proof still verifies. macos-15 doesn't ship forge,
+      # so we install it explicitly. Gated on a successful emit step — if
+      # the verifier wasn't regenerated, there's nothing to verify against.
+      - name: Install Foundry
+        if: steps.build-zkproof.outcome == 'success'
+        uses: foundry-rs/foundry-toolchain@v1
+        with:
+          version: stable
+
+      - name: Verify fixture proof against regenerated verifier (forge)
+        if: steps.build-zkproof.outcome == 'success'
         working-directory: fourksixsixtwo
         run: |
-          if ! command -v forge >/dev/null 2>&1; then
-            echo "forge not installed — skipping fixture verification"
-            exit 0
-          fi
+          # No more `command -v forge` guard — if foundry-toolchain failed
+          # to install, we want this step to fail loudly rather than silently
+          # skip and produce a false-green signal.
           forge test --match-path "test/zk/AmoeGroth16Verifier.t.sol" -vv
 
       - name: Upload regenerated verifier as artifact
