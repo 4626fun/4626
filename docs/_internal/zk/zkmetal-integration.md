@@ -32,11 +32,15 @@ low-latency (3s on quicknet), independent BLS12-381 beacon. Pectra shipped the
 EIP-2537 BLS pairing precompile at `0x10`, which makes drand verification
 ~161k gas per round.
 
-**After.** A new `DrandRandomnessSource` verifies drand rounds via a single
-pairing call. Hash-to-curve to G2 is computed off-chain by the relayer (see
-`relayer/drand`, which uses zkMetal's `GPUBLSSignatureEngine`) and bound to the
-round number via a keccak commitment so the relayer can't substitute an
-attacker-chosen G2 point.
+**After.** A new `DrandRandomnessSource` verifies drand **quicknet** rounds via
+a single pairing call. quicknet uses scheme `bls-unchained-g1-rfc9380` —
+signatures are on G1 (48 byte compressed → 128 byte EIP-2537), public key on G2
+(96 byte compressed → 256 byte EIP-2537). Hash-to-curve to G1 is computed
+off-chain by the relayer (see `relayer/drand`, which uses zkMetal's
+`BLS12381Engine.hashToCurveG1` with DST
+`BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_`) and bound to the round number
+via a keccak commitment so the relayer can't substitute an attacker-chosen G1
+point.
 
 This is wired as a *secondary* source — Chainlink VRF stays primary.
 `CreatorLotteryManager` is unchanged in this PR; the next PR introduces an

@@ -19,8 +19,9 @@ final class DrandClientTests: XCTestCase {
         )
         let env = try await client.fetchRound(0)
         let payload = try await client.buildSubmission(for: env)
-        XCTAssertEqual(payload.signatureUncompressed.count, 256)
-        XCTAssertEqual(payload.hashedRoundG2.count, 256)
+        // quicknet: signature ∈ G1 (128 bytes EIP-2537), H(round) ∈ G1 (128 bytes)
+        XCTAssertEqual(payload.signatureUncompressed.count, 128)
+        XCTAssertEqual(payload.hashedRoundG1.count, 128)
         XCTAssertEqual(payload.hashedRoundCommit.count, 32)
     }
 }

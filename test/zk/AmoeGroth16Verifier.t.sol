@@ -26,22 +26,22 @@ contract AmoeGroth16VerifierTest is Test {
 
     function test_realProofVerifies() public view {
         uint256[2] memory a = [
-            uint256(0x08c5cfd3f1ed65cc129b0ec77ab9fea82a44e521b7810d2f8422dcfe6c282f57),
-            uint256(0x0220b7391f4896c988044f68723fb7b9280e40b6c861e3a7d9dae31446ca04a7)
+            uint256(0x2c81ce38c10d09035f2210e1dfd77a7ead0b768e3c7be86ab2112485f59602c5),
+            uint256(0x2226118f805e934f09fae967eeaaaa89de46f04421f7df3b6b3f0782a5d6f31d)
         ];
         uint256[2][2] memory b = [
             [
-                uint256(0x22981faa7261e79f54690625223186ec092a6178fe6e52804b0f5847a8ffcbe6),
-                uint256(0x0bc45d18a4e40a72acd4a4ab4e81023f44b56b4c3783145718281fa04a0067e9)
+                uint256(0x2e38f9be05d42254420026cc20cbaf77c8826cbfd2681c68b602ed16bb6a0ff2),
+                uint256(0x1aa36063e34e5efe48cbd94532bf21344b38404986f44ec84b7af8ab441d4c2d)
             ],
             [
-                uint256(0x250dd3dd6f850d68932ff20f4868e4566f5defea469dd73802e72d7734d75b7f),
-                uint256(0x0a796d5a19989a97c55b85909a10064ad421b8eebc6e70026e29a3d3a1506e33)
+                uint256(0x01f0b99ec3da76d6dd39a880ed922b70ec2885fdcaa71e619e96f213c8c95657),
+                uint256(0x2692fb61d1aff4e13553f1578b40113dbabd1c83d6e04e9f335432866b7bf138)
             ]
         ];
         uint256[2] memory c = [
-            uint256(0x120ea220f90cca4050420a779a4472c6e0cae402c3c640542f2bb2768060a239),
-            uint256(0x0dce8632d764a88360db9e9ebcf38b6f12a41242bff4aa4e8f60cbbc7cf38ef0)
+            uint256(0x146e01552ea7e630e32e5f6a76d4ccf5475c6433dea2800446628629d9887f3e),
+            uint256(0x13692999ac2d546a750836353d3fbdf1a98c8a16f0afb6c3c83f66ca7648cc04)
         ];
         uint256[5] memory pub = [
             uint256(0x167cef8160ab5cf5a22c488d65deeec1ec79499ba3c2883525c2f849d989bfa1), // walletAddrCommit
@@ -56,22 +56,22 @@ contract AmoeGroth16VerifierTest is Test {
 
     function test_tamperedPublicInputRejected() public view {
         uint256[2] memory a = [
-            uint256(0x08c5cfd3f1ed65cc129b0ec77ab9fea82a44e521b7810d2f8422dcfe6c282f57),
-            uint256(0x0220b7391f4896c988044f68723fb7b9280e40b6c861e3a7d9dae31446ca04a7)
+            uint256(0x2c81ce38c10d09035f2210e1dfd77a7ead0b768e3c7be86ab2112485f59602c5),
+            uint256(0x2226118f805e934f09fae967eeaaaa89de46f04421f7df3b6b3f0782a5d6f31d)
         ];
         uint256[2][2] memory b = [
             [
-                uint256(0x22981faa7261e79f54690625223186ec092a6178fe6e52804b0f5847a8ffcbe6),
-                uint256(0x0bc45d18a4e40a72acd4a4ab4e81023f44b56b4c3783145718281fa04a0067e9)
+                uint256(0x2e38f9be05d42254420026cc20cbaf77c8826cbfd2681c68b602ed16bb6a0ff2),
+                uint256(0x1aa36063e34e5efe48cbd94532bf21344b38404986f44ec84b7af8ab441d4c2d)
             ],
             [
-                uint256(0x250dd3dd6f850d68932ff20f4868e4566f5defea469dd73802e72d7734d75b7f),
-                uint256(0x0a796d5a19989a97c55b85909a10064ad421b8eebc6e70026e29a3d3a1506e33)
+                uint256(0x01f0b99ec3da76d6dd39a880ed922b70ec2885fdcaa71e619e96f213c8c95657),
+                uint256(0x2692fb61d1aff4e13553f1578b40113dbabd1c83d6e04e9f335432866b7bf138)
             ]
         ];
         uint256[2] memory c = [
-            uint256(0x120ea220f90cca4050420a779a4472c6e0cae402c3c640542f2bb2768060a239),
-            uint256(0x0dce8632d764a88360db9e9ebcf38b6f12a41242bff4aa4e8f60cbbc7cf38ef0)
+            uint256(0x146e01552ea7e630e32e5f6a76d4ccf5475c6433dea2800446628629d9887f3e),
+            uint256(0x13692999ac2d546a750836353d3fbdf1a98c8a16f0afb6c3c83f66ca7648cc04)
         ];
         // Flip the epoch from 1 -> 2.
         uint256[5] memory pub = [

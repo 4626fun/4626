@@ -19,7 +19,8 @@ public struct DrandTxBuilder {
     }
 
     /// ABI-encodes:
-    ///   submitRound(uint64 round, bytes sigCompressed, bytes hashedRoundG2, bytes32 hashedRoundCommit)
+    ///   submitRound(uint64 round, bytes sigG1, bytes hashedRoundG1, bytes32 hashedRoundCommit)
+    /// (quicknet: signature is on G1, 128 bytes EIP-2537; pubkey on G2, 256 bytes)
     public func encodeSubmitRound(_ payload: DrandSubmissionPayload) throws -> Data {
         // function selector = first 4 bytes of keccak256("submitRound(uint64,bytes,bytes,bytes32)")
         let selector = Data([0x9c, 0x2a, 0x05, 0x4f]) // placeholder; recompute via ABIEncoder in real build
@@ -37,8 +38,8 @@ public struct DrandTxBuilder {
         calldata.append(payload.hashedRoundCommit)
         calldata.append(encodeUint256(UInt256(payload.signatureUncompressed.count)))
         calldata.append(payload.signatureUncompressed)
-        calldata.append(encodeUint256(UInt256(payload.hashedRoundG2.count)))
-        calldata.append(payload.hashedRoundG2)
+        calldata.append(encodeUint256(UInt256(payload.hashedRoundG1.count)))
+        calldata.append(payload.hashedRoundG1)
         return calldata
     }
 

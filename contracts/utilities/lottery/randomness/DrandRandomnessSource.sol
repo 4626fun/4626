@@ -4,57 +4,59 @@ pragma solidity ^0.8.20;
 import {IRandomnessSource} from "./IRandomnessSource.sol";
 
 /// @title DrandRandomnessSource
-/// @notice Pull-style randomness source backed by the drand
-///         "League of Entropy" beacon (BLS12-381 on G1/G2).
+/// @notice Pull-style randomness source backed by the drand "League of Entropy"
+///         beacon (BLS12-381). Pinned to the **quicknet** chain
+///         `52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971`
+///         which uses scheme `bls-unchained-g1-rfc9380`.
 ///
-/// @dev    Verification model
+/// @dev    quicknet specifics
 ///         ------------------
-///         drand's "quicknet" / "fastnet" chain emits, every period seconds,
-///         a BLS12-381 signature over `H(round)` where:
-///           - public key  pk    ∈ G1, fixed per chain (set in constructor)
-///           - signature   sig   ∈ G2
-///           - msg hash    H(r)  ∈ G2 (RFC 9380 hash-to-curve, BLS12-381 G2,
-///                                     domain "BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_")
-///         and the verification equation is:
-///           e(pk, H(r)) == e(G1_generator, sig)
-///         which we rearrange so a single pairing precompile call suffices:
-///           e(pk, H(r)) * e(-G1_generator, sig) == 1
+///         - Group public key  pk    ∈ G2  (96 bytes compressed → 256 bytes EIP-2537)
+///         - Round signature   σ     ∈ G1  (48 bytes compressed → 128 bytes EIP-2537)
+///         - Message hash      H(r)  ∈ G1  (RFC 9380 hash-to-curve, BLS12-381 G1,
+///                                          domain "BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_")
+///         - period            3 seconds
+///         - genesis_time      1692803367
 ///
-///         RFC 9380 hash-to-curve has no precompile and is prohibitively
-///         expensive in pure Solidity, so the relayer (running zkMetal's
-///         `GPUBLSSignatureEngine.hashToCurveG2`) computes `H(round)` off-chain
-///         and submits it as calldata. We re-derive `H(round)` deterministically
-///         from `round` via a commitment scheme and compare against what the
-///         relayer posted, so a malicious relayer can't lie about the hash:
-///         see `submitRound`'s `hashedRoundCommit` check below.
+///         Verification equation: e(H(r), pk) == e(σ, g2_generator)
+///         Rearranged for one-shot pairing:
+///           e(H(r), pk) * e(σ, -g2_generator) == 1
 ///
-///         Costs (Pectra-era pricing per EIP-2537, see `EVMPrecompileRunner.swift`
-///         in zkMetal: pairingBase=115k, pairingPerPair=23k):
-///             pairing(2 pairs) ≈ 115_000 + 2 * 23_000 = 161_000 gas
-///             total submitRound ≈ ~190k gas (incl. calldata + bookkeeping)
+///         Pairing input (EIP-2537 layout: each pair = G1 (128 bytes) || G2 (256 bytes)):
+///           pair 0:  H(r)  (G1, 128)  ||  pk            (G2, 256)
+///           pair 1:  σ     (G1, 128)  ||  -g2_generator (G2, 256)
 ///
-///         This is ~10x cheaper than running drand verification fully on-chain
-///         (which would need hash-to-curve), and the relayer remains trustless
-///         because we recompute the round commitment.
+///         RFC 9380 hash-to-curve (G1) has no precompile and is prohibitively
+///         expensive in pure Solidity, so the off-chain relayer (running zkMetal
+///         `BLS12381Engine.hashToCurveG1`) computes `H(round)` and submits it
+///         alongside the signature. We bind (round, hashedRoundG1) via a keccak
+///         commitment and recompute it on-chain so a malicious relayer can't
+///         substitute an attacker-chosen message hash.
 ///
-/// @custom:precompile BLS12-381 pairing precompile address: 0x10 (post-Pectra)
+///         Costs (Pectra-era pricing per EIP-2537):
+///             pairing-check(2 pairs) = 37_700 + 2 * 32_600 = 102_900 gas
+///             total submitRound ≈ ~135k gas (incl. calldata + bookkeeping)
+///
+/// @custom:precompile BLS12-381 pairing precompile address: 0x0f (post-Pectra,
+///                     per EIP-2537 — NOT 0x10, that's MAP_FP_TO_G1)
 
 contract DrandRandomnessSource is IRandomnessSource {
     // -------------------------------------------------------------------------
     // Configuration
     // -------------------------------------------------------------------------
 
-    /// @notice drand chain hash this contract is pinned to (e.g. quicknet).
+    /// @notice drand chain hash this contract is pinned to (quicknet).
     bytes32 public immutable chainHash;
 
     /// @notice drand `genesis_time` (unix seconds).
     uint64 public immutable genesisTime;
 
-    /// @notice drand `period` (seconds between rounds, e.g. 3 for quicknet).
+    /// @notice drand `period` (seconds between rounds; 3 for quicknet).
     uint32 public immutable period;
 
-    /// @notice drand group public key in G1. EIP-2537 encoding: 128 bytes
-    ///         (Fp x || Fp y, each 64 bytes big-endian, padded from 48-byte field).
+    /// @notice drand group public key in **G2**. EIP-2537 encoding: 256 bytes
+    ///         (Fp2 x_c0 || x_c1 || Fp2 y_c0 || y_c1; each Fp = 64-byte BE,
+    ///         padded from the 48-byte BLS12-381 base field).
     bytes public groupPubKey;
 
     /// @notice Owner can rotate the relayer / publisher.
@@ -68,7 +70,7 @@ contract DrandRandomnessSource is IRandomnessSource {
     // State
     // -------------------------------------------------------------------------
 
-    /// @notice round => uint256 random word = keccak256(sigCompressed)
+    /// @notice round => uint256 random word = keccak256(sig)
     mapping(uint256 => uint256) public randomWordOf;
 
     /// @notice round => fulfilled flag
@@ -104,7 +106,7 @@ contract DrandRandomnessSource is IRandomnessSource {
     ) {
         require(_owner != address(0), "zero owner");
         require(_period > 0, "zero period");
-        require(_groupPubKey.length == 128, "pk must be 128 bytes (EIP-2537 G1)");
+        require(_groupPubKey.length == 256, "pk must be 256 bytes (EIP-2537 G2)");
 
         owner = _owner;
         chainHash = _chainHash;
@@ -138,7 +140,7 @@ contract DrandRandomnessSource is IRandomnessSource {
 
     /// @notice Allow rotating the drand group pubkey if the network rolls over.
     function setGroupPubKey(bytes calldata _groupPubKey) external onlyOwner {
-        require(_groupPubKey.length == 128, "pk must be 128 bytes");
+        require(_groupPubKey.length == 256, "pk must be 256 bytes");
         groupPubKey = _groupPubKey;
         emit GroupPubKeyUpdated(_groupPubKey);
     }
@@ -166,35 +168,35 @@ contract DrandRandomnessSource is IRandomnessSource {
 
     /// @notice Submit a drand round.
     /// @param round              Round number (>= 1).
-    /// @param sigCompressed      256-byte EIP-2537 G2 encoding of the signature
-    ///                           (Fp2 x || Fp2 y, each 128 bytes).
-    /// @param hashedRoundG2      256-byte EIP-2537 G2 encoding of H(round).
+    /// @param sigG1              128-byte EIP-2537 G1 encoding of the round
+    ///                           signature σ (Fp x || Fp y, each 64 bytes).
+    /// @param hashedRoundG1      128-byte EIP-2537 G1 encoding of H(round).
     ///                           Computed off-chain by the relayer (zkMetal
-    ///                           `GPUBLSSignatureEngine.hashToCurveG2`).
-    /// @param hashedRoundCommit  Keccak256 commitment that binds round->H(round)
-    ///                           encoding. Recomputed on-chain to prevent the
-    ///                           relayer from substituting an attacker-chosen
-    ///                           message hash. See note below.
+    ///                           `BLS12381Engine.hashToCurveG1` with drand DST
+    ///                           `BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_`).
+    /// @param hashedRoundCommit  Keccak256 commitment that binds round->H(round).
+    ///                           Recomputed on-chain to prevent the relayer from
+    ///                           substituting an attacker-chosen message hash.
     function submitRound(
         uint64 round,
-        bytes calldata sigCompressed,
-        bytes calldata hashedRoundG2,
+        bytes calldata sigG1,
+        bytes calldata hashedRoundG1,
         bytes32 hashedRoundCommit
     ) external {
         if (!isRelayer[msg.sender]) revert NotRelayer();
         if (roundFulfilled[round]) revert AlreadyFulfilled();
-        if (sigCompressed.length != 256 || hashedRoundG2.length != 256) revert InvalidLength();
+        if (sigG1.length != 128 || hashedRoundG1.length != 128) revert InvalidLength();
 
-        // -- Bind hashedRoundG2 to `round`.
+        // -- Bind hashedRoundG1 to `round`.
         //
-        // Today drand uses SHA-256(round_be_bytes) as the message that gets
-        // hashed-to-curve. We can't reproduce hashToCurveG2 on-chain cheaply,
-        // but we CAN bind the (round, hashedRoundG2) pair: the relayer must
-        // submit a commit equal to keccak256(round_be || hashedRoundG2). A
-        // malicious relayer that swaps in a different G2 point breaks this
-        // commit and the call reverts.
+        // drand's quicknet message is sha256(round_be) and then hash-to-curve to
+        // G1 using domain "BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_". We can't
+        // reproduce hash-to-curve on-chain cheaply, but we CAN bind the
+        // (round, hashedRoundG1) pair: the relayer must submit a commit equal to
+        // keccak256(round_be || hashedRoundG1). A malicious relayer that swaps
+        // in a different G1 point breaks this commit and the call reverts.
         bytes memory roundBE = abi.encodePacked(uint64(round));
-        bytes32 expected = keccak256(abi.encodePacked(roundBE, hashedRoundG2));
+        bytes32 expected = keccak256(abi.encodePacked(roundBE, hashedRoundG1));
         if (expected != hashedRoundCommit) revert InvalidRoundCommit();
 
         // NOTE: This commit only proves the relayer is consistent with itself,
@@ -203,35 +205,37 @@ contract DrandRandomnessSource is IRandomnessSource {
         //       use majority — done in `MultiRelayerDrandSource.sol` (TODO).
         //       For the hackathon, single-relayer + commit is sufficient when
         //       paired with Chainlink VRF as the primary source (see
-        //       `CreatorLotteryManager`).
+        //       `RandomnessRouter`).
 
-        // -- Build pairing precompile input: e(pk, H(r)) * e(-G1, sig) == 1.
-        // EIP-2537 pairing input layout: concat of (G1 || G2) pairs.
-        //   pair 0:  pk         (128 bytes G1)  ||  hashedRoundG2 (256 bytes G2)
-        //   pair 1:  -G1_gen    (128 bytes G1)  ||  sigCompressed (256 bytes G2)
+        // -- Build pairing precompile input: e(H(r), pk) * e(σ, -g2_gen) == 1.
+        // EIP-2537 pairing input: concat of (G1 || G2) pairs, each G1=128, G2=256.
+        //   pair 0:  H(r)  (G1, 128)  ||  pk            (G2, 256)
+        //   pair 1:  σ     (G1, 128)  ||  -g2_generator (G2, 256)
         // Output: 32 bytes — 0x...01 if pairing == 1, 0x...00 otherwise.
         bytes memory input = abi.encodePacked(
+            hashedRoundG1,
             groupPubKey,
-            hashedRoundG2,
-            _negatedG1Generator(),
-            sigCompressed
+            sigG1,
+            _negatedG2Generator()
         );
 
         bool ok;
         bytes32 result;
         assembly {
-            // BLS12-381 pairing precompile (EIP-2537) lives at 0x10.
-            // Pairing gas: 115_000 + 23_000 * pairs = 115_000 + 46_000 = 161_000.
-            ok := staticcall(gas(), 0x10, add(input, 0x20), mload(input), 0x00, 0x20)
+            // BLS12-381 pairing-check precompile (EIP-2537) lives at 0x0f.
+            // (0x10 is MAP_FP_TO_G1, 0x11 is MAP_FP2_TO_G2 — don't confuse them.)
+            // Pairing gas: 37_700 base + 32_600 * pairs = 37_700 + 65_200 = 102_900.
+            ok := staticcall(gas(), 0x0f, add(input, 0x20), mload(input), 0x00, 0x20)
             result := mload(0x00)
         }
         if (!ok) revert PrecompileFailed();
         if (uint256(result) != 1) revert InvalidPairing();
 
         // -- Effects: derive a 256-bit random word from the signature.
-        //    This matches drand's standard `randomness = sha256(sig)` derivation
-        //    but uses keccak so we stay on the EVM-native hash.
-        uint256 word = uint256(keccak256(sigCompressed));
+        //    drand's standard derivation is sha256(sig_compressed); we use keccak
+        //    of the uncompressed G1 encoding so we stay on the EVM-native hash
+        //    and avoid bringing the compressed form on-chain.
+        uint256 word = uint256(keccak256(sigG1));
         randomWordOf[round] = word;
         roundFulfilled[round] = true;
 
@@ -242,27 +246,26 @@ contract DrandRandomnessSource is IRandomnessSource {
     // Constants
     // -------------------------------------------------------------------------
 
-    /// @dev EIP-2537 encoding of -G1_generator (BLS12-381). The negation flips
-    ///      the y coordinate (y_neg = p - y) where p is the BLS12-381 base
-    ///      field modulus. Both x and y are 64-byte BE, padded from 48 bytes.
+    /// @dev EIP-2537 encoding of -G2_generator (BLS12-381). 256 bytes:
+    ///      Fp2 x = (x_c0 || x_c1), Fp2 y = (y_c0 || y_c1). Each Fp element is
+    ///      64-byte big-endian, padded from the 48-byte BLS12-381 field.
     ///
-    ///      Generator G1:
-    ///        x = 0x17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb
-    ///        y = 0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1
-    ///
-    ///      We store the byte literal lazily-initialized to avoid a 256-byte
-    ///      constant in code; it's the same on every chain.
-    function _negatedG1Generator() internal pure returns (bytes memory) {
-        // x = G1_x, padded from 48 -> 64 bytes
-        // y = p - G1_y, padded from 48 -> 64 bytes
-        // Computed once and hard-coded:
-        //   p           = 0x1a0111ea397fe69a4b1ba7b6434bacd764774b84f38512bf6730d2a0f6b0f6241eabfffeb153ffffb9feffffffffaaab
-        //   G1_y        = 0x08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1
-        //   p - G1_y    = 0x114d1d68b552c5a8aa7d76c8cf1d2d3267826f1a7551070bba9211e3aaab2235f04b25f6e5615b39014b94a37e6c52ca
+    ///      Generator G2 (per EIP-2537 / IETF BLS):
+    ///        x = 0x024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8
+    ///          + 0x13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e * u
+    ///        y = 0x0ce5d527727d6e118cc9cdc6da2e351aadfd9baa8cbdd3a76d429a695160d12c923ac9cc3baca289e193548608b82801
+    ///          + 0x0606c4a02ea734cc32acd2b02bc28b99cb3e287e85a763af267492ab572e99ab3f370d275cec1da1aaa9075ff05f79be * u
+    ///      -y = (p - y_c0, p - y_c1) where p is the BLS12-381 base field modulus.
+    ///      Computed offline and hard-coded.
+    function _negatedG2Generator() internal pure returns (bytes memory) {
         return hex"00000000000000000000000000000000"
-            hex"17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb"
+            hex"024aa2b2f08f0a91260805272dc51051c6e47ad4fa403b02b4510b647ae3d1770bac0326a805bbefd48056c8c121bdb8"
             hex"00000000000000000000000000000000"
-            hex"114d1d68b552c5a8aa7d76c8cf1d2d3267826f1a7551070bba9211e3aaab2235f04b25f6e5615b39014b94a37e6c52ca";
+            hex"13e02b6052719f607dacd3a088274f65596bd0d09920b61ab5da61bbdc7f5049334cf11213945d57e5ac7d055d042b7e"
+            hex"00000000000000000000000000000000"
+            hex"0d1b3cc2c7027888be51d9ef691d77bcb679afda66c73f17f9ee3837a55024f78c71363275a75d75d86bab79f74782aa"
+            hex"00000000000000000000000000000000"
+            hex"13fa4d4a0ad8b1ce186ed5061789213d993923066dddaf1040bc3ff59f825c78df74f2d75467e25e0f55f8a00fa030ed";
     }
 
     /// @notice Convenience: convert a unix timestamp to the drand round number.

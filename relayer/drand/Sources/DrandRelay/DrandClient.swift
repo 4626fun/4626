@@ -3,14 +3,15 @@
 // DrandClient — fetches signed rounds from a drand HTTP endpoint and prepares
 // the calldata expected by `DrandRandomnessSource.submitRound`.
 //
-// Pipeline:
+// Pipeline (drand quicknet, scheme `bls-unchained-g1-rfc9380`):
 //   1. GET https://api.drand.sh/<chain>/public/<round>
 //      -> { round, randomness, signature }
-//   2. Parse `signature` as a compressed G2 point (96 bytes for BLS12-381).
-//   3. Decompress to (Fp2 x, Fp2 y) and emit EIP-2537 256-byte uncompressed.
-//   4. Compute H(round) ∈ G2 via zkMetal's RFC 9380 hash-to-curve and emit
-//      EIP-2537 256-byte uncompressed.
-//   5. Compute commit = keccak256(round_be || hashedRoundG2_bytes).
+//   2. Parse `signature` as a compressed **G1** point (48 bytes for BLS12-381).
+//   3. Decompress to (Fp x, Fp y) and emit EIP-2537 128-byte uncompressed.
+//   4. Compute H(round) ∈ **G1** via zkMetal's RFC 9380 hash-to-curve and emit
+//      EIP-2537 128-byte uncompressed.
+//      DST: "BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_"
+//   5. Compute commit = keccak256(round_be || hashedRoundG1_bytes).
 //   6. Hand all three to `DrandTxBuilder` for Base submission.
 
 import Foundation
@@ -18,7 +19,7 @@ import zkMetal
 
 public struct DrandRoundEnvelope: Sendable {
     public let round: UInt64
-    /// Compressed 96-byte BLS12-381 G2 signature as fetched from drand.
+    /// Compressed 48-byte BLS12-381 **G1** signature (quicknet).
     public let signatureCompressed: Data
     /// Beacon-derived randomness (sha256 of signature). Not used on-chain — the
     /// contract recomputes via keccak256 — but exposed for client-side parity.
@@ -27,11 +28,11 @@ public struct DrandRoundEnvelope: Sendable {
 
 public struct DrandSubmissionPayload: Sendable {
     public let round: UInt64
-    /// 256-byte EIP-2537 G2 encoding of the signature.
+    /// 128-byte EIP-2537 G1 encoding of the signature.
     public let signatureUncompressed: Data
-    /// 256-byte EIP-2537 G2 encoding of H(round).
-    public let hashedRoundG2: Data
-    /// keccak256(round_be || hashedRoundG2).
+    /// 128-byte EIP-2537 G1 encoding of H(round).
+    public let hashedRoundG1: Data
+    /// keccak256(round_be || hashedRoundG1).
     public let hashedRoundCommit: Data
 }
 
@@ -50,7 +51,7 @@ public actor DrandClient {
 
     public init(
         baseURL: URL = URL(string: "https://api.drand.sh")!,
-        chainHash: String, // e.g. quicknet: "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971"
+        chainHash: String, // quicknet: "52db9ba70e0cc0f6eaf7803dd07447a1f5477735fd3f661792ba94600c84e971"
         session: URLSession = .shared
     ) throws {
         self.baseURL = baseURL
@@ -82,7 +83,7 @@ public actor DrandClient {
         let parsed = try JSONDecoder().decode(Response.self, from: data)
         guard let sig = Data(hexString: parsed.signature),
               let rnd = Data(hexString: parsed.randomness),
-              sig.count == 96 else {
+              sig.count == 48 else {  // quicknet: signature ∈ G1, 48 bytes compressed
             throw Error.malformedResponse
         }
         return DrandRoundEnvelope(
@@ -94,46 +95,46 @@ public actor DrandClient {
 
     /// Builds the calldata triple expected by `DrandRandomnessSource.submitRound`.
     public func buildSubmission(for envelope: DrandRoundEnvelope) async throws -> DrandSubmissionPayload {
-        // 1. Decompress drand's compact 96-byte G2 -> EIP-2537 256-byte.
+        // 1. Decompress drand's compact 48-byte G1 -> EIP-2537 128-byte.
         //    zkMetal handles compression flag bits per draft-irtf-cfrg-pairing-friendly-curves.
         let sigUncompressed: Data
         do {
-            let g2 = try bls.decompressG2(envelope.signatureCompressed)
-            sigUncompressed = bls.encodeG2EIP2537(g2)
+            let g1 = try bls.decompressG1(envelope.signatureCompressed)
+            sigUncompressed = bls.encodeG1EIP2537(g1)
         } catch {
-            throw Error.zkMetalFailure("decompressG2: \(error)")
+            throw Error.zkMetalFailure("decompressG1: \(error)")
         }
 
-        // 2. Hash-to-curve H(round) ∈ G2 (RFC 9380, drand DST).
-        //    drand uses domain "BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_".
-        //    The message is the SHA-256 of the big-endian round number — this
-        //    matches drand's spec for unchained beacons (quicknet/fastnet).
+        // 2. Hash-to-curve H(round) ∈ G1 (RFC 9380, drand quicknet DST).
+        //    drand quicknet uses domain "BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_".
+        //    The message is SHA-256 of the big-endian round number — this matches
+        //    drand's spec for unchained beacons (`bls-unchained-g1-rfc9380`).
         let roundBE = withUnsafeBytes(of: envelope.round.bigEndian) { Data($0) }
         let msg = SHA256.hash(data: roundBE)
 
-        let hashedG2: Data
+        let hashedG1: Data
         do {
-            let point = try bls.hashToCurveG2(
+            let point = try bls.hashToCurveG1(
                 message: Data(msg),
-                dst: Data("BLS_SIG_BLS12381G2_XMD:SHA-256_SSWU_RO_NUL_".utf8)
+                dst: Data("BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_".utf8)
             )
-            hashedG2 = bls.encodeG2EIP2537(point)
+            hashedG1 = bls.encodeG1EIP2537(point)
         } catch {
-            throw Error.zkMetalFailure("hashToCurveG2: \(error)")
+            throw Error.zkMetalFailure("hashToCurveG1: \(error)")
         }
 
-        // 3. Commit binds (round, hashedG2_bytes) so a malicious relayer can't
-        //    swap H(round) for an attacker-chosen G2 point with a colliding
+        // 3. Commit binds (round, hashedG1_bytes) so a malicious relayer can't
+        //    swap H(round) for an attacker-chosen G1 point with a colliding
         //    pairing — `DrandRandomnessSource` recomputes this on-chain.
         var commitInput = Data()
         commitInput.append(roundBE)
-        commitInput.append(hashedG2)
+        commitInput.append(hashedG1)
         let commit = Keccak256.hash(commitInput)
 
         return DrandSubmissionPayload(
             round: envelope.round,
             signatureUncompressed: sigUncompressed,
-            hashedRoundG2: hashedG2,
+            hashedRoundG1: hashedG1,
             hashedRoundCommit: commit
         )
     }
@@ -163,7 +164,7 @@ extension Data {
 enum SHA256 {
     static func hash(data: Data) -> [UInt8] {
         // zkMetal exposes Keccak/Blake3 GPU paths; for SHA-256 we use CryptoKit
-        // because the cost is negligible compared to hashToCurveG2.
+        // because the cost is negligible compared to hashToCurveG1.
         import_CryptoKit_SHA256(data: data)
     }
 }
