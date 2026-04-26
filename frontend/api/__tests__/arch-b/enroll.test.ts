@@ -30,6 +30,9 @@ const mocks = vi.hoisted(() => ({
   secp256k1SignHash: vi.fn(),
   // privyOwnerWalletIdResolver
   resolveOwnerWalletId: vi.fn(),
+  // subAccountProvisionVerify helpers
+  getBasePublicClient: vi.fn(() => ({})),
+  isContractAddressByBytecode: vi.fn(async () => true),
   // PrivyClient
   PrivyClientGetUserById: vi.fn(),
 }))
@@ -60,6 +63,11 @@ vi.mock('../../../server/_lib/wallet/privyWalletApi.js', () => ({
 
 vi.mock('../../../server/_lib/wallet/privyOwnerWalletIdResolver.js', () => ({
   resolveOwnerWalletId: mocks.resolveOwnerWalletId,
+}))
+
+vi.mock('../../../server/_lib/wallet/subAccountProvisionVerify.js', () => ({
+  getBasePublicClient: mocks.getBasePublicClient,
+  isContractAddressByBytecode: mocks.isContractAddressByBytecode,
 }))
 
 const PrivyClientMock = vi.fn()
@@ -124,6 +132,7 @@ describe('POST /api/arch-b/enroll', () => {
     mocks.getDb.mockResolvedValue(MOCK_DB)
     mocks.checkRateLimit.mockReturnValue({ allowed: true, remaining: 29, resetAt: Date.now() + 60_000 })
     mocks.resolveAuthorizedRequestPrincipal.mockResolvedValue(AUTHORIZED_PRINCIPAL)
+    mocks.isContractAddressByBytecode.mockResolvedValue(true)
     PrivyClientMock.mockImplementation(() => ({
       getUserById: mocks.PrivyClientGetUserById,
     }))
@@ -183,6 +192,18 @@ describe('POST /api/arch-b/enroll', () => {
     expect(res.body.error).toBe('profile_not_ready')
   })
 
+  it('returns 409 invalid_parent_account when canonicalSmartWalletAddress is malformed', async () => {
+    mocks.resolveAuthorizedRequestPrincipal.mockResolvedValue({
+      ...AUTHORIZED_PRINCIPAL,
+      canonicalSmartWalletAddress: 'not-an-address',
+    })
+    const req = makeReq()
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(409)
+    expect(res.body.error).toBe('invalid_parent_account')
+  })
+
   it('returns 409 delegation_not_configured when quorum missing from additional_signers', async () => {
     mocks.fetchPrivyWalletFull.mockResolvedValue({
       id: WALLET_ID,
@@ -199,6 +220,24 @@ describe('POST /api/arch-b/enroll', () => {
     expect(res.body.error).toBe('delegation_not_configured')
     expect(res.body.data.actualSigners).toEqual([])
     expect(res.body.data.expectedQuorumId).toBe(QUORUM_ID)
+  })
+
+  it('returns 409 invalid_parent_account when canonical smart wallet is not a contract', async () => {
+    mocks.isContractAddressByBytecode.mockResolvedValue(false)
+    const req = makeReq()
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(409)
+    expect(res.body.error).toBe('invalid_parent_account')
+  })
+
+  it('returns 503 parent_csw_probe_failed when bytecode probe throws', async () => {
+    mocks.isContractAddressByBytecode.mockRejectedValue(new Error('rpc timeout'))
+    const req = makeReq()
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(503)
+    expect(res.body.error).toBe('parent_csw_probe_failed')
   })
 
   it('returns 500 smoke_sign_failed when secp256k1SignHash throws', async () => {

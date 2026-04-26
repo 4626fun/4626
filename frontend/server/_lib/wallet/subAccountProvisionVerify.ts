@@ -84,6 +84,18 @@ export function getBasePublicClient(): PublicClient {
   return createPublicClient({ chain: base, transport: http(rpcUrl, { timeout: 10_000 }) }) as unknown as PublicClient
 }
 
+export function hasContractBytecode(bytecode: `0x${string}` | null | undefined): boolean {
+  return typeof bytecode === 'string' && bytecode.trim() !== '' && bytecode !== '0x'
+}
+
+export async function isContractAddressByBytecode(args: {
+  publicClient: PublicClient
+  address: Address
+}): Promise<boolean> {
+  const bytecode = await args.publicClient.getBytecode({ address: args.address })
+  return hasContractBytecode(bytecode)
+}
+
 /**
  * Confirm the supplied signature was produced by an authorized signer of the
  * parent CSW over the given EIP-712 permission payload.
@@ -116,9 +128,11 @@ export async function verifyParentCswSignature(args: {
   // Parent CSW must be a contract. If this is an EOA, the profile's canonical
   // wallet path is drifted/misconfigured and ERC-1271 is guaranteed to fail.
   try {
-    const bytecode = await args.publicClient.getBytecode({ address: args.parentCsw })
-    const hasContractBytecode = typeof bytecode === 'string' && bytecode.trim() !== '' && bytecode !== '0x'
-    if (!hasContractBytecode) {
+    const isContract = await isContractAddressByBytecode({
+      publicClient: args.publicClient,
+      address: args.parentCsw,
+    })
+    if (!isContract) {
       logger.warn('[arch-b/subacct/verify] parent wallet has no contract bytecode; refusing CSW signature verification', {
         parentCsw: args.parentCsw,
       })

@@ -466,12 +466,12 @@
         <section class="chart-panel">
           <h2>▲ Price Matrix // Key Count</h2>
           <div class="legend">
-            <span class="key"><span class="swatch" style="background:#22c55e"></span>BC buy curve</span>
-            <span class="key"><span class="swatch" style="background:#16a34a;opacity:0.7"></span>BC sell curve</span>
+            <span class="key"><span style="width:8px;height:8px;border-radius:50%;background:#00e5a0;display:inline-block"></span> BC buy price</span>
+            <span class="key"><span style="width:8px;height:8px;border-radius:50%;background:#ff4d6d;display:inline-block"></span> BC sell price</span>
             <span class="key"><span class="swatch" style="background:#f59e0b"></span>LP sell — you pay</span>
             <span class="key"><span class="swatch" style="background:#a78bfa"></span>LP buy — you receive</span>
-            <span class="key"><span class="swatch" style="background:rgba(140,178,53,0.69);width:14px;height:10px;border-radius:2px"></span>LP cheaper to buy</span>
-            <span class="key"><span class="swatch" style="background:rgba(95,151,162,0.69);width:14px;height:10px;border-radius:2px"></span>LP pays more to sell</span>
+            <span class="key"><span class="swatch" style="background:rgba(123,120,133,0.69);width:14px;height:10px;border-radius:2px"></span>LP buy zone</span>
+            <span class="key"><span class="swatch" style="background:rgba(106,205,191,0.69);width:14px;height:10px;border-radius:2px"></span>LP sell zone</span>
           </div>
           <div class="chart-wrap">
             <svg id="chart" viewBox="0 0 820 430" role="img" aria-label="AlfaClub bonding curve and Sudoswap delta spot by key count"></svg>
@@ -903,43 +903,63 @@
         svg += `<text class="tick" transform="translate(16 ${height / 2}) rotate(-90)" text-anchor="middle">Bonding curve price (USDC/key)</text>`
         svg += `<text class="tick" transform="translate(${width - 12} ${height / 2}) rotate(90)" text-anchor="middle">Sudoswap pool price (${coinSymbol})</text>`
 
-        // ── BC smooth curves ───────────────────────────────────────────────
+        // ── Dumbbell chart for bonding curve ──────────────────────────────
+        // For each N: thin vertical stem sell→buy, bright dot at buy, dim dot at sell
         const bcBuyPoints = chartPoints.filter((c) => Number.isFinite(c.buy)).map((c) => ({ x: c.x, y: c.buy }))
         const bcSellPoints = chartPoints.filter((c) => Number.isFinite(c.sell)).map((c) => ({ x: c.x, y: c.sell }))
-        svg += `<path class="line" d="${linePath(bcBuyPoints, xScale, yScale)}" stroke="#22c55e" stroke-width="2.2" filter="drop-shadow(0 0 4px rgba(34,197,94,.4))"></path>`
-        svg += `<path class="line" d="${linePath(bcSellPoints, xScale, yScale)}" stroke="#16a34a" stroke-width="1.6" stroke-opacity="0.7"></path>`
+        const dotR = Math.max(1.4, Math.min(3, barWidth * 0.85))
+
+        // Shaded spread ribbon beneath the dumbbell (understated background)
+        const spreadFwd = bcBuyPoints.map((p) => `${xScale(p.x).toFixed(1)},${yScale(p.y).toFixed(1)}`).join(" L ")
+        const spreadRev = [...bcSellPoints].reverse().map((p) => `${xScale(p.x).toFixed(1)},${yScale(p.y).toFixed(1)}`).join(" L ")
+        if (spreadFwd && spreadRev) {
+          svg += `<path d="M ${spreadFwd} L ${spreadRev} Z" fill="rgba(0,229,160,0.05)" stroke="none"></path>`
+        }
+
+        // Stems
+        for (const c of chartPoints) {
+          if (!Number.isFinite(c.buy) || !Number.isFinite(c.sell)) continue
+          const cx = xScale(c.x)
+          svg += `<line x1="${cx.toFixed(1)}" y1="${yScale(c.buy).toFixed(1)}" x2="${cx.toFixed(1)}" y2="${yScale(c.sell).toFixed(1)}" stroke="rgba(255,255,255,0.12)" stroke-width="1.2"></line>`
+        }
+
+        // Sell dots — rose-red
+        for (const c of bcSellPoints) {
+          svg += `<circle cx="${xScale(c.x).toFixed(1)}" cy="${yScale(c.y).toFixed(1)}" r="${dotR.toFixed(1)}" fill="#ff4d6d" fill-opacity="0.88" filter="drop-shadow(0 0 2px rgba(255,77,109,.45))"></circle>`
+        }
+
+        // Buy dots — electric mint
+        for (const c of bcBuyPoints) {
+          svg += `<circle cx="${xScale(c.x).toFixed(1)}" cy="${yScale(c.y).toFixed(1)}" r="${dotR.toFixed(1)}" fill="#00e5a0" fill-opacity="0.92" filter="drop-shadow(0 0 2px rgba(0,229,160,.5))"></circle>`
+        }
+
+        // Thin connector curves through dot centers
+        svg += `<path class="line" d="${linePath(bcBuyPoints, xScale, yScale)}" stroke="#00e5a0" stroke-width="1.2" stroke-opacity="0.45"></path>`
+        svg += `<path class="line" d="${linePath(bcSellPoints, xScale, yScale)}" stroke="#ff4d6d" stroke-width="1.0" stroke-opacity="0.4"></path>`
 
         if (sudoPoolPoints.length) {
           // ── Area fills — mixed colors at 69% opacity ────────────────────
-          // Color mix (BC buy green #22c55e + LP sell amber #f59e0b) = avg RGB:
-          //   (34+245)/2=140, (197+158)/2=178, (94+11)/2=53 → #8CB235 (chartreuse)
-          // Color mix (BC sell green #16a34a + LP buy violet #a78bfa) = avg RGB:
-          //   (22+167)/2=95, (163+139)/2=151, (74+250)/2=162 → #5F97A2 (teal)
-
-          // Build polygon: LP sell path forward → BC buy path backward
+          // BC buy (#0052FF blue) × LP sell (#f59e0b amber) → avg: RGB(123,120,133) = #7B7885 (slate/indigo)
+          // BC sell (#2dd4bf teal) × LP buy (#a78bfa violet) → avg: RGB(106,205,191) = #6ACDBF (aqua)
           const lpSellFwd = sudoPoolPoints.map((p) => `${xScale(p.x).toFixed(1)},${ySudoScale(p.sell).toFixed(1)}`).join(" L ")
           const bcBuyRev = [...bcBuyPoints].reverse()
             .filter((p) => p.x >= sudoPoolPoints[0].x && p.x <= sudoPoolPoints[sudoPoolPoints.length - 1].x)
             .map((p) => `${xScale(p.x).toFixed(1)},${yScale(p.y).toFixed(1)}`).join(" L ")
           if (lpSellFwd && bcBuyRev) {
-            svg += `<path d="M ${lpSellFwd} L ${bcBuyRev} Z" fill="rgba(140,178,53,0.69)" stroke="none"></path>`
+            svg += `<path d="M ${lpSellFwd} L ${bcBuyRev} Z" fill="rgba(123,120,133,0.69)" stroke="none"></path>`
           }
 
-          // Build polygon: BC sell path forward → LP buy path backward
           const bcSellFwd = bcSellPoints
             .filter((p) => p.x >= sudoPoolPoints[0].x && p.x <= sudoPoolPoints[sudoPoolPoints.length - 1].x)
             .map((p) => `${xScale(p.x).toFixed(1)},${yScale(p.y).toFixed(1)}`).join(" L ")
           const lpBuyRev = [...sudoPoolPoints].reverse().map((p) => `${xScale(p.x).toFixed(1)},${ySudoScale(p.buy).toFixed(1)}`).join(" L ")
           if (bcSellFwd && lpBuyRev) {
-            svg += `<path d="M ${bcSellFwd} L ${lpBuyRev} Z" fill="rgba(95,151,162,0.69)" stroke="none"></path>`
+            svg += `<path d="M ${bcSellFwd} L ${lpBuyRev} Z" fill="rgba(106,205,191,0.69)" stroke="none"></path>`
           }
 
-          // ── LP lines on top ─────────────────────────────────────────────
+          // ── LP lines on top of fills ────────────────────────────────────
           svg += `<path class="line" d="${linePath(sudoPoolPoints.map((p) => ({ x: p.x, y: p.sell })), xScale, ySudoScale)}" stroke="#f59e0b" stroke-width="2.4" filter="drop-shadow(0 0 5px rgba(245,158,11,.45))"></path>`
           svg += `<path class="line" d="${linePath(sudoPoolPoints.map((p) => ({ x: p.x, y: p.buy })), xScale, ySudoScale)}" stroke="#a78bfa" stroke-width="2.4" filter="drop-shadow(0 0 5px rgba(167,139,250,.5))"></path>`
-          // BC curves on top of fill
-          svg += `<path class="line" d="${linePath(bcBuyPoints, xScale, yScale)}" stroke="#22c55e" stroke-width="2.2" filter="drop-shadow(0 0 4px rgba(34,197,94,.4))"></path>`
-          svg += `<path class="line" d="${linePath(bcSellPoints, xScale, yScale)}" stroke="#16a34a" stroke-width="1.6" stroke-opacity="0.7"></path>`
         }
 
         if (supply >= chartMinX && supply <= chartMaxX) {
@@ -1054,7 +1074,7 @@
                 <span>${fmt(bcSellCoin)} ${coinSymbol}</span>
               </div>
               <div style="display:flex;justify-content:space-between;padding:6px 0">
-                <span style="color:#666">Sudoswap LP <span style="color:#a78bfa">●</span></span>
+                <span style="color:#666">Sudoswap LP <span style="color:#f59e0b">●</span></span>
                 <span>${fmt(lpSellReceive)} ${coinSymbol}</span>
               </div>
               <div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center">

@@ -14,8 +14,8 @@
  *   200 { success: true, data: PreparePayload }
  *   400 invalid_body | invalid_caps
  *   401 unauthenticated
- *   409 profile_not_ready | missing_privy_wallet
- *   503 db_unavailable
+ *   409 profile_not_ready | missing_privy_wallet | invalid_parent_account
+ *   503 db_unavailable | parent_csw_probe_failed
  */
 
 import { PrivyClient } from '@privy-io/server-auth'
@@ -45,10 +45,12 @@ import {
 import { computeSubAccountAddress } from '../../../server/_lib/wallet/subAccountAddress.js'
 import { resolveOwnerWalletId } from '../../../server/_lib/wallet/privyOwnerWalletIdResolver.js'
 import type { Address } from 'viem'
-import { createPublicClient, http } from 'viem'
-import { base } from 'viem/chains'
 import type { SpendPermissionPayload } from '../../../server/_lib/wallet/commandIssuerContext.js'
 import { randomBytes } from 'node:crypto'
+import {
+  getBasePublicClient,
+  isContractAddressByBytecode,
+} from '../../../server/_lib/wallet/subAccountProvisionVerify.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -97,11 +99,6 @@ function parseBigInt(value: unknown): bigint | null {
 function asObjectBody(input: unknown): Record<string, unknown> {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return {}
   return input as Record<string, unknown>
-}
-
-function getBasePublicClient() {
-  const rpcUrl = (process.env.BASE_RPC_URL ?? 'https://mainnet.base.org').split(',')[0].trim()
-  return createPublicClient({ chain: base, transport: http(rpcUrl, { timeout: 10_000 }) })
 }
 
 function randomSaltHex(): `0x${string}` {
@@ -210,6 +207,32 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const parentCsw = parentCswRaw.toLowerCase() as Address
   const ownerEoa = ownerEoaRaw.toLowerCase() as Address
 
+  const publicClient = getBasePublicClient()
+  try {
+    const parentIsContract = await isContractAddressByBytecode({
+      publicClient: publicClient as unknown as Parameters<typeof isContractAddressByBytecode>[0]['publicClient'],
+      address: parentCsw,
+    })
+    if (!parentIsContract) {
+      logger.warn('[arch-b/subacct/prepare] canonical parent is not a contract CSW', {
+        profileId: principal.profileId,
+        parentCsw,
+      })
+      return res
+        .status(409)
+        .json({ success: false, error: 'invalid_parent_account' } satisfies ApiEnvelope<never>)
+    }
+  } catch (err) {
+    logger.error('[arch-b/subacct/prepare] parent CSW bytecode probe failed', {
+      profileId: principal.profileId,
+      parentCsw,
+      error: err instanceof Error ? err.message : String(err),
+    })
+    return res
+      .status(503)
+      .json({ success: false, error: 'parent_csw_probe_failed' } satisfies ApiEnvelope<never>)
+  }
+
   // Resolve Privy wallet id for the owner EOA. Required even in prepare so
   // /commit does not have to reach Privy a second time unnecessarily.
   const appId = (process.env.PRIVY_APP_ID ?? '').trim()
@@ -235,7 +258,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .json({ success: false, error: 'missing_privy_wallet' } satisfies ApiEnvelope<never>)
   }
 
-  const publicClient = getBasePublicClient()
   let subAccountAddress: Address
   try {
     subAccountAddress = await computeSubAccountAddress({

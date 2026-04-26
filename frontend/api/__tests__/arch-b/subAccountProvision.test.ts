@@ -55,6 +55,7 @@ const mocks = vi.hoisted(() => ({
   verifySubAccountProvision: vi.fn(),
   checkPrivyDelegation: vi.fn(),
   getBasePublicClient: vi.fn(() => ({})),
+  isContractAddressByBytecode: vi.fn(async () => true),
 
   resolveOwnerWalletId: vi.fn(),
   PrivyClientGetUserById: vi.fn(),
@@ -96,6 +97,7 @@ vi.mock('../../../server/_lib/wallet/subAccountProvisionVerify.js', () => ({
   verifySubAccountProvision: mocks.verifySubAccountProvision,
   checkPrivyDelegation: mocks.checkPrivyDelegation,
   getBasePublicClient: mocks.getBasePublicClient,
+  isContractAddressByBytecode: mocks.isContractAddressByBytecode,
 }))
 
 vi.mock('../../../server/_lib/wallet/privyOwnerWalletIdResolver.js', () => ({
@@ -192,6 +194,7 @@ function resetMocks() {
     permissionHash: '0x' + 'aa'.repeat(32),
   })
   mocks.checkPrivyDelegation.mockResolvedValue({ present: true })
+  mocks.isContractAddressByBytecode.mockResolvedValue(true)
   PrivyClientMock.mockImplementation(() => ({
     getUserById: mocks.PrivyClientGetUserById,
   }))
@@ -249,6 +252,24 @@ describe('POST /api/arch-b/sub-account/provision/prepare', () => {
     await handler(req, res)
     expect(res.statusCode).toBe(409)
     expect(res.body.error).toBe('profile_not_ready')
+  })
+
+  it('returns 409 when canonical parent account is not a contract CSW', async () => {
+    mocks.isContractAddressByBytecode.mockResolvedValue(false)
+    const req = createMockReq({ method: 'POST' })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(409)
+    expect(res.body.error).toBe('invalid_parent_account')
+  })
+
+  it('returns 503 when canonical parent bytecode probe fails', async () => {
+    mocks.isContractAddressByBytecode.mockRejectedValue(new Error('rpc timeout'))
+    const req = createMockReq({ method: 'POST' })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(503)
+    expect(res.body.error).toBe('parent_csw_probe_failed')
   })
 
   it('returns 200 with subAccountAddress and permission on happy path', async () => {

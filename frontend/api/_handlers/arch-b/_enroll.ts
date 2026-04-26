@@ -18,8 +18,9 @@
  *   200 { success: true, data: { profileId, smartWallet, ... } }
  *   400 profile_not_ready | profile_missing_privy_user | profile_missing_owner_eoa
  *   401 unauthenticated
- *   409 delegation_not_configured
+ *   409 delegation_not_configured | invalid_parent_account
  *   500 smoke_sign_failed | provision error
+ *   503 parent_csw_probe_failed
  */
 
 import { PrivyClient } from '@privy-io/server-auth'
@@ -48,6 +49,10 @@ import {
   secp256k1SignHash,
 } from '../../../server/_lib/wallet/privyWalletApi.js'
 import { resolveOwnerWalletId } from '../../../server/_lib/wallet/privyOwnerWalletIdResolver.js'
+import {
+  getBasePublicClient,
+  isContractAddressByBytecode,
+} from '../../../server/_lib/wallet/subAccountProvisionVerify.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -130,6 +135,28 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   }
 
   const { profileId, canonicalSmartWalletAddress } = principal
+  if (!/^0x[a-fA-F0-9]{40}$/.test(canonicalSmartWalletAddress)) {
+    return res
+      .status(409)
+      .json({ success: false, error: 'invalid_parent_account' } satisfies ApiEnvelope<never>)
+  }
+  const publicClient = getBasePublicClient()
+  try {
+    const parentIsContract = await isContractAddressByBytecode({
+      publicClient: publicClient as unknown as Parameters<typeof isContractAddressByBytecode>[0]['publicClient'],
+      address: canonicalSmartWalletAddress.toLowerCase() as `0x${string}`,
+    })
+    if (!parentIsContract) {
+      return res
+        .status(409)
+        .json({ success: false, error: 'invalid_parent_account' } satisfies ApiEnvelope<never>)
+    }
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message.slice(0, 256) : String(err).slice(0, 256)
+    return res
+      .status(503)
+      .json({ success: false, error: 'parent_csw_probe_failed', data: { message } } satisfies ApiEnvelope<unknown>)
+  }
 
   // Load privy_user_id and primary_embedded_eoa from profiles
   const profileRow = await db.sql`
