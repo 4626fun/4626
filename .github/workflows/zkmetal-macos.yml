@@ -59,7 +59,7 @@ jobs:
       # Xcode versions hit Swift type-checker timeouts in zkMetal's
       # Groth16/Serialization sources. We pin both ZKMETAL_REF and the
       # Xcode toolchain together so the contract is deterministic.
-      ZKMETAL_REF: 0ff64e0323ac3f7e8f1d4e02ad2dde36b5b32dc8
+      ZKMETAL_REF: 0ff64e0323ac985bd495ebf0fae09b22a55729d5
       # Xcode 16.2 is currently the GA release on macos-15 runners that
       # accepts zkMetal's complex generic expressions without timing out.
       # If GitHub Actions retires it, bump to the next available version.
