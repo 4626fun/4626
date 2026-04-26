@@ -33,8 +33,13 @@ public struct DrandTxBuilder {
 
         var calldata = selector
         calldata.append(encodeUint256(UInt256(payload.round)))
-        calldata.append(encodeUint256(0x80))                                  // offset to sig
-        calldata.append(encodeUint256(0x80 + 32 + UInt256(payload.signatureUncompressed.count)))
+        // Offsets are typed as UInt256 so the encoder treats them uniformly
+        // alongside dynamically-sized arguments below. The previous integer
+        // literals tripped Swift's type inference on `Int` + `UInt256`.
+        calldata.append(encodeUint256(UInt256(UInt64(0x80))))                  // offset to sig
+        calldata.append(encodeUint256(
+            UInt256(UInt64(0x80 + 32 + payload.signatureUncompressed.count))
+        ))
         calldata.append(payload.hashedRoundCommit)
         calldata.append(encodeUint256(UInt256(payload.signatureUncompressed.count)))
         calldata.append(payload.signatureUncompressed)

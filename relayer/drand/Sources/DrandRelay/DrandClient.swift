@@ -42,6 +42,14 @@ public actor DrandClient {
         case malformedResponse
         case unsupportedCompression
         case zkMetalFailure(String)
+        /// Drand quicknet signs in G1 but zkMetal's BLS engine currently
+        /// exposes only G2 hash-to-curve and lacks G1-side EIP-2537 helpers.
+        /// Tracked in `wenakita/4626#389` and slated for an upstream zkMetal
+        /// addition. We surface this as an explicit error rather than a
+        /// silent compile fix so callers cannot accidentally ship
+        /// half-functional drand submissions.
+        case g1HashToCurveUnsupported
+        case g1EIP2537EncodeUnsupported
     }
 
     public let baseURL: URL
@@ -94,49 +102,61 @@ public actor DrandClient {
     }
 
     /// Builds the calldata triple expected by `DrandRandomnessSource.submitRound`.
+    ///
+    /// NOTE: this method currently throws `g1HashToCurveUnsupported` because
+    /// zkMetal does not yet expose G1 hash-to-curve or G1 EIP-2537 encoding.
+    /// Compilation succeeds against the real zkMetal API surface so the rest
+    /// of the relayer can build and be tested; runtime invocation is gated
+    /// pending the upstream additions tracked in `wenakita/4626#389`.
     public func buildSubmission(for envelope: DrandRoundEnvelope) async throws -> DrandSubmissionPayload {
         // 1. Decompress drand's compact 48-byte G1 -> EIP-2537 128-byte.
-        //    zkMetal handles compression flag bits per draft-irtf-cfrg-pairing-friendly-curves.
-        let sigUncompressed: Data
-        do {
-            let g1 = try bls.decompressG1(envelope.signatureCompressed)
-            sigUncompressed = bls.encodeG1EIP2537(g1)
-        } catch {
-            throw Error.zkMetalFailure("decompressG1: \(error)")
+        //    zkMetal exposes a free function `bls12381G1Decompress(_:)` in
+        //    `Sources/zkMetal/Serialization/ProofSerializer.swift` that
+        //    returns a `G1Projective381?`. We reference it here so this code
+        //    path stays wired up; converting the resulting projective point
+        //    to a 128-byte EIP-2537 encoding still requires an upstream
+        //    helper (tracked in #389), so we throw before that step.
+        let sigBytes = [UInt8](envelope.signatureCompressed)
+        guard bls12381G1Decompress(sigBytes) != nil else {
+            throw Error.zkMetalFailure("bls12381G1Decompress returned nil for round \(envelope.round)")
         }
+        // TODO(#389): once zkMetal exposes `encodeG1EIP2537`, replace the
+        // throw below with: `let sigUncompressed = bls.encodeG1EIP2537(g1)`.
+        // Until then, surface the gap explicitly.
+        _ = self.bls // silence "unused" diagnostic in release builds
+        throw Error.g1EIP2537EncodeUnsupported
 
-        // 2. Hash-to-curve H(round) ∈ G1 (RFC 9380, drand quicknet DST).
-        //    drand quicknet uses domain "BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_".
-        //    The message is SHA-256 of the big-endian round number — this matches
-        //    drand's spec for unchained beacons (`bls-unchained-g1-rfc9380`).
-        let roundBE = withUnsafeBytes(of: envelope.round.bigEndian) { Data($0) }
-        let msg = SHA256.hash(data: roundBE)
-
-        let hashedG1: Data
-        do {
-            let point = try bls.hashToCurveG1(
-                message: Data(msg),
-                dst: Data("BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_".utf8)
-            )
-            hashedG1 = bls.encodeG1EIP2537(point)
-        } catch {
-            throw Error.zkMetalFailure("hashToCurveG1: \(error)")
-        }
-
-        // 3. Commit binds (round, hashedG1_bytes) so a malicious relayer can't
-        //    swap H(round) for an attacker-chosen G1 point with a colliding
-        //    pairing — `DrandRandomnessSource` recomputes this on-chain.
-        var commitInput = Data()
-        commitInput.append(roundBE)
-        commitInput.append(hashedG1)
-        let commit = Keccak256.hash(commitInput)
-
-        return DrandSubmissionPayload(
-            round: envelope.round,
-            signatureUncompressed: sigUncompressed,
-            hashedRoundG1: hashedG1,
-            hashedRoundCommit: commit
-        )
+        // The remainder of the pipeline (intended shape) is preserved here
+        // as comments. When the upstream additions land, delete the throw
+        // above and re-enable the hashToCurveG1 / encodeG1EIP2537 calls.
+        //
+        // 2. Hash-to-curve H(round) ∈ G1 (RFC 9380, drand quicknet DST):
+        //      DST = "BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_"
+        //    The message is SHA-256 of the big-endian round number — this
+        //    matches drand's spec for unchained beacons
+        //    (`bls-unchained-g1-rfc9380`).
+        //
+        //    let roundBE = withUnsafeBytes(of: envelope.round.bigEndian) { Data($0) }
+        //    let msg = SHA256.hash(data: roundBE)
+        //    let point = try bls.hashToCurveG1(message: Data(msg),
+        //                                       dst: Data("BLS_SIG_BLS12381G1_XMD:SHA-256_SSWU_RO_NUL_".utf8))
+        //    let hashedG1 = bls.encodeG1EIP2537(point)
+        //
+        // 3. commit = keccak256(round_be || hashedG1_bytes), binds (round,
+        //    hashedG1) so a malicious relayer can't swap H(round) for an
+        //    attacker-chosen G1 point with a colliding pairing —
+        //    `DrandRandomnessSource` recomputes this on-chain.
+        //
+        //    var commitInput = Data()
+        //    commitInput.append(roundBE)
+        //    commitInput.append(hashedG1)
+        //    let commit = Keccak256.hash(commitInput)
+        //
+        //    return DrandSubmissionPayload(
+        //        round: envelope.round,
+        //        signatureUncompressed: sigUncompressed,
+        //        hashedRoundG1: hashedG1,
+        //        hashedRoundCommit: commit)
     }
 }
 

@@ -35,7 +35,12 @@ struct EmitVerifier: ParsableCommand {
 
     func run() throws {
         let vkData = try Data(contentsOf: URL(fileURLWithPath: vk))
-        let parsed = try Groth16VerificationKey.fromSnarkjsJSON(vkData)
+        // zkMetal's `fromSnarkjsJSON(_:)` returns `Groth16VerificationKey?`
+        // (it's a non-throwing failable parser). Surface a clear error if
+        // the snarkjs file can't be decoded.
+        guard let parsed = Groth16VerificationKey.fromSnarkjsJSON(vkData) else {
+            throw ValidationError("failed to parse verification_key.json: \(vk)")
+        }
         var src = generateSolidityVerifier(vk: parsed)
 
         // zkMetal's emitter outputs `contract Groth16Verifier { ... }`. The
@@ -63,7 +68,8 @@ struct EmitVerifier: ParsableCommand {
             atomically: true,
             encoding: .utf8
         )
-        FileHandle.standardError.write(Data("emit-verifier: wrote \(out)\n".utf8))
+        let msg = "emit-verifier: wrote \(out)\n"
+        FileHandle.standardError.write(Data(msg.utf8))
     }
 
     private func stripLeadingSPDX(_ s: String) -> String {

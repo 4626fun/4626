@@ -63,18 +63,26 @@ struct Prove: ParsableCommand {
         )
 
         // snarkjs JSON: { pi_a: [..], pi_b: [[..],[..]], pi_c: [..], protocol: "groth16", curve: "bn128" }
-        let proofData = try Groth16Solidity.exportSnarkjsJSON(proof: proof)
+        // zkMetal exposes this directly on `Groth16Proof` as
+        // `toSnarkjsJSON(prettyPrint:) -> Data?`. Earlier versions of this
+        // CLI assumed a `Groth16Solidity` namespace which never existed.
+        guard let proofData = proof.toSnarkjsJSON(prettyPrint: true) else {
+            throw ValidationError("failed to encode proof as snarkjs JSON")
+        }
         try proofData.write(to: URL(fileURLWithPath: proofOut))
 
         // public.json is just an array of decimal strings, same as snarkjs.
-        let pubArray = publicSignals.map { $0.decimalString }
+        // `frToDecimal(_:)` is a free function in zkMetal's Serialization
+        // module — there is no `Fr.decimalString` property.
+        let pubArray = publicSignals.map { frToDecimal($0) }
         let pubData = try JSONSerialization.data(
             withJSONObject: pubArray,
             options: [.prettyPrinted]
         )
         try pubData.write(to: URL(fileURLWithPath: publicOut))
 
-        FileHandle.standardError.write(Data("amoe-prover: ok\n".utf8))
+        let okMsg = "amoe-prover: ok\n"
+        FileHandle.standardError.write(Data(okMsg.utf8))
     }
 }
 
@@ -99,12 +107,12 @@ struct BuildRoot: ParsableCommand {
         }
         let tree = try AmoeAllowlist()
         for s in arr {
-            guard let v = Fr(decimalString: s) else {
+            guard let v = frFromDecimal(s) else {
                 throw ValidationError("not a decimal Fr: \(s)")
             }
             try tree.insert(leaf: v)
         }
-        try tree.root.decimalString.write(
+        try frToDecimal(tree.root).write(
             to: URL(fileURLWithPath: rootOut),
             atomically: true,
             encoding: .utf8
@@ -156,14 +164,17 @@ private struct InputJSON: Decodable {
                 guard b == "0" || b == "1" else {
                     throw ValidationError("pathIndices[\(i)] must be 0 or 1, got \(b)")
                 }
-                return Fr(integerLiteral: b == "1" ? 1 : 0)
+                return b == "1" ? Fr.one : Fr.zero
             }
         )
     }
 }
 
 private func fr(_ s: String, _ name: String) throws -> Fr {
-    guard let v = Fr(decimalString: s) else {
+    // zkMetal exposes decimal-string parsing as a free function
+    // `frFromDecimal(_:) -> Fr?` (Sources/zkMetal/Serialization/SnarkjsSerialization.swift).
+    // The previous `Fr(decimalString:)` initializer never existed.
+    guard let v = frFromDecimal(s) else {
         throw ValidationError("\(name) is not a decimal Fr: \(s)")
     }
     return v

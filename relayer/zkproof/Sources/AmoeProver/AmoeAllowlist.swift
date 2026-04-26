@@ -33,14 +33,14 @@ public final class AmoeAllowlist {
     public private(set) var count: Int = 0
 
     public init() throws {
-        // zkMetal's IncrementalMerkleTree takes a depth and a hasher. We use
-        // Poseidon2-BN254 to match the circuit hasher exactly.
+        // zkMetal's IncrementalMerkleTree currently exposes only `init(depth:)`
+        // and `init(depth:engine:)` -- the hasher is fixed to Poseidon2 over
+        // BN254 internally and the empty-leaf is zero. That happens to be
+        // exactly what the AMOE circuit pins, so the on-chain root and the
+        // in-circuit root agree by construction. If zkMetal ever pluralises
+        // the hasher this is the constructor to update.
         do {
-            self.tree = try IncrementalMerkleTree(
-                depth: AmoeAllowlist.depth,
-                hasher: .poseidon2BN254,
-                zeroLeaf: AmoeAllowlist.zeroLeaf
-            )
+            self.tree = try IncrementalMerkleTree(depth: AmoeAllowlist.depth)
         } catch {
             throw AmoeAllowlistError.engineInit(String(describing: error))
         }
@@ -53,7 +53,10 @@ public final class AmoeAllowlist {
             throw AmoeAllowlistError.full
         }
         do {
-            try tree.insert(leaf: leaf)
+            // zkMetal's API is `append(leaf:)`, not `insert(leaf:)`. We keep
+            // our public method name as `insert` because that's what the rest
+            // of the relayer says.
+            try tree.append(leaf: leaf)
             let i = count
             count += 1
             return i
@@ -72,13 +75,11 @@ public final class AmoeAllowlist {
         guard index >= 0 && index < count else {
             throw AmoeAllowlistError.indexOutOfRange(index: index, count: count)
         }
-        do {
-            let p = try tree.path(forIndex: index)
-            let bits = p.bits.map { Fr(integerLiteral: $0 ? 1 : 0) }
-            return (p.siblings, bits)
-        } catch {
-            throw AmoeAllowlistError.pathFailed(String(describing: error))
-        }
+        // zkMetal's `proof(index:)` is total -- it returns a `MerkleProof`
+        // with `.siblings: [Fr]` and `.pathBits: [Bool]`.
+        let p = tree.proof(index: index)
+        let bits = p.pathBits.map { $0 ? Fr.one : Fr.zero }
+        return (p.siblings, bits)
     }
 }
 

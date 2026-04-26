@@ -39,6 +39,10 @@ let package = Package(
             name: "DrandRelayCLI",
             dependencies: [
                 "DrandRelay",
+                // CLI parses the contract address into a real
+                // `web3.EthereumAddress` so it lines up with
+                // `DrandTxBuilder.contractAddress`'s type.
+                .product(name: "web3.swift", package: "web3.swift"),
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ]
         ),

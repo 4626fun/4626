@@ -75,13 +75,30 @@ public final class AmoeProver {
         }
         do {
             self.prover = try Groth16Prover()
-            // zkMetal's loaders. Paths kept as positional arguments to track
-            // the underlying API; if the API changes we update here.
-            self.pk = try Groth16ProvingKey.load(zkey: zkeyURL)
-            self.r1cs = try R1CSInstance.load(r1cs: r1csURL)
+            // zkMetal does NOT currently ship a Swift-side .zkey loader.
+            // Until it does, the relayer driver is responsible for handing us
+            // a parsed `Groth16ProvingKey`. We trip a clear error here rather
+            // than silently producing a zero proving key. See issue #389.
+            //
+            // zkMetal DOES ship a Circom .r1cs parser; we use it directly.
+            self.pk = try Self.loadProvingKey(zkeyURL: zkeyURL)
+            let r1csFile = try R1CSParser.parse(contentsOf: r1csURL)
+            self.r1cs = R1CSParser.toR1CSInstance(r1csFile)
         } catch {
             throw AmoeProverError.zkMetal(String(describing: error))
         }
+    }
+
+    /// Until zkMetal exposes a public .zkey parser, this is a deliberate hard
+    /// stop. The relayer's bin entrypoint should call into a real .zkey reader
+    /// (e.g. snarkjs's binary format) and inject the resulting key. Tracked at
+    /// https://github.com/wenakita/4626/issues/389.
+    private static func loadProvingKey(zkeyURL: URL) throws -> Groth16ProvingKey {
+        throw AmoeProverError.zkMetal(
+            "zkMetal does not yet expose a public .zkey loader; " +
+            "AmoeProver cannot self-load \(zkeyURL.lastPathComponent). " +
+            "Inject Groth16ProvingKey via a future init(pk:r1cs:) once available."
+        )
     }
 
     /// Prove AMOE eligibility for the given public/private inputs.
@@ -169,9 +186,12 @@ public final class AmoeProver {
         publicSignals: [Fr],
         vk: Groth16VerificationKey
     ) -> Bool {
-        return Groth16Verifier.verify(
-            vk: vk,
+        // zkMetal's `Groth16Verifier.verify` is an instance method with arg
+        // order (proof:vk:publicInputs:). We construct a fresh verifier per
+        // call -- the type holds no state, so this is free.
+        return Groth16Verifier().verify(
             proof: proof,
+            vk: vk,
             publicInputs: publicSignals
         )
     }

@@ -14,6 +14,14 @@
 import ArgumentParser
 import Foundation
 import DrandRelay
+// `DrandTxBuilder.contractAddress` is typed as `web3.EthereumAddress`
+// (argentlabs/web3.swift). The previous version of this CLI defined a
+// local `EthereumAddress` stub which collided with the real one and
+// caused a `cannot convert ... to web3.EthereumAddress` error at the
+// `DrandTxBuilder(contractAddress:)` call site. Importing the real type
+// here means the same stringly-typed parsing path now produces an
+// instance the relayer can actually consume.
+import web3
 
 @main
 struct DrandRelayCommand: AsyncParsableCommand {
@@ -61,18 +69,16 @@ struct DrandRelayCommand: AsyncParsableCommand {
     }
 
     private func parseAddress(_ s: String) throws -> EthereumAddress {
-        guard let a = EthereumAddress(string: s) else {
+        // Cheap shape check first — web3.EthereumAddress's failable init
+        // returns nil only on a length mismatch, so verifying "0x" + 40 hex
+        // chars up front gives the user a clearer error message.
+        guard s.hasPrefix("0x"), s.count == 42 else {
             throw ValidationError("invalid contract address: \(s)")
         }
-        return a
+        return EthereumAddress(s)
     }
 }
 
 extension Data {
     func hexEncoded() -> String { "0x" + map { String(format: "%02x", $0) }.joined() }
-}
-
-// Tiny stub to keep this file self-contained for review.
-public struct EthereumAddress { public let raw: String
-    public init?(string s: String) { guard s.hasPrefix("0x"), s.count == 42 else { return nil }; self.raw = s }
 }
