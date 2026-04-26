@@ -4,8 +4,10 @@ import { fileURLToPath } from 'node:url'
 
 import { createPublicClient, decodeFunctionResult, encodeFunctionData, getAddress, http, isAddress, type Address } from 'viem'
 import { base } from 'viem/chains'
+import { isDeprecatedCreatorVaultBatcherAddress } from '../src/config/contracts.defaults.js'
+import { deploymentBatcherNotConfiguredMessage } from '../src/lib/deploy/deploymentBatcherConfigError.js'
 
-const DEFAULT_SOURCE_BATCHER = '0x32403a647e73e04ae42b02bdd1ade9c88698fd0c' as Address
+const DEFAULT_SOURCE_BATCHER = '0xe3F9490CfD6bd3D68010405d18Bf772C167E7178' as Address
 // Anvil account #0. Local-only default used to deploy the replacement batcher onto the fork.
 const DEFAULT_ANVIL_DEPLOYER_PRIVATE_KEY =
   '0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80'
@@ -24,6 +26,11 @@ const deployerPrivateKey = (process.env.DEPLOY_DRY_RUN_DEPLOYER_PRIVATE_KEY ?? D
 
 if (!isAddress(sourceBatcherRaw)) {
   throw new Error(`Invalid DEPLOY_DRY_RUN_SOURCE_BATCHER: ${sourceBatcherRaw || '(empty)'}`)
+}
+if (isDeprecatedCreatorVaultBatcherAddress(sourceBatcherRaw)) {
+  throw new Error(
+    `DEPLOY_DRY_RUN_SOURCE_BATCHER is a deprecated alias. ${deploymentBatcherNotConfiguredMessage(sourceBatcherRaw)}`,
+  )
 }
 if (!/^0x[a-fA-F0-9]{64}$/.test(deployerPrivateKey)) {
   throw new Error('DEPLOY_DRY_RUN_DEPLOYER_PRIVATE_KEY must be a 32-byte hex private key.')

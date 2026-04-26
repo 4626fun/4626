@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import handler from '../_handlers/deploy/_config.ts'
 import { createMockReq, createMockRes } from './helpers'
+import { LEGACY_DEPLOYMENT_BATCHER } from '../../src/config/contracts.defaults.ts'
 
 const {
   getApiContractsMock,
@@ -87,15 +88,15 @@ describe('deploy config handler', () => {
     expect(String(res.body?.error ?? '')).toContain('Not authenticated')
   })
 
-  it('returns 403 for authenticated non-admin callers', async () => {
+  it('returns deploy config for authenticated callers regardless of admin role', async () => {
     isServerAdminAddressMock.mockReturnValueOnce(false)
     const req = createMockReq({ method: 'GET' })
     const res = createMockRes()
 
     await handler(req, res)
 
-    expect(res.statusCode).toBe(403)
-    expect(String(res.body?.error ?? '')).toContain('Admin access required')
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
   })
 
   it('returns resolved public deploy config', async () => {
@@ -112,6 +113,7 @@ describe('deploy config handler', () => {
     expect(res.body?.success).toBe(true)
     expect(res.body?.data).toMatchObject({
       creatorVaultBatcher: '0x2222222222222222222222222222222222222222',
+      creatorVaultBatcherConfigError: null,
       deploymentVersion: 'v1.7.1-dryrun',
       allowApiContractOverrides: true,
       deployMode: 'no_eoa_strict',
@@ -123,5 +125,23 @@ describe('deploy config handler', () => {
       payoutRouterZoraWethFee: 123,
       payoutRouterWethCreatorFee: 456,
     })
+  })
+
+  it('returns explicit batcher config error when batcher is unresolved', async () => {
+    getApiContractsMock.mockReturnValueOnce({
+      creatorVaultBatcher: null,
+      zora: '0x3333333333333333333333333333333333333333',
+    })
+    process.env.CREATOR_VAULT_BATCHER = LEGACY_DEPLOYMENT_BATCHER
+
+    const req = createMockReq({ method: 'GET' })
+    const res = createMockRes()
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.success).toBe(true)
+    expect(res.body?.data?.creatorVaultBatcher).toBeNull()
+    expect(String(res.body?.data?.creatorVaultBatcherConfigError ?? '')).toContain('Deprecated aliases are blocked')
+    expect(String(res.body?.data?.creatorVaultBatcherConfigError ?? '')).toContain(LEGACY_DEPLOYMENT_BATCHER)
   })
 })

@@ -3,6 +3,8 @@
 import Safe from '@safe-global/protocol-kit'
 import { OperationType } from '@safe-global/types-kit'
 import { encodeFunctionData, getAddress, isAddress, type Address } from 'viem'
+import { isDeprecatedCreatorVaultBatcherAddress } from '../../src/config/contracts.defaults.js'
+import { deploymentBatcherNotConfiguredMessage } from '../../src/lib/deploy/deploymentBatcherConfigError.js'
 
 declare const process: {
   argv: string[]
@@ -261,6 +263,9 @@ async function main() {
     ),
   )
   if (!batcher) throw new Error('Missing --batcher (or CREATOR_VAULT_BATCHER*_env)')
+  if (isDeprecatedCreatorVaultBatcherAddress(batcher)) {
+    throw new Error(`Deprecated batcher alias is blocked. ${deploymentBatcherNotConfiguredMessage(batcher)}`)
+  }
 
   const includeSolanaConfig = hasFlag('--only-ovault-runtime')
     ? false

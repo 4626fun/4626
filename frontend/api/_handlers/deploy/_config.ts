@@ -16,11 +16,13 @@ import {
   resolvePayoutRouterKeeperAddress,
   resolvePayoutRouterZoraToken,
 } from '../../../server/_lib/onchain/payoutRouterRuntime.js'
+import { deploymentBatcherNotConfiguredMessage } from '../../../server/_lib/onchain/deploymentBatcherConfigError.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
 type DeployConfigResponse = {
   creatorVaultBatcher: `0x${string}` | null
+  creatorVaultBatcherConfigError: string | null
   deploymentVersion: string
   allowApiContractOverrides: boolean
   deployMode: string
@@ -59,9 +61,17 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     .trim()
     .toLowerCase() || 'default'
   const deploymentVersion = String(process.env.VITE_DEPLOYMENT_VERSION ?? '').trim()
+  const creatorVaultBatcherRawCandidate =
+    String(process.env.CREATOR_VAULT_BATCHER ?? '').trim() ||
+    String(process.env.CREATOR_VAULT_BATCHER_AUTO_HANDOFF ?? '').trim() ||
+    null
 
   const data: DeployConfigResponse = {
     creatorVaultBatcher: contracts.creatorVaultBatcher ?? null,
+    creatorVaultBatcherConfigError:
+      contracts.creatorVaultBatcher == null
+        ? deploymentBatcherNotConfiguredMessage(creatorVaultBatcherRawCandidate)
+        : null,
     deploymentVersion,
     allowApiContractOverrides: envBool('ALLOW_API_CONTRACT_OVERRIDES'),
     deployMode,

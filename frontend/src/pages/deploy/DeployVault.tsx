@@ -411,6 +411,7 @@ async function waitForPhase1CoreState(params: {
 type AdminAuthResponse = { address: string; isAdmin: boolean } | null
 type DeployRuntimeConfigResponse = {
   creatorVaultBatcher: Address | null
+  creatorVaultBatcherConfigError: string | null
   deploymentVersion: string
   allowApiContractOverrides: boolean
   deployMode: string
@@ -971,6 +972,7 @@ async function fetchDeployRuntimeConfig(): Promise<DeployRuntimeConfigResponse |
 
 const STALE_DEPLOY_CONFIG_RELOAD_KEY = 'cv:deploy:staleConfigAutoReloadAt'
 const STALE_DEPLOY_CONFIG_RELOAD_WINDOW_MS = 10_000
+const RUNTIME_BATCHER_WARNING_DISMISS_KEY = 'cv:deploy:runtimeBatcherWarningDismissed'
 
 function isLocalhostRuntime(): boolean {
   if (typeof window === 'undefined') return false
@@ -2290,6 +2292,8 @@ function DeployVaultBatcher({
   const [exportBusy, setExportBusy] = useState(false)
   const [exportStatus, setExportStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [runtimeBatcherConfigError, setRuntimeBatcherConfigError] = useState<string | null>(null)
+  const [runtimeBatcherWarningDismissed, setRuntimeBatcherWarningDismissed] = useState(false)
   const [txId, setTxId] = useState<string | null>(null)
   const [phase, setPhase] = useState<'idle' | 'phase1' | 'phase2' | 'phase3' | 'phase4' | 'done'>('idle')
   const [lastSessionStep, setLastSessionStep] = useState<string>('')
@@ -3070,7 +3074,11 @@ function DeployVaultBatcher({
     let cancelled = false
     ;(async () => {
       const runtimeConfig = await fetchDeployRuntimeConfig().catch(() => null)
-      if (cancelled || !runtimeConfig) return
+      if (cancelled || !runtimeConfig) {
+        if (!cancelled) setRuntimeBatcherConfigError(null)
+        return
+      }
+      setRuntimeBatcherConfigError(runtimeConfig.creatorVaultBatcherConfigError ?? null)
       const runtimeBatcher = normalizeDeploymentBatcherAddress(runtimeConfig?.creatorVaultBatcher ?? null)
       if (runtimeBatcher && (!batcherAddress || !sameAddress(runtimeBatcher, batcherAddress))) {
         setBatcherOverride(runtimeBatcher)
@@ -3092,6 +3100,36 @@ function DeployVaultBatcher({
       cancelled = true
     }
   }, [batcherAddress, deploymentVersionProp, vaultVanityIsCustom])
+
+  useEffect(() => {
+    const currentMessage = String(runtimeBatcherConfigError ?? '').trim()
+    if (!currentMessage) {
+      setRuntimeBatcherWarningDismissed(false)
+      return
+    }
+    if (typeof window === 'undefined') {
+      setRuntimeBatcherWarningDismissed(false)
+      return
+    }
+    try {
+      const dismissedMessage = window.sessionStorage.getItem(RUNTIME_BATCHER_WARNING_DISMISS_KEY) ?? ''
+      setRuntimeBatcherWarningDismissed(dismissedMessage === currentMessage)
+    } catch {
+      setRuntimeBatcherWarningDismissed(false)
+    }
+  }, [runtimeBatcherConfigError])
+
+  const dismissRuntimeBatcherWarning = useCallback(() => {
+    const currentMessage = String(runtimeBatcherConfigError ?? '').trim()
+    if (!currentMessage) return
+    setRuntimeBatcherWarningDismissed(true)
+    if (typeof window === 'undefined') return
+    try {
+      window.sessionStorage.setItem(RUNTIME_BATCHER_WARNING_DISMISS_KEY, currentMessage)
+    } catch {
+      // ignore storage failures
+    }
+  }, [runtimeBatcherConfigError])
 
   const payoutRouterCodeId = useMemo(() => {
     return keccak256(DEPLOY_BYTECODE.PayoutRouter as Hex)
@@ -4227,7 +4265,9 @@ function DeployVaultBatcher({
     try {
       const runtimeConfig = await fetchDeployRuntimeConfig().catch(() => null)
       await ensurePaymasterSession()
-      if (!batcherAddress) throw new Error(deploymentBatcherNotConfiguredMessage())
+      if (!batcherAddress) {
+        throw new Error(runtimeConfig?.creatorVaultBatcherConfigError || deploymentBatcherNotConfiguredMessage())
+      }
       const runtimeBatcher = normalizeDeploymentBatcherAddress(runtimeConfig?.creatorVaultBatcher ?? null)
       if (runtimeBatcher && !sameAddress(runtimeBatcher, batcherAddress)) {
         const recovered = tryAutoRecoverStaleDeployConfig({
@@ -7212,6 +7252,24 @@ function DeployVaultBatcher({
           <div className="text-[11px] text-zinc-600">Checking smart wallet balance…</div>
         )}
       </div>
+
+      {runtimeBatcherConfigError && !runtimeBatcherWarningDismissed ? (
+        <div className="rounded-lg border border-amber-500/35 bg-linear-to-b from-amber-500/16 to-amber-500/9 p-3 space-y-1 backdrop-blur-sm">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[10px] font-medium text-amber-200">Deploy runtime warning</div>
+            <button
+              type="button"
+              className="text-[10px] text-amber-200/80 hover:text-amber-100 underline underline-offset-2"
+              onClick={dismissRuntimeBatcherWarning}
+            >
+              Dismiss
+            </button>
+          </div>
+          <div className="text-[11px] text-amber-200/80 leading-relaxed whitespace-pre-wrap">
+            {runtimeBatcherConfigError}
+          </div>
+        </div>
+      ) : null}
 
       {/* Show deploy button only if we have a valid ERC-4337 path */}
       {hasDeploySignerPath ? (
