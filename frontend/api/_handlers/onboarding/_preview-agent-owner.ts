@@ -48,6 +48,11 @@ import { createAgentWallet } from '../../../server/_lib/wallet/privyWalletApi.js
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
 const HEX_RE = /^0x[0-9a-fA-F]+$/
+// Body holds two addresses plus an optional ownership proof (a short message
+// + ERC-1271 signature). 8 KiB is comfortably above the worst-case payload
+// (proof message capped at 1024 chars + a signature of a few hundred bytes)
+// while still rejecting obviously hostile bodies.
+const PREVIEW_AGENT_OWNER_BODY_MAX_BYTES = 8 * 1024
 const MAX_PROOF_MESSAGE_LENGTH = 1_024
 const OWNERSHIP_PROOF_TTL_MS = 10 * 60_000
 const OWNERSHIP_PROOF_MAX_FUTURE_SKEW_MS = 2 * 60_000
@@ -207,7 +212,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   let parsedBody: Record<string, unknown>
   try {
-    parsedBody = (await readJsonBody(req)) as Record<string, unknown>
+    parsedBody = (await readJsonBody(req, { maxBytes: PREVIEW_AGENT_OWNER_BODY_MAX_BYTES })) as Record<string, unknown>
   } catch {
     return res.status(400).json({ success: false, error: 'Invalid JSON body' } satisfies ApiEnvelope<never>)
   }
