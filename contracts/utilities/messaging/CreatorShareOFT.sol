@@ -8,7 +8,6 @@ import {OptionsBuilder} from "@layerzerolabs/oapp-evm/contracts/oapp/libs/Option
 import {Origin} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 import {OFTMsgCodec} from "@layerzerolabs/oft-evm/contracts/libs/OFTMsgCodec.sol";
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
-import {Base64} from "@openzeppelin/contracts/utils/Base64.sol";
 import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import {Strings} from "@openzeppelin/contracts/utils/Strings.sol";
 import {ICreatorGaugeController} from "../../interfaces/core/ICreatorGaugeController.sol";
@@ -54,11 +53,6 @@ interface ISimpleSellTaxHook {
         bool enabled_,
         bool lock_
     ) external;
-}
-
-/// @dev Optional vault extension used for metadata hints.
-interface ICreatorOVaultAsset {
-    function asset() external view returns (address);
 }
 
 // FIX: M-08 — wrapper-side cooldown propagation hook
@@ -1236,59 +1230,21 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
         );
     }
 
-    function _buildContractMetadataJson() internal view returns (string memory) {
-        address vaultAddress = vault;
-        address assetAddress = address(0);
-        if (vaultAddress != address(0) && vaultAddress.code.length > 0) {
-            try ICreatorOVaultAsset(vaultAddress).asset() returns (address asset) {
-                assetAddress = asset;
-            } catch {}
-        }
-
-        string memory pngImageUrl = _buildRendererImageUrl("png");
-        string memory svgImageUrl = _buildRendererImageUrl("svg");
-        string memory appUrl = string.concat("https://app.4626.fun/vault/", Strings.toHexString(address(this)));
-
-        return string(
-            abi.encodePacked(
-                '{"name":"',
-                Strings.escapeJSON(name()),
-                '","symbol":"',
-                Strings.escapeJSON(symbol()),
-                '","description":"4626.fun Share Token","external_link":"',
-                appUrl,
-                '","image":"',
-                pngImageUrl,
-                '","animation_url":"',
-                svgImageUrl,
-                '","properties":{"vault":',
-                _jsonAddressOrNull(vaultAddress),
-                ',"asset":',
-                _jsonAddressOrNull(assetAddress),
-                ',"chain_id":',
-                Strings.toString(block.chainid),
-                '}}'
-            )
-        );
-    }
-
-    function _jsonAddressOrNull(address addr) internal pure returns (string memory) {
-        if (addr == address(0)) return "null";
-        return string(abi.encodePacked('"', Strings.toHexString(addr), '"'));
-    }
-
-    function _buildRendererImageUrl(string memory format) internal view returns (string memory) {
-        return string(
-            abi.encodePacked(
-                "https://api.4626.fun/v1/token/",
-                Strings.toHexString(address(this)),
-                "/image?chain=",
-                Strings.toString(block.chainid),
-                "&format=",
-                format
-            )
-        );
-    }
+    // NOTE: An on-chain `_buildContractMetadataJson` helper (and its
+    // `_jsonAddressOrNull` / `_buildRendererImageUrl` companions) used to
+    // live here, returning a `data:application/json;base64,...` payload as
+    // a fallback for `contractURI()`. We removed it for two reasons:
+    //   1. It became dead code once `contractURI()` started returning the
+    //      canonical HTTPS endpoint (`api.4626.fun/v1/token/<addr>/metadata`)
+    //      directly, since indexers reliably treat that as a URL but often
+    //      silently skip `data:` schemes.
+    //   2. Its bytecode footprint (Strings.escapeJSON, Base64 import, the
+    //      try/catch ICreatorOVaultAsset path, four `string.concat` /
+    //      `abi.encodePacked` blobs) was meaningfully contributing to the
+    //      contract's EIP-170 size pressure (audit M-01, 2026-04-25 — see
+    //      docs/operations/contract-size-gate.md).
+    // If a future client ever wants the JSON inline, generate it server-
+    // side at the canonical endpoint instead of paying for it on-chain.
 
     // ================================
     // TRADE FEE COLLECTOR
