@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import {IRandomnessSource} from "./IRandomnessSource.sol";
+import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 
 /// @title RandomnessRouter
 /// @notice Per-creator-coin randomness source selector. Sits beside
@@ -29,7 +30,7 @@ import {IRandomnessSource} from "./IRandomnessSource.sol";
 ///         router's `acquire` function picks the right shape per source so
 ///         the keeper has a single call site to spin entropy for any coin.
 
-contract RandomnessRouter {
+contract RandomnessRouter is ReentrancyGuard {
     // -------------------------------------------------------------------------
     // Roles
     // -------------------------------------------------------------------------
@@ -130,8 +131,16 @@ contract RandomnessRouter {
     ///         the random word.
     /// @dev    For PULL-mode sources (e.g. drand), use `currentPullKey` to read
     ///         the active round directly without going through this function.
+    /// @dev Defense-in-depth: `acquireRequest` makes a low-level call into
+    /// `src.request()` and emits the `RandomnessAcquired` log only after
+    /// the call returns. Sources are admin-curated via `setSourceFor`
+    /// (see audit §4.1, finding `reentrancy-events`), but a future or
+    /// mis-configured source must not be able to re-enter the router and
+    /// observe inconsistent log ordering. The OpenZeppelin `nonReentrant`
+    /// modifier closes that surface unconditionally.
     function acquireRequest(address creatorCoin)
         external
+        nonReentrant
         returns (address sourceAddr, IRandomnessSource.SourceMode m, uint256 key)
     {
         IRandomnessSource src = resolve(creatorCoin);

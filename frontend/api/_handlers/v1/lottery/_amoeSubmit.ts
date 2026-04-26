@@ -294,14 +294,19 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // economics; waitlist score is decoupled.
 
     if (relayRequested) {
+      // Relay first, debit second. Previously credits were consumed BEFORE
+      // the on-chain submission, which meant any contract-side revert
+      // (e.g. the new `DeadlineTooSoon` floor from audit §4.2) silently
+      // burned user credits. Issuer mirrors the 60s floor so we shouldn't
+      // hit that revert in practice, but ordering is the durable fix.
+      const txHash = await relayAmoeEntryTransaction({
+        to: attested.to,
+        callData: attested.callData,
+      })
       const creditSpend = await consumeAmoeCreditsForEntry({
         wallet: proof.wallet,
         requiredCredits: AMOE_CREDITS_PER_ENTRY,
         refId: `${proof.creatorCoin}:${proof.nonce}`,
-      })
-      const txHash = await relayAmoeEntryTransaction({
-        to: attested.to,
-        callData: attested.callData,
       })
 
       return res.status(200).json({
@@ -338,7 +343,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const messageText = error instanceof Error ? error.message : 'amoe_submit_failed'
     const status = messageText.includes('insufficient')
       ? 402
-      : messageText.includes('invalid') || messageText.includes('mismatch') || messageText.includes('expired')
+      : messageText.includes('invalid') ||
+          messageText.includes('mismatch') ||
+          messageText.includes('expired') ||
+          messageText.includes('expires_too_soon')
         ? 400
         : 500
     return res.status(status).json({

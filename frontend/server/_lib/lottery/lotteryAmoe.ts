@@ -759,11 +759,24 @@ export async function createAmoeAttestation(params: {
   const { privateKeyToAccount } = await import('viem/accounts')
 
   // Keep attestation TTL short and bounded by the user challenge expiry.
+  //
+  // The on-chain `LotteryAmoeRouter` enforces `deadline >= block.timestamp +
+  // MIN_DEADLINE_BUFFER` (60s) to absorb miner-timestamp drift (audit §4.2).
+  // We MUST mirror that floor here so we never sign a calldata blob that the
+  // contract is guaranteed to revert on with `DeadlineTooSoon`. In relay mode
+  // (_amoeSubmit.ts) credits are consumed before the on-chain call, so a
+  // systematic late-window revert would burn user credits for nothing.
+  const MIN_DEADLINE_BUFFER_SEC = 60
   const nowSec = Math.floor(Date.now() / 1000)
   const maxDeadlineSec = nowSec + 15 * 60
   const expiresSec = Math.floor(expiresAtMs / 1000)
   const deadline = Math.min(maxDeadlineSec, expiresSec)
   if (deadline <= nowSec) throw new Error('message_expired')
+  if (deadline - nowSec < MIN_DEADLINE_BUFFER_SEC) {
+    // Surfaced as a 4xx by the handler; clients should retry with a fresh
+    // challenge rather than burn credits on a known-dead attestation.
+    throw new Error('message_expires_too_soon')
+  }
   let amoeMessageHash: `0x${string}` | null = null
   for (const url of getBaseRpcUrls()) {
     try {

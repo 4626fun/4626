@@ -219,8 +219,8 @@ Two distinct cases:
 
 | Priority | Action                                                                                                            | Finding | Effort |
 |----------|-------------------------------------------------------------------------------------------------------------------|---------|--------|
-| Should   | Add `nonReentrant` to `RandomnessRouter.acquireRequest`, or reorder event before call                             | 4.1     | 5 min  |
-| Should   | Document the deadline tolerance assumption in `LotteryAmoeRouter.submitAmoeEntry` and add a `>= 60s` floor check  | 4.2     | 10 min |
+| ~~Should~~ **Done** | Add `nonReentrant` to `RandomnessRouter.acquireRequest` (PR ‘fix/audit-low-findings’)                                | 4.1     | 5 min  |
+| ~~Should~~ **Done** | `LotteryAmoeRouter.submitAmoeEntry` now enforces `MIN_DEADLINE_BUFFER = 60s` with `DeadlineExpired` / `DeadlineTooSoon` errors and inline tolerance docs | 4.2     | 10 min |
 | Should   | Pin `pragma solidity 0.8.30;` across the seven files (matches `foundry.toml`)                                     | 4.3     | 5 min  |
 | Could    | Add inline `// slither-disable-next-line` comments + rationale next to the documented FPs (4.4, 4.5)              | 4.4 / 4.5 | 15 min |
 | Could    | Refactor low-level `call` in `RandomnessRouter.acquireRequest` into a typed `try/catch` against a probe interface | 4.8     | 30 min |

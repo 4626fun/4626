@@ -114,4 +114,66 @@ contract RandomnessRouterTest is Test {
         vm.expectRevert(RandomnessRouter.NotOwner.selector);
         router.setSourceFor(coinA, pull);
     }
+
+    // ---------------------------------------------------------------------
+    // Reentrancy hardening (audit §4.1).
+    //
+    // We install a malicious source that re-enters the router from inside
+    // its own `request()`. Without `nonReentrant` the inner call would
+    // observe a partially-applied state; with `nonReentrant` it must
+    // revert with OpenZeppelin's standard "ReentrancyGuard: reentrant
+    // call" message.
+    // ---------------------------------------------------------------------
+}
+
+contract ReentrantSource is IRandomnessSource {
+    RandomnessRouter public router;
+    address public coin;
+    bool public attempted;
+
+    constructor(RandomnessRouter _router, address _coin) {
+        router = _router;
+        coin = _coin;
+    }
+
+    function mode() external pure returns (SourceMode) { return SourceMode.REQUEST; }
+    function isReady(uint256) external pure returns (bool) { return false; }
+    function randomWord(uint256) external pure returns (uint256) { return 0; }
+
+    function request() external returns (uint256) {
+        if (!attempted) {
+            attempted = true;
+            // Attempt to re-enter `acquireRequest`. Must revert via the
+            // ReentrancyGuard inherited from OpenZeppelin.
+            router.acquireRequest(coin);
+        }
+        return 1;
+    }
+}
+
+contract RandomnessRouterReentrancyTest is Test {
+    RandomnessRouter router;
+    ReentrantSource bad;
+    address owner = address(0xAA);
+    address coinA = address(0xC1);
+
+    function setUp() public {
+        router = new RandomnessRouter(owner, IRandomnessSource(address(0)));
+        bad = new ReentrantSource(router, coinA);
+        vm.prank(owner);
+        router.setSourceFor(coinA, IRandomnessSource(address(bad)));
+    }
+
+    function test_acquireRequest_blocksReentry() public {
+        // The bad source's request() will recurse into router.acquireRequest,
+        // which the OZ ReentrancyGuard must reject. The recursion happens
+        // inside the low-level call in acquireRequest, so the outer
+        // require(ok && ret.length == 32, "request() failed") fires when
+        // the recursive call reverts.
+        vm.expectRevert(bytes("request() failed"));
+        router.acquireRequest(coinA);
+        // Confirm the source actually attempted reentry (i.e. the test is
+        // exercising the reentrancy path, not just an unrelated revert).
+        assertTrue(bad.attempted(), "reentrant call was never attempted");
+    }
 }

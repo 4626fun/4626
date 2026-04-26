@@ -101,6 +101,28 @@ contract LotteryAmoeRouter {
     error NonceReplayed();
     error WalletCreditReplayed();
     error EpochAlreadyPublished();
+    error DeadlineExpired();
+    error DeadlineTooSoon();
+
+    // -------------------------------------------------------------------------
+    // Constants
+    // -------------------------------------------------------------------------
+
+    /// @notice Minimum buffer (in seconds) between `block.timestamp` and a
+    ///         relayer-supplied `deadline` for `submitAmoeEntry`.
+    ///
+    /// @dev    Why this floor exists (audit §4.2, finding `timestamp`):
+    ///         Solidity's `block.timestamp` can be drifted by miners by up
+    ///         to ~15 seconds without violating consensus. AMOE deadlines
+    ///         are denominated in minutes / hours, not seconds, so any
+    ///         legitimately-issued entry will have a deadline far in the
+    ///         future relative to that drift. The 60s floor below rejects
+    ///         relayer-supplied deadlines that fall inside the miner-drift
+    ///         tolerance window, so a benign timestamp jiggle can never
+    ///         turn a valid entry into a `DeadlineExpired` revert at the
+    ///         block boundary. Sixty seconds is well above worst-case
+    ///         observed L1 / L2 timestamp slack.
+    uint256 public constant MIN_DEADLINE_BUFFER = 60;
 
     // -------------------------------------------------------------------------
     // Construction
@@ -248,7 +270,17 @@ contract LotteryAmoeRouter {
         bytes calldata /* signature */
     ) external returns (uint256 entryId) {
         if (msg.sender != allowlistPublisher) revert NotPublisher();
-        require(block.timestamp <= deadline, "expired");
+        // Reject deadlines that have already passed.
+        if (block.timestamp > deadline) revert DeadlineExpired();
+        // Reject deadlines that are too close to `now` to be safe under
+        // miner timestamp drift (see MIN_DEADLINE_BUFFER above). Using
+        // unchecked subtraction is safe because we just verified that
+        // `deadline >= block.timestamp`.
+        unchecked {
+            if (deadline - block.timestamp < MIN_DEADLINE_BUFFER) {
+                revert DeadlineTooSoon();
+            }
+        }
 
         bytes32 nonceCommit = keccak256(abi.encode(nonce, buyer, creatorCoin));
         if (usedNonceCommit[nonceCommit]) revert NonceReplayed();
