@@ -72,6 +72,48 @@ describe('canonicalWalletResolver.resolveAuthorizedWalletProfile', () => {
   })
 })
 
+describe('canonicalWalletResolver canonical fallback guardrails', () => {
+  beforeEach(() => {
+    vi.resetModules()
+    vi.clearAllMocks()
+    ensureCanonicalWalletsSchemaMock.mockResolvedValue(undefined)
+  })
+
+  it('refuses EOA-shaped canonical fallback when csw_address matches primary_wallet', async () => {
+    const eoa = '0x8da9aff7112e7aca19ffda892979197e3a465319'
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = strings.join(' ')
+        if (text.includes('FROM profiles p') && text.includes('WHERE p.id =')) {
+          return {
+            rows: [
+              {
+                id: 1,
+                primary_wallet: eoa,
+                primary_embedded_eoa: null,
+                primary_smart_wallet: null,
+                csw_address: eoa,
+                base_sub_account: null,
+                canonical_wallet: null,
+              },
+            ],
+          }
+        }
+        return { rows: [] }
+      }),
+    }
+
+    const { readProfileWalletAuthority } = await import('./canonicalWalletResolver.ts')
+    const authority = await readProfileWalletAuthority({ db: db as any, profileId: 1 })
+
+    expect(authority).toEqual({
+      profileId: 1,
+      canonicalSmartWalletAddress: null,
+      activeOwnerWalletAddress: eoa,
+    })
+  })
+})
+
 describe('canonicalWalletResolver identity disambiguation', () => {
   beforeEach(() => {
     vi.resetModules()

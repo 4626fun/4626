@@ -8,8 +8,6 @@ import {
   toViemAccount,
   useActiveWallet,
   useBaseAccountSdk,
-  useConnectWallet,
-  useLogin,
   usePrivy,
   useWallets,
 } from '@privy-io/react-auth'
@@ -61,6 +59,7 @@ import {
 } from '@/lib/uniswap/swapUtils'
 import { ensureProviderOnBase } from '@/lib/wallet/safeSwitchToBase'
 import { configureSubAccountSigner, getExistingSubAccount } from '@/lib/wallet/subAccountSetup'
+import { selectPreferredWalletConnector } from '@/lib/wallet/wagmiConnectorSelection'
 import { resolveCreatorTradeTokenAddress } from '@/lib/onchain/vaultResolve'
 import { useAccountContext } from '@/wallet/accountContext'
 import { useScreenshotReady } from '@/lib/ui/screenshotMode'
@@ -226,30 +225,6 @@ function useSafeSwapPrivyHook(enabled: boolean) {
       user: null,
       getAccessToken: null as null | (() => Promise<string | null>),
     } as any
-  }
-}
-
-function useSafeSwapLoginHook(enabled: boolean): { login: ((opts?: any) => Promise<unknown>) | null } {
-  try {
-    const value = useLogin() as any
-    if (!enabled || typeof value?.login !== 'function') return { login: null }
-    return { login: value.login as (opts?: any) => Promise<unknown> }
-  } catch (error) {
-    warnSwapPrivyHookFailure('useLogin', error)
-    return { login: null }
-  }
-}
-
-function useSafeSwapConnectWalletHook(enabled: boolean): {
-  connectWallet: ((opts?: any) => void) | null
-} {
-  try {
-    const value = useConnectWallet() as any
-    if (!enabled || typeof value?.connectWallet !== 'function') return { connectWallet: null }
-    return { connectWallet: value.connectWallet as (opts?: any) => void }
-  } catch (error) {
-    warnSwapPrivyHookFailure('useConnectWallet', error)
-    return { connectWallet: null }
   }
 }
 
@@ -630,9 +605,9 @@ export function Swap() {
     user: privyUser,
     getAccessToken,
   } = useSafeSwapPrivyHook(privyHooksEnabled)
-  const { login: privyLogin } = useSafeSwapLoginHook(privyHooksEnabled)
-  const { connectWallet: privyConnectWallet } = useSafeSwapConnectWalletHook(privyHooksEnabled)
-  const { connectors: wagmiConnectors, connect: wagmiConnect } = useConnect()
+  const { connectors: wagmiConnectors, connectAsync: wagmiConnectAsync } = useConnect()
+  const [swapConnectBusy, setSwapConnectBusy] = useState(false)
+  const [swapConnectError, setSwapConnectError] = useState<string | null>(null)
   const accountMe = useAccountMe()
   const { baseAccountSdk } = useBaseAccountSdk()
   // `extractPrivyWalletsFromUser` returns ADDRESS-ONLY metadata parsed from
@@ -1195,77 +1170,28 @@ export function Swap() {
     [authBusy, executionAddress, hasSession, sessionHydrated],
   )
   const handleConnectGateAction = useCallback(() => {
-    if (authBusy) return
+    if (authBusy || swapConnectBusy) return
 
-    // `wallet-required`: user has a 4626 session but wagmi has no connected
-    // wallet on this device. Choose the correct Privy entry point:
-    //   - already authenticated -> `connectWallet({ walletList })`
-    //     (login() throws "Attempted to log in, but user is already logged in")
-    //   - unauthenticated       -> `login({ loginMethods: ['wallet'], walletList })`
-    //
-    // `walletList` is REQUIRED here. Without it, Privy falls back to its
-    // default modal populated from `PrivyClientProvider.externalWallets`,
-    // which only lists Coinbase Wallet + WalletConnect + Zora cross-app.
-    // Rabby / MetaMask extensions never appear in that default picker, so
-    // Rabby users who land on /swap hit an apparent dead end even though
-    // they're set up correctly. Passing `detected_ethereum_wallets`
-    // surfaces every EIP-6963 provider (Rabby, Frame, OKX, etc.), matching
-    // the behavior of `useAccountSetupController.connectOwnerWallet`.
-    //
-    // If Privy is disabled for this env, fall back to wagmi's first usable
-    // connector so SIWE-only deployments still work.
-    const externalWalletList = [
-      'coinbase_wallet',
-      'base_account',
-      'wallet_connect',
-      'detected_ethereum_wallets',
-      'metamask',
-    ] as const
+    setSwapConnectError(null)
 
     if (connectGate.state === 'wallet-required') {
-      if (privyHooksEnabled) {
-        if (privyAuthenticated === true && typeof privyConnectWallet === 'function') {
-          try {
-            // Privy's TS types for `walletList` lag behind the runtime
-            // implementation, so we cast. Known-good shape verified in
-            // `useAccountSetupController.connectOwnerWallet` where the
-            // same options are passed to the same underlying hook.
-            privyConnectWallet({
-              walletList: externalWalletList as unknown as string[],
-              walletChainType: 'ethereum-only',
-            } as any)
-          } catch {
-            // Privy surfaces its own modal-level errors; re-entry on next
-            // click is fine if the user closes the modal.
-          }
-          return
-        }
-        if (privyAuthenticated !== true && typeof privyLogin === 'function') {
-          void privyLogin({
-            loginMethods: ['wallet'],
-            walletList: externalWalletList as unknown as string[],
-          } as any).catch(() => {})
-          return
-        }
-      }
-      // Non-Privy fallback: prefer a non-generic-injected connector. We
-      // reach for Rabby first if registered (its wagmi connector id is
-      // `'rabby'`, not `'injected'`), then any other registered connector
-      // that isn't the generic multi-wallet `injected` catch-all. Finally
-      // fall through to whatever's available.
-      const preferred =
-        wagmiConnectors.find((c) => String(c.id ?? '').toLowerCase() === 'rabby') ??
-        wagmiConnectors.find((c) => {
-          const id = String(c.id ?? '').toLowerCase()
-          return id !== 'injected' && !id.endsWith('.injected')
-        }) ??
-        wagmiConnectors[0]
-      if (preferred) {
-        wagmiConnect({ connector: preferred })
+      const preferred = selectPreferredWalletConnector(wagmiConnectors)
+      if (!preferred) {
+        setSwapConnectError('No wallet connector is available in this browser. Open 4626 in your wallet app or enable a wallet extension.')
         return
       }
-      // No connector available — fall through to the SIWE path which will
-      // surface a clear "Connect wallet first, then sign in." error.
+
+      setSwapConnectBusy(true)
+      void wagmiConnectAsync({ connector: preferred })
+        .catch((connectError: unknown) => {
+          const message = connectError instanceof Error ? connectError.message : String(connectError ?? '')
+          const rejected = message.toLowerCase().includes('reject') || message.toLowerCase().includes('denied')
+          setSwapConnectError(rejected ? 'Wallet connection was cancelled. Try again when you are ready.' : message || 'Failed to connect wallet.')
+        })
+        .finally(() => {
+          setSwapConnectBusy(false)
+        })
+      return
     }
 
     void signIn({ method: executionMode === 'canonical' ? canonicalSignInMethod : 'auto' })
@@ -1274,14 +1200,16 @@ export function Swap() {
     canonicalSignInMethod,
     connectGate.state,
     executionMode,
-    privyAuthenticated,
-    privyConnectWallet,
-    privyHooksEnabled,
-    privyLogin,
     signIn,
-    wagmiConnect,
+    swapConnectBusy,
+    wagmiConnectAsync,
     wagmiConnectors,
   ])
+
+  useEffect(() => {
+    if (connectGate.ready) setSwapConnectError(null)
+  }, [connectGate.ready])
+
   const ensureCanonicalSession = useCallback(async (): Promise<string | null> => {
     if (executionMode !== 'canonical') return null
     if (!getAccessToken || typeof signInWithPrivyToken !== 'function') return null
@@ -1817,8 +1745,8 @@ export function Swap() {
             !connectGate.ready ? (
               <SwapConnectGate
                 gate={connectGate}
-                busy={authBusy}
-                errorMessage={authError}
+                busy={authBusy || swapConnectBusy}
+                errorMessage={swapConnectError ?? authError}
                 onPrimaryAction={handleConnectGateAction}
               />
             ) : (

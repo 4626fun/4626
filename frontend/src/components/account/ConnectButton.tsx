@@ -8,6 +8,7 @@ import { useCanonicalIdentity } from '@/hooks/useCanonicalIdentity'
 import { getAgentIdentity } from '@/components/chat/agentIdentity'
 import { detectEthereumProviderCollision } from '@/lib/wallet/providerCollision'
 import { usePrivyClientStatus } from '@/lib/privy/client'
+import { filterHiddenInjectedConnectors } from '@/lib/wallet/wagmiConnectorSelection'
 import {
   CanonicalIdentityCard,
   CanonicalIdentityDropdown,
@@ -67,11 +68,7 @@ function ExternalWalletOptions(props: {
   const { connect, connectors, isPending } = useConnect()
 
   const filteredConnectors = useMemo(() => {
-    if (!props.shouldHideInjectedConnector) return connectors
-    return connectors.filter((connector) => {
-      const id = String((connector as any)?.id ?? '').toLowerCase()
-      return !id.includes('injected')
-    })
+    return filterHiddenInjectedConnectors(connectors, props.shouldHideInjectedConnector)
   }, [connectors, props.shouldHideInjectedConnector])
 
   const allowExternalWalletButtons = shouldAllowExternalWalletButtons({

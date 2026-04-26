@@ -32,7 +32,7 @@
  *   400 invalid_body | invalid_caps | invalid_spender | invalid_token | invalid_window | permission_not_yet_active | permission_expired
  *   401 admin_token_missing | admin_token_invalid
  *   403 signer_not_owner
- *   409 missing_privy_wallet
+ *   409 invalid_parent_account | missing_privy_wallet
  *   500 signature_verification_failed | privy_not_configured
  *   503 db_unavailable
  */
@@ -243,6 +243,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       verified.code === 'permission_not_yet_active' ||
       verified.code === 'permission_expired'
         ? 400
+        : verified.code === 'invalid_parent_account'
+          ? 409
         : verified.code === 'signer_not_owner' || verified.code === 'invalid_signature'
           ? 403
           : 500

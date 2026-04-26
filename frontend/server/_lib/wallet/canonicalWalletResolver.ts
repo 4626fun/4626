@@ -52,8 +52,14 @@ function deriveCanonicalSmartWallet(row: ProfileWalletAuthorityRow): string | nu
   const canonical = normalizeLower(row.canonical_wallet)
   if (canonical && isAddressLike(canonical)) return canonical
 
-  const fallback = normalizeLower(row.primary_smart_wallet || row.csw_address || row.base_sub_account)
-  return fallback && isAddressLike(fallback) ? fallback : null
+  // Legacy fallback for profiles missing an explicit canonical row.
+  // Guardrail: never treat an EOA owner slot as canonical CSW.
+  const fallback = normalizeLower(row.primary_smart_wallet || row.csw_address)
+  if (!fallback || !isAddressLike(fallback)) return null
+  const primaryWallet = normalizeLower(row.primary_wallet)
+  const embeddedWallet = normalizeLower(row.primary_embedded_eoa)
+  if (fallback === primaryWallet || fallback === embeddedWallet) return null
+  return fallback
 }
 
 function deriveActiveOwnerWallet(

@@ -376,6 +376,19 @@ describe('POST /api/arch-b/sub-account/provision/commit', () => {
     expect(res.body.error).toBe('signer_not_owner')
   })
 
+  it('returns 409 when canonical parent account is not a contract CSW', async () => {
+    mocks.verifySubAccountProvision.mockResolvedValue({
+      ok: false,
+      code: 'invalid_parent_account',
+      message: 'parent_csw_not_contract',
+    })
+    const req = createMockReq({ method: 'POST' })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(409)
+    expect(res.body.error).toBe('invalid_parent_account')
+  })
+
   it('returns 400 on hash mismatch', async () => {
     mocks.verifySubAccountProvision.mockResolvedValue({ ok: false, code: 'invalid_hash' })
     const req = createMockReq({ method: 'POST' })
@@ -565,6 +578,22 @@ describe('POST /api/admin/arch-b/sub-account/provision', () => {
     await handler(req, res)
     expect(res.statusCode).toBe(403)
     expect(res.body.error).toBe('signer_not_owner')
+  })
+
+  it('returns 409 when verify reports invalid_parent_account', async () => {
+    mocks.verifySubAccountProvision.mockResolvedValue({
+      ok: false,
+      code: 'invalid_parent_account',
+      message: 'parent_csw_not_contract',
+    })
+    const req = createMockReq({
+      method: 'POST',
+      headers: { authorization: 'Bearer super-secret-admin-token' },
+    })
+    const res = createMockRes()
+    await handler(req, res)
+    expect(res.statusCode).toBe(409)
+    expect(res.body.error).toBe('invalid_parent_account')
   })
 
   it('returns 405 for non-POST', async () => {

@@ -64,6 +64,7 @@ export type SubAccountVerifyErrCode =
   | 'invalid_hash'
   | 'invalid_signature'
   | 'signer_not_owner'
+  | 'invalid_parent_account'
   | 'invalid_spender'
   | 'invalid_caps'
   | 'invalid_token'
@@ -100,7 +101,41 @@ export async function verifyParentCswSignature(args: {
   permission: SpendPermissionPayload
   signature: Hex
   permissionHash: Hex
-}): Promise<{ ok: true } | { ok: false; code: 'invalid_signature' | 'signer_not_owner' | 'signature_verification_failed'; message?: string }> {
+}): Promise<
+  | { ok: true }
+  | {
+      ok: false
+      code:
+        | 'invalid_signature'
+        | 'signer_not_owner'
+        | 'invalid_parent_account'
+        | 'signature_verification_failed'
+      message?: string
+    }
+> {
+  // Parent CSW must be a contract. If this is an EOA, the profile's canonical
+  // wallet path is drifted/misconfigured and ERC-1271 is guaranteed to fail.
+  try {
+    const bytecode = await args.publicClient.getBytecode({ address: args.parentCsw })
+    const hasContractBytecode = typeof bytecode === 'string' && bytecode.trim() !== '' && bytecode !== '0x'
+    if (!hasContractBytecode) {
+      logger.warn('[arch-b/subacct/verify] parent wallet has no contract bytecode; refusing CSW signature verification', {
+        parentCsw: args.parentCsw,
+      })
+      return {
+        ok: false,
+        code: 'invalid_parent_account',
+        message:
+          'parent_csw_not_contract: expected canonical CSW contract address but received EOA/non-contract address',
+      }
+    }
+  } catch (err) {
+    logger.warn('[arch-b/subacct/verify] failed to read parent bytecode; continuing with signature checks', {
+      parentCsw: args.parentCsw,
+      error: err instanceof Error ? err.message : String(err),
+    })
+  }
+
   // EOA path
   try {
     const recovered = await recoverTypedDataAddress({
@@ -129,10 +164,19 @@ export async function verifyParentCswSignature(args: {
       return { ok: true }
     }
   } catch (err) {
-    logger.warn('[arch-b/subacct/verify] EOA path failed; falling back to 1271', {
-      parentCsw: args.parentCsw,
-      error: err instanceof Error ? err.message : String(err),
-    })
+    const message = err instanceof Error ? err.message : String(err)
+    // Invalid signature length is expected for non-EOA-formatted signatures.
+    // Keep this at debug level to reduce verifier log noise.
+    if (/invalid signature length/i.test(message)) {
+      logger.debug('[arch-b/subacct/verify] EOA path not applicable; falling back to 1271', {
+        parentCsw: args.parentCsw,
+      })
+    } else {
+      logger.warn('[arch-b/subacct/verify] EOA path failed; falling back to 1271', {
+        parentCsw: args.parentCsw,
+        error: message,
+      })
+    }
   }
 
   // ERC-1271 path
