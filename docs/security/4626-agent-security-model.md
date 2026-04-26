@@ -72,10 +72,10 @@ Signing and execution split across two distinct tracks — see [4626 Connection 
   - [`frontend/server/_lib/wallet/privyWalletApi.ts`](../../frontend/server/_lib/wallet/privyWalletApi.ts)
   - [`frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts`](../../frontend/server/_lib/wallet/privyCoinbaseSmartWallet.ts)
 - Deploy session orchestration:
-  - [`frontend/api/_handlers/deploy/session/_create.ts`](../../frontend/api/_handlers/deploy/session/_create.ts)
-  - [`frontend/api/_handlers/deploy/session/_status.ts`](../../frontend/api/_handlers/deploy/session/_status.ts)
-  - [`frontend/api/_handlers/deploy/session/_continue.ts`](../../frontend/api/_handlers/deploy/session/_continue.ts)
-  - [`frontend/api/_handlers/deploy/session/_sessionAccess.ts`](../../frontend/api/_handlers/deploy/session/_sessionAccess.ts)
+  - [`frontend/api/_handlers/deploy/v2/session/_create.ts`](../../frontend/api/_handlers/deploy/v2/session/_create.ts)
+  - [`frontend/api/_handlers/deploy/v2/session/_status.ts`](../../frontend/api/_handlers/deploy/v2/session/_status.ts)
+  - [`frontend/api/_handlers/deploy/v2/session/_continueCore.ts`](../../frontend/api/_handlers/deploy/v2/session/_continueCore.ts)
+  - [`frontend/api/_handlers/deploy/v2/session/_sessionAccess.ts`](../../frontend/api/_handlers/deploy/v2/session/_sessionAccess.ts)
   - [`frontend/server/_lib/deploy/deploySessions.ts`](../../frontend/server/_lib/deploy/deploySessions.ts)
 - Paymaster policy:
   - [`frontend/api/_handlers/paymaster/_paymaster.ts`](../../frontend/api/_handlers/paymaster/_paymaster.ts)

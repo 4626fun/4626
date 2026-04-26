@@ -53,8 +53,18 @@ const files = listTrackedMarkdownDocs();
 const markdownLinkRe = /\[[^\]]*]\(([^)]+)\)/g;
 const issues = [];
 
+// Replace fenced code blocks (```...```) and inline code (`...`) with
+// equivalent-length whitespace so byte offsets remain stable but their
+// contents do not match the markdown-link regex (e.g. Solidity `new T[](n)`).
+function stripCodeSpans(text) {
+  let out = text.replace(/```[\s\S]*?```/g, (block) => block.replace(/[^\n]/g, " "));
+  out = out.replace(/`[^`\n]*`/g, (block) => " ".repeat(block.length));
+  return out;
+}
+
 for (const file of files) {
-  const text = readFileSync(path.join(repoRoot, file), "utf8");
+  const rawText = readFileSync(path.join(repoRoot, file), "utf8");
+  const text = stripCodeSpans(rawText);
   for (const match of text.matchAll(markdownLinkRe)) {
     const href = match[1] ?? "";
     const relTarget = normalizeTarget(href);
