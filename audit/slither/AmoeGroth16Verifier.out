@@ -1,0 +1,75 @@
+'solc --version' running
+'solc AmoeGroth16Verifier.sol --combined-json abi,ast,bin,bin-runtime,srcmap,srcmap-runtime,userdoc,devdoc,hashes --allow-paths .,/tmp/audit-target' running
+
+Detector: incorrect-return
+AmoeGroth16Verifier.verifyProof(uint256[2],uint256[2][2],uint256[2],uint256[5]) (AmoeGroth16Verifier.sol#71-195) calls AmoeGroth16Verifier.verifyProof.asm_0.checkField() (AmoeGroth16Verifier.sol#73-78) which halt the execution return(uint256,uint256)(0,0x20) (AmoeGroth16Verifier.sol#76)
+AmoeGroth16Verifier.verifyProof(uint256[2],uint256[2][2],uint256[2],uint256[5]) (AmoeGroth16Verifier.sol#71-195) calls AmoeGroth16Verifier.verifyProof.asm_0.checkPairing() (AmoeGroth16Verifier.sol#106-171) which halt the execution return(uint256,uint256)(0,0x20) (AmoeGroth16Verifier.sol#92)
+AmoeGroth16Verifier.verifyProof.asm_0.checkPairing() (AmoeGroth16Verifier.sol#106-171) calls AmoeGroth16Verifier.verifyProof.asm_0.g1_mulAccC() (AmoeGroth16Verifier.sol#81-104) which halt the execution return(uint256,uint256)(0,0x20) (AmoeGroth16Verifier.sol#102)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#incorrect-return-in-assembly
+
+Detector: assembly
+AmoeGroth16Verifier.verifyProof(uint256[2],uint256[2][2],uint256[2],uint256[5]) (AmoeGroth16Verifier.sol#71-195) uses assembly
+	- INLINE ASM (AmoeGroth16Verifier.sol#72-194)
+AmoeGroth16Verifier.verifyProof.asm_0.checkField() (AmoeGroth16Verifier.sol#73-78) uses assembly
+	- INLINE ASM (AmoeGroth16Verifier.sol#73-78)
+AmoeGroth16Verifier.verifyProof.asm_0.g1_mulAccC() (AmoeGroth16Verifier.sol#81-104) uses assembly
+	- INLINE ASM (AmoeGroth16Verifier.sol#81-104)
+AmoeGroth16Verifier.verifyProof.asm_0.checkPairing() (AmoeGroth16Verifier.sol#106-171) uses assembly
+	- INLINE ASM (AmoeGroth16Verifier.sol#106-171)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#assembly-usage
+
+Detector: solc-version
+Version constraint >=0.7.0<0.9.0 is too complex.
+It is used by:
+	- >=0.7.0<0.9.0 (AmoeGroth16Verifier.sol#21)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#incorrect-versions-of-solidity
+
+Detector: naming-convention
+Parameter AmoeGroth16Verifier.verifyProof(uint256[2],uint256[2][2],uint256[2],uint256[5])._pA (AmoeGroth16Verifier.sol#71) is not in mixedCase
+Parameter AmoeGroth16Verifier.verifyProof(uint256[2],uint256[2][2],uint256[2],uint256[5])._pB (AmoeGroth16Verifier.sol#71) is not in mixedCase
+Parameter AmoeGroth16Verifier.verifyProof(uint256[2],uint256[2][2],uint256[2],uint256[5])._pC (AmoeGroth16Verifier.sol#71) is not in mixedCase
+Parameter AmoeGroth16Verifier.verifyProof(uint256[2],uint256[2][2],uint256[2],uint256[5])._pubSignals (AmoeGroth16Verifier.sol#71) is not in mixedCase
+Parameter AmoeGroth16Verifier.verifyProof.asm_0.checkField().v_verifyProof_asm_0_checkField (AmoeGroth16Verifier.sol#73) is not in mixedCase
+Function AmoeGroth16Verifier.verifyProof.asm_0.g1_mulAccC() (AmoeGroth16Verifier.sol#81-104) is not in mixedCase
+Parameter AmoeGroth16Verifier.verifyProof.asm_0.g1_mulAccC().pR_verifyProof_asm_0_g1_mulAccC (AmoeGroth16Verifier.sol#81) is not in mixedCase
+Parameter AmoeGroth16Verifier.verifyProof.asm_0.g1_mulAccC().x_verifyProof_asm_0_g1_mulAccC (AmoeGroth16Verifier.sol#81) is not in mixedCase
+Parameter AmoeGroth16Verifier.verifyProof.asm_0.g1_mulAccC().y_verifyProof_asm_0_g1_mulAccC (AmoeGroth16Verifier.sol#81) is not in mixedCase
+Parameter AmoeGroth16Verifier.verifyProof.asm_0.g1_mulAccC().s_verifyProof_asm_0_g1_mulAccC (AmoeGroth16Verifier.sol#81) is not in mixedCase
+Parameter AmoeGroth16Verifier.verifyProof.asm_0.checkPairing().pA_verifyProof_asm_0_checkPairing (AmoeGroth16Verifier.sol#106) is not in mixedCase
+Parameter AmoeGroth16Verifier.verifyProof.asm_0.checkPairing().pB_verifyProof_asm_0_checkPairing (AmoeGroth16Verifier.sol#106) is not in mixedCase
+Parameter AmoeGroth16Verifier.verifyProof.asm_0.checkPairing().pC_verifyProof_asm_0_checkPairing (AmoeGroth16Verifier.sol#106) is not in mixedCase
+Parameter AmoeGroth16Verifier.verifyProof.asm_0.checkPairing().pubSignals_verifyProof_asm_0_checkPairing (AmoeGroth16Verifier.sol#106) is not in mixedCase
+Parameter AmoeGroth16Verifier.verifyProof.asm_0.checkPairing().pMem_verifyProof_asm_0_checkPairing (AmoeGroth16Verifier.sol#106) is not in mixedCase
+Constant AmoeGroth16Verifier.r (AmoeGroth16Verifier.sol#25) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.q (AmoeGroth16Verifier.sol#27) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.alphax (AmoeGroth16Verifier.sol#30) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.alphay (AmoeGroth16Verifier.sol#31) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.betax1 (AmoeGroth16Verifier.sol#32) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.betax2 (AmoeGroth16Verifier.sol#33) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.betay1 (AmoeGroth16Verifier.sol#34) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.betay2 (AmoeGroth16Verifier.sol#35) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.gammax1 (AmoeGroth16Verifier.sol#36) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.gammax2 (AmoeGroth16Verifier.sol#37) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.gammay1 (AmoeGroth16Verifier.sol#38) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.gammay2 (AmoeGroth16Verifier.sol#39) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.deltax1 (AmoeGroth16Verifier.sol#40) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.deltax2 (AmoeGroth16Verifier.sol#41) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.deltay1 (AmoeGroth16Verifier.sol#42) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.deltay2 (AmoeGroth16Verifier.sol#43) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.IC0x (AmoeGroth16Verifier.sol#46) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.IC0y (AmoeGroth16Verifier.sol#47) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.IC1x (AmoeGroth16Verifier.sol#49) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.IC1y (AmoeGroth16Verifier.sol#50) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.IC2x (AmoeGroth16Verifier.sol#52) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.IC2y (AmoeGroth16Verifier.sol#53) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.IC3x (AmoeGroth16Verifier.sol#55) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.IC3y (AmoeGroth16Verifier.sol#56) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.IC4x (AmoeGroth16Verifier.sol#58) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.IC4y (AmoeGroth16Verifier.sol#59) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.IC5x (AmoeGroth16Verifier.sol#61) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.IC5y (AmoeGroth16Verifier.sol#62) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.pVk (AmoeGroth16Verifier.sol#66) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.pPairing (AmoeGroth16Verifier.sol#67) is not in UPPER_CASE_WITH_UNDERSCORES
+Constant AmoeGroth16Verifier.pLastMem (AmoeGroth16Verifier.sol#69) is not in UPPER_CASE_WITH_UNDERSCORES
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#conformance-to-solidity-naming-conventions
+AmoeGroth16Verifier.sol analyzed (1 contracts with 101 detectors), 54 result(s) found

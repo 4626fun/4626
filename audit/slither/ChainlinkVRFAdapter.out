@@ -1,0 +1,18 @@
+'solc --version' running
+'solc ChainlinkVRFAdapter.sol --combined-json abi,ast,bin,bin-runtime,srcmap,srcmap-runtime,userdoc,devdoc,hashes --allow-paths .,/tmp/audit-target' running
+
+Detector: unused-return
+ChainlinkVRFAdapter.isReady(uint256) (ChainlinkVRFAdapter.sol#41-44) ignores return value by (None,fulfilled,None,None,None) = consumer.getRequestStatus(key) (ChainlinkVRFAdapter.sol#42)
+ChainlinkVRFAdapter.randomWord(uint256) (ChainlinkVRFAdapter.sol#46-50) ignores return value by (None,fulfilled,None,word,None) = consumer.getRequestStatus(key) (ChainlinkVRFAdapter.sol#47)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#unused-return
+
+Detector: solc-version
+Version constraint ^0.8.20 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)
+	- VerbatimInvalidDeduplication
+	- FullInlinerNonExpressionSplitArgumentEvaluationOrder
+	- MissingSideEffectsOnSelectorAccess.
+It is used by:
+	- ^0.8.20 (ChainlinkVRFAdapter.sol#2)
+	- ^0.8.20 (IRandomnessSource.sol#2)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#incorrect-versions-of-solidity
+ChainlinkVRFAdapter.sol analyzed (3 contracts with 101 detectors), 3 result(s) found

@@ -69,11 +69,30 @@ final class AmoeProverTests: XCTestCase {
 
     func testProveSkippedIfArtifactsMissing() throws {
         // Real prove requires amoe_final.zkey + amoe_eligibility.r1cs in
-        // ../../circuits/amoe/build/. CI builds them with circom + snarkjs;
-        // local dev can run `tools/zk/regen_amoe_fixture.sh` to generate them.
-        let zkey = URL(fileURLWithPath: "circuits/amoe/build/amoe_final.zkey")
+        // <repo>/circuits/amoe/build/. CI builds them with circom + snarkjs.
+        // Local dev can run `tools/zk/regen_amoe_fixture.sh` to generate them.
+        //
+        // `swift test` is invoked from the package root (relayer/zkproof) by
+        // CI (.github/workflows/zkmetal-macos.yml uses
+        // `working-directory: fourksixsixtwo/relayer/zkproof`). Resolve the
+        // build dir relative to this source file so the path is independent
+        // of the current working directory and works in both CI and local
+        // `swift test` invocations.
+        let here = URL(fileURLWithPath: #filePath)
+        // <repo>/relayer/zkproof/Tests/AmoeProverTests/AmoeProverTests.swift
+        //   -> <repo>
+        let repoRoot = here
+            .deletingLastPathComponent()  // AmoeProverTests/
+            .deletingLastPathComponent()  // Tests/
+            .deletingLastPathComponent()  // zkproof/
+            .deletingLastPathComponent()  // relayer/
+            .deletingLastPathComponent()  // <repo>/
+        let zkey = repoRoot
+            .appendingPathComponent("circuits/amoe/build/amoe_final.zkey")
         guard FileManager.default.fileExists(atPath: zkey.path) else {
-            throw XCTSkip("amoe_final.zkey not present — skipping live prove.")
+            throw XCTSkip(
+                "amoe_final.zkey not present at \(zkey.path) — skipping live prove."
+            )
         }
         // (left as exercise to integration tests in CI)
     }

@@ -1,0 +1,32 @@
+'solc --version' running
+'solc RandomnessRouter.sol --combined-json abi,ast,bin,bin-runtime,srcmap,srcmap-runtime,userdoc,devdoc,hashes --allow-paths .,/tmp/audit-target' running
+
+Detector: reentrancy-events
+Reentrancy in RandomnessRouter.acquireRequest(address) (RandomnessRouter.sol#133-149):
+	External calls:
+	- (ok,ret) = address(src).call(abi.encodeWithSignature(request())) (RandomnessRouter.sol#144)
+	Event emitted after the call(s):
+	- RandomnessAcquired(creatorCoin,sourceAddr,m,key) (RandomnessRouter.sol#148)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-4
+
+Detector: solc-version
+Version constraint ^0.8.20 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)
+	- VerbatimInvalidDeduplication
+	- FullInlinerNonExpressionSplitArgumentEvaluationOrder
+	- MissingSideEffectsOnSelectorAccess.
+It is used by:
+	- ^0.8.20 (IRandomnessSource.sol#2)
+	- ^0.8.20 (RandomnessRouter.sol#2)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#incorrect-versions-of-solidity
+
+Detector: low-level-calls
+Low level call in RandomnessRouter.acquireRequest(address) (RandomnessRouter.sol#133-149):
+	- (ok,ret) = address(src).call(abi.encodeWithSignature(request())) (RandomnessRouter.sol#144)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#low-level-calls
+
+Detector: naming-convention
+Parameter RandomnessRouter.setOwner(address)._owner (RandomnessRouter.sol#90) is not in mixedCase
+Parameter RandomnessRouter.setDefaultSource(IRandomnessSource)._source (RandomnessRouter.sol#96) is not in mixedCase
+Parameter RandomnessRouter.setSourceFor(address,IRandomnessSource)._source (RandomnessRouter.sol#101) is not in mixedCase
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#conformance-to-solidity-naming-conventions
+RandomnessRouter.sol analyzed (2 contracts with 101 detectors), 6 result(s) found

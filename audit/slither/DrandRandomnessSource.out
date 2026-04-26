@@ -1,0 +1,35 @@
+'solc --version' running
+'solc DrandRandomnessSource.sol --combined-json abi,ast,bin,bin-runtime,srcmap,srcmap-runtime,userdoc,devdoc,hashes --allow-paths .,/tmp/audit-target' running
+
+Detector: encode-packed-collision
+DrandRandomnessSource.submitRound(uint64,bytes,bytes,bytes32) (DrandRandomnessSource.sol#178-239) calls abi.encodePacked() with multiple dynamic arguments:
+	- expected = keccak256(bytes)(abi.encodePacked(roundBE,hashedRoundG2)) (DrandRandomnessSource.sol#197)
+DrandRandomnessSource.submitRound(uint64,bytes,bytes,bytes32) (DrandRandomnessSource.sol#178-239) calls abi.encodePacked() with multiple dynamic arguments:
+	- input = abi.encodePacked(groupPubKey,hashedRoundG2,_negatedG1Generator(),sigCompressed) (DrandRandomnessSource.sol#213-218)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#abi-encodePacked-collision
+
+Detector: assembly
+DrandRandomnessSource.submitRound(uint64,bytes,bytes,bytes32) (DrandRandomnessSource.sol#178-239) uses assembly
+	- INLINE ASM (DrandRandomnessSource.sol#222-227)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#assembly-usage
+
+Detector: solc-version
+Version constraint ^0.8.20 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)
+	- VerbatimInvalidDeduplication
+	- FullInlinerNonExpressionSplitArgumentEvaluationOrder
+	- MissingSideEffectsOnSelectorAccess.
+It is used by:
+	- ^0.8.20 (DrandRandomnessSource.sol#2)
+	- ^0.8.20 (IRandomnessSource.sol#2)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#incorrect-versions-of-solidity
+
+Detector: naming-convention
+Parameter DrandRandomnessSource.setOwner(address)._owner (DrandRandomnessSource.sol#128) is not in mixedCase
+Parameter DrandRandomnessSource.setGroupPubKey(bytes)._groupPubKey (DrandRandomnessSource.sol#140) is not in mixedCase
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#conformance-to-solidity-naming-conventions
+
+Detector: too-many-digits
+DrandRandomnessSource._negatedG1Generator() (DrandRandomnessSource.sol#255-266) uses literals with too many digits:
+	- 0x0000000000000000000000000000000017f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb00000000000000000000000000000000114d1d68b552c5a8aa7d76c8cf1d2d3267826f1a7551070bba9211e3aaab2235f04b25f6e5615b39014b94a37e6c52ca (DrandRandomnessSource.sol#262-265)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#too-many-digits
+DrandRandomnessSource.sol analyzed (2 contracts with 101 detectors), 7 result(s) found

@@ -1,0 +1,403 @@
+{
+  "success": true,
+  "error": null,
+  "results": {
+    "detectors": [
+      {
+        "elements": [
+          {
+            "type": "function",
+            "name": "randomWord",
+            "source_mapping": {
+              "start": 1568,
+              "length": 213,
+              "filename_relative": "ChainlinkVRFAdapter.sol",
+              "filename_absolute": "/tmp/audit-target/ChainlinkVRFAdapter.sol",
+              "filename_short": "ChainlinkVRFAdapter.sol",
+              "is_dependency": false,
+              "lines": [
+                46,
+                47,
+                48,
+                49,
+                50
+              ],
+              "starting_column": 5,
+              "ending_column": 6
+            },
+            "type_specific_fields": {
+              "parent": {
+                "type": "contract",
+                "name": "ChainlinkVRFAdapter",
+                "source_mapping": {
+                  "start": 1030,
+                  "length": 1020,
+                  "filename_relative": "ChainlinkVRFAdapter.sol",
+                  "filename_absolute": "/tmp/audit-target/ChainlinkVRFAdapter.sol",
+                  "filename_short": "ChainlinkVRFAdapter.sol",
+                  "is_dependency": false,
+                  "lines": [
+                    29,
+                    30,
+                    31,
+                    32,
+                    33,
+                    34,
+                    35,
+                    36,
+                    37,
+                    38,
+                    39,
+                    40,
+                    41,
+                    42,
+                    43,
+                    44,
+                    45,
+                    46,
+                    47,
+                    48,
+                    49,
+                    50,
+                    51,
+                    52,
+                    53,
+                    54,
+                    55,
+                    56,
+                    57
+                  ],
+                  "starting_column": 1,
+                  "ending_column": 2
+                }
+              },
+              "signature": "randomWord(uint256)"
+            }
+          },
+          {
+            "type": "node",
+            "name": "(None,fulfilled,None,word,None) = consumer.getRequestStatus(key)",
+            "source_mapping": {
+              "start": 1643,
+              "length": 69,
+              "filename_relative": "ChainlinkVRFAdapter.sol",
+              "filename_absolute": "/tmp/audit-target/ChainlinkVRFAdapter.sol",
+              "filename_short": "ChainlinkVRFAdapter.sol",
+              "is_dependency": false,
+              "lines": [
+                47
+              ],
+              "starting_column": 9,
+              "ending_column": 78
+            },
+            "type_specific_fields": {
+              "parent": {
+                "type": "function",
+                "name": "randomWord",
+                "source_mapping": {
+                  "start": 1568,
+                  "length": 213,
+                  "filename_relative": "ChainlinkVRFAdapter.sol",
+                  "filename_absolute": "/tmp/audit-target/ChainlinkVRFAdapter.sol",
+                  "filename_short": "ChainlinkVRFAdapter.sol",
+                  "is_dependency": false,
+                  "lines": [
+                    46,
+                    47,
+                    48,
+                    49,
+                    50
+                  ],
+                  "starting_column": 5,
+                  "ending_column": 6
+                },
+                "type_specific_fields": {
+                  "parent": {
+                    "type": "contract",
+                    "name": "ChainlinkVRFAdapter",
+                    "source_mapping": {
+                      "start": 1030,
+                      "length": 1020,
+                      "filename_relative": "ChainlinkVRFAdapter.sol",
+                      "filename_absolute": "/tmp/audit-target/ChainlinkVRFAdapter.sol",
+                      "filename_short": "ChainlinkVRFAdapter.sol",
+                      "is_dependency": false,
+                      "lines": [
+                        29,
+                        30,
+                        31,
+                        32,
+                        33,
+                        34,
+                        35,
+                        36,
+                        37,
+                        38,
+                        39,
+                        40,
+                        41,
+                        42,
+                        43,
+                        44,
+                        45,
+                        46,
+                        47,
+                        48,
+                        49,
+                        50,
+                        51,
+                        52,
+                        53,
+                        54,
+                        55,
+                        56,
+                        57
+                      ],
+                      "starting_column": 1,
+                      "ending_column": 2
+                    }
+                  },
+                  "signature": "randomWord(uint256)"
+                }
+              }
+            }
+          }
+        ],
+        "description": "ChainlinkVRFAdapter.randomWord(uint256) (ChainlinkVRFAdapter.sol#46-50) ignores return value by (None,fulfilled,None,word,None) = consumer.getRequestStatus(key) (ChainlinkVRFAdapter.sol#47)\n",
+        "markdown": "[ChainlinkVRFAdapter.randomWord(uint256)](ChainlinkVRFAdapter.sol#L46-L50) ignores return value by [(None,fulfilled,None,word,None) = consumer.getRequestStatus(key)](ChainlinkVRFAdapter.sol#L47)\n",
+        "first_markdown_element": "ChainlinkVRFAdapter.sol#L46-L50",
+        "id": "1075927f628bb488bf2650e1d01ce72bc4e227c2bd914828396bff547447ae47",
+        "check": "unused-return",
+        "impact": "Medium",
+        "confidence": "Medium"
+      },
+      {
+        "elements": [
+          {
+            "type": "function",
+            "name": "isReady",
+            "source_mapping": {
+              "start": 1403,
+              "length": 159,
+              "filename_relative": "ChainlinkVRFAdapter.sol",
+              "filename_absolute": "/tmp/audit-target/ChainlinkVRFAdapter.sol",
+              "filename_short": "ChainlinkVRFAdapter.sol",
+              "is_dependency": false,
+              "lines": [
+                41,
+                42,
+                43,
+                44
+              ],
+              "starting_column": 5,
+              "ending_column": 6
+            },
+            "type_specific_fields": {
+              "parent": {
+                "type": "contract",
+                "name": "ChainlinkVRFAdapter",
+                "source_mapping": {
+                  "start": 1030,
+                  "length": 1020,
+                  "filename_relative": "ChainlinkVRFAdapter.sol",
+                  "filename_absolute": "/tmp/audit-target/ChainlinkVRFAdapter.sol",
+                  "filename_short": "ChainlinkVRFAdapter.sol",
+                  "is_dependency": false,
+                  "lines": [
+                    29,
+                    30,
+                    31,
+                    32,
+                    33,
+                    34,
+                    35,
+                    36,
+                    37,
+                    38,
+                    39,
+                    40,
+                    41,
+                    42,
+                    43,
+                    44,
+                    45,
+                    46,
+                    47,
+                    48,
+                    49,
+                    50,
+                    51,
+                    52,
+                    53,
+                    54,
+                    55,
+                    56,
+                    57
+                  ],
+                  "starting_column": 1,
+                  "ending_column": 2
+                }
+              },
+              "signature": "isReady(uint256)"
+            }
+          },
+          {
+            "type": "node",
+            "name": "(None,fulfilled,None,None,None) = consumer.getRequestStatus(key)",
+            "source_mapping": {
+              "start": 1472,
+              "length": 57,
+              "filename_relative": "ChainlinkVRFAdapter.sol",
+              "filename_absolute": "/tmp/audit-target/ChainlinkVRFAdapter.sol",
+              "filename_short": "ChainlinkVRFAdapter.sol",
+              "is_dependency": false,
+              "lines": [
+                42
+              ],
+              "starting_column": 9,
+              "ending_column": 66
+            },
+            "type_specific_fields": {
+              "parent": {
+                "type": "function",
+                "name": "isReady",
+                "source_mapping": {
+                  "start": 1403,
+                  "length": 159,
+                  "filename_relative": "ChainlinkVRFAdapter.sol",
+                  "filename_absolute": "/tmp/audit-target/ChainlinkVRFAdapter.sol",
+                  "filename_short": "ChainlinkVRFAdapter.sol",
+                  "is_dependency": false,
+                  "lines": [
+                    41,
+                    42,
+                    43,
+                    44
+                  ],
+                  "starting_column": 5,
+                  "ending_column": 6
+                },
+                "type_specific_fields": {
+                  "parent": {
+                    "type": "contract",
+                    "name": "ChainlinkVRFAdapter",
+                    "source_mapping": {
+                      "start": 1030,
+                      "length": 1020,
+                      "filename_relative": "ChainlinkVRFAdapter.sol",
+                      "filename_absolute": "/tmp/audit-target/ChainlinkVRFAdapter.sol",
+                      "filename_short": "ChainlinkVRFAdapter.sol",
+                      "is_dependency": false,
+                      "lines": [
+                        29,
+                        30,
+                        31,
+                        32,
+                        33,
+                        34,
+                        35,
+                        36,
+                        37,
+                        38,
+                        39,
+                        40,
+                        41,
+                        42,
+                        43,
+                        44,
+                        45,
+                        46,
+                        47,
+                        48,
+                        49,
+                        50,
+                        51,
+                        52,
+                        53,
+                        54,
+                        55,
+                        56,
+                        57
+                      ],
+                      "starting_column": 1,
+                      "ending_column": 2
+                    }
+                  },
+                  "signature": "isReady(uint256)"
+                }
+              }
+            }
+          }
+        ],
+        "description": "ChainlinkVRFAdapter.isReady(uint256) (ChainlinkVRFAdapter.sol#41-44) ignores return value by (None,fulfilled,None,None,None) = consumer.getRequestStatus(key) (ChainlinkVRFAdapter.sol#42)\n",
+        "markdown": "[ChainlinkVRFAdapter.isReady(uint256)](ChainlinkVRFAdapter.sol#L41-L44) ignores return value by [(None,fulfilled,None,None,None) = consumer.getRequestStatus(key)](ChainlinkVRFAdapter.sol#L42)\n",
+        "first_markdown_element": "ChainlinkVRFAdapter.sol#L41-L44",
+        "id": "17a8df36fa3ed8447488f358b0d9c8c36a04d926705d546e804b5d0b8d35a043",
+        "check": "unused-return",
+        "impact": "Medium",
+        "confidence": "Medium"
+      },
+      {
+        "elements": [
+          {
+            "type": "pragma",
+            "name": "^0.8.20",
+            "source_mapping": {
+              "start": 32,
+              "length": 24,
+              "filename_relative": "ChainlinkVRFAdapter.sol",
+              "filename_absolute": "/tmp/audit-target/ChainlinkVRFAdapter.sol",
+              "filename_short": "ChainlinkVRFAdapter.sol",
+              "is_dependency": false,
+              "lines": [
+                2
+              ],
+              "starting_column": 1,
+              "ending_column": 25
+            },
+            "type_specific_fields": {
+              "directive": [
+                "solidity",
+                "^",
+                "0.8",
+                ".20"
+              ]
+            }
+          },
+          {
+            "type": "pragma",
+            "name": "^0.8.20",
+            "source_mapping": {
+              "start": 32,
+              "length": 24,
+              "filename_relative": "IRandomnessSource.sol",
+              "filename_absolute": "/tmp/audit-target/IRandomnessSource.sol",
+              "filename_short": "IRandomnessSource.sol",
+              "is_dependency": false,
+              "lines": [
+                2
+              ],
+              "starting_column": 1,
+              "ending_column": 25
+            },
+            "type_specific_fields": {
+              "directive": [
+                "solidity",
+                "^",
+                "0.8",
+                ".20"
+              ]
+            }
+          }
+        ],
+        "description": "Version constraint ^0.8.20 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)\n\t- VerbatimInvalidDeduplication\n\t- FullInlinerNonExpressionSplitArgumentEvaluationOrder\n\t- MissingSideEffectsOnSelectorAccess.\nIt is used by:\n\t- ^0.8.20 (ChainlinkVRFAdapter.sol#2)\n\t- ^0.8.20 (IRandomnessSource.sol#2)\n",
+        "markdown": "Version constraint ^0.8.20 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)\n\t- VerbatimInvalidDeduplication\n\t- FullInlinerNonExpressionSplitArgumentEvaluationOrder\n\t- MissingSideEffectsOnSelectorAccess.\nIt is used by:\n\t- [^0.8.20](ChainlinkVRFAdapter.sol#L2)\n\t- [^0.8.20](IRandomnessSource.sol#L2)\n",
+        "first_markdown_element": "ChainlinkVRFAdapter.sol#L2",
+        "id": "696b776aa34e8ff1e124c03100915a385595b2a25ce2e99d8d9607827f8e5084",
+        "check": "solc-version",
+        "impact": "Informational",
+        "confidence": "High"
+      }
+    ]
+  }
+}

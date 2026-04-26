@@ -1,0 +1,26 @@
+'solc --version' running
+'solc LotteryAmoeRouter.sol --combined-json abi,ast,bin,bin-runtime,srcmap,srcmap-runtime,userdoc,devdoc,hashes --allow-paths .,/tmp/audit-target' running
+
+Detector: timestamp
+LotteryAmoeRouter.submitAmoeEntry(address,address,bytes32,uint256,bytes) (LotteryAmoeRouter.sol#243-274) uses timestamp for comparisons
+	Dangerous comparisons:
+	- require(bool,string)(block.timestamp <= deadline,expired) (LotteryAmoeRouter.sol#251)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#block-timestamp
+
+Detector: solc-version
+Version constraint ^0.8.20 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)
+	- VerbatimInvalidDeduplication
+	- FullInlinerNonExpressionSplitArgumentEvaluationOrder
+	- MissingSideEffectsOnSelectorAccess.
+It is used by:
+	- ^0.8.20 (IAmoeGroth16Verifier.sol#2)
+	- ^0.8.20 (LotteryAmoeRouter.sol#2)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#incorrect-versions-of-solidity
+
+Detector: naming-convention
+Parameter LotteryAmoeRouter.setOwner(address)._owner (LotteryAmoeRouter.sol#128) is not in mixedCase
+Parameter LotteryAmoeRouter.setAllowlistPublisher(address)._publisher (LotteryAmoeRouter.sol#134) is not in mixedCase
+Parameter LotteryAmoeRouter.setVerifier(address)._verifier (LotteryAmoeRouter.sol#140) is not in mixedCase
+Parameter LotteryAmoeRouter.setConsumer(address)._consumer (LotteryAmoeRouter.sol#145) is not in mixedCase
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#conformance-to-solidity-naming-conventions
+LotteryAmoeRouter.sol analyzed (3 contracts with 101 detectors), 6 result(s) found
