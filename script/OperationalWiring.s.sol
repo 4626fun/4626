@@ -98,7 +98,7 @@ contract OperationalWiring is Script {
 
     // Legacy registrar / batchers
     address constant CREATOR_FACTORY = 0x90D25129072059ed5AfF321434f36d40B4556Cfc;
-    address constant VAULT_BATCHER = 0x32403a647e73e04ae42b02bdd1ade9c88698fd0c;
+    address constant VAULT_BATCHER = 0x32403a647e73E04aE42b02bdd1Ade9C88698FD0c;
     address constant VAULT_ACT_BATCHER = 0xd17Ddf952Cc8614721b5F79E43E9c2562FaBcdeB;
 
     // ═══════════════════════════════════════════════════════════════════

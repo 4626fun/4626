@@ -39,10 +39,14 @@ library EIP2537Probe {
 
         bool ok;
         uint256 retSize;
+        // Inline assembly cannot reference Solidity `address` constants (only
+        // direct number constants), so we mirror the precompile address as a
+        // local uint256. Keep this in sync with the `G1ADD` constant above.
+        uint256 g1add = 0x0b;
         assembly {
             // EIP-2537 G1ADD: 375 gas. Allow ~10x for safety vs legacy chains
             // where staticcall into an empty account is also cheap.
-            ok := staticcall(4000, G1ADD, add(input, 0x20), 256, add(output, 0x20), 128)
+            ok := staticcall(4000, g1add, add(input, 0x20), 256, add(output, 0x20), 128)
             retSize := returndatasize()
         }
         // On a chain without EIP-2537, staticcall to 0x0b succeeds (empty

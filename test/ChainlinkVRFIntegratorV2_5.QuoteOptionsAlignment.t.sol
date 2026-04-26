@@ -3,6 +3,11 @@ pragma solidity ^0.8.20;
 
 import "forge-std/Test.sol";
 import "../contracts/utilities/lottery/vrf/ChainlinkVRFIntegratorV2_5.sol";
+// `MessagingFee` is defined by LayerZero's OApp. ChainlinkVRFIntegratorV2_5
+// re-exports it transitively but does not declare a `MessagingFee` member,
+// so qualifying it as `ChainlinkVRFIntegratorV2_5.MessagingFee` is a
+// compile error. Import the type directly from its source.
+import {MessagingFee} from "@layerzerolabs/oapp-evm/contracts/oapp/OApp.sol";
 
 /**
  * M-03 (audit 2026-04-25) regression coverage.
@@ -54,12 +59,12 @@ contract ChainlinkVRFIntegratorV2_5QuoteOptionsAlignmentTest is Test {
             LZ_ENDPOINT,
             abi.encodeWithSignature("quote((uint32,bytes32,bytes,bytes,bool),address)"),
             abi.encode(
-                ChainlinkVRFIntegratorV2_5.MessagingFee({nativeFee: 12345, lzTokenFee: 0})
+                MessagingFee({nativeFee: 12345, lzTokenFee: 0})
             )
         );
 
-        ChainlinkVRFIntegratorV2_5.MessagingFee memory feeA = integrator.quoteFee();
-        ChainlinkVRFIntegratorV2_5.MessagingFee memory feeB = integrator.quoteFeeWithGas(integrator.defaultGasLimit());
+        MessagingFee memory feeA = integrator.quoteFee();
+        MessagingFee memory feeB = integrator.quoteFeeWithGas(integrator.defaultGasLimit());
         assertEq(feeA.nativeFee, feeB.nativeFee, "quote/with-default-gas mismatch");
     }
 
@@ -75,7 +80,7 @@ contract ChainlinkVRFIntegratorV2_5QuoteOptionsAlignmentTest is Test {
             LZ_ENDPOINT,
             abi.encodeWithSignature("quote((uint32,bytes32,bytes,bytes,bool),address)"),
             abi.encode(
-                ChainlinkVRFIntegratorV2_5.MessagingFee({nativeFee: 1, lzTokenFee: 0})
+                MessagingFee({nativeFee: 1, lzTokenFee: 0})
             )
         );
 
@@ -89,8 +94,8 @@ contract ChainlinkVRFIntegratorV2_5QuoteOptionsAlignmentTest is Test {
         vm.prank(owner);
         integrator.setDefaultGasLimit(newGas);
 
-        ChainlinkVRFIntegratorV2_5.MessagingFee memory feeAfter = integrator.quoteFee();
-        ChainlinkVRFIntegratorV2_5.MessagingFee memory feeWith = integrator.quoteFeeWithGas(newGas);
+        MessagingFee memory feeAfter = integrator.quoteFee();
+        MessagingFee memory feeWith = integrator.quoteFeeWithGas(newGas);
         assertEq(feeAfter.nativeFee, feeWith.nativeFee);
         assertEq(integrator.defaultGasLimit(), newGas, "default gas limit not updated");
     }
