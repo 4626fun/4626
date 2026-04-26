@@ -3,340 +3,368 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>AlfaClub Bonding Curve vs Sudoswap Delta</title>
+    <title>ERCreator4626 // Protocol Market Simulator</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
     <style>
+      /* ─── ERCreator4626 Design Tokens ─── */
       :root {
-        color-scheme: dark;
-        font-family:
-          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        background: #0a0d12;
-        color: #eef2f8;
+        --brand-primary: #0052FF;
+        --brand-hover:   #004AD9;
+        --brand-accent:  #3B82F6;
+        --brand-glow:    rgba(0, 82, 255, 0.15);
+        --vault-bg:      #020202;
+        --vault-card:    #0A0A0A;
+        --vault-border:  #1F1F1F;
+        --vault-text:    #EDEDED;
+        --vault-sub:     #666666;
+        --success:       #22c55e;
+        --error:         #ef4444;
       }
 
-      * {
-        box-sizing: border-box;
-      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: #333; border-radius: 99px; border: 2px solid var(--vault-bg); }
+      ::-webkit-scrollbar-thumb:hover { background: #555; }
 
       body {
-        margin: 0;
+        font-family: 'Inter', sans-serif;
+        font-size: 14px;
+        -webkit-font-smoothing: antialiased;
+        color: var(--vault-text);
+        background-color: var(--vault-bg);
         min-height: 100vh;
-        background:
-          linear-gradient(180deg, rgba(10, 13, 18, 0.92), #0a0d12 34%),
-          radial-gradient(circle at top left, rgba(58, 123, 213, 0.18), transparent 32%),
-          radial-gradient(circle at top right, rgba(45, 190, 176, 0.12), transparent 28%);
+        overflow-x: hidden;
+        background-image:
+          radial-gradient(circle at 50% 0%, rgba(0, 82, 255, 0.07) 0%, transparent 60%),
+          url("data:image/svg+xml,%3Csvg width='40' height='40' viewBox='0 0 40 40' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cpath d='M0 0h40v40H0z'/%3E%3Cpath d='M0 .5h40M.5 0v40' stroke='%23EDEDED' stroke-opacity='.03'/%3E%3C/g%3E%3C/svg%3E");
+      }
+
+      /* Cinematic noise overlay */
+      body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 9999;
+        opacity: 0.032;
+        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+        mix-blend-mode: overlay;
       }
 
       main {
-        width: min(1180px, calc(100vw - 32px));
+        width: min(1240px, calc(100vw - 32px));
         margin: 0 auto;
-        padding: 28px 0 40px;
+        padding: 36px 0 60px;
+      }
+
+      /* ─── Eyebrow + Title ─── */
+      .eyebrow {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        letter-spacing: .18em;
+        text-transform: uppercase;
+        color: var(--brand-primary);
+        margin-bottom: 10px;
       }
 
       h1 {
-        margin: 0;
-        font-size: clamp(22px, 3vw, 36px);
-        line-height: 1.1;
-        letter-spacing: 0;
+        font-weight: 300;
+        font-size: clamp(24px, 3vw, 36px);
+        letter-spacing: -0.04em;
+        line-height: 1.08;
+        color: var(--vault-text);
         white-space: nowrap;
       }
 
-      p {
-        color: #aeb8c8;
-        line-height: 1.55;
-      }
+      p { color: var(--vault-sub); line-height: 1.55; margin-top: 10px; }
 
       .top {
         display: grid;
         grid-template-columns: 1.1fr 0.9fr;
-        gap: 22px;
+        gap: 28px;
         align-items: end;
       }
 
-      .summary {
-        margin-top: 14px;
-        max-width: 720px;
-      }
-
       .formula {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        color: var(--vault-sub);
+        padding: 14px 16px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: var(--vault-card);
+        border-radius: 6px;
         display: grid;
-        gap: 8px;
-        padding: 14px;
-        border: 1px solid rgba(255, 255, 255, 0.09);
-        background: rgba(255, 255, 255, 0.035);
-        border-radius: 8px;
-        color: #cbd5e1;
-        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        font-size: 12px;
+        gap: 6px;
+        line-height: 1.6;
       }
 
+      /* ─── Layout ─── */
       .layout {
         display: grid;
-        grid-template-columns: 290px minmax(0, 1fr);
-        gap: 20px;
-        margin-top: 24px;
+        grid-template-columns: 280px minmax(0, 1fr);
+        gap: 16px;
+        margin-top: 28px;
+        align-items: start;
       }
 
-      .panel,
-      .chart-panel,
-      .metric {
-        border: 1px solid rgba(255, 255, 255, 0.09);
-        background: rgba(12, 17, 24, 0.78);
-        border-radius: 8px;
+      /* ─── Panels ─── */
+      .panel, .chart-panel, .metric {
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: var(--vault-card);
+        border-radius: 6px;
       }
 
       .panel {
-        padding: 16px;
+        padding: 20px;
+        position: sticky;
+        top: 20px;
       }
 
-      .panel h2,
-      .chart-panel h2 {
-        margin: 0 0 12px;
-        font-size: 15px;
-        letter-spacing: 0;
+      .panel h2, .chart-panel h2 {
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        letter-spacing: .16em;
+        text-transform: uppercase;
+        color: var(--brand-primary);
+        margin-bottom: 16px;
+        padding-bottom: 10px;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.06);
       }
 
-      .field {
-        display: grid;
-        gap: 6px;
-        margin-bottom: 12px;
-      }
+      /* ─── Fields ─── */
+      .field { display: grid; gap: 6px; margin-bottom: 14px; }
 
       label {
-        color: #8d99aa;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+        color: var(--vault-sub);
+      }
+
+      input, select {
+        width: 100%;
+        min-height: 36px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--vault-text);
+        border-radius: 4px;
+        padding: 7px 10px;
+        font-family: 'JetBrains Mono', monospace;
         font-size: 12px;
+        transition: border-color 200ms;
       }
 
-      input,
-      select {
-        width: 100%;
-        min-height: 38px;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        background: #101722;
-        color: #eef2f8;
-        border-radius: 6px;
-        padding: 8px 10px;
-        font: inherit;
+      input:focus, select:focus {
+        outline: none;
+        border-color: rgba(0, 82, 255, 0.6);
+        background: rgba(0, 82, 255, 0.04);
       }
 
-      input:focus,
-      select:focus {
-        outline: 2px solid rgba(75, 146, 255, 0.5);
-        outline-offset: 1px;
-      }
-
+      /* ─── Sliders ─── */
       input[type="range"] {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 100%;
-        min-height: 28px;
-        height: 28px;
-        padding: 0;
-        background: transparent;
-        border: none;
-        accent-color: #4b92ff;
+        -webkit-appearance: none; appearance: none;
+        width: 100%; min-height: 24px; height: 24px;
+        padding: 0; background: transparent; border: none;
         cursor: grab;
       }
-
-      input[type="range"]:active {
-        cursor: grabbing;
-      }
-
+      input[type="range"]:active { cursor: grabbing; }
       input[type="range"]::-webkit-slider-runnable-track {
-        height: 6px;
-        background: linear-gradient(90deg, rgba(75, 146, 255, 0.85), rgba(75, 146, 255, 0.25));
-        border-radius: 999px;
+        height: 3px;
+        background: linear-gradient(90deg, var(--brand-primary), rgba(59, 130, 246, 0.4));
+        border-radius: 99px;
       }
-
       input[type="range"]::-moz-range-track {
-        height: 6px;
-        background: linear-gradient(90deg, rgba(75, 146, 255, 0.85), rgba(75, 146, 255, 0.25));
-        border-radius: 999px;
-        border: none;
+        height: 3px;
+        background: linear-gradient(90deg, var(--brand-primary), rgba(59, 130, 246, 0.4));
+        border-radius: 99px; border: none;
       }
-
       input[type="range"]::-webkit-slider-thumb {
-        -webkit-appearance: none;
-        appearance: none;
-        width: 18px;
-        height: 18px;
-        border-radius: 50%;
-        background: #eef2f8;
-        border: 2px solid #4b92ff;
-        margin-top: -6px;
-        box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+        -webkit-appearance: none; appearance: none;
+        width: 14px; height: 14px; border-radius: 50%;
+        background: var(--vault-text);
+        border: 2px solid var(--brand-primary);
+        margin-top: -5.5px;
+        box-shadow: 0 0 0 3px rgba(0, 82, 255, 0.2);
       }
-
       input[type="range"]::-moz-range-thumb {
-        width: 18px;
-        height: 18px;
-        border-radius: 50%;
-        background: #eef2f8;
-        border: 2px solid #4b92ff;
-        box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4);
+        width: 14px; height: 14px; border-radius: 50%;
+        background: var(--vault-text);
+        border: 2px solid var(--brand-primary);
+        box-shadow: 0 0 0 3px rgba(0, 82, 255, 0.2);
       }
 
       .slider-row {
-        display: flex;
-        align-items: baseline;
-        justify-content: space-between;
-        gap: 8px;
+        display: flex; align-items: baseline;
+        justify-content: space-between; gap: 8px;
       }
-
       .slider-row strong {
-        font-weight: 500;
-        color: #eef2f8;
-        font-variant-numeric: tabular-nums;
-        min-width: 2.5ch;
-        text-align: right;
-      }
-
-      .chart-panel {
-        padding: 16px;
-        min-width: 0;
-      }
-
-      .legend {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 12px;
-        margin: 4px 0 14px;
-        color: #aeb8c8;
+        font-family: 'JetBrains Mono', monospace;
         font-size: 12px;
+        color: var(--brand-accent);
+        font-variant-numeric: tabular-nums;
       }
 
-      .key {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-      }
+      /* ─── Chart panel ─── */
+      .chart-panel { padding: 20px; min-width: 0; }
 
-      .swatch {
-        width: 18px;
-        height: 3px;
-        border-radius: 999px;
+      /* ─── Legend ─── */
+      .legend {
+        display: flex; flex-wrap: wrap; gap: 16px;
+        margin: 4px 0 16px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 10px;
+        letter-spacing: .06em;
+        color: var(--vault-sub);
       }
+      .key { display: inline-flex; align-items: center; gap: 7px; }
+      .swatch { width: 14px; height: 3px; border-radius: 99px; }
 
+      /* ─── SVG chart ─── */
       svg {
-        display: block;
-        width: 100%;
-        height: auto;
-        min-height: 390px;
-        overflow: visible;
+        display: block; width: 100%; height: auto;
+        min-height: 400px; overflow: visible;
       }
+      .axis { stroke: rgba(255, 255, 255, 0.1); }
+      .grid { stroke: rgba(255, 255, 255, 0.05); stroke-dasharray: 4 6; }
+      .tick { fill: var(--vault-sub); font-family: 'JetBrains Mono', monospace; font-size: 10px; }
+      .line { fill: none; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
 
-      .axis,
-      .grid {
-        stroke: rgba(255, 255, 255, 0.12);
-      }
-
-      .grid {
-        stroke-dasharray: 3 5;
-      }
-
-      .tick {
-        fill: #7c8798;
-        font-size: 11px;
-      }
-
-      .line {
-        fill: none;
-        stroke-width: 3;
-        stroke-linecap: round;
-        stroke-linejoin: round;
-      }
-
+      /* ─── Metrics ─── */
       .metrics {
         display: grid;
         grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 10px;
-        margin-top: 14px;
+        gap: 8px;
+        margin-top: 16px;
       }
-
-      .metric {
-        padding: 12px;
-      }
-
+      .metric { padding: 14px 12px; }
       .metric span {
         display: block;
-        color: #8390a1;
-        font-size: 11px;
-        margin-bottom: 5px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 9px;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+        color: var(--vault-sub);
+        margin-bottom: 6px;
       }
-
       .metric strong {
         display: block;
-        font-size: 18px;
-        line-height: 1.2;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 15px;
+        font-weight: 500;
+        color: var(--vault-text);
+        letter-spacing: -0.02em;
       }
 
       .note {
-        margin: 14px 0 0;
-        color: #8d99aa;
-        font-size: 12px;
+        margin-top: 12px;
+        font-size: 11px;
+        color: var(--vault-sub);
+        font-family: 'JetBrains Mono', monospace;
+        line-height: 1.6;
       }
 
+      /* ─── Buttons ─── */
+      .btn-ghost {
+        flex: 1; min-height: 34px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(255, 255, 255, 0.03);
+        color: var(--vault-text);
+        border-radius: 4px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        cursor: pointer;
+        transition: border-color 200ms, background 200ms;
+      }
+      .btn-ghost:hover {
+        border-color: rgba(0, 82, 255, 0.5);
+        background: rgba(0, 82, 255, 0.07);
+      }
+
+      .btn-primary {
+        width: 100%; min-height: 36px;
+        border: 1px solid rgba(0, 82, 255, 0.7);
+        background: linear-gradient(135deg, #0052FF, #0033CC);
+        color: #fff;
+        border-radius: 4px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        letter-spacing: .08em;
+        cursor: pointer;
+        margin-top: 8px;
+        transition: opacity 200ms;
+      }
+      .btn-primary:hover { opacity: 0.86; }
+
+      /* ─── Chart wrap ─── */
       .chart-wrap {
-        position: relative;
-        cursor: grab;
-        user-select: none;
+        position: relative; cursor: grab; user-select: none;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 4px;
+        background: radial-gradient(circle at 50% 0%, rgba(0, 82, 255, 0.06), transparent 48%);
+        overflow: hidden;
       }
+      .chart-wrap.dragging { cursor: grabbing; }
 
-      .chart-wrap.dragging {
-        cursor: grabbing;
-      }
-
-      .tooltip {
+      /* Scanline animation */
+      .chart-wrap::after {
+        content: "";
         position: absolute;
-        display: none;
-        min-width: 250px;
+        inset: 0;
         pointer-events: none;
-        border: 1px solid rgba(255, 255, 255, 0.14);
-        background: rgba(245, 247, 251, 0.96);
-        color: #111827;
-        border-radius: 6px;
-        padding: 10px 12px;
-        font-size: 12px;
-        line-height: 1.45;
-        box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
+        background: linear-gradient(to bottom, transparent 50%, rgba(0, 82, 255, 0.025) 50%);
+        background-size: 100% 4px;
+        animation: scan 6s linear infinite;
+        opacity: 0.5;
+      }
+      @keyframes scan {
+        0%   { transform: translateY(0); }
+        100% { transform: translateY(8px); }
+      }
+
+      /* ─── Tooltip (dark glass) ─── */
+      .tooltip {
+        position: absolute; display: none;
+        min-width: 230px; pointer-events: none;
+        border: 1px solid rgba(0, 82, 255, 0.5);
+        background: rgba(10, 10, 10, 0.92);
+        backdrop-filter: blur(14px);
+        color: var(--vault-text);
+        border-radius: 4px;
+        padding: 12px 14px;
+        font-family: 'JetBrains Mono', monospace;
+        font-size: 11px;
+        line-height: 1.5;
+        box-shadow: 0 0 0 1px rgba(0, 82, 255, 0.2), 0 24px 48px rgba(0, 0, 0, 0.6);
         z-index: 5;
       }
-
       .tooltip strong {
         display: block;
-        color: #111827;
-        margin-bottom: 6px;
+        font-size: 12px;
+        color: var(--brand-accent);
+        margin-bottom: 8px;
+        letter-spacing: .04em;
       }
-
       .tooltip-row {
-        display: flex;
-        justify-content: space-between;
-        gap: 16px;
+        display: flex; justify-content: space-between; gap: 14px;
+        padding: 2px 0;
       }
+      .tooltip-row span:first-child { color: var(--vault-sub); }
+      .tooltip-row strong { display: inline; font-size: 11px; color: var(--vault-text); }
 
-      .tooltip-row span:first-child {
-        color: #4b5563;
+      /* ─── Responsive ─── */
+      @media (max-width: 900px) {
+        .top, .layout { grid-template-columns: 1fr; }
+        .metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       }
-
-      @media (max-width: 860px) {
-        .top,
-        .layout {
-          grid-template-columns: 1fr;
-        }
-
-        .metrics {
-          grid-template-columns: repeat(2, minmax(0, 1fr));
-        }
-      }
-
       @media (max-width: 520px) {
-        main {
-          width: min(100vw - 20px, 1180px);
-          padding-top: 18px;
-        }
-
-        .metrics {
-          grid-template-columns: 1fr;
-        }
+        main { padding-top: 20px; }
+        h1 { white-space: normal; }
+        .metrics { grid-template-columns: 1fr; }
       }
     </style>
   </head>
@@ -344,7 +372,8 @@
     <main>
       <section class="top">
         <div>
-          <h1>AlfaClub Bonding Curve vs Sudoswap Delta</h1>
+          <p class="eyebrow">■ ERCreator4626 ● Protocol Market Simulator</p>
+          <h1>Bonding Curve // LP Analysis</h1>
           <p class="summary">
             Price of one AlfaClub key in USDC across key supply from 1 to 100, using the
             primary sum-of-squares bonding curve. Defaults are set to room #1043:
@@ -427,17 +456,7 @@
           <button
             id="refetchPriceBtn"
             type="button"
-            style="
-              width: 100%;
-              min-height: 36px;
-              border: 1px solid rgba(75, 146, 255, 0.45);
-              background: rgba(75, 146, 255, 0.12);
-              color: #dbe7ff;
-              border-radius: 6px;
-              font: inherit;
-              cursor: pointer;
-              margin-top: 6px;
-            "
+            class="btn-primary"
           >
             Refetch price from Zora
           </button>
@@ -445,12 +464,12 @@
         </aside>
 
         <section class="chart-panel">
-          <h2>Bonding curve + Sudoswap delta: price vs key count</h2>
+          <h2>▲ Price Matrix // Key Count</h2>
           <div class="legend">
-            <span class="key"><span class="swatch" style="background:#22c55e;height:10px;width:6px;border-radius:2px"></span>Bonding curve candle (sell→buy)</span>
-            <span class="key"><span class="swatch" style="background:#a78bfa"></span>Mid/share price (USDC)</span>
-            <span class="key"><span class="swatch" style="background:#f472d8"></span>Sudoswap sell (<span class="quoteSymbolLabel">coins</span>)</span>
-            <span class="key"><span class="swatch" style="background:#93c5fd"></span>Sudoswap buy (<span class="quoteSymbolLabel">coins</span>)</span>
+            <span class="key"><span class="swatch" style="background:#22c55e;height:8px;width:5px;border-radius:1px"></span>Bonding curve spread</span>
+            <span class="key"><span class="swatch" style="background:#0052FF"></span>Mid / share price</span>
+            <span class="key"><span class="swatch" style="background:#f59e0b"></span>LP sell price — what you pay to buy from LP</span>
+            <span class="key"><span class="swatch" style="background:#3B82F6"></span>LP buy price — what LP pays you when you sell in</span>
           </div>
           <div class="chart-wrap">
             <svg id="chart" viewBox="0 0 820 430" role="img" aria-label="AlfaClub bonding curve and Sudoswap delta spot by key count"></svg>
@@ -470,8 +489,8 @@
             </div>
             <input id="chartCenter" type="range" min="1" max="160" step="1" value="73" />
             <div style="display:flex;gap:8px">
-              <button id="panLeftBtn" type="button" style="flex:1;min-height:34px;border:1px solid rgba(255,255,255,0.12);background:#101722;color:#eef2f8;border-radius:6px;font:inherit;cursor:pointer">← Left</button>
-              <button id="panRightBtn" type="button" style="flex:1;min-height:34px;border:1px solid rgba(255,255,255,0.12);background:#101722;color:#eef2f8;border-radius:6px;font:inherit;cursor:pointer">Right →</button>
+              <button id="panLeftBtn" type="button" class="btn-ghost">← Left</button>
+              <button id="panRightBtn" type="button" class="btn-ghost">Right →</button>
             </div>
             <p class="note" style="margin-top: 6px">Tip: scroll over the chart to zoom in/out around your cursor.</p>
           </div>
@@ -494,6 +513,8 @@
             </div>
           </div>
           <p class="note" id="chartNote"></p>
+
+          <div id="decisionPanel" style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:10px"></div>
 
           <h2 style="margin-top: 26px">Frenmint / Sudoswap delta model</h2>
           <div class="metrics">
@@ -654,10 +675,10 @@
           tooltip.innerHTML = `
             <strong>${Math.round(point.x)}</strong>
             ${tooltipRow("Buy Price (USDC)", formatUsd(point.buy), "#4b92ff")}
-            ${tooltipRow("Share Price (USDC)", formatUsd(mid), "#a78bfa")}
+            ${tooltipRow("Share Price (USDC)", formatUsd(mid), "#0052FF")}
             ${tooltipRow("Sell Price (USDC)", formatUsd(point.sell), "#f59e0b")}
-            ${sudoPoint ? tooltipRow(`Sudoswap Sell (${coinSymbol})`, `${formatCount(sudoPoint.sell)} ${coinSymbol}`, "#f472d8") : ""}
-            ${sudoPoint ? tooltipRow(`Sudoswap Buy (${coinSymbol})`, `${formatCount(sudoPoint.buy)} ${coinSymbol}`, "#93c5fd") : ""}
+            ${sudoPoint ? tooltipRow(`LP sell — you pay (${coinSymbol})`, `${formatCount(sudoPoint.sell)} ${coinSymbol}`, "#f59e0b") : ""}
+            ${sudoPoint ? tooltipRow(`LP buy — you receive (${coinSymbol})`, `${formatCount(sudoPoint.buy)} ${coinSymbol}`, "#3B82F6") : ""}
           `
           tooltip.style.display = "block"
           const tooltipX = Math.min(rect.width - 270, Math.max(8, event.clientX - rect.left + 14))
@@ -889,15 +910,37 @@
           const yTop = yScale(high)
           const yBottom = yScale(low)
           const candleWidth = Math.max(2, barWidth * 1.6)
-          svg += `<line x1="${center.toFixed(2)}" y1="${yTop.toFixed(2)}" x2="${center.toFixed(2)}" y2="${yBottom.toFixed(2)}" stroke="#16a34a" stroke-width="0.8" stroke-opacity="0.85"></line>`
-          svg += `<rect x="${(center - candleWidth / 2).toFixed(2)}" y="${yTop.toFixed(2)}" width="${candleWidth.toFixed(2)}" height="${Math.max(1, yBottom - yTop).toFixed(2)}" fill="#22c55e" fill-opacity="0.78" stroke="#16a34a" stroke-width="0.6"></rect>`
+          svg += `<line x1="${center.toFixed(2)}" y1="${yTop.toFixed(2)}" x2="${center.toFixed(2)}" y2="${yBottom.toFixed(2)}" stroke="#22c55e" stroke-width="0.8" stroke-opacity="0.7"></line>`
+          svg += `<rect x="${(center - candleWidth / 2).toFixed(2)}" y="${yTop.toFixed(2)}" width="${candleWidth.toFixed(2)}" height="${Math.max(1, yBottom - yTop).toFixed(2)}" fill="#22c55e" fill-opacity="0.65" stroke="#16a34a" stroke-width="0.5"></rect>`
         }
 
-        svg += `<path class="line" d="${linePath(midPoints, xScale, yScale)}" stroke="#a78bfa"></path>`
+        svg += `<path class="line" d="${linePath(midPoints, xScale, yScale)}" stroke="#0052FF" filter="drop-shadow(0 0 5px rgba(0,82,255,.4))"></path>`
 
         if (sudoPoolPoints.length) {
-          svg += `<path class="line" d="${linePath(sudoPoolPoints.map((p) => ({ x: p.x, y: p.sell })), xScale, ySudoScale)}" stroke="#f472d8"></path>`
-          svg += `<path class="line" d="${linePath(sudoPoolPoints.map((p) => ({ x: p.x, y: p.buy })), xScale, ySudoScale)}" stroke="#93c5fd"></path>`
+          // ── Crossover shading ──────────────────────────────────────────
+          // LP sell (amber) vs BC buy: when amber < BC buy => LP cheaper to buy from
+          // LP buy (blue) vs BC sell: when blue > BC sell => LP pays more when selling
+          for (const sp of sudoPoolPoints) {
+            const bcPoint = chartPoints.find((c) => c.x === sp.x)
+            if (!bcPoint) continue
+            const cx = xScale(sp.x)
+            const hw = Math.max(2, barWidth * 0.9)
+            const lpSellPx = ySudoScale(sp.sell)
+            const bcBuyPx = yScale(bcPoint.buy)
+            const lpBuyPx = ySudoScale(sp.buy)
+            const bcSellPx = yScale(bcPoint.sell)
+            // LP sell cheaper than BC buy: shade green band at top
+            if (lpSellPx > bcBuyPx) {
+              svg += `<rect x="${(cx - hw).toFixed(2)}" y="${bcBuyPx.toFixed(2)}" width="${(hw * 2).toFixed(2)}" height="${(lpSellPx - bcBuyPx).toFixed(2)}" fill="rgba(34,197,94,0.18)"></rect>`
+            }
+            // LP buy better than BC sell: shade blue band at bottom
+            if (lpBuyPx < bcSellPx) {
+              svg += `<rect x="${(cx - hw).toFixed(2)}" y="${lpBuyPx.toFixed(2)}" width="${(hw * 2).toFixed(2)}" height="${(bcSellPx - lpBuyPx).toFixed(2)}" fill="rgba(59,130,246,0.15)"></rect>`
+            }
+          }
+          // ── Lines on top of shading ────────────────────────────────────
+          svg += `<path class="line" d="${linePath(sudoPoolPoints.map((p) => ({ x: p.x, y: p.sell })), xScale, ySudoScale)}" stroke="#f59e0b" stroke-width="2.4" filter="drop-shadow(0 0 5px rgba(245,158,11,.45))"></path>`
+          svg += `<path class="line" d="${linePath(sudoPoolPoints.map((p) => ({ x: p.x, y: p.buy })), xScale, ySudoScale)}" stroke="#3B82F6" stroke-width="2.4" filter="drop-shadow(0 0 5px rgba(59,130,246,.45))"></path>`
         }
 
         if (supply >= chartMinX && supply <= chartMaxX) {
@@ -907,7 +950,7 @@
           svg += `<text class="tick" x="${markerX + 6}" y="${labelY}" text-anchor="start">N = ${supply}</text>`
           if (Number.isFinite(midAtSupply)) {
             const dy = yScale(midAtSupply)
-            svg += `<circle cx="${markerX}" cy="${dy}" r="4" fill="#a78bfa" stroke="#0a0d12" stroke-width="1"></circle>`
+            svg += `<circle cx="${markerX}" cy="${dy}" r="4" fill="#0052FF" stroke="#020202" stroke-width="1" filter="drop-shadow(0 0 4px rgba(0,82,255,.6))"></circle>`
           }
         }
 
@@ -919,11 +962,21 @@
         $("kOut").textContent = String(sudoDeltaForKeys(lpSeedKeys))
 
         $("chartNote").textContent =
-          `Room #${tokenId}: ${roomType === "trading" ? "Trading" : "Social"} / ${
-            ["Casual", "Club", "Exclusive"][tier] ?? "Casual"
-          }. Divisor ${divisor}, bonding-curve fee ${(primaryFee * 100).toFixed(1)}%. ` +
-          `Green candles show the bonding-curve sell-to-buy spread on the left axis, with the purple mid/share-price line. ` +
-          `Pink/blue Sudoswap lines use the right axis in ${coinSymbol}; they are centered at current supply S=${supply} and extend \u00b1x\u2080 keys.`
+          `S=${supply} | Bonding-curve fee ${(primaryFee * 100).toFixed(1)}%. ` +
+          `Amber line = LP sell price (what you pay to buy a key from LP). Blue line = LP buy price (what LP pays you for a key). ` +
+          `Green shading = LP cheaper to buy from. Blue shading = LP pays more when selling.`
+
+        renderDecisionPanel({
+          supply,
+          divisor,
+          primaryFee,
+          coinSymbol,
+          coinPriceUsd,
+          sudoPoolPoints,
+          midAtSupply,
+          primaryAskAtSupply,
+          primaryBidAtSupply,
+        })
 
         wireChartTooltip({
           points: chartPoints,
@@ -948,6 +1001,75 @@
           coinPriceUsd,
           lpFeeBps: roomType === "trading" ? 690 : 300,
         })
+      }
+
+      function renderDecisionPanel({
+        supply,
+        divisor,
+        primaryFee,
+        coinSymbol,
+        coinPriceUsd,
+        sudoPoolPoints,
+        midAtSupply,
+        primaryAskAtSupply,
+        primaryBidAtSupply,
+      }) {
+        const panel = $("decisionPanel")
+        if (!panel) return
+        const atS = sudoPoolPoints.find((p) => p.x === supply)
+        if (!atS || coinPriceUsd <= 0) {
+          panel.innerHTML = ""
+          return
+        }
+        const bcBuyCoin = coinPriceUsd > 0 ? primaryAskAtSupply / coinPriceUsd : Number.NaN
+        const bcSellCoin = coinPriceUsd > 0 ? primaryBidAtSupply / coinPriceUsd : Number.NaN
+        const lpBuyCost = atS.sell
+        const lpSellReceive = atS.buy
+        const buyLpCheaper = Number.isFinite(lpBuyCost) && Number.isFinite(bcBuyCoin) && lpBuyCost < bcBuyCost
+        const sellLpBetter = Number.isFinite(lpSellReceive) && Number.isFinite(bcSellCoin) && lpSellReceive > bcSellCoin
+        const buyDelta = Number.isFinite(lpBuyCost) && Number.isFinite(bcBuyCoin) ? bcBuyCost - lpBuyCost : Number.NaN
+        const sellDelta = Number.isFinite(lpSellReceive) && Number.isFinite(bcSellCoin) ? lpSellReceive - bcSellCoin : Number.NaN
+        const fmt = (v) => Number.isFinite(v) ? formatCount(v) : "--"
+        const savingsLabel = (d, better) => !Number.isFinite(d) ? "" :
+          `<span style="color:${better ? "#22c55e" : "#ef4444"};font-size:10px">${better ? "▲" : "▼"} ${fmt(Math.abs(d))} ${coinSymbol} ${better ? "saved" : "more"}</span>`
+        const badge = (better, label) =>
+          `<span style="padding:2px 8px;border-radius:3px;font-size:10px;letter-spacing:.06em;font-family:JetBrains Mono,monospace;font-weight:600;background:${better ? "rgba(34,197,94,0.15)" : "rgba(245,158,11,0.12)"};color:${better ? "#22c55e" : "#f59e0b"};border:1px solid ${better ? "rgba(34,197,94,0.35)" : "rgba(245,158,11,0.3)"}">${label}</span>`
+        panel.innerHTML = `
+          <div style="border:1px solid rgba(255,255,255,0.08);background:#0A0A0A;border-radius:4px;padding:16px">
+            <p style="font-family:JetBrains Mono,monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#0052FF;margin-bottom:10px">■ Buying a key at S=${supply}</p>
+            <div style="display:grid;gap:6px;font-family:JetBrains Mono,monospace;font-size:11px;color:#EDEDED">
+              <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+                <span style="color:#666">Bonding curve</span>
+                <span>${fmt(bcBuyCoin)} ${coinSymbol}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding:6px 0">
+                <span style="color:#666">Sudoswap LP <span style="color:#f59e0b">●</span></span>
+                <span>${fmt(lpBuyCost)} ${coinSymbol}</span>
+              </div>
+              <div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center">
+                ${badge(buyLpCheaper, buyLpCheaper ? "LP CHEAPER" : "MINT FROM CURVE")}
+                ${savingsLabel(buyDelta, buyLpCheaper)}
+              </div>
+            </div>
+          </div>
+          <div style="border:1px solid rgba(255,255,255,0.08);background:#0A0A0A;border-radius:4px;padding:16px">
+            <p style="font-family:JetBrains Mono,monospace;font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:#0052FF;margin-bottom:10px">■ Selling a key at S=${supply}</p>
+            <div style="display:grid;gap:6px;font-family:JetBrains Mono,monospace;font-size:11px;color:#EDEDED">
+              <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(255,255,255,0.06)">
+                <span style="color:#666">Bonding curve</span>
+                <span>${fmt(bcSellCoin)} ${coinSymbol}</span>
+              </div>
+              <div style="display:flex;justify-content:space-between;padding:6px 0">
+                <span style="color:#666">Sudoswap LP <span style="color:#3B82F6">●</span></span>
+                <span>${fmt(lpSellReceive)} ${coinSymbol}</span>
+              </div>
+              <div style="margin-top:6px;display:flex;justify-content:space-between;align-items:center">
+                ${badge(sellLpBetter, sellLpBetter ? "LP PAYS MORE" : "SELL TO CURVE")}
+                ${savingsLabel(sellDelta, sellLpBetter)}
+              </div>
+            </div>
+          </div>
+        `
       }
 
       function sudoDeltaForKeys(keyAmount) {
