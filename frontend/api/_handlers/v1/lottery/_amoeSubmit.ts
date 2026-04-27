@@ -21,6 +21,11 @@ import {
   createAmoeAttestation,
   verifyAmoeEntryProof,
 } from '../../../../server/_lib/lottery/lotteryAmoe.js'
+import {
+  AmoeAuthorityError,
+  classifyAmoeError,
+} from '../../../../server/_lib/lottery/lotteryAmoeErrors.js'
+import { resolveAmoeWallet } from '../../../../server/_lib/lottery/amoeWalletResolver.js'
 
 type SubmitBody = {
   creatorCoin?: string
@@ -57,28 +62,24 @@ function readBaseRpcUrl(): string {
   return firstConfigured ?? 'https://mainnet.base.org'
 }
 
+// AMOE relay key isolation — see audit/security note in `docs/security/amoe-relay-key-scope.md`.
+//
+// Previously these readers fell through to `KEEPR_PRIVATE_KEY` and even the
+// generic `PRIVATE_KEY` env var. That coupling is dangerous: any deployment
+// that provisions a single global `PRIVATE_KEY` (which is the template called
+// out as a leak risk in `docs/operations/red-ci-tracking.md`) would silently
+// promote that key into the AMOE-relay role, giving the AMOE submit path
+// authority that was never explicitly granted to it. AMOE-relay must be its
+// own scoped key — fail closed if the dedicated env vars are not set.
 function readAmoeRelayPrivateKey(): `0x${string}` | null {
-  const candidates = [
-    process.env.LOTTERY_AMOE_RELAY_PRIVATE_KEY,
-  ]
-  for (const candidate of candidates) {
-    const value = String(candidate ?? '').trim()
-    if (/^0x[a-fA-F0-9]{64}$/.test(value)) return value as `0x${string}`
-  }
+  const value = String(process.env.LOTTERY_AMOE_RELAY_PRIVATE_KEY ?? '').trim()
+  if (/^0x[a-fA-F0-9]{64}$/.test(value)) return value as `0x${string}`
   return null
 }
 
 function readAmoeRelayOwnerPrivateKey(): `0x${string}` | null {
-  const candidates = [
-    process.env.LOTTERY_AMOE_RELAY_OWNER_PRIVATE_KEY,
-    process.env.CRE_ERC4337_OWNER_PRIVATE_KEY,
-    process.env.KEEPR_PRIVATE_KEY,
-    process.env.PRIVATE_KEY,
-  ]
-  for (const candidate of candidates) {
-    const value = String(candidate ?? '').trim()
-    if (/^0x[a-fA-F0-9]{64}$/.test(value)) return value as `0x${string}`
-  }
+  const value = String(process.env.LOTTERY_AMOE_RELAY_OWNER_PRIVATE_KEY ?? '').trim()
+  if (/^0x[a-fA-F0-9]{64}$/.test(value)) return value as `0x${string}`
   return null
 }
 
@@ -279,6 +280,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       lotteryManager: String(lotteryManager).toLowerCase() as `0x${string}`,
     })
 
+    // Re-verify wallet authority against the auth context.
+    //
+    // The signature inside `verifyAmoeEntryProof` cryptographically binds
+    // the proof to a wallet, but for EIP-1271 / smart-wallet signatures
+    // the wallet's owner set can change between sessions: a wallet whose
+    // owner key was rotated yesterday still produces a valid `isValidSignature`
+    // today. The nonce / credits handlers always re-resolve through
+    // `resolveAmoeWallet` so the auth identity must currently authorise the
+    // wallet; previously, submit skipped that check and trusted the on-chain
+    // signature alone. We now mirror nonce / credits / twitter-checkin
+    // semantics so a stale auth session cannot piggy-back a freshly
+    // re-owned wallet.
+    const walletAuthority = await resolveAmoeWallet({
+      requestedWallet: proof.wallet,
+      authAddress: g.auth?.address ?? null,
+    })
+    if (!walletAuthority.ok) {
+      throw new AmoeAuthorityError(walletAuthority.error)
+    }
+
     const attested = await createAmoeAttestation({
       wallet: proof.wallet,
       creatorCoin: proof.creatorCoin,
@@ -340,18 +361,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       },
     })
   } catch (error: unknown) {
-    const messageText = error instanceof Error ? error.message : 'amoe_submit_failed'
-    const status = messageText.includes('insufficient')
-      ? 402
-      : messageText.includes('invalid') ||
-          messageText.includes('mismatch') ||
-          messageText.includes('expired') ||
-          messageText.includes('expires_too_soon')
-        ? 400
-        : 500
+    // Pivots on `instanceof Amoe*Error` first; falls back to legacy substring
+    // classification for any not-yet-migrated thrower. See
+    // `frontend/server/_lib/lottery/lotteryAmoeErrors.ts`.
+    const { status, message } = classifyAmoeError(error)
     return res.status(status).json({
       success: false,
-      error: messageText,
+      error: message,
     })
   }
 }

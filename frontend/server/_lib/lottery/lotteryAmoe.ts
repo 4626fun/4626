@@ -3,6 +3,11 @@ import { createHash, randomBytes } from 'node:crypto'
 import { getDb } from '../db/postgres.js'
 import { ensureWaitlistSchema } from '../onboarding/waitlistSchema.js'
 import { awardAmoeCheckinPoints } from './amoeWaitlistPoints.js'
+import {
+  AmoeBadRequestError,
+  AmoeInsufficientCreditsError,
+  AmoeServerError,
+} from './lotteryAmoeErrors.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -397,7 +402,7 @@ export async function consumeAmoeCreditsForEntry(params: {
   const db = await getDb()
   if (!db) {
     const current = memCredits.get(wallet) ?? 0
-    if (current < requiredCredits) throw new Error('insufficient_amoe_credits')
+    if (current < requiredCredits) throw new AmoeInsufficientCreditsError()
     const nextCredits = current - requiredCredits
     memCredits.set(wallet, nextCredits)
     const snapshot = toCreditSnapshot(wallet, nextCredits)
@@ -465,7 +470,7 @@ export async function consumeAmoeCreditsForEntry(params: {
       LIMIT 1;
     `
     const alreadySpent = Boolean(existingSpend.rows?.[0]?.id)
-    if (!alreadySpent) throw new Error('insufficient_amoe_credits')
+    if (!alreadySpent) throw new AmoeInsufficientCreditsError()
   }
 
   const creditsRemaining = await readUnifiedPointsForSignup(db, signupId)
@@ -702,18 +707,18 @@ export async function verifyAmoeEntryProof(params: {
   expiresAt: string
 }> {
   const parsed = parseAmoeEntryMessage(params.message)
-  if (!parsed) throw new Error('invalid_message')
-  if (parsed.creatorCoin !== params.creatorCoin.toLowerCase()) throw new Error('creator_mismatch')
-  if (parsed.lotteryManager !== params.lotteryManager.toLowerCase()) throw new Error('lottery_manager_mismatch')
-  if (parsed.chainId !== 8453) throw new Error('invalid_chain')
-  if (Date.parse(parsed.expiresAt) <= Date.now()) throw new Error('message_expired')
+  if (!parsed) throw new AmoeBadRequestError('invalid_message')
+  if (parsed.creatorCoin !== params.creatorCoin.toLowerCase()) throw new AmoeBadRequestError('creator_mismatch')
+  if (parsed.lotteryManager !== params.lotteryManager.toLowerCase()) throw new AmoeBadRequestError('lottery_manager_mismatch')
+  if (parsed.chainId !== 8453) throw new AmoeBadRequestError('invalid_chain')
+  if (Date.parse(parsed.expiresAt) <= Date.now()) throw new AmoeBadRequestError('message_expired')
 
   const ok = await verifyWalletMessageSignature({
     wallet: parsed.wallet,
     message: params.message,
     signature: params.signature,
   })
-  if (!ok) throw new Error('signature_invalid')
+  if (!ok) throw new AmoeBadRequestError('signature_invalid')
 
   await consumeAmoeNonce({
     wallet: parsed.wallet,
@@ -746,13 +751,13 @@ export async function createAmoeAttestation(params: {
 }> {
   const pkRaw = (process.env.LOTTERY_AMOE_SIGNER_PRIVATE_KEY ?? '').trim()
   if (!/^0x[a-fA-F0-9]{64}$/.test(pkRaw)) {
-    throw new Error('amoe_signer_private_key_missing')
+    throw new AmoeServerError('amoe_signer_private_key_missing')
   }
   const expiresAtMs = Date.parse(params.expiresAt)
   if (!Number.isFinite(expiresAtMs) || expiresAtMs <= Date.now()) {
-    throw new Error('message_expired')
+    throw new AmoeBadRequestError('message_expired')
   }
-  if (!isBytes32Like(params.nonce)) throw new Error('invalid_nonce')
+  if (!isBytes32Like(params.nonce)) throw new AmoeBadRequestError('invalid_nonce')
 
   const { createPublicClient, encodeFunctionData, http } = await import('viem')
   const { base } = await import('viem/chains')
@@ -771,11 +776,11 @@ export async function createAmoeAttestation(params: {
   const maxDeadlineSec = nowSec + 15 * 60
   const expiresSec = Math.floor(expiresAtMs / 1000)
   const deadline = Math.min(maxDeadlineSec, expiresSec)
-  if (deadline <= nowSec) throw new Error('message_expired')
+  if (deadline <= nowSec) throw new AmoeBadRequestError('message_expired')
   if (deadline - nowSec < MIN_DEADLINE_BUFFER_SEC) {
     // Surfaced as a 4xx by the handler; clients should retry with a fresh
     // challenge rather than burn credits on a known-dead attestation.
-    throw new Error('message_expires_too_soon')
+    throw new AmoeBadRequestError('message_expires_too_soon')
   }
   let amoeMessageHash: `0x${string}` | null = null
   for (const url of getBaseRpcUrls()) {
@@ -795,7 +800,7 @@ export async function createAmoeAttestation(params: {
       continue
     }
   }
-  if (!amoeMessageHash) throw new Error('amoe_hash_read_failed')
+  if (!amoeMessageHash) throw new AmoeServerError('amoe_hash_read_failed')
 
   const signer = privateKeyToAccount(pkRaw as `0x${string}`)
   const signature = await signer.signMessage({ message: { raw: amoeMessageHash } })
