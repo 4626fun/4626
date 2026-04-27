@@ -160,6 +160,60 @@ async function ensureAmoeSchema(db: Db): Promise<void> {
       PRIMARY KEY (wallet_address, checkin_date)
     );
   `
+
+  // AMOE-eligibility view. Mirrors
+  // `supabase/migrations/20260427180000_amoe_eligible_points_view.sql`.
+  // Bootstrap parity matters because dev/preview envs may not have the
+  // migration applied yet — without this CREATE OR REPLACE here, the
+  // first AMOE submit on a fresh DB would fail with `relation does not
+  // exist`. The migration remains the source of truth in CI / prod; this
+  // is the runtime safety net.
+  //
+  // KEEP THIS BLOCK BYTE-FOR-BYTE IDENTICAL TO THE MIGRATION. If you
+  // change one, update the other.
+  await db.sql`
+    CREATE OR REPLACE VIEW points_amoe_eligible_balance AS
+    SELECT
+      signup_id,
+      COALESCE(
+        ROUND(
+          SUM(
+            CASE
+              WHEN source = 'amoe_entry_spend'    THEN amount
+              WHEN source = 'amoe_twitter_daily'  THEN amount * 1.00
+              WHEN source = 'amoe_checkin'        THEN amount * 1.00
+              WHEN source = 'waitlist_signup'     THEN amount * 1.00
+              WHEN source = 'csw_link'            THEN amount * 1.00
+              WHEN source = 'resolve_csw'         THEN amount * 0.60
+              WHEN source LIKE 'social_%'         THEN amount * 0.50
+              WHEN source LIKE 'bonus_%'          THEN amount * 0.30
+              WHEN source = 'task'                THEN amount * 0.30
+              WHEN source IN (
+                'agent_feedback',
+                'agent_reputation',
+                'lens_identity',
+                'grove_proof'
+              )                                    THEN amount * 0.40
+              WHEN source IN (
+                'link_email',
+                'link_google',
+                'link_apple',
+                'link_telegram',
+                'link_tiktok',
+                'link_twitter',
+                'link_external_eoa',
+                'link_zora'
+              )                                    THEN amount * 0.60
+              ELSE 0
+            END
+          )
+        ),
+        0
+      )::bigint AS credits
+    FROM points
+    GROUP BY signup_id;
+  `
+
   amoeSchemaEnsured = true
 }
 
@@ -238,6 +292,14 @@ async function resolveOrCreateProfileForWallet(db: Db, wallet: `0x${string}`): P
   return Math.floor(createdId)
 }
 
+/**
+ * Total weighted points for a signup — used for leaderboard, tier
+ * progression, and "Your points" UI surfaces.
+ *
+ * Includes paid-action sources (`has_creator_coin`) and tainted sources
+ * (`referral_passthrough`, deprecated `referral_*`). Do NOT use this for
+ * AMOE eligibility — use `readAmoeEligibleCreditsForSignup` instead.
+ */
 async function readUnifiedPointsForSignup(db: Db, signupId: number): Promise<number> {
   const result = await db.sql`
     SELECT COALESCE(
@@ -246,6 +308,11 @@ async function readUnifiedPointsForSignup(db: Db, signupId: number): Promise<num
           CASE
             WHEN source = 'amoe_entry_spend' THEN amount
             WHEN source = 'amoe_twitter_daily' THEN amount * 1.00
+            -- amoe_checkin must mirror the AMOE eligibility view's 1.00x
+            -- weight; otherwise unified points (leaderboard/tier) would
+            -- under-count and AMOE-eligible credits could exceed unified
+            -- points, breaking the documented "eligible subset" invariant.
+            WHEN source = 'amoe_checkin' THEN amount * 1.00
             WHEN source = 'waitlist_signup' THEN amount * 1.00
             WHEN source = 'csw_link' THEN amount * 1.00
             WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
@@ -264,6 +331,32 @@ async function readUnifiedPointsForSignup(db: Db, signupId: number): Promise<num
     WHERE signup_id = ${signupId};
   `
   const valueRaw = Number(result.rows?.[0]?.points ?? 0)
+  const value = Number.isFinite(valueRaw) ? Math.floor(valueRaw) : 0
+  return Math.max(0, value)
+}
+
+/**
+ * AMOE-eligible weighted points for a signup — the strict-allowlist
+ * subset of `readUnifiedPointsForSignup` that excludes paid-action and
+ * tainted sources. Used to gate free lottery entries.
+ *
+ * Compliance contract: the underlying `points_amoe_eligible_balance`
+ * view's source allowlist is the database-level enforcement of the
+ * "no purchase necessary" wall on the AMOE path. See
+ * `docs/security/amoe-points-source-audit.md` for the per-source
+ * rationale.
+ */
+async function readAmoeEligibleCreditsForSignup(
+  db: Db,
+  signupId: number,
+): Promise<number> {
+  const result = await db.sql`
+    SELECT credits
+    FROM points_amoe_eligible_balance
+    WHERE signup_id = ${signupId}
+    LIMIT 1;
+  `
+  const valueRaw = Number(result.rows?.[0]?.credits ?? 0)
   const value = Number.isFinite(valueRaw) ? Math.floor(valueRaw) : 0
   return Math.max(0, value)
 }
@@ -307,7 +400,7 @@ export async function getAmoeCreditSnapshot(params: { wallet: `0x${string}` }): 
 
   await ensureAmoeSchema(db)
   const signupId = await resolveOrCreateProfileForWallet(db, wallet)
-  const credits = await readUnifiedPointsForSignup(db, signupId)
+  const credits = await readAmoeEligibleCreditsForSignup(db, signupId)
   return toCreditSnapshot(wallet, credits)
 }
 
@@ -370,7 +463,7 @@ export async function claimDailyTwitterCheckin(params: { wallet: `0x${string}` }
     }
   }
 
-  const credits = await readUnifiedPointsForSignup(db, signupId)
+  const credits = await readAmoeEligibleCreditsForSignup(db, signupId)
   const snapshot = toCreditSnapshot(wallet, credits)
   return {
     wallet,
@@ -421,29 +514,15 @@ export async function consumeAmoeCreditsForEntry(params: {
     normalizeRefId(params.refId) ??
     `amoe-spend:${wallet}:${Date.now().toString(36)}:${randomBytes(6).toString('hex')}`
 
+  // AMOE eligibility: spend is gated on the AMOE-eligible balance only.
+  // The `points_amoe_eligible_balance` view enforces the strict allowlist —
+  // paid-action sources (e.g. has_creator_coin) and referral_* contribute 0,
+  // so they cannot fund AMOE entries even though they still count toward
+  // tier/leaderboard via `readUnifiedPointsForSignup`.
   const spendAttempt = await db.sql`
     WITH current AS (
-      SELECT COALESCE(
-        ROUND(
-          SUM(
-            CASE
-              WHEN source = 'amoe_entry_spend' THEN amount
-              WHEN source = 'amoe_twitter_daily' THEN amount * 1.00
-              WHEN source = 'waitlist_signup' THEN amount * 1.00
-              WHEN source = 'csw_link' THEN amount * 1.00
-              WHEN source IN ('referral_signup', 'referral_csw_link', 'referral_qualified') THEN amount * 0.60
-              WHEN source LIKE 'social_%' THEN amount * 0.50
-              WHEN source LIKE 'bonus_%' OR source = 'task' THEN amount * 0.30
-              WHEN source IN ('agent_feedback', 'agent_reputation', 'lens_identity', 'grove_proof') THEN amount * 0.40
-              WHEN source IN ('link_email', 'link_google', 'link_apple', 'link_twitter', 'link_telegram', 'link_tiktok', 'link_external_eoa', 'link_zora', 'resolve_csw', 'has_creator_coin')
-                THEN amount * 0.60
-              ELSE amount * 0.30
-            END
-          )
-        ),
-        0
-      )::bigint AS credits
-      FROM points
+      SELECT COALESCE(credits, 0)::bigint AS credits
+      FROM points_amoe_eligible_balance
       WHERE signup_id = ${signupId}
     ),
     ins AS (
@@ -473,7 +552,7 @@ export async function consumeAmoeCreditsForEntry(params: {
     if (!alreadySpent) throw new AmoeInsufficientCreditsError()
   }
 
-  const creditsRemaining = await readUnifiedPointsForSignup(db, signupId)
+  const creditsRemaining = await readAmoeEligibleCreditsForSignup(db, signupId)
 
   const snapshot = toCreditSnapshot(wallet, creditsRemaining)
   return {
