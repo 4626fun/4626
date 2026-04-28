@@ -157,6 +157,12 @@ tools/*
 !tools/vanity-salt-grinder/
 !tools/vanity-salt-grinder/**
 tools/vanity-salt-grinder/target/
+# AMOE ZK pipeline tooling — explicit allowlist so build artifacts
+# elsewhere under tools/ stay ignored, but the regen + CI scripts ship.
+!tools/zk/
+!tools/zk/**
+!tools/ci/
+!tools/ci/**
 
 # Docusaurus build artifacts
 apps/docs-site/build/

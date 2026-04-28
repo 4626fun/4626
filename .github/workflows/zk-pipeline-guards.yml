@@ -1,0 +1,135 @@
+name: ZK pipeline guards
+
+# Hardens the AMOE PLONK pipeline. Specifically: makes sure that
+# `contracts/utilities/lottery/zk/AmoePlonkVerifier.sol` keeps the
+# divergences from stock snarkjs output that we depend on for security.
+#
+# The stock snarkjs PLONK verifier omits a `checkField` pass on the 8
+# public inputs — only the 24 proof scalars are field-bound. Without the
+# patch we add (an explicit `checkField` loop on `_pubSignals` between
+# `checkProofData()` and `calculateChallenges`), a malicious prover can
+# submit non-canonical (x + k*q) encodings of any public-input slot and
+# bypass the router's raw-bytes replay maps (usedNonceCommit,
+# usedWalletCommit, usedPointsBurnNullifier).
+#
+# The fix landed on PR #409. This workflow exists so that a future
+# "let's just re-export the verifier from snarkjs" workflow cannot
+# silently drop the patch — CI will refuse to merge a regression.
+#
+# We also re-run the regression tests in `test/zk/AmoePlonkVerifier.t.sol`
+# (real proof verifies, tampered rejects, non-canonical rejects, gas
+# measurement) on every push to defend against logic drift.
+
+on:
+  pull_request:
+    branches: [main, master]
+    paths:
+      - 'contracts/utilities/lottery/zk/AmoePlonkVerifier.sol'
+      - 'contracts/utilities/lottery/zk/IAmoePlonkVerifier.sol'
+      - 'contracts/utilities/lottery/zk/LotteryAmoeRouter.sol'
+      - 'test/zk/AmoePlonkVerifier.t.sol'
+      - 'test/zk/LotteryAmoeRouter*.t.sol'
+      - 'tools/zk/_patch_amoe_plonk_verifier.py'
+      - 'tools/zk/regen_amoe_plonk_verifier.sh'
+      - 'tools/ci/check_amoe_plonk_patch.sh'
+      - 'tools/ci/check_lottery_amoe_failures.py'
+      - '.github/workflows/zk-pipeline-guards.yml'
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  amoe-plonk-patch-guard:
+    name: AmoePlonkVerifier patch guard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+
+      - name: Run patch guard
+        run: tools/ci/check_amoe_plonk_patch.sh
+
+  amoe-plonk-tests:
+    name: AmoePlonkVerifier regression tests
+    runs-on: ubuntu-latest
+    env:
+      FOUNDRY_PROFILE: ci
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          submodules: recursive
+
+      - uses: foundry-rs/foundry-toolchain@8789b3e21e6c11b2697f5eb56eddae542f746c10 # v1
+        with:
+          version: nightly
+
+      - uses: pnpm/action-setup@a8198c4bff370c8506180b035930dea56dbd5288 # v5
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: '20'
+
+      - name: Install Node deps (Solidity remappings)
+        run: pnpm install --frozen-lockfile
+
+      - name: Run AmoePlonkVerifier suite
+        # 5 tests: real proof verifies, tampered input rejects, non-canonical
+        # public input rejects (epoch slot), non-canonical wallet commit
+        # rejects, gas measurement. The two non-canonical tests are the
+        # security regression that pins the divergence from stock snarkjs
+        # — they MUST pass.
+        run: forge test --match-contract AmoePlonkVerifier -vv
+
+      - name: Run LotteryAmoeRouter suite
+        # 34/35 baseline. ONE specific test is allowed to fail right now
+        # because it reproduces on main and is unrelated to ZK:
+        #
+        #   test/zk/LotteryAmoeRouter.t.sol:LotteryAmoeRouterTest
+        #   :: test_submitAmoeEntry_acceptsDeadlineAtBufferBoundary()
+        #   reverts NotPublisher() on a deadline-buffer boundary case.
+        #
+        # Anything else failing — OR this test starting to pass — means CI
+        # should re-evaluate the allowlist. The codex bot caught a real
+        # weakness in the previous version of this guard
+        # (https://github.com/wenakita/4626/pull/410#discussion_r3155849944):
+        # gating only on `count > 1` allowed a different test to regress
+        # silently as long as the baseline failure was fixed at the same
+        # time. We now compare the EXACT failure set against an explicit
+        # allowlist.
+        env:
+          # The single (suite_path, test_name) pair that's currently allowed
+          # to fail. Update this list (or remove it entirely) when the
+          # baseline failure is fixed; the guard will tell you when that
+          # happens.
+          ALLOWED_FAILURES: |
+            test/zk/LotteryAmoeRouter.t.sol:LotteryAmoeRouterTest::test_submitAmoeEntry_acceptsDeadlineAtBufferBoundary()
+        run: |
+          set +e
+          forge test --match-contract LotteryAmoe --json > /tmp/result.json
+          forge_rc=$?
+          set -e
+
+          # Set-based allowlist guard. The script lives in tools/ci/ rather
+          # than inline because YAML `run: |` blocks preserve leading
+          # indentation, which clashes with Python's significant-whitespace
+          # parsing inside an indented heredoc and breaks with
+          # IndentationError. Extracting it also lets us unit-test the
+          # logic locally.
+          set +e
+          python3 tools/ci/check_lottery_amoe_failures.py /tmp/result.json
+          guard_rc=$?
+          set -e
+
+          # Defense in depth: if forge itself errored out (e.g. compilation
+          # broke) but produced an empty/parseable JSON, the guard above
+          # could pass with zero failures. Re-emit verbose output so the
+          # CI logs surface the underlying cause.
+          if [ "$guard_rc" -eq 0 ] && [ "$forge_rc" -ne 0 ]; then
+              echo "forge returned non-zero exit ($forge_rc) despite the allowlist matching."
+              echo "Re-running verbosely to surface the underlying error:"
+              forge test --match-contract LotteryAmoe -vv || true
+              exit 1
+          fi
+          exit "$guard_rc"
