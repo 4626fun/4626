@@ -140,6 +140,14 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     uint16 public constant MSG_TYPE_LOTTERY_ENTRY = 3;
     uint16 public constant MSG_TYPE_WINNER_CALLBACK = 4;
 
+    /// @notice Delay between proposing and committing a boost-source change
+    /// once `timelockArmed` is true. See `proposeBoostManager` /
+    /// `proposeVaultGaugeVoting` and docs/security/amoe-pr3-handoff.md.
+    /// @dev `internal` on main to save EIP-170 budget; the same constant is
+    ///      exposed `public` on the admin module for off-chain consumers and
+    ///      is also surfaced via `getBoostSourceTimelockState`.
+    uint256 internal constant BOOST_SOURCE_TIMELOCK = 24 hours;
+
     uint128 internal constant DEFAULT_GAS_LIMIT = 200_000;
     uint128 internal constant DEFAULT_MSG_VALUE = 0;
     uint128 internal constant DEFAULT_CALLBACK_GAS_LIMIT = 100_000;
@@ -347,6 +355,38 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     address public authorizedAmoeRelayer;
 
     // ================================
+    // STATE — BOOST-SOURCE TIMELOCK (PR 3)
+    // ================================
+    //
+    // Appended at the end of contract storage; mirrored in
+    // CreatorLotteryManagerAdminModule in the same order so delegatecall
+    // continues to read/write identical slots. See docs/security/amoe-pr3-handoff.md.
+    //
+    // Threat model: a compromised owner key swapping in a malicious
+    // boostManager / vaultGaugeVoting could lift any user's odds up to the
+    // absolute `lotteryConfig.maxWinChance` cap (default 15%) in a single tx.
+    // The timelock forces a 24h pending-then-effective window so off-chain
+    // monitoring + emergency response (or `disableBoostSources`) can react.
+    //
+    // Until `armBoostSourceTimelock()` is called, the legacy single-call
+    // setters (`setBoostManager`, `setVaultGaugeVoting`) continue to work for
+    // operational bootstrap. Once armed they revert and the
+    // propose/commit/cancel flow is the only path forward.
+
+    /// @dev Pending replacement for `boostManager`, set by `proposeBoostManager`.
+    /// Read via `getPendingBoostSources()` to keep main-contract bytecode
+    /// under EIP-170; the storage layout is mirrored in the admin module.
+    address internal _pendingBoostManager;
+    uint256 internal _pendingBoostManagerEffectiveAt;
+    address internal _pendingVaultGaugeVoting;
+    uint256 internal _pendingVaultGaugeVotingEffectiveAt;
+
+    /// @dev Once true, the legacy `setBoostManager` / `setVaultGaugeVoting`
+    /// setters revert and the timelocked propose/commit/cancel flow is the
+    /// only path. One-way switch (no disarm). Read via `isTimelockArmed()`.
+    bool internal _timelockArmed;
+
+    // ================================
     // EVENTS
     // ================================
 
@@ -434,6 +474,16 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     event AuthorizedAmoeRelayerUpdated(address indexed previousRelayer, address indexed newRelayer);
     event BaseCeilingPPMUpdated(uint256 previousCeilingPPM, uint256 newCeilingPPM);
 
+    // PR 3 — Boost-source timelock events.
+    event BoostManagerProposed(address indexed previous, address indexed proposed, uint256 effectiveAt);
+    event BoostManagerProposalCancelled(address indexed cancelled);
+    event BoostManagerUpdated(address indexed previous, address indexed newManager);
+    event VaultGaugeVotingProposed(address indexed previous, address indexed proposed, uint256 effectiveAt);
+    event VaultGaugeVotingProposalCancelled(address indexed cancelled);
+    event VaultGaugeVotingUpdated(address indexed previous, address indexed newGauge);
+    event BoostSourceTimelockArmed();
+    event BoostSourcesDisabled(address indexed previousBoostManager, address indexed previousVaultGaugeVoting);
+
     // ================================
     // ERRORS
     // ================================
@@ -444,6 +494,13 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     error CallerFeeMismatch(uint256 provided, uint256 required);
     error NoPendingVrfResult(uint256 requestId);
     error ETHRefundFailed();
+
+    // PR 3 — Boost-source timelock errors.
+    error TimelockNotArmed();
+    error TimelockAlreadyArmed();
+    error TimelockNotExpired();
+    error NoPendingProposal();
+    error LegacySetterDisabled();
 
     // ================================
     // CONSTRUCTOR
@@ -1756,6 +1813,41 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         _delegateAdmin();
     }
 
+    // PR 3 — Boost-source timelock admin stubs. Bodies live in the admin module.
+    function proposeBoostManager(address _manager) external {
+        _manager;
+        _delegateAdmin();
+    }
+
+    function commitBoostManager() external {
+        _delegateAdmin();
+    }
+
+    function cancelBoostManagerProposal() external {
+        _delegateAdmin();
+    }
+
+    function proposeVaultGaugeVoting(address _gauge) external {
+        _gauge;
+        _delegateAdmin();
+    }
+
+    function commitVaultGaugeVoting() external {
+        _delegateAdmin();
+    }
+
+    function cancelVaultGaugeVotingProposal() external {
+        _delegateAdmin();
+    }
+
+    function armBoostSourceTimelock() external {
+        _delegateAdmin();
+    }
+
+    function disableBoostSources() external {
+        _delegateAdmin();
+    }
+
     function setLotteryConfig(
         uint256 _minSwap,
         uint256 _rewardPercentage,
@@ -2019,6 +2111,17 @@ contract CreatorLotteryManagerAdminModule is OApp, OAppOptionsType3, ReentrancyG
     /// @notice Trusted relayer authorized to call `processAmoeEntry`.
     address public authorizedAmoeRelayer;
 
+    // ================================
+    // STATE — BOOST-SOURCE TIMELOCK (PR 3) — MIRROR
+    // ================================
+    /// @dev Pending replacement for `boostManager`. Public view via `getPendingBoostSources()`.
+    address internal _pendingBoostManager;
+    uint256 internal _pendingBoostManagerEffectiveAt;
+    address internal _pendingVaultGaugeVoting;
+    uint256 internal _pendingVaultGaugeVotingEffectiveAt;
+    /// @dev Once true, legacy single-call setters revert. Read via `isTimelockArmed()`.
+    bool internal _timelockArmed;
+
     address private immutable _self;
 
     event SwapContractAuthorized(address indexed swapContract, bool authorized);
@@ -2045,9 +2148,29 @@ contract CreatorLotteryManagerAdminModule is OApp, OAppOptionsType3, ReentrancyG
     event AuthorizedAmoeRelayerUpdated(address indexed previousRelayer, address indexed newRelayer);
     event BaseCeilingPPMUpdated(uint256 previousCeilingPPM, uint256 newCeilingPPM);
 
+    // PR 3 — Boost-source timelock events (mirror of main contract).
+    event BoostManagerProposed(address indexed previous, address indexed proposed, uint256 effectiveAt);
+    event BoostManagerProposalCancelled(address indexed cancelled);
+    event BoostManagerUpdated(address indexed previous, address indexed newManager);
+    event VaultGaugeVotingProposed(address indexed previous, address indexed proposed, uint256 effectiveAt);
+    event VaultGaugeVotingProposalCancelled(address indexed cancelled);
+    event VaultGaugeVotingUpdated(address indexed previous, address indexed newGauge);
+    event BoostSourceTimelockArmed();
+    event BoostSourcesDisabled(address indexed previousBoostManager, address indexed previousVaultGaugeVoting);
+
+    /// @notice Mirror of main-contract `BOOST_SOURCE_TIMELOCK`.
+    uint256 public constant BOOST_SOURCE_TIMELOCK = 24 hours;
+
     error ZeroAddress();
     error InvalidAmount();
     error OnlyDelegateCall();
+
+    // PR 3 — Boost-source timelock errors.
+    error TimelockNotArmed();
+    error TimelockAlreadyArmed();
+    error TimelockNotExpired();
+    error NoPendingProposal();
+    error LegacySetterDisabled();
 
     constructor(address _registry, address owner_)
         OApp(ICreatorRegistryLottery(_registry).getLayerZeroEndpoint(block.chainid), owner_)
@@ -2159,12 +2282,165 @@ contract CreatorLotteryManagerAdminModule is OApp, OAppOptionsType3, ReentrancyG
         );
     }
 
+    /// @notice Legacy single-call setter for `boostManager`.
+    /// @dev Disabled once `armBoostSourceTimelock()` has been called. Until
+    ///      then, this preserves the original ops bootstrap path so initial
+    ///      deploys can wire up the boost source without going through the
+    ///      24h timelock dance. Once armed, callers must use
+    ///      `proposeBoostManager` + `commitBoostManager`.
     function setBoostManager(address _manager) external onlyDelegateCall onlyOwner {
+        if (_timelockArmed) revert LegacySetterDisabled();
+        address previous = address(boostManager);
         boostManager = Ive4626BoostManager(_manager);
+        emit BoostManagerUpdated(previous, _manager);
     }
 
+    /// @notice Legacy single-call setter for `vaultGaugeVoting`.
+    /// @dev Disabled once `armBoostSourceTimelock()` has been called.
     function setVaultGaugeVoting(address _vaultGaugeVoting) external onlyDelegateCall onlyOwner {
+        if (_timelockArmed) revert LegacySetterDisabled();
+        address previous = address(vaultGaugeVoting);
         vaultGaugeVoting = IVaultGaugeVoting(_vaultGaugeVoting);
+        emit VaultGaugeVotingUpdated(previous, _vaultGaugeVoting);
+    }
+
+    // ================================
+    // PR 3 — Boost-source timelock
+    // ================================
+
+    /// @notice Engage the boost-source timelock. One-way switch.
+    /// @dev After this is called, `setBoostManager` / `setVaultGaugeVoting`
+    ///      revert with `LegacySetterDisabled` and the only path forward is
+    ///      `proposeBoostManager` + (24h delay) + `commitBoostManager`
+    ///      (and the symmetric pair for `vaultGaugeVoting`). The emergency
+    ///      `disableBoostSources()` circuit breaker remains available with no
+    ///      timelock.
+    function armBoostSourceTimelock() external onlyDelegateCall onlyOwner {
+        if (_timelockArmed) revert TimelockAlreadyArmed();
+        _timelockArmed = true;
+        emit BoostSourceTimelockArmed();
+    }
+
+    /// @notice Propose a new `boostManager`. Effective after `BOOST_SOURCE_TIMELOCK`
+    ///         has elapsed, via `commitBoostManager()`. Owner can cancel during
+    ///         the window via `cancelBoostManagerProposal()`.
+    /// @dev Requires `timelockArmed`. Pass `address(0)` to propose disabling the
+    ///      personal boost source entirely (still subject to the same delay).
+    function proposeBoostManager(address _manager) external onlyDelegateCall onlyOwner {
+        if (!_timelockArmed) revert TimelockNotArmed();
+        uint256 effectiveAt = block.timestamp + BOOST_SOURCE_TIMELOCK;
+        _pendingBoostManager = _manager;
+        _pendingBoostManagerEffectiveAt = effectiveAt;
+        emit BoostManagerProposed(address(boostManager), _manager, effectiveAt);
+    }
+
+    /// @notice Commit a previously proposed `boostManager` once the timelock has elapsed.
+    function commitBoostManager() external onlyDelegateCall onlyOwner {
+        uint256 effectiveAt = _pendingBoostManagerEffectiveAt;
+        if (effectiveAt == 0) revert NoPendingProposal();
+        if (block.timestamp < effectiveAt) revert TimelockNotExpired();
+        address previous = address(boostManager);
+        address proposed = _pendingBoostManager;
+        boostManager = Ive4626BoostManager(proposed);
+        // Clear pending state so the slot is reusable for the next proposal.
+        _pendingBoostManager = address(0);
+        _pendingBoostManagerEffectiveAt = 0;
+        emit BoostManagerUpdated(previous, proposed);
+    }
+
+
+
+    /// @notice Propose a new `vaultGaugeVoting`. Symmetric to `proposeBoostManager`.
+    function proposeVaultGaugeVoting(address _gauge) external onlyDelegateCall onlyOwner {
+        if (!_timelockArmed) revert TimelockNotArmed();
+        uint256 effectiveAt = block.timestamp + BOOST_SOURCE_TIMELOCK;
+        _pendingVaultGaugeVoting = _gauge;
+        _pendingVaultGaugeVotingEffectiveAt = effectiveAt;
+        emit VaultGaugeVotingProposed(address(vaultGaugeVoting), _gauge, effectiveAt);
+    }
+
+    /// @notice Commit a previously proposed `vaultGaugeVoting` once the timelock has elapsed.
+    function commitVaultGaugeVoting() external onlyDelegateCall onlyOwner {
+        uint256 effectiveAt = _pendingVaultGaugeVotingEffectiveAt;
+        if (effectiveAt == 0) revert NoPendingProposal();
+        if (block.timestamp < effectiveAt) revert TimelockNotExpired();
+        address previous = address(vaultGaugeVoting);
+        address proposed = _pendingVaultGaugeVoting;
+        vaultGaugeVoting = IVaultGaugeVoting(proposed);
+        _pendingVaultGaugeVoting = address(0);
+        _pendingVaultGaugeVotingEffectiveAt = 0;
+        emit VaultGaugeVotingUpdated(previous, proposed);
+    }
+
+    /// @notice Cancel an in-flight `boostManager` proposal during the timelock window.
+    function cancelBoostManagerProposal() external onlyDelegateCall onlyOwner {
+        if (_pendingBoostManagerEffectiveAt == 0) revert NoPendingProposal();
+        address cancelled = _pendingBoostManager;
+        _pendingBoostManager = address(0);
+        _pendingBoostManagerEffectiveAt = 0;
+        emit BoostManagerProposalCancelled(cancelled);
+    }
+
+    /// @notice Cancel an in-flight `vaultGaugeVoting` proposal during the timelock window.
+    function cancelVaultGaugeVotingProposal() external onlyDelegateCall onlyOwner {
+        if (_pendingVaultGaugeVotingEffectiveAt == 0) revert NoPendingProposal();
+        address cancelled = _pendingVaultGaugeVoting;
+        _pendingVaultGaugeVoting = address(0);
+        _pendingVaultGaugeVotingEffectiveAt = 0;
+        emit VaultGaugeVotingProposalCancelled(cancelled);
+    }
+
+    /// @notice Emergency circuit breaker: zero out both boost sources atomically,
+    ///         no timelock. Use during incident response when a malicious
+    ///         proposal has already been committed and the next safe state is
+    ///         "no boost at all".
+    /// @dev Also clears any in-flight pending proposals so a queued malicious
+    ///      address can't be committed after the breaker is pulled.
+    function disableBoostSources() external onlyDelegateCall onlyOwner {
+        address prevBoost = address(boostManager);
+        address prevGauge = address(vaultGaugeVoting);
+        boostManager = Ive4626BoostManager(address(0));
+        vaultGaugeVoting = IVaultGaugeVoting(address(0));
+        // Clear any pending proposals so they can't be committed post-breaker.
+        _pendingBoostManager = address(0);
+        _pendingBoostManagerEffectiveAt = 0;
+        _pendingVaultGaugeVoting = address(0);
+        _pendingVaultGaugeVotingEffectiveAt = 0;
+        emit BoostSourcesDisabled(prevBoost, prevGauge);
+    }
+
+    // ================================
+    // PR 3 — Boost-source timelock views
+    // ================================
+    //
+    // Single combined getter for the entire timelock state, exposed only on
+    // the admin module to keep main-contract bytecode under EIP-170. The main
+    // contract delegates to this via `_delegateAdmin()`.
+
+    /// @notice Read the entire boost-source timelock state in one call.
+    /// @return pendingBoostMgr The pending replacement for `boostManager`, or address(0).
+    /// @return boostMgrEffectiveAt Timestamp at which `commitBoostManager` may run, or 0 if no proposal.
+    /// @return pendingGauge The pending replacement for `vaultGaugeVoting`, or address(0).
+    /// @return gaugeEffectiveAt Timestamp at which `commitVaultGaugeVoting` may run, or 0 if no proposal.
+    /// @return armed Whether the timelock has been armed (legacy setters disabled).
+    function getBoostSourceTimelockState()
+        external
+        view
+        returns (
+            address pendingBoostMgr,
+            uint256 boostMgrEffectiveAt,
+            address pendingGauge,
+            uint256 gaugeEffectiveAt,
+            bool armed
+        )
+    {
+        return (
+            _pendingBoostManager,
+            _pendingBoostManagerEffectiveAt,
+            _pendingVaultGaugeVoting,
+            _pendingVaultGaugeVotingEffectiveAt,
+            _timelockArmed
+        );
     }
 
     // PR 1 — AMOE Linear Parity admin impls.
