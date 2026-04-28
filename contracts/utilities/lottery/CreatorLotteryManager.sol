@@ -647,14 +647,29 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
             return 0;
         }
 
-        // AMOE has no swap-token coverage. ve4626 boost coverage is computed
-        // against share balance — we pass `creatorCoin` as the share-balance
-        // token (with zero amount) so coverage math semantically matches the
-        // paid path: "holdings of this creator". Vault gauge boost still
-        // applies fully. This is Option B2 "full boost parity".
+        // Option B2 — full boost parity with paid swaps. ve4626 personal
+        // multiplier and lock-duration additive boosts are gated by
+        // `getCoverageBps(creatorShareBalanceUSD, swapAmountUSD)`, so
+        // passing 0 here would silently disable both branches for AMOE
+        // entrants who actually hold the creator's coins. The paid path
+        // reads `balanceOf(buyer)` from the OFT before calling
+        // `processSwapLottery` (CreatorShareOFT line 704); mirror that
+        // read so AMOE odds match paid odds at equal `pointsBurnedAsUSD`
+        // and equal share balance. Vault gauge boost is independent and
+        // applies regardless.
+        uint256 creatorShareBalanceUSD = 0;
+        uint256 buyerShareBalance = IERC20(creatorCoin).balanceOf(buyer);
+        if (buyerShareBalance > 0) {
+            // Same call shape as `processSwapLottery` (line 554). If the
+            // per-creator oracle reverts here it would also revert on the
+            // paid path — failure mode is symmetric, no new behavior.
+            (creatorShareBalanceUSD,,) = _calculateTokenUSD(creatorCoin, creatorCoin, buyerShareBalance);
+        }
+
         uint256 boostedWinChance;
-        (entryId, boostedWinChance) =
-            _boostAndDispatchVRF(buyer, creatorCoin, creatorCoin, 0, pointsBurnedAsUSD, 0);
+        (entryId, boostedWinChance) = _boostAndDispatchVRF(
+            buyer, creatorCoin, creatorCoin, creatorShareBalanceUSD, pointsBurnedAsUSD, 0
+        );
 
         if (entryId > 0) {
             emit LotteryEntryCreated(creatorCoin, buyer, pointsBurnedAsUSD, boostedWinChance, entryId);

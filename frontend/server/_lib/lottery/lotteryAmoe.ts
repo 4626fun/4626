@@ -16,6 +16,55 @@ const AMOE_MESSAGE_TITLE = '4626 Lottery AMOE Entry' as const
 export const AMOE_CREDITS_PER_ENTRY = 100
 export const AMOE_DAILY_TWITTER_CREDIT = 1
 
+// PR 2 — AMOE Linear Parity (variable points amount).
+//
+// Locked spec: min 100 points / max 1_000_000 points per submission.
+// Conversion: 100 points = $1 USD-equivalent (1 point = $0.01 = 1 cent).
+// On-chain `processAmoeEntry` expects USD in 1e6 (USDC) units, so:
+//   pointsBurnedAsUSD = points * 10_000
+//   100 points    → 1_000_000        ($1, base floor)
+//   10_000 points → 100_000_000      ($100)
+//   1_000_000 pts → 10_000_000_000   ($10K, saturates baseCeilingPPM at 4%)
+export const AMOE_MIN_POINTS_PER_SUBMISSION = 100
+export const AMOE_MAX_POINTS_PER_SUBMISSION = 1_000_000
+export const AMOE_POINTS_TO_USD1E6_FACTOR = 10_000
+
+/**
+ * Convert a points-burned count to the 1e6 (USDC) USD value expected by
+ * `CreatorLotteryManager.processAmoeEntry`. Throws if `points` is not a
+ * positive integer in the [MIN, MAX] range — callers MUST validate before
+ * consuming credits.
+ */
+export function pointsToUsd1e6(points: number): bigint {
+  if (!Number.isInteger(points)) {
+    throw new AmoeBadRequestError('points_burned_not_integer')
+  }
+  if (points < AMOE_MIN_POINTS_PER_SUBMISSION) {
+    throw new AmoeBadRequestError('points_burned_below_min')
+  }
+  if (points > AMOE_MAX_POINTS_PER_SUBMISSION) {
+    throw new AmoeBadRequestError('points_burned_above_max')
+  }
+  return BigInt(points) * BigInt(AMOE_POINTS_TO_USD1E6_FACTOR)
+}
+
+/**
+ * Estimate the pre-boost win chance (PPM) for a given USD value. Mirrors
+ * `CreatorLotteryManager.calculateWinChance` exactly so the UI can preview
+ * what the user is buying. The actual on-chain value is authoritative — this
+ * is for display only.
+ *
+ * Formula (PR 1):  winChancePPM = swapValueUSD / 250_000, capped at
+ * `baseCeilingPPM` (40_000 PPM = 4%). Sub-floor returns 0.
+ */
+export function estimateWinChancePPM(usd1e6: bigint): number {
+  const minSwapAmount = 1_000_000n // $1 in 1e6 units (matches lotteryConfig.minSwapAmount)
+  const baseCeilingPPM = 40_000n
+  if (usd1e6 < minSwapAmount) return 0
+  const raw = usd1e6 / 250_000n
+  return Number(raw > baseCeilingPPM ? baseCeilingPPM : raw)
+}
+
 type Db = {
   sql: (strings: TemplateStringsArray, ...values: any[]) => Promise<{ rows: any[] }>
 }
@@ -88,6 +137,24 @@ const lotteryAmoeAbi = [
       { name: 'nonce', type: 'bytes32' },
       { name: 'deadline', type: 'uint256' },
       { name: 'signature', type: 'bytes' },
+    ],
+    outputs: [{ name: 'entryId', type: 'uint256' }],
+  },
+] as const
+
+// PR 2 — calls into PR 1's `processAmoeEntry` on `CreatorLotteryManager`.
+// This function is gated to the authorized relayer key on-chain (single-address
+// allowlist), so calldata produced here can only be successfully submitted by a
+// transaction signed by that key. See PR 1 audit handoff for full trust model.
+const creatorLotteryManagerAmoeAbi = [
+  {
+    type: 'function',
+    name: 'processAmoeEntry',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'buyer', type: 'address' },
+      { name: 'creatorCoin', type: 'address' },
+      { name: 'pointsBurnedAsUSD', type: 'uint256' },
     ],
     outputs: [{ name: 'entryId', type: 'uint256' }],
   },
@@ -909,5 +976,60 @@ export async function createAmoeAttestation(params: {
     signature,
     callData,
     to: params.lotteryManager,
+  }
+}
+
+// =====================================================================
+// PR 2 — variable-points-amount AMOE entry path
+// =====================================================================
+
+/**
+ * Build the calldata for a relayer-mode AMOE entry that targets PR 1's
+ * `CreatorLotteryManager.processAmoeEntry(buyer, creatorCoin, pointsBurnedAsUSD)`.
+ *
+ * Unlike `createAmoeAttestation` (which produced an ECDSA-signed payload
+ * for `LotteryAmoeRouter.submitAmoeEntry`), this path has no on-chain
+ * signature verification — the on-chain function is gated to a single
+ * relayer-key allowlist. The user-signed message remains the off-chain
+ * authorization + anti-replay artifact (verified via `verifyAmoeEntryProof`)
+ * but is NOT included in the on-chain call.
+ *
+ * Trust assumption (PR 2): the relayer key is fully trusted to bind
+ * `pointsBurned` honestly. PR 4 will move that binding into a zkMetal
+ * Groth16 public input. See docs/security/amoe-pr1-handoff.md and the
+ * companion PR 2 handoff for the full model.
+ *
+ * @param params.wallet The buyer (already verified via signed message).
+ * @param params.creatorCoin The creator coin the entry is for.
+ * @param params.pointsBurned Points being burned (must be in [MIN, MAX]).
+ * @param params.lotteryManager Address of the deployed CreatorLotteryManager.
+ * @returns The transaction calldata + target address for the relayer to send.
+ */
+export async function buildProcessAmoeEntryCall(params: {
+  wallet: `0x${string}`
+  creatorCoin: `0x${string}`
+  pointsBurned: number
+  lotteryManager: `0x${string}`
+}): Promise<{
+  to: `0x${string}`
+  callData: `0x${string}`
+  pointsBurned: number
+  pointsBurnedAsUSD: string
+  estimatedWinChancePPM: number
+}> {
+  const pointsBurnedAsUSD = pointsToUsd1e6(params.pointsBurned)
+  const { encodeFunctionData } = await import('viem')
+  const callData = encodeFunctionData({
+    abi: creatorLotteryManagerAmoeAbi,
+    functionName: 'processAmoeEntry',
+    args: [params.wallet, params.creatorCoin, pointsBurnedAsUSD],
+  })
+  return {
+    to: params.lotteryManager,
+    callData,
+    pointsBurned: params.pointsBurned,
+    // Encode bigint as decimal string — JSON.stringify cannot serialize bigint.
+    pointsBurnedAsUSD: pointsBurnedAsUSD.toString(),
+    estimatedWinChancePPM: estimateWinChancePPM(pointsBurnedAsUSD),
   }
 }

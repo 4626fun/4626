@@ -35,6 +35,8 @@ import { applyEnv, createMockReq, createMockRes } from './helpers'
 const guardMock = vi.fn()
 const verifyAmoeEntryProofMock = vi.fn()
 const createAmoeAttestationMock = vi.fn()
+const buildProcessAmoeEntryCallMock = vi.fn()
+const getAmoeCreditSnapshotMock = vi.fn()
 const consumeAmoeCreditsForEntryMock = vi.fn()
 const resolveAuthorizedWalletProfileMock = vi.fn()
 const checkRateLimitMock = vi.fn()
@@ -76,8 +78,12 @@ vi.mock('../../server/auth/_shared.js', () => ({
 
 vi.mock('../../server/_lib/lottery/lotteryAmoe.js', () => ({
   AMOE_CREDITS_PER_ENTRY: 100,
+  AMOE_MIN_POINTS_PER_SUBMISSION: 100,
+  AMOE_MAX_POINTS_PER_SUBMISSION: 1_000_000,
   verifyAmoeEntryProof: verifyAmoeEntryProofMock,
   createAmoeAttestation: createAmoeAttestationMock,
+  buildProcessAmoeEntryCall: buildProcessAmoeEntryCallMock,
+  getAmoeCreditSnapshot: getAmoeCreditSnapshotMock,
   consumeAmoeCreditsForEntry: consumeAmoeCreditsForEntryMock,
 }))
 
@@ -106,6 +112,50 @@ const VALID_ATTESTATION = {
   to: '0x77705A2f173dd52F28300447506Dc35086c34626',
 }
 
+// PR 2 — the new server-relay path uses `buildProcessAmoeEntryCall`
+// instead of `createAmoeAttestation`. Both are mocked so this regression
+// suite can exercise the relay-key-scope invariants under the new flow.
+const VALID_PROCESS_CALL = {
+  to: '0x77705A2f173dd52F28300447506Dc35086c34626' as const,
+  callData: '0xdeadbeef' as const,
+  pointsBurned: 100,
+  pointsBurnedAsUSD: '1000000',
+  estimatedWinChancePPM: 4,
+}
+
+/**
+ * Stub viem so the relay path returns a deterministic txHash without
+ * touching the network. PR 2 dropped client-relay so the only way to reach
+ * post-relay logic (credit-spend, idempotency, success responses) in tests
+ * is to make the relay call succeed.
+ *
+ * Tests that specifically want to assert relay FAILURE (e.g. the A4 key
+ * isolation test) should NOT call this and should leave the relay env vars
+ * unset.
+ */
+function stubRelayedViemSuccess() {
+  process.env.LOTTERY_AMOE_RELAY_PRIVATE_KEY = '0x' + 'aa'.repeat(32)
+  delete process.env.LOTTERY_AMOE_RELAY_SMART_WALLET
+  delete process.env.LOTTERY_AMOE_RELAY_BUNDLER_URL
+  vi.doMock('viem', () => ({
+    createPublicClient: () => ({
+      waitForTransactionReceipt: async () => ({ status: 'success' }),
+    }),
+    createWalletClient: () => ({
+      sendTransaction: async () => '0xfeedface',
+    }),
+    getAddress: (a: string) => a,
+    http: () => () => undefined,
+  }))
+  vi.doMock('viem/chains', () => ({ base: { id: 8453 } }))
+  vi.doMock('viem/accounts', () => ({
+    privateKeyToAccount: (pk: string) => ({
+      address: '0x000000000000000000000000000000000000beef',
+      source: pk,
+    }),
+  }))
+}
+
 // --- A4: relay key isolation ---
 
 describe('AMOE submit relay key scope (A4)', () => {
@@ -121,6 +171,14 @@ describe('AMOE submit relay key scope (A4)', () => {
     resolveAuthorizedWalletProfileMock.mockResolvedValue(null)
     verifyAmoeEntryProofMock.mockResolvedValue(VALID_PROOF)
     createAmoeAttestationMock.mockResolvedValue(VALID_ATTESTATION)
+    buildProcessAmoeEntryCallMock.mockResolvedValue(VALID_PROCESS_CALL)
+    getAmoeCreditSnapshotMock.mockResolvedValue({
+      wallet: VALID_PROOF.wallet,
+      credits: 1_000_000,
+      creditsPerEntry: 100,
+      entriesAvailable: 10_000,
+      nextEntryAtCredits: 100,
+    })
     consumeAmoeCreditsForEntryMock.mockResolvedValue({
       wallet: VALID_PROOF.wallet,
       consumed: 100,
@@ -159,7 +217,7 @@ describe('AMOE submit relay key scope (A4)', () => {
         creatorCoin: VALID_PROOF.creatorCoin,
         message: 'amoe-message',
         signature: '0x1234',
-        relay: true,
+        pointsBurned: 100,
       },
     })
     const res = createMockRes()
@@ -207,7 +265,7 @@ describe('AMOE submit relay key scope (A4)', () => {
         creatorCoin: VALID_PROOF.creatorCoin,
         message: 'amoe-message',
         signature: '0x1234',
-        relay: true,
+        pointsBurned: 100,
       },
     })
     const res = createMockRes()
@@ -241,6 +299,14 @@ describe('AMOE submit wallet authority recheck (A3)', () => {
     checkDurableRateLimitMock.mockResolvedValue({ allowed: true, remaining: 5, resetAt: Date.now() + 60_000 })
     verifyAmoeEntryProofMock.mockResolvedValue(VALID_PROOF)
     createAmoeAttestationMock.mockResolvedValue(VALID_ATTESTATION)
+    buildProcessAmoeEntryCallMock.mockResolvedValue(VALID_PROCESS_CALL)
+    getAmoeCreditSnapshotMock.mockResolvedValue({
+      wallet: VALID_PROOF.wallet,
+      credits: 1_000_000,
+      creditsPerEntry: 100,
+      entriesAvailable: 10_000,
+      nextEntryAtCredits: 100,
+    })
     consumeAmoeCreditsForEntryMock.mockResolvedValue({
       wallet: VALID_PROOF.wallet,
       consumed: 100,
@@ -248,6 +314,10 @@ describe('AMOE submit wallet authority recheck (A3)', () => {
       entriesAvailable: 0,
       creditsPerEntry: 100,
     })
+    // The A3 anonymous-allow case reaches the relay path — stub viem so
+    // it returns success. The 403 case short-circuits before relay so the
+    // stub is harmless there.
+    stubRelayedViemSuccess()
   })
 
   it('returns 403 when the auth identity does not control the proof wallet', async () => {
@@ -273,6 +343,7 @@ describe('AMOE submit wallet authority recheck (A3)', () => {
         creatorCoin: VALID_PROOF.creatorCoin,
         message: 'amoe-message',
         signature: '0x1234',
+        pointsBurned: 100,
       },
     })
     const res = createMockRes()
@@ -300,6 +371,7 @@ describe('AMOE submit wallet authority recheck (A3)', () => {
         creatorCoin: VALID_PROOF.creatorCoin,
         message: 'amoe-message',
         signature: '0x1234',
+        pointsBurned: 100,
       },
     })
     const res = createMockRes()
@@ -390,6 +462,14 @@ describe('AMOE typed error classification (A2)', () => {
     checkDurableRateLimitMock.mockResolvedValue({ allowed: true, remaining: 5, resetAt: Date.now() + 60_000 })
     verifyAmoeEntryProofMock.mockResolvedValue(VALID_PROOF)
     createAmoeAttestationMock.mockResolvedValue(VALID_ATTESTATION)
+    buildProcessAmoeEntryCallMock.mockResolvedValue(VALID_PROCESS_CALL)
+    getAmoeCreditSnapshotMock.mockResolvedValue({
+      wallet: VALID_PROOF.wallet,
+      credits: 1_000_000,
+      creditsPerEntry: 100,
+      entriesAvailable: 10_000,
+      nextEntryAtCredits: 100,
+    })
 
     const { AmoeInsufficientCreditsError } = await import(
       '../../server/_lib/lottery/lotteryAmoeErrors'
@@ -403,6 +483,7 @@ describe('AMOE typed error classification (A2)', () => {
         creatorCoin: VALID_PROOF.creatorCoin,
         message: 'amoe-message',
         signature: '0x1234',
+        pointsBurned: 100,
       },
     })
     const res = createMockRes()
@@ -442,6 +523,17 @@ describe('AMOE submit credit-spend idempotency contract (A1)', () => {
     resolveAuthorizedWalletProfileMock.mockResolvedValue(null)
     verifyAmoeEntryProofMock.mockResolvedValue(VALID_PROOF)
     createAmoeAttestationMock.mockResolvedValue(VALID_ATTESTATION)
+    buildProcessAmoeEntryCallMock.mockResolvedValue(VALID_PROCESS_CALL)
+    getAmoeCreditSnapshotMock.mockResolvedValue({
+      wallet: VALID_PROOF.wallet,
+      credits: 1_000_000,
+      creditsPerEntry: 100,
+      entriesAvailable: 10_000,
+      nextEntryAtCredits: 100,
+    })
+    // PR 2 — the new flow always relays. Stub viem so credit-spend is
+    // reached on every retry; without this the relay would 500 first.
+    stubRelayedViemSuccess()
     consumeAmoeCreditsForEntryMock.mockResolvedValue({
       wallet: VALID_PROOF.wallet,
       consumed: 100,
@@ -461,6 +553,7 @@ describe('AMOE submit credit-spend idempotency contract (A1)', () => {
         creatorCoin: VALID_PROOF.creatorCoin,
         message: 'amoe-message',
         signature: '0x1234',
+        pointsBurned: 100,
       },
     })
     await handler(req1, createMockRes())
@@ -472,6 +565,7 @@ describe('AMOE submit credit-spend idempotency contract (A1)', () => {
         creatorCoin: VALID_PROOF.creatorCoin,
         message: 'amoe-message',
         signature: '0x1234',
+        pointsBurned: 100,
       },
     })
     await handler(req2, createMockRes())

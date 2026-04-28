@@ -16,9 +16,11 @@ import {
 import { checkDurableRateLimit } from '../../../../server/_lib/infra/durableRateLimit.js'
 
 import {
-  AMOE_CREDITS_PER_ENTRY,
+  AMOE_MIN_POINTS_PER_SUBMISSION,
+  AMOE_MAX_POINTS_PER_SUBMISSION,
+  buildProcessAmoeEntryCall,
   consumeAmoeCreditsForEntry,
-  createAmoeAttestation,
+  getAmoeCreditSnapshot,
   verifyAmoeEntryProof,
 } from '../../../../server/_lib/lottery/lotteryAmoe.js'
 import {
@@ -31,7 +33,7 @@ type SubmitBody = {
   creatorCoin?: string
   message?: string
   signature?: string
-  relay?: boolean
+  pointsBurned?: number | string
 }
 
 function setPublicCors(res: VercelResponse) {
@@ -45,13 +47,20 @@ function isAddressLike(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
 }
 
-function parseRelayFlag(value: unknown): boolean {
-  if (typeof value === 'boolean') return value
-  if (typeof value === 'string') {
-    const normalized = value.trim().toLowerCase()
-    return normalized === '1' || normalized === 'true' || normalized === 'yes'
+function parsePointsBurned(value: unknown): number | null {
+  // Accept number or numeric string (JSON.stringify of bigint isn't valid JSON,
+  // and the slider/input may serialize either form). Reject anything else so
+  // `pointsToUsd1e6` only ever sees a clean integer it can validate.
+  let n: number
+  if (typeof value === 'number') {
+    n = value
+  } else if (typeof value === 'string' && value.trim().length > 0) {
+    n = Number(value.trim())
+  } else {
+    return null
   }
-  return false
+  if (!Number.isFinite(n) || !Number.isInteger(n)) return null
+  return n
 }
 
 function readBaseRpcUrl(): string {
@@ -249,10 +258,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const creatorCoinRaw = typeof body.creatorCoin === 'string' ? body.creatorCoin.trim() : ''
   const message = typeof body.message === 'string' ? body.message : ''
   const signatureRaw = typeof body.signature === 'string' ? body.signature.trim() : ''
-  const relayRequested = parseRelayFlag(body.relay)
+  const pointsBurned = parsePointsBurned((body as SubmitBody).pointsBurned)
 
   if (!isAddressLike(creatorCoinRaw) || !message || !signatureRaw.startsWith('0x')) {
     return res.status(400).json({ success: false, error: 'Missing or invalid creatorCoin/message/signature' })
+  }
+
+  // PR 2 — variable points amount. Enforce range here so we can return a clean
+  // 400 before doing any DB or signature work. `pointsToUsd1e6` re-validates
+  // defensively at the conversion site.
+  if (
+    pointsBurned === null ||
+    pointsBurned < AMOE_MIN_POINTS_PER_SUBMISSION ||
+    pointsBurned > AMOE_MAX_POINTS_PER_SUBMISSION
+  ) {
+    return res.status(400).json({
+      success: false,
+      error: `pointsBurned must be an integer in [${AMOE_MIN_POINTS_PER_SUBMISSION}, ${AMOE_MAX_POINTS_PER_SUBMISSION}]`,
+    })
   }
 
   const contracts = getApiContracts()
@@ -300,11 +323,38 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       throw new AmoeAuthorityError(walletAuthority.error)
     }
 
-    const attested = await createAmoeAttestation({
+    // PR 2 follow-up — pre-flight balance check (P1 review fix).
+    // Nonces are issued without a balance gate, so without this check a
+    // client could request `pointsBurned: 1_000_000` while holding only
+    // 100 credits, get a 4%-pre-boost entry mined on-chain, and only
+    // then fail the debit with a 402 — effectively bypassing the AMOE
+    // credit economy. We snapshot the live balance and reject BEFORE
+    // doing any on-chain work so under-collateralized entries never
+    // reach the chain.
+    //
+    // The atomic debit further down still runs after relay (preserves
+    // the audit fix that prevents credit-burn on contract reverts like
+    // `DeadlineTooSoon`). The debit's own balance check is the
+    // source-of-truth race-safe gate — this pre-flight is the cheap
+    // anti-inflation gate that prevents the on-chain side-effect first.
+    const snapshot = await getAmoeCreditSnapshot({ wallet: proof.wallet })
+    if (snapshot.credits < pointsBurned) {
+      // Match the existing AMOE error vocabulary so `classifyAmoeError`
+      // returns 402.
+      throw new Error('insufficient_amoe_credits')
+    }
+
+    // PR 2 — Option B2 server-relay-only path. The previous flow built an
+    // ECDSA-signed attestation for `LotteryAmoeRouter.submitAmoeEntry`; the
+    // new path targets PR 1's `CreatorLotteryManager.processAmoeEntry`,
+    // which is gated to a single-address relayer allowlist on-chain. The
+    // user's signed message remains the off-chain auth + anti-replay
+    // artifact (verified above) but is NOT included in the on-chain call.
+    // See docs/security/amoe-pr2-handoff.md for the full trust model.
+    const call = await buildProcessAmoeEntryCall({
       wallet: proof.wallet,
       creatorCoin: proof.creatorCoin,
-      nonce: proof.nonce,
-      expiresAt: proof.expiresAt,
+      pointsBurned,
       lotteryManager: String(lotteryManager).toLowerCase() as `0x${string}`,
     })
 
@@ -314,46 +364,29 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     // credit-ledger writes below stay the source of truth for entry
     // economics; waitlist score is decoupled.
 
-    if (relayRequested) {
-      // Relay first, debit second. Previously credits were consumed BEFORE
-      // the on-chain submission, which meant any contract-side revert
-      // (e.g. the new `DeadlineTooSoon` floor from audit §4.2) silently
-      // burned user credits. Issuer mirrors the 60s floor so we shouldn't
-      // hit that revert in practice, but ordering is the durable fix.
-      const txHash = await relayAmoeEntryTransaction({
-        to: attested.to,
-        callData: attested.callData,
-      })
-      const creditSpend = await consumeAmoeCreditsForEntry({
-        wallet: proof.wallet,
-        requiredCredits: AMOE_CREDITS_PER_ENTRY,
-        refId: `${proof.creatorCoin}:${proof.nonce}`,
-      })
-
-      return res.status(200).json({
-        success: true,
-        data: {
-          txHash,
-          relayMode: 'server',
-          creditsConsumed: creditSpend.consumed,
-          creditsRemaining: creditSpend.creditsRemaining,
-          creditsPerEntry: creditSpend.creditsPerEntry,
-          entriesAvailable: creditSpend.entriesAvailable,
-        },
-      })
-    }
-
+    // Relay first, debit second. Previously credits were consumed BEFORE
+    // the on-chain submission, which meant any contract-side revert
+    // (e.g. the new `DeadlineTooSoon` floor from audit §4.2) silently
+    // burned user credits. Issuer mirrors the 60s floor so we shouldn't
+    // hit that revert in practice, but ordering is the durable fix.
+    const txHash = await relayAmoeEntryTransaction({
+      to: call.to,
+      callData: call.callData,
+    })
     const creditSpend = await consumeAmoeCreditsForEntry({
       wallet: proof.wallet,
-      requiredCredits: AMOE_CREDITS_PER_ENTRY,
+      requiredCredits: pointsBurned,
       refId: `${proof.creatorCoin}:${proof.nonce}`,
     })
 
     return res.status(200).json({
       success: true,
       data: {
-        ...attested,
-        relayMode: 'client',
+        txHash,
+        relayMode: 'server',
+        pointsBurned: call.pointsBurned,
+        pointsBurnedAsUSD: call.pointsBurnedAsUSD,
+        estimatedWinChancePPM: call.estimatedWinChancePPM,
         creditsConsumed: creditSpend.consumed,
         creditsRemaining: creditSpend.creditsRemaining,
         creditsPerEntry: creditSpend.creditsPerEntry,

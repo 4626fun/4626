@@ -7,6 +7,37 @@ import { usePublicClient, useWalletClient } from 'wagmi'
 import { apiFetch } from '@/lib/api/apiBase'
 import type { ApiEnvelope } from '@/lib/api/apiEnvelope'
 
+// PR 2 — AMOE Linear Parity. Mirrors the server-side constants in
+// `frontend/server/_lib/lottery/lotteryAmoe.ts` and the on-chain math in
+// `CreatorLotteryManager.calculateWinChance` (PR 1, #395). Keep these in
+// sync with the server. The on-chain value is authoritative; the preview
+// here is for display only.
+const AMOE_MIN_POINTS = 100
+const AMOE_MAX_POINTS = 1_000_000
+const BASE_CEILING_PPM = 40_000 // 4%, hard ceiling at $10K-equivalent
+
+function estimateWinChancePPM(pointsBurned: number): number {
+  if (!Number.isFinite(pointsBurned) || pointsBurned < AMOE_MIN_POINTS) return 0
+  // 1 point = 1 cent. On-chain: PPM = swapValueUSD(1e6) / 250_000.
+  // Substituting USD = points * 10_000:  PPM = points * 10_000 / 250_000 = points / 25.
+  const raw = Math.floor(pointsBurned / 25)
+  return Math.min(raw, BASE_CEILING_PPM)
+}
+
+function formatWinChancePct(ppm: number): string {
+  // PPM → percent with up to 4 decimals, trimming trailing zeros for
+  // readability ($1 → 0.0004%, $10K → 4%).
+  const pct = ppm / 10_000
+  if (pct === 0) return '0%'
+  return `${pct.toFixed(4).replace(/0+$/, '').replace(/\.$/, '')}%`
+}
+
+function clampPoints(value: number, max: number): number {
+  if (!Number.isFinite(value)) return AMOE_MIN_POINTS
+  const ceiling = Math.min(max, AMOE_MAX_POINTS)
+  return Math.max(AMOE_MIN_POINTS, Math.min(ceiling, Math.floor(value)))
+}
+
 type CreditSnapshot = {
   wallet: Address
   credits: number
@@ -26,10 +57,11 @@ type NonceResponse = CreditSnapshot & {
 }
 
 type SubmitResponse = {
-  to?: Address
-  callData?: Hex
-  txHash?: Hex
-  relayMode?: 'server' | 'client'
+  txHash: Hex
+  relayMode: 'server'
+  pointsBurned: number
+  pointsBurnedAsUSD: string
+  estimatedWinChancePPM: number
   creditsConsumed: number
   creditsRemaining: number
   creditsPerEntry: number
@@ -82,6 +114,10 @@ export function AmoeEntryCard(props: { walletAddress: Address | null; creatorCoi
   const [txHash, setTxHash] = useState<Hex | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  // PR 2 — user-selected points to burn. Defaults to the floor (100 pts =
+  // $1 = 0.0004% pre-boost) so a one-click entry stays cheap. The slider
+  // and numeric input are kept in sync via this single source of truth.
+  const [pointsBurned, setPointsBurned] = useState<number>(AMOE_MIN_POINTS)
 
   const refreshCredits = useCallback(async () => {
     if (!walletAddress) return
@@ -161,8 +197,8 @@ export function AmoeEntryCard(props: { walletAddress: Address | null; creatorCoi
       setErrorMessage('Missing wallet or creator coin')
       return
     }
-    if (!walletClient || !publicClient) {
-      setErrorMessage('Connect a wallet capable of signing and sending transactions')
+    if (!walletClient) {
+      setErrorMessage('Connect a wallet capable of signing messages')
       return
     }
 
@@ -186,76 +222,95 @@ export function AmoeEntryCard(props: { walletAddress: Address | null; creatorCoi
       setCreditsPerEntry(Number(nonceData.creditsPerEntry ?? 100))
       setEntriesAvailable(Number(nonceData.entriesAvailable ?? 0))
       setNextEntryAtCredits(Number(nonceData.nextEntryAtCredits ?? 100))
-      if (Number(nonceData.entriesAvailable ?? 0) < 1) {
-        throw new Error(`Need ${nonceData.creditsPerEntry} credits for one free entry`)
+
+      // PR 2 — variable points amount. Clamp the user's selection against
+      // the freshly fetched balance and the protocol caps. If they don't
+      // have enough points for even the floor (100), surface a clear error.
+      const liveBalance = Number(nonceData.credits ?? 0)
+      if (liveBalance < AMOE_MIN_POINTS) {
+        throw new Error(`Need at least ${AMOE_MIN_POINTS} credits to enter (you have ${liveBalance})`)
+      }
+      const requestedPoints = clampPoints(pointsBurned, liveBalance)
+      if (requestedPoints !== pointsBurned) {
+        // Reflect the clamp in the UI before submitting so the user knows
+        // exactly what was sent.
+        setPointsBurned(requestedPoints)
       }
 
       const signature = (await walletClient.signMessage({
         message: nonceData.message,
       })) as Hex
 
-      const submitRequest = async (relay: boolean) => {
-        const res = await apiFetch('/api/v1/lottery/amoe/submit', {
-          method: 'POST',
-          withCredentials: true,
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            creatorCoin,
-            message: nonceData.message,
-            signature,
-            relay,
-          }),
-        })
-        const json = parseJsonSafe<SubmitResponse>(await res.json().catch(() => null))
-        return { res, json }
-      }
-
-      let { res: submitRes, json: submitJson } = await submitRequest(true)
-      if ((!submitRes.ok || !submitJson?.success || !submitJson.data) && submitJson?.error === 'amoe_relay_unavailable') {
-        ;({ res: submitRes, json: submitJson } = await submitRequest(false))
-      }
+      // PR 2 — server-relay only. The previous client-relay fallback was
+      // dropped: PR 1's `processAmoeEntry` is gated to a single relayer
+      // key on-chain, so client-signed transactions cannot succeed. The
+      // signed message above remains the off-chain auth + anti-replay
+      // artifact (verified server-side).
+      const submitRes = await apiFetch('/api/v1/lottery/amoe/submit', {
+        method: 'POST',
+        withCredentials: true,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          creatorCoin,
+          message: nonceData.message,
+          signature,
+          pointsBurned: requestedPoints,
+        }),
+      })
+      const submitJson = parseJsonSafe<SubmitResponse>(await submitRes.json().catch(() => null))
       if (!submitRes.ok || !submitJson?.success || !submitJson.data) {
-        throw new Error(submitJson?.error || 'Failed to build AMOE transaction')
+        throw new Error(submitJson?.error || 'Failed to submit AMOE entry')
       }
 
       const tx = submitJson.data
-      let hash = tx.txHash ?? null
-      if (!hash) {
-        if (!tx.to || !tx.callData) {
-          throw new Error('amoe_submit_missing_calldata')
-        }
-        hash = await walletClient.sendTransaction({
-          chain: base,
-          to: tx.to,
-          data: tx.callData,
-          value: 0n,
-        })
-      }
-
+      const hash = tx.txHash
       setTxHash(hash)
-      setStatusMessage(
-        tx.relayMode === 'server'
-          ? 'AMOE entry relayed by protocol. Waiting for confirmation…'
-          : 'AMOE entry submitted. Waiting for confirmation…',
-      )
+      setStatusMessage('AMOE entry relayed by protocol. Waiting for confirmation…')
 
-      await publicClient.waitForTransactionReceipt({ hash })
+      // Receipt confirmation is best-effort — if no public client is
+      // configured we still surface the txHash so the user can follow up.
+      if (publicClient) {
+        await publicClient.waitForTransactionReceipt({ hash })
+      }
       setCredits(Number(tx.creditsRemaining ?? 0))
       setCreditsPerEntry(Number(tx.creditsPerEntry ?? 100))
       setEntriesAvailable(Number(tx.entriesAvailable ?? 0))
       setNextEntryAtCredits(Math.max(Number(tx.creditsPerEntry ?? 100), Number(tx.creditsRemaining ?? 0)))
-      setStatusMessage('Free entry confirmed onchain')
+      const finalPpm = Number(tx.estimatedWinChancePPM ?? 0)
+      setStatusMessage(
+        `Free entry confirmed onchain (${tx.pointsBurned} pts → ${formatWinChancePct(finalPpm)} pre-boost)`,
+      )
       await refreshCredits()
     } catch (error: unknown) {
       setErrorMessage(toErrorMessage(error, 'Failed to submit free entry'))
     } finally {
       setEntryBusy(false)
     }
-  }, [creatorCoin, publicClient, refreshCredits, walletAddress, walletClient])
+  }, [creatorCoin, pointsBurned, publicClient, refreshCredits, walletAddress, walletClient])
 
   const creditsPct = useMemo(() => clampPct((credits / Math.max(1, creditsPerEntry)) * 100), [credits, creditsPerEntry])
   const missingCredits = Math.max(0, creditsPerEntry - credits)
-  const canEnter = Boolean(walletAddress && creatorCoin && entriesAvailable > 0 && !entryBusy && !checkinBusy)
+
+  // PR 2 — the slider's upper bound is min(balance, 1M). When balance is
+  // below the floor we still render the slider (disabled) so users see the
+  // "need 100 credits" affordance instead of an empty container.
+  const sliderMax = Math.max(AMOE_MIN_POINTS, Math.min(credits, AMOE_MAX_POINTS))
+  const hasEnoughForFloor = credits >= AMOE_MIN_POINTS
+  const livePreviewPPM = useMemo(
+    () => estimateWinChancePPM(clampPoints(pointsBurned, sliderMax)),
+    [pointsBurned, sliderMax],
+  )
+  const livePreviewPct = formatWinChancePct(livePreviewPPM)
+
+  // Keep selection in range when the live balance shrinks (e.g. after a
+  // successful entry refresh).
+  useEffect(() => {
+    setPointsBurned((prev) => clampPoints(prev, sliderMax))
+  }, [sliderMax])
+
+  const canEnter = Boolean(
+    walletAddress && creatorCoin && hasEnoughForFloor && !entryBusy && !checkinBusy,
+  )
 
   return (
     <div className="card p-5 sm:p-6 space-y-4">
@@ -309,6 +364,48 @@ export function AmoeEntryCard(props: { walletAddress: Address | null; creatorCoi
         ) : null}
       </div>
 
+      {/* PR 2 — variable points selector. Slider + numeric input are bound
+          to the same `pointsBurned` state so editing either one updates both.
+          Live win-chance preview mirrors the on-chain formula — it is for
+          display only; the server returns the authoritative PPM after
+          submission. */}
+      <div className="space-y-2 rounded-xl border border-white/10 bg-white/5 p-3">
+        <div className="flex items-center justify-between text-xs text-zinc-300">
+          <label htmlFor="amoe-points-slider" className="font-medium">
+            Points to burn
+          </label>
+          <span className="text-zinc-400">
+            Win chance: <span className="text-brand-accent">{livePreviewPct}</span>
+          </span>
+        </div>
+        <input
+          id="amoe-points-slider"
+          type="range"
+          min={AMOE_MIN_POINTS}
+          max={sliderMax}
+          step={1}
+          value={clampPoints(pointsBurned, sliderMax)}
+          onChange={(event) => setPointsBurned(clampPoints(Number(event.target.value), sliderMax))}
+          disabled={!hasEnoughForFloor || entryBusy}
+          className="w-full accent-brand-primary disabled:opacity-50"
+        />
+        <div className="flex items-center justify-between gap-2 text-[11px] text-zinc-500">
+          <span>min {AMOE_MIN_POINTS}</span>
+          <input
+            type="number"
+            min={AMOE_MIN_POINTS}
+            max={sliderMax}
+            step={1}
+            value={clampPoints(pointsBurned, sliderMax)}
+            onChange={(event) => setPointsBurned(clampPoints(Number(event.target.value), sliderMax))}
+            disabled={!hasEnoughForFloor || entryBusy}
+            className="w-28 rounded-md border border-white/15 bg-white/5 px-2 py-1 text-right text-xs text-zinc-100 disabled:opacity-50"
+            aria-label="Points to burn (numeric input)"
+          />
+          <span>max {sliderMax.toLocaleString()}</span>
+        </div>
+      </div>
+
       <div className="flex flex-wrap gap-2">
         <button
           type="button"
@@ -331,7 +428,7 @@ export function AmoeEntryCard(props: { walletAddress: Address | null; creatorCoi
           {entryBusy ? (
             <span className="inline-flex items-center gap-1.5"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Submitting…</span>
           ) : (
-            `Enter for free (${creditsPerEntry} credits)`
+            `Enter for free (${clampPoints(pointsBurned, sliderMax).toLocaleString()} credits)`
           )}
         </button>
         <button

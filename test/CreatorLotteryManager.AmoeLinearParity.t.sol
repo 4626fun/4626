@@ -95,15 +95,30 @@ contract MockLocalVrfConsumerAmoe {
     }
 }
 
-// Pluggable boost manager: returns configurable boost / coverage / probBoost.
+// Pluggable boost manager: returns configurable boost / probBoost. Coverage
+// mirrors the real `ve4626BoostManager` formula:
+//   coverage = min(creatorShareBalanceUSD, swapAmountUSD) / swapAmountUSD
+// so PR 2 follow-up tests can exercise the real "coverage gates personal
+// boost" behavior end-to-end. Tests that want a fixed coverage can call
+// `setForcedCoverageBps` to override.
 contract MockBoostManagerAmoe {
+    uint256 internal constant BOOST_PRECISION = 10_000;
+
     uint256 public boostBPS = 10_000; // 1.00x default (no extra boost)
-    uint256 public coverageBps = 10_000; // 100% coverage
     uint256 public probBoostBps;
+    uint256 public forcedCoverageBps; // 0 = use real formula
+    bool public forcedCoverageActive;
 
     function setBoostBPS(uint256 v) external { boostBPS = v; }
-    function setCoverageBps(uint256 v) external { coverageBps = v; }
     function setProbBoostBps(uint256 v) external { probBoostBps = v; }
+    function setForcedCoverageBps(uint256 v) external {
+        forcedCoverageBps = v;
+        forcedCoverageActive = true;
+    }
+    function clearForcedCoverage() external {
+        forcedCoverageActive = false;
+        forcedCoverageBps = 0;
+    }
 
     function calculateBoost(address) external view returns (uint256) {
         return boostBPS;
@@ -114,10 +129,14 @@ contract MockBoostManagerAmoe {
         address,
         address,
         address,
-        uint256,
-        uint256
+        uint256 creatorShareBalanceUSD,
+        uint256 swapAmountUSD
     ) external view returns (uint256) {
-        return coverageBps;
+        if (forcedCoverageActive) return forcedCoverageBps;
+        if (swapAmountUSD == 0 || creatorShareBalanceUSD == 0) return 0;
+        uint256 covered = creatorShareBalanceUSD < swapAmountUSD ? creatorShareBalanceUSD : swapAmountUSD;
+        uint256 cov = (covered * BOOST_PRECISION) / swapAmountUSD;
+        return cov > BOOST_PRECISION ? BOOST_PRECISION : cov;
     }
 
     function getTotalProbabilityBoost(address) external view returns (uint256) {
@@ -181,6 +200,18 @@ contract CreatorLotteryManagerAmoeLinearParityTest is Test {
         manager.setVaultGaugeVoting(address(gauge));
         manager.setAuthorizedAmoeRelayer(relayer);
         vm.stopPrank();
+
+        // PR 2 follow-up — `processAmoeEntry` now reads the buyer's creator-share
+        // balance via `IERC20(creatorCoin).balanceOf(buyer)` so coverage-scaled
+        // ve4626 personal/lock-duration boosts have parity with the paid path.
+        // Default mock return is 0 (no shares held) so existing tests keep their
+        // expected boost shape; tests that exercise the holdings path override
+        // this with their own `vm.mockCall`.
+        vm.mockCall(
+            creatorCoin,
+            abi.encodeWithSelector(bytes4(keccak256("balanceOf(address)")), buyer),
+            abi.encode(uint256(0))
+        );
     }
 
     // -------------------------------------------------------------
@@ -370,6 +401,90 @@ contract CreatorLotteryManagerAmoeLinearParityTest is Test {
         assertGt(entryId, 0);
         (, , , uint256 effectivePPM, , , ) = manager.vrfRequests(entryId);
         assertEq(effectivePPM, 150_000, "must cap at maxWinChance");
+    }
+
+    // -------------------------------------------------------------
+    // PR 2 follow-up — personal-boost parity with paid path
+    //
+    // Regression for the P1 review finding: prior code passed
+    // `creatorShareBalanceUSD = 0` to `_boostAndDispatchVRF` from the AMOE
+    // path, which silently disabled the ve4626 personal multiplier and
+    // lock-duration additive boost branches in `_applyBoost`. Fix: read
+    // `IERC20(creatorCoin).balanceOf(buyer)` and convert via the per-creator
+    // oracle, exactly like `processSwapLottery`.
+    // -------------------------------------------------------------
+
+    function test_BoostParity_PersonalBoost_AppliesEqually_BothPaths() public {
+        // Configure a real personal boost: 2.00x multiplier and a lock-duration
+        // additive boost. Both branches in `_applyBoost` are gated by
+        // `coverageBps > 0`, so they trigger only when the buyer actually holds
+        // creator shares.
+        boostManager.setBoostBPS(20_000); // 2.00x personal multiplier
+        boostManager.setProbBoostBps(100); // +100 bps lock-duration additive
+        gauge.setGaugeBoostPPM(0); // isolate personal boost from gauge
+
+        // Neutralize the 1.05x slippage bonus (`usdMultiplierBps`). The paid
+        // path applies it to BOTH `swapValueUSD` and `creatorShareBalanceUSD`
+        // via `_calculateTokenUSD`; the AMOE path passes `pointsBurnedAsUSD`
+        // through unscaled (slippage isn't a thing for AMOE) but still applies
+        // it to the on-chain balance read. With the multiplier > 1, the two
+        // paths cannot produce identical PPMs even at equal notional. Setting
+        // it to 1.00x (10_000) isolates the personal-boost gating fix being
+        // verified here. The slippage-bonus semantic itself is exercised by
+        // existing `processSwapLottery` tests in the main suite.
+        vm.prank(owner);
+        manager.setLotteryConfig(1_000_000, 6900, true, 40, 150_000, 10_000);
+
+        // Pin the oracle at $1/token so 1 share = $1 (1e6 units), giving the
+        // buyer $1 of "covered" balance at the same notional as a $1 entry.
+        oracle.setPrice(int256(1e18));
+
+        // 1) AMOE path: $10 entry. Buyer holds 1 share ($1) — partial coverage,
+        //    but coverageBps > 0 so personal boost is applied to the $10 entry.
+        vm.mockCall(
+            creatorCoin,
+            abi.encodeWithSelector(bytes4(keccak256("balanceOf(address)")), buyer),
+            abi.encode(uint256(1e18)) // 1 share (18 decimals)
+        );
+        uint256 swapUSD = 10 * 1_000_000;
+        vm.prank(relayer);
+        uint256 amoeEntryId = manager.processAmoeEntry(buyer, creatorCoin, swapUSD);
+        assertGt(amoeEntryId, 0);
+        (, , , uint256 amoeEffectivePPM, , , ) = manager.vrfRequests(amoeEntryId);
+
+        // 2) Paid path with the same buyer and same $10 swap and same balance.
+        vm.prank(authorizedSwap);
+        uint256 paidEntryId = manager.processSwapLottery(buyer, shareOFT, 10 * 1e18, 1e18);
+        assertGt(paidEntryId, 0);
+        (, , , uint256 paidEffectivePPM, , , ) = manager.vrfRequests(paidEntryId);
+
+        // Parity assertion (the regression): both paths must produce the same
+        // boosted PPM at equal notional + equal balance. Pre-fix this was
+        // `amoe < paid` because the AMOE coverageBps was forced to 0.
+        assertEq(amoeEffectivePPM, paidEffectivePPM, "AMOE personal boost must match paid");
+        // Sanity: boost actually fired (> base of 40 PPM).
+        assertGt(amoeEffectivePPM, 40, "personal boost should kick in when shares held");
+    }
+
+    function test_BoostParity_PersonalBoost_ZeroBalance_NoPersonalBoost() public {
+        // Mirror of the above with balance=0 — personal boost stays gated off
+        // because `coverageBps == 0`. This locks in the "no shares = no
+        // personal boost" behavior that existed before the fix, ensuring the
+        // change is additive only.
+        boostManager.setBoostBPS(20_000);
+        boostManager.setProbBoostBps(100);
+        gauge.setGaugeBoostPPM(0);
+
+        // Default `vm.mockCall` in setUp returns 0 — no override needed.
+        uint256 swapUSD = 10 * 1_000_000;
+        vm.prank(relayer);
+        uint256 entryId = manager.processAmoeEntry(buyer, creatorCoin, swapUSD);
+        assertGt(entryId, 0);
+        (, , , uint256 effectivePPM, , , ) = manager.vrfRequests(entryId);
+
+        // Base is $10 → 40 PPM. With coverage=0 both personal branches are
+        // gated off, so effective == base.
+        assertEq(effectivePPM, 40, "no shares -> base PPM only");
     }
 
     // -------------------------------------------------------------
