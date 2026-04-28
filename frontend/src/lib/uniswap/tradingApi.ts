@@ -97,6 +97,25 @@ function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
 
+function stripPermit2Fields(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripPermit2Fields)
+  if (!isPlainObject(value)) return value
+
+  const next: Record<string, unknown> = {}
+  for (const [key, item] of Object.entries(value)) {
+    if (
+      key === 'permitData' ||
+      key === 'permitSingleData' ||
+      key === 'permitTransferFromData' ||
+      key === 'signature'
+    ) {
+      continue
+    }
+    next[key] = stripPermit2Fields(item)
+  }
+  return next
+}
+
 function normalizeOrigin(raw: string): string | null {
   try {
     return new URL(raw).origin
@@ -472,13 +491,14 @@ export type BuildSwapParams = Omit<CreateSwapRequest, 'quote' | 'permitData'> & 
 }
 
 export async function buildSwap(body: BuildSwapParams): Promise<CreateSwapResponse> {
-  const hasSignature = typeof body.signature === 'string' && body.signature.trim().length > 0
-  const hasPermitData = typeof body.permitData === 'object' && body.permitData !== null
+  const normalizedBody = body.permit2Disabled ? (stripPermit2Fields(body) as BuildSwapParams) : body
+  const hasSignature = typeof normalizedBody.signature === 'string' && normalizedBody.signature.trim().length > 0
+  const hasPermitData = typeof normalizedBody.permitData === 'object' && normalizedBody.permitData !== null
   if (hasSignature !== hasPermitData) {
     throw new Error('Permit2 signature and permitData must be provided together.')
   }
 
-  const cdpParams = buildCdpExecuteParamsFromQuote(body)
+  const cdpParams = buildCdpExecuteParamsFromQuote(normalizedBody)
   if (cdpParams) {
     const response = await executeCdpSwap(cdpParams)
     const tx = extractCdpSwapTransaction(response)
@@ -489,7 +509,7 @@ export async function buildSwap(body: BuildSwapParams): Promise<CreateSwapRespon
     return { swap: tx } as CreateSwapResponse
   }
 
-  const response = await post<CreateSwapResponse>(API_ENDPOINTS.uniswap.swap, body)
+  const response = await post<CreateSwapResponse>(API_ENDPOINTS.uniswap.swap, normalizedBody)
   assertValidSwapTransaction(response.swap)
   return response
 }

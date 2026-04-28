@@ -3531,9 +3531,13 @@ function DeployVaultBatcher({
       const wrapperInitCode = concatHex([DEPLOY_BYTECODE.CreatorOVaultWrapper as Hex, wrapperArgs])
       const wrapperAddress = predictCreate2Address({ create2Deployer, salt: wrapperSalt, initCode: wrapperInitCode })
 
+      // Must mirror DeploymentBatcherPhase2Module.deployPhase2Core exactly:
+      // gauge ctor args = (shareOFT, protocolTreasury, protocolTreasury, batcher).
+      // Using `owner` here predicts the wrong CREATE2 address and causes
+      // finalizePhase2 to revert with Phase2Missing().
       const gaugeArgs = encodeAbiParameters(parseAbiParameters('address,address,address,address'), [
         shareOftAddress,
-        owner,
+        protocolTreasury,
         protocolTreasury,
         tempOwner,
       ])

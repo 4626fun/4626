@@ -116,6 +116,27 @@ export function deriveSwapConnectGate(input: SwapConnectGateInput): SwapConnectG
   }
 }
 
+export function isConnectorAlreadyConnectedError(error: unknown): boolean {
+  const parts: string[] = []
+
+  if (typeof error === 'string') parts.push(error)
+  if (error instanceof Error) {
+    parts.push(error.name, error.message)
+  }
+
+  if (error && typeof error === 'object') {
+    const record = error as Record<string, unknown>
+    for (const key of ['name', 'message', 'shortMessage', 'details']) {
+      const value = record[key]
+      if (typeof value === 'string') parts.push(value)
+    }
+  }
+
+  const normalized = parts.join(' ').toLowerCase()
+  const compact = normalized.replace(/[^a-z0-9]/g, '')
+  return normalized.includes('connector already connected') || compact.includes('connectoralreadyconnected')
+}
+
 function computeState(input: SwapConnectGateInput): SwapConnectGateState {
   if (!input.sessionHydrated) return 'hydrating'
 

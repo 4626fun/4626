@@ -1,5 +1,5 @@
 import { pickRandomHermitMeme } from './memeStore.js'
-import type { HermitExecutionParams, HermitExecutionResult } from './types.js'
+import type { HermitExecutionParams, HermitExecutionResult, HermitMediaAttachment } from './types.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -75,6 +75,50 @@ function asStringArray(value: unknown, max = 6): string[] {
   )
 }
 
+function inferPublicMediaAttachment(url: string): HermitMediaAttachment | null {
+  const trimmed = url.trim()
+  if (!/^https:\/\//i.test(trimmed)) return null
+  let pathname = ''
+  let hostname = ''
+  try {
+    const parsed = new URL(trimmed)
+    pathname = parsed.pathname.toLowerCase()
+    hostname = parsed.hostname.toLowerCase()
+  } catch {
+    return null
+  }
+
+  const filename = pathname.split('/').filter(Boolean).pop()
+  if (hostname === 'media.tenor.com' || pathname.endsWith('.gif')) {
+    return { url: trimmed, type: 'tenor-gif' }
+  }
+  if (pathname.endsWith('.jpg') || pathname.endsWith('.jpeg')) {
+    return {
+      url: trimmed,
+      type: 'photo',
+      ...(filename ? { filename } : {}),
+      mime_type: 'image/jpeg',
+    }
+  }
+  if (pathname.endsWith('.png')) {
+    return {
+      url: trimmed,
+      type: 'photo',
+      ...(filename ? { filename } : {}),
+      mime_type: 'image/png',
+    }
+  }
+  if (pathname.endsWith('.webp')) {
+    return {
+      url: trimmed,
+      type: 'photo',
+      ...(filename ? { filename } : {}),
+      mime_type: 'image/webp',
+    }
+  }
+  return null
+}
+
 function readPinataHermitConfig(): { endpoint: string; bearer: string } | null {
   const endpoint = asTrimmed(process.env.HERMIT_PINATA_CHAT_ENDPOINT)
   const bearer = asTrimmed(process.env.HERMIT_PINATA_BEARER_TOKEN)
@@ -128,6 +172,23 @@ function buildPinataPromptForHermit(params: {
     '{"line":"string","alt":["string","string"],"hashtags":["#tag"],"cta":"string"}',
     'Rules: line <= 220 chars, alt 2-4 entries, hashtags 1-5, no fabricated claims.',
     `User input: ${params.userPrompt}`,
+  ].join('\n')
+}
+
+function buildHermitHelpReply(): string {
+  return [
+    'Hermit drafts room-ready copy.',
+    '',
+    'Use:',
+    '- `/hermit copy <idea>` — short post, CTA, and alternates',
+    '- `/hermit announce <news>` — announcement-style room update',
+    '- `/hermit quest <reward/task>` — quest or reward drop copy',
+    '- `/hermit tone <message>` — rewrite your message with sharper social tone',
+    '',
+    'Examples:',
+    '- `/hermit announce reward drop opens in 30 minutes`',
+    '- `/hermit quest best vault thesis wins custom role`',
+    '- `/hermit tone make this clearer: we are shipping tonight`',
   ].join('\n')
 }
 
@@ -186,12 +247,14 @@ export async function executeHermitCommand(
 ): Promise<HermitExecutionResult> {
   const { command, args } = splitCommandAndArgs(params.commandText)
   if (command === '/gmeow') {
-    const meme = pickRandomHermitMeme(args)
+    const meme = pickRandomHermitMeme(args || 'laugh')
+    const attachment = inferPublicMediaAttachment(meme.url)
     return {
       kind: 'gmeow',
       provider: 'local',
       meme,
       reply: `${meme.caption}\n${meme.url}`,
+      ...(attachment ? { mediaAttachments: [attachment] } : {}),
     }
   }
 
@@ -212,6 +275,13 @@ export async function executeHermitCommand(
   }
 
   if (command === '/hermit') {
+    if (!args || args.toLowerCase() === 'help') {
+      return {
+        kind: 'hermit',
+        provider: 'local',
+        reply: buildHermitHelpReply(),
+      }
+    }
     const { mode, prompt } = parseHermitDraftMode(args)
     const draft = await runPinataDraft(
       buildPinataPromptForHermit({

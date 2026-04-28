@@ -39,7 +39,7 @@ import {
   quoteCreatePosition,
   removeLiquidity,
 } from '@/lib/uniswap/liquidityApi'
-import { deriveSwapConnectGate } from '@/lib/swap/connectGate'
+import { deriveSwapConnectGate, isConnectorAlreadyConnectedError } from '@/lib/swap/connectGate'
 import { pickQuote } from '@/lib/uniswap/tradingApi'
 import { type WalletMode } from '@/lib/uniswap/walletMode'
 import {
@@ -203,11 +203,6 @@ function warnSwapPrivyHookFailure(scope: string, error: unknown) {
   if (warnedSwapPrivyHookFailure) return
   warnedSwapPrivyHookFailure = true
   console.warn(`[swap] Privy hook unavailable in ${scope}; falling back to non-Privy mode`, error)
-}
-
-function isConnectorAlreadyConnectedErrorMessage(message: string): boolean {
-  const normalized = message.toLowerCase()
-  return normalized.includes('connector already connected') || normalized.includes('already connected')
 }
 
 function useSafeSwapPrivyHook(enabled: boolean) {
@@ -626,6 +621,7 @@ export function Swap() {
   const { reconnectAsync } = useReconnect()
   const [swapConnectBusy, setSwapConnectBusy] = useState(false)
   const [swapConnectError, setSwapConnectError] = useState<string | null>(null)
+  const walletRecoveryAttemptKeyRef = useRef('')
   const accountMe = useAccountMe()
   const { baseAccountSdk } = useBaseAccountSdk()
   // `extractPrivyWalletsFromUser` returns ADDRESS-ONLY metadata parsed from
@@ -1188,19 +1184,20 @@ export function Swap() {
       }),
     [authBusy, executionAddress, hasSession, sessionHydrated],
   )
-  const recoverExistingWalletConnection = useCallback(async (): Promise<boolean> => {
+  const recoverExistingWalletConnection = useCallback(async (connectorToRecover?: unknown): Promise<boolean> => {
     let recovered = false
     try {
-      const results = await reconnectAsync()
+      const variables = connectorToRecover ? { connectors: [connectorToRecover] } : undefined
+      const results = await reconnectAsync(variables as never)
       recovered =
-        Array.isArray(results) &&
+        !Array.isArray(results) ||
         results.some((entry: unknown) => {
           const candidate = entry as { accounts?: unknown; connector?: unknown } | null
           const accounts = Array.isArray(candidate?.accounts) ? candidate.accounts : []
           return accounts.length > 0 || Boolean(candidate?.connector)
         })
-    } catch {
-      recovered = false
+    } catch (error) {
+      recovered = isConnectorAlreadyConnectedError(error)
     }
     if (recovered) {
       try {
@@ -1211,6 +1208,29 @@ export function Swap() {
     }
     return recovered
   }, [reconnectAsync, refreshAccountContext])
+  useEffect(() => {
+    if (connectGate.state !== 'wallet-required' || authBusy || swapConnectBusy) return
+
+    const preferred = selectPreferredWalletConnector(wagmiConnectors)
+    const connectorKey = preferred ? `${preferred.id}:${preferred.name}` : 'any'
+    const attemptKey = `${authAddress ?? 'session'}:${executionMode}:${connectorKey}`
+    if (walletRecoveryAttemptKeyRef.current === attemptKey) return
+
+    walletRecoveryAttemptKeyRef.current = attemptKey
+    setSwapConnectError(null)
+    setSwapConnectBusy(true)
+    void recoverExistingWalletConnection(preferred).finally(() => {
+      setSwapConnectBusy(false)
+    })
+  }, [
+    authAddress,
+    authBusy,
+    connectGate.state,
+    executionMode,
+    recoverExistingWalletConnection,
+    swapConnectBusy,
+    wagmiConnectors,
+  ])
   const handleConnectGateAction = useCallback(() => {
     if (authBusy || swapConnectBusy) return
 
@@ -1220,13 +1240,13 @@ export function Swap() {
       setSwapConnectBusy(true)
       void (async () => {
         try {
+          const preferred = selectPreferredWalletConnector(wagmiConnectors)
           // Recover an existing authorized connector first; this avoids
           // throwing when the connector is already connected but wagmi is
           // still hydrating account state for this route.
-          const recovered = await recoverExistingWalletConnection()
+          const recovered = await recoverExistingWalletConnection(preferred)
           if (isConnected || recovered) return
 
-          const preferred = selectPreferredWalletConnector(wagmiConnectors)
           if (!preferred) {
             setSwapConnectError('No wallet connector is available in this browser. Open 4626 in your wallet app or enable a wallet extension.')
             return
@@ -1234,12 +1254,12 @@ export function Swap() {
 
           await wagmiConnectAsync({ connector: preferred })
         } catch (connectError: unknown) {
-          const message = connectError instanceof Error ? connectError.message : String(connectError ?? '')
-          if (isConnectorAlreadyConnectedErrorMessage(message)) {
+          if (isConnectorAlreadyConnectedError(connectError)) {
             await recoverExistingWalletConnection()
             setSwapConnectError(null)
             return
           }
+          const message = connectError instanceof Error ? connectError.message : String(connectError ?? '')
           const rejected = message.toLowerCase().includes('reject') || message.toLowerCase().includes('denied')
           setSwapConnectError(rejected ? 'Wallet connection was cancelled. Try again when you are ready.' : message || 'Failed to connect wallet.')
         } finally {
@@ -1264,8 +1284,12 @@ export function Swap() {
   ])
 
   useEffect(() => {
-    if (connectGate.ready) setSwapConnectError(null)
+    if (!connectGate.ready) return
+    walletRecoveryAttemptKeyRef.current = ''
+    setSwapConnectError(null)
   }, [connectGate.ready])
+  const visibleSwapConnectError =
+    swapConnectError ?? (authError && !isConnectorAlreadyConnectedError(authError) ? authError : null)
 
   const ensureCanonicalSession = useCallback(async (): Promise<string | null> => {
     if (executionMode !== 'canonical') return null
@@ -1828,7 +1852,7 @@ export function Swap() {
               <SwapConnectGate
                 gate={connectGate}
                 busy={authBusy || swapConnectBusy}
-                errorMessage={swapConnectError ?? authError}
+                errorMessage={visibleSwapConnectError}
                 onPrimaryAction={handleConnectGateAction}
               />
             ) : (

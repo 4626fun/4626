@@ -21,6 +21,12 @@ const DEFAULT_MEMES: HermitMeme[] = [
     caption: 'gm from the vault floor.',
     tags: ['gm', 'vault', 'daily'],
   },
+  {
+    id: 'catlaugh-1',
+    url: 'https://app.4626.fun/hermit/catlaugh.gif',
+    caption: 'cat laugh from the Hermit cave.',
+    tags: ['laugh', 'cat', 'meme'],
+  },
 ]
 
 function normalizeTag(value: string): string {

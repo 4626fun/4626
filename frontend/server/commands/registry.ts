@@ -32,6 +32,7 @@ type CommandFamily =
   | 'ai'
   | 'coin'
   | 'send'
+  | 'hermit'
 
 type CommandDefinition = {
   head: string
@@ -169,6 +170,7 @@ const COMMAND_DEFINITIONS: readonly CommandDefinition[] = [
   { head: 'ai', family: 'ai' },
   { head: 'coin', family: 'coin' },
   { head: 'send', family: 'send' },
+  { head: 'hermit', family: 'hermit', aliases: ['gmeow', 'meme'] },
 ] as const
 
 const BOT_MENU_ORDER: Record<CommandScope, readonly string[]> = {

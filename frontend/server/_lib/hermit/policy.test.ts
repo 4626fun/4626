@@ -1,13 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { getAlfaClubPublicClientMock, getAlfaClubHoldingsMock } = vi.hoisted(() => ({
-  getAlfaClubPublicClientMock: vi.fn(async () => ({})),
-  getAlfaClubHoldingsMock: vi.fn(async () => ({
-    holdings: [],
-    isHolder: false,
-    isCreator: false,
-  })),
-}))
+const { getAlfaClubPublicClientMock, getAlfaClubHoldingsMock } = vi.hoisted(() => {
+  type AlfaClubHoldingMock = { tokenId: bigint }
+  type AlfaClubHoldingsMockResult = {
+    holdings: AlfaClubHoldingMock[]
+    isHolder: boolean
+    isCreator: boolean
+  }
+
+  return {
+    getAlfaClubPublicClientMock: vi.fn(async () => ({})),
+    getAlfaClubHoldingsMock: vi.fn(async (): Promise<AlfaClubHoldingsMockResult> => ({
+      holdings: [],
+      isHolder: false,
+      isCreator: false,
+    })),
+  }
+})
 
 vi.mock('../wallet/alfaclub.js', () => ({
   getAlfaClubPublicClient: getAlfaClubPublicClientMock,

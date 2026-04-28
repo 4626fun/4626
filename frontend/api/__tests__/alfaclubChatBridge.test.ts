@@ -4,6 +4,7 @@ import { applyEnv } from './helpers'
 import {
   buildAlfaClubOutboundFrame,
   collectAlfaClubCommandMessages,
+  extractAlfaClubWsMessagesForTest,
   readAlfaClubChatBridgeFlags,
 } from '../../server/_lib/alfaclub/chatBridge.ts'
 
@@ -127,10 +128,11 @@ describe('collectAlfaClubCommandMessages', () => {
         { id: 'm-command-bot', date: 13, sender: 'command-bot', text: '/alfa' },
         { id: 'm-valid-2', date: 14, sender: '0x2222222222222222222222222222222222222222', text: '/alfaclub status' },
         { id: 'm-valid-1', date: 9, sender: '0x1111111111111111111111111111111111111111', text: '/alfa 0xaaa' },
+        { id: 'm-hermit', date: 15, sender: '0x3333333333333333333333333333333333333333', text: '/gmeow gm' },
       ],
     })
 
-    expect(commands).toHaveLength(2)
+    expect(commands).toHaveLength(3)
     expect(commands[0]).toMatchObject({
       id: 'm-valid-1',
       sender: '0x1111111111111111111111111111111111111111',
@@ -138,6 +140,11 @@ describe('collectAlfaClubCommandMessages', () => {
     expect(commands[1]).toMatchObject({
       id: 'm-valid-2',
       sender: '0x2222222222222222222222222222222222222222',
+    })
+    expect(commands[2]).toMatchObject({
+      id: 'm-hermit',
+      sender: '0x3333333333333333333333333333333333333333',
+      text: '/gmeow gm',
     })
   })
 })
@@ -156,6 +163,120 @@ describe('buildAlfaClubOutboundFrame', () => {
         text: 'hello',
         attachments: [],
       },
+    })
+  })
+
+  it('passes through validated public media attachments', () => {
+    expect(
+      buildAlfaClubOutboundFrame({
+        roomId: '1043',
+        text: '',
+        attachments: [
+          {
+            url: 'https://media.tenor.com/rfbhh3Hh3DMAAAAC/mochi-mochimons.gif',
+            dims: [498, 498],
+            size: 1_468_750,
+            type: 'tenor-gif',
+            preview: '',
+            duration: 2,
+          },
+        ],
+      }),
+    ).toEqual({
+      type: 'message',
+      value: {
+        room: '1043',
+        text: '',
+        attachments: [
+          {
+            url: 'https://media.tenor.com/rfbhh3Hh3DMAAAAC/mochi-mochimons.gif',
+            dims: [498, 498],
+            size: 1_468_750,
+            type: 'tenor-gif',
+            preview: '',
+            duration: 2,
+          },
+        ],
+      },
+    })
+  })
+})
+
+describe('extractAlfaClubWsMessagesForTest', () => {
+  it('keeps attachment-only photo messages from captured AlfaChat payloads', () => {
+    const messages = extractAlfaClubWsMessagesForTest({
+      type: 'message',
+      value: {
+        room: '1043',
+        id: '9152e6a3-dfc9-4d13-833b-c755156f79b6',
+        date: 1777141691499,
+        sender: '0x8e521dfddc4a2bc6f30b5fb595263d0388af5fd5',
+        text: '',
+        attachments: [
+          {
+            url: 'https://volvarrdooikeahzzvqc.storage.supabase.co/storage/v1/object/public/attachments/1043/ff60038a-e8c3-4a39-874a-9863321ca593.jpeg',
+            dims: [735, 734],
+            type: 'photo',
+            filename: 'ff60038a-e8c3-4a39-874a-9863321ca593.jpeg',
+            mime_type: 'image/jpeg',
+          },
+        ],
+      },
+    })
+
+    expect(messages).toHaveLength(1)
+    expect(messages[0]).toMatchObject({
+      roomId: '1043',
+      id: '9152e6a3-dfc9-4d13-833b-c755156f79b6',
+      sender: '0x8e521dfddc4a2bc6f30b5fb595263d0388af5fd5',
+      text: '',
+      attachments: [
+        {
+          type: 'photo',
+          filename: 'ff60038a-e8c3-4a39-874a-9863321ca593.jpeg',
+          mime_type: 'image/jpeg',
+        },
+      ],
+    })
+  })
+
+  it('keeps reply attachments on text messages', () => {
+    const messages = extractAlfaClubWsMessagesForTest({
+      room: '1043',
+      id: 'ba301f4a-e109-447c-8b37-6eee91fee44b',
+      date: 1777273576700,
+      sender: '0x8e521dfddc4a2bc6f30b5fb595263d0388af5fd5',
+      text: 'replying with another gif',
+      attachments: [
+        {
+          url: 'https://media.tenor.com/gojal78Yfu8AAAAC/miau-cat.gif',
+          dims: [487, 498],
+          size: 2_449_893,
+          type: 'tenor-gif',
+          preview: '',
+          duration: 0.9,
+        },
+      ],
+      reply_attachments: [
+        {
+          url: 'https://media.tenor.com/rfbhh3Hh3DMAAAAC/mochi-mochimons.gif',
+          dims: [498, 498],
+          size: 1_468_750,
+          type: 'tenor-gif',
+          preview: '',
+          duration: 2,
+        },
+      ],
+    })
+
+    expect(messages).toHaveLength(1)
+    expect(messages[0]?.attachments?.[0]).toMatchObject({
+      type: 'tenor-gif',
+      duration: 0.9,
+    })
+    expect(messages[0]?.replyAttachments?.[0]).toMatchObject({
+      type: 'tenor-gif',
+      duration: 2,
     })
   })
 })

@@ -22,6 +22,20 @@ describe('alfaclub vigilante — vercel wiring', () => {
     expect(entry?.schedule).toBe('5 12 * * *')
   })
 
+  it('allows MetaMask SDK websocket connections in the app CSP', async () => {
+    const body = await readFile(new URL('../../vercel.json', import.meta.url), 'utf8')
+    const parsed = JSON.parse(body) as {
+      routes?: Array<{ headers?: Record<string, string> }>
+    }
+    const csp = (parsed.routes ?? [])
+      .map((route) => route.headers?.['content-security-policy'] ?? '')
+      .find((value) => value.includes('connect-src'))
+
+    expect(csp).toContain('connect-src')
+    expect(csp).toContain('wss://metamask-sdk.api.cx.metamask.io')
+    expect(csp).toContain('https://metamask-sdk.api.cx.metamask.io')
+  })
+
   it('v1 route map exposes alfaclub/leaderboard, run, radar, compare, relay-now, chat-token', async () => {
     const src = await readFile(
       new URL('../_handlers/_routes.v1.ts', import.meta.url),

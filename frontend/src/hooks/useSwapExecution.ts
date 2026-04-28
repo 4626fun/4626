@@ -211,6 +211,19 @@ export function deriveSwapExecutionReadiness(params: {
   return true
 }
 
+export function shouldDisablePermit2ForSwap(params: {
+  executionMode: 'canonical' | 'eoa'
+  canonicalAddress?: string | null
+  executionAddress?: string | null
+}): boolean {
+  if (params.executionMode === 'canonical') return true
+  if (isTargetCanonicalCsw(params.executionAddress ?? null)) return true
+
+  const canonical = params.canonicalAddress?.trim().toLowerCase()
+  const execution = params.executionAddress?.trim().toLowerCase()
+  return Boolean(canonical && execution && isAddress(canonical) && isAddress(execution) && canonical === execution)
+}
+
 type SwapTxDebugState = {
   enabled: boolean
   chainId: number
@@ -550,7 +563,15 @@ export function useSwapExecution(params: {
     }),
     [normalizedAtomicStatus, normalizedPaymasterService, normalizedSupports5792],
   )
-  const permit2DisabledForSwap = params.executionMode === 'canonical'
+  const permit2DisabledForSwap = useMemo(
+    () =>
+      shouldDisablePermit2ForSwap({
+        executionMode: params.executionMode,
+        canonicalAddress: params.canonicalAddress,
+        executionAddress: params.executionAddress,
+      }),
+    [params.canonicalAddress, params.executionAddress, params.executionMode],
+  )
   const canonicalPolicyApplies = useMemo(
     () =>
       shouldApplyCanonicalEnforcement({
@@ -1033,7 +1054,7 @@ export function useSwapExecution(params: {
         swapper: params.executionAddress,
         slippageTolerance: params.parsedSlippage,
         routingPreference: 'BEST_PRICE',
-        permitAmount: 'EXACT',
+        permitAmount: permit2DisabledForSwap ? undefined : 'EXACT',
         walletModeKey: params.executionMode,
       })
       if (runId !== quoteRunRef.current) return
@@ -1078,6 +1099,7 @@ export function useSwapExecution(params: {
     swapChainId,
     quoteReady,
     quoteCooldownUntil,
+    permit2DisabledForSwap,
     getTokenDecimals,
     getErrorDetails,
     guardInputPolicy,
@@ -1244,6 +1266,7 @@ export function useSwapExecution(params: {
       const canReuseCurrentQuote =
         Boolean(quote) &&
         !isQuoteStale() &&
+        (!permit2DisabledForSwap || !pickPermitData(quote)) &&
         readQuoteInputAmount(quote) === amount &&
         readQuoteInputToken(quote) === params.tokenIn.toLowerCase()
       const nextQuote = canReuseCurrentQuote
@@ -1258,7 +1281,7 @@ export function useSwapExecution(params: {
             swapper: params.executionAddress,
             slippageTolerance: params.parsedSlippage,
             routingPreference: 'BEST_PRICE',
-            permitAmount: 'EXACT',
+            permitAmount: permit2DisabledForSwap ? undefined : 'EXACT',
             walletModeKey: params.executionMode,
           })
       if (runId !== quoteRunRef.current) return

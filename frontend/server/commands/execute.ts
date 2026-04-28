@@ -8,6 +8,8 @@ import { executeCoinCommandFamily } from './families/coin.js'
 import { executeConversationalCommandFamily, looksLikeConversationalCommand } from './families/conversation.js'
 import { executeHelpCommandFamily } from './families/help.js'
 import { executeAlfaclubCommandFamily } from './families/alfaclub.js'
+import { isHermitUserAllowed } from '../_lib/hermit/policy.js'
+import { executeHermitCommand } from '../_lib/hermit/skillRouter.js'
 import {
   executeKeeprCommandFamily,
   formatAssistantOnlyBlocked,
@@ -107,6 +109,28 @@ export async function executeCommand(params: ExecuteCommandParams): Promise<Keep
           text: raw,
           senderWallet: params.senderWallet,
         })
+      case 'hermit': {
+        if (!isHermitUserAllowed(params.senderWallet)) {
+          return { ok: false, response: 'Hermit access denied.' }
+        }
+        const result = await executeHermitCommand({
+          commandText: raw,
+          senderAddress: params.senderWallet,
+        })
+        return {
+          ok: true,
+          response: result.reply,
+          ...(result.mediaAttachments?.length
+            ? {
+                action: {
+                  action: 'hermit.command',
+                  kind: result.kind,
+                  attachments: result.mediaAttachments,
+                },
+              }
+            : {}),
+        }
+      }
     }
 
     const vault = await getVault()

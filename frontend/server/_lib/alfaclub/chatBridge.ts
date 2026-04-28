@@ -11,7 +11,7 @@
  */
 
 import { executeDeterministicCommand } from '../../agent/core/executeDeterministicCommand.js'
-import { matchesCommandFamily } from '../../commands/registry.js'
+import { matchesAnyCommandFamily } from '../../commands/registry.js'
 import { TARGET_CANONICAL_CSW_ADDRESS } from '../../../src/wallet/canonicalWalletPolicy.js'
 import { logger } from '../infra/logger.js'
 import WebSocket from 'ws'
@@ -40,10 +40,23 @@ type AlfaClubRoomHistoryMessage = {
   date?: number
   sender?: string
   text?: string
+  attachments?: unknown
+  reply_attachments?: unknown
 }
 
 type AlfaClubRoomHistoryResponse = {
   messages?: AlfaClubRoomHistoryMessage[]
+}
+
+export type AlfaClubMessageAttachment = {
+  url: string
+  dims?: [number, number]
+  type: string
+  filename?: string
+  mime_type?: string
+  size?: number
+  preview?: string
+  duration?: number
 }
 
 type AlfaClubOutboundFrame = {
@@ -51,7 +64,7 @@ type AlfaClubOutboundFrame = {
   value: {
     room: string
     text: string
-    attachments: unknown[]
+    attachments: AlfaClubMessageAttachment[]
   }
 }
 
@@ -90,6 +103,8 @@ type NormalizedHistoryMessage = {
   date: number
   sender: string
   text: string
+  attachments: AlfaClubMessageAttachment[]
+  replyAttachments: AlfaClubMessageAttachment[]
 }
 
 export type AlfaClubChatBridgeSkipReason =
@@ -231,13 +246,14 @@ export function readAlfaClubChatBridgeFlags(): AlfaClubChatBridgeFlags {
 export function buildAlfaClubOutboundFrame(params: {
   roomId: string
   text: string
+  attachments?: unknown
 }): AlfaClubOutboundFrame {
   return {
     type: 'message',
     value: {
       room: params.roomId,
       text: params.text,
-      attachments: [],
+      attachments: normalizeAlfaClubAttachments(params.attachments),
     },
   }
 }
@@ -249,7 +265,14 @@ function normalizeHistoryMessage(message: AlfaClubRoomHistoryMessage): Normalize
   if (!Number.isFinite(date) || date <= 0) return null
   const sender = String(message.sender ?? '').trim().toLowerCase()
   const text = String(message.text ?? '')
-  return { id, date, sender, text }
+  return {
+    id,
+    date,
+    sender,
+    text,
+    attachments: normalizeAlfaClubAttachments(message.attachments),
+    replyAttachments: normalizeAlfaClubAttachments(message.reply_attachments),
+  }
 }
 
 function byChronologicalOrder(a: NormalizedHistoryMessage, b: NormalizedHistoryMessage): number {
@@ -258,7 +281,7 @@ function byChronologicalOrder(a: NormalizedHistoryMessage, b: NormalizedHistoryM
 }
 
 function isAlfaClubCommandText(text: string): boolean {
-  return matchesCommandFamily(text, 'alfaclub')
+  return matchesAnyCommandFamily(text, ['alfaclub', 'hermit'])
 }
 
 export function collectAlfaClubCommandMessages(params: {
@@ -310,6 +333,8 @@ type AlfaClubLiveInboundMessage = {
   date: number
   sender: string
   text: string
+  attachments: AlfaClubMessageAttachment[]
+  replyAttachments: AlfaClubMessageAttachment[]
   rawPayloadText: string | null
 }
 
@@ -342,6 +367,33 @@ function pickFirstDateMs(values: unknown[]): number {
   return Date.now()
 }
 
+function normalizeAlfaClubAttachments(value: unknown): AlfaClubMessageAttachment[] {
+  if (!Array.isArray(value)) return []
+  const out: AlfaClubMessageAttachment[] = []
+  for (const entry of value) {
+    if (!isJsonRecord(entry)) continue
+    const url = typeof entry.url === 'string' ? entry.url.trim() : ''
+    const type = typeof entry.type === 'string' ? entry.type.trim() : ''
+    if (!url || !type) continue
+    const attachment: AlfaClubMessageAttachment = { url, type }
+    if (
+      Array.isArray(entry.dims) &&
+      entry.dims.length >= 2 &&
+      Number.isFinite(Number(entry.dims[0])) &&
+      Number.isFinite(Number(entry.dims[1]))
+    ) {
+      attachment.dims = [Number(entry.dims[0]), Number(entry.dims[1])]
+    }
+    if (typeof entry.filename === 'string') attachment.filename = entry.filename
+    if (typeof entry.mime_type === 'string') attachment.mime_type = entry.mime_type
+    if (Number.isFinite(Number(entry.size))) attachment.size = Number(entry.size)
+    if (typeof entry.preview === 'string') attachment.preview = entry.preview
+    if (Number.isFinite(Number(entry.duration))) attachment.duration = Number(entry.duration)
+    out.push(attachment)
+  }
+  return out
+}
+
 function extractWsMessagesFromPayload(payload: unknown): AlfaClubLiveInboundMessage[] {
   const queue: unknown[] = [payload]
   const out: AlfaClubLiveInboundMessage[] = []
@@ -360,9 +412,33 @@ function extractWsMessagesFromPayload(payload: unknown): AlfaClubLiveInboundMess
     if (isJsonRecord(node.message)) queue.push(node.message)
     if (isJsonRecord(node.value)) queue.push(node.value)
     if (Array.isArray(node.value)) queue.push(node.value)
+    if (
+      isJsonRecord(node.value) &&
+      !('room' in node) &&
+      !('sender' in node) &&
+      !('address' in node) &&
+      !('wallet' in node) &&
+      !('senderAddress' in node) &&
+      !('text' in node) &&
+      !('attachments' in node) &&
+      !('reply_attachments' in node) &&
+      !('id' in node) &&
+      !('messageId' in node)
+    ) {
+      continue
+    }
 
     const text = pickFirstString([node.text, isJsonRecord(node.value) ? node.value.text : null])
-    if (!text) continue
+      ?? (typeof node.text === 'string' || (isJsonRecord(node.value) && typeof node.value.text === 'string') ? '' : null)
+    const attachments = normalizeAlfaClubAttachments([
+      ...normalizeAlfaClubAttachments(node.attachments),
+      ...normalizeAlfaClubAttachments(isJsonRecord(node.value) ? node.value.attachments : null),
+    ])
+    const replyAttachments = normalizeAlfaClubAttachments([
+      ...normalizeAlfaClubAttachments(node.reply_attachments),
+      ...normalizeAlfaClubAttachments(isJsonRecord(node.value) ? node.value.reply_attachments : null),
+    ])
+    if (text === null && attachments.length === 0 && replyAttachments.length === 0) continue
     const room = pickFirstString([node.room, isJsonRecord(node.value) ? node.value.room : null])
     if (!room) continue
 
@@ -409,12 +485,25 @@ function extractWsMessagesFromPayload(payload: unknown): AlfaClubLiveInboundMess
       id: messageId,
       date,
       sender,
-      text,
+      text: text ?? '',
+      attachments,
+      replyAttachments,
       rawPayloadText,
     })
   }
 
   return out
+}
+
+export function extractAlfaClubWsMessagesForTest(payload: unknown): AlfaClubLiveInboundMessage[] {
+  return extractWsMessagesFromPayload(payload)
+}
+
+function extractAlfaClubActionAttachments(action: unknown): AlfaClubMessageAttachment[] {
+  if (!isJsonRecord(action)) return []
+  const actionName = typeof action.action === 'string' ? action.action : ''
+  if (actionName !== 'hermit.command' && actionName !== 'alfaclub.message.attachments') return []
+  return normalizeAlfaClubAttachments(action.attachments)
 }
 
 async function fetchRoomHistory(params: {
@@ -489,6 +578,7 @@ async function sendRoomMessageViaWebSocket(params: {
   jwt: string
   roomId: string
   text: string
+  attachments?: unknown
   timeoutMs: number
 }): Promise<void> {
   const WebSocketCtor = getBridgeWebSocketCtor()
@@ -503,6 +593,7 @@ async function sendRoomMessageViaWebSocket(params: {
     buildAlfaClubOutboundFrame({
       roomId: params.roomId,
       text: params.text,
+      attachments: params.attachments,
     }),
   )
 
@@ -786,6 +877,8 @@ async function ingestLiveMessages(
         date: message.dateMs ?? Date.now(),
         sender: message.senderAddress,
         text: message.text,
+        attachments: [],
+        replyAttachments: [],
         rawPayloadText: message.rawPayloadText ?? null,
       }),
       timeoutMs: flags.sendTimeoutMs,
@@ -944,11 +1037,13 @@ async function executeCommandBatch(params: {
       })
       const responseText = String(result.responseText ?? '').trim()
       if (!responseText) continue
+      const attachments = extractAlfaClubActionAttachments(result.action)
       await sendRoomMessageViaWebSocket({
         websocketUrl: params.flags.websocketUrl,
         jwt: params.jwt,
         roomId: params.roomId,
         text: responseText,
+        attachments,
         timeoutMs: params.flags.sendTimeoutMs,
       })
       replied += 1

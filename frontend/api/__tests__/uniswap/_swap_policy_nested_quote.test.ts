@@ -27,6 +27,7 @@ describe('/api/uniswap/swap token policy with nested quote tokens', () => {
   afterEach(() => {
     if (restoreEnv) restoreEnv()
     restoreEnv = null
+    vi.unstubAllGlobals()
   })
 
   it('rejects denylisted token from quote.input/quote.output', async () => {
@@ -79,5 +80,55 @@ describe('/api/uniswap/swap token policy with nested quote tokens', () => {
 
     expect(res.statusCode).toBe(400)
     expect(res.body?.error).toBe('Token denied by policy: input.token')
+  })
+
+  it('strips stale Permit2 fields before forwarding when Permit2 is disabled', async () => {
+    restoreEnv = applyEnv({
+      UNISWAP_API_KEY: 'test-key',
+      UNISWAP_TRADE_API_BASE: 'https://trade.example.test/v1',
+    })
+    const fetchMock = vi.fn(async () => ({
+      status: 200,
+      text: async () =>
+        JSON.stringify({
+          swap: {
+            to: '0x0000000000000000000000000000000000000001',
+            from: '0x0000000000000000000000000000000000000002',
+            data: '0x1234',
+            value: '0',
+            chainId: 8453,
+          },
+        }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    const handler = await loadSwapHandler()
+    const req = createMockReq({
+      method: 'POST',
+      headers: { origin: 'https://app.4626.fun', 'x-forwarded-for': '10.1.1.101' },
+      body: {
+        permit2Disabled: true,
+        permitData: { domain: {}, values: {} },
+        signature: '0xabc',
+        quote: {
+          input: { token: '0x0000000000000000000000000000000000000001', amount: '1' },
+          output: { token: '0x0000000000000000000000000000000000000002', amount: '1' },
+          routing: 'CLASSIC',
+          permitData: { stale: true },
+        },
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    const forwarded = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? '{}'))
+    expect(forwarded.permit2Disabled).toBeUndefined()
+    expect(forwarded.permitData).toBeUndefined()
+    expect(forwarded.signature).toBeUndefined()
+    expect(forwarded.quote.permitData).toBeUndefined()
+    expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({ 'x-permit2-disabled': 'true' })
   })
 })

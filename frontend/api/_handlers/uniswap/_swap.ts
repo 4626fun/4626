@@ -24,6 +24,25 @@ function isPermit2Disabled(value: unknown): boolean {
   return lc === 'true' || lc === '1'
 }
 
+function stripPermit2Fields(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stripPermit2Fields)
+  if (!isObject(value)) return value
+
+  const next: Record<string, unknown> = {}
+  for (const [key, item] of Object.entries(value)) {
+    if (
+      key === 'permitData' ||
+      key === 'permitSingleData' ||
+      key === 'permitTransferFromData' ||
+      key === 'signature'
+    ) {
+      continue
+    }
+    next[key] = stripPermit2Fields(item)
+  }
+  return next
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -68,8 +87,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(400).json({ success: false, error: routingPolicyErr })
   }
 
-  const hasSignature = typeof body.signature === 'string' && body.signature.trim().length > 0
-  const hasPermitData = isObject(body.permitData)
+  const permit2Disabled = isPermit2Disabled(body.permit2Disabled) || isPermit2Disabled(req.headers['x-permit2-disabled'])
+  const effectiveBody = permit2Disabled ? (stripPermit2Fields(body) as Record<string, unknown>) : body
+  const hasSignature = typeof effectiveBody.signature === 'string' && effectiveBody.signature.trim().length > 0
+  const hasPermitData = isObject(effectiveBody.permitData)
   if (hasSignature !== hasPermitData) {
     return res.status(400).json({
       success: false,
@@ -77,10 +98,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
   }
 
-  const payload: Record<string, unknown> = { ...body }
+  const payload: Record<string, unknown> = { ...effectiveBody }
   delete payload.permit2Disabled
   const headers: Record<string, string> = {}
-  if (isPermit2Disabled(body.permit2Disabled) || isPermit2Disabled(req.headers['x-permit2-disabled'])) {
+  if (permit2Disabled) {
     headers['x-permit2-disabled'] = 'true'
   }
 

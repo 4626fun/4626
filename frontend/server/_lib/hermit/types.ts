@@ -5,6 +5,13 @@ export type HermitMeme = {
   tags: string[]
 }
 
+export type HermitMediaAttachment = {
+  url: string
+  type: string
+  filename?: string
+  mime_type?: string
+}
+
 export type HermitCommandKind = 'gmeow' | 'hermit' | 'meme'
 
 export type HermitExecutionParams = {
@@ -17,5 +24,6 @@ export type HermitExecutionResult = {
   reply: string
   meme?: HermitMeme
   imagePrompt?: string
+  mediaAttachments?: HermitMediaAttachment[]
   provider: 'local' | 'pinata'
 }

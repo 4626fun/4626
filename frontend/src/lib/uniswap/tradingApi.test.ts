@@ -105,6 +105,40 @@ describe('buildSwap', () => {
     ).rejects.toThrow('Invalid swap transaction: missing call data')
   })
 
+  it('strips stale Permit2 fields from swap requests when Permit2 is disabled', async () => {
+    const fetchMock = vi.fn(async () => ({
+      ok: true,
+      status: 200,
+      json: async () => ({
+        success: true,
+        data: { swap: VALID_TX },
+      }),
+    }))
+    vi.stubGlobal('fetch', fetchMock)
+
+    await buildSwap({
+      permit2Disabled: true,
+      quote: {
+        quoteId: 'q_permit_stale',
+        permitData: { stale: true },
+        nested: [{ signature: '0xdef', permitSingleData: { stale: true } }],
+      },
+      permitData: { domain: {}, values: {} },
+      signature: '0xabc',
+      includeGasInfo: false,
+      refreshGasPrice: false,
+      simulateTransaction: false,
+    })
+
+    const forwarded = JSON.parse(String((fetchMock as any).mock.calls[0]?.[1]?.body ?? '{}'))
+    expect(forwarded.permit2Disabled).toBe(true)
+    expect(forwarded.permitData).toBeUndefined()
+    expect(forwarded.signature).toBeUndefined()
+    expect(forwarded.quote.permitData).toBeUndefined()
+    expect(forwarded.quote.nested[0].signature).toBeUndefined()
+    expect(forwarded.quote.nested[0].permitSingleData).toBeUndefined()
+  })
+
   it('executes cdp swap when quote metadata marks cdp provider', async () => {
     vi.stubGlobal(
       'fetch',

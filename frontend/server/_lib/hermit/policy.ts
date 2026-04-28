@@ -21,6 +21,24 @@ export function isHermitOwner(address: string): boolean {
   return address.trim().toLowerCase() === owner
 }
 
+export function readHermitAllowedUsers(): Set<string> {
+  const raw = asTrimmed(process.env.ALFACHAT_PINATA_ALLOWED_USERS)
+  if (!raw) return new Set<string>()
+  const out = new Set<string>()
+  for (const part of raw.split(',')) {
+    const candidate = part.trim().toLowerCase()
+    if (isAddressLike(candidate)) out.add(candidate)
+  }
+  return out
+}
+
+export function isHermitUserAllowed(address: string): boolean {
+  const candidate = address.trim().toLowerCase()
+  if (!isAddressLike(candidate)) return false
+  const allowlist = readHermitAllowedUsers()
+  return allowlist.size > 0 && allowlist.has(candidate)
+}
+
 export function readHermitAllowedRoomIds(): Set<string> {
   const raw = asTrimmed(process.env.HERMIT_ALLOWED_ROOM_IDS)
   if (!raw) return new Set<string>()

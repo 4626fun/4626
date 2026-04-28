@@ -53,6 +53,63 @@ describe('executeHermitCommand', () => {
     ).rejects.toThrow('Hermit Pinata path unavailable')
   })
 
+  it('returns usage context for /hermit without calling pinata', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/hermit',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toContain('/hermit announce <news>')
+    expect(result.reply).toContain('/hermit tone <message>')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('returns usage context for /hermit help', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/hermit help',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })
+
+    expect(result.kind).toBe('hermit')
+    expect(result.provider).toBe('local')
+    expect(result.reply).toContain('Hermit drafts room-ready copy.')
+    expect(fetchMock).not.toHaveBeenCalled()
+  })
+
+  it('uses the bundled cat laugh meme for plain /gmeow', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/gmeow',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })
+
+    expect(result.kind).toBe('gmeow')
+    expect(result.reply).toContain('cat laugh')
+    expect(result.mediaAttachments).toEqual([
+      {
+        url: 'https://app.4626.fun/hermit/catlaugh.gif',
+        type: 'tenor-gif',
+      },
+    ])
+  })
+
+  it('returns the bundled cat laugh meme for /gmeow laugh', async () => {
+    const result = await executeHermitCommand({
+      commandText: '/gmeow laugh',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })
+
+    expect(result.kind).toBe('gmeow')
+    expect(result.reply).toContain('cat laugh')
+    expect(result.mediaAttachments).toEqual([
+      {
+        url: 'https://app.4626.fun/hermit/catlaugh.gif',
+        type: 'tenor-gif',
+      },
+    ])
+  })
+
   it('uses /meme for the Pinata image prompt path', async () => {
     restoreEnv = applyEnv({
       HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',

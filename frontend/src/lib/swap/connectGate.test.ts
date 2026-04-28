@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { deriveSwapConnectGate } from './connectGate'
+import { deriveSwapConnectGate, isConnectorAlreadyConnectedError } from './connectGate'
 
 describe('deriveSwapConnectGate', () => {
   it('returns hydrating while the session has not finished its initial probe', () => {
@@ -108,5 +108,18 @@ describe('deriveSwapConnectGate', () => {
     expect(result.ready).toBe(true)
     expect(result.actionLabel).toBe('')
     expect(result.title).toBe('')
+  })
+})
+
+describe('isConnectorAlreadyConnectedError', () => {
+  it('recognizes wagmi connector already connected errors across common shapes', () => {
+    expect(isConnectorAlreadyConnectedError(new Error('Connector already connected. Version: @wagmi/core@2.22.1'))).toBe(true)
+    expect(isConnectorAlreadyConnectedError({ name: 'ConnectorAlreadyConnectedError', message: 'Version: @wagmi/core@2.22.1' })).toBe(true)
+    expect(isConnectorAlreadyConnectedError({ shortMessage: 'Connector already connected' })).toBe(true)
+  })
+
+  it('does not hide unrelated connector failures', () => {
+    expect(isConnectorAlreadyConnectedError(new Error('User rejected the request'))).toBe(false)
+    expect(isConnectorAlreadyConnectedError(null)).toBe(false)
   })
 })

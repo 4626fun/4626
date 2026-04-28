@@ -5,6 +5,7 @@ import {
   evaluateCanonicalSubmitSession,
   evaluateSwapSessionGate,
   resolveCanonicalSubmitSession,
+  shouldDisablePermit2ForSwap,
 } from './useSwapExecution'
 import { requiresCanonicalExecutionForSwapMode } from '@/lib/swap/providerConfig'
 
@@ -300,5 +301,37 @@ describe('deriveSwapExecutionReadiness', () => {
         canonicalPolicyApplies: false,
       }),
     ).toBe(true)
+  })
+})
+
+describe('shouldDisablePermit2ForSwap', () => {
+  it('disables Permit2 for canonical execution mode', () => {
+    expect(
+      shouldDisablePermit2ForSwap({
+        executionMode: 'canonical',
+        canonicalAddress: null,
+        executionAddress: '0x1111111111111111111111111111111111111111',
+      }),
+    ).toBe(true)
+  })
+
+  it('disables Permit2 whenever the parent canonical CSW is the execution address', () => {
+    expect(
+      shouldDisablePermit2ForSwap({
+        executionMode: 'eoa',
+        canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+        executionAddress: '0xAb6d5C10b03300326CD7fAb7267Ae192842967b5',
+      }),
+    ).toBe(true)
+  })
+
+  it('keeps Permit2 available for normal external EOA swaps', () => {
+    expect(
+      shouldDisablePermit2ForSwap({
+        executionMode: 'eoa',
+        canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+        executionAddress: '0x3333333333333333333333333333333333333333',
+      }),
+    ).toBe(false)
   })
 })

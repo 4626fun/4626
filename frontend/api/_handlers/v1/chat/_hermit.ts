@@ -13,6 +13,7 @@ import {
   rateLimitKey,
 } from '../../../../packages/server-core/src/index.js'
 import { isCreWriteCommandText } from '../../../../server/agent/eliza/plugins/cre/index.js'
+import { isHermitUserAllowed } from '../../../../server/_lib/hermit/policy.js'
 import { executeHermitCommand } from '../../../../server/_lib/hermit/skillRouter.js'
 
 type HermitBody = {
@@ -42,17 +43,6 @@ function isHermitSource(value: string): boolean {
     normalized === 'pinata-agent' ||
     normalized === 'pinata_agent'
   )
-}
-
-function readHermitAllowedUsers(): Set<string> {
-  const raw = String(process.env.ALFACHAT_PINATA_ALLOWED_USERS ?? '').trim()
-  if (!raw) return new Set<string>()
-  const out = new Set<string>()
-  for (const part of raw.split(',')) {
-    const candidate = part.trim().toLowerCase()
-    if (isAddressLike(candidate)) out.add(candidate)
-  }
-  return out
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -110,8 +100,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     } satisfies ApiEnvelope<never>)
   }
 
-  const allowlist = readHermitAllowedUsers()
-  if (allowlist.size === 0 || !allowlist.has(sessionAddress)) {
+  if (!isHermitUserAllowed(sessionAddress)) {
     return res.status(403).json({
       success: false,
       error: 'Hermit access denied',
