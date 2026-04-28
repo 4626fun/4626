@@ -195,16 +195,16 @@ export async function executeHermitCommand(
     }
   }
 
-  if (command === '/hermitimg') {
+  if (command === '/meme') {
     const draft = await runPinataDraft(buildPinataPromptForHermitImage(args))
     if (!draft?.text) {
       throw commandError(
-        'Hermit Pinata image path unavailable. Configure HERMIT_PINATA_CHAT_ENDPOINT and HERMIT_PINATA_BEARER_TOKEN.',
+        'Hermit meme path unavailable. Configure HERMIT_PINATA_CHAT_ENDPOINT and HERMIT_PINATA_BEARER_TOKEN.',
       )
     }
     const image = formatHermitImageResult(draft.text)
     return {
-      kind: 'hermitimg',
+      kind: 'meme',
       provider: 'pinata',
       imagePrompt: image.imagePrompt,
       reply: image.reply,
@@ -232,6 +232,6 @@ export async function executeHermitCommand(
   }
 
   throw commandError(
-    'Unsupported Hermit command. Use /gmeow, /hermit [copy|announce|quest|tone], or /hermitimg.',
+    'Unsupported Hermit command. Use /gmeow, /hermit [copy|announce|quest|tone], or /meme.',
   )
 }

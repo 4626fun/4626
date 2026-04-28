@@ -74,6 +74,26 @@ describe('executeHermitCommand', () => {
     expect(result.reply).toBe('Akita + black cat cyberpunk meme frame')
   })
 
+  it('uses /meme as the simple alias for the Pinata image prompt path', async () => {
+    restoreEnv = applyEnv({
+      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
+      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
+    })
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ text: 'Akita cat meme prompt' }),
+    } as Response)
+
+    const result = await executeHermitCommand({
+      commandText: '/meme akita black cat',
+      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    })
+
+    expect(result.provider).toBe('pinata')
+    expect(result.kind).toBe('hermitimg')
+    expect(result.imagePrompt).toBe('Akita cat meme prompt')
+  })
+
   it('formats structured JSON from pinata for /hermit', async () => {
     restoreEnv = applyEnv({
       HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',

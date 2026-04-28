@@ -2,7 +2,7 @@ import { resolveApiErrorMessage } from '@/lib/api/apiEnvelope'
 import { apiFetch } from '@/lib/api/apiBase'
 import { API_ENDPOINTS } from '@/lib/api/apiEndpoints'
 
-export type HermitCommandKind = 'gmeow' | 'hermit' | 'hermitimg'
+export type HermitCommandKind = 'gmeow' | 'hermit' | 'meme'
 export type HermitProvider = 'local' | 'pinata'
 
 export type HermitMeme = {
@@ -47,7 +47,7 @@ function isHermitMeme(value: unknown): value is HermitMeme {
 function isHermitResult(value: unknown): value is HermitResult {
   if (!isRecord(value)) return false
   if (!hasOnlyKeys(value, ['kind', 'provider', 'reply', 'meme', 'imagePrompt'])) return false
-  if (!(value.kind === 'gmeow' || value.kind === 'hermit' || value.kind === 'hermitimg')) return false
+  if (!(value.kind === 'gmeow' || value.kind === 'hermit' || value.kind === 'meme')) return false
   if (!(value.provider === 'local' || value.provider === 'pinata')) return false
   if (typeof value.reply !== 'string') return false
   if (typeof value.imagePrompt !== 'undefined' && typeof value.imagePrompt !== 'string') return false

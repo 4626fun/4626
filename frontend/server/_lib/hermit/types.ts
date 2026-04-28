@@ -5,7 +5,7 @@ export type HermitMeme = {
   tags: string[]
 }
 
-export type HermitCommandKind = 'gmeow' | 'hermit' | 'hermitimg'
+export type HermitCommandKind = 'gmeow' | 'hermit' | 'meme'
 
 export type HermitExecutionParams = {
   commandText: string
