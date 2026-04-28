@@ -2,13 +2,17 @@
 pragma solidity ^0.8.20;
 
 import {Test} from "forge-std/Test.sol";
-import {LotteryAmoeRouter, ILotteryAmoeConsumer} from "contracts/utilities/lottery/zk/LotteryAmoeRouter.sol";
+import {
+    LotteryAmoeRouter,
+    ILotteryAmoeConsumer,
+    IAmoeManager
+} from "contracts/utilities/lottery/zk/LotteryAmoeRouter.sol";
 import {IAmoeGroth16Verifier} from "contracts/utilities/lottery/zk/IAmoeGroth16Verifier.sol";
 
-/// @notice Stub verifier that returns whatever flag it's configured with. The
-///         router's responsibility is the public-input binding + replay guards;
-///         the cryptographic correctness of the proof is tested in the circuit
-///         integration tests (`circuits/amoe/test`).
+/// @notice Stub verifier (v2: 8 public inputs) returning whatever flag it's
+///         configured with. The router's responsibility is the public-input
+///         binding + replay guards; cryptographic correctness of the proof is
+///         tested in the circuit integration tests (`circuits/amoe/test`).
 contract MockVerifier is IAmoeGroth16Verifier {
     bool public ok = true;
     function setOk(bool v) external { ok = v; }
@@ -16,11 +20,11 @@ contract MockVerifier is IAmoeGroth16Verifier {
         uint256[2] calldata,
         uint256[2][2] calldata,
         uint256[2] calldata,
-        uint256[5] calldata
+        uint256[8] calldata
     ) external view returns (bool) { return ok; }
 }
 
-/// @notice Stub consumer to confirm the router fans out correctly.
+/// @notice Stub legacy event-only consumer.
 contract MockConsumer is ILotteryAmoeConsumer {
     event Recorded(address buyer, address coin, uint64 epoch, uint256 entryId);
     function recordAmoeEntry(address buyer, address coin, uint64 epoch, uint256 entryId) external {
@@ -28,28 +32,77 @@ contract MockConsumer is ILotteryAmoeConsumer {
     }
 }
 
+/// @notice Stub manager-shaped fan-out target (v2). Records the `pointsBurnedAsUSD`
+///         it received so tests can assert the proven value reaches the manager.
+contract MockManager is IAmoeManager {
+    event Processed(address buyer, address coin, uint256 pointsBurnedAsUSD);
+
+    address public lastBuyer;
+    address public lastCoin;
+    uint256 public lastPoints;
+    uint256 public callCount;
+    uint256 public returnEntryId = 1234; // fixture VRF id
+    bool public shouldRevert;
+
+    function setReturnEntryId(uint256 v) external { returnEntryId = v; }
+    function setShouldRevert(bool v) external { shouldRevert = v; }
+
+    function processAmoeEntry(address buyer, address coin, uint256 pointsBurnedAsUSD)
+        external
+        returns (uint256)
+    {
+        if (shouldRevert) revert("MockManager: forced revert");
+        lastBuyer = buyer;
+        lastCoin = coin;
+        lastPoints = pointsBurnedAsUSD;
+        callCount += 1;
+        emit Processed(buyer, coin, pointsBurnedAsUSD);
+        return returnEntryId;
+    }
+}
+
 contract LotteryAmoeRouterTest is Test {
     LotteryAmoeRouter router;
     MockVerifier verifier;
     MockConsumer consumer;
+    MockManager managerMock;
 
     address owner = address(0xAA);
     address publisher = address(0xBB);
+    address pointsPublisher = address(0xCC);
     address buyer = address(0xCAFE);
     address coin = address(0xC0FFEE);
 
     uint64 constant EPOCH = 42;
-    bytes32 constant ROOT = bytes32(uint256(0x1234));
+    bytes32 constant ALLOW_ROOT = bytes32(uint256(0x1234));
+    bytes32 constant LEDGER_ROOT = bytes32(uint256(0x5678));
+
+    // Default points value used by happy-path fixtures: $1.00 USDC equivalent
+    // (1e6 1e6 units). Fits comfortably under MAX_POINTS_AS_USD.
+    uint256 constant DEFAULT_POINTS = 1_000_000;
+
+    // Default nullifier (arbitrary, just needs to be non-zero).
+    bytes32 constant DEFAULT_NULLIFIER = bytes32(uint256(0xDEADBEEF));
 
     function setUp() public {
         verifier = new MockVerifier();
         consumer = new MockConsumer();
+        managerMock = new MockManager();
         router = new LotteryAmoeRouter(owner, publisher, address(verifier));
-        vm.prank(owner);
+        vm.startPrank(owner);
         router.setConsumer(address(consumer));
+        router.setManager(address(managerMock));
+        router.setPointsLedgerPublisher(pointsPublisher);
+        vm.stopPrank();
         vm.prank(publisher);
-        router.setAllowlistRoot(EPOCH, ROOT);
+        router.setAllowlistRoot(EPOCH, ALLOW_ROOT);
+        vm.prank(pointsPublisher);
+        router.setPointsLedgerRoot(EPOCH, LEDGER_ROOT);
     }
+
+    // ---------------------------------------------------------------------
+    // Helpers
+    // ---------------------------------------------------------------------
 
     function _proof()
         internal
@@ -61,39 +114,54 @@ contract LotteryAmoeRouterTest is Test {
         c = [uint256(7), uint256(8)];
     }
 
-    function _pubInputs(uint256 walletCommit, uint256 nonceCommit)
-        internal
-        pure
-        returns (uint256[5] memory)
-    {
-        uint256[5] memory inp;
+    function _pubInputs(
+        uint256 walletCommit,
+        uint256 nonceCommit,
+        uint256 pointsBurnedAsUSD,
+        uint256 nullifier
+    ) internal pure returns (uint256[8] memory inp) {
         inp[0] = walletCommit;
         inp[1] = uint256(uint160(0xC0FFEE));
         inp[2] = nonceCommit;
         inp[3] = uint256(EPOCH);
-        inp[4] = uint256(ROOT);
-        return inp;
+        inp[4] = uint256(ALLOW_ROOT);
+        inp[5] = pointsBurnedAsUSD;
+        inp[6] = uint256(LEDGER_ROOT);
+        inp[7] = nullifier;
     }
+
+    function _defaultPubInputs(uint256 walletCommit, uint256 nonceCommit)
+        internal
+        pure
+        returns (uint256[8] memory)
+    {
+        return _pubInputs(walletCommit, nonceCommit, DEFAULT_POINTS, uint256(DEFAULT_NULLIFIER));
+    }
+
+    // =====================================================================
+    // submitAmoeEntryZK (v2) — happy path & basic public-input bindings
+    // =====================================================================
 
     function test_submitAmoeEntryZK_happyPath() public {
         (uint256[2] memory a, uint256[2][2] memory b, uint256[2] memory c) = _proof();
-        uint256 id = router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, _pubInputs(111, 222));
+        uint256 id = router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, _defaultPubInputs(111, 222));
         assertEq(id, 1);
         assertTrue(router.usedNonceCommit(bytes32(uint256(222))));
         assertTrue(router.usedWalletCommit(EPOCH, bytes32(uint256(111))));
+        assertTrue(router.usedPointsBurnNullifier(DEFAULT_NULLIFIER));
     }
 
     function test_submitAmoeEntryZK_rejectsRootMismatch() public {
         (uint256[2] memory a, uint256[2][2] memory b, uint256[2] memory c) = _proof();
-        uint256[5] memory inp = _pubInputs(111, 222);
-        inp[4] = uint256(bytes32(uint256(0xDEAD))); // wrong root
+        uint256[8] memory inp = _defaultPubInputs(111, 222);
+        inp[4] = uint256(bytes32(uint256(0xDEAD))); // wrong allowlist root
         vm.expectRevert(LotteryAmoeRouter.RootMismatch.selector);
         router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, inp);
     }
 
     function test_submitAmoeEntryZK_rejectsCoinMismatch() public {
         (uint256[2] memory a, uint256[2][2] memory b, uint256[2] memory c) = _proof();
-        uint256[5] memory inp = _pubInputs(111, 222);
+        uint256[8] memory inp = _defaultPubInputs(111, 222);
         inp[1] = uint256(uint160(address(0xBADC0DE))); // wrong coin
         vm.expectRevert(LotteryAmoeRouter.InvalidProof.selector);
         router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, inp);
@@ -101,26 +169,32 @@ contract LotteryAmoeRouterTest is Test {
 
     function test_submitAmoeEntryZK_rejectsNonceReplay() public {
         (uint256[2] memory a, uint256[2][2] memory b, uint256[2] memory c) = _proof();
-        router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, _pubInputs(111, 222));
-        // Different walletCommit but same nonceCommit must still revert.
+        router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, _defaultPubInputs(111, 222));
+        // Different walletCommit, different nullifier, but same nonceCommit must still revert.
+        uint256[8] memory inp = _pubInputs(999, 222, DEFAULT_POINTS, uint256(keccak256("n2")));
         vm.expectRevert(LotteryAmoeRouter.NonceReplayed.selector);
-        router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, _pubInputs(999, 222));
+        router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, inp);
     }
 
     function test_submitAmoeEntryZK_rejectsTwitterCreditReplay() public {
         (uint256[2] memory a, uint256[2][2] memory b, uint256[2] memory c) = _proof();
-        router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, _pubInputs(111, 222));
-        // Same walletCommit (= same twitter credit) with a fresh nonce must revert.
+        router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, _defaultPubInputs(111, 222));
+        // Same walletCommit (= same twitter credit), fresh nonce + nullifier, same epoch → revert.
+        uint256[8] memory inp = _pubInputs(111, 333, DEFAULT_POINTS, uint256(keccak256("n2")));
         vm.expectRevert(LotteryAmoeRouter.WalletCreditReplayed.selector);
-        router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, _pubInputs(111, 333));
+        router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, inp);
     }
 
     function test_submitAmoeEntryZK_rejectsBadProof() public {
         verifier.setOk(false);
         (uint256[2] memory a, uint256[2][2] memory b, uint256[2] memory c) = _proof();
         vm.expectRevert(LotteryAmoeRouter.InvalidProof.selector);
-        router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, _pubInputs(111, 222));
+        router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, _defaultPubInputs(111, 222));
     }
+
+    // ---------------------------------------------------------------------
+    // setAllowlistRoot
+    // ---------------------------------------------------------------------
 
     function test_setAllowlistRoot_onlyPublisher() public {
         vm.expectRevert(LotteryAmoeRouter.NotPublisher.selector);

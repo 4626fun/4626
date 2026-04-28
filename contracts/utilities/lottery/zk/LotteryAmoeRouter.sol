@@ -3,34 +3,52 @@ pragma solidity ^0.8.20;
 
 import {IAmoeGroth16Verifier} from "./IAmoeGroth16Verifier.sol";
 
-/// @title LotteryAmoeRouter
-/// @notice Minimal on-chain settlement layer for 4626.fun AMOE lottery entries.
-///         Today, AMOE proofs are verified server-side in
-///         `frontend/server/_lib/lottery/lotteryAmoe.ts` and only an entry id
-///         is written to Postgres. This router keeps a small piece of state
-///         on-chain so AMOE eligibility can be audited independently of the
-///         server, and adds a sigless ZK path backed by an
-///         AmoeGroth16Verifier emitted from `circuits/amoe`.
+/// @title LotteryAmoeRouter (v2)
+/// @notice On-chain settlement layer for 4626.fun AMOE lottery entries.
+///         v2 closes the trust gap that allowed `authorizedAmoeRelayer` to
+///         assert an arbitrary `pointsBurnedAsUSD` for any allowlisted
+///         wallet — the value is now bound into the Groth16 proof, replay-
+///         guarded by a global nullifier mapping, and anchored by a daily
+///         Merkle root of the off-chain points-burn ledger.
 ///
-/// @dev    This contract intentionally does NOT touch CreatorLotteryManager
-///         storage. It records the AMOE entry, prevents replay, and emits an
-///         event that the lottery manager (or a keeper) can consume to credit
-///         the entry into the next VRF roll. That keeps the diff to existing
-///         audited code zero.
+///         When PR 4b is rolled out, `CreatorLotteryManager.authorizedAmoeRelayer`
+///         is set to this router's address so `processAmoeEntry` is only ever
+///         called with a cryptographically-bound value.
 ///
-///         Two entry paths:
-///           submitAmoeEntry      v1 ECDSA / EIP-1271 (existing flow)
-///           submitAmoeEntryZK    v2 Groth16-backed (new flow)
+/// @dev    Two entry paths:
+///           submitAmoeEntry      v1 ECDSA / EIP-1271 (compat path)
+///           submitAmoeEntryZK    v2 Groth16-backed (audit-grade path)
 ///
 ///         Both produce the same `AmoeEntryRecorded` event so downstream
 ///         consumers don't need to branch.
 interface ILotteryAmoeConsumer {
+    /// @notice Legacy ZK-path consumer hook. Kept for backward compatibility
+    ///         with deployments that wired the router as an event-only
+    ///         broadcaster. Production deployments should set the manager
+    ///         (see `IAmoeManager` + `setManager`) to fan out with the proven
+    ///         `pointsBurnedAsUSD`.
     function recordAmoeEntry(
         address buyer,
         address creatorCoin,
         uint64 epoch,
         uint256 entryId
     ) external;
+}
+
+/// @notice Manager-facing fan-out interface. The router calls this with the
+///         `pointsBurnedAsUSD` value taken straight from the Groth16 public
+///         inputs, so the manager no longer trusts an off-chain relayer's
+///         claim about points accounting.
+///
+///         Matches `CreatorLotteryManager.processAmoeEntry`'s exact signature
+///         — when the rollout op `setAuthorizedAmoeRelayer(<router>)` runs,
+///         the manager treats this router as the relayer.
+interface IAmoeManager {
+    function processAmoeEntry(
+        address buyer,
+        address creatorCoin,
+        uint256 pointsBurnedAsUSD
+    ) external returns (uint256 entryId);
 }
 
 contract LotteryAmoeRouter {
@@ -44,14 +62,30 @@ contract LotteryAmoeRouter {
     /// @notice Address allowed to publish daily allowlist roots (server signer).
     address public allowlistPublisher;
 
-    /// @notice Groth16 verifier for the AMOE eligibility circuit.
+    /// @notice Address allowed to publish daily points-burn ledger roots.
+    /// @dev    Mirrors `allowlistPublisher` but for the v2 points-burn anchor.
+    ///         Same KMS-protected scoped key class.
+    address public pointsLedgerPublisher;
+
+    /// @notice Groth16 verifier for the AMOE eligibility circuit (v2).
     IAmoeGroth16Verifier public verifier;
 
-    /// @notice Optional downstream consumer (typically CreatorLotteryManager).
+    /// @notice Optional downstream legacy consumer (event broadcaster).
+    /// @dev    Receives the truncated `(buyer, coin, epoch, entryId)` shape.
+    ///         Production should prefer `manager` for points-bound fan-out.
     ILotteryAmoeConsumer public consumer;
+
+    /// @notice CreatorLotteryManager-shaped fan-out target. When non-zero, the
+    ///         router calls `manager.processAmoeEntry(buyer, coin,
+    ///         pointsBurnedAsUSD)` after a successful ZK submission, with the
+    ///         value taken directly from `pubInputs[5]`.
+    IAmoeManager public manager;
 
     /// @notice Daily allowlist roots, keyed by epoch.
     mapping(uint64 => bytes32) public allowlistRootOf;
+
+    /// @notice Daily points-burn ledger roots, keyed by epoch (one-shot).
+    mapping(uint64 => bytes32) public pointsLedgerRootOf;
 
     /// @notice Replay guard: nonce commitments already consumed.
     mapping(bytes32 => bool) public usedNonceCommit;
@@ -62,6 +96,13 @@ contract LotteryAmoeRouter {
     ///      reuses different nonces.
     mapping(uint64 => mapping(bytes32 => bool)) public usedWalletCommit;
 
+    /// @notice GLOBAL replay guard for points-burn nullifiers. Once a spend
+    ///         row is consumed by an AMOE entry, it can never back another
+    ///         entry, in any epoch, ever. This matches the off-chain semantic
+    ///         that one `(signup_id, source='amoe_entry_spend', source_id)`
+    ///         points row backs exactly one AMOE entry.
+    mapping(bytes32 => bool) public usedPointsBurnNullifier;
+
     /// @notice Monotonic entry id counter.
     uint256 public nextEntryId;
 
@@ -71,9 +112,12 @@ contract LotteryAmoeRouter {
 
     event OwnerUpdated(address indexed previous, address indexed current);
     event AllowlistPublisherUpdated(address indexed previous, address indexed current);
+    event PointsLedgerPublisherUpdated(address indexed previous, address indexed current);
     event VerifierUpdated(address indexed previous, address indexed current);
     event ConsumerUpdated(address indexed previous, address indexed current);
+    event ManagerUpdated(address indexed previous, address indexed current);
     event AllowlistRootSet(uint64 indexed epoch, bytes32 root);
+    event PointsLedgerRootSet(uint64 indexed epoch, bytes32 root);
 
     event AmoeEntryRecorded(
         uint256 indexed entryId,
@@ -85,6 +129,17 @@ contract LotteryAmoeRouter {
         EntryPath path
     );
 
+    /// @notice Emitted when the router successfully fans out a ZK entry to the
+    ///         lottery manager. `pointsBurnedAsUSD` is the value bound into
+    ///         the Groth16 proof; `managerEntryId` is the VRF id returned by
+    ///         the manager (0 if the manager silently skipped).
+    event AmoeEntrySettled(
+        uint256 indexed entryId,
+        bytes32 indexed pointsBurnNullifier,
+        uint256 pointsBurnedAsUSD,
+        uint256 managerEntryId
+    );
+
     enum EntryPath { ECDSA, ZK }
 
     // -------------------------------------------------------------------------
@@ -93,6 +148,7 @@ contract LotteryAmoeRouter {
 
     error NotOwner();
     error NotPublisher();
+    error NotPointsLedgerPublisher();
     error ZeroAddress();
     error VerifierNotSet();
     error UnknownEpoch();
@@ -100,7 +156,14 @@ contract LotteryAmoeRouter {
     error InvalidProof();
     error NonceReplayed();
     error WalletCreditReplayed();
+    error PointsBurnReplayed();
+    error PointsLedgerEpochNotPublished();
+    error PointsLedgerRootMismatch();
+    error PointsLedgerEpochAlreadyPublished();
+    error PointsValueOutOfRange();
     error EpochAlreadyPublished();
+    error ZeroRoot();
+    error ManagerDeclinedEntry();
     error DeadlineExpired();
     error DeadlineTooSoon();
 
@@ -123,6 +186,14 @@ contract LotteryAmoeRouter {
     ///         block boundary. Sixty seconds is well above worst-case
     ///         observed L1 / L2 timestamp slack.
     uint256 public constant MIN_DEADLINE_BUFFER = 60;
+
+    /// @notice Defense-in-depth ceiling on `pointsBurnedAsUSD`. AMOE max is
+    ///         1_000_000 points × 10_000 = 10^10 1e6 units = $10,000. A
+    ///         buggy server or a malformed proof witness that produces a
+    ///         value above this cap is rejected before it can reach the
+    ///         manager. The circuit independently range-checks the value to
+    ///         uint64; this ceiling is a tighter, semantic limit.
+    uint256 public constant MAX_POINTS_AS_USD = 10_000 * 1_000_000;
 
     // -------------------------------------------------------------------------
     // Construction
@@ -159,6 +230,14 @@ contract LotteryAmoeRouter {
         allowlistPublisher = _publisher;
     }
 
+    /// @notice Set the publisher key for the points-burn ledger Merkle root.
+    ///         Mirrors `setAllowlistPublisher`. Same scoped-KMS class.
+    function setPointsLedgerPublisher(address _publisher) external onlyOwner {
+        if (_publisher == address(0)) revert ZeroAddress();
+        emit PointsLedgerPublisherUpdated(pointsLedgerPublisher, _publisher);
+        pointsLedgerPublisher = _publisher;
+    }
+
     function setVerifier(address _verifier) external onlyOwner {
         emit VerifierUpdated(address(verifier), _verifier);
         verifier = IAmoeGroth16Verifier(_verifier);
@@ -169,6 +248,17 @@ contract LotteryAmoeRouter {
         consumer = ILotteryAmoeConsumer(_consumer);
     }
 
+    /// @notice Set the lottery-manager fan-out target. When non-zero, the
+    ///         router calls `manager.processAmoeEntry(buyer, coin,
+    ///         pointsBurnedAsUSD)` after each successful ZK entry.
+    /// @dev    The manager must be configured to accept this router as its
+    ///         `authorizedAmoeRelayer` for the call to succeed. That is a
+    ///         one-way ops handoff (see `docs/security/amoe-pr4-handoff.md`).
+    function setManager(address _manager) external onlyOwner {
+        emit ManagerUpdated(address(manager), _manager);
+        manager = IAmoeManager(_manager);
+    }
+
     /// @notice Publish the allowlist Merkle root for an epoch. One-shot per
     ///         epoch — re-publishing reverts. The publisher is expected to be
     ///         the same off-chain key that today signs AMOE messages in
@@ -176,22 +266,47 @@ contract LotteryAmoeRouter {
     function setAllowlistRoot(uint64 epoch, bytes32 root) external {
         if (msg.sender != allowlistPublisher) revert NotPublisher();
         if (allowlistRootOf[epoch] != bytes32(0)) revert EpochAlreadyPublished();
+        // Reject zero — `submitAmoeEntryZK` reads a stored zero as
+        // "epoch not yet published", so allowing zero here would brick the
+        // epoch under the one-shot constraint (`PointsLedgerEpochAlreadyPublished`
+        // / `EpochAlreadyPublished` blocks any correction).
+        if (root == bytes32(0)) revert ZeroRoot();
         allowlistRootOf[epoch] = root;
         emit AllowlistRootSet(epoch, root);
     }
 
+    /// @notice Publish the points-burn ledger Merkle root for an epoch.
+    ///         One-shot per epoch — re-publishing reverts. Mirrors the
+    ///         allowlist publisher pattern.
+    function setPointsLedgerRoot(uint64 epoch, bytes32 root) external {
+        if (msg.sender != pointsLedgerPublisher) revert NotPointsLedgerPublisher();
+        if (pointsLedgerRootOf[epoch] != bytes32(0)) revert PointsLedgerEpochAlreadyPublished();
+        // Reject zero — `submitAmoeEntryZK` reads a stored zero as
+        // "epoch not yet published" and reverts with
+        // `PointsLedgerEpochNotPublished`. Combined with the one-shot guard
+        // above, an accidentally-published zero root would permanently brick
+        // the epoch (no correction path). Rejecting zero at publish time is
+        // the cheapest fix.
+        if (root == bytes32(0)) revert ZeroRoot();
+        pointsLedgerRootOf[epoch] = root;
+        emit PointsLedgerRootSet(epoch, root);
+    }
+
     // -------------------------------------------------------------------------
-    // ZK entry path (NEW)
+    // ZK entry path (v2)
     // -------------------------------------------------------------------------
 
     /// @notice Submit an AMOE entry backed by a Groth16 proof.
-    /// @dev    `pubInputs` MUST be in the same order as the circuit's
+    /// @dev    `pubInputs` MUST be in the same order as the v2 circuit's
     ///         `public [...]` declaration:
     ///           [0] walletAddrCommit
     ///           [1] creatorCoinAddr (uint160 cast)
     ///           [2] nonceCommit
     ///           [3] epoch
     ///           [4] allowlistRoot
+    ///           [5] pointsBurnedAsUSD       (v2)
+    ///           [6] pointsLedgerRoot        (v2)
+    ///           [7] pointsBurnNullifier     (v2)
     function submitAmoeEntryZK(
         address buyer,
         address creatorCoin,
@@ -199,33 +314,50 @@ contract LotteryAmoeRouter {
         uint256[2] calldata a,
         uint256[2][2] calldata b,
         uint256[2] calldata c,
-        uint256[5] calldata pubInputs
+        uint256[8] calldata pubInputs
     ) external returns (uint256 entryId) {
         if (address(verifier) == address(0)) revert VerifierNotSet();
 
-        // 1. Bind public inputs to the calldata-asserted (buyer, creatorCoin, epoch)
+        // 1. Bind public inputs to the calldata-asserted (creatorCoin, epoch)
         //    so the proof can't be re-used against a different on-chain entry.
         if (uint256(uint160(creatorCoin)) != pubInputs[1]) revert InvalidProof();
         if (uint256(epoch) != pubInputs[3]) revert InvalidProof();
 
         // 2. Allowlist root pinning. The root must match the value the
         //    publisher posted for this epoch.
-        bytes32 root = allowlistRootOf[epoch];
-        if (root == bytes32(0)) revert UnknownEpoch();
-        if (uint256(root) != pubInputs[4]) revert RootMismatch();
+        bytes32 allowRoot = allowlistRootOf[epoch];
+        if (allowRoot == bytes32(0)) revert UnknownEpoch();
+        if (uint256(allowRoot) != pubInputs[4]) revert RootMismatch();
 
-        // 3. Replay guards.
+        // 3. Points-burn ledger root pinning (v2). Same one-shot pattern as
+        //    allowlist root, separate publisher key.
+        bytes32 ledgerRoot = pointsLedgerRootOf[epoch];
+        if (ledgerRoot == bytes32(0)) revert PointsLedgerEpochNotPublished();
+        if (uint256(ledgerRoot) != pubInputs[6]) revert PointsLedgerRootMismatch();
+
+        // 4. Defense-in-depth: bound the proven `pointsBurnedAsUSD` by the
+        //    AMOE protocol cap. The circuit already range-checks the value
+        //    fits a uint64; this ceiling is the tighter semantic limit.
+        uint256 pointsBurnedAsUSD = pubInputs[5];
+        if (pointsBurnedAsUSD == 0 || pointsBurnedAsUSD > MAX_POINTS_AS_USD) {
+            revert PointsValueOutOfRange();
+        }
+
+        // 5. Replay guards.
         bytes32 nonceCommit = bytes32(pubInputs[2]);
         if (usedNonceCommit[nonceCommit]) revert NonceReplayed();
         bytes32 walletCommit = bytes32(pubInputs[0]);
         if (usedWalletCommit[epoch][walletCommit]) revert WalletCreditReplayed();
+        bytes32 pointsBurnNullifier = bytes32(pubInputs[7]);
+        if (usedPointsBurnNullifier[pointsBurnNullifier]) revert PointsBurnReplayed();
 
-        // 4. Verify the Groth16 proof.
+        // 6. Verify the Groth16 proof.
         if (!verifier.verifyProof(a, b, c, pubInputs)) revert InvalidProof();
 
-        // 5. Effects.
+        // 7. Effects.
         usedNonceCommit[nonceCommit] = true;
         usedWalletCommit[epoch][walletCommit] = true;
+        usedPointsBurnNullifier[pointsBurnNullifier] = true;
         unchecked {
             entryId = ++nextEntryId;
         }
@@ -239,10 +371,33 @@ contract LotteryAmoeRouter {
             EntryPath.ZK
         );
 
-        // 6. Optional fan-out to lottery manager (so the entry feeds VRF).
+        // 8. Fan-out.
+        //    Manager fan-out is the production path: the router calls
+        //    `processAmoeEntry` directly with the proven points value, so the
+        //    manager-side `authorizedAmoeRelayer` gate now only ever admits
+        //    cryptographically-bound values.
+        //
+        //    `CreatorLotteryManager.processAmoeEntry` returns 0 on several
+        //    "silent skip" branches (inactive coin, sub-`minSwapAmount` value,
+        //    lottery currently inactive). Because step 7 above has already
+        //    burned the nonce / wallet / points-burn nullifiers, a 0 return
+        //    would lose the user's entry permanently with no replay path.
+        //    Revert in that case so the proof + nullifiers stay un-consumed
+        //    (state is rolled back atomically) and the user can resubmit
+        //    when conditions become favorable.
+        uint256 managerEntryId = 0;
+        if (address(manager) != address(0)) {
+            managerEntryId = manager.processAmoeEntry(buyer, creatorCoin, pointsBurnedAsUSD);
+            if (managerEntryId == 0) revert ManagerDeclinedEntry();
+        }
+
+        //    Legacy event-only consumer hook (optional, kept for compat with
+        //    deployments that wired the router as a passive broadcaster).
         if (address(consumer) != address(0)) {
             consumer.recordAmoeEntry(buyer, creatorCoin, epoch, entryId);
         }
+
+        emit AmoeEntrySettled(entryId, pointsBurnNullifier, pointsBurnedAsUSD, managerEntryId);
     }
 
     // -------------------------------------------------------------------------
