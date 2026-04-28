@@ -1,11 +1,18 @@
 import { pickRandomHermitMeme } from './memeStore.js'
 import type { HermitExecutionParams, HermitExecutionResult, HermitMediaAttachment } from './types.js'
+import WebSocket from 'ws'
 
 declare const process: { env: Record<string, string | undefined> }
 
 type PinataChatResult = {
   text: string
 }
+
+type PinataGatewayEvent =
+  | { type: 'event'; event?: string; payload?: Record<string, unknown> }
+  | { type: 'res'; id?: string; ok?: boolean; payload?: Record<string, unknown>; error?: Record<string, unknown> }
+
+const PINATA_GATEWAY_RPC_TIMEOUT_MS = 30_000
 
 type HermitDraftMode = 'copy' | 'announce' | 'quest' | 'tone'
 
@@ -129,9 +136,193 @@ function readPinataHermitConfig(): { endpoint: string; bearer: string } | null {
   return { endpoint, bearer }
 }
 
+function toGatewaySocketUrl(rawEndpoint: string): { wsUrl: string; origin: string } | null {
+  let parsed: URL
+  try {
+    parsed = new URL(rawEndpoint)
+  } catch {
+    return null
+  }
+
+  const host = parsed.hostname.toLowerCase()
+  const isPinataGatewayHost =
+    host.endsWith('.agents.pinata.cloud') || host.endsWith('.apps.pinata.cloud')
+  if (!isPinataGatewayHost) return null
+
+  const wsProtocol = parsed.protocol === 'https:' || parsed.protocol === 'wss:' ? 'wss:' : 'ws:'
+  const originProtocol = parsed.protocol === 'wss:' ? 'https:' : parsed.protocol === 'ws:' ? 'http:' : parsed.protocol
+  const wsUrl = `${wsProtocol}//${parsed.host}${parsed.pathname || '/'}`
+  const origin = `${originProtocol}//${parsed.host}`
+  return { wsUrl, origin }
+}
+
+function extractChatFinalText(payload: Record<string, unknown> | undefined): string | null {
+  if (!payload) return null
+  const state = typeof payload.state === 'string' ? payload.state : ''
+  if (state !== 'final') return null
+  const message = payload.message
+  if (!message || typeof message !== 'object' || Array.isArray(message)) return null
+  const content = (message as { content?: unknown }).content
+  if (!Array.isArray(content)) return null
+  const textParts = content
+    .map((entry) => {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return ''
+      const text = (entry as { text?: unknown }).text
+      return typeof text === 'string' ? text : ''
+    })
+    .filter(Boolean)
+  const joined = textParts.join('').trim()
+  return joined || null
+}
+
+async function runPinataDraftOverGateway(params: {
+  endpoint: string
+  bearer: string
+  prompt: string
+}): Promise<PinataChatResult | null> {
+  const gateway = toGatewaySocketUrl(params.endpoint)
+  if (!gateway) return null
+
+  return await new Promise<PinataChatResult | null>((resolve) => {
+    const socket = new WebSocket(gateway.wsUrl, {
+      headers: {
+        Authorization: `Bearer ${params.bearer}`,
+        Origin: gateway.origin,
+        'User-Agent':
+          'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+      },
+    })
+
+    let settled = false
+    let connectSent = false
+    let connected = false
+    let runId: string | null = null
+
+    const finish = (result: PinataChatResult | null): void => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      try {
+        socket.close()
+      } catch {}
+      resolve(result)
+    }
+
+    const sendReq = (id: string, method: string, payload: Record<string, unknown>): void => {
+      socket.send(
+        JSON.stringify({
+          type: 'req',
+          id,
+          method,
+          params: payload,
+        }),
+      )
+    }
+
+    const sendConnect = (): void => {
+      if (settled || connectSent) return
+      connectSent = true
+      sendReq('connect-1', 'connect', {
+        minProtocol: 3,
+        maxProtocol: 3,
+        client: {
+          id: 'openclaw-control-ui',
+          version: 'control-ui',
+          platform: 'node',
+          mode: 'webchat',
+          instanceId: `hermit-${Date.now()}`,
+        },
+        role: 'operator',
+        scopes: ['operator.admin', 'operator.approvals', 'operator.pairing'],
+        caps: ['tool-events'],
+        auth: { token: params.bearer },
+        userAgent: 'Mozilla/5.0',
+        locale: 'en-US',
+      })
+    }
+
+    const timeout = setTimeout(() => finish(null), PINATA_GATEWAY_RPC_TIMEOUT_MS)
+
+    socket.on('open', () => {
+      setTimeout(() => sendConnect(), 300)
+    })
+
+    socket.on('message', (raw) => {
+      if (settled) return
+      let msg: PinataGatewayEvent
+      try {
+        msg = JSON.parse(String(raw)) as PinataGatewayEvent
+      } catch {
+        return
+      }
+
+      if (msg.type === 'event') {
+        if (msg.event === 'connect.challenge') {
+          sendConnect()
+          return
+        }
+        if (msg.event === 'chat') {
+          const payload = msg.payload
+          if (!payload || typeof payload !== 'object') return
+          if (runId && (payload as { runId?: unknown }).runId !== runId) return
+          const text = extractChatFinalText(payload)
+          if (text) finish({ text })
+          return
+        }
+        return
+      }
+
+      if (msg.type !== 'res') return
+      if (msg.id === 'connect-1') {
+        if (!msg.ok) {
+          finish(null)
+          return
+        }
+        connected = true
+        const nextRunId = `hermit-${Date.now()}`
+        runId = nextRunId
+        sendReq('chat-send-1', 'chat.send', {
+          sessionKey: 'main',
+          message: params.prompt,
+          deliver: false,
+          idempotencyKey: nextRunId,
+        })
+        return
+      }
+
+      if (!connected) return
+      if (msg.id === 'chat-send-1') {
+        if (!msg.ok) {
+          finish(null)
+          return
+        }
+        const payload = msg.payload
+        runId =
+          payload && typeof payload === 'object' && typeof payload.runId === 'string'
+            ? payload.runId
+            : null
+        return
+      }
+    })
+
+    socket.on('close', () => finish(null))
+    socket.on('error', () => finish(null))
+  })
+}
+
 async function runPinataDraft(prompt: string): Promise<PinataChatResult | null> {
   const cfg = readPinataHermitConfig()
   if (!cfg) return null
+
+  const gatewayTarget = toGatewaySocketUrl(cfg.endpoint)
+  if (gatewayTarget) {
+    const viaGateway = await runPinataDraftOverGateway({
+      endpoint: cfg.endpoint,
+      bearer: cfg.bearer,
+      prompt,
+    })
+    return viaGateway?.text ? viaGateway : null
+  }
 
   const res = await fetch(cfg.endpoint, {
     method: 'POST',
@@ -205,6 +396,18 @@ function buildPinataPromptForHermitImage(userPrompt: string): string {
   ].join('\n')
 }
 
+function buildPinataPromptForGmeow(params: { userPrompt: string; memeCaption: string; memeTags: string[] }): string {
+  return [
+    'You are Hermit crafting one short meme line for AlfaChat.',
+    'Output STRICT JSON only:',
+    '{"line":"string"}',
+    'Rules: line <= 160 chars, playful but clean, no markdown.',
+    `Reference caption: ${params.memeCaption}`,
+    `Reference tags: ${params.memeTags.join(', ') || 'meme'}`,
+    `User input: ${params.userPrompt || 'gmeow'}`,
+  ].join('\n')
+}
+
 function formatHermitReplyFromDraft(rawText: string): string {
   const parsed = parseLooseJsonObject(rawText)
   if (!parsed) return rawText.trim()
@@ -252,11 +455,23 @@ export async function executeHermitCommand(
   if (command === '/gmeow') {
     const meme = pickRandomHermitMeme(args || 'laugh')
     const attachment = inferPublicMediaAttachment(meme.url)
+    const localReply = `${meme.caption}\n${meme.url}`
+    const draft = await runPinataDraft(
+      buildPinataPromptForGmeow({
+        userPrompt: args,
+        memeCaption: meme.caption,
+        memeTags: meme.tags,
+      }),
+    )
+    const parsed = draft?.text ? parseLooseJsonObject(draft.text) : null
+    const draftedLine =
+      asString(parsed?.line) || asString(parsed?.caption) || asString(parsed?.text) || asString(draft?.text)
+    const reply = draftedLine ? `${draftedLine}\n${meme.url}` : localReply
     return {
       kind: 'gmeow',
-      provider: 'local',
+      provider: draftedLine ? 'pinata' : 'local',
       meme,
-      reply: `${meme.caption}\n${meme.url}`,
+      reply,
       ...(attachment ? { mediaAttachments: [attachment] } : {}),
     }
   }

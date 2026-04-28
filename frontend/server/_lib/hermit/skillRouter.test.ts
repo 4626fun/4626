@@ -110,11 +110,15 @@ describe('executeHermitCommand', () => {
     ])
   })
 
-  it('keeps /gmeow on local meme path even when pinata draft env is configured', async () => {
+  it('uses pinata provider for /gmeow when pinata draft env is configured', async () => {
     restoreEnv = applyEnv({
       HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
       HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
     })
+    fetchMock.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ text: JSON.stringify({ line: 'cat laugh alpha unlocked.' }) }),
+    } as Response)
 
     const result = await executeHermitCommand({
       commandText: '/gmeow',
@@ -122,8 +126,9 @@ describe('executeHermitCommand', () => {
     })
 
     expect(result.kind).toBe('gmeow')
-    expect(result.provider).toBe('local')
-    expect(fetchMock).not.toHaveBeenCalled()
+    expect(result.provider).toBe('pinata')
+    expect(result.reply).toContain('cat laugh alpha unlocked.')
+    expect(fetchMock).toHaveBeenCalledTimes(1)
   })
 
   it('uses /meme for the Pinata image prompt path', async () => {
