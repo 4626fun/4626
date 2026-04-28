@@ -80,19 +80,22 @@ function inferPublicMediaAttachment(url: string): HermitMediaAttachment | null {
   if (!/^https:\/\//i.test(trimmed)) return null
   let pathname = ''
   let hostname = ''
+  let hintedFilename = ''
   try {
     const parsed = new URL(trimmed)
     pathname = parsed.pathname.toLowerCase()
     hostname = parsed.hostname.toLowerCase()
+    hintedFilename = (parsed.searchParams.get('filename') ?? '').toLowerCase()
   } catch {
     return null
   }
 
-  const filename = pathname.split('/').filter(Boolean).pop()
-  if (hostname === 'media.tenor.com' || pathname.endsWith('.gif')) {
+  const filename = hintedFilename || pathname.split('/').filter(Boolean).pop()
+  const mediaName = filename || pathname
+  if (hostname === 'media.tenor.com' || mediaName.endsWith('.gif')) {
     return { url: trimmed, type: 'tenor-gif' }
   }
-  if (pathname.endsWith('.jpg') || pathname.endsWith('.jpeg')) {
+  if (mediaName.endsWith('.jpg') || mediaName.endsWith('.jpeg')) {
     return {
       url: trimmed,
       type: 'photo',
@@ -100,7 +103,7 @@ function inferPublicMediaAttachment(url: string): HermitMediaAttachment | null {
       mime_type: 'image/jpeg',
     }
   }
-  if (pathname.endsWith('.png')) {
+  if (mediaName.endsWith('.png')) {
     return {
       url: trimmed,
       type: 'photo',
@@ -108,7 +111,7 @@ function inferPublicMediaAttachment(url: string): HermitMediaAttachment | null {
       mime_type: 'image/png',
     }
   }
-  if (pathname.endsWith('.webp')) {
+  if (mediaName.endsWith('.webp')) {
     return {
       url: trimmed,
       type: 'photo',

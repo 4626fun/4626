@@ -51,6 +51,8 @@ enum Command {
         vault_prefix: Option<String>,
         #[arg(long)]
         share_suffix: Option<String>,
+        #[arg(long, default_value_t = 0)]
+        start_attempt: u64,
         #[arg(long, default_value_t = 250_000)]
         max_attempts: u64,
         #[arg(long)]
@@ -108,6 +110,7 @@ fn run_command(command: Command) -> Result<()> {
             base_version,
             vault_prefix,
             share_suffix,
+            start_attempt,
             max_attempts,
             vault_init_code_hash,
             share_oft_init_code_hash,
@@ -122,6 +125,7 @@ fn run_command(command: Command) -> Result<()> {
                     base_version,
                     vault_prefix,
                     share_suffix,
+                    start_attempt,
                     max_attempts,
                     vault_init_code_hash,
                     share_oft_init_code_hash,

@@ -16,6 +16,7 @@ pub struct PerVaultVersionSearchConfig {
     pub base_version: String,
     pub vault_prefix: Option<String>,
     pub share_suffix: Option<String>,
+    pub start_attempt: u64,
     pub max_attempts: u64,
     pub vault_init_code_hash: Option<H256>,
     pub share_oft_init_code_hash: Option<H256>,
@@ -26,6 +27,7 @@ pub struct PerVaultVersionSearchConfig {
 #[serde(rename_all = "camelCase")]
 pub struct PerVaultVersionSearchResult {
     pub version: String,
+    pub attempt: u64,
     pub attempts: u64,
     pub vault_address: Option<Address>,
     pub share_oft_address: Option<Address>,
@@ -66,7 +68,8 @@ pub fn find_per_vault_version(
     }
 
     let max_attempts = config.max_attempts.max(1);
-    for attempt in 0..max_attempts {
+    let end_attempt = config.start_attempt.saturating_add(max_attempts);
+    for attempt in config.start_attempt..end_attempt {
         let candidate_version = candidate_version(&config.base_version, attempt);
         let base_salt = derive_base_salt(
             config.creator_token,
@@ -113,7 +116,8 @@ pub fn find_per_vault_version(
 
         return Ok(PerVaultVersionSearchResult {
             version: candidate_version,
-            attempts: attempt + 1,
+            attempt,
+            attempts: attempt - config.start_attempt + 1,
             vault_address,
             share_oft_address,
             vault_salt,
@@ -237,6 +241,7 @@ mod tests {
             base_version: "vtest".to_owned(),
             vault_prefix: Some("0".to_owned()),
             share_suffix: None,
+            start_attempt: 0,
             max_attempts: 128,
             vault_init_code_hash: Some(H256::from(keccak256(b"vault-init-code"))),
             share_oft_init_code_hash: None,

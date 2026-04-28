@@ -93,6 +93,7 @@ import {
   derivePayoutRouterSalt,
   deriveVaultShareBurnStreamSalt,
 } from '@/lib/deploy/create2Salts'
+import { findPerVaultVanityVersionWithWasm } from '@/lib/vanity/perVaultVanityWasm'
 import {
   type DeploySessionStatusData,
 } from '@/lib/deploy/sessionClient'
@@ -876,6 +877,73 @@ function deriveOftBootstrapSalt(): Hex {
 }
 
 async function findDeploymentVersionForVanityTargets(params: {
+  create2Deployer: Address
+  creatorToken: Address
+  owner: Address
+  chainId: number
+  baseVersion: string
+  vaultPrefix?: string | null
+  shareSuffix?: string | null
+  maxTries: number
+  vaultInitCode: Hex
+  shareOftInitCode: Hex
+  shareSymbol: string
+  isAddressDeployed?: (addr: Address) => Promise<boolean>
+  yieldEvery?: number
+}): Promise<string | null> {
+  const vaultPrefix = normalizeHexSuffix(params.vaultPrefix ?? null)
+  const shareSuffix = normalizeHexSuffix(params.shareSuffix ?? null)
+  if (!vaultPrefix && !shareSuffix) return null
+  const maxTries = Math.max(1, Math.floor(params.maxTries))
+
+  if (typeof WebAssembly !== 'undefined' && typeof fetch === 'function') {
+    let startAttempt = 0
+    try {
+      while (startAttempt < maxTries) {
+        const result = await findPerVaultVanityVersionWithWasm({
+          create2Deployer: params.create2Deployer,
+          creatorToken: params.creatorToken,
+          owner: params.owner,
+          chainId: params.chainId,
+          baseVersion: params.baseVersion,
+          vaultPrefix,
+          shareSuffix,
+          startAttempt,
+          maxAttempts: maxTries - startAttempt,
+          vaultInitCodeHash: vaultPrefix ? keccak256(params.vaultInitCode) : null,
+          shareOftInitCodeHash: shareSuffix ? keccak256(params.shareOftInitCode) : null,
+          shareSymbol: shareSuffix ? params.shareSymbol : null,
+        })
+        const toCheck: Address[] = []
+        for (const value of [result.vaultAddress, result.shareOftAddress]) {
+          if (value && isAddress(value)) toCheck.push(getAddress(value))
+        }
+        if (params.isAddressDeployed && toCheck.length > 0) {
+          const deployedStates = await Promise.all(toCheck.map((addr) => params.isAddressDeployed!(addr)))
+          if (deployedStates.some(Boolean)) {
+            startAttempt = result.attempt + 1
+            continue
+          }
+        }
+        return result.version
+      }
+      return null
+    } catch (err) {
+      logger.warn('[DeployVault] Rust WASM vanity search failed; falling back to TypeScript mirror', {
+        error: err instanceof Error ? err.message : String(err ?? ''),
+      })
+    }
+  }
+
+  return findDeploymentVersionForVanityTargetsInTypescript({
+    ...params,
+    vaultPrefix,
+    shareSuffix,
+    maxTries,
+  })
+}
+
+async function findDeploymentVersionForVanityTargetsInTypescript(params: {
   create2Deployer: Address
   creatorToken: Address
   owner: Address

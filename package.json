@@ -17,6 +17,7 @@
     "docs:build:strict": "pnpm docs:check",
     "docs:bundle": "NODE_OPTIONS=--max-old-space-size=4096 pnpm -C apps/docs-site bundle:strict",
     "docs:drift": "node apps/docs-site/scripts/check-docs-drift.mjs",
+    "build:vanity-wasm": "rustup target add wasm32-unknown-unknown && cargo build --manifest-path tools/vanity-salt-grinder/Cargo.toml --release --target wasm32-unknown-unknown && mkdir -p frontend/src/lib/vanity && cp tools/vanity-salt-grinder/target/wasm32-unknown-unknown/release/vanity_salt_grinder.wasm frontend/src/lib/vanity/vanity_salt_grinder.wasm",
     "prepare": "husky || true",
     "lint-staged": "lint-staged"
   },

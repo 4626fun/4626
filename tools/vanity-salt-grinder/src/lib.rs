@@ -3,6 +3,8 @@ pub mod ethereum;
 pub mod per_vault;
 pub mod planner;
 pub mod search;
+#[cfg(target_arch = "wasm32")]
+pub mod wasm_api;
 
 use std::path::{Path, PathBuf};
 
