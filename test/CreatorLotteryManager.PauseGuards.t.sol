@@ -286,13 +286,14 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
 
         (,, uint256 amountUSD, uint256 effectiveWinChancePPM,,,) = lotteryManager.vrfRequests(requestId);
         uint256 baseWinChance = lotteryManager.getWinChance(amountUSD);
-        assertEq(baseWinChance, 40, "expected $1 trade to use base odds");
-        assertEq(effectiveWinChancePPM, 80, "request should store boosted odds snapshot");
+        // PR 1 — linear formula: $1.05 / 250_000 (1e6 units) = 4 PPM. With 2x boost → 8 PPM.
+        assertEq(baseWinChance, 4, "expected $1 trade to use base odds (linear)");
+        assertEq(effectiveWinChancePPM, 8, "request should store boosted odds snapshot");
 
         boostManager.setBoostBps(10_000);
 
         uint256[] memory randomWords = new uint256[](1);
-        randomWords[0] = 60; // Above base odds (40), below boosted odds (80).
+        randomWords[0] = 6; // Above base odds (4), below boosted odds (8).
 
         // CLM-01: receiveRandomWords expects the raw VRF ID; it applies _localVrfKey internally
         vm.prank(address(localVrfConsumer));
@@ -312,8 +313,9 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
 
         (,, uint256 amountUSD, uint256 effectiveWinChancePPM,,,) = lotteryManager.vrfRequests(requestId);
         uint256 baseWinChance = lotteryManager.getWinChance(amountUSD);
-        assertEq(baseWinChance, 40, "expected $1 trade to use base odds");
-        assertEq(effectiveWinChancePPM, 80, "request should store boosted odds snapshot");
+        // PR 1 — linear formula: $1.05 / 250_000 = 4 PPM. With 2x boost → 8 PPM.
+        assertEq(baseWinChance, 4, "expected $1 trade to use base odds (linear)");
+        assertEq(effectiveWinChancePPM, 8, "request should store boosted odds snapshot");
 
         boostManager.setBoostBps(10_000);
 
@@ -321,7 +323,7 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
         lotteryManager.pause();
 
         uint256[] memory randomWords = new uint256[](1);
-        randomWords[0] = 60; // Above base odds (40), below boosted odds (80).
+        randomWords[0] = 6; // Above base odds (4), below boosted odds (8).
 
         // CLM-01: receiveRandomWords expects the raw VRF ID; it applies _localVrfKey internally
         vm.prank(address(localVrfConsumer));
@@ -358,13 +360,14 @@ contract CreatorLotteryManagerPauseGuardsTest is Test {
 
         (,, uint256 amountUSD, uint256 effectiveWinChancePPM,,,) = lotteryManager.vrfRequests(requestId);
         uint256 baseWinChance = lotteryManager.getWinChance(amountUSD);
-        assertEq(baseWinChance, 40, "expected $1 trade to use base odds");
-        assertEq(effectiveWinChancePPM, 140, "request should include additive probability boost");
+        // PR 1 — linear: $1.05 → 4 PPM base. Probability boost adds 1*100 = 100 PPM → 104.
+        assertEq(baseWinChance, 4, "expected $1 trade to use base odds (linear)");
+        assertEq(effectiveWinChancePPM, 104, "request should include additive probability boost");
 
         boostManager.setProbabilityBoostBps(0);
 
         uint256[] memory randomWords = new uint256[](1);
-        randomWords[0] = 100; // Above base odds (40), below boosted odds (140).
+        randomWords[0] = 50; // Above base odds (4), below boosted odds (104).
 
         // CLM-01: receiveRandomWords expects the raw VRF ID; it applies _localVrfKey internally
         vm.prank(address(localVrfConsumer));

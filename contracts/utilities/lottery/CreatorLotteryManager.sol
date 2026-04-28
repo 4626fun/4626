@@ -307,6 +307,34 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     address private immutable _adminModule;
 
     // ================================
+    // STATE — AMOE LINEAR PARITY (PR 1)
+    // ================================
+    //
+    // The fields below are appended at the END of contract storage so the slot
+    // layout remains a strict superset of the audited version. The mirror in
+    // CreatorLotteryManagerAdminModule appends the same fields in the same
+    // order so delegatecall continues to read/write identical slots.
+    //
+    // baseCeilingPPM: pre-boost win-chance cap. Default 40_000 PPM = 4%.
+    //   The new linear formula is `winChancePPM = swapValueUSD / 250_000`,
+    //   capped at baseCeilingPPM. The legacy `lotteryConfig.baseWinChance`
+    //   field is retained for slot/ABI parity but is no longer read.
+    // authorizedAmoeRelayer: the only address allowed to call
+    //   `processAmoeEntry`. Single-address allowlist (rather than a mapping)
+    //   to keep the audit surface minimal. The relayer is the same trusted
+    //   off-chain key that today signs AMOE submissions in lotteryAmoe.ts.
+    /// @notice Pre-boost win-chance ceiling (PPM). The linear formula is
+    /// `winChancePPM = swapValueUSD / 250_000` capped at this value.
+    /// Default 40_000 PPM (= 4% at $10K swap).
+    uint256 public baseCeilingPPM;
+
+    /// @notice Trusted relayer authorized to call `processAmoeEntry`.
+    /// Off-chain points-to-USD accounting is trusted to this key in PR 1;
+    /// PR 4 (zkMetal-bound pointsBurned) will move that trust into a
+    /// circuit-bound public input. See docs/security/amoe-pr1-handoff.md.
+    address public authorizedAmoeRelayer;
+
+    // ================================
     // EVENTS
     // ================================
 
@@ -386,6 +414,14 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
     // FIX: CLM-02 — event for stale VRF results that are discarded
     event StaleVRFResultDiscarded(uint256 indexed requestId, uint256 requestTimestamp, uint256 gracePeriod);
 
+    // PR 1 — AMOE Linear Parity events.
+    // Note: AMOE entries also emit `LotteryEntryCreated` (same shape as paid path).
+    // `AmoeEntryRecorded` is intentionally omitted to keep runtime bytecode under EIP-170.
+    // Off-chain: filter LotteryEntryCreated and cross-reference msg.sender / relayer
+    // (or watch for any future AMOE-specific event added in PR 4 once we have headroom).
+    event AuthorizedAmoeRelayerUpdated(address indexed previousRelayer, address indexed newRelayer);
+    event BaseCeilingPPMUpdated(uint256 previousCeilingPPM, uint256 newCeilingPPM);
+
     // ================================
     // ERRORS
     // ================================
@@ -420,10 +456,13 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
             minSwapAmount: MIN_SWAP_USD,
             rewardPercentage: 6900, // 69% of jackpot
             isActive: true,
-            baseWinChance: 40, // 0.004%
-            maxWinChance: 150_000, // 15%
+            baseWinChance: 40, // legacy slot — retained for layout parity but no longer read by calculateWinChance
+            maxWinChance: 150_000, // 15% absolute (post-boost) cap
             usdMultiplierBps: 10500 // 1.05x
         });
+
+        // PR 1 — AMOE Linear Parity: pre-boost ceiling. 40_000 PPM = 4% at $10K swap.
+        baseCeilingPPM = 40_000;
 
         vrfSponsorshipPolicy = SponsorshipPolicy({
             enabled: false,
@@ -515,27 +554,110 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
             (creatorShareBalanceUSD,,) = _calculateTokenUSD(creatorCoin, tokenIn, buyerCurrentShareBalance);
         }
 
-        // Get vault for this creator coin (for ve(3,3) vault weighting)
-        address vault = registry.getVaultForToken(creatorCoin);
-
-        // Calculate win probability with ve(3,3) boosts
-        uint256 baseWinChance = calculateWinChance(swapValueUSD);
-        uint256 boostedWinChance =
-            _applyBoost(buyer, creatorCoin, tokenIn, creatorShareBalanceUSD, vault, swapValueUSD, baseWinChance);
-
-        // Request VRF
-        if (useLocalVRF && address(localVRFConsumer) != address(0)) {
-            // Local VRF never needs native fees; refuse value to avoid trapping ETH.
-            if (msg.value != 0) revert InvalidAmount();
-            entryId = _requestLocalVRF(creatorCoin, buyer, swapValueUSD, boostedWinChance);
-        } else {
-            entryId = _requestCrossChainVRF(creatorCoin, buyer, swapValueUSD, boostedWinChance, msg.value);
-        }
+        (entryId, ) = _boostAndDispatchVRF(buyer, creatorCoin, tokenIn, creatorShareBalanceUSD, swapValueUSD, msg.value);
 
         // Update reference only when an entry is actually created.
         if (entryId > 0 && oraclePriceUSD1e18 > 0) {
             lastAcceptedPriceUSD1e18[creatorCoin] = oraclePriceUSD1e18;
             lastAcceptedPriceTimestamp[creatorCoin] = block.timestamp;
+        }
+        return entryId;
+    }
+
+    /// @dev Shared boost + VRF dispatch path. Used by both `processSwapLottery`
+    ///      and `processAmoeEntry` to keep their behavior identical at the
+    ///      boost / VRF layer (Option B2 boost parity).
+    function _boostAndDispatchVRF(
+        address buyer,
+        address creatorCoin,
+        address shareBalanceToken,
+        uint256 creatorShareBalanceUSD,
+        uint256 swapValueUSD,
+        uint256 callerFeeValue
+    ) internal returns (uint256 entryId, uint256 boostedWinChanceOut) {
+        address vault = registry.getVaultForToken(creatorCoin);
+        uint256 baseWinChance = calculateWinChance(swapValueUSD);
+        uint256 boostedWinChance = _applyBoost(
+            buyer, creatorCoin, shareBalanceToken, creatorShareBalanceUSD, vault, swapValueUSD, baseWinChance
+        );
+
+        if (useLocalVRF && address(localVRFConsumer) != address(0)) {
+            if (callerFeeValue != 0) revert InvalidAmount();
+            entryId = _requestLocalVRF(creatorCoin, buyer, swapValueUSD, boostedWinChance);
+        } else {
+            entryId = _requestCrossChainVRF(creatorCoin, buyer, swapValueUSD, boostedWinChance, callerFeeValue);
+        }
+
+        // Return tuple via storage of effective PPM via the assigned VRF request.
+        // Note: callers (processSwapLottery / processAmoeEntry) decide whether
+        // to emit LotteryEntryCreated to preserve historical event semantics.
+        boostedWinChanceOut = boostedWinChance;
+    }
+
+    // ================================
+    // AMOE ENTRY PATH (PR 1 — Linear Parity)
+    // ================================
+
+    /**
+     * @notice Process an Alternative Method Of Entry (AMOE) lottery entry.
+     * @dev Gated to a single trusted off-chain relayer (`authorizedAmoeRelayer`).
+     *      The relayer is responsible for converting points-burned to a USD
+     *      value (1e6 / USDC units) before calling. PR 1 trusts that key for
+     *      points-to-USD accounting; PR 4 will move that trust into a
+     *      zkMetal-bound public input. See docs/security/amoe-pr1-handoff.md.
+     *
+     *      Boost flow mirrors `processSwapLottery` so AMOE entries get the
+     *      same ve4626 personal + vault gauge boost parity (Option B2). The
+     *      `pointsBurnedAsUSD` value is treated identically to a paid swap
+     *      value for the purpose of `calculateWinChance` and `_applyBoost`.
+     *
+     *      Defense-in-depth: enforces `pointsBurnedAsUSD >= minSwapAmount`
+     *      on-chain even though the relayer also enforces it off-chain.
+     *
+     * @param buyer The user receiving the lottery entry.
+     * @param creatorCoin The creator coin the entry is for.
+     * @param pointsBurnedAsUSD Off-chain-computed USD value of burnt points (1e6 units).
+     * @return entryId VRF request ID (0 if no entry).
+     */
+    function processAmoeEntry(address buyer, address creatorCoin, uint256 pointsBurnedAsUSD)
+        external
+        nonReentrant
+        whenNotPaused
+        returns (uint256 entryId)
+    {
+        // Relayer gate — single-address allowlist. Combined check rejects
+        // both unauthorized callers and the disabled-relayer (address(0)) case.
+        address relayer = authorizedAmoeRelayer;
+        if (relayer == address(0) || msg.sender != relayer) revert Unauthorized();
+        if (buyer == address(0) || creatorCoin == address(0)) revert ZeroAddress();
+        if (pointsBurnedAsUSD == 0) revert InvalidAmount();
+
+        // Verify creator coin is registered AND active. Silent skip preserves
+        // off-chain idempotency on inactive creators.
+        if (!registry.isCreatorCoinActive(creatorCoin)) {
+            return 0;
+        }
+
+        // Defense-in-depth: floor matches paid path.
+        if (pointsBurnedAsUSD < lotteryConfig.minSwapAmount) {
+            return 0;
+        }
+
+        if (!lotteryConfig.isActive) {
+            return 0;
+        }
+
+        // AMOE has no swap-token coverage. ve4626 boost coverage is computed
+        // against share balance — we pass `creatorCoin` as the share-balance
+        // token (with zero amount) so coverage math semantically matches the
+        // paid path: "holdings of this creator". Vault gauge boost still
+        // applies fully. This is Option B2 "full boost parity".
+        uint256 boostedWinChance;
+        (entryId, boostedWinChance) =
+            _boostAndDispatchVRF(buyer, creatorCoin, creatorCoin, 0, pointsBurnedAsUSD, 0);
+
+        if (entryId > 0) {
+            emit LotteryEntryCreated(creatorCoin, buyer, pointsBurnedAsUSD, boostedWinChance, entryId);
         }
         return entryId;
     }
@@ -720,24 +842,29 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         usd1e6 = usd1e18 / 1e12;
     }
 
+    /// @notice Linear pre-boost win chance (PR 1 — AMOE Linear Parity).
+    /// @dev Formula: `winChancePPM = swapValueUSD / 250_000`, capped at
+    ///      `baseCeilingPPM`. swapValueUSD is in 1e6 (USDC) units, so:
+    ///        $1     → 1_000_000  / 250_000 =     4 PPM   (0.0004%)
+    ///        $10    → 10_000_000 / 250_000 =    40 PPM   (0.004%)
+    ///        $100   → 100_000_000 / 250_000 =   400 PPM   (0.04%)
+    ///        $1_000 → 1_000_000_000 / 250_000 = 4_000 PPM (0.4%)
+    ///        $10_000 → 10_000_000_000 / 250_000 = 40_000 PPM (4% — base ceiling)
+    ///
+    ///      The legacy `lotteryConfig.baseWinChance` field is retained for
+    ///      slot/ABI parity but is no longer read. `lotteryConfig.maxWinChance`
+    ///      remains the absolute (post-boost) cap and is enforced in `_applyBoost`.
     function calculateWinChance(uint256 swapAmountUSD) public view returns (uint256 winChancePPM) {
-        if (swapAmountUSD <= lotteryConfig.minSwapAmount) {
-            return lotteryConfig.baseWinChance;
+        if (swapAmountUSD < lotteryConfig.minSwapAmount) {
+            return 0;
         }
 
-        uint256 scaledAmount = swapAmountUSD - lotteryConfig.minSwapAmount;
-        // Cap max probability scaling at $10,000 total swap value.
-        // scaledAmount is (swap - minSwap), and minSwap defaults to $1 (1e6),
-        // so $10,000 corresponds to (10_000 - 1) * 1e6 = 9_999_000_000.
-        uint256 maxScale = 9_999_000_000; // $9,999 above minSwap ($1), 6 decimals
+        winChancePPM = swapAmountUSD / 250_000;
 
-        if (scaledAmount >= maxScale) {
-            return lotteryConfig.maxWinChance;
+        uint256 ceiling = baseCeilingPPM;
+        if (winChancePPM > ceiling) {
+            winChancePPM = ceiling;
         }
-
-        uint256 chanceRange = lotteryConfig.maxWinChance - lotteryConfig.baseWinChance;
-        // FIX: CLM-11 — use FullMath for better precision at mid-range USD values
-        winChancePPM = lotteryConfig.baseWinChance + FullMath.mulDiv(scaledAmount, chanceRange, maxScale);
     }
 
     /**
@@ -1588,6 +1715,17 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         _delegateAdmin();
     }
 
+    // PR 1 — AMOE Linear Parity admin stubs.
+    function setAuthorizedAmoeRelayer(address _relayer) external {
+        _relayer;
+        _delegateAdmin();
+    }
+
+    function setBaseCeilingPPM(uint256 _ceilingPPM) external {
+        _ceilingPPM;
+        _delegateAdmin();
+    }
+
     function setLotteryConfig(
         uint256 _minSwap,
         uint256 _rewardPercentage,
@@ -1838,6 +1976,19 @@ contract CreatorLotteryManagerAdminModule is OApp, OAppOptionsType3, ReentrancyG
     mapping(address => CreatorStats) public creatorStats;
     uint256 private _payoutLock;
 
+    // ================================
+    // STATE — AMOE LINEAR PARITY (PR 1) — MIRROR
+    // ================================
+    //
+    // These fields MUST mirror the slot order of CreatorLotteryManager so the
+    // delegatecall storage layout stays consistent. See the same block in the
+    // main contract for semantics.
+    /// @notice Pre-boost win-chance ceiling (PPM). Default 40_000 = 4%.
+    uint256 public baseCeilingPPM;
+
+    /// @notice Trusted relayer authorized to call `processAmoeEntry`.
+    address public authorizedAmoeRelayer;
+
     address private immutable _self;
 
     event SwapContractAuthorized(address indexed swapContract, bool authorized);
@@ -1859,6 +2010,10 @@ contract CreatorLotteryManagerAdminModule is OApp, OAppOptionsType3, ReentrancyG
         uint32 callbackMaxPerOriginPerEpoch
     );
     event SponsoredVrfMinSwapUpdated(uint256 minSwapAmountUSD);
+
+    // PR 1 — AMOE Linear Parity events (mirror of main contract).
+    event AuthorizedAmoeRelayerUpdated(address indexed previousRelayer, address indexed newRelayer);
+    event BaseCeilingPPMUpdated(uint256 previousCeilingPPM, uint256 newCeilingPPM);
 
     error ZeroAddress();
     error InvalidAmount();
@@ -1982,6 +2137,30 @@ contract CreatorLotteryManagerAdminModule is OApp, OAppOptionsType3, ReentrancyG
         vaultGaugeVoting = IVaultGaugeVoting(_vaultGaugeVoting);
     }
 
+    // PR 1 — AMOE Linear Parity admin impls.
+
+    /// @notice Set the trusted off-chain relayer for AMOE entries.
+    /// @dev Single-address allowlist. Pass address(0) to disable AMOE entirely.
+    function setAuthorizedAmoeRelayer(address _relayer) external onlyDelegateCall onlyOwner {
+        address previous = authorizedAmoeRelayer;
+        authorizedAmoeRelayer = _relayer;
+        emit AuthorizedAmoeRelayerUpdated(previous, _relayer);
+    }
+
+    /// @notice Set the pre-boost win-chance ceiling (PPM).
+    /// @dev Bounded by `lotteryConfig.maxWinChance` (so a misconfigured ceiling
+    ///      cannot widen the absolute cap) and by 100_000 PPM (10%) as a hard
+    ///      sanity ceiling on the *unboosted* chance — if you ever need more,
+    ///      raise this constant deliberately in a future audit.
+    function setBaseCeilingPPM(uint256 _ceilingPPM) external onlyDelegateCall onlyOwner {
+        if (_ceilingPPM == 0) revert InvalidAmount();
+        if (_ceilingPPM > lotteryConfig.maxWinChance) revert InvalidAmount();
+        if (_ceilingPPM > 100_000) revert InvalidAmount();
+        uint256 previous = baseCeilingPPM;
+        baseCeilingPPM = _ceilingPPM;
+        emit BaseCeilingPPMUpdated(previous, _ceilingPPM);
+    }
+
     function setLotteryConfig(
         uint256 _minSwap,
         uint256 _rewardPercentage,
@@ -1995,6 +2174,10 @@ contract CreatorLotteryManagerAdminModule is OApp, OAppOptionsType3, ReentrancyG
         if (_maxWinChance > 200_000) revert InvalidAmount();
         if (_baseWinChance > _maxWinChance) revert InvalidAmount();
         if (_usdMultiplierBps < 10_000 || _usdMultiplierBps > 15_000) revert InvalidAmount();
+        // PR 1 — AMOE Linear Parity invariant: never let maxWinChance drop
+        // below the active pre-boost ceiling, otherwise calculateWinChance could
+        // exceed _applyBoost's cap.
+        if (baseCeilingPPM > 0 && _maxWinChance < baseCeilingPPM) revert InvalidAmount();
 
         lotteryConfig.minSwapAmount = _minSwap;
         lotteryConfig.rewardPercentage = _rewardPercentage;
