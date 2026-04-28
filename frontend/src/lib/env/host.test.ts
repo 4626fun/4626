@@ -50,12 +50,12 @@ describe('resolveMarketingToAppBaseUrl', () => {
     ).toBe('https://app.4626.fun')
   })
 
-  it('keeps loopback preferred origin while running locally', () => {
+  it('uses the current loopback origin while running locally', () => {
     expect(
       resolveMarketingToAppBaseUrl({
         preferredAppOrigin: 'http://localhost:5173',
         currentOrigin: 'http://localhost:5174',
       }),
-    ).toBe('http://localhost:5173')
+    ).toBe('http://localhost:5174')
   })
 })

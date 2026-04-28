@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { privateKeyToAccount } from 'viem/accounts'
 
-import { makeNonceToken } from '../../server/auth/_shared.ts'
+import { COOKIE_SESSION, clearCookie, makeNonceToken, makeSessionToken, readSessionFromRequest } from '../../server/auth/_shared.ts'
 import { applyEnv, createMockReq, createMockRes, readSetCookies } from './helpers'
 
 const { getDbMock, ensureWaitlistSchemaMock, upsertProfileByWalletMock } = vi.hoisted(() => ({
@@ -136,6 +136,7 @@ describe('siwe auth hardening', () => {
     restoreEnv = applyEnv({
       AUTH_SESSION_SECRET: 'test-auth-session-secret-1234567',
       APP_ORIGIN: 'https://4626.fun',
+      CORS_ALLOWED_ORIGINS: 'https://app.4626.fun',
     })
   })
 
@@ -191,6 +192,96 @@ describe('siwe auth hardening', () => {
 
     expect(replayRes.statusCode).toBe(400)
     expect(replayRes.body?.error).toBe('Nonce already used or expired')
+  })
+
+  it('sets shared-domain auth cookies on 4626 production subdomains', async () => {
+    const db = createNonceDb()
+    getDbMock.mockResolvedValue(db)
+
+    const nonce = 'nonce-shared-domain'
+    db.rows.set(nonce, { expiresAtMs: Date.now() + 15 * 60 * 1000, consumedAtMs: null })
+
+    const message = makeSiweMessage({
+      domain: 'app.4626.fun',
+      address: account.address,
+      uri: 'https://app.4626.fun',
+      chainId: 8453,
+      nonce,
+      issuedAt: new Date().toISOString(),
+    })
+    const signature = await account.signMessage({ message })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { host: 'app.4626.fun', 'x-forwarded-proto': 'https', cookie: `cv_auth_nonce=${nonce}` },
+      body: { message, signature, nonceToken: makeNonceToken({ nonce }) },
+    })
+    const res = createMockRes()
+
+    await verifyHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    const setCookies = readSetCookies(res)
+    expect(setCookies.some((cookie) => cookie.includes(`${COOKIE_SESSION}=`) && cookie.includes('Domain=.4626.fun'))).toBe(true)
+    expect(setCookies.some((cookie) => cookie.includes('cv_auth_nonce=') && cookie.includes('Domain=.4626.fun'))).toBe(true)
+  })
+
+  it('keeps localhost auth cookies host-only for development', async () => {
+    const db = createNonceDb()
+    getDbMock.mockResolvedValue(db)
+
+    const nonce = 'nonce-localhost-cookie'
+    db.rows.set(nonce, { expiresAtMs: Date.now() + 15 * 60 * 1000, consumedAtMs: null })
+
+    const message = makeSiweMessage({
+      domain: '4626.fun',
+      address: account.address,
+      uri: 'https://4626.fun',
+      chainId: 8453,
+      nonce,
+      issuedAt: new Date().toISOString(),
+    })
+    const signature = await account.signMessage({ message })
+
+    const req = createMockReq({
+      method: 'POST',
+      headers: { host: 'localhost:5173', cookie: `cv_auth_nonce=${nonce}` },
+      body: { message, signature, nonceToken: makeNonceToken({ nonce }) },
+    })
+    const res = createMockRes()
+
+    await verifyHandler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(readSetCookies(res).some((cookie) => cookie.includes(`${COOKIE_SESSION}=`) && cookie.includes('Domain='))).toBe(false)
+  })
+
+  it('clears both shared-domain and legacy host-only cookies on production logout', () => {
+    const req = createMockReq({
+      method: 'POST',
+      headers: { host: 'app.4626.fun', 'x-forwarded-proto': 'https' },
+    })
+    const res = createMockRes()
+
+    clearCookie(req, res, COOKIE_SESSION)
+
+    const setCookies = readSetCookies(res).filter((cookie) => cookie.startsWith(`${COOKIE_SESSION}=`))
+    expect(setCookies).toHaveLength(2)
+    expect(setCookies.some((cookie) => cookie.includes('Domain=.4626.fun') && cookie.includes('Max-Age=0'))).toBe(true)
+    expect(setCookies.some((cookie) => !cookie.includes('Domain=') && cookie.includes('Max-Age=0'))).toBe(true)
+  })
+
+  it('accepts a later valid duplicate session cookie when an older duplicate is stale', () => {
+    const staleToken = 'stale.invalid'
+    const validToken = makeSessionToken({ address: '0x00000000000000000000000000000000000000aa' })
+    const req = createMockReq({
+      method: 'GET',
+      headers: {
+        cookie: `${COOKIE_SESSION}=${encodeURIComponent(staleToken)}; theme=dark; ${COOKIE_SESSION}=${encodeURIComponent(validToken)}`,
+      },
+    })
+
+    expect(readSessionFromRequest(req)?.address).toBe('0x00000000000000000000000000000000000000aa')
   })
 
   it('rejects wrong chain id', async () => {

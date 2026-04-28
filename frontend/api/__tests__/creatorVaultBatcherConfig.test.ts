@@ -36,10 +36,10 @@ describe('creatorVaultBatcher config normalization', () => {
     expect(normalizeCreatorVaultBatcherAddress(SPLIT_PHASE1_DEPLOYMENT_BATCHER)).toBe(SPLIT_PHASE1_DEPLOYMENT_BATCHER)
   })
 
-  it('getApiContracts rejects deprecated batcher env override in local/dev mode', () => {
+  it('getApiContracts falls back to canonical default for deprecated env override in local/dev mode', () => {
     process.env.CREATOR_VAULT_BATCHER = LEGACY_DEPLOYMENT_BATCHER
     const contracts = getApiContracts()
-    expect(contracts.creatorVaultBatcher).toBeUndefined()
+    expect(contracts.creatorVaultBatcher).toBe(BASE_DEFAULTS.creatorVaultBatcher)
   })
 
   it('getApiContracts accepts canonical batcher env override', () => {

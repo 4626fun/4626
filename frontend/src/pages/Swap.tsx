@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { Droplets, Plus, RefreshCw } from 'lucide-react'
-import { getAddress, isAddress, toHex, type Address, type Hex } from 'viem'
+import { getAddress, isAddress, parseUnits, toHex, type Address, type Hex } from 'viem'
 import { useQuery } from '@tanstack/react-query'
-import { useAccount, useBalance, useConnect, usePublicClient, useSwitchChain, useWalletClient } from 'wagmi'
+import { useAccount, useBalance, useConnect, usePublicClient, useReconnect, useSwitchChain, useWalletClient } from 'wagmi'
 import {
   toViemAccount,
   useActiveWallet,
@@ -203,6 +203,11 @@ function warnSwapPrivyHookFailure(scope: string, error: unknown) {
   if (warnedSwapPrivyHookFailure) return
   warnedSwapPrivyHookFailure = true
   console.warn(`[swap] Privy hook unavailable in ${scope}; falling back to non-Privy mode`, error)
+}
+
+function isConnectorAlreadyConnectedErrorMessage(message: string): boolean {
+  const normalized = message.toLowerCase()
+  return normalized.includes('connector already connected') || normalized.includes('already connected')
 }
 
 function useSafeSwapPrivyHook(enabled: boolean) {
@@ -507,6 +512,18 @@ function fmtBal(d: { formatted: string; symbol: string } | undefined): string | 
   return `${parseFloat(n.toPrecision(4))} ${d.symbol}`
 }
 
+function parsePositiveAmountToUnits(value: string, decimals: number): bigint | null {
+  const raw = String(value ?? '').trim()
+  if (!raw || raw.endsWith('.')) return null
+  const numeric = Number(raw)
+  if (!Number.isFinite(numeric) || numeric <= 0) return null
+  try {
+    return parseUnits(raw, decimals)
+  } catch {
+    return null
+  }
+}
+
 function formatPercent(value: unknown): string | null {
   const n = typeof value === 'number' ? value : Number(value)
   if (!Number.isFinite(n)) return null
@@ -606,6 +623,7 @@ export function Swap() {
     getAccessToken,
   } = useSafeSwapPrivyHook(privyHooksEnabled)
   const { connectors: wagmiConnectors, connectAsync: wagmiConnectAsync } = useConnect()
+  const { reconnectAsync } = useReconnect()
   const [swapConnectBusy, setSwapConnectBusy] = useState(false)
   const [swapConnectError, setSwapConnectError] = useState<string | null>(null)
   const accountMe = useAccountMe()
@@ -780,6 +798,7 @@ export function Swap() {
   }, [])
 
   const accountContext = useAccountContext()
+  const refreshAccountContext = accountContext.actions.refresh
   const canonicalAddress = accountContext.cswAddress ?? null
   const signerAddress = accountContext.signerAddress ?? null
   const accountSignals = accountMe.me?.accountSignals ?? null
@@ -1169,28 +1188,64 @@ export function Swap() {
       }),
     [authBusy, executionAddress, hasSession, sessionHydrated],
   )
+  const recoverExistingWalletConnection = useCallback(async (): Promise<boolean> => {
+    let recovered = false
+    try {
+      const results = await reconnectAsync()
+      recovered =
+        Array.isArray(results) &&
+        results.some((entry: unknown) => {
+          const candidate = entry as { accounts?: unknown; connector?: unknown } | null
+          const accounts = Array.isArray(candidate?.accounts) ? candidate.accounts : []
+          return accounts.length > 0 || Boolean(candidate?.connector)
+        })
+    } catch {
+      recovered = false
+    }
+    if (recovered) {
+      try {
+        await refreshAccountContext()
+      } catch {
+        // Account context refresh is best-effort after reconnect.
+      }
+    }
+    return recovered
+  }, [reconnectAsync, refreshAccountContext])
   const handleConnectGateAction = useCallback(() => {
     if (authBusy || swapConnectBusy) return
 
     setSwapConnectError(null)
 
     if (connectGate.state === 'wallet-required') {
-      const preferred = selectPreferredWalletConnector(wagmiConnectors)
-      if (!preferred) {
-        setSwapConnectError('No wallet connector is available in this browser. Open 4626 in your wallet app or enable a wallet extension.')
-        return
-      }
-
       setSwapConnectBusy(true)
-      void wagmiConnectAsync({ connector: preferred })
-        .catch((connectError: unknown) => {
+      void (async () => {
+        try {
+          // Recover an existing authorized connector first; this avoids
+          // throwing when the connector is already connected but wagmi is
+          // still hydrating account state for this route.
+          const recovered = await recoverExistingWalletConnection()
+          if (isConnected || recovered) return
+
+          const preferred = selectPreferredWalletConnector(wagmiConnectors)
+          if (!preferred) {
+            setSwapConnectError('No wallet connector is available in this browser. Open 4626 in your wallet app or enable a wallet extension.')
+            return
+          }
+
+          await wagmiConnectAsync({ connector: preferred })
+        } catch (connectError: unknown) {
           const message = connectError instanceof Error ? connectError.message : String(connectError ?? '')
+          if (isConnectorAlreadyConnectedErrorMessage(message)) {
+            await recoverExistingWalletConnection()
+            setSwapConnectError(null)
+            return
+          }
           const rejected = message.toLowerCase().includes('reject') || message.toLowerCase().includes('denied')
           setSwapConnectError(rejected ? 'Wallet connection was cancelled. Try again when you are ready.' : message || 'Failed to connect wallet.')
-        })
-        .finally(() => {
+        } finally {
           setSwapConnectBusy(false)
-        })
+        }
+      })()
       return
     }
 
@@ -1199,7 +1254,9 @@ export function Swap() {
     authBusy,
     canonicalSignInMethod,
     connectGate.state,
+    isConnected,
     executionMode,
+    recoverExistingWalletConnection,
     signIn,
     swapConnectBusy,
     wagmiConnectAsync,
@@ -1365,6 +1422,15 @@ export function Swap() {
   })
   const tokenInBalanceLabel = fmtBal(tokenInBalData)
   const tokenOutBalanceLabel = fmtBal(tokenOutBalData)
+  const tokenInAmountExceedsBalance = useMemo(() => {
+    if (!tokenInBalData) return false
+    const amount = parsePositiveAmountToUnits(amountInUnits, tokenInBalData.decimals)
+    if (amount === null) return false
+    return amount > tokenInBalData.value
+  }, [amountInUnits, tokenInBalData])
+  const tokenInBalanceError = tokenInAmountExceedsBalance
+    ? `Insufficient ${tokenInSymbol} balance. You have ${tokenInBalanceLabel ?? 'less than the amount entered'}.`
+    : null
 
   // ─── Swap execution ───────────────────────────────────────────────────────
   const {
@@ -1375,6 +1441,7 @@ export function Swap() {
     error,
     confirmIntent,
     quoteUpdatedAt,
+    quoteReady,
     isReady,
     quoteCooldownActive,
     quoteCooldownUntil,
@@ -1402,6 +1469,7 @@ export function Swap() {
     executionTrack,
     executionAddress,
     executionReady,
+    expectedSessionAddress: executionMode === 'canonical' ? (privyEmbeddedEoaAddress ?? executionSignerAddress) : executionSignerAddress,
     tokenIn,
     tokenOut,
     amountInUnits,
@@ -1624,14 +1692,28 @@ export function Swap() {
 
   // Debounced auto-quote: only fires when actual swap inputs change.
   useEffect(() => {
-    if (!executionReady || !isReady || quoteCooldownActive) return
+    // Quotes are read-only and only need a session plus execution address.
+    // Keep submit/build gated by `executionReady`, but still show pricing while
+    // the account needs 4626 signing setup.
+    if (!executionAddress || !quoteReady || quoteCooldownActive) return
+    if (tokenInAmountExceedsBalance) return
     const timer = window.setTimeout(() => {
       if (busyRef.current) return
       void handleQuote()
     }, 450)
     return () => window.clearTimeout(timer)
     // `busy` intentionally omitted — use busyRef to check at call-time.
-  }, [tokenIn, tokenOut, amountInUnits, parsedSlippage, executionReady, isReady, quoteCooldownActive, handleQuote])
+  }, [
+    tokenIn,
+    tokenOut,
+    amountInUnits,
+    parsedSlippage,
+    executionAddress,
+    quoteReady,
+    quoteCooldownActive,
+    tokenInAmountExceedsBalance,
+    handleQuote,
+  ])
 
   // One-click flow: after review/build, immediately execute without an extra in-app confirm modal.
   useEffect(() => {
@@ -1765,10 +1847,10 @@ export function Swap() {
               tokenInAddress={tokenIn}
               tokenOutAddress={tokenOut}
               isConnected={isConnected}
-              isReady={isReady}
+              isReady={isReady && !tokenInAmountExceedsBalance}
               busy={busy}
               status={status}
-              error={error ?? canonicalSignerGuardError}
+              error={tokenInBalanceError ?? error ?? canonicalSignerGuardError}
               quoteUpdatedAt={quoteUpdatedAt ? new Date(quoteUpdatedAt).toLocaleTimeString() : null}
               approvalRequired={approvalRequired}
               routeSummary={routeSummary}

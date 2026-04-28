@@ -1810,14 +1810,14 @@ export function useAccountSetupController(params: {
   const ownerPrimaryCtaLabel = needsBaseAccountReconnect
     ? 'Reconnect via Base Account'
     : subAccountReady
-      ? 'Enable 4626 via sub-account'
-      : ownerApprovalReady
-        ? 'Approve 4626 on this wallet'
-        : needsEmbeddedWallet
-          ? 'Provisioning embedded wallet…'
-          : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
-            ? 'Finishing wallet session…'
-            : 'Owner approval required'
+        ? 'Enable 4626 via sub-account'
+        : ownerApprovalReady
+          ? 'Approve 4626 on this wallet'
+          : needsEmbeddedWallet
+            ? 'Provisioning embedded wallet…'
+            : connectedOwnerReady && !(signerClientReady || privySignerClientReady)
+              ? 'Finishing wallet session…'
+              : 'Owner approval required'
 
   useEffect(() => {
     if (!ownerInstallResumeState.requested) return

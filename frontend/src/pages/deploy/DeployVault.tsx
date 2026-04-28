@@ -1,6 +1,6 @@
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { motion } from 'framer-motion'
-import { useAccount, useChainId, usePublicClient, useReadContract, useSwitchChain, useWalletClient } from 'wagmi'
+import { useAccount, useChainId, useConnect, usePublicClient, useReadContract, useSwitchChain, useWalletClient } from 'wagmi'
 import { debugLogsFlag } from '@/lib/flags/featureFlags'
 import { base } from 'wagmi/chains'
 import type { Address, Hex } from 'viem'
@@ -74,6 +74,7 @@ import { useZoraCoin, useZoraProfile } from '@/lib/zora/hooks'
 import { buildZoraHandoffUrl } from '@/lib/zora/referrals'
 import { resolveCreatorIdentity } from '@/lib/identity/creatorIdentity'
 import { ensureProviderOnBase } from '@/lib/wallet/safeSwitchToBase'
+import { selectPreferredWalletConnector } from '@/lib/wallet/wagmiConnectorSelection'
 import { DEPLOY_BYTECODE } from '@/deploy/bytecode.generated'
 import {
   normalizeUnderlyingSymbol,
@@ -173,6 +174,7 @@ const BATCHER_PHASE2_FINALIZE_WITH_PERMIT2_SELECTOR = '0ecf9382'
 const BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR = 'e7fdf838'
 const KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS = new Set<string>([
   '0xe3f9490cfd6bd3d68010405d18bf772c167e7178',
+  '0xf941bb68e4f083f3f531cc598d5c08d0b8ffba7e',
 ])
 // The phased deployment batcher v4+ exposes these immutables as getters. We use this as a
 // compatibility gate to avoid legacy batchers that deploy module-uninitialized vaults.
@@ -3463,6 +3465,19 @@ function DeployVaultBatcher({
 
       const derivedShareOftSalt = deriveShareOftSalt({ owner, shareSymbol, version: deploymentVersionUsed })
       let shareOftSaltOverrideUsed = shareOftSaltOverride
+      if (shareOftSaltOverrideUsed && shareOftVanityUnsupportedByBatcher) {
+        logger.warn('[DeployVault] share_oft_salt_override_ignored', {
+          batcher: batcherAddress,
+          reason: 'phase1_salt_overrides_not_supported',
+          shareOftSaltOverride: shareOftSaltOverrideUsed,
+        })
+        shareOftSaltOverrideUsed = null
+        const overrideWarning =
+          `Ignoring ShareOFT salt override because active batcher ${batcherDisplay} does not support Phase-1 salt overrides.`
+        shareOftVanityWarning = shareOftVanityWarning
+          ? `${shareOftVanityWarning} ${overrideWarning}`
+          : overrideWarning
+      }
       if (!shareOftSaltOverrideUsed && shareOftVanitySuffix && !shareOftVanityUnsupportedByBatcher) {
         const initCodeHash = keccak256(shareOftInitCode)
         const vanitySeed = keccak256(
@@ -4908,13 +4923,21 @@ function DeployVaultBatcher({
             'Update `VITE_CREATOR_VAULT_BATCHER` (and server `CREATOR_VAULT_BATCHER`) to the current batcher.',
         )
       }
-      let supportsSplitPhase1 = (() => {
+      const supportsSplitPhase1NoSalt = (() => {
         if (!batcherBytecode || batcherBytecode === '0x') return false
         return (
           batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_SELECTOR) &&
           batcherBytecodeLower.includes(BATCHER_PHASE1_FINALIZE_SELECTOR)
         )
       })()
+      const supportsSplitPhase1WithSaltSelectors = (() => {
+        if (!batcherBytecode || batcherBytecode === '0x') return false
+        return (
+          batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR) &&
+          batcherBytecodeLower.includes(BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR)
+        )
+      })()
+      let supportsSplitPhase1 = supportsSplitPhase1NoSalt || supportsSplitPhase1WithSaltSelectors
       const supportsLegacyPhase1 = (() => {
         if (!batcherBytecode || batcherBytecode === '0x') return false
         return batcherBytecodeLower.includes(BATCHER_PHASE1_SELECTOR)
@@ -4939,12 +4962,13 @@ function DeployVaultBatcher({
         )
       }
       const batcherAddressLower = String(batcherAddress ?? '').toLowerCase()
+      const splitPhase1SaltOverrideDisabled = (
+        KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS.has(batcherAddressLower) ||
+        batcherBytecodeLower.includes(BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR)
+      )
       const supportsLegacyPhase1WithSalt = (() => {
         if (!batcherBytecode || batcherBytecode === '0x') return false
-        if (
-          KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS.has(batcherAddressLower) ||
-          batcherBytecodeLower.includes(BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR)
-        ) {
+        if (splitPhase1SaltOverrideDisabled) {
           return false
         }
         if (!expectedShareOftSaltOverride) return true
@@ -4952,23 +4976,11 @@ function DeployVaultBatcher({
           batcherBytecodeLower.includes(BATCHER_PHASE1_WITH_SALT_SELECTOR)
         )
       })()
-      const supportsSplitPhase1WithSalt = (() => {
-        if (!batcherBytecode || batcherBytecode === '0x') return false
-        if (
-          KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS.has(batcherAddressLower) ||
-          batcherBytecodeLower.includes(BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR)
-        ) {
-          return false
-        }
-        if (!expectedShareOftSaltOverride) return true
-        return (
-          batcherBytecodeLower.includes(BATCHER_PHASE1_CORE_WITH_SALT_SELECTOR) &&
-          batcherBytecodeLower.includes(BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR)
-        )
-      })()
+      const supportsSplitPhase1WithSalt = supportsSplitPhase1WithSaltSelectors
       if (strictNoEoaEnforced) {
         const requiresShareSaltOverride = Boolean(expectedShareOftSaltOverride)
-        const saltOverrideRequiredButUnavailable = requiresShareSaltOverride && !supportsSplitPhase1WithSalt && shareVanityIsCustom
+        const saltOverrideRequiredButUnavailable =
+          requiresShareSaltOverride && (!supportsSplitPhase1WithSalt || splitPhase1SaltOverrideDisabled) && shareVanityIsCustom
         if (!supportsSplitPhase1 || saltOverrideRequiredButUnavailable) {
           logger.warn('[DeployVault] legacy_batcher_blocked', {
             deploy_mode: 'no_eoa_strict',
@@ -5073,7 +5085,13 @@ function DeployVaultBatcher({
           }
           const coreDone = vaultDeployed && wrapperDeployed
           let saltEnabled = supportsSplitPhase1WithSalt
-          const shareOftSaltOverride: Hex = (expectedShareOftSaltOverride ?? ZERO_BYTES32) as Hex
+          let shareOftSaltOverride: Hex = (expectedShareOftSaltOverride ?? ZERO_BYTES32) as Hex
+          if (splitPhase1SaltOverrideDisabled && shareOftSaltOverride !== ZERO_BYTES32) {
+            logger.warn('[DeployVault] Batcher runtime disabled phase1 salt overrides; forcing zero override for split phase1 calls', {
+              batcher: batcherAddress,
+            })
+            shareOftSaltOverride = ZERO_BYTES32 as Hex
+          }
           if (saltEnabled && shareOftSaltOverride !== ZERO_BYTES32) {
             try {
               const phase1SaltProbeParams = {
@@ -5096,24 +5114,37 @@ function DeployVaultBatcher({
               })
             } catch (probeError: unknown) {
               if (hasSaltOverrideDisabledError(probeError)) {
-                saltEnabled = false
-                logger.warn('[DeployVault] Batcher runtime disabled phase1 salt overrides; falling back to no-salt phase1 calls', {
-                  batcher: batcherAddress,
-                })
+                shareOftSaltOverride = ZERO_BYTES32 as Hex
+                if (supportsSplitPhase1NoSalt) {
+                  saltEnabled = false
+                  logger.warn('[DeployVault] Batcher runtime disabled phase1 salt overrides; falling back to no-salt phase1 calls', {
+                    batcher: batcherAddress,
+                  })
+                } else {
+                  logger.warn('[DeployVault] Batcher runtime disabled phase1 salt overrides; using split with-salt entrypoints and zero override', {
+                    batcher: batcherAddress,
+                  })
+                }
               }
             }
           }
-          if (expectedShareOftSaltOverride && !saltEnabled) {
+          if (expectedShareOftSaltOverride && (!saltEnabled || splitPhase1SaltOverrideDisabled)) {
             if (shareVanityIsCustom) {
               logger.warn('[DeployVault] Batcher lacks split phase1 vanity salt support; continuing without override', {
                 batcher: batcherAddress,
               })
             }
           }
+          const useSplitWithSaltSelectors = saltEnabled || !supportsSplitPhase1NoSalt
+          if (!useSplitWithSaltSelectors && !supportsSplitPhase1NoSalt) {
+            throw new Error(
+              `Batcher ${batcherAddress} does not expose split Phase-1 entrypoints compatible with this deploy.`,
+            )
+          }
           if (phase1All) {
             phase1CallsPrepared = []
           } else if (!coreDone) {
-            const coreCallData = saltEnabled
+            const coreCallData = useSplitWithSaltSelectors
               ? encodeFunctionData({
                   abi: CREATOR_VAULT_BATCHER_ABI,
                   functionName: 'deployPhase1CoreWithSalt',
@@ -5124,7 +5155,7 @@ function DeployVaultBatcher({
                   functionName: 'deployPhase1Core',
                   args: [phase1Params, codeIds],
                 })
-            const finalizeCallData = saltEnabled
+            const finalizeCallData = useSplitWithSaltSelectors
               ? encodeFunctionData({
                   abi: CREATOR_VAULT_BATCHER_ABI,
                   functionName: 'finalizePhase1WithSalt',
@@ -5137,7 +5168,7 @@ function DeployVaultBatcher({
                 })
             phase1CallsPrepared = [asBatcherCall(coreCallData), asBatcherCall(finalizeCallData)]
           } else {
-            const finalizeCallData = saltEnabled
+            const finalizeCallData = useSplitWithSaltSelectors
               ? encodeFunctionData({
                   abi: CREATOR_VAULT_BATCHER_ABI,
                   functionName: 'finalizePhase1WithSalt',
@@ -7376,6 +7407,7 @@ function DeployVaultMain() {
   const { data: walletClient } = useWalletClient({ chainId: base.id })
   const { ready: privyReady, authenticated: privyAuthenticated, user: privyUser, logout, getAccessToken } = usePrivy() as any
   const { login } = useLogin()
+  const { connectors: wagmiConnectors, connectAsync: wagmiConnectAsync } = useConnect()
   const { wallets } = useWallets()
   const { client: smartWalletClient } = useSmartWallets()
   const siwe = useSiweAuth()
@@ -7383,6 +7415,8 @@ function DeployVaultMain() {
   const [addPrivySmartWalletOwnerBusy, setAddPrivySmartWalletOwnerBusy] = useState(false)
   const [addPrivySmartWalletOwnerTxHash, setAddPrivySmartWalletOwnerTxHash] = useState<string | null>(null)
   const [addPrivySmartWalletOwnerError, setAddPrivySmartWalletOwnerError] = useState<string | null>(null)
+  const [externalWalletConnectBusy, setExternalWalletConnectBusy] = useState(false)
+  const [externalWalletConnectError, setExternalWalletConnectError] = useState<string | null>(null)
   const [autoSmartWalletOwnerAttemptCount, setAutoSmartWalletOwnerAttemptCount] = useState(0)
   const [autoSmartWalletOwnerRetryTick, setAutoSmartWalletOwnerRetryTick] = useState(0)
   const autoSmartWalletOwnerTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -7671,6 +7705,38 @@ function DeployVaultMain() {
       onClick: () => void run(),
     }
   }, [login, logout, privyAuthenticated, privyReady])
+
+  const connectExternalSignerWallet = useCallback(() => {
+    if (externalWalletConnectBusy) return
+    const preferred = selectPreferredWalletConnector(wagmiConnectors)
+    setExternalWalletConnectError(null)
+    if (!preferred) {
+      setExternalWalletConnectError(
+        'No external wallet connector is available in this browser. Open 4626 in Base App, Coinbase Wallet, Rabby, or MetaMask and retry.',
+      )
+      return
+    }
+
+    setExternalWalletConnectBusy(true)
+    void wagmiConnectAsync({ connector: preferred })
+      .catch((connectError: unknown) => {
+        const message = connectError instanceof Error ? connectError.message : String(connectError ?? '')
+        const lower = message.toLowerCase()
+        const rejected = lower.includes('reject') || lower.includes('denied') || lower.includes('cancel')
+        setExternalWalletConnectError(
+          rejected
+            ? 'Wallet connection was cancelled. Try again when you are ready.'
+            : message || 'Failed to connect external wallet.',
+        )
+      })
+      .finally(() => {
+        setExternalWalletConnectBusy(false)
+      })
+  }, [externalWalletConnectBusy, wagmiConnectAsync, wagmiConnectors])
+
+  useEffect(() => {
+    if (isConnected) setExternalWalletConnectError(null)
+  }, [isConnected])
 
   useEffect(() => {
     if (!privyAuthenticated || !smartWalletClient) return
@@ -9050,29 +9116,30 @@ function DeployVaultMain() {
                     transition={{ duration: 0.18, ease: baseEase }}
                     className="mt-3 rounded-xl border border-amber-500/25 bg-linear-to-b from-amber-500/18 to-amber-500/8 px-4 py-3 text-[12px] text-amber-200/90 backdrop-blur-sm"
                   >
-                    <div className="font-medium text-amber-200">Account mismatch?</div>
+                    <div className="text-[10px] uppercase tracking-wider text-amber-200/80 font-medium">
+                      Active signer · external
+                    </div>
                     <div className="mt-1 text-amber-200/80">
-                      You’re signed into Privy, but we can’t see your Zora global wallet / Coinbase Smart Wallet on this session.
-                      Re-auth with wallet sign-in to sync the expected wallet linkage.
+                      Connect an external wallet so 4626 can see the signer for this deploy session.
+                    </div>
+                    <div className="text-[10px] text-amber-200/60 mt-0.5">
+                      Optional — use Rabby / MetaMask / Coinbase Wallet as a secondary signer.
                     </div>
                     <div className="mt-3 flex flex-col sm:flex-row gap-2">
                       <button
                         type="button"
                         className="btn-secondary"
-                        onClick={() => {
-                          void (async () => {
-                            try {
-                              if (typeof logout === 'function') await logout()
-                            } catch {
-                              // ignore
-                            }
-                            await login({ loginMethods: ['wallet'] })
-                          })()
-                        }}
+                        disabled={externalWalletConnectBusy}
+                        onClick={connectExternalSignerWallet}
                       >
-                        Re-auth with wallet
+                        {externalWalletConnectBusy ? 'Connecting…' : 'Connect external wallet'}
                       </button>
                     </div>
+                    {externalWalletConnectError ? (
+                      <div className="mt-2 text-[11px] text-red-300/90" role="alert">
+                        {externalWalletConnectError}
+                      </div>
+                    ) : null}
                   </motion.div>
                 ) : null}
               </div>

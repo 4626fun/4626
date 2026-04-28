@@ -72,6 +72,12 @@ export function resolveMarketingToAppBaseUrl(input: MarketingToAppBaseUrlResolut
   try {
     const preferred = new URL(input.preferredAppOrigin)
     const current = new URL(input.currentOrigin)
+    if (isLoopbackHostname(preferred.hostname) && isLoopbackHostname(current.hostname)) {
+      return resolveLoopbackOriginForCurrentWindow({
+        configuredOrigin: input.preferredAppOrigin,
+        currentOrigin: input.currentOrigin,
+      })
+    }
     if (isLoopbackHostname(preferred.hostname) && !isLoopbackHostname(current.hostname)) {
       if (!warnedLoopbackAppOriginOnPublicHost && typeof window !== 'undefined') {
         warnedLoopbackAppOriginOnPublicHost = true

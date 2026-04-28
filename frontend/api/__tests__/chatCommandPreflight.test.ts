@@ -47,6 +47,7 @@ vi.mock('../../server/auth/_shared.js', async () => {
 describe('POST /api/v1/chat/command-preflight', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    delete process.env.ALFACHAT_PINATA_ALLOWED_USERS
     checkRateLimitMock.mockReturnValue({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })
     isCreWriteCommandTextMock.mockReturnValue(false)
     getKeeprVaultByGroupIdMock.mockResolvedValue({
@@ -97,6 +98,87 @@ describe('POST /api/v1/chat/command-preflight', () => {
     expect(res.body?.success).toBe(true)
     expect(res.body?.data?.allowed).toBe(true)
     expect(res.body?.data?.guardCategory).toBe('none')
+  })
+
+  it('denies pinata source when pinata allowlist is not configured', async () => {
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        source: 'pinata',
+        conversationId: 'group-1',
+        senderWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        command: '/wallet',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.allowed).toBe(false)
+    expect(res.body?.data?.reason).toBe('pinata_allowlist_not_configured')
+    expect(res.body?.data?.guardCategory).toBe('pinata_access_denied')
+  })
+
+  it('denies pinata source when session user is not allowlisted', async () => {
+    process.env.ALFACHAT_PINATA_ALLOWED_USERS = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        source: 'pinata',
+        conversationId: 'group-1',
+        senderWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        command: '/wallet',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.allowed).toBe(false)
+    expect(res.body?.data?.reason).toBe('pinata_user_not_allowlisted')
+    expect(res.body?.data?.guardCategory).toBe('pinata_access_denied')
+  })
+
+  it('allows pinata source when session user is allowlisted', async () => {
+    process.env.ALFACHAT_PINATA_ALLOWED_USERS = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        source: 'pinata',
+        conversationId: 'group-1',
+        senderWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        command: '/wallet',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.allowed).toBe(true)
+    expect(res.body?.data?.reason).toBe('read_or_non_mutating_command')
+  })
+
+  it('treats hermit as the pinata source alias', async () => {
+    process.env.ALFACHAT_PINATA_ALLOWED_USERS = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        source: 'hermit',
+        conversationId: 'group-1',
+        senderWallet: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+        command: '/wallet',
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.allowed).toBe(true)
+    expect(res.body?.data?.reason).toBe('read_or_non_mutating_command')
   })
 
   it('rejects write preflight when sender wallet is missing', async () => {

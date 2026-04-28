@@ -44,6 +44,7 @@ import {
   isXmtpNotRegisteredError,
   normalizeEvmAddress,
   parseWireContent,
+  shouldFallbackToOriginalXmtpRecipient,
   truncateAddress,
 } from '@/lib/xmtp/xmtpHelpers'
 import {
@@ -116,7 +117,12 @@ export type StartDmFailureReason =
   | 'create_failed'
 
 export type StartDmResult =
-  | { ok: true; conversationId: string }
+  | {
+      ok: true
+      conversationId: string
+      peerAddress: `0x${string}`
+      usedOriginalAddressFallback: boolean
+    }
   | { ok: false; reason: StartDmFailureReason; message: string }
 
 type XmtpContextValue = {
@@ -1868,23 +1874,38 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
       }
     }
     try {
+      let effectivePeerAddress = normalizedPeerAddress
+      let usedOriginalAddressFallback = false
       const preflightCanMessage = await canMessageAddressOnCurrentEnv(normalizedPeerAddress)
       if (preflightCanMessage === false) {
-        return {
-          ok: false,
-          reason: canonicalizedFromAddress
-            ? 'canonical_recipient_not_registered'
-            : 'recipient_not_registered',
-          message: buildNotRegisteredDmMessage({
-            peerAddress: normalizedPeerAddress,
-            canonicalizedFromAddress,
-            env: XMTP_ENV,
-          }),
+        const originalCanMessage = canonicalizedFromAddress
+          ? await canMessageAddressOnCurrentEnv(canonicalizedFromAddress)
+          : null
+        if (canonicalizedFromAddress && shouldFallbackToOriginalXmtpRecipient({
+          canonicalizedFromAddress,
+          peerAddress: normalizedPeerAddress,
+          peerCanMessage: preflightCanMessage,
+          originalCanMessage,
+        })) {
+          effectivePeerAddress = canonicalizedFromAddress
+          usedOriginalAddressFallback = true
+        } else {
+          return {
+            ok: false,
+            reason: canonicalizedFromAddress
+              ? 'canonical_recipient_not_registered'
+              : 'recipient_not_registered',
+            message: buildNotRegisteredDmMessage({
+              peerAddress: normalizedPeerAddress,
+              canonicalizedFromAddress,
+              env: XMTP_ENV,
+            }),
+          }
         }
       }
       await client.conversations.sync().catch(() => undefined)
       const dm = await client.conversations.createDmWithIdentifier({
-        identifier: normalizedPeerAddress,
+        identifier: effectivePeerAddress,
         identifierKind: IdentifierKind.Ethereum,
       })
       const summary = await buildConvoSummary(dm as any)
@@ -1898,7 +1919,12 @@ export function XmtpChatProvider({ children }: { children: ReactNode }) {
         conversationsRef.current = next
         return next
       })
-      return { ok: true, conversationId: dm.id }
+      return {
+        ok: true,
+        conversationId: dm.id,
+        peerAddress: effectivePeerAddress,
+        usedOriginalAddressFallback,
+      }
     } catch (e) {
       console.error('[xmtp] startDm error:', e)
       const errMsg = e instanceof Error && e.message ? e.message : 'Could not start conversation'

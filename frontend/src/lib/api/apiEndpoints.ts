@@ -55,4 +55,7 @@ export const API_ENDPOINTS = {
   agent: {
     creative: '/api/agent/creative',
   },
+  chat: {
+    hermit: '/api/v1/chat/hermit',
+  },
 } as const

@@ -17,6 +17,13 @@ import { validateQuoteTokenPolicy, validateRoutePolicy } from '../../../server/u
 import { isObject, readJsonObjectBody, toCleanErrorMessage, uniswapTradeFetch } from '../../../server/uniswap/trading.js'
 import { validateSwapTransactionPayload } from '../../../server/uniswap/swapPayloadValidation.js'
 
+function isPermit2Disabled(value: unknown): boolean {
+  if (typeof value === 'boolean') return value
+  if (typeof value !== 'string') return false
+  const lc = value.trim().toLowerCase()
+  return lc === 'true' || lc === '1'
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   setCors(req, res)
   setNoStore(res)
@@ -70,10 +77,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     })
   }
 
+  const payload: Record<string, unknown> = { ...body }
+  delete payload.permit2Disabled
+  const headers: Record<string, string> = {}
+  if (isPermit2Disabled(body.permit2Disabled) || isPermit2Disabled(req.headers['x-permit2-disabled'])) {
+    headers['x-permit2-disabled'] = 'true'
+  }
+
   const upstream = await uniswapTradeFetch({
     path: '/swap',
     method: 'POST',
-    body,
+    body: payload,
+    headers: Object.keys(headers).length > 0 ? headers : undefined,
   })
 
   if (upstream.status >= 400) {

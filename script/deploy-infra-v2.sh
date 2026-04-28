@@ -96,8 +96,9 @@ load_handoff_env_file() {
   fi
 
   if [ ! -f "$BASE_RELEASE_HANDOFF_ENV_PATH" ]; then
-    echo "Error: BASE_RELEASE_HANDOFF_ENV_PATH does not exist: $BASE_RELEASE_HANDOFF_ENV_PATH" >&2
-    exit 1
+    echo "No existing handoff env at ${BASE_RELEASE_HANDOFF_ENV_PATH}; starting fresh and creating it after deploy."
+    mkdir -p "$(dirname "$BASE_RELEASE_HANDOFF_ENV_PATH")"
+    return 0
   fi
 
   load_env_file "$BASE_RELEASE_HANDOFF_ENV_PATH"
@@ -223,6 +224,7 @@ is_known_deployment_batcher_verify_mismatch() {
   local log_path="$1"
   local saw_onchain_success=0
   local saw_deployment_batcher_verify=0
+  local saw_phase2_module_verify=0
   local saw_mismatch=0
   local saw_partial_verify_failure=0
 
@@ -234,17 +236,20 @@ is_known_deployment_batcher_verify_mismatch() {
       *"Submitting verification for [contracts/helpers/batchers/DeploymentBatcher.sol:DeploymentBatcher]"*)
         saw_deployment_batcher_verify=1
         ;;
+      *"Submitting verification for [contracts/helpers/batchers/DeploymentBatcher.sol:DeploymentBatcherPhase2Module]"*)
+        saw_phase2_module_verify=1
+        ;;
       *"Compiled contract deployment bytecode does NOT match the transaction deployment bytecode."*)
         saw_mismatch=1
         ;;
-      *"Error: Not all (7 / 8) contracts were verified!"*)
+      *"Error: Not all ("*" contracts were verified!"*)
         saw_partial_verify_failure=1
         ;;
     esac
   done < "$log_path"
 
   [ "$saw_onchain_success" -eq 1 ] &&
-    [ "$saw_deployment_batcher_verify" -eq 1 ] &&
+    { [ "$saw_deployment_batcher_verify" -eq 1 ] || [ "$saw_phase2_module_verify" -eq 1 ]; } &&
     [ "$saw_mismatch" -eq 1 ] &&
     [ "$saw_partial_verify_failure" -eq 1 ]
 }

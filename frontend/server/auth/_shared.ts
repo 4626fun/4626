@@ -260,10 +260,13 @@ export function readSessionFromRequest(req: VercelRequest): { address: string } 
   }
 
   // Fallback: HttpOnly cookie session when no valid explicit bearer token was supplied.
-  const cookies = parseCookies(req)
-  const cookieToken = cookies[COOKIE_SESSION]
-  const cookieSession = readSessionToken(cookieToken)
-  if (cookieSession) return cookieSession
+  // During the shared-domain cookie rollout, browsers can send both a legacy
+  // host-only cookie and the new parent-domain cookie. Accept the first valid
+  // value rather than letting a stale duplicate shadow the active session.
+  for (const cookieToken of readCookieValues(req, COOKIE_SESSION)) {
+    const cookieSession = readSessionToken(cookieToken)
+    if (cookieSession) return cookieSession
+  }
 
   return null
 }
@@ -285,9 +288,9 @@ export function enforceCookieSessionTrustedOrigin(req: VercelRequest, res: Verce
     (typeof siwaReceiptHeader === 'string' && siwaReceiptHeader.trim().length > 0) ||
     (Array.isArray(siwaReceiptHeader) && siwaReceiptHeader.some((value) => String(value).trim().length > 0))
 
-  const cookies = parseCookies(req)
-  const cookieToken = cookies[COOKIE_SESSION]
-  const hasValidCookieSession = Boolean(readSessionToken(cookieToken))
+  const hasValidCookieSession = readCookieValues(req, COOKIE_SESSION).some((cookieToken) =>
+    Boolean(readSessionToken(cookieToken)),
+  )
 
   // FIX: FINDING-03 — enforce trusted-origin check for ALL authenticated state-changing
   // requests, not just cookie-authenticated ones. The previous bypass for bearer/privy/siwa
@@ -338,6 +341,25 @@ export function parseCookies(req: VercelRequest): Record<string, string> {
   return out
 }
 
+function readCookieValues(req: VercelRequest, name: string): string[] {
+  const header = req.headers?.cookie
+  if (!header || typeof header !== 'string') return []
+  const out: string[] = []
+  for (const part of header.split(';')) {
+    const idx = part.indexOf('=')
+    if (idx <= 0) continue
+    const k = part.slice(0, idx).trim()
+    if (k !== name) continue
+    const raw = part.slice(idx + 1).trim()
+    try {
+      out.push(decodeURIComponent(raw))
+    } catch {
+      out.push(raw)
+    }
+  }
+  return out
+}
+
 function isProbablyHttps(req: VercelRequest): boolean {
   const xfProto = req.headers?.['x-forwarded-proto']
   if (typeof xfProto === 'string' && xfProto.toLowerCase() === 'https') return true
@@ -361,6 +383,47 @@ function appendSetCookie(res: VercelResponse, value: string) {
   res.setHeader('Set-Cookie', [String(existing), value])
 }
 
+function normalizeCookieHost(req: VercelRequest): string {
+  const rawHost = typeof req.headers?.host === 'string' ? req.headers.host.trim().toLowerCase() : ''
+  return rawHost.replace(/:\d+$/, '')
+}
+
+function normalizeCookieDomain(raw: string): string | null {
+  const domain = raw.trim().toLowerCase()
+  if (!domain) return null
+  if (domain.includes('/') || domain.includes(':') || domain.includes(';')) return null
+  const withoutLeadingDot = domain.replace(/^\.+/, '')
+  if (!withoutLeadingDot || !withoutLeadingDot.includes('.')) return null
+  return `.${withoutLeadingDot}`
+}
+
+function resolveCookieDomain(req: VercelRequest): string | null {
+  const configured = normalizeCookieDomain(process.env.AUTH_COOKIE_DOMAIN ?? '')
+  const host = normalizeCookieHost(req)
+  if (configured) {
+    const bare = configured.slice(1)
+    if (host === bare || host.endsWith(`.${bare}`)) return configured
+    return null
+  }
+  if (host === '4626.fun' || host.endsWith('.4626.fun')) return '.4626.fun'
+  return null
+}
+
+function serializeCookie(
+  req: VercelRequest,
+  name: string,
+  value: string,
+  opts: { maxAgeSeconds?: number; httpOnly?: boolean } = {},
+  cookieDomain: string | null = resolveCookieDomain(req),
+): string {
+  const parts: string[] = [`${name}=${encodeURIComponent(value)}`, 'Path=/', 'SameSite=Strict']
+  if (cookieDomain) parts.push(`Domain=${cookieDomain}`)
+  if (opts.httpOnly ?? true) parts.push('HttpOnly')
+  if (typeof opts.maxAgeSeconds === 'number') parts.push(`Max-Age=${Math.max(0, Math.floor(opts.maxAgeSeconds))}`)
+  if (isProbablyHttps(req)) parts.push('Secure')
+  return parts.join('; ')
+}
+
 export function setCookie(
   req: VercelRequest,
   res: VercelResponse,
@@ -370,16 +433,20 @@ export function setCookie(
 ) {
   // FIX: FINDING-16 — use SameSite=Strict for session cookies on production;
   // Lax allows cross-site top-level navigations to carry the cookie.
-  const parts: string[] = [`${name}=${encodeURIComponent(value)}`, 'Path=/', 'SameSite=Strict']
-  if (opts.httpOnly ?? true) parts.push('HttpOnly')
-  if (typeof opts.maxAgeSeconds === 'number') parts.push(`Max-Age=${Math.max(0, Math.floor(opts.maxAgeSeconds))}`)
-  if (isProbablyHttps(req)) parts.push('Secure')
+  // On 4626 production hosts, use a shared parent-domain cookie so auth
+  // survives marketing shell <-> app shell navigation.
   // Support setting multiple cookies in a single response.
-  appendSetCookie(res, parts.join('; '))
+  appendSetCookie(res, serializeCookie(req, name, value, opts))
 }
 
 export function clearCookie(req: VercelRequest, res: VercelResponse, name: string) {
-  setCookie(req, res, name, '', { maxAgeSeconds: 0, httpOnly: true })
+  const opts = { maxAgeSeconds: 0, httpOnly: true }
+  const sharedDomain = resolveCookieDomain(req)
+  appendSetCookie(res, serializeCookie(req, name, '', opts, sharedDomain))
+  if (sharedDomain) {
+    // Clear legacy host-only cookies created before shared-domain auth cookies.
+    appendSetCookie(res, serializeCookie(req, name, '', opts, null))
+  }
 }
 
 export async function readJsonBody<T = any>(req: VercelRequest, opts: { maxBytes?: number } = {}): Promise<T | null> {

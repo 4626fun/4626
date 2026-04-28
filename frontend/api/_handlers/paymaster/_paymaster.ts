@@ -1935,6 +1935,7 @@ async function validateInnerCalls(params: {
     contracts.swapRouter && isAddress(contracts.swapRouter) ? getAddress(contracts.swapRouter) : null
   const allowedUniversalSwapRouters = new Set<Address>([
     BASE_UNIVERSAL_ROUTER_CURRENT,
+    ...(configuredSwapRouter ? [configuredSwapRouter] : []),
   ])
   const allowedPayoutRouterV3Routers = new Set<Address>([
     BASE_V3_SWAP_ROUTER,
@@ -2309,6 +2310,7 @@ async function validateInnerCalls(params: {
         let approvalCalls = 0
         let approvedToken: Address | null = null
         let swapRouterCallData: Hex | null = null
+        let swapRouterTarget: Address | null = null
         for (const c of innerCalls) {
           const selector = getSelector(c.data)
 
@@ -2322,6 +2324,7 @@ async function validateInnerCalls(params: {
             swapRouterCalls += 1
             if (swapRouterCalls > 1) throw new Error('swap_router_call_count_not_allowed')
             swapRouterCallData = c.data
+            swapRouterTarget = c.target
             continue
           }
 
@@ -2330,7 +2333,10 @@ async function validateInnerCalls(params: {
           approvalCalls += 1
           if (approvalCalls > 1) throw new Error('swap_approval_call_count_not_allowed')
           const spender = decodeAddressArgFromCalldata(c.data, 0)
-          if (!spender || spender !== permit2) return { matched: false, creatorToken: null as Address | null }
+          const spenderAllowedForSwap = Boolean(
+            spender && (spender === permit2 || (swapRouterTarget ? spender === swapRouterTarget : allowedUniversalSwapRouters.has(spender))),
+          )
+          if (!spenderAllowedForSwap) return { matched: false, creatorToken: null as Address | null }
           const amount = decodeUint256ArgFromCalldata(c.data, 1)
           if (amount == null || amount <= 0n) throw new Error('swap_approval_amount_invalid')
           const approvalToken = getAddress(c.target)

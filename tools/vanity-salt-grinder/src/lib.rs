@@ -1,5 +1,6 @@
 pub mod catalog;
 pub mod ethereum;
+pub mod per_vault;
 pub mod planner;
 pub mod search;
 

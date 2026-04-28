@@ -188,6 +188,29 @@ export function evaluateSwapSessionGate(input: SwapSessionGateInput): SwapSessio
   }
 }
 
+export function deriveSwapExecutionReadiness(params: {
+  quoteReady: boolean
+  executionMode: 'canonical' | 'eoa'
+  executionTrack?: UserExecutionTrack | null
+  canonicalAddress?: string | null
+  executionAddress?: string | null
+  signerAddress?: string | null
+  canonicalPolicyApplies?: boolean
+  cdpCanonicalOnlyMode?: boolean
+}): boolean {
+  if (!params.quoteReady) return false
+
+  const canonicalPolicyReady =
+    params.executionMode !== 'canonical' ||
+    (isTargetCanonicalCsw(params.canonicalAddress ?? null) &&
+      (params.executionTrack === 'sub-account' ||
+        (isTargetCanonicalCsw(params.executionAddress ?? null) && isAllowedCanonicalSigner(params.signerAddress ?? null))))
+
+  if (params.cdpCanonicalOnlyMode && !canonicalPolicyReady) return false
+  if (params.canonicalPolicyApplies && !canonicalPolicyReady) return false
+  return true
+}
+
 type SwapTxDebugState = {
   enabled: boolean
   chainId: number
@@ -310,6 +333,34 @@ function isCdpProviderQuote(value: TradeQuoteResponse | null | undefined): boole
     .toLowerCase() === 'cdp'
 }
 
+function readQuoteInputAmount(value: TradeQuoteResponse | null | undefined): string | null {
+  const payload = pickQuote(value) ?? (value as Record<string, unknown> | null | undefined)
+  if (!payload || typeof payload !== 'object') return null
+  const input = (payload as any).input
+  if (input && typeof input === 'object') {
+    const amount = typeof input.amount === 'string' ? input.amount : typeof input.startAmount === 'string' ? input.startAmount : ''
+    if (amount.trim()) return amount.trim()
+  }
+  const orderInput = (payload as any).orderInfo?.input
+  if (orderInput && typeof orderInput === 'object') {
+    const amount =
+      typeof orderInput.startAmount === 'string'
+        ? orderInput.startAmount
+        : typeof orderInput.amount === 'string'
+          ? orderInput.amount
+          : ''
+    if (amount.trim()) return amount.trim()
+  }
+  return null
+}
+
+function readQuoteInputToken(value: TradeQuoteResponse | null | undefined): string | null {
+  const payload = pickQuote(value) ?? (value as Record<string, unknown> | null | undefined)
+  if (!payload || typeof payload !== 'object') return null
+  const token = (payload as any).input?.token ?? (payload as any).orderInfo?.input?.token
+  return typeof token === 'string' && isAddress(token) ? token.toLowerCase() : null
+}
+
 export function useSwapExecution(params: {
   address: string | undefined
   walletClient: unknown
@@ -320,6 +371,7 @@ export function useSwapExecution(params: {
   executionTrack?: UserExecutionTrack | null
   executionAddress: `0x${string}` | null
   executionReady: boolean
+  expectedSessionAddress?: string | null
   tokenIn: string
   tokenOut: string
   amountInUnits: string
@@ -498,6 +550,7 @@ export function useSwapExecution(params: {
     }),
     [normalizedAtomicStatus, normalizedPaymasterService, normalizedSupports5792],
   )
+  const permit2DisabledForSwap = params.executionMode === 'canonical'
   const canonicalPolicyApplies = useMemo(
     () =>
       shouldApplyCanonicalEnforcement({
@@ -654,8 +707,7 @@ export function useSwapExecution(params: {
     if (!isTargetCanonicalCsw(params.canonicalAddress ?? null)) {
       throw new Error('Canonical CSW policy requires the configured canonical smart wallet identity.')
     }
-    const subAccountExecution =
-      params.executionTrack === 'sub-account' || params.executionTrack === 'migration-pending'
+    const subAccountExecution = params.executionTrack === 'sub-account'
     if (!subAccountExecution && !isTargetCanonicalCsw(params.executionAddress ?? null)) {
       throw new Error('Canonical CSW policy blocked non-canonical execution address.')
     }
@@ -719,34 +771,42 @@ export function useSwapExecution(params: {
     [params.tokenIn, params.tokenOut],
   )
 
-  const isReady = useMemo(
+  const quoteReady = useMemo(
     () =>
       isAddress(params.tokenIn) &&
       isAddress(params.tokenOut) &&
       !tokensEquivalent &&
       Number(params.amountInUnits) > 0 &&
       Boolean(params.executionAddress) &&
-      swapSessionGate.ok &&
-      (!cdpCanonicalOnlyMode ||
-        (params.executionMode === 'canonical' &&
-          isTargetCanonicalCsw(params.executionAddress ?? null) &&
-          isTargetCanonicalCsw(params.canonicalAddress ?? null) &&
-          isAllowedCanonicalSigner(params.signerAddress ?? null))) &&
-      (!canonicalPolicyApplies ||
-        (params.executionMode === 'canonical' &&
-          isTargetCanonicalCsw(params.executionAddress ?? null) &&
-          isTargetCanonicalCsw(params.canonicalAddress ?? null) &&
-          isAllowedCanonicalSigner(params.signerAddress ?? null))),
+      swapSessionGate.ok,
     [
       params.tokenIn,
       params.tokenOut,
       params.amountInUnits,
       params.executionAddress,
-      params.executionMode,
-      params.canonicalAddress,
-      params.signerAddress,
       tokensEquivalent,
       swapSessionGate.ok,
+    ],
+  )
+  const isReady = useMemo(
+    () =>
+      deriveSwapExecutionReadiness({
+        quoteReady,
+        executionMode: params.executionMode,
+        executionTrack: params.executionTrack,
+        canonicalAddress: params.canonicalAddress,
+        executionAddress: params.executionAddress,
+        signerAddress: params.signerAddress,
+        canonicalPolicyApplies,
+        cdpCanonicalOnlyMode,
+      }),
+    [
+      quoteReady,
+      params.executionMode,
+      params.executionTrack,
+      params.canonicalAddress,
+      params.executionAddress,
+      params.signerAddress,
       cdpCanonicalOnlyMode,
       canonicalPolicyApplies,
     ],
@@ -809,11 +869,12 @@ export function useSwapExecution(params: {
         hasSession: Boolean(params.hasSession),
         sessionAddress: params.sessionAddress ?? null,
         executionAddress: params.executionAddress ?? null,
-        expectedSessionAddress: params.signerAddress ?? null,
+        expectedSessionAddress: params.expectedSessionAddress ?? params.signerAddress ?? null,
       }),
     [
       params.executionAddress,
       params.executionMode,
+      params.expectedSessionAddress,
       params.hasSession,
       params.sessionAddress,
       params.sessionHydrated,
@@ -946,7 +1007,7 @@ export function useSwapExecution(params: {
       }
       return
     }
-    if (!isReady) return
+    if (!quoteReady) return
     if (quoteCooldownUntil && quoteCooldownUntil > Date.now()) {
       setStatus('Auto-quote is paused briefly after repeated API failures.')
       return
@@ -1015,7 +1076,7 @@ export function useSwapExecution(params: {
     params.tokenIn,
     params.tokenOut,
     swapChainId,
-    isReady,
+    quoteReady,
     quoteCooldownUntil,
     getTokenDecimals,
     getErrorDetails,
@@ -1088,6 +1149,7 @@ export function useSwapExecution(params: {
         tokenOut: params.tokenOut,
         tokenOutChainId: swapChainId,
         includeGasInfo: true,
+        permit2Disabled: permit2DisabledForSwap,
       })
       setApprovalData(data)
       setStatus('Approval check complete')
@@ -1107,6 +1169,7 @@ export function useSwapExecution(params: {
     params.connectorName,
     swapChainId,
     isReady,
+    permit2DisabledForSwap,
     getTokenDecimals,
     getErrorMessage,
     guardInputPolicy,
@@ -1122,13 +1185,14 @@ export function useSwapExecution(params: {
     try {
       const selectedQuote = pickSwapQuote(quote)
       if (!selectedQuote) throw new Error('Quote does not contain executable swap payload')
-      const permitPayload = await signPermitIfRequired(quote)
+      const permitPayload = permit2DisabledForSwap ? {} : await signPermitIfRequired(quote)
       const requiresApprovalTx = hasApprovalTransaction(approvalData)
       const data = await buildSwap({
         quote: selectedQuote,
         ...permitPayload,
         includeGasInfo: false,
         refreshGasPrice: true,
+        permit2Disabled: permit2DisabledForSwap,
         // Simulating before approval exists can fail with FAILED_TO_ESTIMATE_GAS.
         simulateTransaction: !requiresApprovalTx,
         deadline: Math.floor(Date.now() / 1000) + params.parsedDeadlineMinutes * 60,
@@ -1141,7 +1205,7 @@ export function useSwapExecution(params: {
     } finally {
       setBusy(null)
     }
-  }, [quote, approvalData, params.parsedDeadlineMinutes, getErrorMessage, signPermitIfRequired])
+  }, [quote, approvalData, params.parsedDeadlineMinutes, getErrorMessage, signPermitIfRequired, permit2DisabledForSwap])
 
   const handleReviewTrade = useCallback(async () => {
     if (!params.executionAddress || !params.executionReady) return
@@ -1177,19 +1241,26 @@ export function useSwapExecution(params: {
         }))
       }
 
-      const nextQuote = await fetchTradeQuote({
-        tokenIn: params.tokenIn,
-        tokenOut: params.tokenOut,
-        tokenInChainId: swapChainId,
-        tokenOutChainId: swapChainId,
-        type: 'EXACT_INPUT',
-        amount,
-        swapper: params.executionAddress,
-        slippageTolerance: params.parsedSlippage,
-        routingPreference: 'BEST_PRICE',
-        permitAmount: 'EXACT',
-        walletModeKey: params.executionMode,
-      })
+      const canReuseCurrentQuote =
+        Boolean(quote) &&
+        !isQuoteStale() &&
+        readQuoteInputAmount(quote) === amount &&
+        readQuoteInputToken(quote) === params.tokenIn.toLowerCase()
+      const nextQuote = canReuseCurrentQuote
+        ? quote!
+        : await fetchTradeQuote({
+            tokenIn: params.tokenIn,
+            tokenOut: params.tokenOut,
+            tokenInChainId: swapChainId,
+            tokenOutChainId: swapChainId,
+            type: 'EXACT_INPUT',
+            amount,
+            swapper: params.executionAddress,
+            slippageTolerance: params.parsedSlippage,
+            routingPreference: 'BEST_PRICE',
+            permitAmount: 'EXACT',
+            walletModeKey: params.executionMode,
+          })
       if (runId !== quoteRunRef.current) return
       const isCdpQuote = isCdpProviderQuote(nextQuote)
       if (!isCdpQuote && !guardRoutingPolicy(nextQuote.routing)) return
@@ -1204,6 +1275,7 @@ export function useSwapExecution(params: {
               tokenOut: params.tokenOut,
               tokenOutChainId: swapChainId,
               includeGasInfo: true,
+              permit2Disabled: permit2DisabledForSwap,
             })
       if (runId !== quoteRunRef.current) return
       setQuote(nextQuote)
@@ -1239,7 +1311,7 @@ export function useSwapExecution(params: {
 
       const selectedQuote = pickSwapQuote(nextQuote)
       if (!selectedQuote) throw new Error('Quote does not contain executable swap payload')
-      const permitPayload = await signPermitIfRequired(nextQuote)
+      const permitPayload = permit2DisabledForSwap ? {} : await signPermitIfRequired(nextQuote)
       if (runId !== quoteRunRef.current) return
       const requiresApprovalTx = hasApprovalTransaction(nextApproval)
       const built = await buildSwap({
@@ -1247,6 +1319,7 @@ export function useSwapExecution(params: {
         ...permitPayload,
         includeGasInfo: false,
         refreshGasPrice: true,
+        permit2Disabled: permit2DisabledForSwap,
         // Simulating before approval exists can fail with FAILED_TO_ESTIMATE_GAS.
         simulateTransaction: !requiresApprovalTx,
         deadline: Math.floor(Date.now() / 1000) + params.parsedDeadlineMinutes * 60,
@@ -1285,6 +1358,9 @@ export function useSwapExecution(params: {
     params.executionReady,
     swapDebugEnabled,
     swapSessionGate,
+    quote,
+    isQuoteStale,
+    permit2DisabledForSwap,
   ])
 
   const run7702DryRun = useCallback(
@@ -1489,7 +1565,7 @@ export function useSwapExecution(params: {
           hasSession: Boolean(params.hasSession),
           sessionAddress: params.sessionAddress ?? null,
           executionAddress: params.executionAddress ?? null,
-          expectedSessionAddress: params.signerAddress ?? null,
+          expectedSessionAddress: params.expectedSessionAddress ?? params.signerAddress ?? null,
         },
           params.ensureCanonicalSession,
         )
@@ -1577,6 +1653,7 @@ export function useSwapExecution(params: {
     params.ensureCanonicalSession,
     params.hasSession,
     params.signerAddress,
+    params.expectedSessionAddress,
     params.canonicalAddress,
     params.connectorId,
     params.connectorName,
@@ -1692,6 +1769,7 @@ export function useSwapExecution(params: {
     fallbackActive,
     swapProvider,
     swapProviderLabel: getSwapProviderLabel(swapProvider),
+    quoteReady,
     isReady,
     canonicalSubmitSession,
     approvalRequired,

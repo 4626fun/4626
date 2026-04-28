@@ -60,6 +60,7 @@ import {
   isDeprecatedCreatorVaultBatcherAddress,
 } from '../../../../../src/config/contracts.defaults.js'
 import { deploymentBatcherNotConfiguredMessage } from '../../../../../server/_lib/onchain/deploymentBatcherConfigError.js'
+import { DEPLOY_BYTECODE } from '../../../../../src/deploy/bytecode.generated.js'
 
 export type ApiEnvelope<T> = { success: boolean; data?: T; error?: string }
 
@@ -154,6 +155,7 @@ type OwnershipCheck = {
 }
 
 const ZERO_ADDRESS = `0x${'00'.repeat(20)}` as Address
+const ZERO_BYTES32 = `0x${'00'.repeat(32)}` as Hex
 const PHASE1_SELECTOR_DEPLOY = '0x3c51ca4e'
 const PHASE1_SELECTOR_CORE = '0x1331378b'
 const PHASE1_SELECTOR_FINALIZE = '0xa98ec9d8'
@@ -168,7 +170,9 @@ const PHASE1_WITH_SALT_SELECTORS = new Set<string>([
 const BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR = 'e7fdf838'
 const KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS = new Set<string>([
   '0xe3f9490cfd6bd3d68010405d18bf772c167e7178',
+  '0xf941bb68e4f083f3f531cc598d5c08d0b8ffba7e',
 ])
+const UNIVERSAL_CREATE2_FACTORY = '0x4e59b44847b379578588920ca78fbf26c0b4956c'
 const EXPECTED_VAULT_MODULE_STORAGE_VERSION = keccak256(encodePacked(['string'], ['CreatorOVaultModuleStorage.v1']))
 const EXPECTED_VAULT_CORE_MODULE_KIND = keccak256(encodePacked(['string'], ['CreatorOVaultModule.core']))
 const EXPECTED_VAULT_STRATEGIES_MODULE_KIND = keccak256(encodePacked(['string'], ['CreatorOVaultModule.strategies']))
@@ -176,6 +180,15 @@ const EXPECTED_VAULT_ADMIN_MODULE_KIND = keccak256(encodePacked(['string'], ['Cr
 const DEFAULT_FREE_VAULT_VANITY_PREFIX = '4626'
 const DEFAULT_FREE_SHARE_VANITY_SUFFIX = '4626'
 const DEFAULT_DEPLOY_VANITY_CUSTOM_MAX_HEX = 5
+const PHASE1_EXPECTED_CODE_IDS = {
+  vault: keccak256(DEPLOY_BYTECODE.CreatorOVault as Hex),
+  wrapper: keccak256(DEPLOY_BYTECODE.CreatorOVaultWrapper as Hex),
+  shareOFT: keccak256(DEPLOY_BYTECODE.CreatorShareOFT as Hex),
+  gauge: keccak256(DEPLOY_BYTECODE.CreatorGaugeController as Hex),
+  cca: keccak256(DEPLOY_BYTECODE.CCALaunchStrategy as Hex),
+  oracle: keccak256(DEPLOY_BYTECODE.CreatorOracle as Hex),
+  oftBootstrap: keccak256(DEPLOY_BYTECODE.OFTBootstrapRegistry as Hex),
+} as const
 
 const PHASE1_PARAMS_COMPONENTS = [
   { name: 'creatorToken', type: 'address' },
@@ -590,15 +603,65 @@ function hasPhase1SaltOverrideCalls(calls: Call[]): boolean {
     const data = typeof call?.data === 'string' ? call.data.trim().toLowerCase() : ''
     if (!data.startsWith('0x') || data.length < 10) continue
     const selector = data.slice(0, 10)
-    if (PHASE1_WITH_SALT_SELECTORS.has(selector)) return true
+    if (!PHASE1_WITH_SALT_SELECTORS.has(selector)) continue
+    try {
+      if (selector === PHASE1_SELECTOR_DEPLOY_WITH_SALT) {
+        const decoded = decodeFunctionData({
+          abi: CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI,
+          data: data as Hex,
+        })
+        const shareOftSaltOverride = decoded.args?.[2]
+        if (
+          typeof shareOftSaltOverride === 'string' &&
+          /^0x[0-9a-f]{64}$/i.test(shareOftSaltOverride) &&
+          !/^0x0{64}$/i.test(shareOftSaltOverride)
+        ) {
+          return true
+        }
+        continue
+      }
+      if (selector === PHASE1_SELECTOR_CORE_WITH_SALT) {
+        const decoded = decodeFunctionData({
+          abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI,
+          data: data as Hex,
+        })
+        const shareOftSaltOverride = decoded.args?.[2]
+        if (
+          typeof shareOftSaltOverride === 'string' &&
+          /^0x[0-9a-f]{64}$/i.test(shareOftSaltOverride) &&
+          !/^0x0{64}$/i.test(shareOftSaltOverride)
+        ) {
+          return true
+        }
+        continue
+      }
+      if (selector === PHASE1_SELECTOR_FINALIZE_WITH_SALT) {
+        const decoded = decodeFunctionData({
+          abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI,
+          data: data as Hex,
+        })
+        const shareOftSaltOverride = decoded.args?.[2]
+        if (
+          typeof shareOftSaltOverride === 'string' &&
+          /^0x[0-9a-f]{64}$/i.test(shareOftSaltOverride) &&
+          !/^0x0{64}$/i.test(shareOftSaltOverride)
+        ) {
+          return true
+        }
+      }
+    } catch {
+      // If malformed calldata is passed with a salted selector, keep conservative anti-bypass behavior.
+      return true
+    }
   }
   return false
 }
 
-function rewritePhase1SaltCallToUnsalted(call: Call): Call {
+function rewritePhase1SaltCallToZeroOverride(call: Call): Call {
   const data = typeof call?.data === 'string' ? call.data.trim() : ''
   if (!data.startsWith('0x') || data.length < 10) return call
   const selector = data.slice(0, 10).toLowerCase()
+  const zeroOverride = `0x${'00'.repeat(32)}` as Hex
   try {
     if (selector === PHASE1_SELECTOR_DEPLOY_WITH_SALT) {
       const decoded = decodeFunctionData({
@@ -611,9 +674,9 @@ function rewritePhase1SaltCallToUnsalted(call: Call): Call {
       return {
         ...call,
         data: encodeFunctionData({
-          abi: CREATOR_VAULT_BATCHER_PHASE1_ABI,
-          functionName: 'deployPhase1',
-          args: [params as any, codeIds as any],
+          abi: CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI,
+          functionName: 'deployPhase1WithSalt',
+          args: [params as any, codeIds as any, zeroOverride],
         }) as Hex,
       }
     }
@@ -628,9 +691,9 @@ function rewritePhase1SaltCallToUnsalted(call: Call): Call {
       return {
         ...call,
         data: encodeFunctionData({
-          abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_ABI,
-          functionName: 'deployPhase1Core',
-          args: [params as any, codeIds as any],
+          abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI,
+          functionName: 'deployPhase1CoreWithSalt',
+          args: [params as any, codeIds as any, zeroOverride],
         }) as Hex,
       }
     }
@@ -645,9 +708,9 @@ function rewritePhase1SaltCallToUnsalted(call: Call): Call {
       return {
         ...call,
         data: encodeFunctionData({
-          abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_ABI,
-          functionName: 'finalizePhase1',
-          args: [params as any, codeIds as any],
+          abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI,
+          functionName: 'finalizePhase1WithSalt',
+          args: [params as any, codeIds as any, zeroOverride],
         }) as Hex,
       }
     }
@@ -655,6 +718,139 @@ function rewritePhase1SaltCallToUnsalted(call: Call): Call {
     return call
   }
   return call
+}
+
+function rewritePhase1CallToWithSaltZeroOverride(call: Call): Call {
+  const data = typeof call?.data === 'string' ? call.data.trim() : ''
+  if (!data.startsWith('0x') || data.length < 10) return call
+  const selector = data.slice(0, 10).toLowerCase()
+  try {
+    if (selector === PHASE1_SELECTOR_DEPLOY) {
+      const decoded = decodeFunctionData({
+        abi: CREATOR_VAULT_BATCHER_PHASE1_ABI,
+        data: data as Hex,
+      })
+      const params = decoded.args?.[0]
+      const codeIds = decoded.args?.[1]
+      if (!params || !codeIds) return call
+      return {
+        ...call,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI,
+          functionName: 'deployPhase1WithSalt',
+          args: [params as any, codeIds as any, ZERO_BYTES32],
+        }) as Hex,
+      }
+    }
+    if (selector === PHASE1_SELECTOR_CORE) {
+      const decoded = decodeFunctionData({
+        abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_ABI,
+        data: data as Hex,
+      })
+      const params = decoded.args?.[0]
+      const codeIds = decoded.args?.[1]
+      if (!params || !codeIds) return call
+      return {
+        ...call,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI,
+          functionName: 'deployPhase1CoreWithSalt',
+          args: [params as any, codeIds as any, ZERO_BYTES32],
+        }) as Hex,
+      }
+    }
+    if (selector === PHASE1_SELECTOR_FINALIZE) {
+      const decoded = decodeFunctionData({
+        abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_ABI,
+        data: data as Hex,
+      })
+      const params = decoded.args?.[0]
+      const codeIds = decoded.args?.[1]
+      if (!params || !codeIds) return call
+      return {
+        ...call,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI,
+          functionName: 'finalizePhase1WithSalt',
+          args: [params as any, codeIds as any, ZERO_BYTES32],
+        }) as Hex,
+      }
+    }
+  } catch {
+    return call
+  }
+  return call
+}
+
+async function normalizePhase1EntrypointCalls(calls: Call[]): Promise<{ calls: Call[]; rewrote: boolean }> {
+  if (!Array.isArray(calls) || calls.length === 0) return { calls: [], rewrote: false }
+
+  const targetAddresses = new Set<string>()
+  for (const call of calls) {
+    const data = typeof call?.data === 'string' ? call.data.trim().toLowerCase() : ''
+    if (!data.startsWith('0x') || data.length < 10 || !call?.to || !isAddress(call.to)) continue
+    const selector = data.slice(0, 10)
+    if (selector === PHASE1_SELECTOR_DEPLOY || selector === PHASE1_SELECTOR_CORE || selector === PHASE1_SELECTOR_FINALIZE) {
+      targetAddresses.add(getAddress(call.to as Address).toLowerCase())
+    }
+  }
+  if (targetAddresses.size === 0) return { calls, rewrote: false }
+
+  const rpc = (process.env.BASE_RPC_URL ?? '').trim() || 'https://mainnet.base.org'
+  const readClient = createPublicClient({
+    chain: base,
+    transport: http(rpc, { timeout: 12_000 }),
+  })
+
+  type EntrypointSupport = {
+    deployNoSalt: boolean
+    deployWithSalt: boolean
+    coreNoSalt: boolean
+    coreWithSalt: boolean
+    finalizeNoSalt: boolean
+    finalizeWithSalt: boolean
+  }
+  const supportByTarget = new Map<string, EntrypointSupport>()
+  for (const target of targetAddresses) {
+    let bytecodeLower = ''
+    try {
+      const bytecode = await readClient.getBytecode({ address: getAddress(target as Address) })
+      bytecodeLower = String(bytecode ?? '').toLowerCase()
+    } catch {
+      bytecodeLower = ''
+    }
+    supportByTarget.set(target, {
+      deployNoSalt: bytecodeLower.includes(PHASE1_SELECTOR_DEPLOY.slice(2)),
+      deployWithSalt: bytecodeLower.includes(PHASE1_SELECTOR_DEPLOY_WITH_SALT.slice(2)),
+      coreNoSalt: bytecodeLower.includes(PHASE1_SELECTOR_CORE.slice(2)),
+      coreWithSalt: bytecodeLower.includes(PHASE1_SELECTOR_CORE_WITH_SALT.slice(2)),
+      finalizeNoSalt: bytecodeLower.includes(PHASE1_SELECTOR_FINALIZE.slice(2)),
+      finalizeWithSalt: bytecodeLower.includes(PHASE1_SELECTOR_FINALIZE_WITH_SALT.slice(2)),
+    })
+  }
+
+  let rewrote = false
+  const normalized = calls.map((call) => {
+    if (!call?.to || !isAddress(call.to)) return call
+    const data = typeof call?.data === 'string' ? call.data.trim().toLowerCase() : ''
+    if (!data.startsWith('0x') || data.length < 10) return call
+    const selector = data.slice(0, 10)
+    const target = getAddress(call.to as Address).toLowerCase()
+    const support = supportByTarget.get(target)
+    if (!support) return call
+
+    const shouldRewrite =
+      (selector === PHASE1_SELECTOR_DEPLOY && !support.deployNoSalt && support.deployWithSalt) ||
+      (selector === PHASE1_SELECTOR_CORE && !support.coreNoSalt && support.coreWithSalt) ||
+      (selector === PHASE1_SELECTOR_FINALIZE && !support.finalizeNoSalt && support.finalizeWithSalt)
+    if (!shouldRewrite) return call
+
+    const rewritten = rewritePhase1CallToWithSaltZeroOverride(call)
+    if (rewritten.data !== call.data) rewrote = true
+    return rewritten
+  })
+
+  return { calls: normalized, rewrote }
 }
 
 async function normalizePhase1SaltOverrideCalls(calls: Call[]): Promise<{ calls: Call[]; rewrote: boolean }> {
@@ -694,7 +890,7 @@ async function normalizePhase1SaltOverrideCalls(calls: Call[]): Promise<{ calls:
     if (!call?.to || !isAddress(call.to)) return call
     const targetLc = getAddress(call.to as Address).toLowerCase()
     if (!saltDisabledTargets.has(targetLc)) return call
-    const rewritten = rewritePhase1SaltCallToUnsalted(call)
+    const rewritten = rewritePhase1SaltCallToZeroOverride(call)
     if (rewritten.data !== call.data) rewrote = true
     return rewritten
   })
@@ -710,6 +906,138 @@ type Phase1CodeIdsTuple = {
   oracle?: Hex
   oftBootstrap?: Hex
 } | null
+
+function normalizePhase1CodeIdsTuple(codeIds: Phase1CodeIdsTuple): { codeIds: Phase1CodeIdsTuple; changed: boolean } {
+  if (!codeIds || typeof codeIds !== 'object') return { codeIds, changed: false }
+  let changed = false
+  const normalized: Record<string, unknown> = { ...codeIds }
+  const entries: Array<[keyof typeof PHASE1_EXPECTED_CODE_IDS, Hex]> = [
+    ['vault', PHASE1_EXPECTED_CODE_IDS.vault],
+    ['wrapper', PHASE1_EXPECTED_CODE_IDS.wrapper],
+    ['shareOFT', PHASE1_EXPECTED_CODE_IDS.shareOFT],
+    ['gauge', PHASE1_EXPECTED_CODE_IDS.gauge],
+    ['cca', PHASE1_EXPECTED_CODE_IDS.cca],
+    ['oracle', PHASE1_EXPECTED_CODE_IDS.oracle],
+    ['oftBootstrap', PHASE1_EXPECTED_CODE_IDS.oftBootstrap],
+  ]
+  for (const [label, expected] of entries) {
+    const current = normalized[label]
+    if (typeof current !== 'string' || !current.startsWith('0x')) continue
+    if (current.toLowerCase() === expected.toLowerCase()) continue
+    normalized[label] = expected
+    changed = true
+  }
+  return { codeIds: normalized as Phase1CodeIdsTuple, changed }
+}
+
+function rewritePhase1CallCodeIdsToCurrent(call: Call): Call {
+  const data = typeof call?.data === 'string' ? call.data.trim() : ''
+  if (!data.startsWith('0x') || data.length < 10) return call
+  const selector = data.slice(0, 10).toLowerCase()
+  try {
+    if (selector === PHASE1_SELECTOR_DEPLOY) {
+      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_ABI, data: data as Hex })
+      const params = decoded.args?.[0]
+      const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple)
+      if (!params || !codeIds || !changed) return call
+      return {
+        ...call,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_BATCHER_PHASE1_ABI,
+          functionName: 'deployPhase1',
+          args: [params as any, codeIds as any],
+        }) as Hex,
+      }
+    }
+    if (selector === PHASE1_SELECTOR_CORE) {
+      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_ABI, data: data as Hex })
+      const params = decoded.args?.[0]
+      const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple)
+      if (!params || !codeIds || !changed) return call
+      return {
+        ...call,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_ABI,
+          functionName: 'deployPhase1Core',
+          args: [params as any, codeIds as any],
+        }) as Hex,
+      }
+    }
+    if (selector === PHASE1_SELECTOR_FINALIZE) {
+      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_ABI, data: data as Hex })
+      const params = decoded.args?.[0]
+      const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple)
+      if (!params || !codeIds || !changed) return call
+      return {
+        ...call,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_ABI,
+          functionName: 'finalizePhase1',
+          args: [params as any, codeIds as any],
+        }) as Hex,
+      }
+    }
+    if (selector === PHASE1_SELECTOR_DEPLOY_WITH_SALT) {
+      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI, data: data as Hex })
+      const params = decoded.args?.[0]
+      const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple)
+      const shareOftSaltOverride = decoded.args?.[2] as Hex | undefined
+      if (!params || !codeIds || typeof shareOftSaltOverride !== 'string' || !changed) return call
+      return {
+        ...call,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_BATCHER_PHASE1_WITH_SALT_ABI,
+          functionName: 'deployPhase1WithSalt',
+          args: [params as any, codeIds as any, shareOftSaltOverride],
+        }) as Hex,
+      }
+    }
+    if (selector === PHASE1_SELECTOR_CORE_WITH_SALT) {
+      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI, data: data as Hex })
+      const params = decoded.args?.[0]
+      const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple)
+      const shareOftSaltOverride = decoded.args?.[2] as Hex | undefined
+      if (!params || !codeIds || typeof shareOftSaltOverride !== 'string' || !changed) return call
+      return {
+        ...call,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_BATCHER_PHASE1_CORE_WITH_SALT_ABI,
+          functionName: 'deployPhase1CoreWithSalt',
+          args: [params as any, codeIds as any, shareOftSaltOverride],
+        }) as Hex,
+      }
+    }
+    if (selector === PHASE1_SELECTOR_FINALIZE_WITH_SALT) {
+      const decoded = decodeFunctionData({ abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI, data: data as Hex })
+      const params = decoded.args?.[0]
+      const { codeIds, changed } = normalizePhase1CodeIdsTuple((decoded.args?.[1] ?? null) as Phase1CodeIdsTuple)
+      const shareOftSaltOverride = decoded.args?.[2] as Hex | undefined
+      if (!params || !codeIds || typeof shareOftSaltOverride !== 'string' || !changed) return call
+      return {
+        ...call,
+        data: encodeFunctionData({
+          abi: CREATOR_VAULT_BATCHER_PHASE1_FINALIZE_WITH_SALT_ABI,
+          functionName: 'finalizePhase1WithSalt',
+          args: [params as any, codeIds as any, shareOftSaltOverride],
+        }) as Hex,
+      }
+    }
+  } catch {
+    return call
+  }
+  return call
+}
+
+function normalizePhase1CodeIds(calls: Call[]): { calls: Call[]; rewrote: boolean } {
+  if (!Array.isArray(calls) || calls.length === 0) return { calls: [], rewrote: false }
+  let rewrote = false
+  const normalized = calls.map((call) => {
+    const rewritten = rewritePhase1CallCodeIdsToCurrent(call)
+    if (rewritten.data !== call.data) rewrote = true
+    return rewritten
+  })
+  return { calls: normalized, rewrote }
+}
 
 function decodePhase1CodeIdsFromCallData(data: Hex): Phase1CodeIdsTuple {
   const raw = typeof data === 'string' ? data.trim() : ''
@@ -798,6 +1126,15 @@ async function assertPhase1BatcherReadiness(phase1Calls: Call[]): Promise<void> 
       outputs: [{ type: 'address' }],
     },
   ] as const
+  const BYTECODE_STORE_CHUNKCOUNT_ABI = [
+    {
+      type: 'function',
+      name: 'chunkCount',
+      stateMutability: 'view',
+      inputs: [{ name: 'codeId', type: 'bytes32' }],
+      outputs: [{ type: 'uint256' }],
+    },
+  ] as const
   const BATCHER_VAULT_MODULES_ABI = [
     { type: 'function', name: 'vaultCoreModule', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
     { type: 'function', name: 'vaultStrategiesModule', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
@@ -847,6 +1184,16 @@ async function assertPhase1BatcherReadiness(phase1Calls: Call[]): Promise<void> 
       }),
     ])
     if (!Boolean(isAuthorized)) {
+      const ownerLower = String(create2Owner).toLowerCase()
+      if (ownerLower === UNIVERSAL_CREATE2_FACTORY) {
+        throw new DeploySessionRequestError(
+          409,
+          `phase1 precheck failed: batcher ${batcherAddress} is not authorized in create2Deployer ${create2Deployer} ` +
+            `(owner ${String(create2Owner)}). This deployer is owned by the universal CREATE2 factory and its ` +
+            `authorizedDeployers list cannot be updated post-deploy; rotate to a batcher wired to a deploy-capable ` +
+            `create2Deployer, then retry.`,
+        )
+      }
       throw new DeploySessionRequestError(
         409,
         `phase1 precheck failed: batcher ${batcherAddress} is not authorized in create2Deployer ${create2Deployer} ` +
@@ -945,18 +1292,32 @@ async function assertPhase1BatcherReadiness(phase1Calls: Call[]): Promise<void> 
 
   const missing: string[] = []
   for (const [label, codeId] of requiredCodeIds.entries()) {
-    let pointer: Address
+    let hasCodeId = false
     try {
-      pointer = (await readClient.readContract({
+      const pointer = (await readClient.readContract({
         address: bytecodeStore,
         abi: BYTECODE_STORE_POINTER_ABI,
         functionName: 'pointers',
         args: [codeId],
       })) as Address
+      hasCodeId = String(pointer).toLowerCase() !== ZERO_ADDRESS.toLowerCase()
     } catch {
-      continue
+      // Some store variants may not expose pointers(); fall back to chunkCount().
     }
-    if (String(pointer).toLowerCase() === ZERO_ADDRESS.toLowerCase()) {
+    if (!hasCodeId) {
+      try {
+        const chunks = (await readClient.readContract({
+          address: bytecodeStore,
+          abi: BYTECODE_STORE_CHUNKCOUNT_ABI,
+          functionName: 'chunkCount',
+          args: [codeId],
+        })) as bigint
+        hasCodeId = chunks > 0n
+      } catch {
+        // Older stores may not expose chunkCount(); leave unresolved and report missing.
+      }
+    }
+    if (!hasCodeId) {
       missing.push(`${label}:${codeId}`)
     }
   }
@@ -1841,7 +2202,11 @@ export async function validateDeploySessionRequest(params: {
   }
 
   const phase1CallsRaw = Array.isArray(params.body.phase1Calls) ? params.body.phase1Calls : []
-  const { calls: phase1Calls, rewrote: phase1SaltCallsRewritten } = await normalizePhase1SaltOverrideCalls(phase1CallsRaw)
+  const { calls: phase1EntrypointNormalizedCalls, rewrote: phase1EntrypointCallsRewritten } =
+    await normalizePhase1EntrypointCalls(phase1CallsRaw)
+  const { calls: phase1SaltNormalizedCalls, rewrote: phase1SaltCallsRewritten } =
+    await normalizePhase1SaltOverrideCalls(phase1EntrypointNormalizedCalls)
+  const { calls: phase1Calls, rewrote: phase1CodeIdsRewritten } = normalizePhase1CodeIds(phase1SaltNormalizedCalls)
   const phase2CoreCallsRaw = Array.isArray(params.body.phase2CoreCalls) ? params.body.phase2CoreCalls : []
   const phase2FinalizeCallsRaw = Array.isArray(params.body.phase2FinalizeCalls) ? params.body.phase2FinalizeCalls : []
   const { phase2CoreCalls, phase2FinalizeCalls } = distributePhase2FinalizeApprovals({
@@ -1906,8 +2271,20 @@ export async function validateDeploySessionRequest(params: {
       }
     }
   }
+  if (phase1EntrypointCallsRewritten) {
+    console.warn('[deploy/v2/session/create] phase1_entrypoint_calls_rewritten', {
+      smartWallet: smartWallet.toLowerCase(),
+      creatorToken: creatorToken.toLowerCase(),
+    })
+  }
   if (phase1SaltCallsRewritten) {
     console.warn('[deploy/v2/session/create] phase1_salt_calls_rewritten', {
+      smartWallet: smartWallet.toLowerCase(),
+      creatorToken: creatorToken.toLowerCase(),
+    })
+  }
+  if (phase1CodeIdsRewritten) {
+    console.warn('[deploy/v2/session/create] phase1_code_ids_rewritten', {
       smartWallet: smartWallet.toLowerCase(),
       creatorToken: creatorToken.toLowerCase(),
     })

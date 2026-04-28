@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 
-import { evaluateCanonicalSubmitSession, evaluateSwapSessionGate, resolveCanonicalSubmitSession } from './useSwapExecution'
+import {
+  deriveSwapExecutionReadiness,
+  evaluateCanonicalSubmitSession,
+  evaluateSwapSessionGate,
+  resolveCanonicalSubmitSession,
+} from './useSwapExecution'
 import { requiresCanonicalExecutionForSwapMode } from '@/lib/swap/providerConfig'
 
 describe('evaluateSwapSessionGate', () => {
@@ -254,5 +259,46 @@ describe('CDP canonical mode policy helpers', () => {
     expect(requiresCanonicalExecutionForSwapMode('uniswap')).toBe(false)
     expect(requiresCanonicalExecutionForSwapMode('cdp')).toBe(true)
     expect(requiresCanonicalExecutionForSwapMode('hybrid')).toBe(true)
+  })
+})
+
+describe('deriveSwapExecutionReadiness', () => {
+  it('allows canonical parent-CSW submit when the embedded owner signer is ready', () => {
+    expect(
+      deriveSwapExecutionReadiness({
+        quoteReady: true,
+        executionMode: 'canonical',
+        executionTrack: 'legacy-owner-install',
+        canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+        executionAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+        signerAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
+        canonicalPolicyApplies: true,
+      }),
+    ).toBe(true)
+  })
+
+  it('allows canonical submit only when the Base sub-account track is ready', () => {
+    expect(
+      deriveSwapExecutionReadiness({
+        quoteReady: true,
+        executionMode: 'canonical',
+        executionTrack: 'sub-account',
+        canonicalAddress: '0xab6d5c10b03300326cd7fab7267ae192842967b5',
+        executionAddress: '0x3333333333333333333333333333333333333333',
+        signerAddress: '0xb05cf01231cf2ff99499682e64d3780d57c80fdd',
+        canonicalPolicyApplies: true,
+      }),
+    ).toBe(true)
+  })
+
+  it('preserves external EOA submit readiness when quote inputs are ready', () => {
+    expect(
+      deriveSwapExecutionReadiness({
+        quoteReady: true,
+        executionMode: 'eoa',
+        executionTrack: null,
+        canonicalPolicyApplies: false,
+      }),
+    ).toBe(true)
   })
 })

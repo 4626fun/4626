@@ -38,6 +38,9 @@ import {CreatorOVaultStrategiesModule} from "../contracts/vault/modules/CreatorO
 ///   CONFIGURE_SOLANA=1
 ///   SOLANA_BRIDGE_ADAPTER=...
 ///   SOLANA_DESTINATION=0x<32-byte-solana-pubkey>
+/// Optional explicit owner for UniversalCreate2DeployerFromStore.
+/// Defaults to broadcaster when unset.
+///   CREATE2_FROM_STORE_OWNER=...
 /// Optional OVault runtime wiring (requires broadcaster == protocolTreasury):
 ///   CONFIGURE_OVAULT_RUNTIME=1
 ///   OVAULT_HUB_COMPOSER=...
@@ -97,6 +100,7 @@ contract DeployBaseMainnetDeployer is Script {
         address uniswapV3Factory;
         address uniswapRouter;
         address ajnaFactory;
+        address create2FromStoreOwner;
         address solanaBridgeAdapter;
         bytes32 solanaDestination;
         address ovaultHubComposer;
@@ -156,6 +160,7 @@ contract DeployBaseMainnetDeployer is Script {
         cfg.uniswapV3Factory = vm.envOr("UNISWAP_V3_FACTORY", DEFAULT_UNISWAP_V3_FACTORY);
         cfg.uniswapRouter = vm.envOr("UNISWAP_ROUTER", DEFAULT_UNISWAP_ROUTER);
         cfg.ajnaFactory = vm.envOr("AJNA_FACTORY", DEFAULT_AJNA_FACTORY);
+        cfg.create2FromStoreOwner = vm.envOr("CREATE2_FROM_STORE_OWNER", broadcaster);
         cfg.solanaBridgeAdapter = vm.envOr("SOLANA_BRIDGE_ADAPTER", address(0));
         cfg.solanaDestination = vm.envOr("SOLANA_DESTINATION", bytes32(0));
         cfg.ovaultHubComposer = vm.envOr("OVAULT_HUB_COMPOSER", address(0));
@@ -204,14 +209,16 @@ contract DeployBaseMainnetDeployer is Script {
         address storeAddr = _create2(CREATE2_FACTORY_ADDR, salts.store, keccak256(storeInit));
         predicted.store = storeAddr;
 
-        bytes memory create2DeployerInit =
-            abi.encodePacked(type(UniversalCreate2DeployerFromStore).creationCode, abi.encode(storeAddr));
+        bytes memory create2DeployerInit = abi.encodePacked(
+            type(UniversalCreate2DeployerFromStore).creationCode, abi.encode(storeAddr, cfg.create2FromStoreOwner)
+        );
         address create2DeployerAddr =
             _create2(CREATE2_FACTORY_ADDR, salts.deployerFromStore, keccak256(create2DeployerInit));
         predicted.deployerFromStore = create2DeployerAddr;
 
         console2.log("UniversalBytecodeStoreV2 (predicted):", storeAddr);
         console2.log("UniversalCreate2DeployerFromStoreV2 (predicted):", create2DeployerAddr);
+        console2.log("UniversalCreate2DeployerFromStore owner:", cfg.create2FromStoreOwner);
 
         // Predict deterministic addresses for shared CreatorOVault modules.
         bytes memory coreModuleInit = type(CreatorOVaultCoreModule).creationCode;
@@ -255,6 +262,10 @@ contract DeployBaseMainnetDeployer is Script {
         predicted.deploymentBatcher = deployerAddr;
         console2.log("DeploymentBatcher (predicted):", deployerAddr);
 
+        if (cfg.create2FromStoreOwner != broadcaster) {
+            revert("CREATE2_FROM_STORE_OWNER must equal broadcaster for inline authorization");
+        }
+
         vm.startBroadcast(pk);
 
         // Deploy v2 store (if missing).
@@ -289,12 +300,34 @@ contract DeployBaseMainnetDeployer is Script {
             require(ok, "DEPLOYMENT_BATCHER deploy failed");
         }
 
+        // Authorize deploy-capable callers on the create2 deployer.
+        // - DeploymentBatcher (phase1/phase2/deferred auction)
+        // - Phase3 helper (external helper contract that performs CREATE2 deploys)
+        // - UniV4 helper (external helper contract that performs CREATE2 deploys)
+        UniversalCreate2DeployerFromStore create2Deployer = UniversalCreate2DeployerFromStore(create2DeployerAddr);
+        DeploymentBatcher deployer = DeploymentBatcher(deployerAddr);
+        address[3] memory requiredDeployers = [
+            deployerAddr,
+            address(deployer.phase3Helper()),
+            address(deployer.uniV4Helper())
+        ];
+        for (uint256 i = 0; i < requiredDeployers.length; ++i) {
+            address deployerCaller = requiredDeployers[i];
+            if (!create2Deployer.authorizedDeployers(deployerCaller)) {
+                create2Deployer.setAuthorizedDeployer(deployerCaller, true);
+            }
+        }
+
         vm.stopBroadcast();
 
         // Minimal sanity checks (read-only).
-        DeploymentBatcher deployer = DeploymentBatcher(deployerAddr);
+        deployer = DeploymentBatcher(deployerAddr);
         require(address(deployer.bytecodeStore()) == storeAddr, "Deployer store mismatch");
         require(address(deployer.create2Deployer()) == create2DeployerAddr, "Deployer create2 mismatch");
+        require(create2Deployer.owner() == cfg.create2FromStoreOwner, "Create2 owner mismatch");
+        require(create2Deployer.authorizedDeployers(address(deployer)), "Batcher not authorized in create2");
+        require(create2Deployer.authorizedDeployers(address(deployer.phase3Helper())), "Phase3 helper not authorized");
+        require(create2Deployer.authorizedDeployers(address(deployer.uniV4Helper())), "UniV4 helper not authorized");
         require(address(deployer.registry()) == cfg.registry, "Deployer registry mismatch");
         require(address(deployer.usdc()) == cfg.usdc, "Deployer USDC mismatch");
         require(address(deployer.uniswapV3Factory()) == cfg.uniswapV3Factory, "Deployer V3 factory mismatch");
@@ -315,21 +348,23 @@ contract DeployBaseMainnetDeployer is Script {
         if (configureSolana) {
             require(cfg.solanaBridgeAdapter != address(0), "SOLANA_BRIDGE_ADAPTER required");
             require(cfg.solanaDestination != bytes32(0), "SOLANA_DESTINATION required");
-            require(broadcaster == cfg.protocolTreasury, "broadcaster must equal protocolTreasury");
+            if (broadcaster != cfg.protocolTreasury) {
+                console2.log("CONFIGURE_SOLANA=1 but broadcaster != protocolTreasury; skipping setSolanaConfig");
+            } else {
+                address currentAdapter = deployer.solanaBridgeAdapter();
+                bytes32 currentDestination = deployer.solanaDestination();
 
-            address currentAdapter = deployer.solanaBridgeAdapter();
-            bytes32 currentDestination = deployer.solanaDestination();
+                if (currentAdapter != cfg.solanaBridgeAdapter || currentDestination != cfg.solanaDestination) {
+                    vm.startBroadcast(pk);
+                    deployer.setSolanaConfig(cfg.solanaBridgeAdapter, cfg.solanaDestination);
+                    vm.stopBroadcast();
+                }
 
-            if (currentAdapter != cfg.solanaBridgeAdapter || currentDestination != cfg.solanaDestination) {
-                vm.startBroadcast(pk);
-                deployer.setSolanaConfig(cfg.solanaBridgeAdapter, cfg.solanaDestination);
-                vm.stopBroadcast();
+                require(deployer.solanaBridgeAdapter() == cfg.solanaBridgeAdapter, "Solana adapter mismatch");
+                require(deployer.solanaDestination() == cfg.solanaDestination, "Solana destination mismatch");
+                console2.log("Solana adapter configured:", cfg.solanaBridgeAdapter);
+                console2.logBytes32(cfg.solanaDestination);
             }
-
-            require(deployer.solanaBridgeAdapter() == cfg.solanaBridgeAdapter, "Solana adapter mismatch");
-            require(deployer.solanaDestination() == cfg.solanaDestination, "Solana destination mismatch");
-            console2.log("Solana adapter configured:", cfg.solanaBridgeAdapter);
-            console2.logBytes32(cfg.solanaDestination);
         } else {
             console2.log("CONFIGURE_SOLANA=0 (skipped setSolanaConfig)");
         }
@@ -337,24 +372,26 @@ contract DeployBaseMainnetDeployer is Script {
         if (configureOvaultRuntime) {
             require(cfg.ovaultHubComposer != address(0), "OVAULT_HUB_COMPOSER required");
             require(cfg.ovaultSolanaEid != 0, "OVAULT_SOLANA_EID required");
-            require(broadcaster == cfg.protocolTreasury, "broadcaster must equal protocolTreasury");
+            if (broadcaster != cfg.protocolTreasury) {
+                console2.log("CONFIGURE_OVAULT_RUNTIME=1 but broadcaster != protocolTreasury; skipping setOVaultRuntimeConfig");
+            } else {
+                DeploymentBatcher.OVaultRuntimeConfig memory currentRuntime = deployer.getOVaultRuntimeConfig();
+                if (
+                    currentRuntime.hubComposer != cfg.ovaultHubComposer || currentRuntime.solanaEid != cfg.ovaultSolanaEid
+                        || !currentRuntime.enabled
+                ) {
+                    vm.startBroadcast(pk);
+                    deployer.setOVaultRuntimeConfig(cfg.ovaultHubComposer, cfg.ovaultSolanaEid, true);
+                    vm.stopBroadcast();
+                }
 
-            DeploymentBatcher.OVaultRuntimeConfig memory currentRuntime = deployer.getOVaultRuntimeConfig();
-            if (
-                currentRuntime.hubComposer != cfg.ovaultHubComposer || currentRuntime.solanaEid != cfg.ovaultSolanaEid
-                    || !currentRuntime.enabled
-            ) {
-                vm.startBroadcast(pk);
-                deployer.setOVaultRuntimeConfig(cfg.ovaultHubComposer, cfg.ovaultSolanaEid, true);
-                vm.stopBroadcast();
+                DeploymentBatcher.OVaultRuntimeConfig memory finalRuntime = deployer.getOVaultRuntimeConfig();
+                require(finalRuntime.hubComposer == cfg.ovaultHubComposer, "OVault hub composer mismatch");
+                require(finalRuntime.solanaEid == cfg.ovaultSolanaEid, "OVault Solana EID mismatch");
+                require(finalRuntime.enabled, "OVault runtime not enabled");
+                console2.log("OVault runtime composer configured:", cfg.ovaultHubComposer);
+                console2.log("OVault runtime Solana EID:", cfg.ovaultSolanaEid);
             }
-
-            DeploymentBatcher.OVaultRuntimeConfig memory finalRuntime = deployer.getOVaultRuntimeConfig();
-            require(finalRuntime.hubComposer == cfg.ovaultHubComposer, "OVault hub composer mismatch");
-            require(finalRuntime.solanaEid == cfg.ovaultSolanaEid, "OVault Solana EID mismatch");
-            require(finalRuntime.enabled, "OVault runtime not enabled");
-            console2.log("OVault runtime composer configured:", cfg.ovaultHubComposer);
-            console2.log("OVault runtime Solana EID:", cfg.ovaultSolanaEid);
         } else {
             console2.log("CONFIGURE_OVAULT_RUNTIME=0 (skipped setOVaultRuntimeConfig)");
         }

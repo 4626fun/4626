@@ -8,9 +8,10 @@ import { base } from 'viem/chains'
 
 const DEFAULT_ORIGIN = process.env.APP_ORIGIN || process.env.CANONICAL_ORIGIN || 'http://localhost:5173'
 const DEFAULT_RPC = process.env.BASE_RPC_URL || 'https://mainnet.base.org'
-const DEFAULT_BATCHER = '0x32403a647e73e04ae42b02bdd1ade9c88698fd0c'
-const DEFAULT_STORE = '0x4F047c895aA1390D4d0607B2aDDAc54a08ccfe5A'
-const DEFAULT_DEPLOYER = '0x6f02c56B2F6C213f727D303Ce9E12e6bE1D224f0'
+const DEFAULT_BATCHER = '0xe3F9490CfD6bd3D68010405d18Bf772C167E7178'
+const DEFAULT_STORE = '0x6925d601cf618AFB9F55099C0FF3d30769a5e141'
+const DEFAULT_DEPLOYER = '0x02feAFb12fDF2c0Ef65dA3038584Dd4EA3b1E2A9'
+const UNIVERSAL_CREATE2_FACTORY = '0x4e59b44847b379578588920ca78fbf26c0b4956c'
 
 const SELECTOR_PHASE1_CORE = '1331378b'
 const SELECTOR_PHASE1_CORE_WITH_SALT = '4154f24e'
@@ -29,6 +30,17 @@ const BATCHER_VIEW_ABI = [
 
 const STORE_CHUNKCOUNT_ABI = [
   { type: 'function', name: 'chunkCount', stateMutability: 'view', inputs: [{ type: 'bytes32' }], outputs: [{ type: 'uint256' }] },
+]
+
+const CREATE2_AUTH_ABI = [
+  { type: 'function', name: 'owner', stateMutability: 'view', inputs: [], outputs: [{ type: 'address' }] },
+  {
+    type: 'function',
+    name: 'authorizedDeployers',
+    stateMutability: 'view',
+    inputs: [{ type: 'address' }],
+    outputs: [{ type: 'bool' }],
+  },
 ]
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -139,6 +151,30 @@ async function runPreflight({ client, batcher, expectedStore, expectedDeployer }
   }
   if (create2Deployer !== expectedDeployer) {
     throw new Error(`batcher.create2Deployer mismatch (expected ${expectedDeployer}, got ${create2Deployer})`)
+  }
+
+  try {
+    const [owner, authorized] = await Promise.all([
+      client.readContract({ address: expectedDeployer, abi: CREATE2_AUTH_ABI, functionName: 'owner' }),
+      client.readContract({
+        address: expectedDeployer,
+        abi: CREATE2_AUTH_ABI,
+        functionName: 'authorizedDeployers',
+        args: [batcher],
+      }),
+    ])
+    if (!authorized) {
+      const ownerLc = String(owner).toLowerCase()
+      if (ownerLc === UNIVERSAL_CREATE2_FACTORY) {
+        throw new Error(
+          `create2Deployer ${expectedDeployer} is factory-owned (${owner}) and cannot authorize batcher ${batcher}; rotate to a deploy-capable batcher/deployer pair.`,
+        )
+      }
+      throw new Error(`batcher ${batcher} is not authorized in create2Deployer ${expectedDeployer} (owner ${owner})`)
+    }
+  } catch (error) {
+    if (String(error?.message || '').includes('not authorized')) throw error
+    // Older deployers may not expose owner/authorizedDeployers; skip auth check.
   }
 
   const requiredSelectors = [

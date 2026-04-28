@@ -25,6 +25,19 @@ function envAddress(name: string, fallback?: `0x${string}` | undefined): `0x${st
   return trimmed as `0x${string}`
 }
 
+function resolveCreatorVaultBatcherAddress(): `0x${string}` | undefined {
+  const configured = envAddress(
+    'VITE_CREATOR_VAULT_BATCHER',
+    envAddress('VITE_CREATOR_VAULT_BATCHER_AUTO_HANDOFF') ??
+      BASE_DEFAULTS.creatorVaultBatcher,
+  )
+  const normalized = normalizeCreatorVaultBatcherAddress(configured)
+  if (normalized) return normalized
+  // If env is set to a deprecated/invalid alias, keep runtime on the canonical default
+  // instead of exposing `undefined` and breaking frontend/server batcher parity.
+  return normalizeCreatorVaultBatcherAddress(BASE_DEFAULTS.creatorVaultBatcher) ?? undefined
+}
+
 export const CONTRACTS = {
   // Shared Infrastructure
   registry: envAddress('VITE_REGISTRY', BASE_DEFAULTS.registry)!,
@@ -51,13 +64,7 @@ export const CONTRACTS = {
   // Phased deploy orchestrator (Phases 1–3): deterministic deploy+launch across multiple txs on Base.
   // Optional env alias kept for staged cutovers / emergency overrides.
   // Primary default remains BASE_DEFAULTS.creatorVaultBatcher.
-  creatorVaultBatcher: normalizeCreatorVaultBatcherAddress(
-    envAddress(
-      'VITE_CREATOR_VAULT_BATCHER',
-      envAddress('VITE_CREATOR_VAULT_BATCHER_AUTO_HANDOFF') ??
-        BASE_DEFAULTS.creatorVaultBatcher,
-    ),
-  ) ?? undefined,
+  creatorVaultBatcher: resolveCreatorVaultBatcherAddress(),
 
   // Protocol treasury / multisig (receives protocol fee slice from GaugeController)
   protocolTreasury: envAddress('VITE_PROTOCOL_TREASURY', BASE_DEFAULTS.protocolTreasury)!,

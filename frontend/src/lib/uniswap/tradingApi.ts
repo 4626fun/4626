@@ -7,7 +7,7 @@ import { APP_ORIGIN, MARKETING_ORIGIN } from '@/lib/env/host'
 import { buildCdpPriceRequest, executeCdpSwap, fetchCdpSwapPrice } from '@/lib/swap/cdpApi'
 import { resolveSwapProviderSelection, shouldFallbackToUniswap, type SwapProvider } from '@/lib/swap/providerConfig'
 
-const DEFAULT_RETRIES = 1
+const DEFAULT_RETRIES = 2
 const RETRY_BASE_DELAY_MS = 500
 const RETRYABLE_STATUS = new Set([503, 502, 429])
 const QUOTE_CACHE_TTL_MS = 8_000
@@ -82,6 +82,17 @@ function isRetryableHttpStatus(status: number): boolean {
   return RETRYABLE_STATUS.has(status)
 }
 
+function parseRetryAfterMs(value: string | null): number | null {
+  if (!value) return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+  const seconds = Number(trimmed)
+  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(5_000, seconds * 1_000)
+  const dateMs = Date.parse(trimmed)
+  if (!Number.isFinite(dateMs)) return null
+  return Math.min(5_000, Math.max(0, dateMs - Date.now()))
+}
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value)
 }
@@ -143,7 +154,8 @@ async function post<T>(path: string, body: Record<string, unknown>, retries = DE
     const message = resolveApiErrorMessage(json, `Request failed (${res.status})`)
     const normalized = normalizeUniswapError(message)
     if (attempt < retries && isRetryableHttpStatus(res.status)) {
-      await sleep(RETRY_BASE_DELAY_MS * 2 ** attempt)
+      const retryAfterMs = parseRetryAfterMs(typeof res.headers?.get === 'function' ? res.headers.get('Retry-After') : null)
+      await sleep(retryAfterMs ?? RETRY_BASE_DELAY_MS * 2 ** attempt)
       attempt += 1
       continue
     }
@@ -440,7 +452,7 @@ export async function fetchTradeQuote(body: TradeQuoteRequest): Promise<TradeQuo
   return request
 }
 
-export async function checkTradeApproval(body: ApprovalRequest): Promise<TradeApprovalResponse> {
+export async function checkTradeApproval(body: ApprovalRequest & { permit2Disabled?: boolean }): Promise<TradeApprovalResponse> {
   const providerSelection = resolveSwapProviderSelection()
   if (providerSelection.mode === 'cdp') {
     return { approval: null, cancel: null } as TradeApprovalResponse
@@ -456,6 +468,7 @@ export async function checkTradeApproval(body: ApprovalRequest): Promise<TradeAp
 export type BuildSwapParams = Omit<CreateSwapRequest, 'quote' | 'permitData'> & {
   quote: Record<string, unknown>
   permitData?: Record<string, unknown>
+  permit2Disabled?: boolean
 }
 
 export async function buildSwap(body: BuildSwapParams): Promise<CreateSwapResponse> {

@@ -32,12 +32,14 @@ contract DeployUniversalBytecodeInfra is Script {
 
     function run() external {
         uint256 pk = vm.envUint("PRIVATE_KEY");
+        address owner = vm.addr(pk);
 
         bytes memory storeInit = type(UniversalBytecodeStore).creationCode;
         address storeAddr = _computeCreate2(UNIVERSAL_CREATE2_FACTORY, STORE_SALT, keccak256(storeInit));
 
-        bytes memory deployerInit =
-            abi.encodePacked(type(UniversalCreate2DeployerFromStore).creationCode, abi.encode(storeAddr));
+        bytes memory deployerInit = abi.encodePacked(
+            type(UniversalCreate2DeployerFromStore).creationCode, abi.encode(storeAddr, owner)
+        );
         address deployerAddr = _computeCreate2(UNIVERSAL_CREATE2_FACTORY, DEPLOYER_SALT, keccak256(deployerInit));
 
         console2.log("UniversalBytecodeStore (predicted):", storeAddr);

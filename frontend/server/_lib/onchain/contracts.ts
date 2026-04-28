@@ -67,6 +67,18 @@ function pickAddressProdSafe(envKey: string, fallback?: string): ContractAddress
   return pickAddress(envKey, fallback)
 }
 
+function resolveCreatorVaultBatcherAddress(): ContractAddress | undefined {
+  const configured = pickAddressProdSafe(
+    'CREATOR_VAULT_BATCHER',
+    pickAddressProdSafe('CREATOR_VAULT_BATCHER_AUTO_HANDOFF') ?? BASE_DEFAULTS.creatorVaultBatcher,
+  )
+  const normalized = normalizeCreatorVaultBatcherAddress(configured)
+  if (normalized) return normalized as ContractAddress
+  // If env is present but deprecated/invalid, hard-failing to `undefined` breaks
+  // server/runtime parity and paymaster validation. Fall back to canonical default.
+  return normalizeCreatorVaultBatcherAddress(BASE_DEFAULTS.creatorVaultBatcher) as ContractAddress | undefined
+}
+
 /**
  * Contract addresses for Base mainnet.
  *
@@ -85,12 +97,7 @@ export function getApiContracts(): ApiContracts {
       BASE_DEFAULTS.universalCreate2DeployerFromStore,
     ),
     vaultActivationBatcher: pickAddressProdSafe('VAULT_ACTIVATION_BATCHER', BASE_DEFAULTS.vaultActivationBatcher)!,
-    creatorVaultBatcher: normalizeCreatorVaultBatcherAddress(
-      pickAddressProdSafe(
-        'CREATOR_VAULT_BATCHER',
-        pickAddressProdSafe('CREATOR_VAULT_BATCHER_AUTO_HANDOFF') ?? BASE_DEFAULTS.creatorVaultBatcher,
-      ),
-    ) as ContractAddress | undefined,
+    creatorVaultBatcher: resolveCreatorVaultBatcherAddress(),
     protocolTreasury: pickAddress('PROTOCOL_TREASURY', BASE_DEFAULTS.protocolTreasury)!,
     vaultGaugeVoting: pickAddressProdSafe('VAULT_GAUGE_VOTING'),
     voterRewardsDistributor: pickAddressProdSafe('VOTER_REWARDS_DISTRIBUTOR'),

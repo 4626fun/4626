@@ -233,6 +233,20 @@ export function extractCanMessageResult(result: unknown, address: `0x${string}`)
   return null
 }
 
+export function shouldFallbackToOriginalXmtpRecipient(params: {
+  canonicalizedFromAddress: `0x${string}` | null
+  peerAddress: `0x${string}`
+  peerCanMessage: boolean | null
+  originalCanMessage: boolean | null
+}): boolean {
+  if (params.peerCanMessage !== false) return false
+  if (params.originalCanMessage !== true) return false
+  const original = normalizeEvmAddress(params.canonicalizedFromAddress)
+  const peer = normalizeEvmAddress(params.peerAddress)
+  if (!original || !peer) return false
+  return original !== peer
+}
+
 // ---------------------------------------------------------------------------
 // DM failure copy
 // ---------------------------------------------------------------------------

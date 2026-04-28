@@ -141,7 +141,7 @@ describe('txRouter', () => {
     })
     const sendTransaction = vi.fn(async () => HASH_A)
     const context = makeContext({
-      executionTrack: 'migration-pending',
+      executionTrack: 'sub-account',
       executionAddress: ADDRESS_C,
       signerAddress: ADDRESS_B,
       walletClient: { request, sendTransaction },
@@ -169,7 +169,7 @@ describe('txRouter', () => {
     expect(sendCoinbaseSmartWalletUserOperationMock).not.toHaveBeenCalled()
   })
 
-  it('falls back from wallet_sendCalls to canonical ERC-4337 when unsupported for approval+swap', async () => {
+  it('falls back from wallet_sendCalls to parent-CSW ERC-4337 for approval+swap', async () => {
     const request = vi.fn(async ({ method }: { method: string }) => {
       if (method === 'wallet_sendCalls') throw new Error('Method not found')
       throw new Error(`unexpected method: ${method}`)
@@ -207,6 +207,7 @@ describe('txRouter', () => {
     })
 
     expect(result.routing.mode).toBe('sendCalls')
+    expect(result.routing.fallbackMode).toBe('canonical4337')
     expect(result.send.mode).toBe('canonical4337')
     expect(result.send.method).toBe('eth_sendUserOperation')
     expect(result.send.transactionHash).toBe(HASH_A)
@@ -409,7 +410,7 @@ describe('txRouter', () => {
     expect(sendTransaction).toHaveBeenCalledTimes(1)
   })
 
-  it('falls back to canonical direct even when canonical swap routing locked sendCalls fallback to 4337', async () => {
+  it('falls back to canonical direct when parent-CSW ERC-4337 swap sponsorship is denied', async () => {
     sendCoinbaseSmartWalletUserOperationMock.mockRejectedValueOnce(
       new Error('request denied - swap_router_value_not_allowed'),
     )
@@ -497,7 +498,7 @@ describe('txRouter', () => {
     expect(sendTransaction).toHaveBeenCalledTimes(1)
   })
 
-  it('locks canonical approval+swap sendCalls fallback to ERC-4337', async () => {
+  it('locks canonical approval+swap sendCalls fallback to parent-CSW ERC-4337', async () => {
     const sendTransaction = vi.fn(async () => HASH_A)
     const context = makeContext({
       executionMode: 'canonical',
@@ -542,7 +543,7 @@ describe('txRouter', () => {
     expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
   })
 
-  it('routes canonical native-value swaps through ERC-4337 instead of direct fallback', async () => {
+  it('routes parent-CSW canonical native-value swaps through ERC-4337 when sponsorable', async () => {
     const sendTransaction = vi.fn(async () => HASH_A)
     const context = makeContext({
       executionMode: 'canonical',
@@ -579,7 +580,7 @@ describe('txRouter', () => {
     expect(sendCoinbaseSmartWalletUserOperationMock).toHaveBeenCalledTimes(1)
   })
 
-  it('locks sendCalls fallback to canonical4337 for canonical native-value swaps', async () => {
+  it('locks sendCalls fallback to canonical4337 for parent-CSW native-value swaps', async () => {
     const request = vi.fn(async ({ method }: { method: string }) => {
       if (method === 'wallet_sendCalls') throw new Error('Method not found')
       throw new Error(`unexpected method: ${method}`)
@@ -787,6 +788,8 @@ describe('txRouter', () => {
     })
     const context = makeContext({
       executionMode: 'canonical',
+      executionTrack: 'sub-account',
+      executionAddress: ADDRESS_C,
       walletClient: {
         request,
       },
@@ -801,14 +804,14 @@ describe('txRouter', () => {
       context,
       approvalTx: {
         to: ADDRESS_B,
-        from: ADDRESS_B,
+        from: ADDRESS_C,
         data: '0xaaaa',
         value: '0',
         chainId: 8453,
       },
       swapTx: {
         to: ADDRESS_C,
-        from: ADDRESS_B,
+        from: ADDRESS_C,
         data: '0xbbbb',
         value: '0',
         chainId: 8453,

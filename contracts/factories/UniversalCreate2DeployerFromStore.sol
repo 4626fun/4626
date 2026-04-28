@@ -22,10 +22,13 @@ contract UniversalCreate2DeployerFromStore {
     error DeployFailed();
     error NotAuthorizedDeployer();
 
-    constructor(address _store) {
+    constructor(address _store, address _owner) {
         require(_store != address(0), "Zero store");
+        require(_owner != address(0), "Zero owner");
         store = UniversalBytecodeStore(_store);
-        owner = msg.sender;
+        // Owner is explicit because deterministic CREATE2 deployments are
+        // executed via the universal factory (0x4e59...), not by the intended operator.
+        owner = _owner;
     }
 
     // FIX: F-13 — deployer allowlist management

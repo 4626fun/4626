@@ -76,10 +76,10 @@ Options:
 
 Examples:
   pnpm -C frontend exec tsx scripts/ops/propose-batcher-solana-config-safe.ts \\
-    --batcher 0x32403a647e73e04ae42b02bdd1ade9c88698fd0c
+    --batcher 0xe3F9490CfD6bd3D68010405d18Bf772C167E7178
 
   pnpm -C frontend exec tsx scripts/ops/propose-batcher-solana-config-safe.ts \\
-    --only-ovault-runtime --batcher 0x32403a647e73e04ae42b02bdd1ade9c88698fd0c --ovault-hub-composer <address> --ovault-solana-eid 30168
+    --only-ovault-runtime --batcher 0xe3F9490CfD6bd3D68010405d18Bf772C167E7178 --ovault-hub-composer <address> --ovault-solana-eid 30168
 `)
 }
 

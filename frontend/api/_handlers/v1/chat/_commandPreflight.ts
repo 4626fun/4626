@@ -21,6 +21,7 @@ type PreflightBody = {
   conversationId?: string
   senderWallet?: string
   command?: string
+  source?: string
 }
 
 type PreflightData = {
@@ -33,6 +34,28 @@ type PreflightData = {
 
 const MAX_CONVERSATION_ID_LENGTH = 128
 const MAX_COMMAND_LENGTH = 4_096
+const MAX_SOURCE_LENGTH = 32
+
+function isPinataSource(value: string): boolean {
+  const normalized = value.trim().toLowerCase()
+  return (
+    normalized === 'pinata' ||
+    normalized === 'pinata-agent' ||
+    normalized === 'pinata_agent' ||
+    normalized === 'hermit'
+  )
+}
+
+function readPinataAllowedUsers(): Set<string> {
+  const raw = String(process.env.ALFACHAT_PINATA_ALLOWED_USERS ?? '').trim()
+  if (!raw) return new Set<string>()
+  const out = new Set<string>()
+  for (const part of raw.split(',')) {
+    const candidate = part.trim().toLowerCase()
+    if (isAddressLike(candidate)) out.add(candidate)
+  }
+  return out
+}
 
 function isAddressLike(value: string): value is `0x${string}` {
   return /^0x[a-fA-F0-9]{40}$/.test(value)
@@ -81,6 +104,42 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const conversationId = asBoundedTrimmed(body.conversationId, MAX_CONVERSATION_ID_LENGTH)
   const senderWallet = asBoundedTrimmed(body.senderWallet, 42).toLowerCase()
   const command = asBoundedTrimmed(body.command, MAX_COMMAND_LENGTH)
+  const source = asBoundedTrimmed(body.source, MAX_SOURCE_LENGTH)?.toLowerCase() ?? ''
+  const pinataSource = isPinataSource(source)
+  let sessionAddress = ''
+
+  if (pinataSource) {
+    const session = readSessionFromRequest(req)
+    sessionAddress = String(session?.address ?? '').trim().toLowerCase()
+    if (!isAddressLike(sessionAddress)) {
+      return res.status(200).json(ok({
+        allowed: false,
+        reason: 'auth_session_required',
+        guardCategory: 'auth_required',
+        role: null,
+        walletMatch: null,
+      }))
+    }
+    const allowlist = readPinataAllowedUsers()
+    if (allowlist.size === 0) {
+      return res.status(200).json(ok({
+        allowed: false,
+        reason: 'pinata_allowlist_not_configured',
+        guardCategory: 'pinata_access_denied',
+        role: null,
+        walletMatch: null,
+      }))
+    }
+    if (!allowlist.has(sessionAddress)) {
+      return res.status(200).json(ok({
+        allowed: false,
+        reason: 'pinata_user_not_allowlisted',
+        guardCategory: 'pinata_access_denied',
+        role: null,
+        walletMatch: null,
+      }))
+    }
+  }
 
   const isCreWrite = isCreWriteCommandText(command)
   if (!isCreWrite) {
@@ -113,8 +172,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }))
   }
 
-  const session = readSessionFromRequest(req)
-  const sessionAddress = String(session?.address ?? '').trim().toLowerCase()
+  if (!sessionAddress) {
+    const session = readSessionFromRequest(req)
+    sessionAddress = String(session?.address ?? '').trim().toLowerCase()
+  }
   if (!isAddressLike(sessionAddress)) {
     return res.status(200).json(ok({
       allowed: false,

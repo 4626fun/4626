@@ -361,12 +361,13 @@ function ChatWidgetInner() {
       }
 
       if (dmResult.ok) {
+        const openedPeerAddress = dmResult.peerAddress ?? destination.address
         setShowNewDm(false)
         handleOpenChat({
           id: dmResult.conversationId,
           type: 'dm',
-          name: destination.basenameHint || `${destination.address.slice(0, 6)}…${destination.address.slice(-4)}`,
-          peerAddress: destination.address,
+          name: destination.basenameHint || `${openedPeerAddress.slice(0, 6)}…${openedPeerAddress.slice(-4)}`,
+          peerAddress: openedPeerAddress,
           imageUrl: destination.avatarUrl ?? undefined,
           unreadCount: 0,
         })

@@ -45,16 +45,11 @@ port_in_use() {
   return 1
 }
 
-replace_local_origin_port() {
+normalize_local_origin_port() {
   local origin="$1"
-  local from_port="$2"
-  local to_port="$3"
-  if [[ "$origin" == "http://localhost:${from_port}"* ]]; then
-    echo "${origin/http:\/\/localhost:${from_port}/http:\/\/localhost:${to_port}}"
-    return 0
-  fi
-  if [[ "$origin" == "http://127.0.0.1:${from_port}"* ]]; then
-    echo "${origin/http:\/\/127.0.0.1:${from_port}/http:\/\/127.0.0.1:${to_port}}"
+  local to_port="$2"
+  if [[ "$origin" =~ ^(https?://(localhost|127\.0\.0\.1)):[0-9]+(.*)$ ]]; then
+    echo "${BASH_REMATCH[1]}:${to_port}${BASH_REMATCH[3]}"
     return 0
   fi
   echo "$origin"
@@ -83,6 +78,7 @@ FORK_HOST="${DEPLOY_DRY_RUN_FORK_HOST:-127.0.0.1}"
 FORK_PORT="${DEPLOY_DRY_RUN_FORK_PORT:-8545}"
 FORK_CHAIN_ID="${DEPLOY_DRY_RUN_FORK_CHAIN_ID:-8453}"
 ANVIL_LOG_FILE="${TMPDIR:-/tmp}/4626-deploy-dry-run-anvil.log"
+DEV_REDIRECT_LOG_FILE="${TMPDIR:-/tmp}/4626-deploy-dry-run-redirect.log"
 export VITE_ALLOW_CONTRACT_OVERRIDES="${VITE_ALLOW_CONTRACT_OVERRIDES:-0}"
 export ALLOW_API_CONTRACT_OVERRIDES="${ALLOW_API_CONTRACT_OVERRIDES:-0}"
 # Use a dedicated deterministic namespace on local forks so dry-runs do not
@@ -90,8 +86,13 @@ export ALLOW_API_CONTRACT_OVERRIDES="${ALLOW_API_CONTRACT_OVERRIDES:-0}"
 export VITE_DEPLOYMENT_VERSION="${VITE_DEPLOYMENT_VERSION:-v1.9.2-dryrun}"
 
 ANVIL_PID=""
+DEV_REDIRECT_PID=""
 
 cleanup() {
+  if [[ -n "$DEV_REDIRECT_PID" ]] && kill -0 "$DEV_REDIRECT_PID" >/dev/null 2>&1; then
+    kill "$DEV_REDIRECT_PID" >/dev/null 2>&1 || true
+    wait "$DEV_REDIRECT_PID" 2>/dev/null || true
+  fi
   if [[ -n "$ANVIL_PID" ]] && kill -0 "$ANVIL_PID" >/dev/null 2>&1; then
     kill "$ANVIL_PID" >/dev/null 2>&1 || true
     wait "$ANVIL_PID" 2>/dev/null || true
@@ -210,11 +211,48 @@ if port_in_use "$DEV_PORT"; then
 fi
 export DEPLOY_DRY_RUN_PORT="$DEV_PORT"
 if [[ -n "${APP_ORIGIN:-}" ]]; then
-  export APP_ORIGIN="$(replace_local_origin_port "$APP_ORIGIN" "$ORIG_DEV_PORT" "$DEV_PORT")"
+  export APP_ORIGIN="$(normalize_local_origin_port "$APP_ORIGIN" "$DEV_PORT")"
 fi
 if [[ -n "${VITE_APP_ORIGIN:-}" ]]; then
-  export VITE_APP_ORIGIN="$(replace_local_origin_port "$VITE_APP_ORIGIN" "$ORIG_DEV_PORT" "$DEV_PORT")"
+  export VITE_APP_ORIGIN="$(normalize_local_origin_port "$VITE_APP_ORIGIN" "$DEV_PORT")"
 fi
+if [[ -n "${VITE_MARKETING_ORIGIN:-}" ]]; then
+  export VITE_MARKETING_ORIGIN="$(normalize_local_origin_port "$VITE_MARKETING_ORIGIN" "$DEV_PORT")"
+fi
+
+DEFAULT_DRY_RUN_PORT=5174
+if [[ "$DEV_PORT" != "$DEFAULT_DRY_RUN_PORT" ]] && ! port_in_use "$DEFAULT_DRY_RUN_PORT" && command -v python3 >/dev/null 2>&1; then
+  REDIRECT_FROM_PORT="$DEFAULT_DRY_RUN_PORT" REDIRECT_TO_PORT="$DEV_PORT" python3 - <<'PY' >"$DEV_REDIRECT_LOG_FILE" 2>&1 &
+import os
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+from_port = int(os.environ["REDIRECT_FROM_PORT"])
+to_port = os.environ["REDIRECT_TO_PORT"]
+
+class RedirectHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        self._redirect()
+
+    def do_HEAD(self):
+        self._redirect()
+
+    def _redirect(self):
+        host = self.headers.get("Host", f"localhost:{from_port}").split(":", 1)[0] or "localhost"
+        target = f"http://{host}:{to_port}{self.path}"
+        self.send_response(307)
+        self.send_header("Location", target)
+        self.send_header("Cache-Control", "no-store")
+        self.end_headers()
+
+    def log_message(self, format, *args):
+        return
+
+ThreadingHTTPServer(("127.0.0.1", from_port), RedirectHandler).serve_forever()
+PY
+  DEV_REDIRECT_PID="$!"
+  echo "Redirecting stale http://localhost:${DEFAULT_DRY_RUN_PORT} links to http://localhost:${DEV_PORT}."
+fi
+
 echo "Starting frontend dev server on port ${DEV_PORT} with BASE_RPC_URL=${BASE_RPC_URL} and VITE_BASE_RPC=${VITE_BASE_RPC}"
 cd "$FRONTEND_DIR"
 exec pnpm exec vite --port "$DEV_PORT"
