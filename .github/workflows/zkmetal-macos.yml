@@ -316,13 +316,18 @@ jobs:
           # skip and produce a false-green signal.
           forge test --match-path "test/zk/AmoeGroth16Verifier.t.sol" -vv
 
+      # The committed verifier path always exists in the repo, so a missing
+      # file here means somebody renamed or deleted the contract — that's a
+      # first-party regression we want to fail loudly on, not silently swallow.
+      # This step still runs on `if: always()` so we capture artifacts even
+      # when an earlier step in the job failed.
       - name: Upload regenerated verifier as artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: AmoeGroth16Verifier-regenerated
           path: fourksixsixtwo/contracts/utilities/lottery/zk/AmoeGroth16Verifier.sol
-          if-no-files-found: ignore
+          if-no-files-found: error
 
   # ---------------------------------------------------------------------------
   # Verify-fork job. Manual trigger only (workflow_dispatch).
