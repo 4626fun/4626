@@ -190,7 +190,19 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
         bool isActive;
         uint256 baseWinChance; // PPM (parts per million)
         uint256 maxWinChance; // PPM
-        uint256 usdMultiplierBps; // Bonus for slippage (10500 = 1.05x)
+        // Tunable lottery-odds boost knob applied inside `_calculateTokenUSD`
+        // to every paid-path token→USD conversion (swap input + balance read).
+        // Bounds [10_000, 15_000]: 10_000 = neutral (1.00x, no effect),
+        // > 10_000 inflates lottery PPM as a marketing/engagement boost.
+        // Production must set this to 10_000 at deploy via setLotteryConfig.
+        // Historically labeled "slippage bonus" but it does not function as one:
+        // applies uniformly to balance reads, only scales upward, and
+        // directly inflates `winChancePPM = swapValueUSD / 250_000` rather
+        // than truing-up an executed value. AMOE bypasses this multiplier
+        // entirely because `pointsBurnedAsUSD` is already an end-value USD
+        // figure (no token→USD conversion). At the production setting of
+        // 10_000, AMOE and paid paths produce identical PPM at equal notional.
+        uint256 usdMultiplierBps;
     }
 
     LotteryConfig public lotteryConfig;
@@ -458,7 +470,10 @@ contract CreatorLotteryManager is OApp, OAppOptionsType3, ReentrancyGuard, Pausa
             isActive: true,
             baseWinChance: 40, // legacy slot — retained for layout parity but no longer read by calculateWinChance
             maxWinChance: 150_000, // 15% absolute (post-boost) cap
-            usdMultiplierBps: 10500 // 1.05x
+            // Constructor default. Production rollout sets this to 10_000
+            // via `setLotteryConfig` for paid/AMOE PPM parity at equal
+            // notional. See storage-field comment for full rationale.
+            usdMultiplierBps: 10500
         });
 
         // PR 1 — AMOE Linear Parity: pre-boost ceiling. 40_000 PPM = 4% at $10K swap.

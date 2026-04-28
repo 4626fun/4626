@@ -157,6 +157,14 @@ Pre-mainnet (still required, copied from PR 1 + new):
       registration for >$5K prize pools, Official Rules page.
 - [ ] Owner sets `setBaseCeilingPPM(40_000)` post-deploy (`maxWinChance`
       stays at 150_000).
+- [ ] Owner calls `setLotteryConfig(...)` post-deploy with
+      `_usdMultiplierBps = 10_000` (1.00x — neutral). The constructor
+      default is `10_500` (1.05x) for legacy reasons; production must
+      flip this to neutral so paid and AMOE paths produce identical PPM
+      at equal notional. See § 7a below for full rationale. Other
+      args: `_minSwapAmount = 1_000_000`, `_rewardPercentage = 6900`,
+      `_isActive = true`, `_baseWinChance = 40` (legacy slot, unread),
+      `_maxWinChance = 150_000`.
 - [ ] Owner sets `setAuthorizedAmoeRelayer(<scoped-key-address>)` only
       after counsel sign-off; until then the AMOE path is disabled.
 - [ ] `LOTTERY_AMOE_RELAY_PRIVATE_KEY` provisioned to its own scoped
@@ -231,17 +239,16 @@ escape hatch is preserved for tests that need fixed coverage. A
 `balanceOf(buyer) → 0` `vm.mockCall` was added in `setUp()` so existing
 AMOE tests retain their pre-fix boost shape (no shares held).
 
-**Slippage-bonus note.** `usdMultiplierBps` (default 1.05x) is applied
-to every `_calculateTokenUSD` output, including the paid path's
-`swapValueUSD`. The AMOE path passes `pointsBurnedAsUSD` through
-unscaled (slippage isn't a thing for AMOE). The two paths therefore
-cannot produce *identical* PPMs at equal notional when the multiplier
-is above 1.00x — paid PPM stays slightly higher because its swap
-value is also scaled up. This is intentional: AMOE entrants do not
-pay slippage, so they shouldn't get the slippage bonus. The new
-parity test isolates the boost-gating fix by setting the multiplier
-to 1.00x; the slippage-bonus semantic itself is exercised by
-existing `processSwapLottery` tests.
+**`usdMultiplierBps` semantic note (corrected interpretation).**
+The constructor default for `usdMultiplierBps` is `10_500` (1.05x),
+historically labeled as a "slippage bonus." On closer review that
+framing is inaccurate — see § 7a below for the full analysis. The
+production rollout sets it to `10_000` (1.00x, neutral) via
+`setLotteryConfig`, which makes paid and AMOE paths produce identical
+PPM at equal notional automatically. The parity test in this PR
+explicitly sets the multiplier to `10_000` to mirror the production
+config; the residual asymmetry that exists at the constructor default
+is irrelevant in practice because production never runs at that value.
 
 ### P1-B — handler: pre-flight credits check (`_amoeSubmit.ts`)
 
@@ -279,6 +286,71 @@ credits=100, requests 1,000,000, asserts 402 +
 NOT called. The relay-key-scope test file was updated with a default
 high-balance snapshot mock so its scoping assertions still exercise
 the relay path.
+
+---
+
+## 7a. `usdMultiplierBps` — corrected interpretation
+
+The `LotteryConfig.usdMultiplierBps` field was added pre-AMOE with the
+comment `// Bonus for slippage (10500 = 1.05x)`. On review during PR 2
+this framing does not hold up under scrutiny:
+
+1. **It applies to balance reads, not just swap inputs.** The
+   multiplier sits inside `_calculateTokenUSD`, which is called for
+   both the paid path's `swapValueUSD` *and* the buyer's
+   `creatorShareBalanceUSD`. A real slippage compensator would touch
+   only the executed-swap leg, not the held-balance leg.
+
+2. **It is one-directional.** `setLotteryConfig` bounds it to
+   `[10_000, 15_000]` — it can only inflate, never deflate, the USD
+   value. A genuine slippage true-up would be bidirectional.
+
+3. **It scales lottery odds, not USDC payouts.** The output flows
+   directly into `winChancePPM = swapValueUSD / 250_000`. There is no
+   refund, no payout adjustment, no settlement true-up — only odds
+   inflation.
+
+In practice, `usdMultiplierBps` is a **tunable lottery-odds boost
+knob**: a marketing/engagement lever for inflating PPM beyond the
+strict 4 PPM/$ linear schedule. The historical "slippage" label was
+a plausible-at-the-time justification that doesn't survive inspection.
+
+### Implication for AMOE
+
+`pointsBurnedAsUSD` is an end-value USD figure computed off-chain as
+`points * 10_000` (100 points = $1, server-bounded
+`100 ≤ points ≤ 1_000_000`). There is no token→USD oracle
+conversion, no slippage, and nothing for the multiplier to true up.
+Applying it to AMOE would be double-counting an inflation factor that
+the paid path only carries because of its `tokenIn` → USD step.
+
+A prior follow-up PR (#397, closed) attempted to apply the multiplier
+symmetrically to AMOE for surface-level PPM parity. That direction
+was reverted because (a) the underlying multiplier semantics are
+incorrect to begin with, and (b) it created a new floor-band
+asymmetry where AMOE entries in
+`[minSwap * 10_000 / multiplier, minSwap)` would be silently dropped
+while paid entries at the same notional were accepted (raised by
+`chatgpt-codex-connector` review).
+
+### Resolution
+
+Keep the contract logic as merged in #396 — AMOE swap value passed
+unscaled. Set `usdMultiplierBps = 10_000` (1.00x, neutral) at the
+production `setLotteryConfig` call. At neutral:
+
+- Paid and AMOE PPMs are identical at equal notional automatically.
+- Coverage is identical for the same balance + swap notional.
+- The floor-band finding from PR #397 collapses to zero.
+- The mechanism is preserved: future governance can flip it back on
+  as an explicit, audited generosity boost — with a corresponding
+  decision about whether AMOE participates uniformly.
+
+The storage-field comment in `CreatorLotteryManager.sol` was updated
+to reflect the corrected interpretation. The constructor default
+remains `10_500` for storage-layout / audit-frozen-bytecode reasons;
+the production deploy flips it to `10_000` via the rollout step in
+§ 5.
 
 ---
 
