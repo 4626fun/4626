@@ -80,20 +80,22 @@ Several files share extensions but target different runtimes/tools:
 
 ## Brand, Social, And Mini App Assets
 
-Static public assets in `frontend/public/` are served directly and copied into `dist/` at build time. Treat `dist/manifest.json` as generated output; the source manifest is [`public/manifest.json`](./public/manifest.json).
+Static public assets in `frontend/public/` are served directly and copied into `dist/` at build time. Treat `dist/manifest.json` as generated output; the linked source manifest is [`public/site.webmanifest`](./public/site.webmanifest).
 
 - Keep creative master assets under [`assets/brand/master/`](./assets/brand/master/) instead of `tmp/` or `public/`.
-- Marketing social card: edit `assets/social/app-hero-source.svg`, then run `pnpm -C frontend generate:social-preview` to refresh `public/app-hero.png`.
+- Canonical SEO favicons, PWA icons, logo exports, and social cards come from the 4626.fun SEO brand kit. Lightweight kit docs live under [`brand/4626fun-seo-brand-kit/`](./brand/4626fun-seo-brand-kit/); deployable assets live under `public/favicons/`, `public/logo/`, and `public/social/`.
+- Marketing social card: replace the committed brand-kit files in `public/social/`, then run `pnpm -C frontend generate:social-preview` to verify required files exist.
 - Base miniapp and Telegram preview hero: run `pnpm -C frontend capture:app-screens` to refresh `public/miniapp-hero.png` from the live UI.
-- Miniapp splash and install icons: edit `public/app-splash.svg` or `public/app-icon.svg`, then run `pnpm -C frontend generate:brand-icons`.
+- Brand-kit favicons and install icons: replace the committed files under `public/favicons/`, then run `pnpm -C frontend generate:brand-icons` to verify required files exist.
 - Manifest screenshots: `pnpm -C frontend capture:app-screens` refreshes `public/screenshot-swap.png`, `public/screenshot-explore.png`, and `public/screenshot-deploy.png`.
-- To clear derived image outputs before a full refresh, run `pnpm -C frontend clean:derived-assets`. This removes generated PNGs plus `dist/` and `build/`, but preserves source SVGs and `public/manifest.json`.
-- To regenerate the static, non-screenshot brand assets after a reset, run `pnpm -C frontend generate:brand-assets:static`.
+- To clear legacy derived image outputs before a full refresh, run `pnpm -C frontend clean:derived-assets`. This removes generated legacy PNGs plus `dist/` and `build/`, but preserves `public/site.webmanifest` and the canonical brand-kit directories.
+- To verify the static, non-screenshot brand assets after a reset, run `pnpm -C frontend generate:brand-assets:static`.
 - Full workflow: see [`frontend/docs/brand-refresh-checklist.md`](./docs/brand-refresh-checklist.md).
 
 These pipelines are intentionally separate:
 
-- `app-hero.png` is the curated marketing/social card.
+- `public/social/og-image-1200x630.png` is the curated Open Graph card.
+- `public/social/twitter-summary-large-image-1200x675.png` is the curated Twitter card.
 - `miniapp-hero.png` is the UI-derived miniapp/Telegram preview image.
 - `miniapp-splash.png` is the splash screen used by Base miniapp metadata.
 - `assets/brand/master/` is the long-term intake area for design masters before they are converted into repo-owned SVG sources.

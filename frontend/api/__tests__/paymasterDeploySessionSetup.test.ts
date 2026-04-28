@@ -1325,6 +1325,125 @@ describe('paymaster deploy-session setup (selfcall-only)', () => {
     expect(errMsg).not.toMatch(/missing_primary_call/i)
   })
 
+  it('allows approve plus direct v3 swap router batch', async () => {
+    const COINBASE_SMART_WALLET_ABI = [
+      {
+        type: 'function',
+        name: 'executeBatch',
+        stateMutability: 'nonpayable',
+        inputs: [
+          {
+            name: 'calls',
+            type: 'tuple[]',
+            components: [
+              { name: 'target', type: 'address' },
+              { name: 'value', type: 'uint256' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
+        ],
+        outputs: [],
+      },
+    ] as const
+
+    const ERC20_ABI = [
+      {
+        type: 'function',
+        name: 'approve',
+        stateMutability: 'nonpayable',
+        inputs: [
+          { name: 'spender', type: 'address' },
+          { name: 'amount', type: 'uint256' },
+        ],
+        outputs: [{ name: '', type: 'bool' }],
+      },
+    ] as const
+
+    const V3_SWAP_ROUTER_ABI = [
+      {
+        type: 'function',
+        name: 'exactInputSingle',
+        stateMutability: 'payable',
+        inputs: [
+          {
+            name: 'params',
+            type: 'tuple',
+            components: [
+              { name: 'tokenIn', type: 'address' },
+              { name: 'tokenOut', type: 'address' },
+              { name: 'fee', type: 'uint24' },
+              { name: 'recipient', type: 'address' },
+              { name: 'amountIn', type: 'uint256' },
+              { name: 'amountOutMinimum', type: 'uint256' },
+              { name: 'sqrtPriceLimitX96', type: 'uint160' },
+            ],
+          },
+        ],
+        outputs: [{ name: 'amountOut', type: 'uint256' }],
+      },
+    ] as const
+
+    const v3SwapRouter = '0x2626664c2603336E57B271c5C0b26F421741e481'
+    const tokenIn = '0x5555555555555555555555555555555555555555'
+    const tokenOut = '0x6666666666666666666666666666666666666666'
+    const approveData = encodeFunctionData({
+      abi: ERC20_ABI,
+      functionName: 'approve',
+      args: [v3SwapRouter, 1_000_000n],
+    })
+    const swapData = encodeFunctionData({
+      abi: V3_SWAP_ROUTER_ABI,
+      functionName: 'exactInputSingle',
+      args: [
+        {
+          tokenIn,
+          tokenOut,
+          fee: 500,
+          recipient: sender,
+          amountIn: 1_000_000n,
+          amountOutMinimum: 1n,
+          sqrtPriceLimitX96: 0n,
+        },
+      ],
+    })
+    const callData = encodeFunctionData({
+      abi: COINBASE_SMART_WALLET_ABI,
+      functionName: 'executeBatch',
+      args: [[
+        { target: tokenIn, value: 0n, data: approveData },
+        { target: v3SwapRouter, value: 0n, data: swapData },
+      ]],
+    })
+
+    const userOp = {
+      sender,
+      callData,
+      initCode: '0x',
+    }
+
+    const body = {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'pm_getPaymasterStubData',
+      params: [userOp, ENTRYPOINT_V06, 8453],
+    }
+
+    const req = createMockReq({
+      method: 'POST',
+      body,
+      headers: { 'content-type': 'application/json' },
+    })
+    const res = createMockRes()
+
+    await paymasterHandler(req as any, res as any)
+
+    expect(res.statusCode).toBe(200)
+    const responseBody = typeof res.body === 'string' ? JSON.parse(res.body) : res.body
+    const errMsg = String(responseBody?.error?.message ?? '')
+    expect(errMsg).not.toMatch(/request denied/i)
+    expect(errMsg).not.toMatch(/missing_primary_call/i)
+  })
+
   it('rejects approve-only batches without a primary deploy/swap call', async () => {
     const COINBASE_SMART_WALLET_ABI = [
       {

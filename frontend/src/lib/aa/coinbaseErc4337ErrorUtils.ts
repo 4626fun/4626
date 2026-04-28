@@ -23,6 +23,7 @@ const KNOWN_ERROR_SELECTORS: Record<string, string> = {
   '0x8284e8bf': 'AuctionAmountMismatch()',
   '0xf79c143b': 'Phase2Missing()',
   // UniversalCreate2DeployerFromStore
+  '0x8164ae93': 'NotAuthorizedDeployer()',
   '0xb4f54111': 'DeployFailed()',
 }
 
@@ -195,6 +196,17 @@ export function isPaymasterPolicyError(error: unknown): boolean {
     lc.includes('swap_router_call_count_not_allowed') ||
     // Broader catch for other `_not_allowed` tags our proxy may add.
     /\b[a-z_]+_not_allowed\b/.test(lc)
+  )
+}
+
+export function isImmediateUserOpRetrySuppressedError(error: unknown): boolean {
+  const msg = getErrorDiagnosticMessage(error)
+  const lc = msg.toLowerCase()
+  return (
+    isPaymasterPolicyError(error) ||
+    lc.includes('request exceeds defined limit') ||
+    lc.includes('sponsorship limit exceeded') ||
+    lc.includes('rate limit exceeded')
   )
 }
 

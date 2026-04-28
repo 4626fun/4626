@@ -702,6 +702,14 @@ const SELECTOR_COIN_SET_PAYOUT_RECIPIENT = '0x46bb5954'
 const SELECTOR_OWNABLE_TRANSFER_OWNERSHIP = '0xf2fde38b'
 const SELECTOR_PERMIT2_PERMIT_TRANSFER_FROM = '0x30f28b7a'
 const SELECTOR_SWAP_ROUTER_EXECUTE = '0x3593564c' // execute(bytes,bytes[],uint256)
+const SELECTOR_V3_SWAP_ROUTER_EXACT_INPUT_NO_DEADLINE = '0xb858183f'
+const SELECTOR_V3_SWAP_ROUTER_EXACT_INPUT_SINGLE_NO_DEADLINE = '0x04e45aaf'
+const SELECTOR_V3_SWAP_ROUTER_EXACT_OUTPUT_NO_DEADLINE = '0x09b81346'
+const SELECTOR_V3_SWAP_ROUTER_EXACT_OUTPUT_SINGLE_NO_DEADLINE = '0x5023b4df'
+const SELECTOR_V3_SWAP_ROUTER_EXACT_INPUT = '0xc04b8d59'
+const SELECTOR_V3_SWAP_ROUTER_EXACT_INPUT_SINGLE = '0x414bf389'
+const SELECTOR_V3_SWAP_ROUTER_EXACT_OUTPUT = '0xf28c0498'
+const SELECTOR_V3_SWAP_ROUTER_EXACT_OUTPUT_SINGLE = '0xdb3e2198'
 const SELECTOR_PAYOUT_ROUTER_SET_KEEPER = '0x748747e6' // setKeeper(address)
 const SELECTOR_PAYOUT_ROUTER_SET_SWAP_PATH = '0xc772f341' // setSwapPath(address,bytes)
 const SELECTOR_PAYOUT_ROUTER_SET_EXTERNAL_SWAP_TARGET_APPROVAL = '0x7b88bf17' // setExternalSwapTargetApproval(address,bool)
@@ -781,6 +789,16 @@ const ALLOWED_TOKEN_SELECTORS = new Set<string>([
 ])
 const ALLOWED_PERMIT2_SELECTORS = new Set<string>([SELECTOR_PERMIT2_PERMIT_TRANSFER_FROM])
 const ALLOWED_SELF_SELECTORS = new Set<string>([SELECTOR_CSW_ADD_OWNER_ADDRESS, SELECTOR_CSW_REMOVE_OWNER_AT_INDEX])
+const ALLOWED_V3_SWAP_ROUTER_SELECTORS = new Set<string>([
+  SELECTOR_V3_SWAP_ROUTER_EXACT_INPUT_NO_DEADLINE,
+  SELECTOR_V3_SWAP_ROUTER_EXACT_INPUT_SINGLE_NO_DEADLINE,
+  SELECTOR_V3_SWAP_ROUTER_EXACT_OUTPUT_NO_DEADLINE,
+  SELECTOR_V3_SWAP_ROUTER_EXACT_OUTPUT_SINGLE_NO_DEADLINE,
+  SELECTOR_V3_SWAP_ROUTER_EXACT_INPUT,
+  SELECTOR_V3_SWAP_ROUTER_EXACT_INPUT_SINGLE,
+  SELECTOR_V3_SWAP_ROUTER_EXACT_OUTPUT,
+  SELECTOR_V3_SWAP_ROUTER_EXACT_OUTPUT_SINGLE,
+])
 const ALLOWED_ERC8004_SELECTORS = new Set<string>([
   SELECTOR_ERC8004_REGISTER,
   SELECTOR_ERC8004_SET_AGENT_URI,
@@ -1565,6 +1583,11 @@ function assertSwapRouterPayloadReferencesToken(data: Hex, token: Address): void
   if (!referencesToken) throw new Error('swap_router_token_not_referenced')
 }
 
+function assertRawSwapPayloadReferencesToken(data: Hex, token: Address): void {
+  const tokenNeedle = token.slice(2).toLowerCase()
+  if (!data.toLowerCase().includes(tokenNeedle)) throw new Error('swap_router_token_not_referenced')
+}
+
 function summarizeSmartWalletCallData(callData: Hex): {
   innerCallCount: number
   innerSelectors: string[]
@@ -2311,20 +2334,22 @@ async function validateInnerCalls(params: {
         let approvedToken: Address | null = null
         let swapRouterCallData: Hex | null = null
         let swapRouterTarget: Address | null = null
+        let swapRouterKind: 'universal' | 'v3' | null = null
+        let approvalSpender: Address | null = null
         for (const c of innerCalls) {
           const selector = getSelector(c.data)
 
-          if (allowedUniversalSwapRouters.has(c.target)) {
-            if (selector !== SELECTOR_SWAP_ROUTER_EXECUTE) {
-              return { matched: false, creatorToken: null as Address | null }
-            }
+          const isUniversalRouterCall = allowedUniversalSwapRouters.has(c.target) && selector === SELECTOR_SWAP_ROUTER_EXECUTE
+          const isV3RouterCall = allowedPayoutRouterV3Routers.has(c.target) && ALLOWED_V3_SWAP_ROUTER_SELECTORS.has(selector)
+          if (isUniversalRouterCall || isV3RouterCall) {
             if (c.value !== 0n) throw new Error('swap_router_value_not_allowed')
-            assertCanonicalSwapRouterExecuteEncoding(c.data)
+            if (isUniversalRouterCall) assertCanonicalSwapRouterExecuteEncoding(c.data)
             sawSwapRouter = true
             swapRouterCalls += 1
             if (swapRouterCalls > 1) throw new Error('swap_router_call_count_not_allowed')
             swapRouterCallData = c.data
             swapRouterTarget = c.target
+            swapRouterKind = isUniversalRouterCall ? 'universal' : 'v3'
             continue
           }
 
@@ -2333,10 +2358,8 @@ async function validateInnerCalls(params: {
           approvalCalls += 1
           if (approvalCalls > 1) throw new Error('swap_approval_call_count_not_allowed')
           const spender = decodeAddressArgFromCalldata(c.data, 0)
-          const spenderAllowedForSwap = Boolean(
-            spender && (spender === permit2 || (swapRouterTarget ? spender === swapRouterTarget : allowedUniversalSwapRouters.has(spender))),
-          )
-          if (!spenderAllowedForSwap) return { matched: false, creatorToken: null as Address | null }
+          if (!spender) return { matched: false, creatorToken: null as Address | null }
+          approvalSpender = spender
           const amount = decodeUint256ArgFromCalldata(c.data, 1)
           if (amount == null || amount <= 0n) throw new Error('swap_approval_amount_invalid')
           const approvalToken = getAddress(c.target)
@@ -2347,8 +2370,23 @@ async function validateInnerCalls(params: {
           }
         }
 
+        const spenderAllowedForSwap = Boolean(
+          approvalSpender &&
+            (approvalSpender === permit2 ||
+              (swapRouterTarget
+                ? approvalSpender === swapRouterTarget
+                : allowedUniversalSwapRouters.has(approvalSpender) || allowedPayoutRouterV3Routers.has(approvalSpender))),
+        )
+        if (approvalCalls > 0 && !spenderAllowedForSwap) {
+          return { matched: false, creatorToken: null as Address | null }
+        }
+
         if (sawSwapRouter && approvedToken && swapRouterCallData) {
-          assertSwapRouterPayloadReferencesToken(swapRouterCallData, approvedToken)
+          if (swapRouterKind === 'universal') {
+            assertSwapRouterPayloadReferencesToken(swapRouterCallData, approvedToken)
+          } else {
+            assertRawSwapPayloadReferencesToken(swapRouterCallData, approvedToken)
+          }
         }
 
         return {

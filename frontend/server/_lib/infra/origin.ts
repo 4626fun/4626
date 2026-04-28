@@ -11,6 +11,11 @@ const DEFAULT_LOCAL_ORIGINS = new Set<string>([
   'http://127.0.0.1:3000',
 ])
 
+function isLoopbackHostname(hostname: string): boolean {
+  const value = String(hostname || '').trim().toLowerCase()
+  return value === 'localhost' || value === '127.0.0.1' || value === '::1' || value === '[::1]'
+}
+
 function normalizeOrigin(raw: string): string | null {
   const t = raw.trim()
   if (!t) return null
@@ -74,11 +79,23 @@ export function getCanonicalOrigin(req?: VercelRequest): string {
   const explicit = getExplicitAppOrigin()
   if (explicit) return explicit
 
-  const vercelUrl = (process.env.VERCEL_URL ?? '').trim()
-  if (vercelUrl) return `https://${vercelUrl.replace(/\/+$/, '')}`
-
   const nodeEnv = (process.env.NODE_ENV ?? '').trim().toLowerCase()
   const allow = new Set<string>([...DEFAULT_LOCAL_ORIGINS, ...getAllowedOriginsFromEnv()])
+
+  const vercelUrl = (process.env.VERCEL_URL ?? '').trim()
+  if (vercelUrl) {
+    const candidate = normalizeOrigin(`https://${vercelUrl.replace(/\/+$/, '')}`)
+    if (candidate) {
+      const hostname = new URL(candidate).hostname
+      // Local dev processes (including some sandbox/proxy flows) can inject
+      // ephemeral localhost VERCEL_URL values (e.g. :64254). Do not pin
+      // canonical origin to that random port; prefer explicit APP_ORIGIN or
+      // trusted request-host allowlist resolution below.
+      if (!(nodeEnv !== 'production' && isLoopbackHostname(hostname))) {
+        return candidate
+      }
+    }
+  }
 
   if (req && nodeEnv !== 'production') {
     const proto = String(req.headers['x-forwarded-proto'] ?? 'http').toLowerCase()

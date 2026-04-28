@@ -29,6 +29,15 @@ describe('resolveLoopbackOriginForCurrentWindow', () => {
       }),
     ).toBe('http://localhost:5174')
   })
+
+  it('does not adopt random loopback ports outside the local allowlist', () => {
+    expect(
+      resolveLoopbackOriginForCurrentWindow({
+        configuredOrigin: 'http://localhost:5173',
+        currentOrigin: 'http://localhost:64254',
+      }),
+    ).toBe('http://localhost:5173')
+  })
 })
 
 describe('resolveMarketingToAppBaseUrl', () => {

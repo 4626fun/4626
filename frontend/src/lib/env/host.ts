@@ -12,10 +12,25 @@ type MarketingToAppBaseUrlResolutionInput = {
 }
 
 let warnedLoopbackAppOriginOnPublicHost = false
+const ALLOWED_LOOPBACK_PORTS = new Set([
+  '5173',
+  '5174',
+  '5175',
+  '5176',
+  '5177',
+  '3000',
+  '4173',
+])
 
 function isLoopbackHostname(hostname: string): boolean {
   const h = String(hostname || '').trim().toLowerCase()
   return h === 'localhost' || h === '127.0.0.1' || h === '::1' || h === '[::1]'
+}
+
+function isAllowedLoopbackPort(port: string): boolean {
+  const normalized = String(port || '').trim()
+  if (!normalized) return true
+  return ALLOWED_LOOPBACK_PORTS.has(normalized)
 }
 
 /**
@@ -39,7 +54,16 @@ export function resolveLoopbackOriginForCurrentWindow(input: LoopbackOriginResol
     const samePort = configured.port === current.port
     if (sameScheme && samePort) return input.configuredOrigin
 
-    return current.origin
+    const configuredPortAllowed = isAllowedLoopbackPort(configured.port)
+    const currentPortAllowed = isAllowedLoopbackPort(current.port)
+    if (!currentPortAllowed && configuredPortAllowed) {
+      return input.configuredOrigin
+    }
+    if (currentPortAllowed) {
+      return current.origin
+    }
+
+    return input.configuredOrigin
   } catch {
     return input.configuredOrigin
   }
@@ -146,7 +170,12 @@ export function getHostMode(): HostMode {
 export function getAppBaseUrl(): string {
   if (typeof window === 'undefined') return APP_ORIGIN
   const mode = getHostMode()
-  if (mode === 'app') return window.location.origin
+  if (mode === 'app') {
+    return resolveLoopbackOriginForCurrentWindow({
+      configuredOrigin: APP_ORIGIN,
+      currentOrigin: window.location.origin,
+    })
+  }
   return resolveMarketingToAppBaseUrl({
     preferredAppOrigin: APP_ORIGIN,
     currentOrigin: window.location.origin,

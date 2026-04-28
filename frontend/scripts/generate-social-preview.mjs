@@ -1,43 +1,49 @@
 #!/usr/bin/env node
 /**
- * Generate social preview image(s) from SVG source assets.
+ * Verify committed social preview image(s) from the SEO brand kit.
  *
  * Why:
- * - Link unfurlers (X, Farcaster, Telegram, Discord) are most reliable with PNG.
- * - We keep the editable source in SVG, then derive fixed-size PNG output.
+ * - Link unfurlers (X, Farcaster, Telegram, Discord) are most reliable with
+ *   committed PNGs at stable URLs.
+ * - The 4626.fun SEO brand kit is now the canonical source for these images.
+ * - This script is kept for existing operator muscle memory, but no longer
+ *   regenerates stale root-level assets such as `public/app-hero.png`.
  *
  * Usage:
  *   node scripts/generate-social-preview.mjs
  */
 
+import fs from 'node:fs/promises'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const publicDir = path.resolve(__dirname, '../public')
+const requiredSocialAssets = [
+  'social/og-image-1200x630.png',
+  'social/twitter-summary-large-image-1200x675.png',
+]
 
 async function main() {
-  let sharp
-  try {
-    sharp = (await import('sharp')).default
-  } catch {
-    // eslint-disable-next-line no-console
-    console.error('Missing dependency: sharp. Install frontend deps and retry.')
-    process.exit(1)
+  const missing = []
+  for (const relativePath of requiredSocialAssets) {
+    try {
+      await fs.access(path.join(publicDir, relativePath))
+    } catch {
+      missing.push(relativePath)
+    }
   }
 
-  const sourceSvg = path.resolve(__dirname, '../assets/social/app-hero-source.svg')
-  const targetPng = path.join(publicDir, 'app-hero.png')
-
-  await sharp(sourceSvg, { density: 512 })
-    .resize(1200, 630, { fit: 'cover' })
-    .flatten({ background: '#000000' })
-    .png({ compressionLevel: 9 })
-    .toFile(targetPng)
+  if (missing.length > 0) {
+    // eslint-disable-next-line no-console
+    console.error(`Missing SEO brand-kit social assets: ${missing.join(', ')}`)
+    process.exitCode = 1
+    return
+  }
 
   // eslint-disable-next-line no-console
-  console.log('wrote public/app-hero.png (1200x630)')
+  console.log('verified committed SEO brand-kit social assets')
 }
 
 await main()

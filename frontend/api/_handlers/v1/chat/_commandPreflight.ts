@@ -47,7 +47,7 @@ function isPinataSource(value: string): boolean {
 }
 
 function readPinataAllowedUsers(): Set<string> {
-  const raw = String(process.env.ALFACHAT_PINATA_ALLOWED_USERS ?? '').trim()
+  const raw = String(process.env.HERMIT_ALLOWED_USERS ?? '').trim()
   if (!raw) return new Set<string>()
   const out = new Set<string>()
   for (const part of raw.split(',')) {

@@ -21,10 +21,10 @@ function buildAbsoluteUrl(baseUrl, assetPath, version) {
 
 const BASE_HTML_SHELL_CONFIG = {
   appBaseUrl: 'https://4626.fun',
-  marketingSocialImagePath: '/app-hero.png',
-  marketingSocialImageVersion: '6',
-  appSocialImagePath: '/og-image.png',
-  twitterCardImagePath: '/twitter-card.png',
+  marketingSocialImagePath: '/social/og-image-1200x630.png',
+  marketingSocialImageVersion: null,
+  appSocialImagePath: '/social/og-image-1200x630.png',
+  twitterCardImagePath: '/social/twitter-summary-large-image-1200x675.png',
   ogImageWidth: '1200',
   ogImageHeight: '630',
   miniappHeroPath: '/miniapp-hero.png',
@@ -39,7 +39,7 @@ const BASE_HTML_SHELL_CONFIG = {
   siteAuthor: 'AKITA, LLC',
   siteAuthorUrl: 'https://akita.llc',
   siteAuthorEmail: 'info@akita.llc',
-  msTileColor: '#020617',
+  msTileColor: '#F8F0E6',
   telegramLinkTitle: SHARED_SITE_META.telegramLinkTitle,
   telegramLinkDescription: SHARED_SITE_META.telegramLinkDescription,
   telegramLinkUrl: 'https://4626.fun/telegram/link',

@@ -4,10 +4,9 @@
  * Why:
  * - "Screenshot" should reflect the actual product UI (not a stylized mock).
  * - This script owns UI-derived assets only: the miniapp preview hero and
- *   portrait install screenshots. The marketing social card is generated from
- *   `assets/social/app-hero-source.svg` via `generate-social-preview.mjs`.
- * - Small install/browser icons stay in
- *   `generate-brand-icons.mjs`.
+ *   portrait install screenshots. SEO social cards and browser icons are
+ *   committed from the canonical brand kit and verified by
+ *   `generate-social-preview.mjs` / `generate-brand-icons.mjs`.
  *
  * Usage:
  *   pnpm -C frontend add -D playwright

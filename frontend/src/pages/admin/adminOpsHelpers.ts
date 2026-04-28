@@ -424,6 +424,8 @@ export function shouldFallbackToOwnerDirectExecute(error: unknown): boolean {
     msg.includes('aa40') ||
     msg.includes("didn't pay prefund") ||
     msg.includes('request denied -') ||
+    msg.includes('request exceeds defined limit') ||
+    msg.includes('rate limit exceeded') ||
     msg.includes('paymaster unavailable') ||
     msg.includes('sponsorship')
   )
@@ -653,12 +655,6 @@ export async function sendEmbeddedOwnerSmartWalletCall(params: {
   } catch (error: unknown) {
     if (!shouldFallbackToOwnerDirectExecute(error)) throw error
     const fallbackReason = summarizeErrorReason(error)
-    logger.warn('[AdminOps][ERC-4337] Falling back to direct owner executeBatch', {
-      smartWallet,
-      ownerAddress,
-      callCount: calls.length,
-      reason: fallbackReason,
-    })
 
     let ownerBalance: bigint | null = null
     try {
@@ -667,7 +663,7 @@ export async function sendEmbeddedOwnerSmartWalletCall(params: {
       ownerBalance = null
     }
     if (ownerBalance === 0n) {
-      logger.error('[AdminOps][ERC-4337] Skipping direct owner executeBatch fallback: owner has zero Base ETH', {
+      logger.warn('[AdminOps][ERC-4337] Direct owner executeBatch fallback unavailable: owner has zero Base ETH', {
         smartWallet,
         ownerAddress,
         callCount: calls.length,
@@ -677,6 +673,12 @@ export async function sendEmbeddedOwnerSmartWalletCall(params: {
         'Gas sponsorship failed, and direct owner fallback is unavailable because the owner wallet has 0 ETH on Base.',
       )
     }
+    logger.warn('[AdminOps][ERC-4337] Falling back to direct owner executeBatch', {
+      smartWallet,
+      ownerAddress,
+      callCount: calls.length,
+      reason: fallbackReason,
+    })
 
     const executeBatchData = encodeFunctionData({
       abi: COINBASE_SMART_WALLET_EXECUTE_BATCH_ABI as any,

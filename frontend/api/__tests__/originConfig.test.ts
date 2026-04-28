@@ -51,6 +51,24 @@ describe('origin resolution', () => {
     expect(getCanonicalOrigin(req)).toBe('http://localhost:5173')
   })
 
+  it('ignores loopback VERCEL_URL in development so random local proxy ports do not become canonical', () => {
+    restoreEnv = applyEnv({
+      APP_ORIGIN: undefined,
+      VERCEL_URL: 'localhost:64254',
+      NODE_ENV: 'development',
+      CORS_ALLOWED_ORIGINS: undefined,
+    })
+
+    const req = createMockReq({
+      headers: {
+        'x-forwarded-proto': 'http',
+        'x-forwarded-host': 'localhost:5174',
+      },
+    })
+
+    expect(getCanonicalOrigin(req)).toBe('http://localhost:5174')
+  })
+
   it('throws when no origin can be derived in production', () => {
     restoreEnv = applyEnv({
       APP_ORIGIN: undefined,

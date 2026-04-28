@@ -376,7 +376,7 @@ function buildTokenImageUrl(params: {
 }
 
 function buildFallbackImageUrl(origin: string): string {
-  const url = new URL('/app-hero.png?v=6', origin)
+  const url = new URL('/social/og-image-1200x630.png', origin)
   return url.toString()
 }
 

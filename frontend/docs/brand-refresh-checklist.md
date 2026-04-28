@@ -1,27 +1,32 @@
 # Brand Refresh Checklist
 
-Use this when you want to replace the current social, miniapp, splash, and icon assets without getting confused about which files are source versus derived output.
+Use this when you want to replace the current SEO, social, miniapp, splash, and icon assets without getting confused about which files are source versus derived output.
 
 ## Source Of Truth
 
 Editable sources:
 
 - `assets/brand/master/` for design masters and intake files
-- `assets/social/app-hero-source.svg`
 - `public/app-splash.svg`
 - `public/app-icon.svg`
-- `public/manifest.json`
+- `public/site.webmanifest`
+- `brand/4626fun-seo-brand-kit/` for lightweight docs, tokens, and asset manifests copied from the canonical SEO brand kit
 
-Derived outputs:
+Committed brand-kit outputs:
 
-- `public/app-hero.png`
+- `public/favicon.ico`
+- `public/favicon.svg`
+- `public/favicons/`
+- `public/logo/`
+- `public/social/og-image-1200x630.png`
+- `public/social/twitter-summary-large-image-1200x675.png`
+
+UI-derived outputs:
+
 - `public/miniapp-hero.png`
 - `public/miniapp-splash.png`
 - `public/app-icon.png`
 - `public/miniapp-icon.png`
-- `public/apple-touch-icon.png`
-- `public/favicon-16x16.png`
-- `public/favicon-32x32.png`
 - `public/icon-192.png`
 - `public/icon-192-maskable.png`
 - `public/icon-512.png`
@@ -34,7 +39,7 @@ Derived outputs:
 - `dist/`
 - `build/`
 
-Do not manually edit derived PNGs unless you intentionally want to replace the generated output.
+Do not manually edit UI-derived PNGs unless you intentionally want to replace the generated output. For SEO brand-kit assets, replace the committed kit files directly and keep the source docs/tokens out of `public/`.
 
 ## Recommended Workflow
 
@@ -48,11 +53,12 @@ pnpm -C frontend clean:derived-assets
 3. Replace or redesign the editable source assets:
 
 - Start from the current master in `assets/brand/master/` instead of from `tmp/` or old generated PNGs.
-- `assets/social/app-hero-source.svg`
+- `public/social/og-image-1200x630.png` and `public/social/twitter-summary-large-image-1200x675.png` for SEO/social cards.
+- `public/favicons/` and root `public/favicon.*` / `public/site.webmanifest` / `public/browserconfig.xml` for install surfaces.
 - `public/app-splash.svg`
 - `public/app-icon.svg`
 
-4. Regenerate static brand assets:
+4. Verify static brand-kit assets:
 
 ```bash
 pnpm -C frontend generate:brand-assets:static
@@ -82,20 +88,22 @@ pnpm -C frontend typecheck
 ## What Each Command Does
 
 - `pnpm -C frontend clean:derived-assets`
-  Removes generated PNG assets from `public/` and clears `dist/` and `build/`.
+  Removes legacy/UI-derived PNG assets from `public/` and clears `dist/` and `build/`.
 - `pnpm -C frontend generate:social-preview`
-  Rebuilds `public/app-hero.png` from `assets/social/app-hero-source.svg`.
+  Verifies the committed SEO brand-kit social assets under `public/social/`.
 - `pnpm -C frontend generate:brand-icons`
-  Rebuilds icon and splash derivatives from `public/app-icon.svg` and `public/app-splash.svg`.
+  Verifies the committed SEO brand-kit favicon, PWA, and browserconfig assets.
 - `pnpm -C frontend generate:brand-assets:static`
-  Runs the two static brand generation steps together.
+  Runs the two static brand-kit verification steps together.
 - `pnpm -C frontend capture:app-screens`
   Rebuilds `miniapp-hero.png` and the manifest screenshot PNGs from the running UI.
 
 ## Asset Ownership
 
-- `app-hero.png`
-  Marketing/social card. Curated static asset.
+- `public/social/og-image-1200x630.png`
+  Canonical Open Graph card. Curated static brand-kit asset.
+- `public/social/twitter-summary-large-image-1200x675.png`
+  Canonical Twitter card. Curated static brand-kit asset.
 - `miniapp-hero.png`
   Miniapp / Telegram preview. UI-derived screenshot asset.
 - `miniapp-splash.png`
@@ -105,9 +113,10 @@ pnpm -C frontend typecheck
 
 ## Safety Notes
 
-- `dist/manifest.json` is generated output. Ignore it during asset design work.
+- `dist/manifest.json` and `dist/site.webmanifest` are generated output. Ignore them during asset design work.
 - Keep design masters in `assets/brand/master/`; treat `tmp/` as scratch space only.
-- Do not delete `public/manifest.json`; it is source.
+- Do not delete `public/site.webmanifest`; it is the linked PWA manifest source.
+- Do not delete `public/manifest.json`; it is retained for compatibility with older install surfaces.
 - Do not delete the SVG sources if you want to regenerate assets later.
 - Social cards should stay opaque unless you have a specific reason not to.
 - Transparency is safest for icon/logo-family assets, not for OG/Twitter share cards.

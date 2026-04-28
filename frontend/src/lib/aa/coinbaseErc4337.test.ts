@@ -9,6 +9,7 @@ import {
   simulateSmartWalletCalls,
   verifyBundlerSupportsV06,
 } from './coinbaseErc4337'
+import { isImmediateUserOpRetrySuppressedError } from './coinbaseErc4337ErrorUtils'
 
 const SMART_WALLET = '0x1111111111111111111111111111111111111111'
 const OWNER_ADDRESS = '0x2222222222222222222222222222222222222222'
@@ -119,6 +120,16 @@ describe('coinbaseErc4337 latency helpers', () => {
 
     const fnCalls = readContract.mock.calls.map(([arg]) => (arg as ReadContractArgs).functionName)
     expect(fnCalls.filter((name) => name === 'nextOwnerIndex')).toHaveLength(2)
+  })
+
+  it('suppresses immediate retries for paymaster quota and rate-limit denials', () => {
+    expect(
+      isImmediateUserOpRetrySuppressedError(
+        new Error('Request exceeds defined limit. Details: Sponsorship limit exceeded for this sender'),
+      ),
+    ).toBe(true)
+    expect(isImmediateUserOpRetrySuppressedError(new Error('Rate limit exceeded'))).toBe(true)
+    expect(isImmediateUserOpRetrySuppressedError(new Error('network error'))).toBe(false)
   })
 
   it('falls back from explicit ownerIndexLookupAddress when it is not an onchain owner', async () => {

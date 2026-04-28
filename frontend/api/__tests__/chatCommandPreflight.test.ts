@@ -47,7 +47,7 @@ vi.mock('../../server/auth/_shared.js', async () => {
 describe('POST /api/v1/chat/command-preflight', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    delete process.env.ALFACHAT_PINATA_ALLOWED_USERS
+    delete process.env.HERMIT_ALLOWED_USERS
     checkRateLimitMock.mockReturnValue({ allowed: true, remaining: 119, resetAt: Date.now() + 60_000 })
     isCreWriteCommandTextMock.mockReturnValue(false)
     getKeeprVaultByGroupIdMock.mockResolvedValue({
@@ -121,7 +121,7 @@ describe('POST /api/v1/chat/command-preflight', () => {
   })
 
   it('denies pinata source when session user is not allowlisted', async () => {
-    process.env.ALFACHAT_PINATA_ALLOWED_USERS = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
+    process.env.HERMIT_ALLOWED_USERS = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
     const req = createMockReq({
       method: 'POST',
       body: {
@@ -142,7 +142,7 @@ describe('POST /api/v1/chat/command-preflight', () => {
   })
 
   it('allows pinata source when session user is allowlisted', async () => {
-    process.env.ALFACHAT_PINATA_ALLOWED_USERS = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    process.env.HERMIT_ALLOWED_USERS = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
     const req = createMockReq({
       method: 'POST',
       body: {
@@ -162,7 +162,7 @@ describe('POST /api/v1/chat/command-preflight', () => {
   })
 
   it('treats hermit as the pinata source alias', async () => {
-    process.env.ALFACHAT_PINATA_ALLOWED_USERS = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    process.env.HERMIT_ALLOWED_USERS = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
     const req = createMockReq({
       method: 'POST',
       body: {

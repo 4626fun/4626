@@ -43,6 +43,7 @@ import {
   getErrorDiagnosticMessage,
   getRpcErrorDetails,
   isExpectedUserOpTimeoutError,
+  isImmediateUserOpRetrySuppressedError,
   isLikelyVerificationGasLimitError,
   isPaymasterAuthPolicyError,
   isPaymasterPolicyError,
@@ -353,6 +354,7 @@ function delay(ms: number): Promise<void> {
 
 function isTransientUserOpSubmissionError(error: unknown): boolean {
   if (isUserRejection(error)) return false
+  if (isImmediateUserOpRetrySuppressedError(error)) return false
   const msg = getErrorDiagnosticMessage(error)
   const lc = msg.toLowerCase()
   const code = (error as any)?.code

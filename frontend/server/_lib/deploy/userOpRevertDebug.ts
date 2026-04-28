@@ -47,6 +47,7 @@ const KNOWN_ERROR_SELECTORS: Record<string, string> = {
   '0x8284e8bf': 'AuctionAmountMismatch()',
   '0xf79c143b': 'Phase2Missing()',
   // UniversalCreate2DeployerFromStore
+  '0x8164ae93': 'NotAuthorizedDeployer()',
   '0xb4f54111': 'DeployFailed()',
 }
 

@@ -124,11 +124,12 @@ describe('/api/uniswap/swap token policy with nested quote tokens', () => {
 
     expect(res.statusCode).toBe(200)
     expect(fetchMock).toHaveBeenCalledTimes(1)
-    const forwarded = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body ?? '{}'))
+    const forwardedRequest = (fetchMock as any).mock.calls[0]?.[1]
+    const forwarded = JSON.parse(String(forwardedRequest?.body ?? '{}'))
     expect(forwarded.permit2Disabled).toBeUndefined()
     expect(forwarded.permitData).toBeUndefined()
     expect(forwarded.signature).toBeUndefined()
     expect(forwarded.quote.permitData).toBeUndefined()
-    expect(fetchMock.mock.calls[0]?.[1]?.headers).toMatchObject({ 'x-permit2-disabled': 'true' })
+    expect(forwardedRequest?.headers).toMatchObject({ 'x-permit2-disabled': 'true' })
   })
 })

@@ -30,10 +30,18 @@ describe('PageMeta', () => {
     expect(canonical?.getAttribute('href')).toBe('http://localhost:3000/swap')
 
     expect(queryMeta('og:url', 'property')?.getAttribute('content')).toBe('http://localhost:3000/swap')
-    expect(queryMeta('og:image', 'property')?.getAttribute('content')).toBe('http://localhost:3000/app-hero.png?v=6')
-    expect(queryMeta('twitter:image', 'name')?.getAttribute('content')).toBe('http://localhost:3000/app-hero.png?v=6')
-    expect(queryMeta('og:image:alt', 'property')?.getAttribute('content')).toBe('4626.fun Creator Vaults on Base')
-    expect(queryMeta('twitter:image:alt', 'name')?.getAttribute('content')).toBe('4626.fun Creator Vaults on Base')
+    expect(queryMeta('og:image', 'property')?.getAttribute('content')).toBe(
+      'http://localhost:3000/social/og-image-1200x630.png',
+    )
+    expect(queryMeta('twitter:image', 'name')?.getAttribute('content')).toBe(
+      'http://localhost:3000/social/twitter-summary-large-image-1200x675.png',
+    )
+    expect(queryMeta('og:image:alt', 'property')?.getAttribute('content')).toBe(
+      '4626.fun logo and Creator Vaults on Base tagline',
+    )
+    expect(queryMeta('twitter:image:alt', 'name')?.getAttribute('content')).toBe(
+      '4626.fun logo and Creator Vaults on Base tagline',
+    )
   })
 
   it('creates, updates, and removes page JSON-LD script', () => {

@@ -49,6 +49,10 @@
       "schedule": "0 12 * * *"
     },
     {
+      "path": "/api/v1/alfaclub/chat-bridge-run",
+      "schedule": "* * * * *"
+    },
+    {
       "path": "/api/v1/alfaclub/radar",
       "schedule": "5 12 * * *"
     }
@@ -111,6 +115,13 @@
     },
     {
       "src": "/manifest.json",
+      "headers": {
+        "cache-control": "no-store"
+      },
+      "continue": true
+    },
+    {
+      "src": "/site.webmanifest",
       "headers": {
         "cache-control": "no-store"
       },

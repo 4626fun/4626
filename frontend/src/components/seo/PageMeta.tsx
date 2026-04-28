@@ -34,6 +34,8 @@ type PageMetaProps = {
   canonicalPath?: string
   /** OG image URL */
   ogImage?: string
+  /** Twitter image URL. Defaults to the canonical Twitter card asset. */
+  twitterImage?: string
   /** Optional JSON-LD payload for rich results */
   structuredData?: Record<string, unknown> | Array<Record<string, unknown>> | null
 }
@@ -98,14 +100,18 @@ export function PageMeta({
   robots = 'noindex,follow',
   canonicalPath,
   ogImage,
+  twitterImage,
   structuredData = null,
 }: PageMetaProps) {
   useEffect(() => {
     const origin = getPageOrigin()
     const canonical = normalizeCanonicalUrl(canonicalPath, origin)
-    const fallbackOgImage = `${origin}/app-hero.png?v=6`
+    const fallbackOgImage = `${origin}/social/og-image-1200x630.png`
+    const fallbackTwitterImage = `${origin}/social/twitter-summary-large-image-1200x675.png`
     const resolvedDescription = String(description ?? '').trim() || SITE_DESCRIPTION
-    const resolvedOgImage = String(ogImage ?? '').trim() || fallbackOgImage
+    const ogImageOverride = String(ogImage ?? '').trim()
+    const resolvedOgImage = ogImageOverride || fallbackOgImage
+    const resolvedTwitterImage = String(twitterImage ?? '').trim() || ogImageOverride || fallbackTwitterImage
 
     // Title
     const fullTitle = title ? `${title} | ${SITE_APP_NAME}` : SITE_APP_NAME
@@ -130,7 +136,7 @@ export function PageMeta({
     setOrCreateMeta('og:image', resolvedOgImage, 'property')
     setOrCreateMeta('og:image:secure_url', resolvedOgImage, 'property')
     setOrCreateMeta('og:image:alt', SITE_IMAGE_ALT, 'property')
-    setOrCreateMeta('twitter:image', resolvedOgImage, 'name')
+    setOrCreateMeta('twitter:image', resolvedTwitterImage, 'name')
     setOrCreateMeta('twitter:image:alt', SITE_IMAGE_ALT, 'name')
 
     // Canonical
@@ -138,7 +144,7 @@ export function PageMeta({
 
     // JSON-LD
     setOrCreateJsonLd('page', structuredData)
-  }, [title, description, robots, canonicalPath, ogImage, structuredData])
+  }, [title, description, robots, canonicalPath, ogImage, twitterImage, structuredData])
 
   return null
 }

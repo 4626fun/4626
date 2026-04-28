@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Droplets, Plus, RefreshCw } from 'lucide-react'
 import { getAddress, isAddress, parseUnits, toHex, type Address, type Hex } from 'viem'
 import { useQuery } from '@tanstack/react-query'
@@ -606,6 +606,7 @@ function LpPositionCard(props: {
 // ─── Main page ──────────────────────────────────────────────────────────────
 
 export function Swap() {
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { address, isConnected, chainId: walletChainId, connector } = useAccount()
   const { data: walletClient } = useWalletClient()
@@ -1150,6 +1151,11 @@ export function Swap() {
   )
   const canonicalSignerGuardError =
     executionMode === 'canonical' && !canonicalSignerGate.ready ? canonicalSignerGate.reason : null
+  const canonicalExecutionSetupRequired =
+    executionMode === 'canonical' && canonicalSignerGate.code === 'execution-setup-required'
+  const handleEnableCanonicalSigning = useCallback(() => {
+    navigate('/waitlist?setup=owner-install')
+  }, [navigate])
   const needsPrivyCanonicalAuth = useMemo(
     () =>
       executionMode === 'canonical' &&
@@ -1874,7 +1880,11 @@ export function Swap() {
               isReady={isReady && !tokenInAmountExceedsBalance}
               busy={busy}
               status={status}
-              error={tokenInBalanceError ?? error ?? canonicalSignerGuardError}
+              error={
+                tokenInBalanceError ??
+                error ??
+                (canonicalExecutionSetupRequired ? null : canonicalSignerGuardError)
+              }
               quoteUpdatedAt={quoteUpdatedAt ? new Date(quoteUpdatedAt).toLocaleTimeString() : null}
               approvalRequired={approvalRequired}
               routeSummary={routeSummary}
@@ -1911,6 +1921,14 @@ export function Swap() {
               swapProviderLabel={swapProviderLabel}
               needsUnverifiedConfirmation={unverifiedSelectionMode}
               unverifiedTokenLabel={unverifiedTokenLabel}
+              primaryActionLabel={canonicalExecutionSetupRequired ? 'Enable 4626 signing' : undefined}
+              onPrimaryAction={canonicalExecutionSetupRequired ? handleEnableCanonicalSigning : undefined}
+              forcePrimaryActionEnabled={canonicalExecutionSetupRequired}
+              primaryActionHint={
+                canonicalExecutionSetupRequired
+                  ? 'Finish one-time account setup before canonical swaps can execute.'
+                  : null
+              }
             />
             )
           ) : (

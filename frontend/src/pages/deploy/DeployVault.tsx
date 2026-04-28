@@ -173,10 +173,27 @@ const BATCHER_PHASE1_FINALIZE_SELECTOR = 'a98ec9d8'
 const BATCHER_PHASE1_FINALIZE_WITH_SALT_SELECTOR = '3bc09a8b'
 const BATCHER_PHASE2_FINALIZE_WITH_PERMIT2_SELECTOR = '0ecf9382'
 const BATCHER_SALT_OVERRIDE_DISABLED_ERROR_SELECTOR = 'e7fdf838'
+const UNIVERSAL_CREATE2_FACTORY = addr('4e59b44847b379578588920cA78FbF26c0B4956C')
 const KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS = new Set<string>([
   '0xe3f9490cfd6bd3d68010405d18bf772c167e7178',
   '0xf941bb68e4f083f3f531cc598d5c08d0b8ffba7e',
 ])
+const CREATE2_DEPLOYER_AUTH_ABI = [
+  {
+    type: 'function',
+    name: 'owner',
+    stateMutability: 'view',
+    inputs: [],
+    outputs: [{ type: 'address' }],
+  },
+  {
+    type: 'function',
+    name: 'authorizedDeployers',
+    stateMutability: 'view',
+    inputs: [{ name: 'deployer', type: 'address' }],
+    outputs: [{ type: 'bool' }],
+  },
+] as const
 // The phased deployment batcher v4+ exposes these immutables as getters. We use this as a
 // compatibility gate to avoid legacy batchers that deploy module-uninitialized vaults.
 const BATCHER_VAULT_CORE_MODULE_SELECTOR = '22c40b75'
@@ -5778,6 +5795,47 @@ function DeployVaultBatcher({
           (c) => String(c.target).toLowerCase() === String(expectedCreate2Deployer).toLowerCase(),
         )
         const phase2ConfigCalls = phase2PostCalls.filter((c) => !phase2Create2Calls.includes(c))
+        if (phase2Create2Calls.length > 0) {
+          let create2Owner: Address | null = null
+          let ownerAuthorized = false
+          try {
+            const [create2OwnerRead, ownerAuthorizedRead] = await Promise.all([
+              publicClient.readContract({
+                address: expectedCreate2Deployer,
+                abi: CREATE2_DEPLOYER_AUTH_ABI,
+                functionName: 'owner',
+              }),
+              publicClient.readContract({
+                address: expectedCreate2Deployer,
+                abi: CREATE2_DEPLOYER_AUTH_ABI,
+                functionName: 'authorizedDeployers',
+                args: [owner],
+              }),
+            ])
+            create2Owner = getAddress(create2OwnerRead as Address)
+            ownerAuthorized = Boolean(ownerAuthorizedRead)
+          } catch (error) {
+            logger.warn('[DeployVault] create2 authorization precheck skipped', {
+              create2Deployer: expectedCreate2Deployer,
+              owner,
+              error: String(error),
+            })
+          }
+          if (create2Owner && !ownerAuthorized && !sameAddress(create2Owner, owner)) {
+            if (sameAddress(create2Owner, UNIVERSAL_CREATE2_FACTORY)) {
+              throw new Error(
+                `Configured create2 deployer ${expectedCreate2Deployer} blocks direct deploy calls from ${shortAddress(owner)}. ` +
+                  `Owner is the universal CREATE2 factory (${shortAddress(create2Owner)}), so authorized deployers cannot be updated. ` +
+                  `Rotate to a batcher wired to a deploy-capable create2 deployer, then retry.`,
+              )
+            }
+            throw new Error(
+              `Configured create2 deployer ${expectedCreate2Deployer} blocks direct deploy calls from ${shortAddress(owner)} ` +
+                `(owner ${shortAddress(create2Owner)}). Authorize ${shortAddress(owner)} via setAuthorizedDeployer, ` +
+                `or rotate to a deploy-capable batcher, then retry.`,
+            )
+          }
+        }
         // Keep phase2 deterministic: finalize-only (deposit + split + ownership transfer).
         // Move CREATE2 + post-config behind a batcher-primary phase3 UserOp.
         const phase2FinalizeCalls = [phase2FinalizeCall]
@@ -6124,6 +6182,8 @@ function DeployVaultBatcher({
                     'ZeroAddress()': 'One of the required addresses is zero. Check creator token, owner, or other parameters.',
                     'InvalidCodeId()': 'Bytecode not registered in the bytecode store. Run the bytecode registration script first.',
                     'DeployFailed()': 'CREATE2 deployment failed (address likely already used for this deployment version). If this is a retry, keep the same version only when the full phase already exists; otherwise bump VITE_DEPLOYMENT_VERSION.',
+                    'NotAuthorizedDeployer()':
+                      'Create2 deployer rejected this caller. The smart wallet is not authorized for direct deploy(bytes32,bytes32,bytes) calls on the configured create2 deployer.',
                     'Phase1Missing()': 'Phase 1 contracts must be deployed before Phase 2. Deploy Phase 1 first.',
                     'Phase1CoreMissing()': 'Phase 1 core must be deployed before finalize. Run deployPhase1Core first.',
                     'Phase1StateMismatch()': 'Phase 1 finalize inputs do not match the stored core deployment state.',
@@ -6158,6 +6218,8 @@ function DeployVaultBatcher({
                       'ZeroAddress()': 'One of the required addresses is zero.',
                       'InvalidCodeId()': 'Bytecode not registered. Run bytecode registration first.',
                       'DeployFailed()': 'CREATE2 deployment failed (address likely already used for this deployment version).',
+                      'NotAuthorizedDeployer()':
+                        'Create2 deployer rejected this caller. The smart wallet is not authorized for direct deploy(bytes32,bytes32,bytes) calls on the configured create2 deployer.',
                       'Phase1Missing()': 'Phase 1 contracts must be deployed first.',
                       'Phase1CoreMissing()': 'Phase 1 core must be deployed before finalize.',
                       'Phase1StateMismatch()': 'Phase 1 finalize inputs do not match the stored core deployment state.',

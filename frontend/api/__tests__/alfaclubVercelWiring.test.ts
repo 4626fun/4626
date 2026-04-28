@@ -22,6 +22,16 @@ describe('alfaclub vigilante — vercel wiring', () => {
     expect(entry?.schedule).toBe('5 12 * * *')
   })
 
+  it('frontend/vercel.json registers a minute cron for /api/v1/alfaclub/chat-bridge-run', async () => {
+    const body = await readFile(new URL('../../vercel.json', import.meta.url), 'utf8')
+    const parsed = JSON.parse(body) as {
+      crons?: Array<{ path?: string; schedule?: string }>
+    }
+    const entry = (parsed.crons ?? []).find((c) => c.path === '/api/v1/alfaclub/chat-bridge-run')
+    expect(entry).toBeDefined()
+    expect(entry?.schedule).toBe('* * * * *')
+  })
+
   it('allows MetaMask SDK websocket connections in the app CSP', async () => {
     const body = await readFile(new URL('../../vercel.json', import.meta.url), 'utf8')
     const parsed = JSON.parse(body) as {
@@ -73,7 +83,7 @@ describe('alfaclub vigilante — vercel wiring', () => {
     ])
   })
 
-  it('v1 route map exposes alfaclub/leaderboard, run, radar, compare, relay-now, chat-token', async () => {
+  it('v1 route map exposes alfaclub/leaderboard, run, radar, compare, relay-now, chat-token, chat-bridge-run', async () => {
     const src = await readFile(
       new URL('../_handlers/_routes.v1.ts', import.meta.url),
       'utf8',
@@ -84,5 +94,6 @@ describe('alfaclub vigilante — vercel wiring', () => {
     expect(src).toContain("'alfaclub/compare'")
     expect(src).toContain("'alfaclub/relay-now'")
     expect(src).toContain("'alfaclub/chat-token'")
+    expect(src).toContain("'alfaclub/chat-bridge-run'")
   })
 })

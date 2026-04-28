@@ -52,10 +52,24 @@ type SwapCardProps = {
   needsUnverifiedConfirmation: boolean
   unverifiedTokenLabel?: string | null
   onResetUnverified: () => void
+  primaryActionLabel?: string
+  onPrimaryAction?: () => void
+  forcePrimaryActionEnabled?: boolean
+  primaryActionHint?: string | null
 }
 
 export function SwapCard(props: SwapCardProps) {
   const showUniswapBranding = props.swapProviderLabel === 'Uniswap'
+  const primaryActionLabel =
+    props.primaryActionLabel ??
+    (props.busy
+      ? 'Preparing…'
+      : props.needsUnverifiedConfirmation
+        ? 'Confirm unverified token to swap'
+        : 'Swap now')
+  const primaryAction = props.onPrimaryAction ?? (props.needsUnverifiedConfirmation ? props.onConfirmUnverified : props.onReviewTrade)
+  const defaultPrimaryDisabled = !props.isReady || !props.isConnected || props.busy !== null
+  const primaryDisabled = props.forcePrimaryActionEnabled ? props.busy !== null : defaultPrimaryDisabled
   return (
     <div className="bv-panel border-0 vault-hover-lift p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
@@ -147,18 +161,14 @@ export function SwapCard(props: SwapCardProps) {
       <Button
         variant="primary"
         size="lg"
-        className="mt-3 h-12 w-full rounded-xl shadow-[0_12px_34px_-14px_rgba(0,82,255,0.9)]"
-        onClick={props.needsUnverifiedConfirmation ? props.onConfirmUnverified : props.onReviewTrade}
+        className="mt-3 h-12 w-full rounded-xl shadow-[0_12px_34px_-14px_rgba(0,82,255,0.9)] disabled:cursor-not-allowed disabled:opacity-60"
+        onClick={primaryAction}
         loading={props.busy === 'pending'}
-        disabled={
-          !props.isReady ||
-          !props.isConnected ||
-          props.busy !== null ||
-          false
-        }
+        disabled={primaryDisabled}
       >
-        {props.busy ? 'Preparing…' : props.needsUnverifiedConfirmation ? 'Confirm unverified token to swap' : 'Swap now'}
+        {primaryActionLabel}
       </Button>
+      {props.primaryActionHint ? <div className="mt-2 text-xs text-vault-subtext">{props.primaryActionHint}</div> : null}
 
       {props.error ? <Alert variant="error" className="mt-3">{props.error}</Alert> : null}
       {props.status && <div className="mt-2 text-xs text-vault-subtext">{props.status}</div>}

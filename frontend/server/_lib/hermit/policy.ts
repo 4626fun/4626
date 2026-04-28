@@ -22,7 +22,7 @@ export function isHermitOwner(address: string): boolean {
 }
 
 export function readHermitAllowedUsers(): Set<string> {
-  const raw = asTrimmed(process.env.ALFACHAT_PINATA_ALLOWED_USERS)
+  const raw = asTrimmed(process.env.HERMIT_ALLOWED_USERS)
   if (!raw) return new Set<string>()
   const out = new Set<string>()
   for (const part of raw.split(',')) {

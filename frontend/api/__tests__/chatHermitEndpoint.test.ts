@@ -47,7 +47,7 @@ describe('POST /api/v1/chat/hermit', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     restoreEnv = applyEnv({
-      ALFACHAT_PINATA_ALLOWED_USERS: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+      HERMIT_ALLOWED_USERS: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     })
     readSessionFromRequestMock.mockReturnValue({
       address: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
@@ -102,7 +102,7 @@ describe('POST /api/v1/chat/hermit', () => {
   it('returns 403 when session user is not allowlisted', async () => {
     restoreEnv?.()
     restoreEnv = applyEnv({
-      ALFACHAT_PINATA_ALLOWED_USERS: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      HERMIT_ALLOWED_USERS: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
     })
     const req = createMockReq({
       method: 'POST',

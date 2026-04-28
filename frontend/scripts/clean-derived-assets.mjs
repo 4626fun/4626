@@ -41,8 +41,8 @@ async function main() {
   await rmIfExists(buildDir)
 
   console.log(
-    `removed ${derivedPublicAssets.length} derived public assets and cleared dist/build.\n` +
-      'Source SVGs, manifest.json, and other checked-in source assets were left intact.',
+    `removed ${derivedPublicAssets.length} legacy/UI-derived public assets and cleared dist/build.\n` +
+      'Canonical SEO brand-kit assets, site.webmanifest, and checked-in source assets were left intact.',
   )
 }
 

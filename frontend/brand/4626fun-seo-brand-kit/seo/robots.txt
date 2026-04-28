@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://4626.fun/sitemap.xml

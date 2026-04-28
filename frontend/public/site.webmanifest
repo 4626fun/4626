@@ -1,0 +1,41 @@
+{
+  "name": "4626.fun - Creator Vaults",
+  "short_name": "4626.fun",
+  "description": "Deposit creator coins into vaults. Earn from trading fees. Everyone earns together.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "lang": "en-US",
+  "display": "standalone",
+  "display_override": ["standalone", "browser"],
+  "categories": ["finance", "productivity"],
+  "background_color": "#F8F0E6",
+  "theme_color": "#DDA01C",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "/favicons/favicon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicons/favicon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicons/maskable-icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/favicons/maskable-icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

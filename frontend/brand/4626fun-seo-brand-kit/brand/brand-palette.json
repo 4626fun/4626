@@ -1,0 +1,24 @@
+{
+  "brand": "4626.fun",
+  "tagline": "Creator Vaults on Base",
+  "url": "https://4626.fun/",
+  "colors": {
+    "gold": "#DDA01C",
+    "gold_highlight": "#FFD45A",
+    "charcoal": "#2B2F30",
+    "silver": "#D5D3CD",
+    "steel": "#8E9498",
+    "electric_blue": "#048EF5",
+    "cyan_glow": "#15D9FF",
+    "warm_ivory": "#F8F0E6",
+    "warm_shadow": "#E6D5C0",
+    "white": "#FFFFFF",
+    "black": "#000000"
+  },
+  "usage_notes": {
+    "primary_logo": "Use the horizontal lockup on wide layouts and the stacked lockup on square/vertical placements.",
+    "favicon": "Use icon-only assets for favicons, PWA icons, and small app badges.",
+    "backgrounds": "Use warm ivory for light brand contexts and near-black charcoal for dark contexts.",
+    "svg_note": "SVG files embed the high-detail PNG assets to preserve metallic and glow effects; they are not hand-vector traced."
+  }
+}

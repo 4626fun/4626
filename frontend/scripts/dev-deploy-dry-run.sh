@@ -81,6 +81,7 @@ ANVIL_LOG_FILE="${TMPDIR:-/tmp}/4626-deploy-dry-run-anvil.log"
 DEV_REDIRECT_LOG_FILE="${TMPDIR:-/tmp}/4626-deploy-dry-run-redirect.log"
 export VITE_ALLOW_CONTRACT_OVERRIDES="${VITE_ALLOW_CONTRACT_OVERRIDES:-0}"
 export ALLOW_API_CONTRACT_OVERRIDES="${ALLOW_API_CONTRACT_OVERRIDES:-0}"
+export VITE_DEV_SERVER_HOST="localhost"
 # Use a dedicated deterministic namespace on local forks so dry-runs do not
 # collide with live Base deployments that share the repo's normal version tag.
 export VITE_DEPLOYMENT_VERSION="${VITE_DEPLOYMENT_VERSION:-v1.9.2-dryrun}"
@@ -196,7 +197,7 @@ fi
 DEV_PORT="${DEPLOY_DRY_RUN_PORT:-5174}"
 ORIG_DEV_PORT="$DEV_PORT"
 if port_in_use "$DEV_PORT"; then
-  for candidate in 5174 5175 5176 5177; do
+  for candidate in 5173 5174; do
     if [[ "$candidate" != "$ORIG_DEV_PORT" ]] && ! port_in_use "$candidate"; then
       DEV_PORT="$candidate"
       break
@@ -205,7 +206,7 @@ if port_in_use "$DEV_PORT"; then
   if [[ "$DEV_PORT" != "$ORIG_DEV_PORT" ]]; then
     echo "Port ${ORIG_DEV_PORT} is busy; using ${DEV_PORT} for deploy dry-run."
   else
-    echo "Port ${ORIG_DEV_PORT} is already in use and no fallback port (5174-5177) is available." >&2
+    echo "Port ${ORIG_DEV_PORT} is already in use and neither localhost:5173 nor localhost:5174 is available." >&2
     exit 1
   fi
 fi
@@ -255,4 +256,4 @@ fi
 
 echo "Starting frontend dev server on port ${DEV_PORT} with BASE_RPC_URL=${BASE_RPC_URL} and VITE_BASE_RPC=${VITE_BASE_RPC}"
 cd "$FRONTEND_DIR"
-exec pnpm exec vite --port "$DEV_PORT"
+exec pnpm exec vite --host localhost --port "$DEV_PORT" --strictPort

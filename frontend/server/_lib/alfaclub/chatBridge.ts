@@ -131,6 +131,20 @@ export type StartAlfaClubChatBridgeResult = {
   stop: () => void
 }
 
+export type RunAlfaClubChatBridgeTickOnceResult =
+  | {
+      ok: true
+      intervalMs: number
+      roomId: string
+      data: AlfaClubChatBridgeTickResult
+    }
+  | {
+      ok: false
+      reason: AlfaClubChatBridgeSkipReason
+      intervalMs: number
+      roomId: string | null
+    }
+
 function parseBool(value: string | undefined): boolean {
   const raw = (value ?? '').trim().toLowerCase()
   return raw === '1' || raw === 'true' || raw === 'yes' || raw === 'on'
@@ -1224,6 +1238,42 @@ async function runBridgeTick(
     processed: batch.processed,
     replied: batch.replied,
     errors: batch.errors,
+  }
+}
+
+export async function runAlfaClubChatBridgeTickOnce(): Promise<RunAlfaClubChatBridgeTickOnceResult> {
+  const flags = readAlfaClubChatBridgeFlags()
+  if (flags.killSwitch) {
+    return {
+      ok: false,
+      reason: 'kill_switch',
+      intervalMs: flags.pollIntervalMs,
+      roomId: flags.roomId,
+    }
+  }
+  if (!flags.enabled) {
+    return {
+      ok: false,
+      reason: 'disabled',
+      intervalMs: flags.pollIntervalMs,
+      roomId: flags.roomId,
+    }
+  }
+  if (!flags.roomId) {
+    return {
+      ok: false,
+      reason: 'env_missing',
+      intervalMs: flags.pollIntervalMs,
+      roomId: flags.roomId,
+    }
+  }
+
+  const data = await runBridgeTick(flags)
+  return {
+    ok: true,
+    intervalMs: flags.pollIntervalMs,
+    roomId: flags.roomId,
+    data,
   }
 }
 
