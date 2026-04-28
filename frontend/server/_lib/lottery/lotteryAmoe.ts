@@ -29,6 +29,43 @@ export const AMOE_MIN_POINTS_PER_SUBMISSION = 100
 export const AMOE_MAX_POINTS_PER_SUBMISSION = 1_000_000
 export const AMOE_POINTS_TO_USD1E6_FACTOR = 10_000
 
+// PR 4 — PLONK ZK path: public-input slot layout.
+//
+// Locked by IAmoePlonkVerifier and verified bit-for-bit in the patch guard
+// (tools/ci/check_amoe_plonk_patch.sh + the on-chain verifier's own
+// checkField loop). Any change here MUST also be reflected in:
+//   * contracts/utilities/lottery/zk/IAmoePlonkVerifier.sol
+//   * contracts/utilities/lottery/zk/AmoePlonkVerifier.sol (banner)
+//   * the circuit (circuits/amoe/amoe_eligibility.circom)
+// otherwise valid proofs will silently fail to verify on-chain.
+export const AMOE_PLONK_PROOF_LEN = 24 as const
+export const AMOE_PLONK_PUB_INPUTS_LEN = 8 as const
+export const AMOE_PLONK_PUB_INPUT_SLOT = {
+  walletAddrCommit: 0,
+  creatorCoinAddr: 1,
+  nonceCommit: 2,
+  epoch: 3,
+  allowlistRoot: 4,
+  pointsBurnedAsUSD: 5,
+  pointsLedgerRoot: 6,
+  pointsBurnNullifier: 7,
+} as const
+
+// BN254 scalar field modulus. Public-input values must be in [0, Q).
+// The router-side AmoePlonkVerifier enforces this with checkField, but we
+// also enforce it here so the relayer fails fast on malformed inputs
+// instead of paying gas for a guaranteed-revert tx.
+export const AMOE_BN254_SCALAR_FIELD_Q =
+  21888242871839275222246405745257275088548364400416034343698204186575808495617n
+
+// Defense-in-depth ceiling on `pointsBurnedAsUSD`. Mirrors
+// LotteryAmoeRouter.MAX_POINTS_AS_USD = 10_000 * 1e6 (= $10,000 in USDC
+// units). The router reverts `PointsValueOutOfRange` if pubInputs[5] is
+// 0 or > this; we mirror it here so the relayer fails fast instead of
+// burning gas on a guaranteed-revert tx. ANY change to the on-chain
+// constant must be reflected here.
+export const AMOE_MAX_POINTS_AS_USD = 10_000n * 1_000_000n
+
 /**
  * Convert a points-burned count to the 1e6 (USDC) USD value expected by
  * `CreatorLotteryManager.processAmoeEntry`. Throws if `points` is not a
@@ -137,6 +174,29 @@ const lotteryAmoeAbi = [
       { name: 'nonce', type: 'bytes32' },
       { name: 'deadline', type: 'uint256' },
       { name: 'signature', type: 'bytes' },
+    ],
+    outputs: [{ name: 'entryId', type: 'uint256' }],
+  },
+  // PR 4 — PLONK ZK path. The router enforces:
+  //   * pubInputs[1] == uint160(creatorCoin)
+  //   * pubInputs[3] == epoch
+  //   * pubInputs[4] == allowlistRootOf[epoch]
+  //   * pubInputs[6] == pointsLedgerRootOf[epoch]
+  //   * pubInputs[7] not previously used (global nullifier)
+  // and then verifies the proof against AmoePlonkVerifier. See
+  // contracts/utilities/lottery/zk/IAmoePlonkVerifier.sol for the public-
+  // input slot layout. The 24-element proof array is the snarkjs PLONK
+  // calldata format (`zkey export solidityverifier`).
+  {
+    type: 'function',
+    name: 'submitAmoeEntryZK',
+    stateMutability: 'nonpayable',
+    inputs: [
+      { name: 'buyer', type: 'address' },
+      { name: 'creatorCoin', type: 'address' },
+      { name: 'epoch', type: 'uint64' },
+      { name: 'proof', type: 'uint256[24]' },
+      { name: 'pubInputs', type: 'uint256[8]' },
     ],
     outputs: [{ name: 'entryId', type: 'uint256' }],
   },
@@ -1029,6 +1089,220 @@ export async function buildProcessAmoeEntryCall(params: {
     callData,
     pointsBurned: params.pointsBurned,
     // Encode bigint as decimal string — JSON.stringify cannot serialize bigint.
+    pointsBurnedAsUSD: pointsBurnedAsUSD.toString(),
+    estimatedWinChancePPM: estimateWinChancePPM(pointsBurnedAsUSD),
+  }
+}
+
+// =====================================================================
+// PR 4 — PLONK ZK entry path
+// =====================================================================
+
+/**
+ * Validate a single PLONK field element. Public-input slots and proof
+ * scalars MUST be in [0, Q) — the router enforces this on-chain via
+ * AmoePlonkVerifier's `checkField` patch (see
+ * docs/security/amoe-plonk-migration.md), but we also enforce it here so
+ * a malformed input fails before the relayer pays gas for a
+ * guaranteed-revert transaction.
+ */
+function assertFieldElement(value: bigint, slotLabel: string): void {
+  if (value < 0n) {
+    throw new AmoeBadRequestError(`${slotLabel}_negative`)
+  }
+  if (value >= AMOE_BN254_SCALAR_FIELD_Q) {
+    throw new AmoeBadRequestError(`${slotLabel}_above_field_q`)
+  }
+}
+
+/**
+ * Coerce an input that may be number | bigint | hex-string | decimal-string
+ * into a bigint. Used because snarkjs emits public-input values as decimal
+ * strings ("1000000") in calldata.txt while many on-chain helpers prefer
+ * 0x-hex.
+ */
+function toBigIntField(value: bigint | number | string, slotLabel: string): bigint {
+  if (typeof value === 'bigint') return value
+  if (typeof value === 'number') {
+    // PLONK proof + public-input scalars routinely exceed 2^53 - 1, so a
+    // JS `number` cannot losslessly represent them. Accepting a non-safe
+    // integer here would silently round the value before BigInt() ever
+    // sees it, then sail through the [0, Q) field check and emit
+    // calldata with the wrong scalar — a deterministic on-chain
+    // InvalidProof. Reject anything outside Number.isSafeInteger so the
+    // upstream prover is forced to hand us a string or bigint.
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new AmoeBadRequestError(`${slotLabel}_not_safe_uint`)
+    }
+    return BigInt(value)
+  }
+  // string
+  const trimmed = value.trim()
+  if (trimmed === '') {
+    throw new AmoeBadRequestError(`${slotLabel}_empty_string`)
+  }
+  try {
+    // BigInt() accepts both 0x-prefixed hex and decimal.
+    return BigInt(trimmed)
+  } catch {
+    throw new AmoeBadRequestError(`${slotLabel}_unparseable`)
+  }
+}
+
+export interface AmoeZKBuildInputs {
+  /** The buyer (already verified via signed message off-chain). */
+  wallet: `0x${string}`
+  /** The creator coin the entry is for. MUST equal pubInputs[1] when masked to uint160. */
+  creatorCoin: `0x${string}`
+  /** Lottery epoch. MUST equal pubInputs[3]. */
+  epoch: bigint | number
+  /**
+   * The 24-element PLONK proof emitted by
+   * `snarkjs zkey export solidityverifier`. Each element is a BN254 field
+   * scalar in [0, Q).
+   */
+  proof: ReadonlyArray<bigint | number | string>
+  /**
+   * The 8 PLONK public inputs in the slot layout pinned by
+   * `AMOE_PLONK_PUB_INPUT_SLOT`. Each element is a BN254 field scalar
+   * in [0, Q).
+   */
+  pubInputs: ReadonlyArray<bigint | number | string>
+  /** Address of the deployed `LotteryAmoeRouter`. */
+  lotteryAmoeRouter: `0x${string}`
+}
+
+export interface AmoeZKBuildResult {
+  /** Target address — the LotteryAmoeRouter. */
+  to: `0x${string}`
+  /** ABI-encoded calldata for `submitAmoeEntryZK`. */
+  callData: `0x${string}`
+  /** USD-1e6 value the proof binds. Pulled from pubInputs[5] for convenience. */
+  pointsBurnedAsUSD: string
+  /** UI win-chance preview, derived from pubInputs[5] (PPM). */
+  estimatedWinChancePPM: number
+}
+
+/**
+ * Build calldata for the PLONK ZK entry path
+ * (`LotteryAmoeRouter.submitAmoeEntryZK`).
+ *
+ * What this function IS:
+ *   * A pure ABI encoder + field-bounds validator. Takes a pre-computed
+ *     proof + public-input array and returns the on-chain calldata.
+ *   * The narrow contract surface that the eventual proof-generation
+ *     server will hand its output to. Decouples "have a proof" from
+ *     "submit a proof."
+ *
+ * What this function ISN'T:
+ *   * A proof generator. Witness construction (Merkle paths over the
+ *     allowlist tree and points-ledger tree, Poseidon commits, snarkjs
+ *     PLONK prove) is downstream and lives outside this module — see
+ *     issue #403 §2 ("Server relayer flip to ZK path") for the open
+ *     scope.
+ *   * A replay guard. The on-chain router maintains the global nullifier
+ *     map (`usedPointsBurnNullifier`); the relayer is expected to also
+ *     skip submission when it sees a previously-used nullifier (also
+ *     tracked in the same issue).
+ *
+ * Trust model: the on-chain `LotteryAmoeRouter` re-checks every input
+ * against `AmoePlonkVerifier` and the per-epoch root maps; this builder
+ * is purely client-side. A malformed proof produced here will be
+ * rejected on-chain.
+ *
+ * @throws AmoeBadRequestError if the proof or pubInputs arrays have the
+ *         wrong length or contain non-canonical encodings.
+ */
+export async function buildAmoeEntryZKCall(
+  inputs: AmoeZKBuildInputs,
+): Promise<AmoeZKBuildResult> {
+  if (!isAddressLike(inputs.wallet)) {
+    throw new AmoeBadRequestError('zk_invalid_wallet')
+  }
+  if (!isAddressLike(inputs.creatorCoin)) {
+    throw new AmoeBadRequestError('zk_invalid_creator_coin')
+  }
+  if (!isAddressLike(inputs.lotteryAmoeRouter)) {
+    throw new AmoeBadRequestError('zk_invalid_router_address')
+  }
+
+  // Length checks first — catches "snarkjs emitted the wrong shape"
+  // before we waste cycles on field-bounds.
+  if (inputs.proof.length !== AMOE_PLONK_PROOF_LEN) {
+    throw new AmoeBadRequestError('zk_proof_wrong_length')
+  }
+  if (inputs.pubInputs.length !== AMOE_PLONK_PUB_INPUTS_LEN) {
+    throw new AmoeBadRequestError('zk_pub_inputs_wrong_length')
+  }
+
+  const epochBig = toBigIntField(inputs.epoch, 'zk_epoch')
+  if (epochBig > 0xffffffffffffffffn) {
+    throw new AmoeBadRequestError('zk_epoch_above_uint64')
+  }
+
+  // Coerce + field-bound every proof scalar.
+  const proofScalars = inputs.proof.map((value, idx) => {
+    const big = toBigIntField(value, `zk_proof_${idx}`)
+    assertFieldElement(big, `zk_proof_${idx}`)
+    return big
+  })
+
+  // Coerce + field-bound every public input. Mirrors the on-chain
+  // checkField loop — if any of these is >= Q the router will reject
+  // the tx with InvalidProof, so we reject locally to avoid burning gas.
+  const pubInputScalars = inputs.pubInputs.map((value, idx) => {
+    const big = toBigIntField(value, `zk_pub_input_${idx}`)
+    assertFieldElement(big, `zk_pub_input_${idx}`)
+    return big
+  })
+
+  // Enforce the calldata→pubInputs binding the router enforces. This is
+  // belt-and-suspenders: getting any of these wrong here would just mean
+  // a guaranteed-revert tx, but failing loudly client-side is cheaper.
+  const creatorCoinAsField = BigInt(inputs.creatorCoin)
+  if (creatorCoinAsField !== pubInputScalars[AMOE_PLONK_PUB_INPUT_SLOT.creatorCoinAddr]) {
+    throw new AmoeBadRequestError('zk_creator_coin_pub_input_mismatch')
+  }
+  if (epochBig !== pubInputScalars[AMOE_PLONK_PUB_INPUT_SLOT.epoch]) {
+    throw new AmoeBadRequestError('zk_epoch_pub_input_mismatch')
+  }
+
+  // Build the typed fixed-length tuples viem expects for `uint256[24]` /
+  // `uint256[8]`. We use intermediate variables so TS keeps the
+  // tuple-arity narrowing.
+  const proofTuple = proofScalars as unknown as readonly [
+    bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint,
+    bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint,
+    bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint,
+  ]
+  const pubTuple = pubInputScalars as unknown as readonly [
+    bigint, bigint, bigint, bigint, bigint, bigint, bigint, bigint,
+  ]
+
+  // Mirror the on-chain `PointsValueOutOfRange` guard
+  // (LotteryAmoeRouter.submitAmoeEntryZK rejects pointsBurnedAsUSD == 0
+  // or > MAX_POINTS_AS_USD). Without this check a buggy/malformed prover
+  // can produce calldata that's perfectly well-formed at the field level
+  // but reverts deterministically on-chain. Catch it client-side so the
+  // builder's stated fail-fast contract actually holds.
+  const pointsBurnedAsUSD = pubInputScalars[AMOE_PLONK_PUB_INPUT_SLOT.pointsBurnedAsUSD]
+  if (pointsBurnedAsUSD === 0n) {
+    throw new AmoeBadRequestError('zk_points_burned_zero')
+  }
+  if (pointsBurnedAsUSD > AMOE_MAX_POINTS_AS_USD) {
+    throw new AmoeBadRequestError('zk_points_burned_above_max')
+  }
+
+  const { encodeFunctionData } = await import('viem')
+  const callData = encodeFunctionData({
+    abi: lotteryAmoeAbi,
+    functionName: 'submitAmoeEntryZK',
+    args: [inputs.wallet, inputs.creatorCoin, epochBig, proofTuple, pubTuple],
+  })
+
+  return {
+    to: inputs.lotteryAmoeRouter,
+    callData,
     pointsBurnedAsUSD: pointsBurnedAsUSD.toString(),
     estimatedWinChancePPM: estimateWinChancePPM(pointsBurnedAsUSD),
   }
