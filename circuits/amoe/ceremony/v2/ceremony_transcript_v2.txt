@@ -1,0 +1,20 @@
+----
+File:        amoe_v2_0001.zkey
+Verified at: 2026-04-28T10:16:31Z
+Name:        testnet-coordinator-sandbox 2026-04-28T09:14Z
+SHA-256:     91e58e6ef559763efabdd667f9142f3487fa68cd43e033f129ca3ace7c7d4099
+Latest hash:
+		d390827a 699e2748 1fd29916 8d46603b
+		532dd980 24c95dfb 71011d01 bf868883
+		5790a7f0 a7d3e6c4 6c30a941 2a257dfe
+		50a57d3b 93b9db22 fc91274a c13b3109
+----
+FINAL BEACON
+Verified at:    2026-04-28T10:18:26Z
+Block height:   947011
+Block hash:     000000000000000000009d1bbada3f6717214263f5790cde44fa4161a029cff2
+Iterations:     2^10
+Output zkey:    amoe_v2_final.zkey
+zkey SHA-256:   7f84d907a857a40b2dd580bfa33d2c91aed4dfc0ab21292cd8423cdf2a3d72c2
+VK   SHA-256:   852a9055381586ea613e4a6646725cbdecb838533406cdb7b5605a80c057d797
+Sol  SHA-256:   15d5648e62d1e57899fafea3573bb67bf0a77dcab29a607cb37393d31fd46a36
