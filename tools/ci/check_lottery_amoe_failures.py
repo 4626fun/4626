@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Compare the LotteryAmoe forge-test failure set against an explicit
+r"""Compare the LotteryAmoe forge-test failure set against an explicit
 allowlist of known-baseline failures.
 
 Why this file exists

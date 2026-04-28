@@ -122,13 +122,15 @@ jobs:
           guard_rc=$?
           set -e
 
-          # Defense in depth: if forge itself errored out (e.g. compilation
-          # broke) but produced an empty/parseable JSON, the guard above
-          # could pass with zero failures. Re-emit verbose output so the
-          # CI logs surface the underlying cause.
-          if [ "$guard_rc" -eq 0 ] && [ "$forge_rc" -ne 0 ]; then
-              echo "forge returned non-zero exit ($forge_rc) despite the allowlist matching."
-              echo "Re-running verbosely to surface the underlying error:"
+          # Defense in depth: forge always exits non-zero whenever any test
+          # fails — including allowlisted baselines — so we cannot use
+          # forge_rc != 0 alone as a tripwire. Only fail the job for
+          # "forge errored AND we got no parseable JSON output", which
+          # actually catches the dangerous case (compilation broke,
+          # toolchain crashed, etc.).
+          if [ "$guard_rc" -eq 0 ] && [ "$forge_rc" -ne 0 ] && [ ! -s /tmp/result.json ]; then
+              echo "forge returned non-zero exit ($forge_rc) and produced no JSON."
+              echo "This usually means compilation broke. Re-running verbosely:"
               forge test --match-contract LotteryAmoe -vv || true
               exit 1
           fi
