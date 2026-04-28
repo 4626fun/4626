@@ -452,7 +452,7 @@ export function WaitlistFlow(props: {
 
   const privy = usePrivy()
   const privyClientStatus = usePrivyClientStatus()
-  const { login } = useLogin({})
+  const { login } = useLogin()
 
   const privyAuthed = privy.authenticated
   const shouldDestroyPrivySession = privyAuthed && privyClientStatus === 'ready'

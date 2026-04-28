@@ -10,16 +10,16 @@
   "miniapp": {
     "version": "1",
     "name": "4626.fun",
-    "homeUrl": "https://v1.4626.fun/",
-    "iconUrl": "https://v1.4626.fun/miniapp-icon.png",
-    "splashImageUrl": "https://v1.4626.fun/miniapp-splash.png",
-    "splashBackgroundColor": "#0052FF",
+    "homeUrl": "https://4626.fun/",
+    "iconUrl": "https://4626.fun/favicons/favicon-512x512.png",
+    "splashImageUrl": "https://4626.fun/social/social-profile-avatar-1080x1080.png",
+    "splashBackgroundColor": "#DDA01C",
     "subtitle": "Creator vaults on Base",
     "description": "Deposit creator coins into vaults. Earn from trading fees. Everyone earns together.",
     "primaryCategory": "finance",
     "tags": ["creator", "vaults", "defi", "base", "trading"],
-    "heroImageUrl": "https://v1.4626.fun/miniapp-hero.png",
-    "screenshotUrls": ["https://v1.4626.fun/screenshot-deploy.png"],
-    "canonicalDomain": "v1.4626.fun"
+    "heroImageUrl": "https://4626.fun/social/og-image-1200x630.png",
+    "screenshotUrls": ["https://4626.fun/social/og-image-1200x630.png"],
+    "canonicalDomain": "4626.fun"
   }
 }

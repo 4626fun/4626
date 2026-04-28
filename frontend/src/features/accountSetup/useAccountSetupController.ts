@@ -148,7 +148,7 @@ function useSafePrivy() {
 
 function useSafeLogin() {
   try {
-    return useLogin({}) as any
+    return useLogin() as any
   } catch {
     return { login: async () => {} } as any
   }

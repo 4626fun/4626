@@ -23,6 +23,8 @@ const publicDir = path.resolve(__dirname, '../public')
 const requiredSocialAssets = [
   'social/og-image-1200x630.png',
   'social/twitter-summary-large-image-1200x675.png',
+  'social/og-image-square-1200x1200.png',
+  'social/social-profile-avatar-1080x1080.png',
 ]
 
 async function main() {

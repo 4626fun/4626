@@ -27,8 +27,8 @@ const BASE_HTML_SHELL_CONFIG = {
   twitterCardImagePath: '/social/twitter-summary-large-image-1200x675.png',
   ogImageWidth: '1200',
   ogImageHeight: '630',
-  miniappHeroPath: '/miniapp-hero.png',
-  miniappSplashPath: '/miniapp-splash.png',
+  miniappHeroPath: '/social/og-image-1200x630.png',
+  miniappSplashPath: '/social/social-profile-avatar-1080x1080.png',
   siteAppName: SHARED_SITE_META.siteAppName,
   siteName: SHARED_SITE_META.siteName,
   siteTitle: SHARED_SITE_META.siteTitle,
@@ -47,7 +47,7 @@ const BASE_HTML_SHELL_CONFIG = {
   talentappProjectVerification:
     '4b7b5b97d054b1a85c4d9635e53e928824fe96da81482cdecc54993bbe539de3df58eba944a698e62a7e6d5bad8b974254b2770354f4f3521c083c74a74af0da',
   miniappLaunchName: '4626.fun',
-  miniappSplashBackgroundColor: '#0052FF',
+  miniappSplashBackgroundColor: '#DDA01C',
 }
 
 export const HTML_SHELL_CONFIG = Object.freeze({

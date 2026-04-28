@@ -7,8 +7,6 @@ Use this when you want to replace the current SEO, social, miniapp, splash, and 
 Editable sources:
 
 - `assets/brand/master/` for design masters and intake files
-- `public/app-splash.svg`
-- `public/app-icon.svg`
 - `public/site.webmanifest`
 - `brand/4626fun-seo-brand-kit/` for lightweight docs, tokens, and asset manifests copied from the canonical SEO brand kit
 
@@ -21,21 +19,8 @@ Committed brand-kit outputs:
 - `public/social/og-image-1200x630.png`
 - `public/social/twitter-summary-large-image-1200x675.png`
 
-UI-derived outputs:
+Generated outputs:
 
-- `public/miniapp-hero.png`
-- `public/miniapp-splash.png`
-- `public/app-icon.png`
-- `public/miniapp-icon.png`
-- `public/icon-192.png`
-- `public/icon-192-maskable.png`
-- `public/icon-512.png`
-- `public/pwa-512.png`
-- `public/pwa-512-maskable.png`
-- `public/screenshot-swap.png`
-- `public/screenshot-explore.png`
-- `public/screenshot-deploy.png`
-- `public/screenshot-portrait.png`
 - `dist/`
 - `build/`
 
@@ -55,8 +40,7 @@ pnpm -C frontend clean:derived-assets
 - Start from the current master in `assets/brand/master/` instead of from `tmp/` or old generated PNGs.
 - `public/social/og-image-1200x630.png` and `public/social/twitter-summary-large-image-1200x675.png` for SEO/social cards.
 - `public/favicons/` and root `public/favicon.*` / `public/site.webmanifest` / `public/browserconfig.xml` for install surfaces.
-- `public/app-splash.svg`
-- `public/app-icon.svg`
+Do not reintroduce root-level generated icon files such as `public/app-icon.png`, `public/miniapp-icon.png`, `public/pwa-512.png`, or `public/miniapp-hero.png`; route new surfaces to the canonical `public/favicons/`, `public/logo/`, and `public/social/` assets instead.
 
 4. Verify static brand-kit assets:
 
@@ -88,7 +72,7 @@ pnpm -C frontend typecheck
 ## What Each Command Does
 
 - `pnpm -C frontend clean:derived-assets`
-  Removes legacy/UI-derived PNG assets from `public/` and clears `dist/` and `build/`.
+  Removes old legacy root PNG assets from `public/` if they ever get regenerated, and clears `dist/` and `build/`.
 - `pnpm -C frontend generate:social-preview`
   Verifies the committed SEO brand-kit social assets under `public/social/`.
 - `pnpm -C frontend generate:brand-icons`
@@ -96,7 +80,7 @@ pnpm -C frontend typecheck
 - `pnpm -C frontend generate:brand-assets:static`
   Runs the two static brand-kit verification steps together.
 - `pnpm -C frontend capture:app-screens`
-  Rebuilds `miniapp-hero.png` and the manifest screenshot PNGs from the running UI.
+  Legacy screenshot helper. Do not use it for canonical SEO, favicon, PWA, or Mini App brand assets.
 
 ## Asset Ownership
 
@@ -104,12 +88,10 @@ pnpm -C frontend typecheck
   Canonical Open Graph card. Curated static brand-kit asset.
 - `public/social/twitter-summary-large-image-1200x675.png`
   Canonical Twitter card. Curated static brand-kit asset.
-- `miniapp-hero.png`
-  Miniapp / Telegram preview. UI-derived screenshot asset.
-- `miniapp-splash.png`
-  Splash asset for miniapp metadata.
-- Manifest screenshots
-  Install-surface screenshots referenced by `public/manifest.json`.
+- Mini App / Farcaster hero
+  Uses `public/social/og-image-1200x630.png`.
+- Mini App splash/avatar
+  Uses `public/social/social-profile-avatar-1080x1080.png`.
 
 ## Safety Notes
 

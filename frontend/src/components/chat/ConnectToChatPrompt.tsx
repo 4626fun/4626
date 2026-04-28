@@ -5,7 +5,7 @@ import { MessageSquare } from 'lucide-react'
 
 function useSafeChatLogin() {
   try {
-    return useLogin({}) as { login: (options?: unknown) => Promise<void> }
+    return useLogin() as { login: (options?: unknown) => Promise<void> }
   } catch {
     return {
       login: async () => {},

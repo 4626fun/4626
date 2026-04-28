@@ -1,4 +1,4 @@
-import vanityWasmUrl from './vanity_salt_grinder.wasm?url'
+const vanityWasmUrl = (import.meta.env.VITE_VANITY_WASM_URL as string | undefined)?.trim() || ''
 
 export type PerVaultVanitySearchInput = {
   create2Deployer: string
@@ -72,6 +72,9 @@ async function loadVanityWasm(): Promise<VanityWasmExports> {
 }
 
 async function instantiateVanityWasm(): Promise<VanityWasmExports> {
+  if (!vanityWasmUrl) {
+    throw new Error('Vanity WASM URL is not configured')
+  }
   const response = await fetch(vanityWasmUrl)
   if (!response.ok) {
     throw new Error(`Failed to load vanity WASM: ${response.status}`)

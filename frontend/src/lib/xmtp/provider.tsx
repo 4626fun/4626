@@ -645,7 +645,7 @@ function showNotification(title: string, body: string) {
   try {
     new Notification(title, {
       body: body.slice(0, 120),
-      icon: '/icon-192.png',
+      icon: '/favicons/favicon-192x192.png',
       tag: 'xmtp-message', // collapse multiple
     })
   } catch { /* ignore */ }

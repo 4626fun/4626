@@ -11,6 +11,7 @@ import { PortalProvider as CdsPortalProvider } from '@coinbase/cds-web/overlays'
 import { CdsToastBridge } from '@/components/ui/Toast'
 import { theme4626 } from '@/theme/cds-theme'
 import { privyAnalyticsFlag } from '@/lib/flags/featureFlags'
+import { resolveDisallowedLoopbackRedirectUrl } from '@/lib/env/host'
 import {
   getPrivyPasswordlessBackoffMs,
   getPrivyPasswordlessFailureBackoffMs,
@@ -348,7 +349,20 @@ function redirectWwwToCanonicalApex(): boolean {
   return true
 }
 
-if (!redirectWwwToCanonicalApex()) {
+function redirectDisallowedLoopbackPort(): boolean {
+  if (!import.meta.env.DEV || typeof window === 'undefined') return false
+  const configuredOrigin = (import.meta.env.VITE_APP_ORIGIN as string | undefined)?.trim()
+  if (!configuredOrigin) return false
+  const target = resolveDisallowedLoopbackRedirectUrl({
+    configuredOrigin,
+    currentHref: window.location.href,
+  })
+  if (!target) return false
+  window.location.replace(target)
+  return true
+}
+
+if (!redirectWwwToCanonicalApex() && !redirectDisallowedLoopbackPort()) {
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       {/* L-19: Top-level error boundary wraps every provider so a render

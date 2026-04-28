@@ -11,13 +11,15 @@ type MarketingToAppBaseUrlResolutionInput = {
   fallbackPublicAppOrigin?: string
 }
 
+type LoopbackRedirectResolutionInput = {
+  configuredOrigin: string
+  currentHref: string
+}
+
 let warnedLoopbackAppOriginOnPublicHost = false
 const ALLOWED_LOOPBACK_PORTS = new Set([
   '5173',
   '5174',
-  '5175',
-  '5176',
-  '5177',
   '3000',
   '4173',
 ])
@@ -47,12 +49,10 @@ export function resolveLoopbackOriginForCurrentWindow(input: LoopbackOriginResol
       return input.configuredOrigin
     }
 
-    const sameHost = configured.hostname === current.hostname
-    if (!sameHost) return input.configuredOrigin
-
     const sameScheme = configured.protocol === current.protocol
+    const sameHost = configured.hostname === current.hostname
     const samePort = configured.port === current.port
-    if (sameScheme && samePort) return input.configuredOrigin
+    if (sameScheme && sameHost && samePort) return input.configuredOrigin
 
     const configuredPortAllowed = isAllowedLoopbackPort(configured.port)
     const currentPortAllowed = isAllowedLoopbackPort(current.port)
@@ -66,6 +66,26 @@ export function resolveLoopbackOriginForCurrentWindow(input: LoopbackOriginResol
     return input.configuredOrigin
   } catch {
     return input.configuredOrigin
+  }
+}
+
+export function resolveDisallowedLoopbackRedirectUrl(input: LoopbackRedirectResolutionInput): string | null {
+  try {
+    const configured = new URL(input.configuredOrigin)
+    const current = new URL(input.currentHref)
+
+    if (!isLoopbackHostname(configured.hostname) || !isLoopbackHostname(current.hostname)) {
+      return null
+    }
+    if (configured.protocol !== current.protocol) return null
+    if (configured.hostname === current.hostname && configured.port === current.port) return null
+    if (isAllowedLoopbackPort(current.port)) return null
+    if (!isAllowedLoopbackPort(configured.port)) return null
+
+    const target = new URL(current.pathname + current.search + current.hash, configured.origin)
+    return target.toString()
+  } catch {
+    return null
   }
 }
 

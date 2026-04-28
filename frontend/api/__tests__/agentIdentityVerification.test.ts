@@ -15,7 +15,7 @@ const canonicalRegistration = {
   name: '4626 Agent',
   description:
     'Agent API for 4626 on Base. Reachable via XMTP messaging, REST API, and MCP tools. Provides vault management, wallet intelligence, ERC-8004 reputation queries, and keeper automation.',
-  image: 'https://4626.fun/app-icon.png',
+  image: 'https://4626.fun/logo/icon-transparent-512.png',
   services: [
     { name: 'web', endpoint: 'https://4626.fun' },
     {

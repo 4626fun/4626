@@ -10,67 +10,32 @@
   "display_override": ["standalone", "browser"],
   "orientation": "portrait",
   "categories": ["finance", "productivity"],
-  "background_color": "#020617",
-  "theme_color": "#0052FF",
+  "background_color": "#F8F0E6",
+  "theme_color": "#DDA01C",
   "icons": [
     {
-      "src": "/miniapp-icon.png",
-      "sizes": "1024x1024",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/pwa-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-512.png",
-      "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-192.png",
+      "src": "/favicons/favicon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/pwa-512-maskable.png",
+      "src": "/favicons/favicon-512x512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "maskable"
+      "purpose": "any"
     },
     {
-      "src": "/icon-192-maskable.png",
+      "src": "/favicons/maskable-icon-192x192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
-    }
-  ],
-  "screenshots": [
-    {
-      "src": "/screenshot-swap.png",
-      "sizes": "1284x2778",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Swap flow"
     },
     {
-      "src": "/screenshot-explore.png",
-      "sizes": "1284x2778",
+      "src": "/favicons/maskable-icon-512x512.png",
+      "sizes": "512x512",
       "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Explore creators"
-    },
-    {
-      "src": "/screenshot-deploy.png",
-      "sizes": "1284x2778",
-      "type": "image/png",
-      "form_factor": "narrow",
-      "label": "Deploy vault flow"
+      "purpose": "maskable"
     }
   ]
 }

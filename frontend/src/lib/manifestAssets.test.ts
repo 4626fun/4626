@@ -12,8 +12,8 @@ const telegramLinkHtmlPath = path.join(frontendRoot, 'telegram-link.html')
 const htmlEntryPaths = [marketingHtmlPath, appHtmlPath]
 const OG_SOCIAL_IMAGE_URL = 'https://4626.fun/social/og-image-1200x630.png'
 const TWITTER_SOCIAL_IMAGE_URL = 'https://4626.fun/social/twitter-summary-large-image-1200x675.png'
-const MINIAPP_HERO_URL = 'https://4626.fun/miniapp-hero.png'
-const MINIAPP_SPLASH_URL = 'https://4626.fun/miniapp-splash.png'
+const MINIAPP_HERO_URL = OG_SOCIAL_IMAGE_URL
+const MINIAPP_SPLASH_URL = 'https://4626.fun/social/social-profile-avatar-1080x1080.png'
 
 describe('public manifest assets', () => {
   it('ships every referenced manifest icon and screenshot in public for local dev', () => {
@@ -84,6 +84,8 @@ describe('public manifest assets', () => {
     expect(appHtml).toContain(`"imageUrl":"${MINIAPP_HERO_URL}"`)
     expect(appHtml).toContain(`"splashImageUrl":"${MINIAPP_SPLASH_URL}"`)
     expect(appHtml).not.toContain('https://app.4626.fun/app-hero.png')
+    expect(appHtml).not.toContain('https://4626.fun/miniapp-hero.png')
+    expect(appHtml).not.toContain('https://4626.fun/miniapp-splash.png')
     expect(appHtml).not.toContain('https://4626.fun/og-image.png')
     expect(appHtml).not.toContain('https://4626.fun/twitter-card.png')
     expect((appHtml.match(/<meta property="og:image"/g) ?? [])).toHaveLength(1)
