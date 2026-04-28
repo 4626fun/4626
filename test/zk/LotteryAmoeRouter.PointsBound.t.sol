@@ -7,7 +7,7 @@ import {
     ILotteryAmoeConsumer,
     IAmoeManager
 } from "contracts/utilities/lottery/zk/LotteryAmoeRouter.sol";
-import {IAmoeGroth16Verifier} from "contracts/utilities/lottery/zk/IAmoeGroth16Verifier.sol";
+import {IAmoePlonkVerifier} from "contracts/utilities/lottery/zk/IAmoePlonkVerifier.sol";
 
 /// @title LotteryAmoeRouter v2 — points-burn binding tests
 /// @notice Exercises the v2-only surface added by PR 4b:
@@ -23,13 +23,11 @@ import {IAmoeGroth16Verifier} from "contracts/utilities/lottery/zk/IAmoeGroth16V
 ///      inputs, on-chain roots, replay guards, and the downstream call to
 ///      `manager.processAmoeEntry`.
 
-contract MockVerifier is IAmoeGroth16Verifier {
+contract MockVerifier is IAmoePlonkVerifier {
     bool public ok = true;
     function setOk(bool v) external { ok = v; }
     function verifyProof(
-        uint256[2] calldata,
-        uint256[2][2] calldata,
-        uint256[2] calldata,
+        uint256[24] calldata,
         uint256[8] calldata
     ) external view returns (bool) { return ok; }
 }
@@ -97,11 +95,15 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
     function _proof()
         internal
         pure
-        returns (uint256[2] memory a, uint256[2][2] memory b, uint256[2] memory c)
+        returns (uint256[24] memory proof)
     {
-        a = [uint256(1), uint256(2)];
-        b = [[uint256(3), uint256(4)], [uint256(5), uint256(6)]];
-        c = [uint256(7), uint256(8)];
+        // Synthetic 24-element PLONK proof. The MockVerifier ignores the
+        // bytes; only its `ok` flag governs accept/reject. Fill with a stable
+        // pattern so any future calldata-binding tests have deterministic
+        // input bytes.
+        for (uint256 i = 0; i < 24; i++) {
+            proof[i] = i + 1;
+        }
     }
 
     function _pubInputs(
@@ -125,8 +127,8 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
     }
 
     function _submit(uint256[8] memory inp) internal returns (uint256) {
-        (uint256[2] memory a, uint256[2][2] memory b, uint256[2] memory c) = _proof();
-        return router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, inp);
+        uint256[24] memory proof = _proof();
+        return router.submitAmoeEntryZK(buyer, coin, EPOCH, proof, inp);
     }
 
     // =====================================================================
@@ -175,9 +177,9 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
         uint256[8] memory inp = _defaults(111, 222);
         inp[3] = uint256(freshEpoch);
         // No setPointsLedgerRoot for freshEpoch -> on-chain root is zero.
-        (uint256[2] memory a, uint256[2][2] memory b, uint256[2] memory c) = _proof();
+        uint256[24] memory proof = _proof();
         vm.expectRevert(LotteryAmoeRouter.PointsLedgerEpochNotPublished.selector);
-        router.submitAmoeEntryZK(buyer, coin, freshEpoch, a, b, c, inp);
+        router.submitAmoeEntryZK(buyer, coin, freshEpoch, proof, inp);
     }
 
     // =====================================================================
@@ -235,9 +237,9 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
 
         uint256[8] memory inp = _pubInputs(999, 333, DEFAULT_POINTS, uint256(DEFAULT_NULLIFIER));
         inp[3] = uint256(nextEpoch);
-        (uint256[2] memory a, uint256[2][2] memory b, uint256[2] memory c) = _proof();
+        uint256[24] memory proof = _proof();
         vm.expectRevert(LotteryAmoeRouter.PointsBurnReplayed.selector);
-        router.submitAmoeEntryZK(buyer, coin, nextEpoch, a, b, c, inp);
+        router.submitAmoeEntryZK(buyer, coin, nextEpoch, proof, inp);
     }
 
     // =====================================================================
@@ -314,7 +316,7 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
 
         uint256[8] memory inp =
             _pubInputs(111, 222, provenPoints, uint256(DEFAULT_NULLIFIER));
-        (uint256[2] memory a, uint256[2][2] memory b, uint256[2] memory c) = _proof();
+        uint256[24] memory proof = _proof();
 
         vm.expectEmit(true, true, true, true);
         emit LotteryAmoeRouter.AmoeEntrySettled(
@@ -323,7 +325,7 @@ contract LotteryAmoeRouterPointsBoundTest is Test {
             provenPoints,
             424242
         );
-        router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, inp);
+        router.submitAmoeEntryZK(buyer, coin, EPOCH, proof, inp);
     }
 
     // =====================================================================

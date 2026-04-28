@@ -7,19 +7,17 @@ import {
     ILotteryAmoeConsumer,
     IAmoeManager
 } from "contracts/utilities/lottery/zk/LotteryAmoeRouter.sol";
-import {IAmoeGroth16Verifier} from "contracts/utilities/lottery/zk/IAmoeGroth16Verifier.sol";
+import {IAmoePlonkVerifier} from "contracts/utilities/lottery/zk/IAmoePlonkVerifier.sol";
 
 /// @notice Stub verifier (v2: 8 public inputs) returning whatever flag it's
 ///         configured with. The router's responsibility is the public-input
 ///         binding + replay guards; cryptographic correctness of the proof is
 ///         tested in the circuit integration tests (`circuits/amoe/test`).
-contract MockVerifier is IAmoeGroth16Verifier {
+contract MockVerifier is IAmoePlonkVerifier {
     bool public ok = true;
     function setOk(bool v) external { ok = v; }
     function verifyProof(
-        uint256[2] calldata,
-        uint256[2][2] calldata,
-        uint256[2] calldata,
+        uint256[24] calldata,
         uint256[8] calldata
     ) external view returns (bool) { return ok; }
 }
@@ -107,11 +105,15 @@ contract LotteryAmoeRouterTest is Test {
     function _proof()
         internal
         pure
-        returns (uint256[2] memory a, uint256[2][2] memory b, uint256[2] memory c)
+        returns (uint256[24] memory proof)
     {
-        a = [uint256(1), uint256(2)];
-        b = [[uint256(3), uint256(4)], [uint256(5), uint256(6)]];
-        c = [uint256(7), uint256(8)];
+        // Synthetic 24-element PLONK proof. The MockVerifier ignores the
+        // bytes; only its `ok` flag governs accept/reject. Fill with a stable
+        // pattern so any future calldata-binding tests have deterministic
+        // input bytes.
+        for (uint256 i = 0; i < 24; i++) {
+            proof[i] = i + 1;
+        }
     }
 
     function _pubInputs(
@@ -143,8 +145,8 @@ contract LotteryAmoeRouterTest is Test {
     // =====================================================================
 
     function test_submitAmoeEntryZK_happyPath() public {
-        (uint256[2] memory a, uint256[2][2] memory b, uint256[2] memory c) = _proof();
-        uint256 id = router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, _defaultPubInputs(111, 222));
+        uint256[24] memory proof = _proof();
+        uint256 id = router.submitAmoeEntryZK(buyer, coin, EPOCH, proof, _defaultPubInputs(111, 222));
         assertEq(id, 1);
         assertTrue(router.usedNonceCommit(bytes32(uint256(222))));
         assertTrue(router.usedWalletCommit(EPOCH, bytes32(uint256(111))));
@@ -152,44 +154,44 @@ contract LotteryAmoeRouterTest is Test {
     }
 
     function test_submitAmoeEntryZK_rejectsRootMismatch() public {
-        (uint256[2] memory a, uint256[2][2] memory b, uint256[2] memory c) = _proof();
+        uint256[24] memory proof = _proof();
         uint256[8] memory inp = _defaultPubInputs(111, 222);
         inp[4] = uint256(bytes32(uint256(0xDEAD))); // wrong allowlist root
         vm.expectRevert(LotteryAmoeRouter.RootMismatch.selector);
-        router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, inp);
+        router.submitAmoeEntryZK(buyer, coin, EPOCH, proof, inp);
     }
 
     function test_submitAmoeEntryZK_rejectsCoinMismatch() public {
-        (uint256[2] memory a, uint256[2][2] memory b, uint256[2] memory c) = _proof();
+        uint256[24] memory proof = _proof();
         uint256[8] memory inp = _defaultPubInputs(111, 222);
         inp[1] = uint256(uint160(address(0xBADC0DE))); // wrong coin
         vm.expectRevert(LotteryAmoeRouter.InvalidProof.selector);
-        router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, inp);
+        router.submitAmoeEntryZK(buyer, coin, EPOCH, proof, inp);
     }
 
     function test_submitAmoeEntryZK_rejectsNonceReplay() public {
-        (uint256[2] memory a, uint256[2][2] memory b, uint256[2] memory c) = _proof();
-        router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, _defaultPubInputs(111, 222));
+        uint256[24] memory proof = _proof();
+        router.submitAmoeEntryZK(buyer, coin, EPOCH, proof, _defaultPubInputs(111, 222));
         // Different walletCommit, different nullifier, but same nonceCommit must still revert.
         uint256[8] memory inp = _pubInputs(999, 222, DEFAULT_POINTS, uint256(keccak256("n2")));
         vm.expectRevert(LotteryAmoeRouter.NonceReplayed.selector);
-        router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, inp);
+        router.submitAmoeEntryZK(buyer, coin, EPOCH, proof, inp);
     }
 
     function test_submitAmoeEntryZK_rejectsTwitterCreditReplay() public {
-        (uint256[2] memory a, uint256[2][2] memory b, uint256[2] memory c) = _proof();
-        router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, _defaultPubInputs(111, 222));
+        uint256[24] memory proof = _proof();
+        router.submitAmoeEntryZK(buyer, coin, EPOCH, proof, _defaultPubInputs(111, 222));
         // Same walletCommit (= same twitter credit), fresh nonce + nullifier, same epoch → revert.
         uint256[8] memory inp = _pubInputs(111, 333, DEFAULT_POINTS, uint256(keccak256("n2")));
         vm.expectRevert(LotteryAmoeRouter.WalletCreditReplayed.selector);
-        router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, inp);
+        router.submitAmoeEntryZK(buyer, coin, EPOCH, proof, inp);
     }
 
     function test_submitAmoeEntryZK_rejectsBadProof() public {
         verifier.setOk(false);
-        (uint256[2] memory a, uint256[2][2] memory b, uint256[2] memory c) = _proof();
+        uint256[24] memory proof = _proof();
         vm.expectRevert(LotteryAmoeRouter.InvalidProof.selector);
-        router.submitAmoeEntryZK(buyer, coin, EPOCH, a, b, c, _defaultPubInputs(111, 222));
+        router.submitAmoeEntryZK(buyer, coin, EPOCH, proof, _defaultPubInputs(111, 222));
     }
 
     // ---------------------------------------------------------------------

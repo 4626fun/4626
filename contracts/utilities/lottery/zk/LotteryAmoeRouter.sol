@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-import {IAmoeGroth16Verifier} from "./IAmoeGroth16Verifier.sol";
+import {IAmoePlonkVerifier} from "./IAmoePlonkVerifier.sol";
 
 /// @title LotteryAmoeRouter (v2)
 /// @notice On-chain settlement layer for 4626.fun AMOE lottery entries.
@@ -67,8 +67,13 @@ contract LotteryAmoeRouter {
     ///         Same KMS-protected scoped key class.
     address public pointsLedgerPublisher;
 
-    /// @notice Groth16 verifier for the AMOE eligibility circuit (v2).
-    IAmoeGroth16Verifier public verifier;
+    /// @notice PLONK verifier for the AMOE eligibility circuit (v2).
+    /// @dev    Migrated from per-circuit Groth16 → PLONK to avoid the
+    ///         per-circuit trusted-setup ceremony. PLONK uses the universal
+    ///         Hermez powersOfTau (pot17) SRS. Public-input layout is
+    ///         unchanged; the on-chain proof shape is now a flat
+    ///         `uint256[24]` instead of `(a,b,c)`. See `IAmoePlonkVerifier`.
+    IAmoePlonkVerifier public verifier;
 
     /// @notice Optional downstream legacy consumer (event broadcaster).
     /// @dev    Receives the truncated `(buyer, coin, epoch, entryId)` shape.
@@ -203,7 +208,7 @@ contract LotteryAmoeRouter {
         if (_owner == address(0) || _allowlistPublisher == address(0)) revert ZeroAddress();
         owner = _owner;
         allowlistPublisher = _allowlistPublisher;
-        verifier = IAmoeGroth16Verifier(_verifier); // may be 0 at deploy; set later
+        verifier = IAmoePlonkVerifier(_verifier); // may be 0 at deploy; set later
         emit OwnerUpdated(address(0), _owner);
         emit AllowlistPublisherUpdated(address(0), _allowlistPublisher);
         emit VerifierUpdated(address(0), _verifier);
@@ -240,7 +245,7 @@ contract LotteryAmoeRouter {
 
     function setVerifier(address _verifier) external onlyOwner {
         emit VerifierUpdated(address(verifier), _verifier);
-        verifier = IAmoeGroth16Verifier(_verifier);
+        verifier = IAmoePlonkVerifier(_verifier);
     }
 
     function setConsumer(address _consumer) external onlyOwner {
@@ -296,7 +301,7 @@ contract LotteryAmoeRouter {
     // ZK entry path (v2)
     // -------------------------------------------------------------------------
 
-    /// @notice Submit an AMOE entry backed by a Groth16 proof.
+    /// @notice Submit an AMOE entry backed by a PLONK proof.
     /// @dev    `pubInputs` MUST be in the same order as the v2 circuit's
     ///         `public [...]` declaration:
     ///           [0] walletAddrCommit
@@ -307,13 +312,13 @@ contract LotteryAmoeRouter {
     ///           [5] pointsBurnedAsUSD       (v2)
     ///           [6] pointsLedgerRoot        (v2)
     ///           [7] pointsBurnNullifier     (v2)
+    ///         `proof` is the flat 24-element PLONK proof emitted by
+    ///         `snarkjs zkey export soliditycalldata`.
     function submitAmoeEntryZK(
         address buyer,
         address creatorCoin,
         uint64 epoch,
-        uint256[2] calldata a,
-        uint256[2][2] calldata b,
-        uint256[2] calldata c,
+        uint256[24] calldata proof,
         uint256[8] calldata pubInputs
     ) external returns (uint256 entryId) {
         if (address(verifier) == address(0)) revert VerifierNotSet();
@@ -351,8 +356,8 @@ contract LotteryAmoeRouter {
         bytes32 pointsBurnNullifier = bytes32(pubInputs[7]);
         if (usedPointsBurnNullifier[pointsBurnNullifier]) revert PointsBurnReplayed();
 
-        // 6. Verify the Groth16 proof.
-        if (!verifier.verifyProof(a, b, c, pubInputs)) revert InvalidProof();
+        // 6. Verify the PLONK proof.
+        if (!verifier.verifyProof(proof, pubInputs)) revert InvalidProof();
 
         // 7. Effects.
         usedNonceCommit[nonceCommit] = true;
