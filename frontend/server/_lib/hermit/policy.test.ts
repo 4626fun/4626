@@ -23,7 +23,7 @@ vi.mock('../wallet/alfaclub.js', () => ({
   getAlfaClubHoldings: getAlfaClubHoldingsMock,
 }))
 
-import { _resetHermitRoomOwnerCacheForTests, isHermitRoomAllowedForOwner } from './policy'
+import { _resetHermitRoomOwnerCacheForTests, isHermitRoomAllowedForOwner, resolveHermitGatewayUrl } from './policy'
 
 describe('isHermitRoomAllowedForOwner', () => {
   const originalEnv = { ...process.env }
@@ -85,5 +85,26 @@ describe('isHermitRoomAllowedForOwner', () => {
     })
 
     expect(allowed).toBe(false)
+  })
+})
+
+describe('resolveHermitGatewayUrl', () => {
+  const originalEnv = { ...process.env }
+
+  beforeEach(() => {
+    process.env = { ...originalEnv }
+    delete process.env.HERMIT_PINATA_GATEWAY_BASE
+  })
+
+  it('builds clean branded IPFS URLs from the gateway base', () => {
+    process.env.HERMIT_PINATA_GATEWAY_BASE = 'https://4626.fun'
+
+    expect(resolveHermitGatewayUrl('bafycat')).toBe('https://4626.fun/ipfs/bafycat')
+  })
+
+  it('does not duplicate /ipfs when the configured base already includes it', () => {
+    process.env.HERMIT_PINATA_GATEWAY_BASE = 'https://4626.fun/ipfs/'
+
+    expect(resolveHermitGatewayUrl('bafycat')).toBe('https://4626.fun/ipfs/bafycat')
   })
 })

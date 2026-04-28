@@ -23,7 +23,7 @@ const DEFAULT_MEMES: HermitMeme[] = [
   },
   {
     id: 'catlaugh-1',
-    url: 'https://lime-rear-booby-542.mypinata.cloud/ipfs/bafybeiaj73ww23xkpuvrptykhu5ukcykd6w3fe5juc3zl6elzfz7tbj2jq?filename=catlaugh.gif',
+    url: 'https://4626.fun/ipfs/bafybeiaj73ww23xkpuvrptykhu5ukcykd6w3fe5juc3zl6elzfz7tbj2jq?filename=catlaugh.gif',
     caption: 'cat laugh from the Hermit cave.',
     tags: ['laugh', 'cat', 'meme'],
   },

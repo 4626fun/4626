@@ -47,6 +47,30 @@ describe('alfaclub vigilante — vercel wiring', () => {
 
     expect(csp).toContain('img-src')
     expect(csp).toContain('https://*.mypinata.cloud')
+    expect(csp).toContain('https://4626.fun')
+    expect(csp).toContain('https://pinata.4626.fun')
+  })
+
+  it('rewrites branded IPFS paths on 4626.fun through the Pinata gateway', async () => {
+    const body = await readFile(new URL('../../vercel.json', import.meta.url), 'utf8')
+    const parsed = JSON.parse(body) as {
+      routes?: Array<{
+        src?: string
+        status?: number
+        dest?: string
+        has?: Array<{ type?: string; value?: string }>
+      }>
+    }
+    const route = (parsed.routes ?? []).find((entry) => entry.src === '/ipfs/(.*)')
+
+    expect(route?.status).toBeUndefined()
+    expect(route?.dest).toBe('https://pinata.4626.fun/ipfs/$1')
+    expect(route?.has).toEqual([
+      {
+        type: 'host',
+        value: '4626.fun',
+      },
+    ])
   })
 
   it('v1 route map exposes alfaclub/leaderboard, run, radar, compare, relay-now, chat-token', async () => {

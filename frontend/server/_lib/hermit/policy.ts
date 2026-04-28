@@ -113,5 +113,7 @@ export function resolveHermitGatewayUrl(cid: string): string | null {
   if (!trimmedCid) return null
   const base = asTrimmed(process.env.HERMIT_PINATA_GATEWAY_BASE)
   if (!base) return null
-  return `${base.replace(/\/+$/, '')}/ipfs/${trimmedCid}`
+  const normalizedBase = base.replace(/\/+$/, '')
+  const pathPrefix = normalizedBase.endsWith('/ipfs') ? normalizedBase : `${normalizedBase}/ipfs`
+  return `${pathPrefix}/${trimmedCid}`
 }
