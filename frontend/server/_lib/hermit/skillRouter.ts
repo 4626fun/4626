@@ -99,7 +99,7 @@ function inferPublicMediaAttachment(url: string): HermitMediaAttachment | null {
 
   const filename = hintedFilename || pathname.split('/').filter(Boolean).pop()
   const mediaName = filename || pathname
-  if (hostname === 'media.tenor.com' || mediaName.endsWith('.gif')) {
+  if (hostname === 'media.tenor.com' && mediaName.endsWith('.gif')) {
     return { url: trimmed, type: 'tenor-gif' }
   }
   if (mediaName.endsWith('.jpg') || mediaName.endsWith('.jpeg')) {

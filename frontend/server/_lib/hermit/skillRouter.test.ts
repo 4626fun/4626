@@ -86,12 +86,8 @@ describe('executeHermitCommand', () => {
 
     expect(result.kind).toBe('gmeow')
     expect(result.reply).toContain('cat laugh')
-    expect(result.mediaAttachments).toEqual([
-      {
-        url: 'https://4626.fun/ipfs/bafybeiaj73ww23xkpuvrptykhu5ukcykd6w3fe5juc3zl6elzfz7tbj2jq?filename=catlaugh.gif',
-        type: 'tenor-gif',
-      },
-    ])
+    expect(result.reply).toContain('https://4626.fun/ipfs/')
+    expect(result.mediaAttachments).toBeUndefined()
   })
 
   it('returns the bundled cat laugh meme for /gmeow laugh', async () => {
@@ -102,12 +98,8 @@ describe('executeHermitCommand', () => {
 
     expect(result.kind).toBe('gmeow')
     expect(result.reply).toContain('cat laugh')
-    expect(result.mediaAttachments).toEqual([
-      {
-        url: 'https://4626.fun/ipfs/bafybeiaj73ww23xkpuvrptykhu5ukcykd6w3fe5juc3zl6elzfz7tbj2jq?filename=catlaugh.gif',
-        type: 'tenor-gif',
-      },
-    ])
+    expect(result.reply).toContain('https://4626.fun/ipfs/')
+    expect(result.mediaAttachments).toBeUndefined()
   })
 
   it('uses pinata provider for /gmeow when pinata draft env is configured', async () => {
