@@ -53,28 +53,7 @@ describe('executeHermitCommand', () => {
     ).rejects.toThrow('Hermit Pinata path unavailable')
   })
 
-  it('uses pinata provider for /hermitimg and returns image prompt text', async () => {
-    restoreEnv = applyEnv({
-      HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
-      HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
-    })
-    fetchMock.mockResolvedValueOnce({
-      ok: true,
-      json: async () => ({ text: 'Akita + black cat cyberpunk meme frame' }),
-    } as Response)
-
-    const result = await executeHermitCommand({
-      commandText: '/hermitimg akita black cat',
-      senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-    })
-
-    expect(result.provider).toBe('pinata')
-    expect(result.kind).toBe('hermitimg')
-    expect(result.imagePrompt).toBe('Akita + black cat cyberpunk meme frame')
-    expect(result.reply).toBe('Akita + black cat cyberpunk meme frame')
-  })
-
-  it('uses /meme as the simple alias for the Pinata image prompt path', async () => {
+  it('uses /meme for the Pinata image prompt path', async () => {
     restoreEnv = applyEnv({
       HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
       HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
@@ -90,7 +69,7 @@ describe('executeHermitCommand', () => {
     })
 
     expect(result.provider).toBe('pinata')
-    expect(result.kind).toBe('hermitimg')
+    expect(result.kind).toBe('meme')
     expect(result.imagePrompt).toBe('Akita cat meme prompt')
   })
 
@@ -122,7 +101,7 @@ describe('executeHermitCommand', () => {
     expect(result.reply).toContain('#4626 #AlfaClub')
   })
 
-  it('formats structured JSON from pinata for /hermitimg', async () => {
+  it('formats structured JSON from pinata for /meme', async () => {
     restoreEnv = applyEnv({
       HERMIT_PINATA_CHAT_ENDPOINT: 'https://pinata.example/chat',
       HERMIT_PINATA_BEARER_TOKEN: 'token-abc',
@@ -139,17 +118,17 @@ describe('executeHermitCommand', () => {
     } as Response)
 
     const result = await executeHermitCommand({
-      commandText: '/hermitimg noir akita',
+      commandText: '/meme noir akita',
       senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
     })
 
-    expect(result.kind).toBe('hermitimg')
+    expect(result.kind).toBe('meme')
     expect(result.imagePrompt).toBe('Noir akita in a neon trading pit')
     expect(result.reply).toContain('Prompt: Noir akita in a neon trading pit')
     expect(result.reply).toContain('Caption: Tape turns green, tails up.')
   })
 
-  it('rejects /hermitimg when pinata path is not configured', async () => {
+  it('rejects /meme when pinata path is not configured', async () => {
     restoreEnv = applyEnv({
       HERMIT_PINATA_CHAT_ENDPOINT: undefined,
       HERMIT_PINATA_BEARER_TOKEN: undefined,
@@ -157,9 +136,10 @@ describe('executeHermitCommand', () => {
 
     await expect(
       executeHermitCommand({
-        commandText: '/hermitimg akita black cat',
+        commandText: '/meme akita black cat',
         senderAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
       }),
-    ).rejects.toThrow('Hermit Pinata image path unavailable')
+    ).rejects.toThrow('Hermit meme path unavailable')
   })
+
 })
