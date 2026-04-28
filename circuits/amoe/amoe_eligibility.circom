@@ -1,43 +1,60 @@
 // SPDX-License-Identifier: MIT
 pragma circom 2.1.6;
 
-// AMOE Eligibility Circuit (4626.fun)
+// AMOE Eligibility Circuit v2 (4626.fun)
 // =============================================================================
 // Proves, without revealing private inputs, that a wallet is permitted to
-// submit a no-purchase lottery entry for a given creator coin in a given epoch.
+// submit a no-purchase lottery entry for a given creator coin in a given epoch
+// AND that the entry is backed by a specific, non-replayable points-burn row
+// in the off-chain ledger snapshotted into `pointsLedgerRoot`.
 //
-// This is the ZK replacement for the off-chain ECDSA / EIP-1271 attestation
-// performed today in `frontend/server/_lib/lottery/lotteryAmoe.ts`. The trust
-// assumption moves from "trust the server's signed nonce" to "trust the daily
-// allowlist Merkle root that the server publishes on-chain" + "trust that a
-// nonce commitment exists for this wallet".
+// v2 closes the trust gap that allowed `authorizedAmoeRelayer` to assert an
+// arbitrary `pointsBurnedAsUSD` for any allowlisted wallet. v1 only proved
+// eligibility (allowlist + nonce); v2 also proves the value the lottery
+// manager will use to compute win-chance.
 //
 // Public inputs (in this exact order — must match Groth16Verifier.IC indices):
-//   0  walletAddrCommit   Poseidon(wallet, twitterCreditNullifier)
-//   1  creatorCoinAddr    address of the creator coin (uint160)
-//   2  nonceCommit        Poseidon(nonce, wallet, creatorCoin)
-//   3  epoch              current AMOE epoch id (uint64)
-//   4  allowlistRoot      Merkle root of the daily wallet allowlist
+//   0  walletAddrCommit       Poseidon(wallet, twitterCreditNullifier)
+//   1  creatorCoinAddr        address of the creator coin (uint160)
+//   2  nonceCommit            Poseidon(nonce, wallet, creatorCoin)
+//   3  epoch                  current AMOE epoch id (uint64)
+//   4  allowlistRoot          Merkle root of the daily wallet allowlist
+//   5  pointsBurnedAsUSD      uint64 — value bound into the proof (NEW in v2)
+//   6  pointsLedgerRoot       Merkle root of the points-burn ledger (NEW in v2)
+//   7  pointsBurnNullifier    Poseidon(signupIdHash, spendRefIdHash,
+//                                      pointsBurnedAsUSD, epoch) (NEW in v2)
 //
 // Private inputs (witness only):
-//   wallet                 EOA / smart-wallet address (uint160)
-//   nonce                  server-issued bytes32 nonce
-//   twitterCreditNullifier Poseidon(twitterUserId, epoch, secretSalt) — proves
-//                          AMOE_DAILY_TWITTER_CREDIT was earned without leaking
-//                          the underlying twitter id
-//   pathElements[DEPTH]    sibling hashes for the allowlist Merkle proof
-//   pathIndices[DEPTH]     left/right bits for the Merkle proof
+//   wallet                    EOA / smart-wallet address (uint160)
+//   nonce                     server-issued bytes32 nonce
+//   twitterCreditNullifier    Poseidon(twitterUserId, epoch, secretSalt)
+//   pathElements[DEPTH]       allowlist Merkle siblings
+//   pathIndices[DEPTH]        allowlist Merkle left/right bits
+//   signupIdHash              Poseidon(signup_id_uuid_bytes) — stable identity
+//   spendRefIdHash            Poseidon(source_id_uuid_bytes) — unique points-row id
+//   pointsLedgerPathElements[DEPTH]
+//   pointsLedgerPathIndices[DEPTH]
 //
 // Notes
 // -----
-// - Hash function is Poseidon (BN254 native, ~150 constraints per hash) — this
-//   keeps the generated Groth16 verifier small. Keccak inside the circuit would
-//   blow up R1CS size by ~30x.
-// - DEPTH = 20 supports up to 2^20 = ~1M wallets per daily snapshot. Plenty for
-//   AMOE volumes; bump only if the snapshot grows past that.
-// - The server still publishes `allowlistRoot` on-chain once per epoch via
-//   `LotteryAmoeRouter.setAllowlistRoot(epoch, root)` (admin-only). The circuit
-//   never sees the raw allowlist.
+// - Identity is `signupIdHash` (NOT wallet). Wallets collapse to one profile
+//   via the off-chain merge logic; signup_id is the only stable handle for a
+//   user. The points-burn nullifier is therefore keyed off (signupIdHash,
+//   spendRefIdHash, pointsBurnedAsUSD, epoch). One spend row → one nullifier.
+// - The ledger leaf BINDS walletAddrCommit (already a public input) so a proof
+//   minted from a different wallet than the one active at burn time fails
+//   verification. This prevents profile-merge race conditions from being
+//   exploitable on-chain; the off-chain pipeline additionally enforces a
+//   ~24h `profile_merge_frozen_until` window during proof submission.
+// - Replay guard for `pointsBurnNullifier` is GLOBAL on-chain
+//   (`mapping(bytes32 => bool) usedPointsBurnNullifier`). Once a spend row is
+//   consumed by an AMOE entry, it can never back another entry, in any epoch.
+// - DEPTH = 20 supports up to 2^20 = ~1M entries per snapshot for both the
+//   allowlist and points-burn ledger trees. Adequate for AMOE volumes.
+// - Constraint cost: roughly 2× v1 (one extra Poseidon-5 leaf hash, one extra
+//   20-deep Poseidon-2 Merkle path, one Poseidon-4 nullifier hash, one
+//   uint64 range check). Stays well under 2^14 = 16,384 constraints, so the
+//   existing `pot14_final.ptau` covers v2 without a larger ptau download.
 // =============================================================================
 
 include "circomlib/circuits/poseidon.circom";
@@ -90,7 +107,7 @@ template MerkleProof(DEPTH) {
 }
 
 // -----------------------------------------------------------------------------
-// AmoeEligibility — top-level circuit
+// AmoeEligibility v2 — top-level circuit
 // -----------------------------------------------------------------------------
 template AmoeEligibility(DEPTH) {
     // ---- Public inputs ----
@@ -99,13 +116,22 @@ template AmoeEligibility(DEPTH) {
     signal input nonceCommit;
     signal input epoch;
     signal input allowlistRoot;
+    signal input pointsBurnedAsUSD;        // v2
+    signal input pointsLedgerRoot;         // v2
+    signal input pointsBurnNullifier;      // v2
 
-    // ---- Private inputs ----
+    // ---- Private inputs (allowlist eligibility) ----
     signal input wallet;
     signal input nonce;
     signal input twitterCreditNullifier;
     signal input pathElements[DEPTH];
     signal input pathIndices[DEPTH];
+
+    // ---- Private inputs (points-burn ledger, v2) ----
+    signal input signupIdHash;
+    signal input spendRefIdHash;
+    signal input pointsLedgerPathElements[DEPTH];
+    signal input pointsLedgerPathIndices[DEPTH];
 
     // -- 1. Bind wallet + twitter credit nullifier into the public commitment.
     component wcHash = Poseidon(2);
@@ -123,8 +149,7 @@ template AmoeEligibility(DEPTH) {
     nHash.inputs[2] <== creatorCoinAddr;
     nonceCommit === nHash.out;
 
-    // -- 3. Range-check creatorCoinAddr fits in 160 bits. Prevents the prover
-    //       from passing a junk field element that collides with a real addr.
+    // -- 3. Range-check creatorCoinAddr fits in 160 bits.
     component addrBits = Num2Bits(160);
     addrBits.in <== creatorCoinAddr;
 
@@ -145,8 +170,63 @@ template AmoeEligibility(DEPTH) {
         merkle.pathElements[i] <== pathElements[i];
         merkle.pathIndices[i]  <== pathIndices[i];
     }
+
+    // =========================================================================
+    // v2 — points-burn binding
+    // =========================================================================
+
+    // -- 6. Range-check pointsBurnedAsUSD fits in 64 bits. AMOE caps the
+    //       value at 1M points × 10_000 = 10^10 1e6 units = $10K, which is
+    //       comfortably inside uint64 (~1.8e19). On-chain, the router
+    //       additionally asserts pointsBurnedAsUSD <= MAX_POINTS_AS_USD as
+    //       defense in depth, but enforcing a clean uint64 here prevents the
+    //       prover from passing field-element junk that aliases small values.
+    component pointsBits = Num2Bits(64);
+    pointsBits.in <== pointsBurnedAsUSD;
+
+    // -- 7. Bind the points-burn nullifier to (signupIdHash, spendRefIdHash,
+    //       pointsBurnedAsUSD, epoch). The nullifier is keyed off the stable
+    //       signup_id (NOT wallet) and the unique points-row source_id, both
+    //       of which the off-chain pipeline already maintains.
+    component nullHash = Poseidon(4);
+    nullHash.inputs[0] <== signupIdHash;
+    nullHash.inputs[1] <== spendRefIdHash;
+    nullHash.inputs[2] <== pointsBurnedAsUSD;
+    nullHash.inputs[3] <== epoch;
+    pointsBurnNullifier === nullHash.out;
+
+    // -- 8. Points-burn ledger Merkle inclusion. Leaf shape:
+    //       Poseidon5(signupIdHash, spendRefIdHash, pointsBurnedAsUSD, epoch,
+    //                 walletAddrCommit)
+    //       Including walletAddrCommit binds *which wallet was active at burn
+    //       time* to the proof. A profile merge that re-keys wallets to a
+    //       different signup_id mid-flight produces a leaf the prover cannot
+    //       reproduce — the proof fails closed.
+    component ledgerLeaf = Poseidon(5);
+    ledgerLeaf.inputs[0] <== signupIdHash;
+    ledgerLeaf.inputs[1] <== spendRefIdHash;
+    ledgerLeaf.inputs[2] <== pointsBurnedAsUSD;
+    ledgerLeaf.inputs[3] <== epoch;
+    ledgerLeaf.inputs[4] <== walletAddrCommit;
+
+    component pointsMerkle = MerkleProof(DEPTH);
+    pointsMerkle.leaf <== ledgerLeaf.out;
+    pointsMerkle.root <== pointsLedgerRoot;
+    for (var i = 0; i < DEPTH; i++) {
+        pointsMerkle.pathElements[i] <== pointsLedgerPathElements[i];
+        pointsMerkle.pathIndices[i]  <== pointsLedgerPathIndices[i];
+    }
 }
 
 component main {
-    public [walletAddrCommit, creatorCoinAddr, nonceCommit, epoch, allowlistRoot]
+    public [
+        walletAddrCommit,
+        creatorCoinAddr,
+        nonceCommit,
+        epoch,
+        allowlistRoot,
+        pointsBurnedAsUSD,
+        pointsLedgerRoot,
+        pointsBurnNullifier
+    ]
 } = AmoeEligibility(20);

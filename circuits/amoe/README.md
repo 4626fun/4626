@@ -1,16 +1,31 @@
-# AMOE Eligibility Circuit
+# AMOE Eligibility Circuit (v2)
 
 Circom 2 circuit that powers `LotteryAmoeRouter.submitAmoeEntryZK` in
 `contracts/utilities/lottery/zk`. See `amoe_eligibility.circom` for the full
 spec; the short version:
 
-| Public input        | Meaning                                                    |
-|---------------------|------------------------------------------------------------|
-| `walletAddrCommit`  | `Poseidon(wallet, twitterCreditNullifier)` — links the entry to a wallet **and** to an unspent Twitter check-in credit, without leaking either |
-| `creatorCoinAddr`   | Creator coin (uint160)                                     |
-| `nonceCommit`       | `Poseidon(nonce, wallet, creatorCoin)` — server-issued     |
-| `epoch`             | AMOE epoch id (uint64)                                     |
-| `allowlistRoot`     | Daily allowlist Merkle root (Poseidon)                     |
+| #   | Public input          | Meaning                                                    |
+|-----|-----------------------|------------------------------------------------------------|
+| 0   | `walletAddrCommit`    | `Poseidon(wallet, twitterCreditNullifier)` — links the entry to a wallet **and** to an unspent Twitter check-in credit, without leaking either |
+| 1   | `creatorCoinAddr`     | Creator coin (uint160)                                     |
+| 2   | `nonceCommit`         | `Poseidon(nonce, wallet, creatorCoin)` — server-issued     |
+| 3   | `epoch`               | AMOE epoch id (uint64)                                     |
+| 4   | `allowlistRoot`       | Daily allowlist Merkle root (Poseidon)                     |
+| 5   | `pointsBurnedAsUSD`   | uint64 — USDC-1e6 value of the AMOE points burned for this entry. Cryptographically bound; the contract no longer trusts the relayer's claim. |
+| 6   | `pointsLedgerRoot`    | Daily Merkle root of the points-burn ledger (Poseidon). Publisher-set, one-shot per epoch. |
+| 7   | `pointsBurnNullifier` | `Poseidon4(signupIdHash, spendRefIdHash, pointsBurnedAsUSD, epoch)` — globally replay-guarded; one points-row → one entry, ever. |
+
+v2 vs v1 changes are documented in `CEREMONY.md § Circuit versions`. v2
+closes the trust gap that allowed `authorizedAmoeRelayer` to assert an
+arbitrary `pointsBurnedAsUSD` for any allowlisted wallet.
+
+Identity inside the circuit is `signupIdHash` — the off-chain stable identity
+from `frontend/server/_lib/lottery/lotteryAmoe.ts`, NOT the wallet address.
+Wallets collapse to one profile via merge logic; signup_id is the only stable
+handle. The points-ledger leaf shape is
+`Poseidon5(signupIdHash, spendRefIdHash, pointsBurnedAsUSD, epoch, walletAddrCommit)`,
+which binds *which wallet was active at burn time* to the proof so a profile
+merge mid-flight produces a leaf the prover cannot reproduce.
 
 ## Build
 
