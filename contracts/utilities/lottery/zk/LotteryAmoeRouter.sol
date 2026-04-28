@@ -7,9 +7,16 @@ import {IAmoePlonkVerifier} from "./IAmoePlonkVerifier.sol";
 /// @notice On-chain settlement layer for 4626.fun AMOE lottery entries.
 ///         v2 closes the trust gap that allowed `authorizedAmoeRelayer` to
 ///         assert an arbitrary `pointsBurnedAsUSD` for any allowlisted
-///         wallet — the value is now bound into the Groth16 proof, replay-
+///         wallet — the value is now bound into a PLONK proof, replay-
 ///         guarded by a global nullifier mapping, and anchored by a daily
 ///         Merkle root of the off-chain points-burn ledger.
+///
+///         The verifier was migrated from Groth16 v2 to PLONK in PR #409
+///         (no trusted setup needed beyond the universal Powers-of-Tau
+///         transcript). See `docs/security/amoe-plonk-migration.md` for
+///         the full rationale, gas/bytecode tradeoffs, and the
+///         security divergence from stock snarkjs output (explicit
+///         `checkField` on all 8 public inputs).
 ///
 ///         When PR 4b is rolled out, `CreatorLotteryManager.authorizedAmoeRelayer`
 ///         is set to this router's address so `processAmoeEntry` is only ever
@@ -17,7 +24,7 @@ import {IAmoePlonkVerifier} from "./IAmoePlonkVerifier.sol";
 ///
 /// @dev    Two entry paths:
 ///           submitAmoeEntry      v1 ECDSA / EIP-1271 (compat path)
-///           submitAmoeEntryZK    v2 Groth16-backed (audit-grade path)
+///           submitAmoeEntryZK    v2 PLONK-backed   (audit-grade path)
 ///
 ///         Both produce the same `AmoeEntryRecorded` event so downstream
 ///         consumers don't need to branch.
@@ -36,7 +43,7 @@ interface ILotteryAmoeConsumer {
 }
 
 /// @notice Manager-facing fan-out interface. The router calls this with the
-///         `pointsBurnedAsUSD` value taken straight from the Groth16 public
+///         `pointsBurnedAsUSD` value taken straight from the PLONK public
 ///         inputs, so the manager no longer trusts an off-chain relayer's
 ///         claim about points accounting.
 ///
@@ -136,7 +143,7 @@ contract LotteryAmoeRouter {
 
     /// @notice Emitted when the router successfully fans out a ZK entry to the
     ///         lottery manager. `pointsBurnedAsUSD` is the value bound into
-    ///         the Groth16 proof; `managerEntryId` is the VRF id returned by
+    ///         the PLONK proof; `managerEntryId` is the VRF id returned by
     ///         the manager (0 if the manager silently skipped).
     event AmoeEntrySettled(
         uint256 indexed entryId,
