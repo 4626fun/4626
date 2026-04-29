@@ -24,6 +24,7 @@ const v1RouteLoaders: ApiRouteLoaders = {
   'lottery/amoe/nonce': () => import('./v1/lottery/_amoeNonce.js'),
   'lottery/amoe/credits': () => import('./v1/lottery/_amoeCredits.js'),
   'lottery/amoe/submit': () => import('./v1/lottery/_amoeSubmit.js'),
+  'lottery/amoe/submit-zk': () => import('./v1/lottery/_amoeSubmitZk.js'),
   'lottery/amoe/twitter-checkin': () => import('./v1/lottery/_amoeTwitterCheckin.js'),
   'gauge/epoch': () => import('./v1/gauge/_epoch.js'),
   'gauge/vaults': () => import('./v1/gauge/_vaults.js'),

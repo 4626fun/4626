@@ -691,7 +691,7 @@ export async function consumeAmoeCreditsForEntry(params: {
   }
 }
 
-type AmoeMessageFields = {
+export type AmoeMessageFields = {
   wallet: `0x${string}`
   creatorCoin: `0x${string}`
   nonce: `0x${string}`
@@ -715,7 +715,7 @@ export function buildAmoeEntryMessage(fields: AmoeMessageFields): string {
   ].join('\n')
 }
 
-function parseAmoeEntryMessage(message: string): AmoeMessageFields | null {
+export function parseAmoeEntryMessage(message: string): AmoeMessageFields | null {
   if (typeof message !== 'string' || message.trim().length === 0) return null
   const lines = message.split('\n').map((line) => line.trim())
   if (lines[0] !== AMOE_MESSAGE_TITLE) return null
@@ -789,6 +789,24 @@ function encodeSignatureWrapper(ownerIndex: number, signatureData: `0x${string}`
     ],
     [{ ownerIndex: BigInt(ownerIndex), signatureData }],
   )
+}
+
+/**
+ * Verify a personal_sign / EIP-191 signature against a wallet, with
+ * EIP-1271 fallback for smart wallets (Coinbase Smart Wallet owner-index
+ * scan included).
+ *
+ * Exported under `verifyAmoeWalletSignature` for the ZK submit path
+ * (PR 3) which needs the same wallet-sig check but NOT the EIP-191
+ * message parsing inside `verifyAmoeEntryProof`. Local callers continue
+ * to use the unprefixed name.
+ */
+export async function verifyAmoeWalletSignature(params: {
+  wallet: `0x${string}`
+  message: string
+  signature: `0x${string}`
+}): Promise<boolean> {
+  return verifyWalletMessageSignature(params)
 }
 
 async function verifyWalletMessageSignature(params: {
