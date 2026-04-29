@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest'
 
 import { applyEnv } from './helpers'
 import {
+  _isRoomHistoryAuthErrorForTests,
   buildAlfaClubOutboundFrame,
   collectAlfaClubCommandMessages,
   extractAlfaClubWsMessagesForTest,
@@ -278,5 +279,31 @@ describe('extractAlfaClubWsMessagesForTest', () => {
       type: 'tenor-gif',
       duration: 2,
     })
+  })
+})
+
+describe('isRoomHistoryAuthError', () => {
+  it('matches 401 from fetchRoomHistory', () => {
+    expect(_isRoomHistoryAuthErrorForTests(new Error('room_history_failed:401'))).toBe(true)
+  })
+
+  it('matches 403 from fetchRoomHistory', () => {
+    // AlfaClub returns 403 when the JWT is authenticated but lacks permission
+    // for the configured room (stale identity token, removed membership, etc.).
+    // Treating 403 the same as 401 lets the bridge fall through to the env
+    // JWT retry and websocket live-fallback paths instead of bubbling a 500.
+    expect(_isRoomHistoryAuthErrorForTests(new Error('room_history_failed:403'))).toBe(true)
+  })
+
+  it('does not match other history failures', () => {
+    expect(_isRoomHistoryAuthErrorForTests(new Error('room_history_failed:500'))).toBe(false)
+    expect(_isRoomHistoryAuthErrorForTests(new Error('room_history_failed:timeout:abort'))).toBe(false)
+    expect(_isRoomHistoryAuthErrorForTests(new Error('room_history_failed:unknown'))).toBe(false)
+    expect(_isRoomHistoryAuthErrorForTests(new Error('something_else'))).toBe(false)
+  })
+
+  it('handles non-Error values', () => {
+    expect(_isRoomHistoryAuthErrorForTests('room_history_failed:403')).toBe(true)
+    expect(_isRoomHistoryAuthErrorForTests(null)).toBe(false)
   })
 })

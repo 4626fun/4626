@@ -731,9 +731,13 @@ async function resolveBridgeJwtWithSource(
   return { jwt: resolved, source: 'db' }
 }
 
-function isRoomHistory401(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error)
-  return message.trim() === 'room_history_failed:401'
+function isRoomHistoryAuthError(error: unknown): boolean {
+  // 401 = no/invalid token; 403 = token authenticated but lacks permission
+  // for this room or has been revoked. Both indicate the JWT in use needs
+  // to be rotated (DB → env fallback) or, failing that, that we should
+  // drop into the websocket live-fallback path until a fresh refresh.
+  const message = (error instanceof Error ? error.message : String(error)).trim()
+  return message === 'room_history_failed:401' || message === 'room_history_failed:403'
 }
 
 function rememberSeenMessageId(id: string): void {
@@ -1129,10 +1133,15 @@ async function runBridgeTick(
       resolvedCommandJwt.source === 'db' &&
       Boolean(fallbackJwt) &&
       fallbackJwt !== resolvedCommandJwt.jwt &&
-      isRoomHistory401(error)
+      isRoomHistoryAuthError(error)
     if (!shouldRetryWithEnv) {
       historyError = error
     } else {
+      logger.warn('[alfaclub-chat] room_history_auth_failed:retry_env', {
+        roomId,
+        jwtSource: resolvedCommandJwt.source,
+        error: error instanceof Error ? error.message : String(error),
+      })
       try {
         fetchedMessages = await fetchRoomHistory({
           apiBaseUrl: flags.apiBaseUrl,
@@ -1149,8 +1158,21 @@ async function runBridgeTick(
   }
 
   if (historyError) {
-    const canUseLiveFallback = flags.wsLiveFallbackEnabled && isRoomHistory401(historyError)
-    if (!canUseLiveFallback) throw historyError
+    const canUseLiveFallback = flags.wsLiveFallbackEnabled && isRoomHistoryAuthError(historyError)
+    if (!canUseLiveFallback) {
+      logger.warn('[alfaclub-chat] room_history_failed:no_fallback', {
+        roomId,
+        jwtSource: resolvedCommandJwt.source,
+        wsLiveFallbackEnabled: flags.wsLiveFallbackEnabled,
+        error: historyError instanceof Error ? historyError.message : String(historyError),
+      })
+      throw historyError
+    }
+    logger.warn('[alfaclub-chat] room_history_auth_failed:ws_live_fallback', {
+      roomId,
+      jwtSource: resolvedCommandJwt.source,
+      error: historyError instanceof Error ? historyError.message : String(historyError),
+    })
 
     bridgeState.liveFallbackActive = true
     if (ingestJwt) {
@@ -1375,6 +1397,10 @@ export function startAlfaClubChatBridge(opts?: {
     roomId: flags.roomId,
     stop,
   }
+}
+
+export function _isRoomHistoryAuthErrorForTests(error: unknown): boolean {
+  return isRoomHistoryAuthError(error)
 }
 
 export function _resetAlfaClubChatBridgeStateForTests(): void {
