@@ -172,3 +172,38 @@
   box-shadow: 0 0 0 1px rgba(221, 160, 28, 0.12),
               0 12px 32px rgba(0, 0, 0, 0.42) !important;
 }
+
+/* ─── 11 · Brand mark (tri-ring SEO kit) overrides ─────────────────────
+   The new brand mark from the SEO kit (gold/silver/blue stacked rings,
+   transparent PNG) is shape-defined, not rectangular — so we need to
+   undo the rounded-square treatments (border-radius / object-fit:cover
+   / borders) the legacy app-icon-7.jpg required. .*-mark suffix classes
+   are applied alongside the existing icon classes so size/position
+   stays managed by the original rules.
+   ─────────────────────────────────────────────────────────────────── */
+.brand-icon-mark,
+.close-vault-icon-mark,
+.close-logo-mark,
+.footer-icon-mark {
+  object-fit: contain !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  /* Slight contrast lift so the metallic ring outlines stay readable
+     against the deep cinematic backdrop without looking fake-glowy. */
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.45));
+}
+
+/* The close-logo had a blue drop-shadow accent in the legacy treatment;
+   for the new mark we let the gold/silver/blue rings speak for
+   themselves rather than haloing them in a single accent color. */
+.close-logo-mark {
+  filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
+}
+
+/* Close-vault icon sits on a dark editorial plate; a touch more
+   shadow helps it hold its shape inside the plate. */
+.close-vault-icon-mark {
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55));
+}
