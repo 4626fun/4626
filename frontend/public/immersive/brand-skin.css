@@ -207,3 +207,28 @@
 .close-vault-icon-mark {
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55));
 }
+
+/* ─── 11a · Display sizing for the tri-ring mark ───────────────────────
+   The SEO-kit mark is composed of three concentric stroked rings; at
+   the legacy 28px nav slot the strokes fall below 1px and disappear
+   visually. Bump the nav slot to 40px (34/30 on smaller viewports) and
+   the footer slot to 28px so the rings actually read. Also override
+   the global .brand-icon { opacity: 0.88 } from refinement.css — at
+   these sizes we want full opacity so the metallic ring outlines hold.
+   ─────────────────────────────────────────────────────────────────── */
+.brand-icon-mark {
+  width: 40px !important;
+  height: 40px !important;
+  opacity: 1 !important;
+}
+@media (max-width: 768px) {
+  .brand-icon-mark { width: 34px !important; height: 34px !important; }
+}
+@media (max-width: 380px) {
+  .brand-icon-mark { width: 30px !important; height: 30px !important; }
+}
+.footer-icon-mark {
+  width: 28px !important;
+  height: 28px !important;
+  opacity: 0.78 !important;
+}
