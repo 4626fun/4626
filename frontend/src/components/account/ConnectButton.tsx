@@ -403,9 +403,12 @@ export function ConnectButton({
                 <div className="px-4 py-3">
                   <div className="label text-emerald-200">Signed in</div>
                   <div className="app-meta-value text-zinc-600 mt-1">
-                    {auth.walletMatchesSession
-                      ? 'Session matches connected signer.'
-                      : `4626 session active as ${formatAddress(sessionAddress ?? address)}.`}
+                    {getSignedInSessionCopy({
+                      walletMatchesSession: auth.walletMatchesSession,
+                      sessionAddress: sessionAddress ?? null,
+                      connectedAddress: address ?? null,
+                      embeddedAddress: canonicalIdentity.privyEmbeddedAddress,
+                    })}
                   </div>
                 </div>
               )}
@@ -503,7 +506,9 @@ export function ConnectButton({
               ) : (
                 <div className="px-4 py-3">
                   <div className="label text-emerald-200">Signed in</div>
-                  <div className="app-meta-value text-zinc-600 mt-1">4626 session is active.</div>
+                  <div className="app-meta-value text-zinc-600 mt-1">
+                    Session signer: {formatAddress(sessionAddress)}.
+                  </div>
                 </div>
               )}
               <Link
@@ -634,4 +639,34 @@ function useIsPhoneViewport(): boolean {
   }, [])
 
   return isPhone
+}
+
+function getSignedInSessionCopy({
+  walletMatchesSession,
+  sessionAddress,
+  connectedAddress,
+  embeddedAddress,
+}: {
+  walletMatchesSession: boolean
+  sessionAddress: string | null
+  connectedAddress: string | null
+  embeddedAddress: string | null
+}): string {
+  if (walletMatchesSession) return 'Session matches connected signer.'
+
+  if (!sessionAddress) return '4626 session is active.'
+
+  if (embeddedAddress && normalizeAddressKey(sessionAddress) === normalizeAddressKey(embeddedAddress)) {
+    return `Session signer: ${formatAddress(sessionAddress)} (embedded fallback).`
+  }
+
+  if (connectedAddress && normalizeAddressKey(sessionAddress) !== normalizeAddressKey(connectedAddress)) {
+    return `Session signer: ${formatAddress(sessionAddress)}; approvals use connected signer.`
+  }
+
+  return `Session signer: ${formatAddress(sessionAddress)}.`
+}
+
+function normalizeAddressKey(value: string | null | undefined): string {
+  return (value ?? '').toLowerCase()
 }

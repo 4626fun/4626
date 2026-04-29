@@ -130,10 +130,7 @@ export function CanonicalIdentityDropdown({
   const externalEoaBasename = useBasenameForAddress(identity.externalEoaAddress)
   const privyBasename = useBasenameForAddress(identity.privyEmbeddedAddress)
   const coinBadge = useCreatorCoinBadge(identity.creatorCoinAddress)
-  const showEmbeddedDetails = Boolean(identity.privyEmbeddedAddress) && (
-    identity.activeSigner === 'embedded' || !identity.externalEoaAddress
-  )
-  const showEmbeddedFallbackHint = Boolean(identity.privyEmbeddedAddress) && !showEmbeddedDetails
+  const embeddedAddress = identity.privyEmbeddedAddress
 
   return (
     <div className="flex flex-col">
@@ -295,7 +292,7 @@ export function CanonicalIdentityDropdown({
       )}
 
       {/* Privy embedded (auto-provisioned) */}
-      {showEmbeddedDetails ? (
+      {embeddedAddress ? (
         <div className="px-4 pt-2 pb-3">
           <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
             Embedded signer · fallback
@@ -311,30 +308,23 @@ export function CanonicalIdentityDropdown({
                 style={{ width: 20, height: 20 }}
               />
             ) : (
-              <JazziconAvatar address={identity.privyEmbeddedAddress} size={20} />
+              <JazziconAvatar address={embeddedAddress} size={20} />
             )}
             <div className="min-w-0 flex-1">
               <div className="text-xs text-zinc-300 truncate">
-                {privyBasename.displayName ?? formatShort(identity.privyEmbeddedAddress)}
+                {privyBasename.displayName ?? formatShort(embeddedAddress)}
               </div>
               <div className="text-[10px] text-zinc-600 truncate">
                 {identity.activeSigner === 'embedded'
-                  ? 'Currently active signer'
-                  : 'Available when external signer is unavailable'}
+                  ? 'Current session signer'
+                  : identity.externalEoaAddress
+                    ? 'Fallback signer; session may still use this address'
+                    : 'Fallback signer for session continuity'}
               </div>
             </div>
           </div>
           <div className="mt-1 ml-8">
-            <CopyableAddress address={identity.privyEmbeddedAddress} variant="muted" />
-          </div>
-        </div>
-      ) : showEmbeddedFallbackHint ? (
-        <div className="px-4 pt-2 pb-3">
-          <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
-            Embedded signer · fallback
-          </div>
-          <div className="mt-1 text-[10px] text-zinc-600 truncate" title="Ready as backup; hidden while external signer is active.">
-            Backup ready while external signer is active.
+            <CopyableAddress address={embeddedAddress} variant="muted" />
           </div>
         </div>
       ) : null}
