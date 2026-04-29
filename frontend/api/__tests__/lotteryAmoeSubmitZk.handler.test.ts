@@ -50,6 +50,14 @@ const {
   consumeAmoeNonceForSubmitMock,
   getAmoeCreditSnapshotMock,
   consumeAmoeCreditsForEntryMock,
+  insertPendingMock,
+  markProvenMock,
+  markBroadcastingMock,
+  markSettledMock,
+  markManagerDeclinedMock,
+  markRejectedChainMock,
+  markProveFailedMock,
+  findActiveByNonceCommitMock,
 } = vi.hoisted(() => ({
   guardMock: vi.fn(),
   checkRateLimitMock: vi.fn(),
@@ -61,6 +69,14 @@ const {
   consumeAmoeNonceForSubmitMock: vi.fn(),
   getAmoeCreditSnapshotMock: vi.fn(),
   consumeAmoeCreditsForEntryMock: vi.fn(),
+  insertPendingMock: vi.fn(),
+  markProvenMock: vi.fn(),
+  markBroadcastingMock: vi.fn(),
+  markSettledMock: vi.fn(),
+  markManagerDeclinedMock: vi.fn(),
+  markRejectedChainMock: vi.fn(),
+  markProveFailedMock: vi.fn(),
+  findActiveByNonceCommitMock: vi.fn(),
 }))
 
 vi.mock('../../server/_lib/agent/agentApiGuard.js', () => ({
@@ -93,6 +109,21 @@ vi.mock('../../server/_lib/lottery/amoeWalletResolver.js', () => ({
 
 vi.mock('../../server/_lib/lottery/amoeNonceStore.js', () => ({
   consumeAmoeNonceForSubmit: consumeAmoeNonceForSubmitMock,
+}))
+
+// PR 4 — replay store. The handler now threads (insertPending →
+// markProven → markBroadcasting → markSettled) through the submit
+// path, with a markProveFailed branch on orchestration failure. We
+// mock the whole module so tests don't need a real DB.
+vi.mock('../../server/_lib/lottery/amoeReplayStore.js', () => ({
+  insertPending: insertPendingMock,
+  markProven: markProvenMock,
+  markBroadcasting: markBroadcastingMock,
+  markSettled: markSettledMock,
+  markManagerDeclined: markManagerDeclinedMock,
+  markRejectedChain: markRejectedChainMock,
+  markProveFailed: markProveFailedMock,
+  findActiveByNonceCommit: findActiveByNonceCommitMock,
 }))
 
 vi.mock('../../server/_lib/onchain/contracts.js', () => ({
@@ -187,6 +218,18 @@ vi.mock('../../server/_lib/lottery/lotteryAmoe.js', () => ({
   getAmoeCreditSnapshot: getAmoeCreditSnapshotMock,
   verifyAmoeWalletSignature: verifyAmoeWalletSignatureMock,
   parseAmoeEntryMessage: parseTestEntryMessage,
+  // PR 4 — the handler now also reads pubInputs by slot to compute
+  // commitment hexes for the replay-store row.
+  AMOE_PLONK_PUB_INPUT_SLOT: {
+    walletAddrCommit: 0,
+    creatorCoinAddr: 1,
+    nonceCommit: 2,
+    epoch: 3,
+    allowlistRoot: 4,
+    pointsBurnedAsUSD: 5,
+    pointsLedgerRoot: 6,
+    pointsBurnNullifier: 7,
+  },
 }))
 
 import {
@@ -304,6 +347,40 @@ beforeEach(() => {
     creditsPerEntry: 100,
     entriesAvailable: 7,
   })
+
+  // PR 4 — replay-store happy-path defaults. Tests that exercise
+  // failure branches (markProven unique-violation, markManagerDeclined,
+  // etc.) override these with mockRejectedValueOnce / mockReturnValueOnce.
+  insertPendingMock.mockResolvedValue('00000000-0000-0000-0000-000000000000')
+  markProvenMock.mockImplementation(async (id: string) => ({
+    id,
+    state: 'proven',
+    retryCount: 0,
+  }))
+  markBroadcastingMock.mockImplementation(async (id: string) => ({
+    id,
+    state: 'broadcast',
+    retryCount: 0,
+  }))
+  markSettledMock.mockImplementation(async (id: string) => ({
+    id,
+    state: 'settled',
+    retryCount: 0,
+  }))
+  markManagerDeclinedMock.mockImplementation(async (id: string) => ({
+    id,
+    state: 'manager_declined',
+    retryCount: 1,
+  }))
+  markRejectedChainMock.mockImplementation(async (id: string) => ({
+    id,
+    state: 'rejected_chain',
+  }))
+  markProveFailedMock.mockImplementation(async (id: string) => ({
+    id,
+    state: 'prove_failed',
+  }))
+  findActiveByNonceCommitMock.mockResolvedValue(null)
 })
 
 afterEach(() => {
@@ -975,11 +1052,15 @@ describe('happy path', () => {
       // bare mocks, but we can at least check both were called).
       expect(consumeAmoeCreditsForEntryMock).toHaveBeenCalledTimes(1)
       const debitArg = consumeAmoeCreditsForEntryMock.mock.calls[0]?.[0]
+      // PR 4 — refId is now `zk:${submissionId}` (the replay-store UUID),
+      // not `zk:${nonce}`. This switch lets the points ledger and the
+      // replay store join on a single column for audit (1:1 with the
+      // submission row, not 1:1 with the user-provided nonce).
       expect(debitArg).toMatchObject({
         wallet: CANONICAL_WALLET,
         requiredCredits: 250,
-        refId: `zk:${VALID_NONCE}`,
       })
+      expect(debitArg.refId).toMatch(/^zk:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
     } finally {
       restore()
     }

@@ -59,6 +59,10 @@
     {
       "path": "/api/v1/alfaclub/chat-token-refresh",
       "schedule": "13,43 * * * *"
+    },
+    {
+      "path": "/api/v1/lottery/amoe/retry-cron",
+      "schedule": "*/5 * * * *"
     }
   ],
   "routes": [

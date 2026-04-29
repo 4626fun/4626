@@ -33,6 +33,7 @@ import { checkDurableRateLimit } from '../../../../server/_lib/infra/durableRate
 import {
   AMOE_MIN_POINTS_PER_SUBMISSION,
   AMOE_MAX_POINTS_PER_SUBMISSION,
+  AMOE_PLONK_PUB_INPUT_SLOT,
   consumeAmoeCreditsForEntry,
   getAmoeCreditSnapshot,
   parseAmoeEntryMessage,
@@ -47,11 +48,23 @@ import {
 import { resolveAmoeWallet } from '../../../../server/_lib/lottery/amoeWalletResolver.js'
 import { consumeAmoeNonceForSubmit } from '../../../../server/_lib/lottery/amoeNonceStore.js'
 import {
+  computeAmoeEpoch,
   defaultAmoeZkAssetPaths,
   isAmoeZkSubmitEnabled,
   orchestrateAmoeSubmitZk,
   readLotteryAmoeRouterAddress,
 } from '../../../../server/_lib/lottery/amoeSubmitZk.js'
+import {
+  findActiveByNonceCommit,
+  insertPending,
+  markBroadcasting,
+  markManagerDeclined,
+  markProveFailed,
+  markProven,
+  markRejectedChain,
+  markSettled,
+  type AmoeReplayProofBlob,
+} from '../../../../server/_lib/lottery/amoeReplayStore.js'
 
 declare const process: { env: Record<string, string | undefined> }
 
@@ -91,6 +104,69 @@ function parsePointsBurned(value: unknown): number | null {
   }
   if (!Number.isFinite(n) || !Number.isInteger(n)) return null
   return n
+}
+
+/**
+ * Convert a bigint pubInputs scalar to canonical 32-byte hex form, the
+ * shape stored in the replay-store nullifier columns. Pads with leading
+ * zeros so two distinct scalars never collide on truncation.
+ */
+function bigintToBytes32Hex(value: bigint): `0x${string}` {
+  const hex = value.toString(16)
+  return `0x${hex.padStart(64, '0')}` as `0x${string}`
+}
+
+/**
+ * Best-effort detector for `LotteryAmoeRouter.ManagerDeclinedEntry`
+ * reverts.
+ *
+ * The router emits this revert (lines 392-403) when
+ * `manager.processAmoeEntry` returns 0, and intentionally rolls back
+ * the nullifier writes so the proof is reusable. The relayer surfaces
+ * this through different shapes depending on the transport (raw EOA tx
+ * → `ContractFunctionExecutionError`; user-op → bundler error string),
+ * so we sniff the shapes we know about and let the rest fall through
+ * to the generic `markRejectedChain` path.
+ *
+ * Returns `null` if the error doesn't look like ManagerDeclinedEntry.
+ */
+function decodeManagerDeclinedRevert(
+  err: unknown,
+): { reason: string; txHash: `0x${string}` | null } | null {
+  if (!err || typeof err !== 'object') return null
+  const e = err as {
+    name?: string
+    message?: string
+    cause?: { name?: string; message?: string }
+    shortMessage?: string
+    metaMessages?: string[]
+    transactionHash?: string
+  }
+  const haystack = [
+    e.name,
+    e.message,
+    e.shortMessage,
+    e.cause?.name,
+    e.cause?.message,
+    ...(Array.isArray(e.metaMessages) ? e.metaMessages : []),
+  ]
+    .filter((s): s is string => typeof s === 'string')
+    .join(' | ')
+  if (!haystack) return null
+  // Match the custom error name verbatim. The selector form
+  // (`0x12345678`) would be more robust but viem typically surfaces the
+  // decoded name when the ABI is in scope (which it is here, via
+  // `buildAmoeEntryZKCall`). Fallback string match keeps us correct
+  // when the bundler returns a stringified error.
+  if (!/ManagerDeclinedEntry/.test(haystack)) return null
+  const txHash =
+    typeof e.transactionHash === 'string' && /^0x[a-fA-F0-9]{64}$/.test(e.transactionHash)
+      ? (e.transactionHash.toLowerCase() as `0x${string}`)
+      : null
+  return {
+    reason: 'ManagerDeclinedEntry',
+    txHash,
+  }
 }
 
 function readBaseRpcUrl(): string {
@@ -495,41 +571,171 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
 
     // ----------------------------------------------------------------
-    // 6. Orchestration — derive nullifiers, build witness, prove,
-    //    build calldata.
+    // 6. Replay store — insert `pending` row before any heavy work.
+    //    The store gives us:
+    //      * audit trail (one table joins user-submit, prove, on-chain,
+    //        credit-debit for every AMOE attempt)
+    //      * in-flight dedupe (the unique constraint on `nonce_commit_hex`
+    //        wins races deterministically at `markProven` time)
+    //      * `ManagerDeclinedEntry` retry pipeline (router-revert keeps the
+    //        proof reusable; the store remembers it)
+    //
+    //    Compute pre-derived epoch here so we can also bind the row to
+    //    the same epoch the orchestrator will use, which lets the cron
+    //    detect epoch-rolled rows and abandon them cleanly.
+    // ----------------------------------------------------------------
+    const epoch = computeAmoeEpoch(BigInt(Math.floor(Date.now() / 1000)))
+    const submissionId = await insertPending({
+      signupId: BigInt(profileId),
+      wallet,
+      creatorCoin: creatorCoinRaw.toLowerCase() as `0x${string}`,
+      epoch,
+      spendRefId,
+      pointsBurned,
+    })
+
+    // ----------------------------------------------------------------
+    // 7. Orchestration — derive nullifiers, build witness, prove,
+    //    build calldata. On any failure, mark the row `prove_failed`
+    //    so future retries / audits see why we never reached chain.
     // ----------------------------------------------------------------
     const orchestrate = __testHooks.orchestrate ?? orchestrateAmoeSubmitZk
     const relay = __testHooks.relay ?? relayAmoeEntryZkTransaction
 
     const { wasmPath, zkeyPath } = defaultAmoeZkAssetPaths()
 
-    const result = await orchestrate(
-      {
-        wallet,
-        creatorCoin: creatorCoinRaw.toLowerCase() as `0x${string}`,
-        pointsBurned,
-        nonce: nonceRaw as `0x${string}`,
-        twitterHandle,
-        spendRefId,
-        profileId: BigInt(profileId),
-        lotteryAmoeRouter,
-      },
-      { wasmPath, zkeyPath },
-    )
+    let result
+    try {
+      result = await orchestrate(
+        {
+          wallet,
+          creatorCoin: creatorCoinRaw.toLowerCase() as `0x${string}`,
+          pointsBurned,
+          nonce: nonceRaw as `0x${string}`,
+          twitterHandle,
+          spendRefId,
+          profileId: BigInt(profileId),
+          lotteryAmoeRouter,
+        },
+        { wasmPath, zkeyPath },
+      )
+    } catch (proveErr) {
+      // Best-effort: don't mask the original error if the row update
+      // itself fails. Log and rethrow.
+      try {
+        await markProveFailed(
+          submissionId,
+          proveErr instanceof Error
+            ? `${proveErr.name}:${proveErr.message}`
+            : 'prove_threw_non_error',
+        )
+      } catch (markErr) {
+        console.warn('[amoe-submit-zk] markProveFailed failed', markErr)
+      }
+      throw proveErr
+    }
 
     // ----------------------------------------------------------------
-    // 7. Relay first, debit credits second (same ordering invariant
-    //    as the legacy path — see audit §4.2 / `_amoeSubmit.ts:367`).
+    // 8. Mark `proven` — writes nullifier commitments + proof blob.
+    //    The unique constraint on `nonce_commit_hex` makes this the
+    //    moment in-flight dedupe takes effect. A racing submitter with
+    //    the same nonce loses here with `submission_in_flight` (400).
     // ----------------------------------------------------------------
-    const txHash = await relay({
-      to: result.call.to,
-      callData: result.call.callData,
+    const proofBlob: AmoeReplayProofBlob = {
+      proof: result.proof.proof.map((b) => b.toString()),
+      pubInputs: result.proof.pubInputs.map((b) => b.toString()),
+    }
+    const nonceCommitHex = bigintToBytes32Hex(
+      result.proof.pubInputs[AMOE_PLONK_PUB_INPUT_SLOT.nonceCommit],
+    )
+    const walletCommitHex = bigintToBytes32Hex(
+      result.proof.pubInputs[AMOE_PLONK_PUB_INPUT_SLOT.walletAddrCommit],
+    )
+    const pointsBurnNullifierHex = bigintToBytes32Hex(
+      result.proof.pubInputs[AMOE_PLONK_PUB_INPUT_SLOT.pointsBurnNullifier],
+    )
+    await markProven(submissionId, {
+      nonceCommitHex,
+      walletCommitHex,
+      pointsBurnNullifierHex,
+      proofBlob,
     })
 
-    // refId binds the credit debit to the proof's nullifier so the
-    // ledger can dedupe. PR 4 will tighten this against the replay
-    // store; for now the nullifier alone is sufficient.
-    const refId = `zk:${nonceRaw}`
+    // ----------------------------------------------------------------
+    // 9. Defense-in-depth: re-check there is no terminal `settled` row
+    //    for the same `nonce_commit_hex`. The unique constraint above
+    //    already prevents two `proven` rows; this catches the case
+    //    where a prior session's `settled` row was deleted but its
+    //    on-chain entry is still recorded (rare, ops-only failure mode).
+    // ----------------------------------------------------------------
+    const conflicting = await findActiveByNonceCommit(nonceCommitHex)
+    if (conflicting && conflicting.id !== submissionId && conflicting.state === 'settled') {
+      // Mark our row rejected so the audit trail is consistent.
+      try {
+        await markRejectedChain(submissionId, { reason: 'submission_already_settled' })
+      } catch (e) {
+        console.warn('[amoe-submit-zk] markRejectedChain (already_settled) failed', e)
+      }
+      throw new AmoeBadRequestError('submission_already_settled')
+    }
+
+    // ----------------------------------------------------------------
+    // 10. Mark `broadcast` then relay. We track `broadcast` BEFORE the
+    //     relay returns so a relay-side timeout that lands on-chain
+    //     later doesn't leave the row stuck in `proven` forever.
+    // ----------------------------------------------------------------
+    await markBroadcasting(submissionId, {})
+
+    let txHash: `0x${string}`
+    try {
+      txHash = await relay({
+        to: result.call.to,
+        callData: result.call.callData,
+      })
+    } catch (relayErr) {
+      // Classify the failure: ManagerDeclinedEntry → retryable, else terminal.
+      const declined = decodeManagerDeclinedRevert(relayErr)
+      if (declined) {
+        await markManagerDeclined(submissionId, {
+          txHash: declined.txHash ?? ('0x' as `0x${string}`),
+          reason: declined.reason,
+        })
+        // 202 — accepted, retry pending. Caller polls or hits retry-zk.
+        return res.status(202).json({
+          success: false,
+          error: 'submission_manager_declined',
+          data: {
+            submissionId,
+            reason: declined.reason,
+          },
+        })
+      }
+      // Generic chain rejection — abandon this submission.
+      const reason =
+        relayErr instanceof Error ? relayErr.message.slice(0, 256) : 'relay_failed'
+      await markRejectedChain(submissionId, { reason })
+      throw relayErr
+    }
+
+    // ----------------------------------------------------------------
+    // 11. Mark `settled` and debit credits (same ordering invariant as
+    //     legacy handler — relay first, debit second).
+    // ----------------------------------------------------------------
+    await markSettled(submissionId, {
+      txHash: txHash as `0x${string}`,
+      // We don't have block_number / managerEntryId from the synchronous
+      // relay path yet. PR 5's publisher will fill these in via a
+      // post-confirmation update. For now record the tx hash; ops can
+      // backfill from chain.
+      blockNumber: 0n,
+      managerEntryId: null,
+    })
+
+    // refId binds the credit debit to the replay-store row so the
+    // ledger can dedupe. Keyed on submissionId (UUID) rather than the
+    // raw nonce so a successful retry shares the credit-debit identity
+    // with its original submission.
+    const refId = `zk:${submissionId}`
 
     const creditSpend = await consumeAmoeCreditsForEntry({
       wallet,
@@ -540,6 +746,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({
       success: true,
       data: {
+        submissionId,
         txHash,
         relayMode: 'server',
         pointsBurned,
