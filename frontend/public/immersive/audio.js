@@ -174,16 +174,57 @@
     btn.setAttribute('aria-pressed', mixer.muted ? 'true' : 'false');
     btn.innerHTML = svgIcon(mixer.muted);
 
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       e.stopPropagation();
+      // Guaranteed user-gesture path: resume the AudioContext synchronously
+      // here so browsers that ignore scroll-driven resume still play sound.
+      try {
+        mixer._ensureContext();
+        if (mixer.ctx && mixer.ctx.state === 'suspended') {
+          await mixer.ctx.resume();
+        }
+      } catch (_) {}
       const muted = mixer.toggleMuted();
       btn.innerHTML = svgIcon(muted);
       btn.setAttribute('aria-label', muted ? 'Unmute audio' : 'Mute audio');
       btn.setAttribute('aria-pressed', muted ? 'true' : 'false');
       if (!muted && !mixer.started) mixer.start();
+      dismissScrollHint();
     });
 
     document.body.appendChild(btn);
+  }
+
+  // ─── Scroll-to-begin hint ──────────────────────────────────────────────
+  // A tiny pill above the audio toggle that quietly tells first-time
+  // visitors the experience starts on scroll. It fades in 1.2s after
+  // load, dismisses on first scroll / first toggle click / 8s timeout.
+  let _hintEl = null;
+  let _hintDismissed = false;
+  function injectScrollHint() {
+    if (_hintEl) return;
+    const el = document.createElement('div');
+    el.className = 'audio-scroll-hint';
+    el.setAttribute('aria-hidden', 'true');
+    el.textContent = 'Scroll to begin';
+    document.body.appendChild(el);
+    _hintEl = el;
+    // Reveal after a beat so it doesn't fight the page-load.
+    setTimeout(() => {
+      if (!_hintDismissed) el.classList.add('is-visible');
+    }, 1200);
+    // Self-dismiss after 8 seconds even without interaction.
+    setTimeout(dismissScrollHint, 9200);
+  }
+  function dismissScrollHint() {
+    if (_hintDismissed || !_hintEl) return;
+    _hintDismissed = true;
+    _hintEl.classList.remove('is-visible');
+    _hintEl.classList.add('is-dismissed');
+    setTimeout(() => {
+      if (_hintEl && _hintEl.parentElement) _hintEl.parentElement.removeChild(_hintEl);
+      _hintEl = null;
+    }, 800);
   }
 
   function svgIcon(muted) {
@@ -219,19 +260,35 @@
 
     injectMuteButton(mixer);
 
-    // Start on first scroll (and never sooner).
-    let firstScrollBound = false;
-    const onFirstScroll = () => {
-      if (firstScrollBound) return;
-      firstScrollBound = true;
-      window.removeEventListener('scroll', onFirstScroll);
-      window.removeEventListener('touchmove', onFirstScroll);
-      window.removeEventListener('wheel', onFirstScroll);
+    injectScrollHint();
+
+    // Start on first scroll (and never sooner). We also attach a one-shot
+    // pointerdown / keydown / click handler so the AudioContext can be
+    // resumed inside a guaranteed user-gesture frame for browsers that
+    // refuse to honour scroll-driven resume.
+    let firstGestureBound = false;
+    const onFirstGesture = async () => {
+      if (firstGestureBound) return;
+      firstGestureBound = true;
+      window.removeEventListener('scroll', onFirstGesture);
+      window.removeEventListener('touchmove', onFirstGesture);
+      window.removeEventListener('wheel', onFirstGesture);
+      window.removeEventListener('pointerdown', onFirstGesture);
+      window.removeEventListener('keydown', onFirstGesture);
+      try {
+        mixer._ensureContext();
+        if (mixer.ctx && mixer.ctx.state === 'suspended') {
+          await mixer.ctx.resume();
+        }
+      } catch (_) {}
       if (!mixer.muted) mixer.start();
+      dismissScrollHint();
     };
-    window.addEventListener('scroll', onFirstScroll, { passive: true });
-    window.addEventListener('touchmove', onFirstScroll, { passive: true });
-    window.addEventListener('wheel', onFirstScroll, { passive: true });
+    window.addEventListener('scroll', onFirstGesture, { passive: true });
+    window.addEventListener('touchmove', onFirstGesture, { passive: true });
+    window.addEventListener('wheel', onFirstGesture, { passive: true });
+    window.addEventListener('pointerdown', onFirstGesture, { passive: true });
+    window.addEventListener('keydown', onFirstGesture, { passive: true });
 
     // Interaction FX — light-touch, doesn't depend on mixer being started.
     // (They simply won't play if the user hasn't scrolled yet, which is fine.)

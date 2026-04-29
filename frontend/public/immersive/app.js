@@ -293,7 +293,7 @@ if (audioToggle) {
     const STAR_COUNT = 2400;
     const TUNNEL_RADIUS = 18;    // cylinder radius
     const TUNNEL_DEPTH = 120;    // how deep the star field extends
-    const STAR_COLOR = 0x5566aa; // muted blue-grey — less overwhelmingly blue
+    const STAR_COLOR = 0x9a8a66; // warm muted gold-grey — atmosphere, not noise
 
     const positions = new Float32Array(STAR_COUNT * 3);
     const sizes = new Float32Array(STAR_COUNT);
@@ -476,7 +476,7 @@ if (audioToggle) {
   }
   const geo1 = new THREE.BufferGeometry();
   geo1.setAttribute('position', new THREE.BufferAttribute(pos1, 3));
-  const mat1 = makeBokehMaterial(0x0052FF, 6, 0.5, FOCAL_Z);
+  const mat1 = makeBokehMaterial(0xDDA01C, 6, 0.5, FOCAL_Z); // brand gold
   scene.add(new THREE.Points(geo1, mat1));
 
   // Layer 2: Dim white dust (depth)
@@ -510,7 +510,7 @@ if (audioToggle) {
   }
   const geo3 = new THREE.BufferGeometry();
   geo3.setAttribute('position', new THREE.BufferAttribute(pos3, 3));
-  const mat3 = makeBokehMaterial(0x3B82FF, 12, 0.35, FOCAL_Z);
+  const mat3 = makeBokehMaterial(0xFFD45A, 12, 0.35, FOCAL_Z); // gold highlight
   scene.add(new THREE.Points(geo3, mat3));
 
   // ── Cursor tracking for magnetic repulsion field ──

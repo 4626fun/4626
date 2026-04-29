@@ -1,0 +1,174 @@
+/* ══════════════════════════════════════════════════════════════════════
+   brand-skin.css — 4626.fun · Brand alignment overlay
+   ──────────────────────────────────────────────────────────────────────
+   Loaded LAST, after style.css and refinement.css.
+
+   Strategy: keep the cinematic dark backdrop intact (the typography
+   and visual hierarchy were authored white-on-dark and only read at
+   their best there). Migrate the electric-blue accent (#0052FF) to
+   the canonical brand gold (#DDA01C) per the SEO + brand kit, plus
+   add the small "scroll to begin" affordance for the audio gate.
+
+   No layouts, motion families, or components are reshaped — only
+   accent color and a single new affordance.
+   ══════════════════════════════════════════════════════════════════════ */
+
+/* ─── 0 · Brand tokens (canonical, from kit) ───────────────────────── */
+:root {
+  --4626-gold: #DDA01C;
+  --4626-gold-highlight: #FFD45A;
+  --4626-gold-soft: rgba(221, 160, 28, 0.14);
+  --4626-gold-glow: rgba(221, 160, 28, 0.32);
+  --4626-gold-glow-strong: rgba(221, 160, 28, 0.55);
+  --4626-charcoal: #2B2F30;
+  --4626-warm-ivory: #F8F0E6;
+}
+
+/* ─── 1 · Re-map accent tokens · gold replaces electric-blue ───────── */
+:root {
+  --color-accent: var(--4626-gold);
+  --color-accent-bright: var(--4626-gold-highlight);
+  --color-accent-glow: var(--4626-gold-soft);
+  --color-accent-glow-strong: var(--4626-gold-glow);
+  --color-border-accent: rgba(221, 160, 28, 0.22);
+}
+
+/* ─── 2 · CTA buttons · gold pill replaces blue pill ───────────────── */
+.cta-button,
+.cres-cta-btn,
+.enter-vaults-btn,
+.nav-btn {
+  /* nav-btn was authored as a thin transparent outline; leave alone if
+     not the primary CTA — only override when it's actively styled blue. */
+}
+.cta-button {
+  background: linear-gradient(180deg, var(--4626-gold-highlight) 0%, var(--4626-gold) 100%) !important;
+  color: #1a1410 !important;
+  border: 1px solid var(--4626-gold) !important;
+  box-shadow: 0 6px 18px rgba(221, 160, 28, 0.28),
+              0 1px 0 rgba(255, 220, 130, 0.45) inset !important;
+}
+.cta-button:hover {
+  background: linear-gradient(180deg, #ffe07f 0%, var(--4626-gold-highlight) 100%) !important;
+  border-color: var(--4626-gold-highlight) !important;
+  box-shadow: 0 10px 26px rgba(221, 160, 28, 0.42),
+              0 1px 0 rgba(255, 235, 170, 0.55) inset !important;
+}
+.cta-button.secondary {
+  background: transparent !important;
+  color: var(--4626-gold-highlight) !important;
+  border: 1px solid rgba(221, 160, 28, 0.55) !important;
+  box-shadow: none !important;
+}
+.cta-button.secondary:hover {
+  border-color: var(--4626-gold) !important;
+  background: var(--4626-gold-soft) !important;
+  color: var(--4626-gold-highlight) !important;
+}
+
+/* Crescendo CTA + final waitlist button — same gold pill treatment */
+.cres-cta-btn,
+.enter-vaults-btn,
+#closing.enter-vaults-btn {
+  background: linear-gradient(180deg, var(--4626-gold-highlight) 0%, var(--4626-gold) 100%) !important;
+  color: #1a1410 !important;
+  border: 1px solid var(--4626-gold) !important;
+  box-shadow: 0 6px 18px rgba(221, 160, 28, 0.32),
+              0 1px 0 rgba(255, 220, 130, 0.45) inset !important;
+}
+.cres-cta-btn:hover,
+.enter-vaults-btn:hover {
+  background: linear-gradient(180deg, #ffe07f 0%, var(--4626-gold-highlight) 100%) !important;
+  border-color: var(--4626-gold-highlight) !important;
+}
+
+/* ─── 3 · Section labels & kickers · gold tick replaces blue ───────── */
+.section-label::before {
+  background: var(--4626-gold) !important;
+}
+
+/* ─── 4 · Scroll progress thread · gold ───────────────────────────── */
+.scroll-progress > * {
+  background: linear-gradient(180deg, var(--4626-gold-highlight) 0%, var(--4626-gold) 100%) !important;
+}
+.scroll-progress::after {
+  background: var(--4626-gold-highlight) !important;
+  box-shadow: 0 0 12px var(--4626-gold),
+              0 0 24px var(--4626-gold-glow-strong) !important;
+}
+
+/* ─── 5 · Editorial accent text (e.g. yield ratio, italic emphasis) ── */
+.cres-brand em,
+.close-brand-wordmark em {
+  color: var(--4626-gold-highlight) !important;
+  font-style: italic;
+}
+
+/* ─── 6 · Selection · gold ─────────────────────────────────────────── */
+::selection {
+  background: var(--4626-gold-glow) !important;
+  color: #fff !important;
+}
+
+/* ─── 7 · Audio toggle (bottom-right) · subtle gold border on hover ── */
+.audio-toggle-float:hover {
+  border-color: var(--4626-gold) !important;
+  background: var(--4626-gold-soft) !important;
+  color: var(--4626-gold-highlight) !important;
+}
+
+/* ─── 8 · "Scroll to begin" hint (audio gating affordance) ─────────── */
+/* Tiny pill above the audio toggle that fades out after first scroll
+   or 8 seconds. JS toggles .is-visible / .is-dismissed. */
+.audio-scroll-hint {
+  position: fixed;
+  right: 1.25rem;
+  bottom: calc(1.25rem + 56px);
+  padding: 0.5rem 0.85rem;
+  font-family: var(--font-display, system-ui);
+  font-size: 0.66rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: rgba(245, 240, 225, 0.94);
+  background: rgba(20, 22, 26, 0.78);
+  border: 1px solid rgba(221, 160, 28, 0.38);
+  border-radius: 999px;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.32),
+              0 0 0 1px rgba(221, 160, 28, 0.12) inset;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition: opacity 0.6s ease-out, transform 0.6s ease-out;
+  z-index: 9998;
+  white-space: nowrap;
+}
+.audio-scroll-hint.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+.audio-scroll-hint.is-dismissed {
+  opacity: 0;
+  transform: translateY(6px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .audio-scroll-hint { transition: opacity 0.2s linear; }
+}
+
+/* ─── 9 · Token rings & glows that referenced electric-blue ────────── */
+/* Most ring colors come from var(--color-accent) which we already
+   re-pointed in §1, so they swing to gold automatically. The few
+   hardcoded blues live in style.css conic-gradients and refinement.css
+   ::before/::after rules with absolute hexes — patch those here. */
+.token-img-ring::before,
+.share-img-ring::before {
+  border-color: var(--4626-gold-soft) !important;
+}
+
+/* ─── 10 · Vault card focus / hover · gold outline ─────────────────── */
+.vault-card:hover {
+  border-color: rgba(221, 160, 28, 0.32) !important;
+  box-shadow: 0 0 0 1px rgba(221, 160, 28, 0.12),
+              0 12px 32px rgba(0, 0, 0, 0.42) !important;
+}
