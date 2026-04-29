@@ -205,10 +205,17 @@ contract AlfaCreatorKeyLPTest is Test {
         vm.expectRevert(abi.encodeWithSelector(AlfaCreatorKeyPool.WrongTokenId.selector, 2));
         friendKey.safeTransferFrom(trader, address(pool), 2, 1, "");
 
-        uint256[] memory ids = new uint256[](1);
+        // OpenZeppelin's ERC1155 routes single-element batches through
+        // `onERC1155Received`, so use a true multi-id batch to actually exercise
+        // `onERC1155BatchReceived` on the pool.
+        uint256 secondTokenId = 3;
+        friendKey.createRoom(secondTokenId, creator, lpCreator, 1);
+        uint256[] memory ids = new uint256[](2);
         ids[0] = TOKEN_ID;
-        uint256[] memory amounts = new uint256[](1);
+        ids[1] = secondTokenId;
+        uint256[] memory amounts = new uint256[](2);
         amounts[0] = 1;
+        amounts[1] = 1;
         vm.prank(lpCreator);
         vm.expectRevert(AlfaCreatorKeyPool.BatchTransfersUnsupported.selector);
         friendKey.safeBatchTransferFrom(lpCreator, address(pool), ids, amounts, "");
@@ -222,11 +229,13 @@ contract AlfaCreatorKeyLPTest is Test {
         friendKey.setApprovalForAll(address(pool), true);
         creatorCoin.approve(address(pool), type(uint256).max);
 
-        (uint256 requiredCreatorCoin, uint256 quotedShares) = pool.quoteAddLiquidity(2);
-        assertEq(requiredCreatorCoin, 2_000 ether);
+        // Add enough keys that a half-share burn still rounds to >=1 whole key
+        // out (keys are unitary integers in this pool by design).
+        (uint256 requiredCreatorCoin, uint256 quotedShares) = pool.quoteAddLiquidity(4);
+        assertEq(requiredCreatorCoin, 4_000 ether);
         assertGt(quotedShares, 0);
 
-        (uint256 paid, uint256 minted) = pool.addLiquidity(2, requiredCreatorCoin, quotedShares, lp2);
+        (uint256 paid, uint256 minted) = pool.addLiquidity(4, requiredCreatorCoin, quotedShares, lp2);
         assertEq(paid, requiredCreatorCoin);
         assertEq(minted, quotedShares);
         assertEq(pool.balanceOf(lp2), quotedShares);
