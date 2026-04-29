@@ -61,16 +61,16 @@ Onboarding requirements:
 - [ ] Re-review scheduled (default: 30 days, or after material TVL / strategy changes).
 - [ ] Cap value mirrored to `workspace_strategy_targets.max_assets_cap` so the operator UI shows it next to the on-chain value.
 
-## Pending strategy features
+## Pending deploy features
 
-| Strategy / feature flag | Tentative class | Required action before non-trivial allocation |
+| Feature flag | Role | Required action before non-trivial allocation |
 | --- | --- | --- |
-| `ajna_sleeve` (AJNA 4626 sleeve) | `capped` unless the valuation path is verified as internal-accounting or oracle-backed | Before activation, locate the concrete strategy address, compute intended debt ceiling and current estimated NAV, then set a trust ceiling with buffer. |
-| `charm_active_lp` (Charm Alpha Vault) | `capped` because LP positions are revalued through market state | Before activation, cap total trusted NAV, not just creator-token inventory; re-review after large swap/LP inventory shifts. |
-| `solana_bridge_strategy` (cross-chain inventory) | `capped` unless keeper/oracle reconciliation is verified as safe enough for another class | Start tighter because valuation depends on keeper/reconciliation trust; re-review if reconciliation changes or fails. |
-| `solana_ovault_mesh` (currently `active`) | Determine whether this is a Phase 2b routing entitlement rather than a Phase 3 strategy allocation | If no `CreatorOVault` strategy address exists, no `setStrategyMaxAssets` calldata applies; still document the risk model. |
+| `ajna_sleeve` (AJNA 4626 sleeve) | Phase 3 strategy; `capped` unless the valuation path is verified as internal-accounting or oracle-backed | Before activation, locate the concrete strategy address, compute intended debt ceiling and current estimated NAV, then set a trust ceiling with buffer. |
+| `charm_active_lp` (Charm Alpha Vault) | Phase 3 strategy; `capped` because LP positions are revalued through market state | Before activation, cap total trusted NAV, not just creator-token inventory; re-review after large swap/LP inventory shifts. |
+| `solana_bridge_strategy` (cross-chain inventory) | Phase 3 strategy; `capped` unless keeper/oracle reconciliation is verified as safe enough for another class | Start tighter because valuation depends on keeper/reconciliation trust; re-review if reconciliation changes or fails. |
+| `solana_ovault_mesh` (currently `active`) | Phase 2b routing entitlement, not a `CreatorOVault` strategy | Do not generate `setStrategyMaxAssets` or `addStrategy` calldata. Track route/peer/config risk in the deploy runbook, not the strategy cap flow. |
 
-Pending features are entitlements only until the activation/provisioning flow produces concrete per-creator strategy addresses.
+Pending Phase 3 strategy features are entitlements only until the activation/provisioning flow produces concrete per-creator strategy addresses. Non-strategy deploy entitlements do not produce strategy cap calldata.
 
 ## Onboarding flow
 
