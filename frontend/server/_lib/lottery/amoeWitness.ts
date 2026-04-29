@@ -112,6 +112,116 @@ export const AMOE_MAX_EPOCH = (1n << 64n) - 1n
 export const AMOE_MAX_POINTS_BURNED_AS_USD = (1n << 64n) - 1n
 
 /**
+ * Genesis timestamp for the AMOE epoch counter, in seconds since the Unix
+ * epoch (UTC). The first epoch (E=0) starts at this instant; subsequent
+ * epochs roll over every {@link AMOE_EPOCH_LENGTH_SECONDS} seconds.
+ *
+ * **Pinned value:** `2026-04-30T00:00:00Z` = 1777939200. This is the first
+ * UTC midnight strictly after PR #426 (the witness module) merged at
+ * 2026-04-29T06:10:43Z, satisfying the design constraint in
+ * `docs/security/amoe-points-burn-ledger-sot.md` §10.
+ *
+ * **Why a hard-coded constant, not env:** the epoch index is a public
+ * input to every PLONK proof and is bound on-chain by
+ * `LotteryAmoeRouter.allowlistRootOf` / `pointsLedgerRootOf`. Allowing the
+ * publisher to differ from the prover by even one epoch would silently
+ * desync every downstream proof. Pinning here means both modules import
+ * the same value at module load.
+ *
+ * **Mutation forbidden post-launch:** changing this value is equivalent
+ * to invalidating every previously-published epoch root and would brick
+ * every in-flight proof. Treat it as a circuit constant.
+ */
+export const AMOE_EPOCH_GENESIS_SECONDS = 1_777_939_200n as const
+
+/**
+ * Length of one AMOE epoch in seconds — 86400 = 1 UTC day.
+ *
+ * **Pinned value:** the daily cadence is locked into the circuit (see
+ * `amoeWitness.ts:102` epoch-is-daily comment and the daily rhythm of
+ * `amoe_twitter_daily` / `amoe_checkin` in the points ledger). Changing
+ * this post-launch would require a circuit regeneration — it is not a
+ * v1 decision, it is a constant.
+ */
+export const AMOE_EPOCH_LENGTH_SECONDS = 86_400n as const
+
+/**
+ * Grace window (in seconds) the publisher waits past `epoch_close(E)`
+ * before declaring epoch `E` eligible for projection / publishing. This
+ * absorbs clock skew between API servers, the publisher cron, and the
+ * database — a row written 30s before `epoch_close(E)` with a server
+ * clock that is 30s fast can land in the database 60s after the boundary,
+ * and we want it to land in epoch `E`'s snapshot, not `E+1`'s.
+ *
+ * 60 seconds is well above worst-case observed Postgres / API clock
+ * drift. Increase only if monitoring shows late-arriving rows.
+ */
+export const AMOE_EPOCH_GRACE_SECONDS = 60n as const
+
+/**
+ * Compute the AMOE epoch index for a `created_at` timestamp.
+ *
+ * @param createdAtSeconds Unix timestamp in seconds (UTC). Bigint to avoid
+ *                         the JS-number 53-bit cliff for far-future
+ *                         epochs.
+ * @returns The epoch counter `E` such that `genesis + E*length <=
+ *          createdAt < genesis + (E+1)*length`.
+ * @throws  Range error (as a plain `Error` — not an AmoeProofGenerationError
+ *          since this is not a witness-time check) if `createdAt` is
+ *          before genesis.
+ */
+export function epochForTimestamp(createdAtSeconds: bigint): bigint {
+  if (typeof createdAtSeconds !== 'bigint') {
+    throw new Error(
+      `epochForTimestamp: createdAtSeconds must be a bigint (got ${typeof createdAtSeconds})`,
+    )
+  }
+  if (createdAtSeconds < AMOE_EPOCH_GENESIS_SECONDS) {
+    throw new Error(
+      `epochForTimestamp: createdAtSeconds=${createdAtSeconds.toString()} is before AMOE genesis=${AMOE_EPOCH_GENESIS_SECONDS.toString()}`,
+    )
+  }
+  const elapsed = createdAtSeconds - AMOE_EPOCH_GENESIS_SECONDS
+  return elapsed / AMOE_EPOCH_LENGTH_SECONDS
+}
+
+/**
+ * Compute the close-time of epoch `E`, in Unix seconds.
+ *
+ * `epoch_close(E) = genesis + (E + 1) * length`. A row whose
+ * `created_at >= epoch_close(E)` belongs to epoch `E+1`, not `E`.
+ */
+export function epochCloseAt(epoch: bigint): bigint {
+  if (typeof epoch !== 'bigint' || epoch < 0n) {
+    throw new Error(`epochCloseAt: epoch must be a non-negative bigint`)
+  }
+  return AMOE_EPOCH_GENESIS_SECONDS + (epoch + 1n) * AMOE_EPOCH_LENGTH_SECONDS
+}
+
+/**
+ * Return the current AMOE epoch given a wall-clock millisecond timestamp
+ * (e.g. `Date.now()`). Pure helper — no I/O, no dependency on the system
+ * clock at module-load time.
+ */
+export function currentAmoeEpoch(nowMs: number): bigint {
+  return epochForTimestamp(BigInt(Math.floor(nowMs / 1000)))
+}
+
+/**
+ * Returns true iff epoch `E` is eligible for projection / publishing —
+ * i.e. its close-time plus the grace window has passed. Used by the
+ * publisher cron to decide which epochs to materialize.
+ */
+export function isAmoeEpochEligibleForPublish(
+  epoch: bigint,
+  nowMs: number,
+): boolean {
+  const nowSec = BigInt(Math.floor(nowMs / 1000))
+  const eligibleAt = epochCloseAt(epoch) + AMOE_EPOCH_GRACE_SECONDS
+  return nowSec >= eligibleAt
+}
+
+/**
  * BN254 scalar field modulus. Every signal in the circuit must lie in
  * `[0, Q)`. Inputs whose domain is naturally bounded by Q (EVM addresses,
  * uint64 counters, USD-cent amounts) are strict-checked; bytes32-domain
