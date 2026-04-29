@@ -285,8 +285,7 @@ export async function readPersistedIdentity(db: Db, profileId: number): Promise<
   const canonicalSmartWallet =
     canonicalFromWallets ??
     normalizeAddress(row.primary_smart_wallet) ??
-    normalizeAddress(row.csw_address) ??
-    normalizeAddress(row.base_sub_account)
+    normalizeAddress(row.csw_address)
   const embeddedEoa =
     normalizeAddress(row.primary_embedded_eoa) ??
     normalizeAddress(row.embedded_wallet)
@@ -715,7 +714,6 @@ async function insertOrUpdateProfile(params: {
         operational_solana_wallet = COALESCE(${operationalSolana}, operational_solana_wallet),
         solana_wallet = COALESCE(${canonicalSolana}, solana_wallet),
         csw_address = COALESCE(${canonical}, csw_address),
-        base_sub_account = COALESCE(${canonical}, base_sub_account),
         updated_at = NOW()
       WHERE id = ${existing.id};
     `
@@ -738,7 +736,6 @@ async function insertOrUpdateProfile(params: {
         operational_solana_wallet = COALESCE(${operationalSolana}, operational_solana_wallet),
         solana_wallet = COALESCE(${canonicalSolana}, solana_wallet),
         csw_address = COALESCE(${canonical}, csw_address),
-        base_sub_account = COALESCE(${canonical}, base_sub_account),
         updated_at = NOW()
       WHERE privy_user_id = ${privyUserId}
       RETURNING id;
@@ -764,7 +761,6 @@ async function insertOrUpdateProfile(params: {
         operational_solana_wallet,
         solana_wallet,
         csw_address,
-        base_sub_account,
         updated_at
       )
       VALUES (
@@ -779,7 +775,6 @@ async function insertOrUpdateProfile(params: {
         ${canonicalSolana},
         ${operationalSolana},
         ${canonicalSolana},
-        ${canonical},
         ${canonical},
         NOW()
       )
@@ -797,7 +792,6 @@ async function insertOrUpdateProfile(params: {
         operational_solana_wallet = COALESCE(EXCLUDED.operational_solana_wallet, profiles.operational_solana_wallet),
         solana_wallet = COALESCE(EXCLUDED.solana_wallet, profiles.solana_wallet),
         csw_address = COALESCE(EXCLUDED.csw_address, profiles.csw_address),
-        base_sub_account = COALESCE(EXCLUDED.base_sub_account, profiles.base_sub_account),
         updated_at = NOW()
       RETURNING id;
     `

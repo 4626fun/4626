@@ -424,7 +424,6 @@ async function reconcileCanonicalInDb(params: {
       SET
         primary_smart_wallet = $1,
         csw_address = $1,
-        base_sub_account = $1,
         updated_at = NOW()
       WHERE id = $2
       `,

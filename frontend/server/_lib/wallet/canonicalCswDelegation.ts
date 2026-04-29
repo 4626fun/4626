@@ -53,7 +53,8 @@ type StructuredDelegationError = Error & {
 
 const ADDRESS_RE = /^0x[a-fA-F0-9]{40}$/
 const TX_HASH_RE = /^0x[a-fA-F0-9]{64}$/
-const DEFAULT_BASE_RPCS = ['https://mainnet.base.org', 'https://base.llamarpc.com'] as const
+const DEFAULT_BASE_RPCS = ['https://mainnet.base.org'] as const
+const BLOCKED_DELEGATION_RPC_HOSTS = new Set(['base.llamarpc.com'])
 
 let delegationColumnsEnsured = false
 let delegationColumnsEnsurePromise: Promise<void> | null = null
@@ -117,13 +118,25 @@ function normalizeCanonicalSource(value: unknown, fallback: string): string {
   return raw || fallback
 }
 
-function getBaseRpcUrls(): string[] {
+function normalizeDelegationRpcUrl(value: string): string | null {
+  const raw = value.trim()
+  if (!raw) return null
+  try {
+    const url = new URL(raw)
+    if (BLOCKED_DELEGATION_RPC_HOSTS.has(url.hostname.toLowerCase())) return null
+    return url.pathname === '/' && !url.search && !url.hash ? url.origin : url.toString()
+  } catch {
+    return raw
+  }
+}
+
+export function getBaseRpcUrls(): string[] {
   const raw = String(process.env.BASE_RPC_URL ?? '').trim()
   if (!raw) return [...DEFAULT_BASE_RPCS]
   const urls = raw
     .split(',')
-    .map((value) => value.trim())
-    .filter(Boolean)
+    .map(normalizeDelegationRpcUrl)
+    .filter((value): value is string => Boolean(value))
   return [...new Set([...urls, ...DEFAULT_BASE_RPCS])]
 }
 
@@ -505,7 +518,6 @@ export async function resolveCanonicalCsw(params: {
       privy_user_id = COALESCE(privy_user_id, ${privyUserId}),
       csw_address = COALESCE(csw_address, ${canonical}),
       primary_smart_wallet = COALESCE(primary_smart_wallet, ${canonical}),
-      base_sub_account = COALESCE(base_sub_account, ${canonical}),
       updated_at = NOW()
     WHERE id = ${profileId};
   `

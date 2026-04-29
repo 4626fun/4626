@@ -217,7 +217,6 @@ async function reconcileCanonicalMappingInDb(params: {
       SET
         primary_smart_wallet = ${canonicalLower},
         csw_address = ${canonicalLower},
-        base_sub_account = ${canonicalLower},
         updated_at = NOW()
       WHERE id = ${params.profileId};
     `

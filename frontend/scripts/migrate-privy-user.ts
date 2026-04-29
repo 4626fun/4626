@@ -215,7 +215,6 @@ async function enforceCanonicalSmartWallet(db: Db, profileId: number, canonicalA
     SET
       primary_smart_wallet = ${canonical},
       csw_address = ${canonical},
-      base_sub_account = ${canonical},
       updated_at = NOW()
     WHERE id = ${profileId};
   `

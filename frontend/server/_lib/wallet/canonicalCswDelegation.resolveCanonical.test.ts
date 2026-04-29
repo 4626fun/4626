@@ -158,6 +158,29 @@ describe('resolveCanonicalCsw', () => {
     expect(syncUserWalletsMock).toHaveBeenCalledTimes(1)
   })
 
+  it('does not write the parent CSW into the app-scoped sub-account column', async () => {
+    syncUserWalletsMock.mockResolvedValueOnce({
+      profileId: 11,
+      canonicalSmartWallet: { address: '0x00000000000000000000000000000000000000AA' },
+    })
+
+    const db = createMockDb()
+    const privyUser = { id: 'did:privy:test-user', linkedAccounts: [] } as any
+
+    const resolved = await resolveCanonicalCsw({
+      db: db as any,
+      privyUserId: 'did:privy:test-user',
+      privyUser,
+    })
+
+    expect(resolved.canonicalCswAddress).toBe('0x00000000000000000000000000000000000000aa')
+    const updateProfilesCalls = vi.mocked(db.sql).mock.calls
+      .map(([strings]) => normalizeSql(strings as TemplateStringsArray))
+      .filter((text) => text.includes('update profiles set'))
+    expect(updateProfilesCalls.length).toBeGreaterThan(0)
+    expect(updateProfilesCalls.join('\n')).not.toContain('base_sub_account')
+  })
+
   it('surfaces Base setup when no canonical CSW can be resolved', async () => {
     syncUserWalletsMock.mockResolvedValueOnce({
       profileId: 11,

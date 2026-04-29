@@ -144,6 +144,8 @@ describe('wallet mapping + sync', () => {
     expect(result.connectedWallets.length).toBe(2)
     expect(db.calls.some((q) => q.includes('insert into wallets'))).toBe(true)
     expect(db.calls.some((q) => q.includes('insert into profile_wallets'))).toBe(true)
+    const profileWriteCalls = db.calls.filter((q) => q.includes('insert into profiles') || q.includes('update profiles set'))
+    expect(profileWriteCalls.join('\n')).not.toContain('base_sub_account')
   })
 
   it('keeps the persisted canonical CSW when Privy returns another smart wallet', async () => {

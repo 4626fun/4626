@@ -424,6 +424,25 @@
             <input id="lpSeedKeys" type="range" min="1" max="100" step="1" value="10" />
           </div>
           <div class="field">
+            <label for="deltaMode">Delta mode</label>
+            <select id="deltaMode">
+              <option value="fit" selected>Auto-fit to curve</option>
+              <option value="frenmint">FrenMint formula</option>
+              <option value="manual">Manual override</option>
+            </select>
+          </div>
+          <div class="field">
+            <div class="slider-row">
+              <label for="fitWindow">Fit window (± keys)</label>
+              <strong id="fitWindowOut">10</strong>
+            </div>
+            <input id="fitWindow" type="range" min="1" max="30" step="1" value="10" />
+          </div>
+          <div class="field">
+            <label for="manualDelta">Manual delta</label>
+            <input id="manualDelta" type="number" min="2" step="1" value="551" />
+          </div>
+          <div class="field">
             <label for="coinSymbol">Creator Coin symbol</label>
             <input id="coinSymbol" type="text" value="mangames" />
           </div>
@@ -470,6 +489,8 @@
             <span class="key"><span style="width:8px;height:8px;border-radius:50%;background:#ff4d6d;display:inline-block"></span> BC sell price</span>
             <span class="key"><span class="swatch" style="background:#f59e0b"></span>LP sell — you pay</span>
             <span class="key"><span class="swatch" style="background:#a78bfa"></span>LP buy — you receive</span>
+            <span class="key"><span class="swatch" style="background:#fbbf24;opacity:.8;border-top:1px dashed #fbbf24"></span>Avg LP sell</span>
+            <span class="key"><span class="swatch" style="background:#c4b5fd;opacity:.8;border-top:1px dashed #c4b5fd"></span>Avg LP buy</span>
             <span class="key"><span class="swatch" style="background:rgba(123,120,133,0.69);width:14px;height:10px;border-radius:2px"></span>LP buy zone</span>
             <span class="key"><span class="swatch" style="background:rgba(106,205,191,0.69);width:14px;height:10px;border-radius:2px"></span>LP sell zone</span>
           </div>
@@ -571,6 +592,72 @@
             </div>
           </div>
           <p class="note" id="sudoPoolNote"></p>
+
+          <h2 style="margin-top: 26px">Stagnant supply simulation</h2>
+          <div class="metrics">
+            <div class="metric">
+              <span>BC buy stays fixed</span>
+              <strong id="simBcBuyOut">--</strong>
+            </div>
+            <div class="metric">
+              <span>BC sell stays fixed</span>
+              <strong id="simBcSellOut">--</strong>
+            </div>
+            <div class="metric">
+              <span>LP buy advantage ends</span>
+              <strong id="simBuyFlipOut">--</strong>
+            </div>
+            <div class="metric">
+              <span>LP sell advantage ends</span>
+              <strong id="simSellFlipOut">--</strong>
+            </div>
+          </div>
+          <table id="simTable" style="width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 10px">
+            <thead>
+              <tr style="text-align: right; color: #8d99aa">
+                <th style="text-align: left; padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">LP state</th>
+                <th style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">Keys sold by LP</th>
+                <th style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">LP sell (buyer pays)</th>
+                <th style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">LP buy (seller receives)</th>
+                <th style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">Buyer route</th>
+                <th style="padding: 6px 8px; border-bottom: 1px solid rgba(255,255,255,0.08); font-weight: 500">Seller route</th>
+              </tr>
+            </thead>
+            <tbody id="simBody"></tbody>
+          </table>
+          <p class="note" id="simNote"></p>
+
+          <div style="margin-top:26px;display:flex;justify-content:space-between;align-items:center;gap:12px;border-top:1px solid rgba(255,255,255,0.06);padding-top:16px">
+            <h2 style="margin:0;padding:0;border:0">ERC-20 / ETH Liquidity Layer</h2>
+            <button id="toggleEthLayerBtn" type="button" class="btn-ghost" style="flex:0 0 auto;min-width:138px">
+              Show layer
+            </button>
+          </div>
+          <section id="ethLayerPanel" style="display:none;margin-top:12px;border:1px solid rgba(255,255,255,0.08);background:#0A0A0A;border-radius:4px;padding:16px">
+            <div class="metrics">
+              <div class="metric">
+                <span>Layer role</span>
+                <strong>Coin access</strong>
+              </div>
+              <div class="metric">
+                <span>Route shape</span>
+                <strong>ETH → Coin → Key</strong>
+              </div>
+              <div class="metric">
+                <span>Risk</span>
+                <strong>Coin slippage</strong>
+              </div>
+              <div class="metric">
+                <span>Target depth</span>
+                <strong>2–5× key demand</strong>
+              </div>
+            </div>
+            <p class="note">
+              This layer models the ERC-20 / ETH pool separately from the ERC-1155 / Creator Coin pool.
+              Keep it hidden when tuning the key market. Show it when you want to reason about whether
+              users can acquire enough Creator Coin without moving its price before buying keys.
+            </p>
+          </section>
         </section>
       </section>
     </main>
@@ -649,6 +736,8 @@
       function wireChartTooltip({
         points,
         sudoPoolPoints,
+        avgSellPoints = [],
+        avgBuyPoints = [],
         chartMaxSupply,
         chartMinX = N_MIN,
         xScale,
@@ -672,6 +761,8 @@
           const point = nearestPoint(points, xValue)
           if (!point) return
           const sudoPoint = nearestPoint(sudoPoolPoints || [], point.x)
+          const avgSellPoint = nearestPoint(avgSellPoints || [], point.x)
+          const avgBuyPoint = nearestPoint(avgBuyPoints || [], point.x)
           const mid = point.mid
 
           tooltip.innerHTML = `
@@ -681,6 +772,8 @@
             ${tooltipRow("Sell Price (USDC)", formatUsd(point.sell), "#f59e0b")}
             ${sudoPoint ? tooltipRow(`LP sell — you pay (${coinSymbol})`, `${formatCount(sudoPoint.sell)} ${coinSymbol}`, "#f59e0b") : ""}
             ${sudoPoint ? tooltipRow(`LP buy — you receive (${coinSymbol})`, `${formatCount(sudoPoint.buy)} ${coinSymbol}`, "#a78bfa") : ""}
+            ${avgSellPoint ? tooltipRow(`Avg LP sell (${coinSymbol})`, `${formatCount(avgSellPoint.y)} ${coinSymbol}`, "#fbbf24") : ""}
+            ${avgBuyPoint ? tooltipRow(`Avg LP buy (${coinSymbol})`, `${formatCount(avgBuyPoint.y)} ${coinSymbol}`, "#c4b5fd") : ""}
           `
           tooltip.style.display = "block"
           const tooltipX = Math.min(rect.width - 270, Math.max(8, event.clientX - rect.left + 14))
@@ -802,6 +895,11 @@
         const lpSeedKeys = Math.max(1, Math.floor(Number($("lpSeedKeys").value) || 10))
         if ($("supplyOut")) $("supplyOut").textContent = String(supply)
         if ($("lpSeedKeysOut")) $("lpSeedKeysOut").textContent = String(lpSeedKeys)
+        const fitWindow = Math.max(1, Math.min(30, Math.floor(Number($("fitWindow").value) || 10)))
+        const effectiveFitWindow = Math.max(1, Math.min(30, lpSeedKeys, fitWindow))
+        if ($("fitWindowOut")) $("fitWindowOut").textContent = String(fitWindow)
+        const deltaMode = $("deltaMode").value
+        const manualDelta = Math.max(2, Math.floor(Number($("manualDelta").value) || sudoDeltaForKeys(lpSeedKeys)))
         const coinSymbol = ($("coinSymbol").value || "CreatorCoin").trim() || "CreatorCoin"
         const coinPriceUsd = Math.max(0, Number($("coinPriceUsd").value) || 0)
         const divisor = divisorTable[roomType][tier]
@@ -823,6 +921,8 @@
         const chartPoints = []
         const midPoints = []
         const sudoPoolPoints = []
+        const avgSellPoints = []
+        const avgBuyPoints = []
         for (let n = chartMinX; n <= chartMaxX; n++) {
           const buy = primaryBuy(n, 1, divisor, primaryFee)
           const sell = primarySell(n, 1, divisor, primaryFee)
@@ -839,11 +939,27 @@
         const midAtSupply = Number.isFinite(primaryAskAtSupply) && Number.isFinite(primaryBidAtSupply)
           ? (primaryAskAtSupply + primaryBidAtSupply) / 2
           : Number.NaN
+        const fitted = fitSudoDelta({
+          supply,
+          divisor,
+          primaryFee,
+          midAtSupply,
+          coinPriceUsd,
+          feeRate: (roomType === "trading" ? 690 : 300) / 10_000,
+          windowSize: effectiveFitWindow,
+          minDelta: 2,
+          maxDelta: Math.max(5_000, sudoDeltaForKeys(lpSeedKeys) * 12),
+        })
+        const frenmintDelta = sudoDeltaForKeys(lpSeedKeys)
+        const activeDelta =
+          deltaMode === "manual" ? manualDelta :
+          deltaMode === "frenmint" ? frenmintDelta :
+          fitted.delta
         if (Number.isFinite(midAtSupply) && midAtSupply > 0 && coinPriceUsd > 0) {
           const roomFeeBps = roomType === "trading" ? 690 : 300
           const feeRate = roomFeeBps / 10_000
           if (Number.isFinite(primaryAskCoinAtSupply) && Number.isFinite(primaryBidCoinAtSupply)) {
-            const currentModel = sudoModelForKeys({ keyAmount: lpSeedKeys, midAtSupply, coinPriceUsd })
+            const currentModel = sudoModelForKeys({ keyAmount: lpSeedKeys, midAtSupply, coinPriceUsd, deltaOverride: activeDelta })
             if (currentModel) {
               for (let offset = -maxPoolStepsLeft; offset <= maxPoolStepsRight; offset++) {
                 const x = supply + offset
@@ -854,6 +970,25 @@
                   buy: sudoXykSellQuote({ spot: state.spot, delta: state.delta, feeRate }),
                   sell: sudoXykBuyQuote({ spot: state.spot, delta: state.delta, feeRate }),
                 })
+              }
+              // Average execution curves from the current supply.
+              let cumulativeBuyFromLp = 0
+              for (let q = 1; q <= maxPoolStepsRight; q++) {
+                const x = supply + q
+                if (x < chartMinX || x > chartMaxX) continue
+                const previous = sudoStateAtOffset({ current: currentModel, offset: q - 1 })
+                const price = sudoXykBuyQuote({ spot: previous.spot, delta: previous.delta, feeRate })
+                cumulativeBuyFromLp += price
+                avgSellPoints.push({ x, y: cumulativeBuyFromLp / q })
+              }
+              let cumulativeSellToLp = 0
+              for (let q = 1; q <= maxPoolStepsLeft; q++) {
+                const x = supply - q
+                if (x < chartMinX || x > chartMaxX) continue
+                const previous = sudoStateAtOffset({ current: currentModel, offset: -(q - 1) })
+                const price = sudoXykSellQuote({ spot: previous.spot, delta: previous.delta, feeRate })
+                cumulativeSellToLp += price
+                avgBuyPoints.push({ x, y: cumulativeSellToLp / q })
               }
             }
           }
@@ -960,6 +1095,12 @@
           // ── LP lines on top of fills ────────────────────────────────────
           svg += `<path class="line" d="${linePath(sudoPoolPoints.map((p) => ({ x: p.x, y: p.sell })), xScale, ySudoScale)}" stroke="#f59e0b" stroke-width="2.4" filter="drop-shadow(0 0 5px rgba(245,158,11,.45))"></path>`
           svg += `<path class="line" d="${linePath(sudoPoolPoints.map((p) => ({ x: p.x, y: p.buy })), xScale, ySudoScale)}" stroke="#a78bfa" stroke-width="2.4" filter="drop-shadow(0 0 5px rgba(167,139,250,.5))"></path>`
+          if (avgSellPoints.length) {
+            svg += `<path class="line" d="${linePath(avgSellPoints, xScale, ySudoScale)}" stroke="#fbbf24" stroke-width="1.6" stroke-dasharray="4 5" stroke-opacity="0.9"></path>`
+          }
+          if (avgBuyPoints.length) {
+            svg += `<path class="line" d="${linePath(avgBuyPoints, xScale, ySudoScale)}" stroke="#c4b5fd" stroke-width="1.6" stroke-dasharray="4 5" stroke-opacity="0.9"></path>`
+          }
         }
 
         if (supply >= chartMinX && supply <= chartMaxX) {
@@ -974,11 +1115,11 @@
         $("primaryAsk").textContent = formatUsd(primaryAskAtSupply)
         $("primaryBid").textContent = formatUsd(primaryBidAtSupply)
         $("midOut").textContent = formatUsd(midAtSupply)
-        $("kOut").textContent = String(sudoDeltaForKeys(lpSeedKeys))
+        $("kOut").textContent = String(activeDelta)
 
         $("chartNote").textContent =
           `S=${supply} · Bonding-curve fee ${(primaryFee * 100).toFixed(1)}%. ` +
-          `Chartreuse fill = zone where LP sell price beats BC buy (cheaper to acquire). Teal fill = zone where LP buy price beats BC sell (better return when selling). Drag to explore.`
+          `Solid LP lines show marginal price; dashed LP lines show average execution price from current supply. Filled regions show where LP beats the bonding curve.`
 
         renderDecisionPanel({
           supply,
@@ -1005,6 +1146,8 @@
           coinSymbol,
           coinPriceUsd,
           sudoPoolPoints,
+          avgSellPoints,
+          avgBuyPoints,
         })
 
         renderSudoswapDeltaModel({
@@ -1014,6 +1157,10 @@
           coinSymbol,
           coinPriceUsd,
           lpFeeBps: roomType === "trading" ? 690 : 300,
+          activeDelta,
+          frenmintDelta,
+          fitted,
+          deltaMode,
         })
       }
 
@@ -1090,15 +1237,72 @@
         return keyAmount * 11 + 1
       }
 
-      function sudoModelForKeys({ keyAmount, midAtSupply, coinPriceUsd }) {
+      function sudoModelForKeys({ keyAmount, midAtSupply, coinPriceUsd, deltaOverride }) {
         if (!Number.isFinite(midAtSupply) || midAtSupply <= 0 || coinPriceUsd <= 0 || keyAmount <= 0) {
           return null
         }
-        const delta = sudoDeltaForKeys(keyAmount)
+        const delta = Math.max(2, Math.floor(deltaOverride || sudoDeltaForKeys(keyAmount)))
         const tokenDeposit = (midAtSupply * keyAmount) / coinPriceUsd
-        const rawSpot = (midAtSupply * delta) / coinPriceUsd
+        // Set spot so buy-from-LP at S approximately matches bonding curve mid before fee.
+        const rawSpot = (midAtSupply * Math.max(1, delta - 1)) / coinPriceUsd
         const rawSpotUsd = rawSpot * coinPriceUsd
         return { keyAmount, delta, tokenDeposit, rawSpot, rawSpotUsd }
+      }
+
+      function scoreDeltaFit({ delta, supply, divisor, primaryFee, midAtSupply, coinPriceUsd, feeRate, windowSize }) {
+        const model = sudoModelForKeys({ keyAmount: Math.max(1, Math.floor(delta / 11)), midAtSupply, coinPriceUsd, deltaOverride: delta })
+        if (!model) return Number.POSITIVE_INFINITY
+        let error = 0
+        let count = 0
+        for (let q = 1; q <= windowSize; q++) {
+          const leftSupply = supply - q
+          const rightSupply = supply + q
+          if (leftSupply >= N_MIN) {
+            const stateLeft = sudoStateAtOffset({ current: model, offset: -q })
+            const lpBuy = sudoXykSellQuote({ spot: stateLeft.spot, delta: stateLeft.delta, feeRate }) * coinPriceUsd
+            const bcSell = primarySell(leftSupply, 1, divisor, primaryFee)
+            if (Number.isFinite(lpBuy) && Number.isFinite(bcSell) && bcSell > 0) {
+              error += Math.abs(lpBuy - bcSell) / bcSell
+              count++ 
+            }
+          }
+          if (rightSupply <= CHART_DOMAIN_MAX) {
+            const stateRight = sudoStateAtOffset({ current: model, offset: q })
+            const lpSell = sudoXykBuyQuote({ spot: stateRight.spot, delta: stateRight.delta, feeRate }) * coinPriceUsd
+            const bcBuy = primaryBuy(rightSupply, 1, divisor, primaryFee)
+            if (Number.isFinite(lpSell) && Number.isFinite(bcBuy) && bcBuy > 0) {
+              error += Math.abs(lpSell - bcBuy) / bcBuy
+              count++
+            }
+          }
+        }
+        return count > 0 ? error / count : Number.POSITIVE_INFINITY
+      }
+
+      function fitSudoDelta({ supply, divisor, primaryFee, midAtSupply, coinPriceUsd, feeRate, windowSize, minDelta, maxDelta }) {
+        if (!Number.isFinite(midAtSupply) || midAtSupply <= 0 || coinPriceUsd <= 0) {
+          return { delta: sudoDeltaForKeys(10), error: Number.NaN }
+        }
+        let bestDelta = minDelta
+        let bestError = Number.POSITIVE_INFINITY
+        const coarseStep = Math.max(1, Math.floor((maxDelta - minDelta) / 900))
+        for (let d = minDelta; d <= maxDelta; d += coarseStep) {
+          const error = scoreDeltaFit({ delta: d, supply, divisor, primaryFee, midAtSupply, coinPriceUsd, feeRate, windowSize })
+          if (error < bestError) {
+            bestError = error
+            bestDelta = d
+          }
+        }
+        const refineStart = Math.max(minDelta, bestDelta - coarseStep * 2)
+        const refineEnd = Math.min(maxDelta, bestDelta + coarseStep * 2)
+        for (let d = refineStart; d <= refineEnd; d++) {
+          const error = scoreDeltaFit({ delta: d, supply, divisor, primaryFee, midAtSupply, coinPriceUsd, feeRate, windowSize })
+          if (error < bestError) {
+            bestError = error
+            bestDelta = d
+          }
+        }
+        return { delta: bestDelta, error: bestError }
       }
 
       function sudoStateAtOffset({ current, offset }) {
@@ -1120,12 +1324,12 @@
         return outputWithoutFee * Math.max(0, 1 - feeRate)
       }
 
-      function renderSudoswapDeltaModel({ supply, lpSeedKeys, midAtSupply, coinSymbol, coinPriceUsd, lpFeeBps }) {
+      function renderSudoswapDeltaModel({ supply, lpSeedKeys, midAtSupply, coinSymbol, coinPriceUsd, lpFeeBps, activeDelta, frenmintDelta, fitted, deltaMode }) {
         const body = $("sudoBody")
         const note = $("sudoNote")
         if (!body || !note) return
 
-        const current = sudoModelForKeys({ keyAmount: lpSeedKeys, midAtSupply, coinPriceUsd })
+        const current = sudoModelForKeys({ keyAmount: lpSeedKeys, midAtSupply, coinPriceUsd, deltaOverride: activeDelta })
         if (!current) {
           body.innerHTML = `<tr><td colspan="5" style="padding:10px;color:#8d99aa">Set a positive Creator Coin price and midprice to display the Sudoswap delta model.</td></tr>`
           for (const id of ["sudoDeltaOut", "sudoDepositOut", "sudoSpotOut", "sudoSpotUsdOut"]) {
@@ -1152,7 +1356,7 @@
         const tdL = `padding:4px 8px;border-bottom:1px solid rgba(255,255,255,0.05);text-align:left;font-weight:500`
 
         body.innerHTML = sampleKeys
-          .map((keyAmount) => sudoModelForKeys({ keyAmount, midAtSupply, coinPriceUsd }))
+          .map((keyAmount) => sudoModelForKeys({ keyAmount, midAtSupply, coinPriceUsd, deltaOverride: keyAmount === lpSeedKeys ? activeDelta : undefined }))
           .filter(Boolean)
           .map((row) => {
             return `<tr>
@@ -1166,15 +1370,25 @@
           .join("")
 
         note.textContent =
-          `This mirrors Frenmint's setup formula, not an exact live-pool quote: delta = x\u2080\u00b711 + 1, ` +
-          `ERC-20 deposit y\u2080 = (midprice \u00b7 x\u2080) / ${coinSymbol}Price, and raw Sudoswap spot = (midprice \u00b7 delta) / ${coinSymbol}Price. ` +
-          `The raw spot is intentionally much larger than y\u2080/x\u2080 because Sudoswap's curve adapter also consumes delta; use the pool's getBuyNFTQuote/getSellNFTQuote for exact live quotes once deployed.`
+          `Delta mode: ${deltaMode}. Active delta ${activeDelta}; FrenMint baseline ${frenmintDelta}; auto-fit ${fitted?.delta ?? "--"} ` +
+          `(avg error ${Number.isFinite(fitted?.error) ? (fitted.error * 100).toFixed(2) + "%" : "--"} over ±window). ` +
+          `Spot is set from active delta using the verified XykCurve quote shape; exact deployed-pair values should still be read from getBuyNFTQuote/getSellNFTQuote.`
 
         renderSudoswapPoolView({
           current,
           lpSeedKeys,
           coinSymbol,
           lpFeeBps,
+        })
+
+        renderStagnantSupplySimulation({
+          current,
+          supply,
+          lpSeedKeys,
+          coinSymbol,
+          coinPriceUsd,
+          lpFeeBps,
+          midAtSupply,
         })
       }
 
@@ -1193,6 +1407,54 @@
           note.textContent =
             `These are derived with the verified XykCurve formula: buy from pool = spot/(delta-1) plus fee; sell to pool = spot/(delta+1) minus fee. Exact deployed-pair values should still be read from getBuyNFTQuote/getSellNFTQuote.`
         }
+      }
+
+      function renderStagnantSupplySimulation({ current, supply, lpSeedKeys, coinSymbol, coinPriceUsd, lpFeeBps, midAtSupply }) {
+        const body = $("simBody")
+        const note = $("simNote")
+        if (!body || !note || !current || coinPriceUsd <= 0) return
+        const feeRate = Math.max(0, lpFeeBps) / 10_000
+        const bcBuyCoin = primaryBuy(supply, 1, divisorTable[$("roomType").value][Number($("tier").value)], feeTable[$("roomType").value]) / coinPriceUsd
+        const bcSellCoin = primarySell(supply, 1, divisorTable[$("roomType").value][Number($("tier").value)], feeTable[$("roomType").value]) / coinPriceUsd
+        const checkpoints = Array.from(
+          new Set([0, 1, 2, 5, 10, 15, 20, Math.floor(lpSeedKeys / 2), lpSeedKeys].filter((n) => n >= 0 && n <= lpSeedKeys)),
+        ).sort((a, b) => a - b)
+
+        let buyFlip = null
+        let sellFlip = null
+        const rows = []
+        for (let sold = 0; sold <= lpSeedKeys; sold++) {
+          const state = sudoStateAtOffset({ current, offset: sold })
+          const lpSell = sudoXykBuyQuote({ spot: state.spot, delta: state.delta, feeRate })
+          const lpBuy = sudoXykSellQuote({ spot: state.spot, delta: state.delta, feeRate })
+          const buyerUsesLp = lpSell < bcBuyCoin
+          const sellerUsesLp = lpBuy > bcSellCoin
+          if (buyFlip == null && !buyerUsesLp) buyFlip = sold
+          if (sellFlip == null && !sellerUsesLp) sellFlip = sold
+          if (checkpoints.includes(sold)) rows.push({ sold, lpSell, lpBuy, buyerUsesLp, sellerUsesLp })
+        }
+
+        const routeBadge = (yes, lpText, curveText) =>
+          `<span style="padding:2px 8px;border-radius:3px;font-family:JetBrains Mono,monospace;font-size:10px;letter-spacing:.06em;border:1px solid ${yes ? "rgba(34,197,94,.35)" : "rgba(245,158,11,.35)"};color:${yes ? "#22c55e" : "#f59e0b"};background:${yes ? "rgba(34,197,94,.12)" : "rgba(245,158,11,.10)"}">${yes ? lpText : curveText}</span>`
+        const tdR = `padding:5px 8px;border-bottom:1px solid rgba(255,255,255,0.05);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap`
+        const tdL = `padding:5px 8px;border-bottom:1px solid rgba(255,255,255,0.05);text-align:left;font-weight:500`
+        body.innerHTML = rows.map((r) => {
+          return `<tr>
+            <td style="${tdL}">${r.sold === 0 ? "Initial" : `After ${r.sold}`}</td>
+            <td style="${tdR}">${r.sold}</td>
+            <td style="${tdR}">${formatCount(r.lpSell)} ${coinSymbol}</td>
+            <td style="${tdR}">${formatCount(r.lpBuy)} ${coinSymbol}</td>
+            <td style="${tdR}">${routeBadge(r.buyerUsesLp, "LP", "MINT")}</td>
+            <td style="${tdR}">${routeBadge(r.sellerUsesLp, "LP", "BURN")}</td>
+          </tr>`
+        }).join("")
+
+        $("simBcBuyOut").textContent = `${formatCount(bcBuyCoin)} ${coinSymbol}`
+        $("simBcSellOut").textContent = `${formatCount(bcSellCoin)} ${coinSymbol}`
+        $("simBuyFlipOut").textContent = buyFlip == null ? `> ${lpSeedKeys} sold` : `${buyFlip} sold`
+        $("simSellFlipOut").textContent = sellFlip == null ? `> ${lpSeedKeys} sold` : `${sellFlip} sold`
+        note.textContent =
+          `Stagnant supply means the room bonding-curve buy/sell prices stay fixed at S=${supply}. Only the Sudoswap pool moves as buyers remove keys and add ${coinSymbol}. Watch where Buyer route flips from LP to mint, and Seller route flips from LP to burn.`
       }
 
       function formatCount(value) {
@@ -1227,12 +1489,14 @@
         $("chartCenter").value = $("supply").value
         const seed = Math.max(1, Math.floor(Number($("lpSeedKeys").value) || 10))
         $("chartZoomWidth").value = String(Math.max(10, Math.min(CHART_DOMAIN_MAX, seed * 2)))
+        $("fitWindow").value = String(Math.max(1, Math.min(30, seed)))
       })
 
       $("lpSeedKeys").addEventListener("input", () => {
         $("chartCenter").value = $("supply").value
         const seed = Math.max(1, Math.floor(Number($("lpSeedKeys").value) || 10))
         $("chartZoomWidth").value = String(Math.max(10, Math.min(CHART_DOMAIN_MAX, seed * 2)))
+        $("fitWindow").value = String(Math.max(1, Math.min(30, seed)))
       })
 
       for (const id of [
@@ -1241,6 +1505,9 @@
         "tier",
         "supply",
         "lpSeedKeys",
+        "deltaMode",
+        "fitWindow",
+        "manualDelta",
         "chartZoomWidth",
         "chartCenter",
         "coinSymbol",
@@ -1263,6 +1530,14 @@
 
       $("panLeftBtn").addEventListener("click", () => panChart(-1))
       $("panRightBtn").addEventListener("click", () => panChart(1))
+
+      $("toggleEthLayerBtn").addEventListener("click", () => {
+        const panel = $("ethLayerPanel")
+        const button = $("toggleEthLayerBtn")
+        const showing = panel.style.display !== "none"
+        panel.style.display = showing ? "none" : "block"
+        button.textContent = showing ? "Show layer" : "Hide layer"
+      })
 
       async function fetchCreatorCoinPrice(address) {
         const url = `https://api-sdk.zora.engineering/coin?address=${encodeURIComponent(address)}&chainId=8453`

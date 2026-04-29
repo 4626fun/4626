@@ -33,7 +33,7 @@ vi.mock('./walletMapping.js', () => ({
   classifyLinkedAccounts: classifyLinkedAccountsMock,
 }))
 
-import { confirmOwnerState } from './canonicalCswDelegation'
+import { confirmOwnerState, getBaseRpcUrls } from './canonicalCswDelegation'
 
 function normalizeSql(strings: TemplateStringsArray): string {
   return strings.join(' ').toLowerCase().replace(/\s+/g, ' ').trim()
@@ -140,5 +140,17 @@ describe('confirmOwnerState', () => {
     )
     expect(metadataQuery?.raw).toContain('::text')
     expect(metadataQuery?.raw).toContain("jsonb_build_object('status', 'active', 'ownerAddress', ")
+  })
+
+  it('excludes Cloudflare-challenged public RPC hosts from owner checks', () => {
+    const originalBaseRpcUrl = process.env.BASE_RPC_URL
+    process.env.BASE_RPC_URL = 'https://base.llamarpc.com,https://mainnet.base.org'
+
+    try {
+      expect(getBaseRpcUrls()).toEqual(['https://mainnet.base.org'])
+    } finally {
+      if (originalBaseRpcUrl === undefined) delete process.env.BASE_RPC_URL
+      else process.env.BASE_RPC_URL = originalBaseRpcUrl
+    }
   })
 })
