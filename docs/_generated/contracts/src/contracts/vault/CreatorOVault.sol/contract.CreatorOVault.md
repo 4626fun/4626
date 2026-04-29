@@ -86,7 +86,7 @@ uint256 public constant MAX_STRATEGIES = 5
 ### MODULE_STORAGE_VERSION
 
 ```solidity
-bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v1")
+bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.current")
 ```
 
 

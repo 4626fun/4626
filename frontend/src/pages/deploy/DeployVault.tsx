@@ -8865,10 +8865,10 @@ function DeployVaultMain() {
     if (bytecodeInfraQuery.isError) return (bytecodeInfraQuery.error as any)?.message || 'Deployment bytecode check failed.'
     if (!bytecodeInfraQuery.data) return 'Deployment bytecode check failed.'
     if (!bytecodeInfraQuery.data.storeSupportsChunking) {
-      return 'Deployment infra uses a v1 bytecode store (no chunking). Deploy the v2 bytecode store + v2 deployer + new deployment batcher.'
+      return 'Deployment infra uses an unchunked bytecode store. Deploy the current chunked bytecode store, phased deployer, and deployment batcher.'
     }
     if (bytecodeInfraQuery.data.missing.length > 0) {
-      return `Bytecode store is missing: ${bytecodeInfraQuery.data.missing.join(', ')}. Seed the v2 store, then retry.`
+      return `Bytecode store is missing: ${bytecodeInfraQuery.data.missing.join(', ')}. Seed the current bytecode store, then retry.`
     }
     return null
   }, [

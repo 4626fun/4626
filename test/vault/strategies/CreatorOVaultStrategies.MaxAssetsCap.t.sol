@@ -23,8 +23,7 @@ import "../../../contracts/interfaces/IStrategyValuation.sol";
 //     https://docs.euler.finance/security/attack-vectors/donation-attacks/
 //
 // Cases pinned by this test:
-//   1. uncapped (cap == 0): vault recognises full reported assets (legacy
-//      behaviour preserved).
+//   1. uncapped (cap == 0): vault recognises full reported assets.
 //   2. cap below reported: clamp applies; totalAssets() cannot exceed
 //      idle + cap, even if the strategy reports a much larger number.
 //   3. cap equal to reported: clamp is a no-op.

@@ -57,7 +57,7 @@ Production override safety:
 
 ### Canonical Base rollout target (`v1.9.2 split Phase-1`)
 
-Current live Base defaults use the split Phase-1 deployment batcher and its paired v2 bytecode store/deployer. Addresses below are the live Base values:
+Current live Base defaults use the split Phase-1 deployment batcher and its paired chunked bytecode store/deployer. Addresses below are the live Base values:
 - Registry: `0x9D86e8FAfA39527c4FE13AAa8FBD2B424f9f65Fb`
 - Deployment batcher: `0x32403a647e73e04ae42b02bdd1ade9c88698fd0c`
 - Deployment batcher auto-handoff alias: `0x32403a647e73e04ae42b02bdd1ade9c88698fd0c`
@@ -80,9 +80,9 @@ export ETHERSCAN_API_KEY=...
 ./script/deploy-base-full-release.sh
 ```
 
-This broadcasts the fresh shared/global contracts, hands their addresses into the deterministic v2 infra deployment, and seeds the bytecode store automatically.
+This broadcasts the fresh shared/global contracts, hands their addresses into the deterministic phased infra deployment, and seeds the bytecode store automatically.
 
-If the shared/global layer is already live and you only need the deterministic v2 pass, run `./script/deploy-infra-v2.sh` instead.
+If the shared/global layer is already live and you only need the deterministic phased infra pass, run `./script/deploy-infra-v2.sh` instead. The script filename is historical; it deploys the current CreatorOVault infra.
 
 2. Onchain sanity checks:
 

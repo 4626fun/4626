@@ -103,7 +103,7 @@ append_handoff_from_log "$infra_log"
 load_env_file "$HANDOFF_ENV_PATH"
 
 echo ""
-echo "2/2 Deploying deterministic v2 infra with explicit shared/global inputs..."
+echo "2/2 Deploying deterministic phased infra with explicit shared/global inputs..."
 BASE_FULL_RELEASE_MODE=1 \
 BASE_RELEASE_HANDOFF_ENV_PATH="$HANDOFF_ENV_PATH" \
 BASE_SHARED_GLOBAL_OUTPUT_PATH="$BASE_SHARED_GLOBAL_OUTPUT_PATH" \
