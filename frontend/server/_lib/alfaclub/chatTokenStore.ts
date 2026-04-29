@@ -9,8 +9,30 @@
  * - This module never returns the raw token from metadata helpers.
  */
 
+import { logger } from '../infra/logger.js'
 import { getDb } from '../db/postgres.js'
 import { ensureAlfaClubVigilanteSchema } from './schema.js'
+
+/**
+ * Extract a redacted error fingerprint suitable for logs.
+ * Never includes any value from `params.value`/`params.jwt` — only
+ * pg error code, message, and constraint metadata. Production logs
+ * for the token store must remain free of token material so they
+ * can ship to general observability backends.
+ */
+function describeDbError(err: unknown): Record<string, unknown> {
+  const anyErr = err as Record<string, unknown> | null | undefined
+  const code = anyErr && typeof anyErr.code === 'string' ? anyErr.code : undefined
+  const message =
+    err instanceof Error ? err.message : typeof err === 'string' ? err : String(err ?? '')
+  return {
+    code,
+    message: message.slice(0, 200),
+    constraint: anyErr && typeof anyErr.constraint === 'string' ? anyErr.constraint : undefined,
+    detail: anyErr && typeof anyErr.detail === 'string' ? anyErr.detail.slice(0, 200) : undefined,
+    routine: anyErr && typeof anyErr.routine === 'string' ? anyErr.routine : undefined,
+  }
+}
 
 const CHAT_TOKEN_KEY = 'chat_jwt' as const
 // Privy session tokens needed to refresh `chat_jwt` (identity token) without
@@ -167,9 +189,19 @@ export async function upsertAlfaClubChatToken(params: {
   updatedBy?: string | null
 }): Promise<AlfaClubChatTokenMeta | null> {
   const db = await getDb()
-  if (!db) return null
+  if (!db) {
+    logger.error('[alfaclub-chat-token-store] chat token upsert skipped: db unavailable', {
+      secretKey: CHAT_TOKEN_KEY,
+    })
+    return null
+  }
   const jwt = String(params.jwt ?? '').trim()
-  if (!jwt) return null
+  if (!jwt) {
+    logger.error('[alfaclub-chat-token-store] chat token upsert skipped: empty jwt', {
+      secretKey: CHAT_TOKEN_KEY,
+    })
+    return null
+  }
   const expiresAt = extractJwtExpiryIso(jwt)
   try {
     await ensureAlfaClubVigilanteSchema()
@@ -199,7 +231,11 @@ export async function upsertAlfaClubChatToken(params: {
     `
     const row = ((result.rows ?? [])[0] ?? null) as TokenRow | null
     return toMeta(row)
-  } catch {
+  } catch (err) {
+    logger.error('[alfaclub-chat-token-store] chat token upsert failed', {
+      secretKey: CHAT_TOKEN_KEY,
+      ...describeDbError(err),
+    })
     return null
   }
 }
@@ -238,9 +274,19 @@ async function upsertPrivySecret(
   params: { value: string; updatedBy?: string | null; expiresAt?: string | null },
 ): Promise<boolean> {
   const db = await getDb()
-  if (!db) return false
+  if (!db) {
+    logger.error('[alfaclub-chat-token-store] privy secret upsert skipped: db unavailable', {
+      secretKey,
+    })
+    return false
+  }
   const trimmed = String(params.value ?? '').trim()
-  if (!trimmed) return false
+  if (!trimmed) {
+    logger.error('[alfaclub-chat-token-store] privy secret upsert skipped: empty value', {
+      secretKey,
+    })
+    return false
+  }
   try {
     await ensureAlfaClubVigilanteSchema()
     await db.sql`
@@ -264,7 +310,11 @@ async function upsertPrivySecret(
           updated_at = NOW();
     `
     return true
-  } catch {
+  } catch (err) {
+    logger.error('[alfaclub-chat-token-store] privy secret upsert failed', {
+      secretKey,
+      ...describeDbError(err),
+    })
     return false
   }
 }
