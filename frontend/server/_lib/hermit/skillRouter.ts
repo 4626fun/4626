@@ -347,6 +347,110 @@ async function runPinataDraft(prompt: string): Promise<PinataChatResult | null> 
   }
 }
 
+type SpanishDialect =
+  | 'neutral_latam'
+  | 'mexico'
+  | 'argentina'
+  | 'colombia'
+  | 'chile'
+  | 'peru'
+  | 'venezuela'
+  | 'caribbean'
+  | 'spain'
+
+const SPANISH_DIALECT_FLAG_MAP: Record<string, SpanishDialect> = {
+  '🇲🇽': 'mexico',
+  '🇦🇷': 'argentina',
+  '🇨🇴': 'colombia',
+  '🇨🇱': 'chile',
+  '🇵🇪': 'peru',
+  '🇻🇪': 'venezuela',
+  '🇵🇷': 'caribbean',
+  '🇪🇸': 'spain',
+  '🌎': 'neutral_latam',
+  '🇺🇳': 'neutral_latam',
+}
+
+const SPANISH_DIALECT_TEXT_HINTS: Array<{ pattern: RegExp; dialect: SpanishDialect }> = [
+  { pattern: /\bmexicano?s?\b|\bmexicana?s?\b|\bméxico\b|\bmexico\b/i, dialect: 'mexico' },
+  { pattern: /\bargentino?s?\b|\bargentina?s?\b|\brioplatense\b/i, dialect: 'argentina' },
+  { pattern: /\bcolombiano?s?\b|\bcolombiana?s?\b|\bcolombia\b/i, dialect: 'colombia' },
+  { pattern: /\bchileno?s?\b|\bchilena?s?\b|\bchile\b/i, dialect: 'chile' },
+  { pattern: /\bperuano?s?\b|\bperuana?s?\b|\bperú\b|\bperu\b/i, dialect: 'peru' },
+  { pattern: /\bvenezolano?s?\b|\bvenezolana?s?\b|\bvenezuela\b/i, dialect: 'venezuela' },
+  {
+    pattern: /\bpuertorriqueñ[oa]s?\b|\bcaribeñ[oa]s?\b|\bpuerto rico\b|\bcaribe\b|\bboricua\b/i,
+    dialect: 'caribbean',
+  },
+  {
+    pattern: /\bespañol de españa\b|\bcastellano\b|\bespañol peninsular\b|\bespaña\b/i,
+    dialect: 'spain',
+  },
+  { pattern: /\bneutral latam\b|\blatam neutral\b|\bespañol neutro\b|\bneutro latam\b/i, dialect: 'neutral_latam' },
+]
+
+const SPANISH_DIALECT_PROFILES: Record<SpanishDialect, string> = {
+  neutral_latam:
+    'Neutral Latin American Spanish. Address reader as tú. No regionalisms, no Castilian vosotros.',
+  mexico:
+    'Mexican Spanish flavor (subtle): tú; sparingly use natural connectors like "ya", "órale", "neta" only when they fit; avoid caricature ("padrísimo", "wey" overused).',
+  argentina:
+    'Rioplatense / Argentine Spanish (subtle): voseo (vos / tenés / sos); sparingly use "che", "dale"; do not overload with lunfardo; avoid caricature.',
+  colombia:
+    'Colombian Spanish (subtle): tú or usted neutral; warm and clear; sparingly natural words like "parce", "bacano" only if they fit; avoid caricature.',
+  chile:
+    'Chilean Spanish (subtle): tú; light natural words like "bacán", "altiro", "po" used sparingly; avoid heavy chilenismos and caricature.',
+  peru:
+    'Peruvian Spanish (subtle): tú; clear and even register; sparing use of "chévere", "pe" only if natural; avoid caricature.',
+  venezuela:
+    'Venezuelan Spanish (subtle): tú; warm tone; sparing use of "chévere", "pana" only if natural; avoid caricature.',
+  caribbean:
+    'Caribbean / Puerto Rican Spanish (subtle): tú; warm and rhythmic; sparing use of "brutal", "wepa" only if natural; avoid caricature and heavy code-switching unless the user does.',
+  spain:
+    'European (Castilian) Spanish: tú in casual register (vosotros only if user uses it); use peninsular forms ("vale", "guay") sparingly; "coger" is fine; avoid Latin American regionalisms.',
+}
+
+function detectSpanishDialect(userInput: string): SpanishDialect | null {
+  if (!userInput) return null
+  for (const flag of Object.keys(SPANISH_DIALECT_FLAG_MAP)) {
+    if (userInput.includes(flag)) return SPANISH_DIALECT_FLAG_MAP[flag]
+  }
+  for (const { pattern, dialect } of SPANISH_DIALECT_TEXT_HINTS) {
+    if (pattern.test(userInput)) return dialect
+  }
+  return null
+}
+
+function buildSpanishMemoryPersistenceClause(dialect: SpanishDialect | null): string {
+  if (dialect !== null) {
+    return [
+      `Memory persistence (explicit signal): the user just signaled the "${dialect}" Spanish dialect this turn (flag emoji or text hint). BEFORE producing the final JSON output, use your file edit tool to update workspace MEMORY.md so future turns honor it without a flag. Under the "## Preferred dialect" section, in the "Long-term preferences (operator-curated):" list, ensure exactly one bullet of the form:`,
+      `- Preferred Spanish dialect: ${dialect} (set by flag/text hint)`,
+      'If a "Preferred Spanish dialect:" bullet already exists, replace its dialect value with the new one. If none exists, append the bullet immediately under the "Long-term preferences (operator-curated):" header. Do not duplicate the bullet, do not reorder other entries, and do not rewrite unrelated sections. The explicit signal in this turn overrides any prior memory; the update is so the next turn can use the dialect without a flag. Perform the file edit as a tool action only — do not mention it in your final JSON output.',
+    ].join('\n')
+  }
+  return [
+    'Memory persistence (no explicit signal): if you are about to reply in Spanish, FIRST read workspace MEMORY.md. Under "## Preferred dialect" → "Long-term preferences (operator-curated):" look for a bullet "- Preferred Spanish dialect: <dialect>". If one is present and the dialect is one of neutral_latam, mexico, argentina, colombia, chile, peru, venezuela, caribbean, spain, treat that as the active dialect for this turn (apply the matching profile from SPANISH.md, ≈80% clear Spanish / 20% regional flavor, never caricature). If MEMORY.md is absent, unreadable, or has no such bullet, default to neutral_latam. Do not write to MEMORY.md this turn (no explicit signal to record).',
+  ].join('\n')
+}
+
+function buildHermitLanguageDirective(dialect: SpanishDialect | null): string {
+  const effectiveDialect: SpanishDialect = dialect ?? 'neutral_latam'
+  const profile = SPANISH_DIALECT_PROFILES[effectiveDialect]
+  const dialectExplicit = dialect !== null
+  const dialectClause = dialectExplicit
+    ? `The user signaled the "${effectiveDialect}" dialect (via flag emoji or text hint). When the language rule selects Spanish, write string values in that dialect. Profile: ${profile} Keep flavor subtle — about 80% clear Spanish, 20% regional flavor. Never lean into caricature or stereotypes.`
+    : `Default Spanish dialect is "neutral_latam" unless workspace MEMORY.md records a long-term preference (see persistence note below). Profile: ${profile}`
+  return [
+    'Language: detect the language of the user input. If the user writes in Spanish or explicitly asks for output en español / in Spanish, set string values in natural Latin American Spanish (see workspace SPANISH.md and MEMORY.md for the style guide; keep crypto-native loanwords like vault, mint, drop, alpha, gm, gas untranslated; address the reader as tú; avoid Castilian forms unless the selected dialect is "spain"). Otherwise reply in English.',
+    `Spanish dialect: ${effectiveDialect}. ${dialectClause}`,
+    buildSpanishMemoryPersistenceClause(dialect),
+    'JSON keys always remain exactly as specified in this prompt — keys are English regardless of language. Hashtags stay as-is. Never wrap the JSON in markdown fences. The final assistant message MUST be ONLY the strict JSON object — any MEMORY.md update must happen as a tool call before the final output, never as prose alongside it.',
+  ].join('\n')
+}
+
+const HERMIT_LANGUAGE_DIRECTIVE = buildHermitLanguageDirective(null)
+
 function buildPinataPromptForHermit(params: {
   mode: HermitDraftMode
   userPrompt: string
@@ -359,12 +463,14 @@ function buildPinataPromptForHermit(params: {
         : params.mode === 'tone'
           ? 'Rewrite input copy into a sharper social tone while preserving meaning.'
           : 'Write concise room copy with social-native energy.'
+  const dialect = detectSpanishDialect(params.userPrompt)
   return [
     'You are Hermit, a crypto-native creative assistant for AlfaChat communities.',
     modeInstruction,
     'Output STRICT JSON only (no markdown):',
     '{"line":"string","alt":["string","string"],"hashtags":["#tag"],"cta":"string"}',
     'Rules: line <= 220 chars, alt 2-4 entries, hashtags 1-5, no fabricated claims.',
+    buildHermitLanguageDirective(dialect),
     `User input: ${params.userPrompt}`,
   ].join('\n')
 }
@@ -387,21 +493,25 @@ function buildHermitHelpReply(): string {
 }
 
 function buildPinataPromptForHermitImage(userPrompt: string): string {
+  const dialect = detectSpanishDialect(userPrompt)
   return [
     'You are Hermit, generating meme-ready image concepts for AlfaChat.',
     'Output STRICT JSON only:',
     '{"imagePrompt":"string","caption":"string","hashtags":["#tag"]}',
     'Rules: imagePrompt vivid and specific, caption <= 180 chars, hashtags 1-5, no markdown.',
+    buildHermitLanguageDirective(dialect),
     `User input: ${userPrompt || 'akita doge and a black cat in dark-luxury meme style'}`,
   ].join('\n')
 }
 
 function buildPinataPromptForGmeow(params: { userPrompt: string; memeCaption: string; memeTags: string[] }): string {
+  const dialect = detectSpanishDialect(params.userPrompt)
   return [
     'You are Hermit crafting one short meme line for AlfaChat.',
     'Output STRICT JSON only:',
     '{"line":"string"}',
     'Rules: line <= 160 chars, playful but clean, no markdown.',
+    buildHermitLanguageDirective(dialect),
     `Reference caption: ${params.memeCaption}`,
     `Reference tags: ${params.memeTags.join(', ') || 'meme'}`,
     `User input: ${params.userPrompt || 'gmeow'}`,
@@ -446,6 +556,17 @@ function formatHermitImageResult(rawText: string): { imagePrompt: string; reply:
 
 function commandError(message: string): Error {
   return new Error(message)
+}
+
+export const _hermitPromptBuildersForTests = {
+  language: HERMIT_LANGUAGE_DIRECTIVE,
+  buildHermit: buildPinataPromptForHermit,
+  buildImage: buildPinataPromptForHermitImage,
+  buildGmeow: buildPinataPromptForGmeow,
+  detectDialect: detectSpanishDialect,
+  buildLanguageDirective: buildHermitLanguageDirective,
+  buildMemoryPersistenceClause: buildSpanishMemoryPersistenceClause,
+  flagMap: SPANISH_DIALECT_FLAG_MAP,
 }
 
 export async function executeHermitCommand(
