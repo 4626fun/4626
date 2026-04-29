@@ -54,6 +54,13 @@ export type WorkspaceStrategyRow = {
   isActive: boolean | null
   currentWeightRaw: string
   targetWeightBps: number | null
+  /**
+   * Operator-intended on-chain cap (`strategyMaxAssets[strategy]`) as a
+   * decimal uint256 string. `null` = no cap configured in Supabase yet.
+   * The on-chain value is authoritative — this is the operator-side mirror
+   * surfaced by the admin UI for drift detection.
+   */
+  maxAssetsCap: string | null
   owner: `0x${string}` | null
   asset: `0x${string}` | null
   liquidityHint: string | null
@@ -254,6 +261,8 @@ export type WorkspaceSettingsResponse = {
     updatedBy: `0x${string}` | null
     updatedSource: string | null
     notes: string | null
+    /** Mirror of on-chain `strategyMaxAssets[strategy]`. uint256 as string; null = unset. */
+    maxAssetsCap: string | null
     createdAt: string
     updatedAt: string
   }>

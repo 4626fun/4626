@@ -21,7 +21,7 @@ interface ICreatorOVaultStrategiesModuleInternal {
 contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModuleIdentity {
     using SafeERC20 for IERC20;
     bytes32 internal constant MODULE_KIND = keccak256("CreatorOVaultModule.core");
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v1");
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v2");
 
     // ---- constants (must match vault) ----
     uint16 internal constant MAX_FEE = 2_000;
@@ -180,6 +180,12 @@ contract CreatorOVaultCoreModule is CreatorOVaultModuleBase, ICreatorOVaultModul
             assets = reportedAssets;
         } catch {
             assets = strategyDebt[strategy];
+        }
+
+        // Governance cap clamp — see CreatorOVault.strategyMaxAssets.
+        uint256 cap = strategyMaxAssets[strategy];
+        if (cap != 0 && assets > cap) {
+            assets = cap;
         }
     }
 

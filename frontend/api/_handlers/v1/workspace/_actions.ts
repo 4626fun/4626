@@ -65,6 +65,31 @@ function asTrimmed(value: unknown): string {
   return typeof value === 'string' ? value.trim() : ''
 }
 
+export type MaxAssetsCapParseResult =
+  | { ok: true; value: string | null | undefined }
+  | { ok: false; error: string }
+
+// Parses the optional `maxAssetsCap` field on `strategy.setTarget` payloads:
+// - omitted        → undefined (preserve existing column value)
+// - explicit null  → null      (clear column)
+// - empty string   → null      (clear column)
+// - decimal digits → trimmed string (set as uint256 value)
+// - any other type → validation error (do NOT silently clear)
+export function parseMaxAssetsCap(payload: Record<string, unknown>): MaxAssetsCapParseResult {
+  if (!('maxAssetsCap' in payload)) return { ok: true, value: undefined }
+  const raw = payload.maxAssetsCap
+  if (raw === null) return { ok: true, value: null }
+  if (typeof raw !== 'string') {
+    return { ok: false, error: 'maxAssetsCap must be a string, null, or omitted' }
+  }
+  const trimmed = raw.trim()
+  if (!trimmed) return { ok: true, value: null }
+  if (!/^\d+$/.test(trimmed)) {
+    return { ok: false, error: 'maxAssetsCap must be a non-negative decimal integer string' }
+  }
+  return { ok: true, value: trimmed }
+}
+
 function asNumber(value: unknown): number | null {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? parsed : null
@@ -208,6 +233,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         } satisfies ApiEnvelope<never>)
       }
 
+      const maxAssetsCapParse = parseMaxAssetsCap(payload)
+      if (!maxAssetsCapParse.ok) {
+        return res.status(400).json({
+          success: false,
+          error: maxAssetsCapParse.error,
+        } satisfies ApiEnvelope<never>)
+      }
+      const maxAssetsCap = maxAssetsCapParse.value
+
       const updated = await upsertStrategyTarget({
         vaultAddress,
         strategyAddress,
@@ -216,6 +250,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         updatedBy: actor,
         updatedSource: source,
         notes: asTrimmed(payload.notes) || null,
+        maxAssetsCap,
       })
 
       await appendWorkspaceActionActivity({

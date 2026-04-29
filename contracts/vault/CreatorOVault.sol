@@ -63,7 +63,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
 
     /// @notice Maximum strategies
     uint256 public constant MAX_STRATEGIES = 5;
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v1");
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v2");
     bytes32 internal constant MODULE_KIND_CORE = keccak256("CreatorOVaultModule.core");
     bytes32 internal constant MODULE_KIND_STRATEGIES = keccak256("CreatorOVaultModule.strategies");
     bytes32 internal constant MODULE_KIND_ADMIN = keccak256("CreatorOVaultModule.admin");
@@ -326,6 +326,14 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     address internal _strategiesModule;
     address internal _adminModule;
 
+    /// @notice Governance-enforced per-strategy cap on assets recognised by the vault.
+    /// @dev Appended to preserve storage layout. 0 == uncapped. When non-zero, the value
+    ///      clamps `_getStrategyAssetsSafe()` so a misreporting strategy (oracle poisoning,
+    ///      direct-balance donation accounting, etc.) cannot inflate `totalAssets()` beyond
+    ///      the cap governance approved. See OpenZeppelin and Euler analyses of ERC-4626
+    ///      inflation/donation attacks (docs/runbooks/strategy-onboarding-checklist.md).
+    mapping(address => uint256) public strategyMaxAssets;
+
     // =================================
     // EVENTS
     // =================================
@@ -337,6 +345,7 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     event StrategyDeployed(address indexed strategy, uint256 amount);
     event StrategyWithdrawn(address indexed strategy, uint256 amount);
     event StrategyWithdrawFailed(address indexed strategy, uint256 amount, bytes revertData);
+    event UpdateStrategyMaxAssets(address indexed strategy, uint256 oldCap, uint256 newCap);
 
     event UpdateManagement(address indexed newManagement);
     event UpdatePendingManagement(address indexed newPendingManagement);
@@ -808,6 +817,14 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
             // - `totalAssets()` remains usable for ERC-4626 previews
             // - withdrawals can still attempt to pull liquidity
             assets = strategyDebt[strategy];
+        }
+
+        // Governance cap: clamp recognised assets so a strategy reporting an
+        // inflated valuation cannot push `totalAssets()` past the approved cap.
+        // 0 == uncapped (preserves prior behaviour for unconfigured strategies).
+        uint256 cap = strategyMaxAssets[strategy];
+        if (cap != 0 && assets > cap) {
+            assets = cap;
         }
     }
 
@@ -1725,6 +1742,15 @@ contract CreatorOVault is ERC4626, Ownable, ReentrancyGuard, EIP712 {
     }
 
     function setMaxTotalSupply(uint256 _maxTotalSupply) external onlyOwner {
+        _delegate(_adminModule);
+    }
+
+    /**
+     * @notice Set the governance-enforced asset cap for a strategy.
+     * @dev 0 == uncapped. Non-zero clamps strategy contribution to `totalAssets()`.
+     *      See docs/runbooks/strategy-onboarding-checklist.md.
+     */
+    function setStrategyMaxAssets(address, uint256) external onlyManagement {
         _delegate(_adminModule);
     }
 

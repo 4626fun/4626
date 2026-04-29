@@ -122,5 +122,13 @@ abstract contract CreatorOVaultModuleStorage {
     address internal _coreModule;
     address internal _strategiesModule;
     address internal _adminModule;
+
+    // ---------------------------------------------------------------------
+    // Governance-enforced per-strategy asset cap (appended; preserves layout)
+    // ---------------------------------------------------------------------
+    // 0 == uncapped. Non-zero values clamp `_getStrategyAssetsSafe()` so a
+    // misreporting / oracle-poisoned / donation-exposed strategy cannot inflate
+    // `totalAssets()` beyond the value governance has explicitly approved.
+    mapping(address => uint256) internal strategyMaxAssets;
 }
 

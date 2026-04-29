@@ -174,7 +174,7 @@ const KNOWN_SALT_OVERRIDE_DISABLED_BATCHERS = new Set<string>([
   '0xf941bb68e4f083f3f531cc598d5c08d0b8ffba7e',
 ])
 const UNIVERSAL_CREATE2_FACTORY = '0x4e59b44847b379578588920ca78fbf26c0b4956c'
-const EXPECTED_VAULT_MODULE_STORAGE_VERSION = keccak256(encodePacked(['string'], ['CreatorOVaultModuleStorage.v1']))
+const EXPECTED_VAULT_MODULE_STORAGE_VERSION = keccak256(encodePacked(['string'], ['CreatorOVaultModuleStorage.v2']))
 const EXPECTED_VAULT_CORE_MODULE_KIND = keccak256(encodePacked(['string'], ['CreatorOVaultModule.core']))
 const EXPECTED_VAULT_STRATEGIES_MODULE_KIND = keccak256(encodePacked(['string'], ['CreatorOVaultModule.strategies']))
 const EXPECTED_VAULT_ADMIN_MODULE_KIND = keccak256(encodePacked(['string'], ['CreatorOVaultModule.admin']))

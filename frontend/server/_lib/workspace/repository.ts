@@ -11,6 +11,13 @@ export type WorkspaceStrategyTarget = {
   updatedBy: `0x${string}` | null
   updatedSource: string | null
   notes: string | null
+  /**
+   * Operator-intended value for on-chain `strategyMaxAssets[strategy]`.
+   * Stored as the uint256-as-string representation (NUMERIC(78,0)). `null`
+   * means "no cap configured in Supabase"; the runbook treats that the same
+   * as uncapped, but the on-chain value is authoritative.
+   */
+  maxAssetsCap: string | null
   createdAt: string
   updatedAt: string
 }
@@ -191,6 +198,10 @@ function mapStrategyTarget(row: any): WorkspaceStrategyTarget {
     updatedBy: normalizeAddress(row.updated_by),
     updatedSource: typeof row.updated_source === 'string' ? row.updated_source : null,
     notes: typeof row.notes === 'string' ? row.notes : null,
+    maxAssetsCap:
+      row.max_assets_cap === null || row.max_assets_cap === undefined
+        ? null
+        : String(row.max_assets_cap),
     createdAt: toIso(row.created_at) ?? new Date().toISOString(),
     updatedAt: toIso(row.updated_at) ?? new Date().toISOString(),
   }
@@ -345,6 +356,13 @@ export async function upsertStrategyTarget(params: {
   updatedBy?: `0x${string}` | null
   updatedSource?: string | null
   notes?: string | null
+  /**
+   * Operator-intended cap mirroring on-chain `strategyMaxAssets[strategy]`.
+   * Pass the uint256 value as a decimal string. `null` clears the field
+   * (treated as "unset" — the runbook still requires the on-chain cap to be
+   * the source of truth). `undefined` leaves the existing value untouched.
+   */
+  maxAssetsCap?: string | null
 }): Promise<WorkspaceStrategyTarget> {
   const db = await withDb()
   const vaultAddress = normalizeRequiredAddress(params.vaultAddress, 'vault_address')
@@ -354,6 +372,28 @@ export async function upsertStrategyTarget(params: {
   const updatedBy = normalizeAddress(params.updatedBy)
   const updatedSource = typeof params.updatedSource === 'string' ? params.updatedSource : null
   const notes = typeof params.notes === 'string' ? params.notes : null
+  // Treat `undefined` as "leave column alone" by preserving the existing row
+  // value via COALESCE; `null` clears it; a string sets it (validated as a
+  // decimal integer to keep the NUMERIC(78,0) column safe).
+  let maxAssetsCap: string | null | undefined
+  if (params.maxAssetsCap === undefined) {
+    maxAssetsCap = undefined
+  } else if (params.maxAssetsCap === null) {
+    maxAssetsCap = null
+  } else {
+    const trimmed = String(params.maxAssetsCap).trim()
+    if (!/^\d+$/.test(trimmed)) {
+      throw new Error('workspace_strategy_target_invalid_max_assets_cap')
+    }
+    maxAssetsCap = trimmed
+  }
+  // When `maxAssetsCap` is `undefined` we want to preserve the existing column
+  // value on UPDATE rather than clobber it. Pass NULL on INSERT (no row exists
+  // yet) and use a sentinel (`__preserve`) on UPDATE so the SQL keeps the
+  // current row value via COALESCE.
+  const insertCap = maxAssetsCap === undefined ? null : maxAssetsCap
+  const preserveCap = maxAssetsCap === undefined
+  const updateCapValue = maxAssetsCap === undefined ? null : maxAssetsCap
   const result = await db.sql`
     INSERT INTO workspace_strategy_targets (
       vault_address,
@@ -363,6 +403,7 @@ export async function upsertStrategyTarget(params: {
       updated_by,
       updated_source,
       notes,
+      max_assets_cap,
       created_at,
       updated_at
     )
@@ -374,6 +415,7 @@ export async function upsertStrategyTarget(params: {
       ${updatedBy},
       ${updatedSource},
       ${notes},
+      ${insertCap},
       NOW(),
       NOW()
     )
@@ -384,6 +426,10 @@ export async function upsertStrategyTarget(params: {
       updated_by = EXCLUDED.updated_by,
       updated_source = EXCLUDED.updated_source,
       notes = EXCLUDED.notes,
+      max_assets_cap = CASE WHEN ${preserveCap}
+        THEN workspace_strategy_targets.max_assets_cap
+        ELSE ${updateCapValue}
+      END,
       updated_at = NOW()
     RETURNING *;
   `

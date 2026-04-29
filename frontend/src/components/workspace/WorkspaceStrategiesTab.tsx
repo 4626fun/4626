@@ -56,7 +56,7 @@ export function WorkspaceStrategiesTab(props: {
             <Badge variant={statusVariant(row.status)}>{row.status}</Badge>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-2 text-xs">
             <div className="rounded-lg border border-white/10 p-2">
               <div className="text-zinc-500">Current Weight</div>
               <div className="text-zinc-100 mt-1">{row.currentWeightRaw}</div>
@@ -64,6 +64,19 @@ export function WorkspaceStrategiesTab(props: {
             <div className="rounded-lg border border-white/10 p-2">
               <div className="text-zinc-500">Target (bps)</div>
               <div className="text-zinc-100 mt-1">{row.targetWeightBps ?? '—'}</div>
+            </div>
+            <div
+              className="rounded-lg border border-white/10 p-2"
+              title="Operator-intended value for on-chain strategyMaxAssets[strategy]. Compare with the live on-chain cap to detect drift."
+            >
+              <div className="text-zinc-500">Max Assets Cap</div>
+              <div className="text-zinc-100 mt-1 truncate">
+                {row.maxAssetsCap === null
+                  ? '—'
+                  : row.maxAssetsCap === '0'
+                    ? 'uncapped'
+                    : row.maxAssetsCap}
+              </div>
             </div>
             <div className="rounded-lg border border-white/10 p-2">
               <div className="text-zinc-500">Last Rebalance</div>

@@ -19,10 +19,17 @@ export async function ensureWorkspaceSchema(): Promise<void> {
         updated_by TEXT NULL,
         updated_source TEXT NULL,
         notes TEXT NULL,
+        max_assets_cap NUMERIC(78, 0) NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         PRIMARY KEY (vault_address, strategy_address)
       );
+    `
+    // Make ensureWorkspaceSchema idempotent for environments where the table
+    // pre-existed without the cap column (matches migration 032).
+    await db.sql`
+      ALTER TABLE workspace_strategy_targets
+      ADD COLUMN IF NOT EXISTS max_assets_cap NUMERIC(78, 0) NULL;
     `
     await db.sql`
       CREATE INDEX IF NOT EXISTS workspace_strategy_targets_vault_idx

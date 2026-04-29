@@ -14,7 +14,7 @@ import {ICreatorOVaultModuleIdentity} from "./ICreatorOVaultModuleIdentity.sol";
 contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModuleIdentity {
     using SafeERC20 for IERC20;
     bytes32 internal constant MODULE_KIND = keccak256("CreatorOVaultModule.admin");
-    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v1");
+    bytes32 internal constant MODULE_STORAGE_VERSION = keccak256("CreatorOVaultModuleStorage.v2");
 
     // ---- constants (must match vault) ----
     uint256 internal constant MAX_BPS = 10_000;
@@ -47,6 +47,8 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
     event RescueInitiated(address indexed oldOwner, address indexed newOwner, uint64 unlockTime);
     event RescueCancelled(address indexed oldOwner);
     event RescueFinalized(address indexed oldOwner, address indexed newOwner);
+
+    event UpdateStrategyMaxAssets(address indexed strategy, uint256 oldCap, uint256 newCap);
 
     // ---- errors (must match vault selectors) ----
     error ZeroAddress();
@@ -300,6 +302,16 @@ contract CreatorOVaultAdminModule is CreatorOVaultModuleBase, ICreatorOVaultModu
         uint256 current = _totalSupply;
         if (_maxTotalSupply < current) revert MaxTotalSupplyBelowCurrent(_maxTotalSupply, current);
         maxTotalSupply = _maxTotalSupply;
+    }
+
+    /// @notice Set the governance-enforced asset cap for a strategy.
+    /// @dev Pass 0 to disable the cap (uncapped). The cap clamps the strategy's
+    ///      contribution to `totalAssets()` so misreporting cannot inflate share price.
+    function setStrategyMaxAssets(address strategy, uint256 cap) external onlyDelegateCall {
+        if (strategy == address(0)) revert ZeroAddress();
+        uint256 oldCap = strategyMaxAssets[strategy];
+        strategyMaxAssets[strategy] = cap;
+        emit UpdateStrategyMaxAssets(strategy, oldCap, cap);
     }
 
     function setFlashLoanProtection(

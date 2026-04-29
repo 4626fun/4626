@@ -91,6 +91,8 @@ export type WorkspaceStrategyRow = {
   isActive: boolean | null
   currentWeightRaw: string
   targetWeightBps: number | null
+  /** Operator-intended on-chain cap mirror; uint256 as decimal string, or null. */
+  maxAssetsCap: string | null
   owner: `0x${string}` | null
   asset: `0x${string}` | null
   liquidityHint: string | null
@@ -564,6 +566,7 @@ export async function resolveWorkspaceStrategies(params: {
         isActive: typeof raw.isActive === 'boolean' ? raw.isActive : null,
         currentWeightRaw: String(raw.weight ?? '0'),
         targetWeightBps: target?.targetWeightBps ?? null,
+        maxAssetsCap: target?.maxAssetsCap ?? null,
         owner: normalizeAddress(raw.owner),
         asset: normalizeAddress(raw.asset),
         liquidityHint: kind === 'solana' ? 'Bridge/Solana route' : kind === 'charm' ? 'Uniswap V3 LP' : kind === 'ajna' ? 'Ajna lending' : null,
