@@ -205,6 +205,9 @@ importers:
       pg:
         specifier: ^8.18.0
         version: 8.18.0
+      poseidon-lite:
+        specifier: ^0.3.0
+        version: 0.3.0
       react:
         specifier: ^19.2.4
         version: 19.2.4
@@ -5636,6 +5639,9 @@ packages:
         optional: true
       wagmi:
         optional: true
+
+  poseidon-lite@0.3.0:
+    resolution: {integrity: sha512-ilJj4MIve4uBEG7SrtPqUUNkvpJ/pLVbndxa0WvebcQqeIhe+h72JR4g0EvwchUzm9sOQDlOjiDNmRAgxNZl4A==}
 
   possible-typed-array-names@1.1.0:
     resolution: {integrity: sha512-/+5VFTchJDoVj3bhoqi6UeymcD00DAwb1nJwamzPvHEszJ4FpF6SNNbUbOS8yI56qHzdV8eK0qEfOSiodkTdxg==}
@@ -14728,6 +14734,8 @@ snapshots:
       - '@types/react'
       - immer
       - use-sync-external-store
+
+  poseidon-lite@0.3.0: {}
 
   possible-typed-array-names@1.1.0: {}
 
