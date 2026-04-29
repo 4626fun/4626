@@ -112,19 +112,23 @@
       if (!this.ctx) return;
       try { if (this.ctx.state === 'suspended') await this.ctx.resume(); } catch (_) {}
       await this.preload();
-      // Music bed: 1.5s pre-roll, then a long 6s exponential fade-in for a
-      // soft authored entrance. Ambience starts immediately on a shorter
-      // fade so the first gesture still produces audible feedback.
-      this._startBed(MUSIC, this.busMusic, 6.0, 1.5);
-      this._startBed(AMBIENCE, this.busAmbience, 2.0, 0);
+      // First gesture triggers both beds immediately. Music bed begins
+      // playback 1.5s into the file (skipping the soft tail-of-phrase
+      // intro that sounded like the end of something else) and fades
+      // in over 6s. Ambience enters on a 2s fade.
+      this._startBed(MUSIC, this.busMusic, 6.0, 0, 1.5);
+      this._startBed(AMBIENCE, this.busAmbience, 2.0, 0, 0);
     }
 
-    _startBed(spec, bus, fadeSec, delaySec = 0) {
+    _startBed(spec, bus, fadeSec, delaySec = 0, offsetSec = 0) {
       const buf = this.buffers.get(spec.key);
       if (!buf) return null;
       const src = this.ctx.createBufferSource();
       src.buffer = buf;
       src.loop = true;
+      // On loop wrap, return to the start of the file — the offset only
+      // skips the intro on first play. (Source is a 124s seamless loop,
+      // so loopStart=0 / loopEnd=duration is correct for continuity.)
       const g = this.ctx.createGain();
       const startAt = this.ctx.currentTime + Math.max(0, delaySec);
       // Exponential-style fade-in: perceived loudness is logarithmic, so
@@ -136,7 +140,10 @@
       g.gain.setTargetAtTime(1, startAt, Math.max(0.05, fadeSec / 4));
       g.gain.setValueAtTime(1, startAt + fadeSec);
       src.connect(g); g.connect(bus);
-      src.start(startAt);
+      // start(when, offset) — offset is seconds into the buffer where
+      // playback begins. Clamp to buffer duration to avoid silent start.
+      const safeOffset = Math.max(0, Math.min(offsetSec, Math.max(0, (buf.duration || 0) - 0.05)));
+      src.start(startAt, safeOffset);
       if (spec.key === MUSIC.key) this.musicSource = { src, gain: g };
       else this.ambienceSource = { src, gain: g };
       return src;
