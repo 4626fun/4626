@@ -113,10 +113,10 @@
       try { if (this.ctx.state === 'suspended') await this.ctx.resume(); } catch (_) {}
       await this.preload();
       // First gesture triggers both beds immediately. Music bed begins
-      // playback 3.5s into the file (skipping the soft tail-of-phrase
-      // intro that sounded like the end of something else) and fades
-      // in over 6s. Ambience enters on a 2s fade.
-      this._startBed(MUSIC, this.busMusic, 6.0, 0, 3.5);
+      // playback 5.5s into the file (skipping the soft tail-of-phrase
+      // intro that sounded like joining the end of something else)
+      // and fades in over 6s. Ambience enters on a 2s fade.
+      this._startBed(MUSIC, this.busMusic, 6.0, 0, 5.5);
       this._startBed(AMBIENCE, this.busAmbience, 2.0, 0, 0);
     }
 
@@ -131,14 +131,15 @@
       // so loopStart=0 / loopEnd=duration is correct for continuity.)
       const g = this.ctx.createGain();
       const startAt = this.ctx.currentTime + Math.max(0, delaySec);
-      // Exponential-style fade-in: perceived loudness is logarithmic, so
-      // setTargetAtTime with a time-constant of fadeSec/4 reaches ~98% of
-      // target by fadeSec while feeling smooth at the start (no slam-in
-      // at the end the way a linear ramp does). Pin the tail to exactly 1
-      // at startAt+fadeSec so we never asymptote short.
+      // True audio fade-in via exponentialRampToValueAtTime. The Web Audio
+      // exponential ramp is multiplicative — it interpolates as a constant
+      // ratio per unit time, which matches how human hearing perceives
+      // loudness (logarithmic). Visually the gain curve starts very quiet
+      // and *swells* into full volume rather than the inverse-decay shape
+      // setTargetAtTime would produce. Start floor must be > 0 (exponential
+      // ramps cannot touch zero); 0.0001 ≈ -80 dB which is inaudible.
       g.gain.setValueAtTime(0.0001, startAt);
-      g.gain.setTargetAtTime(1, startAt, Math.max(0.05, fadeSec / 4));
-      g.gain.setValueAtTime(1, startAt + fadeSec);
+      g.gain.exponentialRampToValueAtTime(1, startAt + fadeSec);
       src.connect(g); g.connect(bus);
       // start(when, offset) — offset is seconds into the buffer where
       // playback begins. Clamp to buffer duration to avoid silent start.
