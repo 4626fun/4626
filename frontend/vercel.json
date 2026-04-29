@@ -393,6 +393,16 @@
       "dest": "/telegram-link.html"
     },
     {
+      "src": "/immersive/?",
+      "status": 308,
+      "headers": { "location": "/" }
+    },
+    {
+      "src": "/immersive/index\\.html",
+      "status": 308,
+      "headers": { "location": "/" }
+    },
+    {
       "src": "/",
       "has": [
         {
