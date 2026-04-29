@@ -2000,7 +2000,14 @@ window.__Continuity = Continuity;
           // @media max-width:768px). The desktop horizontal-pan transform
           // would push the whole graph off-canvas, so gate transform writes.
           if (window.innerWidth > 768) {
-            nodeGraph.style.transform = `translateX(${ngPanX}px) scale(${ngExitScale})`;
+            // Compose with the responsive --ng-base-scale set in CSS so
+            // wide desktops keep the bigger idle scale through the exit.
+            // (The original transform here did NOT include translateY(-50%);
+            // we preserve that exact composition so the graph's resting
+            // position during the active chapter is unchanged — only the
+            // overall scale grows on wide viewports.)
+            const ngBaseScale = parseFloat(getComputedStyle(nodeGraph).getPropertyValue('--ng-base-scale')) || 1;
+            nodeGraph.style.transform = `translateX(${ngPanX}px) scale(${ngExitScale * ngBaseScale})`;
             nodeGraph.style.filter = ngExitBlur > 0.05 ? `blur(${ngExitBlur}px)` : '';
           } else {
             nodeGraph.style.transform = '';
@@ -3695,7 +3702,10 @@ window.__Continuity = Continuity;
         headline.style.filter = headBlur > 0.05 ? `blur(${headBlur}px)` : 'none';
 
         graph.style.opacity = graphOp;
-        graph.style.transform = `translate(-50%, -50%) scale(${graphScale})`;
+        // Compose with the responsive --dual-base-scale (CSS) so wide
+        // desktops keep the bigger idle scale through entry/exit.
+        const dualBaseScale = parseFloat(getComputedStyle(graph).getPropertyValue('--dual-base-scale')) || 1;
+        graph.style.transform = `translate(-50%, -50%) scale(${graphScale * dualBaseScale})`;
 
         // Sides visible for layout, but individual children animate separately
         sideLeft.style.opacity = sideOp;
