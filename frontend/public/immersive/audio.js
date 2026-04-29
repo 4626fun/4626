@@ -113,10 +113,10 @@
       try { if (this.ctx.state === 'suspended') await this.ctx.resume(); } catch (_) {}
       await this.preload();
       // First gesture triggers both beds immediately. Music bed begins
-      // playback 1.5s into the file (skipping the soft tail-of-phrase
+      // playback 3.5s into the file (skipping the soft tail-of-phrase
       // intro that sounded like the end of something else) and fades
       // in over 6s. Ambience enters on a 2s fade.
-      this._startBed(MUSIC, this.busMusic, 6.0, 0, 1.5);
+      this._startBed(MUSIC, this.busMusic, 6.0, 0, 3.5);
       this._startBed(AMBIENCE, this.busAmbience, 2.0, 0, 0);
     }
 
