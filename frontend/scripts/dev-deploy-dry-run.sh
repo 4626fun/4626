@@ -211,6 +211,8 @@ if port_in_use "$DEV_PORT"; then
   fi
 fi
 export DEPLOY_DRY_RUN_PORT="$DEV_PORT"
+APP_ORIGIN="${APP_ORIGIN:-http://localhost:${DEV_PORT}}"
+VITE_APP_ORIGIN="${VITE_APP_ORIGIN:-http://localhost:${DEV_PORT}}"
 if [[ -n "${APP_ORIGIN:-}" ]]; then
   export APP_ORIGIN="$(normalize_local_origin_port "$APP_ORIGIN" "$DEV_PORT")"
 fi

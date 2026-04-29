@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  resolveAuthRedirectOrigin,
   resolveDisallowedLoopbackRedirectUrl,
   resolveLoopbackOriginForCurrentWindow,
   resolveMarketingToAppBaseUrl,
@@ -88,6 +89,35 @@ describe('resolveDisallowedLoopbackRedirectUrl', () => {
         currentHref: 'http://localhost:58492/swap',
       }),
     ).toBeNull()
+  })
+})
+
+describe('resolveAuthRedirectOrigin', () => {
+  it('pins local auth redirects to the configured dry-run origin', () => {
+    expect(
+      resolveAuthRedirectOrigin({
+        configuredOrigin: 'http://localhost:5173',
+        currentOrigin: 'http://localhost:58492',
+      }),
+    ).toBe('http://localhost:5173')
+  })
+
+  it('pins allowed alternate local ports back to the configured dry-run origin', () => {
+    expect(
+      resolveAuthRedirectOrigin({
+        configuredOrigin: 'http://localhost:5173',
+        currentOrigin: 'http://localhost:5174',
+      }),
+    ).toBe('http://localhost:5173')
+  })
+
+  it('keeps public production auth redirects on the current host', () => {
+    expect(
+      resolveAuthRedirectOrigin({
+        configuredOrigin: 'https://app.4626.fun',
+        currentOrigin: 'https://4626.fun',
+      }),
+    ).toBe('https://4626.fun')
   })
 })
 

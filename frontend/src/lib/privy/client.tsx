@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react'
 import { Component, createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { getPrivyAppId, getPrivyClientId, isPrivyClientEnabled } from '@/lib/flags/flags'
+import { CONFIGURED_APP_ORIGIN, resolveAuthRedirectOrigin } from '@/lib/env/host'
 import { PrivyProvider, usePrivy } from '@privy-io/react-auth'
 import { base } from 'viem/chains'
 import { createPrivyAppearance } from './clientAppearance'
@@ -127,7 +128,13 @@ export function PrivyClientProvider(props: {
 
   // Privy OAuth redirects are validated against an allowlist and must match exactly.
   // Use the bare origin so transient search/hash state on the current page never breaks OAuth init.
-  const customOAuthRedirectUrl = typeof window !== 'undefined' ? window.location.origin : null
+  const customOAuthRedirectUrl =
+    typeof window !== 'undefined'
+      ? resolveAuthRedirectOrigin({
+          configuredOrigin: CONFIGURED_APP_ORIGIN,
+          currentOrigin: window.location.origin,
+        })
+      : null
 
   const baseConfig: PrivyProviderConfig = {
     appearance,

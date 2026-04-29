@@ -2,6 +2,7 @@ import type { ReactNode } from 'react'
 import { PrivyProvider } from '@privy-io/react-auth'
 
 import { getPrivyAppId, getPrivyClientId, isPrivyClientEnabled } from '@/lib/flags/flags'
+import { CONFIGURED_APP_ORIGIN, resolveAuthRedirectOrigin } from '@/lib/env/host'
 
 type PrivyProviderConfig = Parameters<typeof PrivyProvider>[0]['config']
 type DefinedPrivyProviderConfig = NonNullable<PrivyProviderConfig>
@@ -28,7 +29,13 @@ export function TelegramLinkPrivyProvider(props: TelegramLinkPrivyProviderProps)
   if (!appId) return <>{children}</>
 
   const clientId = getPrivyClientId()
-  const customOAuthRedirectUrl = typeof window !== 'undefined' ? window.location.origin : null
+  const customOAuthRedirectUrl =
+    typeof window !== 'undefined'
+      ? resolveAuthRedirectOrigin({
+          configuredOrigin: CONFIGURED_APP_ORIGIN,
+          currentOrigin: window.location.origin,
+        })
+      : null
 
   const config: PrivyProviderConfig = {
     appearance: TELEGRAM_LINK_APPEARANCE,

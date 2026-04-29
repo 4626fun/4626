@@ -11,6 +11,11 @@ type MarketingToAppBaseUrlResolutionInput = {
   fallbackPublicAppOrigin?: string
 }
 
+type AuthRedirectOriginResolutionInput = {
+  configuredOrigin: string
+  currentOrigin: string
+}
+
 type LoopbackRedirectResolutionInput = {
   configuredOrigin: string
   currentHref: string
@@ -89,6 +94,26 @@ export function resolveDisallowedLoopbackRedirectUrl(input: LoopbackRedirectReso
   }
 }
 
+export function resolveAuthRedirectOrigin(input: AuthRedirectOriginResolutionInput): string {
+  try {
+    const configured = new URL(input.configuredOrigin)
+    const current = new URL(input.currentOrigin)
+
+    if (
+      isLoopbackHostname(configured.hostname) &&
+      isLoopbackHostname(current.hostname) &&
+      configured.protocol === current.protocol &&
+      isAllowedLoopbackPort(configured.port)
+    ) {
+      return configured.origin
+    }
+
+    return current.origin
+  } catch {
+    return input.currentOrigin
+  }
+}
+
 export function isCurrentWindowUrl(target: string): boolean {
   if (typeof window === 'undefined') return false
   try {
@@ -105,6 +130,12 @@ function resolveConfiguredOrigin(rawOrigin: string): string {
     currentOrigin: window.location.origin,
   })
 }
+
+export const CONFIGURED_MARKETING_ORIGIN =
+  (import.meta.env.VITE_MARKETING_ORIGIN as string)?.trim() || 'https://4626.fun'
+
+export const CONFIGURED_APP_ORIGIN =
+  (import.meta.env.VITE_APP_ORIGIN as string)?.trim() || 'https://app.4626.fun'
 
 /**
  * When rendering the marketing host, never route users to loopback app origins.
@@ -139,12 +170,10 @@ export function resolveMarketingToAppBaseUrl(input: MarketingToAppBaseUrlResolut
 }
 
 /** Canonical marketing/waitlist domain origin. */
-export const MARKETING_ORIGIN =
-  resolveConfiguredOrigin((import.meta.env.VITE_MARKETING_ORIGIN as string)?.trim() || 'https://4626.fun')
+export const MARKETING_ORIGIN = resolveConfiguredOrigin(CONFIGURED_MARKETING_ORIGIN)
 
 /** Canonical app domain origin (post-acceptance). */
-export const APP_ORIGIN =
-  resolveConfiguredOrigin((import.meta.env.VITE_APP_ORIGIN as string)?.trim() || 'https://app.4626.fun')
+export const APP_ORIGIN = resolveConfiguredOrigin(CONFIGURED_APP_ORIGIN)
 
 /**
  * Optional explicit base URL for waitlist referral links.
