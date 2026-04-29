@@ -126,6 +126,7 @@
     "react-jazzicon": "^1.0.4",
     "react-router-dom": "^7.13.0",
     "sharp": "^0.34.5",
+    "snarkjs": "^0.7.6",
     "sonner": "^2.0.7",
     "stripe": "^22.0.2",
     "usehooks-ts": "^3.1.1",
