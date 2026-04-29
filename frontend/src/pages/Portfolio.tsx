@@ -543,6 +543,36 @@ export function Portfolio() {
   const onchainIdentity = portfolioQuery.data?.onchainIdentity ?? null
   const profileFields = profile?.profileFields ?? {}
 
+  const displayPrimaryWalletAddress = useMemo(() => {
+    const connectedCandidate =
+      normalizeAddress(accountContext.activeAccount) ??
+      normalizeAddress(accountContext.signerAddress) ??
+      normalizeAddress(wagmiAddress) ??
+      normalizeAddress(siwe.authAddress)
+
+    const connectedWallet = connectedCandidate
+      ? wallets.find((wallet) => normalizeAddress(wallet.address) === connectedCandidate)
+      : null
+    if (connectedWallet && !connectedWallet.isEmbeddedEoa) {
+      return normalizeAddress(connectedWallet.address)
+    }
+
+    const canonicalCandidate =
+      normalizeAddress(profile?.primarySmartWallet) ??
+      normalizeAddress(wallets.find((wallet) => wallet.isCanonicalSmartWallet)?.address ?? null)
+    if (canonicalCandidate) return canonicalCandidate
+
+    const fallbackPrimary = wallets.find((wallet) => wallet.isPrimary && !wallet.isEmbeddedEoa)
+    return normalizeAddress(fallbackPrimary?.address ?? null)
+  }, [
+    accountContext.activeAccount,
+    accountContext.signerAddress,
+    profile?.primarySmartWallet,
+    siwe.authAddress,
+    wagmiAddress,
+    wallets,
+  ])
+
   const avatarLensPreviewUrl = useMemo(() => resolveLensUri(editAvatarLensUri.trim()), [editAvatarLensUri])
   const bannerLensPreviewUrl = useMemo(() => resolveLensUri(editBannerLensUri.trim()), [editBannerLensUri])
 
@@ -643,7 +673,9 @@ export function Portfolio() {
               <span className="text-zinc-300">{shortAddr(wallet.address)}</span>
               {wallet.isCanonicalSmartWallet ? <Badge variant="canonical" size="xs">Smart Wallet</Badge> : null}
               {wallet.isEmbeddedEoa ? <Badge variant="eoa" size="xs">User Wallet</Badge> : null}
-              {wallet.isPrimary ? <Badge variant="warning" size="xs">Primary</Badge> : null}
+              {normalizeAddress(wallet.address) === displayPrimaryWalletAddress ? (
+                <Badge variant="warning" size="xs">Primary</Badge>
+              ) : null}
             </div>
           ))}
         </div>

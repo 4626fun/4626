@@ -186,3 +186,7 @@ export const ZoraConnectorProbe = lazyNamed(
   () => import('../pages/dev/ZoraConnectorProbe'),
   'ZoraConnectorProbe',
 )
+export const CswSignatureProbe = lazyNamed(
+  () => import('../pages/dev/CswSignatureProbe'),
+  'CswSignatureProbe',
+)

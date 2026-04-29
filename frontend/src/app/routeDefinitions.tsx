@@ -22,6 +22,7 @@ import {
   CompleteAuction,
   CreatorEarnings,
   CreatorStrategyFeatures,
+  CswSignatureProbe,
   Deploy,
   DeployCoin,
   DeployVault,
@@ -103,6 +104,10 @@ export const ACCOUNT_ROUTES: PathRouteDef[] = [
   {
     path: '/dev/zora-connector-probe',
     element: <ZoraConnectorProbe />,
+  },
+  {
+    path: '/dev/csw-signature-probe',
+    element: <CswSignatureProbe />,
   },
 ]
 
