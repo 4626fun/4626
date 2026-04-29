@@ -230,7 +230,44 @@ export async function upsertAlfaClubChatToken(params: {
                 updated_by;
     `
     const row = ((result.rows ?? [])[0] ?? null) as TokenRow | null
-    return toMeta(row)
+    if (row) return toMeta(row)
+
+    // RETURNING came back empty even though the SQL did not throw. The
+    // observed production failure mode here is an RLS / role permission
+    // quirk where the underlying UPDATE is silently filtered (USING
+    // returns false for the runtime role) — the row is left untouched and
+    // RETURNING is empty, but no Postgres error surfaces. Read the row back
+    // via a separate SELECT and treat the upsert as successful only if the
+    // persisted secret_value matches what we just tried to write. Reads
+    // against this table are known to work for the runtime role (the chat
+    // bridge polls it on every tick), so a value mismatch unambiguously
+    // means the write did not land.
+    const verify = await db.sql`
+      SELECT secret_value,
+             updated_at::text AS updated_at,
+             expires_at::text AS expires_at,
+             updated_by
+      FROM alfaclub_runtime_secret
+      WHERE secret_key = ${CHAT_TOKEN_KEY}
+      LIMIT 1;
+    `
+    const verifyRow = ((verify.rows ?? [])[0] ?? null) as TokenRow | null
+    if (verifyRow && verifyRow.secret_value === jwt) {
+      logger.warn(
+        '[alfaclub-chat-token-store] chat token upsert RETURNING was empty but SELECT confirms persisted value matches; treating as success',
+        { secretKey: CHAT_TOKEN_KEY },
+      )
+      return toMeta(verifyRow)
+    }
+    logger.error(
+      '[alfaclub-chat-token-store] chat token upsert produced no RETURNING row and SELECT-back does not match — write was silently rejected (likely RLS USING(false) / missing UPDATE grant for runtime role)',
+      {
+        secretKey: CHAT_TOKEN_KEY,
+        verifyRowPresent: Boolean(verifyRow),
+        verifyValueMatches: verifyRow ? verifyRow.secret_value === jwt : null,
+      },
+    )
+    return null
   } catch (err) {
     logger.error('[alfaclub-chat-token-store] chat token upsert failed', {
       secretKey: CHAT_TOKEN_KEY,

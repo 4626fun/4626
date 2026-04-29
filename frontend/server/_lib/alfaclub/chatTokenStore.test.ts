@@ -126,4 +126,107 @@ describe('upsertAlfaClubChatToken — diagnostics on failure', () => {
       }),
     )
   })
+
+  it('treats empty RETURNING + matching SELECT-back as success (RLS RETURNING-filter quirk)', async () => {
+    // Production failure mode: ON CONFLICT DO UPDATE silently no-ops under
+    // RLS USING(false), so RETURNING returns 0 rows even though the read
+    // role still sees the row. The follow-up SELECT confirms the persisted
+    // value, so the upsert should report success rather than failing the
+    // refresh path.
+    const calls: string[] = []
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const sqlText = strings.join(' ')
+        if (/INSERT INTO alfaclub_runtime_secret/i.test(sqlText)) {
+          calls.push('upsert')
+          return { rows: [], rowCount: 0 }
+        }
+        if (/SELECT secret_value/i.test(sqlText)) {
+          calls.push('select')
+          return {
+            rows: [
+              {
+                secret_value: 'h.p.s',
+                updated_at: '2026-04-29T05:43:31.239506+00',
+                expires_at: '2026-04-29T06:43:31+00',
+                updated_by: 'unit-test',
+              },
+            ],
+            rowCount: 1,
+          }
+        }
+        return { rows: [], rowCount: 0 }
+      }),
+    }
+    getDbMock.mockResolvedValue(db)
+
+    const { upsertAlfaClubChatToken } = await import('./chatTokenStore.ts')
+    const meta = await upsertAlfaClubChatToken({ jwt: 'h.p.s', updatedBy: 'unit-test' })
+
+    expect(meta).not.toBeNull()
+    expect(meta?.hasToken).toBe(true)
+    expect(calls).toEqual(['upsert', 'select'])
+  })
+
+  it('returns null when RETURNING is empty AND the SELECT-back value does not match (true write rejection)', async () => {
+    // If the runtime role cannot write at all and the persisted row still
+    // shows the OLD value, the read-back fallback must not paper over the
+    // failure: surface null so the refresher reports
+    // status:"error" / token_persistence_failed:identity_token.
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const sqlText = strings.join(' ')
+        if (/INSERT INTO alfaclub_runtime_secret/i.test(sqlText)) {
+          return { rows: [], rowCount: 0 }
+        }
+        if (/SELECT secret_value/i.test(sqlText)) {
+          return {
+            rows: [
+              {
+                secret_value: 'OLD.STALE.JWT',
+                updated_at: '2026-04-29T05:00:00+00',
+                expires_at: '2026-04-29T06:00:00+00',
+                updated_by: 'previous-write',
+              },
+            ],
+            rowCount: 1,
+          }
+        }
+        return { rows: [], rowCount: 0 }
+      }),
+    }
+    getDbMock.mockResolvedValue(db)
+
+    const { upsertAlfaClubChatToken } = await import('./chatTokenStore.ts')
+    const meta = await upsertAlfaClubChatToken({ jwt: 'h.p.s', updatedBy: 'unit-test' })
+
+    expect(meta).toBeNull()
+    expect(loggerErrorMock).toHaveBeenCalledWith(
+      expect.stringContaining('upsert produced no RETURNING row and SELECT-back does not match'),
+      expect.objectContaining({
+        secretKey: 'chat_jwt',
+        verifyRowPresent: true,
+        verifyValueMatches: false,
+      }),
+    )
+  })
+
+  it('returns null when RETURNING and SELECT-back both come back empty', async () => {
+    const db = {
+      sql: vi.fn(async () => ({ rows: [], rowCount: 0 })),
+    }
+    getDbMock.mockResolvedValue(db)
+
+    const { upsertAlfaClubChatToken } = await import('./chatTokenStore.ts')
+    const meta = await upsertAlfaClubChatToken({ jwt: 'h.p.s', updatedBy: 'unit-test' })
+
+    expect(meta).toBeNull()
+    expect(loggerErrorMock).toHaveBeenCalledWith(
+      expect.stringContaining('upsert produced no RETURNING row and SELECT-back does not match'),
+      expect.objectContaining({
+        verifyRowPresent: false,
+        verifyValueMatches: null,
+      }),
+    )
+  })
 })
