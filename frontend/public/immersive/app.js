@@ -1620,7 +1620,25 @@ window.__Continuity = Continuity;
       edgePathsComputed = true;
     }
   }
-  window.addEventListener('resize', () => { edgePathsComputed = false; });
+
+  // Cache the responsive base scale read from the CSS custom property.
+  // Reading getComputedStyle inside the per-frame scroll write loop forces
+  // synchronous style/layout recalc each frame and causes scroll stutter,
+  // so we resolve it once on load and refresh only when the viewport
+  // breakpoint could have changed (resize). 1 is a safe fallback before
+  // the first read completes.
+  let ngBaseScaleCached = 1;
+  function refreshNgBaseScale() {
+    if (!nodeGraph) return;
+    const v = parseFloat(getComputedStyle(nodeGraph).getPropertyValue('--ng-base-scale'));
+    if (Number.isFinite(v) && v > 0) ngBaseScaleCached = v;
+  }
+  refreshNgBaseScale();
+
+  window.addEventListener('resize', () => {
+    edgePathsComputed = false;
+    refreshNgBaseScale();
+  });
   // Also recompute periodically during scroll to catch transform changes
   let lastEdgeCompute = 0;
 
@@ -2002,12 +2020,15 @@ window.__Continuity = Continuity;
           if (window.innerWidth > 768) {
             // Compose with the responsive --ng-base-scale set in CSS so
             // wide desktops keep the bigger idle scale through the exit.
+            // ngBaseScaleCached is resolved once at load and refreshed on
+            // resize — see refreshNgBaseScale() above. Reading
+            // getComputedStyle here would force per-frame style recalc and
+            // reintroduce scroll stutter.
             // (The original transform here did NOT include translateY(-50%);
             // we preserve that exact composition so the graph's resting
             // position during the active chapter is unchanged — only the
             // overall scale grows on wide viewports.)
-            const ngBaseScale = parseFloat(getComputedStyle(nodeGraph).getPropertyValue('--ng-base-scale')) || 1;
-            nodeGraph.style.transform = `translateX(${ngPanX}px) scale(${ngExitScale * ngBaseScale})`;
+            nodeGraph.style.transform = `translateX(${ngPanX}px) scale(${ngExitScale * ngBaseScaleCached})`;
             nodeGraph.style.filter = ngExitBlur > 0.05 ? `blur(${ngExitBlur}px)` : '';
           } else {
             nodeGraph.style.transform = '';
@@ -3574,7 +3595,21 @@ window.__Continuity = Continuity;
   window.computeDualEdgePaths = computeDualEdgePaths;
 
   let dualEdgesComputed = false;
-  window.addEventListener('resize', () => { dualEdgesComputed = false; });
+
+  // Cache responsive base scale (see node-graph chapter for rationale —
+  // avoid per-frame getComputedStyle inside the scroll write loop).
+  let dualBaseScaleCached = 1;
+  function refreshDualBaseScale() {
+    if (!graph) return;
+    const v = parseFloat(getComputedStyle(graph).getPropertyValue('--dual-base-scale'));
+    if (Number.isFinite(v) && v > 0) dualBaseScaleCached = v;
+  }
+  refreshDualBaseScale();
+
+  window.addEventListener('resize', () => {
+    dualEdgesComputed = false;
+    refreshDualBaseScale();
+  });
 
   ScrollTrigger.create({
     trigger: section,
@@ -3704,8 +3739,10 @@ window.__Continuity = Continuity;
         graph.style.opacity = graphOp;
         // Compose with the responsive --dual-base-scale (CSS) so wide
         // desktops keep the bigger idle scale through entry/exit.
-        const dualBaseScale = parseFloat(getComputedStyle(graph).getPropertyValue('--dual-base-scale')) || 1;
-        graph.style.transform = `translate(-50%, -50%) scale(${graphScale * dualBaseScale})`;
+        // dualBaseScaleCached is resolved once at load and refreshed on
+        // resize — see refreshDualBaseScale() above. Reading
+        // getComputedStyle here would force per-frame style recalc.
+        graph.style.transform = `translate(-50%, -50%) scale(${graphScale * dualBaseScaleCached})`;
 
         // Sides visible for layout, but individual children animate separately
         sideLeft.style.opacity = sideOp;
