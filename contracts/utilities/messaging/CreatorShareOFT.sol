@@ -1101,84 +1101,43 @@ contract CreatorShareOFT is OFT, ReentrancyGuard {
     }
 
     /**
-     * @notice Preview fee for a transfer
-     */
-    function previewFee(address from, address to, uint256 amount) external view returns (bool isBuy, uint256 fee) {
-        if (addressType[from] == OperationType.NoFees || addressType[to] == OperationType.NoFees) {
-            return (false, 0);
-        }
-        if (addressType[from] == OperationType.SwapOnly && addressType[to] != OperationType.SwapOnly && feesEnabled) {
-            return (true, (amount * buyFeeBps) / BASIS_POINTS);
-        }
-        return (false, 0);
-    }
-
-    /**
-     * @notice Check if address is a trading venue
-     */
-    function isTradingVenue(address addr) external view returns (bool) {
-        return addressType[addr] == OperationType.SwapOnly;
-    }
-
-    /**
-     * @notice Confirm transfers are always allowed
-     */
-    function canTransfer(address, address, uint256) external pure returns (bool) {
-        return true;
-    }
-
-    /**
-     * @notice Check if address is a minter
-     */
-    function checkMinter(address account) external view returns (bool) {
-        return isMinter[account] || account == vault || account == owner();
-    }
-
-    /**
      * @notice Get contract version
+     * @dev Kept as a deliberate part of the runtime ABI — indexers and
+     *      audit tooling commonly check `version()` on deployed OFTs.
      */
     function version() external pure returns (string memory) {
         return "2.0.0-hub-centric";
     }
 
-    /**
-     * @notice Get token category
-     */
-    function category() external pure returns (string memory) {
-        return "Creator Vault Share Token";
-    }
-
-    /**
-     * @notice Get token description
-     */
-    function description() external pure returns (string memory) {
-        return "4626.fun Share Token";
-    }
-
-    /**
-     * @notice Check if fees can be flushed (remote chains only)
-     */
-    function canFlush() external view returns (bool) {
-        return !isHub && pendingFees > 0 && hubGaugeReceiver != address(0) && hubEid != 0;
-    }
-
-    /**
-     * @notice Get remote chain status
-     */
-    function getRemoteStatus()
-        external
-        view
-        returns (
-            uint256 _pendingFees,
-            uint256 _totalFeesFlushed,
-            uint256 _totalLotteryEntriesSent,
-            bool _isHub,
-            uint32 _hubEid,
-            address _hubGaugeReceiver
-        )
-    {
-        return (pendingFees, totalFeesFlushed, totalLotteryEntriesSent, isHub, hubEid, hubGaugeReceiver);
-    }
+    // NOTE: A cluster of dead view helpers (`previewFee`, `isTradingVenue`,
+    // `canTransfer`, `checkMinter`, `category`, `description`, `canFlush`,
+    // `getRemoteStatus`) used to live here. They had ZERO on-chain or
+    // off-chain callers and were redundant with the auto-generated public
+    // getters for `addressType`, `isMinter`, `vault`, `owner`, `pendingFees`,
+    // `totalFeesFlushed`, `totalLotteryEntriesSent`, `isHub`, `hubEid`, and
+    // `hubGaugeReceiver`. Their dispatcher entries + selectors + literal
+    // strings ("Creator Vault Share Token", "4626.fun Share Token") were
+    // contributing to EIP-170 size pressure and pushing this contract over
+    // the 24,576-byte runtime cap (audit M-01, 2026-04-25; see
+    // docs/operations/contract-size-gate.md). Removed in the post-PLONK
+    // size-shrink PR. Frontend / indexer code that used to call these
+    // should read the public state variables directly via their
+    // auto-getters and compute the (trivial) derived values client-side.
+    //   * previewFee(from, to, amount):
+    //       Mirror _transferWithFees order EXACTLY. The NoFees short-
+    //       circuit MUST run first — SwapOnly → NoFees transfers (e.g.
+    //       venue → vault, venue → wrapper, venue → GaugeController) are
+    //       fee-exempt on-chain even though `from` is SwapOnly:
+    //         if addressType(from) == NoFees || addressType(to) == NoFees:
+    //             return (isBuy=false, fee=0)
+    //         isBuy = addressType(from) == SwapOnly && addressType(to) != SwapOnly && feesEnabled()
+    //         fee   = isBuy ? (amount * buyFeeBps()) / 10_000 : 0
+    //   * isTradingVenue(addr): addressType(addr) == SwapOnly
+    //   * canTransfer(...):     always true (vestigial; ERC-20 has no such hook)
+    //   * checkMinter(account): isMinter(account) || account == vault() || account == owner()
+    //   * canFlush():           !isHub() && pendingFees() > 0 &&
+    //                           hubGaugeReceiver() != address(0) && hubEid() != 0
+    //   * getRemoteStatus():    read each public getter individually
 
     // ================================
     // ERC-7572 CONTRACT METADATA

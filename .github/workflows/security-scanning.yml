@@ -277,7 +277,12 @@ jobs:
         run: pip install slither-analyzer
 
       - name: Forge build (EIP-170 size check)
-        run: forge build --sizes
+        # `--skip test` matches the deployability-gate intent: test
+        # harnesses inherit production contracts and trivially overflow
+        # whenever the parent is within a few hundred bytes of the cap,
+        # but harnesses are never deployed. See test.yml for the full
+        # rationale and docs/operations/contract-size-gate.md.
+        run: forge build --skip test --sizes
 
       - name: Run Slither (JSON)
         run: slither . --fail-none --json "$RUNNER_TEMP/slither.json" 2>&1 | tee "$RUNNER_TEMP/slither.txt"

@@ -73,9 +73,20 @@ helpers, `CreatorLotteryManager` admin module). The current step is:
 
 ```yaml
 - name: Run Forge build (sizes; EIP-170 blocking)
-  run: forge build --sizes
+  run: forge build --skip test --sizes
   id: build
 ```
+
+**Post-PLONK update (2026-04-28):** added `--skip test` to the gate so
+test-only artifacts (foundry harnesses, inline mocks) are excluded.
+The gate is a *deployability* check; harnesses inherit production
+contracts and add a few `exposed*` wrappers, so whenever a production
+contract sits within a few hundred bytes of the cap the harness will
+trivially overflow even though it is never deployed. The full forge
+test suite (next step in `test.yml`) recompiles everything regardless,
+so this does not skip any actual test execution. If the day comes
+where we want a separate CI tripwire for harness size, that should be
+a *non-blocking* informational step, not the deployability gate.
 
 If a contract crosses 24 KiB, the build will fail and the PR cannot
 land until the offending contract is split or shrunk. Local

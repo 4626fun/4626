@@ -50,7 +50,17 @@ jobs:
           # innocent ~200B feature add could silently push the next deploy
           # over the cap. The previous `|| true` swallowed that failure; the
           # gate is now blocking. See docs/operations/contract-size-gate.md.
-          forge build --sizes
+          #
+          # `--skip test` excludes test-only contracts from the gate.
+          # Test harnesses (e.g. CreatorLotteryManagerHarness) inherit
+          # production contracts and add a few `exposed*` wrappers, so
+          # whenever a production contract is within ~250 B of the cap
+          # the harness will trivially overflow even though the harness
+          # is never deployed. The size gate is a *deployability* check;
+          # excluding test-only artifacts matches its intent. The full
+          # forge test suite below recompiles everything regardless, so
+          # this does not skip any actual test execution.
+          forge build --skip test --sizes
         id: build
 
       - name: Run Forge tests
