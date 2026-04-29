@@ -294,8 +294,25 @@ function byChronologicalOrder(a: NormalizedHistoryMessage, b: NormalizedHistoryM
   return a.date - b.date
 }
 
-function isAlfaClubCommandText(text: string): boolean {
+function isAlfaClubSlashCommandText(text: string): boolean {
+  if (!text.trimStart().startsWith('/')) return false
   return matchesAnyCommandFamily(text, ['alfaclub', 'hermit'])
+}
+
+/**
+ * Trusted senders allowed to invoke a small set of slash commands without
+ * the leading slash. Currently only Manito9v9 → bare `gmeow`. Keep this list
+ * tiny and exact; broader keyword triggers belong behind a slash prefix so
+ * unrelated chatter that happens to begin with `gmeow`/`meme`/`hermit` does
+ * not get routed to the agent.
+ */
+const BARE_GMEOW_TRUSTED_SENDERS: ReadonlySet<string> = new Set([
+  '0x8e521dfddc4a2bc6f30b5fb595263d0388af5fd5',
+])
+
+function isBareGmeowFromTrustedSender(rawText: string, senderLower: string): boolean {
+  if (!BARE_GMEOW_TRUSTED_SENDERS.has(senderLower)) return false
+  return rawText.trim().toLowerCase() === 'gmeow'
 }
 
 export function collectAlfaClubCommandMessages(params: {
@@ -313,15 +330,16 @@ export function collectAlfaClubCommandMessages(params: {
   for (const entry of normalized) {
     if (params.seenMessageIds.has(entry.id)) continue
     if (!entry.text.trim()) continue
-    if (!isAlfaClubCommandText(entry.text)) continue
     if (!isHexAddress(entry.sender)) continue
     if (self && entry.sender === self) continue
     if (entry.sender === TARGET_CANONICAL_CSW_ADDRESS.toLowerCase()) continue
+    const trustedBareGmeow = isBareGmeowFromTrustedSender(entry.text, entry.sender)
+    if (!trustedBareGmeow && !isAlfaClubSlashCommandText(entry.text)) continue
     commands.push({
       id: entry.id,
       date: entry.date,
       sender: entry.sender,
-      text: entry.text.trim(),
+      text: trustedBareGmeow ? '/gmeow' : entry.text.trim(),
     })
   }
   return commands
