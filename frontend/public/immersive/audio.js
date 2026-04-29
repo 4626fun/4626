@@ -3,8 +3,8 @@
  *  ─────────────────────────────────────────────────────────────────────
  *  • ~60s looped music bed (subtle, piano-led)
  *  • 15s cosmic ambience loop (string pad)
- *  • 4 close-beat crescendo FX  (L1 → L2 → L3 → L4)
  *  • 3 interaction FX (hover / click / reveal)
+ *  • (close-beat crescendo FX disabled — finale plays silent over the music bed)
  *  • Silent at load. Fades in on first user scroll.
  *  • Mute toggle persisted to localStorage.
  *  • Respects `prefers-reduced-motion`.
@@ -21,10 +21,8 @@
   const AMBIENCE = { key: 'ambience', url: AUDIO_BASE + 'fx/ambience.mp3', loop: true, gain: 0.12 };
 
   const FX = {
-    beat_L1:   { url: AUDIO_BASE + 'fx/beat_L1.mp3',   gain: 0.30 },
-    beat_L2:   { url: AUDIO_BASE + 'fx/beat_L2.mp3',   gain: 0.34 },
-    beat_L3:   { url: AUDIO_BASE + 'fx/beat_L3.mp3',   gain: 0.38 },
-    beat_L4:   { url: AUDIO_BASE + 'fx/beat_L4.mp3',   gain: 0.45 },
+    // Crescendo beats (beat_L1…L4) intentionally omitted — finale plays
+    // silent over the music bed.
     hover:     { url: AUDIO_BASE + 'fx/hover.mp3',     gain: 0.15 },
     click:     { url: AUDIO_BASE + 'fx/click.mp3',     gain: 0.25 },
     reveal:    { url: AUDIO_BASE + 'fx/reveal.mp3',    gain: 0.22 },
@@ -204,34 +202,10 @@
     }
     const ST = window.ScrollTrigger;
 
-    // 4 close-scene beats — driven by progress on #ch-close.
-    // From the mobile audit: L1 peaks at progress 0.47, L2 at 0.55, L3 at 0.72, L4 at 0.90.
-    // We fire each beat a touch earlier than its peak so the audio lands into the visual.
-    const closeSection = document.getElementById('ch-close');
-    if (closeSection) {
-      mixer._beatFired = new Set();
-      const beatThresholds = [
-        { key: 'beat_L1', p: 0.42 },
-        { key: 'beat_L2', p: 0.52 },
-        { key: 'beat_L3', p: 0.68 },
-        { key: 'beat_L4', p: 0.86 },
-      ];
-      ST.create({
-        id: 'audio-close-beats',
-        trigger: closeSection,
-        start: 'top bottom',
-        end: 'bottom top',
-        onUpdate: (self) => {
-          const prog = self.progress;
-          for (const b of beatThresholds) {
-            if (prog >= b.p && !mixer._beatFired.has(b.key)) {
-              mixer._beatFired.add(b.key);
-              mixer.playFx(b.key);
-            }
-          }
-        },
-      });
-    }
+    // Crescendo close-beat FX intentionally disabled. The finale lines
+    // (One vault → Two tokens → (3,3) → 4626.fun) now read silent over
+    // the continuing music bed for a quieter, more authored ending.
+    // Music bed + ambience + click/hover/reveal interaction FX still play.
   }
 
   // ─── Boot ──────────────────────────────────────────────────────────────
