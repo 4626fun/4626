@@ -214,8 +214,20 @@ export interface AlfaClubRefresherDependencies {
   readRefreshToken?: () => Promise<string | null>
   /** Getter for current identity token — used only to decide "is it near expiry?" */
   readIdentityToken?: () => Promise<string | null>
-  /** Persists the fresh triplet once a refresh succeeds. */
-  writeBundle?: (bundle: PrivyRefreshBundle, updatedBy: string) => Promise<void>
+  /**
+   * Persists the fresh triplet once a refresh succeeds. `inbound` carries the
+   * pre-refresh access/refresh tokens so the writer can skip rows that did not
+   * actually rotate (Privy returns null on those fields when it kept the
+   * existing credential alive — see `refreshPrivySession`). Skipping unchanged
+   * rows avoids unnecessary writes that can fail on roles with SELECT-only
+   * grants on `alfaclub_runtime_secret` while still letting the identity-token
+   * write — which always rotates — surface a real persistence failure.
+   */
+  writeBundle?: (
+    bundle: PrivyRefreshBundle,
+    updatedBy: string,
+    inbound?: { accessToken: string; refreshToken: string },
+  ) => Promise<void>
   /** Override the actual Privy call — swapped in tests. */
   refresh?: (params: {
     accessToken: string
@@ -273,32 +285,52 @@ function resolveDeps(
     )
   const writeBundle =
     deps.writeBundle ??
-    (async (bundle: PrivyRefreshBundle, updatedBy: string): Promise<void> => {
+    (async (
+      bundle: PrivyRefreshBundle,
+      updatedBy: string,
+      inbound?: { accessToken: string; refreshToken: string },
+    ): Promise<void> => {
       // Order matters: write the identity token LAST so a partial failure
       // leaves the bridge running on the PREVIOUS identity token (worst
       // case: ticks eventually 401 and the next refresh attempt self-heals)
       // rather than on a newer identity token with no valid
       // access/refresh pair to rotate it with.
       //
-      // ALSO: every underlying upsert returns a truthy success value (bool
-      // or meta record). If the DB is unreachable or the insert fails, they
-      // return false/null WITHOUT throwing. Treat those silent failures as
-      // hard errors so the caller can log an 'error' outcome instead of
-      // misleadingly reporting 'refreshed' while credentials stayed stale
-      // on disk — this was P1 review feedback on PR #368.
-      const accessOk = await upsertAlfaClubPrivyAccessToken({
-        accessToken: bundle.accessToken,
-        updatedBy,
-      })
-      if (!accessOk) {
-        throw new Error('token_persistence_failed:access_token')
+      // Skip rows Privy did not rotate. `refreshPrivySession` returns the
+      // INBOUND access/refresh token verbatim when Privy responds with
+      // `privy_access_token: null` / `refresh_token: null` — its documented
+      // "we kept the existing credential alive" signal. Re-upserting the
+      // same value just to refresh `updated_at` is logically a no-op, and
+      // production has been observed running with a DB role that has
+      // SELECT (RLS bypass) but lacks INSERT/UPDATE grants on
+      // `alfaclub_runtime_secret`. In that environment the unnecessary
+      // write was throwing `42501 permission denied`, surfacing as a
+      // 502 `token_persistence_failed:access_token` even though the
+      // identity token — the only credential the bridge actually consumes —
+      // could and should still be rotated. Only the identity-token write
+      // is treated as fatal: it always rotates on a successful refresh,
+      // and it is the credential the bridge reads on every tick.
+      if (inbound && bundle.accessToken !== inbound.accessToken) {
+        const accessOk = await upsertAlfaClubPrivyAccessToken({
+          accessToken: bundle.accessToken,
+          updatedBy,
+        })
+        if (!accessOk) {
+          logger.warn(
+            '[alfaclub-refresher] access-token persistence failed; continuing with identity-token rotation',
+          )
+        }
       }
-      const refreshOk = await upsertAlfaClubPrivyRefreshToken({
-        refreshToken: bundle.refreshToken,
-        updatedBy,
-      })
-      if (!refreshOk) {
-        throw new Error('token_persistence_failed:refresh_token')
+      if (inbound && bundle.refreshToken !== inbound.refreshToken) {
+        const refreshOk = await upsertAlfaClubPrivyRefreshToken({
+          refreshToken: bundle.refreshToken,
+          updatedBy,
+        })
+        if (!refreshOk) {
+          logger.warn(
+            '[alfaclub-refresher] refresh-token persistence failed; continuing with identity-token rotation',
+          )
+        }
       }
       const chatMeta = await upsertAlfaClubChatToken({
         jwt: bundle.identityToken,
@@ -371,7 +403,10 @@ export async function runAlfaClubPrivyRefreshOnce(
       accessToken: accessToken as string,
       refreshToken: refreshToken as string,
     })
-    await writeBundle(bundle, 'privy-token-refresher')
+    await writeBundle(bundle, 'privy-token-refresher', {
+      accessToken: accessToken as string,
+      refreshToken: refreshToken as string,
+    })
     const newExp = decodeTokenExpMs(bundle.identityToken)
     log.info('[alfaclub-refresher] identity token refreshed', {
       newIdentityExp: newExp ? new Date(newExp).toISOString() : null,

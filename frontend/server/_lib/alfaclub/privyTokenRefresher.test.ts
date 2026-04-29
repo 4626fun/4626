@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   refreshPrivySession,
@@ -6,6 +6,38 @@ import {
   startAlfaClubPrivyTokenRefresher,
   type PrivyRefreshBundle,
 } from './privyTokenRefresher.js'
+
+const upsertAccessMock = vi.fn<
+  (params: { accessToken: string; updatedBy?: string | null }) => Promise<boolean>
+>()
+const upsertRefreshMock = vi.fn<
+  (params: { refreshToken: string; updatedBy?: string | null }) => Promise<boolean>
+>()
+const upsertChatMock = vi.fn<
+  (params: { jwt: string; updatedBy?: string | null }) => Promise<{ hasToken: boolean } | null>
+>()
+
+vi.mock('./chatTokenStore.js', async () => {
+  const actual = await vi.importActual<typeof import('./chatTokenStore.js')>(
+    './chatTokenStore.js',
+  )
+  return {
+    ...actual,
+    readAlfaClubChatToken: vi.fn(async () => null),
+    readAlfaClubPrivyAccessToken: vi.fn(async () => null),
+    readAlfaClubPrivyRefreshToken: vi.fn(async () => null),
+    upsertAlfaClubChatToken: (params: { jwt: string; updatedBy?: string | null }) =>
+      upsertChatMock(params),
+    upsertAlfaClubPrivyAccessToken: (params: {
+      accessToken: string
+      updatedBy?: string | null
+    }) => upsertAccessMock(params),
+    upsertAlfaClubPrivyRefreshToken: (params: {
+      refreshToken: string
+      updatedBy?: string | null
+    }) => upsertRefreshMock(params),
+  }
+})
 
 /**
  * Build a JWT whose ONLY interesting property is its `exp` claim. We don't
@@ -264,6 +296,119 @@ describe('runAlfaClubPrivyRefreshOnce', () => {
     })
     expect(outcome.status).toBe('refreshed')
     expect(writes[0]?.refreshToken).toBe('rt-stable')
+  })
+})
+
+describe('default writeBundle persistence semantics', () => {
+  const NOW_MS = 1_800_000_000_000
+  const now = () => NOW_MS
+
+  beforeEach(() => {
+    upsertAccessMock.mockReset()
+    upsertRefreshMock.mockReset()
+    upsertChatMock.mockReset()
+  })
+
+  it('skips access-token write when Privy did not rotate it (inbound === bundle)', async () => {
+    upsertChatMock.mockResolvedValue({ hasToken: true })
+    upsertRefreshMock.mockResolvedValue(true)
+
+    const outcome = await runAlfaClubPrivyRefreshOnce({
+      readAccessToken: async () => 'at-stable',
+      readRefreshToken: async () => 'rt-old',
+      readIdentityToken: async () => jwtWithExp(NOW_MS / 1000 + 5 * 60),
+      refresh: async () => ({
+        // Privy returned null for privy_access_token; refresher preserved
+        // the inbound access token verbatim.
+        accessToken: 'at-stable',
+        identityToken: jwtWithExp(NOW_MS / 1000 + 60 * 60),
+        refreshToken: 'rt-new',
+      }),
+      log: silentLog(),
+      now,
+    })
+
+    expect(outcome.status).toBe('refreshed')
+    expect(upsertAccessMock).not.toHaveBeenCalled()
+    expect(upsertRefreshMock).toHaveBeenCalledTimes(1)
+    expect(upsertChatMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('skips refresh-token write when Privy did not rotate it', async () => {
+    upsertChatMock.mockResolvedValue({ hasToken: true })
+    upsertAccessMock.mockResolvedValue(true)
+
+    const outcome = await runAlfaClubPrivyRefreshOnce({
+      readAccessToken: async () => 'at-old',
+      readRefreshToken: async () => 'rt-stable',
+      readIdentityToken: async () => jwtWithExp(NOW_MS / 1000 + 5 * 60),
+      refresh: async () => ({
+        accessToken: 'at-new',
+        identityToken: jwtWithExp(NOW_MS / 1000 + 60 * 60),
+        refreshToken: 'rt-stable',
+      }),
+      log: silentLog(),
+      now,
+    })
+
+    expect(outcome.status).toBe('refreshed')
+    expect(upsertRefreshMock).not.toHaveBeenCalled()
+    expect(upsertAccessMock).toHaveBeenCalledTimes(1)
+    expect(upsertChatMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('treats access-token persistence failure as non-fatal when identity-token write succeeds', async () => {
+    // Production scenario: DB role has SELECT (RLS bypass) on
+    // alfaclub_runtime_secret but lacks INSERT/UPDATE grants. The unrelated
+    // access-token row write fails, but the identity-token row — written
+    // last — succeeds. The refresher should report success because the
+    // bridge only consumes the identity token.
+    upsertAccessMock.mockResolvedValue(false)
+    upsertRefreshMock.mockResolvedValue(true)
+    upsertChatMock.mockResolvedValue({ hasToken: true })
+
+    const outcome = await runAlfaClubPrivyRefreshOnce({
+      readAccessToken: async () => 'at-old',
+      readRefreshToken: async () => 'rt-old',
+      readIdentityToken: async () => jwtWithExp(NOW_MS / 1000 + 5 * 60),
+      refresh: async () => ({
+        accessToken: 'at-new',
+        identityToken: jwtWithExp(NOW_MS / 1000 + 60 * 60),
+        refreshToken: 'rt-new',
+      }),
+      log: silentLog(),
+      now,
+    })
+
+    expect(outcome.status).toBe('refreshed')
+    expect(upsertChatMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('reports error when identity-token persistence fails', async () => {
+    // The identity token is the only credential the bridge consumes, and
+    // it always rotates on a successful Privy refresh — failing to persist
+    // it is the one case that must surface as status:"error".
+    upsertAccessMock.mockResolvedValue(true)
+    upsertRefreshMock.mockResolvedValue(true)
+    upsertChatMock.mockResolvedValue(null)
+
+    const outcome = await runAlfaClubPrivyRefreshOnce({
+      readAccessToken: async () => 'at-old',
+      readRefreshToken: async () => 'rt-old',
+      readIdentityToken: async () => jwtWithExp(NOW_MS / 1000 + 5 * 60),
+      refresh: async () => ({
+        accessToken: 'at-new',
+        identityToken: jwtWithExp(NOW_MS / 1000 + 60 * 60),
+        refreshToken: 'rt-new',
+      }),
+      log: silentLog(),
+      now,
+    })
+
+    expect(outcome.status).toBe('error')
+    if (outcome.status === 'error') {
+      expect(outcome.error).toContain('token_persistence_failed:identity_token')
+    }
   })
 })
 
