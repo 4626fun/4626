@@ -18,6 +18,10 @@ const DEFAULT_MARKETING_ORIGINS = new Set<string>([
   'https://www.4626.fun',
 ])
 
+const DEFAULT_APP_ORIGINS = new Set<string>([
+  'https://app.4626.fun',
+])
+
 function normalizeLower(value: unknown): string {
   return typeof value === 'string' ? value.trim().toLowerCase() : ''
 }
@@ -138,6 +142,7 @@ export function getTrustedRequestOrigins(req?: VercelRequest): Set<string> {
   if (canonical) out.add(canonical)
 
   for (const origin of DEFAULT_MARKETING_ORIGINS) out.add(origin)
+  for (const origin of DEFAULT_APP_ORIGINS) out.add(origin)
 
   const marketing = getExplicitMarketingOrigin()
   if (marketing) out.add(marketing)

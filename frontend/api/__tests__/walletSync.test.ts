@@ -472,6 +472,27 @@ describe('wallet mapping + sync', () => {
     expect(result.canonicalSmartWallet?.address).toBe('0x00000000000000000000000000000000000000f2')
   })
 
+  it('uses Zora canonical fallback when Privy only returns one smart-wallet candidate', async () => {
+    fetchZoraProfileMock.mockResolvedValue({
+      publicWallet: { walletAddress: '0x00000000000000000000000000000000000000f2' },
+      linkedWallets: { edges: [] },
+    })
+
+    const db = createLooseDb()
+    const user = {
+      id: 'did:privy:zora-single-candidate',
+      linkedAccounts: [
+        { type: 'wallet', address: '0x00000000000000000000000000000000000000f0', walletClientType: 'metamask' },
+        { type: 'wallet', address: '0x00000000000000000000000000000000000000e2', walletClientType: 'embedded_privy_wallet' },
+        // Single smart-wallet candidate from Privy session payload.
+        { type: 'smart_wallet', address: '0x00000000000000000000000000000000000000f1', walletClientType: 'coinbase_smart_wallet' },
+      ],
+    }
+
+    const result = await syncUserWallets(db as any, user as any)
+    expect(result.canonicalSmartWallet?.address).toBe('0x00000000000000000000000000000000000000f2')
+  })
+
   it('seeds Zora lookup from preprov_zora_handle when available', async () => {
     fetchZoraProfileMock.mockResolvedValue({
       linkedWallets: { edges: [] },

@@ -45,6 +45,23 @@ describe('cookie origin guard', () => {
     expect(res.body).toBeUndefined()
   })
 
+  it('allows unsafe requests with cookie session from canonical app origin even when APP_ORIGIN is stale', () => {
+    const req = createMockReq({
+      method: 'POST',
+      headers: {
+        cookie: buildSessionCookie(),
+        origin: 'https://app.4626.fun',
+      },
+    })
+    const res = createMockRes()
+
+    const handled = enforceCookieSessionTrustedOrigin(req, res)
+
+    expect(handled).toBe(false)
+    expect(res.statusCode).toBe(200)
+    expect(res.body).toBeUndefined()
+  })
+
   it('blocks unsafe requests with cookie session from untrusted origins', () => {
     const req = createMockReq({
       method: 'POST',

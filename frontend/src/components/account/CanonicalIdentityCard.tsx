@@ -213,6 +213,35 @@ export function CanonicalIdentityDropdown({
         <div className="mx-4 my-2 h-px bg-white/8" />
       ) : null}
 
+      {/* Execution sub-account (app-scoped signer address) */}
+      {identity.executionSubAccountAddress ? (
+        <div className="px-4 pb-2">
+          <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+            Execution sub-account
+          </div>
+          <div className="mt-1 text-[10px] text-zinc-600">
+            App-scoped execution wallet for 4626 actions
+          </div>
+          <div className="mt-1.5">
+            <CopyableAddress address={identity.executionSubAccountAddress} variant="muted" />
+          </div>
+        </div>
+      ) : identity.executionTrack === 'legacy-owner-install' ? (
+        <div className="px-4 pb-2">
+          <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+            Execution sub-account
+          </div>
+          <div className="mt-1 text-[10px] text-zinc-600">
+            Legacy owner path active — no sub-account registered.
+          </div>
+        </div>
+      ) : null}
+
+      {(identity.executionSubAccountAddress || identity.executionTrack === 'legacy-owner-install') &&
+      (identity.externalEoaAddress || identity.privyEmbeddedAddress) ? (
+        <div className="mx-4 my-2 h-px bg-white/8" />
+      ) : null}
+
       {/* Active external signer (Rabby / MetaMask / CBW) */}
       {identity.externalEoaAddress ? (
         <div className="px-4 pb-2">

@@ -383,12 +383,17 @@ async function resolveCanonicalSmartWalletFromZora(params: {
 }): Promise<string | null> {
   const { classification, persisted } = params
   const candidates = classification.allWallets.filter(isSmartWalletCandidate).map((w) => normalizeLower(w.address)).filter(Boolean)
-  if (candidates.length < 2) return null
+  if (candidates.length === 0) return null
 
   const seed = pickZoraSeedIdentifier({ classification, persisted })
   if (!seed) return null
 
-  const profile = await fetchZoraProfile(seed).catch(() => null)
+  let profile: Awaited<ReturnType<typeof fetchZoraProfile>> | null = null
+  try {
+    profile = await fetchZoraProfile(seed)
+  } catch {
+    profile = null
+  }
   if (!profile) return null
 
   const candidateSet = new Set(candidates)
@@ -400,6 +405,28 @@ async function resolveCanonicalSmartWalletFromZora(params: {
     const normalized = normalizeAddress(candidate)
     if (!normalized) continue
     if (candidateSet.has(normalizeLower(normalized))) return normalizeLower(normalized)
+  }
+
+  // Fallback for canonical drift cases:
+  // If Privy only surfaces a single smart wallet candidate, but Zora resolves a
+  // different EVM wallet for the same identity seed, prefer the Zora wallet as
+  // canonical so an app-scoped/session wallet cannot pin canonical custody state.
+  if (candidates.length === 1) {
+    const nonSmartWalletSet = new Set(
+      classification.allWallets
+        .filter((wallet) => wallet.chain === 'evm' && wallet.walletType !== 'smart_wallet')
+        .map((wallet) => normalizeLower(wallet.address))
+        .filter(Boolean),
+    )
+    for (const candidate of zoraCandidates) {
+      const normalized = normalizeAddress(candidate)
+      if (!normalized) continue
+      const lower = normalizeLower(normalized)
+      if (!lower) continue
+      if (candidateSet.has(lower)) return lower
+      if (nonSmartWalletSet.has(lower)) continue
+      return lower
+    }
   }
 
   return null

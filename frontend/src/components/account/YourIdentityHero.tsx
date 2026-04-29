@@ -91,6 +91,30 @@ export function YourIdentityHero() {
           <div className="mt-2">
             <CopyableAddress address={identity.cswAddress} />
           </div>
+          <div className="mt-3 rounded-lg border border-white/8 bg-white/[0.02] px-3 py-2">
+            <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-medium">
+              Execution sub-account
+            </div>
+            {identity.executionSubAccountAddress ? (
+              <div className="mt-1.5 flex items-center gap-2 text-xs text-zinc-300">
+                <CopyableAddress address={identity.executionSubAccountAddress} variant="muted" />
+                <a
+                  href={`https://basescan.org/address/${identity.executionSubAccountAddress}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-zinc-500 hover:text-zinc-300"
+                >
+                  Basescan <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
+            ) : (
+              <div className="mt-1 text-[11px] text-zinc-500">
+                {identity.executionTrack === 'legacy-owner-install'
+                  ? 'Legacy owner path active — no sub-account registered.'
+                  : 'Not provisioned yet.'}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 

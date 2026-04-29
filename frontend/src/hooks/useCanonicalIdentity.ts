@@ -79,6 +79,10 @@ export type CanonicalIdentity = {
   creatorCoinAddress: Address | null
   /** Loading state for async CSW → coin lookup. */
   loadingCoin: boolean
+  /** App-scoped execution sub-account used for day-to-day actions. */
+  executionSubAccountAddress: Address | null
+  /** Server-derived execution track classification. */
+  executionTrack: 'sub-account' | 'legacy-owner-install' | 'migration-pending' | 'none-yet' | null
 }
 
 /**
@@ -204,6 +208,22 @@ export function useCanonicalIdentity(): CanonicalIdentity {
     return null
   })()
 
+  const executionTrack = (accountMe.me?.accountSignals?.executionTrack ?? null) as CanonicalIdentity['executionTrack']
+  const executionSubAccountAddress: Address | null = (() => {
+    const signals = accountMe.me?.accountSignals
+    if (!signals) return null
+    if (signals.executionTrack !== 'sub-account' && signals.executionTrack !== 'migration-pending') return null
+    if (!signals.baseSubAccount?.registered) return null
+    const candidate = signals.baseSubAccount.address
+    if (!candidate || !isAddress(candidate)) return null
+    const normalized = candidate as Address
+    const lower = normalized.toLowerCase()
+    if (csw && lower === csw.toLowerCase()) return null
+    if (externalEoa && lower === externalEoa.toLowerCase()) return null
+    if (privyEmbeddedAddress && lower === privyEmbeddedAddress.toLowerCase()) return null
+    return normalized
+  })()
+
   const cswKey = csw ? csw.toLowerCase() : null
   const hasCachedCoin = cswKey ? coinAddressCache.has(cswKey) : false
   const cachedCoin = cswKey ? (coinAddressCache.get(cswKey) ?? null) : null
@@ -257,5 +277,7 @@ export function useCanonicalIdentity(): CanonicalIdentity {
     activeSigner,
     creatorCoinAddress,
     loadingCoin,
+    executionSubAccountAddress,
+    executionTrack,
   }
 }

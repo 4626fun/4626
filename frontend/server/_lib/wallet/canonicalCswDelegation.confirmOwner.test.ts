@@ -112,6 +112,9 @@ describe('confirmOwnerState', () => {
         if (text.includes('select base_sub_account from profiles where id =')) {
           return { rows: [{ base_sub_account: null }] }
         }
+        if (text.includes('select pw.address from profile_wallets pw') && text.includes('left join wallets w')) {
+          return { rows: [] }
+        }
 
         throw new Error(`Unhandled SQL in test: ${text}; values=${JSON.stringify(values)}`)
       }),

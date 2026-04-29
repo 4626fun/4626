@@ -200,10 +200,30 @@ export function AccountSetupWorkspaceView(props: {
 
   const zoraStepComplete = zoraLinked
   const walletStepComplete = Boolean(canonicalCswAddress)
+  const executionTrack = me.accountSignals.executionTrack
+  const executionTrackUsesSubAccount = executionTrack === 'sub-account' || executionTrack === 'migration-pending'
+  const persistedExecutionSubAccountCandidate =
+    executionTrackUsesSubAccount && me.accountSignals.baseSubAccount.registered
+      ? me.accountSignals.baseSubAccount.address
+      : null
+  const ownerAddressSet = new Set(
+    readableCswOwners
+      .map((owner) => (typeof owner.ownerAddress === 'string' ? owner.ownerAddress.toLowerCase() : null))
+      .filter((address): address is string => typeof address === 'string'),
+  )
+  const executionSubAccountAddress = (() => {
+    const candidate = subAccountAddress ?? persistedExecutionSubAccountCandidate ?? null
+    if (!candidate) return null
+    if (!isAddressLike(candidate)) return null
+    const normalized = candidate.toLowerCase()
+    if (canonicalCswAddress && normalized === canonicalCswAddress.toLowerCase()) return null
+    if (ownerAddressSet.has(normalized)) return null
+    return candidate
+  })()
   const signingStepComplete =
     Boolean(subAccountAddress) ||
     me.accountSignals.baseSubAccount.registered ||
-    me.accountSignals.executionTrack === 'legacy-owner-install' ||
+    executionTrack === 'legacy-owner-install' ||
     /4626 signing is enabled|already enabled/i.test(notice ?? '')
   const sponsorshipDiagnostic = extractSponsorshipDiagnostic(error)
   const ownerApprovalDiagnostic = extractOwnerApprovalDebugDiagnostic(error)
@@ -850,6 +870,45 @@ export function AccountSetupWorkspaceView(props: {
                     ) : null}
                   </details>
                 </div>
+                <div className="mt-3 rounded-xl bg-white/[0.03] px-3 py-3 text-xs text-zinc-300 ring-1 ring-white/10">
+                  <div className="text-[11px] uppercase tracking-[0.14em] text-zinc-500">Execution sub-account</div>
+                  {executionSubAccountAddress ? (
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => copyAddress(executionSubAccountAddress)}
+                        title={executionSubAccountAddress}
+                        className="font-mono text-sm text-zinc-100 hover:text-zinc-300 transition-colors"
+                      >
+                        {shortAddr(executionSubAccountAddress)}
+                      </button>
+                      <a
+                        href={`${BASESCAN_BASE}${executionSubAccountAddress}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        title="View on Basescan"
+                        className="text-zinc-500 hover:text-zinc-300 transition-colors"
+                      >
+                        <ExternalLink className="h-3.5 w-3.5" />
+                      </a>
+                      <span className="rounded-full bg-brand-primary/10 px-2 py-0.5 text-[11px] text-brand-100 ring-1 ring-brand-primary/25">
+                        Active
+                      </span>
+                    </div>
+                  ) : executionTrack === 'legacy-owner-install' ? (
+                    <div className="mt-2 text-zinc-400">
+                      Legacy owner-install path is active. Sub-account execution is not registered for this account yet.
+                    </div>
+                  ) : executionTrackUsesSubAccount ? (
+                    <div className="mt-2 text-zinc-400">
+                      Execution track expects a sub-account, but the persisted address looks invalid for this CSW. Re-run 4626 setup to reprovision.
+                    </div>
+                  ) : (
+                    <div className="mt-2 text-zinc-400">
+                      No sub-account registered yet. Finish Step 2 to provision app-scoped execution.
+                    </div>
+                  )}
+                </div>
                 {needsEmbeddedWallet ? (
                   <div className="mt-4 rounded-xl bg-amber-500/10 px-3 py-2 text-xs text-amber-100 ring-1 ring-amber-400/20">
                     Privy embedded wallet provisioning is still settling. Retry signer setup in a moment.
@@ -968,6 +1027,27 @@ export function AccountSetupWorkspaceView(props: {
                   <div className="flex items-center justify-between gap-3">
                     <span className="text-zinc-500">Cross-app accounts</span>
                     <span className="text-zinc-100">{zoraCrossAppCount}</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-zinc-500">Execution sub-account</span>
+                    {executionSubAccountAddress ? (
+                      <button
+                        type="button"
+                        onClick={() => copyAddress(executionSubAccountAddress)}
+                        title={executionSubAccountAddress}
+                        className="font-mono text-zinc-100 hover:text-zinc-300 transition-colors"
+                      >
+                        {shortAddr(executionSubAccountAddress)}
+                      </button>
+                    ) : (
+                      <span className="text-zinc-400">
+                        {executionTrack === 'legacy-owner-install'
+                          ? 'Legacy owner path'
+                          : executionTrackUsesSubAccount
+                            ? 'Needs reprovision'
+                            : 'Not set'}
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

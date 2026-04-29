@@ -112,7 +112,7 @@ describe('buildAccountsMePayload', () => {
           }
         }
 
-        if (query.includes('select id') && query.includes('from profiles') && query.includes('where privy_user_id')) {
+        if (query.includes('select id from profiles') && query.includes('where privy_user_id')) {
           return { rows: [{ id: 42 }] }
         }
 
@@ -120,9 +120,9 @@ describe('buildAccountsMePayload', () => {
           return { rows: [{ points: 0 }] }
         }
 
-        if (query.includes('select app_access_status') && query.includes('from profiles')) {
+        if (query.includes('app_access_status') && query.includes('base_sub_account') && query.includes('from profiles')) {
           expect(String(values[0] ?? '')).toBe('did:privy:test-user')
-          return { rows: [{ app_access_status: 'approved', base_sub_account: null }] }
+          return { rows: [{ id: 42, app_access_status: 'approved', base_sub_account: null }] }
         }
 
         return { rows: [] }
@@ -209,7 +209,7 @@ describe('buildAccountsMePayload', () => {
           }
         }
 
-        if (query.includes('select id') && query.includes('from profiles') && query.includes('where privy_user_id')) {
+        if (query.includes('select id from profiles') && query.includes('where privy_user_id')) {
           return { rows: [{ id: 77 }] }
         }
 
@@ -217,12 +217,24 @@ describe('buildAccountsMePayload', () => {
           return { rows: [{ points: 0 }] }
         }
 
-        if (query.includes('select app_access_status') && query.includes('from profiles')) {
+        if (query.includes('app_access_status') && query.includes('base_sub_account') && query.includes('from profiles')) {
           // Legacy account: base_sub_account is null (no sub-account was ever set up).
-          return { rows: [{ app_access_status: 'approved', base_sub_account: null }] }
+          return { rows: [{ id: 77, app_access_status: 'approved', base_sub_account: null }] }
         }
 
         // Delegation state lookup: the embedded EOA IS a direct CSW owner (legacy install).
+        if (query.includes('from profile_wallets pw') && query.includes('left join wallets w')) {
+          return {
+            rows: [
+              {
+                canonical_source: 'wallet_sync',
+                wallet_type: 'smart_wallet',
+                provider: 'privy',
+              },
+            ],
+          }
+        }
+
         if (query.includes('from profile_wallets pw') && query.includes('privy_is_owner')) {
           return {
             rows: [
@@ -321,7 +333,7 @@ describe('buildAccountsMePayload', () => {
           }
         }
 
-        if (query.includes('select id') && query.includes('from profiles') && query.includes('where privy_user_id')) {
+        if (query.includes('select id from profiles') && query.includes('where privy_user_id')) {
           return { rows: [{ id: 88 }] }
         }
 
@@ -329,9 +341,21 @@ describe('buildAccountsMePayload', () => {
           return { rows: [{ points: 0 }] }
         }
 
-        if (query.includes('select app_access_status') && query.includes('from profiles')) {
+        if (query.includes('app_access_status') && query.includes('base_sub_account') && query.includes('from profiles')) {
           return {
-            rows: [{ app_access_status: 'approved', base_sub_account: SUB_ACCOUNT }],
+            rows: [{ id: 88, app_access_status: 'approved', base_sub_account: SUB_ACCOUNT }],
+          }
+        }
+
+        if (query.includes('from profile_wallets pw') && query.includes('left join wallets w')) {
+          return {
+            rows: [
+              {
+                canonical_source: 'wallet_sync',
+                wallet_type: 'smart_wallet',
+                provider: 'privy',
+              },
+            ],
           }
         }
 

@@ -17,6 +17,7 @@ import {
   type BaseSubAccountSummary,
   type ExecutionTrack,
 } from '../wallet/executionTrack.js'
+import { sanitizePersistedSubAccountAddress } from '../wallet/sanitizeBaseSubAccount.js'
 import { fetchZoraProfile } from '../zora/zoraProfile.js'
 
 declare const process: { env: Record<string, string | undefined> }
@@ -947,7 +948,7 @@ export async function buildAccountsMePayload(params: {
   `
   const accountRow = accountRowResult.rows?.[0] ?? null
   const profileStatusResult = await db.sql`
-    SELECT app_access_status, base_sub_account
+    SELECT id, app_access_status, base_sub_account
     FROM profiles
     WHERE privy_user_id = ${privyUserId}
     ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, id DESC
@@ -963,16 +964,30 @@ export async function buildAccountsMePayload(params: {
 
   const rawBaseSubAccount = normalizeString(profileStatusRow?.base_sub_account)
   const canonicalCswAddressForTrack = delegationState?.canonicalCswAddress ?? zoraRow.canonicalCswAddress
+  const profileIdForTrack = (() => {
+    const raw = profileStatusRow?.id ?? delegationState?.profileId ?? null
+    const numeric = Number(raw)
+    return Number.isFinite(numeric) && numeric > 0 ? Math.trunc(numeric) : null
+  })()
   const privyEmbeddedEoaIsOwnerOfCanonicalCsw = canonicalCswAddressForTrack
     ? delegationState?.privyIsOwner ?? null
     : null
+  const sanitizedBaseSubAccountForTrack = profileIdForTrack
+    ? await sanitizePersistedSubAccountAddress({
+        db,
+        profileId: profileIdForTrack,
+        canonicalCswAddress: canonicalCswAddressForTrack,
+        baseSubAccountAddress: rawBaseSubAccount,
+        privyUser,
+      })
+    : null
   const baseSubAccountSummary = summarizeBaseSubAccount({
     canonicalCswAddress: canonicalCswAddressForTrack,
-    baseSubAccountAddress: rawBaseSubAccount,
+    baseSubAccountAddress: sanitizedBaseSubAccountForTrack,
   })
   const executionTrack = resolveExecutionTrack({
     canonicalCswAddress: canonicalCswAddressForTrack,
-    baseSubAccountAddress: rawBaseSubAccount,
+    baseSubAccountAddress: sanitizedBaseSubAccountForTrack,
     privyEmbeddedEoaIsOwnerOfCanonicalCsw: privyEmbeddedEoaIsOwnerOfCanonicalCsw === true,
   })
 

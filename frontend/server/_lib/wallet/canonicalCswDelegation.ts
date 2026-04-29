@@ -11,6 +11,7 @@ import {
   type BaseSubAccountSummary,
   type ExecutionTrack,
 } from './executionTrack.js'
+import { sanitizePersistedSubAccountAddress } from './sanitizeBaseSubAccount.js'
 import { ensureWaitlistSchema } from '../onboarding/waitlistSchema.js'
 import { classifyLinkedAccounts, type PrivyUserLike } from './walletMapping.js'
 import { syncUserWallets } from './walletSync.js'
@@ -685,13 +686,20 @@ export async function bootstrapCanonicalDelegationState(params: {
     typeof subAccountResult.rows?.[0]?.base_sub_account === 'string'
       ? subAccountResult.rows[0].base_sub_account
       : null
-  const baseSubAccount = summarizeBaseSubAccount({
+  const sanitizedSubAccountAddress = await sanitizePersistedSubAccountAddress({
+    db,
+    profileId: canonical.profileId,
     canonicalCswAddress: canonical.canonicalCswAddress,
     baseSubAccountAddress: rawSubAccountAddress,
+    privyUser: context.privyUser,
+  })
+  const baseSubAccount = summarizeBaseSubAccount({
+    canonicalCswAddress: canonical.canonicalCswAddress,
+    baseSubAccountAddress: sanitizedSubAccountAddress,
   })
   const executionTrack = resolveExecutionTrack({
     canonicalCswAddress: canonical.canonicalCswAddress,
-    baseSubAccountAddress: rawSubAccountAddress,
+    baseSubAccountAddress: sanitizedSubAccountAddress,
     privyEmbeddedEoaIsOwnerOfCanonicalCsw: privyIsOwner,
   })
 
