@@ -101,10 +101,23 @@ export interface PrivyRefreshBundle {
   refreshToken: string
 }
 
+/**
+ * Shape of `POST https://auth.privy.io/api/v1/sessions` 2xx response, as
+ * documented by Privy's own `@privy-io/react-auth` SDK type
+ * `ValidSessionResponse`. Notable nullability:
+ *
+ *  - `privy_access_token` and `refresh_token` may be `string | null`
+ *  - `identity_token` is OPTIONAL (often omitted) — when absent the same
+ *    identity-token JWT is carried by the top-level `token` field
+ *
+ * The refresher accepts either `identity_token` or `token` so it does not
+ * misclassify a perfectly valid Privy response as `malformed_response`.
+ */
 export interface PrivyRefreshResponse {
-  privy_access_token?: string
-  identity_token?: string
-  refresh_token?: string
+  privy_access_token?: string | null
+  identity_token?: string | null
+  refresh_token?: string | null
+  token?: string | null
 }
 
 function decodeTokenExpMs(jwt: string | null | undefined): number | null {
@@ -149,7 +162,12 @@ export async function refreshPrivySession(params: {
 
   const payload = (await response.json().catch(() => null)) as PrivyRefreshResponse | null
   const accessToken = payload?.privy_access_token?.trim()
-  const identityToken = payload?.identity_token?.trim()
+  // Privy's session response carries the identity JWT in `identity_token`
+  // when present and otherwise in the top-level `token` field (see Privy's
+  // own `ValidSessionResponse` SDK type). Either is acceptable.
+  const identityToken =
+    (payload?.identity_token?.trim() ?? '') ||
+    (payload?.token?.trim() ?? '')
   // Privy may or may not rotate the refresh token on each call. Honor whatever
   // it returns; if missing, keep the inbound one so we never lose our ability
   // to refresh again.
@@ -157,7 +175,20 @@ export async function refreshPrivySession(params: {
     (payload?.refresh_token?.trim() ?? '') || params.refreshToken.trim()
 
   if (!accessToken || !identityToken || !refreshToken) {
-    throw new Error('privy_refresh_failed:malformed_response')
+    // Surface which fields were missing without leaking token material —
+    // this lets ops distinguish "Privy changed the response shape" from
+    // "Privy returned an empty body" the next time this fires.
+    const presentKeys = payload && typeof payload === 'object'
+      ? Object.keys(payload).sort().join(',')
+      : '<non-object>'
+    const missing = [
+      accessToken ? null : 'privy_access_token',
+      identityToken ? null : 'identity_token|token',
+      refreshToken ? null : 'refresh_token',
+    ].filter(Boolean).join('+')
+    throw new Error(
+      `privy_refresh_failed:malformed_response:missing=${missing}:keys=${presentKeys}`,
+    )
   }
 
   return { accessToken, identityToken, refreshToken }
