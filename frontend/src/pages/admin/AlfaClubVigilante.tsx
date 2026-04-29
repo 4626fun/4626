@@ -365,8 +365,9 @@ export function AlfaClubVigilante() {
         <div className="space-y-3 p-4">
           <p className="text-xs text-zinc-400">
             One-shot invocation of the ERC-8004 feedback relayer. Dry-run resolves the Privy owner
-            context and validates the top queued row's calldata but does not submit a UserOp. Routine
-            relaying runs on the Railway Eliza process (setInterval); this button is an escape valve.
+            context and validates the top queued row's calldata but does not submit a UserOp. The
+            AlfaClub control path now runs on Vercel cron; the long-lived Railway relayer loop is
+            opt-in (legacy). This button is the manual escape valve.
           </p>
           <label className="flex cursor-pointer items-center gap-2 text-xs text-zinc-300">
             <input

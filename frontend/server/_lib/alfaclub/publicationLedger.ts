@@ -288,7 +288,8 @@ export async function attachErc8004TxHash(
 }
 
 // ---------------------------------------------------------------------------
-// Drain-queue helpers (Railway-side submission loop)
+// Drain-queue helpers (long-lived submission loop on Railway; AlfaClub
+// control path now runs on Vercel cron, so this is a legacy/opt-in path)
 // ---------------------------------------------------------------------------
 
 /**

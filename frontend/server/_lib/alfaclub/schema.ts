@@ -333,8 +333,10 @@ export async function ensureAlfaClubVigilanteSchema(): Promise<void> {
   }
 
   // ── Drain state columns (additive; safe on re-run) ──
-  // Tracks autonomous Railway-side submission attempts for 'erc8004-queued'
-  // rows. Consumed by [feedbackRelayer.ts](./feedbackRelayer.ts).
+  // Tracks autonomous long-lived submission attempts for 'erc8004-queued'
+  // rows. Consumed by [feedbackRelayer.ts](./feedbackRelayer.ts) when the
+  // long-lived (Railway) AlfaClub relayer is enabled; production AlfaClub
+  // signing now runs on Vercel cron via /api/v1/alfaclub/chat-bridge-run.
   try {
     await db.sql`ALTER TABLE alfaclub_publications ADD COLUMN IF NOT EXISTS submission_attempts INT NOT NULL DEFAULT 0;`
   } catch {

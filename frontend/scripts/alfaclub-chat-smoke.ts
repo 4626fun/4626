@@ -332,7 +332,7 @@ async function main(): Promise<void> {
   }
 
   throw new Error(
-    `No non-command reply observed within ${timeoutMs}ms. Check Railway logs for [alfaclub-chat] tick errors.`,
+    `No non-command reply observed within ${timeoutMs}ms. Check Vercel cron logs for [alfaclub-chat] tick errors (or Railway logs if the long-lived in-process bridge is enabled).`,
   )
 }
 

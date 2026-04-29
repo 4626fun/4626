@@ -2,7 +2,8 @@
  * AlfaClub chat-bridge JWT persistence.
  *
  * Stores the short-lived AlfaClub bearer token in Postgres so operators can
- * rotate it at runtime without restarting the Railway XMTP process.
+ * rotate it at runtime without restarting the Railway XMTP process or
+ * waiting for the next Vercel cron deploy.
  *
  * Security model:
  * - Table is private (RLS deny-all in [schema.ts](./schema.ts)).

@@ -7,8 +7,8 @@
  * token (the JWT we store in `alfaclub_runtime_secret.chat_jwt`). Privy
  * identity tokens expire after 1 hour. Without automation, every 401 in
  * `[alfaclub-chat] tick error` would require an operator to manually log
- * in to alfaclub, grab a fresh JWT from their browser devtools, and run
- * `railway variables --set ALFACLUB_CHAT_JWT=...` — not a sustainable chore.
+ * in to alfaclub, grab a fresh JWT from their browser devtools, and update
+ * `ALFACLUB_CHAT_JWT` in the host env — not a sustainable chore.
  *
  * ## Solution
  *
@@ -25,7 +25,9 @@
  * ## Bootstrap
  *
  * First-time setup: operator pastes a freshly-logged-in triplet into the
- * three env vars on Railway:
+ * three env vars on the host platform (Vercel for the canonical cron path;
+ * Railway is still available as a long-lived host for non-AlfaClub
+ * runtimes if AlfaClub is later moved back in-process):
  *   - `ALFACLUB_CHAT_JWT`                   (identity token; alfaclub API)
  *   - `ALFACLUB_CHAT_PRIVY_ACCESS_TOKEN`    (access token; Privy refresh)
  *   - `ALFACLUB_CHAT_PRIVY_REFRESH_TOKEN`   (refresh token; 30-day lifetime)

@@ -1,7 +1,7 @@
 /**
- * AlfaClub Feedback Relayer — Railway-side autonomous submitter.
+ * AlfaClub Feedback Relayer — long-lived autonomous submitter.
  *
- * Runs inside the long-lived Eliza runtime on Railway where the Privy
+ * Designed to run inside a long-lived Eliza runtime where the Privy
  * delegated-signing context is already warm (used by every XMTP message).
  * Pulls `alfaclub_publications` rows with `kind='erc8004-queued'` and
  * relays each onchain as a UserOp through the canonical Keepr CSW so
@@ -9,8 +9,14 @@
  * Registry matches Keepr's published Agent #2205 identity.
  *
  * "Relayer" matches the ERC-4337 mental model: the Vercel cron prepares
- * prepared calldata; the Railway relayer forwards it through the
- * bundler (and paymaster) onto chain.
+ * the calldata; this relayer forwards it through the bundler (and
+ * paymaster) onto chain.
+ *
+ * Hosting note: the AlfaClub control path now signs and submits from
+ * Vercel cron via `ALFACLUB_VIGILANTE_SIGNER_PRIVATE_KEY`. This long-lived
+ * relayer remains available for the Railway Eliza runtime (which is still
+ * the host for non-AlfaClub functionality) if/when AlfaClub is moved back
+ * in-process.
  *
  * Safety rails baked in:
  *   - KILL_SWITCH halts every tick immediately.
@@ -419,7 +425,7 @@ export type StartRelayerResult = {
 }
 
 /**
- * Start the Railway-side relayer loop. Idempotent: if already running,
+ * Start the long-lived relayer loop. Idempotent: if already running,
  * returns the same `stop()` closure without starting a second interval.
  * The returned `stop()` cancels the interval and waits for any in-flight
  * tick.

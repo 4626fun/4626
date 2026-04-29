@@ -35,7 +35,7 @@ jobs:
         run: pnpm --dir frontend install --frozen-lockfile
 
       - name: Verify Railway readiness probe is strict
-        run: grep -Eq 'healthcheckPath[[:space:]]*=[[:space:]]*"/readyz"' railway.toml
+        run: grep -Eq 'healthcheckPath[[:space:]]*=[[:space:]]*"/healthz"' railway.toml
 
       - name: Verify runtime env contract is documented
         run: |
