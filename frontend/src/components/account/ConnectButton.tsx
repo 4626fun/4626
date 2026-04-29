@@ -1,7 +1,8 @@
 import { useAccount, useConnect, useDisconnect } from 'wagmi'
-import { type ReactNode, useMemo, useState } from 'react'
+import { type ReactNode, useEffect, useMemo, useState } from 'react'
 import { Wallet, ChevronDown } from 'lucide-react'
 import { Link } from 'react-router-dom'
+import { Tray } from '@coinbase/cds-web/overlays/tray/Tray'
 import { useSiweAuth } from '@/hooks/useSiweAuth'
 import { useIdentity } from '@/hooks/useIdentity'
 import { useCanonicalIdentity } from '@/hooks/useCanonicalIdentity'
@@ -244,8 +245,31 @@ export function ConnectButton({
   const prefersPrivyWalletLogin = privyStatus === 'ready'
   const [showMenu, setShowMenu] = useState(false)
   const [showOptions, setShowOptions] = useState(false)
-  const menuPanelClassName = 'absolute right-0 top-full mt-4 w-72 max-w-[calc(100vw-1.5rem)] card p-4 z-50 space-y-2'
   const optionsPanelClassName = 'absolute right-0 top-full mt-3 w-64 card p-3 z-50 space-y-1'
+  const isPhoneViewport = useIsPhoneViewport()
+  const trayPin = isPhoneViewport ? 'bottom' : 'right'
+  const trayStyles = useMemo(() => {
+    if (isPhoneViewport) {
+      return {
+        content: {
+          paddingBottom: 'var(--space-3)',
+        },
+      }
+    }
+    return {
+      container: {
+        top: 'var(--space-2)',
+        right: 'var(--space-2)',
+        bottom: 'var(--space-2)',
+        width: '26rem',
+        maxWidth: 'calc(100vw - 1.5rem)',
+        borderRadius: 'var(--borderRadius-600)',
+      },
+      content: {
+        paddingBottom: 'var(--space-3)',
+      },
+    }
+  }, [isPhoneViewport])
 
   const providerCollision = useMemo(() => detectEthereumProviderCollision(), [])
   const { hasMultipleInjectedProviders, lockedEthereumProviderGlobal } = providerCollision
@@ -331,7 +355,15 @@ export function ConnectButton({
         )}
 
         {showMenu && (
-          <DropdownLayer onClose={() => setShowMenu(false)} panelClassName={menuPanelClassName}>
+          <Tray
+            pin={trayPin}
+            showHandleBar={isPhoneViewport}
+            title="Account"
+            accessibilityLabel="Account menu"
+            onCloseComplete={() => setShowMenu(false)}
+            styles={trayStyles}
+            closeAccessibilityLabel="Close account menu"
+          >
               {showCanonicalCard ? (
                 <>
                   <CanonicalIdentityDropdown
@@ -372,8 +404,8 @@ export function ConnectButton({
                   <div className="label text-emerald-200">Signed in</div>
                   <div className="app-meta-value text-zinc-600 mt-1">
                     {auth.walletMatchesSession
-                      ? 'Session matches connected wallet.'
-                      : `4626 session is active as ${formatAddress(sessionAddress ?? address)}.`}
+                      ? 'Session matches connected signer.'
+                      : `4626 session active as ${formatAddress(sessionAddress ?? address)}.`}
                   </div>
                 </div>
               )}
@@ -410,7 +442,7 @@ export function ConnectButton({
               >
                 <span className="label block text-zinc-600">Disconnect</span>
               </button>
-          </DropdownLayer>
+          </Tray>
         )}
       </div>
     )
@@ -448,7 +480,15 @@ export function ConnectButton({
         )}
 
         {showMenu && (
-          <DropdownLayer onClose={() => setShowMenu(false)} panelClassName={menuPanelClassName}>
+          <Tray
+            pin={trayPin}
+            showHandleBar={isPhoneViewport}
+            title="Account"
+            accessibilityLabel="Account menu"
+            onCloseComplete={() => setShowMenu(false)}
+            styles={trayStyles}
+            closeAccessibilityLabel="Close account menu"
+          >
               {showCanonicalCard ? (
                 <>
                   <CanonicalIdentityDropdown
@@ -496,7 +536,7 @@ export function ConnectButton({
                 <span className="label block text-zinc-300">{auth.busy ? 'Signing out…' : 'Sign out'}</span>
               </button>
               {auth.error ? <div className="px-4 text-[11px] text-red-400/90">{auth.error}</div> : null}
-          </DropdownLayer>
+          </Tray>
         )}
 
         {showOptions && (
@@ -576,4 +616,22 @@ export function ConnectButton({
       )}
     </div>
   )
+}
+
+function useIsPhoneViewport(): boolean {
+  const [isPhone, setIsPhone] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false
+    return window.matchMedia('(max-width: 767px)').matches
+  })
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mediaQuery = window.matchMedia('(max-width: 767px)')
+    const handleChange = (event: MediaQueryListEvent) => setIsPhone(event.matches)
+    setIsPhone(mediaQuery.matches)
+    mediaQuery.addEventListener('change', handleChange)
+    return () => mediaQuery.removeEventListener('change', handleChange)
+  }, [])
+
+  return isPhone
 }

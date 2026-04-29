@@ -656,7 +656,7 @@ export function Portfolio() {
       <div className="mb-3 flex items-center justify-between">
         <div>
           <div className="text-[12px] text-white">Connected wallets</div>
-          <div className="app-meta-value text-zinc-600">Canonical + execution track</div>
+          <div className="app-meta-value text-zinc-600">Primary identity + fallback signer roles</div>
         </div>
         <Wallet className="h-4 w-4 text-zinc-500" />
       </div>
@@ -672,9 +672,9 @@ export function Portfolio() {
               />
               <span className="text-zinc-300">{shortAddr(wallet.address)}</span>
               {wallet.isCanonicalSmartWallet ? <Badge variant="canonical" size="xs">Smart Wallet</Badge> : null}
-              {wallet.isEmbeddedEoa ? <Badge variant="eoa" size="xs">User Wallet</Badge> : null}
+              {wallet.isEmbeddedEoa ? <Badge variant="eoa" size="xs">Embedded fallback</Badge> : null}
               {normalizeAddress(wallet.address) === displayPrimaryWalletAddress ? (
-                <Badge variant="warning" size="xs">Primary</Badge>
+                <Badge variant="warning" size="xs">Primary identity</Badge>
               ) : null}
             </div>
           ))}

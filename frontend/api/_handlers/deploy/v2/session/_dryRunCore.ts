@@ -217,7 +217,7 @@ function formatErc20InsufficientBalanceError(raw: string): string | null {
   if (!payloadMatch) {
     return (
       'ERC20InsufficientBalance(): the canonical smart wallet does not hold enough creator tokens ' +
-      'for the required 50,000,000-token initial deposit.'
+      'for the required initial deposit.'
     )
   }
 
@@ -237,7 +237,7 @@ function formatErc20InsufficientBalanceError(raw: string): string | null {
   } catch {
     return (
       'ERC20InsufficientBalance(): the canonical smart wallet does not hold enough creator tokens ' +
-      'for the required 50,000,000-token initial deposit.'
+      'for the required initial deposit.'
     )
   }
 }
