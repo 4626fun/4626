@@ -198,6 +198,54 @@ describe('runAlfaClubPrivyRefreshOnce', () => {
     expect(refresh).toHaveBeenCalledTimes(1)
   })
 
+  it('regression: production Privy response with null privy_access_token + token-as-identity refreshes successfully', async () => {
+    // This is the exact response shape that produced
+    //   privy_refresh_failed:malformed_response:missing=privy_access_token
+    //     :keys=created_at,expires_at,privy_access_token,refresh_token,
+    //           session_update_action,token,user
+    // 502s on /api/v1/alfaclub/chat-token-refresh after PR #417.
+    const realFetch = globalThis.fetch
+    try {
+      globalThis.fetch = vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        json: async () => ({
+          created_at: '2026-04-29T00:00:00Z',
+          expires_at: '2026-04-29T01:00:00Z',
+          privy_access_token: null,
+          refresh_token: 'rt-rotated',
+          session_update_action: 'set',
+          token: 'eyJ-identity-jwt',
+          user: { id: 'did:privy:abc' },
+        }),
+        text: async () => '',
+      }) as unknown as Response) as unknown as typeof fetch
+
+      const writes: Array<PrivyRefreshBundle> = []
+      const outcome = await runAlfaClubPrivyRefreshOnce({
+        readAccessToken: async () => 'at-old',
+        readRefreshToken: async () => 'rt-old',
+        readIdentityToken: async () => jwtWithExp(NOW_MS / 1000 + 5 * 60),
+        // Use the real `refreshPrivySession` path via mocked fetch so we
+        // exercise the response parser end to end.
+        writeBundle: async (bundle) => { writes.push(bundle) },
+        log: silentLog(),
+        now,
+      })
+
+      expect(outcome.status).toBe('refreshed')
+      expect(writes).toHaveLength(1)
+      expect(writes[0]).toEqual({
+        // Inbound access token preserved because Privy returned null.
+        accessToken: 'at-old',
+        identityToken: 'eyJ-identity-jwt',
+        refreshToken: 'rt-rotated',
+      })
+    } finally {
+      globalThis.fetch = realFetch
+    }
+  })
+
   it('preserves the inbound refresh token when Privy does not rotate', async () => {
     const writes: Array<PrivyRefreshBundle> = []
     const outcome = await runAlfaClubPrivyRefreshOnce({
@@ -351,7 +399,7 @@ describe('refreshPrivySession Privy response parsing', () => {
     mockFetchOnce({
       privy_access_token: 'at-new',
       refresh_token: 'rt-new',
-      // both identity_token and token absent
+      // both identity_token and token absent — no JWT to fall back on
       session_update_action: 'set',
     })
     await expect(
@@ -359,14 +407,58 @@ describe('refreshPrivySession Privy response parsing', () => {
     ).rejects.toThrow(/malformed_response:missing=identity_token\|token:keys=privy_access_token,refresh_token,session_update_action/)
   })
 
-  it('throws malformed_response when privy_access_token is missing', async () => {
+  it('preserves the inbound access token when privy_access_token is null (matches production Privy response)', async () => {
+    // Production regression guard: alfaclub Privy app returns
+    //   { token, refresh_token, privy_access_token: null, ... }
+    // for sessions where the existing access token is still valid. The
+    // refresher must NOT throw `malformed_response` here; instead it
+    // preserves the inbound access token (same pattern as `refresh_token`)
+    // so the next refresh still has a valid Bearer credential.
+    mockFetchOnce({
+      privy_access_token: null,
+      token: 'id-from-token-field',
+      refresh_token: 'rt-new',
+      session_update_action: 'set',
+      user: { id: 'did:privy:abc' },
+    })
+    const bundle = await refreshPrivySession({
+      accessToken: 'at-old',
+      refreshToken: 'rt-old',
+    })
+    expect(bundle).toEqual({
+      accessToken: 'at-old',
+      identityToken: 'id-from-token-field',
+      refreshToken: 'rt-new',
+    })
+  })
+
+  it('preserves the inbound access token when privy_access_token is omitted entirely', async () => {
     mockFetchOnce({
       identity_token: 'id-new',
       refresh_token: 'rt-new',
     })
-    await expect(
-      refreshPrivySession({ accessToken: 'at-old', refreshToken: 'rt-old' }),
-    ).rejects.toThrow(/malformed_response:missing=privy_access_token/)
+    const bundle = await refreshPrivySession({
+      accessToken: 'at-old',
+      refreshToken: 'rt-old',
+    })
+    expect(bundle).toEqual({
+      accessToken: 'at-old',
+      identityToken: 'id-new',
+      refreshToken: 'rt-new',
+    })
+  })
+
+  it('preserves the inbound access token when privy_access_token is empty/whitespace', async () => {
+    mockFetchOnce({
+      privy_access_token: '   ',
+      identity_token: 'id-new',
+      refresh_token: 'rt-new',
+    })
+    const bundle = await refreshPrivySession({
+      accessToken: 'at-old',
+      refreshToken: 'rt-old',
+    })
+    expect(bundle.accessToken).toBe('at-old')
   })
 
   it('throws privy_refresh_failed:<status> on non-2xx without consulting the body shape', async () => {

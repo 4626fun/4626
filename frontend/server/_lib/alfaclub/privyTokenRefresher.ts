@@ -106,12 +106,17 @@ export interface PrivyRefreshBundle {
  * documented by Privy's own `@privy-io/react-auth` SDK type
  * `ValidSessionResponse`. Notable nullability:
  *
- *  - `privy_access_token` and `refresh_token` may be `string | null`
+ *  - `privy_access_token` and `refresh_token` may be `string | null` —
+ *    Privy treats null here as "we did not rotate this credential, keep
+ *    using the previous one." Production has been observed to return
+ *    `privy_access_token: null` while still rotating the identity token.
  *  - `identity_token` is OPTIONAL (often omitted) — when absent the same
- *    identity-token JWT is carried by the top-level `token` field
+ *    identity-token JWT is carried by the top-level `token` field.
  *
- * The refresher accepts either `identity_token` or `token` so it does not
- * misclassify a perfectly valid Privy response as `malformed_response`.
+ * The refresher accepts either `identity_token` or `token` for the JWT,
+ * and falls back to the inbound access/refresh tokens when Privy returns
+ * null/missing values for them, so it does not misclassify a valid Privy
+ * response as `malformed_response`.
  */
 export interface PrivyRefreshResponse {
   privy_access_token?: string | null
@@ -161,29 +166,37 @@ export async function refreshPrivySession(params: {
   }
 
   const payload = (await response.json().catch(() => null)) as PrivyRefreshResponse | null
-  const accessToken = payload?.privy_access_token?.trim()
   // Privy's session response carries the identity JWT in `identity_token`
   // when present and otherwise in the top-level `token` field (see Privy's
   // own `ValidSessionResponse` SDK type). Either is acceptable.
   const identityToken =
     (payload?.identity_token?.trim() ?? '') ||
     (payload?.token?.trim() ?? '')
-  // Privy may or may not rotate the refresh token on each call. Honor whatever
-  // it returns; if missing, keep the inbound one so we never lose our ability
-  // to refresh again.
+  // Privy may or may not rotate the access or refresh token on each call. Both
+  // are declared `string | null` in Privy's SDK types and have been observed
+  // null in production on the alfaclub app. Honor whatever Privy returns; if
+  // null/empty, keep the inbound one so we never lose our ability to refresh
+  // again. The non-2xx branch above already handled "Privy rejected our
+  // credentials", so reaching here means the server kept the existing pair
+  // alive and only rotated identity.
+  const accessToken =
+    (payload?.privy_access_token?.trim() ?? '') || params.accessToken.trim()
   const refreshToken =
     (payload?.refresh_token?.trim() ?? '') || params.refreshToken.trim()
 
-  if (!accessToken || !identityToken || !refreshToken) {
-    // Surface which fields were missing without leaking token material —
-    // this lets ops distinguish "Privy changed the response shape" from
-    // "Privy returned an empty body" the next time this fires.
+  // The only field we cannot fall back on is the identity token: there is no
+  // "previous identity token" to keep alive (the bridge would already be
+  // 401-ing at this point) and no other field carries the JWT shape we need.
+  // Surface a malformed-response diagnostic with the response key list so ops
+  // can tell "Privy changed the response shape" from "Privy returned an empty
+  // body" without leaking token material.
+  if (!identityToken || !accessToken || !refreshToken) {
     const presentKeys = payload && typeof payload === 'object'
       ? Object.keys(payload).sort().join(',')
       : '<non-object>'
     const missing = [
-      accessToken ? null : 'privy_access_token',
       identityToken ? null : 'identity_token|token',
+      accessToken ? null : 'privy_access_token',
       refreshToken ? null : 'refresh_token',
     ].filter(Boolean).join('+')
     throw new Error(
