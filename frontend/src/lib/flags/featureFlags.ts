@@ -114,20 +114,10 @@ function getPrivyAllowedOrigins(): Set<string> {
   return new Set(list.length > 0 ? list : Array.from(DEFAULT_PRIVY_ALLOWED_ORIGINS))
 }
 
-function isLoopbackOrigin(origin: string): boolean {
-  try {
-    const hostname = new URL(origin).hostname.toLowerCase()
-    return hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1' || hostname === '[::1]'
-  } catch {
-    return false
-  }
-}
-
 function isPrivyOriginAllowed(): boolean {
   const origin = getCurrentOrigin()
   if (!origin) return true
   if (getPrivyAllowedOrigins().has(origin)) return true
-  if (import.meta.env.DEV && isLoopbackOrigin(origin)) return true
   return false
 }
 

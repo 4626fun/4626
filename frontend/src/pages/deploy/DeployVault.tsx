@@ -4329,8 +4329,9 @@ function DeployVaultBatcher({
     [],
   )
 
-  const submit = async (opts?: { planOnly?: boolean }): Promise<DeployPlanExport | null> => {
+  const submit = async (opts?: { planOnly?: boolean; validateDepositBalance?: boolean }): Promise<DeployPlanExport | null> => {
     const planOnly = opts?.planOnly === true
+    const validateDepositBalance = !planOnly || opts?.validateDepositBalance === true
     if (busy || exportBusy) return null
 
     // Simple rate limit: avoid accidental double-submits after a quick reload/click.
@@ -5515,7 +5516,7 @@ function DeployVaultBatcher({
           functionName: 'balanceOf',
           args: [owner],
         })) as bigint
-        if (!planOnly && smartWalletBalance < depositAmount) {
+        if (validateDepositBalance && smartWalletBalance < depositAmount) {
           throw new Error(
             `Creator smart wallet needs ${formatDeposit(depositAmount)} ${depositSymbol} (has ${formatDeposit(smartWalletBalance)}). Transfer funds to ${shortAddress(owner)} and retry.`,
           )
@@ -6812,7 +6813,7 @@ function DeployVaultBatcher({
     setExportStatus(null)
     setError(null)
     try {
-      const plan = await submit({ planOnly: true })
+      const plan = await submit({ planOnly: true, validateDepositBalance: true })
       if (!plan) throw new Error('Could not prepare deployment plan.')
       if (typeof window === 'undefined') throw new Error('Plan export is only available in a browser session.')
 

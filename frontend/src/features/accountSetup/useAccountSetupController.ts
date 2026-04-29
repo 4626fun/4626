@@ -301,6 +301,38 @@ export function useAccountSetupController(params: {
     [getAccessToken],
   )
 
+  const postOnboardingBootstrap = useCallback(
+    async (
+      headers: Record<string, string>,
+    ): Promise<{ response: Response; payload: ApiEnvelope<OnboardingBootstrapResponse> | null }> => {
+      const response = await apiFetch('/api/onboarding/bootstrap', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({}),
+      })
+      const payload = (await response.json().catch(() => null)) as ApiEnvelope<OnboardingBootstrapResponse> | null
+      return { response, payload }
+    },
+    [],
+  )
+
+  const runOnboardingBootstrapPreflight = useCallback(async (): Promise<{
+    headers: Record<string, string>
+    response: Response
+    payload: ApiEnvelope<OnboardingBootstrapResponse> | null
+  }> => {
+    let headers = await authHeaders()
+    let { response, payload } = await postOnboardingBootstrap(headers)
+    if ((!response.ok || !payload?.success) && response.status === 401) {
+      await sleep(150)
+      headers = await authHeaders()
+      const retry = await postOnboardingBootstrap(headers)
+      response = retry.response
+      payload = retry.payload
+    }
+    return { headers, response, payload }
+  }, [authHeaders, postOnboardingBootstrap])
+
   const ensurePaymasterSession = useCallback(async (): Promise<boolean> => {
     const result = await ensureWalletAlignedPaymasterSessionDetailed({
       hasMatchingSiweSession: Boolean(siwe.hasSession),
@@ -1249,7 +1281,7 @@ export function useAccountSetupController(params: {
         throw new Error('Connect a wallet that is already an owner of your Coinbase Smart Wallet before enabling 4626 signing.')
       }
 
-      const headers = await authHeaders()
+      let { headers, response: preflightRes, payload: preflightPayload } = await runOnboardingBootstrapPreflight()
       emitOwnerApprovalStageEvent({
         runId: approvalRunId,
         stage: 'preflight',
@@ -1259,20 +1291,12 @@ export function useAccountSetupController(params: {
         signerAddress: ownerSignerAddress ?? null,
         canonicalCswAddress,
       })
-      let preflightRes = await apiFetch('/api/onboarding/bootstrap', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({}),
-      })
-      let preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<OnboardingBootstrapResponse> | null
       if ((!preflightRes.ok || !preflightPayload?.success) && (preflightPayload as any)?.needsEmbeddedWallet === true) {
         await ensureEmbeddedWallet()
-        preflightRes = await apiFetch('/api/onboarding/bootstrap', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({}),
-        })
-        preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<OnboardingBootstrapResponse> | null
+        const embeddedRetry = await runOnboardingBootstrapPreflight()
+        headers = embeddedRetry.headers
+        preflightRes = embeddedRetry.response
+        preflightPayload = embeddedRetry.payload
         if (!preflightRes.ok || !preflightPayload?.success) {
           emitOwnerApprovalStageEvent({
             runId: approvalRunId,
@@ -1407,6 +1431,7 @@ export function useAccountSetupController(params: {
     ownerSignerAddress,
     ownerSignerChainId,
     publicClient,
+    runOnboardingBootstrapPreflight,
     sendPreparedOwnerTx,
     subAccount,
   ])
@@ -1427,12 +1452,14 @@ export function useAccountSetupController(params: {
     setAdvancedBusy(false)
     setError(null)
     setNotice(null)
+    setConnectedOwnerState({ value: null, reason: 'idle' })
     setOwnerInstallIntent('embeddedOwner')
     setCustomOwnerGasPreflight(null)
     setCustomOwnerPreparedTxRequest(null)
     setCustomOwnerPreparedAddress(null)
     setOwnerDelegationFlags(null)
     await retryOwnerCheck()
+    setNotice('Signing state reset. Reconnect or switch owner wallet if needed.')
   }, [retryOwnerCheck])
 
   const onAddRabbyCoOwner = useCallback(async (advancedOwnerAddress: string) => {
@@ -1478,13 +1505,7 @@ export function useAccountSetupController(params: {
         signerAddress: ownerSignerAddress ?? null,
         canonicalCswAddress,
       })
-      const headers = await authHeaders()
-      const preflightRes = await apiFetch('/api/onboarding/bootstrap', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({}),
-      })
-      const preflightPayload = (await preflightRes.json().catch(() => null)) as ApiEnvelope<OnboardingBootstrapResponse> | null
+      const { headers, response: preflightRes, payload: preflightPayload } = await runOnboardingBootstrapPreflight()
       if (!preflightRes.ok || !preflightPayload?.success) {
         emitOwnerApprovalStageEvent({
           runId: approvalRunId,
@@ -1662,7 +1683,6 @@ export function useAccountSetupController(params: {
       setAdvancedBusy(false)
     }
   }, [
-    authHeaders,
     canonicalCswAddress,
     connectedCanonicalWalletSelected,
     emitOwnerApprovalStageEvent,
@@ -1670,6 +1690,7 @@ export function useAccountSetupController(params: {
     ownerSignerAddress,
     privyLiveWallets,
     runCustomOwnerGasPreflight,
+    runOnboardingBootstrapPreflight,
     sendPreparedOwnerTx,
     subAccount.embeddedWallet,
   ])

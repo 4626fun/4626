@@ -60,6 +60,13 @@ type BootstrapErrorEnvelope = ApiEnvelope<never> & {
   baseAppUrl?: string
 }
 
+function isProductionEnv(): boolean {
+  const raw = String((globalThis as any)?.process?.env?.NODE_ENV ?? '')
+    .trim()
+    .toLowerCase()
+  return raw === 'production'
+}
+
 function resolveStatusCode(error: unknown): number {
   const flags = extractDelegationFlags(error)
   // Actionable setup states are not hard transport failures.
@@ -119,12 +126,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     return res.status(200).json({ success: true, data } satisfies ApiEnvelope<BootstrapResponse>)
   } catch (error: unknown) {
     const statusCode = resolveStatusCode(error)
+    const rawMessage = error instanceof Error ? error.message : String(error ?? 'Onboarding bootstrap failed')
+    if (statusCode >= 500) {
+      console.error('[onboarding/bootstrap] failed', {
+        statusCode,
+        message: rawMessage,
+        stack: error instanceof Error ? error.stack : null,
+      })
+    }
     const message =
-      statusCode >= 500
+      statusCode >= 500 && isProductionEnv()
         ? 'Onboarding bootstrap failed'
-        : error instanceof Error
-          ? error.message
-          : 'Onboarding bootstrap failed'
+        : rawMessage
     return res
       .status(statusCode)
       .json({ success: false, error: message, ...extractDelegationFlags(error) } satisfies BootstrapErrorEnvelope)

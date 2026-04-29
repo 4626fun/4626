@@ -215,8 +215,9 @@ export function AccountSetupWorkspaceView(props: {
   // use sub-account derivation. Show this hint up front, before they pick
   // a wallet, so they don't burn a connection attempt on Coinbase Wallet
   // or an EOA wallet that has no chance of being on the owner list.
+  const hasConnectedSigner = Boolean(connectedSignerLabel) && !/no wallet connected/i.test(connectedSignerLabel)
   const shouldHintBaseAccountForZora =
-    zoraLinked && Boolean(canonicalCswAddress) && !connectedOwnerReady && !needsBaseAccountReconnect
+    zoraLinked && Boolean(canonicalCswAddress) && !connectedOwnerReady && !needsBaseAccountReconnect && !hasConnectedSigner
 
   if (context === 'waitlist') {
     const stepOneComplete = zoraStepComplete && walletStepComplete
@@ -228,6 +229,8 @@ export function AccountSetupWorkspaceView(props: {
       ? 'Reconnect via Base Account'
       : connectedOwnerReady
         ? 'Approve signing access'
+        : hasConnectedSigner
+          ? 'Switch wallet to current owner'
         : ownerWalletConnecting
           ? 'Connecting wallet…'
           : 'Connect owner wallet'
@@ -353,7 +356,7 @@ export function AccountSetupWorkspaceView(props: {
 
                 {/* Expanded body */}
                 {isOpen ? (
-                  <div className="space-y-3 px-4 pb-4 pl-[52px]">
+                  <div className="space-y-3 px-4 pb-4 pl-[52px]" onClick={(e) => e.stopPropagation()}>
                     {/* Primary actions */}
                     <div className="flex flex-wrap gap-2">
                       <button
@@ -371,6 +374,14 @@ export function AccountSetupWorkspaceView(props: {
                         className="inline-flex h-9 items-center rounded-lg border border-white/10 bg-transparent px-4 text-sm font-medium text-zinc-400 hover:bg-white/[0.04] disabled:opacity-50"
                       >
                         Already linked? Refresh
+                      </button>
+                      <button
+                        type="button"
+                        disabled={busyProvider === 'email'}
+                        onClick={() => void onSwitchAccount()}
+                        className="inline-flex h-9 items-center rounded-lg border border-rose-400/20 bg-rose-500/10 px-4 text-sm font-medium text-rose-200 hover:bg-rose-500/20 disabled:opacity-50"
+                      >
+                        {busyProvider === 'email' ? 'Resetting…' : 'Reset Zora identity'}
                       </button>
                     </div>
 
@@ -456,7 +467,7 @@ export function AccountSetupWorkspaceView(props: {
                     {s === 'done' ? <CheckCircle2 className="h-3.5 w-3.5" /> : '2'}
                   </div>
                   <div className="min-w-0 flex-1">
-                    <span className="text-sm font-medium text-white">Enable 4626 signing</span>
+                    <span className="text-sm font-medium text-white">Finish 4626 signing setup</span>
                     {s === 'done' ? (
                       <p className="mt-0.5 text-[11px] text-zinc-500">Signing access approved</p>
                     ) : null}
@@ -464,7 +475,7 @@ export function AccountSetupWorkspaceView(props: {
                 </div>
 
                 {isOpen ? (
-                  <div className="space-y-2.5 px-4 pb-4 pl-[52px]">
+                  <div className="space-y-2.5 px-4 pb-4 pl-[52px]" onClick={(e) => e.stopPropagation()}>
                     {shouldHintBaseAccountForZora ? (
                       <div className="rounded-lg bg-brand-primary/10 px-3 py-2.5 text-xs leading-relaxed text-brand-100 ring-1 ring-brand-primary/25">
                         <span className="font-semibold">Pick &ldquo;Base Account&rdquo;</span>{' '}
@@ -494,6 +505,10 @@ export function AccountSetupWorkspaceView(props: {
                     {/* Contextual status — only rendered when relevant */}
                     {!connectedOwnerReady && (!connectedSignerLabel || /no wallet connected/i.test(connectedSignerLabel)) ? (
                       <p className="text-xs text-zinc-500">Signer not detected, please connect wallet.</p>
+                    ) : !connectedOwnerReady && hasConnectedSigner ? (
+                      <p className="text-xs text-amber-300/90">
+                        This signer is connected, but it is not a current CSW owner. Switch wallet in the connector to one of the owner addresses listed below.
+                      </p>
                     ) : connectedSignerLabel ? (
                       <p className="text-xs text-zinc-500">
                         Connected signer: <span className="font-mono text-zinc-300">{connectedSignerLabel}</span>

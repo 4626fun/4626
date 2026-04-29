@@ -15,6 +15,7 @@ describe('DeployVault dry run wiring', () => {
     expect(pageSource).toContain('isLocalForkRpcUrl')
     expect(pageSource).toContain('VITE_BASE_RPC')
     expect(pageSource).toContain('Run dry-run')
+    expect(pageSource).toContain('validateDepositBalance: true')
     expect(pageSource).toContain('Dry-run is local-fork-only.')
   })
 

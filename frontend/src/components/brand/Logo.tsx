@@ -2,6 +2,8 @@ import { useState } from 'react'
 
 import { TextScramble } from './TextScramble'
 
+const BRAND_ICON_SRC = '/logo/icon-transparent-512.png'
+
 export interface LogoProps {
   className?: string
   width?: number
@@ -31,99 +33,19 @@ export function Logo({
       onMouseLeave={() => setInternalHover(false)}
     >
       <div className="relative flex items-center justify-center" style={{ width, height }}>
-        <svg
+        <img
+          src={BRAND_ICON_SRC}
+          alt="4626.fun"
           width={width}
           height={height}
-          viewBox="0 0 48 48"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          className="overflow-visible"
-          role="img"
-          aria-label="Creator Vaults Logo"
-        >
-          <defs>
-            <filter id="soft-glow" x="-50%" y="-50%" width="200%" height="200%">
-              <feGaussianBlur stdDeviation="2" result="coloredBlur" />
-              <feMerge>
-                <feMergeNode in="coloredBlur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-
-            <linearGradient id="base-gradient" x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#0052FF" />
-              <stop offset="100%" stopColor="#0033CC" />
-            </linearGradient>
-
-            <radialGradient
-              id="sphere-shine"
-              cx="0"
-              cy="0"
-              r="1"
-              gradientUnits="userSpaceOnUse"
-              gradientTransform="translate(16 16) rotate(90) scale(24)"
-            >
-              <stop offset="0%" stopColor="white" stopOpacity="0.4" />
-              <stop offset="100%" stopColor="white" stopOpacity="0" />
-            </radialGradient>
-
-            <linearGradient id="stroke-sheen" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stopColor="white" stopOpacity="0.8" />
-              <stop offset="50%" stopColor="#3B82F6" stopOpacity="0.5" />
-              <stop offset="100%" stopColor="#0052FF" stopOpacity="0.2" />
-            </linearGradient>
-          </defs>
-
-          <g
-            className="relative transition-all duration-[600ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
-            style={{
-              transformOrigin: 'center',
-              transform: isHovered ? 'rotate(180deg) scale(0.55)' : 'rotate(0deg) scale(1)',
-            }}
-          >
-            <rect
-              x="10"
-              y="10"
-              width="28"
-              height="28"
-              rx={isHovered ? 14 : 2}
-              fill={isHovered ? 'url(#base-gradient)' : 'transparent'}
-              stroke={isHovered ? 'transparent' : 'url(#stroke-sheen)'}
-              strokeWidth={1.5}
-              className="transition-all duration-[600ms] ease-[cubic-bezier(0.4,0,0.2,1)]"
-              style={{
-                filter: isHovered ? 'url(#soft-glow)' : 'none',
-              }}
-            />
-
-            <rect
-              x="10"
-              y="10"
-              width="28"
-              height="28"
-              rx={14}
-              fill="url(#sphere-shine)"
-              className="transition-opacity duration-[600ms] ease-[cubic-bezier(0.4,0,0.2,1)] pointer-events-none"
-              style={{
-                opacity: isHovered ? 1 : 0,
-              }}
-            />
-
-            <ellipse
-              cx="18"
-              cy="16"
-              rx="6"
-              ry="3"
-              fill="white"
-              className="transition-all duration-[600ms] ease-[cubic-bezier(0.4,0,0.2,1)] pointer-events-none blur-[2px]"
-              style={{
-                opacity: isHovered ? 0.3 : 0,
-                transform: isHovered ? 'translateY(0)' : 'translateY(4px)',
-                transformOrigin: '24px 24px',
-              }}
-            />
-          </g>
-        </svg>
+          className="block select-none object-contain transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+          draggable={false}
+          style={{
+            width,
+            height,
+            transform: isHovered ? 'scale(1.06)' : 'scale(1)',
+          }}
+        />
       </div>
 
       {showText ? (

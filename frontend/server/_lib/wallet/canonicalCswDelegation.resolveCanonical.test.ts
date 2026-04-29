@@ -105,7 +105,7 @@ describe('resolveCanonicalCsw', () => {
     vi.clearAllMocks()
   })
 
-  it('refreshes a stale persisted canonical when the live session resolves a different canonical smart wallet', async () => {
+  it('keeps the persisted canonical when the live session resolves a different smart wallet', async () => {
     syncUserWalletsMock
       .mockResolvedValueOnce({
         profileId: 11,
@@ -116,7 +116,9 @@ describe('resolveCanonicalCsw', () => {
         canonicalSmartWallet: { address: '0x00000000000000000000000000000000000000BB' },
       })
 
-    const db = createMockDb()
+    const db = createMockDb({
+      persistedCanonicalAddress: '0x00000000000000000000000000000000000000AA',
+    })
     const privyUser = { id: 'did:privy:test-user', linkedAccounts: [] } as any
 
     const first = await resolveCanonicalCsw({
@@ -131,7 +133,7 @@ describe('resolveCanonicalCsw', () => {
     })
 
     expect(first.canonicalCswAddress).toBe('0x00000000000000000000000000000000000000aa')
-    expect(second.canonicalCswAddress).toBe('0x00000000000000000000000000000000000000bb')
+    expect(second.canonicalCswAddress).toBe('0x00000000000000000000000000000000000000aa')
     expect(syncUserWalletsMock).toHaveBeenCalledTimes(2)
   })
 
@@ -203,6 +205,70 @@ describe('resolveCanonicalCsw', () => {
       message: 'No canonical Coinbase Smart Wallet is linked to this account yet.',
       needsBaseAppSetup: true,
     })
+  })
+
+  it('falls back to persisted canonical via wallet hints when sync throws and privy_user_id lookup is missing', async () => {
+    syncUserWalletsMock.mockRejectedValueOnce(new Error('wallet_sync_profile_upsert_failed'))
+
+    const walletAddress = '0x00000000000000000000000000000000000000aa'
+    const db = {
+      sql: vi.fn(async (strings: TemplateStringsArray) => {
+        const text = normalizeSql(strings)
+        if (text.includes("to_regclass('public.profile_wallets') is not null as has_profile_wallets")) {
+          return {
+            rows: [
+              {
+                has_profile_wallets: true,
+                has_chain_id: true,
+                has_canonical_csw_address: true,
+                has_canonical_source: true,
+                has_privy_embedded_eoa_address: true,
+                has_privy_is_owner: true,
+                has_last_checked_at: true,
+              },
+            ],
+          }
+        }
+        if (text.startsWith('do $$')) return { rows: [] }
+        if (text.startsWith('alter table profile_wallets')) return { rows: [] }
+        if (text.includes('select id from profiles where privy_user_id =')) return { rows: [] }
+        if (text.includes('select id from profiles where lower(email) =')) return { rows: [] }
+        if (text.includes('select profile_id from profile_wallets where lower(address) =')) return { rows: [{ profile_id: 99 }] }
+        if (text.includes('select pw.profile_id')) {
+          return {
+            rows: [
+              {
+                profile_id: 99,
+                chain_id: 8453,
+                canonical_csw_address: walletAddress.toLowerCase(),
+                canonical_source: 'wallet_sync',
+                privy_embedded_eoa_address: null,
+                privy_is_owner: false,
+                last_checked_at: null,
+                address: walletAddress.toLowerCase(),
+                is_canonical_smart_wallet: true,
+              },
+            ],
+          }
+        }
+        throw new Error(`Unhandled SQL in test: ${text}`)
+      }),
+    }
+
+    const privyUser = {
+      id: 'did:privy:test-user',
+      linkedAccounts: [{ type: 'wallet', chainType: 'ethereum', walletClientType: 'rabby_wallet', address: walletAddress }],
+    } as any
+
+    const resolved = await resolveCanonicalCsw({
+      db: db as any,
+      privyUserId: 'did:privy:test-user',
+      privyUser,
+    })
+
+    expect(resolved.profileId).toBe(99)
+    expect(resolved.canonicalCswAddress).toBe(walletAddress.toLowerCase())
+    expect(syncUserWalletsMock).toHaveBeenCalledTimes(1)
   })
 })
 

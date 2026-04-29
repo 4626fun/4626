@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { encodeFunctionData, type Address } from 'viem'
 
 import { canonicalWalletSchemaReadyResult, createMockReq, createMockRes } from './helpers'
 
@@ -163,6 +164,153 @@ vi.mock('viem', async (importOriginal) => {
   }
 })
 
+const TEST_OWNER = '0x0000000000000000000000000000000000000002' as Address
+const TEST_CREATOR = '0x0000000000000000000000000000000000000003' as Address
+const TEST_VAULT = '0x0000000000000000000000000000000000000101' as Address
+const TEST_WRAPPER = '0x0000000000000000000000000000000000000102' as Address
+const TEST_SHARE = '0x0000000000000000000000000000000000000103' as Address
+const TEST_GAUGE = '0x0000000000000000000000000000000000000201' as Address
+const TEST_CCA = '0x0000000000000000000000000000000000000202' as Address
+const TEST_ORACLE = '0x0000000000000000000000000000000000000203' as Address
+const ZERO_BYTES32 = `0x${'0'.repeat(64)}` as const
+const TEST_CODE_IDS = {
+  vault: ZERO_BYTES32,
+  wrapper: ZERO_BYTES32,
+  shareOFT: ZERO_BYTES32,
+  gauge: ZERO_BYTES32,
+  cca: ZERO_BYTES32,
+  oracle: ZERO_BYTES32,
+  oftBootstrap: ZERO_BYTES32,
+} as const
+
+const TEST_PHASE2_CORE_ABI = [
+  {
+    type: 'function',
+    name: 'deployPhase2Core',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'creatorTreasury', type: 'address' },
+          { name: 'payoutRecipient', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'shareSymbol', type: 'string' },
+          { name: 'version', type: 'string' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+        ],
+      },
+      {
+        name: 'codeIds',
+        type: 'tuple',
+        components: [
+          { name: 'vault', type: 'bytes32' },
+          { name: 'wrapper', type: 'bytes32' },
+          { name: 'shareOFT', type: 'bytes32' },
+          { name: 'gauge', type: 'bytes32' },
+          { name: 'cca', type: 'bytes32' },
+          { name: 'oracle', type: 'bytes32' },
+          { name: 'oftBootstrap', type: 'bytes32' },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const
+
+const TEST_FINALIZE_PHASE2_ABI = [
+  {
+    type: 'function',
+    name: 'finalizePhase2',
+    stateMutability: 'nonpayable',
+    inputs: [
+      {
+        name: 'params',
+        type: 'tuple',
+        components: [
+          { name: 'creatorToken', type: 'address' },
+          { name: 'owner', type: 'address' },
+          { name: 'vault', type: 'address' },
+          { name: 'wrapper', type: 'address' },
+          { name: 'shareOFT', type: 'address' },
+          { name: 'gaugeController', type: 'address' },
+          { name: 'ccaStrategy', type: 'address' },
+          { name: 'oracle', type: 'address' },
+          { name: 'version', type: 'string' },
+          { name: 'depositAmount', type: 'uint256' },
+          { name: 'requiredRaise', type: 'uint128' },
+          { name: 'floorPriceQ96', type: 'uint256' },
+          { name: 'auctionSteps', type: 'bytes' },
+          { name: 'meteoraAlphaVault', type: 'bytes32' },
+          {
+            name: 'solanaIxs',
+            type: 'tuple[]',
+            components: [
+              { name: 'programId', type: 'bytes32' },
+              { name: 'serializedAccounts', type: 'bytes[]' },
+              { name: 'data', type: 'bytes' },
+            ],
+          },
+        ],
+      },
+    ],
+    outputs: [],
+  },
+] as const
+
+function makePhase2CoreData() {
+  return encodeFunctionData({
+    abi: TEST_PHASE2_CORE_ABI,
+    functionName: 'deployPhase2Core',
+    args: [
+      {
+        creatorToken: TEST_CREATOR,
+        owner: TEST_OWNER,
+        creatorTreasury: '0x0000000000000000000000000000000000000004',
+        payoutRecipient: '0x0000000000000000000000000000000000000000',
+        vault: TEST_VAULT,
+        wrapper: TEST_WRAPPER,
+        shareOFT: TEST_SHARE,
+        shareSymbol: 'TEST',
+        version: 'vtest',
+        floorPriceQ96: 1n,
+      },
+      TEST_CODE_IDS,
+    ],
+  })
+}
+
+function makeFinalizePhase2Data() {
+  return encodeFunctionData({
+    abi: TEST_FINALIZE_PHASE2_ABI,
+    functionName: 'finalizePhase2',
+    args: [
+      {
+        creatorToken: TEST_CREATOR,
+        owner: TEST_OWNER,
+        vault: TEST_VAULT,
+        wrapper: TEST_WRAPPER,
+        shareOFT: TEST_SHARE,
+        gaugeController: TEST_GAUGE,
+        ccaStrategy: TEST_CCA,
+        oracle: TEST_ORACLE,
+        version: 'vtest',
+        depositAmount: 1n,
+        requiredRaise: 1n,
+        floorPriceQ96: 1n,
+        auctionSteps: '0x',
+        meteoraAlphaVault: ZERO_BYTES32,
+        solanaIxs: [],
+      },
+    ],
+  })
+}
+
 function makeCanonicalDb() {
   return {
     query: vi.fn(async () => ({ rows: [{}] })),
@@ -225,9 +373,9 @@ function makeCanonicalDb() {
 
 function makeRequestBody() {
   return {
-    smartWallet: '0x0000000000000000000000000000000000000002',
-    creatorToken: '0x0000000000000000000000000000000000000003',
-    ownerAddress: '0x0000000000000000000000000000000000000002',
+    smartWallet: TEST_OWNER,
+    creatorToken: TEST_CREATOR,
+    ownerAddress: TEST_OWNER,
     phase1Calls: [{ to: '0x0000000000000000000000000000000000000010', value: '0', data: '0x12345678' }],
     phase2CoreCalls: [{ to: '0x0000000000000000000000000000000000000011', value: '0', data: '0x23456789' }],
     phase2FinalizeCalls: [{ to: '0x0000000000000000000000000000000000000012', value: '0', data: '0x34567890' }],
@@ -252,6 +400,8 @@ describe('deploy session dry run', () => {
       type: 'session',
     })
     checkRateLimitMock.mockReturnValue({ allowed: true, resetAt: Date.now() + 60_000 })
+    requestMock.mockResolvedValue(null)
+    getBytecodeMock.mockResolvedValue('0x')
   })
 
   it('requires authenticated deploy auth even when legacy dev-bypass header is present', async () => {
@@ -415,5 +565,121 @@ describe('deploy session dry run', () => {
     )
     expect(insertDeploySessionMock).not.toHaveBeenCalled()
     expect(sendUserOperationMock).not.toHaveBeenCalled()
+  })
+
+  it('formats CREATE2 deploy failures as actionable dry-run errors', async () => {
+    const { default: handler } = await import('../_handlers/deploy/v2/session/_dryRun.ts')
+    sendTransactionMock.mockRejectedValueOnce(new Error('execution reverted: custom error 0xb4f54111'))
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        ...makeRequestBody(),
+        phase2CoreCalls: [],
+        phase2FinalizeCalls: [],
+        phase3Calls: [],
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.ok).toBe(false)
+    expect(res.body?.data?.failure?.error).toContain('DeployFailed()')
+    expect(res.body?.data?.failure?.error).toContain('CREATE2 deployment failed')
+  })
+
+  it('formats ERC20 insufficient balance failures as actionable dry-run errors', async () => {
+    const { default: handler } = await import('../_handlers/deploy/v2/session/_dryRun.ts')
+    const ownerWord = TEST_OWNER.slice(2).padStart(64, '0')
+    const balanceWord = (1_000_000n * 10n ** 18n).toString(16).padStart(64, '0')
+    const neededWord = (50_000_000n * 10n ** 18n).toString(16).padStart(64, '0')
+    sendTransactionMock.mockRejectedValueOnce(
+      new Error(`execution reverted: custom error 0xe450d38c: ${ownerWord}${balanceWord}${neededWord}`),
+    )
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        ...makeRequestBody(),
+        phase2CoreCalls: [],
+        phase2FinalizeCalls: [],
+        phase3Calls: [],
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.ok).toBe(false)
+    expect(res.body?.data?.failure?.error).toContain('ERC20InsufficientBalance()')
+    expect(res.body?.data?.failure?.error).toContain('1,000,000 creator tokens')
+    expect(res.body?.data?.failure?.error).toContain('50,000,000')
+  })
+
+  it('skips phase2 core during dry-run when all projected core contracts already exist', async () => {
+    const { default: handler } = await import('../_handlers/deploy/v2/session/_dryRun.ts')
+    const phase2CoreData = makePhase2CoreData()
+    getBytecodeMock.mockImplementation(async ({ address }: { address: Address }) =>
+      [TEST_GAUGE, TEST_CCA, TEST_ORACLE].some((known) => known.toLowerCase() === address.toLowerCase()) ? '0x6000' : '0x',
+    )
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        ...makeRequestBody(),
+        phase1Calls: [],
+        phase2CoreCalls: [{ to: '0x0000000000000000000000000000000000000011', value: '0', data: phase2CoreData }],
+        phase2FinalizeCalls: [
+          { to: '0x0000000000000000000000000000000000000012', value: '0', data: makeFinalizePhase2Data() },
+        ],
+        phase3Calls: [],
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.ok).toBe(true)
+    expect(res.body?.data?.phases).toEqual([
+      { name: 'phase2Core', status: 'passed', callCount: 1 },
+      { name: 'phase2Finalize', status: 'passed', callCount: 1 },
+    ])
+    expect(sendTransactionMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: phase2CoreData }),
+    )
+  })
+
+  it('returns an actionable failure when phase2 core is partially deployed on the fork', async () => {
+    const { default: handler } = await import('../_handlers/deploy/v2/session/_dryRun.ts')
+    getBytecodeMock.mockImplementation(async ({ address }: { address: Address }) =>
+      address.toLowerCase() === TEST_GAUGE.toLowerCase() ? '0x6000' : '0x',
+    )
+    const req = createMockReq({
+      method: 'POST',
+      body: {
+        ...makeRequestBody(),
+        phase1Calls: [],
+        phase2CoreCalls: [{ to: '0x0000000000000000000000000000000000000011', value: '0', data: makePhase2CoreData() }],
+        phase2FinalizeCalls: [
+          { to: '0x0000000000000000000000000000000000000012', value: '0', data: makeFinalizePhase2Data() },
+        ],
+        phase3Calls: [],
+      },
+    })
+    const res = createMockRes()
+
+    await handler(req, res)
+
+    expect(res.statusCode).toBe(200)
+    expect(res.body?.data?.ok).toBe(false)
+    expect(res.body?.data?.failure).toEqual(
+      expect.objectContaining({
+        phase: 'phase2Core',
+        callIndex: 0,
+        error: expect.stringContaining('Phase 2 core is partially deployed on the local fork'),
+      }),
+    )
+    expect(sendTransactionMock).not.toHaveBeenCalled()
   })
 })

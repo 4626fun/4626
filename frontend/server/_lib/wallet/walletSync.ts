@@ -413,19 +413,12 @@ function applyPersistedIdentity(params: {
   const { classification, persisted } = params
   if (!persisted) return classification
 
-  // Treat persisted canonical as durable source of truth only when the current
-  // Privy payload still enumerates that address as a linked EVM wallet. If the user
-  // has since unlinked the canonical smart wallet from Privy we MUST NOT
-  // resurrect it from the database — doing so would promote a stale owner into
-  // paymaster ownership checks and canonical submit guards. This enforces a
-  // "persisted AND live" invariant symmetric to the Solana gating below.
-  //
-  // FIX: M-20 / 4626-432
   const persistedCanonicalRaw = persisted?.canonicalSmartWallet ?? null
-  const persistedCanonical =
-    persistedCanonicalRaw && isEvmWalletAddressInClassification(classification, persistedCanonicalRaw)
-      ? persistedCanonicalRaw
-      : null
+  // The canonical CSW is the asset-holding account and can disappear from a
+  // fresh Privy payload even though it remains the deployed account on Base.
+  // Keep the persisted CSW as source of truth so a newly surfaced Privy smart
+  // wallet/counterfactual address cannot silently replace it.
+  const persistedCanonical = normalizeAddress(persistedCanonicalRaw)
   const persistedCanonicalSolana =
     persisted?.canonicalSolanaWallet &&
     isSolanaWalletAddressInClassification(classification, persisted.canonicalSolanaWallet)

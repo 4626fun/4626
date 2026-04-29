@@ -146,6 +146,62 @@ async function readProfileIdByPrivyUserId(db: Db, privyUserId: string): Promise<
   return Number.isFinite(id) && id > 0 ? id : null
 }
 
+async function readProfileIdByEmail(db: Db, email: string): Promise<number | null> {
+  const normalized = String(email ?? '').trim().toLowerCase()
+  if (!normalized) return null
+  const result = await db.sql`
+    SELECT id
+    FROM profiles
+    WHERE LOWER(email) = ${normalized}
+    LIMIT 1;
+  `
+  const idRaw = result.rows?.[0]?.id
+  const id = typeof idRaw === 'number' ? idRaw : Number(idRaw)
+  return Number.isFinite(id) && id > 0 ? id : null
+}
+
+async function recoverProfileIdFromPrivyHints(db: Db, privyUser: PrivyUserLike): Promise<number | null> {
+  const email = typeof (privyUser as any)?.email?.address === 'string' ? String((privyUser as any).email.address) : ''
+  const fromEmail = await readProfileIdByEmail(db, email)
+  if (fromEmail) return fromEmail
+
+  const classification = classifyLinkedAccounts(privyUser)
+  const walletAddresses = Array.from(
+    new Set(
+      classification.allWallets
+        .map((wallet) => normalizeAddress(wallet.address))
+        .filter((address): address is string => typeof address === 'string'),
+    ),
+  )
+  for (const address of walletAddresses) {
+    const byProfileWallet = await db.sql`
+      SELECT profile_id
+      FROM profile_wallets
+      WHERE LOWER(address) = ${address}
+      ORDER BY updated_at DESC
+      LIMIT 1;
+    `
+    const profileIdRaw = byProfileWallet.rows?.[0]?.profile_id
+    const profileId = typeof profileIdRaw === 'number' ? profileIdRaw : Number(profileIdRaw)
+    if (Number.isFinite(profileId) && profileId > 0) return profileId
+
+    const byProfiles = await db.sql`
+      SELECT id
+      FROM profiles
+      WHERE
+        LOWER(COALESCE(primary_wallet, '')) = ${address}
+        OR LOWER(COALESCE(primary_smart_wallet, '')) = ${address}
+        OR LOWER(COALESCE(csw_address, '')) = ${address}
+        OR LOWER(COALESCE(base_sub_account, '')) = ${address}
+      LIMIT 1;
+    `
+    const idRaw = byProfiles.rows?.[0]?.id
+    const id = typeof idRaw === 'number' ? idRaw : Number(idRaw)
+    if (Number.isFinite(id) && id > 0) return id
+  }
+  return null
+}
+
 async function readPersistedDelegationState(db: Db, profileId: number): Promise<PersistedDelegationState> {
   const rows = await db.sql`
     SELECT
@@ -383,6 +439,9 @@ export async function resolveCanonicalCsw(params: {
   await ensureDelegationColumns(db)
 
   let profileId = await readProfileIdByPrivyUserId(db, privyUserId)
+  if (!profileId) {
+    profileId = await recoverProfileIdFromPrivyHints(db, privyUser)
+  }
   const persisted = profileId ? await readPersistedDelegationState(db, profileId) : null
 
   let syncResult: Awaited<ReturnType<typeof syncUserWallets>> | null = null
@@ -390,6 +449,18 @@ export async function resolveCanonicalCsw(params: {
     syncResult = await syncUserWallets(db, privyUser)
     profileId = syncResult.profileId
   } catch (error) {
+    if (!profileId) {
+      profileId = await recoverProfileIdFromPrivyHints(db, privyUser)
+    }
+    const persistedFromHints = profileId ? await readPersistedDelegationState(db, profileId) : null
+    const fallbackPersisted = persistedFromHints?.canonicalCswAddress ? persistedFromHints : persisted
+    if (fallbackPersisted?.canonicalCswAddress && profileId) {
+      return {
+        profileId,
+        canonicalCswAddress: fallbackPersisted.canonicalCswAddress,
+        canonicalSource: normalizeCanonicalSource(fallbackPersisted.canonicalSource, 'wallet_sync'),
+      }
+    }
     if (persisted?.canonicalCswAddress && profileId) {
       return {
         profileId,
@@ -407,7 +478,10 @@ export async function resolveCanonicalCsw(params: {
       : 'wallet_sync'
     : null
 
-  const canonical = syncedCanonical ?? persisted?.canonicalCswAddress ?? null
+  // Once a canonical CSW is persisted, it remains the product source of truth
+  // for asset custody. Fresh Privy payloads can include app-scoped or
+  // counterfactual smart wallets; those must not displace the canonical CSW.
+  const canonical = persisted?.canonicalCswAddress ?? syncedCanonical ?? null
   if (!canonical) {
     throw buildStructuredError('No canonical Coinbase Smart Wallet is linked to this account yet.', {
       needsBaseAppSetup: true,

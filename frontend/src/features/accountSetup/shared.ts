@@ -68,8 +68,9 @@ export function deriveOwnerAuthorityState(input: {
     return {
       phase: 'owner_connected',
       label: 'Owner connected',
-      hint: `Ready to approve with ${shortValue(input.connectedAddress)}`,
-      detail: 'This wallet is already one of the current CSW owners and can approve the add-owner transaction.',
+      hint: `Ready for one-time setup approval with ${shortValue(input.connectedAddress)}`,
+      detail:
+        'This wallet is already a current CSW owner. 4626 still needs its own execution signer path (sub-account or embedded owner), and this owner wallet is used to approve that one-time setup transaction.',
       badgeClass: 'border border-emerald-400/20 bg-emerald-500/10 text-emerald-200',
     }
   }

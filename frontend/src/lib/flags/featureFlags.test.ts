@@ -72,15 +72,28 @@ describe('privyEnabledFlag', () => {
     expect(privyEnabledFlag()).toBe(false)
   })
 
-  it('enables Privy on loopback origins in local dev', async () => {
+  it('keeps Privy disabled on random loopback ports in local dev', async () => {
     vi.stubEnv('DEV', true)
     vi.stubEnv('VITE_PRIVY_ENABLED', 'true')
     vi.stubEnv('VITE_PRIVY_ALLOWED_ORIGINS', 'https://4626.fun')
     vi.stubGlobal('window', {
-      location: { origin: 'http://localhost:4173' },
+      location: { origin: 'http://localhost:63210' },
     } as unknown as Window & typeof globalThis)
     const hostModule = await import('@/lib/env/host')
     const hostSpy = vi.spyOn(hostModule, 'getHostMode').mockReturnValue('marketing')
+    expect(privyEnabledFlag()).toBe(false)
+    hostSpy.mockRestore()
+  })
+
+  it('enables Privy on explicitly allowlisted local dev origins', async () => {
+    vi.stubEnv('DEV', true)
+    vi.stubEnv('VITE_PRIVY_ENABLED', 'true')
+    vi.stubEnv('VITE_PRIVY_ALLOWED_ORIGINS', 'http://localhost:5173 http://localhost:5174')
+    vi.stubGlobal('window', {
+      location: { origin: 'http://localhost:5174' },
+    } as unknown as Window & typeof globalThis)
+    const hostModule = await import('@/lib/env/host')
+    const hostSpy = vi.spyOn(hostModule, 'getHostMode').mockReturnValue('app')
     expect(privyEnabledFlag()).toBe(true)
     hostSpy.mockRestore()
   })
