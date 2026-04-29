@@ -39,6 +39,18 @@ const EXPLICIT_OUT_OF_SCOPE = [
   // Indexer and Looker Studio connector readmes are engineering-facing only.
   'indexer/README.md',
   'indexer/scripts/lookerStudioConnector/README.md',
+  // Internal audit reports kept in repo for traceability, not public docs.
+  'audit/SOLIDSECS_AUDIT.md',
+  // ZK circuit / ceremony engineering docs (operator-facing, not public site).
+  'circuits/amoe/**',
+  // Relayer/keeper internal engineering readmes.
+  'relayer/zkproof/README.md',
+  // SEO assets engineering readme.
+  'seo/README.md',
+  // Repo-level meta doc (single sign-on notes), peer of note.md.
+  'sso.md',
+  // ZK tooling engineering readme.
+  'tools/zk/README.md',
 ];
 
 function gitLines(args) {
