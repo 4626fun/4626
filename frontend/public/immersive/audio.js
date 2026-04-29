@@ -104,7 +104,7 @@
       return this.loadPromise;
     }
 
-    // First scroll gesture — resume context, fade music in over 3s.
+    // First scroll gesture — resume context, then ease music + ambience in.
     async start() {
       if (this.started) return;
       this.started = true;
@@ -112,9 +112,10 @@
       if (!this.ctx) return;
       try { if (this.ctx.state === 'suspended') await this.ctx.resume(); } catch (_) {}
       await this.preload();
-      // Music bed enters 1.5s after the first gesture for a calmer onset;
-      // ambience starts immediately so the gesture still produces audible feedback.
-      this._startBed(MUSIC, this.busMusic, 3.0, 1.5);
+      // Music bed: 1.5s pre-roll, then a long 6s exponential fade-in for a
+      // soft authored entrance. Ambience starts immediately on a shorter
+      // fade so the first gesture still produces audible feedback.
+      this._startBed(MUSIC, this.busMusic, 6.0, 1.5);
       this._startBed(AMBIENCE, this.busAmbience, 2.0, 0);
     }
 
@@ -126,8 +127,14 @@
       src.loop = true;
       const g = this.ctx.createGain();
       const startAt = this.ctx.currentTime + Math.max(0, delaySec);
-      g.gain.setValueAtTime(0, startAt);
-      g.gain.linearRampToValueAtTime(1, startAt + fadeSec);
+      // Exponential-style fade-in: perceived loudness is logarithmic, so
+      // setTargetAtTime with a time-constant of fadeSec/4 reaches ~98% of
+      // target by fadeSec while feeling smooth at the start (no slam-in
+      // at the end the way a linear ramp does). Pin the tail to exactly 1
+      // at startAt+fadeSec so we never asymptote short.
+      g.gain.setValueAtTime(0.0001, startAt);
+      g.gain.setTargetAtTime(1, startAt, Math.max(0.05, fadeSec / 4));
+      g.gain.setValueAtTime(1, startAt + fadeSec);
       src.connect(g); g.connect(bus);
       src.start(startAt);
       if (spec.key === MUSIC.key) this.musicSource = { src, gain: g };
