@@ -112,21 +112,24 @@
       if (!this.ctx) return;
       try { if (this.ctx.state === 'suspended') await this.ctx.resume(); } catch (_) {}
       await this.preload();
-      this._startBed(MUSIC, this.busMusic, 3.0);
-      this._startBed(AMBIENCE, this.busAmbience, 2.0);
+      // Music bed enters 1.5s after the first gesture for a calmer onset;
+      // ambience starts immediately so the gesture still produces audible feedback.
+      this._startBed(MUSIC, this.busMusic, 3.0, 1.5);
+      this._startBed(AMBIENCE, this.busAmbience, 2.0, 0);
     }
 
-    _startBed(spec, bus, fadeSec) {
+    _startBed(spec, bus, fadeSec, delaySec = 0) {
       const buf = this.buffers.get(spec.key);
       if (!buf) return null;
       const src = this.ctx.createBufferSource();
       src.buffer = buf;
       src.loop = true;
       const g = this.ctx.createGain();
-      g.gain.setValueAtTime(0, this.ctx.currentTime);
-      g.gain.linearRampToValueAtTime(1, this.ctx.currentTime + fadeSec);
+      const startAt = this.ctx.currentTime + Math.max(0, delaySec);
+      g.gain.setValueAtTime(0, startAt);
+      g.gain.linearRampToValueAtTime(1, startAt + fadeSec);
       src.connect(g); g.connect(bus);
-      src.start();
+      src.start(startAt);
       if (spec.key === MUSIC.key) this.musicSource = { src, gain: g };
       else this.ambienceSource = { src, gain: g };
       return src;
