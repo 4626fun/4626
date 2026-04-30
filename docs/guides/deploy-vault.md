@@ -59,12 +59,12 @@ Production override safety:
 
 Current live Base defaults use the split Phase-1 deployment batcher and its paired chunked bytecode store/deployer. Addresses below are the live Base values:
 - Registry: `0x9D86e8FAfA39527c4FE13AAa8FBD2B424f9f65Fb`
-- Deployment batcher: `0x32403a647e73e04ae42b02bdd1ade9c88698fd0c`
-- Deployment batcher auto-handoff alias: `0x32403a647e73e04ae42b02bdd1ade9c88698fd0c`
+- Deployment batcher: `0x004684670d284EF607E1B2424fcf8ccBda8ef828`
+- Deployment batcher auto-handoff alias: `0x004684670d284EF607E1B2424fcf8ccBda8ef828`
 - Creator lottery manager: `0xd593A8A58BDf7E7448D2dAbDE0Ae3B2BAFDA1357`
 - Creator VRF consumer: `0xdd25Ed1b3D258Ccc6D306a9a325Af1A7F96C7F47`
-- `UniversalBytecodeStoreV2`: `0x4F047c895aA1390D4d0607B2aDDAc54a08ccfe5A`
-- `UniversalCreate2DeployerFromStore`: `0x6f02c56B2F6C213f727D303Ce9E12e6bE1D224f0`
+- `UniversalBytecodeStoreV2`: `0x77e53f656Ee3c5A962e9DA2Fc97EA1A35ae9b4d5`
+- `UniversalCreate2DeployerFromStore`: `0x808f2Cf1b7e7afaC561dd9d2A2aA20be15EEb3fd`
 - `VaultActivationBatcher`: `0x7Cc0050842433968cc7A0884d192b61FD0b46F63`
 - `SolanaBridgeAdapter`: see [Contract Addresses](../reference/addresses.md) (canonical). Do not hardcode this address in new docs — it has rotated across releases (H-16).
 
@@ -88,7 +88,7 @@ If the shared/global layer is already live and you only need the deterministic p
 
 ```bash
 export BASE_RPC_URL=https://mainnet.base.org
-export NEW_BATCHER=0x32403a647e73e04ae42b02bdd1ade9c88698fd0c
+export NEW_BATCHER=0x004684670d284EF607E1B2424fcf8ccBda8ef828
 
 # infra wiring
 cast call "$NEW_BATCHER" "bytecodeStore()(address)" --rpc-url "$BASE_RPC_URL"
@@ -102,8 +102,8 @@ cast call "$NEW_BATCHER" "uniV4Helper()(address)" --rpc-url "$BASE_RPC_URL"
 # split Phase-1 selectors in runtime bytecode
 cast code "$NEW_BATCHER" --rpc-url "$BASE_RPC_URL" | tr 'A-F' 'a-f' | rg "4154f24e|3bc09a8b"
 
-# v2 store surface
-cast call 0x4F047c895aA1390D4d0607B2aDDAc54a08ccfe5A \
+# chunked store surface
+cast call 0x77e53f656Ee3c5A962e9DA2Fc97EA1A35ae9b4d5 \
   "chunkCount(bytes32)(uint256)" \
   0x0000000000000000000000000000000000000000000000000000000000000000 \
   --rpc-url "$BASE_RPC_URL"
@@ -114,7 +114,7 @@ cast call 0x4F047c895aA1390D4d0607B2aDDAc54a08ccfe5A \
 ```bash
 export PRIVATE_KEY=... # must be protocolTreasury for setSolanaConfig
 export BASE_RPC_URL=https://mainnet.base.org
-export DEPLOYMENT_BATCHER=0x32403a647e73e04ae42b02bdd1ade9c88698fd0c
+export DEPLOYMENT_BATCHER=0x004684670d284EF607E1B2424fcf8ccBda8ef828
 export SOLANA_BRIDGE_ADAPTER=0x653326dD0145656eC3b598943C0E84d7405aE6Ae
 export SOLANA_DESTINATION=0x<32-byte-solana-pubkey>
 export SET_BATCHER_SOLANA_CONFIG=1
